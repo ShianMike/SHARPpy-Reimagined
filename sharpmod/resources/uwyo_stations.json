@@ -1,0 +1,6541 @@
+{
+ "generated_from": "weather.uwyo.edu/wsgi/sounding_json",
+ "sampled_years": [
+  2024,
+  2015
+ ],
+ "station_count": 933,
+ "stations": [
+  {
+   "id": "01001",
+   "name": "Jan Mayen, Norway",
+   "lat": 70.93965,
+   "lon": -8.66934,
+   "src": "FM35"
+  },
+  {
+   "id": "01004",
+   "name": "Ny-Alesund Ii, Norway",
+   "lat": 78.92321,
+   "lon": 11.92314,
+   "src": "FM35"
+  },
+  {
+   "id": "01010",
+   "name": "Andoya, Norway",
+   "lat": 69.31522,
+   "lon": 16.13091,
+   "src": "FM35"
+  },
+  {
+   "id": "01028",
+   "name": "Bjornoya, Norway",
+   "lat": 74.50341,
+   "lon": 19.00339,
+   "src": "FM35"
+  },
+  {
+   "id": "01241",
+   "name": "Orland, Norway",
+   "lat": 63.70541,
+   "lon": 9.61187,
+   "src": "FM35"
+  },
+  {
+   "id": "01400",
+   "name": "Ekofisk, Norway",
+   "lat": 56.54264,
+   "lon": 3.22379,
+   "src": "FM35"
+  },
+  {
+   "id": "01415",
+   "name": "Stavanger, Norway",
+   "lat": 58.87423,
+   "lon": 5.66505,
+   "src": "FM35"
+  },
+  {
+   "id": "02185",
+   "name": "Lulea-Kallax, Sweden",
+   "lat": 65.54331,
+   "lon": 22.11453,
+   "src": "FM35"
+  },
+  {
+   "id": "02365",
+   "name": "Sundsvall Harnosand, Sweden",
+   "lat": 62.53176,
+   "lon": 17.43608,
+   "src": "FM35"
+  },
+  {
+   "id": "02527",
+   "name": "Goteborg/Landvetter, Sweden",
+   "lat": 57.66,
+   "lon": 12.5,
+   "src": "FM35"
+  },
+  {
+   "id": "02591",
+   "name": "Visby, Sweden",
+   "lat": 57.67083,
+   "lon": 18.34531,
+   "src": "FM35"
+  },
+  {
+   "id": "02836",
+   "name": "Sodankyla, Finland",
+   "lat": 67.36632,
+   "lon": 26.63125,
+   "src": "FM35"
+  },
+  {
+   "id": "02963",
+   "name": "Jokioinen, Finland",
+   "lat": 60.81461,
+   "lon": 23.4987,
+   "src": "FM35"
+  },
+  {
+   "id": "03005",
+   "name": "Lerwick, United Kingdom",
+   "lat": 60.13934,
+   "lon": -1.18513,
+   "src": "FM35"
+  },
+  {
+   "id": "03023",
+   "name": "",
+   "lat": 57.3575,
+   "lon": -7.385,
+   "src": "BUFR"
+  },
+  {
+   "id": "03238",
+   "name": "Albemarle, United Kingdom",
+   "lat": 55.01921,
+   "lon": -1.87842,
+   "src": "FM35"
+  },
+  {
+   "id": "03354",
+   "name": "Nottingham, United Kingdom",
+   "lat": 53.00568,
+   "lon": -1.25023,
+   "src": "FM35"
+  },
+  {
+   "id": "03743",
+   "name": "Larkhill, United Kingdom",
+   "lat": 51.20167,
+   "lon": -1.80583,
+   "src": "BUFR"
+  },
+  {
+   "id": "03808",
+   "name": "Camborne, United Kingdom",
+   "lat": 50.21841,
+   "lon": -5.32753,
+   "src": "FM35"
+  },
+  {
+   "id": "03882",
+   "name": "",
+   "lat": 50.891,
+   "lon": 0.31655,
+   "src": "FM35"
+  },
+  {
+   "id": "03918",
+   "name": "Castor Bay, United Kingdom",
+   "lat": 54.50297,
+   "lon": -6.34312,
+   "src": "FM35"
+  },
+  {
+   "id": "03953",
+   "name": "Valentia Observatory, Ireland",
+   "lat": 51.93,
+   "lon": -10.25,
+   "src": "FM35"
+  },
+  {
+   "id": "04018",
+   "name": "Keflavikurflugvollur, Iceland",
+   "lat": 63.96869,
+   "lon": -22.61412,
+   "src": "FM35"
+  },
+  {
+   "id": "04089",
+   "name": "",
+   "lat": 65.27293,
+   "lon": -14.40682,
+   "src": "FM35"
+  },
+  {
+   "id": "04202",
+   "name": "Pituffik (Thule A.B), Greenland",
+   "lat": 76.53,
+   "lon": -68.75,
+   "src": "FM35"
+  },
+  {
+   "id": "04220",
+   "name": "Aasiaat, Greenland",
+   "lat": 68.70857,
+   "lon": -52.85236,
+   "src": "FM35"
+  },
+  {
+   "id": "04270",
+   "name": "Narsarsuaq, Greenland",
+   "lat": 61.15804,
+   "lon": -45.44007,
+   "src": "FM35"
+  },
+  {
+   "id": "04320",
+   "name": "Danmarkshavn, Greenland",
+   "lat": 76.76856,
+   "lon": -18.6711,
+   "src": "FM35"
+  },
+  {
+   "id": "04339",
+   "name": "Ittoqqortoormiit, Greenland",
+   "lat": 70.4845,
+   "lon": -21.9514,
+   "src": "FM35"
+  },
+  {
+   "id": "04360",
+   "name": "Tasiilaq (Ammassalik), Greenland",
+   "lat": 65.61091,
+   "lon": -37.6366,
+   "src": "FM35"
+  },
+  {
+   "id": "04417",
+   "name": "Geosummit, Greenland",
+   "lat": 72.57974,
+   "lon": -38.46037,
+   "src": "FM35"
+  },
+  {
+   "id": "06011",
+   "name": "Torshavn, Denmark",
+   "lat": 62.02341,
+   "lon": -6.76404,
+   "src": "FM35"
+  },
+  {
+   "id": "06260",
+   "name": "De Bilt, Netherlands",
+   "lat": 52.1,
+   "lon": 5.177,
+   "src": "BUFR"
+  },
+  {
+   "id": "06458",
+   "name": "",
+   "lat": 50.75,
+   "lon": 4.77,
+   "src": "FM35"
+  },
+  {
+   "id": "06610",
+   "name": "Payern, Switzerland",
+   "lat": 46.8125,
+   "lon": 6.94333,
+   "src": "FM35"
+  },
+  {
+   "id": "07110",
+   "name": "Brest, France",
+   "lat": 48.44422,
+   "lon": -4.41249,
+   "src": "FM35"
+  },
+  {
+   "id": "07145",
+   "name": "Trappes, France",
+   "lat": 48.77298,
+   "lon": 2.01224,
+   "src": "FM35"
+  },
+  {
+   "id": "07510",
+   "name": "Bordeaux Merignac, France",
+   "lat": 44.83112,
+   "lon": -0.69086,
+   "src": "FM35"
+  },
+  {
+   "id": "07645",
+   "name": "Nimes-Courbessac, France",
+   "lat": 43.85,
+   "lon": 4.4,
+   "src": "FM35"
+  },
+  {
+   "id": "07761",
+   "name": "Ajaccio, France",
+   "lat": 41.91788,
+   "lon": 8.79205,
+   "src": "FM35"
+  },
+  {
+   "id": "08001",
+   "name": "La Coruna, Spain",
+   "lat": 43.36,
+   "lon": -8.41,
+   "src": "FM35"
+  },
+  {
+   "id": "08023",
+   "name": "Santander, Spain",
+   "lat": 43.49122,
+   "lon": -3.80079,
+   "src": "FM35"
+  },
+  {
+   "id": "08160",
+   "name": "Zaragoza/Aeropuerto, Spain",
+   "lat": 41.66,
+   "lon": -1.01,
+   "src": "FM35"
+  },
+  {
+   "id": "08190",
+   "name": "",
+   "lat": 41.62,
+   "lon": 2.2,
+   "src": "FM35"
+  },
+  {
+   "id": "08221",
+   "name": "Madrid/Barajas, Spain",
+   "lat": 40.5,
+   "lon": -3.58,
+   "src": "FM35"
+  },
+  {
+   "id": "08302",
+   "name": "Palma Son Bonet, Spain",
+   "lat": 39.61,
+   "lon": 2.71,
+   "src": "FM35"
+  },
+  {
+   "id": "08430",
+   "name": "Murcia, Spain",
+   "lat": 38.00208,
+   "lon": -1.17115,
+   "src": "FM35"
+  },
+  {
+   "id": "08508",
+   "name": "Lajes/Santa Rita, Portugal",
+   "lat": 38.76783,
+   "lon": -27.08716,
+   "src": "FM35"
+  },
+  {
+   "id": "08522",
+   "name": "Funchal, Madeira",
+   "lat": 32.64769,
+   "lon": -16.89231,
+   "src": "FM35"
+  },
+  {
+   "id": "08536",
+   "name": "Lisboa, Portugal",
+   "lat": 38.77604,
+   "lon": -9.12557,
+   "src": "BUFR"
+  },
+  {
+   "id": "08579",
+   "name": "Lisboa/Gago Coutinho, Portugal",
+   "lat": 38.76,
+   "lon": -9.13,
+   "src": "FM35"
+  },
+  {
+   "id": "08594",
+   "name": "Sal, Cabo Verde",
+   "lat": 16.73,
+   "lon": -22.95,
+   "src": "FM35"
+  },
+  {
+   "id": "10035",
+   "name": "Schleswig, Germany",
+   "lat": 54.52727,
+   "lon": 9.54946,
+   "src": "FM35"
+  },
+  {
+   "id": "10113",
+   "name": "Norderney, Germany",
+   "lat": 53.71201,
+   "lon": 7.1516,
+   "src": "FM35"
+  },
+  {
+   "id": "10184",
+   "name": "Greifswald, Germany",
+   "lat": 54.09695,
+   "lon": 13.40484,
+   "src": "FM35"
+  },
+  {
+   "id": "10238",
+   "name": "Bergen, Germany",
+   "lat": 52.8152,
+   "lon": 9.9247,
+   "src": "FM35"
+  },
+  {
+   "id": "10304",
+   "name": "Meppen, Germany",
+   "lat": 52.71528,
+   "lon": 7.31824,
+   "src": "BUFR"
+  },
+  {
+   "id": "10393",
+   "name": "Lindenberg, Germany",
+   "lat": 52.2093,
+   "lon": 14.12041,
+   "src": "FM35"
+  },
+  {
+   "id": "10410",
+   "name": "Essen, Germany",
+   "lat": 51.40412,
+   "lon": 6.96818,
+   "src": "FM35"
+  },
+  {
+   "id": "10548",
+   "name": "Meiningen, Germany",
+   "lat": 50.56175,
+   "lon": 10.37709,
+   "src": "FM35"
+  },
+  {
+   "id": "10618",
+   "name": "Idar-Oberstein, Germany",
+   "lat": 49.69246,
+   "lon": 7.3259,
+   "src": "FM35"
+  },
+  {
+   "id": "10739",
+   "name": "Stuttgart/Schnarrenberg, Germany",
+   "lat": 48.8281,
+   "lon": 9.2006,
+   "src": "FM35"
+  },
+  {
+   "id": "10771",
+   "name": "Kuemmersbruck, Germany",
+   "lat": 49.4283,
+   "lon": 11.9016,
+   "src": "FM35"
+  },
+  {
+   "id": "10868",
+   "name": "Muenchen-Oberschleissheim, Germany",
+   "lat": 48.2446,
+   "lon": 11.55257,
+   "src": "FM35"
+  },
+  {
+   "id": "10954",
+   "name": "Altenstadt, Germany",
+   "lat": 47.8341,
+   "lon": 10.8667,
+   "src": "BUFR"
+  },
+  {
+   "id": "11010",
+   "name": "Linz/Hoersching-Flughafen, Austria",
+   "lat": 48.23203,
+   "lon": 14.20099,
+   "src": "BUFR"
+  },
+  {
+   "id": "11035",
+   "name": "Wien/Hohe Warte, Austria",
+   "lat": 48.25174,
+   "lon": 16.35863,
+   "src": "FM35"
+  },
+  {
+   "id": "11120",
+   "name": "Innsbruck-Flughafen, Austria",
+   "lat": 47.25977,
+   "lon": 11.35527,
+   "src": "BUFR"
+  },
+  {
+   "id": "11240",
+   "name": "Graz-Thalerhof-Flughafen, Austria",
+   "lat": 46.99396,
+   "lon": 15.44706,
+   "src": "BUFR"
+  },
+  {
+   "id": "11520",
+   "name": "Praha-Libus, Czech Republic",
+   "lat": 50.0078,
+   "lon": 14.4469,
+   "src": "FM35"
+  },
+  {
+   "id": "11747",
+   "name": "Prostejov, Czech Republic",
+   "lat": 49.4525,
+   "lon": 17.1347,
+   "src": "FM35"
+  },
+  {
+   "id": "11952",
+   "name": "Poprad-Ganovce, Slovakia",
+   "lat": 49.03,
+   "lon": 20.31,
+   "src": "FM35"
+  },
+  {
+   "id": "12120",
+   "name": "Leba, Poland",
+   "lat": 54.75433,
+   "lon": 17.53641,
+   "src": "FM35"
+  },
+  {
+   "id": "12123",
+   "name": "",
+   "lat": -66.7049,
+   "lon": 144.19124,
+   "src": "BUFR"
+  },
+  {
+   "id": "12374",
+   "name": "Legionowo, Poland",
+   "lat": 52.4,
+   "lon": 20.96,
+   "src": "FM35"
+  },
+  {
+   "id": "12425",
+   "name": "Wroclaw I, Poland",
+   "lat": 51.11379,
+   "lon": 16.88221,
+   "src": "FM35"
+  },
+  {
+   "id": "12575",
+   "name": "Tarnow, Poland",
+   "lat": 50.02732,
+   "lon": 20.93534,
+   "src": "BUFR"
+  },
+  {
+   "id": "12843",
+   "name": "Budapest/Pestszentlorinc, Hungary",
+   "lat": 47.43,
+   "lon": 19.18,
+   "src": "FM35"
+  },
+  {
+   "id": "12982",
+   "name": "Szeged, Hungary",
+   "lat": 46.25,
+   "lon": 20.1,
+   "src": "FM35"
+  },
+  {
+   "id": "13275",
+   "name": "Beograd/Kosutnjak, Serbia",
+   "lat": 44.771,
+   "lon": 20.425,
+   "src": "FM35"
+  },
+  {
+   "id": "13388",
+   "name": "Nis, Serbia",
+   "lat": 43.33,
+   "lon": 21.9,
+   "src": "FM35"
+  },
+  {
+   "id": "14240",
+   "name": "Zagreb/Maksimir, Croatia",
+   "lat": 45.82123,
+   "lon": 16.03383,
+   "src": "FM35"
+  },
+  {
+   "id": "14430",
+   "name": "Zadar Rs, Croatia",
+   "lat": 44.10052,
+   "lon": 15.33914,
+   "src": "FM35"
+  },
+  {
+   "id": "15420",
+   "name": "Bucuresti Inmh-Banesa, Romania",
+   "lat": 44.5,
+   "lon": 26.13,
+   "src": "FM35"
+  },
+  {
+   "id": "15614",
+   "name": "Sofia (Observ.), Bulgaria",
+   "lat": 42.65,
+   "lon": 23.38,
+   "src": "FM35"
+  },
+  {
+   "id": "16044",
+   "name": "Udine/Campoformido, Italy",
+   "lat": 46.03,
+   "lon": 13.18,
+   "src": "FM35"
+  },
+  {
+   "id": "16045",
+   "name": "Rivolto, Italy",
+   "lat": 45.98158,
+   "lon": 13.04742,
+   "src": "BUFR"
+  },
+  {
+   "id": "16064",
+   "name": "Novara Cameri, Italy",
+   "lat": 45.53,
+   "lon": 8.67,
+   "src": "FM35"
+  },
+  {
+   "id": "16080",
+   "name": "Milano/Linate, Italy",
+   "lat": 45.43,
+   "lon": 9.28,
+   "src": "FM35"
+  },
+  {
+   "id": "16113",
+   "name": "Cuneo-Levaldigi, Italy",
+   "lat": 44.53,
+   "lon": 7.61,
+   "src": "FM35"
+  },
+  {
+   "id": "16144",
+   "name": "S. Pietro Capofiume Molinella (Bologna), Italy",
+   "lat": 44.6543,
+   "lon": 11.6231,
+   "src": "FM35"
+  },
+  {
+   "id": "16245",
+   "name": "Pratica Di Mare, Italy",
+   "lat": 41.65,
+   "lon": 12.43,
+   "src": "FM35"
+  },
+  {
+   "id": "16320",
+   "name": "Brindisi, Italy",
+   "lat": 40.65,
+   "lon": 17.95,
+   "src": "FM35"
+  },
+  {
+   "id": "16332",
+   "name": "Galatina, Italy",
+   "lat": 40.23864,
+   "lon": 18.13924,
+   "src": "BUFR"
+  },
+  {
+   "id": "16429",
+   "name": "Trapani/Birgi, Italy",
+   "lat": 37.91,
+   "lon": 12.5,
+   "src": "FM35"
+  },
+  {
+   "id": "16546",
+   "name": "Decimonannu, Italy",
+   "lat": 39.34434,
+   "lon": 8.96427,
+   "src": "FM35"
+  },
+  {
+   "id": "16622",
+   "name": "Thessaloniki (Airport), Greece",
+   "lat": 40.51,
+   "lon": 22.96,
+   "src": "FM35"
+  },
+  {
+   "id": "16716",
+   "name": "Athinai (Airport), Greece",
+   "lat": 37.89027,
+   "lon": 23.74217,
+   "src": "FM35"
+  },
+  {
+   "id": "16754",
+   "name": "Heraklion (Airport), Greece",
+   "lat": 35.33553,
+   "lon": 25.18189,
+   "src": "FM35"
+  },
+  {
+   "id": "17030",
+   "name": "Samsun, Turkey",
+   "lat": 41.28,
+   "lon": 36.3,
+   "src": "FM35"
+  },
+  {
+   "id": "17064",
+   "name": "Istanbul/Kartal, Turkey",
+   "lat": 40.91,
+   "lon": 29.16,
+   "src": "FM35"
+  },
+  {
+   "id": "17095",
+   "name": "Erzurum Bolge, Turkey",
+   "lat": 39.91,
+   "lon": 41.25,
+   "src": "FM35"
+  },
+  {
+   "id": "17130",
+   "name": "Ankara/Central, Turkey",
+   "lat": 39.97,
+   "lon": 32.86,
+   "src": "FM35"
+  },
+  {
+   "id": "17196",
+   "name": "Kayseri, Turkey",
+   "lat": 38.69,
+   "lon": 35.5,
+   "src": "FM35"
+  },
+  {
+   "id": "17220",
+   "name": "Izmir/Guzelyali, Turkey",
+   "lat": 38.3948,
+   "lon": 27.0818,
+   "src": "FM35"
+  },
+  {
+   "id": "17240",
+   "name": "Isparta, Turkey",
+   "lat": 37.78,
+   "lon": 30.57,
+   "src": "FM35"
+  },
+  {
+   "id": "17281",
+   "name": "Diyarbakir-Bolge, Turkey",
+   "lat": 37.91,
+   "lon": 40.21,
+   "src": "FM35"
+  },
+  {
+   "id": "17351",
+   "name": "Adana/Bolge, Turkey",
+   "lat": 37.0,
+   "lon": 35.34,
+   "src": "FM35"
+  },
+  {
+   "id": "17516",
+   "name": "",
+   "lat": 35.19568,
+   "lon": 33.35157,
+   "src": "BUFR"
+  },
+  {
+   "id": "17607",
+   "name": "Athalassa, Cyprus",
+   "lat": 35.15,
+   "lon": 33.4,
+   "src": "FM35"
+  },
+  {
+   "id": "20046",
+   "name": "Polargmo Im. E.T. Krenkelja, Russian Federation (In Asia)",
+   "lat": 80.61,
+   "lon": 58.05,
+   "src": "FM35"
+  },
+  {
+   "id": "20292",
+   "name": "Gmo Im.E.K. Fedorova, Russian Federation (In Asia)",
+   "lat": 77.71716,
+   "lon": 104.22984,
+   "src": "FM35"
+  },
+  {
+   "id": "20674",
+   "name": "Ostrov Dikson, Russian Federation (In Asia)",
+   "lat": 73.5,
+   "lon": 80.4,
+   "src": "FM35"
+  },
+  {
+   "id": "20744",
+   "name": "Malye Karmakuly, Russian Federation (In Asia)",
+   "lat": 72.36,
+   "lon": 52.7,
+   "src": "FM35"
+  },
+  {
+   "id": "21432",
+   "name": "Ostrov Kotel'Nyj, Russian Federation (In Asia)",
+   "lat": 76.0,
+   "lon": 137.86,
+   "src": "FM35"
+  },
+  {
+   "id": "21824",
+   "name": "Tiksi, Russian Federation (In Asia)",
+   "lat": 71.58,
+   "lon": 128.91,
+   "src": "FM35"
+  },
+  {
+   "id": "21946",
+   "name": "Chokurdah, Russian Federation (In Asia)",
+   "lat": 70.61,
+   "lon": 147.88,
+   "src": "FM35"
+  },
+  {
+   "id": "22008",
+   "name": "Murmansk, Russia",
+   "lat": 68.99,
+   "lon": 33.13,
+   "src": "FM35"
+  },
+  {
+   "id": "22113",
+   "name": "Murmansk, Russian Federation (In Europe)",
+   "lat": 68.98,
+   "lon": 33.11,
+   "src": "FM35"
+  },
+  {
+   "id": "22217",
+   "name": "Kandalaksha, Russian Federation (In Europe)",
+   "lat": 67.15,
+   "lon": 32.35,
+   "src": "FM35"
+  },
+  {
+   "id": "22271",
+   "name": "Shojna, Russian Federation (In Europe)",
+   "lat": 67.88,
+   "lon": 44.13,
+   "src": "FM35"
+  },
+  {
+   "id": "22522",
+   "name": "Kem', Russian Federation (In Europe)",
+   "lat": 64.95,
+   "lon": 34.65,
+   "src": "FM35"
+  },
+  {
+   "id": "22543",
+   "name": "Maymaksa, Russia",
+   "lat": 64.62,
+   "lon": 40.51,
+   "src": "FM35"
+  },
+  {
+   "id": "22820",
+   "name": "Petrozavodsk, Russian Federation (In Europe)",
+   "lat": 61.81,
+   "lon": 34.26,
+   "src": "FM35"
+  },
+  {
+   "id": "22845",
+   "name": "Kargopol', Russian Federation (In Europe)",
+   "lat": 61.5,
+   "lon": 38.93,
+   "src": "FM35"
+  },
+  {
+   "id": "23078",
+   "name": "Norilsk, Russia",
+   "lat": 69.32,
+   "lon": 88.22,
+   "src": "FM35"
+  },
+  {
+   "id": "23205",
+   "name": "Nar'Jan-Mar, Russian Federation (In Asia)",
+   "lat": 67.63,
+   "lon": 53.03,
+   "src": "FM35"
+  },
+  {
+   "id": "23330",
+   "name": "Salehard, Russian Federation (In Asia)",
+   "lat": 66.53,
+   "lon": 66.66,
+   "src": "FM35"
+  },
+  {
+   "id": "23415",
+   "name": "Pechora, Russia",
+   "lat": 65.12,
+   "lon": 57.13,
+   "src": "FM35"
+  },
+  {
+   "id": "23472",
+   "name": "Turuhansk, Russian Federation (In Asia)",
+   "lat": 65.78,
+   "lon": 87.93,
+   "src": "FM35"
+  },
+  {
+   "id": "23802",
+   "name": "Syktyvkar, Russia",
+   "lat": 61.68,
+   "lon": 50.79,
+   "src": "FM35"
+  },
+  {
+   "id": "23884",
+   "name": "Bor, Russian Federation (In Asia)",
+   "lat": 61.6,
+   "lon": 90.01,
+   "src": "FM35"
+  },
+  {
+   "id": "23921",
+   "name": "Ivdel', Russian Federation (In Asia)",
+   "lat": 60.68,
+   "lon": 60.45,
+   "src": "FM35"
+  },
+  {
+   "id": "23933",
+   "name": "Hanty-Mansijsk, Russian Federation (In Asia)",
+   "lat": 61.01,
+   "lon": 69.03,
+   "src": "FM35"
+  },
+  {
+   "id": "23955",
+   "name": "Aleksandrovskoe, Russian Federation (In Asia)",
+   "lat": 60.43,
+   "lon": 77.86,
+   "src": "FM35"
+  },
+  {
+   "id": "24122",
+   "name": "Olenek, Russia",
+   "lat": 68.5,
+   "lon": 112.43,
+   "src": "FM35"
+  },
+  {
+   "id": "24125",
+   "name": "Olenek, Russian Federation (In Asia)",
+   "lat": 68.5,
+   "lon": 112.43,
+   "src": "FM35"
+  },
+  {
+   "id": "24266",
+   "name": "Verhojansk, Russian Federation (In Asia)",
+   "lat": 67.56,
+   "lon": 133.4,
+   "src": "FM35"
+  },
+  {
+   "id": "24343",
+   "name": "Zhigansk, Russian Federation (In Asia)",
+   "lat": 66.76,
+   "lon": 123.4,
+   "src": "FM35"
+  },
+  {
+   "id": "24507",
+   "name": "Tura, Russian Federation (In Asia)",
+   "lat": 64.26,
+   "lon": 100.23,
+   "src": "FM35"
+  },
+  {
+   "id": "24641",
+   "name": "Viljujsk, Russian Federation (In Asia)",
+   "lat": 63.76,
+   "lon": 121.61,
+   "src": "FM35"
+  },
+  {
+   "id": "24688",
+   "name": "Ojmjakon, Russian Federation (In Asia)",
+   "lat": 63.25,
+   "lon": 143.15,
+   "src": "FM35"
+  },
+  {
+   "id": "24726",
+   "name": "Mirnvy, Russian Federation (In Asia)",
+   "lat": 62.53,
+   "lon": 113.86,
+   "src": "FM35"
+  },
+  {
+   "id": "24908",
+   "name": "Vanavara, Russian Federation (In Asia)",
+   "lat": 60.33,
+   "lon": 102.26,
+   "src": "FM35"
+  },
+  {
+   "id": "24944",
+   "name": "Olekminsk, Russian Federation (In Asia)",
+   "lat": 60.36,
+   "lon": 120.41,
+   "src": "FM35"
+  },
+  {
+   "id": "24947",
+   "name": "Olekminsk, Russia",
+   "lat": 60.37,
+   "lon": 120.42,
+   "src": "FM35"
+  },
+  {
+   "id": "24959",
+   "name": "Jakutsk, Russian Federation (In Asia)",
+   "lat": 62.01,
+   "lon": 129.71,
+   "src": "FM35"
+  },
+  {
+   "id": "25123",
+   "name": "Cherskij, Russian Federation (In Asia)",
+   "lat": 68.75,
+   "lon": 161.28,
+   "src": "FM35"
+  },
+  {
+   "id": "25400",
+   "name": "Zyryanka, Russian Federation (In Asia)",
+   "lat": 65.73,
+   "lon": 150.9,
+   "src": "FM35"
+  },
+  {
+   "id": "25403",
+   "name": "Zyrjanka, Russia",
+   "lat": 65.72,
+   "lon": 150.9,
+   "src": "FM35"
+  },
+  {
+   "id": "25428",
+   "name": "Omolon, Russian Federation (In Asia)",
+   "lat": 65.23,
+   "lon": 160.53,
+   "src": "FM35"
+  },
+  {
+   "id": "25703",
+   "name": "Sejmchan, Russian Federation (In Asia)",
+   "lat": 62.91,
+   "lon": 152.41,
+   "src": "FM35"
+  },
+  {
+   "id": "25913",
+   "name": "Magadan, Russian Federation (In Asia)",
+   "lat": 59.55,
+   "lon": 150.78,
+   "src": "FM35"
+  },
+  {
+   "id": "26038",
+   "name": "Tallinn, Estonia",
+   "lat": 59.38,
+   "lon": 24.58,
+   "src": "FM35"
+  },
+  {
+   "id": "26063",
+   "name": "St.Petersburg (Voejkovo), Russian Federation (In Europe)",
+   "lat": 59.95,
+   "lon": 30.7,
+   "src": "FM35"
+  },
+  {
+   "id": "26075",
+   "name": "St Petersburg/Voejkovo, Russia",
+   "lat": 59.95,
+   "lon": 30.7,
+   "src": "FM35"
+  },
+  {
+   "id": "26298",
+   "name": "Bologoe, Russian Federation (In Europe)",
+   "lat": 57.9,
+   "lon": 34.05,
+   "src": "FM35"
+  },
+  {
+   "id": "26477",
+   "name": "Velikie Luki, Russian Federation (In Europe)",
+   "lat": 56.35,
+   "lon": 30.61,
+   "src": "FM35"
+  },
+  {
+   "id": "26629",
+   "name": "Kaunas, Lithuania",
+   "lat": 54.88,
+   "lon": 23.88,
+   "src": "FM35"
+  },
+  {
+   "id": "26702",
+   "name": "Kaliningrad, Russian Federation (In Europe)",
+   "lat": 54.71,
+   "lon": 20.55,
+   "src": "FM35"
+  },
+  {
+   "id": "26708",
+   "name": "Kaliningrad, Russia",
+   "lat": 54.7,
+   "lon": 20.77,
+   "src": "FM35"
+  },
+  {
+   "id": "26781",
+   "name": "Smolensk, Russian Federation (In Europe)",
+   "lat": 54.75,
+   "lon": 32.06,
+   "src": "FM35"
+  },
+  {
+   "id": "27038",
+   "name": "Vologda, Russia",
+   "lat": 59.32,
+   "lon": 39.93,
+   "src": "FM35"
+  },
+  {
+   "id": "27199",
+   "name": "Kirov, Russian Federation (In Europe)",
+   "lat": 58.6,
+   "lon": 49.63,
+   "src": "FM35"
+  },
+  {
+   "id": "27459",
+   "name": "Nizhnij Novgorod, Russian Federation (In Europe)",
+   "lat": 56.26,
+   "lon": 44.0,
+   "src": "FM35"
+  },
+  {
+   "id": "27594",
+   "name": "Kolkhoznaya Ulitsa, Russia",
+   "lat": 55.81,
+   "lon": 48.51,
+   "src": "FM35"
+  },
+  {
+   "id": "27595",
+   "name": "Kazan', Russian Federation (In Europe)",
+   "lat": 55.6,
+   "lon": 49.28,
+   "src": "FM35"
+  },
+  {
+   "id": "27612",
+   "name": "Moskva (Dolgoprudnyj), Russian Federation (In Europe)",
+   "lat": 55.75,
+   "lon": 37.95,
+   "src": "FM35"
+  },
+  {
+   "id": "27707",
+   "name": "Suhinichi, Russian Federation (In Europe)",
+   "lat": 54.1,
+   "lon": 35.35,
+   "src": "FM35"
+  },
+  {
+   "id": "27713",
+   "name": "Moskva/Dolgoprudny, Russia",
+   "lat": 55.93,
+   "lon": 37.52,
+   "src": "FM35"
+  },
+  {
+   "id": "27730",
+   "name": "Ryazan', Russian Federation (In Europe)",
+   "lat": 54.63,
+   "lon": 39.7,
+   "src": "FM35"
+  },
+  {
+   "id": "27962",
+   "name": "Penza, Russian Federation (In Europe)",
+   "lat": 53.11,
+   "lon": 45.01,
+   "src": "FM35"
+  },
+  {
+   "id": "27995",
+   "name": "Samara (Bezenchuk), Russian Federation (In Europe)",
+   "lat": 52.98,
+   "lon": 49.43,
+   "src": "FM35"
+  },
+  {
+   "id": "28225",
+   "name": "Perm', Russian Federation (In Asia)",
+   "lat": 57.95,
+   "lon": 56.2,
+   "src": "FM35"
+  },
+  {
+   "id": "28275",
+   "name": "Tobol'Sk, Russian Federation (In Asia)",
+   "lat": 58.15,
+   "lon": 68.25,
+   "src": "FM35"
+  },
+  {
+   "id": "28445",
+   "name": "Verhnee Dubrovo, Russian Federation (In Asia)",
+   "lat": 56.73,
+   "lon": 61.06,
+   "src": "FM35"
+  },
+  {
+   "id": "28661",
+   "name": "Kurgan, Russian Federation (In Asia)",
+   "lat": 55.46,
+   "lon": 65.4,
+   "src": "FM35"
+  },
+  {
+   "id": "28695",
+   "name": "Omsk, Russia",
+   "lat": 54.93,
+   "lon": 73.4,
+   "src": "FM35"
+  },
+  {
+   "id": "28698",
+   "name": "Omsk, Russian Federation (In Asia)",
+   "lat": 54.93,
+   "lon": 73.4,
+   "src": "FM35"
+  },
+  {
+   "id": "28722",
+   "name": "Ufa-Dioma, Russian Federation (In Asia)",
+   "lat": 54.71,
+   "lon": 55.83,
+   "src": "FM35"
+  },
+  {
+   "id": "28951",
+   "name": "Kostanai, Kazakhstan",
+   "lat": 53.23,
+   "lon": 63.62,
+   "src": "FM35"
+  },
+  {
+   "id": "29231",
+   "name": "Kolpasevo, Russian Federation (In Asia)",
+   "lat": 58.31,
+   "lon": 82.95,
+   "src": "FM35"
+  },
+  {
+   "id": "29263",
+   "name": "Enisejsk, Russian Federation (In Asia)",
+   "lat": 58.45,
+   "lon": 92.15,
+   "src": "FM35"
+  },
+  {
+   "id": "29282",
+   "name": "Bogucany, Russian Federation (In Asia)",
+   "lat": 58.38,
+   "lon": 97.45,
+   "src": "FM35"
+  },
+  {
+   "id": "29572",
+   "name": "Emel'Janovo, Russian Federation (In Asia)",
+   "lat": 56.18,
+   "lon": 92.61,
+   "src": "FM35"
+  },
+  {
+   "id": "29612",
+   "name": "Barabinsk, Russian Federation (In Asia)",
+   "lat": 55.33,
+   "lon": 78.36,
+   "src": "FM35"
+  },
+  {
+   "id": "29634",
+   "name": "Novosibirsk, Russian Federation (In Asia)",
+   "lat": 54.96,
+   "lon": 82.95,
+   "src": "FM35"
+  },
+  {
+   "id": "29698",
+   "name": "Nizhneudinsk, Russian Federation (In Asia)",
+   "lat": 54.88,
+   "lon": 99.03,
+   "src": "FM35"
+  },
+  {
+   "id": "29839",
+   "name": "Barnaul, Russian Federation (In Asia)",
+   "lat": 53.35,
+   "lon": 83.81,
+   "src": "FM35"
+  },
+  {
+   "id": "29862",
+   "name": "Hakasskaja, Russian Federation (In Asia)",
+   "lat": 53.76,
+   "lon": 91.31,
+   "src": "FM35"
+  },
+  {
+   "id": "30054",
+   "name": "Vitim, Russian Federation (In Asia)",
+   "lat": 59.45,
+   "lon": 112.58,
+   "src": "FM35"
+  },
+  {
+   "id": "30230",
+   "name": "Kirensk, Russian Federation (In Asia)",
+   "lat": 57.76,
+   "lon": 108.06,
+   "src": "FM35"
+  },
+  {
+   "id": "30309",
+   "name": "Bratsk, Russian Federation (In Asia)",
+   "lat": 56.28,
+   "lon": 101.75,
+   "src": "FM35"
+  },
+  {
+   "id": "30372",
+   "name": "Chara, Russian Federation (In Asia)",
+   "lat": 56.9,
+   "lon": 118.26,
+   "src": "FM35"
+  },
+  {
+   "id": "30554",
+   "name": "Bagdarin, Russian Federation (In Asia)",
+   "lat": 54.48,
+   "lon": 113.58,
+   "src": "FM35"
+  },
+  {
+   "id": "30557",
+   "name": "Bagdarin, Russia",
+   "lat": 54.47,
+   "lon": 113.58,
+   "src": "FM35"
+  },
+  {
+   "id": "30635",
+   "name": "Ust'-Barguzin, Russian Federation (In Asia)",
+   "lat": 53.41,
+   "lon": 109.01,
+   "src": "FM35"
+  },
+  {
+   "id": "30673",
+   "name": "Mogoca, Russian Federation (In Asia)",
+   "lat": 53.75,
+   "lon": 119.73,
+   "src": "FM35"
+  },
+  {
+   "id": "30715",
+   "name": "Angarsk, Russian Federation (In Asia)",
+   "lat": 52.48,
+   "lon": 103.85,
+   "src": "FM35"
+  },
+  {
+   "id": "30758",
+   "name": "Chita, Russian Federation (In Asia)",
+   "lat": 52.08,
+   "lon": 113.48,
+   "src": "FM35"
+  },
+  {
+   "id": "30935",
+   "name": "Krasnyj Chikoj, Russian Federation (In Asia)",
+   "lat": 50.36,
+   "lon": 108.75,
+   "src": "FM35"
+  },
+  {
+   "id": "30965",
+   "name": "Borzya, Russian Federation (In Asia)",
+   "lat": 50.4,
+   "lon": 116.51,
+   "src": "FM35"
+  },
+  {
+   "id": "31004",
+   "name": "Aldan, Russian Federation (In Asia)",
+   "lat": 58.61,
+   "lon": 125.36,
+   "src": "FM35"
+  },
+  {
+   "id": "31088",
+   "name": "Ohotsk, Russian Federation (In Asia)",
+   "lat": 59.36,
+   "lon": 143.2,
+   "src": "FM35"
+  },
+  {
+   "id": "31168",
+   "name": "Ayan, Russian Federation (In Asia)",
+   "lat": 56.45,
+   "lon": 138.15,
+   "src": "FM35"
+  },
+  {
+   "id": "31300",
+   "name": "Zeja, Russian Federation (In Asia)",
+   "lat": 53.7,
+   "lon": 127.3,
+   "src": "FM35"
+  },
+  {
+   "id": "31369",
+   "name": "Nikolaevsk-Na-Amure, Russian Federation (In Asia)",
+   "lat": 53.15,
+   "lon": 140.7,
+   "src": "FM35"
+  },
+  {
+   "id": "31510",
+   "name": "Blagovescensk, Russian Federation (In Asia)",
+   "lat": 50.53,
+   "lon": 127.5,
+   "src": "FM35"
+  },
+  {
+   "id": "31538",
+   "name": "Sutur, Russian Federation (In Asia)",
+   "lat": 50.07,
+   "lon": 132.13,
+   "src": "FM35"
+  },
+  {
+   "id": "31736",
+   "name": "Habarovsk, Russian Federation (In Asia)",
+   "lat": 48.53,
+   "lon": 135.23,
+   "src": "FM35"
+  },
+  {
+   "id": "31770",
+   "name": "Sovetskay Gavan, Russia",
+   "lat": 49.0,
+   "lon": 140.27,
+   "src": "FM35"
+  },
+  {
+   "id": "31873",
+   "name": "Dal'Nerechensk, Russian Federation (In Asia)",
+   "lat": 45.86,
+   "lon": 133.73,
+   "src": "FM35"
+  },
+  {
+   "id": "31977",
+   "name": "Vladivostok (Sad Gorod), Russian Federation (In Asia)",
+   "lat": 43.26,
+   "lon": 132.05,
+   "src": "FM35"
+  },
+  {
+   "id": "32061",
+   "name": "Aleksandrovsk-Sahalinskij, Russian Federation (In Asia)",
+   "lat": 50.9,
+   "lon": 142.16,
+   "src": "FM35"
+  },
+  {
+   "id": "32098",
+   "name": "Poronajsk, Russian Federation (In Asia)",
+   "lat": 49.22,
+   "lon": 143.1,
+   "src": "FM35"
+  },
+  {
+   "id": "32150",
+   "name": "Juzhno-Sahalinsk, Russian Federation (In Asia)",
+   "lat": 46.95,
+   "lon": 142.71,
+   "src": "FM35"
+  },
+  {
+   "id": "32215",
+   "name": "Severo-Kuril'Sk, Russian Federation (In Asia)",
+   "lat": 50.68,
+   "lon": 156.13,
+   "src": "FM35"
+  },
+  {
+   "id": "323306",
+   "name": "AF306 dropsonde #23",
+   "lat": 28.4,
+   "lon": -86.8,
+   "src": "FM37"
+  },
+  {
+   "id": "32389",
+   "name": "Kljuchi, Russian Federation (In Asia)",
+   "lat": 56.31,
+   "lon": 160.83,
+   "src": "FM35"
+  },
+  {
+   "id": "32477",
+   "name": "Sobolevo, Russia",
+   "lat": 54.3,
+   "lon": 155.97,
+   "src": "FM35"
+  },
+  {
+   "id": "32540",
+   "name": "Petropavlovsk-Kamchatskij, Russian Federation (In Asia)",
+   "lat": 53.08,
+   "lon": 158.58,
+   "src": "FM35"
+  },
+  {
+   "id": "32618",
+   "name": "Ostrov Beringa, Russian Federation (In Asia)",
+   "lat": 55.2,
+   "lon": 165.98,
+   "src": "FM35"
+  },
+  {
+   "id": "33041",
+   "name": "Gomel', Belarus",
+   "lat": 52.4,
+   "lon": 30.95,
+   "src": "FM35"
+  },
+  {
+   "id": "33345",
+   "name": "Kyiv, Ukraine",
+   "lat": 50.4,
+   "lon": 30.56,
+   "src": "FM35"
+  },
+  {
+   "id": "33393",
+   "name": "L'Viv, Ukraine",
+   "lat": 49.81,
+   "lon": 23.95,
+   "src": "FM35"
+  },
+  {
+   "id": "33658",
+   "name": "Chernivtsi, Ukraine",
+   "lat": 48.36,
+   "lon": 25.9,
+   "src": "FM35"
+  },
+  {
+   "id": "33791",
+   "name": "Kryvyi Rih, Ukraine",
+   "lat": 48.03,
+   "lon": 33.21,
+   "src": "FM35"
+  },
+  {
+   "id": "33837",
+   "name": "Odesa, Ukraine",
+   "lat": 46.43,
+   "lon": 30.76,
+   "src": "FM35"
+  },
+  {
+   "id": "34009",
+   "name": "Kursk, Russian Federation (In Europe)",
+   "lat": 51.76,
+   "lon": 36.16,
+   "src": "FM35"
+  },
+  {
+   "id": "34122",
+   "name": "Voronez, Russian Federation (In Europe)",
+   "lat": 51.65,
+   "lon": 39.25,
+   "src": "FM35"
+  },
+  {
+   "id": "34172",
+   "name": "Saratov, Russian Federation (In Europe)",
+   "lat": 51.56,
+   "lon": 46.03,
+   "src": "FM35"
+  },
+  {
+   "id": "34247",
+   "name": "Kalac, Russian Federation (In Europe)",
+   "lat": 50.41,
+   "lon": 41.05,
+   "src": "FM35"
+  },
+  {
+   "id": "34300",
+   "name": "Kharkiv, Ukraine",
+   "lat": 49.96,
+   "lon": 36.13,
+   "src": "FM35"
+  },
+  {
+   "id": "34467",
+   "name": "Volgograd, Russian Federation (In Asia)",
+   "lat": 48.68,
+   "lon": 44.35,
+   "src": "FM35"
+  },
+  {
+   "id": "34731",
+   "name": "Rostov-Na-Donu, Russian Federation (In Europe)",
+   "lat": 47.25,
+   "lon": 39.81,
+   "src": "FM35"
+  },
+  {
+   "id": "34858",
+   "name": "Divnoe, Russian Federation (In Europe)",
+   "lat": 45.91,
+   "lon": 43.35,
+   "src": "FM35"
+  },
+  {
+   "id": "34882",
+   "name": "Astrakhan, Russia",
+   "lat": 46.27,
+   "lon": 48.03,
+   "src": "FM35"
+  },
+  {
+   "id": "35121",
+   "name": "Orenburg, Russian Federation (In Asia)",
+   "lat": 51.68,
+   "lon": 55.1,
+   "src": "FM35"
+  },
+  {
+   "id": "35229",
+   "name": "Aktobe, Kazakhstan",
+   "lat": 50.28,
+   "lon": 57.15,
+   "src": "FM35"
+  },
+  {
+   "id": "35394",
+   "name": "Karaganda, Kazakhstan",
+   "lat": 49.8,
+   "lon": 73.15,
+   "src": "FM35"
+  },
+  {
+   "id": "35671",
+   "name": "Zhezkazgan, Kazakhstan",
+   "lat": 47.8,
+   "lon": 67.71,
+   "src": "FM35"
+  },
+  {
+   "id": "35700",
+   "name": "Atyrau, Kazakhstan",
+   "lat": 47.11,
+   "lon": 51.91,
+   "src": "FM35"
+  },
+  {
+   "id": "35905301",
+   "name": "AF301 dropsonde #5",
+   "lat": 21.2,
+   "lon": -69.8,
+   "src": "FM37"
+  },
+  {
+   "id": "35906301",
+   "name": "AF301 dropsonde #6",
+   "lat": 22.2,
+   "lon": -68.8,
+   "src": "FM37"
+  },
+  {
+   "id": "35907301",
+   "name": "AF301 dropsonde #7",
+   "lat": 22.2,
+   "lon": -68.6,
+   "src": "FM37"
+  },
+  {
+   "id": "35907304",
+   "name": "AF304 dropsonde #7",
+   "lat": 16.7,
+   "lon": -84.8,
+   "src": "FM37"
+  },
+  {
+   "id": "35908301",
+   "name": "AF301 dropsonde #8",
+   "lat": 22.7,
+   "lon": -68.0,
+   "src": "FM37"
+  },
+  {
+   "id": "35913308",
+   "name": "AF308 dropsonde #13",
+   "lat": 44.3,
+   "lon": -137.8,
+   "src": "FM37"
+  },
+  {
+   "id": "35914308",
+   "name": "AF308 dropsonde #14",
+   "lat": 44.4,
+   "lon": -139.5,
+   "src": "FM37"
+  },
+  {
+   "id": "35915308",
+   "name": "AF308 dropsonde #15",
+   "lat": 44.5,
+   "lon": -141.0,
+   "src": "FM37"
+  },
+  {
+   "id": "35916308",
+   "name": "AF308 dropsonde #16",
+   "lat": 44.1,
+   "lon": -142.5,
+   "src": "FM37"
+  },
+  {
+   "id": "36003",
+   "name": "Pavlodar, Kazakhstan",
+   "lat": 52.3,
+   "lon": 76.93,
+   "src": "FM35"
+  },
+  {
+   "id": "36009304",
+   "name": "AF304 dropsonde #9",
+   "lat": 15.8,
+   "lon": -83.8,
+   "src": "FM37"
+  },
+  {
+   "id": "36010301",
+   "name": "AF301 dropsonde #10",
+   "lat": 24.1,
+   "lon": -66.8,
+   "src": "FM37"
+  },
+  {
+   "id": "36011304",
+   "name": "AF304 dropsonde #11",
+   "lat": 14.8,
+   "lon": -82.7,
+   "src": "FM37"
+  },
+  {
+   "id": "36017308",
+   "name": "AF308 dropsonde #17",
+   "lat": 43.6,
+   "lon": -144.0,
+   "src": "FM37"
+  },
+  {
+   "id": "36018308",
+   "name": "AF308 dropsonde #18",
+   "lat": 43.1,
+   "lon": -145.5,
+   "src": "FM37"
+  },
+  {
+   "id": "36019308",
+   "name": "AF308 dropsonde #19",
+   "lat": 42.6,
+   "lon": -147.0,
+   "src": "FM37"
+  },
+  {
+   "id": "36096",
+   "name": "Kyzyl, Russia",
+   "lat": 51.71,
+   "lon": 94.5,
+   "src": "FM35"
+  },
+  {
+   "id": "36112301",
+   "name": "AF301 dropsonde #12",
+   "lat": 23.7,
+   "lon": -70.0,
+   "src": "FM37"
+  },
+  {
+   "id": "36113304",
+   "name": "AF304 dropsonde #13",
+   "lat": 16.8,
+   "lon": -82.9,
+   "src": "FM37"
+  },
+  {
+   "id": "36114301",
+   "name": "AF301 dropsonde #14",
+   "lat": 22.7,
+   "lon": -69.0,
+   "src": "FM37"
+  },
+  {
+   "id": "36115301",
+   "name": "AF301 dropsonde #15",
+   "lat": 22.5,
+   "lon": -68.8,
+   "src": "FM37"
+  },
+  {
+   "id": "36116301",
+   "name": "AF301 dropsonde #16",
+   "lat": 22.5,
+   "lon": -68.6,
+   "src": "FM37"
+  },
+  {
+   "id": "36117301",
+   "name": "AF301 dropsonde #17",
+   "lat": 21.7,
+   "lon": -67.9,
+   "src": "FM37"
+  },
+  {
+   "id": "36120308",
+   "name": "AF308 dropsonde #20",
+   "lat": 42.1,
+   "lon": -148.4,
+   "src": "FM37"
+  },
+  {
+   "id": "36121308",
+   "name": "AF308 dropsonde #21",
+   "lat": 41.5,
+   "lon": -149.8,
+   "src": "FM37"
+  },
+  {
+   "id": "36122308",
+   "name": "AF308 dropsonde #22",
+   "lat": 41.5,
+   "lon": -148.5,
+   "src": "FM37"
+  },
+  {
+   "id": "36123308",
+   "name": "AF308 dropsonde #23",
+   "lat": 41.6,
+   "lon": -147.0,
+   "src": "FM37"
+  },
+  {
+   "id": "36124308",
+   "name": "AF308 dropsonde #24",
+   "lat": 41.6,
+   "lon": -145.5,
+   "src": "FM37"
+  },
+  {
+   "id": "36872",
+   "name": "Almaty, Russia",
+   "lat": 43.36,
+   "lon": 77.0,
+   "src": "FM35"
+  },
+  {
+   "id": "37011",
+   "name": "Tuapse, Russia",
+   "lat": 44.1,
+   "lon": 39.07,
+   "src": "FM35"
+  },
+  {
+   "id": "37055",
+   "name": "Mineral'Nye Vody, Russia",
+   "lat": 44.22,
+   "lon": 43.1,
+   "src": "FM35"
+  },
+  {
+   "id": "37105308",
+   "name": "AF308 dropsonde #5",
+   "lat": 23.6,
+   "lon": -70.3,
+   "src": "FM37"
+  },
+  {
+   "id": "37107308",
+   "name": "AF308 dropsonde #7",
+   "lat": 24.4,
+   "lon": -69.3,
+   "src": "FM37"
+  },
+  {
+   "id": "37108308",
+   "name": "AF308 dropsonde #8",
+   "lat": 24.5,
+   "lon": -69.3,
+   "src": "FM37"
+  },
+  {
+   "id": "37210308",
+   "name": "AF308 dropsonde #10",
+   "lat": 25.2,
+   "lon": -68.6,
+   "src": "FM37"
+  },
+  {
+   "id": "37211308",
+   "name": "AF308 dropsonde #11",
+   "lat": 25.9,
+   "lon": -67.9,
+   "src": "FM37"
+  },
+  {
+   "id": "37259",
+   "name": "Mahachkala, Russia",
+   "lat": 43.01,
+   "lon": 47.48,
+   "src": "FM35"
+  },
+  {
+   "id": "37301009",
+   "name": "NOAA9 dropsonde #1",
+   "lat": 27.3,
+   "lon": -72.8,
+   "src": "FM37"
+  },
+  {
+   "id": "37302009",
+   "name": "NOAA9 dropsonde #2",
+   "lat": 27.0,
+   "lon": -71.7,
+   "src": "FM37"
+  },
+  {
+   "id": "37313308",
+   "name": "AF308 dropsonde #13",
+   "lat": 25.8,
+   "lon": -70.5,
+   "src": "FM37"
+  },
+  {
+   "id": "37314308",
+   "name": "AF308 dropsonde #14",
+   "lat": 25.3,
+   "lon": -69.9,
+   "src": "FM37"
+  },
+  {
+   "id": "37316308",
+   "name": "AF308 dropsonde #16",
+   "lat": 24.6,
+   "lon": -69.2,
+   "src": "FM37"
+  },
+  {
+   "id": "37317308",
+   "name": "AF308 dropsonde #17",
+   "lat": 24.5,
+   "lon": -69.1,
+   "src": "FM37"
+  },
+  {
+   "id": "37318308",
+   "name": "AF308 dropsonde #18",
+   "lat": 23.9,
+   "lon": -68.5,
+   "src": "FM37"
+  },
+  {
+   "id": "37789",
+   "name": "Yerevan/Yerevan-Arabkir, Armenia",
+   "lat": 40.13,
+   "lon": 44.46,
+   "src": "FM35"
+  },
+  {
+   "id": "38064",
+   "name": "Kyzylorda, Kazakhstan",
+   "lat": 44.77,
+   "lon": 65.52,
+   "src": "FM35"
+  },
+  {
+   "id": "38341",
+   "name": "Zhambyl, Kazakhstan",
+   "lat": 42.85,
+   "lon": 71.38,
+   "src": "FM35"
+  },
+  {
+   "id": "3923009",
+   "name": "NOAA9 dropsonde #23",
+   "lat": 20.3,
+   "lon": -154.8,
+   "src": "FM37"
+  },
+  {
+   "id": "40179",
+   "name": "Bet Dagan, Israel",
+   "lat": 32.007,
+   "lon": 34.8149,
+   "src": "FM35"
+  },
+  {
+   "id": "40186",
+   "name": "",
+   "lat": 31.8667,
+   "lon": 34.6833,
+   "src": "BUFR"
+  },
+  {
+   "id": "4023009",
+   "name": "NOAA9 dropsonde #23",
+   "lat": 19.4,
+   "lon": -154.5,
+   "src": "FM37"
+  },
+  {
+   "id": "40265",
+   "name": "Mafraq, Jordan",
+   "lat": 32.36,
+   "lon": 36.25,
+   "src": "FM35"
+  },
+  {
+   "id": "40373",
+   "name": "Al-Qaisumah, Saudi Arabia",
+   "lat": 28.31,
+   "lon": 46.13,
+   "src": "FM35"
+  },
+  {
+   "id": "40375",
+   "name": "Tabuk, Saudi Arabia",
+   "lat": 28.38,
+   "lon": 36.6,
+   "src": "FM35"
+  },
+  {
+   "id": "40394",
+   "name": "Hail, Saudi Arabia",
+   "lat": 27.43,
+   "lon": 41.68,
+   "src": "FM35"
+  },
+  {
+   "id": "40417",
+   "name": "K.F.I.A. (King Fahad Int. Airport) Dammam, Saudi Arabia",
+   "lat": 26.45,
+   "lon": 49.81,
+   "src": "FM35"
+  },
+  {
+   "id": "40430",
+   "name": "Al-Madinah, Saudi Arabia",
+   "lat": 24.55,
+   "lon": 39.7,
+   "src": "FM35"
+  },
+  {
+   "id": "40437",
+   "name": "King Khaled Int. Airport, Saudi Arabia",
+   "lat": 24.93,
+   "lon": 46.71,
+   "src": "FM35"
+  },
+  {
+   "id": "40582",
+   "name": "Kuwait International Airport, Kuwait",
+   "lat": 29.21,
+   "lon": 47.98,
+   "src": "FM35"
+  },
+  {
+   "id": "40650",
+   "name": "Baghdad, Iraq",
+   "lat": 33.23,
+   "lon": 44.23,
+   "src": "FM35"
+  },
+  {
+   "id": "40706",
+   "name": "Tabriz, Iran, Islamic Republic Of",
+   "lat": 38.08,
+   "lon": 46.28,
+   "src": "FM35"
+  },
+  {
+   "id": "40738",
+   "name": "Gorgan, Iran",
+   "lat": 36.82,
+   "lon": 54.47,
+   "src": "FM35"
+  },
+  {
+   "id": "40745",
+   "name": "Mashhad, Iran, Islamic Republic Of",
+   "lat": 36.26,
+   "lon": 59.63,
+   "src": "FM35"
+  },
+  {
+   "id": "40754",
+   "name": "Tehran-Mehrabad, Iran, Islamic Republic Of",
+   "lat": 35.68,
+   "lon": 51.35,
+   "src": "FM35"
+  },
+  {
+   "id": "40766",
+   "name": "Kermanshah, Iran, Islamic Republic Of",
+   "lat": 34.26,
+   "lon": 47.11,
+   "src": "FM35"
+  },
+  {
+   "id": "40800",
+   "name": "Esfahan, Iran, Islamic Republic Of",
+   "lat": 32.46,
+   "lon": 51.71,
+   "src": "FM35"
+  },
+  {
+   "id": "40809",
+   "name": "Birjand, Iran, Islamic Republic Of",
+   "lat": 32.86,
+   "lon": 59.2,
+   "src": "FM35"
+  },
+  {
+   "id": "40811",
+   "name": "Ahwaz, Iran, Islamic Republic Of",
+   "lat": 31.33,
+   "lon": 48.67,
+   "src": "FM35"
+  },
+  {
+   "id": "40841",
+   "name": "Kerman, Iran, Islamic Republic Of",
+   "lat": 30.25,
+   "lon": 56.96,
+   "src": "FM35"
+  },
+  {
+   "id": "40848",
+   "name": "Shiraz, Iran, Islamic Republic Of",
+   "lat": 29.53,
+   "lon": 52.58,
+   "src": "FM35"
+  },
+  {
+   "id": "40856",
+   "name": "Zahedan, Iran, Islamic Republic Of",
+   "lat": 29.46,
+   "lon": 60.88,
+   "src": "FM35"
+  },
+  {
+   "id": "40875",
+   "name": "Bandarabbass, Iran, Islamic Republic Of",
+   "lat": 27.21,
+   "lon": 56.36,
+   "src": "FM35"
+  },
+  {
+   "id": "40948",
+   "name": "Kabul Airport, Afghanistan",
+   "lat": 34.55,
+   "lon": 69.21,
+   "src": "FM35"
+  },
+  {
+   "id": "41024",
+   "name": "Jeddah (King Abdul Aziz Int. Airport), Saudi Arabia",
+   "lat": 21.7,
+   "lon": 39.18,
+   "src": "FM35"
+  },
+  {
+   "id": "41112",
+   "name": "Abha, Saudi Arabia",
+   "lat": 18.23,
+   "lon": 42.65,
+   "src": "FM35"
+  },
+  {
+   "id": "41169",
+   "name": "",
+   "lat": 25.27,
+   "lon": 51.6,
+   "src": "FM35"
+  },
+  {
+   "id": "41217",
+   "name": "Abu Dhabi Inter. Airport, United Arab Emirates",
+   "lat": 24.43,
+   "lon": 54.65,
+   "src": "FM35"
+  },
+  {
+   "id": "4123009",
+   "name": "NOAA9 dropsonde #23",
+   "lat": 18.5,
+   "lon": -154.2,
+   "src": "FM37"
+  },
+  {
+   "id": "41256",
+   "name": "Seeb, Int'L Airport, Oman",
+   "lat": 23.58,
+   "lon": 58.28,
+   "src": "FM35"
+  },
+  {
+   "id": "41316",
+   "name": "Salalah, Oman",
+   "lat": 17.03,
+   "lon": 54.08,
+   "src": "FM35"
+  },
+  {
+   "id": "41594",
+   "name": "Sargodha, Pakistan",
+   "lat": 32.05,
+   "lon": 72.66,
+   "src": "FM35"
+  },
+  {
+   "id": "41640",
+   "name": "Lahore City, Pakistan",
+   "lat": 31.55,
+   "lon": 74.33,
+   "src": "FM35"
+  },
+  {
+   "id": "41883",
+   "name": "Bogra, Bangladesh",
+   "lat": 24.85,
+   "lon": 89.36,
+   "src": "FM35"
+  },
+  {
+   "id": "41891",
+   "name": "Sylhet, Bangladesh",
+   "lat": 24.9,
+   "lon": 91.88,
+   "src": "FM35"
+  },
+  {
+   "id": "41923",
+   "name": "Dhaka, Bangladesh",
+   "lat": 23.76,
+   "lon": 90.38,
+   "src": "FM35"
+  },
+  {
+   "id": "41977",
+   "name": "Chittagong (Ambagan), Bangladesh",
+   "lat": 22.35,
+   "lon": 91.81,
+   "src": "FM35"
+  },
+  {
+   "id": "42027",
+   "name": "Srinagar, India (Stations North Of Latitude 20~N)",
+   "lat": 34.0504,
+   "lon": 74.8041,
+   "src": "FM35"
+  },
+  {
+   "id": "42056",
+   "name": "Jammu, India",
+   "lat": 32.67,
+   "lon": 74.83,
+   "src": "FM35"
+  },
+  {
+   "id": "42079",
+   "name": "",
+   "lat": -78.0,
+   "lon": -99.99,
+   "src": "FM35"
+  },
+  {
+   "id": "42101",
+   "name": "Patiala, India (Stations North Of Latitude 20~N)",
+   "lat": 30.35737,
+   "lon": 76.45024,
+   "src": "FM35"
+  },
+  {
+   "id": "42111",
+   "name": "Dehradun, India (Stations North Of Latitude 20~N)",
+   "lat": 30.31,
+   "lon": 78.03,
+   "src": "FM35"
+  },
+  {
+   "id": "42182",
+   "name": "New Delhi/Safdarjung, India (Stations North Of Latitude 20~N)",
+   "lat": 28.58,
+   "lon": 77.2,
+   "src": "FM35"
+  },
+  {
+   "id": "42220",
+   "name": "Pasighat, India",
+   "lat": 28.07,
+   "lon": 95.34,
+   "src": "FM35"
+  },
+  {
+   "id": "42314",
+   "name": "Dibrugarh /Mohanbari, India (Stations North Of Latitude 20~N)",
+   "lat": 27.48,
+   "lon": 95.01,
+   "src": "FM35"
+  },
+  {
+   "id": "423306",
+   "name": "AF306 dropsonde #23",
+   "lat": 28.3,
+   "lon": -87.8,
+   "src": "FM37"
+  },
+  {
+   "id": "42339",
+   "name": "Jodhpur, India (Stations North Of Latitude 20~N)",
+   "lat": 26.3,
+   "lon": 73.01,
+   "src": "FM35"
+  },
+  {
+   "id": "42361",
+   "name": "Gwalior, India (Stations North Of Latitude 20~N)",
+   "lat": 26.23,
+   "lon": 78.25,
+   "src": "FM35"
+  },
+  {
+   "id": "42369",
+   "name": "Lucknow/Amausi, India (Stations North Of Latitude 20~N)",
+   "lat": 26.75,
+   "lon": 80.88,
+   "src": "FM35"
+  },
+  {
+   "id": "42379",
+   "name": "Gorakhpur, India (Stations North Of Latitude 20~N)",
+   "lat": 26.75,
+   "lon": 83.36,
+   "src": "FM35"
+  },
+  {
+   "id": "42397",
+   "name": "Siliguri, India (Stations North Of Latitude 20~N)",
+   "lat": 26.66,
+   "lon": 88.36,
+   "src": "FM35"
+  },
+  {
+   "id": "42410",
+   "name": "Gauhati, India (Stations North Of Latitude 20~N)",
+   "lat": 26.06,
+   "lon": 91.35,
+   "src": "FM35"
+  },
+  {
+   "id": "42492",
+   "name": "Patna, India (Stations North Of Latitude 20~N)",
+   "lat": 25.5983,
+   "lon": 85.09,
+   "src": "FM35"
+  },
+  {
+   "id": "42623",
+   "name": "Imphal, India (Stations North Of Latitude 20~N)",
+   "lat": 24.66,
+   "lon": 93.9,
+   "src": "FM35"
+  },
+  {
+   "id": "42634",
+   "name": "Bhuj-Rudramata, India (Stations North Of Latitude 20~N)",
+   "lat": 23.25,
+   "lon": 69.66,
+   "src": "FM35"
+  },
+  {
+   "id": "42647",
+   "name": "Ahmadabad, India (Stations North Of Latitude 20~N)",
+   "lat": 23.06,
+   "lon": 72.63,
+   "src": "FM35"
+  },
+  {
+   "id": "42667",
+   "name": "Bhopal/Bairagarh, India (Stations North Of Latitude 20~N)",
+   "lat": 23.28,
+   "lon": 77.35,
+   "src": "FM35"
+  },
+  {
+   "id": "42675",
+   "name": "Jabalpur, India (Stations North Of Latitude 20~N)",
+   "lat": 23.2,
+   "lon": 79.95,
+   "src": "FM35"
+  },
+  {
+   "id": "42701",
+   "name": "M.O. Ranchi, India (Stations North Of Latitude 20~N)",
+   "lat": 23.31,
+   "lon": 85.31,
+   "src": "FM35"
+  },
+  {
+   "id": "42724",
+   "name": "Agartala, India (Stations North Of Latitude 20~N)",
+   "lat": 23.88,
+   "lon": 91.25,
+   "src": "FM35"
+  },
+  {
+   "id": "42809",
+   "name": "Calcutta/Dum Dum, India (Stations North Of Latitude 20~N)",
+   "lat": 22.65,
+   "lon": 88.45,
+   "src": "FM35"
+  },
+  {
+   "id": "42867",
+   "name": "Nagpur Sonegaon, India (Stations North Of Latitude 20~N)",
+   "lat": 21.1,
+   "lon": 79.05,
+   "src": "FM35"
+  },
+  {
+   "id": "42874",
+   "name": "Pbo Raipur, India (Stations North Of Latitude 20~N)",
+   "lat": 21.23,
+   "lon": 81.65,
+   "src": "FM35"
+  },
+  {
+   "id": "42886",
+   "name": "Jharsuguda, India (Stations North Of Latitude 20~N)",
+   "lat": 21.9176,
+   "lon": 84.0407,
+   "src": "FM35"
+  },
+  {
+   "id": "42971",
+   "name": "Bhubaneswar, India (Stations North Of Latitude 20~N)",
+   "lat": 20.25149,
+   "lon": 85.81967,
+   "src": "FM35"
+  },
+  {
+   "id": "43003",
+   "name": "Bombay / Santacruz, India (Stations South Of Latitude 20~N)",
+   "lat": 19.11,
+   "lon": 72.85,
+   "src": "FM35"
+  },
+  {
+   "id": "43014",
+   "name": "Aurangabad Chikalthan Aerodrome, India (Stations South Of Latitude 20~N)",
+   "lat": 19.85,
+   "lon": 75.4,
+   "src": "FM35"
+  },
+  {
+   "id": "43041",
+   "name": "Jagdalpur, India (Stations South Of Latitude 20~N)",
+   "lat": 82.02,
+   "lon": 19.05,
+   "src": "FM35"
+  },
+  {
+   "id": "43049",
+   "name": "Gopalpur, India (Stations South Of Latitude 20~N)",
+   "lat": 19.26,
+   "lon": 84.88,
+   "src": "FM35"
+  },
+  {
+   "id": "43063",
+   "name": "Poona, India (Stations South Of Latitude 20~N)",
+   "lat": 18.53,
+   "lon": 73.85,
+   "src": "FM35"
+  },
+  {
+   "id": "43086",
+   "name": "Ramgundam, India",
+   "lat": 18.78,
+   "lon": 79.44,
+   "src": "FM35"
+  },
+  {
+   "id": "43128",
+   "name": "Hyderabad Airport, India (Stations South Of Latitude 20~N)",
+   "lat": 17.446,
+   "lon": 78.474,
+   "src": "FM35"
+  },
+  {
+   "id": "43150",
+   "name": "Cwc Vishakhapatnam/Waltair, India (Stations South Of Latitude 20~N)",
+   "lat": 17.72209,
+   "lon": 83.32943,
+   "src": "FM35"
+  },
+  {
+   "id": "43185",
+   "name": "Machilipatnam, India (Stations South Of Latitude 20~N)",
+   "lat": 16.18499,
+   "lon": 81.214,
+   "src": "FM35"
+  },
+  {
+   "id": "43192",
+   "name": "Goa/Panjim, India (Stations South Of Latitude 20~N)",
+   "lat": 15.48,
+   "lon": 73.81,
+   "src": "FM35"
+  },
+  {
+   "id": "43243",
+   "name": "Kavali, India",
+   "lat": 14.906,
+   "lon": 79.992,
+   "src": "FM35"
+  },
+  {
+   "id": "43279",
+   "name": "Madras/Minambakkam, India (Stations South Of Latitude 20~N)",
+   "lat": 13.0,
+   "lon": 80.18,
+   "src": "FM35"
+  },
+  {
+   "id": "43285",
+   "name": "Mangalore/Panambur, India (Stations South Of Latitude 20~N)",
+   "lat": 12.95,
+   "lon": 74.83,
+   "src": "FM35"
+  },
+  {
+   "id": "43295",
+   "name": "Bangalore, India (Stations South Of Latitude 20~N)",
+   "lat": 12.96,
+   "lon": 77.58,
+   "src": "FM35"
+  },
+  {
+   "id": "43333",
+   "name": "Port Blair, India (Stations South Of Latitude 20~N)",
+   "lat": 11.65596,
+   "lon": 92.74396,
+   "src": "FM35"
+  },
+  {
+   "id": "43346",
+   "name": "Karaikal, India (Stations South Of Latitude 20~N)",
+   "lat": 10.91,
+   "lon": 79.84,
+   "src": "FM35"
+  },
+  {
+   "id": "43353",
+   "name": "Cochin/Willingdon, India (Stations South Of Latitude 20~N)",
+   "lat": 9.9263,
+   "lon": 76.2623,
+   "src": "FM35"
+  },
+  {
+   "id": "43369",
+   "name": "Minicoy, India (Stations South Of Latitude 20~N)",
+   "lat": 8.3,
+   "lon": 73.15,
+   "src": "FM35"
+  },
+  {
+   "id": "43371",
+   "name": "Thiruvananthapuram, India (Stations South Of Latitude 20~N)",
+   "lat": 8.48,
+   "lon": 76.95,
+   "src": "FM35"
+  },
+  {
+   "id": "43466",
+   "name": "Colombo, Sri Lanka",
+   "lat": 6.9,
+   "lon": 79.86,
+   "src": "FM35"
+  },
+  {
+   "id": "44212",
+   "name": "Ulaangom, Mongolia",
+   "lat": 49.59,
+   "lon": 92.05,
+   "src": "FM35"
+  },
+  {
+   "id": "44231",
+   "name": "Muren, Mongolia",
+   "lat": 49.56,
+   "lon": 100.16,
+   "src": "FM35"
+  },
+  {
+   "id": "44292",
+   "name": "Ulaanbaatar, Mongolia",
+   "lat": 47.55,
+   "lon": 106.52,
+   "src": "FM35"
+  },
+  {
+   "id": "44373",
+   "name": "Dalanzadgad, Mongolia",
+   "lat": 43.58,
+   "lon": 104.42,
+   "src": "FM35"
+  },
+  {
+   "id": "45004",
+   "name": "Kowloon, Hong Kong, China",
+   "lat": 22.31153,
+   "lon": 114.17274,
+   "src": "FM35"
+  },
+  {
+   "id": "47041",
+   "name": "Hamheung, Republic Of Korea",
+   "lat": 39.93,
+   "lon": 127.55,
+   "src": "FM35"
+  },
+  {
+   "id": "47058",
+   "name": "Pyongyang, Republic Of Korea",
+   "lat": 39.03,
+   "lon": 125.78,
+   "src": "FM35"
+  },
+  {
+   "id": "47090",
+   "name": "Sokcho, Republic Of Korea",
+   "lat": 38.25,
+   "lon": 128.57,
+   "src": "FM35"
+  },
+  {
+   "id": "47102",
+   "name": "Baengnyeongdo, Republic Of Korea",
+   "lat": 67.32961,
+   "lon": 67.32961,
+   "src": "FM35"
+  },
+  {
+   "id": "47104",
+   "name": "Bukgangneung, Republic Of Korea",
+   "lat": 37.80467,
+   "lon": 128.85437,
+   "src": "BUFR"
+  },
+  {
+   "id": "47122",
+   "name": "Osan Ab, Republic Of Korea",
+   "lat": 37.1,
+   "lon": 127.03,
+   "src": "FM35"
+  },
+  {
+   "id": "47138",
+   "name": "Pohang, Republic Of Korea",
+   "lat": 67.32961,
+   "lon": 67.32961,
+   "src": "FM35"
+  },
+  {
+   "id": "47155",
+   "name": "Changwon, Republic Of Korea",
+   "lat": 35.1699,
+   "lon": 128.57274,
+   "src": "BUFR"
+  },
+  {
+   "id": "47158",
+   "name": "Gwangju Ab, Republic Of Korea",
+   "lat": 35.11,
+   "lon": 126.81,
+   "src": "FM35"
+  },
+  {
+   "id": "47169",
+   "name": "Heuksando, Republic Of Korea",
+   "lat": 34.68707,
+   "lon": 125.45106,
+   "src": "FM35"
+  },
+  {
+   "id": "47185",
+   "name": "Gosan, Republic Of Korea",
+   "lat": 33.28,
+   "lon": 126.16,
+   "src": "FM35"
+  },
+  {
+   "id": "47186",
+   "name": "National Typhoon Centre, Republic Of Korea",
+   "lat": 33.33035,
+   "lon": 126.67955,
+   "src": "BUFR"
+  },
+  {
+   "id": "47193",
+   "name": "",
+   "lat": 36.69214,
+   "lon": 128.85047,
+   "src": "BUFR"
+  },
+  {
+   "id": "47230",
+   "name": "Incheon, Republic Of Korea",
+   "lat": 37.26342,
+   "lon": 126.10238,
+   "src": "BUFR"
+  },
+  {
+   "id": "47401",
+   "name": "Wakkanai, Japan",
+   "lat": 45.41,
+   "lon": 141.68,
+   "src": "FM35"
+  },
+  {
+   "id": "47412",
+   "name": "Sapporo, Japan",
+   "lat": 43.05,
+   "lon": 141.33,
+   "src": "FM35"
+  },
+  {
+   "id": "47418",
+   "name": "",
+   "lat": 42.98,
+   "lon": 144.4,
+   "src": "FM35"
+  },
+  {
+   "id": "47580",
+   "name": "Misawa Ab, Japan",
+   "lat": 40.7,
+   "lon": 141.38,
+   "src": "FM35"
+  },
+  {
+   "id": "47582",
+   "name": "Akita, Japan",
+   "lat": 39.71,
+   "lon": 140.1,
+   "src": "FM35"
+  },
+  {
+   "id": "47600",
+   "name": "Wajima, Japan",
+   "lat": 37.38,
+   "lon": 136.9,
+   "src": "FM35"
+  },
+  {
+   "id": "47646",
+   "name": "Tateno, Japan",
+   "lat": 36.05,
+   "lon": 140.13,
+   "src": "FM35"
+  },
+  {
+   "id": "47678",
+   "name": "Hachijojima/Omure, Japan",
+   "lat": 33.11,
+   "lon": 139.78,
+   "src": "FM35"
+  },
+  {
+   "id": "47681",
+   "name": "Hamamatsu Ab, Japan",
+   "lat": 34.75,
+   "lon": 137.7,
+   "src": "FM35"
+  },
+  {
+   "id": "47741",
+   "name": "Matsue, Japan",
+   "lat": 35.45,
+   "lon": 133.07,
+   "src": "FM35"
+  },
+  {
+   "id": "47778",
+   "name": "Shionomisaki, Japan",
+   "lat": 33.45,
+   "lon": 135.76,
+   "src": "FM35"
+  },
+  {
+   "id": "47807",
+   "name": "Fukuoka, Japan",
+   "lat": 33.58,
+   "lon": 130.38,
+   "src": "FM35"
+  },
+  {
+   "id": "47827",
+   "name": "Kagoshima, Japan",
+   "lat": 31.55,
+   "lon": 130.55,
+   "src": "FM35"
+  },
+  {
+   "id": "47909",
+   "name": "Naze/Funchatoge, Japan",
+   "lat": 28.38,
+   "lon": 129.55,
+   "src": "FM35"
+  },
+  {
+   "id": "47918",
+   "name": "Ishigakijima, Japan",
+   "lat": 24.33,
+   "lon": 124.16,
+   "src": "FM35"
+  },
+  {
+   "id": "47945",
+   "name": "Minamidaitojima, Japan",
+   "lat": 25.83,
+   "lon": 131.23,
+   "src": "FM35"
+  },
+  {
+   "id": "47971",
+   "name": "Chichijima, Japan",
+   "lat": 27.08,
+   "lon": 142.18,
+   "src": "FM35"
+  },
+  {
+   "id": "47991",
+   "name": "Minamitorishima, Japan",
+   "lat": 24.3,
+   "lon": 153.96,
+   "src": "FM35"
+  },
+  {
+   "id": "48327",
+   "name": "Chiang Mai, Thailand",
+   "lat": 18.78,
+   "lon": 98.98,
+   "src": "FM35"
+  },
+  {
+   "id": "48378",
+   "name": "Phitsanulok, Thailand",
+   "lat": 16.78,
+   "lon": 100.26,
+   "src": "FM35"
+  },
+  {
+   "id": "48381",
+   "name": "Khon Kaen, Thailand",
+   "lat": 16.43,
+   "lon": 102.83,
+   "src": "FM35"
+  },
+  {
+   "id": "48407",
+   "name": "Ubon Ratchathani, Thailand",
+   "lat": 15.25,
+   "lon": 104.86,
+   "src": "FM35"
+  },
+  {
+   "id": "48431",
+   "name": "Nakhon Ratchasima, Thailand",
+   "lat": 14.96,
+   "lon": 102.08,
+   "src": "FM35"
+  },
+  {
+   "id": "48453",
+   "name": "Bangna, Thailand",
+   "lat": 13.67,
+   "lon": 100.6,
+   "src": "FM35"
+  },
+  {
+   "id": "48480",
+   "name": "Chanthaburi, Thailand",
+   "lat": 12.6,
+   "lon": 102.11,
+   "src": "FM35"
+  },
+  {
+   "id": "48500",
+   "name": "Prachuap Khirikhan, Thailand",
+   "lat": 11.83,
+   "lon": 99.83,
+   "src": "FM35"
+  },
+  {
+   "id": "48565",
+   "name": "Phuket Airport, Thailand",
+   "lat": 8.11,
+   "lon": 98.31,
+   "src": "FM35"
+  },
+  {
+   "id": "48568",
+   "name": "Songkhla, Thailand",
+   "lat": 7.2,
+   "lon": 100.6,
+   "src": "FM35"
+  },
+  {
+   "id": "48601",
+   "name": "Penang/Bayan Lepas, Malaysia (Peninsular Malaysia)",
+   "lat": 5.29563,
+   "lon": 100.26897,
+   "src": "FM35"
+  },
+  {
+   "id": "48615",
+   "name": "Kota Bharu, Malaysia (Peninsular Malaysia)",
+   "lat": 6.16333,
+   "lon": 102.30053,
+   "src": "FM35"
+  },
+  {
+   "id": "48650",
+   "name": "Sepang, Malaysia (Peninsular Malaysia)",
+   "lat": 2.7309,
+   "lon": 101.70313,
+   "src": "FM35"
+  },
+  {
+   "id": "48657",
+   "name": "Kuantan, Malaysia (Peninsular Malaysia)",
+   "lat": 3.77219,
+   "lon": 103.21188,
+   "src": "FM35"
+  },
+  {
+   "id": "48698",
+   "name": "Singapore/Changi Airport, Singapore",
+   "lat": 1.36,
+   "lon": 103.98,
+   "src": "FM35"
+  },
+  {
+   "id": "48811",
+   "name": "Dien Bien Phu, Vietnam",
+   "lat": 21.37,
+   "lon": 103.0,
+   "src": "FM35"
+  },
+  {
+   "id": "48820",
+   "name": "Ha Noi, Vietnam",
+   "lat": 21.01,
+   "lon": 105.8,
+   "src": "FM35"
+  },
+  {
+   "id": "48839",
+   "name": "Bach Longvi, Vietnam",
+   "lat": 20.13,
+   "lon": 107.72,
+   "src": "FM35"
+  },
+  {
+   "id": "48845",
+   "name": "Vinh, Vietnam",
+   "lat": 18.67,
+   "lon": 105.68,
+   "src": "FM35"
+  },
+  {
+   "id": "48855",
+   "name": "Da Nang, Vietnam",
+   "lat": 16.03,
+   "lon": 108.2,
+   "src": "FM35"
+  },
+  {
+   "id": "48900",
+   "name": "Tan Son Hoa, Vietnam",
+   "lat": 10.81,
+   "lon": 106.66,
+   "src": "FM35"
+  },
+  {
+   "id": "50527",
+   "name": "Hailar, China",
+   "lat": 49.25,
+   "lon": 119.7,
+   "src": "FM35"
+  },
+  {
+   "id": "50557",
+   "name": "Nenjiang, China",
+   "lat": 49.17,
+   "lon": 125.23,
+   "src": "FM35"
+  },
+  {
+   "id": "50774",
+   "name": "Yichun, China",
+   "lat": 47.72,
+   "lon": 128.83,
+   "src": "FM35"
+  },
+  {
+   "id": "50953",
+   "name": "Harbin, China",
+   "lat": 45.93,
+   "lon": 126.57,
+   "src": "FM35"
+  },
+  {
+   "id": "51076",
+   "name": "Altay, China",
+   "lat": 47.73,
+   "lon": 88.08,
+   "src": "FM35"
+  },
+  {
+   "id": "51431",
+   "name": "Yining, China",
+   "lat": 43.95,
+   "lon": 81.33,
+   "src": "FM35"
+  },
+  {
+   "id": "51463",
+   "name": "Wu Lu Mu Qi, China",
+   "lat": 43.78,
+   "lon": 87.62,
+   "src": "FM35"
+  },
+  {
+   "id": "51644",
+   "name": "Kuqa, China",
+   "lat": 41.72,
+   "lon": 82.95,
+   "src": "FM35"
+  },
+  {
+   "id": "51709",
+   "name": "Kashi, China",
+   "lat": 39.48,
+   "lon": 75.75,
+   "src": "FM35"
+  },
+  {
+   "id": "51777",
+   "name": "Ruoqiang, China",
+   "lat": 39.03,
+   "lon": 88.17,
+   "src": "FM35"
+  },
+  {
+   "id": "51828",
+   "name": "Hotan, China",
+   "lat": 37.13,
+   "lon": 79.93,
+   "src": "FM35"
+  },
+  {
+   "id": "51839",
+   "name": "Minfeng, China",
+   "lat": 37.07,
+   "lon": 82.72,
+   "src": "FM35"
+  },
+  {
+   "id": "52203",
+   "name": "Hami, China",
+   "lat": 42.82,
+   "lon": 93.52,
+   "src": "FM35"
+  },
+  {
+   "id": "52267",
+   "name": "Ejin Qi, China",
+   "lat": 41.95,
+   "lon": 101.07,
+   "src": "FM35"
+  },
+  {
+   "id": "52323",
+   "name": "Mazong Shan, China",
+   "lat": 41.8,
+   "lon": 97.03,
+   "src": "FM35"
+  },
+  {
+   "id": "52418",
+   "name": "Dunhuang, China",
+   "lat": 40.15,
+   "lon": 94.68,
+   "src": "FM35"
+  },
+  {
+   "id": "52533",
+   "name": "Jiuquan, China",
+   "lat": 39.77,
+   "lon": 98.48,
+   "src": "FM35"
+  },
+  {
+   "id": "52681",
+   "name": "Minqin, China",
+   "lat": 38.63,
+   "lon": 103.08,
+   "src": "FM35"
+  },
+  {
+   "id": "52818",
+   "name": "Golmud, China",
+   "lat": 36.42,
+   "lon": 94.9,
+   "src": "FM35"
+  },
+  {
+   "id": "52836",
+   "name": "Dulan, China",
+   "lat": 36.3,
+   "lon": 98.1,
+   "src": "FM35"
+  },
+  {
+   "id": "52866",
+   "name": "Xining, China",
+   "lat": 36.65,
+   "lon": 101.72,
+   "src": "FM35"
+  },
+  {
+   "id": "52983",
+   "name": "Yuzhong, China",
+   "lat": 35.87,
+   "lon": 104.15,
+   "src": "FM35"
+  },
+  {
+   "id": "53068",
+   "name": "Erenhot, China",
+   "lat": 43.63,
+   "lon": 111.95,
+   "src": "FM35"
+  },
+  {
+   "id": "53463",
+   "name": "Hohhot, China",
+   "lat": 40.85,
+   "lon": 111.57,
+   "src": "FM35"
+  },
+  {
+   "id": "53513",
+   "name": "Linhe, China",
+   "lat": 40.73,
+   "lon": 107.37,
+   "src": "FM35"
+  },
+  {
+   "id": "53614",
+   "name": "Yinchuan, China",
+   "lat": 38.47,
+   "lon": 106.2,
+   "src": "FM35"
+  },
+  {
+   "id": "53772",
+   "name": "Taiyuan, China",
+   "lat": 37.62,
+   "lon": 112.58,
+   "src": "FM35"
+  },
+  {
+   "id": "53845",
+   "name": "Yan An, China",
+   "lat": 36.57,
+   "lon": 109.45,
+   "src": "FM35"
+  },
+  {
+   "id": "53915",
+   "name": "Pingliang, China",
+   "lat": 35.53,
+   "lon": 106.67,
+   "src": "FM35"
+  },
+  {
+   "id": "54102",
+   "name": "Xilin Hot, China",
+   "lat": 43.95,
+   "lon": 116.12,
+   "src": "FM35"
+  },
+  {
+   "id": "54135",
+   "name": "Tongliao, China",
+   "lat": 43.6,
+   "lon": 122.27,
+   "src": "FM35"
+  },
+  {
+   "id": "54161",
+   "name": "Changchun, China",
+   "lat": 43.9,
+   "lon": 125.22,
+   "src": "FM35"
+  },
+  {
+   "id": "54218",
+   "name": "Chifeng, China",
+   "lat": 42.3,
+   "lon": 118.83,
+   "src": "FM35"
+  },
+  {
+   "id": "54292",
+   "name": "Yanji, China",
+   "lat": 42.87,
+   "lon": 129.5,
+   "src": "FM35"
+  },
+  {
+   "id": "54340",
+   "name": "Shenyang, China",
+   "lat": 41.54,
+   "lon": 123.61,
+   "src": "BUFR"
+  },
+  {
+   "id": "54342",
+   "name": "Shenyang, China",
+   "lat": 41.76,
+   "lon": 123.43,
+   "src": "FM35"
+  },
+  {
+   "id": "54374",
+   "name": "Linjiang, China",
+   "lat": 41.8,
+   "lon": 126.88,
+   "src": "FM35"
+  },
+  {
+   "id": "54511",
+   "name": "Beijing, China",
+   "lat": 39.93,
+   "lon": 116.28,
+   "src": "FM35"
+  },
+  {
+   "id": "54662",
+   "name": "Dalian, China",
+   "lat": 38.9,
+   "lon": 121.63,
+   "src": "FM35"
+  },
+  {
+   "id": "54727",
+   "name": "Zhangqiu, China",
+   "lat": 36.65,
+   "lon": 117.5,
+   "src": "FM35"
+  },
+  {
+   "id": "54857",
+   "name": "Qingdao, China",
+   "lat": 36.07,
+   "lon": 120.33,
+   "src": "FM35"
+  },
+  {
+   "id": "54954",
+   "name": "",
+   "lat": 13.07173,
+   "lon": -59.49205,
+   "src": "BUFR"
+  },
+  {
+   "id": "55299",
+   "name": "Nagqu, China",
+   "lat": 31.48,
+   "lon": 92.07,
+   "src": "FM35"
+  },
+  {
+   "id": "55591",
+   "name": "Lhasa, China",
+   "lat": 29.67,
+   "lon": 91.13,
+   "src": "FM35"
+  },
+  {
+   "id": "56029",
+   "name": "Yushu, China",
+   "lat": 33.0,
+   "lon": 96.95,
+   "src": "FM35"
+  },
+  {
+   "id": "56080",
+   "name": "Hezuo, China",
+   "lat": 35.0,
+   "lon": 102.9,
+   "src": "FM35"
+  },
+  {
+   "id": "56137",
+   "name": "Qamdo, China",
+   "lat": 31.15,
+   "lon": 97.17,
+   "src": "FM35"
+  },
+  {
+   "id": "56146",
+   "name": "Garze, China",
+   "lat": 31.62,
+   "lon": 100.0,
+   "src": "FM35"
+  },
+  {
+   "id": "56187",
+   "name": "Wenjiang, China",
+   "lat": 30.75,
+   "lon": 103.87,
+   "src": "FM35"
+  },
+  {
+   "id": "56571",
+   "name": "Xichang, China",
+   "lat": 27.9,
+   "lon": 102.27,
+   "src": "FM35"
+  },
+  {
+   "id": "56691",
+   "name": "Weining, China",
+   "lat": 26.87,
+   "lon": 104.28,
+   "src": "FM35"
+  },
+  {
+   "id": "56739",
+   "name": "Tengchong, China",
+   "lat": 24.98,
+   "lon": 98.51,
+   "src": "FM35"
+  },
+  {
+   "id": "56778",
+   "name": "Kunming, China",
+   "lat": 25.02,
+   "lon": 102.68,
+   "src": "FM35"
+  },
+  {
+   "id": "56964",
+   "name": "Simao, China",
+   "lat": 22.77,
+   "lon": 100.98,
+   "src": "FM35"
+  },
+  {
+   "id": "56985",
+   "name": "Mengzi, China",
+   "lat": 23.44,
+   "lon": 103.33,
+   "src": "FM35"
+  },
+  {
+   "id": "57083",
+   "name": "Zhengzhou, China",
+   "lat": 34.72,
+   "lon": 113.65,
+   "src": "FM35"
+  },
+  {
+   "id": "57127",
+   "name": "Hanzhong, China",
+   "lat": 33.07,
+   "lon": 107.03,
+   "src": "FM35"
+  },
+  {
+   "id": "57131",
+   "name": "Jinjhe, China",
+   "lat": 34.43,
+   "lon": 108.97,
+   "src": "FM35"
+  },
+  {
+   "id": "57178",
+   "name": "Nanyang, China",
+   "lat": 33.1,
+   "lon": 112.48,
+   "src": "FM35"
+  },
+  {
+   "id": "57447",
+   "name": "Enshi, China",
+   "lat": 30.28,
+   "lon": 109.46,
+   "src": "FM35"
+  },
+  {
+   "id": "57461",
+   "name": "Yichang, China",
+   "lat": 30.73,
+   "lon": 111.37,
+   "src": "FM35"
+  },
+  {
+   "id": "57494",
+   "name": "Wuhan, China",
+   "lat": 30.6,
+   "lon": 114.05,
+   "src": "FM35"
+  },
+  {
+   "id": "57516",
+   "name": "Chongqing, China",
+   "lat": 29.6,
+   "lon": 106.4,
+   "src": "FM35"
+  },
+  {
+   "id": "57541",
+   "name": "Zhushan, China",
+   "lat": 29.99,
+   "lon": 109.47,
+   "src": "BUFR"
+  },
+  {
+   "id": "57679",
+   "name": "Changsha, China",
+   "lat": 28.2,
+   "lon": 113.08,
+   "src": "FM35"
+  },
+  {
+   "id": "57687",
+   "name": "Changsha, China",
+   "lat": 28.11,
+   "lon": 112.79,
+   "src": "BUFR"
+  },
+  {
+   "id": "57749",
+   "name": "Huaihua, China",
+   "lat": 27.57,
+   "lon": 110.0,
+   "src": "FM35"
+  },
+  {
+   "id": "57816",
+   "name": "Guiyang, China",
+   "lat": 26.48,
+   "lon": 106.65,
+   "src": "FM35"
+  },
+  {
+   "id": "57957",
+   "name": "Guilin, China",
+   "lat": 25.33,
+   "lon": 110.3,
+   "src": "FM35"
+  },
+  {
+   "id": "57972",
+   "name": "Chenzhou, China",
+   "lat": 25.74,
+   "lon": 112.97,
+   "src": "FM35"
+  },
+  {
+   "id": "57993",
+   "name": "Ganzhou, China",
+   "lat": 25.87,
+   "lon": 115.0,
+   "src": "FM35"
+  },
+  {
+   "id": "58027",
+   "name": "Xuzhou, China",
+   "lat": 34.28,
+   "lon": 117.15,
+   "src": "FM35"
+  },
+  {
+   "id": "58150",
+   "name": "Sheyang, China",
+   "lat": 33.75,
+   "lon": 120.3,
+   "src": "FM35"
+  },
+  {
+   "id": "58203",
+   "name": "Fuyang, China",
+   "lat": 32.87,
+   "lon": 115.73,
+   "src": "FM35"
+  },
+  {
+   "id": "58238",
+   "name": "Nanjing, China",
+   "lat": 31.93,
+   "lon": 118.9,
+   "src": "FM35"
+  },
+  {
+   "id": "58362",
+   "name": "Shanghai, China",
+   "lat": 31.42,
+   "lon": 121.45,
+   "src": "FM35"
+  },
+  {
+   "id": "58424",
+   "name": "Anqing, China",
+   "lat": 30.62,
+   "lon": 116.97,
+   "src": "FM35"
+  },
+  {
+   "id": "58457",
+   "name": "Hangzhou, China",
+   "lat": 30.23,
+   "lon": 120.17,
+   "src": "FM35"
+  },
+  {
+   "id": "58606",
+   "name": "Nanchang, China",
+   "lat": 28.6,
+   "lon": 115.92,
+   "src": "FM35"
+  },
+  {
+   "id": "58633",
+   "name": "Qu Xian, China",
+   "lat": 28.97,
+   "lon": 118.87,
+   "src": "FM35"
+  },
+  {
+   "id": "58665",
+   "name": "Hongjia, China",
+   "lat": 28.62,
+   "lon": 121.42,
+   "src": "FM35"
+  },
+  {
+   "id": "58725",
+   "name": "Shaowu, China",
+   "lat": 27.33,
+   "lon": 117.47,
+   "src": "FM35"
+  },
+  {
+   "id": "58847",
+   "name": "Fuzhou, China",
+   "lat": 26.08,
+   "lon": 119.28,
+   "src": "FM35"
+  },
+  {
+   "id": "58968",
+   "name": "Taibei, China",
+   "lat": 25.03,
+   "lon": 121.51,
+   "src": "FM35"
+  },
+  {
+   "id": "59134",
+   "name": "Xiamen, China",
+   "lat": 24.48,
+   "lon": 118.08,
+   "src": "FM35"
+  },
+  {
+   "id": "59211",
+   "name": "Baise, China",
+   "lat": 23.9,
+   "lon": 106.6,
+   "src": "FM35"
+  },
+  {
+   "id": "59265",
+   "name": "Wuzhou, China",
+   "lat": 23.48,
+   "lon": 111.3,
+   "src": "FM35"
+  },
+  {
+   "id": "59280",
+   "name": "Qing Yuan, China",
+   "lat": 23.72,
+   "lon": 113.08,
+   "src": "FM35"
+  },
+  {
+   "id": "59316",
+   "name": "Shantou, China",
+   "lat": 23.35,
+   "lon": 116.67,
+   "src": "FM35"
+  },
+  {
+   "id": "59431",
+   "name": "Nanning, China",
+   "lat": 22.78,
+   "lon": 108.55,
+   "src": "FM35"
+  },
+  {
+   "id": "59644",
+   "name": "",
+   "lat": 21.48,
+   "lon": 109.1,
+   "src": "FM35"
+  },
+  {
+   "id": "59663",
+   "name": "",
+   "lat": 21.87,
+   "lon": 111.97,
+   "src": "FM35"
+  },
+  {
+   "id": "59758",
+   "name": "Haikou, China",
+   "lat": 20.0,
+   "lon": 110.25,
+   "src": "FM35"
+  },
+  {
+   "id": "59948",
+   "name": "",
+   "lat": 18.28,
+   "lon": 109.47,
+   "src": "FM35"
+  },
+  {
+   "id": "59981",
+   "name": "Xisha Dao, China",
+   "lat": 16.83,
+   "lon": 112.33,
+   "src": "FM35"
+  },
+  {
+   "id": "60018",
+   "name": "Tenerife-Guimar, Spain (Canary Islands)",
+   "lat": 28.47,
+   "lon": -16.38,
+   "src": "FM35"
+  },
+  {
+   "id": "60096",
+   "name": "Dakhla, Western Sahara",
+   "lat": 23.7048,
+   "lon": -15.92985,
+   "src": "FM35"
+  },
+  {
+   "id": "60155",
+   "name": "Casablanca, Morocco",
+   "lat": 33.54168,
+   "lon": -7.67071,
+   "src": "FM35"
+  },
+  {
+   "id": "60253",
+   "name": "Taroudant, Morocco",
+   "lat": 30.49879,
+   "lon": -8.82878,
+   "src": "BUFR"
+  },
+  {
+   "id": "60390",
+   "name": "Dar-El-Beida, Algeria",
+   "lat": 36.68,
+   "lon": 3.21,
+   "src": "FM35"
+  },
+  {
+   "id": "60571",
+   "name": "Bechar, Algeria",
+   "lat": 31.5,
+   "lon": -2.25,
+   "src": "FM35"
+  },
+  {
+   "id": "60630",
+   "name": "In-Salah, Algeria",
+   "lat": 27.23,
+   "lon": 2.5,
+   "src": "FM35"
+  },
+  {
+   "id": "60656",
+   "name": "Tindouf, Algeria",
+   "lat": 27.7,
+   "lon": -8.16,
+   "src": "FM35"
+  },
+  {
+   "id": "60680",
+   "name": "Tamanrasset, Algeria",
+   "lat": 22.78,
+   "lon": 5.52,
+   "src": "FM35"
+  },
+  {
+   "id": "60715",
+   "name": "Tunis-Carthage, Tunisia",
+   "lat": 36.85083,
+   "lon": 10.21462,
+   "src": "FM35"
+  },
+  {
+   "id": "60760",
+   "name": "Tozeur, Tunisia",
+   "lat": 33.93521,
+   "lon": 8.11102,
+   "src": "FM35"
+  },
+  {
+   "id": "61024",
+   "name": "Agadez, Niger",
+   "lat": 16.96,
+   "lon": 7.98,
+   "src": "FM35"
+  },
+  {
+   "id": "61052",
+   "name": "Niamey-Aero, Niger",
+   "lat": 13.48,
+   "lon": 2.16,
+   "src": "FM35"
+  },
+  {
+   "id": "61291",
+   "name": "Bamako/Senou, Mali",
+   "lat": 12.53,
+   "lon": -7.95,
+   "src": "FM35"
+  },
+  {
+   "id": "61442",
+   "name": "Nouakchott, Mauritania",
+   "lat": 18.1,
+   "lon": -15.95,
+   "src": "FM35"
+  },
+  {
+   "id": "61641",
+   "name": "Dakar/Yoff, Senegal",
+   "lat": 14.73,
+   "lon": -17.5,
+   "src": "FM35"
+  },
+  {
+   "id": "61687",
+   "name": "Tambacounda, Senegal",
+   "lat": 13.76,
+   "lon": -13.68,
+   "src": "FM35"
+  },
+  {
+   "id": "61901",
+   "name": "St. Helena Is., Ocean Islands",
+   "lat": -15.94194,
+   "lon": -5.66722,
+   "src": "FM35"
+  },
+  {
+   "id": "61980",
+   "name": "Saint-Denis/Gillot, Oceania",
+   "lat": -20.89671,
+   "lon": 55.49496,
+   "src": "FM35"
+  },
+  {
+   "id": "61995",
+   "name": "Vacoas (Mauritius), Mauritius",
+   "lat": -20.3,
+   "lon": 57.5,
+   "src": "FM35"
+  },
+  {
+   "id": "61998",
+   "name": "Port-Aux-Francais (Iles Kerguelen), Ocean Islands",
+   "lat": -49.35131,
+   "lon": 70.24138,
+   "src": "BUFR"
+  },
+  {
+   "id": "62306",
+   "name": "Mersa Matruh, Egypt",
+   "lat": 31.33,
+   "lon": 27.21,
+   "src": "FM35"
+  },
+  {
+   "id": "62337",
+   "name": "El Arish, Egypt",
+   "lat": 31.08,
+   "lon": 33.81,
+   "src": "FM35"
+  },
+  {
+   "id": "62378",
+   "name": "Helwan, Egypt",
+   "lat": 29.86,
+   "lon": 31.33,
+   "src": "FM35"
+  },
+  {
+   "id": "62414",
+   "name": "Asswan, Egypt",
+   "lat": 23.96,
+   "lon": 32.78,
+   "src": "FM35"
+  },
+  {
+   "id": "62423",
+   "name": "Farafra, Egypt",
+   "lat": 27.05,
+   "lon": 27.96,
+   "src": "FM35"
+  },
+  {
+   "id": "63741",
+   "name": "Nairobi/Dagoretti, Kenya",
+   "lat": -1.3,
+   "lon": 36.75,
+   "src": "FM35"
+  },
+  {
+   "id": "63985",
+   "name": "Seychelles Inter. Airport (Rawinsonde Station), Seychelles",
+   "lat": -4.66,
+   "lon": 55.53,
+   "src": "FM35"
+  },
+  {
+   "id": "64400",
+   "name": "Pointe-Noire, Congo",
+   "lat": -4.81,
+   "lon": 11.9,
+   "src": "FM35"
+  },
+  {
+   "id": "64458",
+   "name": "Ouesso, Congo",
+   "lat": 1.61,
+   "lon": 16.05,
+   "src": "FM35"
+  },
+  {
+   "id": "64650",
+   "name": "Bangui, Central African Republic",
+   "lat": 4.4,
+   "lon": 18.51,
+   "src": "FM35"
+  },
+  {
+   "id": "64700",
+   "name": "Ndjamena, Chad",
+   "lat": 12.13,
+   "lon": 15.03,
+   "src": "FM35"
+  },
+  {
+   "id": "64870",
+   "name": "Ngaoundere, Cameroon",
+   "lat": 7.35,
+   "lon": 13.56,
+   "src": "FM35"
+  },
+  {
+   "id": "64910",
+   "name": "Douala R.S., Cameroon",
+   "lat": 4.01,
+   "lon": 9.7,
+   "src": "FM35"
+  },
+  {
+   "id": "65125",
+   "name": "Abuja, Nigeria",
+   "lat": -78.0,
+   "lon": -99.99,
+   "src": "FM35"
+  },
+  {
+   "id": "65344",
+   "name": "Cotonou, Benin",
+   "lat": 6.35659,
+   "lon": 2.38838,
+   "src": "BUFR"
+  },
+  {
+   "id": "65503",
+   "name": "Ouagadougou, Burkina Faso",
+   "lat": 12.35,
+   "lon": -1.51,
+   "src": "FM35"
+  },
+  {
+   "id": "65548",
+   "name": "Man, Cote D'Ivoire",
+   "lat": 7.38,
+   "lon": -7.51,
+   "src": "FM35"
+  },
+  {
+   "id": "65578",
+   "name": "Abidjan, Cote D'Ivoire",
+   "lat": 5.25,
+   "lon": -3.93,
+   "src": "FM35"
+  },
+  {
+   "id": "66160",
+   "name": "Luanda, Angola",
+   "lat": -8.85973,
+   "lon": 13.2258,
+   "src": "BUFR"
+  },
+  {
+   "id": "67083",
+   "name": "Antananarivo/Ivato, Madagascar",
+   "lat": -18.8,
+   "lon": 47.48,
+   "src": "FM35"
+  },
+  {
+   "id": "67197",
+   "name": "Fort-Dauphin, Madagascar",
+   "lat": -25.03,
+   "lon": 46.95,
+   "src": "FM35"
+  },
+  {
+   "id": "68110",
+   "name": "Windhoek, Namibia",
+   "lat": -22.56,
+   "lon": 17.1,
+   "src": "FM35"
+  },
+  {
+   "id": "68263",
+   "name": "Pretoria (Irene), South Africa",
+   "lat": -25.91,
+   "lon": 28.21,
+   "src": "FM35"
+  },
+  {
+   "id": "68424",
+   "name": "Upington, South Africa",
+   "lat": -28.41,
+   "lon": 21.26,
+   "src": "FM35"
+  },
+  {
+   "id": "68442",
+   "name": "Bloemfontein Airport, South Africa",
+   "lat": -29.1,
+   "lon": 26.3,
+   "src": "FM35"
+  },
+  {
+   "id": "68512",
+   "name": "Springbok, South Africa",
+   "lat": -29.66,
+   "lon": 17.9,
+   "src": "FM35"
+  },
+  {
+   "id": "68538",
+   "name": "De Aar, South Africa",
+   "lat": -30.65,
+   "lon": 24.0,
+   "src": "FM35"
+  },
+  {
+   "id": "68592",
+   "name": "King Shaka, South Africa",
+   "lat": -29.61,
+   "lon": 31.12,
+   "src": "FM35"
+  },
+  {
+   "id": "68816",
+   "name": "Cape Town Intnl. Airport, South Africa",
+   "lat": -33.96,
+   "lon": 18.6,
+   "src": "FM35"
+  },
+  {
+   "id": "68842",
+   "name": "Port Elizabeth, South Africa",
+   "lat": -33.98,
+   "lon": 25.61,
+   "src": "FM35"
+  },
+  {
+   "id": "68906",
+   "name": "Gough Island, South Africa",
+   "lat": -40.35,
+   "lon": -9.88,
+   "src": "FM35"
+  },
+  {
+   "id": "70026",
+   "name": "Barrow/W. Post W. Rogers, Usa",
+   "lat": 71.32261,
+   "lon": -156.61778,
+   "src": "FM35"
+  },
+  {
+   "id": "70133",
+   "name": "Kotzebue, Ralph Wien, Usa",
+   "lat": 66.88704,
+   "lon": -162.61216,
+   "src": "FM35"
+  },
+  {
+   "id": "70165",
+   "name": "",
+   "lat": -78.0,
+   "lon": -99.99,
+   "src": "FM35"
+  },
+  {
+   "id": "70200",
+   "name": "Nome, Ak, Usa",
+   "lat": 64.50732,
+   "lon": -165.43431,
+   "src": "FM35"
+  },
+  {
+   "id": "70219",
+   "name": "Bethel/Bethel Airport, Ak, Usa",
+   "lat": 60.78511,
+   "lon": -161.84011,
+   "src": "FM35"
+  },
+  {
+   "id": "70231",
+   "name": "Mcgrath, Ak, Usa",
+   "lat": 62.95537,
+   "lon": -155.60059,
+   "src": "FM35"
+  },
+  {
+   "id": "70261",
+   "name": "Fairbanks/Int., Ak, Usa",
+   "lat": 64.8163,
+   "lon": -147.87631,
+   "src": "FM35"
+  },
+  {
+   "id": "70273",
+   "name": "Anchorage/Int., Ak, Usa",
+   "lat": 61.15713,
+   "lon": -149.98664,
+   "src": "FM35"
+  },
+  {
+   "id": "70308",
+   "name": "St. Paul Islands, Ak, Usa",
+   "lat": 57.15604,
+   "lon": -170.21957,
+   "src": "FM35"
+  },
+  {
+   "id": "70316",
+   "name": "Cold Bay, Ak, Usa",
+   "lat": 55.21241,
+   "lon": -162.7237,
+   "src": "FM35"
+  },
+  {
+   "id": "70326",
+   "name": "King Salmon, Ak, Usa",
+   "lat": 58.67937,
+   "lon": -156.66883,
+   "src": "FM35"
+  },
+  {
+   "id": "70350",
+   "name": "Kodiak, Ak, Usa",
+   "lat": 57.7432,
+   "lon": -152.48624,
+   "src": "FM35"
+  },
+  {
+   "id": "70361",
+   "name": "Yakutat, Ak, Usa",
+   "lat": 59.51081,
+   "lon": -139.67191,
+   "src": "FM35"
+  },
+  {
+   "id": "70398",
+   "name": "Annette Island, Ak, Usa",
+   "lat": 55.04509,
+   "lon": -131.58743,
+   "src": "FM35"
+  },
+  {
+   "id": "70414",
+   "name": "Shemya Afb, Usa",
+   "lat": 52.71,
+   "lon": 174.1,
+   "src": "FM35"
+  },
+  {
+   "id": "71043",
+   "name": "Norman Wells Ua,  Nwt, Canada",
+   "lat": 65.28758,
+   "lon": -126.75315,
+   "src": "FM35"
+  },
+  {
+   "id": "71081",
+   "name": "Hall Beach Ua, Nu., Canada",
+   "lat": 68.76438,
+   "lon": -81.22484,
+   "src": "FM35"
+  },
+  {
+   "id": "71082",
+   "name": "Alert Ua, Nu, Canada",
+   "lat": 82.49288,
+   "lon": -62.34406,
+   "src": "FM35"
+  },
+  {
+   "id": "71109",
+   "name": "Port Hardy Ua, Bc, Canada",
+   "lat": 50.68502,
+   "lon": -127.37583,
+   "src": "FM35"
+  },
+  {
+   "id": "71119",
+   "name": "Edmonton Stony Plain, Canada",
+   "lat": 53.55,
+   "lon": -114.11,
+   "src": "FM35"
+  },
+  {
+   "id": "71126",
+   "name": "",
+   "lat": 53.55,
+   "lon": -114.1,
+   "src": "FM35"
+  },
+  {
+   "id": "71203",
+   "name": "Kelowna, Canada",
+   "lat": 49.94,
+   "lon": -119.4,
+   "src": "FM35"
+  },
+  {
+   "id": "71600",
+   "name": "Sable Island, Ns, Canada",
+   "lat": 43.93,
+   "lon": -60.01,
+   "src": "FM35"
+  },
+  {
+   "id": "71603",
+   "name": "Yarmouth, Ns, Canada",
+   "lat": 43.8717,
+   "lon": -66.1072,
+   "src": "FM35"
+  },
+  {
+   "id": "71722",
+   "name": "Maniwaki, Que, Canada",
+   "lat": 46.3017,
+   "lon": -76.0064,
+   "src": "FM35"
+  },
+  {
+   "id": "71802",
+   "name": "Mt Pearl, Canada",
+   "lat": 47.5136,
+   "lon": -52.7828,
+   "src": "FM35"
+  },
+  {
+   "id": "71811",
+   "name": "Sept-Iles Ua, Que, Canada",
+   "lat": 50.22,
+   "lon": -66.24,
+   "src": "FM35"
+  },
+  {
+   "id": "71815",
+   "name": "Stephenville Ua, Nfld, Canada",
+   "lat": 48.56,
+   "lon": -58.56,
+   "src": "FM35"
+  },
+  {
+   "id": "71816",
+   "name": "Goose Bay, Nfld, Canada",
+   "lat": 53.30656,
+   "lon": -60.36313,
+   "src": "FM35"
+  },
+  {
+   "id": "71823",
+   "name": "La Grande Iv, Que, Canada",
+   "lat": 53.75725,
+   "lon": -73.67916,
+   "src": "FM35"
+  },
+  {
+   "id": "71836",
+   "name": "Moosonee, Ont, Canada",
+   "lat": 51.29,
+   "lon": -80.62,
+   "src": "FM35"
+  },
+  {
+   "id": "71845",
+   "name": "Pickle Lake, Ont, Canada",
+   "lat": 51.44852,
+   "lon": -90.21783,
+   "src": "FM35"
+  },
+  {
+   "id": "71867",
+   "name": "The Pas, Canada",
+   "lat": 53.9747,
+   "lon": -101.0892,
+   "src": "FM35"
+  },
+  {
+   "id": "71906",
+   "name": "Kuujjuaq, Ua, Que, Canada",
+   "lat": 58.1089,
+   "lon": -68.4114,
+   "src": "FM35"
+  },
+  {
+   "id": "71907",
+   "name": "Inukjuak, Que, Canada",
+   "lat": 58.46738,
+   "lon": -78.0778,
+   "src": "FM35"
+  },
+  {
+   "id": "71908",
+   "name": "Prince George, Ua, Canada",
+   "lat": 53.9,
+   "lon": -122.79102,
+   "src": "FM35"
+  },
+  {
+   "id": "71909",
+   "name": "Iqaluit, Nwt, Canada",
+   "lat": 63.74712,
+   "lon": -68.54422,
+   "src": "FM35"
+  },
+  {
+   "id": "71913",
+   "name": "Churchill Ua, Man, Canada",
+   "lat": 58.7392,
+   "lon": -94.0586,
+   "src": "FM35"
+  },
+  {
+   "id": "71915",
+   "name": "Coral Harbour Ua, Nwt, Canada",
+   "lat": 64.2,
+   "lon": -83.36,
+   "src": "FM35"
+  },
+  {
+   "id": "71917",
+   "name": "Eureka Ua, Nwt, Canada",
+   "lat": 79.98,
+   "lon": -85.93,
+   "src": "FM35"
+  },
+  {
+   "id": "71924",
+   "name": "Resolute Ua, Nwt, Canada",
+   "lat": 74.70472,
+   "lon": -94.96934,
+   "src": "FM35"
+  },
+  {
+   "id": "71925",
+   "name": "Cambridge Bay Ua, Nwt, Canada",
+   "lat": 69.13,
+   "lon": -105.06,
+   "src": "FM35"
+  },
+  {
+   "id": "71926",
+   "name": "Baker Lake Ua, Nwt, Canada",
+   "lat": 64.31888,
+   "lon": -96.00166,
+   "src": "FM35"
+  },
+  {
+   "id": "71934",
+   "name": "Fort Smith Ua,  Nwt, Canada",
+   "lat": 60.0266,
+   "lon": -111.92926,
+   "src": "FM35"
+  },
+  {
+   "id": "71945",
+   "name": "Fort Nelson Ua, Bc, Canada",
+   "lat": 58.84148,
+   "lon": -122.57293,
+   "src": "FM35"
+  },
+  {
+   "id": "71957",
+   "name": "Inuvik Ua, Nwt, Canada",
+   "lat": 68.31753,
+   "lon": -133.53398,
+   "src": "FM35"
+  },
+  {
+   "id": "71964",
+   "name": "Whitehorse, Ua, Yt, Canada",
+   "lat": 60.7331,
+   "lon": -135.0978,
+   "src": "FM35"
+  },
+  {
+   "id": "72201",
+   "name": "Key West/Int., Fl, Usa",
+   "lat": 24.55306,
+   "lon": -81.78861,
+   "src": "FM35"
+  },
+  {
+   "id": "72202",
+   "name": "Miami, Fl, Usa",
+   "lat": 25.75547,
+   "lon": -80.38355,
+   "src": "FM35"
+  },
+  {
+   "id": "72206",
+   "name": "Jacksonville/Intnl.,  Fl., Usa",
+   "lat": 30.48332,
+   "lon": -81.7011,
+   "src": "FM35"
+  },
+  {
+   "id": "72208",
+   "name": "Charleston/Mun., Sc., Usa",
+   "lat": 32.89472,
+   "lon": -80.02778,
+   "src": "FM35"
+  },
+  {
+   "id": "72210",
+   "name": "Tampa Bay Area, Fl., Usa",
+   "lat": 27.70528,
+   "lon": -82.40139,
+   "src": "FM35"
+  },
+  {
+   "id": "72214",
+   "name": "Tallahassee/Mun.,  Fl., Usa",
+   "lat": 30.45,
+   "lon": -84.3,
+   "src": "FM35"
+  },
+  {
+   "id": "72215",
+   "name": "Peachtree City, Ga., Usa",
+   "lat": 33.35611,
+   "lon": -84.56722,
+   "src": "FM35"
+  },
+  {
+   "id": "72230",
+   "name": "Birmingham, Al, Usa",
+   "lat": 33.18,
+   "lon": -86.78278,
+   "src": "FM35"
+  },
+  {
+   "id": "72233",
+   "name": "Slidell/Mun. La, Usa",
+   "lat": 30.33764,
+   "lon": -89.82509,
+   "src": "FM35"
+  },
+  {
+   "id": "72235",
+   "name": "Jackson/Allen C. Thompson Field, Ms., Usa",
+   "lat": 32.31998,
+   "lon": -90.08031,
+   "src": "FM35"
+  },
+  {
+   "id": "72240",
+   "name": "Lake Charles/Mun.,  La., Usa",
+   "lat": 30.12556,
+   "lon": -93.2171,
+   "src": "FM35"
+  },
+  {
+   "id": "72248",
+   "name": "Shreveport/Reg., La., Usa",
+   "lat": 32.45167,
+   "lon": -93.84167,
+   "src": "FM35"
+  },
+  {
+   "id": "72249",
+   "name": "Fort Worth, Tx., Usa",
+   "lat": 32.83522,
+   "lon": -97.29794,
+   "src": "FM35"
+  },
+  {
+   "id": "72250",
+   "name": "Brownsville/Int., Tx, Usa",
+   "lat": 25.9162,
+   "lon": -97.41993,
+   "src": "FM35"
+  },
+  {
+   "id": "72251",
+   "name": "Corpus Christi/Int.,  Tx., Usa",
+   "lat": 27.77933,
+   "lon": -97.50496,
+   "src": "FM35"
+  },
+  {
+   "id": "72261",
+   "name": "Del Rio/Int., Tx., Usa",
+   "lat": 29.37437,
+   "lon": -100.91788,
+   "src": "FM35"
+  },
+  {
+   "id": "72265",
+   "name": "Midland/Midland Reg. Air Term., Tx., Usa",
+   "lat": 31.94278,
+   "lon": -102.18972,
+   "src": "FM35"
+  },
+  {
+   "id": "72274",
+   "name": "Tucson/Int., Az., Usa",
+   "lat": 32.22796,
+   "lon": -110.95607,
+   "src": "FM35"
+  },
+  {
+   "id": "72293",
+   "name": "San Diego/Miramar,  Nas, Ca., Usa",
+   "lat": 32.84512,
+   "lon": -117.12368,
+   "src": "FM35"
+  },
+  {
+   "id": "72305",
+   "name": "Newport, Nc., Usa",
+   "lat": 34.77581,
+   "lon": -76.87765,
+   "src": "FM35"
+  },
+  {
+   "id": "72317",
+   "name": "Greensboro/G.-High Pt., Nc., Usa",
+   "lat": 36.09821,
+   "lon": -79.94298,
+   "src": "FM35"
+  },
+  {
+   "id": "72318",
+   "name": "Blacksburg, Va., Usa",
+   "lat": 37.20589,
+   "lon": -80.41436,
+   "src": "FM35"
+  },
+  {
+   "id": "72327",
+   "name": "Nashville/Old Hickory, Tn., Usa",
+   "lat": 36.24695,
+   "lon": -86.56178,
+   "src": "FM35"
+  },
+  {
+   "id": "72340",
+   "name": "Little Rock/Adams Fld,  Ar., Usa",
+   "lat": 34.83639,
+   "lon": -92.25972,
+   "src": "FM35"
+  },
+  {
+   "id": "72357",
+   "name": "Norman/Max Westheimer A, Ok., Usa",
+   "lat": 35.18095,
+   "lon": -97.43787,
+   "src": "FM35"
+  },
+  {
+   "id": "72363",
+   "name": "Amarillo/Intl., Tx., Usa",
+   "lat": 35.23253,
+   "lon": -101.70874,
+   "src": "FM35"
+  },
+  {
+   "id": "72364",
+   "name": "Santa Teresa, Nm., Usa",
+   "lat": 31.87268,
+   "lon": -106.69709,
+   "src": "FM35"
+  },
+  {
+   "id": "72365",
+   "name": "Albuquerque/Int., Nm., Usa",
+   "lat": 35.03806,
+   "lon": -106.62278,
+   "src": "FM35"
+  },
+  {
+   "id": "72376",
+   "name": "Flagstaff, Az, Usa",
+   "lat": 35.23057,
+   "lon": -111.82019,
+   "src": "FM35"
+  },
+  {
+   "id": "72381",
+   "name": "Edwards Afb, Ca., Usa",
+   "lat": 34.9,
+   "lon": -117.88,
+   "src": "FM35"
+  },
+  {
+   "id": "72388",
+   "name": "Las Vegas, Usa",
+   "lat": 36.04706,
+   "lon": -115.1847,
+   "src": "FM35"
+  },
+  {
+   "id": "72393",
+   "name": "Vandenberg Afb, Ca., Usa",
+   "lat": 34.75,
+   "lon": -120.56,
+   "src": "FM35"
+  },
+  {
+   "id": "72402",
+   "name": "Wallops Island, Va., Usa",
+   "lat": 37.93,
+   "lon": -75.47,
+   "src": "FM35"
+  },
+  {
+   "id": "72403",
+   "name": "Sterling, Va., Usa",
+   "lat": 38.97653,
+   "lon": -77.48592,
+   "src": "FM35"
+  },
+  {
+   "id": "72413",
+   "name": "",
+   "lat": 38.97357,
+   "lon": -77.48447,
+   "src": "BUFR"
+  },
+  {
+   "id": "72426",
+   "name": "Wilmington, Oh., Usa",
+   "lat": 39.42111,
+   "lon": -83.82111,
+   "src": "FM35"
+  },
+  {
+   "id": "72440",
+   "name": "Springfield/Mun., Mo., Usa",
+   "lat": 37.23583,
+   "lon": -93.40216,
+   "src": "FM35"
+  },
+  {
+   "id": "72451",
+   "name": "Dodge City/Mun., Ks., Usa",
+   "lat": 37.76164,
+   "lon": -99.96936,
+   "src": "FM35"
+  },
+  {
+   "id": "72456",
+   "name": "Topeka/Mun., Ks., Usa",
+   "lat": 39.07297,
+   "lon": -95.62983,
+   "src": "FM35"
+  },
+  {
+   "id": "72469",
+   "name": "Denver/Stapleton Int., Co., Usa",
+   "lat": 39.77,
+   "lon": -104.87,
+   "src": "FM35"
+  },
+  {
+   "id": "72476",
+   "name": "Grand Junction/Walker Field, Co., Usa",
+   "lat": 39.11974,
+   "lon": -108.52431,
+   "src": "FM35"
+  },
+  {
+   "id": "72489",
+   "name": "Reno, Nv., Usa",
+   "lat": 39.5683,
+   "lon": -119.79534,
+   "src": "FM35"
+  },
+  {
+   "id": "72493",
+   "name": "Oakland/Metrop. Oakland Int., Ca., Usa",
+   "lat": 37.74448,
+   "lon": -122.22356,
+   "src": "FM35"
+  },
+  {
+   "id": "72501",
+   "name": "Upton, Ny., Usa",
+   "lat": 40.86513,
+   "lon": -72.86286,
+   "src": "FM35"
+  },
+  {
+   "id": "72518",
+   "name": "Albany County Airport,  Ny., Usa",
+   "lat": 42.68027,
+   "lon": -73.81596,
+   "src": "FM35"
+  },
+  {
+   "id": "72520",
+   "name": "Pittsburgh/Moon Township, Pa., Usa",
+   "lat": 40.53158,
+   "lon": -80.21738,
+   "src": "FM35"
+  },
+  {
+   "id": "72528",
+   "name": "Buffalo/Greater Buffalo Int., Ny., Usa",
+   "lat": 42.94003,
+   "lon": -78.72474,
+   "src": "FM35"
+  },
+  {
+   "id": "72558",
+   "name": "Valley, Ne., Usa",
+   "lat": 41.31944,
+   "lon": -96.38306,
+   "src": "FM35"
+  },
+  {
+   "id": "72562",
+   "name": "North Platte/Lee Bird, Ne., Usa",
+   "lat": 41.13394,
+   "lon": -100.69992,
+   "src": "FM35"
+  },
+  {
+   "id": "72572",
+   "name": "Salt Lake City/Intnl Ut., Usa",
+   "lat": 40.77244,
+   "lon": -111.9547,
+   "src": "FM35"
+  },
+  {
+   "id": "72582",
+   "name": "Elko, Nv., Usa",
+   "lat": 40.86018,
+   "lon": -115.74146,
+   "src": "FM35"
+  },
+  {
+   "id": "72597",
+   "name": "Medford/Medford-Jackson County, Or., Usa",
+   "lat": 42.37687,
+   "lon": -122.88212,
+   "src": "FM35"
+  },
+  {
+   "id": "72632",
+   "name": "White Lake, Mi., Usa",
+   "lat": 42.69902,
+   "lon": -83.4715,
+   "src": "FM35"
+  },
+  {
+   "id": "72634",
+   "name": "Gaylord, Mi., Usa",
+   "lat": 44.90826,
+   "lon": -84.71936,
+   "src": "FM35"
+  },
+  {
+   "id": "72645",
+   "name": "Green Bay/A.-Straubel, Wi., Usa",
+   "lat": 44.49755,
+   "lon": -88.11171,
+   "src": "FM35"
+  },
+  {
+   "id": "72649",
+   "name": "Chanhassen, Mn., Usa",
+   "lat": 44.849,
+   "lon": -93.56431,
+   "src": "FM35"
+  },
+  {
+   "id": "72659",
+   "name": "Aberdeen/Reg., Sd., Usa",
+   "lat": 45.4545,
+   "lon": -98.41416,
+   "src": "FM35"
+  },
+  {
+   "id": "72662",
+   "name": "Rapid City Wfo, Sd., Usa",
+   "lat": 44.07301,
+   "lon": -103.21027,
+   "src": "FM35"
+  },
+  {
+   "id": "72672",
+   "name": "Riverton, Wy., Usa",
+   "lat": 43.06485,
+   "lon": -108.47667,
+   "src": "FM35"
+  },
+  {
+   "id": "72681",
+   "name": "Boise/Mun., Id., Usa",
+   "lat": 43.56775,
+   "lon": -116.21092,
+   "src": "FM35"
+  },
+  {
+   "id": "72694",
+   "name": "Salem/Mcnary, Or., Usa",
+   "lat": 44.90955,
+   "lon": -123.00944,
+   "src": "FM35"
+  },
+  {
+   "id": "72712",
+   "name": "Caribou/Mun., Me., Usa",
+   "lat": 46.86812,
+   "lon": -68.01354,
+   "src": "FM35"
+  },
+  {
+   "id": "72747",
+   "name": "Int.Falls/Falls Int. Mn., Usa",
+   "lat": 48.56,
+   "lon": -93.4,
+   "src": "FM35"
+  },
+  {
+   "id": "72764",
+   "name": "Bismarck/Mun., Nd., Usa",
+   "lat": 46.77166,
+   "lon": -100.76158,
+   "src": "FM35"
+  },
+  {
+   "id": "72768",
+   "name": "Glasgow/Int., Mt., Usa",
+   "lat": 48.20601,
+   "lon": -106.62646,
+   "src": "FM35"
+  },
+  {
+   "id": "72776",
+   "name": "Great Falls, Mt., Usa",
+   "lat": 47.46056,
+   "lon": -111.38533,
+   "src": "FM35"
+  },
+  {
+   "id": "72786",
+   "name": "Spokane, Wa., Usa",
+   "lat": 47.68159,
+   "lon": -117.62662,
+   "src": "FM35"
+  },
+  {
+   "id": "72797",
+   "name": "Quillayute, Wa., Usa",
+   "lat": 47.93477,
+   "lon": -124.55945,
+   "src": "FM35"
+  },
+  {
+   "id": "73033",
+   "name": "Vernon, Canada",
+   "lat": 50.2393,
+   "lon": -119.28998,
+   "src": "BUFR"
+  },
+  {
+   "id": "73110",
+   "name": "Shearwater, Canada",
+   "lat": 44.6319,
+   "lon": -63.5086,
+   "src": "BUFR"
+  },
+  {
+   "id": "73111",
+   "name": "Stationid\n73111    Kapuskasing\n73111    Kapuskasing\nName: Name, Dtype: Str, Stationid\n73111    Ca\n73111    Ca\nName: Country, Dtype: Str",
+   "lat": 49.4049,
+   "lon": -82.44292,
+   "src": "BUFR"
+  },
+  {
+   "id": "74001",
+   "name": "",
+   "lat": 34.6,
+   "lon": -86.62,
+   "src": "FM35"
+  },
+  {
+   "id": "74002",
+   "name": "Aberdeen Proving Grounds, Md., Usa",
+   "lat": 39.47,
+   "lon": -76.07,
+   "src": "FM35"
+  },
+  {
+   "id": "74004",
+   "name": "Yuma Proving Ground, Usa",
+   "lat": 32.85,
+   "lon": -114.4,
+   "src": "FM35"
+  },
+  {
+   "id": "74005",
+   "name": "",
+   "lat": 32.86,
+   "lon": -114.03,
+   "src": "FM35"
+  },
+  {
+   "id": "74006",
+   "name": "Yuma Proving Grounds (Tower M), Usa",
+   "lat": 32.92,
+   "lon": -113.8,
+   "src": "FM35"
+  },
+  {
+   "id": "74389",
+   "name": "Gray, Me., Usa",
+   "lat": 43.8925,
+   "lon": -70.25722,
+   "src": "FM35"
+  },
+  {
+   "id": "74455",
+   "name": "Quad City, Ia., Usa",
+   "lat": 41.61248,
+   "lon": -90.57999,
+   "src": "FM35"
+  },
+  {
+   "id": "74494",
+   "name": "Chatham, Ma., Usa",
+   "lat": 41.66,
+   "lon": -69.96,
+   "src": "FM35"
+  },
+  {
+   "id": "74560",
+   "name": "Lincoln, Il., Usa",
+   "lat": 40.15111,
+   "lon": -89.3375,
+   "src": "FM35"
+  },
+  {
+   "id": "74626",
+   "name": "Wfo Phoenix, Az., Usa",
+   "lat": 33.45,
+   "lon": -111.95,
+   "src": "FM35"
+  },
+  {
+   "id": "74646",
+   "name": "Lamont, Ok., Usa",
+   "lat": 36.62,
+   "lon": -97.48,
+   "src": "FM35"
+  },
+  {
+   "id": "74794",
+   "name": "Cape Kennedy, Fl., Usa",
+   "lat": 28.46,
+   "lon": -80.55,
+   "src": "FM35"
+  },
+  {
+   "id": "76225",
+   "name": "Chihuahua, Chih., Mexico",
+   "lat": 28.67,
+   "lon": -106.02,
+   "src": "FM35"
+  },
+  {
+   "id": "76256",
+   "name": "Empalme, Son., Mexico",
+   "lat": 27.95,
+   "lon": -110.75,
+   "src": "FM35"
+  },
+  {
+   "id": "76394",
+   "name": "Monterrey, N.L., Mexico",
+   "lat": 25.87,
+   "lon": -100.23,
+   "src": "FM35"
+  },
+  {
+   "id": "76405",
+   "name": "La Paz, Bcs, Mexico",
+   "lat": 24.17,
+   "lon": -110.3,
+   "src": "FM35"
+  },
+  {
+   "id": "76458",
+   "name": "Colonia Juan Carrasco Mazatlan, Sin., Mexico",
+   "lat": 23.2,
+   "lon": -106.42,
+   "src": "FM35"
+  },
+  {
+   "id": "76526",
+   "name": "Zacatecas,Zac., Mexico",
+   "lat": 22.75,
+   "lon": -102.5,
+   "src": "FM35"
+  },
+  {
+   "id": "76595",
+   "name": "Cancun, Mexico",
+   "lat": 21.02,
+   "lon": -86.85,
+   "src": "FM35"
+  },
+  {
+   "id": "76612",
+   "name": "Guadalajara, Jal., Mexico",
+   "lat": 20.67,
+   "lon": -103.38,
+   "src": "FM35"
+  },
+  {
+   "id": "76644",
+   "name": "Aerop.Internacional Merida, Yuc, Mexico",
+   "lat": 20.98,
+   "lon": -89.65,
+   "src": "FM35"
+  },
+  {
+   "id": "76654",
+   "name": "Manzanillo, Col., Mexico",
+   "lat": 19.05,
+   "lon": -104.32,
+   "src": "FM35"
+  },
+  {
+   "id": "76679",
+   "name": "Aerop. Internacional Mexico, D.F., Mexico",
+   "lat": 19.4,
+   "lon": -99.2,
+   "src": "FM35"
+  },
+  {
+   "id": "76692",
+   "name": "Hacienda Ylang Ylang Veracruz, Ver., Mexico",
+   "lat": 19.15,
+   "lon": -96.12,
+   "src": "FM35"
+  },
+  {
+   "id": "76805",
+   "name": "Acapulco, Gro., Mexico",
+   "lat": 16.75,
+   "lon": -99.75,
+   "src": "FM35"
+  },
+  {
+   "id": "78016",
+   "name": "Bermuda Naval Air Station Kindley, Bermuda",
+   "lat": 32.37,
+   "lon": -64.68,
+   "src": "FM35"
+  },
+  {
+   "id": "78073",
+   "name": "Nassau Airport New Providence, Bahamas",
+   "lat": 25.05,
+   "lon": -77.46,
+   "src": "FM35"
+  },
+  {
+   "id": "78384",
+   "name": "Owen Roberts Airport Grand Cayman, Cayman Islands",
+   "lat": 19.294,
+   "lon": -81.3631,
+   "src": "FM35"
+  },
+  {
+   "id": "78397",
+   "name": "Kingston/Norman Manley, Jamaica",
+   "lat": 17.93902,
+   "lon": -76.78085,
+   "src": "FM35"
+  },
+  {
+   "id": "78486",
+   "name": "Santo Domingo, Dominican Republic",
+   "lat": 18.43,
+   "lon": -69.88,
+   "src": "FM35"
+  },
+  {
+   "id": "78526",
+   "name": "San Juan/Int.,  Puerto Rico, Puerto Rico And Us Possessions In The Caribbean Area",
+   "lat": 18.43,
+   "lon": -65.99,
+   "src": "FM35"
+  },
+  {
+   "id": "78583",
+   "name": "Belize/Phillip Goldston Intl. Airport, Belize",
+   "lat": 17.53422,
+   "lon": -88.31283,
+   "src": "FM35"
+  },
+  {
+   "id": "78762",
+   "name": "Juan Santamaria Int. Airport, Costa Rica",
+   "lat": 10.0,
+   "lon": -84.27,
+   "src": "FM35"
+  },
+  {
+   "id": "78807",
+   "name": "Corozal Oeste, Panama",
+   "lat": 8.98,
+   "lon": -79.58,
+   "src": "FM35"
+  },
+  {
+   "id": "78866",
+   "name": "Juliana Airport,  St. Maarten, Curacao, St Maarten And/Et Aruba",
+   "lat": 18.05,
+   "lon": -63.12,
+   "src": "FM35"
+  },
+  {
+   "id": "78897",
+   "name": "Le Raizet, Guadeloupe, Guadeloupe, St Martin, St Barthelemy (And Other French Islands In The Vicinity",
+   "lat": 16.2621,
+   "lon": -61.52791,
+   "src": "FM35"
+  },
+  {
+   "id": "78954",
+   "name": "Grantley Adams, Barbados",
+   "lat": 13.07167,
+   "lon": -59.49194,
+   "src": "FM35"
+  },
+  {
+   "id": "78970",
+   "name": "Piarco Int. Airport,  Trinidad, Trinidad And Tobago",
+   "lat": 10.58,
+   "lon": -61.35,
+   "src": "FM35"
+  },
+  {
+   "id": "78988",
+   "name": "Hato Airport, Curacao, Curacao, St Maarten And/Et Aruba",
+   "lat": 12.2,
+   "lon": -68.96,
+   "src": "FM35"
+  },
+  {
+   "id": "80001",
+   "name": "San Andres (Isla)/Sesquicentenario, Colombia",
+   "lat": 12.58,
+   "lon": -81.72,
+   "src": "FM35"
+  },
+  {
+   "id": "80028",
+   "name": "Ernesto Cortissoz, Colombia",
+   "lat": 10.53,
+   "lon": -74.46,
+   "src": "FM35"
+  },
+  {
+   "id": "80035",
+   "name": "Riohacha/Almirante Padilla, Colombia",
+   "lat": 11.53,
+   "lon": -72.93,
+   "src": "FM35"
+  },
+  {
+   "id": "80094",
+   "name": "Palonegro, Colombia",
+   "lat": 7.06,
+   "lon": -73.12,
+   "src": "FM35"
+  },
+  {
+   "id": "80222",
+   "name": "Bogota/Eldorado, Colombia",
+   "lat": 4.7,
+   "lon": -74.15,
+   "src": "FM35"
+  },
+  {
+   "id": "80259",
+   "name": "Alfonso Bonilla Aragon, Colombia",
+   "lat": 3.54,
+   "lon": -76.39,
+   "src": "FM35"
+  },
+  {
+   "id": "80371",
+   "name": "Tres Esquinas, Colombia",
+   "lat": 0.75,
+   "lon": -75.23,
+   "src": "FM35"
+  },
+  {
+   "id": "80398",
+   "name": "Leticia/Vasquez Cobo, Colombia",
+   "lat": -4.55,
+   "lon": -69.53,
+   "src": "FM35"
+  },
+  {
+   "id": "80422",
+   "name": "",
+   "lat": 10.67,
+   "lon": -63.25,
+   "src": "FM35"
+  },
+  {
+   "id": "81405",
+   "name": "Rochambeau, French Guiana",
+   "lat": 4.8222,
+   "lon": -52.36562,
+   "src": "FM35"
+  },
+  {
+   "id": "81729",
+   "name": "",
+   "lat": -3.29,
+   "lon": -60.63,
+   "src": "FM35"
+  },
+  {
+   "id": "82022",
+   "name": "Boa Vista, Brazil",
+   "lat": 2.83,
+   "lon": -60.7,
+   "src": "FM35"
+  },
+  {
+   "id": "82026",
+   "name": "Tirios, Brazil",
+   "lat": 2.48,
+   "lon": -55.98,
+   "src": "FM35"
+  },
+  {
+   "id": "82099",
+   "name": "Macapa A/P, Brazil",
+   "lat": 0.05,
+   "lon": -51.07,
+   "src": "FM35"
+  },
+  {
+   "id": "82107",
+   "name": "San Garbriel Da Cachoeira, Brazil",
+   "lat": -1.3,
+   "lon": -67.05,
+   "src": "FM35"
+  },
+  {
+   "id": "82193",
+   "name": "Belem (Aeroporto), Brazil",
+   "lat": -1.38,
+   "lon": -48.48,
+   "src": "FM35"
+  },
+  {
+   "id": "82244",
+   "name": "Santarem-Aeroporto, Brazil",
+   "lat": -2.43,
+   "lon": -54.72,
+   "src": "FM35"
+  },
+  {
+   "id": "82281",
+   "name": "Sao Luiz, Brazil",
+   "lat": -2.6,
+   "lon": -44.23,
+   "src": "FM35"
+  },
+  {
+   "id": "82332",
+   "name": "Manaus (Aeroporto), Brazil",
+   "lat": -3.15,
+   "lon": -59.98,
+   "src": "FM35"
+  },
+  {
+   "id": "82397",
+   "name": "Fortaleza, Brazil",
+   "lat": -3.76,
+   "lon": -38.6,
+   "src": "FM35"
+  },
+  {
+   "id": "82400",
+   "name": "Fernando De Noronha, Brazil",
+   "lat": -3.85,
+   "lon": -32.41,
+   "src": "FM35"
+  },
+  {
+   "id": "82411",
+   "name": "Tabatinga, Brazil",
+   "lat": -3.67,
+   "lon": -69.67,
+   "src": "FM35"
+  },
+  {
+   "id": "82532",
+   "name": "Manicore , Brazil",
+   "lat": -5.82,
+   "lon": -61.28,
+   "src": "FM35"
+  },
+  {
+   "id": "82599",
+   "name": "Natal Aeroporto, Brazil",
+   "lat": -5.91,
+   "lon": -35.25,
+   "src": "FM35"
+  },
+  {
+   "id": "82678",
+   "name": "Floriano, Brazil",
+   "lat": -6.76,
+   "lon": -43.01,
+   "src": "FM35"
+  },
+  {
+   "id": "82705",
+   "name": "Cruzerio Do Sul, Brazil",
+   "lat": -7.62,
+   "lon": -72.67,
+   "src": "FM35"
+  },
+  {
+   "id": "82765",
+   "name": "Carolina, Brazil",
+   "lat": -7.33,
+   "lon": -47.46,
+   "src": "FM35"
+  },
+  {
+   "id": "82824",
+   "name": "Porto Velho (Aeroporto), Brazil",
+   "lat": -8.76,
+   "lon": -63.91,
+   "src": "FM35"
+  },
+  {
+   "id": "82900",
+   "name": "Recife, Brazil",
+   "lat": -8.05,
+   "lon": -34.91,
+   "src": "FM35"
+  },
+  {
+   "id": "82917",
+   "name": "Rio Branco, Brazil",
+   "lat": -10.0,
+   "lon": -67.8,
+   "src": "FM35"
+  },
+  {
+   "id": "82965",
+   "name": "Alta Floresta (Aeroporto), Brazil",
+   "lat": -9.86,
+   "lon": -56.1,
+   "src": "FM35"
+  },
+  {
+   "id": "82983",
+   "name": "Petrolina, Brazil",
+   "lat": -9.38,
+   "lon": -40.48,
+   "src": "FM35"
+  },
+  {
+   "id": "83208",
+   "name": "Vilhena (Aeroporto), Brazil",
+   "lat": -12.7,
+   "lon": -60.1,
+   "src": "FM35"
+  },
+  {
+   "id": "83229",
+   "name": "Salvador, Brazil",
+   "lat": -13.01,
+   "lon": -38.51,
+   "src": "FM35"
+  },
+  {
+   "id": "83288",
+   "name": "Bom Jesus Da Lapa, Brazil",
+   "lat": -13.26,
+   "lon": -43.41,
+   "src": "FM35"
+  },
+  {
+   "id": "83362",
+   "name": "Cuiaba (Aeroporto), Brazil",
+   "lat": -15.65,
+   "lon": -56.1,
+   "src": "FM35"
+  },
+  {
+   "id": "83378",
+   "name": "Brasilia (Aeroporto), Brazil",
+   "lat": -15.86,
+   "lon": -47.93,
+   "src": "FM35"
+  },
+  {
+   "id": "83498",
+   "name": "Caravelas, Brazil",
+   "lat": -17.73,
+   "lon": -39.25,
+   "src": "FM35"
+  },
+  {
+   "id": "83525",
+   "name": "Uberlandia, Brazil",
+   "lat": -18.87,
+   "lon": -48.22,
+   "src": "FM35"
+  },
+  {
+   "id": "83554",
+   "name": "Corumba (Aeroporto), Brazil",
+   "lat": -19.0,
+   "lon": -57.67,
+   "src": "FM35"
+  },
+  {
+   "id": "83566",
+   "name": "Belo Horizonte(Confins), Brazil",
+   "lat": -19.62,
+   "lon": -43.57,
+   "src": "FM35"
+  },
+  {
+   "id": "83612",
+   "name": "Campo Grande (Aeroporto), Brazil",
+   "lat": -20.46,
+   "lon": -54.66,
+   "src": "FM35"
+  },
+  {
+   "id": "83649",
+   "name": "Vitoria, Brazil",
+   "lat": -20.27,
+   "lon": -40.28,
+   "src": "FM35"
+  },
+  {
+   "id": "83650",
+   "name": "Trindade (Ilha), Brazil",
+   "lat": -20.5,
+   "lon": -29.31,
+   "src": "FM35"
+  },
+  {
+   "id": "83746",
+   "name": "Galeao, Brazil",
+   "lat": -22.81,
+   "lon": -43.25,
+   "src": "FM35"
+  },
+  {
+   "id": "83768",
+   "name": "Londrina (Aeroporto), Brazil",
+   "lat": -23.33,
+   "lon": -51.13,
+   "src": "FM35"
+  },
+  {
+   "id": "83779",
+   "name": "Marte Civ/Mil, Brazil",
+   "lat": -23.52,
+   "lon": -46.63,
+   "src": "FM35"
+  },
+  {
+   "id": "83827",
+   "name": "Foz Do Iguacu (Aeroporto), Brazil",
+   "lat": -25.51,
+   "lon": -54.58,
+   "src": "FM35"
+  },
+  {
+   "id": "83840",
+   "name": "Curitiba (Aeroporto), Brazil",
+   "lat": -25.51,
+   "lon": -49.16,
+   "src": "FM35"
+  },
+  {
+   "id": "83899",
+   "name": "Florianpolis (Aeroporto), Brazil",
+   "lat": -27.67,
+   "lon": -48.55,
+   "src": "FM35"
+  },
+  {
+   "id": "83928",
+   "name": "Uruguaiana (Aeroporto), Brazil",
+   "lat": -29.78,
+   "lon": -57.03,
+   "src": "FM35"
+  },
+  {
+   "id": "83937",
+   "name": "Santa Maria (Aeroporto), Brazil",
+   "lat": -29.72,
+   "lon": -53.7,
+   "src": "FM35"
+  },
+  {
+   "id": "83971",
+   "name": "Porto Alegre (Aeroporto), Brazil",
+   "lat": -30.0,
+   "lon": -51.18,
+   "src": "FM35"
+  },
+  {
+   "id": "84008",
+   "name": "San Cristobal (Galapagos), Ecuador",
+   "lat": -0.43,
+   "lon": -89.6,
+   "src": "FM35"
+  },
+  {
+   "id": "84203",
+   "name": "",
+   "lat": -2.17,
+   "lon": -79.83,
+   "src": "FM35"
+  },
+  {
+   "id": "84372",
+   "name": "Iquitos, Peru",
+   "lat": -3.76423,
+   "lon": -73.25475,
+   "src": "BUFR"
+  },
+  {
+   "id": "84516",
+   "name": "Trujillo, Peru",
+   "lat": -8.04397,
+   "lon": -79.05942,
+   "src": "BUFR"
+  },
+  {
+   "id": "84622",
+   "name": "Junin, Peru",
+   "lat": -11.91619,
+   "lon": -75.32178,
+   "src": "BUFR"
+  },
+  {
+   "id": "84754",
+   "name": "Arequipa, Peru",
+   "lat": -16.40422,
+   "lon": -71.55156,
+   "src": "BUFR"
+  },
+  {
+   "id": "85442",
+   "name": "Antofagasta, Chile",
+   "lat": -23.45308,
+   "lon": -70.44069,
+   "src": "FM35"
+  },
+  {
+   "id": "85469",
+   "name": "Isla De Pascua, Chile",
+   "lat": -27.16,
+   "lon": -109.43,
+   "src": "FM35"
+  },
+  {
+   "id": "85586",
+   "name": "Santo Domingo, Chile",
+   "lat": -33.65,
+   "lon": -71.61,
+   "src": "FM35"
+  },
+  {
+   "id": "85799",
+   "name": "Puerto Montt, Chile",
+   "lat": -41.4353,
+   "lon": -73.1013,
+   "src": "FM35"
+  },
+  {
+   "id": "85934",
+   "name": "Punta Arenas, Chile",
+   "lat": -53.00632,
+   "lon": -70.84086,
+   "src": "FM35"
+  },
+  {
+   "id": "87155",
+   "name": "Resistencia Aero, Argentina",
+   "lat": -27.43898,
+   "lon": -59.04602,
+   "src": "FM35"
+  },
+  {
+   "id": "87344",
+   "name": "Cordoba Aero, Argentina",
+   "lat": -31.29663,
+   "lon": -64.21185,
+   "src": "FM35"
+  },
+  {
+   "id": "87418",
+   "name": "Mendoza Aero, Argentina",
+   "lat": -32.8437,
+   "lon": -68.79702,
+   "src": "FM35"
+  },
+  {
+   "id": "87576",
+   "name": "Ezeiza Aero, Argentina",
+   "lat": -34.81,
+   "lon": -58.53,
+   "src": "FM35"
+  },
+  {
+   "id": "87582",
+   "name": "",
+   "lat": -34.56409,
+   "lon": -58.41718,
+   "src": "BUFR"
+  },
+  {
+   "id": "87585",
+   "name": "Buenos Aires, Argentina",
+   "lat": -34.59001,
+   "lon": -58.48388,
+   "src": "BUFR"
+  },
+  {
+   "id": "87623",
+   "name": "Santa Rosa Aero, Argentina",
+   "lat": -36.59298,
+   "lon": -64.2802,
+   "src": "FM35"
+  },
+  {
+   "id": "87715",
+   "name": "Neuquen Aero, Argentina",
+   "lat": -38.95204,
+   "lon": -68.1367,
+   "src": "FM35"
+  },
+  {
+   "id": "87860",
+   "name": "Comodoro Rivadavia Aero, Argentina",
+   "lat": -45.79253,
+   "lon": -67.46264,
+   "src": "FM35"
+  },
+  {
+   "id": "88889",
+   "name": "Mount Pleasant Airport, Islands",
+   "lat": -51.81,
+   "lon": -58.45,
+   "src": "FM35"
+  },
+  {
+   "id": "89002",
+   "name": "Neumayer, Stations Operated By Germany",
+   "lat": -70.66,
+   "lon": -8.25,
+   "src": "FM35"
+  },
+  {
+   "id": "89009",
+   "name": "Amundsen-Scott, Stations Operated By The U.S.A.",
+   "lat": -78.0,
+   "lon": 0.0,
+   "src": "FM35"
+  },
+  {
+   "id": "89022",
+   "name": "Halley, Stations Operated By The United Kingdom",
+   "lat": -75.5,
+   "lon": -26.65,
+   "src": "FM35"
+  },
+  {
+   "id": "89055",
+   "name": "Base Marambio (Centro Met. Antartico), Stations Operated By Argentina",
+   "lat": -64.24058,
+   "lon": -56.62259,
+   "src": "FM35"
+  },
+  {
+   "id": "89062",
+   "name": "Rothera , Stations Operated By The United Kingdom",
+   "lat": -67.56611,
+   "lon": 68.12972,
+   "src": "FM35"
+  },
+  {
+   "id": "89512",
+   "name": "Novolazarevskaja, Stations Operated By The Russian Federation",
+   "lat": -70.76,
+   "lon": 11.83,
+   "src": "FM35"
+  },
+  {
+   "id": "89514",
+   "name": "Maitri, Antarctica",
+   "lat": -70.76439,
+   "lon": 11.7342,
+   "src": "BUFR"
+  },
+  {
+   "id": "89532",
+   "name": "Syowa, Stations Operated By Japan",
+   "lat": -69.0,
+   "lon": 39.58,
+   "src": "FM35"
+  },
+  {
+   "id": "89564",
+   "name": "Mawson, Stations Operated By Australia",
+   "lat": -67.6017,
+   "lon": 62.8737,
+   "src": "FM35"
+  },
+  {
+   "id": "89571",
+   "name": "Davis, Stations Operated By Australia",
+   "lat": -68.5752,
+   "lon": 77.9659,
+   "src": "FM35"
+  },
+  {
+   "id": "89592",
+   "name": "Mirnyj, Stations Operated By The Russian Federation",
+   "lat": -66.55,
+   "lon": 93.01,
+   "src": "FM35"
+  },
+  {
+   "id": "89611",
+   "name": "Casey, Stations Operated By Australia",
+   "lat": -66.2827,
+   "lon": 110.5234,
+   "src": "FM35"
+  },
+  {
+   "id": "89642",
+   "name": "Dumont D'Urville, Stations Operated By France",
+   "lat": -66.66,
+   "lon": 140.01,
+   "src": "FM35"
+  },
+  {
+   "id": "89664",
+   "name": "Mcmurdo, Stations Operated By The U.S.A.",
+   "lat": -77.85,
+   "lon": 166.66,
+   "src": "FM35"
+  },
+  {
+   "id": "91165",
+   "name": "Lihue, Kauai, Hawaii, Islands In The Pacific Ocean North Of The Equator",
+   "lat": 21.98714,
+   "lon": -159.33791,
+   "src": "FM35"
+  },
+  {
+   "id": "91212",
+   "name": "Nwso Agana, Guam, Mariana Is., Islands In The Pacific Ocean North Of The Equator",
+   "lat": 13.47761,
+   "lon": 144.79381,
+   "src": "FM35"
+  },
+  {
+   "id": "91285",
+   "name": "Hilo, Hi, Islands In The Pacific Ocean North Of The Equator",
+   "lat": 19.717,
+   "lon": -155.04935,
+   "src": "FM35"
+  },
+  {
+   "id": "91334",
+   "name": "Chuuk, Eci, Islands In The Pacific Ocean North Of The Equator",
+   "lat": 7.46,
+   "lon": 151.84,
+   "src": "FM35"
+  },
+  {
+   "id": "91348",
+   "name": "Pohnpei, Caroline Is., Islands In The Pacific Ocean North Of The Equator",
+   "lat": 6.96,
+   "lon": 158.21,
+   "src": "FM35"
+  },
+  {
+   "id": "91376",
+   "name": "Majuro/Marshall Is. Intnl., Islands In The Pacific Ocean North Of The Equator",
+   "lat": 7.07,
+   "lon": 171.29,
+   "src": "FM35"
+  },
+  {
+   "id": "91408",
+   "name": "Koror, Palau Wci., Islands In The Pacific Ocean North Of The Equator",
+   "lat": 7.37,
+   "lon": 134.54,
+   "src": "FM35"
+  },
+  {
+   "id": "91413",
+   "name": "Yap, Caroline Is., Islands In The Pacific Ocean North Of The Equator",
+   "lat": 9.5,
+   "lon": 138.08,
+   "src": "FM35"
+  },
+  {
+   "id": "91592",
+   "name": "Noumea (Nlle-Caledonie), New Caledonia",
+   "lat": -22.27564,
+   "lon": 166.45262,
+   "src": "FM35"
+  },
+  {
+   "id": "91610",
+   "name": "Tarawa, Kiribati",
+   "lat": 1.35488,
+   "lon": 172.92326,
+   "src": "FM35"
+  },
+  {
+   "id": "91643",
+   "name": "Funafuti, Tuvalu",
+   "lat": -8.51,
+   "lon": 179.21,
+   "src": "FM35"
+  },
+  {
+   "id": "91680",
+   "name": "Nadi Airport, Fiji",
+   "lat": -17.75,
+   "lon": 177.45,
+   "src": "FM35"
+  },
+  {
+   "id": "91765",
+   "name": "Pago Pago/Int.Airp., American Samoa",
+   "lat": -14.33,
+   "lon": -170.71,
+   "src": "FM35"
+  },
+  {
+   "id": "91843",
+   "name": "Rarotonga, Cook Islands",
+   "lat": -21.2,
+   "lon": -159.81,
+   "src": "FM35"
+  },
+  {
+   "id": "91925",
+   "name": "Atuona, French Polynesia (Marquesas Islands)",
+   "lat": -9.80589,
+   "lon": -139.03564,
+   "src": "FM35"
+  },
+  {
+   "id": "91938",
+   "name": "Tahiti-Faaa, French Polynesia (Society Islands)",
+   "lat": -17.55526,
+   "lon": -149.61467,
+   "src": "FM35"
+  },
+  {
+   "id": "91948",
+   "name": "Rikitea, French Polynesia (Tuamotu Islands And Gambier Islands)",
+   "lat": -23.13021,
+   "lon": -134.96495,
+   "src": "FM35"
+  },
+  {
+   "id": "93112",
+   "name": "Whenuapai, New Zealand",
+   "lat": -36.78,
+   "lon": 174.63,
+   "src": "FM35"
+  },
+  {
+   "id": "93417",
+   "name": "Paraparaumu Aerodrome, New Zealand",
+   "lat": -40.90472,
+   "lon": 174.98413,
+   "src": "FM35"
+  },
+  {
+   "id": "93844",
+   "name": "Invercargill Aerodrome, New Zealand",
+   "lat": -46.41797,
+   "lon": 168.33046,
+   "src": "FM35"
+  },
+  {
+   "id": "93997",
+   "name": "Raoul Island, Kermadec Is., New Zealand",
+   "lat": -29.25,
+   "lon": -177.91,
+   "src": "FM35"
+  },
+  {
+   "id": "94001",
+   "name": "Barmaryee, Australia",
+   "lat": -23.1257,
+   "lon": 150.70218,
+   "src": "BUFR"
+  },
+  {
+   "id": "94005",
+   "name": "Clifton Beach, Australia",
+   "lat": -42.96795,
+   "lon": 147.53391,
+   "src": "BUFR"
+  },
+  {
+   "id": "94120",
+   "name": "Darwin Airport, Australia",
+   "lat": -12.4242,
+   "lon": 130.8925,
+   "src": "FM35"
+  },
+  {
+   "id": "94150",
+   "name": "Gove Airport, Australia",
+   "lat": -12.28,
+   "lon": 136.81,
+   "src": "FM35"
+  },
+  {
+   "id": "94155",
+   "name": "Arnhem Space Centre, Australia",
+   "lat": -12.38465,
+   "lon": 136.79597,
+   "src": "BUFR"
+  },
+  {
+   "id": "94170",
+   "name": "Weipa Aero, Australia",
+   "lat": -12.6776,
+   "lon": 141.9206,
+   "src": "FM35"
+  },
+  {
+   "id": "94203",
+   "name": "Broome Airport, Australia",
+   "lat": -17.94785,
+   "lon": 122.23503,
+   "src": "FM35"
+  },
+  {
+   "id": "94294",
+   "name": "Townsville Aero, Australia",
+   "lat": -19.25,
+   "lon": 146.76,
+   "src": "FM35"
+  },
+  {
+   "id": "94299",
+   "name": "Willis Island, Australia",
+   "lat": -16.2878,
+   "lon": 149.9652,
+   "src": "FM35"
+  },
+  {
+   "id": "94302",
+   "name": "Learmonth Airport, Australia",
+   "lat": -22.2412,
+   "lon": 114.097,
+   "src": "FM35"
+  },
+  {
+   "id": "94312",
+   "name": "Port Hedland Airport, Australia",
+   "lat": -20.37229,
+   "lon": 118.63217,
+   "src": "FM35"
+  },
+  {
+   "id": "94326",
+   "name": "Alice Springs Airport, Australia",
+   "lat": -23.7951,
+   "lon": 133.889,
+   "src": "FM35"
+  },
+  {
+   "id": "94332",
+   "name": "Mount Isa Aero, Australia",
+   "lat": -20.6787,
+   "lon": 139.4877,
+   "src": "FM35"
+  },
+  {
+   "id": "94374",
+   "name": "Rockhampton Aero, Australia",
+   "lat": -23.38,
+   "lon": 150.48,
+   "src": "FM35"
+  },
+  {
+   "id": "94403",
+   "name": "Geraldton Airport, Australia",
+   "lat": -28.80434,
+   "lon": 114.69747,
+   "src": "FM35"
+  },
+  {
+   "id": "94430",
+   "name": "Meekatharra Airport, Australia",
+   "lat": -26.6128,
+   "lon": 118.5365,
+   "src": "FM35"
+  },
+  {
+   "id": "94461",
+   "name": "Giles Meteorological Office, Australia",
+   "lat": -25.0342,
+   "lon": 128.3011,
+   "src": "FM35"
+  },
+  {
+   "id": "94510",
+   "name": "Charleville Aero, Australia",
+   "lat": -26.41386,
+   "lon": 146.25657,
+   "src": "FM35"
+  },
+  {
+   "id": "94578",
+   "name": "Brisbane Aero, Australia",
+   "lat": -27.3917,
+   "lon": 153.1292,
+   "src": "FM35"
+  },
+  {
+   "id": "94610",
+   "name": "Perth Airport, Australia",
+   "lat": -31.9275,
+   "lon": 115.9764,
+   "src": "FM35"
+  },
+  {
+   "id": "94637",
+   "name": "Kalgoorlie-Boulder Airport, Australia",
+   "lat": -30.7844,
+   "lon": 121.4537,
+   "src": "FM35"
+  },
+  {
+   "id": "94638",
+   "name": "Esperance, Australia",
+   "lat": -33.83006,
+   "lon": 121.89204,
+   "src": "FM35"
+  },
+  {
+   "id": "94653",
+   "name": "Ceduna Amo, Australia",
+   "lat": -32.13012,
+   "lon": 133.6969,
+   "src": "BUFR"
+  },
+  {
+   "id": "94659",
+   "name": "Woomera Aerodrome, Australia",
+   "lat": -31.1562,
+   "lon": 136.8049,
+   "src": "FM35"
+  },
+  {
+   "id": "94672",
+   "name": "Adelaide Airport, Australia",
+   "lat": -34.9524,
+   "lon": 138.5204,
+   "src": "FM35"
+  },
+  {
+   "id": "94711",
+   "name": "Cobar Mo, Australia",
+   "lat": -31.48424,
+   "lon": 145.82958,
+   "src": "FM35"
+  },
+  {
+   "id": "94750",
+   "name": "",
+   "lat": -34.95,
+   "lon": 150.53,
+   "src": "FM35"
+  },
+  {
+   "id": "94775",
+   "name": "Paterson, Australia",
+   "lat": -32.62989,
+   "lon": 151.58644,
+   "src": "BUFR"
+  },
+  {
+   "id": "94776",
+   "name": "Williamtown Raaf, Australia",
+   "lat": -32.7931,
+   "lon": 151.8364,
+   "src": "FM35"
+  },
+  {
+   "id": "94802",
+   "name": "Albany Airport, Australia",
+   "lat": -34.94128,
+   "lon": 117.81643,
+   "src": "FM35"
+  },
+  {
+   "id": "94821",
+   "name": "Mount Gambier Aero, Australia",
+   "lat": -37.7478,
+   "lon": 140.77521,
+   "src": "FM35"
+  },
+  {
+   "id": "94866",
+   "name": "Melbourne Airport, Australia",
+   "lat": -37.67,
+   "lon": 144.83,
+   "src": "FM35"
+  },
+  {
+   "id": "94910",
+   "name": "Wagga Wagga Amo, Australia",
+   "lat": -35.15792,
+   "lon": 147.45671,
+   "src": "FM35"
+  },
+  {
+   "id": "94975",
+   "name": "Hobart Airport, Australia",
+   "lat": -42.8389,
+   "lon": 147.5033,
+   "src": "FM35"
+  },
+  {
+   "id": "94995",
+   "name": "Lord Howe Island Aero, Australia (Additional Islands)",
+   "lat": -31.54174,
+   "lon": 159.07854,
+   "src": "FM35"
+  },
+  {
+   "id": "94996",
+   "name": "Norfolk Island Aero, Australia (Additional Islands)",
+   "lat": -29.0389,
+   "lon": 167.94,
+   "src": "FM35"
+  },
+  {
+   "id": "94998",
+   "name": "Macquarie Island, Australia (Additional Islands)",
+   "lat": -54.4994,
+   "lon": 158.9369,
+   "src": "FM35"
+  },
+  {
+   "id": "95282",
+   "name": "Woodstock, Australia",
+   "lat": -19.63368,
+   "lon": 146.85699,
+   "src": "BUFR"
+  },
+  {
+   "id": "95527",
+   "name": "Moree Aero, Australia",
+   "lat": -29.49048,
+   "lon": 149.84702,
+   "src": "FM35"
+  },
+  {
+   "id": "95954",
+   "name": "Rosebury, Australia",
+   "lat": -41.78,
+   "lon": 145.57,
+   "src": "FM35"
+  },
+  {
+   "id": "96011",
+   "name": "Banda Aceh/Blang Bintang, Indonesia",
+   "lat": 5.51,
+   "lon": 95.41,
+   "src": "FM35"
+  },
+  {
+   "id": "96035",
+   "name": "Medan/Polonia, Indonesia",
+   "lat": 3.56,
+   "lon": 98.68,
+   "src": "FM35"
+  },
+  {
+   "id": "96109",
+   "name": "Pekan Baru/Simpangtiga, Indonesia",
+   "lat": 0.46,
+   "lon": 101.45,
+   "src": "FM35"
+  },
+  {
+   "id": "96147",
+   "name": "Ranai, Indonesia",
+   "lat": 3.95,
+   "lon": 108.38,
+   "src": "FM35"
+  },
+  {
+   "id": "96163",
+   "name": "Padang/Tabing, Indonesia",
+   "lat": -0.88,
+   "lon": 100.35,
+   "src": "FM35"
+  },
+  {
+   "id": "96237",
+   "name": "Pangkal Pinang, Indonesia",
+   "lat": -2.16,
+   "lon": 106.13,
+   "src": "FM35"
+  },
+  {
+   "id": "96253",
+   "name": "Bengkulu/Padang Kemiling, Indonesia",
+   "lat": -3.88,
+   "lon": 102.33,
+   "src": "FM35"
+  },
+  {
+   "id": "96315",
+   "name": "Brunei Airport, Brunei Darussalam",
+   "lat": 4.93,
+   "lon": 114.93,
+   "src": "FM35"
+  },
+  {
+   "id": "96413",
+   "name": "Kuching, Malaysia (Sabah And Sarawak)",
+   "lat": 1.49027,
+   "lon": 110.35214,
+   "src": "FM35"
+  },
+  {
+   "id": "96441",
+   "name": "Bintulu, Malaysia (Sabah And Sarawak)",
+   "lat": 3.12022,
+   "lon": 113.02442,
+   "src": "FM35"
+  },
+  {
+   "id": "96471",
+   "name": "Kota Kinabalu, Malaysia (Sabah And Sarawak)",
+   "lat": 5.93293,
+   "lon": 116.0476,
+   "src": "FM35"
+  },
+  {
+   "id": "96481",
+   "name": "Tawau, Malaysia (Sabah And Sarawak)",
+   "lat": 4.26,
+   "lon": 117.88,
+   "src": "FM35"
+  },
+  {
+   "id": "96509",
+   "name": "Tarakan/Juwata, Indonesia",
+   "lat": 3.33,
+   "lon": 117.56,
+   "src": "FM35"
+  },
+  {
+   "id": "96581",
+   "name": "Pontianak/Supadio, Indonesia",
+   "lat": -0.15,
+   "lon": 109.4,
+   "src": "FM35"
+  },
+  {
+   "id": "96633",
+   "name": "Balikpapan/Sepinggan, Indonesia",
+   "lat": -1.26,
+   "lon": 116.9,
+   "src": "FM35"
+  },
+  {
+   "id": "96645",
+   "name": "Pangkalan Bun/Iskandar, Indonesia",
+   "lat": -2.7,
+   "lon": 112.7,
+   "src": "FM35"
+  },
+  {
+   "id": "96685",
+   "name": "Banjarmasin/Syamsudin Noor, Indonesia",
+   "lat": -3.43,
+   "lon": 114.75,
+   "src": "FM35"
+  },
+  {
+   "id": "96749",
+   "name": "Jakarta/Soekarno-Hatta, Indonesia",
+   "lat": -6.11,
+   "lon": 106.65,
+   "src": "FM35"
+  },
+  {
+   "id": "96805",
+   "name": "Cilacap, Indonesia",
+   "lat": -7.73,
+   "lon": 109.01,
+   "src": "FM35"
+  },
+  {
+   "id": "96935",
+   "name": "Surabaya/Juanda, Indonesia",
+   "lat": -7.36,
+   "lon": 112.76,
+   "src": "FM35"
+  },
+  {
+   "id": "96996",
+   "name": "Cocos Island Aero, Islands",
+   "lat": -12.18877,
+   "lon": 96.83446,
+   "src": "FM35"
+  },
+  {
+   "id": "97014",
+   "name": "Menado/ Sam Ratulangi, Indonesia",
+   "lat": 1.53,
+   "lon": 124.91,
+   "src": "FM35"
+  },
+  {
+   "id": "97072",
+   "name": "Palu/Mutiara, Indonesia",
+   "lat": -0.68,
+   "lon": 119.73,
+   "src": "FM35"
+  },
+  {
+   "id": "97180",
+   "name": "Ujung Pandang/Hasanuddin, Indonesia",
+   "lat": -5.06,
+   "lon": 119.55,
+   "src": "FM35"
+  },
+  {
+   "id": "97230",
+   "name": "Denpasar/Ngurah Rai, Indonesia",
+   "lat": -8.75,
+   "lon": 115.16,
+   "src": "FM35"
+  },
+  {
+   "id": "97300",
+   "name": "Maumere/Wai Oti, Indonesia",
+   "lat": -8.63,
+   "lon": 122.25,
+   "src": "FM35"
+  },
+  {
+   "id": "97372",
+   "name": "Kupang/Eltari, Indonesia",
+   "lat": -10.16,
+   "lon": 123.66,
+   "src": "FM35"
+  },
+  {
+   "id": "97430",
+   "name": "Ternate/Babullah, Indonesia",
+   "lat": 0.76,
+   "lon": 127.36,
+   "src": "FM35"
+  },
+  {
+   "id": "97502",
+   "name": "Sorong/Jefman, Indonesia",
+   "lat": -0.93,
+   "lon": 131.11,
+   "src": "FM35"
+  },
+  {
+   "id": "97560",
+   "name": "Biak/Frans Kaisiepo, Indonesia",
+   "lat": -1.18,
+   "lon": 136.11,
+   "src": "FM35"
+  },
+  {
+   "id": "97686",
+   "name": "Wamena, Indonesia",
+   "lat": -4.06,
+   "lon": 138.95,
+   "src": "FM35"
+  },
+  {
+   "id": "97690",
+   "name": "Jayapura/Sentani, Indonesia",
+   "lat": -2.56,
+   "lon": 140.48,
+   "src": "FM35"
+  },
+  {
+   "id": "97724",
+   "name": "Ambon/Pattimura, Indonesia",
+   "lat": -3.7,
+   "lon": 128.08,
+   "src": "FM35"
+  },
+  {
+   "id": "97900",
+   "name": "Saumlaki/Olilit, Indonesia",
+   "lat": -7.98,
+   "lon": 131.3,
+   "src": "FM35"
+  },
+  {
+   "id": "97980",
+   "name": "Merauke/Mopah, Indonesia",
+   "lat": -8.46,
+   "lon": 140.38,
+   "src": "FM35"
+  },
+  {
+   "id": "98223",
+   "name": "Laoag, Philippines",
+   "lat": 18.18,
+   "lon": 120.53,
+   "src": "FM35"
+  },
+  {
+   "id": "98233",
+   "name": "Tuguegarao, Philippines",
+   "lat": 17.62,
+   "lon": 121.73,
+   "src": "FM35"
+  },
+  {
+   "id": "98328",
+   "name": "Baguio, Philippines",
+   "lat": 16.41,
+   "lon": 120.6,
+   "src": "FM35"
+  },
+  {
+   "id": "98433",
+   "name": "Tanay, Philippines",
+   "lat": 14.56,
+   "lon": 121.36,
+   "src": "FM35"
+  },
+  {
+   "id": "98444",
+   "name": "Legaspi, Philippines",
+   "lat": 13.13,
+   "lon": 123.73,
+   "src": "FM35"
+  },
+  {
+   "id": "98558",
+   "name": "Guiuan, Philippines",
+   "lat": 11.03,
+   "lon": 126.73,
+   "src": "FM35"
+  },
+  {
+   "id": "98618",
+   "name": "Puerto Princesa, Philippines",
+   "lat": 9.75,
+   "lon": 118.73,
+   "src": "FM35"
+  },
+  {
+   "id": "98646",
+   "name": "Mactan, Philippines",
+   "lat": 10.3,
+   "lon": 123.96,
+   "src": "FM35"
+  },
+  {
+   "id": "98747",
+   "name": "",
+   "lat": 8.41,
+   "lon": 124.61,
+   "src": "FM35"
+  },
+  {
+   "id": "98753",
+   "name": "Davao Airport, Philippines",
+   "lat": 7.11,
+   "lon": 125.65,
+   "src": "FM35"
+  },
+  {
+   "id": "99999",
+   "name": "",
+   "lat": -54.36096,
+   "lon": 115.00478,
+   "src": "BUFR"
+  }
+ ]
+}

@@ -1,0 +1,68 @@
+# ---------------------------------------------------------------------------
+# Virtual environments (recreate with `pip install -e ".[dev,era5,wrf]"`)
+# ---------------------------------------------------------------------------
+.gribenv/
+.griblenv/
+.rendertest/
+.venv/
+.kiro/
+venv/
+env/
+ENV/
+
+# ---------------------------------------------------------------------------
+# Python bytecode / build artifacts
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+*.manifest
+*.spec
+
+# ---------------------------------------------------------------------------
+# Test / type-checker / lint caches
+# ---------------------------------------------------------------------------
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# ---------------------------------------------------------------------------
+# Renderer / data artifacts generated at runtime
+# ---------------------------------------------------------------------------
+sharpmod_render.ini
+*.grib
+*.grib2
+*.grib*.idx
+*.idx
+
+# ---------------------------------------------------------------------------
+# Legacy prototype kept on disk for reference but not shipped in the repo.
+# (Un-ignore this if you want the original prototype in version control.)
+# ---------------------------------------------------------------------------
+attic/sounding_plots_legacy/
+
+# ---------------------------------------------------------------------------
+# Editor / OS cruft
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

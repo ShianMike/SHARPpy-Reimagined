@@ -1,0 +1,124 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sharpmod"
+version = "0.1.0"
+description = "A modernized, standalone fork of the SHARPpy sounding renderer (Python 3.11+, NumPy 1.24+, Qt6/PySide6)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "BSD-3-Clause" }
+authors = [{ name = "SHARPpy Reimagined maintainers" }]
+keywords = [
+    "meteorology",
+    "sounding",
+    "skew-t",
+    "skewt",
+    "hodograph",
+    "sharppy",
+    "severe-weather",
+    "weather",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+
+# Bounded runtime dependency pins (Requirement 15.3).
+#
+# NOTE ON SHARPpy / sutils: the renderer composes the vendored upstream
+# ``sharppy`` (and its bundled ``sutils`` package) at runtime. Upstream
+# ``SHARPpy==1.4.0a5`` is on PyPI, but its wheel metadata carries a stale
+# ``numpy==1.15.*`` pin that conflicts with the modern NumPy required here, so
+# it cannot be listed as a normal dependency (pip would fail to resolve). It is
+# therefore installed in a separate ``--no-deps`` step (see README
+# "Installation"); the ``[render]`` extra documents the transitive packages
+# that step needs so nothing is silently missing.
+dependencies = [
+    "numpy>=1.24,<3.0",
+    "PySide6>=6.5,<7.0",
+    "qtpy>=2.3,<3.0",
+    "python-dateutil>=2.8,<3.0",
+    "certifi>=2023.7.22",
+    # SHARPpy's declared runtime need (used by its datasources import chain).
+    "requests>=2.28,<3.0",
+    # Reference-consistent ECAPE (Peters et al. 2023) building blocks are
+    # computed via MetPy to agree with the authors' ECAPE_FUNCTIONS oracle
+    # (Requirement 5.7); the ECAPE parameter degrades to MISSING without it.
+    "metpy>=1.5,<2.0",
+    # Analytic ECAPE implementation (Peters et al.) used by sharptab.ecape.
+    "ecape>=0.1,<1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ShianMike/SHARPpy-Reimagined"
+Repository = "https://github.com/ShianMike/SHARPpy-Reimagined"
+Documentation = "https://github.com/ShianMike/SHARPpy-Reimagined/blob/main/docs/USAGE.md"
+Issues = "https://github.com/ShianMike/SHARPpy-Reimagined/issues"
+
+[project.optional-dependencies]
+# ERA5 / GRIB point-sounding extraction tooling (optional install extra).
+era5 = [
+    "herbie-data",
+    "cfgrib",
+    "xarray",
+]
+# WRF-ARW (wrfout NetCDF) point-sounding extraction tooling (optional extra).
+wrf = [
+    "xarray",
+    "netCDF4",
+]
+# Transitive packages the upstream SHARPpy render stack needs. These ARE
+# resolvable normally; only ``SHARPpy`` itself must be installed --no-deps
+# (stale numpy pin), so keeping these here means the --no-deps step pulls in
+# nothing else. Install with:  pip install -e ".[render]"
+render = [
+    "requests>=2.28,<3.0",
+]
+# Development / test tooling: pytest + Hypothesis power the property-based and
+# unit test suites (shared ``profiles()`` strategy, >=100 iterations).
+dev = [
+    "pytest>=7.0",
+    "hypothesis>=6.0",
+]
+
+[project.scripts]
+# Console entry points installed on `pip install .`.
+sharpmod-render = "sharpmod.render:main"
+uwyo-sounding = "sharpmod.tools.uwyo_sounding:main"
+era5-extract = "sharpmod.tools.era5_extract:main"
+wrf-extract = "sharpmod.tools.wrf_extract:main"
+
+[tool.pytest.ini_options]
+testpaths = ["sharpmod/tests"]
+python_files = ["test_*.py"]
+
+[tool.setuptools]
+# Discover the top-level `sharpmod` package and its subpackages.
+packages = [
+    "sharpmod",
+    "sharpmod.sharptab",
+    "sharpmod.io",
+    "sharpmod.viz",
+    "sharpmod.tools",
+    "sharpmod.resources",
+    "sharpmod.resources.fonts",
+]
+
+[tool.setuptools.package-data]
+# Bundle the TTF fonts as package data so they resolve via importlib.resources
+# (never absolute paths) — Requirements 15.1, 15.2.
+"sharpmod.resources.fonts" = ["*.ttf"]
+# Bundle the full UWyo station catalogue so every station is choosable offline.
+"sharpmod.resources" = ["*.json"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*.pyc"]

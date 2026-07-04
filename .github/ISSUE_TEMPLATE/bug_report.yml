@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible problem in rendering, decoding, or extraction.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include the exact command, input format, and smallest data sample you can share.
+      placeholder: |
+        python -m pip install -e ".[render]"
+        python -m pip install --no-deps "SHARPpy==1.4.0a5"
+        sharpmod-render examples/soundings/... out.png
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, install extras, and relevant package versions.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or Screenshots
+      render: shell

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Usage guide
+    url: https://github.com/ShianMike/SHARPpy-Reimagined/blob/main/docs/USAGE.md
+    about: Check documented commands, examples, and troubleshooting first.

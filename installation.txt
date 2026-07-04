@@ -1,0 +1,165 @@
+numpy<3.0,>=1.24
+PySide6<7.0,>=6.5
+qtpy<3.0,>=2.3
+python-dateutil<3.0,>=2.8
+certifi>=2023.7.22
+requests<3.0,>=2.28
+metpy<2.0,>=1.5
+ecape<1.0,>=0.1
+
+[dev]
+pytest>=7.0
+hypothesis>=6.0
+
+[era5]
+herbie-data
+cfgrib
+xarray
+
+[render]
+requests<3.0,>=2.28
+
+[wrf]
+xarray
+netCDF4
+
+===========================================================================
+ SHARPpy Reimagined — INSTALLATION REFERENCE
+===========================================================================
+
+Everything you need to INSTALL and run SHARPpy Reimagined is listed here.
+  - How to USE the tools ..................... docs/USAGE.md
+  - Narrative install walkthrough ........... README.md ("Installation")
+
+The Python import package is still named `sharpmod` (that is the module name
+and the pip distribution name); "SHARPpy Reimagined" is the project name.
+
+
+---------------------------------------------------------------------------
+1. SYSTEM REQUIREMENTS
+---------------------------------------------------------------------------
+  - Python >= 3.11  (64-bit; tested through Python 3.14)
+  - pip     >= 23   (needed for editable installs + modern resolver)
+  - OS      : Windows, Linux, or macOS
+  - Disk    : ~1.5 GB for the full render + scientific stack
+  - Network : required for `pip install`, UWyo fetch, and ERA5 retrieval
+  - Display : NOT required — rendering runs headless (Qt "offscreen")
+
+
+---------------------------------------------------------------------------
+2. QUICK INSTALL (copy/paste)
+---------------------------------------------------------------------------
+  # 1) core library + CLI tools + render transitive deps
+  pip install -e ".[render]"
+
+  # 2) rendering engine (separate step — see section 4 for why)
+  pip install --no-deps "SHARPpy==1.4.0a5"
+
+  # 3) optional, only if you need them
+  pip install -e ".[era5]"     # ERA5 point-sounding extraction
+  pip install -e ".[wrf]"      # WRF-ARW (wrfout NetCDF) extraction
+  pip install -e ".[dev]"      # run the test suite
+
+  On Windows, create/activate a venv first:
+      py -3.11 -m venv .venv
+      .venv\Scripts\activate
+
+
+---------------------------------------------------------------------------
+3. CORE RUNTIME LIBRARIES  (installed by `pip install -e .`)
+---------------------------------------------------------------------------
+  Package           Version pin       Purpose
+  ----------------  ---------------   -------------------------------------
+  numpy             >=1.24,<3.0       arrays / numerical math
+  PySide6           >=6.5,<7.0        Qt6 GUI toolkit (used for rendering)
+  qtpy              >=2.3,<3.0        Qt binding abstraction layer
+  python-dateutil   >=2.8,<3.0        flexible date/time parsing
+  certifi           >=2023.7.22       CA bundle for verified HTTPS fetches
+  requests          >=2.28,<3.0       HTTP (UWyo + SHARPpy datasources)
+  metpy             >=1.5,<2.0        meteorological calcs (ECAPE reference)
+  ecape             >=0.1,<1.0        entraining CAPE implementation
+
+  Notable second-level libraries pulled in automatically (mainly by MetPy
+  and PySide6), listed for offline mirrors / air-gapped installs:
+      shiboken6, PySide6-Essentials, PySide6-Addons   (Qt6 runtime)
+      pandas, scipy, matplotlib, xarray, pint, pooch, pyproj, contourpy,
+      kiwisolver, fonttools, cycler, pillow, pyparsing, packaging,
+      platformdirs, flexcache, flexparser, traitlets, six, tzdata,
+      urllib3, idna, charset-normalizer, typing-extensions
+      (plus their own transitive dependencies)
+
+
+---------------------------------------------------------------------------
+4. RENDERING ENGINE — upstream SHARPpy  (installed with --no-deps)
+---------------------------------------------------------------------------
+  Package : SHARPpy==1.4.0a5
+  Provides: sharppy, sutils, datasources, runsharp
+  Install : pip install --no-deps "SHARPpy==1.4.0a5"
+
+  WHY A SEPARATE --no-deps STEP:
+    SHARPpy 1.4.0a5's wheel metadata pins `numpy==1.15.*`, which conflicts
+    with the modern NumPy required above (a normal `pip install SHARPpy`
+    would fail to resolve, or try to downgrade NumPy and break everything).
+    Its real runtime needs — python-dateutil, requests, numpy — are ALREADY
+    provided by the core install, so --no-deps is safe.
+
+  NEEDED ONLY FOR RENDERING (`sharpmod-render` or any `--render` flag).
+  Fetching/extracting soundings does NOT require it.
+
+
+---------------------------------------------------------------------------
+5. OPTIONAL EXTRAS
+---------------------------------------------------------------------------
+  [era5]  ERA5 reanalysis point-sounding extraction
+              herbie-data, cfgrib, xarray
+  [wrf]   WRF-ARW (wrfout NetCDF) point-sounding extraction
+              xarray, netCDF4
+  [dev]   test tooling
+              pytest>=7.0, hypothesis>=6.0
+
+
+---------------------------------------------------------------------------
+6. WHAT YOU NEED FOR EACH TASK
+---------------------------------------------------------------------------
+  Task                                   Core   +SHARPpy   +extra
+  -------------------------------------  -----  ---------  ----------
+  List / search / fetch UWyo soundings    yes      no         -
+  Render a sounding to PNG                yes      YES        -
+  Extract an ERA5 point sounding          yes      no       [era5]
+  Extract a WRF-ARW point sounding        yes      no       [wrf]
+  Run the test suite                      yes      YES      [dev]
+
+
+---------------------------------------------------------------------------
+7. CONSOLE COMMANDS INSTALLED
+---------------------------------------------------------------------------
+  sharpmod-render   render a sounding file to PNG
+  uwyo-sounding     list / search / fetch University of Wyoming soundings
+  era5-extract      ERA5 point sounding  -> .npz
+  wrf-extract       WRF-ARW point sounding -> .npz
+
+
+---------------------------------------------------------------------------
+8. VERIFY THE INSTALL
+---------------------------------------------------------------------------
+  # imports resolve
+  python -c "import sharpmod, sharppy, sutils; print('imports OK')"
+
+  # render a bundled example (needs the SHARPpy step)
+  sharpmod-render examples/soundings/hrrr_point_36.68N_95.66W_f018.npz out.png
+
+  # full test suite (needs [dev] + the SHARPpy step)
+  pytest
+
+
+---------------------------------------------------------------------------
+9. TROUBLESHOOTING
+---------------------------------------------------------------------------
+  - "No module named sharppy/sutils" or a Qt enum error when rendering:
+        pip install --no-deps "SHARPpy==1.4.0a5"
+  - ResolutionImpossible mentioning numpy==1.15:
+        you tried to install SHARPpy WITHOUT --no-deps; use the --no-deps form.
+  - ImportError for herbie/cfgrib or netCDF4:
+        install the matching extra:  pip install -e ".[era5]"  /  ".[wrf]"
+  - A blank window / QpaPlatform error on a headless server:
+        ensure QT_QPA_PLATFORM=offscreen (the renderer sets this by default).

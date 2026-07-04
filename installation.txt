@@ -43,7 +43,8 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   - OS      : Windows, Linux, or macOS
   - Disk    : ~1.5 GB for the full render + scientific stack
   - Network : required for `pip install`, UWyo fetch, and ERA5 retrieval
-  - Display : NOT required — rendering runs headless (Qt "offscreen")
+  - Display : required ONLY for the interactive desktop GUI (`sharpmod-gui`);
+              CLI rendering runs headless (Qt "offscreen") and needs no display
 
 
 ---------------------------------------------------------------------------
@@ -123,6 +124,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
   Task                                   Core   +SHARPpy   +extra
   -------------------------------------  -----  ---------  ----------
+  Run the interactive GUI (sharpmod-gui)  yes      YES        -
   List / search / fetch UWyo soundings    yes      no         -
   Render a sounding to PNG                yes      YES        -
   Extract an ERA5 point sounding          yes      no       [era5]
@@ -133,10 +135,14 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
 7. CONSOLE COMMANDS INSTALLED
 ---------------------------------------------------------------------------
+  sharpmod-gui      interactive desktop app (station map / list / open file)
   sharpmod-render   render a sounding file to PNG
   uwyo-sounding     list / search / fetch University of Wyoming soundings
   era5-extract      ERA5 point sounding  -> .npz
   wrf-extract       WRF-ARW point sounding -> .npz
+
+  (sharpmod-gui is a windowed/no-console entry point; it needs a display and
+   the SHARPpy render stack from section 4.)
 
 
 ---------------------------------------------------------------------------

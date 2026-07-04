@@ -7,9 +7,22 @@ separate.
 
 ---
 
+## Two ways to drive it
+
+- **Interactive desktop GUI** (`sharpmod-gui`) — point-and-click: pick a station
+  on a map or from a list, or open a local file, and explore/edit the sounding
+  live. Start here if you just want to look at soundings. See
+  [section 0](#0-desktop-gui-sharpmod-gui).
+- **Command-line tools** (`uwyo-sounding`, `era5-extract`, `wrf-extract`,
+  `sharpmod-render`) — scriptable, headless, reproducible. Use these for batch
+  extraction and PNG rendering (sections 1–4).
+
+Both share the same portable `.npz` point-sounding format, so anything the CLI
+extracts opens in the GUI, and anything you save from the GUI renders on the CLI.
+
 ## Mental model
 
-SHARPpy Reimagined has two kinds of capabilities:
+The command-line side has two kinds of capabilities:
 
 1. **Get a sounding** — either *fetch* an observed one (University of Wyoming)
    or *extract* a model/reanalysis point column (ERA5, WRF-ARW). Each of these
@@ -37,6 +50,68 @@ same way (and the same way as the bundled HRRR examples).
 | Render any sounding to PNG (`--render`) | **Yes** (`pip install --no-deps SHARPpy==1.4.0a5`) | No |
 
 > Data extraction never requires the render stack. Only rendering does.
+
+---
+
+## 0. Desktop GUI (`sharpmod-gui`)
+
+The interactive app is the fastest way to look at a sounding — no CLI arguments,
+no `.npz` bookkeeping. It needs a display (unlike the headless renderer) and the
+SHARPpy render stack (see README → Rendering).
+
+```bash
+sharpmod-gui             # or: python -m sharpmod.gui
+```
+
+### Pick a sounding
+
+The app opens on the **Sounding Picker** with three tabs:
+
+- **Station Map** — a clickable map of every UWyo radiosonde station over a
+  coastline basemap. Click a dot to select it, double-click to open it. Scroll
+  to zoom, drag to pan, and jump to a region with the *Map area* menu. Set the
+  valid time (defaults to the most recent synoptic hour) and open the selection.
+- **Station List** — the full 933-station catalogue with live id/name filtering;
+  type to narrow, pick a station and time, then fetch.
+- **Open File** — load a local `.npz`, SPC (`.spc`/`.OAX`), BUFKIT (`.buf`),
+  PECAN, or WRF-ARW text sounding. You can also **drag a file onto the window**.
+
+Fetches run on a background thread, so the window stays responsive while a UWyo
+sounding downloads.
+
+### Explore and edit a sounding
+
+Each sounding opens in the full interactive SPC window (the upstream SHARPpy
+widget stack), so every gesture from the
+[SHARPpy GUI guide](https://sharppy.github.io/SHARPpy/interacting_gui.html)
+works — right-click the skew-T for the readout cursor / *Modify Surface* /
+parcel lifting, click-and-drag temperature, dewpoint, or wind points to edit the
+profile (indices recalculate live), mouse-wheel to zoom, and double-click the
+lower-left inset to swap lifted parcels. **File → Preferences** switches the
+color palette (Standard / Inverted / Protanopia) and units. The `W` key returns
+to the picker. A tip bar along the bottom summarizes the current controls.
+
+### Save from the GUI
+
+The sounding window's **Export** menu writes the current view:
+
+- **Export Image (PNG)** (`Ctrl+E`) — the whole window including the mounted
+  derived-parameter panels, defaulting to `STATION_YYYYMMDDHHZ.png` on your
+  Desktop.
+- **Export Text (SPC tabular)** — the focused profile as a text file that loads
+  straight back into the app (or into `sharpmod-render`).
+
+### Standalone build (no Python required)
+
+For a distributable Windows build, use the bundled PyInstaller spec:
+
+```bash
+python -m pip install pyinstaller
+pyinstaller packaging/sharpmod_gui.spec --noconfirm
+```
+
+The result is `dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe`. See the README
+for the one-file variant.
 
 ---
 

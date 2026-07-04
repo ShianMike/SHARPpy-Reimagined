@@ -25,6 +25,8 @@ wheels/
 pip-wheel-metadata/
 *.manifest
 *.spec
+# ...but keep the maintained PyInstaller spec for the standalone GUI build.
+!packaging/sharpmod_gui.spec
 
 # ---------------------------------------------------------------------------
 # Test / type-checker / lint caches

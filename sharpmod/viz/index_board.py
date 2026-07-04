@@ -24,10 +24,16 @@ from __future__ import annotations
 import math
 
 from qtpy import QtGui
-from qtpy.QtCore import QRect, Qt
+from qtpy.QtCore import QRect, Qt, Signal
 from qtpy.QtWidgets import QFrame
 
 from sharpmod import colors
+
+#: Parcel display-name -> Profile attribute (the six SHARPpy parcels).
+PCL_ATTR = {
+    "SFC": "sfcpcl", "ML": "mlpcl", "FCST": "fcstpcl",
+    "MU": "mupcl", "EFF": "effpcl", "USER": "usrpcl",
+}
 from sharpmod.sharptab.constants import is_missing
 
 __all__ = ["IndexBoard"]
@@ -102,10 +108,26 @@ def uv_dirspd(v):
 
 
 class IndexBoard(QFrame):
+    #: Emitted when the parcel table is double-clicked (opens "Show Parcels").
+    parcelDialogRequested = Signal()
+    #: Emitted with a parcel key ("SFC"/"ML"/...) when a parcel row is clicked
+    #: (sets that parcel's trace on the Skew-T, like legacy SHARPpy).
+    parcelClicked = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.sp = None
         self.dp = None
+        #: Which four parcels the convective column shows (matches the vendored
+        #: ``plotText`` selection; updated when the user picks via "Show
+        #: Parcels"). Defaults keep the headless PNG render unchanged.
+        self.pcl_types = ["SFC", "ML", "FCST", "MU"]
+        #: Screen rect of the parcel (convective) column, set during paint so a
+        #: double-click there can raise the parcel selector.
+        self._conv_rect = QRect()
+        #: (key, QRect) for each drawn parcel row, so a single click can select
+        #: that parcel's trace on the Skew-T.
+        self._parcel_rows = []
         self.setMinimumHeight(240)
         self.setStyleSheet(
             "QFrame { background-color: rgb(0,0,0); border: 0px; margin: 0px; }")
@@ -123,6 +145,14 @@ class IndexBoard(QFrame):
         # Smaller bold font for tight column headers (kinematics table), so the
         # unit-bearing labels do not overflow their narrow value columns.
         self.hfs = QtGui.QFont("Helvetica"); self.hfs.setPixelSize(10); self.hfs.setBold(True)
+        # Force antialiased, quality glyph rendering. Without this the bold
+        # "Helvetica" (substituted on Windows) can fall back to a bitmap/hinted
+        # face that renders pixelated -- unlike the smooth vendored STP/SARS
+        # insets -- so the board text stays visually consistent with them.
+        _strat = (QtGui.QFont.StyleStrategy.PreferAntialias
+                  | QtGui.QFont.StyleStrategy.PreferQuality)
+        for _f in (self.hf, self.rf, self.hfs):
+            _f.setStyleStrategy(_strat)
         self.plotBitMap = QtGui.QPixmap(max(1, self.width()), max(1, self.height()))
         self.plotBitMap.fill(self.bg)
 
@@ -142,6 +172,32 @@ class IndexBoard(QFrame):
         super().paintEvent(e)
         qp = QtGui.QPainter(); qp.begin(self)
         qp.setClipRect(self.rect()); qp.drawPixmap(0, 0, self.plotBitMap); qp.end()
+
+    def mousePressEvent(self, e):
+        """Single-click a parcel row -> show that parcel's trace on the Skew-T.
+
+        Mirrors legacy SHARPpy ("clicking on any of the 4 parcels changes the
+        parcel trace drawn on the Skew-T"). The interactive GUI connects
+        :attr:`parcelClicked`; headless renders leave it unconnected (no-op).
+        """
+        pos = e.position().toPoint() if hasattr(e, "position") else e.pos()
+        for key, rect in self._parcel_rows:
+            if rect.contains(pos):
+                self.parcelClicked.emit(key)
+                return
+        super().mousePressEvent(e)
+
+    def mouseDoubleClickEvent(self, e):
+        """Double-click the parcel column -> open the "Show Parcels" selector.
+
+        Mirrors the legacy SHARPpy behaviour (double-click the thermo/parcel
+        inset). The interactive GUI connects :attr:`parcelDialogRequested` to
+        the parcel selection dialog; in the headless renderer nothing is
+        connected, so this is a harmless no-op.
+        """
+        pos = e.position().toPoint() if hasattr(e, "position") else e.pos()
+        if self._conv_rect.isNull() or self._conv_rect.contains(pos):
+            self.parcelDialogRequested.emit()
 
     # value accessors
     def _p(self, name, field):
@@ -220,46 +276,42 @@ class IndexBoard(QFrame):
             return QtGui.QColor("#FF0000")
         return QtGui.QColor(PINK)
 
-    def _barb(self, qp, ox, oy, wdir, wspd, color, shemis=False):
-        # Draw a wind barb at (ox, oy) in a fixed color (used for the 1 km /
-        # 6 km AGL barbs, colored to distinguish the two levels like legacy
-        # SHARPpy). Reuses the custom_barbs path builders for barb/flag shapes.
+    def _barb_path(self, wdir, wspd, shemis, scale):
+        # Build a wind-barb painter path (staff + barbs/flags) in local
+        # coordinates with the plotted point at the origin, already rotated to
+        # ``wdir`` and scaled by ``scale``. Returns ``None`` on bad input.
         try:
             from sharpmod.viz import custom_barbs as cb
             wdir = float(wdir); wspd = float(wspd)
         except (TypeError, ValueError, Exception):
-            return
+            return None
         if not (math.isfinite(wdir) and math.isfinite(wspd)):
-            return
-        pen = QtGui.QPen(QtGui.QColor(color), 1, Qt.SolidLine)
-        pen.setWidthF(1.4)
-        qp.setPen(pen)
-        qp.setBrush(Qt.NoBrush)
+            return None
         spd = int(round(wspd / 5.) * 5)
-        qp.translate(ox, oy)
-        try:
-            if spd > 0:
-                qp.rotate(wdir - 90)
-                path = QtGui.QPainterPath()
-                path.moveTo(0, 0)
-                path.lineTo(25, 0)
-                while spd >= 50:
-                    cb.drawFlag(path, shemis=shemis); spd -= 50
-                while spd >= 10:
-                    cb.drawFullBarb(path, shemis=shemis); spd -= 10
-                while spd >= 5:
-                    cb.drawHalfBarb(path, shemis=shemis); spd -= 5
-                qp.drawPath(path)
-                qp.rotate(90 - wdir)
-            else:
-                qp.drawEllipse(-3, -3, 6, 6)
-        finally:
-            qp.translate(-ox, -oy)
+        path = QtGui.QPainterPath()
+        if spd > 0:
+            path.moveTo(0, 0)
+            path.lineTo(25, 0)
+            while spd >= 50:
+                cb.drawFlag(path, shemis=shemis); spd -= 50
+            while spd >= 10:
+                cb.drawFullBarb(path, shemis=shemis); spd -= 10
+            while spd >= 5:
+                cb.drawHalfBarb(path, shemis=shemis); spd -= 5
+        else:
+            path.addEllipse(-3, -3, 6, 6)
+        t = QtGui.QTransform()
+        t.scale(scale, scale)
+        t.rotate(wdir - 90)
+        return t.map(path)
 
     def _draw_agl_barbs(self, qp, rx, top, rw, h):
         # 1 km (red) & 6 km (blue) AGL wind barbs drawn from a common origin,
-        # centered in the reserved region [rx, rx+rw], with a two-line label
-        # beneath -- faithfully mirroring legacy SHARPpy's kinematics panel.
+        # with the two barbs' combined bounding box centered in the reserved
+        # region [rx, rx+rw] and a two-line label beneath -- mirroring legacy
+        # SHARPpy's kinematics panel. Centering the *bounding box* (not the barb
+        # origin) keeps the barbs visually centered over the label regardless of
+        # which way the staffs point.
         w1 = getattr(self.sp, "wind1km", None) if self.sp is not None else None
         w6 = getattr(self.sp, "wind6km", None) if self.sp is not None else None
         d1, s1 = (_f(w1[0]), _f(w1[1])) if isinstance(w1, (tuple, list)) and len(w1) >= 2 else (None, None)
@@ -267,17 +319,51 @@ class IndexBoard(QFrame):
         if d1 is None and d6 is None:
             return
         shemis = (_f(getattr(self.sp, "latitude", 0)) or 0) < 0
-        # Common barb origin: centered in the reserved region, above the label.
-        ox = rx + rw // 2
-        oy = top + int(h * 0.40)
+        # Scale the barbs to fill the reserved region instead of floating in
+        # whitespace. The unscaled barb spans ~35 px (25 px staff + barbs); size
+        # it against the room available above the two-line label.
+        barb_span = 35.0
+        avail = min(rw * 0.9, h * 0.5)
+        scale = max(1.0, min(2.4, avail / barb_span))
+        # Enlarge the label proportionally so it stays balanced with the barbs.
+        lbl_font = QtGui.QFont(self.hfs)
+        base_px = self.hfs.pixelSize() if self.hfs.pixelSize() > 0 else 10
+        lbl_font.setPixelSize(max(base_px, int(round(base_px * min(scale, 1.5)))))
+
+        # Build both barbs (shared origin) and center their combined bounds.
+        barbs = []
         if d6 is not None and s6 is not None:
-            self._barb(qp, ox, oy, d6, s6, "#0A74C6", shemis)   # 6 km : blue
+            p6 = self._barb_path(d6, s6, shemis, scale)
+            if p6 is not None:
+                barbs.append((p6, "#0A74C6"))               # 6 km : blue
         if d1 is not None and s1 is not None:
-            self._barb(qp, ox, oy, d1, s1, "#AA0000", shemis)   # 1 km : red
-        qp.setFont(self.hfs)
+            p1 = self._barb_path(d1, s1, shemis, scale)
+            if p1 is not None:
+                barbs.append((p1, "#AA0000"))               # 1 km : red
+        if barbs:
+            bounds = None
+            for path, _c in barbs:
+                br = path.boundingRect()
+                bounds = br if bounds is None else bounds.united(br)
+            cx = rx + rw * 0.5
+            cy = top + h * 0.58
+            dx = cx - bounds.center().x()
+            dy = cy - bounds.center().y()
+            pen = QtGui.QPen(Qt.NoPen)
+            for path, color in barbs:
+                pen = QtGui.QPen(QtGui.QColor(color), 1, Qt.SolidLine)
+                pen.setWidthF(1.4 * max(1.0, scale ** 0.5))
+                qp.setPen(pen)
+                qp.setBrush(Qt.NoBrush)
+                qp.save()
+                qp.translate(dx, dy)
+                qp.drawPath(path)
+                qp.restore()
+
+        qp.setFont(lbl_font)
         qp.setPen(QtGui.QPen(QtGui.QColor("#0A74C6"), 1))
-        fh = QtGui.QFontMetrics(self.hfs).height()
-        lbl_rect = QRect(rx - 6, top + int(h * 0.66), rw + 12, 2 * fh)
+        fh = QtGui.QFontMetrics(lbl_font).height()
+        lbl_rect = QRect(rx, top + int(h * 0.90), rw, 2 * fh + 2)
         qp.drawText(lbl_rect, int(Qt.TextWordWrap | Qt.AlignHCenter | Qt.AlignTop),
                     "1km & 6km AGL\nWind Barbs")
 
@@ -409,6 +495,10 @@ class IndexBoard(QFrame):
             return
         qp = QtGui.QPainter(); qp.begin(self.plotBitMap)
         try:
+            # Antialias glyphs (and shapes) so the board's text matches the
+            # smooth vendored insets (STP/SARS) instead of rendering pixelated.
+            qp.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+            qp.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
             qp.setClipRect(QRect(0, 0, W, H))
             qp.fillRect(QRect(0, 0, W, H), self.bg)
             fm = QtGui.QFontMetrics(self.rf)
@@ -439,8 +529,14 @@ class IndexBoard(QFrame):
         # the column fills its height instead of clustering at the top. Content
         # below the header = 4 parcel + 6 stats + 5 lapse = 15 rows.
         per_div = max(6, int((R.height() - 16 * rh - 1) / 2))
-        for name, attr in [("SFC", "sfcpcl"), ("ML", "mlpcl"),
-                           ("FCST", "fcstpcl"), ("MU", "mupcl")]:
+        # Remember the parcel column's screen rect so a double-click here opens
+        # the "Show Parcels" selector (wired by the interactive GUI).
+        self._conv_rect = QRect(int(x), int(R.y()), int(w), int(R.height()))
+        self._parcel_rows = []
+        for name in list(self.pcl_types)[:4]:
+            attr = PCL_ATTR.get(name, "sfcpcl")
+            self._parcel_rows.append(
+                (name, QRect(int(x), int(y), int(w), int(rh))))
             cape = self._p(attr, "bplus")
             cin = self._p(attr, "bminus")
             lcl = self._p(attr, "lclhght")
@@ -500,11 +596,16 @@ class IndexBoard(QFrame):
                 ("3CAPE", i0(b3), self._cape3_color(b3)),
                 ("6CAPE", i0(b6), self._cape3_color(b6)),
                 ("MBURST", i0(self._sf("mburst"))),
-                ("SigSvr", i0(self._sf("sig_severe")))]
+                ("SigSvr", suf(i0(self._sf("sig_severe")), " m\u00b3/s\u00b3"))]
         scw = w / 3.0
         fm = QtGui.QFontMetrics(self.rf)
+        ncol = 3
         for ci, col in enumerate((col1, col2, col3)):
             cx = int(x + ci * scw)
+            # The rightmost sub-column can spill its value all the way to the
+            # convective column's right edge, so SigSvr's "m3/s3" units are not
+            # clipped in the narrow third-column slot.
+            val_right = x + w if ci == ncol - 1 else cx + scw
             for ri, entry in enumerate(col):
                 lbl, val = entry[0], entry[1]
                 cc = entry[2] if len(entry) > 2 else self.fg
@@ -515,8 +616,23 @@ class IndexBoard(QFrame):
                 ltext = lbl + " = "
                 self._text(qp, QRect(cx, ry, int(scw), rh), ltext, cc)
                 lw = fm.horizontalAdvance(ltext)
-                self._text(qp, QRect(cx + lw, ry, int(scw) - lw - 2, rh),
+                vw = max(0, int(val_right) - (cx + lw) - 2)
+                # Shrink the value font just enough to fit its slot, so unit
+                # suffixes (e.g. SigSvr's "m3/s3") are never clipped even in the
+                # narrow sub-columns on smaller panels.
+                vfont = self.rf
+                if vw > 0 and fm.horizontalAdvance(val) > vw:
+                    px = self.rf.pixelSize()
+                    while px > 9:
+                        px -= 1
+                        vfont = QtGui.QFont(self.rf); vfont.setPixelSize(px)
+                        if QtGui.QFontMetrics(vfont).horizontalAdvance(val) <= vw:
+                            break
+                    qp.setFont(vfont)
+                self._text(qp, QRect(cx + lw, ry, vw, rh),
                            val, cc, Qt.AlignLeft)
+                if vfont is not self.rf:
+                    qp.setFont(self.rf)
         y += 6 * rh
         y += per_div // 2
         qp.setPen(QtGui.QPen(self.rule, 1)); qp.drawLine(x, y, x + w, y)
@@ -636,6 +752,10 @@ class IndexBoard(QFrame):
         qp.setPen(QtGui.QPen(self.rule, 1)); qp.drawLine(x, y, x + w, y)
         y += kg
 
+        # Top of the right-hand whitespace beside the BRN/SR-wind + storm-motion
+        # rows; the AGL wind barbs are anchored here so they occupy that empty
+        # region instead of floating low beside the storm-motion vectors.
+        barb_top = y
         # BRN Shear (m2/s2) and 4-6km SR wind; drawn neutral (no coloring).
         brn = self._p("mupcl", "brnshear")
         for lbl, val, unit in [
@@ -663,8 +783,11 @@ class IndexBoard(QFrame):
         # label; the storm-motion vectors take the rest. Sized from the label's
         # own width so the vectors are never clipped when the column is wide
         # enough (the renderer widens the canvas to guarantee this).
-        barb_region = QtGui.QFontMetrics(self.hfs).horizontalAdvance(
-            "1km & 6km AGL") + 18
+        # Reserve a wider band (~1.4x the label width) so the enlarged 1/6 km
+        # AGL barbs and label fill the space instead of leaving whitespace; the
+        # storm-motion vectors keep at least half the column.
+        barb_region = int(QtGui.QFontMetrics(self.hfs).horizontalAdvance(
+            "1km & 6km AGL") * 1.4) + 20
         text_w = max(int(w * 0.5), w - barb_region)
         sm_top = y
         self._text(qp, QRect(x, y, text_w, rh),
@@ -683,8 +806,13 @@ class IndexBoard(QFrame):
                        vcol, Qt.AlignLeft)
             y += rh
         # 1 km & 6 km AGL wind barbs in the reserved right region, beside the
-        # storm-motion vectors (legacy SHARPpy kinematics-panel feature).
-        self._draw_agl_barbs(qp, x + text_w, sm_top, w - text_w,
+        # BRN/SR-wind + storm-motion rows (legacy SHARPpy kinematics-panel
+        # feature). Anchored at ``barb_top`` so they fill the whitespace above
+        # rather than sitting low beside the storm-motion vectors.
+        # Keep the ORIGINAL region height so the barb scale is unchanged (the
+        # scale is derived from ``h``); only the ``top`` moves up so the group
+        # is translated, not resized.
+        self._draw_agl_barbs(qp, x + text_w, barb_top, w - text_w,
                              max(rh * 5, y - sm_top))
 
     # ---- column 3: composite indices ----------------------------------
@@ -693,14 +821,17 @@ class IndexBoard(QFrame):
         qp.setFont(self.rf)
         fm = QtGui.QFontMetrics(self.rf)
 
-        def row(lbl, val, color):
+        def row_at(cx, cw, cy, lbl, val, color):
             # Draw "label = " then the value left-aligned right after it, so the
             # value sits next to its label instead of being pushed to the far
             # right edge (that gap is what made the column look wide).
             ltext = lbl + " = "
-            self._text(qp, QRect(x, y, w, rh), ltext, color)
+            self._text(qp, QRect(cx, cy, cw, rh), ltext, color)
             lw = fm.horizontalAdvance(ltext)
-            self._text(qp, QRect(x + lw, y, w - lw - 2, rh), val, color, Qt.AlignLeft)
+            self._text(qp, QRect(cx + lw, cy, cw - lw - 2, rh), val, color, Qt.AlignLeft)
+
+        def row(lbl, val, color):
+            row_at(x, w, y, lbl, val, color)
 
         # Note: the Severe Weather Composite (SCP / STP / SHIP / DCP) now lives
         # beside the lapse rates in the convective column, not here.
@@ -732,21 +863,42 @@ class IndexBoard(QFrame):
                 self._wyrp(ecape, 1000, 2500, 4000, higher=True))]
         # SHIP box-and-whisker chart at the TOP (above the EHI indices), then
         # the indices, then the CAPE block pushed to the bottom.
-        n_rows = len(top) + len(bot)
+        # The composite indices are laid out in two columns, so they only take
+        # ceil(len/2) rows -- freeing vertical space for a taller SHIP chart.
+        top_rows = (len(top) + 1) // 2
+        n_rows = top_rows + len(bot)
         slack = max(0, R.height() - n_rows * rh)
-        chart_h = min(slack - 14, 150) if slack > 70 else 0
-        mid_gap = max(6, slack - chart_h - 8)
+        # Fixed divider gaps that match the small spacing used elsewhere, so all
+        # the vertical space freed by the two-column indices feeds the SHIP
+        # chart (making it as tall as possible) instead of leaving a dead band
+        # mid-panel. The chart's own divider below it reserves CHART_DIV px.
+        MID_GAP = 12          # gap around the indices -> CAPE divider rule
+        CHART_DIV = 8         # gap the SHIP chart's divider rule consumes below
+        if slack > 70:
+            mid_gap = MID_GAP
+            # Consume every remaining pixel of slack into the chart height.
+            chart_h = slack - mid_gap - CHART_DIV
+        else:
+            chart_h = 0
+            mid_gap = max(6, slack)
 
         if chart_h >= 50:
             self._ship_chart(qp, QRect(x, y, w, chart_h))
             y += chart_h + 2
             qp.setPen(QtGui.QPen(self.rule, 1)); qp.drawLine(x, y, x + w, y)
-            y += 6
+            y += CHART_DIV - 2
         # Restore the normal row font (the SHIP chart set the small header font).
         qp.setFont(self.rf)
-        for lbl, val, c in top:
-            row(lbl, val, c)
-            y += rh
+        # Two-column layout for the composite indices: fill the left column
+        # top-to-bottom, then the right column. col_w-6 leaves a small gutter.
+        col_w = w // 2
+        col_x = (x, x + col_w)
+        left_n = top_rows
+        for idx, (lbl, val, c) in enumerate(top):
+            ci = 0 if idx < left_n else 1
+            ri = idx if idx < left_n else idx - left_n
+            row_at(col_x[ci], col_w - 6, y + ri * rh, lbl, val, c)
+        y += top_rows * rh
         y += mid_gap // 2
         qp.setPen(QtGui.QPen(self.rule, 1)); qp.drawLine(x, y, x + w, y)
         y += mid_gap - mid_gap // 2

@@ -90,6 +90,10 @@ dev = [
     "hypothesis>=6.0",
 ]
 
+[project.gui-scripts]
+# Windowed (no-console) GUI entry point installed on `pip install .`.
+sharpmod-gui = "sharpmod.gui:main"
+
 [project.scripts]
 # Console entry points installed on `pip install .`.
 sharpmod-render = "sharpmod.render:main"
@@ -117,7 +121,8 @@ packages = [
 # Bundle the TTF fonts as package data so they resolve via importlib.resources
 # (never absolute paths) — Requirements 15.1, 15.2.
 "sharpmod.resources.fonts" = ["*.ttf"]
-# Bundle the full UWyo station catalogue so every station is choosable offline.
+# Bundle the full UWyo station catalogue and the GUI basemap coastlines so
+# every station is choosable offline and the picker map renders without network.
 "sharpmod.resources" = ["*.json"]
 
 [tool.setuptools.exclude-package-data]

@@ -144,7 +144,8 @@ class RenderController(QWidget):
 
 
 def compose_window(config, prof_col=None, *, check_integrity=False,
-                   mount=False, custom_config=None, custom_sars_lines=None):
+                   mount=False, custom_config=None, custom_sars_lines=None,
+                   controller=None):
     """Compose an :class:`SPCWindow` with a real :class:`RenderController`.
 
     Parameters
@@ -172,15 +173,23 @@ def compose_window(config, prof_col=None, *, check_integrity=False,
     custom_config, custom_sars_lines : optional, keyword-only
         Accepted for backward compatibility; currently unused (the vendored
         SARS inset is left pristine).
+    controller : QWidget, keyword-only
+        An existing controller/parent to compose ``SPCWindow`` onto. It must
+        provide the same ``config_changed`` signal + ``preferencesbox`` slot
+        contract as :class:`RenderController` (e.g. the interactive picker
+        window, which doubles as the controller so the ``W`` key can refocus
+        it). When omitted a headless :class:`RenderController` is created, which
+        preserves the existing offscreen-render behaviour.
 
     Returns
     -------
-    tuple(SPCWindow, RenderController)
+    tuple(SPCWindow, controller)
         The composed window and its controller. The controller is the window's
         Qt parent and **must outlive it**, so the caller has to retain the
-        returned reference for the render's duration.
+        returned reference for the window's duration.
     """
-    controller = RenderController(config)
+    if controller is None:
+        controller = RenderController(config)
     win = SPCWindow(parent=controller, cfg=config)
     if prof_col is not None:
         win.addProfileCollection(prof_col, check_integrity=check_integrity)

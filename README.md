@@ -46,6 +46,64 @@ The upstream `SHARPpy==1.4.0a5` package is installed with `--no-deps` because
 its published metadata pins an old NumPy version. SHARPpy Reimagined provides
 the modern runtime dependencies separately.
 
+## Desktop GUI
+
+An interactive, legacy-SHARPpy-style desktop app is included:
+
+```bash
+sharpmod-gui          # or: python -m sharpmod.gui
+```
+
+The **Sounding Picker** opens with three ways to load a sounding:
+
+- **Station Map** — a clickable map of every UWyo radiosonde station over a
+  coastline basemap. Click a dot to select, double-click to open; scroll to
+  zoom, drag to pan, and pick a region from the *Map area* menu.
+- **Station List** — the full catalogue with live id/name filtering.
+- **Open File** — a local `.npz`, SPC, BUFKIT, PECAN, or WRF-ARW text sounding
+  (or just drag the file onto the window).
+
+Each sounding opens in the full interactive SPC window (the upstream SHARPpy
+widget stack), so every interaction from the
+[SHARPpy GUI guide](https://sharppy.github.io/SHARPpy/interacting_gui.html)
+works:
+
+- **Right-click the Skew-T** for the readout cursor, *Modify Surface*, parcel
+  lifting, and reset.
+- **Click + drag** temperature / dewpoint / wind points to edit the profile —
+  every index recalculates live.
+- **Mouse wheel** zooms; **right-click the hodograph** re-centers it, and
+  **double-clicking** the RM/LM markers sets the storm motion.
+- **Double-click the lower-left inset** to swap lifted parcels.
+- **Keys:** ← / → step in time, ↑ / ↓ change ensemble member, `Space` swaps
+  focus, `I` interpolates, `C` collects observed, `W` returns to the picker.
+- **File → Preferences** switches the color palette (Standard / Inverted /
+  Protanopia) and units.
+
+### Export
+
+The sounding window's **Export** menu saves the current view:
+
+- **Export Image (PNG)** (`Ctrl+E`) — the full window, including the mounted
+  derived-parameter panels, with a sensible default filename
+  (`STATION_YYYYMMDDHHZ.png`) in your Desktop folder.
+- **Export Text (SPC tabular)** — the focused profile as a text file that loads
+  back into the app.
+
+(The upstream `File → Save Image` / `Save Text` actions remain available too.)
+
+### Standalone executable (Windows)
+
+A one-folder, no-Python-required build is produced with PyInstaller:
+
+```bash
+python -m pip install pyinstaller
+pyinstaller packaging/sharpmod_gui.spec --noconfirm
+```
+
+The result is `dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe`. Set
+`ONEFILE = True` in the spec for a single self-extracting `.exe` instead.
+
 ## Command Line Tools
 
 | Command | Purpose |
@@ -101,12 +159,17 @@ SPC-style skew-T + hodograph PNG
 
 ```text
 sharpmod/
+  gui.py        interactive desktop app (sounding picker + SPC window)
+  render.py     headless PNG render entry point
   sharptab/     derived-parameter and meteorological calculations
   io/           decoders for SPC, BUFKIT, PECAN, WRF-ARW, .npz, and UWyo
   viz/          Qt6/PySide6 rendering widgets
-  tools/        UWyo, ERA5, WRF, and render command-line tools
-  resources/    bundled fonts and station catalog
+  tools/        UWyo, ERA5, WRF, basemap, and render command-line tools
+  resources/    bundled fonts, station catalog, and GUI basemap/icons
   tests/        unit, smoke, and property-based tests
+
+packaging/
+  sharpmod_gui.spec   PyInstaller spec for the standalone GUI build
 
 examples/
   example_sounding.png

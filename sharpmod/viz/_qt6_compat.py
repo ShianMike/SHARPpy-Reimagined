@@ -296,5 +296,27 @@ def apply() -> bool:
     _patch_methods()
     _patch_numpy_aliases()
     _patch_sharppy_pwv_climo()
+    _patch_inset_layout()
     _APPLIED = True
     return True
+
+
+def _patch_inset_layout() -> None:
+    """Fix clipped axis labels in the vendored Theta-E / SR-Wind insets.
+
+    The upstream insets size their label font from the widget height but draw
+    labels into fixed 15-20 px boxes, so DPI-scaled text is clipped (the
+    pressure/theta-e ticks and the "Classic Supercell" annotation get cut off).
+    :func:`sharpmod.viz.inset_layout.apply` widens those boxes and clamps the
+    annotation inside the widget at runtime; it is best-effort and a no-op when
+    the upstream inset modules are unavailable.
+    """
+    try:
+        from sharpmod.viz.inset_layout import apply as _apply_inset_layout
+    except Exception:
+        return
+    try:
+        _apply_inset_layout()
+    except Exception:
+        # A label-layout fix must never abort the core Qt6/NumPy shim.
+        pass

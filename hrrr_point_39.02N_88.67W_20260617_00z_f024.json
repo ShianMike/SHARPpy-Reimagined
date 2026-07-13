@@ -1,0 +1,14 @@
+{
+  "model": "HRRR",
+  "source_product": "wrfnat",
+  "vertical_coordinate": "surface plus 50 native HRRR hybrid levels",
+  "levels": 51,
+  "requested_lat": 39.020569,
+  "requested_lon": -88.665685,
+  "selected_lat": 39.031866946155795,
+  "selected_lon": -88.67126633413665,
+  "run": "2026-06-17 00:00",
+  "valid": "2026-06-18 00:00",
+  "fxx": 24,
+  "npz": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\hrrr_point_39.02N_88.67W_20260617_00z_f024.npz"
+}

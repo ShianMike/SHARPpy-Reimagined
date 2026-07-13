@@ -1,0 +1,20 @@
+{
+  "model": "HRRR",
+  "loc": "HRRRpt 44.83N 99.62W",
+  "requested_lat": 44.83,
+  "requested_lon": -99.62,
+  "selected_lat": 44.83348977795835,
+  "selected_lon": -99.62375132397608,
+  "grid_distance_km": 0.48796048787560475,
+  "grid_index": 1377078,
+  "run": "2026-07-07 00:00",
+  "valid": "2026-07-07 22:00",
+  "fxx": 22,
+  "levels": 39,
+  "messages_used": 234,
+  "pressure_min_hpa": 50.0,
+  "pressure_max_hpa": 1000.0,
+  "source_grib": "C:\\Users\\shian\\data\\hrrr\\20260707\\subset_bf110d02__hrrr.t00z.wrfprsf22.grib2",
+  "npz": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\hrrr_point_44.83N_99.62W_20260707_00z_f022.npz",
+  "surface_relative_vorticity": -5.242906074387966e-05
+}

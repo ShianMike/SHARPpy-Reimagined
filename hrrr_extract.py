@@ -20,6 +20,11 @@ from datetime import datetime, timezone
 
 import numpy as np
 
+from sharpmod.tools.era5_extract import (
+    _surface_relative_vorticity_from_column,
+    _surface_relative_vorticity_from_wind_grid,
+)
+
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -115,7 +120,7 @@ def retrieve_hrrr(run_date, run_hour, fxx):
 
     # Fetch all pressure-level fields in one pass using a combined regex.
     # This downloads a single subset of the GRIB file instead of 6 separate ones.
-    pattern = ":(TMP|HGT|RH|UGRD|VGRD|VVEL):\\d+ mb:"
+    pattern = ":(TMP|HGT|RH|UGRD|VGRD|VVEL|ABSV):\\d+ mb:"
     print(f"  Downloading with pattern: {pattern}")
 
     ds = H.xarray(pattern, remove_grib=False)
@@ -196,6 +201,8 @@ def extract_column(ds, lat, lon):
     u_names = ("u", "UGRD_P0_L100_GLC0", "ugrd", "u10")
     v_names = ("v", "VGRD_P0_L100_GLC0", "vgrd", "v10")
     w_names = ("w", "VVEL_P0_L100_GLC0", "vvel")
+    rel_vort_names = ("vo", "vort", "VORT_P0_L100_GLC0", "relative_vorticity")
+    absv_names = ("absv", "ABSV_P0_L100_GLC0", "absolute_vorticity")
 
     def get_var(candidates):
         for name in candidates:
@@ -237,6 +244,17 @@ def extract_column(ds, lat, lon):
     w_raw = get_var(w_names)
     omeg = w_raw  # Pa/s, same convention as the .npz loader expects
 
+    rel_vort_raw = get_var(rel_vort_names)
+    surface_relative_vorticity = _surface_relative_vorticity_from_column(
+        rel_vort_raw, levels, latitude=glat)
+    if surface_relative_vorticity is None:
+        absv_raw = get_var(absv_names)
+        surface_relative_vorticity = _surface_relative_vorticity_from_column(
+            absv_raw, levels, latitude=glat, absolute=True)
+    if surface_relative_vorticity is None:
+        surface_relative_vorticity = _surface_relative_vorticity_from_wind_grid(
+            ds, idx, levels)
+
     # Build output columns, ordered bottom (high pressure) to top (low pressure)
     cols = {
         "pres": mark_missing(levels, n_levels),
@@ -254,6 +272,8 @@ def extract_column(ds, lat, lon):
     order = np.argsort(-cols["pres"])
     for key in cols:
         cols[key] = cols[key][order]
+    if surface_relative_vorticity is not None:
+        cols["surface_relative_vorticity"] = surface_relative_vorticity
 
     return cols, n_levels, glat, glon
 
@@ -314,6 +334,8 @@ def main():
         "valid": valid_str,
         "fxx": FXX,
     }
+    if "surface_relative_vorticity" in cols:
+        arrays["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
 
     # Write .npz atomically
     out_dir = os.path.dirname(os.path.abspath(OUT_NPZ)) or "."
@@ -344,6 +366,8 @@ def main():
         "levels": n_levels,
         "npz": os.path.abspath(OUT_NPZ),
     }
+    if "surface_relative_vorticity" in cols:
+        meta["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
     json_path = os.path.splitext(OUT_NPZ)[0] + ".json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)

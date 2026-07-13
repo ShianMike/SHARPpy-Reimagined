@@ -7,7 +7,9 @@ Builds a single windowed executable (no console) that bundles:
 * the vendored upstream ``sharppy`` render stack (with its ``databases`` +
   ``datasources`` data files and all decoder submodules),
 * the scientific runtime (``metpy``/``pint``/``ecape``/``scipy``) that the
-  derived-parameter layer needs at runtime.
+  derived-parameter layer needs at runtime,
+* the live model-fetch runtime (``herbie``/``cfgrib``/``eccodes``/``xarray``),
+  including ecCodes' Windows DLL and Herbie's model templates.
 
 Build from the repository root with::
 
@@ -21,7 +23,11 @@ a single self-extracting ``dist/SHARPpy-Reimagined.exe`` instead.
 import glob
 import os
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import (
+    collect_all,
+    collect_data_files,
+    collect_submodules,
+)
 
 # --- one-folder (default) vs one-file toggle --------------------------------
 # Overridable from the environment so we can build either layout without editing
@@ -55,7 +61,10 @@ for _ttf in glob.glob(os.path.join(_RES, "fonts", "*.ttf")):
 # full (data files + submodules + any bundled binaries). ``collect_all`` is the
 # robust way to pull package data (fonts, station JSON, sharppy databases,
 # metpy/pint unit + static data) that would otherwise be missed by a frozen app.
-for pkg in ("sharpmod", "sharppy", "sutils", "metpy", "pint", "ecape"):
+for pkg in (
+    "sharpmod", "sharppy", "sutils", "metpy", "pint", "ecape",
+    "cfgrib", "eccodes",
+):
     try:
         d, b, h = collect_all(pkg)
         datas += d
@@ -65,6 +74,18 @@ for pkg in ("sharpmod", "sharppy", "sutils", "metpy", "pint", "ecape"):
         # A package that is not installed (e.g. an optional extra) is skipped;
         # the app degrades gracefully at runtime.
         pass
+
+# Herbie's model definitions are runtime modules, but its optional plotting
+# toolbox imports cartopy. Collect the operational package while omitting that
+# unused optional branch. PyInstaller's maintained xarray hook handles xarray
+# itself and avoids dragging its test suite into the frozen application.
+datas += collect_data_files("herbie")
+hiddenimports += collect_submodules(
+    "herbie",
+    filter=lambda name: not name.startswith("herbie.toolbox"),
+    on_error="ignore",
+)
+hiddenimports += ["xarray", "cfgrib.xarray_plugin"]
 
 # The decoder registry imports these vendored decoders dynamically
 # (sharpmod.io.decoder.findDecoders); name them so the freezer keeps them.
@@ -95,10 +116,13 @@ a = Analysis(
     runtime_hooks=[],
     # Trim heavyweight, GUI-irrelevant optional deps to keep the bundle smaller.
     excludes=["tkinter", "PyQt5", "PyQt6", "PySide2", "IPython", "notebook",
-              "pytest", "hypothesis", "netCDF4", "cfgrib", "herbie",
+              "pytest", "hypothesis", "netCDF4",
               # Test trees dragged in by scientific deps -- never needed at run.
               "pandas.tests", "scipy.tests", "numpy.tests", "matplotlib.tests",
-              "sharpmod.tests",
+              "xarray.tests", "sharpmod.tests",
+              # Optional Herbie plotting helpers require cartopy; forecast
+              # inventory/download/xarray support does not use this toolbox.
+              "herbie.toolbox",
               # pyarrow (~47 MB of arrow*.dll) is only used by pandas for
               # parquet/arrow-backed frames, which this app never touches.
               "pyarrow",

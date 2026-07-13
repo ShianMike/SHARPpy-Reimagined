@@ -158,6 +158,7 @@ DERIVED_PARAMS = {
     "storm_motion_lstu": lambda p: _storm_motion_component(p, 2),
     "storm_motion_lstv": lambda p: _storm_motion_component(p, 3),
     "lapserate_sfc_1km": lambda p: params_mod.lapse_rate(p, 0.0, 1000.0, agl=True),
+    "lapserate_sfc_500m": lambda p: params_mod.lapse_rate(p, 0.0, 500.0, agl=True),
     "vgp": derived_mod.vorticity_generation_parameter,
     "wbz_height": derived_mod.wet_bulb_zero_height,
     "hgz_cape": lambda p: params_mod.layer_cape_isotherm(p, -10, -30),

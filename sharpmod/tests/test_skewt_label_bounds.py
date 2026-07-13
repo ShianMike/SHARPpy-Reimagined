@@ -388,7 +388,7 @@ def test_hodograph_readout_rect_clamps_inside_frame(qt_app):
     assert fitted.bottom() <= widget.bry - 2
 
 
-def test_hodograph_ring_labels_keep_edge_80_90_100_labels_off_axes(qt_app):
+def test_hodograph_ring_labels_use_only_natural_positions_that_fit(qt_app):
     pytest.importorskip("sharppy.viz.hodo")
     render_mod._install_hodo_label_fit()
 
@@ -402,24 +402,26 @@ def test_hodograph_ring_labels_keep_edge_80_90_100_labels_off_axes(qt_app):
     backgroundHodo.draw_ring(widget, 100, painter)
 
     labels_80 = [item for item in painter.texts if item.text == "80"]
-    assert len(labels_80) == 2
-    assert not any(label.rect.top() <= widget.tly + 6
-                   for label in labels_80)
-    assert not any(label.rect.bottom() >= widget.bry - 3
-                   for label in labels_80)
+    assert len(labels_80) == 4
+    assert any(label.rect.center().y() < widget.centery
+               for label in labels_80)
+    assert any(label.rect.center().y() > widget.centery
+               for label in labels_80)
     assert any(label.rect.center().x() < widget.centerx
                for label in labels_80)
     assert any(label.rect.center().x() > widget.centerx
                for label in labels_80)
 
     labels_90 = [item for item in painter.texts if item.text == "90"]
-    assert len(labels_90) == 2
-    assert not any(label.rect.top() <= widget.tly + 6
-                   for label in labels_90)
-    assert not any(label.rect.bottom() >= widget.bry - 3
-                   for label in labels_90)
-    assert any(label.rect.right() >= widget.brx - 3
+    assert len(labels_90) == 3
+    assert any(label.rect.center().y() < widget.centery
                for label in labels_90)
+    assert any(label.rect.center().y() > widget.centery
+               for label in labels_90)
+    assert any(label.rect.center().x() < widget.centerx
+               for label in labels_90)
+    assert not any(label.rect.left() > widget.centerx + 50
+                   for label in labels_90)
 
     labels = [item for item in painter.texts if item.text == "100"]
     assert len(labels) == 1
@@ -431,10 +433,8 @@ def test_hodograph_ring_labels_keep_edge_80_90_100_labels_off_axes(qt_app):
         metrics = QtGui.QFontMetrics(label.font)
         assert metrics.horizontalAdvance(label.text) <= label.rect.width() - 2
 
-    assert any(label.rect.left() <= widget.tlx + 3 for label in labels)
-    assert not any(label.rect.top() <= widget.tly + 6 for label in labels)
-    assert not any(label.rect.right() >= widget.brx - 3 for label in labels)
-    assert not any(label.rect.bottom() >= widget.bry - 3 for label in labels)
+    assert labels[0].rect.center().y() < widget.centery
+    assert labels[0].rect.center().x() > widget.centerx
 
 
 def test_surface_trace_label_clamps_right_and_flips_above_bottom(qt_app):

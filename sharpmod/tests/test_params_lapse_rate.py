@@ -45,6 +45,14 @@ def test_sfc_1km_lapse_rate_interpolated():
     assert lr == pytest.approx(10.0, abs=1e-6)
 
 
+def test_sfc_500m_lapse_rate_interpolated():
+    # 500 m AGL falls between 250 m and 750 m; linear T => T_500m = 20.0.
+    # levels: 0 m -> 25, 250 -> 22.5, 750 -> 17.5  => LR = 10 C/km.
+    prof = _sounding([0.0, 250.0, 750.0], [25.0, 22.5, 17.5])
+    lr = params.lapse_rate(prof, 0, 500, agl=True)
+    assert lr == pytest.approx(10.0, abs=1e-6)
+
+
 def test_sfc_1km_lapse_rate_nonzero_sfc_elevation():
     # Surface elevated 1500 m; AGL conversion must still resolve 1 km AGL.
     prof = _sounding([0.0, 1000.0, 2000.0], [10.0, 4.0, -2.0], sfc_elev=1500.0)

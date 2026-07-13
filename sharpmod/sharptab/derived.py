@@ -55,7 +55,7 @@ import numpy.ma as ma
 
 from . import interp
 from . import winds
-from .constants import MISSING, is_missing
+from .constants import KTS_PER_MS, MISSING, is_missing
 
 __all__ = [
     "dcp",
@@ -67,6 +67,9 @@ __all__ = [
     "hail_possibility_index",
     "peskov_index",
     "mcs_index",
+    "left_supercell_composite",
+    "non_supercell_tornado_parameter",
+    "modified_sherbe",
 ]
 
 
@@ -80,6 +83,7 @@ _MNWIND_NORM = 16.0     # kt (0-6 km mean wind speed)
 
 _SFC_TOP_AGL = 6000.0   # SFC->6 km AGL layer top
 _VGP_TOP_AGL = 4000.0   # SFC->4 km AGL layer top for VGP shear
+_SFC_1500M_AGL = 1500.0
 
 
 # ---------------------------------------------------------------------------
@@ -787,6 +791,29 @@ _MMP_A2 = -1.16               # per (deg C/km)
 _MMP_A3 = -6.17e-4            # per (J/kg)
 _MMP_A4 = -0.17               # per (m/s)
 
+# --- SPC LSCP / NSTP / Modified SHERBE constants ---------------------------
+_LSCP_MUCAPE_NORM = 1000.0    # J/kg
+_LSCP_ESRH_NORM = 50.0        # m2/s2
+_LSCP_EBWD_NORM = 20.0        # m/s
+_LSCP_MUCIN_NORM = -40.0      # J/kg; term is 1.0 when muCIN > -40
+
+_NSTP_LR_NORM = 9.0           # C/km
+_NSTP_MLCAPE3_NORM = 100.0    # J/kg
+_NSTP_MLCIN_BASE = 225.0      # J/kg
+_NSTP_MLCIN_NORM = 200.0      # J/kg
+_NSTP_SHEAR_BASE_MS = 18.0    # m/s
+_NSTP_SHEAR_NORM_MS = 5.0     # m/s
+_NSTP_VORT_NORM_S = 8.0e-5    # s^-1
+
+_MOSHE_LLLR_OFFSET = 4.0      # K/km
+_MOSHE_LLLR_NORM = 4.0        # K2/km2
+_MOSHE_SHEAR_OFFSET_MS = 8.0  # m/s
+_MOSHE_SHEAR_NORM_MS = 10.0   # m/s
+_MOSHE_TEVV_OFFSET = 10.0     # K Pa km^-1 s^-1
+_MOSHE_TEVV_NORM = 9.0        # K Pa km^-1 s^-1
+_MOSHE_LAYER_DEPTH_KM = 2.0
+_MOSHE_LAYER_TOPS_AGL = tuple(np.arange(2000.0, 6000.0 + 0.1, 500.0))
+
 
 def _oracle_profile(prof):
     """Build the shared ``sharppy`` "default" Profile oracle for ``prof``.
@@ -837,6 +864,194 @@ def _finite_or_none(value):
     except (TypeError, ValueError):
         return None
     return fval if np.isfinite(fval) else None
+
+
+def _metadata_value(prof, *names):
+    """Return the first finite value found on ``prof`` or ``prof.meta``."""
+    for name in names:
+        value = _finite_or_none(getattr(prof, name, None))
+        if value is not None:
+            return value
+    meta = getattr(prof, "meta", None)
+    if isinstance(meta, dict):
+        for name in names:
+            value = _finite_or_none(meta.get(name))
+            if value is not None:
+                return value
+    return None
+
+
+def _metadata_raw(prof, *names):
+    """Return the first non-missing raw metadata value."""
+    for name in names:
+        value = getattr(prof, name, None)
+        if value is not None and not is_missing(value):
+            return value
+    meta = getattr(prof, "meta", None)
+    if isinstance(meta, dict):
+        for name in names:
+            value = meta.get(name)
+            if value is not None and not is_missing(value):
+                return value
+    return None
+
+
+def _convective_oracle_profile(prof):
+    """Return a cached upstream SHARPpy ConvectiveProfile for SPC composites."""
+    cached = getattr(prof, "_sharpmod_convective_oracle", None)
+    if cached is not None:
+        return cached
+
+    arrays = _profile_columns(prof)
+    if arrays is None:
+        return None
+    pres, hght, tmpc, dwpc, wdir, wspd = arrays
+
+    try:
+        from sharppy.sharptab import profile as sp_profile
+    except Exception:
+        return None
+
+    kwargs = dict(
+        profile="convective",
+        pres=pres,
+        hght=hght,
+        tmpc=tmpc,
+        dwpc=dwpc,
+        wdir=wdir,
+        wspd=wspd,
+        missing=-9999.0,
+        strictQC=False,
+    )
+    lat = _metadata_value(prof, "latitude", "lat")
+    if lat is not None:
+        kwargs["latitude"] = lat
+    date = _metadata_raw(prof, "date", "valid", "run", "base_time")
+    if date is not None:
+        kwargs["date"] = date
+    location = _metadata_raw(prof, "location", "loc", "station", "stn")
+    if location is not None:
+        kwargs["location"] = str(location)
+
+    omeg = _omeg_column_for_oracle(prof, len(pres))
+    if omeg is not None:
+        kwargs["omeg"] = omeg
+
+    try:
+        oracle = sp_profile.create_profile(**kwargs)
+    except Exception:
+        return None
+
+    try:
+        setattr(prof, "_sharpmod_convective_oracle", oracle)
+    except Exception:
+        pass
+    return oracle
+
+
+def _omeg_column_for_oracle(prof, target_len):
+    """Return an omega column aligned to the core profile, or ``None``."""
+    omeg = _get_field(prof, "omeg")
+    if omeg is None:
+        return None
+    omeg = ma.masked_where(ma.asarray(omeg, dtype=float) <= -9000.0, omeg)
+    if int(omeg.size) != int(target_len):
+        # If masked core levels were dropped in _profile_columns, do not guess
+        # the alignment for a vertical-motion-sensitive composite.
+        return None
+    if ma.getmaskarray(omeg).all():
+        return None
+    return np.asarray(ma.asarray(omeg).filled(-9999.0), dtype=float)
+
+
+def _vector_mag_ms(vector):
+    """Magnitude of a kt vector converted to m/s, or ``None``."""
+    if not isinstance(vector, (tuple, list, np.ndarray)) or len(vector) < 2:
+        return None
+    u = _finite_or_none(vector[0])
+    v = _finite_or_none(vector[1])
+    if u is None or v is None:
+        return None
+    return float(np.hypot(u, v) / KTS_PER_MS)
+
+
+def _bulk_shear_ms(prof, top_agl):
+    """SFC->``top_agl`` bulk shear magnitude in m/s."""
+    pbot = _sfc_pres(prof)
+    ptop = interp.pres_at_hght_agl(prof, top_agl)
+    if is_missing(pbot) or is_missing(ptop):
+        return MISSING
+    du, dv = winds.wind_shear(prof, pbot, ptop)
+    if is_missing(du) or is_missing(dv):
+        return MISSING
+    value = float(winds.mag(du, dv) / KTS_PER_MS)
+    return value if np.isfinite(value) else MISSING
+
+
+def _surface_relative_vorticity(prof):
+    """Surface relative vertical vorticity in s^-1 from optional source data."""
+    value = _metadata_value(
+        prof,
+        "sfc_relative_vorticity",
+        "surface_relative_vorticity",
+        "sfc_vorticity",
+        "surface_vorticity",
+        "vorticity",
+    )
+    if value is None:
+        return None
+    # Some gridded products expose this in 10^-5 s^-1 units. Treat small values
+    # as SI s^-1 and larger compact values as 10^-5 s^-1.
+    if abs(value) >= 1.0e-2:
+        return value * 1.0e-5
+    return value
+
+
+def _thetae_at_hght_agl(prof, h_agl):
+    """Equivalent potential temperature at ``h_agl`` metres AGL."""
+    p = interp.pres_at_hght_agl(prof, h_agl)
+    t = interp.temp_at_hght_agl(prof, h_agl)
+    td = interp.dwpt_at_hght_agl(prof, h_agl)
+    if is_missing(p) or is_missing(t) or is_missing(td):
+        return None
+    try:
+        from sharppy.sharptab import thermo as sp_thermo
+        value = sp_thermo.thetae(float(p), float(t), float(td))
+    except Exception:
+        return None
+    return _finite_or_none(value)
+
+
+def _omeg_at_hght_agl(prof, h_agl):
+    """Omega (Pa/s) at ``h_agl`` metres AGL."""
+    omeg = _get_field(prof, "omeg")
+    if omeg is None:
+        return None
+    omeg = ma.masked_where(ma.asarray(omeg, dtype=float) <= -9000.0, omeg)
+    if ma.getmaskarray(omeg).all():
+        return None
+    value = interp.interp_hght_agl(prof, omeg, h_agl)
+    return _finite_or_none(value)
+
+
+def _max_thetae_vertical_velocity(prof):
+    """Return MOSHE MAXTEVV in K Pa km^-1 s^-1, or ``None``."""
+    values = []
+    for top in _MOSHE_LAYER_TOPS_AGL:
+        bottom = top - (_MOSHE_LAYER_DEPTH_KM * 1000.0)
+        thetae_bottom = _thetae_at_hght_agl(prof, bottom)
+        thetae_top = _thetae_at_hght_agl(prof, top)
+        omega_top = _omeg_at_hght_agl(prof, top)
+        if thetae_bottom is None or thetae_top is None or omega_top is None:
+            continue
+        thetae_decrease = (thetae_bottom - thetae_top) / _MOSHE_LAYER_DEPTH_KM
+        upward_motion = -omega_top
+        value = thetae_decrease * upward_motion
+        if np.isfinite(value):
+            values.append(float(value))
+    if not values:
+        return None
+    return max(values)
 
 
 def wet_bulb_zero_height(prof):
@@ -1136,3 +1351,131 @@ def _mmp_linear_predictor(sp):
         + _MMP_A4 * mnwind_ms
     )
     return float(value) if np.isfinite(value) else None
+
+
+# ---------------------------------------------------------------------------
+# LSCP / NSTP / Modified SHERBE (SPC mesoanalysis composites)
+# ---------------------------------------------------------------------------
+
+def left_supercell_composite(prof):
+    """Compute the Left-moving Supercell Composite Parameter (LSCP)."""
+    try:
+        return _left_supercell_composite_impl(prof)
+    except Exception:
+        return MISSING
+
+
+def _left_supercell_composite_impl(prof):
+    sp = _convective_oracle_profile(prof)
+    if sp is None:
+        return MISSING
+
+    etop = getattr(sp, "etop", None)
+    ebottom = getattr(sp, "ebottom", None)
+    if is_missing(etop) or is_missing(ebottom):
+        return 0.0
+
+    mucape = _finite_or_none(getattr(getattr(sp, "mupcl", None), "bplus", None))
+    mucin = _finite_or_none(getattr(getattr(sp, "mupcl", None), "bminus", None))
+    left_esrh = getattr(sp, "left_esrh", None)
+    try:
+        esrh = _finite_or_none(left_esrh[0])
+    except Exception:
+        esrh = None
+    ebwd_ms = _finite_or_none(getattr(sp, "ebwspd", None))
+    if ebwd_ms is not None:
+        ebwd_ms = ebwd_ms / KTS_PER_MS
+
+    if mucape is None or mucin is None or esrh is None or ebwd_ms is None:
+        return MISSING
+    if mucape <= 0.0:
+        return 0.0
+
+    if ebwd_ms > 20.0:
+        ebwd_ms = 20.0
+    elif ebwd_ms < 10.0:
+        ebwd_ms = 0.0
+
+    if mucin > _LSCP_MUCIN_NORM:
+        mucin_term = 1.0
+    elif mucin < 0.0:
+        mucin_term = _LSCP_MUCIN_NORM / mucin
+    else:
+        mucin_term = 1.0
+
+    value = (
+        (mucape / _LSCP_MUCAPE_NORM)
+        * (esrh / _LSCP_ESRH_NORM)
+        * (ebwd_ms / _LSCP_EBWD_NORM)
+        * mucin_term
+    )
+    return float(value) if np.isfinite(value) else MISSING
+
+
+def non_supercell_tornado_parameter(prof):
+    """Compute the Non-Supercell Tornado Parameter (NSTP)."""
+    try:
+        return _non_supercell_tornado_parameter_impl(prof)
+    except Exception:
+        return MISSING
+
+
+def _non_supercell_tornado_parameter_impl(prof):
+    sp = _convective_oracle_profile(prof)
+    if sp is None:
+        return MISSING
+
+    lr01 = _finite_or_none(getattr(prof, "lapserate_sfc_1km", None))
+    if lr01 is None:
+        from . import params as sm_params
+        lr01 = _finite_or_none(sm_params.lapse_rate(prof, 0, 1000, agl=True))
+
+    mlpcl = getattr(sp, "mlpcl", None)
+    mlcape3 = _finite_or_none(getattr(mlpcl, "b3km", None))
+    mlcin = _finite_or_none(getattr(mlpcl, "bminus", None))
+    shear06_ms = _vector_mag_ms(getattr(sp, "sfc_6km_shear", None))
+    sfc_vort = _surface_relative_vorticity(prof)
+
+    if None in (lr01, mlcape3, mlcin, shear06_ms, sfc_vort):
+        return MISSING
+
+    value = (
+        (lr01 / _NSTP_LR_NORM)
+        * (mlcape3 / _NSTP_MLCAPE3_NORM)
+        * ((_NSTP_MLCIN_BASE - mlcin) / _NSTP_MLCIN_NORM)
+        * ((_NSTP_SHEAR_BASE_MS - shear06_ms) / _NSTP_SHEAR_NORM_MS)
+        * (sfc_vort / _NSTP_VORT_NORM_S)
+    )
+    return float(value) if np.isfinite(value) else MISSING
+
+
+def modified_sherbe(prof):
+    """Compute the SPC Modified SHERBE / MOSHE composite."""
+    try:
+        return _modified_sherbe_impl(prof)
+    except Exception:
+        return MISSING
+
+
+def _modified_sherbe_impl(prof):
+    sp = _convective_oracle_profile(prof)
+    if sp is None:
+        return MISSING
+
+    lllr = _finite_or_none(getattr(sp, "lapserate_3km", None))
+    s15mg = _finite_or_none(_bulk_shear_ms(prof, _SFC_1500M_AGL))
+    eshr = _finite_or_none(getattr(sp, "ebwspd", None))
+    if eshr is not None:
+        eshr = eshr / KTS_PER_MS
+    maxtevv = _max_thetae_vertical_velocity(prof)
+
+    if None in (lllr, s15mg, eshr, maxtevv):
+        return MISSING
+
+    value = (
+        (((lllr - _MOSHE_LLLR_OFFSET) ** 2.0) / _MOSHE_LLLR_NORM)
+        * ((s15mg - _MOSHE_SHEAR_OFFSET_MS) / _MOSHE_SHEAR_NORM_MS)
+        * ((eshr - _MOSHE_SHEAR_OFFSET_MS) / _MOSHE_SHEAR_NORM_MS)
+        * ((maxtevv + _MOSHE_TEVV_OFFSET) / _MOSHE_TEVV_NORM)
+    )
+    return float(value) if np.isfinite(value) else MISSING

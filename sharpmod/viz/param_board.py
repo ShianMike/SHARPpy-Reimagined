@@ -170,11 +170,11 @@ class ParamBoard(QFrame):
             E("MLCAPE", _scalar(self._parcel("mlpcl", "bplus")), _fmt0, "cape"),
             E("MUCAPE", _scalar(self._parcel("mupcl", "bplus")), _fmt0, "cape"),
             E("6CAPE", _scalar(self._dp("cape_0_6km")), _fmt0, "cape"),
-            E("HGZ CAPE", _scalar(self._dp("hgz_cape")), _fmt0, "cape"),
-            E("ECAPE", _scalar(self._dp("ecape")), _fmt0, "cape"),
+            E("HGZ CAPE", _scalar(self._dp("hgz_cape")), _fmt0, "hgz_cape"),
+            E("ECAPE", _scalar(self._dp("ecape")), _fmt0, "ecape"),
             E("DCAPE", _scalar(self._sp("dcape")), _fmt0, None),
             E("MUCIN", _scalar(self._parcel("mupcl", "bminus")), _fmt0, "cinh"),
-            E("NCAPE", _scalar(self._dp("ncape")), _fmt2, None),
+            E("NCAPE", _scalar(self._dp("ncape")), _fmt2, "ncape"),
             E("WBZ Height", _scalar(self._dp("wbz_height")), _fmt0, None),
         ]))
 
@@ -182,6 +182,7 @@ class ParamBoard(QFrame):
         groups.append(("Moisture / Lapse", [
             E("PW (in)", _scalar(self._sp("pwat")), _fmt2, None),
             E("K-index", _scalar(self._sp("k_idx")), _fmt0, None),
+            E("SFC-500m LR", _scalar(self._dp("lapserate_sfc_500m")), _fmt1, "lapse_rate"),
             E("SFC-1km LR", _scalar(self._dp("lapserate_sfc_1km")), _fmt1, "lapse_rate"),
             E("SFC-3km LR", _scalar(self._sp("lapserate_3km")), _fmt1, "lapse_rate"),
             E("3-6km LR", _scalar(self._sp("lapserate_3_6km")), _fmt1, "lapse_rate"),
@@ -204,21 +205,24 @@ class ParamBoard(QFrame):
 
         # Composite indices ---------------------------------------------
         groups.append(("Composite Indices", [
-            E("STP (cin)", _scalar(self._sp("stp_cin")), _fmt1, "stp"),
-            E("STP (fix)", _scalar(self._sp("stp_fixed")), _fmt1, "stp"),
+            E("STP (cin)", _scalar(self._sp("stp_cin")), _fmt1, "stp_cin"),
+            E("STP (fix)", _scalar(self._sp("stp_fixed")), _fmt1, "stp_fixed"),
             E("SCP", _scalar(self._sp("right_scp")), _fmt1, "scp"),
             E("SHIP", _scalar(self._sp("ship")), _fmt1, "ship"),
-            E("DCP", _scalar(self._dp("dcp")), _fmt1, None),
-            E("EHI 0-1km", _scalar(self._dp("ehi_0_1km")), _fmt1, None),
-            E("EHI 0-3km", _scalar(self._dp("ehi_0_3km")), _fmt1, None),
-            E("Peskov", _scalar(self._dp("peskov")), _fmt1, None),
-            E("MCS", _scalar(self._dp("mcs_index")), _fmt1, None),
+            E("DCP", _scalar(self._dp("dcp")), _fmt1, "dcp"),
+            E("EHI 0-1km", _scalar(self._dp("ehi_0_1km")), _fmt1, "ehi"),
+            E("EHI 0-3km", _scalar(self._dp("ehi_0_3km")), _fmt1, "ehi"),
+            E("LSCP", _scalar(self._dp("lscp")), _fmt1, "lscp"),
+            E("NSTP", _scalar(self._dp("nstp")), _fmt1, "nstp"),
+            E("Mod SHERBE", _scalar(self._dp("modified_sherbe")), _fmt1, "modified_sherbe"),
+            E("Peskov", _scalar(self._dp("peskov")), _fmt1, "peskov"),
+            E("MCS", _scalar(self._dp("mcs_index")), _fmt1, "mcs_index"),
         ]))
 
         # Hail -----------------------------------------------------------
         groups.append(("Hail", [
-            E("VGP", _scalar(self._dp("vgp")), _fmt1, None),
-            E("LRG HAIL", _scalar(self._dp("lrghail")), _fmt1, None),
+            E("VGP", _scalar(self._dp("vgp")), _fmt2, None),
+            E("LRG HAIL", _scalar(self._dp("lrghail")), _fmt1, "lrghail"),
         ]))
 
         return groups

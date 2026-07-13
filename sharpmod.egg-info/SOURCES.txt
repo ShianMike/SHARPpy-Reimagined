@@ -3,6 +3,7 @@ README.md
 pyproject.toml
 sharpmod/__init__.py
 sharpmod/colors.py
+sharpmod/gui.py
 sharpmod/render.py
 sharpmod.egg-info/PKG-INFO
 sharpmod.egg-info/SOURCES.txt
@@ -12,9 +13,12 @@ sharpmod.egg-info/requires.txt
 sharpmod.egg-info/top_level.txt
 sharpmod/io/__init__.py
 sharpmod/io/decoder.py
+sharpmod/io/sharppy_export.py
 sharpmod/io/uwyo_catalog.py
 sharpmod/io/uwyo_decoder.py
 sharpmod/resources/__init__.py
+sharpmod/resources/basemap.json
+sharpmod/resources/coastlines.json
 sharpmod/resources/font_resolver.py
 sharpmod/resources/uwyo_stations.json
 sharpmod/resources/fonts/JetBrainsMono-Bold.ttf
@@ -50,8 +54,12 @@ sharpmod/sharptab/params.py
 sharpmod/sharptab/profile.py
 sharpmod/sharptab/winds.py
 sharpmod/tools/__init__.py
+sharpmod/tools/build_basemap.py
+sharpmod/tools/build_coastlines.py
 sharpmod/tools/build_uwyo_catalog.py
 sharpmod/tools/era5_extract.py
+sharpmod/tools/ifs_extract.py
+sharpmod/tools/model_extract.py
 sharpmod/tools/uwyo_sounding.py
 sharpmod/tools/wrf_extract.py
 sharpmod/viz/SPCWindow.py
@@ -60,8 +68,13 @@ sharpmod/viz/_qt6_compat.py
 sharpmod/viz/custom_barbs.py
 sharpmod/viz/custom_panel.py
 sharpmod/viz/hazard.py
+sharpmod/viz/hodo_locator.py
 sharpmod/viz/index_board.py
+sharpmod/viz/inset_layout.py
+sharpmod/viz/inset_readout.py
 sharpmod/viz/param_board.py
 sharpmod/viz/ship.py
 sharpmod/viz/skew.py
+sharpmod/viz/streamwiseness.py
 sharpmod/viz/thermo.py
+sharpmod/viz/unit_text.py

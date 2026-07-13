@@ -187,6 +187,24 @@ class UWyo_Decoder:
     #: Ordered core per-level field names.
     CORE_FIELDS = ("pres", "hght", "tmpc", "dwpc", "wdir", "wspd")
 
+    #: Soundings with more than this many decoded levels are thinned before a
+    #: :class:`Profile` is built. High-resolution BUFR soundings routinely carry
+    #: several thousand levels; the SHARPpy analysis + drawing pipeline is not
+    #: designed for that many and slows to a crawl (the interactive window can
+    #: appear to hang while it composes). Classic mandatory+significant-level
+    #: TEMP soundings (~tens to low hundreds of levels) pass through untouched.
+    HIGH_RES_LEVEL_THRESHOLD = 400
+
+    #: Minimum pressure spacing (hPa) retained when thinning a high-res
+    #: sounding. Fine enough to preserve skew-T / CAPE structure, coarse enough
+    #: to keep the level count (and therefore analysis cost) modest.
+    THIN_MIN_DP_HPA = 2.0
+
+    #: Hard cap on the retained level count. If pressure-spacing thinning still
+    #: leaves more levels than this, the profile is uniformly subsampled down to
+    #: this many (endpoints always kept).
+    MAX_ANALYSIS_LEVELS = 300
+
     def __init__(self, station_catalog: dict | None = None,
                  full_catalog: bool = False):
         """Create a decoder.
@@ -488,6 +506,13 @@ class UWyo_Decoder:
             for name, col in zip(self.CORE_FIELDS, cols)
         }
 
+        # Thin high-resolution soundings (e.g. BUFR, which can report several
+        # thousand levels) down to a size the SHARPpy analysis + drawing
+        # pipeline handles interactively. This also guarantees a strictly
+        # decreasing pressure profile, which the downstream interpolation
+        # assumes -- non-monotonic high-res data can otherwise stall it.
+        intermediate = self._thin_high_res(intermediate)
+
         # Convert wind speed m/s -> knots on the modern server, leaving the
         # MISSING sentinel untouched (Requirement 7.2).
         if wspd_in_ms:
@@ -512,6 +537,84 @@ class UWyo_Decoder:
             "source": "uwyo",
         }
         return intermediate
+
+    def _thin_high_res(self, intermediate: dict) -> dict:
+        """Thin a high-resolution sounding to a manageable level count.
+
+        No-ops for ordinary soundings (at or below
+        :attr:`HIGH_RES_LEVEL_THRESHOLD` levels). Otherwise the core per-level
+        arrays are reduced by (1) keeping levels at least
+        :attr:`THIN_MIN_DP_HPA` hPa apart with strictly decreasing pressure,
+        then (2) uniformly subsampling to at most :attr:`MAX_ANALYSIS_LEVELS`
+        levels if still oversized. The surface (highest pressure) and top
+        (lowest pressure) levels are always retained.
+        """
+        pres = intermediate.get("pres")
+        if pres is None:
+            return intermediate
+        n = int(np.asarray(pres).size)
+        if n <= self.HIGH_RES_LEVEL_THRESHOLD:
+            return intermediate
+
+        keep = self._pressure_spaced_indices(pres, self.THIN_MIN_DP_HPA)
+        if len(keep) > self.MAX_ANALYSIS_LEVELS:
+            keep = self._subsample_indices(keep, self.MAX_ANALYSIS_LEVELS)
+        if not keep or len(keep) >= n:
+            return intermediate
+
+        idx = np.asarray(keep, dtype=int)
+        for name in self.CORE_FIELDS:
+            arr = intermediate.get(name)
+            if arr is not None:
+                intermediate[name] = np.asarray(arr)[idx]
+        return intermediate
+
+    @staticmethod
+    def _pressure_spaced_indices(pres, min_dp: float) -> list:
+        """Indices of levels >= ``min_dp`` hPa apart (strictly decreasing p).
+
+        Always keeps the first level with valid pressure and the topmost level
+        with valid pressure (lowest pressure), so full sounding depth is
+        preserved. Levels with non-finite or non-decreasing pressure are
+        dropped, yielding a clean monotonic profile.
+        """
+        parr = np.asarray(pres, dtype=float)
+        n = parr.size
+        keep: list[int] = []
+        last_p = None
+        for i in range(n):
+            p = parr[i]
+            if not np.isfinite(p):
+                continue
+            if last_p is None or (last_p - p) >= min_dp:
+                keep.append(i)
+                last_p = p
+        # Ensure the topmost valid level (lowest pressure) is present.
+        last_finite = None
+        for j in range(n - 1, -1, -1):
+            if np.isfinite(parr[j]):
+                last_finite = j
+                break
+        if last_finite is not None and (not keep or keep[-1] != last_finite):
+            # Only append if it keeps pressure strictly decreasing.
+            if last_p is None or parr[last_finite] < last_p:
+                keep.append(last_finite)
+        return keep
+
+    @staticmethod
+    def _subsample_indices(indices: list, max_count: int) -> list:
+        """Uniformly reduce ``indices`` to ``max_count`` (endpoints kept)."""
+        n = len(indices)
+        if n <= max_count or max_count < 2:
+            return indices
+        picks = np.linspace(0, n - 1, max_count)
+        chosen = sorted({int(round(x)) for x in picks})
+        # Guarantee both endpoints survive the rounding/dedup.
+        if chosen[0] != 0:
+            chosen.insert(0, 0)
+        if chosen[-1] != n - 1:
+            chosen.append(n - 1)
+        return [indices[k] for k in chosen]
 
     @staticmethod
     def _parse_metadata(lines):

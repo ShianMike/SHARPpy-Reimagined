@@ -10,7 +10,7 @@ Label                   Profile attribute          Units / format
 ======================  =========================  ================
 ``DCP``                 ``prof.dcp``               unitless (0.1)
 ``LRGHAIL``             ``prof.lrghail``           unitless (0.1)
-``VGP``                 ``prof.vgp``               numeric  (0.1)
+``VGP``                 ``prof.vgp``               numeric  (0.01)
 ``Peskov``              ``prof.peskov``            numeric  (0.1)
 ``MCS``                 ``prof.mcs_index``         numeric  (0.1)
 ``EHI 0-1km``           ``prof.ehi_0_1km``         unitless (0.1)
@@ -92,6 +92,11 @@ def _fmt_float1(value: float) -> str:
     return f"{value:.1f}"
 
 
+def _fmt_float2(value: float) -> str:
+    """Format a finite float to two decimal places."""
+    return f"{value:.2f}"
+
+
 def _fmt_int(value: float) -> str:
     """Format a finite value as a rounded integer (J/kg CAPE readouts)."""
     return str(int(round(value)))
@@ -107,7 +112,7 @@ def _fmt_int(value: float) -> str:
 DERIVED_INDEX_ROWS: Tuple[Tuple[str, str, Callable[[float], str]], ...] = (
     ("DCP", "dcp", _fmt_float1),              # Req 2.6 / 2.7
     ("LRGHAIL", "lrghail", _fmt_float1),       # Req 6.7 / 6.8
-    ("VGP", "vgp", _fmt_float1),
+    ("VGP", "vgp", _fmt_float2),
     ("Peskov", "peskov", _fmt_float1),         # Req 16.4 / 16.5
     ("MCS", "mcs_index", _fmt_float1),         # Req 17.4 / 17.5
     ("EHI 0-1km", "ehi_0_1km", _fmt_float1),   # Req 18.7 / 18.8

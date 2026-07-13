@@ -43,6 +43,11 @@ from sharpmod import colors
 
 FG = colors.FG_COLOR
 T = colors.ALERT_TIERS  # alert palette indexed 0..6
+Y = colors.GRADIENT_YELLOW
+R = colors.GRADIENT_RED
+P = colors.GRADIENT_PINK
+C = colors.GRADIENT_CYAN
+B = colors.ALERT_L1_COLOR
 
 
 def _missing(value) -> bool:
@@ -92,6 +97,8 @@ def _ref_lcl(value, cape=None):
     if _missing(value) or _missing(cape) or float(cape) <= 0:
         return FG
     v = float(value)
+    if v == 0.0:
+        return FG
     if v < 750:
         return T[6]
     if v < 1000:
@@ -109,6 +116,8 @@ def _ref_li(value, cape=None):
     if _missing(value) or _missing(cape) or float(cape) <= 0:
         return FG
     v = float(value)
+    if v == 0.0:
+        return FG
     if v < -13:
         return T[6]
     if v < -10:
@@ -124,6 +133,8 @@ def _ref_lapse_rate(value):
     if _missing(value):
         return FG
     v = float(value)
+    if v == 0.0:
+        return FG
     if v <= 6.0:
         return "#00FF00"
     if v <= 7.0:
@@ -137,55 +148,103 @@ def _ref_lapse_rate(value):
 
 def _ref_stp_fixed(value):
     if _missing(value):
-        return T[0]
+        return FG
     v = float(value)
-    if v >= 7:
-        return T[6]
+    if 0.0 <= v < 1.0:
+        return B
     if v >= 5:
-        return T[5]
+        return P
     if v >= 2:
-        return T[4]
+        return R
     if v >= 1:
-        return T[3]
-    if v >= 0:  # threshold table rule (0, 2) is applied with >=
-        return T[2]
-    return T[1]
+        return Y
+    return FG
 
 
 def _ref_stp_effective(value):
     if _missing(value):
-        return T[0]
+        return FG
     v = float(value)
-    if v >= 15:
-        return T[6]
-    if v >= 10:
-        return T[5]
+    if 0.0 <= v < 1.0:
+        return B
     if v >= 5:
-        return T[4]
+        return P
     if v >= 2:
-        return T[3]
+        return R
     if v >= 0.5:
-        return T[2]
-    if v >= -0.5:
-        return T[1]
-    return T[0]
+        return Y
+    return FG
+
+
+def _ref_scp(value):
+    if _missing(value):
+        return FG
+    v = float(value)
+    if v < 0.0:
+        return C
+    if v < 1.0:
+        return B
+    if v >= 5:
+        return P
+    if v >= 2:
+        return R
+    if v >= 0.5:
+        return Y
+    return FG
 
 
 def _ref_ship(value):
     if _missing(value):
-        return T[0]
+        return FG
     v = float(value)
-    if v >= 5:
-        return T[6]
+    if 0.0 <= v < 1.0:
+        return B
     if v >= 3:
-        return T[5]
+        return P
     if v >= 2:
-        return T[4]
+        return R
     if v >= 1:
-        return T[3]
-    if v >= 0.1:
-        return T[2]
-    return T[1]
+        return Y
+    return FG
+
+
+def _ref_common(value, yellow, red, pink):
+    if _missing(value):
+        return FG
+    v = float(value)
+    if v == 0.0:
+        return FG
+    if v >= pink:
+        return P
+    if v >= red:
+        return R
+    if v >= yellow:
+        return Y
+    return FG
+
+
+def _ref_low_severe_composite(value, yellow, red, pink):
+    if _missing(value):
+        return FG
+    v = float(value)
+    if 0.0 <= v < 1.0:
+        return B
+    return _ref_common(v, yellow, red, pink)
+
+
+def _ref_common_inverse(value, yellow, red, pink):
+    if _missing(value):
+        return FG
+    v = float(value)
+    if v == 0.0:
+        return FG
+    if v <= pink:
+        return P
+    if v <= red:
+        return R
+    if v <= yellow:
+        return Y
+    return FG
 
 
 # param name -> (oracle, whether it consumes a cape context, value strategy)
@@ -208,8 +267,22 @@ _PARAMS = {
     "stp_fixed": (_ref_stp_fixed, None, _finite(-3, 12)),
     "stp_effective": (_ref_stp_effective, None, _finite(-5, 25)),
     "stp_cin": (_ref_stp_effective, None, _finite(-5, 25)),
-    "scp": (_ref_stp_effective, None, _finite(-5, 25)),
+    "scp": (_ref_scp, None, _finite(-5, 25)),
     "ship": (_ref_ship, None, _finite(-1, 8)),
+    "lrghail": (lambda v: _ref_common(v, 4, 7, 10), None, _finite(-1, 20)),
+    "dcp": (lambda v: _ref_low_severe_composite(v, 1, 4, 6), None,
+            _finite(-2, 10)),
+    "ehi": (lambda v: _ref_common(v, 1, 2, 3), None, _finite(-2, 8)),
+    "lscp": (lambda v: _ref_common_inverse(v, -1, -4, -8), None, _finite(-12, 4)),
+    "nstp": (lambda v: _ref_common(v, 1, 2, 4), None, _finite(-4, 8)),
+    "modified_sherbe": (lambda v: _ref_common(v, 1, 2, 3), None, _finite(-4, 8)),
+    "mcs": (lambda v: _ref_common(v, 1, 2, 3), None, _finite(-4, 8)),
+    "mcs_index": (lambda v: _ref_common(v, 1, 2, 3), None, _finite(-4, 8)),
+    "peskov": (lambda v: _ref_common(v, 1, 4, 7), None, _finite(-6, 12)),
+    "hgz_cape": (lambda v: _ref_common(v, 1000, 2500, 4000), None, _finite(-100, 6000)),
+    "ncape": (lambda v: _ref_common(v, 0.1, 0.2, 0.3), None, _finite(-0.2, 0.6)),
+    "ecape": (lambda v: _ref_common(v, 1000, 2500, 4000), None, _finite(-100, 6000)),
+    "sweat": (colors.sweat_color, None, _finite(0, 800)),
 }
 
 # Values that must be treated as missing/undefined regardless of parameter.
@@ -318,6 +391,34 @@ def test_recompute_across_bands_example():
     # Non-positive CAPE (or no positive-CAPE parcel) falls back to neutral fg.
     assert colors.tier_color("cape", 5000, has_positive_cape=False) == colors.FG_COLOR
     assert colors.tier_color("cape", -10, has_positive_cape=True) == colors.FG_COLOR
+
+
+def test_negative_scp_is_cyan():
+    """Negative Supercell Composite values render cyan."""
+    assert colors.tier_color("scp", -0.1) == colors.GRADIENT_CYAN
+    assert colors.tier_color("scp", -5.0) == colors.GRADIENT_CYAN
+
+
+def test_low_severe_composites_use_modernized_brown():
+    """Values from zero through less than one use the readable L1 brown."""
+    params = ("scp", "stp_cin", "stp_effective", "stp_fixed", "ship", "dcp")
+    for param in params:
+        for value in (0.0, 0.1, 0.5, 0.999):
+            assert colors.tier_color(param, value) == B
+        assert colors.tier_color(param, 1.0) != B
+
+
+def test_zero_values_are_white_except_cinh_and_severe_composites():
+    """Zero is white except CIN/CINH and the selected severe composites."""
+    zero_white = [
+        "lapse_rate", "lrghail", "sweat", "ehi", "mcs", "mcs_index",
+        "lscp", "nstp", "modified_sherbe", "peskov", "hgz_cape", "ncape",
+        "ecape",
+    ]
+    for param in zero_white:
+        assert colors.tier_color(param, 0.0) == colors.FG_COLOR
+    assert colors.tier_color("cape", 0.0, has_positive_cape=True) == colors.FG_COLOR
+    assert colors.tier_color("cinh", 0.0, cape=1000.0) != colors.FG_COLOR
 
 
 def test_unknown_parameter_raises():

@@ -93,17 +93,28 @@ def test_renders_label_value_and_unit(qt_app):
 
     left, right = _capture(panel)
 
-    # The raw value text is the number plus the unit (10.2). We compare against
-    # the panel's own elided output so the assertion is robust to the headless
-    # font environment (Qt may elide differently without bundled fonts).
+    # The numeric value and its unit are separate draws so the unit can use the
+    # smaller suffix font while both remain visible (10.2).
     column_w = (panel.width() - panel.lpad - panel.rpad) // 2
     expected_label = panel._elide(label, column_w, panel.label_font)
     raw_value = f"{panel._fmt_value(7.5)} {unit}"
     assert raw_value == "7.5 degrees C/km"
-    expected_value = panel._elide(raw_value, column_w, panel.value_font)
 
     assert expected_label in left
-    assert expected_value in right
+    assert panel._fmt_value(7.5) in right
+    assert f" {unit}" in right
+
+
+def test_vgp_value_uses_hundredths(qt_app):
+    """The VGP readout retains hundredths in the mounted custom panel."""
+    panel = CustomPanel()
+    panel.resize(360, 260)
+    panel.configure([PanelItem(param="vgp")])
+    panel.setProf(SimpleNamespace(vgp=0.42))
+
+    _left, right = _capture(panel)
+
+    assert any("0.42" in text for text in right)
 
     panel.deleteLater()
 

@@ -150,6 +150,43 @@ def test_draw_hgz_overlay_free_function_matches_class(qt_app):
     assert drew is True
 
 
+def test_attached_overlay_can_use_derived_profile_when_skewt_profile_lacks_hgz(qt_app):
+    """Mount seam uses the derived profile that owns hgz_cape, not just skewt.prof."""
+    from sharpmod.viz.SPCWindow import attach_hgz_overlay
+
+    base_prof = _make_prof(hgz_cape=MISSING)
+    derived_prof = _make_prof(hgz_cape=190.0)
+    image = _blank_image()
+
+    class _FakeSkewT:
+        tlx = PLOT_RECT.left()
+        tly = PLOT_RECT.top()
+        brx = PLOT_RECT.right()
+        bry = PLOT_RECT.bottom()
+        originy = 0.0
+        scale = 1.0
+        plot_omega = False
+        plotBitMap = image
+        prof = base_prof
+
+        def pres_to_pix(self, p):
+            return _pres_to_pix(p)
+
+        def plotData(self):
+            return "base"
+
+    skewt = _FakeSkewT()
+
+    assert attach_hgz_overlay(skewt, profile=derived_prof) is True
+    assert skewt.plotData() == "base"
+
+    overlay = skew.HGZOverlay(PLOT_RECT, _pres_to_pix)
+    top, bottom = overlay.band_pixels(derived_prof)
+    mid_x = PLOT_RECT.left() + PLOT_RECT.width() // 2
+    mid_y = int((top + bottom) / 2)
+    assert image.pixelColor(mid_x, mid_y) != QColor("white")
+
+
 # ---------------------------------------------------------------------------
 # 19.11 -- overlay absent when hgz_cape is missing
 # ---------------------------------------------------------------------------

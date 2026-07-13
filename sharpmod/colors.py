@@ -51,6 +51,10 @@ __all__ = [
     "LEGACY_SUBSTITUTIONS",
     "ALERT_TIERS_LEGACY",
     "ALERT_TIERS",
+    "GRADIENT_YELLOW",
+    "GRADIENT_RED",
+    "GRADIENT_PINK",
+    "GRADIENT_CYAN",
     "TIER_THRESHOLDS",
     "MISSING_STR",
     "is_missing",
@@ -60,11 +64,22 @@ __all__ = [
     "lcl_color",
     "li_color",
     "lapse_rate_color",
+    "common_gradient_color",
     "stp_fixed_color",
     "stp_effective_color",
     "scp_color",
     "ship_color",
     "sweat_color",
+    "dcp_color",
+    "ehi_color",
+    "lscp_color",
+    "nstp_color",
+    "modified_sherbe_color",
+    "mcs_color",
+    "peskov_color",
+    "hgz_cape_color",
+    "ncape_color",
+    "ecape_color",
     "tier_color",
     "scheme_preferences",
 ]
@@ -81,6 +96,15 @@ WHITE = "#ffffff"
 FG_COLOR = WHITE
 #: Chart background the palette is designed to remain legible against.
 BG_COLOR = BLACK
+
+# Shared index/composite-value gradient. Parameter-specific thresholds still
+# determine when a value escalates. Severe composites additionally use the
+# readable modernized L1 brown from zero through less than one, then continue
+# through yellow -> red -> pink.
+GRADIENT_YELLOW = "#FFFF00"
+GRADIENT_RED = "#FF0000"
+GRADIENT_PINK = "#FF00FF"
+GRADIENT_CYAN = "#00FFFF"
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +207,41 @@ def _as_float(value):
     except (TypeError, ValueError):
         return None
     return f if math.isfinite(f) else None
+
+
+def common_gradient_color(value, yellow, red, pink, *, higher: bool = True) -> str:
+    """White/yellow/red/pink gradient used by composite and index values.
+
+    ``higher=True`` escalates as values increase. ``higher=False`` is for
+    inverse scales where lower or more-negative values are more significant.
+    Zero is intentionally neutral white; CIN/CINH keeps its own color logic.
+    """
+    v = _as_float(value)
+    if v is None or v == 0.0:
+        return FG_COLOR
+    if higher:
+        if v >= pink:
+            return GRADIENT_PINK
+        if v >= red:
+            return GRADIENT_RED
+        if v >= yellow:
+            return GRADIENT_YELLOW
+        return FG_COLOR
+    if v <= pink:
+        return GRADIENT_PINK
+    if v <= red:
+        return GRADIENT_RED
+    if v <= yellow:
+        return GRADIENT_YELLOW
+    return FG_COLOR
+
+
+def _low_severe_composite_color(value):
+    """Return the readable brown tier for severe composites in ``[0, 1)``."""
+    v = _as_float(value)
+    if v is not None and 0.0 <= v < 1.0:
+        return ALERT_L1_COLOR
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +375,17 @@ TIER_THRESHOLDS = {
     "ship": _SHIP_RULES,
     "lrghail": _LRGHAIL_RULES,
     "sweat": _SWEAT_RULES,
+    "dcp": ((1.0, GRADIENT_YELLOW), (4.0, GRADIENT_RED), (6.0, GRADIENT_PINK)),
+    "ehi": ((1.0, GRADIENT_YELLOW), (2.0, GRADIENT_RED), (3.0, GRADIENT_PINK)),
+    "mcs": ((1.0, GRADIENT_YELLOW), (2.0, GRADIENT_RED), (3.0, GRADIENT_PINK)),
+    "mcs_index": ((1.0, GRADIENT_YELLOW), (2.0, GRADIENT_RED), (3.0, GRADIENT_PINK)),
+    "lscp": ((-1.0, GRADIENT_YELLOW), (-4.0, GRADIENT_RED), (-8.0, GRADIENT_PINK)),
+    "nstp": ((1.0, GRADIENT_YELLOW), (2.0, GRADIENT_RED), (4.0, GRADIENT_PINK)),
+    "modified_sherbe": ((1.0, GRADIENT_YELLOW), (2.0, GRADIENT_RED), (3.0, GRADIENT_PINK)),
+    "peskov": ((1.0, GRADIENT_YELLOW), (4.0, GRADIENT_RED), (7.0, GRADIENT_PINK)),
+    "hgz_cape": ((1000.0, GRADIENT_YELLOW), (2500.0, GRADIENT_RED), (4000.0, GRADIENT_PINK)),
+    "ncape": ((0.1, GRADIENT_YELLOW), (0.2, GRADIENT_RED), (0.3, GRADIENT_PINK)),
+    "ecape": ((1000.0, GRADIENT_YELLOW), (2500.0, GRADIENT_RED), (4000.0, GRADIENT_PINK)),
 }
 
 
@@ -359,7 +429,7 @@ def lcl_color(value, cape=None) -> str:
     """Tier color for an LCL height (m AGL). Lower LCL -> higher tier."""
     v = _as_float(value)
     cape_v = _as_float(cape)
-    if v is None or cape_v is None or cape_v <= 0:
+    if v is None or v == 0.0 or cape_v is None or cape_v <= 0:
         return FG_COLOR
     for threshold, tier in _LCL_RULES:
         if v < threshold:
@@ -371,7 +441,7 @@ def li_color(value, cape=None) -> str:
     """Tier color for a Lifted Index (C). More negative -> higher tier."""
     v = _as_float(value)
     cape_v = _as_float(cape)
-    if v is None or cape_v is None or cape_v <= 0:
+    if v is None or v == 0.0 or cape_v is None or cape_v <= 0:
         return FG_COLOR
     for threshold, tier in _LI_RULES:
         if v < threshold:
@@ -382,7 +452,7 @@ def li_color(value, cape=None) -> str:
 def lapse_rate_color(value) -> str:
     """Fixed-scale color for a lapse rate (C/km). Steeper -> hotter color."""
     v = _as_float(value)
-    if v is None:
+    if v is None or v == 0.0:
         return FG_COLOR
     for threshold, hexcolor in _LAPSE_RATE_RULES:
         if v <= threshold:
@@ -392,51 +462,44 @@ def lapse_rate_color(value) -> str:
 
 def stp_fixed_color(value) -> str:
     """Tier color for the fixed-layer Significant Tornado Parameter."""
-    v = _as_float(value)
-    if v is None:
-        return ALERT_TIERS[0]
-    for threshold, tier in _STP_FIXED_RULES:
-        if v >= threshold:
-            return ALERT_TIERS[tier]
-    return ALERT_TIERS[1]
+    low = _low_severe_composite_color(value)
+    if low is not None:
+        return low
+    return common_gradient_color(value, 1.0, 2.0, 5.0)
 
 
 def stp_effective_color(value) -> str:
     """Tier color for the effective-layer STP (cin) on the symmetric scale."""
-    v = _as_float(value)
-    if v is None:
-        return ALERT_TIERS[0]
-    for threshold, tier in _STP_EFFECTIVE_RULES:
-        if v >= threshold:
-            return ALERT_TIERS[tier]
-    return ALERT_TIERS[0]  # < -0.5
+    low = _low_severe_composite_color(value)
+    if low is not None:
+        return low
+    return common_gradient_color(value, 0.5, 2.0, 5.0)
 
 
 def scp_color(value) -> str:
-    """Tier color for the Supercell Composite Parameter (symmetric scale)."""
-    return stp_effective_color(value)
+    """Tier color for the Supercell Composite Parameter."""
+    v = _as_float(value)
+    if v is None:
+        return FG_COLOR
+    if v < 0.0:
+        return GRADIENT_CYAN
+    low = _low_severe_composite_color(v)
+    if low is not None:
+        return low
+    return common_gradient_color(v, 0.5, 2.0, 5.0)
 
 
 def lrghail_color(value) -> str:
     """Tier color for the LRGHAIL (SPC Large Hail Parameter / LHP) value."""
-    v = _as_float(value)
-    if v is None:
-        return ALERT_TIERS[0]
-    for threshold, tier in _LRGHAIL_RULES:
-        if v >= threshold:
-            return ALERT_TIERS[tier]
-    return ALERT_TIERS[1]
+    return common_gradient_color(value, 4.0, 7.0, 10.0)
 
 
 def ship_color(value) -> str:
     """Tier color for the Significant Hail Parameter."""
-    v = _as_float(value)
-    if v is None:
-        return ALERT_TIERS[0]
-    for threshold, tier in _SHIP_RULES:
-        if v >= threshold:
-            return ALERT_TIERS[tier]
-    return ALERT_TIERS[1]
+    low = _low_severe_composite_color(value)
+    if low is not None:
+        return low
+    return common_gradient_color(value, 1.0, 2.0, 3.0)
 
 
 def sweat_color(value) -> str:
@@ -447,12 +510,65 @@ def sweat_color(value) -> str:
     foreground.
     """
     v = _as_float(value)
-    if v is None:
+    if v is None or v == 0.0:
         return FG_COLOR
     for threshold, hexcolor in _SWEAT_RULES:
         if v < threshold:
             return hexcolor
     return _SWEAT_TOP  # >= 650
+
+
+def dcp_color(value) -> str:
+    """Common-gradient color for the Derecho Composite Parameter."""
+    low = _low_severe_composite_color(value)
+    if low is not None:
+        return low
+    return common_gradient_color(value, 1.0, 4.0, 6.0)
+
+
+def ehi_color(value) -> str:
+    """Common-gradient color for Energy-Helicity Index values."""
+    return common_gradient_color(value, 1.0, 2.0, 3.0)
+
+
+def lscp_color(value) -> str:
+    """Common-gradient color for Left-Moving Supercell Composite values."""
+    return common_gradient_color(value, -1.0, -4.0, -8.0, higher=False)
+
+
+def nstp_color(value) -> str:
+    """Common-gradient color for Non-Supercell Tornado Parameter values."""
+    return common_gradient_color(value, 1.0, 2.0, 4.0)
+
+
+def modified_sherbe_color(value) -> str:
+    """Common-gradient color for Modified SHERBE / MOSHE values."""
+    return common_gradient_color(value, 1.0, 2.0, 3.0)
+
+
+def mcs_color(value) -> str:
+    """Common-gradient color for the MCS index."""
+    return common_gradient_color(value, 1.0, 2.0, 3.0)
+
+
+def peskov_color(value) -> str:
+    """Common-gradient color for the Peskov index."""
+    return common_gradient_color(value, 1.0, 4.0, 7.0)
+
+
+def hgz_cape_color(value) -> str:
+    """Common-gradient color for hail-growth-zone CAPE."""
+    return common_gradient_color(value, 1000.0, 2500.0, 4000.0)
+
+
+def ncape_color(value) -> str:
+    """Common-gradient color for normalized CAPE."""
+    return common_gradient_color(value, 0.1, 0.2, 0.3)
+
+
+def ecape_color(value) -> str:
+    """Common-gradient color for entraining CAPE."""
+    return common_gradient_color(value, 1000.0, 2500.0, 4000.0)
 
 
 # Dispatcher: parameter name -> recompute function.
@@ -471,6 +587,17 @@ _TIER_DISPATCH = {
     "ship": lambda value, **ctx: ship_color(value),
     "lrghail": lambda value, **ctx: lrghail_color(value),
     "sweat": lambda value, **ctx: sweat_color(value),
+    "dcp": lambda value, **ctx: dcp_color(value),
+    "ehi": lambda value, **ctx: ehi_color(value),
+    "lscp": lambda value, **ctx: lscp_color(value),
+    "nstp": lambda value, **ctx: nstp_color(value),
+    "modified_sherbe": lambda value, **ctx: modified_sherbe_color(value),
+    "mcs": lambda value, **ctx: mcs_color(value),
+    "mcs_index": lambda value, **ctx: mcs_color(value),
+    "peskov": lambda value, **ctx: peskov_color(value),
+    "hgz_cape": lambda value, **ctx: hgz_cape_color(value),
+    "ncape": lambda value, **ctx: ncape_color(value),
+    "ecape": lambda value, **ctx: ecape_color(value),
 }
 
 
@@ -520,9 +647,13 @@ def scheme_preferences(config=None) -> dict:
         "fg_color": FG_COLOR,
         "alert_l1_color": ALERT_L1_COLOR,
         "alert_l2_color": ALERT_L2_COLOR,
+        "temp_units": "Fahrenheit",
+        "wind_units": "knots",
+        "pw_units": "in",
     }
     if config is not None:
-        for key in ("bg_color", "fg_color", "alert_l1_color", "alert_l2_color"):
+        for key in ("bg_color", "fg_color", "alert_l1_color", "alert_l2_color",
+                    "temp_units", "wind_units", "pw_units"):
             value = _read_pref(config, key)
             if value:
                 prefs[key] = value

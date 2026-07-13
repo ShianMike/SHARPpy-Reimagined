@@ -74,7 +74,10 @@ _qt6_compat.apply()
 # The upstream widget stack, imported through the PySide6/Qt6 binding. Aliased
 # so this module can re-export the name ``SPCWindow`` without shadowing the
 # import of the class it composes.
-from sharppy.viz.SPCWindow import SPCWindow as _VendoredSPCWindow  # noqa: E402
+from sharppy.viz.SPCWindow import (  # noqa: E402
+    SPCWidget as _VendoredSPCWidget,
+    SPCWindow as _VendoredSPCWindow,
+)
 
 # SHARPpy Reimagined's in-workspace products mounted onto the window (task 17.3). Each is
 # a self-contained, headless-importable Qt6 widget/overlay implemented in this
@@ -106,6 +109,59 @@ __all__ = [
 #: against ``sharpmod.viz.SPCWindow.SPCWindow`` without importing the vendored
 #: package directly.
 SPCWindow = _VendoredSPCWindow
+
+
+def _apply_streamwiseness_column_stretches(grid3):
+    """Keep the original board share while splitting the former STP column."""
+    for column, stretch in enumerate((4, 4, 4, 2, 6)):
+        grid3.setColumnStretch(column, stretch)
+
+
+def _place_right_inset_after_streamwiseness(sw):
+    """Move the current swappable right inset back to column 4."""
+    grid3 = getattr(sw, "grid3", None)
+    right = getattr(sw, "right_inset_ob", None)
+    stream = getattr(sw, "streamwiseness", None)
+    if grid3 is None or right is None or stream is None:
+        return False
+    try:
+        grid3.removeWidget(right)
+        grid3.addWidget(right, 0, 4)
+        _apply_streamwiseness_column_stretches(grid3)
+        right.show()
+        return True
+    except Exception:
+        return False
+
+
+def _install_streamwiseness_hooks():
+    """Extend SHARPpy profile/deviant/inset swaps for the mounted chart."""
+    cls = _VendoredSPCWidget
+    if getattr(cls, "_sharpmod_streamwiseness_hooks", False):
+        return
+
+    original_toggle = cls.toggleVector
+    original_swap = cls.swapInset
+
+    def toggleVector(self, deviant):  # noqa: N802 - upstream Qt API
+        result = original_toggle(self, deviant)
+        chart = getattr(self, "streamwiseness", None)
+        if chart is not None:
+            try:
+                chart.setDeviant(deviant)
+            except Exception:
+                pass
+        return result
+
+    def swapInset(self):  # noqa: N802 - upstream Qt API
+        result = original_swap(self)
+        if getattr(self, "inset_to_swap", None) == "RIGHT":
+            _place_right_inset_after_streamwiseness(self)
+        return result
+
+    cls.toggleVector = toggleVector
+    cls.swapInset = swapInset
+    cls._sharpmod_streamwiseness_hooks = True
 
 
 class RenderController(QWidget):
@@ -189,6 +245,7 @@ def compose_window(config, prof_col=None, *, check_integrity=False,
         Qt parent and **must outlive it**, so the caller has to retain the
         returned reference for the window's duration.
     """
+    _install_streamwiseness_hooks()
     if controller is None:
         controller = RenderController(config)
     win = SPCWindow(parent=controller, cfg=config)
@@ -237,13 +294,18 @@ def reapply_color_scheme(win, config=None):
     if products is not None:
         candidates.extend(
             (name, getattr(products, name, None))
-            for name in ("ship", "composite", "thermo", "kinematic", "hail")
+            for name in (
+                "ship", "composite", "thermo", "kinematic", "hail",
+                "streamwiseness",
+            )
         )
     # Any SHARPpy Reimagined panels/insets attached straight onto the composed widget.
     # ``derived_indices``/``hazard_type``/``custom_panel`` are kept in the scan
     # for backward compatibility with widgets that expose those names.
-    for attr in ("composite_panel", "thermo_panel", "kinematic_panel",
-                 "ship_inset", "derived_indices", "hazard_type", "custom_panel"):
+    for attr in (
+            "composite_panel", "thermo_panel", "kinematic_panel",
+            "ship_inset", "derived_indices", "hazard_type", "custom_panel",
+            "streamwiseness"):
         candidates.append((attr, getattr(sw, attr, None)))
 
     seen = set()
@@ -366,6 +428,7 @@ THERMO_FAMILY_ROWS = [
     ("NCAPE", "ncape", _fmt_f2, None),
     ("WBZ Height", "wbz_height", _fmt_int, None),
     ("ECAPE", "ecape", _fmt_int, "cape"),
+    ("SFC-500m LR", "lapserate_sfc_500m", _fmt_f1, "lapse_rate"),
     ("SFC-1km LR", "lapserate_sfc_1km", _fmt_f1, "lapse_rate"),
 ]
 
@@ -374,7 +437,7 @@ COMPOSITE_FAMILY_ROWS = [
     ("DCP", "dcp", _fmt_f1, None),
     ("EHI 0-1km", "ehi_0_1km", _fmt_f1, None),
     ("EHI 0-3km", "ehi_0_3km", _fmt_f1, None),
-    ("VGP", "vgp", _fmt_f1, None),
+    ("VGP", "vgp", _fmt_f2, None),
     ("LRG HAIL", "lrghail", _fmt_f1, None),
     ("Peskov", "peskov", _fmt_f1, None),
     ("MCS", "mcs_index", _fmt_f1, None),
@@ -417,6 +480,7 @@ THERMO_PANEL_ITEMS = [
     PanelItem(param="ecape"),
     PanelItem(param="ncape"),
     PanelItem(param="wbz_height"),
+    PanelItem(param="lapserate_sfc_500m"),
     PanelItem(param="lapserate_sfc_1km"),
 ]
 
@@ -474,12 +538,15 @@ class MountResult:
     overlay pass was installed. ``sars_detached`` reports whether the vendored
     SARS analogues inset was successfully removed from ``grid3`` to reclaim its
     column. ``kinematic``/``thermo``/``composite`` reference the mounted
-    ``CustomPanel`` widgets (or ``None`` when that panel was blocked). ``ship``
-    is ``None`` -- the SHIP inset is not mounted in this family layout (the
-    vendored ``plotText`` panel already carries the SHIP composite).
+    ``CustomPanel`` widgets (or ``None`` when that panel was blocked).
+    ``streamwiseness`` references the 0-6 km chart mounted beside the narrowed
+    right/STP inset. ``ship`` is ``None`` -- the SHIP inset is not mounted in
+    this family layout (the vendored ``plotText`` panel already carries the
+    SHIP composite).
     """
 
     ship: Optional[object] = None
+    streamwiseness: Optional[object] = None
     composite: Optional[object] = None
     thermo: Optional[object] = None
     kinematic: Optional[object] = None
@@ -536,15 +603,51 @@ def _derived_profile(prof):
     if isinstance(prof, _SMProfile):
         return prof
     try:
+        raw_meta = getattr(prof, "meta", None)
+        meta = dict(raw_meta) if isinstance(raw_meta, dict) else {}
+        for key, attr in (
+            ("date", "date"),
+            ("valid", "date"),
+            ("location", "location"),
+            ("loc", "location"),
+        ):
+            if key in meta:
+                continue
+            value = getattr(prof, attr, None)
+            if value is not None:
+                meta[key] = value
+        for key, attr in (
+            ("lat", "latitude"),
+            ("lon", "longitude"),
+            ("sfc_relative_vorticity", "sfc_relative_vorticity"),
+            ("surface_relative_vorticity", "surface_relative_vorticity"),
+            ("sfc_vorticity", "sfc_vorticity"),
+            ("surface_vorticity", "surface_vorticity"),
+            ("vorticity", "vorticity"),
+        ):
+            if key in meta:
+                continue
+            value = getattr(prof, attr, None)
+            try:
+                fval = float(value)
+            except (TypeError, ValueError):
+                continue
+            if fval == fval:
+                meta[key] = fval
         return _sm_create(
             pres=prof.pres, hght=prof.hght, tmpc=prof.tmpc, dwpc=prof.dwpc,
             wdir=prof.wdir, wspd=prof.wspd,
+            omeg=getattr(prof, "omeg", None),
+            wetbulb=getattr(prof, "wetbulb", None),
+            meta=meta,
         )
     except Exception:
         return prof
 
 
-def attach_hgz_overlay(skewt, *, fill_color=None, edge_color=None, draw_fill=True):
+def attach_hgz_overlay(
+    skewt, *, fill_color=None, edge_color=None, draw_fill=True, profile=None
+):
     """Install the Hail-Growth-Zone overlay pass on a vendored skew-T widget.
 
     This is the concrete mount seam for Requirements 19.9-19.11: it wraps the
@@ -556,7 +659,9 @@ def attach_hgz_overlay(skewt, *, fill_color=None, edge_color=None, draw_fill=Tru
     composition the vendored widget applies to every plotted level) and its plot
     rectangle (``tlx/tly/brx/bry``). The overlay draws nothing when
     ``skewt.prof.hgz_cape`` is missing (Requirement 19.11) and is clipped to the
-    plot rectangle (Requirement 19.10).
+    plot rectangle (Requirement 19.10). ``profile`` may supply the SHARPpy
+    Reimagined derived profile when the vendored skew-T profile lacks those
+    lazy-derived attributes.
 
     The wrapper is defensive: any failure in the overlay pass is swallowed so it
     can never break the base skew-T rendering. Returns ``True`` when the pass was
@@ -601,7 +706,7 @@ def attach_hgz_overlay(skewt, *, fill_color=None, edge_color=None, draw_fill=Tru
     def _wrapped_plot_data(*args, **kwargs):
         result = original_plot_data(*args, **kwargs)
         try:
-            prof = getattr(skewt, "prof", None)
+            prof = profile if profile is not None else getattr(skewt, "prof", None)
             rect = _plot_rect()
             bitmap = getattr(skewt, "plotBitMap", None)
             if prof is not None and rect is not None and bitmap is not None:
@@ -924,8 +1029,9 @@ def mount_products(win, prof=None, *, custom_config=None, custom_sars_lines=None
 
     Before placing the panels the vendored SARS analogues inset is detached from
     ``grid3`` (0, 2) to reclaim its column (:func:`_detach_sars_inset`); the
-    Effective Layer STP chart at (0, 3) is left in place. The skew-T HGZ overlay
-    is also attached (Requirement 19.9).
+    Streamwiseness is placed at (0, 3) and the Effective Layer STP chart moves
+    to (0, 4), splitting its former width allocation. The skew-T HGZ overlay is
+    also attached (Requirement 19.9).
 
     Values are read OFF a SHARPpy Reimagined Profile derived from ``prof``
     (:func:`_derived_profile`) and never recomputed (Requirement 13.3);
@@ -961,8 +1067,8 @@ def mount_products(win, prof=None, *, custom_config=None, custom_sars_lines=None
     # convective / kinematics / SARS panels with the SHARPpy Reimagined IndexBoard (a
     # legacy-styled 3-column reimplementation whose columns are computed so
     # Space Grotesk never overlaps, with the derived params woven in). The
-    # vendored Effective Layer STP graphic (right inset, grid3 col 3) is
-    # KEPT. The board spans grid3 columns 0-2.
+    # vendored Effective Layer STP graphic is kept but later moved beside the
+    # streamwiseness chart. The board spans grid3 columns 0-2.
     try:
         from sharpmod.viz.index_board import IndexBoard
         grid3 = getattr(sw, "grid3", None)
@@ -978,22 +1084,48 @@ def mount_products(win, prof=None, *, custom_config=None, custom_sars_lines=None
         board.setData(prof, derived)
         if grid3 is not None:
             grid3.addWidget(board, 0, 0, 1, 3)
-            # Widen the Effective Layer STP graphic (col 3): the board spans
-            # cols 0-2, so give col 3 a larger stretch than each board column
-            # (STP ends up ~1/3 of the band instead of ~1/4).
+            # Give Effective Layer STP a larger dedicated column. The IndexBoard
+            # compensates internally so only its SHIP/composite section tightens.
             try:
-                grid3.setColumnStretch(0, 2)
-                grid3.setColumnStretch(1, 2)
-                grid3.setColumnStretch(2, 2)
-                grid3.setColumnStretch(3, 3)
+                grid3.setColumnStretch(0, 4)
+                grid3.setColumnStretch(1, 4)
+                grid3.setColumnStretch(2, 4)
+                grid3.setColumnStretch(3, 7)
             except Exception:
                 pass
         board.show()
         sw.index_board = board
         result.composite = board
-        result.mounted.append("IndexBoard (cols 0-2); STP chart kept (col 3)")
+        result.mounted.append("IndexBoard (cols 0-2)")
     except Exception as exc:  # noqa: BLE001 - record, never abort the mount
         result.blocked.append(f"IndexBoard: {exc}")
+
+    # Place the streamwiseness profile directly left of the existing right
+    # inset.  The original board-to-right-inset width share remains stable;
+    # only the old STP allocation is split between these two charts.
+    try:
+        from sharpmod.viz.streamwiseness import plotStreamwiseness
+
+        grid3 = getattr(sw, "grid3", None)
+        right = getattr(sw, "right_inset_ob", None)
+        if grid3 is None or right is None:
+            raise RuntimeError("grid3/right_inset_ob not found")
+        stream = plotStreamwiseness(parent=getattr(sw, "text", None) or sw)
+        stream.setProf(prof)
+        latitude = getattr(prof, "latitude", 0.0) if prof is not None else 0.0
+        stream.setDeviant("left" if latitude < 0 else "right")
+        grid3.addWidget(stream, 0, 3)
+        sw.streamwiseness = stream
+        if isinstance(getattr(sw, "insets", None), dict):
+            sw.insets["SHARPMOD STREAMWISENESS"] = stream
+        if not _place_right_inset_after_streamwiseness(sw):
+            raise RuntimeError("could not move right inset to column 4")
+        stream.show()
+        result.streamwiseness = stream
+        result.mounted.append(
+            "Streamwiseness (col 3); right/STP inset narrowed (col 4)")
+    except Exception as exc:  # noqa: BLE001 - record, never abort the mount
+        result.blocked.append(f"Streamwiseness: {exc}")
 
     # 3. CAPE/CIN buoyancy fill + HGZ overlay -> skew-T (Requirement 19.9).
     #    The CAPE/CIN fill is attached first so it renders *behind* the HGZ
@@ -1012,7 +1144,7 @@ def mount_products(win, prof=None, *, custom_config=None, custom_sars_lines=None
         result.blocked.append(f"CAPE/CIN fill: {exc}")
 
     try:
-        if attach_hgz_overlay(skewt, draw_fill=False):
+        if attach_hgz_overlay(skewt, draw_fill=False, profile=derived):
             result.hgz_attached = True
             result.mounted.append("HGZ overlay (skew-T)")
         else:

@@ -31,7 +31,7 @@ from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from qtpy import QtWidgets
+from qtpy import QtGui, QtWidgets
 
 from sharpmod import colors
 from sharpmod.sharptab.constants import MISSING
@@ -63,7 +63,7 @@ def qt_app():
 _FULL_DERIVED = SimpleNamespace(
     dcp=1.5,
     lrghail=2.3,
-    vgp=0.4,
+    vgp=0.42,
     peskov=0.8,
     mcs_index=3.1,
     ehi_0_1km=1.2,
@@ -139,7 +139,7 @@ def test_derived_rows_show_all_present_values():
     rows = dict(derived_rows(_FULL_DERIVED))
     assert rows["DCP"] == "1.5"
     assert rows["LRGHAIL"] == "2.3"
-    assert rows["VGP"] == "0.4"
+    assert rows["VGP"] == "0.42"
     assert rows["Peskov"] == "0.8"
     assert rows["MCS"] == "3.1"
     assert rows["EHI 0-1km"] == "1.2"
@@ -296,6 +296,528 @@ def test_scheme_preferences_carry_alert_substitutions():
     prefs = colors.scheme_preferences()
     assert prefs["alert_l1_color"] == "#c8911f"
     assert prefs["alert_l2_color"] == "#e0a800"
+
+
+def test_scheme_preferences_carry_unit_preferences():
+    """Custom mounted panels receive the same unit keys as vendored panels."""
+    config = {
+        ("preferences", "temp_units"): "Celsius",
+        ("preferences", "wind_units"): "m/s",
+        ("preferences", "pw_units"): "cm",
+    }
+
+    prefs = colors.scheme_preferences(config)
+
+    assert prefs["temp_units"] == "Celsius"
+    assert prefs["wind_units"] == "m/s"
+    assert prefs["pw_units"] == "cm"
+
+
+def test_index_board_formats_display_units(qt_app):
+    """IndexBoard converts the hardcoded legacy readouts from preferences."""
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.setPreferences(
+        update_gui=False,
+        temp_units="Celsius",
+        wind_units="m/s",
+        pw_units="cm",
+    )
+
+    assert board._temp(68.0) == "20\u00b0C"
+    assert board._pwat(1.0) == "2.5 cm"
+    assert board._wind_unit() == "m/s"
+    assert board._wind_scalar(20.0) == "10"
+    assert board._dirspd((180.0, 20.0)) == "180/10"
+    assert board._uv_dirspd((10.0, 0.0)) == "270/05"
+
+
+def test_index_board_preserves_primary_widths_with_compact_composites(qt_app):
+    """Convective/kinematic columns retain room while SHIP/composites tighten."""
+    from qtpy.QtCore import QRect
+
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.resize(1000, 320)
+    board.clearData()
+    rects = {}
+    board._col_conv = lambda _qp, rect, _rh: rects.update(conv=QRect(rect))
+    board._col_kin = lambda _qp, rect, _rh: rects.update(kin=QRect(rect))
+    board._col_comp = lambda _qp, rect, _rh: rects.update(comp=QRect(rect))
+
+    board.plotData()
+
+    assert rects["conv"].width() == 372
+    assert rects["kin"].width() == 328
+    assert rects["comp"].width() == 275
+    assert rects["kin"].width() > rects["comp"].width()
+    assert rects["comp"].x() + rects["comp"].width() == 999
+    assert 1000 - (rects["comp"].x() + rects["comp"].width()) == 1
+
+
+def test_index_board_uses_compact_mcs_index_label(qt_app):
+    """The composite readout uses the compact MCS Index display label."""
+    from qtpy.QtCore import QRect, Qt
+
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace()
+    board.dp = SimpleNamespace(mcs_index=-4.0)
+    records = []
+
+    def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
+        if text.startswith("MCS"):
+            records.append(text)
+
+    board._text = capture_text
+    board._ship_chart = lambda *args, **kwargs: None
+    pixmap = QtGui.QPixmap(320, 420)
+    pixmap.fill(QtGui.QColor("#000000"))
+    painter = QtGui.QPainter(pixmap)
+    board._col_comp(painter, QRect(0, 0, 300, 400), 18)
+    painter.end()
+
+    assert "MCS Index = " in records
+    assert "MCS Idx = " not in records
+
+
+def test_three_column_stats_keep_numeric_values_at_normal_size(qt_app):
+    """Smaller unit suffixes avoid shrinking MeanW and SigSvr values."""
+    from qtpy.QtCore import QRect, Qt
+
+    from sharpmod.viz.index_board import IndexBoard
+    from sharpmod.viz.unit_text import value_unit_width
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace(mean_mixr=14.86, sig_severe=43265.0)
+    board.dp = SimpleNamespace()
+    records = {}
+
+    def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
+        if text in {"14.86 g/kg", "43265 m\u00b3/s\u00b3"}:
+            records[text] = (QRect(rect), QtGui.QFont(qp.font()))
+
+    board._text = capture_text
+    pixmap = QtGui.QPixmap(360, 420)
+    pixmap.fill(QtGui.QColor("#000000"))
+    painter = QtGui.QPainter(pixmap)
+    board._col_conv(painter, QRect(0, 0, 392, 400), 18)
+    painter.end()
+
+    regular_px = board.rf.pixelSize()
+    for text in ("14.86 g/kg", "43265 m\u00b3/s\u00b3"):
+        rect, font = records[text]
+        assert font.pixelSize() == regular_px
+        assert value_unit_width(font, text) <= rect.width()
+
+
+def test_three_column_stats_leave_one_line_between_lapse_rows(qt_app):
+    """The three-column stats layout does not crowd the lapse-rate block."""
+    from qtpy.QtCore import QRect, Qt
+
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace()
+    board.dp = SimpleNamespace()
+    lapse_ys = []
+
+    def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
+        if text.endswith(" LR = "):
+            lapse_ys.append(rect.y())
+
+    board._text = capture_text
+    pixmap = QtGui.QPixmap(360, 320)
+    pixmap.fill(QtGui.QColor("#000000"))
+    painter = QtGui.QPainter(pixmap)
+    row_height = 13
+    board._col_conv(painter, QRect(0, 0, 392, 300), row_height)
+    painter.end()
+
+    assert len(lapse_ys) == 5
+    assert min(b - a for a, b in zip(lapse_ys, lapse_ys[1:])) >= row_height
+
+
+def test_composite_reorders_ecape_lscp_and_wbz(qt_app):
+    """ECAPE shares NCAPE's row, then LSCP precedes WBZ Height below it."""
+    from qtpy.QtCore import QRect, Qt
+
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace()
+    board.dp = SimpleNamespace(
+        hgz_cape=638.0,
+        ncape=0.13,
+        wbz_height=4106.0,
+        ecape=1417.0,
+        lscp=3.1,
+    )
+    records = {}
+
+    def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
+        if text in {"LSCP = ", "WBZ Height = ", "ECAPE = ", "NCAPE = "}:
+            records[text] = QRect(rect)
+
+    board._text = capture_text
+    board._ship_chart = lambda *args, **kwargs: None
+    pixmap = QtGui.QPixmap(320, 420)
+    pixmap.fill(QtGui.QColor("#000000"))
+    painter = QtGui.QPainter(pixmap)
+    board._col_comp(painter, QRect(0, 0, 300, 400), 18)
+    painter.end()
+
+    assert records["ECAPE = "].y() == records["NCAPE = "].y()
+    assert records["ECAPE = "].x() > records["NCAPE = "].x()
+    assert records["LSCP = "].y() < records["WBZ Height = "].y()
+    assert records["WBZ Height = "].y() - records["LSCP = "].y() == 18
+
+
+def test_index_board_sfc500m_kinematics_row_is_neutral_white(qt_app):
+    """SFC-500m kinematics row label and values render as normal white text."""
+    from qtpy.QtCore import QRect, Qt
+
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace(
+        latitude=44.83,
+        mupcl=SimpleNamespace(brnshear=82.0),
+        right_srw_4_5km=(227.0, 25.0),
+        srwind=(10.0, 0.0, -10.0, 0.0),
+        upshear_downshear=(10.0, 10.0, -10.0, -10.0),
+        wind1km=(291.0, 13.0),
+        wind6km=(243.0, 42.0),
+    )
+    board.dp = SimpleNamespace(
+        srh500=-2.0,
+        shear_sfc_500m=1.0,
+        mean_wind_sfc_500m=(10.0, 0.0),
+        srw_sfc_500m=(0.0, 10.0),
+    )
+    records = []
+
+    def capture_text(qp, rect, s, color=None, align=Qt.AlignLeft):
+        records.append((s, (color or board.fg).name().lower()))
+
+    board._text = capture_text
+    board._draw_agl_barbs = lambda *args, **kwargs: None
+
+    pixmap = QtGui.QPixmap(460, 320)
+    pixmap.fill(QtGui.QColor("#000000"))
+    painter = QtGui.QPainter(pixmap)
+    board._col_kin(painter, QRect(0, 0, 440, 300), 18)
+    painter.end()
+
+    row_start = next(i for i, (text, _color) in enumerate(records)
+                     if text == "SFC-500m")
+    row = records[row_start:row_start + 5]
+    assert [text for text, _color in row] == [
+        "SFC-500m", "-2", "1", "270/10", "180/10"]
+    assert {color for _text, color in row} == {board.fg.name().lower()}
+
+
+def test_index_board_gives_wind_vector_columns_extra_width(qt_app):
+    """MnWind and SRW retain room for three-digit direction/speed values."""
+    from qtpy.QtCore import QRect, Qt
+
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace(
+        latitude=44.83,
+        mean_1km=(359.0, 999.0),
+        srw_1km=(358.0, 999.0),
+    )
+    board.dp = SimpleNamespace()
+    records = {}
+
+    def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
+        if text in {"SRH", "Shear", "MnWind", "SRW", "359/999", "358/999"}:
+            records[text] = QRect(rect)
+
+    board._text = capture_text
+    board._draw_agl_barbs = lambda *args, **kwargs: None
+    pixmap = QtGui.QPixmap(300, 420)
+    pixmap.fill(QtGui.QColor("#000000"))
+    painter = QtGui.QPainter(pixmap)
+    board._col_kin(painter, QRect(0, 0, 280, 400), 18)
+    painter.end()
+
+    assert records["MnWind"].width() >= 60
+    assert records["SRW"].width() >= 60
+    assert records["MnWind"].width() == records["SRW"].width()
+    assert records["MnWind"].width() > records["SRH"].width()
+    assert records["SRW"].width() > records["Shear"].width()
+    assert records["359/999"].width() == records["MnWind"].width()
+    assert records["358/999"].width() == records["SRW"].width()
+
+
+def test_index_board_moves_only_srh_track_toward_layer_labels(qt_app):
+    """SRH shifts left while the other kinematics tracks stay anchored."""
+    from qtpy.QtCore import QRect, Qt
+
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace()
+    board.dp = SimpleNamespace(srh500=233.0)
+    records = {}
+
+    def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
+        if text in {"SRH", "233", "Shear", "MnWind", "SRW"}:
+            records[text] = QRect(rect)
+
+    board._text = capture_text
+    board._draw_agl_barbs = lambda *args, **kwargs: None
+    pixmap = QtGui.QPixmap(460, 320)
+    pixmap.fill(QtGui.QColor("#000000"))
+    painter = QtGui.QPainter(pixmap)
+    board._col_kin(painter, QRect(0, 0, 440, 300), 18)
+    painter.end()
+
+    label_w = int(440 * 0.28)
+    srh_w = int(440 * 0.13)
+    srh_shift = max(4, int(440 * 0.04))
+    assert records["SRH"].x() == label_w - srh_shift
+    assert records["233"].x() == records["SRH"].x()
+    assert records["Shear"].x() == label_w + srh_w
+    assert records["MnWind"].x() > records["Shear"].x()
+    assert records["SRW"].x() > records["MnWind"].x()
+
+
+def test_index_board_uses_five_lapse_rows_and_places_lrghail_below_moshe(qt_app):
+    """Keep LRGHAIL below MOSHE and omit the 3-6 km lapse-rate row."""
+    from qtpy.QtCore import QRect, Qt
+
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace(
+        pwat=1.0,
+        k_idx=30.0,
+        lapserate_3km=7.1,
+        lapserate_3_6km=7.3,
+        lapserate_850_500=6.5,
+        lapserate_700_500=6.2,
+        right_scp=0.7,
+        stp_cin=0.7,
+        stp_fixed=0.7,
+        ship=0.7,
+        mupcl=SimpleNamespace(bplus=1500.0, bminus=-25.0),
+        sfcpcl=SimpleNamespace(bplus=1200.0, bminus=-50.0),
+        mlpcl=SimpleNamespace(bplus=1000.0, bminus=-75.0),
+        fcstpcl=SimpleNamespace(bplus=900.0, bminus=-40.0),
+        mucape=1500.0,
+    )
+    board.dp = SimpleNamespace(
+        lapserate_sfc_500m=10.0,
+        lapserate_sfc_1km=8.0,
+        dcp=0.8,
+        lrghail=6.9,
+        modified_sherbe=2.2,
+    )
+    records = []
+    severe_colors = {}
+
+    def capture_text(qp, rect, s, color=None, align=Qt.AlignLeft):
+        records.append((s, rect.y(), rect.height()))
+        if s in {"Supercell Comp = ", "STP(cin) = ", "STP(fix) = ",
+                 "SHIP = ", "Derecho Comp = "}:
+            severe_colors[s] = QtGui.QColor(color).name()
+
+    board._text = capture_text
+
+    pixmap = QtGui.QPixmap(500, 420)
+    pixmap.fill(QtGui.QColor("#000000"))
+    painter = QtGui.QPainter(pixmap)
+    board._col_conv(painter, QRect(0, 0, 480, 400), 18)
+    board._col_comp(painter, QRect(0, 0, 400, 400), 18)
+    painter.end()
+
+    texts = [text for text, _y, _h in records]
+    assert "SFC-500m LR = " in texts
+    idx = texts.index("SFC-500m LR = ")
+    assert texts[idx + 1] == "10.0 C/km"
+    assert texts.count("Derecho Comp = ") == 1
+    assert "3-6km LR = " not in texts
+    assert texts.count("LRGHAIL = ") == 1
+    assert set(severe_colors.values()) == {colors.ALERT_L1_COLOR}
+
+    composite_y = {text: y for text, y, _h in records
+                   if text in {"MOSHE = ", "LRGHAIL = "}}
+    assert composite_y["LRGHAIL = "] - composite_y["MOSHE = "] == 18
+
+    lapse_y = {text: y for text, y, _h in records if text.endswith(" LR = ")}
+
+    severe_y = {
+        text: y for text, y, _h in records
+        if text in {"Supercell Comp = ", "STP(cin) = ", "STP(fix) = ",
+                    "SHIP = ", "Derecho Comp = "}
+    }
+    lapse_step = lapse_y["SFC-1km LR = "] - lapse_y["SFC-500m LR = "]
+    severe_step = severe_y["STP(cin) = "] - severe_y["Supercell Comp = "]
+    assert severe_step == lapse_step
+    assert lapse_step <= 21
+    assert severe_y["Derecho Comp = "] - severe_y["SHIP = "] == severe_step
+    for lapse_label, severe_label in zip(
+            ("SFC-500m LR = ", "SFC-1km LR = ", "SFC-3km LR = ",
+             "850-500 LR = ", "700-500 LR = "),
+            ("Supercell Comp = ", "STP(cin) = ", "STP(fix) = ",
+             "SHIP = ", "Derecho Comp = ")):
+        assert lapse_y[lapse_label] == severe_y[severe_label]
+    top_gap = severe_y["Supercell Comp = "] - lapse_y["SFC-500m LR = "]
+    bottom_gap = lapse_y["700-500 LR = "] - severe_y["Derecho Comp = "]
+    assert top_gap == 0
+    assert bottom_gap == 0
+    row_rects = {text: (y, h) for text, y, h in records}
+    assert row_rects["700-500 LR = "][0] + row_rects["700-500 LR = "][1] == 400
+    assert row_rects["Derecho Comp = "][0] + row_rects["Derecho Comp = "][1] == 400
+
+
+def test_index_board_storm_vectors_share_the_bottom_baseline(qt_app):
+    """The final storm-motion row uses the board's common bottom margin."""
+    from qtpy.QtCore import QRect, Qt
+
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace(
+        latitude=44.83,
+        mupcl=SimpleNamespace(brnshear=82.0),
+        right_srw_4_5km=(227.0, 25.0),
+        srwind=(10.0, 0.0, -10.0, 0.0),
+        upshear_downshear=(10.0, 10.0, -10.0, -10.0),
+        wind1km=(291.0, 13.0),
+        wind6km=(243.0, 42.0),
+    )
+    board.dp = SimpleNamespace(
+        srh500=-2.0,
+        shear_sfc_500m=1.0,
+        mean_wind_sfc_500m=(10.0, 0.0),
+        srw_sfc_500m=(0.0, 10.0),
+    )
+    board._draw_agl_barbs = lambda *args, **kwargs: None
+    records = {}
+
+    def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
+        if text == "Corfidi Ushr = ":
+            records[text] = QRect(rect)
+
+    board._text = capture_text
+    pixmap = QtGui.QPixmap(460, 420)
+    pixmap.fill(QtGui.QColor("#000000"))
+    painter = QtGui.QPainter(pixmap)
+    board._col_kin(painter, QRect(0, 0, 440, 400), 18)
+    painter.end()
+
+    assert records["Corfidi Ushr = "].bottom() + 1 == 400
+
+
+def test_index_board_storm_vectors_fit_compact_corfidi_readouts(qt_app):
+    """Compact Corfidi labels retain room for full direction/speed values."""
+    from qtpy.QtCore import QRect, Qt
+
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace(
+        latitude=44.83,
+        mupcl=SimpleNamespace(brnshear=82.0),
+        right_srw_4_5km=(227.0, 25.0),
+        srwind=(10.0, 0.0, -10.0, 0.0),
+        upshear_downshear=(10.0, 10.0, -10.0, -10.0),
+        wind1km=(291.0, 13.0),
+        wind6km=(243.0, 42.0),
+    )
+    board.dp = SimpleNamespace(
+        srh500=-2.0,
+        shear_sfc_500m=1.0,
+        mean_wind_sfc_500m=(10.0, 0.0),
+        srw_sfc_500m=(0.0, 10.0),
+    )
+    records = {}
+    active_label = {"text": None}
+    barb_region = {}
+
+    def capture_text(qp, rect, text, color=None, align=Qt.AlignLeft):
+        if text in {"Bunkers Right = ", "Bunkers Left = ",
+                    "Corfidi Dshr = ", "Corfidi Ushr = "}:
+            active_label["text"] = text
+            records[text] = QRect(rect)
+        elif active_label["text"] is not None:
+            records[active_label["text"] + "value"] = QRect(rect)
+            active_label["text"] = None
+
+    def capture_barbs(qp, x, y, w, h):
+        barb_region["rect"] = QRect(x, y, w, h)
+
+    board._text = capture_text
+    board._draw_agl_barbs = capture_barbs
+    pixmap = QtGui.QPixmap(300, 420)
+    pixmap.fill(QtGui.QColor("#000000"))
+    painter = QtGui.QPainter(pixmap)
+    board._col_kin(painter, QRect(0, 0, 280, 400), 18)
+    painter.end()
+
+    assert set(records) == {
+        "Bunkers Right = ", "Bunkers Right = value",
+        "Bunkers Left = ", "Bunkers Left = value",
+        "Corfidi Dshr = ", "Corfidi Dshr = value",
+        "Corfidi Ushr = ", "Corfidi Ushr = value",
+    }
+    text_width = int(280 * 0.54)
+    assert records["Corfidi Dshr = "].width() >= text_width
+    assert records["Corfidi Ushr = "].width() >= text_width
+    assert records["Corfidi Dshr = value"].width() > 0
+    assert records["Corfidi Ushr = value"].width() > 0
+    assert barb_region["rect"].left() == records["Corfidi Dshr = "].width()
+    assert barb_region["rect"].width() >= 120
+
+
+def test_index_board_agl_barbs_use_a_compact_scale(qt_app, monkeypatch):
+    """The 1/6 km AGL barb cluster remains legible without dominating its cell."""
+    from sharpmod.viz.index_board import IndexBoard
+
+    board = IndexBoard()
+    board.sp = SimpleNamespace(
+        wind1km=(291.0, 13.0),
+        wind6km=(243.0, 42.0),
+        latitude=44.83,
+    )
+    scales = []
+    original_path = board._barb_path
+
+    def capture_path(wdir, wspd, shemis, scale):
+        scales.append(scale)
+        return original_path(wdir, wspd, shemis, scale)
+
+    monkeypatch.setattr(board, "_barb_path", capture_path)
+    pixmap = QtGui.QPixmap(240, 130)
+    pixmap.fill(QtGui.QColor("#000000"))
+
+    painter = QtGui.QPainter(pixmap)
+    board._draw_agl_barbs(painter, 20, 10, 190, 100)
+    painter.end()
+
+    image = pixmap.toImage().convertToFormat(QtGui.QImage.Format.Format_RGB32)
+    points = []
+    for y in range(0, 80):
+        for x in range(image.width()):
+            color = image.pixelColor(x, y)
+            if color.red() > 20 or color.green() > 20 or color.blue() > 20:
+                points.append((x, y))
+
+    assert points
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    assert max(xs) - min(xs) + 1 >= 48
+    assert max(ys) - min(ys) + 1 >= 44
+    assert scales
+    assert max(scales) <= 1.25
 
 
 def test_reapply_pushes_substitutions_to_every_panel():

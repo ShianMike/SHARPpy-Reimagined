@@ -13,9 +13,9 @@ separate.
   on a map or from a list, or open a local file, and explore/edit the sounding
   live. Start here if you just want to look at soundings. See
   [section 0](#0-desktop-gui-sharpmod-gui).
-- **Command-line tools** (`uwyo-sounding`, `era5-extract`, `wrf-extract`,
+- **Command-line tools** (`uwyo-sounding`, `era5-extract`, `model-extract`, `wrf-extract`,
   `sharpmod-render`) — scriptable, headless, reproducible. Use these for batch
-  extraction and PNG rendering (sections 1–4).
+  extraction and PNG rendering (sections 1–5).
 
 Both share the same portable `.npz` point-sounding format, so anything the CLI
 extracts opens in the GUI, and anything you save from the GUI renders on the CLI.
@@ -25,7 +25,8 @@ extracts opens in the GUI, and anything you save from the GUI renders on the CLI
 The command-line side has two kinds of capabilities:
 
 1. **Get a sounding** — either *fetch* an observed one (University of Wyoming)
-   or *extract* a model/reanalysis point column (ERA5, WRF-ARW). Each of these
+   or *extract* a model/reanalysis point column (forecast models, ERA5,
+   WRF-ARW). Each of these
    writes a portable `.npz` point-sounding file.
 2. **Render a sounding** — turn any supported sounding file into an SPC-style
    skew-T / hodograph PNG.
@@ -33,7 +34,8 @@ The command-line side has two kinds of capabilities:
 ```
                  ┌── uwyo-sounding fetch ──┐
 observed / model │   era5-extract          │──►  <name>.npz  ──►  sharpmod-render  ──►  <name>.png
-   data          │   wrf-extract           │        (portable point sounding)      (skew-T / hodograph)
+   data          │   model-extract         │        (portable point sounding)      (skew-T / hodograph)
+                 │   wrf-extract           │
                  └─────────────────────────┘
 ```
 
@@ -46,6 +48,7 @@ same way (and the same way as the bundled HRRR examples).
 |---|---|---|
 | List / search / fetch UWyo soundings | No | No |
 | Extract an ERA5 point sounding | No | `pip install -e ".[era5]"` |
+| Fetch a forecast-model point sounding | No | `pip install -e ".[era5]"` |
 | Extract a WRF-ARW point sounding | No | `pip install -e ".[wrf]"` |
 | Render any sounding to PNG (`--render`) | **Yes** (`pip install --no-deps SHARPpy==1.4.0a5`) | No |
 
@@ -65,16 +68,26 @@ sharpmod-gui             # or: python -m sharpmod.gui
 
 ### Pick a sounding
 
-The app opens on the **Sounding Picker** with three tabs:
+The app opens on the **Sounding Picker** with four tabs:
 
-- **Station Map** — a clickable map of every UWyo radiosonde station over a
+- **Station Map** — a clickable map of UWyo radiosonde stations over a
   coastline basemap. Click a dot to select it, double-click to open it. Scroll
   to zoom, drag to pan, and jump to a region with the *Map area* menu. Set the
   valid time (defaults to the most recent synoptic hour) and open the selection.
-- **Station List** — the full 933-station catalogue with live id/name filtering;
-  type to narrow, pick a station and time, then fetch.
+- **Station List** — the station catalogue with live id/name filtering; type to
+  narrow, pick a station and time, then fetch.
+- **Forecast Model** — choose a supported public model, run, forecast hour, and
+  map point. Every published pressure level is fetched. The isolated GRIB and
+  point-sounding data remain available while the sounding window is open, then
+  are deleted when that window closes.
 - **Open File** — load a local `.npz`, SPC (`.spc`/`.OAX`), BUFKIT (`.buf`),
   PECAN, or WRF-ARW text sounding. You can also **drag a file onto the window**.
+
+The station set shown on the map and in the list is refreshed from UWyo for the
+**selected observation time** (via the `/wsgi/sounding_json` endpoint), so
+stations that were relocated — and had their WMO index change over time — show
+up for the period they actually reported. The bundled offline catalogue is used
+as a fallback until the live list arrives (or if the network is unavailable).
 
 Fetches run on a background thread, so the window stays responsive while a UWyo
 sounding downloads.
@@ -88,17 +101,22 @@ works — right-click the skew-T for the readout cursor / *Modify Surface* /
 parcel lifting, click-and-drag temperature, dewpoint, or wind points to edit the
 profile (indices recalculate live), mouse-wheel to zoom, and double-click the
 lower-left inset to swap lifted parcels. **File → Preferences** switches the
-color palette (Standard / Inverted / Protanopia) and units. The `W` key returns
-to the picker. A tip bar along the bottom summarizes the current controls.
+color palette (Standard / Inverted / Protanopia), units, and the parcel
+visualized by default when a Skew-T opens. The `W` key returns to the picker. A
+tip bar along the bottom summarizes the current controls.
 
 ### Save from the GUI
 
 The sounding window's **Export** menu writes the current view:
 
-- **Export Image (PNG)** (`Ctrl+E`) — the whole window including the mounted
-  derived-parameter panels, defaulting to `STATION_YYYYMMDDHHZ.png` on your
-  Desktop.
-- **Export Text (SPC tabular)** — the focused profile as a text file that loads
+- **Export Image (HD PNG)** (`Ctrl+E`) — a 2x high-density image of the whole
+  window including the mounted derived-parameter panels, defaulting to
+  `STATION_YYYYMMDDHHZ_hd.png` on your Desktop.
+- **Export Image (UHD PNG)** — a larger 2.8x ultra-high-density image,
+  defaulting to `STATION_YYYYMMDDHHZ_uhd.png`.
+- **Export Image (Lossless PNG)** — the original-size compact/lossless image,
+  defaulting to `STATION_YYYYMMDDHHZ_lossless.png`.
+- **Export Text (SHARPpy)** — the focused profile as a text file that loads
   straight back into the app (or into `sharpmod-render`).
 
 ### Standalone build (no Python required)
@@ -209,7 +227,28 @@ era5_extract.extract(lat=35.18, lon=-97.44,
 
 ---
 
-## 3. WRF-ARW model output (`wrf-extract`)
+## 3. Public forecast-model point soundings (`model-extract`)
+
+Requires the `[era5]` extra (`herbie-data`, `cfgrib`, `xarray`) and network
+access. Use `model-extract --list` to see all supported models and their
+forecast ranges.
+
+```bash
+# model-extract MODEL LAT LON [out.npz] [--run TIME] [--fxx HOUR] [--render [PNG]]
+
+model-extract gfs 35.18 -97.44 --run "2024-05-20 00:00" --fxx 6
+model-extract hrrr 35.18 -97.44 --run "2024-05-20 00:00" --fxx 18 --render hrrr.png
+```
+
+The extractor requests every pressure level published for the chosen model,
+not only the standard mandatory levels. Without `--render`, it keeps the
+portable `.npz` and `.json` sidecar. With `--render`, the PNG is the served
+artifact: the downloaded GRIB subset and transient `.npz`/`.json` are removed
+after rendering, including failure cleanup.
+
+---
+
+## 4. WRF-ARW model output (`wrf-extract`)
 
 Requires the `[wrf]` extra (`xarray`, `netCDF4`). Reads a raw `wrfout*` NetCDF
 file, selects the nearest grid point, destaggers the vertical and wind grids,
@@ -239,7 +278,7 @@ wrf_extract.extract("wrfout_d01_2024-05-20_00:00:00",
 
 ---
 
-## 4. Rendering soundings (`sharpmod-render`)
+## 5. Rendering soundings (`sharpmod-render`)
 
 Requires the SHARPpy render stack (see README). Renders headlessly — no display
 is needed.
@@ -248,18 +287,29 @@ is needed.
 # sharpmod-render <input> [output.png]
 
 sharpmod-render oun.npz oun.png
+sharpmod-render oun.npz oun_ml.png --parcel ML
+sharpmod-render oun.npz oun_uhd.png --uhd
+sharpmod-render oun.npz oun_lossless.png --lossless
 sharpmod-render examples/soundings/14061619.OAX oax.png
 sharpmod-render examples/soundings/hrrr_kbvo_20260625_06z.buf kbvo.png
 ```
 
 Supported inputs: the `.npz` point sounding (UWyo/ERA5/WRF/HRRR), SPC tabular
 (`.spc` / `.OAX`), BUFKIT (`.buf`), PECAN, and WRF-ARW text soundings.
+CLI rendering defaults to a 2x HD PNG; pass `--uhd` or `--image-mode uhd` for
+the larger 2.8x export, or `--lossless` / `--image-mode lossless` for the
+original-size compact/lossless PNG.
+
+Choose the parcel visualized on the Skew-T with `--parcel SFC`, `--parcel ML`,
+`--parcel FCST`, `--parcel MU`, `--parcel EFF`, or `--parcel USER`. Parcel keys
+are case-insensitive and default to `MU`, matching the GUI's original behavior.
 
 ### Python API
 
 ```python
 from sharpmod.render import render
 render("oun.npz", "oun.png")
+render("oun.npz", "oun_sfc.png", parcel="SFC")
 
 # Or the thin helper used by the extractor CLIs:
 from sharpmod.tools import render_npz
@@ -272,6 +322,8 @@ render_npz("oun.npz")                 # -> oun.png (PNG next to the .npz)
 |---|---|---|
 | `QT_QPA_PLATFORM` | `offscreen` | Qt platform; leave as `offscreen` for headless PNG output |
 | `CHART_FONT` | `Space Grotesk` | Chart font family (empty string uses SHARPpy's default) |
+| `SHARPMOD_HD_SCALE` | `2.0` | Pixel scale for HD PNG exports |
+| `SHARPMOD_UHD_SCALE` | `2.8` | Pixel scale for UHD PNG exports |
 
 ```bash
 # Example: force headless explicitly (the renderer already defaults to it)

@@ -42,6 +42,9 @@ python -m pip install --no-deps "SHARPpy==1.4.0a5"
 sharpmod-render examples/soundings/hrrr_point_36.68N_95.66W_f018.npz out.png
 ```
 
+`sharpmod-render` writes a 2x HD PNG by default; add `--uhd` for the larger
+2.8x export or `--lossless` for the original-size compact/lossless PNG.
+
 The upstream `SHARPpy==1.4.0a5` package is installed with `--no-deps` because
 its published metadata pins an old NumPy version. SHARPpy Reimagined provides
 the modern runtime dependencies separately.
@@ -78,18 +81,22 @@ works:
 - **Keys:** ← / → step in time, ↑ / ↓ change ensemble member, `Space` swaps
   focus, `I` interpolates, `C` collects observed, `W` returns to the picker.
 - **File → Preferences** switches the color palette (Standard / Inverted /
-  Protanopia) and units.
+  Protanopia), units, and the parcel visualized by default when a Skew-T opens.
 
 ### Export
 
 The sounding window's **Export** menu saves the current view:
 
-- **Export Image (PNG)** (`Ctrl+E`) — the full window, including the mounted
-  derived-parameter panels, with a sensible default filename
-  (`STATION_YYYYMMDDHHZ.png`) in your Desktop folder.
+- **Export Image (HD PNG)** (`Ctrl+E`) — a 2x high-density image of the full
+  window, including the mounted derived-parameter panels, with a sensible
+  default filename (`STATION_YYYYMMDDHHZ_hd.png`) in your Desktop folder.
+- **Export Image (UHD PNG)** — a larger 2.8x ultra-high-density image
+  (`STATION_YYYYMMDDHHZ_uhd.png`).
+- **Export Image (Lossless PNG)** — the original-size compact/lossless image
+  for smaller files (`STATION_YYYYMMDDHHZ_lossless.png`).
 - **Copy Image to Clipboard** (`Ctrl+Shift+C`) — the same current view, ready
   to paste into another app.
-- **Export Text (SPC tabular)** — the focused profile as a text file that loads
+- **Export Text (SHARPpy)** — the focused profile as a text file that loads
   back into the app.
 
 (The upstream `File → Save Image` / `Save Text` actions remain available too.)
@@ -113,16 +120,29 @@ The result is `dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe`. Set
 | `sharpmod-render` | Render a sounding file to a PNG |
 | `uwyo-sounding` | List, search, and fetch University of Wyoming soundings |
 | `era5-extract` | Extract an ERA5 point sounding to `.npz` |
+| `model-extract` | Fetch all pressure levels for a supported forecast-model point sounding |
 | `wrf-extract` | Extract a WRF-ARW point sounding to `.npz` |
 
 ```bash
 # Observed sounding: fetch Norman, OK at 00Z and render it
 uwyo-sounding fetch 72357 "2024-05-20 00" --out oun.npz --render oun.png
 
+# Render the mixed-layer parcel on the Skew-T (MU is the default)
+sharpmod-render oun.npz oun_ml.png --parcel ML
+
 # Reanalysis / model point soundings
 era5-extract "2024-05-20 00:00" 35.18 -97.44 era5.npz --render
+model-extract gfs 35.18 -97.44 --run "2024-05-20 00:00" --fxx 6 --render gfs.png
 wrf-extract wrfout_d01_2024-05-20_00:00:00 35.18 -97.44 wrf.npz --render
 ```
+
+`model-extract --render` keeps only the rendered PNG: its downloaded GRIB
+subset and transient `.npz`/`.json` files are removed after rendering. The GUI
+retains those files while the sounding window is open and removes them when the
+window closes.
+
+`sharpmod-render --parcel` accepts `SFC`, `ML`, `FCST`, `MU`, `EFF`, and
+`USER`. Parcel keys are case-insensitive.
 
 ## Install Extras
 

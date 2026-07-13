@@ -19,23 +19,48 @@ decoder still functions.
 from __future__ import annotations
 
 import json
+import re
+import socket
+import ssl
+from datetime import datetime
 from functools import lru_cache
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 try:  # Python 3.9+: importlib.resources.files
     from importlib.resources import files as _res_files
 except Exception:  # pragma: no cover - very old Pythons
     _res_files = None
 
+try:  # certifi is a declared runtime dependency; fall back gracefully.
+    import certifi
+    _CA_FILE = certifi.where()
+except Exception:  # pragma: no cover - certifi always present in practice
+    _CA_FILE = None
+
 __all__ = [
     "load_catalog",
     "all_stations",
     "get_station",
     "search_stations",
+    "fetch_stations_for_datetime",
+    "StationListError",
     "SEED_STATIONS",
 ]
 
 _RESOURCE_PACKAGE = "sharpmod.resources"
 _RESOURCE_NAME = "uwyo_stations.json"
+
+#: Modern UWyo ``/wsgi/`` endpoint that lists every station reporting at a given
+#: observation time. Unlike the bundled (fixed-in-time) catalogue, this reflects
+#: the network as it actually was for that ``datetime`` -- so stations that were
+#: relocated (and had their WMO index change) resolve correctly for the period
+#: they reported under that id.
+_STATION_LIST_URL = "https://weather.uwyo.edu/wsgi/sounding_json"
+
+#: Hard fetch timeout in seconds for the live station-list request.
+_STATION_LIST_TIMEOUT = 30
 
 #: Minimal seed catalogue used only if the bundled JSON resource is absent.
 #: Records mirror the JSON schema: id -> (name, lat, lon, elev-unused, src).
@@ -127,3 +152,128 @@ def search_stations(query, limit: int | None = None) -> list[dict]:
     if limit is not None:
         matches = matches[:limit]
     return matches
+
+
+# --------------------------------------------------------------------------- #
+# Live, datetime-aware station listing (Requirement: relocated-station support)
+# --------------------------------------------------------------------------- #
+class StationListError(Exception):
+    """The live UWyo station list could not be fetched or parsed."""
+
+
+_WS_RE = re.compile(r"\s+")
+
+
+def _clean_name(raw) -> str:
+    """Normalize a station name from the ``sounding_json`` payload.
+
+    The live feed is occasionally polluted with pandas ``repr`` fragments (e.g.
+    ``"Stationid\\n73111    Kapuskasing ... Dtype: Str"``). Collapse whitespace,
+    and drop obviously corrupt dumps so the picker shows a clean (or blank)
+    label rather than garbage.
+    """
+    name = _WS_RE.sub(" ", str(raw or "")).strip()
+    if not name:
+        return ""
+    low = name.casefold()
+    if "dtype:" in low or "stationid" in low:
+        return ""
+    return name
+
+
+def _build_station_list_url(when_utc: datetime) -> str:
+    """Build the ``sounding_json`` request URL for ``when_utc`` (UTC)."""
+    params = {"datetime": when_utc.strftime("%Y-%m-%d %H:00:00")}
+    return "%s?%s" % (_STATION_LIST_URL, urlencode(params))
+
+
+def fetch_stations_for_datetime(when_utc: datetime,
+                                timeout: float = _STATION_LIST_TIMEOUT
+                                ) -> list[dict]:
+    """Fetch the stations UWyo reported at ``when_utc`` (UTC) over HTTPS.
+
+    Queries the modern ``/wsgi/sounding_json`` endpoint, which returns the set
+    of upper-air stations available for the requested observation time. Each
+    record is normalized to the same ``{"id", "name", "lat", "lon", "src"}``
+    schema the bundled catalogue uses, so the result is a drop-in replacement
+    for :func:`all_stations` in a station picker -- but reflecting the network
+    as it was at ``when_utc`` (Requirement: relocated / re-indexed stations).
+
+    Parameters
+    ----------
+    when_utc : datetime.datetime
+        The observation date/hour, interpreted as UTC.
+    timeout : float
+        Hard request timeout in seconds.
+
+    Returns
+    -------
+    list[dict]
+        Normalized station records, sorted by id (duplicate ids collapsed,
+        keeping the first occurrence).
+
+    Raises
+    ------
+    StationListError
+        If the service cannot be reached, times out, or returns something that
+        is not a parseable station list.
+    """
+    if not isinstance(when_utc, datetime):
+        raise StationListError(
+            f"observation time must be a datetime, got {when_utc!r}")
+
+    url = _build_station_list_url(when_utc)
+    context = ssl.create_default_context(cafile=_CA_FILE)
+    try:
+        with urlopen(url, timeout=timeout, context=context) as resp:
+            raw = resp.read()
+    except (socket.timeout, TimeoutError) as exc:
+        raise StationListError(
+            f"UWyo station list timed out after {timeout}s") from exc
+    except URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        raise StationListError(
+            f"UWyo station list could not be reached ({reason})") from exc
+    except (OSError, ValueError) as exc:
+        raise StationListError(
+            f"UWyo station list could not be reached ({exc})") from exc
+
+    try:
+        payload = json.loads(raw.decode("utf-8", errors="replace"))
+    except (ValueError, AttributeError) as exc:
+        raise StationListError(
+            f"UWyo station list was not valid JSON: {exc}") from exc
+
+    rows = payload.get("stations") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        raise StationListError(
+            "UWyo station list response did not contain a 'stations' array")
+
+    out: list[dict] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        sid = str(row.get("stationid", row.get("id", ""))).strip()
+        if not sid or sid in seen:
+            continue
+        try:
+            lat = float(row.get("lat", "nan"))
+            lon = float(row.get("lon", "nan"))
+        except (TypeError, ValueError):
+            lat = lon = float("nan")
+        seen.add(sid)
+        out.append({
+            "id": sid,
+            "name": _clean_name(row.get("name", "")),
+            "lat": lat,
+            "lon": lon,
+            "src": str(row.get("src", "UNKNOWN")).strip() or "UNKNOWN",
+        })
+
+    if not out:
+        raise StationListError(
+            "UWyo reported no stations for the requested time")
+
+    out.sort(key=lambda r: r["id"])
+    return out

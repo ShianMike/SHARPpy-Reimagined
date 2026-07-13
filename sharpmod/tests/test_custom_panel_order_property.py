@@ -99,10 +99,21 @@ def _capture(panel: CustomPanel):
     _RecordingPainter.calls.clear()
     panel.plotData()
     left_col = [(y, t) for (x, y, t) in _RecordingPainter.calls if x == _LABEL_X]
-    right_col = [(y, t) for (x, y, t) in _RecordingPainter.calls if x != _LABEL_X]
+    right_col = [(x, y, t) for (x, y, t) in _RecordingPainter.calls
+                 if x != _LABEL_X]
     # Drop the title ("Custom") which is the first left-column draw.
     labels = [t for (_, t) in left_col if t != panel.title]
-    values = [t for (_, t) in right_col]
+    # Compact unit rendering intentionally paints the numeric value and its
+    # smaller suffix as separate fragments on the same row. Reassemble those
+    # fragments by y-coordinate so this property continues to assert semantic
+    # rows rather than implementation-level QPainter call counts.
+    rows = {}
+    for x, y, text in right_col:
+        rows.setdefault(y, []).append((x, text))
+    values = [
+        "".join(text for _x, text in sorted(rows[y]))
+        for y in sorted(rows)
+    ]
     return labels, values
 
 

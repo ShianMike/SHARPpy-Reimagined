@@ -38,6 +38,7 @@ Attribute               Computation
 ``srw_sfc_500m``        :func:`winds.sfc_500m_kinematics` (tuple element 3)
 ``dcp``                 :func:`derived.dcp`
 ``lapserate_sfc_1km``   :func:`params.lapse_rate` (0->1000 m AGL)
+``lapserate_sfc_500m``  :func:`params.lapse_rate` (0->500 m AGL)
 ``vgp``                 :func:`derived.vorticity_generation_parameter`
 ``wbz_height``          :func:`derived.wet_bulb_zero_height`
 ``ncape``               :func:`derived.normalized_cape_cin` (element 0)
@@ -47,6 +48,9 @@ Attribute               Computation
 ``hpi``                 :func:`derived.hail_possibility_index`
 ``peskov``              :func:`derived.peskov_index`
 ``mcs_index``           :func:`derived.mcs_index`
+``lscp``                :func:`derived.left_supercell_composite`
+``nstp``                :func:`derived.non_supercell_tornado_parameter`
+``modified_sherbe``     :func:`derived.modified_sherbe`
 ``ehi_0_1km``           :func:`derived.ehi` (0-1 km layer)
 ``ehi_0_3km``           :func:`derived.ehi` (0-3 km layer)
 ``hgz_cape``            :func:`params.layer_cape_isotherm` (-10 to -30 C)
@@ -91,6 +95,7 @@ __all__ = ["Profile", "create_profile", "DERIVED_ATTRS"]
 _SINGLE_COMPUTE = {
     "dcp": lambda prof: derived.dcp(prof),
     "lapserate_sfc_1km": lambda prof: params.lapse_rate(prof, 0, 1000, agl=True),
+    "lapserate_sfc_500m": lambda prof: params.lapse_rate(prof, 0, 500, agl=True),
     "vgp": lambda prof: derived.vorticity_generation_parameter(prof),
     "wbz_height": lambda prof: derived.wet_bulb_zero_height(prof),
     "ecape": lambda prof: ecape_mod.ecape(prof),
@@ -98,6 +103,9 @@ _SINGLE_COMPUTE = {
     "hpi": lambda prof: derived.hail_possibility_index(prof),
     "peskov": lambda prof: derived.peskov_index(prof),
     "mcs_index": lambda prof: derived.mcs_index(prof),
+    "lscp": lambda prof: derived.left_supercell_composite(prof),
+    "nstp": lambda prof: derived.non_supercell_tornado_parameter(prof),
+    "modified_sherbe": lambda prof: derived.modified_sherbe(prof),
     "ehi_0_1km": lambda prof: derived.ehi(prof, 1000),
     "ehi_0_3km": lambda prof: derived.ehi(prof, 3000),
     "hgz_cape": lambda prof: params.layer_cape_isotherm(prof, -10, -30),

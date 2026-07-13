@@ -187,12 +187,17 @@ _LON_COORDS = ("longitude", "lon")
 
 _VAR_TEMP = ("t", "temperature")
 _VAR_GEOPOTENTIAL = ("z", "geopotential")
-_VAR_GEOPOTENTIAL_HEIGHT = ("gh", "geopotential_height")
+_VAR_GEOPOTENTIAL_HEIGHT = ("gh", "geopotential_height", "hgt")
 _VAR_RH = ("r", "relative_humidity")
-_VAR_Q = ("q", "specific_humidity")
+_VAR_Q = ("q", "specific_humidity", "spfh")
 _VAR_U = ("u", "u_component_of_wind", "ugrd")
 _VAR_V = ("v", "v_component_of_wind", "vgrd")
-_VAR_W = ("w", "vertical_velocity", "vvel")
+_VAR_W = ("w", "vertical_velocity", "vvel", "dzdt")
+_VAR_RELATIVE_VORTICITY = ("vo", "vort", "relative_vorticity", "relv")
+_VAR_ABSOLUTE_VORTICITY = ("absv", "absolute_vorticity")
+
+EARTH_RADIUS_M = 6371008.8
+EARTH_ROTATION_RATE = 7.2921159e-5
 
 
 def _first_present(container, candidates):
@@ -211,6 +216,30 @@ def _coord_values(ds, candidates):
     if name is None:
         return None, None
     return name, np.asarray(ds[name].values)
+
+
+def _coriolis_parameter(latitude):
+    """Return the Coriolis parameter at ``latitude`` in s^-1."""
+    return float(2.0 * EARTH_ROTATION_RATE * np.sin(np.radians(latitude)))
+
+
+def _wrapped_lon_delta(lon1, lon2):
+    """Signed longitude delta from ``lon1`` to ``lon2`` in degrees."""
+    return ((float(lon2) - float(lon1) + 180.0) % 360.0) - 180.0
+
+
+def _east_west_distance_m(lat, lon1, lon2):
+    """Approximate signed east-west distance between two longitudes."""
+    return (
+        EARTH_RADIUS_M
+        * np.cos(np.radians(float(lat)))
+        * np.radians(_wrapped_lon_delta(lon1, lon2))
+    )
+
+
+def _north_south_distance_m(lat1, lat2):
+    """Approximate signed north-south distance between two latitudes."""
+    return EARTH_RADIUS_M * np.radians(float(lat2) - float(lat1))
 
 
 def _to_epoch(dt):
@@ -339,7 +368,109 @@ def _mark_missing(arr, n_levels):
     return out
 
 
-def _build_columns(ds, index_tuple):
+def _first_surface_value(values):
+    """Return the first finite, non-missing value in a bottom-up column."""
+    if values is None:
+        return None
+    arr = np.asarray(values, dtype=float).reshape(-1)
+    for value in arr:
+        if np.isfinite(value) and value != MISSING:
+            return float(value)
+    return None
+
+
+def _surface_relative_vorticity_from_column(values, levels, latitude=None,
+                                            absolute=False):
+    """Return the bottom-most relative-vorticity value from a level column."""
+    if values is None:
+        return None
+    arr = np.asarray(values, dtype=float)
+    if absolute:
+        if latitude is None:
+            return None
+        arr = arr - _coriolis_parameter(latitude)
+    if arr.size != np.asarray(levels).size:
+        return None
+    ordered = _mark_missing(arr, arr.size)[np.argsort(-np.asarray(levels))]
+    return _first_surface_value(ordered)
+
+
+def _neighbor_pair(index, size):
+    """Return adjacent indexes around ``index`` for a finite difference."""
+    if size < 2:
+        return None
+    if index <= 0:
+        return 0, 1
+    if index >= size - 1:
+        return size - 2, size - 1
+    return index - 1, index + 1
+
+
+def _surface_relative_vorticity_from_wind_grid(ds, index_tuple, levels):
+    """Estimate surface relative vorticity from the gridded u/v wind fields."""
+    if len(index_tuple) != 2:
+        return None
+
+    u_name = _first_present(ds, _VAR_U)
+    v_name = _first_present(ds, _VAR_V)
+    if u_name is None or v_name is None:
+        return None
+
+    try:
+        u = np.squeeze(np.asarray(ds[u_name].values, dtype=float))
+        v = np.squeeze(np.asarray(ds[v_name].values, dtype=float))
+    except Exception:
+        return None
+    if u.ndim != 3 or v.ndim != 3 or u.shape != v.shape:
+        return None
+
+    _, lats = _coord_values(ds, _LAT_COORDS)
+    _, lons = _coord_values(ds, _LON_COORDS)
+    if lats is None or lons is None:
+        return None
+
+    iy, ix = (int(index_tuple[0]), int(index_tuple[1]))
+    if iy < 0 or ix < 0 or iy >= u.shape[1] or ix >= u.shape[2]:
+        return None
+
+    try:
+        surface_level = int(np.nanargmax(np.asarray(levels, dtype=float)))
+    except Exception:
+        return None
+    u2d = u[surface_level]
+    v2d = v[surface_level]
+
+    x_pair = _neighbor_pair(ix, u2d.shape[1])
+    y_pair = _neighbor_pair(iy, u2d.shape[0])
+    if x_pair is None or y_pair is None:
+        return None
+    x0, x1 = x_pair
+    y0, y1 = y_pair
+
+    if np.asarray(lats).ndim == 1 and np.asarray(lons).ndim == 1:
+        lat_center = float(lats[iy])
+        dx = _east_west_distance_m(lat_center, lons[x0], lons[x1])
+        dy = _north_south_distance_m(lats[y0], lats[y1])
+    else:
+        lat_grid = np.asarray(lats, dtype=float)
+        lon_grid = np.asarray(lons, dtype=float)
+        if lat_grid.shape != u2d.shape or lon_grid.shape != u2d.shape:
+            return None
+        lat_center = float(lat_grid[iy, ix])
+        dx = _east_west_distance_m(
+            lat_center, lon_grid[iy, x0], lon_grid[iy, x1])
+        dy = _north_south_distance_m(lat_grid[y0, ix], lat_grid[y1, ix])
+
+    if not (np.isfinite(dx) and np.isfinite(dy)) or abs(dx) < 1.0 or abs(dy) < 1.0:
+        return None
+
+    dvdx = (float(v2d[iy, x1]) - float(v2d[iy, x0])) / dx
+    dudy = (float(u2d[y1, ix]) - float(u2d[y0, ix])) / dy
+    value = dvdx - dudy
+    return float(value) if np.isfinite(value) else None
+
+
+def _build_columns(ds, index_tuple, latitude=None):
     """Extract and convert every per-level field from the selected column.
 
     Returns a dict of NumPy arrays (bottom->top ordered) plus the level count.
@@ -391,6 +522,17 @@ def _build_columns(ds, index_tuple):
     # bars overshoot the +/-10 scale by 10x and the read-out read 10x too high.
     omeg = None if w_raw is None else w_raw
 
+    vort_raw = get(_VAR_RELATIVE_VORTICITY)
+    surface_relative_vorticity = _surface_relative_vorticity_from_column(
+        vort_raw, levels, latitude=latitude)
+    if surface_relative_vorticity is None:
+        absv_raw = get(_VAR_ABSOLUTE_VORTICITY)
+        surface_relative_vorticity = _surface_relative_vorticity_from_column(
+            absv_raw, levels, latitude=latitude, absolute=True)
+    if surface_relative_vorticity is None:
+        surface_relative_vorticity = _surface_relative_vorticity_from_wind_grid(
+            ds, index_tuple, levels)
+
     n = levels.size
     cols = {
         "pres": _mark_missing(levels, n),
@@ -408,6 +550,8 @@ def _build_columns(ds, index_tuple):
     order = np.argsort(-cols["pres"])
     for key in cols:
         cols[key] = cols[key][order]
+    if surface_relative_vorticity is not None:
+        cols["surface_relative_vorticity"] = surface_relative_vorticity
     return cols, n
 
 
@@ -557,7 +701,7 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt"):
     glon = ((glon + 180.0) % 360.0) - 180.0  # normalize to [-180, 180)
 
     # 5. Extract and convert the vertical column; mark per-level missing fields.
-    cols, n_levels = _build_columns(ds_t, index_tuple)
+    cols, n_levels = _build_columns(ds_t, index_tuple, latitude=glat)
 
     # 6. Assemble output arrays + metadata and write atomically.
     run_str = _as_datetime(selected_time).strftime("%Y-%m-%d %H:%M")
@@ -570,6 +714,8 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt"):
         "lat": glat, "lon": glon, "loc": loc, "model": "ERA5",
         "run": run_str, "valid": valid_str, "fxx": 0,
     }
+    if "surface_relative_vorticity" in cols:
+        arrays["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
 
     requested_valid_str = valid_dt.strftime("%Y-%m-%d %H:%M")
     selected_valid_str = _as_datetime(selected_time).strftime(
@@ -590,6 +736,8 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt"):
         "npz": os.path.abspath(out_path),
         "levels": int(n_levels),
     }
+    if "surface_relative_vorticity" in cols:
+        meta["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
 
     # Write the .npz first, then the sidecar; both are atomic renames so a
     # failure never leaves a partial primary output (Requirement 8.6).

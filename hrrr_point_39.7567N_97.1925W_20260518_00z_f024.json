@@ -1,0 +1,18 @@
+{
+  "model": "HRRR",
+  "model_key": "hrrr",
+  "loc": "39.756703,-97.192531",
+  "requested_lat": 39.756703,
+  "requested_lon": -97.192531,
+  "selected_lat": 39.76474085124293,
+  "selected_lon": -97.19028275691278,
+  "run": "2026-05-18 00:00",
+  "valid": "2026-05-19 00:00",
+  "fxx": 24,
+  "npz": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\hrrr_point_39.7567N_97.1925W_20260518_00z_f024.npz",
+  "levels": 40,
+  "herbie_model": "hrrr",
+  "product": "prs",
+  "source_grib": "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20260518/conus/hrrr.t00z.wrfprsf24.grib2",
+  "surface_relative_vorticity": 0.0002567138760206979
+}

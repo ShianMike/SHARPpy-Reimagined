@@ -60,6 +60,7 @@ from qtpy import QtGui, QtCore, QtWidgets
 
 from sharpmod import colors
 from sharpmod.sharptab.constants import is_missing, PARAM_REGISTRY
+from sharpmod.viz.unit_text import draw_text_with_smaller_unit
 
 __all__ = ["CustomPanel", "PanelItem", "MISSING_STR", "UNRESOLVED_STR"]
 
@@ -396,7 +397,7 @@ class CustomPanel(QtWidgets.QFrame):
                 value_text = MISSING_STR
                 value_color = self.fg_color
             else:
-                value_text = self._fmt_value(raw)
+                value_text = self._fmt_value(raw, param=item.param)
                 if unit:
                     value_text = f"{value_text} {unit}"
                 value_color = self.fg_color
@@ -406,11 +407,14 @@ class CustomPanel(QtWidgets.QFrame):
             value_rect = QtCore.QRect(
                 left + (right - left) // 2, y, (right - left) // 2, self.row_h
             )
-            qp.drawText(
-                value_rect,
-                QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter,
-                self._elide(value_text, value_rect.width(), self.value_font),
-            )
+            display_text = self._elide(value_text, value_rect.width(), self.value_font)
+            if not draw_text_with_smaller_unit(
+                    qp, value_rect, display_text, QtCore.Qt.AlignRight):
+                qp.drawText(
+                    value_rect,
+                    QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter,
+                    display_text,
+                )
             y += self.row_h
 
         # "more items not shown" indicator (Requirement 10.8).
@@ -442,7 +446,7 @@ class CustomPanel(QtWidgets.QFrame):
         return not (f != f or f in (float("inf"), float("-inf")))
 
     @staticmethod
-    def _fmt_value(value) -> str:
+    def _fmt_value(value, *, param: Optional[str] = None) -> str:
         """Format a resolved parameter value compactly.
 
         A 2-element numeric vector (e.g. the SFC-500 m mean wind ``(u, v)`` in
@@ -461,6 +465,8 @@ class CustomPanel(QtWidgets.QFrame):
             return str(value)
         if f != f or f in (float("inf"), float("-inf")):
             return MISSING_STR
+        if param == "vgp":
+            return f"{f:.2f}"
         if abs(f) >= 1000:
             return f"{f:.0f}"
         if f == int(f):

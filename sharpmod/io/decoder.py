@@ -306,8 +306,8 @@ def load_npz(filename):
     ----------
     filename : str
         Path to the ``.npz`` sidecar. Expected arrays: ``pres, hght, tmpc,
-        dwpc, wdir, wspd, omeg`` plus metadata ``valid, run, loc, lat`` and an
-        optional ``model``.
+        dwpc, wdir, wspd, omeg`` plus metadata ``valid, run, loc, lat`` and
+        optional ``model`` / surface-vorticity metadata.
 
     Returns
     -------
@@ -324,6 +324,19 @@ def load_npz(filename):
         dwpc=d["dwpc"], wdir=d["wdir"], wspd=d["wspd"], omeg=d["omeg"],
         location=loc, date=valid, latitude=float(d["lat"]), missing=-9999.0)
 
+    optional_surface_fields = {}
+    for key in (
+        "surface_relative_vorticity",
+        "sfc_relative_vorticity",
+        "surface_vorticity",
+        "sfc_vorticity",
+        "vorticity",
+    ):
+        if key in d:
+            value = float(np.asarray(d[key]).reshape(-1)[0])
+            optional_surface_fields[key] = value
+            setattr(prof, key, value)
+
     pc = prof_collection.ProfCollection({"": [prof]}, [valid])
     pc.setMeta("loc", loc)
     pc.setMeta("observed", False)
@@ -334,4 +347,16 @@ def load_npz(filename):
         pc.setMeta("lat", float(d["lat"]))
     if "lon" in d:
         pc.setMeta("lon", float(d["lon"]))
+    for key, value in optional_surface_fields.items():
+        pc.setMeta(key, value)
+    if optional_surface_fields:
+        profiles = []
+        try:
+            profiles.extend((pc.getCurrentProfs() or {}).values())
+        except Exception:
+            pass
+        profiles.extend(p for plist in getattr(pc, "_profs", {}).values() for p in plist)
+        for cur_prof in profiles:
+            for key, value in optional_surface_fields.items():
+                setattr(cur_prof, key, value)
     return pc, loc

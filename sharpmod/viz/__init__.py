@@ -1,8 +1,8 @@
 """SHARPpy Reimagined Qt6/PySide6 rendering widgets.
 
-Skew-T, hodograph, storm slinky, wind barbs, index tables, the SHIP chart
-inset, the customizable SARS-slot panel, and the window composition used by the
-headless renderer.
+Skew-T, hodograph, storm slinky, wind barbs, index tables, SHIP and
+streamwiseness chart insets, the customizable SARS-slot panel, and the window
+composition used by the headless renderer.
 """
 
 from __future__ import annotations
@@ -18,6 +18,11 @@ from .skew import (
     draw_cape_fill,
 )
 from .ship import plotSHIP, SHIP_SCALE_MIN, SHIP_SCALE_MAX
+from .streamwiseness import (
+    StreamwisenessData,
+    plotStreamwiseness,
+    streamwiseness_profile,
+)
 from .thermo import (
     plotDerivedIndices,
     derived_rows,
@@ -41,6 +46,10 @@ __all__ = [
     "plotSHIP",
     "SHIP_SCALE_MIN",
     "SHIP_SCALE_MAX",
+    # 0-6 km streamwiseness chart inset
+    "StreamwisenessData",
+    "plotStreamwiseness",
+    "streamwiseness_profile",
     # Derived-parameter index table (task 17.2)
     "plotDerivedIndices",
     "derived_rows",

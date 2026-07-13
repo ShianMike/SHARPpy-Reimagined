@@ -86,9 +86,13 @@ def is_missing(value) -> bool:
     mask = np.ma.getmask(value)
     if mask is not np.ma.nomask and np.all(mask):
         return True
-    # Plain NaN (e.g. a float that fell through a computation).
+    # Plain NaN (e.g. a float that fell through a computation). Fill any masked
+    # entries with NaN *first* so the NaN test never coerces a masked element to
+    # a float -- that coercion emits a spurious "converting a masked element to
+    # nan" UserWarning on some NumPy versions.
     try:
-        return bool(np.all(np.isnan(value)))
+        filled = np.ma.filled(np.ma.asarray(value, dtype=float), np.nan)
+        return bool(np.all(np.isnan(filled)))
     except (TypeError, ValueError):
         return False
 
@@ -187,6 +191,9 @@ RELATIVE_TOLERANCE: Dict[str, float] = {
     "hpi": 0.01,
     "peskov": 0.01,
     "mcs_index": 0.01,
+    "lscp": 0.01,
+    "nstp": 0.01,
+    "modified_sherbe": 0.01,
     "ehi_0_1km": 0.01,
     "ehi_0_3km": 0.01,
     "hgz_cape": 0.01,
@@ -273,6 +280,17 @@ PARAM_REGISTRY: Dict[str, ParamSpec] = {
         tolerance=0.1,
         reference="standard lapse-rate definition",
         formula="(T_sfc - T_1km) / 1.0 km",
+    ),
+    "lapserate_sfc_500m": ParamSpec(
+        name="lapserate_sfc_500m",
+        label="SFC-500m Lapse Rate",
+        input_units="degrees C, m",
+        output_units="degrees C/km",
+        phys_min=-5.0,
+        phys_max=30.0,
+        tolerance=0.1,
+        reference="standard lapse-rate definition",
+        formula="(T_sfc - T_500m) / 0.5 km",
     ),
     "vgp": ParamSpec(
         name="vgp",
@@ -399,6 +417,46 @@ PARAM_REGISTRY: Dict[str, ParamSpec] = {
         formula="a0 + a1*max_bulk_shear + a2*lr38 + a3*MUCAPE + a4*mnwind_3_12 "
         "(a0=13.0, a1=-4.59e-2, a2=-1.16, a3=-6.17e-4, a4=-0.17); "
         "MMP = 1/(1+exp(MCS_index))",
+    ),
+    "lscp": ParamSpec(
+        name="lscp",
+        label="LSCP",
+        input_units="J/kg, J/kg, m^2/s^2, m/s",
+        output_units="unitless",
+        phys_min=-100.0,
+        phys_max=100.0,
+        tolerance=0.05,
+        reference="SPC Mesoanalysis Left-Moving Supercell Composite Parameter "
+        "(help_lscp)",
+        formula="(MUCAPE/1000)*(left_ESRH/50)*(clip(EBWD,10,20)/20)*CIN_term, "
+        "where EBWD<10 m/s is zero and CIN_term is 1 when MUCIN>-40 J/kg "
+        "else -40/MUCIN",
+    ),
+    "nstp": ParamSpec(
+        name="nstp",
+        label="NSTP",
+        input_units="degrees C/km, J/kg, m/s, s^-1",
+        output_units="unitless",
+        phys_min=-100.0,
+        phys_max=100.0,
+        tolerance=0.05,
+        reference="SPC Mesoanalysis Non-Supercell Tornado Parameter (help_nstp); "
+        "Baumgardt and Cook",
+        formula="(LR0-1/9)*(MLCAPE0-3/100)*((225-MLCIN)/200)*"
+        "((18-shear0-6)/5)*(surface_relative_vorticity/8e-5)",
+    ),
+    "modified_sherbe": ParamSpec(
+        name="modified_sherbe",
+        label="Mod SHERBE",
+        input_units="K/km, m/s, K Pa km^-1 s^-1",
+        output_units="unitless",
+        phys_min=-100.0,
+        phys_max=100.0,
+        tolerance=0.05,
+        reference="SPC Mesoanalysis Modified SHERBE / MOSHE (help_moshe); "
+        "Sherburn et al. (2016), Wea. Forecasting",
+        formula="((LLLR-4)^2/4)*((S15MG-8)/10)*((ESHR-8)/10)*"
+        "((MAXTEVV+10)/9)",
     ),
     "ehi_0_1km": ParamSpec(
         name="ehi_0_1km",

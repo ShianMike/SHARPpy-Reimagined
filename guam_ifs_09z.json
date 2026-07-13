@@ -1,0 +1,16 @@
+{
+  "model": "ECMWF-IFS",
+  "loc": "Guam",
+  "requested_lat": 13.067189,
+  "requested_lon": 145.678574,
+  "requested_valid": "2026-07-05 09:00",
+  "selected_lat": 13.0,
+  "selected_lon": 145.75,
+  "selected_valid": "2026-07-05 09:00",
+  "run": "2026-07-05 00:00",
+  "valid": "2026-07-05 09:00",
+  "fxx": 9,
+  "npz": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\guam_ifs_09z.npz",
+  "levels": 14,
+  "surface_relative_vorticity": 5.459534624131727e-05
+}

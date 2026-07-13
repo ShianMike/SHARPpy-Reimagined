@@ -321,6 +321,16 @@ def _ref_lapserate_sfc_1km(snd, sp):
     return (t_sfc - t_1km) / 1.0  # degrees C over 1 km
 
 
+def _ref_lapserate_sfc_500m(snd, sp):
+    h_agl = np.asarray(snd.hght, dtype=float) - float(snd.hght[0])
+    tmpc = np.asarray(snd.tmpc, dtype=float)
+    t_sfc = float(tmpc[0])
+    t_500m = _interp_height(500.0, h_agl, tmpc)
+    if t_500m is None:
+        return None
+    return (t_sfc - t_500m) / 0.5  # degrees C over 500 m
+
+
 def _ref_ehi(snd, sp, htop):
     from sharppy.sharptab import params as sp_params
     from sharppy.sharptab import winds as sp_winds
@@ -548,6 +558,10 @@ def _val_lapserate_sfc_1km(snd):
     return params_mod.lapse_rate(snd, 0, 1000, agl=True)
 
 
+def _val_lapserate_sfc_500m(snd):
+    return params_mod.lapse_rate(snd, 0, 500, agl=True)
+
+
 def _val_ehi_0_1km(snd):
     return derived_mod.ehi(snd, 1000)
 
@@ -578,6 +592,7 @@ _ORACLES = {
     "shear_sfc_500m": (_val_shear_sfc_500m, _ref_shear_sfc_500m),
     "mean_wind_sfc_500m": (_val_mean_wind_sfc_500m, _ref_mean_wind_sfc_500m),
     "lapserate_sfc_1km": (_val_lapserate_sfc_1km, _ref_lapserate_sfc_1km),
+    "lapserate_sfc_500m": (_val_lapserate_sfc_500m, _ref_lapserate_sfc_500m),
     "ehi_0_1km": (_val_ehi_0_1km, _ref_ehi_0_1km),
     "ehi_0_3km": (_val_ehi_0_3km, _ref_ehi_0_3km),
     "vgp": (derived_mod.vorticity_generation_parameter, _ref_vgp),

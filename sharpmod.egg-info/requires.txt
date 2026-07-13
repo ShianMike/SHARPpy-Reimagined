@@ -12,9 +12,10 @@ pytest>=7.0
 hypothesis>=6.0
 
 [era5]
-herbie-data
-cfgrib
-xarray
+herbie-data<2027.0,>=2026.3
+cfgrib<0.10,>=0.9.15
+eccodes<3.0,>=2.47
+xarray<2027.0,>=2026.4
 
 [render]
 requests<3.0,>=2.28

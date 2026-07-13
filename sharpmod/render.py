@@ -40,11 +40,36 @@ corrupt PNG and never disturbs a pre-existing output file
 
 from __future__ import annotations
 
+import argparse
 import os
 import ssl
 import sys
 import tempfile
+import warnings
 from datetime import datetime
+
+# The vendored SHARPpy index/kinematics widgets format legitimately-missing
+# (masked) wind values for display by coercing them to float, e.g.
+# ``np.float64(self.srw_ebw[0])``. On recent NumPy that coercion emits a
+# spurious "converting a masked element to nan" UserWarning for every missing
+# value drawn -- purely cosmetic console noise from unreachable third-party
+# code. Silence just that one message (our own code path is fixed at the
+# source, see ``sharptab.constants.is_missing``).
+warnings.filterwarnings(
+    "ignore",
+    message="Warning: converting a masked element to nan",
+    category=UserWarning,
+)
+# The vendored SARS database loader (``sharppy/databases/sars.py``) reads its
+# supercell/hail text files with ``np.loadtxt``. Those files carry a blank
+# second line, which NumPy >=1.23 flags with a one-time "Input line N contained
+# no data" UserWarning per ``loadtxt`` call. The blank line is intentional and
+# harmless, so silence just that message from the unreachable third-party read.
+warnings.filterwarnings(
+    "ignore",
+    message=r"Input line \d+ contained no data",
+    category=UserWarning,
+)
 
 # --- Qt platform / binding setup (must precede the first Qt import) --------
 # Render without a physical display. ``setdefault`` lets a caller override
@@ -57,7 +82,7 @@ import certifi  # noqa: E402
 from urllib.error import URLError  # noqa: E402
 from urllib.request import urlopen  # noqa: E402
 
-from qtpy import QtGui  # noqa: E402
+from qtpy import QtCore, QtGui  # noqa: E402
 from qtpy.QtWidgets import QApplication  # noqa: E402
 
 # Restore Qt5-style unscoped enum access for the vendored ``sharppy.viz`` stack
@@ -77,9 +102,104 @@ from sharpmod.resources import font_resolver  # noqa: E402
 # setup before the first Qt widget import.
 from sharpmod.viz.SPCWindow import RenderController, compose_window  # noqa: E402
 
-__all__ = ["RenderError", "RenderController", "fetch_url", "build_config",
-           "decode", "render", "main", "install_font", "grab_widget_pixmap",
-           "save_widget_png"]
+PNG_IMAGE_HD = "hd"
+PNG_IMAGE_UHD = "uhd"
+PNG_IMAGE_LOSSLESS = "lossless"
+PNG_IMAGE_MODES = (PNG_IMAGE_HD, PNG_IMAGE_UHD, PNG_IMAGE_LOSSLESS)
+PARCEL_TYPES = ("SFC", "ML", "FCST", "MU", "EFF", "USER")
+PARCEL_ATTRIBUTES = {
+    "SFC": "sfcpcl",
+    "ML": "mlpcl",
+    "FCST": "fcstpcl",
+    "MU": "mupcl",
+    "EFF": "effpcl",
+    "USER": "usrpcl",
+}
+DEFAULT_RENDER_PARCEL = "MU"
+
+__all__ = [
+    "PNG_IMAGE_HD", "PNG_IMAGE_UHD", "PNG_IMAGE_LOSSLESS", "RenderError",
+    "PARCEL_TYPES", "DEFAULT_RENDER_PARCEL",
+    "RenderController", "fetch_url", "build_config", "decode", "render",
+    "main", "install_font", "grab_widget_pixmap", "save_widget_png",
+]
+
+
+def _bounded_float_env(name: str, default: float, lower: float,
+                       upper: float) -> float:
+    try:
+        value = float(os.environ.get(name, str(default)))
+    except ValueError:
+        value = default
+    return max(lower, min(upper, value))
+
+
+def _bounded_int_env(name: str, default: int, lower: int,
+                     upper: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except ValueError:
+        value = default
+    return max(lower, min(upper, value))
+
+
+def _normalise_png_image_mode(mode: str | None) -> str:
+    """Return a canonical PNG export mode name."""
+    value = (mode or PNG_IMAGE_HD).strip().lower().replace("_", "-")
+    aliases = {
+        "hires": PNG_IMAGE_HD,
+        "hi-res": PNG_IMAGE_HD,
+        "high-resolution": PNG_IMAGE_HD,
+        "high-definition": PNG_IMAGE_HD,
+        "ultra": PNG_IMAGE_UHD,
+        "ultrahd": PNG_IMAGE_UHD,
+        "ultra-hd": PNG_IMAGE_UHD,
+        "ultra-high-definition": PNG_IMAGE_UHD,
+        "compact": PNG_IMAGE_LOSSLESS,
+        "original": PNG_IMAGE_LOSSLESS,
+        "original-size": PNG_IMAGE_LOSSLESS,
+    }
+    value = aliases.get(value, value)
+    if value not in PNG_IMAGE_MODES:
+        valid = ", ".join(PNG_IMAGE_MODES)
+        raise ValueError(f"unknown PNG image mode {mode!r}; expected {valid}")
+    return value
+
+
+def _normalise_parcel_type(parcel: str | None) -> str:
+    """Return a canonical parcel key for GUI-equivalent CLI rendering."""
+    try:
+        value = str(parcel or DEFAULT_RENDER_PARCEL).strip().upper()
+    except Exception as exc:
+        raise ValueError(f"invalid parcel value {parcel!r}") from exc
+    if value not in PARCEL_TYPES:
+        valid = ", ".join(PARCEL_TYPES)
+        raise ValueError(f"unknown parcel {parcel!r}; expected {valid}")
+    return value
+
+
+def _apply_render_parcel(win, parcel: str | None) -> str:
+    """Select the requested parcel through SHARPpy's normal update path."""
+    parcel_type = _normalise_parcel_type(parcel)
+    spc_widget = getattr(win, "spc_widget", None)
+    if spc_widget is None or not hasattr(spc_widget, "updateParcel"):
+        raise ValueError("render window does not expose parcel selection")
+
+    prof = getattr(spc_widget, "default_prof", None)
+    if prof is None:
+        raise ValueError("rendered sounding has no active profile")
+
+    selected = None
+    get_parcel = getattr(spc_widget, "getParcelObj", None)
+    if callable(get_parcel):
+        selected = get_parcel(prof, parcel_type)
+    if selected is None:
+        selected = getattr(prof, PARCEL_ATTRIBUTES[parcel_type], None)
+    if selected is None:
+        raise ValueError(f"{parcel_type} parcel is unavailable for this sounding")
+
+    spc_widget.updateParcel(selected)
+    return parcel_type
 
 
 def _png_lossless_compression_quality() -> int:
@@ -89,11 +209,32 @@ def _png_lossless_compression_quality() -> int:
     dimensions or visual fidelity. ``0`` gives the smallest lossless PNG while
     preserving the same decoded pixels as the legacy ``quality=100`` save.
     """
-    try:
-        value = int(os.environ.get("SHARPMOD_PNG_QUALITY", "0"))
-    except ValueError:
-        value = 0
-    return max(0, min(100, value))
+    return _bounded_int_env("SHARPMOD_PNG_QUALITY", 0, 0, 100)
+
+
+def _png_hd_image_scale() -> float:
+    """Return the HD export pixel scale.
+
+    A 2x render roughly moves the current 370-400 KB chart exports into the
+    requested 1-2 MB range while improving text/line density. Clamp the env
+    override so accidental values do not create enormous offscreen pixmaps.
+    """
+    return _bounded_float_env("SHARPMOD_HD_SCALE", 2.0, 1.0, 4.0)
+
+
+def _png_hd_compression_quality() -> int:
+    """Return Qt's PNG compression setting for HD exports."""
+    return _bounded_int_env("SHARPMOD_HD_PNG_QUALITY", 0, 0, 100)
+
+
+def _png_uhd_image_scale() -> float:
+    """Return the UHD export pixel scale."""
+    return _bounded_float_env("SHARPMOD_UHD_SCALE", 2.8, 1.0, 4.0)
+
+
+def _png_uhd_compression_quality() -> int:
+    """Return Qt's PNG compression setting for UHD exports."""
+    return _bounded_int_env("SHARPMOD_UHD_PNG_QUALITY", 0, 0, 100)
 
 
 # ===========================================================================
@@ -448,7 +589,20 @@ def _grow_for_family_panels(win):
         if text is not None:
             try:
                 if grow_h > 0:
-                    text.setMinimumHeight(max(text.height(), 1) + grow_h)
+                    # Immediately after mount, ``text.height()`` can still be
+                    # the pre-layout value from the original four-column
+                    # bottom band.  Adding the fifth Streamwiseness/STP column
+                    # made that stale live value much taller than the settled
+                    # one.  Grow from Qt's layout hints instead so the result
+                    # is deterministic whether or not an event pass happened
+                    # between mount and this function.
+                    base_height = max(
+                        1,
+                        text.minimumHeight(),
+                        text.minimumSizeHint().height(),
+                        text.sizeHint().height(),
+                    )
+                    text.setMinimumHeight(base_height + grow_h)
                 if grow_w > 0:
                     text.setMinimumWidth(max(text.width(), 1) + grow_w)
             except Exception:
@@ -973,6 +1127,7 @@ ADV_TITLE_MAX_PT = int(os.environ.get("ADV_TITLE_MAX_PT", "9"))
 SFC_LABEL_MAX_PT = int(os.environ.get("SFC_LABEL_MAX_PT", "10"))
 
 _speed_title_cap_installed = False
+_speed_0500_installed = False
 _adv_font_cap_installed = False
 
 
@@ -1234,6 +1389,81 @@ def _install_speed_title_cap():
         _cls.draw_speed = draw_speed
         _cls._sharpmod_title_cap = True
         _speed_title_cap_installed = True
+    except Exception:  # pragma: no cover - vendored module always present
+        pass
+
+
+def _install_speed_0500():
+    """Color the wind-speed strip's SFC-500 m layer like the hodograph.
+
+    Upstream ``sharppy.viz.speed.plotSpeed`` colors every height below 3 km
+    with the low-level hodograph color. The hodograph patch splits out the
+    first 500 m as a pink band; this draw-profile wrapper applies the same
+    split to the speed-vs-height strip while leaving the rest of the vendored
+    profile drawing unchanged.
+    """
+    global _speed_0500_installed
+    if _speed_0500_installed:
+        return
+    try:
+        import numpy as _np
+        import sharppy.sharptab as _tab
+        import sharppy.viz.speed as _speed_mod
+
+        _cls = _speed_mod.plotSpeed
+        if getattr(_cls, "_sharpmod_0500", False):
+            return
+        _QtGui = _speed_mod.QtGui
+        _QtCore = _speed_mod.QtCore
+        _orig = _cls.draw_profile
+
+        def draw_profile(self, qp):
+            try:
+                if self.prof is None:
+                    return
+                try:
+                    mask = _np.maximum(
+                        _np.maximum(self.u.mask, self.v.mask),
+                        self.hght.mask)
+                    hgt = _tab.interp.to_agl(self.prof, self.hght[~mask])
+                    pres = self.pres[~mask]
+                    u = self.u[~mask]
+                    v = self.v[~mask]
+                    spd = _np.sqrt(u ** 2 + v ** 2)
+                except Exception:
+                    hgt = _tab.interp.to_agl(self.prof, self.hght)
+                    pres = self.pres
+                    u = self.u
+                    v = self.v
+                    spd = _np.sqrt(u ** 2 + v ** 2)
+
+                if self.wind_units == "m/s":
+                    spd = _tab.utils.KTS2MS(spd)
+
+                sfc_500_color = _QtGui.QColor(HODO_0_500_COLOR)
+                for i in range(pres.shape[0]):
+                    hgt1 = float(hgt[i])
+                    x1 = self.speed_to_pix(spd[i])
+                    y1 = self.pres_to_pix(pres[i])
+                    if hgt1 < 500.0:
+                        pen = _QtGui.QPen(sfc_500_color, 2)
+                    elif hgt1 < 3000.0:
+                        pen = _QtGui.QPen(self.low_level_color, 2)
+                    elif hgt1 < 6000.0:
+                        pen = _QtGui.QPen(self.mid_level_color, 2)
+                    elif hgt1 < 9000.0:
+                        pen = _QtGui.QPen(self.upper_level_color, 2)
+                    else:
+                        pen = _QtGui.QPen(self.trop_level_color, 2)
+                    pen.setStyle(_QtCore.Qt.SolidLine)
+                    qp.setPen(pen)
+                    qp.drawLine(0, int(y1), int(x1), int(y1))
+            except Exception:
+                _orig(self, qp)
+
+        _cls.draw_profile = draw_profile
+        _cls._sharpmod_0500 = True
+        _speed_0500_installed = True
     except Exception:  # pragma: no cover - vendored module always present
         pass
 
@@ -1740,7 +1970,7 @@ def enlarge_canvas(win):
         pass
 
 
-def rebrand_version_label(win, text="SHARPpy Reimagined v0.1a (20260705)"):
+def rebrand_version_label(win, text="SHARPpy Reimagined v0.2 (20260713)"):
     """Rename the vendored top-right ``SHARPpy v...`` label to the fork's brand.
 
     Returns the label widget (or ``None``) so callers can align it. Guarded so a
@@ -1828,19 +2058,52 @@ class RenderError(RuntimeError):
         super().__init__(f"failed to render {infile!r}: {message}")
 
 
-def grab_widget_pixmap(widget):
-    """Grab the exact widget pixels used by GUI export and CLI rendering.
+def grab_widget_pixmap(widget, scale: float = 1.0):
+    """Grab ``widget`` as a pixmap, optionally rendered at higher pixel scale.
 
-    This intentionally mirrors upstream SHARPpy's ``SPCWidget.pixmapToFile``
-    source pixmap, so exports keep the original widget shape and dimensions.
+    ``scale=1`` intentionally mirrors upstream SHARPpy's ``SPCWidget`` grab so
+    compact/lossless exports keep the original widget shape and dimensions.
+    HD exports render the widget through a scaled painter instead of resizing
+    the captured bitmap, so text, barbs, and grid lines are redrawn at the
+    higher pixel density rather than being blurred after the fact.
     """
-    return widget.grab()
+    scale = max(1.0, float(scale))
+    if scale <= 1.0:
+        return widget.grab()
+
+    size = widget.size()
+    width = max(1, int(round(size.width() * scale)))
+    height = max(1, int(round(size.height() * scale)))
+    pixmap = QtGui.QPixmap(width, height)
+    pixmap.fill(QtGui.QColor(0, 0, 0, 0))
+
+    painter = QtGui.QPainter(pixmap)
+    try:
+        painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        painter.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
+        painter.setRenderHint(QtGui.QPainter.SmoothPixmapTransform, True)
+        painter.scale(scale, scale)
+        widget.render(painter, QtCore.QPoint(0, 0))
+    finally:
+        painter.end()
+    return pixmap
 
 
-def save_widget_png(widget, outfile: str) -> bool:
-    """Save ``widget`` as a losslessly compressed PNG without resizing it."""
-    pixmap = grab_widget_pixmap(widget)
-    return bool(pixmap.save(outfile, "PNG", _png_lossless_compression_quality()))
+def save_widget_png(widget, outfile: str,
+                    image_mode: str = PNG_IMAGE_HD) -> bool:
+    """Save ``widget`` as HD, UHD, or original-size lossless PNG."""
+    mode = _normalise_png_image_mode(image_mode)
+    if mode == PNG_IMAGE_UHD:
+        scale = _png_uhd_image_scale()
+        quality = _png_uhd_compression_quality()
+    elif mode == PNG_IMAGE_HD:
+        scale = _png_hd_image_scale()
+        quality = _png_hd_compression_quality()
+    else:
+        scale = 1.0
+        quality = _png_lossless_compression_quality()
+    pixmap = grab_widget_pixmap(widget, scale=scale)
+    return bool(pixmap.save(outfile, "PNG", quality))
 
 
 # ---------------------------------------------------------------------------
@@ -2364,27 +2627,6 @@ def _install_hodo_label_fit():
         # --- 2. Override ring labels to use font-metrics-sized rects ---
         _orig_ring = _bg.draw_ring
 
-        def _clamped_ring_rect(self, left, top, width, height):
-            left_limit = float(getattr(self, "tlx", 0)) + 2.0
-            right_limit = float(getattr(self, "brx", self.wid)) - 2.0
-            top_limit = float(getattr(self, "tly", 0)) + 2.0
-            bottom_limit = float(getattr(self, "bry", self.hgt)) - 2.0
-
-            width = min(float(width), max(1.0, right_limit - left_limit))
-            height = min(float(height), max(1.0, bottom_limit - top_limit))
-
-            left = float(left)
-            top = float(top)
-            if left + width > right_limit:
-                left = right_limit - width
-            if left < left_limit:
-                left = left_limit
-            if top + height > bottom_limit:
-                top = bottom_limit - height
-            if top < top_limit:
-                top = top_limit
-            return _QtCore.QRectF(left, top, width, height)
-
         def draw_ring(self, spd, qp):
             try:
                 color = self.isotach_color
@@ -2409,39 +2651,43 @@ def _install_hodo_label_fit():
                 height = min(avail_h, max(15, fm.height() + 2))
 
                 offset = 5
-                rects = [
-                    ("top", _clamped_ring_rect(
-                        self, self.centerx + offset,
-                        self.centery - radius - offset, width, height)),
-                    ("right", _clamped_ring_rect(
-                        self, self.centerx + radius - offset,
-                        self.centery + offset, width, height)),
-                    ("bottom", _clamped_ring_rect(
-                        self, self.centerx + offset,
-                        self.centery + radius - offset, width, height)),
-                    ("left", _clamped_ring_rect(
-                        self, self.centerx - radius - offset,
-                        self.centery + offset, width, height)),
-                ]
-                suppressed_positions = set()
-                if int(spd) >= 80:
-                    suppressed_positions.add("top")
-                    suppressed_positions.add("bottom")
-                if int(spd) == 100:
-                    suppressed_positions.add("right")
-                if suppressed_positions:
-                    rects = [
-                        (pos, rect) for pos, rect in rects
-                        if pos not in suppressed_positions
-                    ]
+                pad = 2.0
+                left_limit = float(getattr(self, "tlx", 0)) + pad
+                right_limit = float(getattr(self, "brx", self.wid)) - pad
+                top_limit = float(getattr(self, "tly", 0)) + pad
+                bottom_limit = float(getattr(self, "bry", self.hgt)) - pad
 
-                for _pos, rect in rects:
+                # Emit each of the four axis labels ONLY when its natural
+                # position lies fully inside the frame. Clamping an out-of-range
+                # label back onto the frame edge (the previous behavior) piled
+                # every too-large ring's number onto the same spot, so the
+                # numbers merged -- worst on the shorter vertical axis after the
+                # zoom-out. Skipping them instead keeps the labels clean.
+                rects = []
+                top_y = self.centery - radius - offset
+                if top_y >= top_limit:  # above origin
+                    rects.append(_QtCore.QRectF(
+                        self.centerx + offset, top_y, width, height))
+                bot_y = self.centery + radius - offset
+                if bot_y + height <= bottom_limit:  # below origin
+                    rects.append(_QtCore.QRectF(
+                        self.centerx + offset, bot_y, width, height))
+                right_x = self.centerx + radius - offset
+                if right_x + width <= right_limit:  # right of origin
+                    rects.append(_QtCore.QRectF(
+                        right_x, self.centery + offset, width, height))
+                left_x = self.centerx - radius - offset
+                if left_x >= left_limit:  # left of origin
+                    rects.append(_QtCore.QRectF(
+                        left_x, self.centery + offset, width, height))
+
+                for rect in rects:
                     try:
                         qp.fillRect(rect, self.bg_color)
                     except Exception:
                         pass
                 qp.setPen(_QtGui.QPen(self.fg_color))
-                for _pos, rect in rects:
+                for rect in rects:
                     qp.drawText(rect, _QtCore.Qt.AlignCenter, text)
             except Exception:
                 _orig_ring(self, spd, qp)
@@ -2536,14 +2782,34 @@ def _install_hodo_label_fit():
                 lm_rect = _QtCore.QRectF(
                     luu + h_offset, lvv + v_offset, lm_tw, th)
 
+                # A range-ring speed label sits at each marker's on-axis
+                # position, so when a storm-motion vector lands on (or near) an
+                # axis its label crowds that ring number. Mask a region that
+                # extends up-and-left of the label -- toward the marker/axis --
+                # so the colliding ring number is painted over, not just the
+                # text's own footprint.
+                mask_pad_x = 14
+                mask_pad_y = 12
+
+                def _mask_rect(rect):
+                    return _QtCore.QRectF(
+                        rect.x() - mask_pad_x, rect.y() - mask_pad_y,
+                        rect.width() + mask_pad_x, rect.height() + mask_pad_y)
+
                 # Background fill so labels are readable over the hodo traces
-                qp.fillRect(rm_rect, self.bg_color)
-                qp.fillRect(lm_rect, self.bg_color)
+                # and any range-ring number beneath / beside them.
+                qp.fillRect(_mask_rect(rm_rect), self.bg_color)
+                qp.fillRect(_mask_rect(lm_rect), self.bg_color)
 
                 pen = _QtGui.QPen(self.fg_color)
                 qp.setPen(pen)
                 qp.drawText(rm_rect, _QtCore.Qt.AlignCenter, rm_text)
                 qp.drawText(lm_rect, _QtCore.Qt.AlignCenter, lm_text)
+
+                # The widened mask can paint over the storm-motion marker
+                # circles (drawn earlier); redraw them on top so they survive.
+                qp.drawEllipse(center_rm, 5, 5)
+                qp.drawEllipse(center_lm, 5, 5)
             except Exception:
                 _orig_smv(self, qp)
 
@@ -2689,6 +2955,30 @@ def _install_hodo_label_fit():
         _plot.drawCorfidi = drawCorfidi
 
         _plot._sharpmod_label_fit = True
+    except Exception:  # pragma: no cover - vendored module always present
+        pass
+
+
+def _install_hodo_locator():
+    """Overlay a local county-outline locator after hodograph data is drawn."""
+    try:
+        import sharppy.viz.hodo as _hodo_mod
+        from sharpmod.viz.hodo_locator import draw_hodo_locator
+
+        _plot = _hodo_mod.plotHodo
+        if getattr(_plot, "_sharpmod_locator", False):
+            return
+        _orig_plot_data = _plot.plotData
+
+        def plotData(self):
+            _orig_plot_data(self)
+            try:
+                draw_hodo_locator(self)
+            except Exception:
+                pass
+
+        _plot.plotData = plotData
+        _plot._sharpmod_locator = True
     except Exception:  # pragma: no cover - vendored module always present
         pass
 
@@ -3208,7 +3498,8 @@ def _install_stp_prob_box_spacing():
                 # Size the box from its actual content rather than stretching to
                 # the inset's right edge, so the wide right-hand whitespace is
                 # removed. The value column sits just past the longest label.
-                _fm = self.box_metrics
+                _box_font = _QtGui.QFont(self.box_font)
+                _fm = _QtGui.QFontMetrics(_box_font)
                 _adv = getattr(_fm, "horizontalAdvance", None) or _fm.width
                 _labels = ['based on CAPE:', 'based on LCL:', 'based on ESRH:',
                            'based on EBWD:', 'based on STPC:',
@@ -3220,6 +3511,25 @@ def _install_stp_prob_box_spacing():
                 val_w = _adv('0.00')
                 content_w = max(label_w + col_gap + val_w,
                                 max(_adv(t) for t in _headers))
+                # The Streamwiseness inset now shares the former STP column.
+                # Fit this long-label box to the available right half instead
+                # of letting its height-derived font clip at the new width.
+                available_w = max(40., self.brx - width * 7 - 10.)
+                if content_w + 8 > available_w:
+                    point_size = _box_font.pointSizeF()
+                    if point_size > 0:
+                        scale = available_w / float(content_w + 8)
+                        _box_font.setPointSizeF(max(5.0, point_size * scale * .96))
+                        _fm = _QtGui.QFontMetrics(_box_font)
+                        _adv = (getattr(_fm, "horizontalAdvance", None)
+                                or _fm.width)
+                        label_w = max(_adv(t) for t in _labels)
+                        col_gap = max(8, _adv('  '))
+                        val_w = _adv('0.00')
+                        content_w = max(
+                            label_w + col_gap + val_w,
+                            max(_adv(t) for t in _headers),
+                        )
                 # Anchor the box against the inset's right edge (but never left
                 # of the mid-line, so it can't overlap the EF box-and-whisker
                 # plot on the left half).
@@ -3227,9 +3537,10 @@ def _install_stp_prob_box_spacing():
                 left_x = max(width * 7, right_x - (content_w + 8))
 
                 # One consistent row height for both header and data rows.
-                row_h = self.box_height + 1
+                box_height = _fm.xHeight() + self.textpad
+                row_h = box_height + 1
                 if _platform.system() == "Windows":
-                    row_h += self.box_metrics.descent()
+                    row_h += _fm.descent()
 
                 # Symmetric breathing room around the divider rule so the first
                 # data row is no longer flush against it.
@@ -3253,7 +3564,7 @@ def _install_stp_prob_box_spacing():
                 qp.drawLine(left_x, top_y, left_x, bot_y)
                 qp.drawLine(right_x, top_y, right_x, bot_y)
 
-                qp.setFont(self.box_font)
+                qp.setFont(_box_font)
                 text_w = right_x - left_x - 3
                 x1 = left_x + 3
                 x2 = x1 + label_w + col_gap
@@ -3264,7 +3575,7 @@ def _install_stp_prob_box_spacing():
                 qp.setPen(pen)
                 for text in ['Prob EF2+ torn with supercell',
                              'Sample CLIMO = .15 sigtor']:
-                    rect = _QtCore.QRectF(x1, y1, text_w, self.box_height)
+                    rect = _QtCore.QRectF(x1, y1, text_w, box_height)
                     qp.drawText(
                         rect, _QtCore.Qt.TextDontClip | _QtCore.Qt.AlignLeft, text)
                     y1 += row_h
@@ -3283,8 +3594,8 @@ def _install_stp_prob_box_spacing():
                           self.ebwd_c, self.stpc_c, self.stpf_c]
                 for text, p, c in zip(texts, probs, colors):
                     qp.setPen(_QtGui.QPen(c, 1, _QtCore.Qt.SolidLine))
-                    rect = _QtCore.QRectF(x1, y1, text_w, self.box_height)
-                    rect2 = _QtCore.QRectF(x2, y1, text_w, self.box_height)
+                    rect = _QtCore.QRectF(x1, y1, text_w, box_height)
+                    rect2 = _QtCore.QRectF(x2, y1, text_w, box_height)
                     qp.drawText(
                         rect, _QtCore.Qt.TextDontClip | _QtCore.Qt.AlignLeft, text)
                     qp.drawText(
@@ -3414,7 +3725,9 @@ def decode(infile: str):
 
 def render(infile: str, outfile: str = "sharpmod_sounding.png",
            model: str | None = None, run: datetime | None = None,
-           loc: str | None = None) -> str:
+           loc: str | None = None,
+           image_mode: str = PNG_IMAGE_HD,
+           parcel: str = DEFAULT_RENDER_PARCEL) -> str:
     """Render ``infile`` to ``outfile`` and return the output path.
 
     Composes :class:`~sharppy.viz.SPCWindow.SPCWindow` with a real
@@ -3426,6 +3739,7 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
     :class:`RenderError` naming ``infile`` is raised and no partial PNG is left
     behind (Requirements 11.4, 11.7, 15.5).
     """
+    parcel = _normalise_parcel_type(parcel)
     out_dir = os.path.dirname(os.path.abspath(outfile))
     os.makedirs(out_dir, exist_ok=True)
 
@@ -3445,6 +3759,7 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
         _install_hodo_zoom()
         _install_hodo_interpolation_menu()
         _install_hodo_label_fit()
+        _install_hodo_locator()
         _install_skewt_level_labels_fit()
         # Condense the vendored STP graphic fonts before it is constructed.
         _install_stp_condense()
@@ -3456,7 +3771,9 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
         _install_stp_prob_box_spacing()
         _install_conditional_prob_panel_fit()
         _install_winter_text_fit()
-        # Cap the wind-speed strip title so it never overflows on a wide strip.
+        # Split the speed strip's SFC-500 m layer and cap the title so it never
+        # overflows on a wide strip.
+        _install_speed_0500()
         _install_speed_title_cap()
         # Cap the temp-advection strip title + axis labels for the same reason.
         _install_advection_font_cap()
@@ -3507,6 +3824,7 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
         # guarded (see ``mount_products``); the outcome is recorded on
         # ``win.sharpmod_products`` for inspection.
         win, controller = compose_window(config, prof_col, mount=True)
+        _apply_render_parcel(win, parcel)
 
         # Rebrand the vendored version label (top-right "SHARPpy v..." QLabel)
         # and level the top frame so the upper-right panel band lines up with
@@ -3546,7 +3864,8 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
         fd, tmp_path = tempfile.mkstemp(suffix=".png", dir=out_dir)
         os.close(fd)
         try:
-            if not save_widget_png(win.spc_widget, tmp_path):
+            if not save_widget_png(win.spc_widget, tmp_path,
+                                   image_mode=image_mode):
                 raise RenderError(infile, "Qt could not save the PNG image")
             if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
                 raise RenderError(infile, "renderer produced an empty image")
@@ -3563,16 +3882,50 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
     return outfile
 
 
+def _build_cli_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="sharpmod-render",
+        description="Render a sounding file to a PNG image.")
+    parser.add_argument("infile", help="input sounding file")
+    parser.add_argument("outfile", nargs="?", default="sharpmod_sounding.png",
+                        help="output PNG path")
+    parser.add_argument(
+        "--image-mode", "--image", choices=PNG_IMAGE_MODES,
+        default=PNG_IMAGE_HD, help="PNG image mode (default: hd)")
+    parser.add_argument(
+        "--hd", action="store_const", const=PNG_IMAGE_HD,
+        dest="image_mode",
+        help="render a 2x high-density PNG (default)")
+    parser.add_argument(
+        "--uhd", action="store_const", const=PNG_IMAGE_UHD,
+        dest="image_mode",
+        help="render a 2.8x ultra-high-density PNG")
+    parser.add_argument(
+        "--lossless", action="store_const", const=PNG_IMAGE_LOSSLESS,
+        dest="image_mode",
+        help="render the original-size compact/lossless PNG")
+    parser.add_argument(
+        "--parcel", type=str.upper, choices=PARCEL_TYPES,
+        default=DEFAULT_RENDER_PARCEL,
+        help="parcel visualized on the Skew-T (default: MU)")
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point: ``render.py <sounding_file> [output.png]``."""
+    """CLI entry point: ``sharpmod-render <sounding_file> [output.png]``."""
     args = list(sys.argv[1:] if argv is None else argv)
+    parser = _build_cli_parser()
     if not args:
-        print(__doc__)
+        parser.print_help()
         return 1
-    infile = args[0]
-    outfile = args[1] if len(args) > 1 else "sharpmod_sounding.png"
+    ns = parser.parse_args(args)
     try:
-        out = render(infile, outfile)
+        out = render(
+            ns.infile,
+            ns.outfile,
+            image_mode=ns.image_mode,
+            parcel=ns.parcel,
+        )
     except RenderError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

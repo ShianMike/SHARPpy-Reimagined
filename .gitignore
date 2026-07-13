@@ -52,6 +52,18 @@ sharpmod_render.ini
 *.grib*.idx
 *.idx
 
+# Local point-sounding downloads and rendered inspection previews.
+# Keep the curated README example under examples/ tracked separately.
+/guam_ifs*.json
+/guam_ifs*.npz
+/guam_ifs*.png
+/hrrr_point_*.json
+/hrrr_point_*.npz
+/hrrr_point_*.png
+/ifs_point_*.json
+/ifs_point_*.npz
+/ifs_point_*.png
+
 # ---------------------------------------------------------------------------
 # Legacy prototype kept on disk for reference but not shipped in the repo.
 # (Un-ignore this if you want the original prototype in version control.)

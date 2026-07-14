@@ -66,6 +66,7 @@ __all__ = [
     "CAPE_FILL_COLOR",
     "CIN_FILL_COLOR",
     "draw_cape_fill",
+    "parcel_level_markers",
 ]
 
 
@@ -101,6 +102,18 @@ CAPE_FILL_COLOR = QColor(255, 130, 0, 80)
 #: Translucent blue for negative buoyancy (CIN) -- the area where the parcel is
 #: colder than the environment.
 CIN_FILL_COLOR = QColor(30, 120, 255, 70)
+
+
+def parcel_level_markers(pcl):
+    """Return the standard parcel-level labels and pressures, including MPL."""
+    if pcl is None:
+        return []
+    return [
+        ("LCL", getattr(pcl, "lclpres", None)),
+        ("LFC", getattr(pcl, "lfcpres", None)),
+        ("EL", getattr(pcl, "elpres", None)),
+        ("MPL", getattr(pcl, "mplpres", None)),
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -38,7 +38,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
 1. SYSTEM REQUIREMENTS
 ---------------------------------------------------------------------------
-  - Python >= 3.11  (64-bit; tested through Python 3.14)
+  - Python >= 3.11  (64-bit; use 3.11-3.13 for Windows source GUI runs)
   - pip     >= 23   (needed for editable installs + modern resolver)
   - OS      : Windows, Linux, or macOS
   - Disk    : ~1.5 GB for the full render + scientific stack
@@ -111,8 +111,8 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
 5. OPTIONAL EXTRAS
 ---------------------------------------------------------------------------
-  [era5]  ERA5 reanalysis point-sounding extraction
-              herbie-data, cfgrib, xarray
+  [era5]  ERA5 reanalysis and public forecast-model point extraction
+              cdsapi, herbie-data, cfgrib, ecCodes, xarray, numcodecs, pyproj
   [wrf]   WRF-ARW (wrfout NetCDF) point-sounding extraction
               xarray, netCDF4
   [dev]   test tooling
@@ -167,5 +167,9 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
         you tried to install SHARPpy WITHOUT --no-deps; use the --no-deps form.
   - ImportError for herbie/cfgrib or netCDF4:
         install the matching extra:  pip install -e ".[era5]"  /  ".[wrf]"
+  - ERA5 reports missing CDS API credentials:
+        create a free CDS account, accept the ERA5 pressure-level licence,
+        then copy the profile from https://cds.climate.copernicus.eu/how-to-api
+        into %USERPROFILE%\.cdsapirc (Windows) or $HOME/.cdsapirc.
   - A blank window / QpaPlatform error on a headless server:
         ensure QT_QPA_PLATFORM=offscreen (the renderer sets this by default).

@@ -29,7 +29,7 @@ Behaviour (Requirement 8):
 * Record the requested source lat/lon/time and the selected grid-point lat/lon
   and analysis time in a ``.json`` metadata sidecar (Requirement 8.7).
 
-The ERA5 tooling (``herbie-data``, ``cfgrib``, ``xarray``) is an optional
+The ERA5 tooling (``cdsapi``, ``cfgrib``, ``xarray``) is an optional
 ``[era5]`` install extra, so those packages are imported **lazily** inside the
 functions that need them; importing this module never requires them.
 """
@@ -64,6 +64,22 @@ LON_MIN, LON_MAX = -180.0, 360.0
 # ERA5 (including the ERA5 back-extension) begins in 1940; the upper bound is
 # resolved against "now" at call time.
 ERA5_START = datetime(1940, 1, 1, tzinfo=timezone.utc)
+
+ERA5_CDS_DATASET = "reanalysis-era5-pressure-levels"
+ERA5_CDS_VARIABLES = (
+    "geopotential",
+    "relative_humidity",
+    "temperature",
+    "u_component_of_wind",
+    "v_component_of_wind",
+    "vertical_velocity",
+)
+ERA5_PRESSURE_LEVELS = (
+    "1", "2", "3", "5", "7", "10", "20", "30", "50", "70", "100",
+    "125", "150", "175", "200", "225", "250", "300", "350", "400",
+    "450", "500", "550", "600", "650", "700", "750", "775", "800",
+    "825", "850", "875", "900", "925", "950", "975", "1000",
+)
 
 
 class ERA5ExtractionError(Exception):
@@ -559,35 +575,91 @@ def _build_columns(ds, index_tuple, latitude=None):
 # Retrieval (lazy optional dependency)
 # ---------------------------------------------------------------------------
 
-def _retrieve_dataset(lat, lon, valid_time):
-    """Fetch the ERA5 pressure-level column dataset via Herbie.
+def _nearest_era5_grid_point(lat, lon):
+    """Snap a request to the regular 0.25-degree CDS ERA5 grid."""
+    grid_lat = round(float(lat) * 4.0) / 4.0
+    lon180 = ((float(lon) + 180.0) % 360.0) - 180.0
+    grid_lon = round(lon180 * 4.0) / 4.0
+    return grid_lat, grid_lon
 
-    Imports the optional ``[era5]`` extra lazily. Any failure is surfaced as a
-    :class:`RetrievalError` so callers can guarantee no partial output file is
-    written (Requirement 8.6).
+
+def _cds_pressure_level_request(lat, lon, valid_time):
+    """Build the smallest CDS request that contains one sounding column."""
+    vt = _as_datetime(valid_time)
+    grid_lat, grid_lon = _nearest_era5_grid_point(lat, lon)
+    return {
+        "product_type": "reanalysis",
+        "variable": list(ERA5_CDS_VARIABLES),
+        "pressure_level": list(ERA5_PRESSURE_LEVELS),
+        "year": vt.strftime("%Y"),
+        "month": vt.strftime("%m"),
+        "day": vt.strftime("%d"),
+        "time": vt.strftime("%H:00"),
+        "area": [grid_lat, grid_lon, grid_lat, grid_lon],
+        "data_format": "grib",
+        "download_format": "unarchived",
+    }
+
+
+def _is_cds_credential_error(exc):
+    message = str(exc).lower()
+    return any(token in message for token in (
+        ".cdsapirc",
+        "api key",
+        "credential",
+        "missing/incomplete configuration",
+        "401",
+        "unauthorized",
+    ))
+
+
+def _retrieve_dataset(lat, lon, valid_time):
+    """Fetch one ERA5 pressure-level column through the official CDS API.
+
+    The requested GRIB contains only the nearest 0.25-degree point, the six
+    sounding variables, and all 37 published pressure levels. It is fully
+    loaded before the temporary download is removed.
     """
     try:
-        from herbie import Herbie  # noqa: F401  (optional [era5] extra)
-    except Exception as exc:  # pragma: no cover - depends on optional extra
+        import cdsapi
+        import cfgrib
+    except Exception as exc:  # pragma: no cover - optional dependency path
         raise RetrievalError(
             "ERA5 support requires the optional [era5] extra "
-            "(herbie-data, cfgrib, xarray): %s" % exc) from exc
+            "(cdsapi, cfgrib, xarray): %s" % exc) from exc
 
     vt = _as_datetime(valid_time)
-    try:  # pragma: no cover - network / optional dependency path
-        H = Herbie(vt.strftime("%Y-%m-%d %H:%M"), model="era5",
-                   product="pressure")
-        ds = H.xarray(
-            r":(HGT|TMP|RH|UGRD|VGRD|VVEL):\d+ mb:", remove_grib=False)
-        if isinstance(ds, list):
-            ds = _merge_datasets(ds)
+    request = _cds_pressure_level_request(lat, lon, vt)
+    fd, grib_path = tempfile.mkstemp(prefix="sharpmod-era5-", suffix=".grib")
+    os.close(fd)
+    source_datasets = []
+    try:  # pragma: no cover - live CDS/network path
+        client = cdsapi.Client()
+        client.retrieve(ERA5_CDS_DATASET, request, grib_path)
+        source_datasets = list(cfgrib.open_datasets(
+            grib_path, backend_kwargs={"indexpath": ""}))
+        ds = _merge_datasets(source_datasets)
+        ds.load()
         return ds
     except RetrievalError:
         raise
-    except Exception as exc:  # pragma: no cover - network failure path
+    except Exception as exc:  # pragma: no cover - network/auth failure path
+        if _is_cds_credential_error(exc):
+            raise RetrievalError(
+                "ERA5 retrieval requires CDS API credentials. Create a free "
+                "Climate Data Store account, then copy its API profile into "
+                "$HOME/.cdsapirc; original error: %s" % exc) from exc
         raise RetrievalError(
-            "failed to retrieve ERA5 data for %s at (%.4f, %.4f): %s"
-            % (vt.isoformat(), lat, lon, exc)) from exc
+            "failed to retrieve ERA5 data from the Copernicus CDS for %s at "
+            "(%.4f, %.4f): %s" % (vt.isoformat(), lat, lon, exc)) from exc
+    finally:
+        for source in source_datasets:
+            try:
+                source.close()
+            except Exception:
+                pass
+        _quiet_remove(grib_path)
+        _quiet_remove(grib_path + ".idx")
 
 
 def _merge_datasets(ds_list):  # pragma: no cover - optional dependency path

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sharpmod"
-version = "0.2.0"
+dynamic = ["version"]
 description = "A modernized, standalone fork of the SHARPpy sounding renderer (Python 3.11+, NumPy 1.24+, Qt6/PySide6)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -67,10 +67,13 @@ Issues = "https://github.com/ShianMike/SHARPpy-Reimagined/issues"
 [project.optional-dependencies]
 # ERA5 / GRIB point-sounding extraction tooling (optional install extra).
 era5 = [
+    "cdsapi>=0.7.7,<0.8",
     "herbie-data>=2026.3,<2027.0",
     "cfgrib>=0.9.15,<0.10",
     "eccodes>=2.47,<3.0",
     "xarray>=2026.4,<2027.0",
+    "numcodecs>=0.11,<1.0",
+    "pyproj>=3.5,<4.0",
 ]
 # WRF-ARW (wrfout NetCDF) point-sounding extraction tooling (optional extra).
 wrf = [
@@ -118,6 +121,9 @@ packages = [
     "sharpmod.resources",
     "sharpmod.resources.fonts",
 ]
+
+[tool.setuptools.dynamic]
+version = { attr = "sharpmod._version.__version__" }
 
 [tool.setuptools.package-data]
 # Bundle the TTF fonts as package data so they resolve via importlib.resources

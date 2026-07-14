@@ -17,6 +17,7 @@ from qtpy.QtWidgets import (
 )
 
 import sharpmod.gui as gui
+from sharpmod import gui_picker
 from sharpmod.gui import (
     PickerWindow,
     _add_default_parcel_tab,
@@ -105,6 +106,7 @@ def test_accepting_preferences_persists_and_applies_selected_parcel(monkeypatch)
     app = QApplication.instance() or QApplication([])
     saved = []
     applied = []
+    saved_configs = []
 
     class StubPreferencesDialog(QDialog):
         def __init__(self):
@@ -118,7 +120,7 @@ def test_accepting_preferences_persists_and_applies_selected_parcel(monkeypatch)
             return QDialog.Accepted
 
     monkeypatch.setattr(
-        gui,
+        gui_picker,
         "_build_preferences_dialog",
         lambda _config, parent=None: StubPreferencesDialog(),
     )
@@ -127,6 +129,7 @@ def test_accepting_preferences_persists_and_applies_selected_parcel(monkeypatch)
         _default_parcel=lambda: "MU",
         _unit_preferences_from_config=lambda _config: {},
         _save_unit_preferences=lambda _preferences: None,
+        _save_config_preferences=saved_configs.append,
         _apply_unit_preferences_to_viewers=lambda _config: None,
         _save_default_parcel=saved.append,
         _apply_default_parcel_to_viewers=applied.append,
@@ -137,4 +140,5 @@ def test_accepting_preferences_persists_and_applies_selected_parcel(monkeypatch)
 
     assert saved == ["SFC"]
     assert applied == ["SFC"]
+    assert len(saved_configs) == 1
     app.processEvents()

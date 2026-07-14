@@ -21,17 +21,23 @@ def _model_fetch_runtime_check(output_path: str) -> int:
         "frozen": bool(getattr(sys, "frozen", False)),
     }
     try:
+        import cdsapi
         import cfgrib
         import eccodes
         import herbie
+        import numcodecs
+        import pyproj
         import xarray
 
         from sharpmod.tools import model_extract
 
         result.update(
+            cdsapi=bool(cdsapi.Client),
             cfgrib=cfgrib.__version__,
             eccodes=eccodes.codes_get_api_version(),
             herbie=herbie.__version__,
+            numcodecs=numcodecs.__version__,
+            pyproj=pyproj.__version__,
             xarray=xarray.__version__,
             configured_models=len(model_extract.available_models()),
             ok=True,

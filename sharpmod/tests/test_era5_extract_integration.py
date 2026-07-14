@@ -20,7 +20,10 @@ from __future__ import annotations
 import glob
 import json
 import os
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -41,6 +44,92 @@ def _dataset():
     lats = np.array([25.0, 30.0, 35.0, 40.0, 45.0], dtype=float)
     lons = np.array([250.0, 255.0, 260.0, 265.0, 270.0], dtype=float)
     return lats, lons, make_era5_dataset(lats, lons, _LEVELS, _TIMES, seed=42)
+
+
+def test_retrieve_dataset_uses_cds_pressure_level_request(monkeypatch):
+    """Live ERA5 retrieval uses CDS, not Herbie's removed ERA5 model."""
+    calls = {}
+
+    class FakeClient:
+        def retrieve(self, dataset, request, target):
+            calls["dataset"] = dataset
+            calls["request"] = request
+            calls["target"] = target
+            Path(target).write_bytes(b"fake-grib")
+
+    class FakeDataset:
+        loaded = False
+        closed = False
+
+        def load(self):
+            self.loaded = True
+            return self
+
+        def close(self):
+            self.closed = True
+
+    decoded = FakeDataset()
+
+    def open_datasets(path, backend_kwargs=None):
+        calls["opened"] = path
+        calls["backend_kwargs"] = backend_kwargs
+        return [decoded]
+
+    monkeypatch.setitem(
+        sys.modules, "cdsapi", SimpleNamespace(Client=FakeClient))
+    monkeypatch.setitem(
+        sys.modules, "cfgrib", SimpleNamespace(open_datasets=open_datasets))
+    monkeypatch.setattr(era5, "_merge_datasets", lambda values: values[0])
+
+    result = era5._retrieve_dataset(
+        58.26, 59.73,
+        datetime(2026, 6, 22, 12, tzinfo=timezone.utc))
+
+    assert result is decoded
+    assert decoded.loaded
+    assert decoded.closed
+    assert calls["dataset"] == "reanalysis-era5-pressure-levels"
+    request = calls["request"]
+    assert request["year"] == "2026"
+    assert request["month"] == "06"
+    assert request["day"] == "22"
+    assert request["time"] == "12:00"
+    assert request["area"] == [58.25, 59.75, 58.25, 59.75]
+    assert len(request["pressure_level"]) == 37
+    assert set(request["variable"]) == {
+        "geopotential",
+        "relative_humidity",
+        "temperature",
+        "u_component_of_wind",
+        "v_component_of_wind",
+        "vertical_velocity",
+    }
+    assert request["data_format"] == "grib"
+    assert request["download_format"] == "unarchived"
+    assert calls["backend_kwargs"] == {"indexpath": ""}
+    assert not Path(calls["target"]).exists()
+
+
+def test_retrieve_dataset_explains_missing_cds_credentials(monkeypatch):
+    """A missing CDS profile produces setup guidance instead of a model error."""
+    class MissingCredentialsClient:
+        def __init__(self):
+            raise Exception(
+                "Missing/incomplete configuration file: C:/Users/test/.cdsapirc")
+
+    monkeypatch.setitem(
+        sys.modules, "cdsapi",
+        SimpleNamespace(Client=MissingCredentialsClient))
+    monkeypatch.setitem(
+        sys.modules, "cfgrib",
+        SimpleNamespace(open_datasets=lambda *_args, **_kwargs: []))
+
+    with pytest.raises(
+            era5.RetrievalError,
+            match=r"CDS API credentials.*\.cdsapirc"):
+        era5._retrieve_dataset(
+            58.26, 59.73,
+            datetime(2026, 6, 22, 12, tzinfo=timezone.utc))
 
 
 # --------------------------------------------------------------------------- #

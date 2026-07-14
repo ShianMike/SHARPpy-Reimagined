@@ -1,4 +1,14 @@
 # ---------------------------------------------------------------------------
+# AI-agent working material (kept locally; not part of consumer releases)
+# ---------------------------------------------------------------------------
+/docs/superpowers/
+/docs/ENGINEERING_BACKLOG.md
+/.agents/
+/.codex/
+/AGENTS.md
+/CLAUDE.md
+
+# ---------------------------------------------------------------------------
 # Virtual environments (recreate with `pip install -e ".[dev,era5,wrf]"`)
 # ---------------------------------------------------------------------------
 .gribenv/
@@ -10,6 +20,12 @@ venv/
 env/
 ENV/
 
+# Local credentials and environment overrides. Keep a sanitized example file.
+.env
+.env.*
+!.env.example
+.cdsapirc
+
 # ---------------------------------------------------------------------------
 # Python bytecode / build artifacts
 # ---------------------------------------------------------------------------
@@ -18,6 +34,7 @@ __pycache__/
 *$py.class
 *.egg
 .eggs/
+*.egg-info/
 build/
 dist/
 wheels/
@@ -42,11 +59,20 @@ coverage.xml
 .tox/
 .nox/
 .tmp/
+*.log
+/logs/
+*.tmp
+*.bak
+*.orig
+*.rej
 
 # ---------------------------------------------------------------------------
 # Renderer / data artifacts generated at runtime
 # ---------------------------------------------------------------------------
 sharpmod_render.ini
+settings.ini
+sharpmod-gui.log*
+*.sharpmod-session
 *.grib
 *.grib2
 *.grib*.idx
@@ -65,10 +91,10 @@ sharpmod_render.ini
 /ifs_point_*.png
 
 # ---------------------------------------------------------------------------
-# Legacy prototype kept on disk for reference but not shipped in the repo.
-# (Un-ignore this if you want the original prototype in version control.)
+# Historical prototypes and stale local-only copies are not shipped.
 # ---------------------------------------------------------------------------
-attic/sounding_plots_legacy/
+/attic/
+/sounding_parameter_guide.md
 
 # ---------------------------------------------------------------------------
 # Editor / OS cruft

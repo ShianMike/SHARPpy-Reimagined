@@ -407,9 +407,10 @@ class CustomPanel(QtWidgets.QFrame):
             value_rect = QtCore.QRect(
                 left + (right - left) // 2, y, (right - left) // 2, self.row_h
             )
-            display_text = self._elide(value_text, value_rect.width(), self.value_font)
             if not draw_text_with_smaller_unit(
-                    qp, value_rect, display_text, QtCore.Qt.AlignRight):
+                    qp, value_rect, value_text, QtCore.Qt.AlignRight):
+                display_text = self._elide(
+                    value_text, value_rect.width(), self.value_font)
                 qp.drawText(
                     value_rect,
                     QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter,

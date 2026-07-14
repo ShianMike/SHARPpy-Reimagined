@@ -1970,12 +1970,20 @@ def enlarge_canvas(win):
         pass
 
 
-def rebrand_version_label(win, text="SHARPpy Reimagined v0.2 (20260713)"):
+def application_label() -> str:
+    """Return the branded label using the package's canonical version."""
+    from sharpmod._version import __version__
+
+    return f"SHARPpy Reimagined v{__version__}"
+
+
+def rebrand_version_label(win, text=None):
     """Rename the vendored top-right ``SHARPpy v...`` label to the fork's brand.
 
     Returns the label widget (or ``None``) so callers can align it. Guarded so a
     missing label never aborts a render.
     """
+    text = application_label() if text is None else str(text)
     try:
         from qtpy.QtWidgets import QLabel
         for lbl in win.findChildren(QLabel):
@@ -3000,6 +3008,7 @@ def _install_skewt_level_labels_fit():
     try:
         import sharppy.viz.skew as _skew_mod
         import sharppy.sharptab as _tab
+        from sharpmod.viz.skew import parcel_level_markers
         _cls = _skew_mod.plotSkewT
         if getattr(_cls, "_sharpmod_level_fit", False):
             return
@@ -3046,13 +3055,23 @@ def _install_skewt_level_labels_fit():
                         top = y + _pad
                     qp.drawText(_QtCore.QRectF(left, top, w, fh), flags, text)
 
-                if _tab.utils.QC(self.pcl.lclpres):
-                    _marker(self.pcl.lclpres, self.lcl_mkr_color, False, "LCL")
-                if _tab.utils.QC(self.pcl.lfcpres):
-                    _marker(self.pcl.lfcpres, self.lfc_mkr_color, True, "LFC")
-                if _tab.utils.QC(self.pcl.elpres) and \
-                        self.pcl.elpres != self.pcl.lclpres:
-                    _marker(self.pcl.elpres, self.el_mkr_color, True, "EL")
+                colors = {
+                    "LCL": self.lcl_mkr_color,
+                    "LFC": self.lfc_mkr_color,
+                    "EL": self.el_mkr_color,
+                    "MPL": _QtGui.QColor("#00D7FF"),
+                }
+                for label, pressure in parcel_level_markers(self.pcl):
+                    if not _tab.utils.QC(pressure):
+                        continue
+                    if label == "EL" and pressure == self.pcl.lclpres:
+                        continue
+                    _marker(
+                        pressure,
+                        colors[label],
+                        label != "LCL",
+                        label,
+                    )
             except Exception:
                 _orig_parcel(self, qp)
 
@@ -3620,12 +3639,12 @@ _title_override_installed = False
 
 
 def _install_title_override():
-    """Format the skew-T title as ``MODEL DATE HHz, Fxxx  VALID: Ddd DATE HHz @lat lon``.
+    """Format the skew-T title without calendar dates.
 
     Overrides the vendored ``plotSkewT.getPlotTitle`` (a read-only presentation
     change) so the heading reads, e.g.::
 
-        HRRR 2026-07-03 10z, F000  VALID: Fri 2026-07-03 10z @41.54N 92.93W
+        HRRR Run: 10Z F000  Valid: 10Z @41.54N 92.93W
 
     Lat/lon come from the collection meta (set by the ``.npz`` loader) or the
     profile's ``latitude``/``longitude``; the ``@lat lon`` clause is omitted when
@@ -3654,8 +3673,8 @@ def _install_title_override():
             fhr = int((valid - base).total_seconds() / 3600)
         except Exception:
             fhr = 0
-        run_s = run.strftime("%Y-%m-%d %Hz") if run is not None else ""
-        valid_s = ("Valid: " + valid.strftime("%a %Y-%m-%d %Hz")
+        run_s = ("Run: " + run.strftime("%HZ")) if run is not None else ""
+        valid_s = ("Valid: " + valid.strftime("%HZ")
                    ) if valid is not None else ""
         # Leading spaces indent the left-aligned title off the plot's left
         # frame line so it isn't flush against the border.
@@ -3685,6 +3704,51 @@ def _install_title_override():
         _title_override_installed = True
     except Exception:  # pragma: no cover - vendored module always present
         pass
+
+
+def render_patch_specs():
+    """Return the sole ordered registry of SHARPpy widget monkeypatches."""
+    from sharpmod.render_patch_registry import PatchSpec
+
+    return (
+        PatchSpec("title.override", _install_title_override),
+        PatchSpec("skewt.title-shrink", _install_skewt_title_shrink),
+        PatchSpec("title.top", _install_title_top),
+        PatchSpec("barbs.custom", _install_custom_barbs),
+        PatchSpec("hodo.0500", _install_hodo_0500),
+        PatchSpec("hodo.zoom", _install_hodo_zoom),
+        PatchSpec("hodo.interpolation-menu", _install_hodo_interpolation_menu),
+        PatchSpec("hodo.label-fit", _install_hodo_label_fit),
+        PatchSpec("hodo.locator", _install_hodo_locator),
+        PatchSpec("skewt.level-labels", _install_skewt_level_labels_fit),
+        PatchSpec("stp.condense", _install_stp_condense),
+        PatchSpec("stp.label-rename", _install_stp_label_rename),
+        PatchSpec("stp.xlabel-colors", _install_stp_xlabel_colors),
+        PatchSpec("stp.bottom-margin", _install_stp_bottom_margin),
+        PatchSpec("stp.box-shrink", _install_stp_box_shrink),
+        PatchSpec("stp.prob-box-spacing", _install_stp_prob_box_spacing),
+        PatchSpec("conditional-prob.fit", _install_conditional_prob_panel_fit),
+        PatchSpec("winter-text.fit", _install_winter_text_fit),
+        PatchSpec("speed.0500", _install_speed_0500),
+        PatchSpec("speed.title-cap", _install_speed_title_cap),
+        PatchSpec("advection.font-cap", _install_advection_font_cap),
+        PatchSpec("skewt.mixratio-mask", _install_skewt_mixratio_mask),
+        PatchSpec("skewt.surface-label-mask", _install_skewt_sfc_label_mask),
+        PatchSpec(
+            "skewt.effective-layer-label-fit",
+            _install_skewt_effective_layer_label_fit),
+        PatchSpec("skewt.frame-on-top", _install_skewt_frame_ontop),
+        PatchSpec("skewt.isotherm-label-fit", _install_skewt_isotherm_label_fit),
+        PatchSpec("slinky.title-fit", _install_slinky_title_fit),
+        PatchSpec("tables.spacing", _apply_table_spacing_patch),
+    )
+
+
+def install_render_patches() -> tuple[str, ...]:
+    """Validate SHARPpy then install the ordered render patch registry."""
+    from sharpmod.render_patch_registry import apply_patch_registry
+
+    return apply_patch_registry(render_patch_specs())
 
 
 # ---------------------------------------------------------------------------
@@ -3751,46 +3815,7 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
 
         config = build_config(out_dir)
         _apply_sars_match_color()
-        _install_title_override()
-        _install_skewt_title_shrink()
-        _install_title_top()
-        _install_custom_barbs()
-        _install_hodo_0500()
-        _install_hodo_zoom()
-        _install_hodo_interpolation_menu()
-        _install_hodo_label_fit()
-        _install_hodo_locator()
-        _install_skewt_level_labels_fit()
-        # Condense the vendored STP graphic fonts before it is constructed.
-        _install_stp_condense()
-        _install_stp_label_rename()
-        _install_stp_xlabel_colors()
-        _install_stp_bottom_margin()
-        # Shrink the STP prob box so it is more compact on the enlarged canvas.
-        _install_stp_box_shrink()
-        _install_stp_prob_box_spacing()
-        _install_conditional_prob_panel_fit()
-        _install_winter_text_fit()
-        # Split the speed strip's SFC-500 m layer and cap the title so it never
-        # overflows on a wide strip.
-        _install_speed_0500()
-        _install_speed_title_cap()
-        # Cap the temp-advection strip title + axis labels for the same reason.
-        _install_advection_font_cap()
-        # Size the skew-T mixing-ratio + surface-value label masks to the font
-        # so background lines stop bleeding through the (wider-font) digits.
-        _install_skewt_mixratio_mask()
-        _install_skewt_sfc_label_mask()
-        _install_skewt_effective_layer_label_fit()
-        # Redraw the white skew-T outline on top so label masks never gap it.
-        _install_skewt_frame_ontop()
-        # Keep the bottom isotherm labels inside the widget (no bottom clip).
-        _install_skewt_isotherm_label_fit()
-        # Keep the Storm Slinky title inside the widget (no descender clip).
-        _install_slinky_title_fit()
-        # Loosen thermo/kinematics row spacing for the taller custom font,
-        # before the vendored panels are constructed/drawn.
-        _apply_table_spacing_patch()
+        install_render_patches()
 
         prof_col, stn_id = decode(infile)
 

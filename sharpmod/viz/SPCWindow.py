@@ -142,6 +142,7 @@ def _install_streamwiseness_hooks():
 
     original_toggle = cls.toggleVector
     original_swap = cls.swapInset
+    original_update = cls.updateProfs
 
     def toggleVector(self, deviant):  # noqa: N802 - upstream Qt API
         result = original_toggle(self, deviant)
@@ -159,8 +160,14 @@ def _install_streamwiseness_hooks():
             _place_right_inset_after_streamwiseness(self)
         return result
 
+    def updateProfs(self):  # noqa: N802 - upstream Qt API
+        result = original_update(self)
+        _refresh_mounted_products(self)
+        return result
+
     cls.toggleVector = toggleVector
     cls.swapInset = swapInset
+    cls.updateProfs = updateProfs
     cls._sharpmod_streamwiseness_hooks = True
 
 
@@ -246,6 +253,11 @@ def compose_window(config, prof_col=None, *, check_integrity=False,
         returned reference for the window's duration.
     """
     _install_streamwiseness_hooks()
+    # Install before ``SPCWidget`` is constructed so its existing Qt signal
+    # connections bind the history-aware mutation methods. Headless renderers
+    # never attach an ``AnalysisHistory``, so these wrappers are no-ops there.
+    from sharpmod.sessions import install_history_hooks
+    install_history_hooks(_VendoredSPCWidget)
     if controller is None:
         controller = RenderController(config)
     win = SPCWindow(parent=controller, cfg=config)
@@ -645,6 +657,38 @@ def _derived_profile(prof):
         return prof
 
 
+def _refresh_mounted_products(sw):
+    """Refresh custom products from the currently focused/recomputed profile."""
+    prof = getattr(sw, "default_prof", None)
+    if prof is None:
+        return
+    derived = _derived_profile(prof)
+
+    board = getattr(sw, "index_board", None)
+    if board is not None:
+        try:
+            board.setData(prof, derived)
+        except Exception:
+            pass
+
+    stream = getattr(sw, "streamwiseness", None)
+    if stream is not None:
+        try:
+            stream.setProf(prof)
+        except Exception:
+            pass
+
+    sound = getattr(sw, "sound", None)
+    if sound is not None:
+        sound._sharpmod_derived_profile = derived
+        try:
+            sound.clearData()
+            sound.plotData()
+            sound.update()
+        except Exception:
+            pass
+
+
 def attach_hgz_overlay(
     skewt, *, fill_color=None, edge_color=None, draw_fill=True, profile=None
 ):
@@ -675,6 +719,8 @@ def attach_hgz_overlay(
     original_plot_data = getattr(skewt, "plotData", None)
     if not callable(original_plot_data):
         return False
+    if profile is not None:
+        skewt._sharpmod_derived_profile = profile
 
     def _plot_rect():
         tlx = getattr(skewt, "tlx", None)
@@ -706,7 +752,10 @@ def attach_hgz_overlay(
     def _wrapped_plot_data(*args, **kwargs):
         result = original_plot_data(*args, **kwargs)
         try:
-            prof = profile if profile is not None else getattr(skewt, "prof", None)
+            prof = getattr(skewt, "_sharpmod_derived_profile", None)
+            if prof is None:
+                prof = profile if profile is not None \
+                    else getattr(skewt, "prof", None)
             rect = _plot_rect()
             bitmap = getattr(skewt, "plotBitMap", None)
             if prof is not None and rect is not None and bitmap is not None:

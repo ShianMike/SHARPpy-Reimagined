@@ -8,7 +8,12 @@
 *.cfg   text eol=lf
 *.txt   text eol=lf
 *.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.sh    text eol=lf
+*.ps1   text eol=lf
 *.bat   text eol=crlf
+*.cmd   text eol=crlf
 
 # Binary assets (never touched / diffed as text)
 *.png   binary

@@ -5,7 +5,7 @@ fixed-column panels). The vendored Effective Layer STP graphic is kept as the
 4th column alongside this board.
 
 Columns:
-  1. Convective  -- parcel table (PCL/CAPE/CINH/LCL/LI/LFC/EL for SFC/ML/FCST/MU),
+  1. Convective  -- parcel table (PCL/CAPE/CINH/LCL/LI/LFC/EL/MPL for SFC/ML/FCST/MU),
      the thermo stats block (3 sub-columns), and the lapse-rate box (SFC-1km LR
      first -- a SHARPpy Reimagined-derived addition).
   2. Kinematics  -- SRH/Shear/MnWind/SRW table (SFC-500m first -- derived),
@@ -528,7 +528,7 @@ class IndexBoard(QFrame):
     # ---- column 1: convective -----------------------------------------
     def _col_conv(self, qp, R, rh):
         x, y, w = R.x(), R.y(), R.width()
-        cols = ["PCL", "CAPE", "CINH", "LCL", "LI", "LFC", "EL"]
+        cols = ["PCL", "CAPE", "CINH", "LCL", "LI", "LFC", "EL", "MPL"]
         cw = w / len(cols)
         qp.setFont(self.hf)
         for i, c in enumerate(cols):
@@ -554,6 +554,7 @@ class IndexBoard(QFrame):
             li = self._p(attr, "li5")
             lfc = self._p(attr, "lfchght")
             el = self._p(attr, "elhght")
+            mpl = self._p(attr, "mplhght")
             has_cape = cape is not None and cape > 0
             # Color CAPE/CINH/LCL/LI on a white -> yellow -> red -> pink
             # intensity scale (brighter = more significant), only when the
@@ -576,6 +577,7 @@ class IndexBoard(QFrame):
                 (i0(li), li_c),
                 (i0(lfc), self.fg),
                 (i0(el), self.fg),
+                (i0(mpl), self.fg),
             ]
             for i, (v, c) in enumerate(cells):
                 self._text(qp, QRect(int(x + i * cw), y, int(cw), rh), v,

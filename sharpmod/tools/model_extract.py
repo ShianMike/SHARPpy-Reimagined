@@ -7,15 +7,36 @@ ERA5, IFS, HRRR, UWyo, and WRF paths.
 
 from __future__ import annotations
 
+import importlib.util
 import io
+import logging
 import os
 import shutil
+import sys
 import tempfile
 from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import numpy as np
+
+from sharpmod.model_fields import choose_search
+from sharpmod.model_transport import (
+    DownloadCancelled,
+    OptimizedTransportUnavailable,
+    download_herbie_subset,
+    ranges_from_inventory,
+)
+from sharpmod.model_sources import (
+    SourceRoutingUnavailable,
+    download_nomads_subset,
+    nomads_supported,
+    select_herbie_provider,
+)
+from sharpmod.hrrr_zarr import (
+    ZarrBackendUnavailable,
+    fetch_hrrr_zarr_point,
+)
 
 from sharpmod.tools.era5_extract import (
     ERA5ExtractionError as ModelExtractionError,
@@ -42,6 +63,8 @@ NOAA_PRESSURE_SEARCH = (
     r"\d+(?:\.\d+)? mb:"
 )
 IFS_PRESSURE_SEARCH = r":(gh|t|u|v|r|q|w|vo):\d+:pl:"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -292,8 +315,184 @@ def _herbie_kwargs(config, member=None):
     return kwargs
 
 
-def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None):
+def _prepare_windows_eccodes_runtime():
+    """Expose a bundled ecCodes DLL when no CPython helper wheel exists.
+
+    ECMWF's Windows wheel normally includes a version-specific ``_eccodes``
+    helper.  On Python versions for which that helper is not published, pip
+    falls back to the pure-Python wheel even though the same installation still
+    contains ``eccodes.dll`` and its dependencies.  Selecting findlibs mode and
+    putting that package directory first on ``PATH`` lets the ABI-level CFFI
+    bindings load the bundled DLL directly.
+    """
+    if sys.platform != "win32":
+        return None
+
+    try:
+        spec = importlib.util.find_spec("eccodes")
+        origin = getattr(spec, "origin", None)
+        if not origin:
+            return None
+        package_dir = os.path.dirname(os.path.abspath(origin))
+        package_files = os.listdir(package_dir)
+    except (ImportError, OSError, ValueError):
+        return None
+
+    has_helper = any(
+        name.startswith("_eccodes") and name.endswith(".pyd")
+        for name in package_files
+    )
+    if has_helper or not os.path.isfile(os.path.join(package_dir, "eccodes.dll")):
+        return None
+
+    os.environ["ECCODES_PYTHON_USE_FINDLIBS"] = "1"
+    current_path = os.environ.get("PATH", "")
+    path_entries = [entry for entry in current_path.split(os.pathsep) if entry]
+    normalized = {os.path.normcase(os.path.abspath(entry)) for entry in path_entries}
+    if os.path.normcase(package_dir) not in normalized:
+        os.environ["PATH"] = os.pathsep.join([package_dir, *path_entries])
+    return package_dir
+
+
+def require_runtime_dependencies():
+    """Load the native ecCodes boundary before starting a worker.
+
+    ecCodes is a native extension.  Importing a partially installed build for
+    the first time from a ``QThread`` can terminate the whole process before
+    Python can report the import error.  The GUI calls this function on its
+    main thread before it creates model-availability or model-fetch workers.
+    The slower pure-Python Herbie, cfgrib, and xarray imports stay on those
+    background workers.
+    """
+    _prepare_windows_eccodes_runtime()
+    try:
+        import eccodes
+
+        # Importing the pure-Python ``eccodes`` wrapper can succeed even when
+        # its binary extension is absent.  Calling the API version forces that
+        # native boundary to be resolved here, on the main thread.
+        eccodes.codes_get_api_version()
+    except Exception as exc:  # pragma: no cover - environment-specific path
+        hint = "Install the optional model stack with pip install -e \".[era5]\"."
+        if sys.platform == "win32" and sys.version_info >= (3, 14):
+            hint = (
+                "The installed Windows ecCodes package is incomplete. "
+                "Reinstall the [era5] extra, or use Python 3.11-3.13 if its "
+                "native DLL still cannot be loaded."
+            )
+        raise RetrievalError(
+            "forecast model support could not load its GRIB runtime: %s. %s"
+            % (exc, hint)
+        ) from exc
+
+
+def _emit_progress(callback, stage, total_bytes=0):
+    """Send one optional, dependency-free extraction progress event."""
+    if callback is not None:
+        callback(str(stage), max(0, int(total_bytes or 0)))
+
+
+def _subset_download_bytes(herbie, search):
+    """Return the planned coalesced byte-range transfer size."""
+    try:
+        inventory = herbie.inventory(search).copy()
+        if len(inventory) == 0:
+            return 0
+        return sum(item.size for item in ranges_from_inventory(inventory))
+    except Exception:
+        # Progress estimation must never make an otherwise valid fetch fail.
+        return 0
+
+
+_NOMADS_MIN_RANGE_BYTES = 32 * 1024 * 1024
+
+
+def _prefer_nomads_subset(expected_range_bytes):
+    """Use CGI subsetting only when indexed ranges would be a large transfer."""
+    size = max(0, int(expected_range_bytes or 0))
+    return size == 0 or size > _NOMADS_MIN_RANGE_BYTES
+
+
+def _planned_model_search(herbie, config):
+    """Choose one field from each equivalent group without dropping levels."""
+    try:
+        inventory = herbie.inventory(config.search).copy()
+        search, fields = choose_search(config, inventory)
+        # Confirm that the narrower expression really matches the provider's
+        # index before using it to name a persistent subset file.
+        if len(herbie.inventory(search)) == 0:
+            raise ValueError("planned model search matched no messages")
+        return search, fields
+    except Exception as exc:
+        _LOGGER.info(
+            "model_fields.fallback model=%s reason=%s", config.key, exc
+        )
+        return config.search, ()
+
+
+def _point_backends_enabled():
+    """Return whether Zarr/NOMADS point and subregion routes are enabled."""
+    mode = os.environ.get("SHARPMOD_POINT_BACKENDS", "auto").strip().lower()
+    return mode not in {"0", "false", "no", "off", "grib"}
+
+
+def spatial_cache_key(config, lat, lon):
+    """Return a point identity when an enabled backend can subset spatially."""
+    if not _point_backends_enabled():
+        return None
+    if config.key != "hrrr" and not nomads_supported(config):
+        return None
+    lon180 = ((float(lon) + 180.0) % 360.0) - 180.0
+    return f"{float(lat):.4f},{lon180:.4f}"
+
+
+def hrrr_zarr_candidate(config, fxx, lat=None, lon=None):
+    """Whether this request may use the point-only HRRR analysis archive."""
+    mode = os.environ.get("SHARPMOD_HRRR_BACKEND", "auto").strip().lower()
+    point_mode = os.environ.get("SHARPMOD_POINT_BACKENDS", "auto").strip().lower()
+    return (
+        config.key == "hrrr"
+        and int(fxx) == 0
+        and lat is not None
+        and lon is not None
+        and mode not in {"0", "false", "no", "off", "grib"}
+        and point_mode not in {"0", "false", "no", "off", "grib"}
+    )
+
+
+def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
+                      progress_callback=None, cancelled=None, lat=None,
+                      lon=None):
     """Fetch a Herbie pressure-level subset for ``config``."""
+    _emit_progress(progress_callback, "locating")
+    if hrrr_zarr_candidate(config, fxx, lat, lon):
+        mode = os.environ.get("SHARPMOD_HRRR_BACKEND", "auto").strip().lower()
+        _emit_progress(progress_callback, "downloading")
+        try:
+            dataset, source = fetch_hrrr_zarr_point(
+                run_dt,
+                int(fxx),
+                float(lat),
+                float(lon),
+                cache_dir=download_dir,
+                cancelled=cancelled,
+            )
+            _emit_progress(
+                progress_callback,
+                "decoding",
+                getattr(source, "downloaded_bytes", 0),
+            )
+            return dataset, source
+        except ZarrBackendUnavailable as exc:
+            if mode == "zarr":
+                raise RetrievalError(
+                    "forced HRRR Zarr retrieval failed: %s" % exc
+                ) from exc
+            _LOGGER.info(
+                "hrrr_zarr.fallback run=%s fxx=%03d reason=%s",
+                run_dt.isoformat(), int(fxx), exc,
+            )
+    require_runtime_dependencies()
     try:
         from herbie import Herbie
     except Exception as exc:  # pragma: no cover - optional dependency path
@@ -318,18 +517,85 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None):
         # Windows GUI/worker streams can use CP1252, where those glyphs raise
         # UnicodeEncodeError before the download even starts.
         xarray_kwargs = {"remove_grib": False, "verbose": False}
+        download_kwargs = {"verbose": False}
         if download_dir is not None:
             xarray_kwargs["save_dir"] = os.fspath(download_dir)
+            download_kwargs["save_dir"] = os.fspath(download_dir)
+        search, selected_fields = _planned_model_search(H, config)
+        expected_bytes = _subset_download_bytes(H, search)
+        _emit_progress(progress_callback, "downloading", expected_bytes)
         # Herbie 2026.3.0 unconditionally prints an emoji when it creates its
         # download directory, even with ``verbose=False``.  Capturing stdout
         # keeps that third-party status message from crashing CP1252 Windows
         # GUI and worker processes; retrieval exceptions still propagate.
+        transport = None
+        source_url = str(H.grib)
+        if lat is not None and lon is not None and selected_fields \
+                and _point_backends_enabled() and nomads_supported(config) \
+                and _prefer_nomads_subset(expected_bytes):
+            try:
+                _path, transferred_bytes, source_url = download_nomads_subset(
+                    H,
+                    config,
+                    search,
+                    selected_fields,
+                    float(lat),
+                    float(lon),
+                    save_dir=download_dir,
+                    cancelled=cancelled,
+                )
+                transport = "nomads-subregion"
+                if transferred_bytes:
+                    expected_bytes = int(transferred_bytes)
+            except SourceRoutingUnavailable as exc:
+                _LOGGER.info(
+                    "model_sources.nomads_fallback model=%s run=%s fxx=%03d "
+                    "reason=%s",
+                    config.key, run_dt.isoformat(), int(fxx), exc,
+                )
+        if transport is None:
+            if cancelled is not None and cancelled():
+                raise DownloadCancelled("forecast-model download cancelled")
+            try:
+                select_herbie_provider(H)
+            except Exception as exc:
+                _LOGGER.info(
+                    "model_sources.provider_fallback model=%s reason=%s",
+                    config.key, exc,
+                )
+            source_url = str(H.grib)
+            transport = "optimized-ranges"
+            try:
+                _path, transferred_bytes = download_herbie_subset(
+                    H,
+                    search,
+                    save_dir=download_dir,
+                    cancelled=cancelled,
+                )
+                if transferred_bytes:
+                    expected_bytes = int(transferred_bytes)
+            except OptimizedTransportUnavailable as exc:
+                transport = "herbie"
+                _LOGGER.info(
+                    "model_transport.fallback model=%s run=%s fxx=%03d "
+                    "reason=%s",
+                    config.key, run_dt.isoformat(), int(fxx), exc,
+                )
+                with redirect_stdout(io.StringIO()):
+                    H.download(search, **download_kwargs)
+        if cancelled is not None and cancelled():
+            raise DownloadCancelled("forecast-model download cancelled")
+        _emit_progress(progress_callback, "decoding", expected_bytes)
         with redirect_stdout(io.StringIO()):
-            ds = H.xarray(config.search, **xarray_kwargs)
+            ds = H.xarray(search, **xarray_kwargs)
         if isinstance(ds, list):
             ds = _merge_datasets(ds)
+        H._sharpmod_fields = selected_fields
+        H._sharpmod_search = search
+        H._sharpmod_transport = transport
+        H._sharpmod_source_url = source_url
         return ds, H
-    except RetrievalError:
+    except (RetrievalError, DownloadCancelled):
         raise
     except Exception as exc:  # pragma: no cover - live failure path
         raise RetrievalError(
@@ -348,7 +614,9 @@ def _selected_valid(ds_t, selected_time, run_dt, fxx):
 
 
 def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
-            member=None, dataset=None, download_dir=None):
+            member=None, dataset=None, download_dir=None,
+            source_grib=None, source_fields=None, source_transport=None,
+            progress_callback=None, cancelled=None):
     """Extract a public forecast-model point sounding to ``out_path``.
 
     Parameters mirror the CLI: choose a supported ``model`` key, a latitude and
@@ -376,12 +644,24 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
         )
 
     if dataset is None:
-        ds, H = _retrieve_dataset(
-            config, run_dt, fxx, member=member, download_dir=download_dir)
+        retrieve_kwargs = {
+            "member": member,
+            "download_dir": download_dir,
+            "lat": lat,
+            "lon": lon,
+        }
+        if progress_callback is not None:
+            retrieve_kwargs["progress_callback"] = progress_callback
+        if cancelled is not None:
+            retrieve_kwargs["cancelled"] = cancelled
+        ds, H = _retrieve_dataset(config, run_dt, fxx, **retrieve_kwargs)
     else:
         ds = dataset
         H = None
 
+    if cancelled is not None and cancelled():
+        raise DownloadCancelled("forecast-model download cancelled")
+    _emit_progress(progress_callback, "extracting")
     ds_t, selected_time = _select_time(ds, run_dt)
     _, lats = _coord_values(ds_t, _LAT_COORDS)
     _, lons = _coord_values(ds_t, _LON_COORDS)
@@ -443,10 +723,23 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
     elif "member" in config.kwargs:
         meta["member"] = str(config.kwargs["member"])
     if H is not None:
-        meta["source_grib"] = str(getattr(H, "grib", ""))
+        source_grib = getattr(
+            H, "_sharpmod_source_url", getattr(H, "grib", "")
+        )
+        source_fields = getattr(H, "_sharpmod_fields", source_fields)
+        source_transport = getattr(H, "_sharpmod_transport", source_transport)
+    if source_grib:
+        meta["source_grib"] = str(source_grib)
+    if source_fields:
+        meta["fields"] = list(source_fields)
+    if source_transport:
+        meta["transport"] = str(source_transport)
     if "surface_relative_vorticity" in cols:
         meta["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
 
+    if cancelled is not None and cancelled():
+        raise DownloadCancelled("forecast-model download cancelled")
+    _emit_progress(progress_callback, "writing")
     _atomic_write_npz(out_path, arrays)
     json_path = os.path.splitext(out_path)[0] + ".json"
     try:
@@ -454,6 +747,7 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
     except BaseException:
         _quiet_remove(out_path)
         raise
+    _emit_progress(progress_callback, "complete")
     return out_path
 
 
@@ -486,6 +780,7 @@ def probe(model, run_time=None, fxx=0, member=None, open_subset=False):
         "subset_opened": False,
     }
     try:
+        require_runtime_dependencies()
         from herbie import Herbie
         H = Herbie(
             run_dt.strftime("%Y-%m-%d %H:%M"),

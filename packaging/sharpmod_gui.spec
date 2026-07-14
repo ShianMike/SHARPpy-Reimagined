@@ -8,8 +8,9 @@ Builds a single windowed executable (no console) that bundles:
   ``datasources`` data files and all decoder submodules),
 * the scientific runtime (``metpy``/``pint``/``ecape``/``scipy``) that the
   derived-parameter layer needs at runtime,
-* the live model-fetch runtime (``herbie``/``cfgrib``/``eccodes``/``xarray``),
-  including ecCodes' Windows DLL and Herbie's model templates.
+* live model/ERA5 retrieval (``herbie``/``cdsapi``/``cfgrib``/``eccodes``),
+  including ecCodes' Windows DLL and Herbie's model templates, plus the
+  ``numcodecs``/``pyproj`` runtime used by fast HRRR Zarr point extraction.
 
 Build from the repository root with::
 
@@ -63,7 +64,7 @@ for _ttf in glob.glob(os.path.join(_RES, "fonts", "*.ttf")):
 # metpy/pint unit + static data) that would otherwise be missed by a frozen app.
 for pkg in (
     "sharpmod", "sharppy", "sutils", "metpy", "pint", "ecape",
-    "cfgrib", "eccodes",
+    "cdsapi", "ecmwf", "cfgrib", "eccodes", "numcodecs", "pyproj",
 ):
     try:
         d, b, h = collect_all(pkg)

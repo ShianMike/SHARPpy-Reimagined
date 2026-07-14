@@ -86,6 +86,16 @@ LCL pressure is then obtained by lifting dry adiabatically to $T_{LCL}$, and the
 
 The level of free convection (LFC) is the first level above the LCL where the parcel becomes positively buoyant. The equilibrium level (EL) is the later crossing where positive buoyancy ends. Both crossings use the parcel and environmental virtual-temperature traces from the upstream parcel integration.
 
+### Maximum Parcel Level (MPL)
+
+The maximum parcel level is the height above the equilibrium level where the
+parcel's accumulated negative buoyancy has consumed the positive energy gained
+below the EL. In the upstream parcel integration, the search continues above
+the EL until the integrated negative area equals the parcel's CAPE. The result
+is stored as `mplpres` and `mplhght`; the GUI shows MPL both beside the Skew-T
+and in the main parcel table. MPL can be missing when the sounding does not
+extend high enough for the energy balance to be reached.
+
 ### Lifted Index
 
 The displayed lifted index is the environmental virtual temperature minus the lifted parcel virtual temperature at 500 hPa:
@@ -624,6 +634,7 @@ Colors are presentation cues, not additional scientific thresholds. Missing valu
 | CAPE | White below 1000; yellow at 1000; red at 2500; pink at 4000 J/kg. Requires positive CAPE. |
 | CIN | Green at -50 J/kg or greater; orange from -100 to less than -50; red below -100. |
 | LCL | Neutral white; the available generic LCL helper is not called by this table. |
+| LFC / EL / MPL | Neutral white heights; missing levels display as `--`. |
 | LI | White above -4; yellow at -4 or lower; red at -7 or lower; pink at -10 or lower. Requires positive CAPE. |
 | 3CAPE / 6CAPE | Green above 25; yellow above 50; orange above 75; red above 100; magenta above 125 J/kg. |
 

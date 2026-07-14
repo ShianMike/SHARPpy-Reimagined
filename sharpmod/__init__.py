@@ -6,4 +6,6 @@ data-extraction tools (``tools``). It targets Python >= 3.11, NumPy >= 1.24, and
 PySide6 (Qt6) with no legacy compatibility shims.
 """
 
-__all__ = ["io", "sharptab", "viz", "tools"]
+from ._version import __version__
+
+__all__ = ["__version__", "io", "sharptab", "viz", "tools"]

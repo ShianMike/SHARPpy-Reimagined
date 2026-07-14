@@ -3639,12 +3639,12 @@ _title_override_installed = False
 
 
 def _install_title_override():
-    """Format the skew-T title without calendar dates.
+    """Format the skew-T title with full forecast run and valid timestamps.
 
     Overrides the vendored ``plotSkewT.getPlotTitle`` (a read-only presentation
     change) so the heading reads, e.g.::
 
-        HRRR Run: 10Z F000  Valid: 10Z @41.54N 92.93W
+        HRRR 2026-07-14 10z, F000  VALID: Tue 2026-07-14 10z @41.54N 92.93W
 
     Lat/lon come from the collection meta (set by the ``.npz`` loader) or the
     profile's ``latitude``/``longitude``; the ``@lat lon`` clause is omitted when
@@ -3673,8 +3673,8 @@ def _install_title_override():
             fhr = int((valid - base).total_seconds() / 3600)
         except Exception:
             fhr = 0
-        run_s = ("Run: " + run.strftime("%HZ")) if run is not None else ""
-        valid_s = ("Valid: " + valid.strftime("%HZ")
+        run_s = run.strftime("%Y-%m-%d %Hz,") if run is not None else ""
+        valid_s = ("VALID: " + valid.strftime("%a %Y-%m-%d %Hz")
                    ) if valid is not None else ""
         # Leading spaces indent the left-aligned title off the plot's left
         # frame line so it isn't flush against the border.

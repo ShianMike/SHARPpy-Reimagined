@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from sharpmod import render
+from sharpmod.tools import model_extract
 from sharpmod.render_patch_registry import (
     PatchSpec,
     RenderPatchError,
@@ -74,10 +75,14 @@ def test_renderer_declares_one_named_spec_per_patch_installer():
     assert names[-1] == "tables.spacing"
 
 
-def test_sounding_title_omits_calendar_date_but_keeps_utc_hours():
+@pytest.mark.parametrize(
+    "model",
+    [config.label for config in model_extract.available_models()],
+)
+def test_forecast_model_title_includes_full_run_and_valid_dates(model):
     class Collection:
         metadata = {
-            "model": "HRRR",
+            "model": model,
             "run": datetime(2026, 7, 14, 0),
             "base_time": datetime(2026, 7, 14, 0),
             "lat": 41.54,
@@ -96,7 +101,6 @@ def test_sounding_title_omits_calendar_date_but_keeps_utc_hours():
     title = plotSkewT.getPlotTitle(SimpleNamespace(prof=None), Collection())
 
     assert title == (
-        "   HRRR Run: 00Z F006  Valid: 06Z"
+        f"   {model} 2026-07-14 00z, F006  VALID: Tue 2026-07-14 06z"
         "  @41.54\N{DEGREE SIGN}N 92.93\N{DEGREE SIGN}W"
     )
-    assert "2026" not in title

@@ -108,7 +108,7 @@ block_cipher = None
 
 a = Analysis(
     ["sharpmod_gui_launcher.py"],
-    pathex=[".."],
+    pathex=[_REPO],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

@@ -131,6 +131,17 @@ def test_selected_grid_point_2d_curvilinear(data):
     assert selected_dist <= best + 1e-6
 
 
+def test_selected_grid_point_accepts_scalar_single_point_coordinates():
+    """A zero-area CDS subset exposes latitude/longitude as scalar coords."""
+    index, glat, glon = era5.select_nearest_grid_point(
+        np.asarray(58.25), np.asarray(59.75), 58.26, 59.73
+    )
+
+    assert index == (0, 0)
+    assert glat == 58.25
+    assert glon == 59.75
+
+
 # --------------------------------------------------------------------------- #
 # Property 17 -- nearest analysis time
 # --------------------------------------------------------------------------- #

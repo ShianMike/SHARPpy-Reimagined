@@ -195,13 +195,26 @@ def _building_blocks(pres_f, hght_f, tmpc_f, dwpc_f, u_kt, v_kt):
     el_z = float(z[el_idx].to("m").magnitude)
 
     # --- NCAPE dilution integral (calc_mse / calc_integral_arg / calc_ncape)-
-    mse = mpcalc.moist_static_energy(z, t, q)
+    # Only the surface-through-EL layer contributes to NCAPE.  ERA5 can carry
+    # physically valid upper-stratospheric temperatures at pressures so low
+    # that liquid-water saturation is undefined (saturation vapor pressure >=
+    # total pressure).  Evaluating those unused levels emits a MetPy warning
+    # and produces NaNs even though they are above the integral's upper bound.
+    top = el_idx + 1
+    z_ncape = z[:top]
+    p_ncape = p[:top]
+    t_ncape = t[:top]
+    q_ncape = q[:top]
+
+    mse = mpcalc.moist_static_energy(z_ncape, t_ncape, q_ncape)
     n = mse.size
     mse_bar = (np.cumsum(mse) / np.arange(1, n + 1)).to("J/kg")
-    sat_mr = mpcalc.saturation_mixing_ratio(p, t)
-    mse_star = mpcalc.moist_static_energy(z, t, sat_mr).to("J/kg")
+    sat_mr = mpcalc.saturation_mixing_ratio(p_ncape, t_ncape)
+    mse_star = mpcalc.moist_static_energy(
+        z_ncape, t_ncape, sat_mr
+    ).to("J/kg")
 
-    t_k = t.to("kelvin")
+    t_k = t_ncape.to("kelvin")
     integral_arg = -(earth_gravity / (dry_air_spec_heat_press * t_k)) * (
         mse_bar - mse_star
     )
@@ -211,7 +224,10 @@ def _building_blocks(pres_f, hght_f, tmpc_f, dwpc_f, u_kt, v_kt):
         seg = (
             0.5 * integral_arg[lfc_idx:el_idx]
             + 0.5 * integral_arg[lfc_idx + 1:el_idx + 1]
-        ) * (z[lfc_idx + 1:el_idx + 1] - z[lfc_idx:el_idx])
+        ) * (
+            z_ncape[lfc_idx + 1:el_idx + 1]
+            - z_ncape[lfc_idx:el_idx]
+        )
         ncape = float(np.sum(seg).to("J/kg").magnitude)
     if not np.isfinite(ncape):
         return None

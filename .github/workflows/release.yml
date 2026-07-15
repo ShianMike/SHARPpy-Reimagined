@@ -57,7 +57,7 @@ jobs:
             throw "Frozen model-fetch runtime check failed"
           }
           $result = Get-Content $report -Raw | ConvertFrom-Json
-          if (-not $result.ok -or $result.configured_models -lt 1) {
+          if (-not $result.ok -or $result.configured_models -lt 1 -or -not $result.logging_handlers -or -not $result.gui_entrypoint) {
             throw "Frozen model-fetch runtime report is invalid"
           }
           $result | ConvertTo-Json
@@ -66,6 +66,24 @@ jobs:
         env:
           SHARPMOD_ONEFILE: "1"
         run: pyinstaller packaging/sharpmod_gui.spec --noconfirm
+
+      - name: Verify frozen single-file runtime
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP "single-file-runtime.json"
+          $process = Start-Process `
+            -FilePath "dist/SHARPpy-Reimagined.exe" `
+            -ArgumentList "--model-fetch-runtime-check", $report `
+            -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $report) { Get-Content $report }
+            throw "Frozen single-file runtime check failed"
+          }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if (-not $result.ok -or $result.configured_models -lt 1 -or -not $result.logging_handlers -or -not $result.gui_entrypoint) {
+            throw "Frozen single-file runtime report is invalid"
+          }
+          $result | ConvertTo-Json
 
       - name: Resolve release tag
         id: tag

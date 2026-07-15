@@ -119,14 +119,22 @@ def great_circle_distance_km(lat1, lon1, lat2, lon2):
 def select_nearest_grid_point(lats, lons, lat0, lon0):
     """Return the grid index minimizing great-circle distance to ``(lat0, lon0)``.
 
-    Supports both 1-D coordinate vectors (a regular lat/lon grid) and 2-D
-    coordinate arrays (a curvilinear grid). Returns
+    Supports scalar coordinates (a one-point subset), 1-D coordinate vectors
+    (a regular lat/lon grid), and 2-D coordinate arrays (a curvilinear grid).
+    Returns
     ``(index_tuple, selected_lat, selected_lon)`` where ``index_tuple`` indexes
     the data arrays (``(ilat, ilon)`` for a regular grid, ``(iy, ix)`` for a
     2-D grid).
     """
     lats = np.asarray(lats, dtype=float)
     lons = np.asarray(lons, dtype=float)
+
+    if lats.ndim == 0 and lons.ndim == 0:
+        # A zero-area CDS request is decoded by cfgrib with scalar horizontal
+        # coordinates and level-only data variables.  Keep the conventional
+        # two-index return shape; the column extractor ignores it for 1-D
+        # level arrays.
+        return (0, 0), float(lats), float(lons)
 
     if lats.ndim == 1 and lons.ndim == 1:
         lat_grid, lon_grid = np.meshgrid(lats, lons, indexing="ij")
@@ -309,6 +317,11 @@ def _refine_coverage(ds, lon):
     """Tighten longitude validation against the actual dataset coordinates."""
     _, lons = _coord_values(ds, _LON_COORDS)
     if lons is not None and lons.size:
+        # A zero-area retrieval contains only the grid point nearest the
+        # request.  Its singleton coordinate is a selected result, not the
+        # longitude coverage of the global source dataset.
+        if lons.size == 1:
+            return
         # Compare in a common 0..360 frame so wrapped requests still validate.
         lo, hi = float(np.min(lons)), float(np.max(lons))
         lon360 = lon % 360.0

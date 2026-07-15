@@ -5,6 +5,20 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-07-15
+
+### Fixed
+
+- ERA5 point extraction now accepts scalar latitude/longitude coordinates from
+  zero-area CDS responses and does not mistake a snapped singleton coordinate
+  for the source dataset's geographic coverage.
+- ECAPE's NCAPE calculation now evaluates only through the equilibrium level,
+  avoiding invalid saturation calculations in unused upper-stratospheric
+  levels.
+- Windows builds now analyze from the actual repository root so the local
+  `sharpmod` package is embedded, and frozen runtime verification checks
+  `logging.handlers` and the GUI entrypoint in both build formats.
+
 ## [0.3.0] - 2026-07-14
 
 ### Added features

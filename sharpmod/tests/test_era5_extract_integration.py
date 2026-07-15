@@ -132,6 +132,16 @@ def test_retrieve_dataset_explains_missing_cds_credentials(monkeypatch):
             datetime(2026, 6, 22, 12, tzinfo=timezone.utc))
 
 
+def test_single_point_subset_does_not_reject_the_requested_longitude():
+    """A snapped one-point response is not the source dataset's coverage."""
+    _, _, ds = _dataset()
+    point = ds.isel(time=0, latitude=2, longitude=2)
+
+    # The request is near the returned 260-degree grid point but is not equal
+    # to it.  This is the normal shape of the zero-area CDS request.
+    era5._refine_coverage(point, 260.07)
+
+
 # --------------------------------------------------------------------------- #
 # Nearest-point / nearest-time wiring + atomic write
 # --------------------------------------------------------------------------- #
@@ -178,6 +188,27 @@ def test_extract_selects_nearest_point_and_time_and_writes_atomically(tmp_path):
     assert loc
     prof = next(iter(prof_collection._profs.values()))[0]
     assert np.asarray(prof.pres).size == len(_LEVELS)
+
+
+def test_extract_accepts_scalar_coordinates_from_single_point_cds_subset(tmp_path):
+    """The real zero-area CDS response writes a complete point sounding."""
+    _, _, ds = _dataset()
+    point = ds.isel(time=1, latitude=2, longitude=2)
+    out_path = str(tmp_path / "era5_scalar_point.npz")
+
+    result = era5.extract(
+        35.02,
+        260.07,
+        _TIMES[1],
+        out_path,
+        dataset=point,
+    )
+
+    assert result == out_path
+    with np.load(out_path, allow_pickle=True) as npz:
+        assert float(npz["lat"]) == 35.0
+        assert float(npz["lon"]) == -100.0
+        assert np.asarray(npz["pres"]).size == len(_LEVELS)
 
 
 # --------------------------------------------------------------------------- #

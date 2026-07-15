@@ -21,6 +21,8 @@ def _model_fetch_runtime_check(output_path: str) -> int:
         "frozen": bool(getattr(sys, "frozen", False)),
     }
     try:
+        from logging.handlers import RotatingFileHandler
+
         import cdsapi
         import cfgrib
         import eccodes
@@ -29,6 +31,7 @@ def _model_fetch_runtime_check(output_path: str) -> int:
         import pyproj
         import xarray
 
+        from sharpmod.gui import main as gui_main
         from sharpmod.tools import model_extract
 
         result.update(
@@ -40,6 +43,8 @@ def _model_fetch_runtime_check(output_path: str) -> int:
             pyproj=pyproj.__version__,
             xarray=xarray.__version__,
             configured_models=len(model_extract.available_models()),
+            logging_handlers=bool(RotatingFileHandler),
+            gui_entrypoint=callable(gui_main),
             ok=True,
         )
     except BaseException as exc:  # noqa: BLE001 - diagnostics must be recorded

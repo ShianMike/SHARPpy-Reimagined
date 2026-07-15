@@ -21,6 +21,8 @@ actually exercised at least once.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import numpy.ma as ma
 from hypothesis import event, given
@@ -91,3 +93,26 @@ def test_ecape_non_negative_on_unstable_example():
     val = ecape_mod.ecape(_unstable_sounding())
     assert not is_missing(val), "unstable sounding should yield a computed ECAPE"
     assert float(val) >= 0.0
+
+
+def test_ecape_ignores_unphysical_saturation_state_above_equilibrium_level():
+    """Upper-stratospheric levels outside the ECAPE integral emit no warning."""
+    snd = _unstable_sounding()
+    extended = SoundingData(
+        np.append(snd.pres, 1.0),
+        np.append(snd.hght, 49420.0),
+        np.append(snd.tmpc, 5.2),
+        np.append(snd.dwpc, -106.6),
+        np.append(snd.wdir, 87.0),
+        np.append(snd.wspd, 39.0),
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        value = ecape_mod.ecape(extended)
+
+    assert not is_missing(value)
+    assert not any(
+        "Saturation mixing ratio is undefined" in str(item.message)
+        for item in caught
+    )

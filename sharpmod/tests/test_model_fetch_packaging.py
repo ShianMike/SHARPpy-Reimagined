@@ -12,6 +12,8 @@ def test_release_installs_model_fetch_dependencies():
     )
     assert 'python -m pip install -e ".[render,era5]"' in workflow
     assert "--model-fetch-runtime-check" in workflow
+    assert "Verify frozen single-file runtime" in workflow
+    assert workflow.count("--model-fetch-runtime-check") >= 2
 
 
 def test_pyinstaller_bundles_model_fetch_runtime():
@@ -29,6 +31,12 @@ def test_pyinstaller_bundles_model_fetch_runtime():
     assert '"cfgrib"' not in excludes_block
     assert '"herbie"' not in excludes_block
 
+    # The checkout lives inside a wrapper folder.  Analysis must use the
+    # repository root resolved by the spec, not a relative parent directory,
+    # or the editable ``sharpmod`` package is absent on other machines.
+    assert "pathex=[_REPO]" in spec
+    assert 'pathex=[".."]' not in spec
+
 
 def test_frozen_runtime_check_imports_cds_client():
     launcher = (ROOT / "packaging" / "sharpmod_gui_launcher.py").read_text(
@@ -38,3 +46,6 @@ def test_frozen_runtime_check_imports_cds_client():
     assert "import cdsapi" in launcher
     assert "import numcodecs" in launcher
     assert "import pyproj" in launcher
+    assert "from logging.handlers import RotatingFileHandler" in launcher
+    assert "logging_handlers=bool(RotatingFileHandler)" in launcher
+    assert "gui_entrypoint=callable(gui_main)" in launcher

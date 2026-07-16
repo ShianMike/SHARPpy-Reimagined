@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "sharpmod-rs"
-version = "0.4.0"
+version = "0.4.1"
 description = "Supported Rust-primary numerical and GRIB backend for SHARPpy Reimagined"
 readme = "README.md"
 requires-python = ">=3.11"

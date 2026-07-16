@@ -1,4 +1,5 @@
-//! PyO3 bindings for SHARPpy Reimagined's optional acceleration kernels.
+//! PyO3 bindings for SHARPpy Reimagined's primary Rust numerical and direct
+//! GRIB point-decoding backend.
 
 pub mod grib;
 pub mod interpolation;

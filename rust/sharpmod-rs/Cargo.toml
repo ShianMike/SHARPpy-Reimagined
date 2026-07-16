@@ -1,9 +1,9 @@
 [package]
 name = "sharpmod-rs"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 rust-version = "1.88"
-description = "Optional Rust acceleration kernels for SHARPpy Reimagined"
+description = "Primary Rust numerical and direct GRIB decoding backend for SHARPpy Reimagined"
 readme = "README.md"
 license = "BSD-3-Clause"
 repository = "https://github.com/ShianMike/SHARPpy-Reimagined"

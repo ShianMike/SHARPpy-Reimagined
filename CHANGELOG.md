@@ -7,6 +7,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-16
+
 ### Changed
 
 - Updated the Rust backend's `libloading` dependency from 0.8.9 to 0.9.0 and

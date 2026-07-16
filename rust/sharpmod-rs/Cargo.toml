@@ -15,7 +15,7 @@ name = "sharpmod_rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-libloading = "0.8"
+libloading = "0.9"
 memchr = "2.7"
 memmap2 = "0.9"
 numpy = "0.29"

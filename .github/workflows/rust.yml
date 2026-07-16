@@ -1,0 +1,450 @@
+name: Rust backend
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "rust/sharpmod-rs/**"
+      - "sharpmod/_version.py"
+      - "sharpmod/backends/**"
+      - "sharpmod/model_transport.py"
+      - "sharpmod/sharptab/interp.py"
+      - "sharpmod/sharptab/profile.py"
+      - "sharpmod/tools/era5_extract.py"
+      - "sharpmod/tools/model_extract.py"
+      - "sharpmod/tests/test_backend_*.py"
+      - "sharpmod/tests/test_grib_backend_equivalence.py"
+      - "sharpmod/tests/test_scalar_pressure_merge.py"
+      - "benchmarks/**"
+      - "packaging/sharpmod_gui.spec"
+      - "packaging/sharpmod_gui_launcher.py"
+      - "pyproject.toml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/rust.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-checks:
+    name: Stable quality, MSRV, and source contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Create Python virtual environment
+        run: |
+          python -m venv "$RUNNER_TEMP/sharpmod-rust-venv"
+          echo "$RUNNER_TEMP/sharpmod-rust-venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$RUNNER_TEMP/sharpmod-rust-venv" >> "$GITHUB_ENV"
+
+      - name: Set up stable Rust and the 1.86 MSRV
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup component add rustfmt clippy --toolchain stable
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default stable
+
+      - name: Install Python test and build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy>=1.24,<3" "pytest>=7" "hypothesis>=6" "PyYAML>=6" "maturin==1.14.1"
+          python -m pip install -e . --no-deps
+
+      - name: Check Rust formatting on stable
+        working-directory: rust/sharpmod-rs
+        run: cargo +stable fmt --all -- --check
+
+      - name: Lint all Rust targets on stable
+        working-directory: rust/sharpmod-rs
+        run: cargo +stable clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Test all Rust targets on stable
+        working-directory: rust/sharpmod-rs
+        run: cargo +stable test --locked --all-targets
+
+      - name: Test all Rust targets on the 1.86 MSRV
+        working-directory: rust/sharpmod-rs
+        run: cargo +1.86.0 test --locked --all-targets
+
+      - name: Test source versions and workflow structure
+        run: >-
+          python -m pytest -q sharpmod/tests/test_backend_packaging.py
+          -k "native_source_versions or rust_workflow or release_workflow"
+
+      - name: Build and install extension
+        working-directory: rust/sharpmod-rs
+        run: python -m maturin develop --release --locked
+
+      - name: Smoke-test Rust backend selection
+        env:
+          SHARPMOD_BACKEND: rust
+        run: >-
+          python -c "import sharpmod, sharpmod_rs; from sharpmod.backends import backend_info;
+          info = backend_info();
+          assert sharpmod_rs.__version__ == sharpmod.__version__;
+          assert info['requested_backend'] == 'rust', info;
+          assert info['active_backend'] == 'rust', info;
+          assert info['fallback_reason'] is None, info; print(info)"
+
+      - name: Test backend behavior and equivalence
+        env:
+          SHARPMOD_BACKEND: rust
+        run: >-
+          python -m pytest -q
+          sharpmod/tests/test_backend_selection.py
+          sharpmod/tests/test_python_backend.py
+          sharpmod/tests/test_backend_integration.py
+          sharpmod/tests/test_backend_equivalence.py
+
+  numpy-compat:
+    name: Native integration (${{ matrix.name }})
+    needs: rust-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: NumPy 1.26
+            numpy: "numpy==1.26.*"
+            numpy-major: "1"
+          - name: NumPy 2.x
+            numpy: "numpy>=2,<3"
+            numpy-major: "2"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install selected NumPy and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "${{ matrix.numpy }}" "pytest>=7" "hypothesis>=6" "maturin==1.14.1"
+          python -m pip install -e . --no-deps
+
+      - name: Build and install extension against selected NumPy
+        working-directory: rust/sharpmod-rs
+        run: python -m maturin develop --release --locked
+
+      - name: Verify NumPy and required Rust selection
+        env:
+          EXPECTED_NUMPY_MAJOR: ${{ matrix.numpy-major }}
+          SHARPMOD_BACKEND: rust
+        run: >-
+          python -c "import numpy as np; from sharpmod.backends import backend_info;
+          info = backend_info();
+          assert np.__version__.split('.', 1)[0] == __import__('os').environ['EXPECTED_NUMPY_MAJOR'];
+          assert info['active_backend'] == 'rust', info;
+          assert info['fallback_reason'] is None, info; print(np.__version__, info)"
+
+      - name: Test real integration and Python-Rust equivalence
+        env:
+          SHARPMOD_BACKEND: rust
+        run: >-
+          python -m pytest -q
+          sharpmod/tests/test_backend_equivalence.py
+          sharpmod/tests/test_backend_integration.py
+
+  wheels:
+    name: Wheel (${{ matrix.platform }}, ${{ matrix.python-version }})
+    needs: rust-checks
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            manylinux: "off"
+            python-version: "3.11"
+            python-tag: cp311
+            interpreter: python
+          - platform: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            manylinux: "off"
+            python-version: "3.12"
+            python-tag: cp312
+            interpreter: python
+          - platform: linux-x86_64-manylinux2014
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2014"
+            python-version: "3.11"
+            python-tag: cp311
+            interpreter: python3.11
+          - platform: linux-x86_64-manylinux2014
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2014"
+            python-version: "3.12"
+            python-tag: cp312
+            interpreter: python3.12
+          - platform: macos-x86_64
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            manylinux: "off"
+            python-version: "3.11"
+            python-tag: cp311
+            interpreter: python
+          - platform: macos-x86_64
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            manylinux: "off"
+            python-version: "3.12"
+            python-tag: cp312
+            interpreter: python
+          - platform: macos-arm64
+            os: macos-15
+            target: aarch64-apple-darwin
+            manylinux: "off"
+            python-version: "3.11"
+            python-tag: cp311
+            interpreter: python
+          - platform: macos-arm64
+            os: macos-15
+            target: aarch64-apple-darwin
+            manylinux: "off"
+            python-version: "3.12"
+            python-tag: cp312
+            interpreter: python
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy>=1.24,<3" "pytest>=7" "hypothesis>=6" "PyYAML>=6"
+          python -m pip install -e . --no-deps
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          maturin-version: v1.14.1
+          rust-toolchain: stable
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          working-directory: rust/sharpmod-rs
+          args: --release --locked --out dist -i ${{ matrix.interpreter }}
+
+      - name: Inspect source and wheel metadata
+        env:
+          SHARPMOD_RS_WHEEL: rust/sharpmod-rs/dist
+        run: python -m pytest -q sharpmod/tests/test_backend_packaging.py
+
+      - name: Resolve and smoke-test wheel in a clean environment
+        shell: python
+        env:
+          SHARPMOD_RS_WHEEL: rust/sharpmod-rs/dist
+        run: |
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          import tempfile
+          import venv
+
+          wheels = list(Path(os.environ["SHARPMOD_RS_WHEEL"]).glob("*.whl"))
+          assert len(wheels) == 1, wheels
+          venv_dir = Path(tempfile.mkdtemp(prefix="sharpmod-rs-wheel-"))
+          venv.EnvBuilder(with_pip=True).create(venv_dir)
+          python = venv_dir / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+          subprocess.check_call([
+              python, "-c",
+              "import importlib.util; assert importlib.util.find_spec('numpy') is None",
+          ])
+          subprocess.check_call([python, "-m", "pip", "install", str(wheels[0])])
+          subprocess.check_call([python, "-m", "pip", "check"])
+          subprocess.check_call([
+              python,
+              "-c",
+              "import numpy as np, sharpmod_rs; "
+              "u, v = sharpmod_rs.wind_to_components("
+              "np.array([270.0]), np.array([10.0])); "
+              "assert np.allclose(u, [10.0]) and np.allclose(v, [0.0]); "
+              "print(np.__version__, sharpmod_rs.__version__)",
+          ])
+
+      - name: Install built wheel
+        run: >-
+          python -c "import pathlib, subprocess, sys;
+          wheels = list(pathlib.Path('rust/sharpmod-rs/dist').glob('*.whl'));
+          assert len(wheels) == 1, wheels;
+          subprocess.check_call([sys.executable, '-m', 'pip', 'install',
+          '--force-reinstall', '--no-deps', str(wheels[0])])"
+
+      - name: Smoke-test wheel and Rust backend selection
+        env:
+          SHARPMOD_BACKEND: rust
+        run: >-
+          python -c "import sharpmod, sharpmod_rs; from sharpmod.backends import backend_info;
+          info = backend_info();
+          assert sharpmod_rs.__version__ == sharpmod.__version__;
+          assert info['requested_backend'] == 'rust', info;
+          assert info['active_backend'] == 'rust', info;
+          assert info['fallback_reason'] is None, info; print(info)"
+
+      - name: Test wheel integration and equivalence
+        env:
+          SHARPMOD_BACKEND: rust
+        run: >-
+          python -m pytest -q
+          sharpmod/tests/test_backend_equivalence.py
+          sharpmod/tests/test_backend_integration.py
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: sharpmod-rs-${{ matrix.platform }}-${{ matrix.python-tag }}
+          path: rust/sharpmod-rs/dist/*.whl
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-frozen:
+    name: Rust-enabled Windows frozen application
+    needs: wheels
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Download CPython 3.11 Windows native wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: sharpmod-rs-windows-x86_64-cp311
+          path: ${{ runner.temp }}/sharpmod-rs-wheel
+
+      - name: Install application, freezer, and native wheel
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[render,era5]"
+          python -m pip install --no-deps "SHARPpy==1.4.0a5"
+          python -m pip install pyinstaller
+          $wheels = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/sharpmod-rs-wheel" -Filter "*.whl")
+          if ($wheels.Count -ne 1) { throw "Expected one native wheel, found $($wheels.Count)" }
+          python -m pip install --force-reinstall --no-deps $wheels[0].FullName
+
+      - name: Require Rust before freezing
+        env:
+          SHARPMOD_BACKEND: rust
+        run: >-
+          python -c "from sharpmod.backends import backend_info, wind_to_components;
+          info = backend_info(); assert info['active_backend'] == 'rust', info;
+          assert info['fallback_reason'] is None, info;
+          assert abs(wind_to_components(270.0, 10.0)[0] - 10.0) < 1e-12; print(info)"
+
+      - name: Generate application icon
+        run: python packaging/make_icon.py
+        continue-on-error: true
+
+      - name: Build Rust-enabled one-folder executable
+        run: pyinstaller packaging/sharpmod_gui.spec --clean --noconfirm
+
+      - name: Verify Rust-enabled one-folder runtime
+        env:
+          SHARPMOD_BACKEND: rust
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP "rust-one-folder-runtime.json"
+          $quotedReport = '"' + $report + '"'
+          $process = Start-Process `
+            -FilePath "dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe" `
+            -ArgumentList "--model-fetch-runtime-check", $quotedReport `
+            -Wait -PassThru
+          if ($process.ExitCode -ne 0 -or -not (Test-Path $report)) {
+            if (Test-Path $report) { Get-Content $report }
+            throw "Rust-enabled one-folder runtime check failed"
+          }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if (-not $result.ok -or -not $result.backend_kernel_ok -or `
+              $result.backend.requested_backend -ne "rust" -or `
+              $result.backend.active_backend -ne "rust" -or `
+              $null -ne $result.backend.fallback_reason) {
+            $result | ConvertTo-Json -Depth 5
+            throw "Rust-enabled one-folder runtime report is invalid"
+          }
+          $result | ConvertTo-Json -Depth 5
+
+      - name: Build Rust-enabled single-file executable
+        env:
+          SHARPMOD_ONEFILE: "1"
+        run: pyinstaller packaging/sharpmod_gui.spec --clean --noconfirm
+
+      - name: Verify Rust-enabled single-file runtime
+        env:
+          SHARPMOD_BACKEND: rust
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP "rust-one-file-runtime.json"
+          $quotedReport = '"' + $report + '"'
+          $process = Start-Process `
+            -FilePath "dist/SHARPpy-Reimagined.exe" `
+            -ArgumentList "--model-fetch-runtime-check", $quotedReport `
+            -Wait -PassThru
+          if ($process.ExitCode -ne 0 -or -not (Test-Path $report)) {
+            if (Test-Path $report) { Get-Content $report }
+            throw "Rust-enabled single-file runtime check failed"
+          }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if (-not $result.ok -or -not $result.backend_kernel_ok -or `
+              $result.backend.requested_backend -ne "rust" -or `
+              $result.backend.active_backend -ne "rust" -or `
+              $null -ne $result.backend.fallback_reason) {
+            $result | ConvertTo-Json -Depth 5
+            throw "Rust-enabled single-file runtime report is invalid"
+          }
+          $result | ConvertTo-Json -Depth 5
+
+      - name: Upload frozen runtime reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: sharpmod-rs-windows-frozen-runtime-reports
+          path: ${{ runner.temp }}/rust-*-runtime.json
+          if-no-files-found: error
+          retention-days: 14

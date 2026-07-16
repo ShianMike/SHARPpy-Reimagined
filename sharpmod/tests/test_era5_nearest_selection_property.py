@@ -142,6 +142,24 @@ def test_selected_grid_point_accepts_scalar_single_point_coordinates():
     assert glon == 59.75
 
 
+def test_regular_grid_selection_does_not_materialize_meshgrids(monkeypatch):
+    """Independent coordinate axes stay O(nlat+nlon), not O(nlat*nlon)."""
+    def _unexpected_meshgrid(*_args, **_kwargs):
+        raise AssertionError("regular-grid selection materialized a meshgrid")
+
+    monkeypatch.setattr(np, "meshgrid", _unexpected_meshgrid)
+    index, glat, glon = era5.select_nearest_grid_point(
+        np.linspace(20.0, 50.0, 1059),
+        np.linspace(230.0, 300.0, 1799),
+        39.0,
+        -89.0,
+    )
+
+    assert index == (670, 1053)
+    assert glat == float(np.linspace(20.0, 50.0, 1059)[670])
+    assert glon == float(np.linspace(230.0, 300.0, 1799)[1053])
+
+
 # --------------------------------------------------------------------------- #
 # Property 17 -- nearest analysis time
 # --------------------------------------------------------------------------- #

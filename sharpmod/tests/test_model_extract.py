@@ -124,6 +124,111 @@ def test_model_extract_writes_loadable_npz(tmp_path, monkeypatch):
         8.0e-5)
 
 
+def test_owned_dataset_closes_when_cancelled_after_retrieval(
+        tmp_path, monkeypatch):
+    class CloseTracker:
+        close_calls = 0
+
+        def close(self):
+            self.close_calls += 1
+
+    tracker = CloseTracker()
+    monkeypatch.setattr(
+        model_extract,
+        "_retrieve_dataset",
+        lambda *_args, **_kwargs: (
+            tracker, SimpleNamespace(grib="memory://cancelled")
+        ),
+    )
+
+    with pytest.raises(model_extract.DownloadCancelled):
+        model_extract.extract(
+            "gfs",
+            35.0,
+            -99.0,
+            run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+            out_path=tmp_path / "cancelled.npz",
+            cancelled=lambda: True,
+        )
+
+    assert tracker.close_calls == 1
+
+
+def test_direct_failure_uses_compact_xarray_fallback(
+        tmp_path, monkeypatch):
+    path = tmp_path / "fallback.grib2"
+    path.write_bytes(b"GRIB-fallback-7777")
+    source = model_extract._LocalGribDataset(path)
+    fallback = _dataset()
+    seen = {"fallback": 0}
+
+    def fail_direct(*_args, **_kwargs):
+        raise RuntimeError("unsupported packing")
+
+    def fallback_point(lat, lon, run_dt):
+        seen["fallback"] += 1
+        assert (lat, lon) == (35.0, -99.0)
+        return fallback
+
+    monkeypatch.setenv("SHARPMOD_GRIB_DECODER", "auto")
+    monkeypatch.setattr(model_extract, "_decode_local_point", fail_direct)
+    monkeypatch.setattr(source, "fallback_point_dataset", fallback_point)
+
+    output = tmp_path / "fallback.npz"
+    model_extract.extract(
+        "gfs",
+        35.0,
+        -99.0,
+        run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+        out_path=output,
+        dataset=source,
+    )
+
+    assert seen["fallback"] == 1
+    with np.load(output, allow_pickle=False) as payload:
+        value = float(np.asarray(
+            payload["surface_relative_vorticity"]
+        ).reshape(-1)[0])
+        assert value == pytest.approx(8.0e-5)
+
+
+def test_forced_direct_failure_does_not_silently_use_xarray(
+        tmp_path, monkeypatch):
+    path = tmp_path / "forced-direct.grib2"
+    path.write_bytes(b"GRIB-forced-direct-7777")
+    source = model_extract._LocalGribDataset(path)
+    monkeypatch.setenv("SHARPMOD_GRIB_DECODER", "direct")
+    monkeypatch.setattr(
+        model_extract,
+        "_decode_local_point",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("native decode failed")
+        ),
+    )
+    monkeypatch.setattr(
+        source,
+        "fallback_point_dataset",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("forced direct mode opened xarray")
+        ),
+    )
+    output = tmp_path / "forced-direct.npz"
+
+    with pytest.raises(
+        model_extract.RetrievalError, match="direct GRIB point decoding failed"
+    ):
+        model_extract.extract(
+            "gfs",
+            35.0,
+            -99.0,
+            run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+            out_path=output,
+            dataset=source,
+        )
+
+    assert not output.exists()
+
+
 def test_extract_forwards_isolated_download_directory(tmp_path, monkeypatch):
     seen = {}
 
@@ -297,6 +402,7 @@ def test_retrieve_dataset_uses_pruned_search_and_optimized_transport(
     search = seen["optimized"][1]
     assert "SPFH" not in search
     assert "DZDT" not in search
+    assert len(seen["inventory"]) == 1
     assert seen["xarray"][0] == search
     assert herbie._sharpmod_fields == (
         "HGT", "TMP", "UGRD", "VGRD", "RH", "VVEL", "ABSV"

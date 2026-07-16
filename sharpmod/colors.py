@@ -36,6 +36,7 @@ parameters, to the documented lowest tier), matching the legacy behavior.
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 
 __all__ = [
     "BLACK",
@@ -81,6 +82,9 @@ __all__ = [
     "ncape_color",
     "ecape_color",
     "tier_color",
+    "contrast_ratio",
+    "resolve_theme_color",
+    "semantic_palette",
     "scheme_preferences",
 ]
 
@@ -96,6 +100,144 @@ WHITE = "#ffffff"
 FG_COLOR = WHITE
 #: Chart background the palette is designed to remain legible against.
 BG_COLOR = BLACK
+
+
+def _rgb(color: str) -> tuple[int, int, int]:
+    """Parse a CSS-style hex color without pulling Qt into this module."""
+    value = str(color).strip()
+    if value.startswith("#"):
+        value = value[1:]
+    if len(value) == 3:
+        value = "".join(ch * 2 for ch in value)
+    if len(value) != 6:
+        raise ValueError(f"unsupported color {color!r}; expected #rrggbb")
+    try:
+        return tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
+    except ValueError as exc:
+        raise ValueError(
+            f"unsupported color {color!r}; expected #rrggbb") from exc
+
+
+def _hex(rgb: tuple[int, int, int]) -> str:
+    return "#%02x%02x%02x" % rgb
+
+
+def _relative_luminance(color: str) -> float:
+    channels = []
+    for channel in _rgb(color):
+        value = channel / 255.0
+        channels.append(
+            value / 12.92
+            if value <= 0.04045
+            else ((value + 0.055) / 1.055) ** 2.4
+        )
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def contrast_ratio(foreground: str, background: str) -> float:
+    """Return the WCAG contrast ratio between two ``#rrggbb`` colors."""
+    first = _relative_luminance(foreground)
+    second = _relative_luminance(background)
+    lighter, darker = max(first, second), min(first, second)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+@lru_cache(maxsize=512)
+def _resolve_theme_color_cached(
+        color: str, bg_color: str, fg_color: str, minimum: float) -> str:
+    source = _hex(_rgb(color))
+    background = _hex(_rgb(bg_color))
+    foreground = _hex(_rgb(fg_color))
+
+    # The standard and protanopia palettes are deliberately unchanged.  Their
+    # established colors are part of the renderer's visual contract; only a
+    # light canvas needs the contrast correction introduced here.
+    if _relative_luminance(background) < 0.5:
+        return source
+    if contrast_ratio(source, background) >= minimum:
+        return source
+
+    # Neutral legacy white means "normal foreground".  On a light canvas it
+    # should therefore become the configured foreground rather than a dimmed
+    # gray approximation of white.
+    if source == WHITE and contrast_ratio(foreground, background) >= minimum:
+        return foreground
+
+    # Preserve hue by walking the smallest possible integer blend toward
+    # black.  An integer search avoids returning a rounded color just below
+    # the requested ratio and is cheap enough to cache for all repeated draws.
+    source_rgb = _rgb(source)
+    for step in range(1, 256):
+        fraction = step / 255.0
+        candidate = _hex(tuple(
+            round(channel * (1.0 - fraction)) for channel in source_rgb
+        ))
+        if contrast_ratio(candidate, background) >= minimum:
+            return candidate
+
+    return BLACK
+
+
+def resolve_theme_color(
+        color: str, bg_color: str, fg_color: str, minimum: float = 4.5) -> str:
+    """Return ``color`` adjusted only when a light theme needs more contrast.
+
+    Existing standard/protanopia (dark-background) values are returned exactly
+    in normalized hex form.  For a light canvas, already-compliant colors stay
+    unchanged while low-contrast colors are minimally darkened toward black.
+    """
+    try:
+        threshold = max(1.0, float(minimum))
+        return _resolve_theme_color_cached(
+            str(color), str(bg_color), str(fg_color), threshold)
+    except (TypeError, ValueError):
+        # Rendering should never fail because a third-party config supplied a
+        # malformed optional semantic color.
+        return str(fg_color)
+
+
+_SEMANTIC_COLORS = {
+    "neutral": WHITE,
+    "header": WHITE,
+    "rule": "#8a8a8a",
+    "cyan": "#00b0b0",
+    "magenta": "#ff40ff",
+    "red": "#ff4040",
+    "yellow": "#e0c000",
+    "green": "#00ff00",
+    "orange": "#ffa500",
+    "blue": "#3399ff",
+    "amber_l1": ALERT_L1_COLOR if "ALERT_L1_COLOR" in globals() else "#c8911f",
+    "amber_l2": ALERT_L2_COLOR if "ALERT_L2_COLOR" in globals() else "#e0a800",
+    "profile": "#44ddaa",
+    "cyclonic": "#ff3333",
+    "anticyclonic": "#4488ff",
+    "border": "#3399cc",
+    "grid": "#33506a",
+    "marker_gray": "#b8bcc2",
+    "marker_orange": "#ff8800",
+    "marker_yellow": "#ffcc00",
+    "corfidi": "#00bfff",
+    "mpl": "#00d7ff",
+    "hodo_0500": "#ff00ff",
+    "tornado_ef1": "#006600",
+    "tornado_ef2": "#ffcc33",
+    "tornado_ef3": "#ff0000",
+    "tornado_ef4": "#ff00ff",
+    "conditional_grid": "#0080ff",
+}
+
+
+def semantic_palette(bg_color: str, fg_color: str) -> dict[str, str]:
+    """Return stable semantic renderer roles for the current canvas theme.
+
+    Every role meets 4.5:1 contrast on a light background.  Dark-background
+    values intentionally remain byte-for-byte equivalent after normalization.
+    """
+    return {
+        role: resolve_theme_color(value, bg_color, fg_color)
+        for role, value in _SEMANTIC_COLORS.items()
+    }
 
 # Shared index/composite-value gradient. Parameter-specific thresholds still
 # determine when a value escalates. Severe composites additionally use the
@@ -620,7 +762,12 @@ def tier_color(param: str, value, **context) -> str:
             f"unknown tier parameter {param!r}; "
             f"expected one of {sorted(_TIER_DISPATCH)}"
         )
-    return fn(value, **context)
+    resolved = fn(value, **context)
+    bg_color = context.get("bg_color")
+    if bg_color is not None:
+        resolved = resolve_theme_color(
+            resolved, bg_color, context.get("fg_color", FG_COLOR))
+    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -657,6 +804,10 @@ def scheme_preferences(config=None) -> dict:
             value = _read_pref(config, key)
             if value:
                 prefs[key] = value
+    prefs["alert_l1_color"] = resolve_theme_color(
+        prefs["alert_l1_color"], prefs["bg_color"], prefs["fg_color"])
+    prefs["alert_l2_color"] = resolve_theme_color(
+        prefs["alert_l2_color"], prefs["bg_color"], prefs["fg_color"])
     return prefs
 
 

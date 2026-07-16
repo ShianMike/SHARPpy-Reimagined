@@ -459,6 +459,67 @@ def _read_config_preferences(config):
     return preferences
 
 
+_LIGHT_GUIDE_COLOR_KEYS = {
+    # These are intentionally subtle construction/grid lines, not text or
+    # scientific traces.  Forcing them to text contrast would overwhelm the
+    # sounding on a white canvas.
+    "skew_itherm_color",
+    "skew_adiab_color",
+    "skew_mixr_color",
+    "hodo_itach_color",
+    "spd_itach_color",
+}
+
+
+def _color_style_preferences(style):
+    """Return a complete, renderer-ready palette for ``style``.
+
+    The vendored inverted preset predates a light-mode contrast pass and uses
+    many bright colors that disappear on white.  Preserve the established
+    standard/protanopia values while adapting the inverted scientific colors
+    to a 4.5:1 contrast target.  Background guide lines remain deliberately
+    subtle.
+    """
+    from sharppy.viz.preferences import PrefDialog
+    from sharpmod import colors
+
+    palette = dict(PrefDialog._styles[style])
+    if style in {"standard", "protanopia"}:
+        # Preserve SHARPpy Reimagined's documented readable dark-theme amber
+        # substitutions, which replace the legacy low-contrast browns.
+        palette["alert_l1_color"] = colors.ALERT_L1_COLOR
+        palette["alert_l2_color"] = colors.ALERT_L2_COLOR
+        return palette
+
+    bg_color = palette["bg_color"]
+    fg_color = palette["fg_color"]
+    for key, color in tuple(palette.items()):
+        if key in {"bg_color", "fg_color"} or key in _LIGHT_GUIDE_COLOR_KEYS:
+            continue
+        palette[key] = colors.resolve_theme_color(
+            color, bg_color, fg_color, minimum=4.5)
+    return palette
+
+
+def _apply_selected_color_style(config, style=None) -> None:
+    """Apply one complete color style to a live SHARPpy config."""
+    if config is None:
+        return
+    if style is None:
+        try:
+            style = config["preferences", "color_style"]
+        except Exception:
+            return
+    if style not in CONFIG_PREFERENCE_OPTIONS["color_style"]:
+        return
+    try:
+        config["preferences", "color_style"] = style
+        for key, color in _color_style_preferences(style).items():
+            config["preferences", key] = color
+    except Exception:
+        return
+
+
 def _write_config_preferences(config, preferences) -> None:
     """Apply validated persisted preferences to SHARPpy's runtime config."""
     if config is None:
@@ -479,15 +540,7 @@ def _write_config_preferences(config, preferences) -> None:
     # only its name, so an inverted/protanopia choice is correct on first open.
     style = validated.get("color_style")
     if style is not None:
-        try:
-            from sharppy.viz.preferences import PrefDialog
-
-            for key, color in PrefDialog._styles[style].items():
-                if key in {"alert_l1_color", "alert_l2_color"}:
-                    continue
-                config["preferences", key] = color
-        except Exception:
-            pass
+        _apply_selected_color_style(config, style)
 
 
 def _read_config_unit(config, key):
@@ -504,11 +557,11 @@ def _write_unit_preferences_to_config(config, preferences) -> None:
 
 
 def _apply_unit_preferences_to_window(win, config) -> None:
-    """Refresh mounted SHARPpy Reimagined widgets after unit changes."""
+    """Refresh the complete sounding window after preference changes."""
     try:
-        from sharpmod.viz.SPCWindow import reapply_color_scheme
+        from sharpmod.viz.SPCWindow import apply_preferences_to_window
 
-        reapply_color_scheme(win, config)
+        apply_preferences_to_window(win, config)
         return
     except Exception:
         pass

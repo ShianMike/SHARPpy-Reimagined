@@ -41,6 +41,8 @@ from __future__ import annotations
 import numpy as np
 import numpy.ma as ma
 
+from sharpmod import backends as _backends
+
 from .constants import MISSING, is_missing
 
 __all__ = [
@@ -152,13 +154,8 @@ def generic_interp_hght(h, hght, field, log=False):
     Interpolated value(s), or :data:`MISSING` when the height falls outside the
     reported range or fewer than two usable levels exist.
     """
-    x, y = _valid_pairs(hght, field)
-    if x.size < 2:
-        return MISSING
-    order = np.argsort(x, kind="stable")
-    x, y = x[order], y[order]
-    result = np.interp(h, x, y, left=np.nan, right=np.nan)
-    return _finalize(result, log)
+    return _backends.interpolate_1d(
+        h, hght, field, missing=None, log=log)
 
 
 def generic_interp_pres(p, pres, field, log=False):
@@ -172,13 +169,8 @@ def generic_interp_pres(p, pres, field, log=False):
     Interpolated value(s), or :data:`MISSING` when the pressure falls outside the
     reported range or fewer than two usable levels exist.
     """
-    x, y = _valid_pairs(pres, field)
-    if x.size < 2:
-        return MISSING
-    order = np.argsort(x, kind="stable")
-    x, y = x[order], y[order]
-    result = np.interp(p, x, y, left=np.nan, right=np.nan)
-    return _finalize(result, log)
+    return _backends.interpolate_1d(
+        p, pres, field, missing=None, log=log)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,3840 @@
+{
+  "benchmark": "SHARPpy Reimagined all-model local GRIB decoding",
+  "environment_identity": {
+    "cfgrib": "0.9.15.1",
+    "eccodes_library": "2.47.0",
+    "eccodes_python": "2.47.0",
+    "git_revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+    "git_tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e",
+    "numpy": "2.4.6",
+    "python": "3.11.14",
+    "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+    "source_fingerprints": {
+      "benchmark_decoding": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+        "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+      },
+      "legacy_decoding": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+        "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+      },
+      "sharpmod.backends.grib": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+        "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+      },
+      "sharpmod.backends.python_backend": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+        "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+      },
+      "sharpmod.backends.rust_backend": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+        "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+      },
+      "sharpmod_rs": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+        "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+      },
+      "sharpmod_rs.sharpmod_rs": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+        "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+      }
+    },
+    "xarray": "2026.4.0"
+  },
+  "equivalence_scope": {
+    "cross_generation_core": [
+      "pres",
+      "hght",
+      "tmpc",
+      "dwpc",
+      "wdir",
+      "wspd",
+      "u",
+      "v"
+    ],
+    "cross_generation_optional": [
+      "omeg"
+    ],
+    "within_generation": "strict all columns including omega"
+  },
+  "failures": [],
+  "generated_at": "2026-07-16T08:21:20.214632+00:00",
+  "input_fingerprints": {
+    "decoder_driver_sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9",
+    "manifest_sha256": "ed231928dae8192fb0a7ce48ef8a2fe23d1c10e4537b58dd5b14e69bf193a7d5",
+    "matrix_driver_sha256": "33cd6d5dca7514e6234577da6f46eee819fba4e543636170f1e32c246c1f1275"
+  },
+  "manifest": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\all-model-fixtures.json",
+  "models": [
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "HRRR",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "hrrr",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrrr.grib2",
+        "pressure_level_count": 40,
+        "product": "prs",
+        "production_decode_path": "direct GRIB (F000 may use point Zarr in auto mode)",
+        "run": "2026-07-16T04:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:01:41.268843+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 40,
+            "legacy_levels": 40,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 40,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 40,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 40,
+                "max_abs_difference_on_common": 9.822542779825251e-14,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 40,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 40,
+            "optimized": 40
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 40,
+          "reference": "optimized-python",
+          "selected_lat": 35.18069065447114,
+          "selected_lon": -97.4398067119418,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": 4.597194309717572e-05
+            },
+            "optimized": {
+              "status": "matched",
+              "value": 4.597194274327316e-05
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181241618072800,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrrr.grib2",
+          "sha256": "b6e291f5e4b2628f44bc9f2050ec1fb846d196b12adf6d57fdd1d206d3aa69e6",
+          "size_bytes": 161875836
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 14.0113325,
+            "median_seconds": 13.6561913,
+            "minimum_seconds": 13.6139949,
+            "samples_seconds": [
+              14.0113325,
+              13.6139949,
+              13.6561913
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 6.8808594,
+            "median_seconds": 6.666527,
+            "minimum_seconds": 6.4162899,
+            "samples_seconds": [
+              6.4162899,
+              6.666527,
+              6.8808594
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 14.4821458,
+            "median_seconds": 13.6238008,
+            "minimum_seconds": 13.5790083,
+            "samples_seconds": [
+              14.4821458,
+              13.6238008,
+              13.5790083
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 6.4031621,
+            "median_seconds": 6.325879,
+            "minimum_seconds": 6.285861,
+            "samples_seconds": [
+              6.285861,
+              6.325879,
+              6.4031621
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0005443,
+            "median_seconds": 0.0002356,
+            "minimum_seconds": 0.0002118,
+            "samples_seconds": [
+              0.0005443,
+              0.0002356,
+              0.0002118
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.0002938,
+            "median_seconds": 0.0002005,
+            "minimum_seconds": 0.0001286,
+            "samples_seconds": [
+              0.0002938,
+              0.0001286,
+              0.0002005
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "RAP",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "rap",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\rap.grib2",
+        "pressure_level_count": 37,
+        "product": "awp130pgrb",
+        "production_decode_path": "direct GRIB",
+        "run": "2026-07-16T04:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:02:42.098275+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 37,
+            "legacy_levels": 37,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 37,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 37,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 37,
+                "max_abs_difference_on_common": 0.0,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 37,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 37,
+            "optimized": 37
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 37,
+          "reference": "optimized-python",
+          "selected_lat": 35.22075454622663,
+          "selected_lon": -97.49441983455205,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": 9.383720501732805e-06
+            },
+            "optimized": {
+              "status": "matched",
+              "value": 4.7747446451839096e-05
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181242443973300,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\rap.grib2",
+          "sha256": "67a9cd7521e4e8a61406a516e87f461024eacf2589cd2e2f13f2d30a63e6c42d",
+          "size_bytes": 9815504
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 4.5465401,
+            "median_seconds": 4.4682872,
+            "minimum_seconds": 4.3747111,
+            "samples_seconds": [
+              4.3747111,
+              4.4682872,
+              4.5465401
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 2.2788598,
+            "median_seconds": 2.2131364,
+            "minimum_seconds": 2.2074835,
+            "samples_seconds": [
+              2.2131364,
+              2.2788598,
+              2.2074835
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 4.6900972,
+            "median_seconds": 4.442193,
+            "minimum_seconds": 4.3400485,
+            "samples_seconds": [
+              4.3400485,
+              4.6900972,
+              4.442193
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 2.1165292,
+            "median_seconds": 2.095314,
+            "minimum_seconds": 2.0871651,
+            "samples_seconds": [
+              2.1165292,
+              2.095314,
+              2.0871651
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0004121,
+            "median_seconds": 0.0001973,
+            "minimum_seconds": 0.0001881,
+            "samples_seconds": [
+              0.0004121,
+              0.0001973,
+              0.0001881
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.0001704,
+            "median_seconds": 0.0001156,
+            "minimum_seconds": 0.0001155,
+            "samples_seconds": [
+              0.0001704,
+              0.0001155,
+              0.0001156
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "NAM",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "nam",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\nam.grib2",
+        "pressure_level_count": 39,
+        "product": "awphys",
+        "production_decode_path": "direct GRIB",
+        "run": "2026-07-16T00:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:03:53.140828+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 39,
+            "legacy_levels": 39,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 39,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 39,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 39,
+                "max_abs_difference_on_common": 9.05990599209261e-09,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 39,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 39,
+            "optimized": 39
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 39,
+          "reference": "optimized-python",
+          "selected_lat": 35.198017815393584,
+          "selected_lon": -97.46260153009081,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": -9.770892433977083e-06
+            },
+            "optimized": {
+              "status": "matched",
+              "value": -9.770889307061527e-06
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181165115599700,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\nam.grib2",
+          "sha256": "faa291ad708ccfcaf209e373bba50ea59839b08e939281b77424ebb371c42a79",
+          "size_bytes": 37539877
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 10.6531276,
+            "median_seconds": 8.1746413,
+            "minimum_seconds": 4.0328984,
+            "samples_seconds": [
+              4.0328984,
+              10.6531276,
+              8.1746413
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 3.5894689,
+            "median_seconds": 1.2333971,
+            "minimum_seconds": 1.1428501,
+            "samples_seconds": [
+              1.1428501,
+              1.2333971,
+              3.5894689
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 11.1034388,
+            "median_seconds": 4.0031657,
+            "minimum_seconds": 3.9059544,
+            "samples_seconds": [
+              3.9059544,
+              4.0031657,
+              11.1034388
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 3.3450316,
+            "median_seconds": 0.9808085,
+            "minimum_seconds": 0.9581835,
+            "samples_seconds": [
+              0.9581835,
+              0.9808085,
+              3.3450316
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0008795,
+            "median_seconds": 0.0006674,
+            "minimum_seconds": 0.0005897,
+            "samples_seconds": [
+              0.0008795,
+              0.0006674,
+              0.0005897
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.000449,
+            "median_seconds": 0.0004154,
+            "minimum_seconds": 0.0003873,
+            "samples_seconds": [
+              0.000449,
+              0.0004154,
+              0.0003873
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "NAM 3km CONUS",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "nam-3km-conus",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\nam-3km-conus.grib2",
+        "pressure_level_count": 42,
+        "product": "conusnest.hiresf",
+        "production_decode_path": "direct GRIB",
+        "run": "2026-07-16T00:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:08:46.637954+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 42,
+            "legacy_levels": 42,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 42,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 42,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 42,
+                "max_abs_difference_on_common": 1.0490417423625331e-08,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 42,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 42,
+            "optimized": 42
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 42,
+          "reference": "optimized-python",
+          "selected_lat": 35.18069171084332,
+          "selected_lon": -97.44038977755264,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": -0.00010702805996485108
+            },
+            "optimized": {
+              "status": "matched",
+              "value": -0.00010702805945448632
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181498913595500,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\nam-3km-conus.grib2",
+          "sha256": "6978ccbf7fbb928a6d81736a585129a30a77398334472e9d24cb340f5846c2db",
+          "size_bytes": 380603239
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 19.8010629,
+            "median_seconds": 19.33412,
+            "minimum_seconds": 19.1563127,
+            "samples_seconds": [
+              19.33412,
+              19.1563127,
+              19.8010629
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 10.1258179,
+            "median_seconds": 9.8485331,
+            "minimum_seconds": 9.803558,
+            "samples_seconds": [
+              9.803558,
+              10.1258179,
+              9.8485331
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 19.1177857,
+            "median_seconds": 19.1122634,
+            "minimum_seconds": 18.7305704,
+            "samples_seconds": [
+              18.7305704,
+              19.1177857,
+              19.1122634
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 9.9672794,
+            "median_seconds": 9.5410455,
+            "minimum_seconds": 9.3366949,
+            "samples_seconds": [
+              9.9672794,
+              9.3366949,
+              9.5410455
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0004374,
+            "median_seconds": 0.0001983,
+            "minimum_seconds": 0.0001868,
+            "samples_seconds": [
+              0.0004374,
+              0.0001868,
+              0.0001983
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.0001815,
+            "median_seconds": 0.0001396,
+            "minimum_seconds": 0.0001171,
+            "samples_seconds": [
+              0.0001815,
+              0.0001171,
+              0.0001396
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "HRW WRF-ARW",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "hrw-wrf-arw",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrw-wrf-arw.grib2",
+        "pressure_level_count": 27,
+        "product": "arw_5km",
+        "production_decode_path": "direct GRIB",
+        "run": "2026-07-16T00:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:10:34.748093+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 27,
+            "legacy_levels": 27,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 27,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 27,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 27,
+                "max_abs_difference_on_common": 0.0,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 27,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 27,
+            "optimized": 27
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 27,
+          "reference": "optimized-python",
+          "selected_lat": 35.16064415432141,
+          "selected_lon": -97.4227610120086,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": -2.501990152867316e-05
+            },
+            "optimized": {
+              "status": "matched",
+              "value": 6.393751283854258e-05
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181243372868400,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrw-wrf-arw.grib2",
+          "sha256": "8874ea477c764fcbb2efe79b1115160aff9b6ad6f7679ac9cec76c6a23148c62",
+          "size_bytes": 96301647
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 8.092566,
+            "median_seconds": 7.9275298,
+            "minimum_seconds": 7.9080255,
+            "samples_seconds": [
+              7.9080255,
+              8.092566,
+              7.9275298
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 3.9852909,
+            "median_seconds": 3.9638359,
+            "minimum_seconds": 3.9573339,
+            "samples_seconds": [
+              3.9638359,
+              3.9852909,
+              3.9573339
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 8.2122532,
+            "median_seconds": 7.9660921,
+            "minimum_seconds": 7.8913938,
+            "samples_seconds": [
+              8.2122532,
+              7.8913938,
+              7.9660921
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 3.8628591,
+            "median_seconds": 3.8584573,
+            "minimum_seconds": 3.8200021,
+            "samples_seconds": [
+              3.8628591,
+              3.8200021,
+              3.8584573
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0004625,
+            "median_seconds": 0.0003352,
+            "minimum_seconds": 0.0002548,
+            "samples_seconds": [
+              0.0004625,
+              0.0002548,
+              0.0003352
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.0001813,
+            "median_seconds": 0.0001809,
+            "minimum_seconds": 0.0001358,
+            "samples_seconds": [
+              0.0001809,
+              0.0001358,
+              0.0001813
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "HRW FV3",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "hrw-fv3",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrw-fv3.grib2",
+        "pressure_level_count": 27,
+        "product": "fv3_5km",
+        "production_decode_path": "direct GRIB",
+        "run": "2026-07-16T00:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:12:13.811349+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 27,
+            "legacy_levels": 27,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 27,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 27,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 27,
+                "max_abs_difference_on_common": 0.0,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 27,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 27,
+            "optimized": 27
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 27,
+          "reference": "optimized-python",
+          "selected_lat": 35.16064415432141,
+          "selected_lon": -97.4227610120086,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": 5.6294775139339624e-05
+            },
+            "optimized": {
+              "status": "matched",
+              "value": 3.9936627828776955e-05
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181244175579100,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrw-fv3.grib2",
+          "sha256": "69510ed624aa9ce345d4d7cf15c12eca4f2b8336d5ca02f7bfdfdee33bdabb9f",
+          "size_bytes": 92106618
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 7.6331625,
+            "median_seconds": 7.5535656,
+            "minimum_seconds": 7.509691,
+            "samples_seconds": [
+              7.6331625,
+              7.509691,
+              7.5535656
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 3.5367538,
+            "median_seconds": 3.5188358,
+            "minimum_seconds": 3.514703,
+            "samples_seconds": [
+              3.5367538,
+              3.514703,
+              3.5188358
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 7.7395303,
+            "median_seconds": 7.7199788,
+            "minimum_seconds": 7.4356648,
+            "samples_seconds": [
+              7.4356648,
+              7.7199788,
+              7.7395303
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 3.4374147,
+            "median_seconds": 3.4326085,
+            "minimum_seconds": 3.3884106,
+            "samples_seconds": [
+              3.3884106,
+              3.4326085,
+              3.4374147
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0009994,
+            "median_seconds": 0.0002358,
+            "minimum_seconds": 0.0001946,
+            "samples_seconds": [
+              0.0009994,
+              0.0002358,
+              0.0001946
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.000251,
+            "median_seconds": 0.0001203,
+            "minimum_seconds": 0.0001168,
+            "samples_seconds": [
+              0.000251,
+              0.0001203,
+              0.0001168
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "RRFS A",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "rrfs-a",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\rrfs-a.grib2",
+        "pressure_level_count": 45,
+        "product": "prslev",
+        "production_decode_path": "direct GRIB",
+        "run": "2026-07-16T00:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:15:20.620253+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 45,
+            "legacy_levels": 45,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 45,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 0,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 0,
+                "max_abs_difference_on_common": null,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 0,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 45,
+            "optimized": 45
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 45,
+          "reference": "optimized-python",
+          "selected_lat": 35.18069065447114,
+          "selected_lon": -97.4398067119418,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": -0.00020102806048562222
+            },
+            "optimized": {
+              "status": "matched",
+              "value": -0.00020102805725672688
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181304047854400,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\rrfs-a.grib2",
+          "sha256": "66768eaf01e9a8c0dd39296300dd4442d744bc541130a54b90374168a9678fd5",
+          "size_bytes": 355350947
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 14.9522411,
+            "median_seconds": 14.3808223,
+            "minimum_seconds": 14.3625182,
+            "samples_seconds": [
+              14.3808223,
+              14.3625182,
+              14.9522411
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 6.8529563,
+            "median_seconds": 6.8219142,
+            "minimum_seconds": 6.7257251,
+            "samples_seconds": [
+              6.7257251,
+              6.8529563,
+              6.8219142
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 14.8786988,
+            "median_seconds": 14.5331937,
+            "minimum_seconds": 14.4290729,
+            "samples_seconds": [
+              14.8786988,
+              14.5331937,
+              14.4290729
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 6.401747,
+            "median_seconds": 6.3796901,
+            "minimum_seconds": 6.302135,
+            "samples_seconds": [
+              6.3796901,
+              6.302135,
+              6.401747
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0004468,
+            "median_seconds": 0.0002088,
+            "minimum_seconds": 0.0001915,
+            "samples_seconds": [
+              0.0004468,
+              0.0002088,
+              0.0001915
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.0002164,
+            "median_seconds": 0.0001332,
+            "minimum_seconds": 0.0001197,
+            "samples_seconds": [
+              0.0002164,
+              0.0001332,
+              0.0001197
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "GFS",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "gfs",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\gfs.grib2",
+        "pressure_level_count": 41,
+        "product": "pgrb2.0p25",
+        "production_decode_path": "direct GRIB",
+        "run": "2026-07-16T00:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:17:57.200960+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 33,
+            "legacy_levels": 33,
+            "optimized_extra_pressures_hpa": [
+              0.7,
+              0.4,
+              0.2,
+              0.1,
+              0.07,
+              0.04,
+              0.02,
+              0.01
+            ],
+            "optimized_levels": 41,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 33,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 33,
+                "max_abs_difference_on_common": 2.813339239349233e-08,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 33,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 33,
+            "optimized": 41
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 41,
+          "reference": "optimized-python",
+          "selected_lat": 35.25,
+          "selected_lon": -97.5,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": 3.122685283363546e-05
+            },
+            "optimized": {
+              "status": "matched",
+              "value": 3.122685551398184e-05
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181496997301800,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\gfs.grib2",
+          "sha256": "7f90ea419466b86c7bee93abd001fb6a615a46846af7179257f406509fd5476a",
+          "size_bytes": 229809761
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 14.6636755,
+            "median_seconds": 14.5023658,
+            "minimum_seconds": 14.3056386,
+            "samples_seconds": [
+              14.3056386,
+              14.5023658,
+              14.6636755
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 4.1037806,
+            "median_seconds": 3.609185,
+            "minimum_seconds": 3.6023135,
+            "samples_seconds": [
+              3.609185,
+              4.1037806,
+              3.6023135
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 14.6875866,
+            "median_seconds": 14.4545164,
+            "minimum_seconds": 14.3894561,
+            "samples_seconds": [
+              14.6875866,
+              14.3894561,
+              14.4545164
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 3.4219617,
+            "median_seconds": 3.3330533,
+            "minimum_seconds": 3.3220389,
+            "samples_seconds": [
+              3.4219617,
+              3.3220389,
+              3.3330533
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0011208,
+            "median_seconds": 0.0002873,
+            "minimum_seconds": 0.0002262,
+            "samples_seconds": [
+              0.0011208,
+              0.0002873,
+              0.0002262
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.0005293,
+            "median_seconds": 0.0002018,
+            "minimum_seconds": 0.0001316,
+            "samples_seconds": [
+              0.0005293,
+              0.0002018,
+              0.0001316
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "AIGFS",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "aigfs",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\aigfs.grib2",
+        "pressure_level_count": 13,
+        "product": "pres",
+        "production_decode_path": "xarray vorticity fallback (direct point decoder benchmarked)",
+        "run": "2026-07-16T00:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:18:36.137668+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 13,
+            "legacy_levels": 13,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 13,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 12,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 12,
+                "max_abs_difference_on_common": 1.6689300497141346e-08,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 12,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 13,
+            "optimized": 13
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 13,
+          "reference": "optimized-python",
+          "selected_lat": 35.25,
+          "selected_lon": -97.5,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": 3.169065704683131e-05
+            },
+            "optimized": {
+              "status": "both-unavailable",
+              "value": null
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181644745146500,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\aigfs.grib2",
+          "sha256": "f541aa33fcb78a9684b334958dee30133650a69056a1b8899629c52b8803f25e",
+          "size_bytes": 82834645
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 3.0324802,
+            "median_seconds": 3.0212791,
+            "minimum_seconds": 2.8965698,
+            "samples_seconds": [
+              2.8965698,
+              3.0212791,
+              3.0324802
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 1.1665814,
+            "median_seconds": 1.1442659,
+            "minimum_seconds": 1.1349582,
+            "samples_seconds": [
+              1.1442659,
+              1.1349582,
+              1.1665814
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 2.9429655,
+            "median_seconds": 2.884502,
+            "minimum_seconds": 2.8841972,
+            "samples_seconds": [
+              2.8841972,
+              2.884502,
+              2.9429655
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 1.1406508,
+            "median_seconds": 1.0907848,
+            "minimum_seconds": 1.0589481,
+            "samples_seconds": [
+              1.0907848,
+              1.0589481,
+              1.1406508
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0003772,
+            "median_seconds": 0.0002176,
+            "minimum_seconds": 0.0001947,
+            "samples_seconds": [
+              0.0003772,
+              0.0001947,
+              0.0002176
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.000148,
+            "median_seconds": 0.0001269,
+            "minimum_seconds": 0.0001177,
+            "samples_seconds": [
+              0.000148,
+              0.0001269,
+              0.0001177
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "CFS",
+        "lat": 35.18,
+        "lon": -97.44,
+        "member": 1,
+        "model": "cfs",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\cfs.grib2",
+        "pressure_level_count": 37,
+        "product": "6_hourly",
+        "production_decode_path": "direct GRIB",
+        "run": "2026-07-15T18:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:19:43.119694+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 37,
+            "legacy_levels": 37,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 37,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 37,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 37,
+                "max_abs_difference_on_common": 1.4019012450905421e-08,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 37,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 37,
+            "optimized": 37
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 37,
+          "reference": "optimized-python",
+          "selected_lat": 35.0,
+          "selected_lon": -97.0,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": -1.9851718712099163e-05
+            },
+            "optimized": {
+              "status": "matched",
+              "value": -1.9851717027616003e-05
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181305023603600,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\cfs.grib2",
+          "sha256": "6e7b4f6e6ed3ff1340f3d1e0dd445a41188bef0e3eff7b36ad1498100dc0a5de",
+          "size_bytes": 12181352
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 5.0874717,
+            "median_seconds": 4.9445959,
+            "minimum_seconds": 4.878167,
+            "samples_seconds": [
+              4.9445959,
+              4.878167,
+              5.0874717
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 2.5650453,
+            "median_seconds": 2.5178297,
+            "minimum_seconds": 2.5019476,
+            "samples_seconds": [
+              2.5019476,
+              2.5178297,
+              2.5650453
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 4.9486612,
+            "median_seconds": 4.8850376,
+            "minimum_seconds": 4.8388466,
+            "samples_seconds": [
+              4.8388466,
+              4.8850376,
+              4.9486612
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 2.3826044,
+            "median_seconds": 2.3658956,
+            "minimum_seconds": 2.3562885,
+            "samples_seconds": [
+              2.3826044,
+              2.3658956,
+              2.3562885
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0003948,
+            "median_seconds": 0.000205,
+            "minimum_seconds": 0.0002017,
+            "samples_seconds": [
+              0.0003948,
+              0.000205,
+              0.0002017
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.000145,
+            "median_seconds": 0.0001226,
+            "minimum_seconds": 0.0001189,
+            "samples_seconds": [
+              0.000145,
+              0.0001189,
+              0.0001226
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "ECMWF IFS Open Data",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "ecmwf-ifs",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\ecmwf-ifs.grib2",
+        "pressure_level_count": 14,
+        "product": "oper",
+        "production_decode_path": "direct GRIB",
+        "run": "2026-07-15T18:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:20:28.425009+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 14,
+            "legacy_levels": 14,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 14,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 14,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 14,
+                "max_abs_difference_on_common": 0.0,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 14,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 14,
+            "optimized": 14
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 14,
+          "reference": "optimized-python",
+          "selected_lat": 35.25,
+          "selected_lon": -97.5,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": -2.9147835448384285e-05
+            },
+            "optimized": {
+              "status": "matched",
+              "value": -2.9147835448384285e-05
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181628096572200,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\ecmwf-ifs.grib2",
+          "sha256": "4230720b5c51941fbfe912e017509bb2287abbc3420122e754e74b1cba9c6829",
+          "size_bytes": 74926254
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 3.6444529,
+            "median_seconds": 3.4873569,
+            "minimum_seconds": 3.4839578,
+            "samples_seconds": [
+              3.6444529,
+              3.4873569,
+              3.4839578
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 1.3377634,
+            "median_seconds": 1.3308185,
+            "minimum_seconds": 1.2864424,
+            "samples_seconds": [
+              1.3377634,
+              1.3308185,
+              1.2864424
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 3.480585,
+            "median_seconds": 3.4381417,
+            "minimum_seconds": 3.3757543,
+            "samples_seconds": [
+              3.3757543,
+              3.4381417,
+              3.480585
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 1.2422501,
+            "median_seconds": 1.2392305,
+            "minimum_seconds": 1.2378358,
+            "samples_seconds": [
+              1.2378358,
+              1.2392305,
+              1.2422501
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0004243,
+            "median_seconds": 0.0003017,
+            "minimum_seconds": 0.0002029,
+            "samples_seconds": [
+              0.0004243,
+              0.0003017,
+              0.0002029
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.0002446,
+            "median_seconds": 0.0001876,
+            "minimum_seconds": 0.0001205,
+            "samples_seconds": [
+              0.0001876,
+              0.0002446,
+              0.0001205
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "ECMWF-AIFS",
+        "lat": 35.18,
+        "lon": -97.44,
+        "model": "ecmwf-aifs",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\ecmwf-aifs.grib2",
+        "pressure_level_count": 14,
+        "product": "oper",
+        "production_decode_path": "xarray vorticity fallback (direct point decoder benchmarked)",
+        "run": "2026-07-15T18:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:21:06.495104+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 14,
+            "legacy_levels": 14,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 14,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 14,
+                "legacy_only_pressures_hpa": [],
+                "legacy_valid_levels": 14,
+                "max_abs_difference_on_common": 0.0,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 14,
+                "status": "matched"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 14,
+            "optimized": 14
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 14,
+          "reference": "optimized-python",
+          "selected_lat": 35.25,
+          "selected_lon": -97.5,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": -1.912804982313594e-05
+            },
+            "optimized": {
+              "status": "both-unavailable",
+              "value": null
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181628877669000,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\ecmwf-aifs.grib2",
+          "sha256": "33a26417175380d62cc8be87d766dac44514d56a16d059864e69bed8d48c5deb",
+          "size_bytes": 58648820
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 2.9742433,
+            "median_seconds": 2.9268929,
+            "minimum_seconds": 2.9262084,
+            "samples_seconds": [
+              2.9268929,
+              2.9262084,
+              2.9742433
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 1.1255671,
+            "median_seconds": 1.1236987,
+            "minimum_seconds": 1.1005397,
+            "samples_seconds": [
+              1.1236987,
+              1.1005397,
+              1.1255671
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 2.9490429,
+            "median_seconds": 2.9301736,
+            "minimum_seconds": 2.921717,
+            "samples_seconds": [
+              2.921717,
+              2.9301736,
+              2.9490429
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 1.1467223,
+            "median_seconds": 1.0494237,
+            "minimum_seconds": 1.0338906,
+            "samples_seconds": [
+              1.0338906,
+              1.0494237,
+              1.1467223
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0004504,
+            "median_seconds": 0.0001926,
+            "minimum_seconds": 0.0001855,
+            "samples_seconds": [
+              0.0004504,
+              0.0001926,
+              0.0001855
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.0001505,
+            "median_seconds": 0.0001222,
+            "minimum_seconds": 0.0001186,
+            "samples_seconds": [
+              0.0001505,
+              0.0001222,
+              0.0001186
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    },
+    {
+      "fixture": {
+        "fxx": 0,
+        "label": "GEFS",
+        "lat": 35.18,
+        "lon": -97.44,
+        "member": "c00",
+        "model": "gefs",
+        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\gefs.grib2",
+        "pressure_level_count": 12,
+        "product": "atmos.5",
+        "production_decode_path": "xarray vorticity fallback (direct point decoder benchmarked)",
+        "run": "2026-07-16T00:00:00Z"
+      },
+      "result": {
+        "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+        "environment": {
+          "cfgrib": "0.9.15.1",
+          "eccodes_library": "2.47.0",
+          "eccodes_python": "2.47.0",
+          "generated_at": "2026-07-16T08:21:19.789017+00:00",
+          "git": {
+            "branch": "main",
+            "dirty": true,
+            "revision": "e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a",
+            "status_sha256": "fed855d65b85fc800e89a0360369f1fcfbb76d299780e4c219267a70bc30cc59",
+            "tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e"
+          },
+          "machine": "AMD64",
+          "numpy": "2.4.6",
+          "platform": "Windows-10-10.0.26200-SP0",
+          "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+          "python": "3.11.14",
+          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "sharpmod": "0.4.0",
+          "sharpmod_rs": "0.4.0",
+          "source_fingerprints": {
+            "benchmark_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+            },
+            "legacy_decoding": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+            },
+            "sharpmod.backends.grib": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
+            },
+            "sharpmod.backends.python_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
+            },
+            "sharpmod.backends.rust_backend": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
+            },
+            "sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+            },
+            "sharpmod_rs.sharpmod_rs": {
+              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
+            }
+          },
+          "xarray": "2026.4.0"
+        },
+        "equivalence": {
+          "cross_generation": {
+            "common_levels": 12,
+            "legacy_levels": 12,
+            "optimized_extra_pressures_hpa": [],
+            "optimized_levels": 12,
+            "optional_fields": {
+              "omeg": {
+                "common_valid_levels": 1,
+                "legacy_only_pressures_hpa": [
+                  1000.0,
+                  925.0,
+                  700.0,
+                  500.0,
+                  400.0,
+                  300.0,
+                  250.0,
+                  200.0,
+                  100.0,
+                  50.0,
+                  10.0
+                ],
+                "legacy_valid_levels": 12,
+                "max_abs_difference_on_common": 0.4019999999701977,
+                "optimized_only_pressures_hpa": [],
+                "optimized_valid_levels": 1,
+                "status": "different"
+              }
+            },
+            "status": "passed"
+          },
+          "generation_levels": {
+            "old": 12,
+            "optimized": 12
+          },
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "levels": 12,
+          "reference": "optimized-python",
+          "selected_lat": 35.0,
+          "selected_lon": -97.5,
+          "status": "passed",
+          "surface_relative_vorticity": {
+            "old": {
+              "status": "matched",
+              "value": -1.1829985389763159e-05
+            },
+            "optimized": {
+              "status": "both-unavailable",
+              "value": null
+            }
+          }
+        },
+        "fixture": {
+          "mtime_ns": 1784181589150846700,
+          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\gefs.grib2",
+          "sha256": "515abcfec9962f1e99ec7d13f189b8f1878929705ce86603e19f6a0c617df50d",
+          "size_bytes": 11552600
+        },
+        "records": [
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-python",
+            "maximum_seconds": 1.0601913,
+            "median_seconds": 0.9272363,
+            "minimum_seconds": 0.8825777,
+            "samples_seconds": [
+              0.9272363,
+              0.8825777,
+              1.0601913
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.3446323,
+            "median_seconds": 0.2469075,
+            "minimum_seconds": 0.2207211,
+            "samples_seconds": [
+              0.2207211,
+              0.2469075,
+              0.3446323
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "cfgrib index disabled explicitly",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "old-rust",
+            "maximum_seconds": 1.216511,
+            "median_seconds": 0.9001898,
+            "minimum_seconds": 0.8175882,
+            "samples_seconds": [
+              0.8175882,
+              0.9001898,
+              1.216511
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "full local decode with application caches cleared",
+            "details": {
+              "cache_state": "all application GRIB caches cleared",
+              "os_file_cache": "not flushed"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.2047523,
+            "median_seconds": 0.2010132,
+            "minimum_seconds": 0.1940244,
+            "samples_seconds": [
+              0.2010132,
+              0.2047523,
+              0.1940244
+            ],
+            "stage": "application-cold"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "inventory": {
+                  "hits": 0,
+                  "max_size": 8,
+                  "misses": 1,
+                  "size": 1
+                },
+                "nearest": {
+                  "hits": 0,
+                  "max_size": 256,
+                  "misses": 1,
+                  "size": 1
+                },
+                "points": {
+                  "hits": 0,
+                  "max_size": 128,
+                  "misses": 1,
+                  "size": 1
+                }
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-python",
+            "maximum_seconds": 0.0004284,
+            "median_seconds": 0.0002109,
+            "minimum_seconds": 0.0001992,
+            "samples_seconds": [
+              0.0004284,
+              0.0001992,
+              0.0002109
+            ],
+            "stage": "point-cache-hit"
+          },
+          {
+            "calls_per_sample": 1,
+            "description": "same point served from the decoded-point cache",
+            "details": {
+              "cache_after_setup": {
+                "hits": 0,
+                "max_size": 128,
+                "misses": 1,
+                "size": 1
+              },
+              "cache_state": "same decoded-point key retained"
+            },
+            "implementation": "optimized-rust",
+            "maximum_seconds": 0.0001551,
+            "median_seconds": 0.0001228,
+            "minimum_seconds": 0.0001177,
+            "samples_seconds": [
+              0.0001551,
+              0.0001177,
+              0.0001228
+            ],
+            "stage": "point-cache-hit"
+          }
+        ],
+        "schema_version": 1,
+        "settings": {
+          "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+          "implementations": [
+            "old-python",
+            "optimized-python",
+            "old-rust",
+            "optimized-rust"
+          ],
+          "lat": 35.18,
+          "lon": -97.44,
+          "repeat": 3,
+          "second_lat": 35.23,
+          "second_lon": -97.39,
+          "stages": [
+            "application-cold",
+            "point-cache-hit"
+          ],
+          "valid_time": null,
+          "warmup": 0
+        },
+        "unavailable": [
+          {
+            "implementation": "old-python",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          },
+          {
+            "implementation": "old-rust",
+            "reason": "StageUnavailable: the frozen decoder had no decoded-point cache",
+            "stage": "point-cache-hit"
+          }
+        ]
+      }
+    }
+  ],
+  "schema_version": 1,
+  "settings": {
+    "implementations": [
+      "old-python",
+      "optimized-python",
+      "old-rust",
+      "optimized-rust"
+    ],
+    "repeat": 3,
+    "stages": [
+      "application-cold",
+      "point-cache-hit"
+    ],
+    "warmup": 0
+  },
+  "unavailable": []
+}

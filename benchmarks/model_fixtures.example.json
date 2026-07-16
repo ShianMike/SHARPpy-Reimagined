@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "model": "hrrr",
+      "label": "HRRR",
+      "product": "prs",
+      "run": "2026-07-16T01:00:00Z",
+      "fxx": 0,
+      "member": null,
+      "lat": 35.18,
+      "lon": -97.44,
+      "path": "C:/path/to/complete-hrrr-pressure-subset.grib2",
+      "production_decode_path": "direct GRIB (F000 may use Zarr in auto mode)"
+    }
+  ],
+  "unavailable": [
+    {
+      "model": "rap",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "nam",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "nam-3km-conus",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "hrw-wrf-arw",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "hrw-fv3",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "rrfs-a",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "gfs",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "aigfs",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "cfs",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "ecmwf-ifs",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "ecmwf-aifs",
+      "reason": "example only: replace with a complete fixture entry"
+    },
+    {
+      "model": "gefs",
+      "reason": "example only: replace with a complete fixture entry"
+    }
+  ]
+}

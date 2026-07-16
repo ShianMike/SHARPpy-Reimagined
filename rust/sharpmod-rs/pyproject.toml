@@ -1,0 +1,30 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "sharpmod-rs"
+version = "0.4.0"
+description = "Supported Rust-primary numerical and GRIB backend for SHARPpy Reimagined"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.24,<3"]
+license = { text = "BSD-3-Clause" }
+authors = [{ name = "SHARPpy Reimagined maintainers" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+
+[project.urls]
+Repository = "https://github.com/ShianMike/SHARPpy-Reimagined"
+
+[tool.maturin]
+bindings = "pyo3"
+module-name = "sharpmod_rs"
+manifest-path = "Cargo.toml"

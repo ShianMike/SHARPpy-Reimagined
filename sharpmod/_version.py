@@ -1,3 +1,3 @@
 """Single source of truth for SHARPpy Reimagined's package version."""
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"

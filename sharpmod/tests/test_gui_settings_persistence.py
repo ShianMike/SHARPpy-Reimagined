@@ -12,6 +12,11 @@ from qtpy.QtWidgets import QApplication
 
 import sharpmod.gui as gui
 from sharpmod import gui_picker
+from sharpmod import colors
+from sharpmod.gui_settings import (
+    _LIGHT_GUIDE_COLOR_KEYS,
+    _color_style_preferences,
+)
 from sharpmod.gui import (
     CONFIG_PREFERENCE_DEFAULTS,
     PickerWindow,
@@ -130,3 +135,22 @@ def test_lazy_config_creation_restores_celsius_and_other_preferences(
     } == chosen
     assert restored["preferences", "dewp_color"] == "#00ffff"
     app.processEvents()
+
+
+def test_complete_color_styles_preserve_dark_palettes_and_optimize_inverted():
+    from sharppy.viz.preferences import PrefDialog
+
+    for style in ("standard", "protanopia"):
+        actual = _color_style_preferences(style)
+        expected = dict(PrefDialog._styles[style])
+        expected["alert_l1_color"] = colors.ALERT_L1_COLOR
+        expected["alert_l2_color"] = colors.ALERT_L2_COLOR
+        assert actual == expected
+
+    inverted = _color_style_preferences("inverted")
+    assert inverted["bg_color"] == "#ffffff"
+    assert inverted["fg_color"] == "#000000"
+    for key, color in inverted.items():
+        if key in {"bg_color", "fg_color"} | _LIGHT_GUIDE_COLOR_KEYS:
+            continue
+        assert colors.contrast_ratio(color, inverted["bg_color"]) >= 4.5

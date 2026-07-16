@@ -132,6 +132,29 @@ def test_retrieve_dataset_explains_missing_cds_credentials(monkeypatch):
             datetime(2026, 6, 22, 12, tzinfo=timezone.utc))
 
 
+def test_merged_dataset_closes_every_cfgrib_source():
+    """The merged cache entry owns, and releases, every source dataset."""
+    xr = pytest.importorskip("xarray")
+    closed = []
+    first = xr.Dataset(
+        {"t": (("isobaricInhPa",), [280.0])},
+        coords={"isobaricInhPa": [1000.0]},
+    )
+    second = xr.Dataset(
+        {"u": (("isobaricInhPa",), [5.0])},
+        coords={"isobaricInhPa": [1000.0]},
+    )
+    filtered = xr.Dataset({"surface": ((), 1.0)})
+    first.set_close(lambda: closed.append("first"))
+    second.set_close(lambda: closed.append("second"))
+    filtered.set_close(lambda: closed.append("filtered"))
+
+    merged = era5._merge_datasets([first, second, filtered])
+    merged.close()
+
+    assert closed == ["first", "second", "filtered"]
+
+
 def test_single_point_subset_does_not_reject_the_requested_longitude():
     """A snapped one-point response is not the source dataset's coverage."""
     _, _, ds = _dataset()

@@ -95,6 +95,7 @@ __all__ = [
     "attach_cape_fill",
     "attach_family_rows",
     "mount_products",
+    "apply_preferences_to_window",
     "reapply_color_scheme",
     "COMPOSITE_FAMILY_ROWS",
     "THERMO_FAMILY_ROWS",
@@ -261,22 +262,40 @@ def compose_window(config, prof_col=None, *, check_integrity=False,
     if controller is None:
         controller = RenderController(config)
     win = SPCWindow(parent=controller, cfg=config)
+    # The vendored window subscribes the signal to profile refresh and only to
+    # the outer window stylesheet.  Keep one additional retained slot that
+    # applies the config to the actual SPCWidget and every mounted extension.
+    def _apply_preferences(changed_config):
+        apply_preferences_to_window(win, changed_config)
+
+    controller.config_changed.connect(_apply_preferences)
+    win._sharpmod_preferences_slot = _apply_preferences
     if prof_col is not None:
         win.addProfileCollection(prof_col, check_integrity=check_integrity)
-    # Re-apply the palette with update_gui=True so every inset recomputes
-    # per-value tier colors against the current config rather than keeping
-    # stale defaults.
-    win.spc_widget.updateConfig(config, update_gui=True)
 
     if mount:
         prof = _highlighted_profile(prof_col)
         win.sharpmod_products = mount_products(win, prof)
-        # Drive the SHARPpy Reimagined products through the same Color-Scheme re-apply
-        # step so the documented palette is applied consistently to every
-        # SHARPpy Reimagined panel/inset (Requirement 22.4) and each recomputes its
-        # per-value tier colors from the current value (Requirement 22.5).
-        reapply_color_scheme(win, config)
+    # One complete initial application follows the same path as a live picker
+    # change.  This updates every vendored surface plus all mounted products.
+    apply_preferences_to_window(win, config)
     return win, controller
+
+
+def apply_preferences_to_window(win, config):
+    """Apply ``config`` to every surface in one sounding window.
+
+    This is the public live-theme seam used by both the controller signal and
+    compatibility callers.  It deliberately crosses the vendored boundary at
+    ``SPCWidget.updateConfig`` once, then refreshes the mounted extensions that
+    the upstream method cannot know about.
+    """
+    sw = getattr(win, "spc_widget", None) or win
+    sw.updateConfig(config, update_gui=True)
+    update_window = getattr(win, "updateConfig", None)
+    if callable(update_window) and sw is not win:
+        update_window()
+    return reapply_color_scheme(win, config)
 
 
 def reapply_color_scheme(win, config=None):
@@ -316,7 +335,7 @@ def reapply_color_scheme(win, config=None):
     # for backward compatibility with widgets that expose those names.
     for attr in (
             "composite_panel", "thermo_panel", "kinematic_panel",
-            "ship_inset", "derived_indices", "hazard_type", "custom_panel",
+            "ship_inset", "derived_indices", "index_board", "hazard_type", "custom_panel",
             "streamwiseness"):
         candidates.append((attr, getattr(sw, attr, None)))
 

@@ -151,9 +151,15 @@ def _retrieve_dataset(valid_time):
 def _merge_datasets(ds_list):  # pragma: no cover - optional dependency path
     """Merge cfgrib's split datasets into one, importing xarray lazily."""
     import xarray as xr
-    from sharpmod.tools.era5_extract import _LEVEL_COORDS
-    ds_list = [d for d in ds_list
-               if any(c in d.coords for c in _LEVEL_COORDS)]
+    from sharpmod.tools.era5_extract import (
+        _LEVEL_COORDS,
+        _promote_scalar_level_coordinate,
+    )
+    ds_list = [
+        _promote_scalar_level_coordinate(d)
+        for d in ds_list
+        if any(c in d.coords for c in _LEVEL_COORDS)
+    ]
     if not ds_list:
         raise RetrievalError("no pressure-level IFS dataset was returned")
     return xr.merge(ds_list, compat="override", join="outer")

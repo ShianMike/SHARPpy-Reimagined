@@ -195,7 +195,7 @@ class plotStreamwiseness(QtWidgets.QFrame):
         self.use_left = False
         self.bg_color = QtGui.QColor(colors.BG_COLOR)
         self.fg_color = QtGui.QColor(colors.FG_COLOR)
-        self.text_color = QtGui.QColor(self.TEXT_COLOR)
+        self._apply_palette()
         self._legend_rect = QtCore.QRectF()
         self._border_lines = ()
         self.setObjectName("sharpmod_streamwiseness")
@@ -204,7 +204,6 @@ class plotStreamwiseness(QtWidgets.QFrame):
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
-        self.setStyleSheet("QFrame { border: 0px; margin: 0px; }")
         self.plotBitMap = QtGui.QPixmap(max(1, self.width()), max(1, self.height()))
         self._redraw()
 
@@ -222,9 +221,26 @@ class plotStreamwiseness(QtWidgets.QFrame):
             self.bg_color = QtGui.QColor(prefs["bg_color"])
         if "fg_color" in prefs:
             self.fg_color = QtGui.QColor(prefs["fg_color"])
+        self._apply_palette()
         if update_gui:
             self._redraw()
             self.update()
+
+    def _apply_palette(self):
+        palette = colors.semantic_palette(
+            self.bg_color.name(), self.fg_color.name())
+        self.text_color = QtGui.QColor(palette["neutral"])
+        self.profile_color = QtGui.QColor(palette["profile"])
+        self.cyclonic_color = QtGui.QColor(palette["cyclonic"])
+        self.anticyclonic_color = QtGui.QColor(palette["anticyclonic"])
+        self.border_color = QtGui.QColor(palette["border"])
+        self.grid_color = QtGui.QColor(palette["grid"])
+        self.marker_gray = QtGui.QColor(palette["marker_gray"])
+        self.marker_orange = QtGui.QColor(palette["marker_orange"])
+        self.marker_yellow = QtGui.QColor(palette["marker_yellow"])
+        self.setStyleSheet(
+            "QFrame { background-color: %s; border: 0px; margin: 0px; }"
+            % self.bg_color.name())
 
     def setDeviant(self, deviant):
         self.use_left = deviant == "left"
@@ -351,7 +367,7 @@ class plotStreamwiseness(QtWidgets.QFrame):
         painter.restore()
 
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        painter.setPen(QtGui.QPen(QtGui.QColor(self.BORDER_COLOR), 1))
+        painter.setPen(QtGui.QPen(self.border_color, 1))
         self._border_lines = (
             QtCore.QLineF(0.5, 0.5, 0.5, max(0.5, self.height() - 0.5)),
         )
@@ -360,7 +376,7 @@ class plotStreamwiseness(QtWidgets.QFrame):
         painter.end()
 
     def _draw_grid(self, painter, plot, font_size):
-        grid = QtGui.QColor(self.GRID_COLOR)
+        grid = QtGui.QColor(self.grid_color)
         grid.setAlpha(130)
         pen = QtGui.QPen(grid, 1, QtCore.Qt.PenStyle.DashLine)
         painter.setPen(pen)
@@ -405,8 +421,8 @@ class plotStreamwiseness(QtWidgets.QFrame):
             x0 = self._x_to_pix(plot, p0)
             x1 = self._x_to_pix(plot, p1)
             color = QtGui.QColor(
-                self.CYCLONIC_COLOR if (s0 + s1) >= 0.0
-                else self.ANTICYCLONIC_COLOR)
+                self.cyclonic_color if (s0 + s1) >= 0.0
+                else self.anticyclonic_color)
             color.setAlpha(52)
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
             painter.setBrush(QtGui.QBrush(color))
@@ -420,7 +436,7 @@ class plotStreamwiseness(QtWidgets.QFrame):
     def _draw_profile(self, painter, plot):
         data = self.data
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        painter.setPen(QtGui.QPen(QtGui.QColor(self.PROFILE_COLOR), 2))
+        painter.setPen(QtGui.QPen(self.profile_color, 2))
         path = QtGui.QPainterPath()
         active = False
         for value, height_km in zip(data.percent, data.height_km):
@@ -438,8 +454,10 @@ class plotStreamwiseness(QtWidgets.QFrame):
 
     def _draw_markers(self, painter, plot, font_size):
         painter.setFont(self._font(font_size, bold=True))
-        for depth, color_hex in (
-                (0.5, "#b8bcc2"), (1.0, "#ff8800"), (3.0, "#ffcc00")):
+        for depth, marker_color in (
+                (0.5, self.marker_gray),
+                (1.0, self.marker_orange),
+                (3.0, self.marker_yellow)):
             valid = np.isfinite(self.data.percent)
             if not np.any(valid):
                 continue
@@ -449,7 +467,7 @@ class plotStreamwiseness(QtWidgets.QFrame):
             value = float(self.data.percent[index])
             if not np.isfinite(value):
                 continue
-            color = QtGui.QColor(color_hex)
+            color = QtGui.QColor(marker_color)
             color_dim = QtGui.QColor(color)
             color_dim.setAlpha(115)
             y = self._y_to_pix(plot, depth)
@@ -458,7 +476,7 @@ class plotStreamwiseness(QtWidgets.QFrame):
                 color_dim, 1, QtCore.Qt.PenStyle.DashLine))
             painter.drawLine(QtCore.QPointF(plot.left(), y),
                              QtCore.QPointF(plot.right(), y))
-            painter.setPen(QtGui.QPen(QtGui.QColor("#ffffff"), 1))
+            painter.setPen(QtGui.QPen(self.fg_color, 1))
             painter.setBrush(QtGui.QBrush(color))
             painter.drawEllipse(QtCore.QPointF(x, y), 2.8, 2.8)
             label = f"{value:.0f}%"
@@ -476,8 +494,8 @@ class plotStreamwiseness(QtWidgets.QFrame):
         painter.setFont(self._font(font_size))
         metrics = QtGui.QFontMetrics(painter.font())
         labels = (
-            ("Cyclonic", QtGui.QColor(self.CYCLONIC_COLOR)),
-            ("Anticyclonic", QtGui.QColor(self.ANTICYCLONIC_COLOR)),
+            ("Cyclonic", QtGui.QColor(self.cyclonic_color)),
+            ("Anticyclonic", QtGui.QColor(self.anticyclonic_color)),
         )
         row_h = max(9, metrics.height())
         width = min(plot.width() - 4, max(
@@ -488,7 +506,8 @@ class plotStreamwiseness(QtWidgets.QFrame):
         self._legend_rect = QtCore.QRectF(left, top, width, height)
         background = QtGui.QColor(self.bg_color)
         background.setAlpha(220)
-        painter.setPen(QtGui.QPen(QtGui.QColor("#555b62"), 1))
+        painter.setPen(QtGui.QPen(QtGui.QColor(colors.resolve_theme_color(
+            "#555b62", self.bg_color.name(), self.fg_color.name())), 1))
         painter.setBrush(QtGui.QBrush(background))
         painter.drawRect(self._legend_rect)
         for row, (label, color) in enumerate(labels):

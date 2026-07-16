@@ -41,6 +41,8 @@ from datetime import datetime, timezone
 
 import numpy as np
 
+from sharpmod import backends as _backends
+
 __all__ = [
     "extract",
     "ERA5ExtractionError",
@@ -137,9 +139,23 @@ def select_nearest_grid_point(lats, lons, lat0, lon0):
         return (0, 0), float(lats), float(lons)
 
     if lats.ndim == 1 and lons.ndim == 1:
-        lat_grid, lon_grid = np.meshgrid(lats, lons, indexing="ij")
-        dist = great_circle_distance_km(lat0, lon0, lat_grid, lon_grid)
-        ilat, ilon = np.unravel_index(np.argmin(dist), dist.shape)
+        # On a Cartesian product of independent latitude/longitude axes, the
+        # spherical dot product is separable.  The longitude that maximizes
+        # cos(delta_lon) is optimal for every latitude because cos(latitude)
+        # is non-negative over the geographic range.  Choosing that longitude
+        # first and then maximizing the remaining latitude score is therefore
+        # exactly equivalent to the full great-circle mesh search, without
+        # allocating several nlat-by-nlon temporary arrays.
+        lat0r = np.radians(float(lat0))
+        latr = np.radians(lats)
+        lon_delta = np.radians(lons - float(lon0))
+        ilon = int(np.argmax(np.cos(lon_delta)))
+        lon_score = float(np.cos(lon_delta[ilon]))
+        score = (
+            np.sin(lat0r) * np.sin(latr)
+            + np.cos(lat0r) * np.cos(latr) * lon_score
+        )
+        ilat = int(np.argmax(score))
         return (int(ilat), int(ilon)), float(lats[ilat]), float(lons[ilon])
 
     dist = great_circle_distance_km(lat0, lon0, lats, lons)
@@ -169,8 +185,9 @@ def select_nearest_time(times, target):
 
 def uv_to_dir_spd(u, v):
     """Zonal/meridional wind (m/s) -> (met direction degrees, speed knots)."""
-    spd = np.sqrt(np.asarray(u) ** 2 + np.asarray(v) ** 2) * 1.94384449
-    wdir = (270.0 - np.degrees(np.arctan2(v, u))) % 360.0
+    wdir, spd = _backends.components_to_wind(u, v, missing=None)
+    wdir = np.asarray(np.ma.filled(wdir, np.nan), dtype=float)
+    spd = np.asarray(np.ma.filled(spd, np.nan), dtype=float) * 1.94384449
     return wdir, spd
 
 
@@ -240,6 +257,20 @@ def _coord_values(ds, candidates):
     if name is None:
         return None, None
     return name, np.asarray(ds[name].values)
+
+
+def _promote_scalar_level_coordinate(dataset):
+    """Make a one-level pressure coordinate a real dimension before merging.
+
+    cfgrib represents a field published at only one pressure level as a scalar
+    coordinate.  xarray otherwise drops that field's pressure relationship
+    when it is outer-merged with multi-level groups and broadcasts the value as
+    though it had no vertical dimension.
+    """
+    level_name = _first_present(dataset.coords, _LEVEL_COORDS)
+    if level_name is None or dataset[level_name].ndim != 0:
+        return dataset
+    return dataset.expand_dims(level_name)
 
 
 def _coriolis_parameter(latitude):
@@ -358,6 +389,29 @@ def _select_time(ds, valid_time):
     return ds.isel({tname: idx}), selected
 
 
+def _horizontal_indexers(ds, index_tuple):
+    """Map a selected horizontal index onto xarray dimension names."""
+    lat_name = _first_present(ds.coords, _LAT_COORDS)
+    lon_name = _first_present(ds.coords, _LON_COORDS)
+    if lat_name is None or lon_name is None:
+        return {}, (None, None)
+
+    lat_coord = ds[lat_name]
+    lon_coord = ds[lon_name]
+    if lat_coord.ndim == 0 and lon_coord.ndim == 0:
+        return {}, (None, None)
+
+    iy, ix = (int(index_tuple[0]), int(index_tuple[1]))
+    if lat_coord.ndim == 1 and lon_coord.ndim == 1:
+        ydim = lat_coord.dims[0]
+        xdim = lon_coord.dims[0]
+    elif lat_coord.ndim >= 2 and lon_coord.ndim >= 2:
+        ydim, xdim = lat_coord.dims[-2:]
+    else:
+        return {}, (None, None)
+    return {ydim: iy, xdim: ix}, (ydim, xdim)
+
+
 def _column(ds, iy, ix, index_is_regular):
     """Return the ``(level, lat, lon)`` -> per-level column extractor.
 
@@ -369,8 +423,21 @@ def _column(ds, iy, ix, index_is_regular):
         name = _first_present(ds, candidates)
         if name is None:
             return None
-        arr = np.asarray(ds[name].values, dtype=float)
+        data = ds[name]
+        indexers, _dims = _horizontal_indexers(ds, (iy, ix))
+        applicable = {
+            dim: index for dim, index in indexers.items()
+            if dim in data.dims
+        }
+        if applicable:
+            # Crucially, index the lazy cfgrib array before asking xarray for
+            # NumPy values.  Materializing first decoded/cast every grid cell
+            # and returned a tiny view retaining the multi-hundred-MiB base.
+            data = data.isel(applicable)
+        arr = np.asarray(data.values, dtype=float)
         arr = np.squeeze(arr)
+        if arr.ndim == 0:
+            return arr.reshape(1)
         if arr.ndim == 1:
             # Already reduced to a level vector.
             return arr
@@ -445,36 +512,61 @@ def _surface_relative_vorticity_from_wind_grid(ds, index_tuple, levels):
     if u_name is None or v_name is None:
         return None
 
-    try:
-        u = np.squeeze(np.asarray(ds[u_name].values, dtype=float))
-        v = np.squeeze(np.asarray(ds[v_name].values, dtype=float))
-    except Exception:
-        return None
-    if u.ndim != 3 or v.ndim != 3 or u.shape != v.shape:
-        return None
-
     _, lats = _coord_values(ds, _LAT_COORDS)
     _, lons = _coord_values(ds, _LON_COORDS)
     if lats is None or lons is None:
         return None
 
+    _point_indexers, (ydim, xdim) = _horizontal_indexers(ds, index_tuple)
+    if ydim is None or xdim is None:
+        return None
+
     iy, ix = (int(index_tuple[0]), int(index_tuple[1]))
-    if iy < 0 or ix < 0 or iy >= u.shape[1] or ix >= u.shape[2]:
+    ysize = int(ds.sizes.get(ydim, 0))
+    xsize = int(ds.sizes.get(xdim, 0))
+    if iy < 0 or ix < 0 or iy >= ysize or ix >= xsize:
         return None
 
     try:
         surface_level = int(np.nanargmax(np.asarray(levels, dtype=float)))
     except Exception:
         return None
-    u2d = u[surface_level]
-    v2d = v[surface_level]
-
-    x_pair = _neighbor_pair(ix, u2d.shape[1])
-    y_pair = _neighbor_pair(iy, u2d.shape[0])
+    x_pair = _neighbor_pair(ix, xsize)
+    y_pair = _neighbor_pair(iy, ysize)
     if x_pair is None or y_pair is None:
         return None
     x0, x1 = x_pair
     y0, y1 = y_pair
+
+    level_name = _first_present(ds.coords, _LEVEL_COORDS)
+    if level_name is None:
+        return None
+    level_dims = ds[level_name].dims
+    if not level_dims:
+        return None
+    level_dim = level_dims[0]
+    selection = {
+        level_dim: surface_level,
+        ydim: slice(y0, y1 + 1),
+        xdim: slice(x0, x1 + 1),
+    }
+    try:
+        # Decode one surface message per wind component and retain only the
+        # small neighbor window needed by the finite difference.  The previous
+        # path loaded/cast both complete 3-D wind cubes a second time.
+        u_window = ds[u_name].isel(selection).transpose(ydim, xdim)
+        v_window = ds[v_name].isel(selection).transpose(ydim, xdim)
+        u2d = np.asarray(u_window.values, dtype=float)
+        v2d = np.asarray(v_window.values, dtype=float)
+    except Exception:
+        return None
+    if u2d.ndim != 2 or v2d.shape != u2d.shape:
+        return None
+
+    local_y = iy - y0
+    local_x = ix - x0
+    local_x0, local_x1 = x0 - x0, x1 - x0
+    local_y0, local_y1 = y0 - y0, y1 - y0
 
     if np.asarray(lats).ndim == 1 and np.asarray(lons).ndim == 1:
         lat_center = float(lats[iy])
@@ -493,8 +585,14 @@ def _surface_relative_vorticity_from_wind_grid(ds, index_tuple, levels):
     if not (np.isfinite(dx) and np.isfinite(dy)) or abs(dx) < 1.0 or abs(dy) < 1.0:
         return None
 
-    dvdx = (float(v2d[iy, x1]) - float(v2d[iy, x0])) / dx
-    dudy = (float(u2d[y1, ix]) - float(u2d[y0, ix])) / dy
+    dvdx = (
+        float(v2d[local_y, local_x1])
+        - float(v2d[local_y, local_x0])
+    ) / dx
+    dudy = (
+        float(u2d[local_y1, local_x])
+        - float(u2d[local_y0, local_x])
+    ) / dy
     value = dvdx - dudy
     return float(value) if np.isfinite(value) else None
 
@@ -575,13 +673,18 @@ def _build_columns(ds, index_tuple, latitude=None):
         "v": _mark_missing(v_raw, n),
     }
 
-    # Order bottom (highest pressure) -> top (lowest pressure).
-    order = np.argsort(-cols["pres"])
+    # Order bottom (highest pressure) -> top (lowest pressure), remove invalid
+    # pressure rows, and retain the earliest source row for exact duplicates.
+    # Compute this selection once and apply it to every aligned field.
+    order = _backends.pressure_sort_dedup_indices(
+        cols["pres"], missing=MISSING)
+    if np.asarray(order).size == 0:
+        raise RetrievalError("dataset has no usable pressure levels")
     for key in cols:
         cols[key] = cols[key][order]
     if surface_relative_vorticity is not None:
         cols["surface_relative_vorticity"] = surface_relative_vorticity
-    return cols, n
+    return cols, int(np.asarray(order).size)
 
 
 # ---------------------------------------------------------------------------
@@ -678,11 +781,41 @@ def _retrieve_dataset(lat, lon, valid_time):
 def _merge_datasets(ds_list):  # pragma: no cover - optional dependency path
     """Merge cfgrib's split datasets into one, importing xarray lazily."""
     import xarray as xr
-    ds_list = [d for d in ds_list
-               if any(c in d.coords for c in _LEVEL_COORDS)]
-    if not ds_list:
+    candidates = tuple(ds_list)
+    sources = tuple(
+        _promote_scalar_level_coordinate(d)
+        for d in candidates
+        if any(c in d.coords for c in _LEVEL_COORDS)
+    )
+    if not sources:
+        for candidate in candidates:
+            try:
+                candidate.close()
+            except Exception:
+                pass
         raise RetrievalError("no pressure-level ERA5 dataset was returned")
-    return xr.merge(ds_list, compat="override", join="outer")
+    try:
+        merged = xr.merge(sources, compat="override", join="outer")
+    except BaseException:
+        for candidate in candidates:
+            try:
+                candidate.close()
+            except Exception:
+                pass
+        raise
+
+    # xr.merge does not retain the close callbacks of its inputs.  Without an
+    # explicit composite callback, cached cfgrib file handles survive until GC
+    # and can keep cache directories locked on Windows.
+    def _close_sources():
+        for source in candidates:
+            try:
+                source.close()
+            except Exception:
+                pass
+
+    merged.set_close(_close_sources)
+    return merged
 
 
 # ---------------------------------------------------------------------------

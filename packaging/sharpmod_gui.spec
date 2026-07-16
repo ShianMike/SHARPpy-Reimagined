@@ -22,6 +22,8 @@ a single self-extracting ``dist/SHARPpy-Reimagined.exe`` instead.
 """
 
 import glob
+import importlib.machinery
+import importlib.util
 import os
 
 from PyInstaller.utils.hooks import (
@@ -75,6 +77,57 @@ for pkg in (
         # A package that is not installed (e.g. an optional extra) is skipped;
         # the app degrades gracefully at runtime.
         pass
+
+# Rust release contract: official binaries set SHARPMOD_REQUIRE_RUST=1 and must
+# fail closed if the native extension cannot be collected.  Keeping the flag
+# explicit preserves ordinary source and Python-only PyInstaller builds, where
+# Rust remains an opportunistic acceleration when it is installed.
+_RUST_BACKEND_REQUIRED = (
+    os.environ.get("SHARPMOD_REQUIRE_RUST", "0") == "1"
+)
+try:
+    _RUST_BACKEND_SPEC = importlib.util.find_spec("sharpmod_rs")
+except (AttributeError, ImportError, ValueError):
+    _RUST_BACKEND_SPEC = None
+
+if _RUST_BACKEND_SPEC is not None:
+    try:
+        d, b, h = collect_all("sharpmod_rs")
+        _RUST_NATIVE_SPEC = importlib.util.find_spec("sharpmod_rs.sharpmod_rs")
+        _RUST_NATIVE_ORIGIN = (
+            None if _RUST_NATIVE_SPEC is None else _RUST_NATIVE_SPEC.origin
+        )
+        if not _RUST_NATIVE_ORIGIN or not any(
+            _RUST_NATIVE_ORIGIN.endswith(suffix)
+            for suffix in importlib.machinery.EXTENSION_SUFFIXES
+        ):
+            raise RuntimeError(
+                "release requires the sharpmod_rs native extension"
+            )
+
+        datas += d
+        binaries += b
+        hiddenimports += h
+        hiddenimports += ["sharpmod_rs", "sharpmod_rs.sharpmod_rs"]
+        # collect_all identifies the extension as a hidden import, but adding
+        # its origin explicitly makes the release collection requirement
+        # inspectable and independent of PyInstaller hook-discovery changes.
+        binaries.append((_RUST_NATIVE_ORIGIN, "sharpmod_rs"))
+    except Exception as exc:
+        if _RUST_BACKEND_REQUIRED:
+            raise RuntimeError(
+                "release requires collecting sharpmod_rs"
+            ) from exc
+        # A broken extension must not prevent an explicitly Python-only bundle,
+        # but make the downgrade visible in the PyInstaller build log.
+        print(
+            "WARNING: could not collect sharpmod_rs; building a Python-only "
+            f"bundle ({type(exc).__name__}: {exc})"
+        )
+elif _RUST_BACKEND_REQUIRED:
+    raise RuntimeError(
+        "release requires the sharpmod_rs native extension"
+    )
 
 # Herbie's model definitions are runtime modules, but its optional plotting
 # toolbox imports cartopy. Collect the operational package while omitting that

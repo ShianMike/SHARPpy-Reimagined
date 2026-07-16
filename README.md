@@ -27,6 +27,11 @@ test-backed decoder/extractor layer.
 - Portable `.npz` point-sounding output from UWyo, ERA5, WRF-ARW, and public
   forecast models fetched through Herbie.
 - Qt6/PySide6 compatibility shims around the upstream SHARPpy widget stack.
+- A supported Rust-primary numerical and point-decoding backend, with an
+  independently optimized Python fallback and equivalence coverage across all
+  13 configured public forecast models.
+- A complete inverted/light sounding palette shared by the interactive GUI and
+  headless renderer, including contrast-aware labels and derived displays.
 - Offline UWyo station catalog plus package-relative bundled fonts.
 - Property-based pytest coverage for decoders, derived parameters, hazards,
   renderer-facing widgets, and extraction paths.
@@ -48,6 +53,80 @@ sharpmod-render examples/soundings/hrrr_point_36.68N_95.66W_f018.npz out.png
 The upstream `SHARPpy==1.4.0a5` package is installed with `--no-deps` because
 its published metadata pins an old NumPy version. SHARPpy Reimagined provides
 the modern runtime dependencies separately.
+
+### Rust-primary backend
+
+Official v0.4 Windows executables bundle the supported `sharpmod_rs` extension,
+and the default `auto` mode uses Rust after validating its package version,
+backend API, and required operations. The independently optimized Python
+implementation remains a fully functional portable fallback, so source and
+Python-only installations do not require Rust, Cargo, maturin, or a native
+extension to run.
+
+To add the Rust backend to a source installation, first install a stable Rust
+toolchain (Rust 1.86 or newer), then run these commands in the same Python
+environment as `sharpmod`:
+
+```bash
+python -m pip install -e ".[rust-build]"
+cd rust/sharpmod-rs
+maturin develop --release
+cd ../..
+```
+
+Select the backend with `SHARPMOD_BACKEND` before starting the application:
+
+| Value | Behavior |
+| --- | --- |
+| `auto` | Default. Use Rust when it loads; otherwise use Python and record the fallback reason. |
+| `python` | Require the optimized Python implementation. |
+| `rust` | Require the Rust extension; report an error if it is unavailable or cannot load. |
+
+Check the resolved backend without running a sounding workflow:
+
+```bash
+python -c "from sharpmod.backends import backend_info; print(backend_info())"
+```
+
+Rust is the supported primary backend when a compatible extension is present;
+official v0.4 Windows binaries include it. Standalone native wheels are still
+CI/build artifacts rather than a separately published Python package. See the
+[Rust backend guide](docs/RUST_BACKEND.md) for source-build instructions,
+fallback behavior, platform status, limitations, tests, and benchmarks.
+
+### Forecast-decoder performance and validation
+
+Version 0.4.0 optimizes the two GRIB implementations independently. The Python
+backend reuses a file inventory and nearest-point selection, reads only the
+required scalar fields, and keeps bounded inventory, point-selection, and
+decoded-sounding caches. The Rust backend memory-maps each local subset,
+iterates ecCodes messages without copying the GRIB payload, and returns one
+NumPy-compatible matrix through a single Python call. Neither implementation
+requires speculative parallel decoding.
+
+Both decoders understand GRIB multi-field messages in which one physical
+message contains separate U- and V-wind fields. Their equivalence preflight
+checks selected grid coordinates, pressure ordering, missing masks, and values
+within field-appropriate floating-point tolerances. The matrix covers HRRR,
+RAP, NAM, NAM 3 km, HRW WRF-ARW, HRW FV3, RRFS-A, GFS, AIGFS, CFS, ECMWF IFS,
+ECMWF-AIFS, and GEFS.
+
+Products without a published relative- or absolute-vorticity field can retain
+the full xarray compatibility path in the production extractor so the
+neighbor-wind vorticity estimate is preserved; their direct point decoder is
+still measured separately and is not an end-to-end timing of that production
+route. Optional fields published at a single pressure,
+such as GEFS omega, are aligned only to that pressure and remain missing at
+other levels instead of being broadcast through the sounding. Optimized Python
+and Rust return matching pressure-aligned omega values and missing masks. The
+old/new GEFS benchmark difference records the correction of the frozen legacy
+xarray full-column broadcast; it is not a Rust availability gap.
+
+See the [all-model benchmark table](benchmarks/results/2026-07-16-all-model-decoding-windows-amd64.md),
+its [raw JSON record](benchmarks/results/2026-07-16-all-model-decoding-windows-amd64.json),
+and the [benchmark methodology](benchmarks/README.md). Network transfer is
+excluded from decoder timings, and the JSON retains fixture hashes, raw
+samples, selected coordinates, build fingerprints, and equivalence results.
 
 ## Desktop GUI
 
@@ -104,6 +183,13 @@ tips, recent files, and last selections. On Windows they are stored in
 `%APPDATA%\SHARPpy Reimagined\settings.ini`; set `SHARPMOD_SETTINGS_PATH` to
 use a different INI file.
 
+The **Inverted** palette is a complete light theme. Applying it updates the
+Skew-T, hodograph, locator, storm slinky, inset products, IndexBoard, and
+Streamwiseness panels in one live configuration change. Theme-dependent text,
+rules, legends, and semantic annotations are contrast-adjusted for a light
+canvas while plotted scientific values, units, and established dark-theme
+colors remain unchanged. Headless rendering uses the same selected palette.
+
 ### Analysis sessions
 
 Use **File → Save Analysis Session…** (`Ctrl+Shift+E`) in a sounding window to
@@ -145,7 +231,13 @@ pyinstaller packaging/sharpmod_gui.spec --noconfirm
 ```
 
 The result is `dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe`. Set
-`ONEFILE = True` in the spec for a single self-extracting `.exe` instead.
+`SHARPMOD_ONEFILE=1` in the build environment for a single self-extracting
+`dist/SHARPpy-Reimagined.exe` instead.
+The official v0.4 release workflow builds and installs `sharpmod_rs` before
+PyInstaller packages the executable, making Rust the `auto` backend in the
+published application. For custom local builds, the spec collects a compatible
+installed extension when present; otherwise it logs a warning and produces a
+fully functional Python-fallback bundle.
 
 ## Command Line Tools
 
@@ -235,6 +327,7 @@ Advanced overrides are available for testing or constrained environments:
 | --- | --- | --- |
 | `SHARPMOD_HRRR_BACKEND` | `auto` | `auto`, `zarr`, or `grib` for HRRR F000 |
 | `SHARPMOD_POINT_BACKENDS` | `auto` | Set to `grib` to bypass point/subregion routes |
+| `SHARPMOD_GRIB_DECODER` | `auto` | `auto` uses direct point decoding with xarray fallback; `direct` requires it; `xarray` forces the compatibility path |
 | `SHARPMOD_PROVIDER_RACING` | `1` | Set to `0` to disable equivalent-provider probes |
 | `SHARPMOD_MODEL_CACHE` | platform cache | Override the GUI model-cache directory |
 | `SHARPMOD_MODEL_CACHE_GB` | `3` | Maximum retained cache size in GiB |
@@ -291,7 +384,8 @@ use Herbie and do not require CDS credentials.
 | `[render]` | SHARPpy runtime companions | PNG rendering |
 | `[era5]` | CDS API, Herbie, cfgrib, ecCodes, xarray, numcodecs, pyproj | ERA5 and public forecast-model point extraction |
 | `[wrf]` | xarray, netCDF4 | WRF-ARW NetCDF extraction |
-| `[dev]` | pytest, Hypothesis | Test and development work |
+| `[dev]` | pytest, Hypothesis, PyYAML | Test and workflow-validation work |
+| `[rust-build]` | maturin | Build the supported Rust backend locally (Rust toolchain installed separately) |
 
 ```bash
 python -m pip install -e ".[dev,era5,wrf,render]"
@@ -301,6 +395,8 @@ pytest
 
 For the full setup reference, see [`installation.txt`](installation.txt). For
 usage recipes and Python API examples, see [`docs/USAGE.md`](docs/USAGE.md).
+Rust-backend setup, fallback behavior, and limitations are documented in
+[`docs/RUST_BACKEND.md`](docs/RUST_BACKEND.md).
 
 ## Data Flow
 
@@ -323,6 +419,7 @@ UWyo / ERA5 / WRF / public forecast models
 sharpmod/
   gui.py        interactive desktop app (sounding picker + SPC window)
   render.py     headless PNG render entry point
+  backends/     optimized Python/Rust kernels and direct GRIB point decoders
   sharptab/     derived-parameter and meteorological calculations
   io/           decoders for SPC, BUFKIT, PECAN, WRF-ARW, .npz, and UWyo
   viz/          Qt6/PySide6 rendering widgets
@@ -333,12 +430,16 @@ sharpmod/
 packaging/
   sharpmod_gui.spec   PyInstaller spec for the standalone GUI build
 
+rust/sharpmod-rs/     supported PyO3/maturin backend extension crate
+benchmarks/           Python-versus-Rust equivalence-first timing harness
+
 examples/
   example_sounding.png
   soundings/    bundled sample inputs
 
 docs/
   USAGE.md      workflow guide and API examples
+  RUST_BACKEND.md  Rust-primary setup, fallback behavior, and limitations
 ```
 
 ## Attribution

@@ -325,6 +325,27 @@ _font_installed = False
 _table_spacing_patched = False
 
 
+def _semantic_qcolor(widget, role, *, override=None):
+    """Resolve one draw-time semantic color from a widget's live palette."""
+    bg_color = QtGui.QColor(
+        getattr(widget, "bg_color", colors.BG_COLOR)).name()
+    fg_color = QtGui.QColor(
+        getattr(widget, "fg_color", colors.FG_COLOR)).name()
+    palette = colors.semantic_palette(bg_color, fg_color)
+    resolved = palette[role]
+
+    # Preserve the documented HODO_0_500_COLOR environment override. The
+    # default still flows through its named semantic role; a custom value is
+    # contrast-adjusted only on a light canvas, like every other role.
+    if override is not None:
+        dark_default = colors.semantic_palette(
+            colors.BG_COLOR, colors.FG_COLOR)[role]
+        if QtGui.QColor(override).name() != QtGui.QColor(dark_default).name():
+            resolved = colors.resolve_theme_color(
+                override, bg_color, fg_color)
+    return QtGui.QColor(resolved)
+
+
 def install_font(app):
     """Register the bundled TTFs and force every ``QFont`` to ``FONT_FAMILY``.
 
@@ -1440,7 +1461,8 @@ def _install_speed_0500():
                 if self.wind_units == "m/s":
                     spd = _tab.utils.KTS2MS(spd)
 
-                sfc_500_color = _QtGui.QColor(HODO_0_500_COLOR)
+                sfc_500_color = _semantic_qcolor(
+                    self, "hodo_0500", override=HODO_0_500_COLOR)
                 for i in range(pres.shape[0]):
                     hgt1 = float(hgt[i])
                     x1 = self.speed_to_pix(spd[i])
@@ -1517,7 +1539,8 @@ def _install_conditional_prob_panel_fit():
                     tick = self.prob_to_pix(int(text))
                 except Exception:
                     continue
-                qp.setPen(qtgui.QPen(qtgui.QColor("#0080FF"), 1,
+                qp.setPen(qtgui.QPen(_semantic_qcolor(
+                                      self, "conditional_grid"), 1,
                                       qtcore.Qt.DashLine))
                 qp.drawLine(self.tlx, tick, self.brx, tick)
                 rect = qtcore.QRectF(self.tlx, tick - label_h / 2.0,
@@ -1546,23 +1569,23 @@ def _install_conditional_prob_panel_fit():
             def stpef_draw_frame(self, qp):
                 try:
                     data = _ins.condSTPData()
-                    colors = {
-                        "EF1+": "#006600",
-                        "EF2+": "#FFCC33",
-                        "EF3+": "#FF0000",
-                        "EF4+": "#FF00FF",
+                    legend_colors = {
+                        "EF1+": _semantic_qcolor(self, "tornado_ef1"),
+                        "EF2+": _semantic_qcolor(self, "tornado_ef2"),
+                        "EF3+": _semantic_qcolor(self, "tornado_ef3"),
+                        "EF4+": _semantic_qcolor(self, "tornado_ef4"),
                     }
                     _draw_header(qp, self, _QtCoreS, _QtGuiS,
                                  "Conditional Tornado Probs based on STPC",
                                  [
                                      (self.stpc_to_pix(.2), "EF1+",
-                                      colors["EF1+"], 48),
+                                      legend_colors["EF1+"], 48),
                                      (self.stpc_to_pix(1.1), "EF2+",
-                                      colors["EF2+"], 48),
+                                      legend_colors["EF2+"], 48),
                                      (self.stpc_to_pix(3.1), "EF3+",
-                                      colors["EF3+"], 48),
+                                      legend_colors["EF3+"], 48),
                                      (self.stpc_to_pix(6.1), "EF4+",
-                                      colors["EF4+"], 48),
+                                      legend_colors["EF4+"], 48),
                                  ])
 
                     _draw_y_grid(qp, self, _QtCoreS, _QtGuiS, data["ytexts"])
@@ -1578,10 +1601,10 @@ def _install_conditional_prob_panel_fit():
                                       centers[i], width, text)
 
                     series = [
-                        ("EF1+", colors["EF1+"]),
-                        ("EF2+", colors["EF2+"]),
-                        ("EF3+", colors["EF3+"]),
-                        ("EF4+", colors["EF4+"]),
+                        ("EF1+", legend_colors["EF1+"]),
+                        ("EF2+", legend_colors["EF2+"]),
+                        ("EF3+", legend_colors["EF3+"]),
+                        ("EF4+", legend_colors["EF4+"]),
                     ]
                     for key, color in series:
                         vals = data[key]
@@ -2141,22 +2164,21 @@ def fetch_url(url: str, timeout: float = 30.0) -> bytes:
 
 
 def build_config(out_dir: str) -> Config:
-    """Build the render :class:`Config`, applying the documented Color Scheme.
+    """Build a render config with the complete selected color style applied.
 
-    Mirrors the launcher's config bootstrap (``PrefDialog.initConfig``) and
-    then applies the modernized alert-tier substitutions from
-    :mod:`sharpmod.colors` (Requirement 22.3), so the two lowest amber tiers
-    are legible against the black background instead of the near-unreadable
-    legacy dark browns.
+    This mirrors GUI startup: persisted style selection wins over stale
+    per-color keys, dark palettes retain the readable modern amber tiers, and
+    the inverted palette receives its light-background contrast adjustments.
     """
     cfg_path = os.path.join(out_dir, "sharpmod_render.ini")
     config = Config(cfg_path)
     PrefDialog.initConfig(config)
 
-    # Brighten the two lowest alert tiers (Requirement 22.3). Values are sourced
-    # from the documented Color Scheme rather than hard-coded here.
-    config["preferences", "alert_l1_color"] = colors.ALERT_L1_COLOR
-    config["preferences", "alert_l2_color"] = colors.ALERT_L2_COLOR
+    # Use the same complete, contrast-aware style transaction as GUI startup.
+    # This replaces stale per-color keys in an existing render config while
+    # preserving the selected style and the established dark-theme values.
+    from sharpmod.gui_settings import _apply_selected_color_style
+    _apply_selected_color_style(config)
 
     config.initialize({("paths", "save_img"): out_dir,
                        ("paths", "save_txt"): out_dir,
@@ -2280,7 +2302,6 @@ def _install_hodo_0500():
             from qtpy.QtGui import QPainterPath as _QPP
         except Exception:
             _QPP = _QtGui.QPainterPath
-        _c0500 = _QtGui.QColor(HODO_0_500_COLOR)
         _orig = _cls.draw_hodo
 
         def draw_hodo(self, qp, prof, colors, width=2):
@@ -2303,7 +2324,9 @@ def _install_hodo_0500():
                 # colors list out of range.
                 seg_bnds = _np.maximum(
                     [0., 500., 3000., 6000., 9000., 12000.], z.min())
-                hcolors = [_c0500] + list(colors)   # 0-500 m + the 4 bands
+                c0500 = _semantic_qcolor(
+                    self, "hodo_0500", override=HODO_0_500_COLOR)
+                hcolors = [c0500] + list(colors)   # 0-500 m + the 4 bands
                 seg_x = [_tab.interp.generic_interp_hght(b, z, xx)
                          for b in seg_bnds if b <= z.max()]
                 seg_y = [_tab.interp.generic_interp_hght(b, z, yy)
@@ -2900,7 +2923,8 @@ def _install_hodo_label_fit():
         def drawCorfidi(self, qp):
             try:
                 penwidth = 1
-                pen = _QtGui.QPen(_QtGui.QColor("#00BFFF"), penwidth)
+                corfidi_color = _semantic_qcolor(self, "corfidi")
+                pen = _QtGui.QPen(corfidi_color, penwidth)
                 pen.setStyle(_QtCore.Qt.SolidLine)
                 qp.setPen(pen)
 
@@ -2953,7 +2977,7 @@ def _install_hodo_label_fit():
                 qp.fillRect(up_rect, self.bg_color)
                 qp.fillRect(dn_rect, self.bg_color)
 
-                pen = _QtGui.QPen(_QtGui.QColor("#00BFFF"))
+                pen = _QtGui.QPen(corfidi_color)
                 qp.setPen(pen)
                 qp.drawText(up_rect, _QtCore.Qt.AlignCenter, up_text)
                 qp.drawText(dn_rect, _QtCore.Qt.AlignCenter, dn_text)
@@ -3059,7 +3083,7 @@ def _install_skewt_level_labels_fit():
                     "LCL": self.lcl_mkr_color,
                     "LFC": self.lfc_mkr_color,
                     "EL": self.el_mkr_color,
-                    "MPL": _QtGui.QColor("#00D7FF"),
+                    "MPL": _semantic_qcolor(self, "mpl"),
                 }
                 for label, pressure in parcel_level_markers(self.pcl):
                     if not _tab.utils.QC(pressure):
@@ -3376,6 +3400,14 @@ STP_XLABEL_COLORS = {
     "EF0": "#3399FF",    # blue
 }
 
+STP_XLABEL_ROLES = {
+    "EF4+": "tornado_ef4",
+    "EF3": "tornado_ef3",
+    "EF2": "orange",
+    "EF1": "yellow",
+    "EF0": "blue",
+}
+
 
 def _install_stp_xlabel_colors():
     """Color the Effective Layer STP graphic's EF-category labels + boxes.
@@ -3460,8 +3492,13 @@ def _install_stp_xlabel_colors():
                         break
                     text = xtexts[i] if i < len(xtexts) else ""
                     hexc = STP_XLABEL_COLORS.get(text)
-                    box_col = _QtGui.QColor(hexc) if hexc else self.box_color
-                    lbl_col = _QtGui.QColor(hexc) if hexc else self.fg_color
+                    role = STP_XLABEL_ROLES.get(text)
+                    themed = (
+                        _semantic_qcolor(self, role, override=hexc)
+                        if role is not None else None
+                    )
+                    box_col = themed if themed is not None else self.box_color
+                    lbl_col = themed if themed is not None else self.fg_color
                     cx = float(center[i])
                     qp.setPen(_QtGui.QPen(box_col, 2, _QtCore.Qt.SolidLine))
                     _draw_box(qp, cx, width, ef[i])

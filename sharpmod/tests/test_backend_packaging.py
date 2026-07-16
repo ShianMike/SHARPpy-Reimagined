@@ -71,6 +71,8 @@ def test_native_source_versions_and_numpy_dependency_match():
     ]
 
     assert cargo["package"]["version"] == python_version
+    assert cargo["package"]["rust-version"] == "1.88"
+    assert cargo["dependencies"]["libloading"] == "0.9"
     assert maturin["project"]["version"] == python_version
     assert len(lock_packages) == 1
     assert lock_packages[0]["version"] == python_version
@@ -134,7 +136,7 @@ def test_rust_workflow_covers_versions_numpy_and_frozen_layouts():
         "cargo +stable clippy --locked --all-targets --all-features "
         "-- -D warnings"
     ) in rust_steps
-    assert "cargo +1.86.0 test --locked --all-targets" in rust_steps
+    assert "cargo +1.88.0 test --locked --all-targets" in rust_steps
 
     numpy_rows = jobs["numpy-compat"]["strategy"]["matrix"]["include"]
     assert {row["numpy"] for row in numpy_rows} == {

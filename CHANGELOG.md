@@ -5,6 +5,15 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Updated the Rust backend's `libloading` dependency from 0.8.9 to 0.9.0 and
+  raised the source-build minimum supported Rust version from 1.86 to 1.88.
+  Official binaries still bundle the native extension, and Python-fallback
+  installations still do not require a Rust toolchain.
+
 ## [0.4.0] - 2026-07-16
 
 ### Added

@@ -56,11 +56,11 @@ jobs:
           echo "$RUNNER_TEMP/sharpmod-rust-venv/bin" >> "$GITHUB_PATH"
           echo "VIRTUAL_ENV=$RUNNER_TEMP/sharpmod-rust-venv" >> "$GITHUB_ENV"
 
-      - name: Set up stable Rust and the 1.86 MSRV
+      - name: Set up stable Rust and the 1.88 MSRV
         run: |
           rustup toolchain install stable --profile minimal
           rustup component add rustfmt clippy --toolchain stable
-          rustup toolchain install 1.86.0 --profile minimal
+          rustup toolchain install 1.88.0 --profile minimal
           rustup default stable
 
       - name: Install Python test and build dependencies
@@ -81,9 +81,9 @@ jobs:
         working-directory: rust/sharpmod-rs
         run: cargo +stable test --locked --all-targets
 
-      - name: Test all Rust targets on the 1.86 MSRV
+      - name: Test all Rust targets on the 1.88 MSRV
         working-directory: rust/sharpmod-rs
-        run: cargo +1.86.0 test --locked --all-targets
+        run: cargo +1.88.0 test --locked --all-targets
 
       - name: Test source versions and workflow structure
         run: >-

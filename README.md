@@ -64,7 +64,7 @@ Python-only installations do not require Rust, Cargo, maturin, or a native
 extension to run.
 
 To add the Rust backend to a source installation, first install a stable Rust
-toolchain (Rust 1.86 or newer), then run these commands in the same Python
+toolchain (Rust 1.88 or newer), then run these commands in the same Python
 environment as `sharpmod`:
 
 ```bash

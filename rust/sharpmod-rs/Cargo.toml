@@ -2,7 +2,7 @@
 name = "sharpmod-rs"
 version = "0.4.0"
 edition = "2021"
-rust-version = "1.86"
+rust-version = "1.88"
 description = "Optional Rust acceleration kernels for SHARPpy Reimagined"
 readme = "README.md"
 license = "BSD-3-Clause"

@@ -13,7 +13,7 @@ This crate does not contain the PySide6 GUI, SHARPpy widget stack, renderer,
 download clients, model-retrieval orchestration, or meteorological parcel
 calculations; those shared application layers continue to run in Python.
 
-Build it with Rust 1.86 or newer on the stable channel into the repository's
+Build it with Rust 1.88 or newer on the stable channel into the repository's
 Python 3.11 development environment from the repository root:
 
 ```powershell

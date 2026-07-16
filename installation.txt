@@ -49,7 +49,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   - Network : required for `pip install`, UWyo fetch, and ERA5 retrieval
   - Display : required ONLY for the interactive desktop GUI (`sharpmod-gui`);
               CLI rendering runs headless (Qt "offscreen") and needs no display
-  - Rust    : stable 1.86+ toolchain required ONLY to build `sharpmod_rs`
+  - Rust    : stable 1.88+ toolchain required ONLY to build `sharpmod_rs`
               locally; official Windows binaries include the extension, and
               Python-fallback installs do not need a Rust toolchain
 
@@ -138,7 +138,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   remains a fully functional portable fallback, so a source or Python-only
   installation works without Rust, Cargo, maturin, or `sharpmod_rs`.
 
-  To build the extension locally, install Rust 1.86 or newer on the stable
+  To build the extension locally, install Rust 1.88 or newer on the stable
   channel first, then
   use the same Python environment that runs `sharpmod`:
 

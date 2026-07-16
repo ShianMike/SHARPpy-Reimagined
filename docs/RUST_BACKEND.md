@@ -170,7 +170,7 @@ while an explicit `rust` request reports that the extension is unavailable.
 
 ## Build the local Rust extension
 
-Install Rust 1.86 or newer from the stable channel and make `cargo` available
+Install Rust 1.88 or newer from the stable channel and make `cargo` available
 on `PATH`. Then install the optional build frontend into the same `.gribenv`
 that will import the extension:
 

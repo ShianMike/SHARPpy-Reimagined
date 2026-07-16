@@ -573,10 +573,12 @@ def _surface_relative_vorticity_from_wind_grid(ds, index_tuple, levels):
         dx = _east_west_distance_m(lat_center, lons[x0], lons[x1])
         dy = _north_south_distance_m(lats[y0], lats[y1])
     else:
-        lat_grid = np.asarray(lats, dtype=float)
-        lon_grid = np.asarray(lons, dtype=float)
-        lat_window = lat_grid[y0:y1 + 1, x0:x1 + 1]
-        lon_window = lon_grid[y0:y1 + 1, x0:x1 + 1]
+        lat_grid = np.asarray(lats)
+        lon_grid = np.asarray(lons)
+        lat_window = np.asarray(
+            lat_grid[y0:y1 + 1, x0:x1 + 1], dtype=float)
+        lon_window = np.asarray(
+            lon_grid[y0:y1 + 1, x0:x1 + 1], dtype=float)
         if lat_window.shape != u2d.shape or lon_window.shape != u2d.shape:
             return None
         lat_center = float(lat_window[local_y, local_x])

@@ -195,7 +195,7 @@ def test_rust_workflow_covers_versions_numpy_and_frozen_layouts():
 def test_release_workflow_gates_tag_and_source_versions():
     workflow = _load_workflow("release.yml")
     dispatch = workflow["on"]["workflow_dispatch"]["inputs"]["tag"]
-    assert dispatch["default"] == "v0.4.0"
+    assert dispatch["default"] == "v0.4.1"
 
     steps = workflow["jobs"]["build-windows-exe"]["steps"]
     names = [step.get("name") for step in steps]
@@ -233,9 +233,28 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
     }
 
     steps = job["steps"]
+    toolchain = next(
+        step for step in steps
+        if step.get("name") == "Set up Rust 1.88 toolchain"
+    )
+    assert toolchain["shell"] == "bash"
+    toolchain_script = toolchain["run"]
+    assert "set -euo pipefail" in toolchain_script
+    assert (
+        "rustup toolchain install 1.88.0 --profile minimal"
+        in toolchain_script
+    )
+    assert "rustup default 1.88.0" in toolchain_script
+    assert "rustc --version" in toolchain_script
+    assert "grep -E '^rustc 1\\.88\\.0 '" in toolchain_script
+
     build = next(
         step for step in steps
         if step.get("name") == "Build and install locked Rust wheel"
+    )
+    names = [step.get("name") for step in steps]
+    assert names.index("Set up Rust 1.88 toolchain") < names.index(
+        "Build and install locked Rust wheel"
     )
     script = build["run"]
     assert "maturin==1.14.1" in script

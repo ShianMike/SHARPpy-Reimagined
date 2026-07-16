@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v0.4.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v0.4.1). Created if it does not exist."
         required: true
-        default: "v0.4.0"
+        default: "v0.4.1"
 
 permissions:
   contents: write
@@ -84,6 +84,14 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+
+      - name: Set up Rust 1.88 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup default 1.88.0
+          rustc --version | grep -E '^rustc 1\.88\.0 '
 
       - name: Validate release tag and source versions
         shell: bash

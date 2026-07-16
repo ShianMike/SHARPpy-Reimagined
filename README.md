@@ -96,10 +96,11 @@ fallback behavior, platform status, limitations, tests, and benchmarks.
 
 ### Forecast-decoder performance and validation
 
-Version 0.4.0 optimizes the two GRIB implementations independently. The Python
-backend reuses a file inventory and nearest-point selection, reads only the
-required scalar fields, and keeps bounded inventory, point-selection, and
-decoded-sounding caches. The Rust backend memory-maps each local subset,
+Version 0.4.1 includes the two independently optimized GRIB implementations
+introduced in v0.4.0. The Python backend reuses a file inventory and
+nearest-point selection, reads only the required scalar fields, and keeps
+bounded inventory, point-selection, and decoded-sounding caches. The Rust
+backend memory-maps each local subset,
 iterates ecCodes messages without copying the GRIB payload, and returns one
 NumPy-compatible matrix through a single Python call. Neither implementation
 requires speculative parallel decoding.

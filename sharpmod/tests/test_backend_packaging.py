@@ -141,6 +141,13 @@ def test_rust_workflow_covers_versions_numpy_and_frozen_layouts():
         "numpy==1.26.*",
         "numpy>=2,<3",
     }
+    numpy_steps = jobs["numpy-compat"]["steps"]
+    numpy_venv = next(
+        step for step in numpy_steps
+        if step.get("name") == "Create Python virtual environment"
+    )
+    assert 'python -m venv "$RUNNER_TEMP/sharpmod-rust-venv"' in numpy_venv["run"]
+    assert 'VIRTUAL_ENV=$RUNNER_TEMP/sharpmod-rust-venv' in numpy_venv["run"]
 
     wheel_rows = jobs["wheels"]["strategy"]["matrix"]["include"]
     combinations = {

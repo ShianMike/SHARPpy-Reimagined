@@ -141,6 +141,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Create Python virtual environment
+        run: |
+          python -m venv "$RUNNER_TEMP/sharpmod-rust-venv"
+          echo "$RUNNER_TEMP/sharpmod-rust-venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$RUNNER_TEMP/sharpmod-rust-venv" >> "$GITHUB_ENV"
+
       - name: Install selected NumPy and test dependencies
         run: |
           python -m pip install --upgrade pip

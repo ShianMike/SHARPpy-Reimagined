@@ -333,6 +333,7 @@ def download_herbie_subset(
     herbie,
     search: str,
     *,
+    inventory=None,
     save_dir=None,
     session=None,
     cancelled: Callable[[], bool] | None = None,
@@ -349,7 +350,10 @@ def download_herbie_subset(
     if save_dir is not None:
         herbie.save_dir = Path(save_dir).expanduser()
     try:
-        inventory = herbie.inventory(search).copy()
+        if inventory is None:
+            inventory = herbie.inventory(search).copy()
+        else:
+            inventory = inventory.copy()
         output = Path(herbie.get_localFilePath(search))
     except Exception as exc:
         raise OptimizedTransportUnavailable(

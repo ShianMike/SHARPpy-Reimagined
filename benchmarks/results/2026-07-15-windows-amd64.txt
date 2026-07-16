@@ -1,0 +1,44 @@
+Command:
+$env:PATH = 'C:\Users\shian\.cargo\bin;' + $env:PATH; .\.gribenv\Scripts\python.exe benchmarks\benchmark_backends.py --repeat 20 --warmup 5 --large-size 100000 --repeated-calls 1000 --batch-profiles 2048 --batch-levels 128 --cpu-model "12th Gen Intel(R) Core(TM) i5-1235U" --power-mode "Balanced"
+
+SHARPpy Reimagined backend benchmark
+platform: Windows-10-10.0.26200-SP0
+machine: AMD64
+cpu: 12th Gen Intel(R) Core(TM) i5-1235U
+power mode: Balanced
+python: 3.11.14 (C:\Users\shian\OneDrive\Desktop\sharppy reimagined\SHARPpy Reimagined\.gribenv\Scripts\python.exe)
+numpy: 2.4.6
+sharpmod_rs: 0.3.1
+rustc: rustc 1.97.0 (2d8144b78 2026-07-07)
+settings: repeat=20, warmup=5, large_size=100000, repeated_calls=1000, batch=2048x128
+
+scenario | operation | backend | calls | median total ms | min total ms | max total ms | median per call ms
+--- | --- | --- | --- | --- | --- | --- | ---
+small-32 | wind_to_components | python | 1000 | 49.887750 | 44.663300 | 69.117700 | 0.049888
+small-32 | wind_to_components | rust | 1000 | 46.492650 | 39.743200 | 54.183400 | 0.046493
+small-32 | components_to_wind | python | 1000 | 78.264900 | 50.477000 | 130.458200 | 0.078265
+small-32 | components_to_wind | rust | 1000 | 72.194800 | 44.155700 | 117.983800 | 0.072195
+small-32 | interpolate_1d | python | 1000 | 60.877900 | 29.320600 | 95.494600 | 0.060878
+small-32 | interpolate_1d | rust | 1000 | 56.760150 | 33.175000 | 82.510300 | 0.056760
+ordinary-128 | wind_to_components | python | 500 | 55.951750 | 26.609600 | 73.029800 | 0.111904
+ordinary-128 | wind_to_components | rust | 500 | 45.837900 | 22.429700 | 67.279900 | 0.091676
+ordinary-128 | components_to_wind | python | 500 | 56.780300 | 23.946200 | 74.643900 | 0.113561
+ordinary-128 | components_to_wind | rust | 500 | 53.823450 | 20.661400 | 69.639400 | 0.107647
+ordinary-128 | interpolate_1d | python | 500 | 28.858100 | 16.538000 | 47.062400 | 0.057716
+ordinary-128 | interpolate_1d | rust | 500 | 21.050550 | 15.121000 | 41.659100 | 0.042101
+large-100000 | wind_to_components | python | 10 | 46.195100 | 30.553700 | 52.784000 | 4.619510
+large-100000 | wind_to_components | rust | 10 | 38.169550 | 23.446500 | 49.540500 | 3.816955
+large-100000 | components_to_wind | python | 10 | 56.264500 | 35.585700 | 65.910200 | 5.626450
+large-100000 | components_to_wind | rust | 10 | 45.316400 | 24.200100 | 55.211800 | 4.531640
+large-100000 | interpolate_1d | python | 10 | 37.663150 | 26.354600 | 43.204700 | 3.766315
+large-100000 | interpolate_1d | rust | 10 | 47.063600 | 27.765300 | 58.583700 | 4.706360
+batch-2048x128 | wind_to_components | python | 5 | 56.808850 | 42.351100 | 65.775600 | 11.361770
+batch-2048x128 | wind_to_components | rust | 5 | 39.128550 | 25.948400 | 54.177200 | 7.825710
+batch-2048x128 | components_to_wind | python | 5 | 83.144600 | 57.712300 | 95.087600 | 16.628920
+batch-2048x128 | components_to_wind | rust | 5 | 62.405450 | 32.114000 | 69.752900 | 12.481090
+repeated-128x1000 | wind_to_components | python | 1000 | 89.046200 | 47.017400 | 122.937100 | 0.089046
+repeated-128x1000 | wind_to_components | rust | 1000 | 79.252750 | 45.473900 | 125.653400 | 0.079253
+repeated-128x1000 | components_to_wind | python | 1000 | 84.925700 | 45.662200 | 136.835000 | 0.084926
+repeated-128x1000 | components_to_wind | rust | 1000 | 101.478750 | 48.737500 | 129.465000 | 0.101479
+repeated-128x1000 | interpolate_1d | python | 1000 | 66.906800 | 48.885700 | 99.484200 | 0.066907
+repeated-128x1000 | interpolate_1d | rust | 1000 | 64.213050 | 34.390100 | 83.846900 | 0.064213

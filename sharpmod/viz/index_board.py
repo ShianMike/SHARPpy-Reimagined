@@ -125,17 +125,9 @@ class IndexBoard(QFrame):
         self.wind_units = "knots"
         self.pw_units = "in"
         self.setMinimumHeight(240)
-        self.setStyleSheet(
-            "QFrame { background-color: rgb(0,0,0); border: 0px; margin: 0px; }")
         self.bg = QtGui.QColor(colors.BG_COLOR)
         self.fg = QtGui.QColor(colors.FG_COLOR)
-        self.new = QtGui.QColor(colors.ALERT_L2_COLOR)
-        self.rule = QtGui.QColor("#8a8a8a")
-        self.hdr = QtGui.QColor("#ffffff")
-        self.cyan = QtGui.QColor("#00b0b0")
-        self.magenta = QtGui.QColor("#ff40ff")
-        self.red = QtGui.QColor("#ff4040")
-        self.yellow = QtGui.QColor("#e0c000")
+        self._apply_palette(colors.ALERT_L2_COLOR)
         self.hf = QtGui.QFont("Helvetica"); self.hf.setPixelSize(13); self.hf.setBold(True)
         self.rf = QtGui.QFont("Helvetica"); self.rf.setPixelSize(13)
         # Smaller bold font for tight column headers (kinematics table), so the
@@ -158,8 +150,7 @@ class IndexBoard(QFrame):
             self.bg = QtGui.QColor(prefs["bg_color"])
         if "fg_color" in prefs:
             self.fg = QtGui.QColor(prefs["fg_color"])
-        if "alert_l2_color" in prefs:
-            self.new = QtGui.QColor(prefs["alert_l2_color"])
+        self._apply_palette(prefs.get("alert_l2_color"))
         if ("temp_units" in prefs
                 and prefs["temp_units"] in {"Fahrenheit", "Celsius"}):
             self.temp_units = prefs["temp_units"]
@@ -171,6 +162,26 @@ class IndexBoard(QFrame):
             self.clearData()
             self.plotData()
             self.update()
+
+    def _apply_palette(self, alert_l2=None):
+        palette = colors.semantic_palette(self.bg.name(), self.fg.name())
+        self.new = self._theme_qcolor(alert_l2 or palette["amber_l2"])
+        self.rule = QtGui.QColor(palette["rule"])
+        self.hdr = QtGui.QColor(palette["header"])
+        self.cyan = QtGui.QColor(palette["cyan"])
+        self.magenta = QtGui.QColor(palette["magenta"])
+        self.red = QtGui.QColor(palette["red"])
+        self.yellow = QtGui.QColor(palette["yellow"])
+        self.green = QtGui.QColor(palette["green"])
+        self.orange = QtGui.QColor(palette["orange"])
+        self.blue = QtGui.QColor(palette["blue"])
+        self.setStyleSheet(
+            "QFrame { background-color: %s; border: 0px; margin: 0px; }"
+            % self.bg.name())
+
+    def _theme_qcolor(self, color, minimum=4.5):
+        return QtGui.QColor(colors.resolve_theme_color(
+            color, self.bg.name(), self.fg.name(), minimum=minimum))
 
     def setData(self, sp, dp):
         self.sp, self.dp = sp, dp
@@ -282,19 +293,19 @@ class IndexBoard(QFrame):
         return "%.2f in" % v
 
     def _peskov_color(self, v):
-        return QtGui.QColor(colors.peskov_color(v))
+        return self._theme_qcolor(colors.peskov_color(v))
 
     def _lrghail_color(self, v):
-        return QtGui.QColor(colors.lrghail_color(v))
+        return self._theme_qcolor(colors.lrghail_color(v))
 
     def _scp_color(self, v):
-        return QtGui.QColor(colors.scp_color(v))
+        return self._theme_qcolor(colors.scp_color(v))
 
     def _ehi_color(self, v):
-        return QtGui.QColor(colors.ehi_color(v))
+        return self._theme_qcolor(colors.ehi_color(v))
 
     def _dcp_color(self, v):
-        return QtGui.QColor(colors.dcp_color(v))
+        return self._theme_qcolor(colors.dcp_color(v))
 
     def _barb_path(self, wdir, wspd, shemis, scale):
         # Build a wind-barb painter path (staff + barbs/flags) in local
@@ -409,7 +420,9 @@ class IndexBoard(QFrame):
         if value is None:
             return self.fg
         try:
-            return QtGui.QColor(colors.tier_color(param, value, **ctx))
+            return QtGui.QColor(colors.tier_color(
+                param, value, bg_color=self.bg.name(),
+                fg_color=self.fg.name(), **ctx))
         except Exception:
             return self.fg
 
@@ -422,10 +435,10 @@ class IndexBoard(QFrame):
         if cin is None:
             return self.fg
         if cin >= -50:
-            return QtGui.QColor("#00FF00")
+            return self.green
         if cin >= -100:
-            return QtGui.QColor("#FFA500")
-        return QtGui.QColor("#FF0000")
+            return self.orange
+        return self.red
 
     def _wyrp(self, v, yellow, red, pink, higher=True):
         """4-color intensity scale: white -> yellow -> red -> pink.
@@ -435,7 +448,7 @@ class IndexBoard(QFrame):
                            lowest/most-extreme bound).
         A missing value stays neutral white.
         """
-        return QtGui.QColor(colors.common_gradient_color(
+        return self._theme_qcolor(colors.common_gradient_color(
             v, yellow, red, pink, higher=higher))
 
     def _sweat_color(self, v):
@@ -443,7 +456,7 @@ class IndexBoard(QFrame):
         # 350-500 yellow, 500-650 red, >= 650 pink.
         if v is None:
             return self.fg
-        return QtGui.QColor(colors.sweat_color(v))
+        return self._theme_qcolor(colors.sweat_color(v))
 
     def _sweat(self):
         # SWEAT is not stored on the analyzed profile; compute it on demand
@@ -464,7 +477,7 @@ class IndexBoard(QFrame):
     def _lapse_color(self, v):
         # Lapse-rate color table (from thermo.py): green<=6, yellow<=7,
         # orange<=8, red<=9, magenta>9.
-        return QtGui.QColor(colors.lapse_rate_color(v))
+        return self._theme_qcolor(colors.lapse_rate_color(v))
 
     def _cape3_color(self, v):
         # 3CAPE color table (from thermo.py, by MLCAPE 0-3 km):
@@ -472,19 +485,19 @@ class IndexBoard(QFrame):
         if v is None:
             return self.fg
         if v > 125:
-            return QtGui.QColor("#FF00FF")
+            return self.magenta
         if v > 100:
-            return QtGui.QColor("#FF0000")
+            return self.red
         if v > 75:
-            return QtGui.QColor("#FFA500")
+            return self.orange
         if v > 50:
-            return QtGui.QColor("#FFFF00")
+            return self.yellow
         if v > 25:
-            return QtGui.QColor("#00FF00")
+            return self.green
         return self.fg
 
     def _mcs_color(self, v):
-        return QtGui.QColor(colors.mcs_color(v))
+        return self._theme_qcolor(colors.mcs_color(v))
 
     def _text(self, qp, rect, s, color=None, align=Qt.AlignLeft):
         qp.setPen(QtGui.QPen(color or self.fg, 1))
@@ -683,7 +696,9 @@ class IndexBoard(QFrame):
             if v is None:
                 return self.fg
             try:
-                return QtGui.QColor(colors.tier_color(param, v))
+                return QtGui.QColor(colors.tier_color(
+                    param, v, bg_color=self.bg.name(),
+                    fg_color=self.fg.name()))
             except Exception:
                 return self.fg
 
@@ -1067,7 +1082,10 @@ class IndexBoard(QFrame):
         # "< 2 in" -> yellow, ">= 2 in" -> red (matching the STP EF scale look).
         n = len(dist)
         plotw = ax1 - ax0
-        cat_colors = [QtGui.QColor("#FFFF00"), QtGui.QColor("#FF0000")]
+        cat_colors = [
+            self._theme_qcolor("#FFFF00"),
+            self._theme_qcolor("#FF0000"),
+        ]
         for i in range(n):
             col = dist[i]
             wl, bb, med, bt, wh = (float(col[0]), float(col[1]), float(col[2]),
@@ -1091,6 +1109,7 @@ class IndexBoard(QFrame):
         sv = self._sf("ship")
         if sv is not None:
             sy = toy(sv)
-            line_col = QtGui.QColor("#FF0000") if sv >= 1.0 else QtGui.QColor("#FFFF00")
+            line_col = (self._theme_qcolor("#FF0000") if sv >= 1.0
+                        else self._theme_qcolor("#FFFF00"))
             qp.setPen(QtGui.QPen(line_col, 2))
             qp.drawLine(ax0, sy, ax1, sy)

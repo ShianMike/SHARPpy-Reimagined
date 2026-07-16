@@ -8,9 +8,11 @@ from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from qtpy import QtCore
 from qtpy.QtGui import QColor, QPixmap
 from qtpy.QtWidgets import QApplication
 
+from sharpmod import colors
 from sharpmod.viz import hodo_locator
 
 
@@ -124,3 +126,41 @@ def test_locator_draws_county_outline_and_sounding_marker(monkeypatch, qt_app):
             if color.red() > 180 and color.green() > 140 and color.blue() < 90:
                 marker_pixels += 1
     assert marker_pixels > 5
+
+
+def test_locator_draws_an_inverted_map_surface_and_accessible_marker(
+        monkeypatch, qt_app):
+    monkeypatch.setattr(
+        hodo_locator, "county_features_for_point", lambda _lat, _lon: ())
+    monkeypatch.setattr(
+        hodo_locator,
+        "global_lines_for_bounds",
+        lambda _bounds: {name: () for name in ("coastline", "countries", "states")},
+    )
+    pixmap = QPixmap(640, 480)
+    pixmap.fill(QColor("magenta"))
+    widget = SimpleNamespace(
+        plotBitMap=pixmap,
+        prof=SimpleNamespace(latitude=39.0319, longitude=-88.6713),
+        bg_color=QColor("#ffffff"),
+        fg_color=QColor("#000000"),
+        width=lambda: 640,
+        height=lambda: 480,
+    )
+
+    assert hodo_locator.draw_hodo_locator(widget) is True
+
+    image = pixmap.toImage()
+    rect = hodo_locator._inset_rect(widget, QtCore)
+    fill = image.pixelColor(int(rect.left()) + 10, int(rect.top()) + 10)
+    assert fill.name().lower() == "#ffffff"
+
+    marker = colors.semantic_palette(
+        "#ffffff", "#000000")["marker_yellow"]
+    marker_pixels = sum(
+        image.pixelColor(x, y).name().lower() == marker
+        for y in range(image.height())
+        for x in range(image.width())
+    )
+    assert marker_pixels > 0
+    assert colors.contrast_ratio(marker, "#ffffff") >= 4.5

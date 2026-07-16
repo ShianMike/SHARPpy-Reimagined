@@ -14,16 +14,20 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 from contextlib import redirect_stdout
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import numpy as np
 
+from sharpmod import backends as _backends
 from sharpmod.model_fields import choose_search
 from sharpmod.model_transport import (
     DownloadCancelled,
     OptimizedTransportUnavailable,
+    _valid_grib,
     download_herbie_subset,
     ranges_from_inventory,
 )
@@ -47,11 +51,14 @@ from sharpmod.tools.era5_extract import (
     _atomic_write_npz,
     _build_columns,
     _coord_values,
+    _horizontal_indexers,
     _merge_datasets,
+    _promote_scalar_level_coordinate,
     _quiet_remove,
     _select_time,
     select_nearest_grid_point,
     _LAT_COORDS,
+    _LEVEL_COORDS,
     _LON_COORDS,
 )
 
@@ -65,6 +72,75 @@ NOAA_PRESSURE_SEARCH = (
 IFS_PRESSURE_SEARCH = r":(gh|t|u|v|r|q|w|vo):\d+:pl:"
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class _LocalGribDataset:
+    """Cache-owned local GRIB source with a lazy compatibility dataset.
+
+    The normal path decodes a compact point directly from ``path``. If a GRIB
+    layout is not supported by that decoder, ``fallback_dataset`` opens the
+    same file with cfgrib's persistent on-disk index and keeps the lazy xarray
+    object under the existing model-hour lease.
+    """
+
+    def __init__(self, path):
+        self.path = Path(path).expanduser().resolve(strict=True)
+        self._fallback_sources = None
+        self._pressure_sources = None
+        self._lock = threading.RLock()
+
+    def _open_fallback_sources(self):
+        with self._lock:
+            if self._pressure_sources is not None:
+                return self._pressure_sources
+            try:
+                import cfgrib
+            except ImportError as exc:
+                raise RetrievalError(
+                    "forecast model fallback decoding requires cfgrib"
+                ) from exc
+
+            sources = ()
+            try:
+                # Keep cfgrib's default ``{path}.{short_hash}.idx``. Unlike the
+                # previous no-index profiling path, this inventory is reused by
+                # later opens while the model-hour cache owns the directory.
+                sources = tuple(cfgrib.open_datasets(os.fspath(self.path)))
+                pressure_sources = tuple(
+                    source for source in sources
+                    if any(name in source.coords for name in _LEVEL_COORDS)
+                )
+                if not pressure_sources:
+                    raise RetrievalError(
+                        "cfgrib returned no pressure-level dataset"
+                    )
+            except BaseException:
+                for source in sources:
+                    try:
+                        source.close()
+                    except Exception:
+                        pass
+                raise
+            self._fallback_sources = sources
+            self._pressure_sources = pressure_sources
+            return pressure_sources
+
+    def fallback_point_dataset(self, lat, lon, run_dt):
+        """Merge only a small neighborhood around the requested grid point."""
+        return _merge_point_datasets(
+            self._open_fallback_sources(), lat, lon, run_dt
+        )
+
+    def close(self):
+        with self._lock:
+            sources = self._fallback_sources or ()
+            self._fallback_sources = None
+            self._pressure_sources = None
+        for source in sources:
+            try:
+                source.close()
+            except Exception:
+                pass
 
 
 @dataclass(frozen=True)
@@ -392,10 +468,13 @@ def _emit_progress(callback, stage, total_bytes=0):
         callback(str(stage), max(0, int(total_bytes or 0)))
 
 
-def _subset_download_bytes(herbie, search):
+def _subset_download_bytes(inventory_or_herbie, search=None):
     """Return the planned coalesced byte-range transfer size."""
     try:
-        inventory = herbie.inventory(search).copy()
+        if search is None:
+            inventory = inventory_or_herbie
+        else:
+            inventory = inventory_or_herbie.inventory(search).copy()
         if len(inventory) == 0:
             return 0
         return sum(item.size for item in ranges_from_inventory(inventory))
@@ -418,22 +497,72 @@ def _planned_model_search(herbie, config):
     try:
         inventory = herbie.inventory(config.search).copy()
         search, fields = choose_search(config, inventory)
-        # Confirm that the narrower expression really matches the provider's
-        # index before using it to name a persistent subset file.
-        if len(herbie.inventory(search)) == 0:
+        planned = inventory
+        if fields and "variable" in inventory:
+            planned = inventory[
+                inventory["variable"].astype(str).isin(tuple(fields))
+            ].copy()
+        # Confirm the in-memory narrowed inventory really contains records
+        # before using the expression to name a persistent subset file.  This
+        # avoids two more regex scans/copies of Herbie's cached DataFrame.
+        if len(planned) == 0:
             raise ValueError("planned model search matched no messages")
-        return search, fields
+        return search, fields, planned
     except Exception as exc:
         _LOGGER.info(
             "model_fields.fallback model=%s reason=%s", config.key, exc
         )
-        return config.search, ()
+        try:
+            fallback_inventory = herbie.inventory(config.search).copy()
+        except Exception:
+            fallback_inventory = None
+        return config.search, (), fallback_inventory
 
 
 def _point_backends_enabled():
     """Return whether Zarr/NOMADS point and subregion routes are enabled."""
     mode = os.environ.get("SHARPMOD_POINT_BACKENDS", "auto").strip().lower()
     return mode not in {"0", "false", "no", "off", "grib"}
+
+
+def _direct_grib_enabled():
+    """Return whether local GRIB point decoding may bypass xarray."""
+    mode = os.environ.get("SHARPMOD_GRIB_DECODER", "auto").strip().lower()
+    if mode not in {"auto", "direct", "xarray"}:
+        raise RetrievalError(
+            "invalid SHARPMOD_GRIB_DECODER value %r; expected auto, direct, "
+            "or xarray" % mode
+        )
+    return mode != "xarray"
+
+
+def _direct_grib_required():
+    return os.environ.get(
+        "SHARPMOD_GRIB_DECODER", "auto"
+    ).strip().lower() == "direct"
+
+
+def _has_direct_vorticity(fields):
+    """Avoid changing the legacy wind-gradient vorticity fallback."""
+    normalized = {str(value).strip().lower() for value in (fields or ())}
+    return bool(normalized & {
+        "absv", "vo", "vort", "relv", "relative_vorticity",
+    })
+
+
+def _local_grib_path(value):
+    """Return one complete downloaded GRIB path, if ``value`` contains one."""
+    candidates = value if isinstance(value, (tuple, list)) else (value,)
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        try:
+            path = Path(os.fspath(candidate)).expanduser()
+        except TypeError:
+            continue
+        if _valid_grib(path):
+            return path.resolve()
+    return None
 
 
 def spatial_cache_key(config, lat, lon):
@@ -521,14 +650,16 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
         if download_dir is not None:
             xarray_kwargs["save_dir"] = os.fspath(download_dir)
             download_kwargs["save_dir"] = os.fspath(download_dir)
-        search, selected_fields = _planned_model_search(H, config)
-        expected_bytes = _subset_download_bytes(H, search)
+        search, selected_fields, planned_inventory = _planned_model_search(
+            H, config)
+        expected_bytes = _subset_download_bytes(planned_inventory)
         _emit_progress(progress_callback, "downloading", expected_bytes)
         # Herbie 2026.3.0 unconditionally prints an emoji when it creates its
         # download directory, even with ``verbose=False``.  Capturing stdout
         # keeps that third-party status message from crashing CP1252 Windows
         # GUI and worker processes; retrieval exceptions still propagate.
         transport = None
+        local_path = None
         source_url = str(H.grib)
         if lat is not None and lon is not None and selected_fields \
                 and _point_backends_enabled() and nomads_supported(config) \
@@ -544,6 +675,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                     save_dir=download_dir,
                     cancelled=cancelled,
                 )
+                local_path = _local_grib_path(_path)
                 transport = "nomads-subregion"
                 if transferred_bytes:
                     expected_bytes = int(transferred_bytes)
@@ -569,9 +701,11 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                 _path, transferred_bytes = download_herbie_subset(
                     H,
                     search,
+                    inventory=planned_inventory,
                     save_dir=download_dir,
                     cancelled=cancelled,
                 )
+                local_path = _local_grib_path(_path)
                 if transferred_bytes:
                     expected_bytes = int(transferred_bytes)
             except OptimizedTransportUnavailable as exc:
@@ -582,18 +716,35 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                     config.key, run_dt.isoformat(), int(fxx), exc,
                 )
                 with redirect_stdout(io.StringIO()):
-                    H.download(search, **download_kwargs)
+                    downloaded = H.download(search, **download_kwargs)
+                local_path = _local_grib_path(downloaded)
         if cancelled is not None and cancelled():
             raise DownloadCancelled("forecast-model download cancelled")
+        if local_path is None:
+            try:
+                local_path = _local_grib_path(H.get_localFilePath(search))
+            except Exception:
+                pass
+        H._sharpmod_fields = selected_fields
+        H._sharpmod_search = search
+        H._sharpmod_transport = transport
+        H._sharpmod_source_url = source_url
+
+        if local_path is not None and _direct_grib_enabled():
+            if _has_direct_vorticity(selected_fields):
+                return _LocalGribDataset(local_path), H
+            if _direct_grib_required():
+                raise RetrievalError(
+                    "the downloaded pressure-level subset has no direct "
+                    "vorticity field; xarray is required to preserve the "
+                    "wind-gradient surface-vorticity fallback"
+                )
+
         _emit_progress(progress_callback, "decoding", expected_bytes)
         with redirect_stdout(io.StringIO()):
             ds = H.xarray(search, **xarray_kwargs)
         if isinstance(ds, list):
             ds = _merge_datasets(ds)
-        H._sharpmod_fields = selected_fields
-        H._sharpmod_search = search
-        H._sharpmod_transport = transport
-        H._sharpmod_source_url = source_url
         return ds, H
     except (RetrievalError, DownloadCancelled):
         raise
@@ -609,8 +760,116 @@ def _selected_valid(ds_t, selected_time, run_dt, fxx):
         return _as_datetime(vt.reshape(-1)[0])
     if selected_time is not None:
         return _as_datetime(selected_time)
-    from datetime import timedelta
     return run_dt + timedelta(hours=int(fxx))
+
+
+def _point_neighborhood(ds, lat, lon, run_dt):
+    """Slice one lazy xarray group to at most a 3-by-3 horizontal window."""
+    ds_t, _selected_time = _select_time(ds, run_dt)
+    _, lats = _coord_values(ds_t, _LAT_COORDS)
+    _, lons = _coord_values(ds_t, _LON_COORDS)
+    if lats is None or lons is None:
+        raise RetrievalError(
+            "cfgrib pressure group is missing latitude/longitude coordinates"
+        )
+    lon_req = lon
+    try:
+        if np.nanmin(lons) >= 0.0 and lon < 0.0:
+            lon_req = lon + 360.0
+    except Exception:
+        pass
+    index_tuple, selected_lat, selected_lon = select_nearest_grid_point(
+        lats, lons, lat, lon_req
+    )
+    indexers, _dims = _horizontal_indexers(ds_t, index_tuple)
+    slices = {}
+    for dim, index in indexers.items():
+        size = int(ds_t.sizes[dim])
+        start = max(0, int(index) - 1)
+        stop = min(size, int(index) + 2)
+        slices[dim] = slice(start, stop)
+    compact = ds_t.isel(slices) if slices else ds_t
+    selected_lon = ((selected_lon + 180.0) % 360.0) - 180.0
+    return compact, float(selected_lat), float(selected_lon)
+
+
+def _merge_point_datasets(datasets, lat, lon, run_dt):
+    """Merge compact lazy point neighborhoods instead of complete grids."""
+    try:
+        import xarray as xr
+    except ImportError as exc:
+        raise RetrievalError(
+            "forecast model fallback decoding requires xarray"
+        ) from exc
+
+    compact = []
+    selected = None
+    for source in datasets:
+        point, selected_lat, selected_lon = _point_neighborhood(
+            source, lat, lon, run_dt
+        )
+        if selected is None:
+            selected = (selected_lat, selected_lon)
+        else:
+            lon_delta = (
+                (selected_lon - selected[1] + 180.0) % 360.0
+            ) - 180.0
+            if (
+                abs(selected_lat - selected[0]) > 1.0e-6
+                or abs(lon_delta) > 1.0e-6
+            ):
+                raise RetrievalError(
+                    "cfgrib pressure groups use inconsistent horizontal grids"
+                )
+        compact.append(_promote_scalar_level_coordinate(point))
+    if not compact:
+        raise RetrievalError("cfgrib returned no pressure-level dataset")
+    return xr.merge(compact, compat="override", join="outer")
+
+
+def _decode_local_point(source, lat, lon):
+    """Decode through the selected backend, with Python fallback in auto mode."""
+    try:
+        return _backends.decode_grib_point(source.path, lat, lon)
+    except Exception as rust_error:
+        info = _backends.backend_info()
+        if not (
+            info["requested_backend"] == "auto"
+            and info["active_backend"] == "rust"
+        ):
+            raise
+        _LOGGER.info(
+            "grib_decode.rust_fallback path=%s reason=%s",
+            source.path,
+            rust_error,
+        )
+        from sharpmod.backends.python_backend import PythonBackend
+        return PythonBackend().decode_grib_point(source.path, lat, lon)
+
+
+def _xarray_point_columns(ds, lat, lon, run_dt, fxx, label):
+    """Return the legacy xarray point result while materializing only columns."""
+    ds_t, selected_time = _select_time(ds, run_dt)
+    _, lats = _coord_values(ds_t, _LAT_COORDS)
+    _, lons = _coord_values(ds_t, _LON_COORDS)
+    if lats is None or lons is None:
+        raise RetrievalError(
+            "%s dataset is missing latitude/longitude coordinates" % label
+        )
+
+    lon_req = lon
+    try:
+        if np.nanmin(lons) >= 0.0 and lon < 0.0:
+            lon_req = lon + 360.0
+    except Exception:
+        pass
+    index_tuple, glat, glon = select_nearest_grid_point(
+        lats, lons, lat, lon_req
+    )
+    glon = ((glon + 180.0) % 360.0) - 180.0
+    cols, n_levels = _build_columns(ds_t, index_tuple, latitude=glat)
+    valid_dt = _selected_valid(ds_t, selected_time, run_dt, fxx)
+    return cols, n_levels, glat, glon, valid_dt, ds_t
 
 
 def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
@@ -643,7 +902,8 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
             fxx,
         )
 
-    if dataset is None:
+    owns_dataset = dataset is None
+    if owns_dataset:
         retrieve_kwargs = {
             "member": member,
             "download_dir": download_dir,
@@ -659,35 +919,78 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
         ds = dataset
         H = None
 
-    if cancelled is not None and cancelled():
-        raise DownloadCancelled("forecast-model download cancelled")
-    _emit_progress(progress_callback, "extracting")
-    ds_t, selected_time = _select_time(ds, run_dt)
-    _, lats = _coord_values(ds_t, _LAT_COORDS)
-    _, lons = _coord_values(ds_t, _LON_COORDS)
-    if lats is None or lons is None:
-        raise RetrievalError("%s dataset is missing latitude/longitude coordinates"
-                             % config.label)
-
-    lon_req = lon
+    selected_dataset = None
     try:
-        if np.nanmin(lons) >= 0.0 and lon < 0.0:
-            lon_req = lon + 360.0
-    except Exception:
-        pass
-
-    index_tuple, glat, glon = select_nearest_grid_point(
-        lats, lons, lat, lon_req)
-    glon = ((glon + 180.0) % 360.0) - 180.0
-
-    cols, n_levels = _build_columns(ds_t, index_tuple, latitude=glat)
-    valid_dt = _selected_valid(ds_t, selected_time, run_dt, fxx)
-    if dataset is None:
-        try:
-            ds_t.close()
-        finally:
-            if ds_t is not ds:
+        if cancelled is not None and cancelled():
+            raise DownloadCancelled("forecast-model download cancelled")
+        if isinstance(ds, _LocalGribDataset):
+            _emit_progress(progress_callback, "decoding")
+            try:
+                decoded = _decode_local_point(ds, lat, lon)
+                if decoded.surface_relative_vorticity is None:
+                    raise RetrievalError(
+                        "the direct decoder found no usable vorticity value"
+                    )
+            except Exception as exc:
+                if _direct_grib_required():
+                    raise RetrievalError(
+                        "direct GRIB point decoding failed for %s: %s"
+                        % (config.label, exc)
+                    ) from exc
+                _LOGGER.info(
+                    "grib_decode.xarray_fallback model=%s path=%s reason=%s",
+                    config.key,
+                    ds.path,
+                    exc,
+                )
+                fallback = ds.fallback_point_dataset(lat, lon, run_dt)
+                try:
+                    (
+                        cols,
+                        n_levels,
+                        glat,
+                        glon,
+                        valid_dt,
+                        selected_dataset,
+                    ) = _xarray_point_columns(
+                        fallback, lat, lon, run_dt, fxx, config.label
+                    )
+                finally:
+                    fallback.close()
+            else:
+                cols = decoded.as_dict()
+                if decoded.surface_relative_vorticity is not None:
+                    cols["surface_relative_vorticity"] = (
+                        decoded.surface_relative_vorticity
+                    )
+                n_levels = int(decoded.pres.size)
+                glat = decoded.selected_lat
+                glon = decoded.selected_lon
+                valid_dt = run_dt + timedelta(hours=fxx)
+            _emit_progress(progress_callback, "extracting")
+        else:
+            _emit_progress(progress_callback, "extracting")
+            (
+                cols,
+                n_levels,
+                glat,
+                glon,
+                valid_dt,
+                selected_dataset,
+            ) = _xarray_point_columns(
+                ds, lat, lon, run_dt, fxx, config.label
+            )
+    finally:
+        if owns_dataset:
+            if isinstance(ds, _LocalGribDataset):
                 ds.close()
+            else:
+                try:
+                    if selected_dataset is not None:
+                        selected_dataset.close()
+                finally:
+                    if selected_dataset is not ds:
+                        ds.close()
     run_str = run_dt.strftime("%Y-%m-%d %H:%M")
     valid_str = valid_dt.strftime("%Y-%m-%d %H:%M")
     loc_label = loc or "%s %.2f, %.2f" % (config.label, glat, glon)

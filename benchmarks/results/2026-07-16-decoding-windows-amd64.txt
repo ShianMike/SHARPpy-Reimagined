@@ -1,0 +1,90 @@
+SHARPpy Reimagined local GRIB decoding benchmark
+================================================
+
+Fixture
+-------
+path: C:\Users\shian\AppData\Local\sharpmod\model-cache\hrrr\2026071601\f000-deterministic-41_7677_-98_4026\hrrr\20260716\subset_eeef4502__hrrr.t01z.wrfprsf00.grib2
+size: 181267625 bytes
+sha256: 7d8b0595c0efbaf546b118a4d96e6f2ee7b7577279bd0935eb225e9448adbc99
+requested point: 35.18, -97.44
+selected point: 35.18069065447114, -97.4398067119418
+decoded pressure levels: 40
+
+Environment
+-----------
+generated: 2026-07-16T05:06:45Z
+platform: Windows-10-10.0.26200-SP0 (AMD64)
+processor: Intel64 Family 6 Model 154 Stepping 4, GenuineIntel
+Python: 3.11.14
+NumPy: 2.4.6
+xarray: 2026.4.0
+cfgrib: 0.9.15.1
+ecCodes Python/library: 2.47.0 / 2.47.0
+sharpmod/sharpmod_rs: 0.3.1 / 0.3.1
+Rust extension: maturin develop --release
+revision: e1bb8a8f7a0baecc1c8e3765eafd3b062d2dc90a (dirty working tree)
+
+Method
+------
+- Three measured decoder samples, no harness warmup.
+- Forward/reverse implementation order alternated between repeats.
+- Legacy application-cold samples used cfgrib indexpath="" explicitly.
+- Optimized application-cold samples cleared all backend point/inventory work.
+- Operating-system file cache was not flushed.
+- The warm legacy stage retained persistent cfgrib indexes and decoded a new
+  point (35.23, -97.39). The warm optimized Python stage retained only its
+  message inventory while clearing nearest-point and decoded-point work.
+- Cache-hit rows used 100 alternating samples after five untimed hits.
+- The equivalence preflight passed for old Python, old Rust, optimized Python,
+  and optimized Rust: values/missing masks matched within field-specific
+  floating-point tolerances, pressure ordering matched, and all four selected
+  the same grid point.
+
+Cold local decode results
+-------------------------
+implementation   median ms    min ms       max ms       speedup vs matching old
+old Python       33961.648800  32957.176600 35985.935600  1.00x
+optimized Python  6601.793200   6576.336900  7182.886600  5.14x
+old Rust hybrid  31398.743900  29197.947400 34090.652600  1.00x
+optimized Rust    6614.370100   6360.628200  6895.327700  4.75x
+
+Raw cold samples, seconds
+old Python:       33.9616488, 32.9571766, 35.9859356
+optimized Python:  7.1828866,  6.5763369,  6.6017932
+old Rust hybrid:  34.0906526, 29.1979474, 31.3987439
+optimized Rust:    6.6143701,  6.3606282,  6.8953277
+
+Optimized Python versus optimized Rust: 6601.793200 ms versus 6614.370100 ms;
+effectively tied for this fixture (Python was 0.19% faster in this run).
+
+Persistent-inventory/index, new-point results
+---------------------------------------------
+implementation   median ms    min ms       max ms       comparison
+old Python       19569.670200  19329.269500 22749.898700  1.00x
+optimized Python  7254.022700   6040.124400  7386.149200  2.70x faster
+old Rust hybrid  23014.757300  18514.147000 25236.493400  legacy index only
+optimized Rust   unavailable                             no inventory cache
+
+Exact-point cache-hit results
+-----------------------------
+implementation   samples median ms min ms   max ms   comparison
+optimized Python 100     0.165650  0.153100 0.876200 1.00x
+optimized Rust   100     0.110250  0.100500 0.641300 1.50x faster
+old Python/Rust  unavailable (the frozen decoder had no decoded-point cache)
+
+Commands
+--------
+.\.gribenv\Scripts\python.exe benchmarks\benchmark_decoding.py --grib <fixture-above> --lat 35.18 --lon -97.44 --second-lat 35.23 --second-lon -97.39 --repeat 3 --warmup 0 --stages application-cold warm-inventory-point-miss --skip-equivalence --output .tmp\decode-main.json
+
+.\.gribenv\Scripts\python.exe benchmarks\benchmark_decoding.py --grib <fixture-above> --lat 35.18 --lon -97.44 --implementations optimized-python optimized-rust --stages point-cache-hit --repeat 100 --warmup 5 --skip-equivalence --output .tmp\decode-cache.json
+
+Interpretation
+--------------
+These are local decoder measurements, not network/model-fetch timings. The
+legacy Rust label is intentionally not described as a native GRIB decoder: its
+historical native work was only the small wind post-processing kernel after
+the same cfgrib/xarray decode used by old Python. The near-tie between the two
+optimized cold paths shows that ecCodes message/value access dominates this
+fixture; the Python/Rust boundary is visible mainly once the result is already
+cached. Three cold samples characterize this workstation snapshot but are not
+a cross-machine performance guarantee.

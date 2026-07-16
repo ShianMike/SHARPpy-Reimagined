@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (e.g. v0.1.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v0.4.0). Created if it does not exist."
         required: true
-        default: "v0.1.0"
+        default: "v0.4.0"
 
 permissions:
   contents: write
@@ -19,10 +19,65 @@ jobs:
     name: Build Windows executable
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      SHARPMOD_BACKEND: "rust"
+      SHARPMOD_REQUIRE_RUST: "1"
 
     steps:
-      - name: Check out repository
+      - name: Resolve release tag and source
+        id: release
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ github.event.inputs.tag }}
+          EVENT_TAG: ${{ github.ref_name }}
+          REMOTE_URL: https://github.com/${{ github.repository }}.git
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            tag="$DISPATCH_TAG"
+          else
+            tag="$EVENT_TAG"
+          fi
+          if ! git check-ref-format "refs/tags/$tag" >/dev/null; then
+            echo "Invalid release tag: $tag" >&2
+            exit 1
+          fi
+
+          tag_exists=false
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\r\n')
+            set +e
+            git -c "http.extraheader=AUTHORIZATION: basic $auth" \
+              ls-remote --exit-code --refs "$REMOTE_URL" "refs/tags/$tag" \
+              >/dev/null 2>&1
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then
+              checkout_ref="refs/tags/$tag"
+              tag_exists=true
+            elif [ "$status" -eq 2 ]; then
+              # GITHUB_SHA is the immutable commit selected in the Run workflow
+              # ref picker. The release action creates the new tag there later.
+              checkout_ref="$GITHUB_SHA"
+            else
+              echo "Unable to determine whether release tag $tag exists" >&2
+              exit "$status"
+            fi
+          else
+            checkout_ref="$GITHUB_REF"
+            tag_exists=true
+          fi
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+          printf 'checkout_ref=%s\n' "$checkout_ref" >> "$GITHUB_OUTPUT"
+          printf 'tag_exists=%s\n' "$tag_exists" >> "$GITHUB_OUTPUT"
+
+      - name: Check out release source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.checkout_ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,12 +85,120 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Validate release tag and source versions
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import tomllib
+
+          root = Path.cwd()
+          version_source = (root / "sharpmod/_version.py").read_text(encoding="utf-8")
+          match = re.search(
+              r'^__version__\s*=\s*["\']([^"\']+)["\']',
+              version_source,
+              flags=re.MULTILINE,
+          )
+          if match is None:
+              raise SystemExit("sharpmod/_version.py does not define __version__")
+          python_version = match.group(1)
+          cargo_version = tomllib.loads(
+              (root / "rust/sharpmod-rs/Cargo.toml").read_text(encoding="utf-8")
+          )["package"]["version"]
+          maturin_version = tomllib.loads(
+              (root / "rust/sharpmod-rs/pyproject.toml").read_text(encoding="utf-8")
+          )["project"]["version"]
+          lock_packages = [
+              package
+              for package in tomllib.loads(
+                  (root / "rust/sharpmod-rs/Cargo.lock").read_text(
+                      encoding="utf-8"
+                  )
+              )["package"]
+              if package.get("name") == "sharpmod-rs"
+          ]
+          if len(lock_packages) != 1:
+              raise SystemExit(
+                  "Cargo.lock must contain exactly one sharpmod-rs package"
+              )
+          lock_version = lock_packages[0]["version"]
+
+          versions = {
+              "sharpmod/_version.py": python_version,
+              "rust/sharpmod-rs/Cargo.toml": cargo_version,
+              "rust/sharpmod-rs/pyproject.toml": maturin_version,
+              "rust/sharpmod-rs/Cargo.lock": lock_version,
+          }
+          if len(set(versions.values())) != 1:
+              raise SystemExit(f"release source versions do not match: {versions}")
+
+          expected_tag = f"v{python_version}"
+          release_tag = os.environ["RELEASE_TAG"].strip()
+          if release_tag != expected_tag:
+              raise SystemExit(
+                  f"release tag {release_tag!r} must equal {expected_tag!r}"
+              )
+          print(f"Validated {release_tag} against {versions}")
+          PY
+
       - name: Install package and build dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[render,era5]"
           python -m pip install --no-deps "SHARPpy==1.4.0a5"
           python -m pip install pyinstaller
+
+      - name: Build and install locked Rust wheel
+        shell: pwsh
+        run: |
+          python -m pip install "maturin==1.14.1"
+          Push-Location "rust/sharpmod-rs"
+          try {
+            python -m maturin build --release --locked --interpreter python --out dist
+            if ($LASTEXITCODE -ne 0) {
+              throw "Locked Rust wheel build failed"
+            }
+          }
+          finally {
+            Pop-Location
+          }
+          $wheels = @(
+            Get-ChildItem -LiteralPath "rust/sharpmod-rs/dist" `
+              -Filter "sharpmod_rs-*-cp311-cp311-win_amd64.whl" -File
+          )
+          if ($wheels.Count -ne 1) {
+            throw "Expected one CPython 3.11 Windows Rust wheel, found $($wheels.Count)"
+          }
+          python -m pip install --force-reinstall --no-deps $wheels[0].FullName
+          if ($LASTEXITCODE -ne 0) {
+            throw "Rust wheel installation failed"
+          }
+
+      - name: Verify installed Rust backend
+        shell: python
+        run: |
+          import importlib.metadata
+
+          import sharpmod
+          import sharpmod_rs
+          from sharpmod.backends import backend_info, wind_to_components
+
+          info = backend_info()
+          assert info["requested_backend"] == "rust", info
+          assert info["active_backend"] == "rust", info
+          assert info["rust_installed"] is True, info
+          assert info["rust_version"] == sharpmod.__version__, info
+          assert info["fallback_reason"] is None, info
+          assert sharpmod_rs.__version__ == sharpmod.__version__
+          assert importlib.metadata.version("sharpmod-rs") == sharpmod.__version__
+          u_component, v_component = wind_to_components(270.0, 10.0)
+          assert abs(u_component - 10.0) <= 1.0e-12
+          assert abs(v_component) <= 1.0e-12
+          print(info)
 
       - name: Generate application icon
         run: python packaging/make_icon.py
@@ -57,10 +220,18 @@ jobs:
             throw "Frozen model-fetch runtime check failed"
           }
           $result = Get-Content $report -Raw | ConvertFrom-Json
-          if (-not $result.ok -or $result.configured_models -lt 1 -or -not $result.logging_handlers -or -not $result.gui_entrypoint) {
+          if (-not $result.ok -or -not $result.backend_kernel_ok -or `
+              $result.backend.requested_backend -ne "rust" -or `
+              $result.backend.active_backend -ne "rust" -or `
+              -not $result.backend.rust_installed -or `
+              [string]::IsNullOrWhiteSpace([string]$result.backend.rust_version) -or `
+              $null -ne $result.backend.fallback_reason -or `
+              $result.configured_models -lt 1 -or `
+              -not $result.logging_handlers -or -not $result.gui_entrypoint) {
+            $result | ConvertTo-Json -Depth 5
             throw "Frozen model-fetch runtime report is invalid"
           }
-          $result | ConvertTo-Json
+          $result | ConvertTo-Json -Depth 5
 
       - name: Build single-file executable
         env:
@@ -80,25 +251,23 @@ jobs:
             throw "Frozen single-file runtime check failed"
           }
           $result = Get-Content $report -Raw | ConvertFrom-Json
-          if (-not $result.ok -or $result.configured_models -lt 1 -or -not $result.logging_handlers -or -not $result.gui_entrypoint) {
+          if (-not $result.ok -or -not $result.backend_kernel_ok -or `
+              $result.backend.requested_backend -ne "rust" -or `
+              $result.backend.active_backend -ne "rust" -or `
+              -not $result.backend.rust_installed -or `
+              [string]::IsNullOrWhiteSpace([string]$result.backend.rust_version) -or `
+              $null -ne $result.backend.fallback_reason -or `
+              $result.configured_models -lt 1 -or `
+              -not $result.logging_handlers -or -not $result.gui_entrypoint) {
+            $result | ConvertTo-Json -Depth 5
             throw "Frozen single-file runtime report is invalid"
           }
-          $result | ConvertTo-Json
-
-      - name: Resolve release tag
-        id: tag
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
+          $result | ConvertTo-Json -Depth 5
 
       - name: Package one-folder build as zip
         shell: pwsh
         run: |
-          $tag = "${{ steps.tag.outputs.tag }}"
+          $tag = "${{ steps.release.outputs.tag }}"
           Compress-Archive -Path "dist/SHARPpy-Reimagined/*" `
             -DestinationPath "dist/SHARPpy-Reimagined-$tag-windows-x64.zip" -Force
           Copy-Item "dist/SHARPpy-Reimagined.exe" `
@@ -111,16 +280,20 @@ jobs:
           path: |
             dist/SHARPpy-Reimagined-*-windows-x64.zip
             dist/SHARPpy-Reimagined-*-windows-x64.exe
+            rust/sharpmod-rs/dist/*.whl
+          if-no-files-found: error
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: SHARPpy Reimagined ${{ steps.tag.outputs.tag }}
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ steps.release.outputs.checkout_ref }}
+          name: SHARPpy Reimagined ${{ steps.release.outputs.tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
             dist/SHARPpy-Reimagined-*-windows-x64.zip
             dist/SHARPpy-Reimagined-*-windows-x64.exe
+            rust/sharpmod-rs/dist/*.whl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

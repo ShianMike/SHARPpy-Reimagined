@@ -142,3 +142,45 @@ def test_accepting_preferences_persists_and_applies_selected_parcel(monkeypatch)
     assert applied == ["SFC"]
     assert len(saved_configs) == 1
     app.processEvents()
+
+
+def test_canceling_preferences_does_not_mutate_or_refresh_viewers(monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    config = {
+        ("preferences", "color_style"): "inverted",
+        ("preferences", "alert_l1_color"): "#654321",
+        ("preferences", "alert_l2_color"): "#abcdef",
+    }
+    before = dict(config)
+    calls = []
+
+    class StubPreferencesDialog(QDialog):
+        def __init__(self):
+            super().__init__()
+            layout = QVBoxLayout(self)
+            layout.addWidget(QTabWidget(self))
+
+        def exec(self):
+            return QDialog.Rejected
+
+    monkeypatch.setattr(
+        gui_picker,
+        "_build_preferences_dialog",
+        lambda _config, parent=None: StubPreferencesDialog(),
+    )
+    owner = SimpleNamespace(
+        _config=lambda: config,
+        _default_parcel=lambda: "MU",
+        _save_config_preferences=lambda _config: calls.append("save"),
+        _save_default_parcel=lambda _parcel: calls.append("parcel-save"),
+        _apply_default_parcel_to_viewers=lambda _parcel: calls.append(
+            "parcel-apply"),
+        config_changed=SimpleNamespace(
+            emit=lambda _config: calls.append("emit")),
+    )
+
+    PickerWindow.preferencesbox(owner)
+
+    assert config == before
+    assert calls == []
+    app.processEvents()

@@ -5,6 +5,137 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-16
+
+### Added
+
+- Added independently optimized Rust and Python backends for profile-array
+  operations and direct pressure-level GRIB point decoding. Rust is the
+  supported primary backend in official v0.4 binaries and whenever `auto`
+  validates a compatible extension. Python remains the fully functional,
+  portable fallback, while explicit modes expose compatibility failures instead
+  of silently changing implementations.
+- Added an all-model decoder matrix covering all 13 enabled forecast products:
+  HRRR, RAP, NAM, NAM 3 km, HRW WRF-ARW, HRW FV3, RRFS-A, GFS, AIGFS, CFS,
+  ECMWF IFS, ECMWF-AIFS, and GEFS.
+- Added reproducible old-Python-versus-optimized-Python,
+  old-hybrid-versus-optimized-Rust, and optimized-Python-versus-optimized-Rust
+  benchmark drivers. Dated Markdown and JSON results under
+  `benchmarks/results` retain fixture hashes, raw samples, selected grid
+  coordinates, build fingerprints, unavailable stages, and equivalence output.
+- Added cross-backend tests for selected point, pressure order, deduplication,
+  missing masks, metadata, and scientific values within appropriate
+  floating-point tolerances, including generated multi-field GRIB fixtures.
+
+### Performance
+
+- Replaced repeated Python cfgrib scans and full-grid xarray construction on
+  compatible products with a direct ecCodes point decoder. It scans headers
+  once per file identity, reuses the inventory and nearest-point selection,
+  reads only required field/level scalars, and keeps bounded inventory,
+  nearest-point, and exact decoded-sounding caches.
+- Kept cfgrib as a functional compatibility path while reusing persistent
+  indexes. Direct-decoder failures reduce split groups to a small point
+  neighborhood before merge; products that require the established
+  neighbor-wind vorticity calculation retain their full xarray merge.
+- Added a Rust decoder that memory-maps the local GRIB subset, borrows message
+  storage through ecCodes, releases the GIL during the immutable decode, and
+  returns all sounding columns as one contiguous NumPy-compatible matrix in a
+  single Python/Rust boundary crossing.
+- Avoided speculative decoder parallelism. Profiling did not show a benefit for
+  ordinary point soundings, so calls made by the Rust decoder remain serialized
+  and the implementation focuses on fewer allocations, copies, and calls.
+- Reused the existing model inventory for field planning and transport, passed
+  cache-owned local GRIB subsets directly into the selected decoder, and kept
+  source, run, valid-time, selected-point, field, unit, and lifecycle metadata
+  unchanged through profile construction.
+
+#### All-model decoder benchmark
+
+Network transfer is excluded. Times are application-cold medians;
+application caches and cfgrib indexes are cleared, while the operating-system
+file cache is not flushed.
+
+| Model | Production decode path | Levels old / optimized | Old/new omega | Old Python ms | Optimized Python ms | Python speedup | Old Rust hybrid ms | Optimized Rust ms | Rust speedup | Py/Rust optimized |
+| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| HRRR | direct GRIB (F000 may use point Zarr in auto mode) | 40 / 40 | matched | 13,656.191 | 6,666.527 | 2.05x | 13,623.801 | 6,325.879 | 2.15x | 1.054x |
+| RAP | direct GRIB | 37 / 37 | matched | 4,468.287 | 2,213.136 | 2.02x | 4,442.193 | 2,095.314 | 2.12x | 1.056x |
+| NAM | direct GRIB | 39 / 39 | matched | 8,174.641 | 1,233.397 | 6.63x | 4,003.166 | 980.808 | 4.08x | 1.258x |
+| NAM 3km CONUS | direct GRIB | 42 / 42 | matched | 19,334.120 | 9,848.533 | 1.96x | 19,112.263 | 9,541.045 | 2.00x | 1.032x |
+| HRW WRF-ARW | direct GRIB | 27 / 27 | matched | 7,927.530 | 3,963.836 | 2.00x | 7,966.092 | 3,858.457 | 2.06x | 1.027x |
+| HRW FV3 | direct GRIB | 27 / 27 | matched | 7,553.566 | 3,518.836 | 2.15x | 7,719.979 | 3,432.609 | 2.25x | 1.025x |
+| RRFS A | direct GRIB | 45 / 45 | matched | 14,380.822 | 6,821.914 | 2.11x | 14,533.194 | 6,379.690 | 2.28x | 1.069x |
+| GFS | direct GRIB | 33 / 41 | matched | 14,502.366 | 3,609.185 | 4.02x | 14,454.516 | 3,333.053 | 4.34x | 1.083x |
+| AIGFS | xarray vorticity fallback (direct point decoder benchmarked) | 13 / 13 | matched | 3,021.279 | 1,144.266 | 2.64x | 2,884.502 | 1,090.785 | 2.64x | 1.049x |
+| CFS | direct GRIB | 37 / 37 | matched | 4,944.596 | 2,517.830 | 1.96x | 4,885.038 | 2,365.896 | 2.06x | 1.064x |
+| ECMWF IFS Open Data | direct GRIB | 14 / 14 | matched | 3,487.357 | 1,330.818 | 2.62x | 3,438.142 | 1,239.230 | 2.77x | 1.074x |
+| ECMWF-AIFS | xarray vorticity fallback (direct point decoder benchmarked) | 14 / 14 | matched | 2,926.893 | 1,123.699 | 2.60x | 2,930.174 | 1,049.424 | 2.79x | 1.071x |
+| GEFS | xarray vorticity fallback (direct point decoder benchmarked) | 12 / 12 | different (12 -> 1 valid) | 927.236 | 246.907 | 3.76x | 900.190 | 201.013 | 4.48x | 1.228x |
+
+Across all 13 fixtures, the geometric-mean speedups are **2.61x for Python**
+and **2.65x for Rust**. Optimized Python divided by optimized Rust is 1.082x,
+so optimized Rust has about 7.6% lower latency overall. The matrix's NAM row
+contains an isolated system-wide timing stall; the separate five-repeat
+[NAM confirmation](benchmarks/results/2026-07-16-nam-decoding-v0.4.0-windows-amd64.json)
+measured 3.36x for Python and 4.04x for Rust.
+
+`Old Rust hybrid` is the frozen historical cfgrib/xarray algorithm followed by
+native wind post-processing; the old extension did not decode GRIB. See the
+[complete benchmark report](benchmarks/results/2026-07-16-all-model-decoding-windows-amd64.md)
+and [raw JSON record](benchmarks/results/2026-07-16-all-model-decoding-windows-amd64.json)
+for fixture hashes, raw samples, equivalence results, and environment details.
+
+### Fixed
+
+- Decoded every logical field in packed GRIB multi-field messages, preserving
+  both U and V winds when they share one physical byte offset. This fixes the
+  layouts used by products including RAP, NAM, NAM 3 km, HRW WRF-ARW, HRW FV3,
+  and CFS in both Python and Rust.
+- Preserved every published pressure level while applying stable descending
+  pressure sorting and aligned deduplication consistently across all columns.
+- Aligned scalar-pressure variables to their actual pressure before xarray
+  merging. In particular, a GEFS omega value published only at 850 hPa remains
+  missing at all other levels instead of being broadcast or indexed as a full
+  vertical column.
+- Applied preference changes to the complete mounted sounding widget tree.
+  Switching to **Inverted** now updates the Skew-T, hodograph, locator, storm
+  slinky, insets, IndexBoard, and Streamwiseness panels immediately instead of
+  leaving custom surfaces in the dark palette.
+- Made inverted/light colors readable without changing scientific values or
+  established dark palettes. Theme-dependent text and semantic annotations use
+  a complete contrast-checked role palette, and headless rendering now honors
+  the same selected inverted colors as the GUI.
+
+#### Sounding palette previews
+
+Both previews use the same checked-in HRRR profile, selected parcel, and viewer
+state so only the palette changes.
+
+##### Inverted / light mode
+
+![SHARPpy Reimagined sounding in inverted light mode](docs/images/v0.4.0/sounding-light-mode.png)
+
+##### Protanopia colorblind mode
+
+![SHARPpy Reimagined sounding in the Protanopia colorblind palette](docs/images/v0.4.0/sounding-protanopia.png)
+
+### Compatibility and limitations
+
+- Products without a usable published relative- or absolute-vorticity field
+  retain the xarray wind-gradient fallback in production so derived
+  vorticity behavior is preserved, even though their direct point decoder is
+  measured by the benchmark matrix.
+- Optimized Python and Rust return matching pressure-aligned omega values and
+  missing masks within the cross-backend tolerances. The GEFS cross-generation
+  report's `12 -> 1 valid` difference is the intentional correction of the
+  frozen legacy xarray scalar-pressure broadcast, not missing Rust
+  functionality or a new scientific-value discrepancy.
+- Rust is the supported primary backend in official v0.4 binaries and in
+  `auto` mode whenever its versioned contract validates. Optimized Python
+  remains the fully functional portable fallback for source installs and
+  platforms without a compatible native extension; GUI and CLI behavior do not
+  change when fallback is required.
+
 ## [0.3.1] - 2026-07-15
 
 ### Fixed

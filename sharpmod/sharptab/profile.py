@@ -63,6 +63,8 @@ from __future__ import annotations
 import numpy as np
 import numpy.ma as ma
 
+from sharpmod import backends as _backends
+
 from . import interp  # noqa: F401  (re-exported convenience for callers)
 from . import winds
 from . import params
@@ -244,9 +246,10 @@ class Profile:
         self.logp = ma.log10(self.pres)
         # Meteorological wind-component convention: a wind *from* ``wdir`` at
         # ``wspd`` kt has components u = -wspd*sin(dir), v = -wspd*cos(dir).
-        rad = np.deg2rad(self.wdir)
-        self.u = -self.wspd * ma.sin(rad)
-        self.v = -self.wspd * ma.cos(rad)
+        # The backend facade preserves the masked-array result contract and
+        # keeps this profile usable when the optional extension is absent.
+        self.u, self.v = _backends.wind_to_components(
+            self.wdir, self.wspd, missing=None)
 
     # -- lazy derived-attribute mechanism ------------------------------------
 

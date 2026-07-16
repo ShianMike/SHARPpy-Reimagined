@@ -15,6 +15,8 @@ from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from sharpmod import colors
+
 
 _COUNTY_QUERY_URL = (
     "https://tigerweb.geo.census.gov/arcgis/rest/services/"
@@ -284,11 +286,41 @@ def draw_hodo_locator(widget: Any) -> bool:
     except Exception:
         global_layers = {name: () for name in _GLOBAL_LAYER_NAMES}
 
+    bg_color = QtGui.QColor(getattr(widget, "bg_color", _MAP_FILL))
+    fg_color = QtGui.QColor(getattr(widget, "fg_color", _MAP_BORDER))
+    if not bg_color.isValid():
+        bg_color = QtGui.QColor(_MAP_FILL)
+    if not fg_color.isValid():
+        fg_color = QtGui.QColor(_MAP_BORDER)
+    if bg_color.lightnessF() >= 0.5:
+        background = bg_color.name()
+        foreground = fg_color.name()
+        semantic = colors.semantic_palette(background, foreground)
+        map_fill = background
+        map_border = foreground
+        state_outline = colors.resolve_theme_color(
+            _GLOBAL_STATE_OUTLINE, background, foreground, minimum=3.0)
+        country_outline = colors.resolve_theme_color(
+            _GLOBAL_COUNTRY_OUTLINE, background, foreground, minimum=3.0)
+        coastline = colors.resolve_theme_color(
+            _GLOBAL_COASTLINE, background, foreground, minimum=3.0)
+        county_outline = foreground
+        point_color = semantic["marker_yellow"]
+    else:
+        # Preserve the established standard/protanopia locator byte-for-byte.
+        map_fill = _MAP_FILL
+        map_border = _MAP_BORDER
+        state_outline = _GLOBAL_STATE_OUTLINE
+        country_outline = _GLOBAL_COUNTRY_OUTLINE
+        coastline = _GLOBAL_COASTLINE
+        county_outline = _COUNTY_OUTLINE
+        point_color = _POINT_COLOR
+
     painter = QtGui.QPainter(widget.plotBitMap)
     try:
         painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
-        painter.setPen(QtGui.QPen(QtGui.QColor(_MAP_BORDER), 1.25))
-        painter.setBrush(QtGui.QBrush(QtGui.QColor(_MAP_FILL)))
+        painter.setPen(QtGui.QPen(QtGui.QColor(map_border), 1.25))
+        painter.setBrush(QtGui.QBrush(QtGui.QColor(map_fill)))
         painter.drawRect(rect)
 
         padding = 5.0
@@ -297,14 +329,14 @@ def draw_hodo_locator(widget: Any) -> bool:
         painter.setClipRect(interior)
         _draw_global_lines(
             painter, global_layers.get("states", ()),
-            _GLOBAL_STATE_OUTLINE, 0.8, interior, bounds, QtCore, QtGui)
+            state_outline, 0.8, interior, bounds, QtCore, QtGui)
         _draw_global_lines(
             painter, global_layers.get("countries", ()),
-            _GLOBAL_COUNTRY_OUTLINE, 1.0, interior, bounds, QtCore, QtGui)
+            country_outline, 1.0, interior, bounds, QtCore, QtGui)
         _draw_global_lines(
             painter, global_layers.get("coastline", ()),
-            _GLOBAL_COASTLINE, 1.15, interior, bounds, QtCore, QtGui)
-        county_pen = QtGui.QPen(QtGui.QColor(_COUNTY_OUTLINE), 1.0)
+            coastline, 1.15, interior, bounds, QtCore, QtGui)
+        county_pen = QtGui.QPen(QtGui.QColor(county_outline), 1.0)
         county_pen.setCosmetic(True)
         painter.setPen(county_pen)
         painter.setBrush(QtCore.Qt.NoBrush)
@@ -331,9 +363,9 @@ def draw_hodo_locator(widget: Any) -> bool:
                     painter.drawPath(path)
 
         point_x, point_y = _map_point(interior, bounds, lat, lon)
-        marker = QtGui.QColor(_POINT_COLOR)
+        marker = QtGui.QColor(point_color)
         painter.setPen(QtGui.QPen(marker, 1.4))
-        painter.setBrush(QtGui.QBrush(QtGui.QColor(_MAP_FILL)))
+        painter.setBrush(QtGui.QBrush(QtGui.QColor(map_fill)))
         painter.drawEllipse(QtCore.QPointF(point_x, point_y), 4.0, 4.0)
         painter.drawLine(point_x - 7.0, point_y, point_x + 7.0, point_y)
         painter.drawLine(point_x, point_y - 7.0, point_x, point_y + 7.0)

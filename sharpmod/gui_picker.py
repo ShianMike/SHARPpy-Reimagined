@@ -43,6 +43,7 @@ from sharpmod.gui_settings import (
     _DEFAULT_SKEWT_PARCEL,
     _UnitPreferencesDialog,
     _add_default_parcel_tab,
+    _apply_selected_color_style,
     _apply_default_parcel_to_window,
     _apply_unit_preferences_to_window,
     _build_preferences_dialog,
@@ -493,8 +494,8 @@ class PickerWindow(QMainWindow):
         """Open the SHARPpy preferences dialog (palette + units).
 
         Mirrors the legacy ``Main.preferencesbox``: the dialog edits the shared
-        :attr:`config` in place; on close we re-apply the fork's alert-tier
-        color substitutions and broadcast :attr:`config_changed` so every open
+        :attr:`config` in place; on acceptance we apply the fork's complete
+        style palette and broadcast :attr:`config_changed` so every open
         sounding window refreshes its profiles and palette.
         """
         try:
@@ -506,21 +507,17 @@ class PickerWindow(QMainWindow):
             return
         parcel_box = _add_default_parcel_tab(dialog, self._default_parcel())
         accepted = dialog.exec()
-        # Keep the fork's legibility substitutions after any palette change.
-        try:
-            from sharpmod import colors
-            config["preferences", "alert_l1_color"] = colors.ALERT_L1_COLOR
-            config["preferences", "alert_l2_color"] = colors.ALERT_L2_COLOR
-        except Exception:
-            pass
         if accepted:
+            # PrefDialog applies its upstream palette on accept.  Normalize it
+            # once through the fork's complete style map before persistence and
+            # before the single live-window signal is emitted.
+            _apply_selected_color_style(config)
             self._save_config_preferences(config)
-        self.config_changed.emit(config)
-        self._apply_unit_preferences_to_viewers(config)
-        if accepted and parcel_box is not None:
-            parcel_key = _normalize_default_parcel(parcel_box.currentData())
-            self._save_default_parcel(parcel_key)
-            self._apply_default_parcel_to_viewers(parcel_key)
+            self.config_changed.emit(config)
+            if parcel_box is not None:
+                parcel_key = _normalize_default_parcel(parcel_box.currentData())
+                self._save_default_parcel(parcel_key)
+                self._apply_default_parcel_to_viewers(parcel_key)
 
     def unit_preferencesbox(self, parent=None) -> None:
         """Open the compact display-units popup."""
@@ -531,7 +528,6 @@ class PickerWindow(QMainWindow):
             config = self._config()
             _write_unit_preferences_to_config(config, prefs)
             self.config_changed.emit(config)
-            self._apply_unit_preferences_to_viewers(config)
 
     def focusPicker(self) -> None:  # noqa: N802 - matches SPCWindow's caller
         """Bring the picker back to the front (the ``W`` key target)."""

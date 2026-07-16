@@ -37,6 +37,8 @@ missing-value sentinel by contract.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from hypothesis import event, given
 
@@ -125,28 +127,22 @@ def test_hpi_is_a_distinct_quantity(snd):
 def _hpi_distinct_sounding() -> SoundingData:
     """A deterministic hail-favorable sounding for which all three are present.
 
-    Strong buoyancy through a deep hail-growth zone with veering/strengthening
-    winds, so HPI (hail-growth-zone CAPE x melt factor), LRGHAIL, and SHIP all
-    resolve to real values -- and HPI, being a different formula, takes a value
-    distinct from both LRGHAIL and SHIP.
+    The checked-in HRRR point fixture has strong buoyancy through a deep
+    hail-growth zone and veering/strengthening winds. HPI (hail-growth-zone CAPE
+    x melt factor), LRGHAIL, and SHIP all resolve to distinct real values.
     """
-    hght = np.array(
-        [0.0, 500.0, 1000.0, 2000.0, 3000.0, 5000.0,
-         7000.0, 9000.0, 11000.0, 12000.0, 14000.0, 16000.0], dtype=float)
-    pres = 1000.0 * np.exp(-hght / 8000.0)
-    tmpc = np.array(
-        [32.0, 27.0, 23.0, 15.0, 8.0, -6.0,
-         -21.0, -37.0, -53.0, -57.0, -60.0, -62.0], dtype=float)
-    dwpc = np.array(
-        [24.0, 21.0, 17.0, 8.0, 0.0, -16.0,
-         -30.0, -46.0, -60.0, -64.0, -68.0, -70.0], dtype=float)
-    wdir = np.array(
-        [150.0, 180.0, 200.0, 225.0, 245.0, 258.0,
-         262.0, 266.0, 270.0, 274.0, 278.0, 282.0], dtype=float)
-    wspd = np.array(
-        [12.0, 24.0, 34.0, 44.0, 52.0, 64.0,
-         72.0, 80.0, 86.0, 92.0, 98.0, 104.0], dtype=float)
-    return SoundingData(pres, hght, tmpc, dwpc, wdir, wspd)
+    fixture_path = (
+        Path(__file__).resolve().parents[2]
+        / "examples"
+        / "soundings"
+        / "hrrr_point_36.68N_95.66W_f018.npz"
+    )
+    with np.load(fixture_path) as fixture:
+        arrays = [
+            np.array(fixture[name], dtype=float, copy=True)
+            for name in ("pres", "hght", "tmpc", "dwpc", "wdir", "wspd")
+        ]
+    return SoundingData(*arrays)
 
 
 def test_hpi_distinct_from_lrghail_and_ship_on_hail_sounding():
@@ -164,9 +160,11 @@ def test_hpi_distinct_from_lrghail_and_ship_on_hail_sounding():
     lrghail = derived_mod.large_hail_parameter(snd)
     ship = _ship(snd)
 
-    if is_missing(hpi) or is_missing(lrghail) or ship is None:
-        # Oracle unavailable in this environment -- nothing to compare against.
-        return
+    assert not is_missing(hpi), "deterministic hail sounding must produce HPI"
+    assert not is_missing(lrghail), (
+        "deterministic hail sounding must produce LRGHAIL"
+    )
+    assert ship is not None, "deterministic hail sounding must produce SHIP"
 
     fhpi, flrg, fship = float(hpi), float(lrghail), float(ship)
     # Record for the cross-example non-identity assertion too.

@@ -92,6 +92,12 @@ render = [
 dev = [
     "pytest>=7.0",
     "hypothesis>=6.0",
+    "PyYAML>=6.0,<7.0",
+]
+# Build frontend for the optional local Rust extension. This does not install
+# Rust itself or make the extension a requirement of the Python package.
+rust-build = [
+    "maturin>=1.9,<2",
 ]
 
 [project.gui-scripts]
@@ -114,6 +120,7 @@ python_files = ["test_*.py"]
 # Discover the top-level `sharpmod` package and its subpackages.
 packages = [
     "sharpmod",
+    "sharpmod.backends",
     "sharpmod.sharptab",
     "sharpmod.io",
     "sharpmod.viz",

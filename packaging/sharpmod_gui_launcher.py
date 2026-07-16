@@ -31,10 +31,25 @@ def _model_fetch_runtime_check(output_path: str) -> int:
         import pyproj
         import xarray
 
+        from sharpmod.backends import backend_info, wind_to_components
         from sharpmod.gui import main as gui_main
         from sharpmod.tools import model_extract
 
+        backend = backend_info()
+        u_component, v_component = wind_to_components(270.0, 10.0)
+        backend_kernel_ok = (
+            abs(u_component - 10.0) <= 1.0e-12
+            and abs(v_component) <= 1.0e-12
+        )
+        if not backend_kernel_ok:
+            raise RuntimeError(
+                "backend wind_to_components smoke check returned "
+                f"u={u_component!r}, v={v_component!r}"
+            )
+
         result.update(
+            backend=backend,
+            backend_kernel_ok=backend_kernel_ok,
             cdsapi=bool(cdsapi.Client),
             cfgrib=cfgrib.__version__,
             eccodes=eccodes.codes_get_api_version(),

@@ -125,3 +125,45 @@ def test_surface_vorticity_falls_back_to_wind_grid_gradient():
 
     assert cols["surface_relative_vorticity"] == pytest.approx(
         target_vort, rel=1.0e-6)
+
+
+def test_surface_vorticity_windows_curvilinear_coordinates_with_wind():
+    """Windowed wind gradients retain matching 2-D latitude/longitude grids."""
+    levels = np.array([1000.0, 850.0], dtype=float)
+    when = datetime(2026, 7, 5, 9, tzinfo=timezone.utc)
+    ds = make_era5_dataset(
+        np.arange(5, dtype=float),
+        np.arange(5, dtype=float),
+        levels,
+        [when],
+        seed=14,
+    ).rename({"latitude": "y", "longitude": "x"})
+
+    yy, xx = np.meshgrid(
+        np.arange(5, dtype=float),
+        np.arange(5, dtype=float),
+        indexing="ij",
+    )
+    lat_grid = 10.0 + 0.5 * yy + 0.02 * xx
+    lon_grid = 100.0 + 0.03 * yy + 0.5 * xx
+    ds = ds.assign_coords(
+        latitude=(("y", "x"), lat_grid),
+        longitude=(("y", "x"), lon_grid),
+    )
+
+    target_vort = 8.0e-5
+    iy = ix = 2
+    dx = era5._east_west_distance_m(
+        lat_grid[iy, ix], lon_grid[iy, ix - 1], lon_grid[iy, ix + 1])
+    v_surface = np.zeros(5, dtype=float)
+    v_surface[ix + 1] = target_vort * dx
+    u = np.zeros(ds["u"].shape, dtype=float)
+    v = np.zeros(ds["v"].shape, dtype=float)
+    v[:, 0, :, :] = v_surface[None, None, :]
+    ds = ds.assign(u=(ds["u"].dims, u), v=(ds["v"].dims, v))
+
+    cols, _ = era5._build_columns(
+        ds.isel(time=0), (iy, ix), latitude=float(lat_grid[iy, ix]))
+
+    assert cols["surface_relative_vorticity"] == pytest.approx(
+        target_vort, rel=1.0e-6)

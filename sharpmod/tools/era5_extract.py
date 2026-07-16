@@ -575,12 +575,20 @@ def _surface_relative_vorticity_from_wind_grid(ds, index_tuple, levels):
     else:
         lat_grid = np.asarray(lats, dtype=float)
         lon_grid = np.asarray(lons, dtype=float)
-        if lat_grid.shape != u2d.shape or lon_grid.shape != u2d.shape:
+        lat_window = lat_grid[y0:y1 + 1, x0:x1 + 1]
+        lon_window = lon_grid[y0:y1 + 1, x0:x1 + 1]
+        if lat_window.shape != u2d.shape or lon_window.shape != u2d.shape:
             return None
-        lat_center = float(lat_grid[iy, ix])
+        lat_center = float(lat_window[local_y, local_x])
         dx = _east_west_distance_m(
-            lat_center, lon_grid[iy, x0], lon_grid[iy, x1])
-        dy = _north_south_distance_m(lat_grid[y0, ix], lat_grid[y1, ix])
+            lat_center,
+            lon_window[local_y, local_x0],
+            lon_window[local_y, local_x1],
+        )
+        dy = _north_south_distance_m(
+            lat_window[local_y0, local_x],
+            lat_window[local_y1, local_x],
+        )
 
     if not (np.isfinite(dx) and np.isfinite(dy)) or abs(dx) < 1.0 or abs(dy) < 1.0:
         return None

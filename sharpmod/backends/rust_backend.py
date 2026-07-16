@@ -84,8 +84,15 @@ class RustBackend:
     ):
         targets, coordinates, fields, target_shape = prepare_interpolation(
             target, coordinate, values, missing=missing)
+        scalar_log = bool(log) and target_shape == ()
         result = self._module.interpolate_1d(
-            targets, coordinates, fields, missing, bool(log))
+            targets, coordinates, fields, missing,
+            False if scalar_log else bool(log))
+        if scalar_log:
+            # Match the legacy/Python scalar exponentiation path exactly while
+            # keeping interpolation in the native kernel and retaining a
+            # single Python/Rust call.
+            result[0] = 10.0 ** result[0]
         return restore_array(result, target_shape)
 
     def pressure_sort_dedup_indices(self, pressure, *, missing=-9999.0):

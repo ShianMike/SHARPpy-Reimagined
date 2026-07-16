@@ -59,7 +59,14 @@ class PythonBackend:
             result = np.interp(
                 targets, x[order], y[order], left=np.nan, right=np.nan)
         if log:
-            result = np.power(10.0, result)
+            if target_shape == ():
+                # Preserve the legacy scalar operation exactly.  NumPy's
+                # vector power loop can differ by one ULP across platforms;
+                # that is enough to move a pressure-layer boundary across a
+                # reported level in upstream SHARPpy's CAPE integrator.
+                result[0] = 10.0 ** result[0]
+            else:
+                result = np.power(10.0, result)
         return restore_array(result, target_shape)
 
     def pressure_sort_dedup_indices(self, pressure, *, missing=-9999.0):

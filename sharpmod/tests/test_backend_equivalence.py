@@ -172,6 +172,23 @@ def test_interpolation_equivalence(
     )
 
 
+def test_scalar_log_interpolation_matches_legacy_power_exactly(backends):
+    """Both adapters preserve the legacy scalar pressure-rounding path."""
+    python, rust = backends
+    coordinate = np.array([0.0, 6000.0])
+    values = np.log10(np.array([992.0, 468.58762031908657]))
+    expected = float(10.0 ** np.asarray(np.interp(
+        6000.0, coordinate, values,
+    ))[()])
+
+    assert python.interpolate_1d(
+        6000.0, coordinate, values, log=True,
+    ) == expected
+    assert rust.interpolate_1d(
+        6000.0, coordinate, values, log=True,
+    ) == expected
+
+
 def test_large_vector_equivalence(backends):
     python, rust = backends
     size = 100_000

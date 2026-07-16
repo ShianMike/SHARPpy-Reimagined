@@ -79,6 +79,20 @@ def test_pres_at_reported_level_returns_exact_value():
     assert interp.pres_at_hght_agl(snd, 6000.0) == pytest.approx(400.0)
 
 
+def test_pres_at_reported_level_matches_legacy_scalar_log_round_trip():
+    """Scalar log-pressure output retains the pre-backend numeric path."""
+    snd = _linear_profile()
+    source_pressure = 468.58762031908657
+    snd.pres[-1] = source_pressure
+    snd.logp = ma.log10(snd.pres)
+    expected = float(10.0 ** np.asarray(np.interp(
+        6000.0, snd.hght, snd.logp,
+    ))[()])
+
+    assert interp.pres_at_hght_agl(snd, 6000.0) == expected
+    assert interp.pres(snd, 6000.0) == expected
+
+
 def test_isotherm_on_reported_level_returns_exact_level():
     """-10/-30 degrees C fall exactly on reported levels (Req 19.3)."""
     snd = _linear_profile()

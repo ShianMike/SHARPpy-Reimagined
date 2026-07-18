@@ -143,8 +143,18 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   use the same Python environment that runs `sharpmod`:
 
       pip install -e ".[rust-build]"
+      sharpmod-rust-sync
+      sharpmod-rust-sync --check
+
+  The default command rebuilds only when the extension is missing or its
+  installed version does not match the checkout, then verifies forced Rust in
+  a fresh Python process. --check never modifies the environment; use
+  sharpmod-rust-sync --force after changing native source.
+
+  Lower-level extension-development command:
+
       cd rust/sharpmod-rs
-      maturin develop --release
+      maturin develop --release --locked
       cd ../..
 
   Set SHARPMOD_BACKEND before starting Python or the GUI:
@@ -196,6 +206,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   uwyo-sounding     list / search / fetch University of Wyoming soundings
   era5-extract      ERA5 point sounding  -> .npz
   wrf-extract       WRF-ARW point sounding -> .npz
+  sharpmod-rust-sync check / repair / verify the local Rust extension
 
   (sharpmod-gui is a windowed/no-console entry point; it needs a display and
    the SHARPpy render stack from section 4.)
@@ -233,7 +244,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   - A blank window / QpaPlatform error on a headless server:
         ensure QT_QPA_PLATFORM=offscreen (the renderer sets this by default).
   - SHARPMOD_BACKEND=rust reports that sharpmod_rs is unavailable:
-        activate the environment where `maturin develop --release` installed
-        the extension, or use SHARPMOD_BACKEND=auto/python.
+        activate the source environment and run sharpmod-rust-sync, or use
+        SHARPMOD_BACKEND=auto/python when a native build is not wanted.
   - An invalid SHARPMOD_BACKEND value raises ValueError:
         use exactly auto, python, or rust.

@@ -111,6 +111,7 @@ uwyo-sounding = "sharpmod.tools.uwyo_sounding:main"
 era5-extract = "sharpmod.tools.era5_extract:main"
 model-extract = "sharpmod.tools.model_extract:main"
 wrf-extract = "sharpmod.tools.wrf_extract:main"
+sharpmod-rust-sync = "sharpmod.tools.rust_backend_sync:main"
 
 [tool.pytest.ini_options]
 testpaths = ["sharpmod/tests"]

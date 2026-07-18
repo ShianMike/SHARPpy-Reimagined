@@ -7,6 +7,32 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-18
+
+### Fixed
+
+- Fixed forced-Rust startup and backend-test failures caused by a stale or
+  mismatched locally installed `sharpmod_rs` extension. The new synchronization
+  command detects version drift, rebuilds the locked native extension when
+  needed, and verifies Rust selection in a fresh Python process.
+- Fixed the Windows Qt `CO_E_CANTCALLOUT_ININPUTSYNCCALL` COM-apartment warning
+  seen during GUI event-dispatch tests by selecting Qt's headless platform
+  before any GUI test module is imported.
+
+### Added
+
+- Added `sharpmod-rust-sync` to check, rebuild, and verify the native Rust
+  extension for editable source installations.
+
+### Changed
+
+- Moved frozen Windows executable validation out of pull-request CI. Pull
+  requests retain Python, Rust, NumPy, and wheel coverage; executable builds
+  and runtime checks now run only in the release workflow after merge.
+- Defaulted the shared pytest Qt platform to `offscreen` before GUI modules are
+  collected, preventing native test windows and collection-order failures.
+- Ignored local sounding render and issue-working directories.
+
 ## [0.4.1] - 2026-07-16
 
 ### Changed

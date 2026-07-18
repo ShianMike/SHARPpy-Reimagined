@@ -110,7 +110,7 @@ def test_native_wheel_metadata_declares_compatible_numpy():
         assert "<3" in normalized, normalized
 
 
-def test_rust_workflow_covers_versions_numpy_and_frozen_layouts():
+def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
     workflow = _load_workflow("rust.yml")
     triggers = workflow["on"]
     required_paths = {
@@ -128,6 +128,7 @@ def test_rust_workflow_covers_versions_numpy_and_frozen_layouts():
     assert "push" not in triggers
 
     jobs = workflow["jobs"]
+    assert "windows-frozen" not in jobs
     rust_steps = "\n".join(
         step.get("run", "") for step in jobs["rust-checks"]["steps"]
     )
@@ -177,25 +178,10 @@ def test_rust_workflow_covers_versions_numpy_and_frozen_layouts():
     assert '"pip", "check"' in clean_install["run"]
     assert "sharpmod_rs.wind_to_components" in clean_install["run"]
 
-    frozen = jobs["windows-frozen"]
-    frozen_steps = "\n".join(
-        step.get("run", "") for step in frozen["steps"]
-    )
-    frozen_env = "\n".join(
-        str(step.get("env", {})) for step in frozen["steps"]
-    )
-    assert "sharpmod-rs-windows-x86_64-cp311" in str(frozen["steps"])
-    assert frozen_steps.count("pyinstaller packaging/sharpmod_gui.spec") == 2
-    assert 'SHARPMOD_ONEFILE: "1"' in (ROOT / ".github" / "workflows" / "rust.yml").read_text(encoding="utf-8")
-    assert "SHARPMOD_BACKEND" in frozen_env and "rust" in frozen_env
-    assert frozen_steps.count("active_backend") >= 2
-    assert frozen_steps.count("backend_kernel_ok") >= 2
-
-
 def test_release_workflow_gates_tag_and_source_versions():
     workflow = _load_workflow("release.yml")
     dispatch = workflow["on"]["workflow_dispatch"]["inputs"]["tag"]
-    assert dispatch["default"] == "v0.4.1"
+    assert dispatch["default"] == "v0.4.2"
 
     steps = workflow["jobs"]["build-windows-exe"]["steps"]
     names = [step.get("name") for step in steps]

@@ -14,6 +14,13 @@ count with their own ``@settings(max_examples=...)`` decorator.
 
 from __future__ import annotations
 
+import os
+
+# Select Qt's headless platform before pytest imports any GUI test modules.
+# Module-local ``setdefault`` calls are too late when an earlier collection
+# import has already loaded ``sharpmod.gui_common`` on Windows.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 from hypothesis import HealthCheck, settings
 
 #: Shared minimum number of Hypothesis examples per property test.

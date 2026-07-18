@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v0.4.1). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v0.4.2). Created if it does not exist."
         required: true
-        default: "v0.4.1"
+        default: "v0.4.2"
 
 permissions:
   contents: write

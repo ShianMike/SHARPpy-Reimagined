@@ -69,10 +69,15 @@ environment as `sharpmod`:
 
 ```bash
 python -m pip install -e ".[rust-build]"
-cd rust/sharpmod-rs
-maturin develop --release
-cd ../..
+sharpmod-rust-sync
+sharpmod-rust-sync --check
 ```
+
+`sharpmod-rust-sync` rebuilds only when `sharpmod_rs` is missing or its version
+does not match this checkout, then verifies forced-Rust selection in a fresh
+Python process. `--check` is non-mutating; use `--force` after editing native
+source. Extension developers can still run `maturin develop --release --locked`
+directly from `rust/sharpmod-rs`.
 
 Select the backend with `SHARPMOD_BACKEND` before starting the application:
 
@@ -249,6 +254,7 @@ fully functional Python-fallback bundle.
 | `era5-extract` | Extract an ERA5 point sounding to `.npz` |
 | `model-extract` | Fetch all pressure levels for a supported forecast-model point sounding |
 | `wrf-extract` | Extract a WRF-ARW point sounding to `.npz` |
+| `sharpmod-rust-sync` | Check, rebuild when needed, and verify the local Rust backend |
 
 ### Forecast-model extraction (`model-extract`)
 
@@ -392,6 +398,10 @@ use Herbie and do not require CDS credentials.
 python -m pip install -e ".[dev,era5,wrf,render]"
 python -m pip install --no-deps "SHARPpy==1.4.0a5"
 pytest
+
+# Optional source-checkout Rust backend
+python -m pip install -e ".[rust-build]"
+sharpmod-rust-sync
 ```
 
 For the full setup reference, see [`installation.txt`](installation.txt). For

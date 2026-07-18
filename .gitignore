@@ -3,9 +3,14 @@
 # ---------------------------------------------------------------------------
 /docs/superpowers/
 /docs/ENGINEERING_BACKLOG.md
+/foundissues/
 /.agents/
 /.codex/
 /AGENTS.md
+
+# Local sounding render outputs
+/rendered_soundings/*
+!/rendered_soundings/.gitkeep
 /CLAUDE.md
 
 # ---------------------------------------------------------------------------

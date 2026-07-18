@@ -177,17 +177,31 @@ that will import the extension:
 ```powershell
 .\.gribenv\Scripts\Activate.ps1
 python -m pip install -e ".[dev,rust-build]"
+sharpmod-rust-sync
+sharpmod-rust-sync --check
+```
+
+`sharpmod-rust-sync` compares the installed native distribution with the
+checkout version. It performs a locked release rebuild only when the extension
+is missing or stale, installs it into the active virtual environment, and then
+requires forced-Rust selection in a fresh Python process. `--check` performs
+the version and selector checks without modifying the environment. Use
+`sharpmod-rust-sync --force` after changing native source even when the package
+version did not change.
+
+The lower-level extension-development path remains available:
+
+```powershell
 Set-Location rust\sharpmod-rs
-maturin develop --release
+maturin develop --release --locked
 Set-Location ..\..
 ```
 
-`maturin develop` installs `sharpmod_rs` into the active environment. It does
-not modify the normal setuptools build backend for `sharpmod`. Re-run the
-command after changing Rust source. From a POSIX shell, activate
-`.gribenv/bin/activate` and use the same `cd rust/sharpmod-rs` and maturin
-commands. Windows source builds also require the MSVC C/C++ linker toolchain
-(normally installed through Visual Studio Build Tools).
+`maturin develop` installs `sharpmod_rs` into the active environment; it does
+not modify the normal setuptools build backend for `sharpmod`. From a POSIX
+shell, activate `.gribenv/bin/activate` and use the same sync command or crate
+directory commands. Windows source builds also require the MSVC C/C++ linker
+toolchain (normally installed through Visual Studio Build Tools).
 
 Confirm the extension and selector:
 
@@ -216,7 +230,7 @@ Set-Location rust\sharpmod-rs
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
-maturin develop --release
+maturin develop --release --locked
 Set-Location ..\..
 
 $env:SHARPMOD_BACKEND = "rust"

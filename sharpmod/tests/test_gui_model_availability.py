@@ -133,6 +133,40 @@ def test_availability_preflights_native_runtime_before_worker_start(
     assert events == ["runtime", "construct", "start"]
 
 
+def test_geomet_availability_skips_native_grib_preflight(monkeypatch):
+    requested = datetime(2026, 7, 22, 0, tzinfo=timezone.utc)
+    events = []
+
+    from sharpmod.tools import model_extract
+    monkeypatch.setattr(
+        model_extract,
+        "require_runtime_dependencies",
+        lambda: pytest.fail("GeoMet availability imported ecCodes"),
+    )
+
+    class FakeWorker:
+        def __init__(self, *_args, **_kwargs):
+            events.append("construct")
+            self.checked = _FakeSignal()
+            self.finished = _FakeSignal()
+
+        def start(self):
+            events.append("start")
+
+    monkeypatch.setattr(gui_picker, "_ModelAvailabilityWorker", FakeWorker)
+    owner = SimpleNamespace(
+        _model_availability_request=("gdps", requested, 0, None),
+        _model_availability_token=11,
+        _model_availability_workers=[],
+        _on_model_availability_checked=lambda *_args: None,
+        _on_model_availability_finished=lambda: None,
+    )
+
+    gui.PickerWindow._run_model_availability(owner)
+
+    assert events == ["construct", "start"]
+
+
 def test_availability_runtime_failure_stays_advisory(monkeypatch):
     requested = datetime(2026, 7, 14, 6, tzinfo=timezone.utc)
     indicator = _RecordingIndicator()

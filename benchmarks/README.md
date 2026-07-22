@@ -6,6 +6,11 @@ threshold or claim that one implementation is faster. Results depend on the
 CPU, operating system, Python and NumPy versions, compiler, build profile,
 input size, array layout, and Python/native conversion overhead.
 
+Network transfer is measured separately. The
+[2026-07-22 RRFS range-worker benchmark](results/2026-07-22-rrfs-range-workers.md)
+compares 1, 2, 4, and 6 workers across three live cycles and records the
+equivalence and timing evidence for the four-worker RRFS default.
+
 ## Prerequisites
 
 Create the normal Python environment, install the benchmark build frontend, and
@@ -223,3 +228,7 @@ complete [`JSON record`](results/2026-07-16-all-model-decoding-windows-amd64.jso
 Its NAM row includes an isolated timing stall; the stable five-repeat
 confirmation is retained in
 [`results/2026-07-16-nam-decoding-v0.4.0-windows-amd64.json`](results/2026-07-16-nam-decoding-v0.4.0-windows-amd64.json).
+
+The 2026-07-22 generalized model transport, direct wind-stencil, and
+multi-point decode measurements are retained in
+[`results/2026-07-22-all-model-fetch-decode-optimization.md`](results/2026-07-22-all-model-fetch-decode-optimization.md).

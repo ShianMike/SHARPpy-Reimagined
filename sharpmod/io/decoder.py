@@ -26,6 +26,7 @@ legacy module is never imported.
 import glob
 import importlib.machinery
 import importlib.util
+import json
 import logging
 import os
 import ssl
@@ -339,16 +340,61 @@ def load_npz(filename):
 
     pc = prof_collection.ProfCollection({"": [prof]}, [valid])
     pc.setMeta("loc", loc)
-    pc.setMeta("observed", False)
+    model_name = str(d["model"]) if "model" in d else "HRRR"
+    observed = model_name.casefold().startswith("observed")
+    if "observed" in d:
+        observed = bool(np.asarray(d["observed"]).reshape(-1)[0])
+    pc.setMeta("observed", observed)
     pc.setMeta("base_time", run)
     pc.setMeta("run", run)
-    pc.setMeta("model", str(d["model"]) if "model" in d else "HRRR")
+    pc.setMeta("model", model_name)
+    pc.setMeta("npz_path", os.path.abspath(filename))
+    pc.setMeta("decoder", "portable NPZ decoder")
+    pc.setMeta("backend", "portable NPZ")
     if "lat" in d:
         pc.setMeta("lat", float(d["lat"]))
     if "lon" in d:
         pc.setMeta("lon", float(d["lon"]))
+    provenance = {}
+    for key in (
+        "source", "source_provider", "source_provider_name",
+        "source_station", "source_url", "requested_station",
+    ):
+        if key in d:
+            value = str(np.asarray(d[key]).reshape(-1)[0])
+            provenance[key] = value
+            pc.setMeta(key, value)
+    if "fallback_from" in d:
+        fallback_from = tuple(str(value) for value in np.asarray(
+            d["fallback_from"]
+        ).reshape(-1))
+        provenance["fallback_from"] = fallback_from
+        pc.setMeta("fallback_from", fallback_from)
+    if provenance:
+        current_meta = dict(getattr(prof, "meta", {}) or {})
+        current_meta.update(provenance)
+        current_meta["observed"] = observed
+        prof.meta = current_meta
     for key, value in optional_surface_fields.items():
         pc.setMeta(key, value)
+    sidecar_path = os.path.splitext(os.path.abspath(filename))[0] + ".json"
+    try:
+        with open(sidecar_path, encoding="utf-8") as sidecar_file:
+            sidecar = json.load(sidecar_file)
+    except (OSError, ValueError, TypeError):
+        sidecar = None
+    if isinstance(sidecar, dict):
+        # Preserve datetime-valued core metadata established above. Everything
+        # else is JSON-safe provenance produced by the extractor and can be
+        # surfaced by the viewer's data-quality inspector or analysis sessions.
+        reserved = {
+            "loc", "observed", "base_time", "run", "model", "lat", "lon",
+            *optional_surface_fields,
+        }
+        for key, value in sidecar.items():
+            if str(key) not in reserved:
+                pc.setMeta(str(key), value)
+        pc.setMeta("metadata_sidecar", sidecar_path)
     if optional_surface_fields:
         profiles = []
         try:

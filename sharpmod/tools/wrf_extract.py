@@ -48,11 +48,14 @@ import numpy as np
 from sharpmod.tools.era5_extract import (
     MISSING,
     ERA5ExtractionError,
+    ExtractionCancelled,
     ParameterRangeError,
     RetrievalError,
     _as_datetime,
     _atomic_write_json,
     _atomic_write_npz,
+    _check_cancelled,
+    _emit_progress,
     _quiet_remove,
     great_circle_distance_km,
     select_nearest_grid_point,
@@ -61,7 +64,11 @@ from sharpmod.tools.era5_extract import (
 
 __all__ = [
     "extract",
+    "inspect_file",
+    "point_in_domain",
+    "require_runtime_dependencies",
     "WRFExtractionError",
+    "ExtractionCancelled",
     "ParameterRangeError",
     "RetrievalError",
 ]
@@ -77,6 +84,30 @@ LAT_MIN, LAT_MAX = -90.0, 90.0
 
 class WRFExtractionError(ERA5ExtractionError):
     """Base class for WRF extraction failures (shares the ERA5 hierarchy)."""
+
+
+def require_runtime_dependencies():
+    """Validate xarray and a usable NetCDF engine with focused setup help."""
+    try:
+        import xarray as xr
+    except Exception as exc:  # pragma: no cover - environment dependent
+        raise RetrievalError(
+            "raw wrfout support requires the optional [wrf] extra "
+            "(xarray and netCDF4): %s. Install it with: "
+            "pip install -e \".[wrf]\"" % exc
+        ) from exc
+    try:
+        engines = xr.backends.list_engines()
+    except Exception as exc:  # pragma: no cover - environment dependent
+        raise RetrievalError(
+            "xarray could not inspect its NetCDF backends: %s" % exc
+        ) from exc
+    if not any(name in engines for name in ("netcdf4", "h5netcdf", "scipy")):
+        raise RetrievalError(
+            "raw wrfout support needs a NetCDF backend. Install it with: "
+            "pip install -e \".[wrf]\""
+        )
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -167,12 +198,158 @@ def _select_time_index(times, valid_time):
     return best_i
 
 
+def _grid2d(values, time_index=0):
+    """Reduce a WRF coordinate variable to one two-dimensional grid."""
+    arr = np.asarray(values, dtype=float)
+    while arr.ndim > 2:
+        arr = arr[time_index] if arr.shape[0] > time_index else arr[0]
+    if arr.ndim != 2:
+        raise RetrievalError("WRF latitude/longitude coordinates are not 2-D")
+    return arr
+
+
+def _grid_boundary(lat2d, lon2d):
+    """Return the ordered exterior points of a curvilinear WRF grid."""
+    lat2d = np.asarray(lat2d, dtype=float)
+    lon2d = np.asarray(lon2d, dtype=float)
+    if lat2d.shape != lon2d.shape or lat2d.ndim != 2:
+        raise RetrievalError("WRF XLAT/XLONG grids have incompatible shapes")
+    ny, nx = lat2d.shape
+    if ny < 2 or nx < 2:
+        return [
+            (float(lat2d.flat[0]), float(lon2d.flat[0]))
+        ] if lat2d.size else []
+    indices = []
+    indices.extend((0, ix) for ix in range(nx))
+    indices.extend((iy, nx - 1) for iy in range(1, ny))
+    indices.extend((ny - 1, ix) for ix in range(nx - 2, -1, -1))
+    indices.extend((iy, 0) for iy in range(ny - 2, 0, -1))
+    return [
+        (float(lat2d[iy, ix]), float(lon2d[iy, ix]))
+        for iy, ix in indices
+        if np.isfinite(lat2d[iy, ix]) and np.isfinite(lon2d[iy, ix])
+    ]
+
+
+def _point_on_segment(x, y, x1, y1, x2, y2, tolerance=1.0e-7):
+    cross = (x - x1) * (y2 - y1) - (y - y1) * (x2 - x1)
+    scale = max(1.0, abs(x2 - x1), abs(y2 - y1))
+    if abs(cross) > tolerance * scale:
+        return False
+    return (
+        min(x1, x2) - tolerance <= x <= max(x1, x2) + tolerance
+        and min(y1, y2) - tolerance <= y <= max(y1, y2) + tolerance
+    )
+
+
+def _point_in_boundary(boundary, lat, lon):
+    """Ray-cast against a WRF perimeter, unwrapping around the test point."""
+    points = [
+        (float(plat), float(lon) + ((float(plon) - float(lon) + 180.0) % 360.0) - 180.0)
+        for plat, plon in boundary
+        if np.isfinite(plat) and np.isfinite(plon)
+    ]
+    if len(points) < 3:
+        if len(points) == 1:
+            return abs(points[0][0] - lat) <= 1.0e-7 \
+                and abs(points[0][1] - lon) <= 1.0e-7
+        return False
+    x, y = float(lon), float(lat)
+    inside = False
+    previous = points[-1]
+    for current in points:
+        y1, x1 = previous
+        y2, x2 = current
+        if _point_on_segment(x, y, x1, y1, x2, y2):
+            return True
+        if (y1 > y) != (y2 > y):
+            crossing = x1 + (y - y1) * (x2 - x1) / (y2 - y1)
+            if x < crossing:
+                inside = not inside
+        previous = current
+    return inside
+
+
+def point_in_domain(domain, lat, lon):
+    """Return whether ``lat, lon`` lies inside inspected WRF grid edges."""
+    if not domain or "boundary" not in domain:
+        return False
+    try:
+        return _point_in_boundary(domain["boundary"], float(lat), float(lon))
+    except (TypeError, ValueError):
+        return False
+
+
+def _domain_info(ds, source_file=None):
+    xlat = _var(ds, "XLAT")
+    xlong = _var(ds, "XLONG")
+    if xlat is None or xlong is None:
+        raise RetrievalError("WRF file lacks XLAT/XLONG coordinates")
+    lat2d = _grid2d(xlat)
+    lon2d = _grid2d(xlong)
+    finite = np.isfinite(lat2d) & np.isfinite(lon2d)
+    if not finite.any():
+        raise RetrievalError("WRF XLAT/XLONG grid contains no finite points")
+    boundary = _grid_boundary(lat2d, lon2d)
+    center_lat = float(np.nanmean(lat2d[finite]))
+    center_lon = float(np.nanmean(lon2d[finite]))
+    center_lon = ((center_lon + 180.0) % 360.0) - 180.0
+    normalized_lon = (
+        center_lon + ((lon2d[finite] - center_lon + 180.0) % 360.0) - 180.0
+    )
+    lon_min = float(np.nanmin(normalized_lon))
+    lon_max = float(np.nanmax(normalized_lon))
+    if lon_min < -180.0 or lon_max > 180.0:
+        map_bounds = (-180.0, 180.0, float(np.nanmin(lat2d[finite])),
+                      float(np.nanmax(lat2d[finite])))
+    else:
+        map_bounds = (lon_min, lon_max, float(np.nanmin(lat2d[finite])),
+                      float(np.nanmax(lat2d[finite])))
+    return {
+        "source_file": os.path.abspath(source_file) if source_file else None,
+        "shape": tuple(int(value) for value in lat2d.shape),
+        "bounds": map_bounds,
+        "center": (center_lat, center_lon),
+        "boundary": tuple(boundary),
+        "times": tuple(_wrf_times(ds)),
+    }
+
+
+def inspect_file(wrfout_path, dataset=None, cancelled=None):
+    """Inspect one raw wrfout domain and its times without extracting data."""
+    _check_cancelled(cancelled)
+    close_ds = False
+    if dataset is None:
+        require_runtime_dependencies()
+        import xarray as xr
+        try:
+            ds = xr.open_dataset(wrfout_path)
+            close_ds = True
+        except Exception as exc:
+            raise RetrievalError(
+                "failed to open WRF file %r: %s" % (wrfout_path, exc)
+            ) from exc
+    else:
+        ds = dataset
+    try:
+        result = _domain_info(ds, wrfout_path)
+        _check_cancelled(cancelled)
+        return result
+    finally:
+        if close_ds:
+            try:
+                ds.close()
+            except Exception:
+                pass
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
 def extract(wrfout_path, lat, lon, out_path, valid_time=None,
-            dataset=None, loc="WRFpt"):
+            dataset=None, loc="WRFpt", progress_callback=None,
+            cancelled=None):
     """Extract a WRF point sounding to a ``.npz`` sidecar.
 
     Parameters
@@ -207,6 +384,8 @@ def extract(wrfout_path, lat, lon, out_path, valid_time=None,
     """
     lat = float(lat)
     lon = float(lon)
+    _emit_progress(progress_callback, "validating")
+    _check_cancelled(cancelled)
     if not (LAT_MIN <= lat <= LAT_MAX):
         raise ParameterRangeError(
             "latitude %.4f is out of range; permitted range is [%.1f, %.1f]"
@@ -215,13 +394,10 @@ def extract(wrfout_path, lat, lon, out_path, valid_time=None,
     # 1. Open the dataset (retrieval failures write nothing).
     close_ds = False
     if dataset is None:
+        require_runtime_dependencies()
+        import xarray as xr
         try:
-            import xarray as xr
-        except Exception as exc:  # pragma: no cover - optional dependency
-            raise RetrievalError(
-                "reading wrfout files requires xarray plus a NetCDF backend "
-                "(netCDF4 or h5netcdf): %s" % exc) from exc
-        try:
+            _emit_progress(progress_callback, "opening")
             ds = xr.open_dataset(wrfout_path)
             close_ds = True
         except Exception as exc:
@@ -231,7 +407,10 @@ def extract(wrfout_path, lat, lon, out_path, valid_time=None,
         ds = dataset
 
     try:
+        _check_cancelled(cancelled)
+        _emit_progress(progress_callback, "extracting")
         cols, sel = _build_columns(ds, lat, lon, valid_time)
+        _check_cancelled(cancelled)
     except (WRFExtractionError, ParameterRangeError, RetrievalError):
         raise
     except Exception as exc:  # noqa: BLE001 - any field/shape error -> retrieval
@@ -279,8 +458,13 @@ def extract(wrfout_path, lat, lon, out_path, valid_time=None,
         "fxx": 0,
         "npz": os.path.abspath(out_path),
         "levels": int(n),
+        "backend": "xarray/NetCDF WRF",
+        "decoder": "raw wrfout pressure-column extractor",
+        "cache_hit": False,
+        "surface_vorticity_source": "not available from this WRF workflow",
     }
 
+    _emit_progress(progress_callback, "writing")
     _atomic_write_npz(out_path, arrays)
     json_path = os.path.splitext(out_path)[0] + ".json"
     try:
@@ -288,6 +472,13 @@ def extract(wrfout_path, lat, lon, out_path, valid_time=None,
     except BaseException:
         _quiet_remove(out_path)
         raise
+    try:
+        _check_cancelled(cancelled)
+    except ExtractionCancelled:
+        _quiet_remove(out_path)
+        _quiet_remove(json_path)
+        raise
+    _emit_progress(progress_callback, "complete")
     return out_path
 
 
@@ -304,14 +495,18 @@ def _build_columns(ds, lat, lon, valid_time):
     sel_valid = times[it] if it < len(times) else None
 
     # XLAT/XLONG are (Time, south_north, west_east); reduce to this time's 2-D.
-    def _grid2d(a):
-        a = np.asarray(a, dtype=float)
-        while a.ndim > 2:
-            a = a[it] if a.shape[0] > it else a[0]
-        return a
+    def _selected_grid2d(a):
+        return _grid2d(a, it)
 
-    lat2d = _grid2d(xlat)
-    lon2d = _grid2d(xlong)
+    lat2d = _selected_grid2d(xlat)
+    lon2d = _selected_grid2d(xlong)
+
+    domain = {"boundary": tuple(_grid_boundary(lat2d, lon2d))}
+    if not point_in_domain(domain, lat, lon):
+        raise ParameterRangeError(
+            "requested point (%.4f, %.4f) lies outside the WRF grid domain"
+            % (lat, lon)
+        )
 
     (iy, ix), glat, glon = select_nearest_grid_point(lat2d, lon2d, lat, lon)
     glon = ((glon + 180.0) % 360.0) - 180.0
@@ -374,8 +569,8 @@ def _build_columns(ds, lat, lon, valid_time):
         cosa = _var(ds, "COSALPHA")
         sina = _var(ds, "SINALPHA")
         if cosa is not None and sina is not None:
-            ca = _grid2d(cosa)[iy, ix]
-            sa = _grid2d(sina)[iy, ix]
+            ca = _selected_grid2d(cosa)[iy, ix]
+            sa = _selected_grid2d(sina)[iy, ix]
             u_earth = u * ca - v * sa
             v_earth = v * ca + u * sa
         else:

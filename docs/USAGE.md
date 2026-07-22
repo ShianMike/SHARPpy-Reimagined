@@ -13,9 +13,10 @@ separate.
   on a map or from a list, or open a local file, and explore/edit the sounding
   live. Start here if you just want to look at soundings. See
   [section 0](#0-desktop-gui-sharpmod-gui).
-- **Command-line tools** (`uwyo-sounding`, `era5-extract`, `model-extract`, `wrf-extract`,
-  `sharpmod-render`) — scriptable, headless, reproducible. Use these for batch
-  extraction and PNG rendering (sections 1–5).
+- **Command-line tools** (`observed-sounding`, `uwyo-sounding`, `era5-extract`,
+  `model-extract`, `model-batch-extract`, `wrf-extract`, `sharpmod-render`) —
+  scriptable, headless, reproducible. Use these for batch extraction and PNG
+  rendering (sections 1–5).
 
 Both share the same portable `.npz` point-sounding format, so anything the CLI
 extracts opens in the GUI, and anything you save from the GUI renders on the CLI.
@@ -24,7 +25,7 @@ extracts opens in the GUI, and anything you save from the GUI renders on the CLI
 
 The command-line side has two kinds of capabilities:
 
-1. **Get a sounding** — either *fetch* an observed one (University of Wyoming)
+1. **Get a sounding** — either *fetch* an observed one (UWyo or IEM RAOB)
    or *extract* a model/reanalysis point column (forecast models, ERA5,
    WRF-ARW). Each of these
    writes a portable `.npz` point-sounding file.
@@ -32,11 +33,11 @@ The command-line side has two kinds of capabilities:
    skew-T / hodograph PNG.
 
 ```
-                 ┌── uwyo-sounding fetch ──┐
-observed / model │   era5-extract          │──►  <name>.npz  ──►  sharpmod-render  ──►  <name>.png
-   data          │   model-extract         │        (portable point sounding)      (skew-T / hodograph)
-                 │   wrf-extract           │
-                 └─────────────────────────┘
+                 ┌── observed-sounding fetch ─┐
+observed / model │   era5-extract             │──►  <name>.npz  ──►  sharpmod-render  ──►  <name>.png
+   data          │   model-extract / batch    │        (portable point sounding)      (skew-T / hodograph)
+                 │   wrf-extract              │
+                 └────────────────────────────┘
 ```
 
 The `.npz` files are all the same format, so anything you extract renders the
@@ -47,8 +48,10 @@ same way (and the same way as the bundled HRRR examples).
 | You want to… | Needs the SHARPpy render stack? | Needs an extra install? |
 |---|---|---|
 | List / search / fetch UWyo soundings | No | No |
+| Fetch with UWyo → IEM RAOB fallback | No | No |
 | Extract an ERA5 point sounding | No | `pip install -e ".[era5]"` |
 | Fetch a forecast-model point sounding | No | `pip install -e ".[era5]"` |
+| Run a resumable model batch | No | `pip install -e ".[era5]"` |
 | Extract a WRF-ARW point sounding | No | `pip install -e ".[wrf]"` |
 | Render any sounding to PNG (`--render`) | **Yes** (`pip install --no-deps SHARPpy==1.4.0a5`) | No |
 
@@ -68,7 +71,7 @@ sharpmod-gui             # or: python -m sharpmod.gui
 
 ### Pick a sounding
 
-The app opens on the **Sounding Picker** with four tabs:
+The app opens on the **Sounding Picker** with five tabs:
 
 - **Station Map** — a clickable map of UWyo radiosonde stations over a
   coastline basemap. Click a dot to select it, double-click to open it. Scroll
@@ -85,8 +88,21 @@ The app opens on the **Sounding Picker** with four tabs:
   unknown or failed check does not block manual Fetch. Every published pressure
   level is fetched. The isolated GRIB and point-sounding data remain available
   while the sounding window is open, then are deleted when that window closes.
+  **Timeline…** queues an inclusive range of up to 72 published hours into one
+  sounding viewer. Its slider, previous/next, play, and loop controls update as
+  results arrive; already completed hours survive cancellation and unavailable
+  hours are reported explicitly.
+- **Reanalysis (ERA5)** — choose a global map point and hourly UTC analysis.
+  The tab shows the requested and snapped 0.25-degree point, checks the local
+  CDS setup, runs retrieval outside the Qt event loop, and reuses a completed
+  cached point/hour. Cancel suppresses display and cleans the local output;
+  the stable synchronous `cdsapi` call itself may need to return first.
 - **Open File** — load a local `.npz`, SPC (`.spc`/`.OAX`), BUFKIT (`.buf`),
-  PECAN, or WRF-ARW text sounding. You can also **drag a file onto the window**.
+  PECAN, or WRF-ARW text sounding. The nested **Raw WRF wrfout** workflow
+  inspects domain coordinates and available times in a worker, provides a
+  domain-aware point map, rejects points outside the real curvilinear grid
+  perimeter, and extracts without blocking Qt. You can also **drag a file onto
+  the window**; raw `wrfout*`/NetCDF files route to this workflow.
 
 The station set shown on the map and in the list is refreshed from UWyo for the
 **selected observation time** (via the `/wsgi/sounding_json` endpoint), so
@@ -94,8 +110,20 @@ stations that were relocated — and had their WMO index change over time — sh
 up for the period they actually reported. The bundled offline catalogue is used
 as a fallback until the live list arrives (or if the network is unavailable).
 
-Fetches run on a background thread, so the window stays responsive while a UWyo
-sounding downloads.
+Observed fetches run on a background thread and try UWyo first, followed by the
+independent IEM RAOB archive when UWyo fails. The successful provider is shown
+in the sounding metadata and viewer title.
+
+Use **File → Downloaded Data Library…** to inspect cached model entries, reopen
+or re-extract them offline, pin them against automatic cleanup, delete them, or
+copy their source metadata. In **Locations**, manage searchable saved points,
+reuse recent forecast/ERA5 points, and import/export the versioned JSON format;
+saved and recent points appear as map markers.
+
+In a sounding window, **Data → Source & Quality Inspector…** reports the
+provider URL/transport, decoder/backend, cache reuse, pressure-level and missing
+field counts, vorticity source, and read-only QC warnings for the focused
+profile.
 
 By default, each newly fetched or opened sounding is added to the active
 sounding window instead of opening another window. Use the sounding window's
@@ -249,6 +277,27 @@ prof = dec.fetch("72357", datetime(2024, 5, 20, 0))   # -> Profile
 print(prof.pres[0], prof.tmpc[0], prof.wspd[1])       # wind speed already in knots
 ```
 
+### Redundant observed source (`observed-sounding`)
+
+The provider-neutral command defaults to an explicit UWyo → Iowa
+Environmental Mesonet (IEM) RAOB fallback. A result always comes wholly from
+one provider: levels are never merged across archives. The `.npz` and JSON
+sidecar retain the actual provider, provider station, exact request URL, and
+any failed earlier attempt.
+
+```bash
+observed-sounding providers
+observed-sounding fetch 72357 "2024-05-20 00" --out oun.npz
+
+# Pin one source and disable fallback
+observed-sounding fetch KOUN "2024-05-20 00" --provider iem --out oun_iem.npz
+```
+
+The IEM adapter uses Iowa State University's public RAOB JSON service and its
+RAOB station catalogue. It accepts IEM station IDs, WMO numbers, or an
+unambiguous station name. Programmatic callers can pass an explicit provider
+order to `sharpmod.observations.fetch_observed(...)`.
+
 ### Rebuilding the station catalogue (rarely needed)
 
 The bundled catalogue lives at `sharpmod/resources/uwyo_stations.json`. To
@@ -266,6 +315,8 @@ Requires the `[era5]` extra (`cdsapi`, `cfgrib`, `xarray`), a free Copernicus
 Climate Data Store account, and network access. Accept the ERA5 pressure-level
 dataset licence and copy the credentials from
 <https://cds.climate.copernicus.eu/how-to-api> into `$HOME/.cdsapirc`.
+The GUI exposes the same extractor on **Reanalysis (ERA5)** and never displays
+credential values.
 
 ```bash
 # era5-extract "<UTC time>" LAT LON [out.npz] [--loc LABEL] [--render [PNG]]
@@ -305,6 +356,7 @@ models and their forecast ranges.
 
 model-extract gfs 35.18 -97.44 --run "2024-05-20 00:00" --fxx 6
 model-extract hrrr 35.18 -97.44 --run "2024-05-20 00:00" --fxx 18 --render hrrr.png
+model-extract gdps 45.50 -73.60 --run "2026-07-22 00:00" --fxx 6
 ```
 
 The extractor requests every pressure level published for the chosen model,
@@ -321,6 +373,37 @@ they do not pay the CGI preparation cost. If an optimized route is missing or
 incompatible, the normal Herbie downloader is used. These choices reduce
 transfer size without reducing the published pressure-level set.
 
+All indexed Herbie models default to four bounded range workers. A coalesced
+span is split into balanced fragments when it is large enough to benefit, then
+reassembled in byte order under a pinned ETag or Last-Modified identity. A
+server without a validator, a rejected parallel transfer, or a partial failure
+downgrades to the validated sequential route. Set
+`SHARPMOD_RANGE_WORKERS=1` for that compatibility path, or 2-8 to tune network
+concurrency. This setting never adds decoder threads.
+
+The direct decoder also covers products such as AIGFS, ECMWF-AIFS, and GEFS
+that omit a pressure-level vorticity field. It reads the four surface U/V
+neighbors needed by the existing finite-difference calculation directly from
+two GRIB messages, with cfgrib retained only for unsupported grid layouts.
+Multi-point batch groups vectorize both normal columns and wind stencils so a
+selected message is unpacked once for every point. HRRR Zarr columns likewise
+normalize directly into the compact point contract without constructing an
+intermediate xarray dataset.
+
+RRFS-A exposes separate `rrfs-a`, `rrfs-a-alaska`, `rrfs-a-hawaii`, and
+`rrfs-a-puerto-rico` adapters. Its 00/06/12/18Z cycles advertise F000-F084;
+off-hour cycles advertise F000-F018. RRFS uses the same four-worker validated
+transport as the other indexed models; its retained multi-cycle benchmark is
+documented in `benchmarks/results/2026-07-22-rrfs-range-workers.md`.
+
+Canadian `gdps` and `rdps` use ECCC MSC GeoMet's point-value route. The adapter
+fans out the required variable/pressure layers with four bounded workers,
+checks the exact model reference and valid times returned by every layer, and
+normalizes 33 pressure levels into the same portable sounding contract. Set
+`SHARPMOD_GEOMET_WORKERS` from 1-8 to tune that network fan-out. GDPS supports
+00/12Z through F240 every three hours; RDPS supports 00/06/12/18Z through F084
+hourly.
+
 The GUI retains its downloaded model cache for reuse (3 GB / 48 hours by
 default), exposes **Clear Downloaded Model Cache** and an opt-in **Prefetch Next
 Forecast Hour** action in the File menu, and provides a Cancel button on the
@@ -329,6 +412,47 @@ model tab. Set `SHARPMOD_MODEL_CACHE`, `SHARPMOD_MODEL_CACHE_GB`, or
 `SHARPMOD_POINT_BACKENDS=grib` or `SHARPMOD_HRRR_BACKEND=grib` to bypass the
 point routes while troubleshooting.
 
+### Resumable batch API and CLI (`model-batch-extract`)
+
+A version-1 JSON job can mix points, forecast hours, models, and members.
+Requests sharing the same model/run/hour/member reuse one model-hour download;
+local-GRIB point values within that lease are vector-read in one decoder pass,
+while distinct hours use a bounded 1-4 worker pool.
+Single-point hours retain the optimized point/subregion route and its
+GUI-compatible spatial cache key. Multi-point hours retrieve one reusable
+field subset and vector-decode all points in that hour.
+
+```json
+{
+  "version": 1,
+  "requests": [
+    {"id": "oun-f000", "model": "gfs", "lat": 35.18, "lon": -97.44,
+     "run": "2026-07-14T00:00:00Z", "fxx": 0, "output": "oun/f000.npz"},
+    {"id": "ict-f000", "model": "gfs", "lat": 37.65, "lon": -97.43,
+     "run": "2026-07-14T00:00:00Z", "fxx": 0, "output": "ict/f000.npz"},
+    {"id": "oun-f006", "model": "gfs", "lat": 35.18, "lon": -97.44,
+     "run": "2026-07-14T00:00:00Z", "fxx": 6, "output": "oun/f006.npz"}
+  ]
+}
+```
+
+```bash
+model-batch-extract job.json --output-dir batch-output --workers 2
+```
+
+`batch-output/batch-manifest.json` is atomically updated and stores the schema
+version, per-request state, cache reuse, checksums, sizes, and errors. A rerun
+validates both the `.npz` and JSON checksums before skipping completed work;
+failed, cancelled, interrupted, missing, or corrupt requests are retried. Use
+`--no-resume` to force every request. Output paths in the job must be relative
+to `--output-dir`.
+
+Python callers can use `sharpmod.batch_extract.run_batch(...)` or retain a
+`BatchExtractor` and call `cancel()`. `BatchRunResult.items` and
+`output_paths` preserve input order, including heterogeneous forecast hours.
+Pass `model_hour_cache=` to lease a caller-owned `ModelHourCache`; the batch
+runner leaves an external cache alive for timeline/offline reuse.
+
 ---
 
 ## 4. WRF-ARW model output (`wrf-extract`)
@@ -336,6 +460,8 @@ point routes while troubleshooting.
 Requires the `[wrf]` extra (`xarray`, `netCDF4`). Reads a raw `wrfout*` NetCDF
 file, selects the nearest grid point, destaggers the vertical and wind grids,
 rotates winds to earth-relative (`COSALPHA`/`SINALPHA`), and writes the `.npz`.
+The GUI's **Open File → Raw WRF wrfout** workflow performs the same operation
+after asynchronous domain/time inspection and inside-grid validation.
 
 ```bash
 # wrf-extract WRFOUT LAT LON [out.npz] [--time "<UTC>"] [--loc LABEL] [--render [PNG]]
@@ -422,7 +548,7 @@ before the command.
 
 **Observed sounding for Norman, OK at 00Z and open it:**
 ```bash
-uwyo-sounding fetch 72357 "2024-05-20 00" --out oun.npz --render oun.png
+observed-sounding fetch 72357 "2024-05-20 00" --out oun.npz --render oun.png
 ```
 
 **Find a station by name, then fetch + render:**
@@ -449,7 +575,10 @@ wrf-extract wrfout_d02_2024-05-20_00:00:00 41.32 -96.37 oax_wrf.npz --render
   render stack isn't installed (or not Qt6-compatible). Run
   `pip install --no-deps "SHARPpy==1.4.0a5"` (see README → Rendering).
 - **`uwyo-sounding fetch` says the station/time is unavailable** — that site
-  didn't report at that hour; try 00Z or 12Z, or a nearby date.
+  didn't report at that hour; try 00Z or 12Z, a nearby date, or use
+  `observed-sounding fetch` for the explicit IEM fallback.
+- **A batch manifest belongs to a different job** — choose a new manifest or
+  output directory; the resume guard intentionally refuses to mix job specs.
 - **`era5-extract` / `wrf-extract` import errors** — install the matching extra:
   `pip install -e ".[era5]"` or `pip install -e ".[wrf]"`.
 - **`era5-extract` reports missing CDS credentials** — create a free CDS

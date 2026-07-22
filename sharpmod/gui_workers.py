@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 import logging
 import os
 import re
+import json
+import shutil
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -331,7 +335,7 @@ class _AvailabilityIndicator(QWidget):
 # UWyo fetch worker (keeps the picker UI responsive during the network call)
 # ===========================================================================
 class _FetchWorker(QThread):
-    """Fetch a UWyo sounding off the UI thread and write a temp ``.npz``.
+    """Fetch one observed sounding with explicit UWyo → IEM fallback.
 
     Emits :attr:`finished_ok` with ``(npz_path, station_meta, when)`` on
     success or :attr:`failed` with a human-readable message on any error.
@@ -349,42 +353,60 @@ class _FetchWorker(QThread):
 
     def run(self):  # noqa: D401 - QThread entry point
         try:
-            StationLookupError, UWyo_Decoder, UWyoError = _uwyo_decoder_classes()
-        except Exception as exc:  # noqa: BLE001 - surface import/freezer issues
-            self.failed.emit(f"UWyo decoder is unavailable: {exc}")
+            from sharpmod.observations import (
+                IEMObservedProvider,
+                ObservedFallbackError,
+                UWyoObservedProvider,
+                fetch_observed,
+                write_observed_npz,
+            )
+        except Exception as exc:  # noqa: BLE001 - import/freezer boundary
+            self.failed.emit(
+                f"Observed-sounding providers are unavailable: {exc}"
+            )
             return
         try:
             decoder, seeded_query = _decoder_for_station(self._station)
-            meta = decoder.resolve_station(seeded_query or self._query)
-            prof = decoder.fetch(meta.id, self._when)
-        except StationLookupError as exc:
-            self.failed.emit(f"Station lookup failed: {exc}")
-            return
-        except UWyoError as exc:
-            self.failed.emit(f"UWyo fetch failed: {exc}")
+            result = fetch_observed(
+                seeded_query or self._query,
+                self._when,
+                providers=(
+                    UWyoObservedProvider(decoder=decoder),
+                    IEMObservedProvider(),
+                ),
+            )
+        except ObservedFallbackError as exc:
+            self.failed.emit(f"Observed sounding fetch failed: {exc}")
             return
         except Exception as exc:  # noqa: BLE001 - surface any error to the UI
-            self.failed.emit(f"Unexpected error: {exc}")
+            self.failed.emit(f"Observed-sounding providers are unavailable: {exc}")
             return
 
+        npz_path = None
         try:
-            # Reuse the tested UWyo -> .npz writer so the interactive path and
-            # the CLI/PNG path share one output format + metadata.
-            from sharpmod.tools.uwyo_sounding import _write_npz
-
-            prof_meta = dict(getattr(prof, "meta", {}) or {})
-            if prof_meta.get("lat") != prof_meta.get("lat") or "lat" not in prof_meta:
-                prof_meta["lat"] = meta.lat
-            if prof_meta.get("lon") != prof_meta.get("lon") or "lon" not in prof_meta:
-                prof_meta["lon"] = meta.lon
-            prof_meta.setdefault("valid", self._when)
-
-            loc = meta.name.split(",")[0].split()[0]
+            metadata = dict(result.metadata)
+            station_name = str(
+                metadata.get("station_name") or result.station_id
+            )
+            meta = SimpleNamespace(
+                id=result.station_id,
+                name=station_name,
+                lat=float(metadata.get("lat", float("nan"))),
+                lon=float(metadata.get("lon", float("nan"))),
+                provider=result.provider,
+            )
+            loc = station_name.split(",")[0].split()[0]
             fd, npz_path = tempfile.mkstemp(
-                prefix=f"uwyo_{meta.id}_{self._when:%Y%m%d%H}_", suffix=".npz")
+                prefix=(
+                    f"observed_{result.provider}_{meta.id}_"
+                    f"{self._when:%Y%m%d%H}_"
+                ),
+                suffix=".npz",
+            )
             os.close(fd)
-            _write_npz(prof, npz_path, prof_meta, loc)
+            write_observed_npz(result, npz_path, loc=loc)
         except Exception as exc:  # noqa: BLE001
+            _cleanup_point_data(npz_path, None)
             self.failed.emit(f"Could not save fetched sounding: {exc}")
             return
 
@@ -395,8 +417,34 @@ def _cleanup_model_data(npz_path: str, download_dir: str) -> None:
     """Remove one isolated forecast-model fetch tree."""
     _LOGGER.info(
         "model_data.cleanup npz=%s download_dir=%s", npz_path, download_dir)
-    from sharpmod.tools import model_extract
-    model_extract.cleanup_transient_data(npz_path, download_dir)
+    _cleanup_point_data(npz_path, download_dir)
+
+
+def _cleanup_point_data(npz_path: str | None,
+                        output_dir: str | None) -> None:
+    """Remove one viewer-owned portable sounding and its isolated directory."""
+    if npz_path:
+        try:
+            os.remove(os.fspath(npz_path))
+        except OSError:
+            pass
+        try:
+            os.remove(os.path.splitext(os.fspath(npz_path))[0] + ".json")
+        except OSError:
+            pass
+    if output_dir:
+        shutil.rmtree(os.fspath(output_dir), ignore_errors=True)
+
+
+def _retain_point_data_until_close(viewer, npz_path: str,
+                                   output_dir: str) -> None:
+    """Keep one GUI-produced point sounding alive until its viewer closes."""
+    _LOGGER.info(
+        "point_data.retain viewer=%s npz=%s output_dir=%s",
+        id(viewer), npz_path, output_dir)
+    viewer.setAttribute(Qt.WA_DeleteOnClose, True)
+    viewer.destroyed.connect(
+        lambda *_args: _cleanup_point_data(npz_path, output_dir))
 
 
 def _retain_model_data_until_close(viewer, npz_path: str,
@@ -405,9 +453,297 @@ def _retain_model_data_until_close(viewer, npz_path: str,
     _LOGGER.info(
         "model_data.retain viewer=%s npz=%s download_dir=%s",
         id(viewer), npz_path, download_dir)
-    viewer.setAttribute(Qt.WA_DeleteOnClose, True)
-    viewer.destroyed.connect(
-        lambda *_args: _cleanup_model_data(npz_path, download_dir))
+    _retain_point_data_until_close(viewer, npz_path, download_dir)
+
+
+def _portable_pair_valid(npz_path) -> bool:
+    """Return whether a cached portable sounding and sidecar are complete."""
+    npz_path = os.fspath(npz_path)
+    json_path = os.path.splitext(npz_path)[0] + ".json"
+    if not os.path.isfile(npz_path) or not os.path.isfile(json_path):
+        return False
+    try:
+        with np.load(npz_path, allow_pickle=True) as data:
+            required = {"pres", "hght", "tmpc", "dwpc", "wdir", "wspd"}
+            if not required.issubset(data.files) or np.asarray(data["pres"]).size < 2:
+                return False
+        with open(json_path, encoding="utf-8") as handle:
+            return isinstance(json.load(handle), dict)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
+
+
+def _atomic_npz(path, arrays) -> None:
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(suffix=".npz", dir=directory)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            np.savez(handle, **arrays)
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.remove(temporary)
+        except OSError:
+            pass
+        raise
+
+
+def _atomic_json(path, payload) -> None:
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(suffix=".json", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.remove(temporary)
+        except OSError:
+            pass
+        raise
+
+
+def _update_sounding_sidecar(npz_path, **values) -> None:
+    """Atomically add GUI/cache provenance to an extractor sidecar."""
+    path = os.path.splitext(os.path.abspath(os.fspath(npz_path)))[0] + ".json"
+    with open(path, encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict):
+        raise ValueError("sounding sidecar must contain a JSON object")
+    payload.update(values)
+    _atomic_json(path, payload)
+
+
+def _materialize_cached_sounding(source_npz, out_path, *, loc,
+                                 requested_lat, requested_lon,
+                                 cache_hit=False) -> None:
+    """Create a viewer-owned copy while retaining current request metadata."""
+    source_npz = os.fspath(source_npz)
+    source_json = os.path.splitext(source_npz)[0] + ".json"
+    out_path = os.fspath(out_path)
+    out_json = os.path.splitext(out_path)[0] + ".json"
+    with np.load(source_npz, allow_pickle=True) as source:
+        arrays = {name: source[name] for name in source.files}
+    arrays["loc"] = str(loc)
+    with open(source_json, encoding="utf-8") as handle:
+        metadata = json.load(handle)
+    metadata.update({
+        "loc": str(loc),
+        "requested_lat": float(requested_lat),
+        "requested_lon": float(requested_lon),
+        "cache_hit": bool(cache_hit),
+        "npz": os.path.abspath(out_path),
+    })
+    _atomic_npz(out_path, arrays)
+    try:
+        _atomic_json(out_json, metadata)
+    except BaseException:
+        try:
+            os.remove(out_path)
+        except OSError:
+            pass
+        raise
+
+
+class _ERA5FetchWorker(QThread):
+    """Retrieve/cache one ERA5 analysis and create a viewer-owned output."""
+
+    finished_ok = Signal(str, object, float, float, bool)
+    failed = Signal(str)
+    cancelled = Signal()
+    progress = Signal(str)
+
+    def __init__(self, lat, lon, valid_time, out_path, *, loc="ERA5pt",
+                 disk_cache=None, parent=None):
+        super().__init__(parent)
+        self._lat = float(lat)
+        self._lon = float(lon)
+        self._valid_time = valid_time
+        self._out_path = os.fspath(out_path)
+        self._output_dir = os.path.dirname(self._out_path)
+        self._loc = str(loc or "ERA5pt")
+        self._disk_cache = disk_cache
+        self._cancel_requested = False
+
+    def requestInterruption(self):  # noqa: N802 - Qt API override
+        self._cancel_requested = True
+        super().requestInterruption()
+
+    def cancellation_requested(self) -> bool:
+        return self._cancel_requested or self.isInterruptionRequested()
+
+    def _report_progress(self, stage) -> None:
+        self.progress.emit(str(stage))
+
+    def run(self):
+        from sharpmod.tools import era5_extract
+
+        cache_hit = False
+        try:
+            if self.cancellation_requested():
+                raise era5_extract.ExtractionCancelled("ERA5 fetch cancelled")
+            snapped_lat, snapped_lon = era5_extract._nearest_era5_grid_point(
+                self._lat, self._lon)
+            if self._disk_cache is None:
+                path = era5_extract.extract(
+                    self._lat, self._lon, self._valid_time, self._out_path,
+                    loc=self._loc,
+                    progress_callback=self._report_progress,
+                    cancelled=self.cancellation_requested,
+                )
+            else:
+                valid = era5_extract._as_datetime(self._valid_time)
+                if valid.tzinfo is None:
+                    valid = valid.replace(tzinfo=timezone.utc)
+                else:
+                    valid = valid.astimezone(timezone.utc)
+                valid = valid.replace(minute=0, second=0, microsecond=0)
+                key = ModelHourKey.create(
+                    "era5", valid, 0,
+                    spatial=f"{snapped_lat:.2f},{snapped_lon:.2f}",
+                )
+                cache_dir = self._disk_cache.directory_for(key)
+                cache_npz = os.path.join(cache_dir, "era5-point.npz")
+                with self._disk_cache.protect(cache_dir):
+                    cache_hit = _portable_pair_valid(cache_npz)
+                    if not cache_hit:
+                        try:
+                            os.remove(cache_npz)
+                        except OSError:
+                            pass
+                        try:
+                            os.remove(os.path.splitext(cache_npz)[0] + ".json")
+                        except OSError:
+                            pass
+                        era5_extract.extract(
+                            snapped_lat, snapped_lon, valid, cache_npz,
+                            loc="ERA5",
+                            progress_callback=self._report_progress,
+                            cancelled=self.cancellation_requested,
+                        )
+                    else:
+                        self._report_progress("cached")
+                    self._disk_cache.annotate(
+                        cache_dir,
+                        source_url=f"cds://{era5_extract.ERA5_CDS_DATASET}",
+                        source_transport="cdsapi",
+                        source_provider="Copernicus Climate Data Store",
+                        source_fields=era5_extract.ERA5_CDS_VARIABLES,
+                    )
+                    if self.cancellation_requested():
+                        raise era5_extract.ExtractionCancelled(
+                            "ERA5 fetch cancelled")
+                    self._report_progress("writing")
+                    _materialize_cached_sounding(
+                        cache_npz, self._out_path, loc=self._loc,
+                        requested_lat=self._lat, requested_lon=self._lon,
+                        cache_hit=cache_hit,
+                    )
+                    path = self._out_path
+                    self._report_progress("complete")
+        except era5_extract.ExtractionCancelled:
+            _cleanup_point_data(self._out_path, self._output_dir)
+            self.cancelled.emit()
+            return
+        except Exception as exc:  # noqa: BLE001 - surface optional/network errors
+            _LOGGER.exception("era5_fetch.worker_failed")
+            _cleanup_point_data(self._out_path, self._output_dir)
+            self.failed.emit(f"ERA5 fetch failed: {exc}")
+            return
+        self.finished_ok.emit(
+            path, self._valid_time, snapped_lat, snapped_lon, cache_hit)
+
+
+class _WRFInspectWorker(QThread):
+    """Inspect WRF coordinates and times without blocking Qt."""
+
+    inspected = Signal(object)
+    failed = Signal(str)
+    cancelled = Signal()
+
+    def __init__(self, path, parent=None):
+        super().__init__(parent)
+        self._path = os.fspath(path)
+        self._cancel_requested = False
+
+    def requestInterruption(self):  # noqa: N802 - Qt API override
+        self._cancel_requested = True
+        super().requestInterruption()
+
+    def cancellation_requested(self) -> bool:
+        return self._cancel_requested or self.isInterruptionRequested()
+
+    def run(self):
+        from sharpmod.tools import wrf_extract
+        try:
+            result = wrf_extract.inspect_file(
+                self._path, cancelled=self.cancellation_requested)
+        except wrf_extract.ExtractionCancelled:
+            self.cancelled.emit()
+            return
+        except Exception as exc:  # noqa: BLE001 - file/backend errors to UI
+            _LOGGER.exception("wrf_inspect.worker_failed path=%s", self._path)
+            self.failed.emit(f"Could not inspect raw WRF output: {exc}")
+            return
+        self.inspected.emit(result)
+
+
+class _WRFExtractWorker(QThread):
+    """Extract one raw wrfout point sounding without blocking Qt."""
+
+    finished_ok = Signal(str, object)
+    failed = Signal(str)
+    cancelled = Signal()
+    progress = Signal(str)
+
+    def __init__(self, path, lat, lon, out_path, *, valid_time=None,
+                 loc="WRFpt", parent=None):
+        super().__init__(parent)
+        self._path = os.fspath(path)
+        self._lat = float(lat)
+        self._lon = float(lon)
+        self._out_path = os.fspath(out_path)
+        self._output_dir = os.path.dirname(self._out_path)
+        self._valid_time = valid_time
+        self._loc = str(loc or "WRFpt")
+        self._cancel_requested = False
+
+    def requestInterruption(self):  # noqa: N802 - Qt API override
+        self._cancel_requested = True
+        super().requestInterruption()
+
+    def cancellation_requested(self) -> bool:
+        return self._cancel_requested or self.isInterruptionRequested()
+
+    def run(self):
+        from sharpmod.tools import wrf_extract
+        try:
+            path = wrf_extract.extract(
+                self._path, self._lat, self._lon, self._out_path,
+                valid_time=self._valid_time, loc=self._loc,
+                progress_callback=lambda stage: self.progress.emit(str(stage)),
+                cancelled=self.cancellation_requested,
+            )
+        except wrf_extract.ExtractionCancelled:
+            _cleanup_point_data(self._out_path, self._output_dir)
+            self.cancelled.emit()
+            return
+        except Exception as exc:  # noqa: BLE001 - file/backend errors to UI
+            _LOGGER.exception("wrf_extract.worker_failed path=%s", self._path)
+            _cleanup_point_data(self._out_path, self._output_dir)
+            self.failed.emit(f"WRF extraction failed: {exc}")
+            return
+        self.finished_ok.emit(path, self._valid_time)
 
 
 def _model_probe_candidates(model: str, requested_run: datetime,
@@ -452,6 +788,7 @@ class _ModelAvailabilityWorker(QThread):
         from sharpmod.tools import model_extract
 
         errors = []
+        cache_hit = False
         try:
             candidates = _model_probe_candidates(
                 self._model, self._run_time, limit=4)
@@ -503,7 +840,9 @@ class _ModelFetchWorker(QThread):
     def __init__(self, model: str, lat: float, lon: float, run_time: datetime,
                  fxx: int, out_path: str, loc: str | None = None,
                  member: str | None = None, download_dir: str | None = None,
-                 model_hour_cache=None, parent=None):
+                 model_hour_cache=None, cached_grib=None,
+                 cached_source_fields=(), cached_cache=None,
+                 cached_directory=None, parent=None):
         super().__init__(parent)
         self._model = model
         self._lat = float(lat)
@@ -519,6 +858,12 @@ class _ModelFetchWorker(QThread):
         # emitted; point-output cleanup always uses ``_output_dir``.
         self._download_dir = self._output_dir
         self._model_hour_cache = model_hour_cache
+        self._cached_grib = (
+            os.fspath(cached_grib) if cached_grib is not None else None
+        )
+        self._cached_source_fields = tuple(cached_source_fields or ())
+        self._cached_cache = cached_cache
+        self._cached_directory = cached_directory
         self._cancel_requested = False
 
     def requestInterruption(self):  # noqa: N802 - Qt API override
@@ -537,7 +882,40 @@ class _ModelFetchWorker(QThread):
         try:
             from sharpmod.tools import model_extract
             cfg = model_extract.get_config(self._model)
-            if self._model_hour_cache is None:
+            cache_hit = False
+            if self._cached_grib is not None:
+                protection = (
+                    self._cached_cache.protect(self._cached_directory)
+                    if self._cached_cache is not None
+                    and self._cached_directory is not None
+                    else nullcontext()
+                )
+                with protection:
+                    self._report_progress("cached")
+                    dataset = model_extract._LocalGribDataset(
+                        self._cached_grib
+                    )
+                    try:
+                        path = model_extract.extract(
+                            self._model,
+                            self._lat,
+                            self._lon,
+                            run_time=self._run_time,
+                            fxx=self._fxx,
+                            out_path=self._out_path,
+                            loc=self._loc,
+                            member=self._member,
+                            dataset=dataset,
+                            source_grib=self._cached_grib,
+                            source_fields=self._cached_source_fields,
+                            source_transport="offline-cache",
+                            progress_callback=self._report_progress,
+                            cancelled=self.cancellation_requested,
+                        )
+                    finally:
+                        dataset.close()
+                cache_hit = True
+            elif self._model_hour_cache is None:
                 path = model_extract.extract(
                     self._model,
                     self._lat,
@@ -604,6 +982,7 @@ class _ModelFetchWorker(QThread):
                         progress_callback=_cached_progress,
                         cancelled=self.cancellation_requested,
                     )
+            _update_sounding_sidecar(path, cache_hit=bool(cache_hit))
         except model_extract.DownloadCancelled:
             _LOGGER.info(
                 "model_fetch.worker_cancelled model=%s run=%s fxx=%03d",

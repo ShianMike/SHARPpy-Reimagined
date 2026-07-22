@@ -181,7 +181,7 @@ def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
 def test_release_workflow_gates_tag_and_source_versions():
     workflow = _load_workflow("release.yml")
     dispatch = workflow["on"]["workflow_dispatch"]["inputs"]["tag"]
-    assert dispatch["default"] == "v0.4.2"
+    assert dispatch["default"] == "v0.5.0"
 
     steps = workflow["jobs"]["build-windows-exe"]["steps"]
     names = [step.get("name") for step in steps]

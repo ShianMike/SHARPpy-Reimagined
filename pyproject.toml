@@ -108,8 +108,10 @@ sharpmod-gui = "sharpmod.gui:main"
 # Console entry points installed on `pip install .`.
 sharpmod-render = "sharpmod.render:main"
 uwyo-sounding = "sharpmod.tools.uwyo_sounding:main"
+observed-sounding = "sharpmod.tools.observed_sounding:main"
 era5-extract = "sharpmod.tools.era5_extract:main"
 model-extract = "sharpmod.tools.model_extract:main"
+model-batch-extract = "sharpmod.tools.batch_extract:main"
 wrf-extract = "sharpmod.tools.wrf_extract:main"
 sharpmod-rust-sync = "sharpmod.tools.rust_backend_sync:main"
 

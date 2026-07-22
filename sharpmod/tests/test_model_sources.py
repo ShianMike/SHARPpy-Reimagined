@@ -6,6 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
+import pytest
+
 from sharpmod.model_sources import (
     build_nomads_subset_url,
     choose_provider,
@@ -55,9 +57,55 @@ def test_nomads_directory_derivation_supports_gfs_nested_cycle():
     assert query["file"] == ["gfs.t06z.pgrb2.0p25.f000"]
 
 
+@pytest.mark.parametrize(("key", "source", "endpoint", "directory"), (
+    (
+        "nam-3km-conus",
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nam/prod/"
+        "nam.20260722/nam.t00z.conusnest.hiresf00.tm00.grib2",
+        "filter_nam_conusnest.pl",
+        "/nam.20260722",
+    ),
+    (
+        "hrw-wrf-arw",
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hiresw/prod/"
+        "hiresw.20260722/hiresw.t00z.arw_5km.f00.conus.grib2",
+        "filter_hiresconus.pl",
+        "/hiresw.20260722",
+    ),
+    (
+        "hrw-fv3",
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hiresw/prod/"
+        "hiresw.20260722/hiresw.t00z.fv3_5km.f00.conus.grib2",
+        "filter_hiresconus.pl",
+        "/hiresw.20260722",
+    ),
+    (
+        "cfs",
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/cfs/prod/"
+        "cfs.20260722/00/6hrly_grib_01/"
+        "pgbf2026072200.01.2026072200.grb2",
+        "filter_cfs_pgb.pl",
+        "/cfs.20260722/00/6hrly_grib_01",
+    ),
+))
+def test_model_specific_nomads_routes_use_official_filter_and_directory(
+        key, source, endpoint, directory):
+    parsed = urlparse(build_nomads_subset_url(
+        SimpleNamespace(key=key), source, 35.0, -97.0,
+        ("HGT", "TMP", "RH", "UGRD", "VGRD"),
+    ))
+    query = parse_qs(parsed.query)
+
+    assert parsed.path.endswith("/" + endpoint)
+    assert query["dir"] == [directory]
+
+
 def test_nomads_support_is_capability_checked():
     assert nomads_supported(SimpleNamespace(key="hrrr"))
     assert nomads_supported(SimpleNamespace(key="nam-3km-conus"))
+    assert nomads_supported(SimpleNamespace(key="hrw-wrf-arw"))
+    assert nomads_supported(SimpleNamespace(key="hrw-fv3"))
+    assert nomads_supported(SimpleNamespace(key="cfs"))
     assert not nomads_supported(SimpleNamespace(key="ecmwf-ifs"))
 
 

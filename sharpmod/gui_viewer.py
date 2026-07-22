@@ -72,6 +72,7 @@ from qtpy.QtWidgets import (
     QGraphicsScene,
     QProgressBar,
     QMenu,
+    QPlainTextEdit,
 )
 
 _LEVEL_FIELDS = (
@@ -322,6 +323,13 @@ def compose_interactive(config, prof_col, controller, *, stn_id=None,
     _install_export_menu(win, prof_col, controller)
     _install_analysis_actions(win, controller)
     _install_units_menu(win, controller)
+    _install_data_inspector(win, prof_col)
+    try:
+        from sharpmod.gui_timeline import install_timeline_controls
+
+        install_timeline_controls(win, prof_col)
+    except Exception:
+        _LOGGER.exception("forecast_timeline.install_failed")
     try:
         _apply_unit_preferences_to_window(win, controller._config())
     except Exception:
@@ -910,6 +918,49 @@ def _install_export_menu(win, prof_col, controller) -> None:
     except Exception:
         # Never let an export-menu hiccup block the interactive window.
         pass
+
+
+def _install_data_inspector(win, prof_col) -> None:
+    """Add a copyable source-provenance and conservative QC report."""
+    try:
+        menu = win.menuBar().addMenu("Data")
+        action = QAction("Source && Quality Inspector…", win)
+
+        def show_report(_checked=False):
+            from sharpmod.profile_inspector import format_report
+
+            focused = prof_col
+            try:
+                widget = win.spc_widget
+                focused = widget.prof_collections[int(widget.pc_idx)]
+            except (AttributeError, IndexError, TypeError, ValueError):
+                pass
+
+            dialog = QDialog(win)
+            dialog.setWindowTitle("Sounding Source & Quality")
+            dialog.resize(760, 540)
+            layout = QVBoxLayout(dialog)
+            intro = QLabel(
+                "Extractor provenance and non-mutating structural checks for "
+                "the focused sounding."
+            )
+            intro.setWordWrap(True)
+            layout.addWidget(intro)
+            report = QPlainTextEdit()
+            report.setReadOnly(True)
+            report.setPlainText(format_report(focused))
+            layout.addWidget(report, 1)
+            buttons = QDialogButtonBox(QDialogButtonBox.Close)
+            buttons.rejected.connect(dialog.reject)
+            buttons.clicked.connect(dialog.accept)
+            layout.addWidget(buttons)
+            dialog.exec()
+
+        action.triggered.connect(show_report)
+        menu.addAction(action)
+        win._sharpmod_data_inspector_action = action
+    except Exception:
+        _LOGGER.exception("data_inspector.install_failed")
 
 
 def _install_units_menu(win, controller) -> None:

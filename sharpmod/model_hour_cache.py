@@ -91,6 +91,7 @@ class ModelHourCache:
         *,
         directory_factory: Callable[[ModelHourKey], str] | None = None,
         directory_protector: Callable[[str], object] | None = None,
+        metadata_writer: Callable[..., object] | None = None,
         delete_download_dirs: bool = True,
     ):
         max_entries = int(max_entries)
@@ -104,6 +105,7 @@ class ModelHourCache:
         self._generation = 0
         self._directory_factory = directory_factory
         self._directory_protector = directory_protector
+        self._metadata_writer = metadata_writer
         self._delete_download_dirs = bool(delete_download_dirs)
 
     def __len__(self) -> int:
@@ -190,6 +192,21 @@ class ModelHourCache:
                 source_transport = getattr(
                     source, "_sharpmod_transport", None
                 )
+            if self._metadata_writer is not None:
+                try:
+                    self._metadata_writer(
+                        download_dir,
+                        source_url=(str(source_grib) if source_grib else None),
+                        source_transport=(
+                            str(source_transport) if source_transport else None
+                        ),
+                        source_fields=source_fields,
+                    )
+                except Exception:
+                    _LOGGER.exception(
+                        "model_hour_cache.metadata_write_failed model=%s dir=%s",
+                        key.model, download_dir,
+                    )
             entry = ModelHourEntry(
                 key=key,
                 dataset=dataset,

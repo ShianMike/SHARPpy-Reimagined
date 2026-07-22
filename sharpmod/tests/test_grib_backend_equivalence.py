@@ -16,6 +16,9 @@ from sharpmod.backends.grib import (
     GRIB_COLUMN_NAMES,
     clear_grib_caches,
     decode_grib_point,
+    decode_grib_points,
+    decode_grib_wind_vorticities,
+    decode_grib_wind_vorticity,
     grib_cache_info,
     load_eccodes,
 )
@@ -134,6 +137,24 @@ def multifield_grib(tmp_path):
     # A decoder must enable multi-field support itself rather than inheriting
     # process-global ecCodes state from another caller.
     eccodes.codes_grib_multi_support_off()
+    return path, eccodes
+
+
+@pytest.fixture
+def no_vorticity_grib(tmp_path):
+    try:
+        eccodes = load_eccodes()
+    except RuntimeError as exc:
+        pytest.skip(str(exc))
+
+    path = tmp_path / "no-vorticity-pressure-levels.grib2"
+    with path.open("wb") as output:
+        for level in (850.0, 1000.0):
+            values = _LEVEL_VALUES[level]
+            for short_name in ("gh", "t", "r", "u", "v", "w"):
+                _write_message(
+                    eccodes, output, short_name, level, values[short_name]
+                )
     return path, eccodes
 
 
@@ -294,6 +315,64 @@ def test_decoder_reads_one_element_per_selected_message_and_caches_points(
     assert info["points"]["misses"] == 1
 
 
+def test_vectorized_decoder_unpacks_each_message_once_for_multiple_points(
+        compact_grib, monkeypatch):
+    path, eccodes = compact_grib
+    requests = [(10.1, 100.1), (10.9, 101.1), (10.95, 101.05)]
+    expected = [decode_grib_point(path, *point) for point in requests]
+    clear_grib_caches()
+    calls = 0
+    real_getter = eccodes.codes_get_double_elements
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return real_getter(*args, **kwargs)
+
+    monkeypatch.setattr(eccodes, "codes_get_double_elements", counted)
+    actual = decode_grib_points(path, requests)
+
+    assert len(actual) == len(expected)
+    for left, right in zip(actual, expected):
+        np.testing.assert_allclose(left.matrix, right.matrix)
+        assert left.selected_lat == pytest.approx(right.selected_lat)
+        assert left.selected_lon == pytest.approx(right.selected_lon)
+        assert left.surface_relative_vorticity == pytest.approx(
+            right.surface_relative_vorticity
+        )
+    # Seven selected fields at each of two pressure levels, independent of the
+    # number of requested points. The last two requests share one grid cell.
+    assert calls == 14
+    assert actual[1] is actual[2]
+
+
+def test_vectorized_wind_stencils_unpack_two_fields_once(
+        no_vorticity_grib, monkeypatch):
+    path, eccodes = no_vorticity_grib
+    requests = [(10.1, 100.1), (10.9, 101.1), (10.95, 101.05)]
+    expected = [
+        decode_grib_wind_vorticity(path, *point) for point in requests
+    ]
+    clear_grib_caches()
+    calls = 0
+    real_getter = eccodes.codes_get_double_elements
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return real_getter(*args, **kwargs)
+
+    monkeypatch.setattr(eccodes, "codes_get_double_elements", counted)
+    actual = decode_grib_wind_vorticities(path, requests)
+
+    np.testing.assert_allclose(actual, expected, rtol=0.0, atol=0.0)
+    # One U-value read, one V-value read, and one latitude/longitude read,
+    # independent of the requested point count. The final requests share a
+    # grid cell and are calculated only once.
+    assert calls == 4
+    assert actual[1] == actual[2]
+
+
 def test_file_identity_invalidates_all_cached_decode_state(compact_grib):
     path, _eccodes = compact_grib
     first = decode_grib_point(path, 10.9, 101.1)
@@ -389,6 +468,48 @@ def test_xarray_fallback_reuses_cfgrib_persistent_index(compact_grib):
             first.close()
         if second is not None:
             second.close()
+        source.close()
+
+
+def test_targeted_wind_stencil_matches_full_xarray_vorticity(
+        no_vorticity_grib):
+    from sharpmod.tools import model_extract
+
+    path, _eccodes = no_vorticity_grib
+    source = model_extract._LocalGribDataset(path)
+    full = None
+    try:
+        direct_targeted = decode_grib_wind_vorticity(
+            path, 10.9, 101.1
+        )
+        targeted = source.surface_wind_vorticity(
+            10.9, 101.1, datetime(2026, 7, 16, tzinfo=timezone.utc)
+        )
+        first_source = source._vorticity_source
+        repeated = source.surface_wind_vorticity(
+            10.9, 101.1, datetime(2026, 7, 16, tzinfo=timezone.utc)
+        )
+        full = source.fallback_point_dataset(
+            10.9, 101.1, datetime(2026, 7, 16, tzinfo=timezone.utc)
+        )
+        columns, *_rest = model_extract._xarray_point_columns(
+            full,
+            10.9,
+            101.1,
+            datetime(2026, 7, 16, tzinfo=timezone.utc),
+            0,
+            "synthetic",
+        )
+
+        assert targeted == pytest.approx(
+            columns["surface_relative_vorticity"], rel=1e-12, abs=1e-12
+        )
+        assert direct_targeted == pytest.approx(targeted)
+        assert repeated == pytest.approx(targeted)
+        assert source._vorticity_source is first_source
+    finally:
+        if full is not None:
+            full.close()
         source.close()
 
 

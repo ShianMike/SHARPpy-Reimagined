@@ -14,6 +14,7 @@ import threading
 
 import numpy as np
 
+from sharpmod.backends.grib import DecodedPoint, GRIB_COLUMN_NAMES
 from sharpmod.model_transport import DownloadCancelled
 
 
@@ -42,6 +43,20 @@ class HrrrZarrSource:
     _sharpmod_fields: tuple[str, ...]
     _sharpmod_transport: str = "hrrr-zarr-point"
     downloaded_bytes: int = 0
+
+
+@dataclass
+class HrrrZarrPointDataset:
+    """Normalized point profile that avoids constructing an xarray dataset."""
+
+    decoded: DecodedPoint
+    requested_lat: float
+    requested_lon: float
+    run_time: datetime
+    valid_time: datetime
+
+    def close(self):
+        """Match the model-hour cache dataset protocol (there is no handle)."""
 
 
 _ARRAY_PATTERN = re.compile(
@@ -171,38 +186,102 @@ def _root_url(run_dt: datetime) -> str:
     )
 
 
-def _dataset_from_columns(levels, columns, selected_lat, selected_lon, run_dt):
-    try:
-        import xarray as xr
-    except ImportError as exc:
-        raise ZarrBackendUnavailable("HRRR Zarr requires xarray") from exc
-    dims = ("isobaricInhPa", "latitude", "longitude")
-    names = {
-        "HGT": "gh",
-        "TMP": "t",
-        "RH": "r",
-        "SPFH": "q",
-        "UGRD": "u",
-        "VGRD": "v",
-        "VVEL": "w",
-        "ABSV": "absv",
-    }
-    data_vars = {
-        names[field]: (dims, np.asarray(values, dtype=float)[:, None, None])
-        for field, values in columns.items()
-    }
+def _point_dataset_from_columns(
+    levels, columns, selected_lat, selected_lon, run_dt,
+    requested_lat, requested_lon,
+):
+    """Normalize raw HRRR arrays directly into the shared compact matrix."""
+    levels = np.asarray(levels, dtype=np.float64)
+    order = np.argsort(-levels)
+    levels = levels[order]
+    missing = -9999.0
+    matrix = np.full(
+        (len(GRIB_COLUMN_NAMES), levels.size), missing, dtype=np.float64
+    )
+    matrix[0] = levels
+
+    def values(name):
+        value = columns.get(name)
+        if value is None:
+            return None
+        result = np.asarray(value, dtype=np.float64)[order]
+        result = np.array(result, copy=True)
+        result[~np.isfinite(result)] = missing
+        return result
+
+    height = values("HGT")
+    temperature = values("TMP")
+    u_wind = values("UGRD")
+    v_wind = values("VGRD")
+    if any(value is None for value in (
+            height, temperature, u_wind, v_wind)):
+        raise ZarrBackendUnavailable(
+            "HRRR Zarr point is missing a required sounding column"
+        )
+    matrix[1] = height
+    good_temperature = temperature != missing
+    matrix[2, good_temperature] = temperature[good_temperature] - 273.15
+    matrix[7] = u_wind
+    matrix[8] = v_wind
+
+    humidity = values("RH")
+    if humidity is not None:
+        good = good_temperature & (humidity != missing)
+        temp_c = matrix[2, good]
+        rh = np.clip(humidity[good], 1.0e-3, 100.0)
+        gamma = np.log(rh / 100.0) + 17.625 * temp_c / (243.04 + temp_c)
+        matrix[3, good] = 243.04 * gamma / (17.625 - gamma)
+    else:
+        humidity = values("SPFH")
+        if humidity is None:
+            raise ZarrBackendUnavailable(
+                "HRRR Zarr point is missing RH and specific humidity"
+            )
+        good = good_temperature & (humidity != missing)
+        q = humidity[good]
+        vapor_pressure = q * levels[good] / (0.622 + 0.378 * q)
+        logarithm = np.log(np.clip(vapor_pressure, 1.0e-6, None) / 6.112)
+        matrix[3, good] = 243.04 * logarithm / (17.625 - logarithm)
+
+    good_wind = (u_wind != missing) & (v_wind != missing)
+    matrix[4, good_wind] = (
+        270.0 - np.degrees(np.arctan2(
+            v_wind[good_wind], u_wind[good_wind]
+        ))
+    ) % 360.0
+    matrix[5, good_wind] = np.hypot(
+        u_wind[good_wind], v_wind[good_wind]
+    ) * 1.94384449
+
+    omega = values("VVEL")
+    if omega is not None:
+        matrix[6] = omega
+
+    surface_vorticity = None
+    absolute_vorticity = values("ABSV")
+    if absolute_vorticity is not None:
+        coriolis = (
+            2.0 * 7.2921159e-5 * np.sin(np.radians(float(selected_lat)))
+        )
+        for value in absolute_vorticity:
+            if np.isfinite(value) and value != missing:
+                surface_vorticity = float(value - coriolis)
+                break
+
+    decoded = DecodedPoint(
+        matrix, float(selected_lat), float(selected_lon), surface_vorticity
+    )
     run_utc = run_dt
-    if run_utc.tzinfo is not None:
-        run_utc = run_utc.astimezone(timezone.utc).replace(tzinfo=None)
-    return xr.Dataset(
-        data_vars=data_vars,
-        coords={
-            "isobaricInhPa": np.asarray(levels, dtype=float),
-            "latitude": np.asarray([selected_lat], dtype=float),
-            "longitude": np.asarray([selected_lon], dtype=float),
-            "time": np.datetime64(run_utc),
-        },
-        attrs={"model": "hrrr", "description": "HRRR Zarr point sounding"},
+    if run_utc.tzinfo is None:
+        run_utc = run_utc.replace(tzinfo=timezone.utc)
+    else:
+        run_utc = run_utc.astimezone(timezone.utc)
+    return HrrrZarrPointDataset(
+        decoded=decoded,
+        requested_lat=float(requested_lat),
+        requested_lon=float(requested_lon),
+        run_time=run_utc,
+        valid_time=run_utc,
     )
 
 
@@ -223,10 +302,11 @@ def _load_cached_point(path, run_dt, requested_lat, requested_lon, root_url):
                 return None
             fields = tuple(str(value) for value in cached["fields"])
             columns = {field: cached[field] for field in fields}
-            dataset = _dataset_from_columns(
+            dataset = _point_dataset_from_columns(
                 cached["levels"], columns,
                 float(cached["selected_lat"]),
                 float(cached["selected_lon"]), run_dt,
+                requested_lat, requested_lon,
             )
         return dataset, HrrrZarrSource(root_url, root_url, fields)
     except (OSError, ValueError, KeyError, TypeError):
@@ -358,8 +438,9 @@ def fetch_hrrr_zarr_point(
                 columns[field][level_index] = decode_zarr_point(
                     future.result(), metadata, iy=iy, ix=ix
                 )
-        dataset = _dataset_from_columns(
-            plan.levels, columns, selected_lat, selected_lon, run_dt
+        dataset = _point_dataset_from_columns(
+            plan.levels, columns, selected_lat, selected_lon, run_dt,
+            lat, lon,
         )
         _write_cached_point(
             _cache_path(cache_dir), run_dt, float(lat), float(lon),

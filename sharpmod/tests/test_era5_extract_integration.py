@@ -205,6 +205,8 @@ def test_extract_selects_nearest_point_and_time_and_writes_atomically(tmp_path):
     assert meta["selected_lat"] == true_lat
     assert meta["selected_lon"] == true_lon_norm
     assert meta["selected_valid"] == true_time.strftime("%Y-%m-%d %H:%M")
+    assert meta["backend"] == "xarray/cfgrib"
+    assert meta["cache_hit"] is False
 
     # The output loads through the shared point-sounding path.
     prof_collection, loc = decoder_mod.load_npz(out_path)

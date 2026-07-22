@@ -84,6 +84,31 @@ def test_repeated_key_reuses_dataset_and_cache_directory():
     assert not loads[0].exists()
 
 
+def test_loaded_source_metadata_is_forwarded_to_persistent_cache():
+    written = []
+    cache = ModelHourCache(
+        max_entries=1,
+        metadata_writer=lambda directory, **values: written.append(
+            (directory, values)
+        ),
+    )
+    source = SimpleNamespace(
+        grib="https://example.test/subset.grib2",
+        _sharpmod_fields=("TMP", "HGT"),
+        _sharpmod_transport="parallel-ranges",
+    )
+
+    with cache.lease(_key(), lambda _directory: (_FakeDataset(), source)):
+        pass
+
+    assert written[0][1] == {
+        "source_url": "https://example.test/subset.grib2",
+        "source_transport": "parallel-ranges",
+        "source_fields": ("TMP", "HGT"),
+    }
+    cache.clear()
+
+
 def test_one_entry_limit_evicts_and_closes_previous_hour():
     cache = ModelHourCache(max_entries=1)
     first_dataset = _FakeDataset()

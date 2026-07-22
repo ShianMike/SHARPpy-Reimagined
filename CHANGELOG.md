@@ -7,6 +7,57 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-22
+
+### Added
+
+- Added a non-blocking **Reanalysis (ERA5)** GUI workflow with a global point
+  map, hourly UTC selection, snapped-grid preview, focused CDS setup errors,
+  point/hour caching, cooperative cancellation, and viewer-scoped outputs.
+- Added guided raw `wrfout*` extraction under **Open File**, including
+  background domain/time inspection, curvilinear grid-edge validation, map
+  selection, progress/cancellation, and viewer-scoped output cleanup.
+- Added RRFS-A Alaska, Hawaii, and Puerto Rico point-sounding adapters plus a
+  provider capability contract for domains, cycles, forecast hours, members,
+  fields, levels, archive status, and supported transports.
+- Added real Canadian GDPS and RDPS point adapters through ECCC MSC GeoMet,
+  with exact run/valid-time checks, bounded layer fan-out, normalized 33-level
+  soundings, spatial cache identity, provider capabilities, and CLI/GUI use.
+- Added forecast-hour timeline queues with streaming partial results and
+  slider, step, play, and loop controls in the sounding viewer.
+- Added a downloaded-data library for validating, reopening/re-extracting,
+  pinning, deleting, and copying provenance from persistent model-cache entries.
+- Added searchable saved and recent points with versioned JSON import/export
+  and forecast/ERA5 map markers.
+- Added a focused-profile source, quality, and provenance inspector with
+  provider/transport, decoder/backend, cache, level/missing-field, vorticity,
+  and non-mutating QC details.
+- Added resumable multi-point/multi-hour batch extraction with shared model-hour
+  downloads, bounded concurrency, atomic outputs, and checksummed manifests.
+- Added provider-neutral observed-sounding retrieval with explicit UWyo to IEM
+  RAOB fallback in both the GUI and CLI.
+
+### Performance
+
+- Generalized bounded parallel HTTP-range retrieval from RRFS to every indexed
+  Herbie model. Large coalesced spans are balanced across up to four workers by
+  default, with per-worker sessions, ETag/Last-Modified identity pinning,
+  ordered atomic assembly, resumable fragments, cancellation, progress
+  aggregation, bounded transient retries, and an automatic sequential-range
+  fallback. This does not change decoder parallelism.
+- Added official NOAA geographic-subset routes for NAM 3 km CONUS, HRW
+  WRF-ARW, HRW FV3, and CFS alongside the existing HRRR, RAP, NAM, GFS, and
+  GEFS routes.
+- Vectorized multi-point GRIB element reads, added direct four-neighbor wind
+  stencils for products without vorticity fields, and removed HRRR Zarr's
+  intermediate xarray point construction. Unsupported layouts retain the
+  existing compatibility fallbacks.
+
+### Fixed
+
+- Preserved the cancellation signal during raw WRF extraction after the input
+  dataset has opened, so cancelled GUI requests do not surface as failures.
+
 ## [0.4.2] - 2026-07-18
 
 ### Fixed

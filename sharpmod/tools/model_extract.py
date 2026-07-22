@@ -19,16 +19,19 @@ from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
 from sharpmod import backends as _backends
+from sharpmod import eccc_geomet
 from sharpmod.model_fields import choose_search
 from sharpmod.model_transport import (
     DownloadCancelled,
     OptimizedTransportUnavailable,
     _valid_grib,
     download_herbie_subset,
+    range_worker_count,
     ranges_from_inventory,
 )
 from sharpmod.model_sources import (
@@ -38,6 +41,7 @@ from sharpmod.model_sources import (
     select_herbie_provider,
 )
 from sharpmod.hrrr_zarr import (
+    HrrrZarrPointDataset,
     ZarrBackendUnavailable,
     fetch_hrrr_zarr_point,
 )
@@ -56,10 +60,13 @@ from sharpmod.tools.era5_extract import (
     _promote_scalar_level_coordinate,
     _quiet_remove,
     _select_time,
+    _surface_relative_vorticity_from_wind_grid,
     select_nearest_grid_point,
     _LAT_COORDS,
     _LEVEL_COORDS,
     _LON_COORDS,
+    _VAR_U,
+    _VAR_V,
 )
 
 LAT_MIN, LAT_MAX = -90.0, 90.0
@@ -87,7 +94,110 @@ class _LocalGribDataset:
         self.path = Path(path).expanduser().resolve(strict=True)
         self._fallback_sources = None
         self._pressure_sources = None
+        self._vorticity_source = None
         self._lock = threading.RLock()
+
+    def _open_vorticity_source(self):
+        """Open only the compatible pressure group needed for a wind stencil."""
+        with self._lock:
+            if self._vorticity_source is not None:
+                return self._vorticity_source
+            try:
+                import cfgrib
+            except ImportError as exc:
+                raise RetrievalError(
+                    "forecast model wind-gradient decoding requires cfgrib"
+                ) from exc
+
+            failures = []
+            filters = (
+                # U/V share parameter category 2 in GRIB2. Selecting that
+                # category avoids cfgrib choosing another pressure group when
+                # a product (notably GEFS) stores thermodynamic and wind
+                # fields in separate hypercubes with the same level type.
+                {"typeOfLevel": "isobaricInhPa", "parameterCategory": 2},
+                {"typeOfLevel": "isobaricInPa", "parameterCategory": 2},
+                # Retain compatibility with GRIB layouts that do not expose a
+                # GRIB2 parameterCategory key.
+                {"typeOfLevel": "isobaricInhPa"},
+                {"typeOfLevel": "isobaricInPa"},
+            )
+            for filter_by_keys in filters:
+                source = None
+                try:
+                    source = cfgrib.open_dataset(
+                        os.fspath(self.path),
+                        filter_by_keys=filter_by_keys,
+                        errors="ignore",
+                    )
+                    variables = set(source.data_vars)
+                    if not variables.intersection(_VAR_U) \
+                            or not variables.intersection(_VAR_V):
+                        raise RetrievalError(
+                            "pressure group has no compatible u/v wind pair"
+                        )
+                    _level_name, levels = _coord_values(
+                        source, _LEVEL_COORDS
+                    )
+                    if levels is None or not np.asarray(levels).size:
+                        raise RetrievalError(
+                            "pressure group has no pressure coordinate"
+                        )
+                except Exception as exc:
+                    failures.append(exc)
+                    if source is not None:
+                        try:
+                            source.close()
+                        except Exception:
+                            pass
+                    continue
+                self._vorticity_source = source
+                return source
+            detail = failures[-1] if failures else "no pressure group"
+            raise RetrievalError(
+                "could not open a targeted pressure-wind group: %s" % detail
+            )
+
+    def surface_wind_vorticity(self, lat, lon, run_dt):
+        """Decode one pressure-level u/v neighbor stencil, not every field."""
+        try:
+            return _backends.decode_grib_wind_vorticity(
+                self.path, lat, lon
+            )
+        except Exception as exc:
+            # Reduced/unstructured or otherwise unusual GRIB grids retain the
+            # proven cfgrib compatibility path below.
+            _LOGGER.info(
+                "grib_decode.direct_wind_stencil_fallback path=%s reason=%s",
+                self.path,
+                exc,
+            )
+        with self._lock:
+            source = self._open_vorticity_source()
+            ds_t, _selected_time = _select_time(source, run_dt)
+            _, lats = _coord_values(ds_t, _LAT_COORDS)
+            _, lons = _coord_values(ds_t, _LON_COORDS)
+            _, levels = _coord_values(ds_t, _LEVEL_COORDS)
+            if lats is None or lons is None or levels is None:
+                raise RetrievalError(
+                    "targeted pressure-wind group is missing coordinates"
+                )
+            lon_req = float(lon)
+            try:
+                if np.nanmin(lons) >= 0.0 and lon_req < 0.0:
+                    lon_req += 360.0
+            except Exception:
+                pass
+            index_tuple, _selected_lat, _selected_lon = \
+                select_nearest_grid_point(lats, lons, float(lat), lon_req)
+            value = _surface_relative_vorticity_from_wind_grid(
+                ds_t, index_tuple, levels
+            )
+            if value is None:
+                raise RetrievalError(
+                    "targeted pressure-wind group could not produce vorticity"
+                )
+            return float(value)
 
     def _open_fallback_sources(self):
         with self._lock:
@@ -134,13 +244,33 @@ class _LocalGribDataset:
     def close(self):
         with self._lock:
             sources = self._fallback_sources or ()
+            vorticity_source = self._vorticity_source
             self._fallback_sources = None
             self._pressure_sources = None
+            self._vorticity_source = None
         for source in sources:
             try:
                 source.close()
             except Exception:
                 pass
+        if vorticity_source is not None:
+            try:
+                vorticity_source.close()
+            except Exception:
+                pass
+
+
+@dataclass(frozen=True)
+class DecodedModelPointDataset:
+    """One predecoded model point used by vectorized batch extraction."""
+
+    decoded: object
+    valid_time: datetime
+    backend: str = "vectorized multi-point direct GRIB decoder"
+    vorticity_source: str = "direct pressure-level vorticity field"
+
+    def close(self):
+        """Match the model-hour dataset protocol (there is no handle)."""
 
 
 @dataclass(frozen=True)
@@ -162,8 +292,30 @@ class ModelConfig:
     notes: str = ""
 
 
+@dataclass(frozen=True)
+class ProviderCapability:
+    """Qt-independent description of one forecast-model provider adapter."""
+
+    model_key: str
+    provider: str
+    domain: str
+    domain_bounds: tuple[float, float, float, float]
+    cycles: tuple[int, ...]
+    forecast_hours: tuple[int, ...]
+    members: tuple[str, ...]
+    fields: tuple[str, ...]
+    levels: str
+    archive_window: str | None
+    transports: tuple[str, ...]
+
+
 GLOBAL_DOMAIN = (-180.0, 180.0, -90.0, 90.0)
 CONUS_DOMAIN = (-130.0, -60.0, 20.0, 55.0)
+ALASKA_DOMAIN = (160.0, -120.0, 40.0, 80.0)
+HAWAII_DOMAIN = (-162.5, -152.5, 16.0, 24.0)
+PUERTO_RICO_DOMAIN = (-70.0, -62.0, 15.0, 22.0)
+RRFS_CYCLES = tuple(range(24))
+RRFS_EXTENDED_CYCLES = (0, 6, 12, 18)
 
 
 def _hours(stop, step=1):
@@ -205,8 +357,28 @@ _CONFIGS = (
         notes="NOAA HiResW FV3 5-km pressure-level grids"),
     ModelConfig(
         "rrfs-a", "RRFS A", "rrfs", "prslev",
-        fxx_values=_hours(60), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        cycles=RRFS_CYCLES, fxx_values=_hours(84),
+        domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        kwargs={"domain": "conus"},
         notes="RRFS-A 3-km pressure-level grids"),
+    ModelConfig(
+        "rrfs-a-alaska", "RRFS A Alaska", "rrfs", "prslev",
+        cycles=RRFS_CYCLES, fxx_values=_hours(84),
+        domain="Alaska", domain_bounds=ALASKA_DOMAIN,
+        kwargs={"domain": "alaska"},
+        notes="RRFS-A 3-km Alaska pressure-level grids"),
+    ModelConfig(
+        "rrfs-a-hawaii", "RRFS A Hawaii", "rrfs", "prslev",
+        cycles=RRFS_CYCLES, fxx_values=_hours(84),
+        domain="Hawaii", domain_bounds=HAWAII_DOMAIN,
+        kwargs={"domain": "hawaii"},
+        notes="RRFS-A 2.5-km Hawaii pressure-level grids"),
+    ModelConfig(
+        "rrfs-a-puerto-rico", "RRFS A Puerto Rico", "rrfs", "prslev",
+        cycles=RRFS_CYCLES, fxx_values=_hours(84),
+        domain="Puerto Rico", domain_bounds=PUERTO_RICO_DOMAIN,
+        kwargs={"domain": "puerto rico"},
+        notes="RRFS-A 2.5-km Puerto Rico pressure-level grids"),
     ModelConfig(
         "gfs", "GFS", "gfs", "pgrb2.0p25",
         fxx_values=_gfs_hours(),
@@ -233,6 +405,18 @@ _CONFIGS = (
         fxx_values=_hours(384, 3),
         kwargs={"member": "c00"},
         notes="GEFS 0.5-degree control member by default"),
+    ModelConfig(
+        "gdps", "Canadian GDPS 15 km", "gdps", "geomet-point",
+        cycles=(0, 12),
+        fxx_values=eccc_geomet.get_capability("gdps").forecast_hours,
+        notes="Global ECCC GeoMet pressure-level point values"),
+    ModelConfig(
+        "rdps", "Canadian RDPS 10 km", "rdps", "geomet-point",
+        cycles=(0, 6, 12, 18),
+        fxx_values=eccc_geomet.get_capability("rdps").forecast_hours,
+        domain="North America and Arctic",
+        domain_bounds=eccc_geomet.get_capability("rdps").domain_bounds,
+        notes="Regional ECCC GeoMet pressure-level point values"),
 )
 
 _ALIASES = {
@@ -249,6 +433,15 @@ _ALIASES = {
     "hrw-fv3": "hrw-fv3",
     "rrfs": "rrfs-a",
     "rrfs-a": "rrfs-a",
+    "rrfs-ak": "rrfs-a-alaska",
+    "rrfs-alaska": "rrfs-a-alaska",
+    "rrfs-a-alaska": "rrfs-a-alaska",
+    "rrfs-hi": "rrfs-a-hawaii",
+    "rrfs-hawaii": "rrfs-a-hawaii",
+    "rrfs-a-hawaii": "rrfs-a-hawaii",
+    "rrfs-pr": "rrfs-a-puerto-rico",
+    "rrfs-puerto-rico": "rrfs-a-puerto-rico",
+    "rrfs-a-puerto-rico": "rrfs-a-puerto-rico",
     "gfs": "gfs",
     "aigfs": "aigfs",
     "cfs": "cfs",
@@ -258,27 +451,47 @@ _ALIASES = {
     "aifs": "ecmwf-aifs",
     "ecmwf-aifs": "ecmwf-aifs",
     "gefs": "gefs",
+    "gdps": "gdps",
+    "gem-global": "gdps",
+    "cmc-global": "gdps",
+    "rdps": "rdps",
+    "gem-regional": "rdps",
+    "cmc-regional": "rdps",
 }
 
 _CONFIG_BY_KEY = {cfg.key: cfg for cfg in _CONFIGS}
 
 UNSUPPORTED_MODELS = {
-    "icon": "No Herbie loader is installed for ICON in this environment.",
+    "icon": (
+        "The installed Herbie has no ICON loader; DWD publishes split "
+        "variables on native model levels/icosahedral grids."
+    ),
     "ukmet": "UKMET global GRIB access is not public through Herbie here.",
     "eps": "ECMWF EPS products need separate ensemble handling.",
     "eps-opendata": "ECMWF EPS open data needs separate ensemble handling.",
     "cmce": "CMC ensemble members are not exposed by the installed Herbie loader.",
     "mogreps-g": "MOGREPS-G is not exposed by the installed Herbie loader.",
     "sref": "SREF is not exposed by the installed Herbie loader.",
-    "gdps": "GDPS is public, but its files are split by variable/level.",
-    "rdps": "RDPS is public, but its files are split by variable/level.",
-    "hrdps": "HRDPS is public, but its files are split by variable/level.",
+    "hrdps": (
+        "HRDPS GeoMet does not currently expose a complete pressure-level "
+        "temperature/moisture/wind profile."
+    ),
 }
 
 
 def available_models():
     """Return supported forecast model configs as a tuple."""
     return _CONFIGS
+
+
+def requires_grib_runtime(model) -> bool:
+    """Whether a model route imports the native ecCodes/cfgrib stack."""
+    return _coerce_config(model).key not in {"gdps", "rdps"}
+
+
+def point_only_provider(model) -> bool:
+    """Whether a reusable source dataset is tied to one requested point."""
+    return _coerce_config(model).key in {"gdps", "rdps"}
 
 
 def _normalize_lon180(lon):
@@ -292,15 +505,73 @@ def _coerce_config(model):
 def forecast_hours(model, cycle_hour=None):
     """Return selectable forecast hours for ``model``.
 
-    Most products have one cadence. HRRR is the exception here: the major
-    synoptic cycles commonly carry longer forecasts than the off-hour cycles.
+    Most products have one cadence. HRRR and RRFS publish longer forecasts on
+    major synoptic cycles than on their off-hour cycles.
     """
     cfg = _coerce_config(model)
     values = cfg.fxx_values or (cfg.default_fxx,)
     if cfg.key == "hrrr" and cycle_hour is not None \
             and int(cycle_hour) not in (0, 6, 12, 18):
         return tuple(v for v in values if int(v) <= 18)
+    if cfg.herbie_model == "rrfs" and cycle_hour is not None \
+            and int(cycle_hour) not in RRFS_EXTENDED_CYCLES:
+        return tuple(v for v in values if int(v) <= 18)
     return values
+
+
+def cycle_hours(model):
+    """Return configured UTC cycle hours for one provider adapter."""
+    return tuple(_coerce_config(model).cycles)
+
+
+def provider_capability(model, cycle_hour=None):
+    """Return the normalized capability contract for one model adapter."""
+    cfg = _coerce_config(model)
+    if cfg.key in {"gdps", "rdps"}:
+        capability = eccc_geomet.get_capability(cfg.key)
+        return ProviderCapability(
+            model_key=cfg.key,
+            provider=capability.provider,
+            domain=capability.domain,
+            domain_bounds=capability.domain_bounds,
+            cycles=capability.cycles,
+            forecast_hours=capability.forecast_hours,
+            members=(),
+            fields=capability.fields,
+            levels="%d published pressure levels" % len(
+                capability.pressure_levels
+            ),
+            archive_window=capability.archive_window,
+            transports=capability.transports,
+        )
+    transports = ["herbie", "indexed-ranges"]
+    if nomads_supported(cfg):
+        transports.insert(0, "nomads-subregion")
+    if cfg.key == "hrrr":
+        transports.insert(0, "hrrr-zarr-point")
+    member = cfg.kwargs.get("member")
+    fields = (
+        "HGT", "TMP", "UGRD", "VGRD", "RH-or-SPFH",
+        "VVEL-or-DZDT", "ABSV-when-published",
+    )
+    if cfg.herbie_model in {"ifs", "aifs"}:
+        fields = (
+            "gh", "t", "u", "v", "r-or-q", "w-when-published",
+            "vo-when-published",
+        )
+    return ProviderCapability(
+        model_key=cfg.key,
+        provider="Herbie",
+        domain=cfg.domain,
+        domain_bounds=cfg.domain_bounds,
+        cycles=cycle_hours(cfg),
+        forecast_hours=forecast_hours(cfg, cycle_hour=cycle_hour),
+        members=(str(member),) if member is not None else (),
+        fields=fields,
+        levels="all published pressure levels",
+        archive_window=None,
+        transports=tuple(transports),
+    )
 
 
 def domain_label(model):
@@ -315,7 +586,17 @@ def point_in_domain(model, lat, lon):
     lon0, lon1, lat0, lat1 = cfg.domain_bounds
     lat = float(lat)
     lon = _normalize_lon180(lon)
-    return lat0 <= lat <= lat1 and lon0 <= lon <= lon1
+    longitude_ok = lon0 <= lon <= lon1 if lon0 <= lon1 \
+        else lon >= lon0 or lon <= lon1
+    return lat0 <= lat <= lat1 and longitude_ok
+
+
+def _longitude_segments(lon0, lon1):
+    lon0 = max(-180.0, min(180.0, float(lon0)))
+    lon1 = max(-180.0, min(180.0, float(lon1)))
+    if lon0 <= lon1:
+        return ((lon0, lon1),)
+    return ((lon0, 180.0), (-180.0, lon1))
 
 
 def domain_intersects_bounds(model, bounds):
@@ -326,7 +607,13 @@ def domain_intersects_bounds(model, bounds):
     cfg = _coerce_config(model)
     lon0, lon1, lat0, lat1 = cfg.domain_bounds
     blo0, blo1, bla0, bla1 = bounds
-    return not (lon1 < blo0 or lon0 > blo1 or lat1 < bla0 or lat0 > bla1)
+    if lat1 < bla0 or lat0 > bla1:
+        return False
+    return any(
+        not (right < other_left or left > other_right)
+        for left, right in _longitude_segments(lon0, lon1)
+        for other_left, other_right in _longitude_segments(blo0, blo1)
+    )
 
 
 def domain_contains_bounds(model, bounds):
@@ -334,7 +621,14 @@ def domain_contains_bounds(model, bounds):
     cfg = _coerce_config(model)
     lon0, lon1, lat0, lat1 = cfg.domain_bounds
     blo0, blo1, bla0, bla1 = bounds
-    return lon0 <= blo0 and lon1 >= blo1 and lat0 <= bla0 and lat1 >= bla1
+    if lat0 > bla0 or lat1 < bla1:
+        return False
+    model_segments = _longitude_segments(lon0, lon1)
+    return all(
+        any(left <= other_left and right >= other_right
+            for left, right in model_segments)
+        for other_left, other_right in _longitude_segments(blo0, blo1)
+    )
 
 
 def unsupported_models():
@@ -542,14 +836,6 @@ def _direct_grib_required():
     ).strip().lower() == "direct"
 
 
-def _has_direct_vorticity(fields):
-    """Avoid changing the legacy wind-gradient vorticity fallback."""
-    normalized = {str(value).strip().lower() for value in (fields or ())}
-    return bool(normalized & {
-        "absv", "vo", "vort", "relv", "relative_vorticity",
-    })
-
-
 def _local_grib_path(value):
     """Return one complete downloaded GRIB path, if ``value`` contains one."""
     candidates = value if isinstance(value, (tuple, list)) else (value,)
@@ -567,6 +853,9 @@ def _local_grib_path(value):
 
 def spatial_cache_key(config, lat, lon):
     """Return a point identity when an enabled backend can subset spatially."""
+    if config.key in {"gdps", "rdps"}:
+        lon180 = ((float(lon) + 180.0) % 360.0) - 180.0
+        return f"{float(lat):.4f},{lon180:.4f}"
     if not _point_backends_enabled():
         return None
     if config.key != "hrrr" and not nomads_supported(config):
@@ -593,6 +882,29 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                       progress_callback=None, cancelled=None, lat=None,
                       lon=None):
     """Fetch a Herbie pressure-level subset for ``config``."""
+    if config.key in {"gdps", "rdps"}:
+        if lat is None or lon is None:
+            raise RetrievalError(
+                "%s uses a point-only provider and requires lat/lon"
+                % config.label
+            )
+        dataset = eccc_geomet.fetch_point(
+            config.key,
+            float(lat),
+            float(lon),
+            run_time=run_dt,
+            fxx=int(fxx),
+            progress_callback=progress_callback,
+            cancelled=cancelled,
+        )
+        capability = eccc_geomet.get_capability(config.key)
+        source = SimpleNamespace(
+            grib=eccc_geomet.GEOMET_URL,
+            _sharpmod_source_url=eccc_geomet.GEOMET_URL,
+            _sharpmod_fields=capability.fields,
+            _sharpmod_transport="wms-getfeatureinfo-point",
+        )
+        return dataset, source
     _emit_progress(progress_callback, "locating")
     if hrrr_zarr_candidate(config, fxx, lat, lon):
         mode = os.environ.get("SHARPMOD_HRRR_BACKEND", "auto").strip().lower()
@@ -704,6 +1016,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                     inventory=planned_inventory,
                     save_dir=download_dir,
                     cancelled=cancelled,
+                    workers=range_worker_count(default=4),
                 )
                 local_path = _local_grib_path(_path)
                 if transferred_bytes:
@@ -731,14 +1044,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
         H._sharpmod_source_url = source_url
 
         if local_path is not None and _direct_grib_enabled():
-            if _has_direct_vorticity(selected_fields):
-                return _LocalGribDataset(local_path), H
-            if _direct_grib_required():
-                raise RetrievalError(
-                    "the downloaded pressure-level subset has no direct "
-                    "vorticity field; xarray is required to preserve the "
-                    "wind-gradient surface-vorticity fallback"
-                )
+            return _LocalGribDataset(local_path), H
 
         _emit_progress(progress_callback, "decoding", expected_bytes)
         with redirect_stdout(io.StringIO()):
@@ -892,6 +1198,25 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
             "that domain" % (
                 config.label, config.domain, config.domain_bounds, lat, lon))
 
+    if config.key in {"gdps", "rdps"}:
+        if member is not None:
+            raise RetrievalError(
+                "%s is deterministic and does not accept --member"
+                % config.label
+            )
+        return eccc_geomet.extract(
+            config.key,
+            lat,
+            lon,
+            run_time=run_time,
+            fxx=fxx,
+            out_path=out_path,
+            loc=loc,
+            dataset=dataset,
+            progress_callback=progress_callback,
+            cancelled=cancelled,
+        )
+
     run_dt = _run_datetime(run_time, config)
     if out_path is None:
         out_path = "%s_point_%.2fN_%.2fE_%s_f%03d.npz" % (
@@ -920,16 +1245,64 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
         H = None
 
     selected_dataset = None
+    decoder_backend = "xarray/cfgrib"
     try:
         if cancelled is not None and cancelled():
             raise DownloadCancelled("forecast-model download cancelled")
-        if isinstance(ds, _LocalGribDataset):
+        if isinstance(ds, DecodedModelPointDataset):
             _emit_progress(progress_callback, "decoding")
+            decoder_backend = ds.backend
+            decoded = ds.decoded
+            cols = decoded.as_dict()
+            if decoded.surface_relative_vorticity is not None:
+                cols["surface_relative_vorticity"] = (
+                    decoded.surface_relative_vorticity
+                )
+                cols["_surface_vorticity_source"] = ds.vorticity_source
+            n_levels = int(decoded.pres.size)
+            glat = decoded.selected_lat
+            glon = decoded.selected_lon
+            valid_dt = ds.valid_time
+            _emit_progress(progress_callback, "extracting")
+        elif isinstance(ds, HrrrZarrPointDataset):
+            _emit_progress(progress_callback, "decoding")
+            decoder_backend = "HRRR Zarr direct point decoder"
+            decoded = ds.decoded
+            cols = decoded.as_dict()
+            if decoded.surface_relative_vorticity is not None:
+                cols["surface_relative_vorticity"] = (
+                    decoded.surface_relative_vorticity
+                )
+                cols["_surface_vorticity_source"] = (
+                    "absolute-vorticity pressure-level field minus Coriolis"
+                )
+            n_levels = int(decoded.pres.size)
+            glat = decoded.selected_lat
+            glon = decoded.selected_lon
+            valid_dt = ds.valid_time
+            _emit_progress(progress_callback, "extracting")
+        elif isinstance(ds, _LocalGribDataset):
+            _emit_progress(progress_callback, "decoding")
+            decoder_backend = "direct GRIB point decoder"
             try:
                 decoded = _decode_local_point(ds, lat, lon)
-                if decoded.surface_relative_vorticity is None:
-                    raise RetrievalError(
-                        "the direct decoder found no usable vorticity value"
+                surface_vorticity = decoded.surface_relative_vorticity
+                surface_vorticity_source = (
+                    "direct pressure-level vorticity field"
+                )
+                if surface_vorticity is None:
+                    if _direct_grib_required():
+                        raise RetrievalError(
+                            "the direct decoder found no usable vorticity value"
+                        )
+                    surface_vorticity = ds.surface_wind_vorticity(
+                        lat, lon, run_dt
+                    )
+                    surface_vorticity_source = (
+                        "targeted horizontal wind-gradient fallback"
+                    )
+                    decoder_backend = (
+                        "direct GRIB point decoder + targeted wind stencil"
                     )
             except Exception as exc:
                 if _direct_grib_required():
@@ -943,6 +1316,7 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
                     ds.path,
                     exc,
                 )
+                decoder_backend = "cfgrib/xarray point fallback"
                 fallback = ds.fallback_point_dataset(lat, lon, run_dt)
                 try:
                     (
@@ -959,9 +1333,12 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
                     fallback.close()
             else:
                 cols = decoded.as_dict()
-                if decoded.surface_relative_vorticity is not None:
+                if surface_vorticity is not None:
                     cols["surface_relative_vorticity"] = (
-                        decoded.surface_relative_vorticity
+                        surface_vorticity
+                    )
+                    cols["_surface_vorticity_source"] = (
+                        surface_vorticity_source
                     )
                 n_levels = int(decoded.pres.size)
                 glat = decoded.selected_lat
@@ -1020,6 +1397,9 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
         "levels": int(n_levels),
         "herbie_model": config.herbie_model,
         "product": config.product,
+        "backend": decoder_backend,
+        "decoder": "forecast pressure-level column",
+        "cache_hit": False,
     }
     if member is not None:
         meta["member"] = str(member)
@@ -1039,6 +1419,10 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
         meta["transport"] = str(source_transport)
     if "surface_relative_vorticity" in cols:
         meta["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
+        meta["surface_vorticity_source"] = cols.get(
+            "_surface_vorticity_source",
+            "direct pressure-level vorticity field",
+        )
 
     if cancelled is not None and cancelled():
         raise DownloadCancelled("forecast-model download cancelled")
@@ -1073,6 +1457,26 @@ def cleanup_transient_data(npz_path=None, download_dir=None):
 def probe(model, run_time=None, fxx=0, member=None, open_subset=False):
     """Return a live availability probe dict for one supported model."""
     config = get_config(model)
+    if config.key in {"gdps", "rdps"}:
+        if member is not None:
+            return {
+                "model": config.key,
+                "label": config.label,
+                "fxx": int(fxx),
+                "available": False,
+                "subset_opened": False,
+                "error": "%s is deterministic and has no members"
+                % config.label,
+            }
+        result = eccc_geomet.probe(
+            config.key, run_time=run_time, fxx=fxx
+        )
+        if open_subset:
+            result["note"] = (
+                "GeoMet availability is layer-based; point values are "
+                "opened during extraction."
+            )
+        return result
     run_dt = _run_datetime(run_time, config)
     result = {
         "model": config.key,
@@ -1147,7 +1551,7 @@ def main(argv=None):  # pragma: no cover - CLI wrapper
         for cfg in available_models():
             fxx = forecast_hours(cfg)
             fxx_label = "F%03d-F%03d" % (min(fxx), max(fxx)) if fxx else "F---"
-            print("  %-15s %-24s %-16s %-11s %s/%s" % (
+            print("  %-20s %-24s %-16s %-11s %s/%s" % (
                 cfg.key, cfg.label, cfg.domain, fxx_label,
                 cfg.herbie_model, cfg.product))
         print("\nKnown but not enabled:")

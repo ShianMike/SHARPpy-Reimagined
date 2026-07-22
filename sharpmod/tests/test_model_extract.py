@@ -38,6 +38,9 @@ def test_model_aliases_resolve_to_supported_configs():
     assert model_extract.get_config("ecmwf-aifs").herbie_model == "aifs"
     assert model_extract.get_config("nam3").key == "nam-3km-conus"
     assert model_extract.get_config("rrfs").key == "rrfs-a"
+    assert model_extract.get_config("rrfs-ak").key == "rrfs-a-alaska"
+    assert model_extract.get_config("rrfs-hi").key == "rrfs-a-hawaii"
+    assert model_extract.get_config("rrfs-pr").key == "rrfs-a-puerto-rico"
 
 
 def test_every_model_search_accepts_non_mandatory_pressure_levels():
@@ -74,11 +77,29 @@ def test_forecast_hours_are_model_specific():
     assert cfs_hours[:3] == (0, 6, 12)
     assert max(cfs_hours) == 384
 
+    assert model_extract.cycle_hours("rrfs-a") == tuple(range(24))
+    assert max(model_extract.forecast_hours("rrfs-a", cycle_hour=0)) == 84
+    assert max(model_extract.forecast_hours("rrfs-a", cycle_hour=5)) == 18
+
 
 def test_domain_helpers_reject_out_of_region_points():
     assert model_extract.point_in_domain("hrrr", 35.0, -97.0)
     assert not model_extract.point_in_domain("hrrr", 52.0, 10.0)
     assert model_extract.point_in_domain("gfs", 52.0, 10.0)
+    assert model_extract.point_in_domain("rrfs-ak", 58.3, -134.4)
+    assert model_extract.point_in_domain("rrfs-ak", 52.0, 172.0)
+    assert not model_extract.point_in_domain("rrfs-ak", 20.0, -157.0)
+    assert model_extract.point_in_domain("rrfs-hi", 20.8, -157.8)
+    assert model_extract.point_in_domain("rrfs-pr", 18.2, -66.5)
+    assert model_extract.domain_intersects_bounds(
+        "rrfs-ak", (170.0, 180.0, 50.0, 60.0)
+    )
+    assert model_extract.domain_intersects_bounds(
+        "rrfs-ak", (-180.0, -150.0, 50.0, 60.0)
+    )
+    assert not model_extract.domain_intersects_bounds(
+        "rrfs-ak", (-100.0, -80.0, 50.0, 60.0)
+    )
 
     with pytest.raises(model_extract.ParameterRangeError, match="outside"):
         model_extract.extract(
@@ -87,6 +108,20 @@ def test_domain_helpers_reject_out_of_region_points():
             out_path="unused.npz",
             dataset=_dataset(),
         )
+
+
+def test_provider_capability_publishes_rrfs_domain_and_transport_contract():
+    capability = model_extract.provider_capability(
+        "rrfs-hi", cycle_hour=5
+    )
+
+    assert capability.model_key == "rrfs-a-hawaii"
+    assert capability.domain == "Hawaii"
+    assert capability.cycles == tuple(range(24))
+    assert max(capability.forecast_hours) == 18
+    assert capability.levels == "all published pressure levels"
+    assert capability.members == ()
+    assert capability.transports == ("herbie", "indexed-ranges")
 
 
 def test_model_extract_writes_loadable_npz(tmp_path, monkeypatch):
@@ -190,6 +225,104 @@ def test_direct_failure_uses_compact_xarray_fallback(
             payload["surface_relative_vorticity"]
         ).reshape(-1)[0])
         assert value == pytest.approx(8.0e-5)
+
+
+def test_direct_profile_uses_targeted_wind_stencil_when_vorticity_is_absent(
+        tmp_path, monkeypatch):
+    path = tmp_path / "targeted-vorticity.grib2"
+    path.write_bytes(b"GRIB-targeted-vorticity-7777")
+    source = model_extract._LocalGribDataset(path)
+    columns, _count = model_extract._build_columns(
+        _dataset(), (1, 1), latitude=35.0
+    )
+    columns.pop("surface_relative_vorticity", None)
+    columns.pop("_surface_vorticity_source", None)
+    matrix = np.vstack([
+        columns["pres"], columns["hght"], columns["tmpc"],
+        columns["dwpc"], columns["wdir"], columns["wspd"],
+        columns["omeg"], columns["u"], columns["v"],
+    ])
+    decoded = SimpleNamespace(
+        surface_relative_vorticity=None,
+        selected_lat=35.0,
+        selected_lon=-99.0,
+        pres=columns["pres"],
+        matrix=matrix,
+        as_dict=lambda: {
+            name: matrix[index]
+            for index, name in enumerate(
+                ("pres", "hght", "tmpc", "dwpc", "wdir", "wspd",
+                 "omeg", "u", "v")
+            )
+        },
+    )
+    seen = {"targeted": 0, "full": 0}
+
+    monkeypatch.setenv("SHARPMOD_GRIB_DECODER", "auto")
+    monkeypatch.setattr(
+        model_extract, "_decode_local_point", lambda *_args: decoded
+    )
+
+    def targeted(*_args):
+        seen["targeted"] += 1
+        return 2.5e-5
+
+    monkeypatch.setattr(source, "surface_wind_vorticity", targeted)
+    monkeypatch.setattr(
+        source,
+        "fallback_point_dataset",
+        lambda *_args: seen.__setitem__("full", seen["full"] + 1),
+    )
+    output = tmp_path / "targeted.npz"
+
+    model_extract.extract(
+        "gfs", 35.0, -99.0,
+        run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+        out_path=output,
+        dataset=source,
+    )
+
+    assert seen == {"targeted": 1, "full": 0}
+    with np.load(output, allow_pickle=False) as payload:
+        assert float(payload["surface_relative_vorticity"]) == pytest.approx(
+            2.5e-5
+        )
+    import json
+    metadata = json.loads(output.with_suffix(".json").read_text("utf-8"))
+    assert metadata["backend"] == (
+        "direct GRIB point decoder + targeted wind stencil"
+    )
+    assert metadata["surface_vorticity_source"] == (
+        "targeted horizontal wind-gradient fallback"
+    )
+
+
+def test_targeted_wind_group_prefers_grib2_wind_category(
+        tmp_path, monkeypatch):
+    path = tmp_path / "split-pressure-groups.grib2"
+    path.write_bytes(b"GRIB-split-pressure-groups-7777")
+    calls = []
+    dataset = _dataset()
+
+    def open_dataset(_path, *, filter_by_keys, errors):
+        calls.append(filter_by_keys)
+        assert errors == "ignore"
+        if filter_by_keys.get("parameterCategory") == 2:
+            return dataset
+        raise AssertionError("the wind-category filter should be attempted first")
+
+    monkeypatch.setitem(
+        sys.modules, "cfgrib", SimpleNamespace(open_dataset=open_dataset)
+    )
+    source = model_extract._LocalGribDataset(path)
+    try:
+        assert source._open_vorticity_source() is dataset
+        assert calls == [{
+            "typeOfLevel": "isobaricInhPa",
+            "parameterCategory": 2,
+        }]
+    finally:
+        source.close()
 
 
 def test_forced_direct_failure_does_not_silently_use_xarray(
@@ -354,6 +487,7 @@ def test_retrieve_dataset_uses_pruned_search_and_optimized_transport(
         tmp_path, monkeypatch):
     seen = {}
     dataset = _dataset()
+    monkeypatch.delenv("SHARPMOD_RANGE_WORKERS", raising=False)
 
     class FakeHerbie:
         grib = "https://example.invalid/hrrr.grib2"
@@ -407,6 +541,7 @@ def test_retrieve_dataset_uses_pruned_search_and_optimized_transport(
     assert herbie._sharpmod_fields == (
         "HGT", "TMP", "UGRD", "VGRD", "RH", "VVEL", "ABSV"
     )
+    assert seen["optimized"][2]["workers"] == 4
 
 
 def test_retrieve_dataset_prefers_nomads_point_subset_when_coordinates_exist(

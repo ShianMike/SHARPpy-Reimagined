@@ -22,8 +22,11 @@ NOMADS_ENDPOINTS = {
     "hrrr": "filter_hrrr_2d.pl",
     "rap": "filter_rap.pl",
     "nam": "filter_nam.pl",
-    "nam-3km-conus": "filter_nam.pl",
+    "nam-3km-conus": "filter_nam_conusnest.pl",
+    "hrw-wrf-arw": "filter_hiresconus.pl",
+    "hrw-fv3": "filter_hiresconus.pl",
     "gfs": "filter_gfs_0p25.pl",
+    "cfs": "filter_cfs_pgb.pl",
     "gefs": "filter_gefs_atmos_0p50a.pl",
 }
 

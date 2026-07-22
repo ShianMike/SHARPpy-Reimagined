@@ -24,8 +24,10 @@ test-backed decoder/extractor layer.
 
 - Headless PNG rendering for `.npz`, SPC tabular, BUFKIT, PECAN, and WRF-ARW
   text sounding inputs.
-- Portable `.npz` point-sounding output from UWyo, ERA5, WRF-ARW, and public
-  forecast models fetched through Herbie.
+- Portable `.npz` point-sounding output from UWyo, the independent IEM RAOB
+  archive, ERA5, WRF-ARW, Herbie-backed forecast models, and ECCC GeoMet.
+- Resumable multi-point/multi-hour jobs with one download per shared model hour,
+  bounded concurrency, atomic outputs, and a checksummed versioned manifest.
 - Qt6/PySide6 compatibility shims around the upstream SHARPpy widget stack.
 - A supported Rust-primary numerical and point-decoding backend, with an
   independently optimized Python fallback and equivalence coverage across all
@@ -147,7 +149,7 @@ invoked by Python 3.14 and the checkout has a `.venv` or `.gribenv`, the launche
 automatically hands the GUI to that compatible environment before Qt starts.
 The packaged Windows release already bundles Python 3.11.
 
-The **Sounding Picker** opens with four ways to load a sounding:
+The **Sounding Picker** opens with five ways to load a sounding:
 
 - **Station Map** — a clickable map of every UWyo radiosonde station over a
   coastline basemap. Click a dot to select, double-click to open; scroll to
@@ -160,9 +162,18 @@ The **Sounding Picker** opens with four ways to load a sounding:
   checks that inventory in the background. If publication is delayed, it offers
   the newest available earlier cycle without silently changing the selection;
   an uncertain check never disables manual Fetch. The fetch runs in the
-  background and opens the point sounding in the SPC window.
+  background and opens the point sounding in the SPC window. **Timeline…**
+  queues a selected range of as many as 72 hours into one viewer with a
+  slider, playback, step, and loop controls; completed hours remain available
+  after cancellation or a missing hour.
+- **Reanalysis (ERA5)** — choose any global point and hourly UTC analysis. The
+  picker previews the snapped 0.25-degree grid point, validates the optional
+  packages/CDS profile, caches completed point-hours, and keeps Qt responsive
+  while the synchronous CDS request runs in a worker.
 - **Open File** — a local `.npz`, SPC, BUFKIT, PECAN, or WRF-ARW text sounding
-  (or just drag the file onto the window).
+  (or just drag the file onto the window). Its **Raw WRF wrfout** workflow
+  inspects a NetCDF domain/times in the background, validates a map point
+  against the actual curvilinear grid perimeter, then extracts and opens it.
 
 Each sounding opens in the full interactive SPC window (the upstream SHARPpy
 widget stack), so every interaction from the
@@ -180,8 +191,17 @@ works:
   focus, `I` interpolates, `C` collects observed, `W` returns to the picker.
 - **Undo / Redo:** `Ctrl+Z` reverses profile, interpolation, and storm-motion
   edits; `Ctrl+Y` reapplies them. Each viewer retains the latest 50 edits.
+- **Data → Source & Quality Inspector…** shows the provider/source route,
+  backend and decoder, cache status, level and missing-field counts, surface
+  vorticity provenance, and non-mutating QC warnings for the focused profile.
 - **File → Preferences** switches the color palette (Standard / Inverted /
   Protanopia), units, and the parcel visualized by default when a Skew-T opens.
+
+The picker also provides **File → Downloaded Data Library…** to browse,
+validate, reopen/re-extract, pin, delete, or copy provenance for cached model
+data. **Locations → Manage Saved Locations…** stores searchable named points,
+supports versioned JSON import/export, and displays saved and recent points as
+map markers. Only labels and coordinates are persisted.
 
 GUI choices persist across launches, including temperature/wind/PWAT units,
 palette, top/bottom readouts, default parcel, multi-sounding behavior, dismissed
@@ -251,8 +271,10 @@ fully functional Python-fallback bundle.
 | --- | --- |
 | `sharpmod-render` | Render a sounding file to a PNG |
 | `uwyo-sounding` | List, search, and fetch University of Wyoming soundings |
+| `observed-sounding` | Fetch from UWyo with an explicit IEM RAOB fallback |
 | `era5-extract` | Extract an ERA5 point sounding to `.npz` |
 | `model-extract` | Fetch all pressure levels for a supported forecast-model point sounding |
+| `model-batch-extract` | Run a resumable multi-point/multi-hour model job |
 | `wrf-extract` | Extract a WRF-ARW point sounding to `.npz` |
 | `sharpmod-rust-sync` | Check, rebuild when needed, and verify the local Rust backend |
 
@@ -312,13 +334,30 @@ The extractor keeps every pressure level published by the selected model while
 avoiding fields that are duplicates for sounding construction. It tries the
 smallest compatible route first:
 
-1. HRRR F000 analyses use direct point reads from the public HRRR Zarr archive.
+1. HRRR F000 analyses use direct point reads from the public HRRR Zarr archive
+   and normalize those columns straight into the compact decoder contract;
+   Canadian GDPS/RDPS use ECCC GeoMet point queries with bounded layer fan-out.
 2. Indexed subsets at or below 32 MiB use validated, coalesced HTTP byte ranges
-   after selecting a healthy equivalent provider.
-3. Larger HRRR, RAP, NAM, NAM 3 km, GFS, and GEFS transfers use a small NOAA
-   NOMADS geographic subset; other indexed products retain the range route.
+   after selecting a healthy equivalent provider. Every indexed model uses up
+   to four bounded range workers by default. Large coalesced spans are split
+   into balanced fragments, with one session per worker, pinned object
+   identity, ordered atomic assembly, resumable fragments, and an automatic
+   sequential-range fallback. Live
+   [RRFS](benchmarks/results/2026-07-22-rrfs-range-workers.md) and
+   [all-model transport/decode](benchmarks/results/2026-07-22-all-model-fetch-decode-optimization.md)
+   records retain timing and byte-equivalence evidence for that default.
+3. Larger HRRR, RAP, NAM, NAM 3 km, HRW WRF-ARW/FV3, GFS, CFS, and GEFS
+   transfers use a small NOAA NOMADS geographic subset; other indexed products
+   retain the range route.
 4. Any unavailable or incompatible optimization falls back automatically to
    the standard Herbie download path.
+
+Local GRIB files decode directly into compact NumPy columns. Products without
+a pressure-level vorticity field use a four-neighbor U/V stencil read directly
+from two GRIB messages instead of opening xarray wind cubes. Multi-point batch
+jobs vectorize both the sounding columns and those stencils, so each selected
+message is unpacked once for all requested points; this is vectorized I/O, not
+unsafe decoder threading.
 
 The GUI keeps downloaded model hours under
 `%LOCALAPPDATA%\sharpmod\model-cache` on Windows (or the platform cache folder),
@@ -336,9 +375,46 @@ Advanced overrides are available for testing or constrained environments:
 | `SHARPMOD_POINT_BACKENDS` | `auto` | Set to `grib` to bypass point/subregion routes |
 | `SHARPMOD_GRIB_DECODER` | `auto` | `auto` uses direct point decoding with xarray fallback; `direct` requires it; `xarray` forces the compatibility path |
 | `SHARPMOD_PROVIDER_RACING` | `1` | Set to `0` to disable equivalent-provider probes |
+| `SHARPMOD_RANGE_WORKERS` | `4` | HTTP range-request workers for indexed models, clamped to 1-8; decoder execution remains serial |
+| `SHARPMOD_GEOMET_WORKERS` | `4` | Concurrent ECCC GeoMet layer-point requests, clamped to 1-8 |
 | `SHARPMOD_MODEL_CACHE` | platform cache | Override the GUI model-cache directory |
 | `SHARPMOD_MODEL_CACHE_GB` | `3` | Maximum retained cache size in GiB |
 | `SHARPMOD_MODEL_CACHE_HOURS` | `48` | Maximum retained entry age |
+
+#### Batch and multi-point extraction
+
+`model-batch-extract` accepts heterogeneous points and forecast hours. Requests
+with the same model, UTC run, forecast hour, and member share one decoded
+model-hour lease, while different hours run with a bounded 1-4 worker pool.
+Single-point hours retain the normal point/subregion route and its GUI-compatible
+spatial cache key; multi-point hours fetch one reusable field subset and decode
+all local-GRIB points with vector element reads.
+Every `.npz` and `.json` sidecar is atomic. The checksummed manifest is also
+atomic, so rerunning the same command validates and skips completed outputs.
+
+```json
+{
+  "version": 1,
+  "requests": [
+    {"id": "oun-f000", "model": "gfs", "lat": 35.18, "lon": -97.44,
+     "run": "2026-07-14T00:00:00Z", "fxx": 0, "output": "oun/f000.npz"},
+    {"id": "ict-f000", "model": "gfs", "lat": 37.65, "lon": -97.43,
+     "run": "2026-07-14T00:00:00Z", "fxx": 0, "output": "ict/f000.npz"},
+    {"id": "oun-f006", "model": "gfs", "lat": 35.18, "lon": -97.44,
+     "run": "2026-07-14T00:00:00Z", "fxx": 6, "output": "oun/f006.npz"}
+  ]
+}
+```
+
+```bash
+model-batch-extract job.json --output-dir batch-output --workers 2
+```
+
+The Python API is `sharpmod.batch_extract.run_batch(...)`; it accepts ordered
+`BatchRequest` values and returns ordered per-request results plus completed
+NPZ paths. Call `BatchExtractor.cancel()` for cooperative cancellation.
+Pass an existing `ModelHourCache` as `model_hour_cache=` when a GUI or service
+owns a longer-lived cache; the batch runner leases it but does not clear it.
 
 #### Configured models
 
@@ -354,17 +430,22 @@ enabled. Remote run availability still depends on the upstream provider.
 | `nam-3km-conus` | NAM 3 km CONUS nest | CONUS | F000-F060 hourly | `nam3`, `nam-3km` |
 | `hrw-wrf-arw` | NOAA HiResW WRF-ARW 5 km | CONUS | F000-F048 hourly | `hiresw-arw`, `hrw-arw` |
 | `hrw-fv3` | NOAA HiResW FV3 5 km | CONUS | F000-F048 hourly | `hiresw-fv3` |
-| `rrfs-a` | RRFS-A 3 km pressure levels | CONUS | F000-F060 hourly | `rrfs` |
+| `rrfs-a` | RRFS-A 3 km pressure levels | CONUS | 00/06/12/18Z: F000-F084 hourly; other cycles: F000-F018 hourly | `rrfs` |
+| `rrfs-a-alaska` | RRFS-A 3 km pressure levels | Alaska | 00/06/12/18Z: F000-F084 hourly; other cycles: F000-F018 hourly | `rrfs-ak`, `rrfs-alaska` |
+| `rrfs-a-hawaii` | RRFS-A 2.5 km pressure levels | Hawaii | 00/06/12/18Z: F000-F084 hourly; other cycles: F000-F018 hourly | `rrfs-hi`, `rrfs-hawaii` |
+| `rrfs-a-puerto-rico` | RRFS-A 2.5 km pressure levels | Puerto Rico | 00/06/12/18Z: F000-F084 hourly; other cycles: F000-F018 hourly | `rrfs-pr`, `rrfs-puerto-rico` |
 | `gfs` | GFS 0.25-degree pressure levels | Global | F000-F120 hourly, then every 3 hours to F384 | — |
 | `aigfs` | AI-GFS pressure levels | Global | F000-F384 every 6 hours | Humidity is read from specific humidity |
 | `cfs` | CFS 6-hourly pressure levels | Global | F000-F384 every 6 hours | Member 1 by default |
 | `ecmwf-ifs` | ECMWF IFS Open Data | Global | F000-F144 every 3 hours, then every 6 hours to F360 | `ecmwf`, `ifs` |
 | `ecmwf-aifs` | ECMWF-AIFS Open Data | Global | F000-F144 every 3 hours, then every 6 hours to F360 | `aifs` |
 | `gefs` | GEFS 0.5-degree pressure levels | Global | F000-F384 every 3 hours | Control member `c00` by default |
+| `gdps` | Canadian GDPS 15 km point profile | Global | F000-F240 every 3 hours | 00/12Z; `gem-global`, `cmc-global` |
+| `rdps` | Canadian RDPS 10 km point profile | North America / Arctic | F000-F084 hourly | 00/06/12/18Z; `gem-regional`, `cmc-regional` |
 
 ```bash
-# Observed sounding: fetch Norman, OK at 00Z and render it
-uwyo-sounding fetch 72357 "2024-05-20 00" --out oun.npz --render oun.png
+# Observed sounding: try UWyo, then the independent IEM RAOB archive
+observed-sounding fetch 72357 "2024-05-20 00" --out oun.npz --render oun.png
 
 # Render the mixed-layer parcel on the Skew-T (MU is the default)
 sharpmod-render oun.npz oun_ml.png --parcel ML
@@ -372,6 +453,9 @@ sharpmod-render oun.npz oun_ml.png --parcel ML
 # Reanalysis / local WRF point soundings
 era5-extract "2024-05-20 00:00" 35.18 -97.44 era5.npz --render
 wrf-extract wrfout_d01_2024-05-20_00:00:00 35.18 -97.44 wrf.npz --render
+
+# Canadian point sounding through ECCC GeoMet (no full-grid download)
+model-extract gdps 45.50 -73.60 montreal.npz --run "2026-07-22 00" --fxx 6
 ```
 
 `era5-extract` retrieves all 37 pressure levels from the official Copernicus

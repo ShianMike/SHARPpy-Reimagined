@@ -9,7 +9,8 @@ from types import SimpleNamespace
 import time
 
 from sharpmod import gui, gui_picker, gui_workers
-from sharpmod.model_hour_cache import ModelHourCache
+from sharpmod.model_disk_cache import ModelDiskCache
+from sharpmod.model_hour_cache import ModelHourCache, ModelHourKey
 from sharpmod.tests.era5_synth import make_era5_dataset
 from sharpmod.tools import model_extract
 
@@ -151,6 +152,96 @@ def test_gui_workers_reuse_one_decoded_model_hour(tmp_path, monkeypatch):
     assert not (tmp_path / "point-0").exists()
     cache.clear()
     assert not cache_dir.exists()
+
+
+def test_gui_model_worker_without_hour_cache_records_cache_miss(
+        tmp_path, monkeypatch):
+    run_time = datetime(2026, 7, 14, 0, tzinfo=timezone.utc)
+    output_dir = tmp_path / "uncached"
+    output_dir.mkdir()
+    out_path = output_dir / "sounding.npz"
+
+    def fake_extract(*_args, **kwargs):
+        target = Path(kwargs["out_path"])
+        target.write_bytes(b"portable")
+        target.with_suffix(".json").write_text(
+            json.dumps({"backend": "test"}), encoding="utf-8"
+        )
+        return str(target)
+
+    monkeypatch.setattr(model_extract, "extract", fake_extract)
+    completed = []
+    failed = []
+    worker = gui_workers._ModelFetchWorker(
+        "gfs", 35.0, -99.0, run_time, 0, str(out_path),
+        download_dir=str(output_dir), model_hour_cache=None,
+    )
+    worker.finished_ok.connect(lambda path, *_args: completed.append(path))
+    worker.failed.connect(failed.append)
+
+    worker.run()
+
+    assert completed == [str(out_path)]
+    assert failed == []
+    metadata = json.loads(out_path.with_suffix(".json").read_text("utf-8"))
+    assert metadata["cache_hit"] is False
+
+
+def test_gui_model_worker_reextracts_complete_grib_without_network(
+        tmp_path, monkeypatch):
+    run_time = datetime(2026, 7, 14, 0, tzinfo=timezone.utc)
+    cache = ModelDiskCache(tmp_path / "cache")
+    cache_dir = cache.directory_for(ModelHourKey.create("gfs", run_time, 0))
+    grib = cache_dir / "subset.grib2"
+    grib.write_bytes(b"GRIB7777")
+    output_dir = tmp_path / "offline-viewer"
+    output_dir.mkdir()
+    out_path = output_dir / "sounding.npz"
+    closed = []
+
+    class FakeLocalDataset:
+        def __init__(self, path):
+            assert Path(path) == grib
+
+        def close(self):
+            closed.append(True)
+
+    def fake_extract(*_args, **kwargs):
+        assert isinstance(kwargs["dataset"], FakeLocalDataset)
+        assert kwargs["source_grib"] == str(grib)
+        assert kwargs["source_transport"] == "offline-cache"
+        target = Path(kwargs["out_path"])
+        target.write_bytes(b"portable")
+        target.with_suffix(".json").write_text(
+            json.dumps({"backend": "test"}), encoding="utf-8"
+        )
+        return str(target)
+
+    monkeypatch.setattr(model_extract, "_LocalGribDataset", FakeLocalDataset)
+    monkeypatch.setattr(model_extract, "extract", fake_extract)
+    monkeypatch.setattr(
+        model_extract,
+        "_retrieve_dataset",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("offline cache reuse attempted a network loader")
+        ),
+    )
+    completed = []
+    worker = gui_workers._ModelFetchWorker(
+        "gfs", 35.0, -99.0, run_time, 0, str(out_path),
+        download_dir=str(output_dir), model_hour_cache=ModelHourCache(),
+        cached_grib=grib, cached_source_fields=("TMP", "HGT"),
+        cached_cache=cache, cached_directory=cache_dir,
+    )
+    worker.finished_ok.connect(lambda path, *_args: completed.append(path))
+
+    worker.run()
+
+    assert completed == [str(out_path)]
+    assert closed == [True]
+    metadata = json.loads(out_path.with_suffix(".json").read_text("utf-8"))
+    assert metadata["cache_hit"] is True
+    assert cache.entries()[0].protected is False
 
 
 def test_gui_debug_log_directory_can_be_overridden(tmp_path, monkeypatch):

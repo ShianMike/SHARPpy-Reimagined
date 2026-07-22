@@ -35,6 +35,7 @@ functions that need them; importing this module never requires them.
 """
 
 import json
+import importlib
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -46,8 +47,10 @@ from sharpmod import backends as _backends
 __all__ = [
     "extract",
     "ERA5ExtractionError",
+    "ExtractionCancelled",
     "ParameterRangeError",
     "RetrievalError",
+    "require_runtime_dependencies",
     "great_circle_distance_km",
     "select_nearest_grid_point",
     "select_nearest_time",
@@ -94,6 +97,69 @@ class ParameterRangeError(ERA5ExtractionError):
 
 class RetrievalError(ERA5ExtractionError):
     """ERA5 source data could not be retrieved (Requirement 8.6)."""
+
+
+class ExtractionCancelled(ERA5ExtractionError):
+    """A cooperative ERA5/WRF extraction cancellation was requested."""
+
+
+def _emit_progress(progress_callback, stage):
+    if progress_callback is not None:
+        progress_callback(str(stage))
+
+
+def _check_cancelled(cancelled):
+    if cancelled is not None and cancelled():
+        raise ExtractionCancelled("point-sounding extraction cancelled")
+
+
+def _cds_terms_error(exc):
+    message = str(exc).lower()
+    return any(token in message for token in (
+        "accept the terms",
+        "licence not accepted",
+        "license not accepted",
+        "required licences",
+        "required licenses",
+        "terms of use",
+    ))
+
+
+def require_runtime_dependencies(require_credentials=True):
+    """Validate the optional ERA5 runtime and CDS profile without a request.
+
+    The check deliberately never returns or logs the CDS key.  Constructing a
+    ``cdsapi.Client`` only reads its configuration; dataset-term acceptance is
+    checked by CDS when the first real retrieval is submitted.
+    """
+    modules = {}
+    missing = []
+    for name in ("cdsapi", "cfgrib", "xarray"):
+        try:
+            modules[name] = importlib.import_module(name)
+        except Exception as exc:  # pragma: no cover - environment dependent
+            missing.append(f"{name} ({exc})")
+    if missing:
+        raise RetrievalError(
+            "ERA5 support is missing optional dependencies: %s. Install "
+            "them with: pip install -e \".[era5]\"" % ", ".join(missing)
+        )
+    if require_credentials:
+        try:
+            modules["cdsapi"].Client()
+        except Exception as exc:
+            if _is_cds_credential_error(exc):
+                raise RetrievalError(
+                    "ERA5 retrieval requires CDS API credentials. Create a "
+                    "free Climate Data Store account, accept the ERA5 "
+                    "pressure-level dataset terms, then save the API profile "
+                    "as $HOME/.cdsapirc (or configure CDSAPI_URL and "
+                    "CDSAPI_KEY)."
+                ) from exc
+            raise RetrievalError(
+                "could not initialize the Copernicus CDS client: %s" % exc
+            ) from exc
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -662,13 +728,23 @@ def _build_columns(ds, index_tuple, latitude=None):
     vort_raw = get(_VAR_RELATIVE_VORTICITY)
     surface_relative_vorticity = _surface_relative_vorticity_from_column(
         vort_raw, levels, latitude=latitude)
+    surface_vorticity_source = (
+        "relative-vorticity pressure-level field"
+        if surface_relative_vorticity is not None else None
+    )
     if surface_relative_vorticity is None:
         absv_raw = get(_VAR_ABSOLUTE_VORTICITY)
         surface_relative_vorticity = _surface_relative_vorticity_from_column(
             absv_raw, levels, latitude=latitude, absolute=True)
+        if surface_relative_vorticity is not None:
+            surface_vorticity_source = (
+                "absolute-vorticity pressure-level field minus Coriolis"
+            )
     if surface_relative_vorticity is None:
         surface_relative_vorticity = _surface_relative_vorticity_from_wind_grid(
             ds, index_tuple, levels)
+        if surface_relative_vorticity is not None:
+            surface_vorticity_source = "horizontal wind-gradient fallback"
 
     n = levels.size
     cols = {
@@ -694,6 +770,7 @@ def _build_columns(ds, index_tuple, latitude=None):
         cols[key] = cols[key][order]
     if surface_relative_vorticity is not None:
         cols["surface_relative_vorticity"] = surface_relative_vorticity
+        cols["_surface_vorticity_source"] = surface_vorticity_source
     return cols, int(np.asarray(order).size)
 
 
@@ -739,7 +816,8 @@ def _is_cds_credential_error(exc):
     ))
 
 
-def _retrieve_dataset(lat, lon, valid_time):
+def _retrieve_dataset(lat, lon, valid_time, progress_callback=None,
+                      cancelled=None):
     """Fetch one ERA5 pressure-level column through the official CDS API.
 
     The requested GRIB contains only the nearest 0.25-degree point, the six
@@ -756,18 +834,27 @@ def _retrieve_dataset(lat, lon, valid_time):
 
     vt = _as_datetime(valid_time)
     request = _cds_pressure_level_request(lat, lon, vt)
+    _check_cancelled(cancelled)
     fd, grib_path = tempfile.mkstemp(prefix="sharpmod-era5-", suffix=".grib")
     os.close(fd)
     source_datasets = []
     try:  # pragma: no cover - live CDS/network path
+        _emit_progress(progress_callback, "queued")
         client = cdsapi.Client()
+        _emit_progress(progress_callback, "retrieving")
+        # cdsapi's stable client is synchronous.  A cancellation requested
+        # while this call is in flight is observed immediately after it
+        # returns; the remote CDS job itself may continue server-side.
         client.retrieve(ERA5_CDS_DATASET, request, grib_path)
+        _check_cancelled(cancelled)
+        _emit_progress(progress_callback, "decoding")
         source_datasets = list(cfgrib.open_datasets(
             grib_path, backend_kwargs={"indexpath": ""}))
         ds = _merge_datasets(source_datasets)
         ds.load()
+        _check_cancelled(cancelled)
         return ds
-    except RetrievalError:
+    except (RetrievalError, ExtractionCancelled):
         raise
     except Exception as exc:  # pragma: no cover - network/auth failure path
         if _is_cds_credential_error(exc):
@@ -775,6 +862,12 @@ def _retrieve_dataset(lat, lon, valid_time):
                 "ERA5 retrieval requires CDS API credentials. Create a free "
                 "Climate Data Store account, then copy its API profile into "
                 "$HOME/.cdsapirc; original error: %s" % exc) from exc
+        if _cds_terms_error(exc):
+            raise RetrievalError(
+                "ERA5 pressure-level dataset terms have not been accepted. "
+                "Sign in to the Copernicus Climate Data Store, open the ERA5 "
+                "hourly pressure-level dataset, and accept its terms before "
+                "retrying; original error: %s" % exc) from exc
         raise RetrievalError(
             "failed to retrieve ERA5 data from the Copernicus CDS for %s at "
             "(%.4f, %.4f): %s" % (vt.isoformat(), lat, lon, exc)) from exc
@@ -871,7 +964,8 @@ def _quiet_remove(path):
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt"):
+def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt",
+            progress_callback=None, cancelled=None):
     """Extract an ERA5 point sounding and write it as a ``.npz`` sidecar.
 
     Parameters
@@ -906,15 +1000,28 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt"):
 
     # 1. Static range validation -- must happen before any retrieval or I/O so
     #    an out-of-range request writes nothing (Requirement 8.5).
+    _emit_progress(progress_callback, "validating")
+    _check_cancelled(cancelled)
     valid_dt = _validate_request(lat, lon, valid_time)
 
     # 2. Acquire the dataset (retrieval failures write nothing -- Req 8.6).
     if dataset is None:
-        ds = _retrieve_dataset(lat, lon, valid_dt)
+        if progress_callback is None and cancelled is None:
+            # Preserve the simple three-argument seam used by integrations
+            # that replace the live retriever in tests or private adapters.
+            ds = _retrieve_dataset(lat, lon, valid_dt)
+        else:
+            ds = _retrieve_dataset(
+                lat, lon, valid_dt,
+                progress_callback=progress_callback,
+                cancelled=cancelled,
+            )
     else:
         ds = dataset
+    _check_cancelled(cancelled)
 
     # 3. Refine longitude coverage against the real dataset grid.
+    _emit_progress(progress_callback, "extracting")
     _refine_coverage(ds, lon)
 
     # 4. Nearest analysis time, then nearest grid point (great-circle).
@@ -930,6 +1037,7 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt"):
 
     # 5. Extract and convert the vertical column; mark per-level missing fields.
     cols, n_levels = _build_columns(ds_t, index_tuple, latitude=glat)
+    _check_cancelled(cancelled)
 
     # 6. Assemble output arrays + metadata and write atomically.
     run_str = _as_datetime(selected_time).strftime("%Y-%m-%d %H:%M")
@@ -963,12 +1071,19 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt"):
         "fxx": 0,
         "npz": os.path.abspath(out_path),
         "levels": int(n_levels),
+        "backend": "xarray/cfgrib",
+        "decoder": "ERA5 pressure-level column",
+        "cache_hit": False,
     }
     if "surface_relative_vorticity" in cols:
         meta["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
+        meta["surface_vorticity_source"] = cols.get(
+            "_surface_vorticity_source", "unknown"
+        )
 
     # Write the .npz first, then the sidecar; both are atomic renames so a
     # failure never leaves a partial primary output (Requirement 8.6).
+    _emit_progress(progress_callback, "writing")
     _atomic_write_npz(out_path, arrays)
     json_path = os.path.splitext(out_path)[0] + ".json"
     try:
@@ -978,6 +1093,13 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt"):
         _quiet_remove(out_path)
         raise
 
+    try:
+        _check_cancelled(cancelled)
+    except ExtractionCancelled:
+        _quiet_remove(out_path)
+        _quiet_remove(json_path)
+        raise
+    _emit_progress(progress_callback, "complete")
     return out_path
 
 

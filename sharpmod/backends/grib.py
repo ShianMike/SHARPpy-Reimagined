@@ -37,6 +37,7 @@ _G0 = 9.80665
 _KELVIN_OFFSET = 273.15
 _MS_TO_KNOTS = 1.94384449
 _EARTH_ROTATION_RATE = 7.2921159e-5
+_EARTH_RADIUS_M = 6371008.8
 
 _INVENTORY_CACHE_MAX = 8
 _NEAREST_CACHE_MAX = 256
@@ -555,6 +556,271 @@ def _read_element(eccodes, message, index):
     return float(values[0])
 
 
+def _read_key_elements(eccodes, message, key, indexes):
+    """Read several indexes from one GRIB array-valued key."""
+    indexes = [int(index) for index in indexes]
+    getter = getattr(eccodes, "codes_get_double_elements", None)
+    if getter is not None:
+        return np.asarray(
+            getter(message, key, indexes), dtype=np.float64
+        )
+    return np.asarray(
+        eccodes.codes_get_elements(message, key, indexes),
+        dtype=np.float64,
+    )
+
+
+def _read_elements(eccodes, message, indexes):
+    """Read several grid indexes while unpacking one GRIB message once."""
+    return _read_key_elements(eccodes, message, "values", indexes)
+
+
+def _neighbor_pair(index, size):
+    if size < 2:
+        return None
+    if index <= 0:
+        return 0, 1
+    if index >= size - 1:
+        return size - 2, size - 1
+    return index - 1, index + 1
+
+
+def _wrapped_lon_delta(lon1, lon2):
+    return ((float(lon2) - float(lon1) + 180.0) % 360.0) - 180.0
+
+
+def _wind_reference(inventory, role_name, pressure):
+    role = next(
+        (value for value in inventory.roles if value.role == role_name), None
+    )
+    if role is None:
+        raise GribDecodeError(
+            f"pressure-level GRIB inventory has no {role_name} wind field"
+        )
+    return next(
+        (value for value in role.messages if value.pressure == pressure), None
+    )
+
+
+def _valid_reference_values(values, reference):
+    values = np.asarray(values, dtype=np.float64)
+    if not np.all(np.isfinite(values)):
+        return False
+    missing_value = reference.missing_value
+    return missing_value is None or not np.any(values == missing_value)
+
+
+def decode_grib_wind_vorticities(path, points) -> tuple[float, ...]:
+    """Estimate several surface-vorticity stencils with two field unpacks.
+
+    This preserves the legacy centered finite-difference definition without
+    constructing cfgrib/xarray wind cubes. It supports structured GRIB grids
+    with stable ``Ni``/``Nj`` indexing and falls back cleanly for reduced or
+    alternating-row layouts. Duplicate requests resolving to one grid cell
+    share the same calculation.
+    """
+    requests = []
+    for value in points:
+        try:
+            latitude, longitude = value
+            latitude = float(latitude)
+            longitude = float(longitude)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "each GRIB point must be a (latitude, longitude) pair"
+            ) from exc
+        if not np.isfinite(latitude) or not -90.0 <= latitude <= 90.0:
+            raise ValueError("latitude must be finite and within [-90, 90]")
+        if not np.isfinite(longitude):
+            raise ValueError("longitude must be finite")
+        requests.append((latitude, longitude))
+    if not requests:
+        return ()
+
+    identity = _file_identity(path)
+    eccodes = load_eccodes()
+    inventory = _inventory_for(identity, eccodes)
+    requested_points = [
+        _nearest_point(identity, inventory, lat, lon, eccodes)
+        for lat, lon in requests
+    ]
+    unique_points = []
+    seen_indexes = set()
+    for point in requested_points:
+        if point.index not in seen_indexes:
+            seen_indexes.add(point.index)
+            unique_points.append(point)
+    u_role = next(
+        (value for value in inventory.roles if value.role == "u"), None
+    )
+    v_role = next(
+        (value for value in inventory.roles if value.role == "v"), None
+    )
+    if u_role is None or v_role is None:
+        raise GribDecodeError("pressure-level GRIB has no compatible u/v pair")
+    common_levels = {
+        value.pressure for value in u_role.messages
+    }.intersection(value.pressure for value in v_role.messages)
+    if not common_levels:
+        raise GribDecodeError(
+            "pressure-level GRIB u/v fields share no pressure level"
+        )
+    pressure = max(common_levels)
+    u_reference = _wind_reference(inventory, "u", pressure)
+    v_reference = _wind_reference(inventory, "v", pressure)
+
+    with _multi_field_source(identity, eccodes) as source:
+        u_message = _message_at(
+            eccodes,
+            source,
+            u_reference.offset,
+            u_reference.field_index,
+        )
+        try:
+            ni = _safe_get(eccodes, u_message, "Ni")
+            nj = _safe_get(eccodes, u_message, "Nj")
+            if ni is None:
+                ni = _safe_get(eccodes, u_message, "Nx")
+            if nj is None:
+                nj = _safe_get(eccodes, u_message, "Ny")
+            try:
+                ni, nj = int(ni), int(nj)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise GribDecodeError(
+                    "wind-vorticity stencil requires a structured GRIB grid"
+                ) from exc
+            number_of_points = int(_safe_get(
+                eccodes, u_message, "numberOfPoints", -1
+            ))
+            if (
+                ni < 2 or nj < 2 or ni * nj != number_of_points
+                or int(_safe_get(
+                    eccodes, u_message, "alternativeRowScanning", 0
+                ))
+            ):
+                raise GribDecodeError(
+                    "wind-vorticity stencil does not support this GRIB grid"
+                )
+            j_consecutive = bool(int(_safe_get(
+                eccodes, u_message, "jPointsAreConsecutive", 0
+            )))
+            if j_consecutive:
+                def grid_index(x_index, y_index):
+                    return x_index * nj + y_index
+            else:
+                def grid_index(x_index, y_index):
+                    return y_index * ni + x_index
+            u_indexes = []
+            v_indexes = []
+            coordinate_indexes = []
+            for point in unique_points:
+                if j_consecutive:
+                    ix, iy = divmod(point.index, nj)
+                else:
+                    iy, ix = divmod(point.index, ni)
+                if not (0 <= ix < ni and 0 <= iy < nj):
+                    raise GribDecodeError(
+                        "nearest GRIB point is outside the structured grid"
+                    )
+                x_pair = _neighbor_pair(ix, ni)
+                y_pair = _neighbor_pair(iy, nj)
+                if x_pair is None or y_pair is None:
+                    raise GribDecodeError(
+                        "GRIB grid is too small for a wind-vorticity stencil"
+                    )
+                x0, x1 = x_pair
+                y0, y1 = y_pair
+                point_u_indexes = [
+                    grid_index(ix, y0), grid_index(ix, y1)
+                ]
+                point_v_indexes = [
+                    grid_index(x0, iy), grid_index(x1, iy)
+                ]
+                point_coordinate_indexes = [
+                    point_v_indexes[0], point_v_indexes[1],
+                    point_u_indexes[0], point_u_indexes[1], point.index,
+                ]
+                u_indexes.extend(point_u_indexes)
+                v_indexes.extend(point_v_indexes)
+                coordinate_indexes.extend(point_coordinate_indexes)
+            u_values = _read_elements(
+                eccodes, u_message, u_indexes
+            ).reshape(len(unique_points), 2)
+            latitudes = _read_key_elements(
+                eccodes, u_message, "latitudes", coordinate_indexes
+            ).reshape(len(unique_points), 5)
+            longitudes = _read_key_elements(
+                eccodes, u_message, "longitudes", coordinate_indexes
+            ).reshape(len(unique_points), 5)
+        finally:
+            eccodes.codes_release(u_message)
+
+    with _multi_field_source(identity, eccodes) as source:
+        v_message = _message_at(
+            eccodes,
+            source,
+            v_reference.offset,
+            v_reference.field_index,
+        )
+        try:
+            v_values = _read_elements(
+                eccodes, v_message, v_indexes
+            ).reshape(len(unique_points), 2)
+        finally:
+            eccodes.codes_release(v_message)
+
+    results_by_index = {}
+    for index, point in enumerate(unique_points):
+        point_u = u_values[index]
+        point_v = v_values[index]
+        point_lats = latitudes[index]
+        point_lons = longitudes[index]
+        if (
+            not _valid_reference_values(point_u, u_reference)
+            or not _valid_reference_values(point_v, v_reference)
+            or not np.all(np.isfinite(point_lats))
+            or not np.all(np.isfinite(point_lons))
+        ):
+            raise GribDecodeError(
+                "wind-vorticity stencil contains missing or invalid values"
+            )
+        lat_center = float(point_lats[4])
+        dx = (
+            _EARTH_RADIUS_M
+            * np.cos(np.radians(lat_center))
+            * np.radians(_wrapped_lon_delta(
+                point_lons[0], point_lons[1]
+            ))
+        )
+        dy = _EARTH_RADIUS_M * np.radians(
+            float(point_lats[3]) - float(point_lats[2])
+        )
+        if (
+            not np.isfinite(dx) or not np.isfinite(dy)
+            or abs(dx) < 1.0 or abs(dy) < 1.0
+        ):
+            raise GribDecodeError(
+                "wind-vorticity stencil has invalid grid spacing"
+            )
+        value = (
+            (float(point_v[1]) - float(point_v[0])) / dx
+            - (float(point_u[1]) - float(point_u[0])) / dy
+        )
+        if not np.isfinite(value):
+            raise GribDecodeError(
+                "wind-vorticity stencil produced a non-finite value"
+            )
+        results_by_index[point.index] = float(value)
+    return tuple(
+        results_by_index[point.index] for point in requested_points
+    )
+
+
+def decode_grib_wind_vorticity(path, lat, lon) -> float:
+    """Estimate one direct surface wind-vorticity stencil."""
+    return decode_grib_wind_vorticities(path, [(lat, lon)])[0]
+
+
 def _decode_selected_values(identity, inventory, point, missing, eccodes):
     selections = defaultdict(dict)
     for role in inventory.roles:
@@ -600,6 +866,66 @@ def _decode_selected_values(identity, inventory, point, missing, eccodes):
                     ):
                         value = missing
                     decoded[role.role][reference.pressure] = value
+                finally:
+                    eccodes.codes_release(message)
+    return decoded
+
+
+def _decode_selected_values_many(
+        identity, inventory, points, missing, eccodes):
+    """Decode N point columns with one vector value read per GRIB field."""
+    selections = defaultdict(dict)
+    for role in inventory.roles:
+        for reference in role.messages:
+            selections[reference.offset][reference.field_index] = (
+                role, reference
+            )
+
+    decoded = [defaultdict(dict) for _point in points]
+    indexes = [point.index for point in points]
+    with _multi_field_source(identity, eccodes) as source:
+        for offset in sorted(selections):
+            selected_fields = selections[offset]
+            _reset_multi_file(eccodes, source)
+            source.seek(offset)
+            last_field_index = max(selected_fields)
+            for field_index in range(last_field_index + 1):
+                message = eccodes.codes_grib_new_from_file(source)
+                if message is None:
+                    raise GribDecodeError(
+                        f"failed to reopen GRIB field {field_index} "
+                        f"at byte {offset}"
+                    )
+                try:
+                    selection = selected_fields.get(field_index)
+                    if selection is None:
+                        continue
+                    role, reference = selection
+                    try:
+                        values = _read_elements(eccodes, message, indexes)
+                    except Exception as exc:
+                        raise GribDecodeError(
+                            f"failed to read {role.short_name} at "
+                            f"{reference.pressure:g} hPa for "
+                            f"{len(points)} points: {exc}"
+                        ) from exc
+                    if values.size != len(points):
+                        raise GribDecodeError(
+                            "ecCodes returned the wrong number of point values"
+                        )
+                    for point_index, value in enumerate(values):
+                        value = float(value)
+                        if (
+                            not np.isfinite(value)
+                            or (
+                                reference.missing_value is not None
+                                and value == reference.missing_value
+                            )
+                        ):
+                            value = missing
+                        decoded[point_index][role.role][
+                            reference.pressure
+                        ] = value
                 finally:
                     eccodes.codes_release(message)
     return decoded
@@ -727,12 +1053,82 @@ def decode_grib_point(path, lat, lon, *, missing=-9999.0) -> DecodedPoint:
     return _cache_put(_POINT_CACHE, point_key, result, _POINT_CACHE_MAX)
 
 
+def decode_grib_points(path, points, *, missing=-9999.0) -> tuple[DecodedPoint, ...]:
+    """Decode several points while unpacking every selected message once.
+
+    This is a vectorized multi-point operation, not speculative decoder
+    threading. Duplicate requests that resolve to one grid cell share the same
+    immutable :class:`DecodedPoint` and all results populate the normal point
+    cache used by later scalar calls.
+    """
+    requests = []
+    for value in points:
+        try:
+            latitude, longitude = value
+            latitude = float(latitude)
+            longitude = float(longitude)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "each GRIB point must be a (latitude, longitude) pair"
+            ) from exc
+        if not np.isfinite(latitude) or not -90.0 <= latitude <= 90.0:
+            raise ValueError("latitude must be finite and within [-90, 90]")
+        if not np.isfinite(longitude):
+            raise ValueError("longitude must be finite")
+        requests.append((latitude, longitude))
+    if not requests:
+        return ()
+    missing_value = float(missing)
+    if not np.isfinite(missing_value):
+        raise ValueError("missing must be a finite numeric sentinel")
+
+    identity = _file_identity(path)
+    eccodes = load_eccodes()
+    inventory = _inventory_for(identity, eccodes)
+    requested_points = [
+        _nearest_point(identity, inventory, lat, lon, eccodes)
+        for lat, lon in requests
+    ]
+    unique_points = []
+    point_by_index = {}
+    for point in requested_points:
+        if point.index not in point_by_index:
+            point_by_index[point.index] = point
+            unique_points.append(point)
+
+    results_by_index = {}
+    missing_points = []
+    for point in unique_points:
+        key = (identity, point.index, missing_value)
+        cached = _cache_get("points", _POINT_CACHE, key)
+        if cached is None:
+            missing_points.append(point)
+        else:
+            results_by_index[point.index] = cached
+    if missing_points:
+        decoded_values = _decode_selected_values_many(
+            identity, inventory, missing_points, missing_value, eccodes
+        )
+        for point, decoded in zip(missing_points, decoded_values):
+            result = _assemble_point(
+                inventory, point, decoded, missing_value
+            )
+            key = (identity, point.index, missing_value)
+            results_by_index[point.index] = _cache_put(
+                _POINT_CACHE, key, result, _POINT_CACHE_MAX
+            )
+    return tuple(results_by_index[point.index] for point in requested_points)
+
+
 __all__ = [
     "DecodedPoint",
     "GRIB_COLUMN_NAMES",
     "GribDecodeError",
     "clear_grib_caches",
     "decode_grib_point",
+    "decode_grib_points",
+    "decode_grib_wind_vorticities",
+    "decode_grib_wind_vorticity",
     "grib_cache_info",
     "load_eccodes",
 ]

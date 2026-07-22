@@ -5,6 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import zipfile
+
+import pytest
 
 from sharpmod.model_disk_cache import ModelDiskCache, default_model_cache_root
 from sharpmod.model_hour_cache import ModelHourKey
@@ -85,3 +88,103 @@ def test_clear_removes_only_managed_entries(tmp_path):
 
     assert not managed.exists()
     assert unmanaged.exists()
+
+
+def test_entries_expose_metadata_validity_and_newest_first(tmp_path):
+    cache = ModelDiskCache(tmp_path)
+    older = cache.directory_for(_key(0))
+    newer = cache.directory_for(_key(1))
+    (older / "subset.grib2").write_bytes(b"GRIB7777")
+    (newer / "incomplete.part").write_bytes(b"partial")
+    cache.touch(older, now=1.0)
+    cache.touch(newer, now=2.0)
+
+    entries = cache.entries()
+
+    assert [entry.fxx for entry in entries] == [1, 0]
+    assert entries[0].valid_grib is False
+    assert entries[1].valid_grib is True
+    assert entries[1].model == "hrrr"
+
+
+def test_entries_recognize_portable_sounding_pair(tmp_path):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+    with zipfile.ZipFile(directory / "era5-point.npz", "w") as archive:
+        for name in (
+            "pres.npy", "hght.npy", "tmpc.npy", "dwpc.npy", "wdir.npy",
+            "wspd.npy", "omeg.npy", "valid.npy", "run.npy", "loc.npy",
+        ):
+            archive.writestr(name, b"value")
+    (directory / "era5-point.json").write_text("{}", encoding="utf-8")
+
+    entry = cache.entries()[0]
+
+    assert entry.valid_grib is False
+    assert entry.valid_sounding is True
+
+
+def test_source_provenance_can_be_copied_from_cache_entry(tmp_path):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+
+    cache.annotate(
+        directory,
+        source_url="https://example.test/model.grib2",
+        source_transport="parallel-ranges",
+        source_fields=("TMP", "HGT"),
+    )
+    entry = cache.entries()[0]
+
+    assert entry.source_url.endswith("model.grib2")
+    assert entry.source_transport == "parallel-ranges"
+    assert entry.source_fields == ("TMP", "HGT")
+
+
+def test_range_fragments_are_never_exposed_as_reusable_grib(tmp_path):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+    fragments = directory / ".subset.grib2.ranges"
+    fragments.mkdir()
+    (fragments / "0-11.part").write_bytes(b"GRIBxxxx7777")
+
+    entry = cache.entries()[0]
+
+    assert entry.valid_grib is False
+    assert entry.file_count == 0
+    assert cache.valid_grib_paths(directory) == ()
+
+
+def test_complete_grib_payload_can_be_opened_for_offline_reextract(tmp_path):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+    grib = directory / "subset.grib2"
+    grib.write_bytes(b"GRIB7777")
+    (directory / "ignored.part").write_bytes(b"GRIB7777")
+
+    assert cache.valid_grib_paths(directory) == (grib,)
+
+
+def test_pinned_entries_survive_prune_and_default_clear(tmp_path):
+    cache = ModelDiskCache(tmp_path, max_bytes=1, max_age_hours=0)
+    directory = cache.directory_for(_key())
+    (directory / "subset.grib2").write_bytes(b"GRIB7777")
+
+    pinned = cache.set_pinned(directory, True)
+
+    assert pinned.pinned is True
+    assert cache.prune(now=10_000_000_000.0) == []
+    assert cache.clear() == []
+    assert directory.exists()
+    assert cache.clear(include_pinned=True) == [directory]
+
+
+def test_explicit_delete_rejects_unmanaged_and_respects_lease(tmp_path):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+
+    with pytest.raises(ValueError):
+        cache.delete(tmp_path / "not-managed")
+    with cache.protect(directory):
+        assert cache.delete(directory) is False
+    assert cache.delete(directory) is True

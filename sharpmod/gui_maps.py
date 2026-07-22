@@ -93,6 +93,9 @@ def _load_basemap() -> dict:
 #: Named map extents for the "Map Area" selector: (lon0, lon1, lat0, lat1).
 MAP_AREAS: dict[str, tuple[float, float, float, float]] = {
     "United States (CONUS)": (-125.0, -66.0, 23.0, 50.0),
+    "Alaska": (-180.0, -125.0, 48.0, 73.0),
+    "Hawaii": (-162.5, -152.0, 15.0, 24.5),
+    "Puerto Rico": (-69.5, -64.0, 16.5, 20.0),
     "North America": (-170.0, -50.0, 8.0, 75.0),
     "Caribbean / Gulf": (-100.0, -50.0, 5.0, 35.0),
     "Western Pacific": (115.0, 170.0, -5.0, 30.0),
@@ -556,8 +559,31 @@ class PointMapWidget(StationMapWidget):
     def __init__(self, parent=None):
         super().__init__([], parent=parent)
         self._point_lonlat = (-97.44, 35.63)
+        self._saved_points: tuple[tuple[str, float, float], ...] = ()
         self._domain_bounds: tuple[float, float, float, float] | None = None
         self._domain_label = ""
+
+    def set_saved_points(self, locations) -> None:
+        """Show user-named locations as passive map markers."""
+        points = []
+        for location in locations or ():
+            try:
+                if isinstance(location, dict):
+                    name = location["name"]
+                    lat = location["lat"]
+                    lon = location["lon"]
+                else:
+                    name = location.name
+                    lat = location.lat
+                    lon = location.lon
+                lat = float(lat)
+                lon = ((float(lon) + 180.0) % 360.0) - 180.0
+            except (AttributeError, KeyError, TypeError, ValueError):
+                continue
+            if -90.0 <= lat <= 90.0:
+                points.append((str(name), lon, lat))
+        self._saved_points = tuple(points)
+        self.update()
 
     def set_point(self, lat: float, lon: float, center: bool = False) -> None:
         lon = ((float(lon) + 180.0) % 360.0) - 180.0
@@ -583,6 +609,7 @@ class PointMapWidget(StationMapWidget):
         qp.setRenderHint(QPainter.Antialiasing, True)
         p = self._proj()
         self._draw_domain(qp, p)
+        self._draw_saved_points(qp, p)
         self._draw_point(qp, p)
         self._draw_readout(qp)
         qp.end()
@@ -593,18 +620,36 @@ class PointMapWidget(StationMapWidget):
         lon0, lon1, lat0, lat1 = self._domain_bounds
         if lon0 <= -179.0 and lon1 >= 179.0 and lat0 <= -85.0 and lat1 >= 85.0:
             return
-        poly = QPolygonF([
-            self._to_px(lon0, lat0, p),
-            self._to_px(lon1, lat0, p),
-            self._to_px(lon1, lat1, p),
-            self._to_px(lon0, lat1, p),
-            self._to_px(lon0, lat0, p),
-        ])
         fill = QColor(80, 140, 220, 34)
         edge = QColor("#79b8ff")
         qp.setBrush(QBrush(fill))
         qp.setPen(QPen(edge, 1.4, Qt.DashLine))
-        qp.drawPolygon(poly)
+        spans = ((lon0, lon1),) if lon0 <= lon1 else (
+            (lon0, 180.0), (-180.0, lon1)
+        )
+        for start, end in spans:
+            poly = QPolygonF([
+                self._to_px(start, lat0, p),
+                self._to_px(end, lat0, p),
+                self._to_px(end, lat1, p),
+                self._to_px(start, lat1, p),
+                self._to_px(start, lat0, p),
+            ])
+            qp.drawPolygon(poly)
+
+    def _draw_saved_points(self, qp, p) -> None:
+        qp.setFont(QFont("Helvetica", 8))
+        for name, lon, lat in self._saved_points:
+            pt = self._to_px(lon, lat, p)
+            if pt.x() < -20 or pt.y() < -20 \
+                    or pt.x() > self.width() + 20 \
+                    or pt.y() > self.height() + 20:
+                continue
+            qp.setBrush(QBrush(QColor("#44d7ff")))
+            qp.setPen(QPen(QColor("#07131b"), 1.3))
+            qp.drawEllipse(pt, 4.0, 4.0)
+            qp.setPen(QPen(QColor("#eafaff"), 1.0))
+            qp.drawText(QPointF(pt.x() + 6, pt.y() - 5), name)
 
     def _draw_point(self, qp, p) -> None:
         lon, lat = self._point_lonlat

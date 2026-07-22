@@ -12,6 +12,9 @@ from .grib import (
     DecodedPoint,
     GribDecodeError,
     clear_grib_caches as _clear_python_grib_caches,
+    decode_grib_points,
+    decode_grib_wind_vorticities,
+    decode_grib_wind_vorticity,
     grib_cache_info as _python_grib_cache_info,
 )
 from .protocol import Backend, QualityControlResult
@@ -96,6 +99,9 @@ __all__ = [
     "clear_grib_caches",
     "components_to_wind",
     "decode_grib_point",
+    "decode_grib_points",
+    "decode_grib_wind_vorticities",
+    "decode_grib_wind_vorticity",
     "get_backend",
     "grib_cache_info",
     "interpolate_1d",

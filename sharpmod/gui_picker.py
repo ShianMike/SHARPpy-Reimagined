@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -34,8 +35,15 @@ from sharpmod.gui_common import (
     _uwyo_catalog,
 )
 from sharpmod.gui_maps import MAP_AREAS, PointMapWidget, StationMapWidget
+from sharpmod.gui_cache import CacheManagerDialog, parse_spatial_point
+from sharpmod.gui_locations import SavedLocationsDialog
+from sharpmod.gui_timeline import ForecastTimelineDialog, ModelTimelineWorker
 from sharpmod.model_disk_cache import ModelDiskCache
 from sharpmod.model_hour_cache import ModelHourCache
+from sharpmod.saved_locations import (
+    RECENT_SETTINGS_KEY,
+    SavedLocationStore,
+)
 from sharpmod.gui_sessions import _apply_viewer_session_state
 from sharpmod.gui_settings import (
     UNIT_DEFAULTS,
@@ -66,12 +74,17 @@ from sharpmod.gui_workers import (
     _AvailabilityIndicator,
     _AvailabilityWorker,
     _FetchWorker,
+    _ERA5FetchWorker,
     _ModelAvailabilityWorker,
     _ModelFetchWorker,
     _ModelPrefetchWorker,
     _StationListWorker,
+    _WRFExtractWorker,
+    _WRFInspectWorker,
     _cleanup_model_data,
+    _cleanup_point_data,
     _retain_model_data_until_close,
+    _retain_point_data_until_close,
     _station_label,
 )
 
@@ -223,7 +236,18 @@ class PickerWindow(QMainWindow):
         self._viewers: list = []
         self._worker: _FetchWorker | None = None
         self._model_worker: _ModelFetchWorker | None = None
+        self._model_timeline_worker: ModelTimelineWorker | None = None
+        self._model_timeline_viewer = None
+        self._model_timeline_collection = None
+        self._model_timeline_output_dir: str | None = None
+        self._model_timeline_paths: list[str] = []
+        self._model_timeline_failures: dict[int, str] = {}
+        self._model_timeline_viewer_closed = False
         self._model_prefetch_worker: _ModelPrefetchWorker | None = None
+        self._era5_worker: _ERA5FetchWorker | None = None
+        self._wrf_inspect_worker: _WRFInspectWorker | None = None
+        self._wrf_extract_worker: _WRFExtractWorker | None = None
+        self._wrf_domain: dict | None = None
         self._model_disk_cache = ModelDiskCache()
         try:
             self._model_disk_cache.prune()
@@ -233,6 +257,7 @@ class PickerWindow(QMainWindow):
             max_entries=1,
             directory_factory=self._model_disk_cache.directory_for,
             directory_protector=self._model_disk_cache.protect,
+            metadata_writer=self._model_disk_cache.annotate,
             delete_download_dirs=False,
         )
         app = QApplication.instance()
@@ -246,6 +271,10 @@ class PickerWindow(QMainWindow):
         self._model_progress_timer.timeout.connect(
             self._poll_model_fetch_progress)
         self._settings = _build_settings()
+        self._saved_location_store = SavedLocationStore(self._settings)
+        self._recent_location_store = SavedLocationStore(
+            self._settings, key=RECENT_SETTINGS_KEY, max_entries=12
+        )
         self._all_stations = _uwyo_catalog().all_stations()
 
         # -- availability pre-flight check state ----------------------------- #
@@ -302,7 +331,9 @@ class PickerWindow(QMainWindow):
         self._tabs.addTab(self._build_map_tab(), "Station Map")
         self._tabs.addTab(self._build_uwyo_tab(), "Station List")
         self._tabs.addTab(self._build_model_tab(), "Forecast Model")
-        self._tabs.addTab(self._build_file_tab(), "Open File")
+        self._tabs.addTab(self._build_era5_tab(), "Reanalysis (ERA5)")
+        self._file_tab = self._build_file_tab()
+        self._tabs.addTab(self._file_tab, "Open File")
         self._tabs.currentChanged.connect(self._sync_tab_status)
         self.setCentralWidget(self._tabs)
 
@@ -311,6 +342,8 @@ class PickerWindow(QMainWindow):
 
         self._build_menu()
         self._restore_state()
+        self._refresh_location_markers()
+        self._refresh_recent_location_menu()
 
         # Populate the live, datetime-aware station set for the default cycle in
         # the background (the bundled catalogue shows immediately as fallback).
@@ -323,8 +356,12 @@ class PickerWindow(QMainWindow):
         if tab == "Forecast Model":
             self.statusBar().showMessage(
                 "Ready \u2014 pick a point, model, run, and forecast hour")
+        elif tab == "Reanalysis (ERA5)":
+            self.statusBar().showMessage(
+                "Ready \u2014 pick a global point and ERA5 analysis hour")
         elif tab == "Open File":
-            self.statusBar().showMessage("Ready \u2014 open a sounding file")
+            self.statusBar().showMessage(
+                "Ready \u2014 open a sounding or extract raw WRF output")
         else:
             self.statusBar().showMessage(
                 "Ready \u2014 pick a station and press Fetch")
@@ -363,6 +400,10 @@ class PickerWindow(QMainWindow):
         prefetch_act.toggled.connect(self._save_model_prefetch)
         filemenu.addAction(prefetch_act)
         self._model_prefetch_action = prefetch_act
+        cache_library_act = QAction("Downloaded Data &Library…", self)
+        cache_library_act.triggered.connect(self._show_cache_manager)
+        filemenu.addAction(cache_library_act)
+        self._cache_library_action = cache_library_act
         clear_cache_act = QAction("Clear Downloaded Model Cache", self)
         clear_cache_act.triggered.connect(self._clear_model_cache)
         filemenu.addAction(clear_cache_act)
@@ -372,6 +413,14 @@ class PickerWindow(QMainWindow):
         quit_act.setShortcut("Ctrl+Q")
         quit_act.triggered.connect(self.close)
         filemenu.addAction(quit_act)
+
+        locations_menu = self.menuBar().addMenu("&Locations")
+        manage_locations = QAction("Manage Saved Locations…", self)
+        manage_locations.setShortcut("Ctrl+L")
+        manage_locations.triggered.connect(self._show_saved_locations)
+        locations_menu.addAction(manage_locations)
+        self._manage_locations_action = manage_locations
+        self._recent_locations_menu = locations_menu.addMenu("Recent Points")
 
         helpmenu = self.menuBar().addMenu("&Help")
         controls_act = QAction("Sounding Window &Controls", self)
@@ -776,8 +825,8 @@ class PickerWindow(QMainWindow):
         src_box = QGroupBox("Sounding source")
         sb = QVBoxLayout(src_box)
         src_combo = QComboBox()
-        src_combo.addItem("Observed (UWyo radiosonde)")
-        src_combo.setEnabled(False)  # only observed is wired today
+        src_combo.addItem("Observed (UWyo / IEM fallback)")
+        src_combo.setEnabled(False)
         sb.addWidget(src_combo)
         left.addWidget(src_box)
 
@@ -1101,17 +1150,18 @@ class PickerWindow(QMainWindow):
         self._start_fetch(sid, self._selected_when())
 
     def _start_fetch(self, sid: str, when: datetime) -> None:
-        """Kick off a background UWyo fetch for ``sid`` at ``when`` (UTC)."""
+        """Fetch an observation with explicit UWyo then IEM fallback."""
         if self._worker is not None and self._worker.isRunning():
             QMessageBox.information(self, APP_NAME,
                                     "A fetch is already in progress.")
             return
-        _LOGGER.info("uwyo_fetch.start station=%s valid=%s", sid, when)
+        _LOGGER.info("observed_fetch.start station=%s valid=%s", sid, when)
         self._settings.setValue("last_station", sid)
 
         self._set_busy(True)
         self.statusBar().showMessage(
-            f"Fetching {sid} at {when:%Y-%m-%d %H}Z from UWyo\u2026")
+            f"Fetching {sid} at {when:%Y-%m-%d %H}Z "
+            "(UWyo \u2192 IEM fallback)\u2026")
 
         self._worker = _FetchWorker(sid, when, parent=self,
                                     station=self._station(sid))
@@ -1148,9 +1198,15 @@ class PickerWindow(QMainWindow):
         try:
             R = _render()
             prof_col, stn_id = R.decode(npz_path)
-            title = f"{APP_NAME} \u2014 {meta.id} {when:%Y-%m-%d %H}Z"
+            provider = str(getattr(meta, "provider", "observed")).upper()
+            title = (
+                f"{APP_NAME} \u2014 {meta.id} {when:%Y-%m-%d %H}Z "
+                f"[{provider}]"
+            )
             self._show_sounding(prof_col, stn_id, title=title)
-            self.statusBar().showMessage(f"Opened {meta.id} {when:%Y-%m-%d %H}Z")
+            self.statusBar().showMessage(
+                f"Opened {meta.id} {when:%Y-%m-%d %H}Z from {provider}"
+            )
             _LOGGER.info(
                 "uwyo_fetch.displayed station=%s valid=%s", meta.id, when)
         except Exception as exc:  # noqa: BLE001
@@ -1161,6 +1217,10 @@ class PickerWindow(QMainWindow):
         finally:
             try:
                 os.remove(npz_path)
+            except OSError:
+                pass
+            try:
+                os.remove(os.path.splitext(npz_path)[0] + ".json")
             except OSError:
                 pass
 
@@ -1319,6 +1379,13 @@ class PickerWindow(QMainWindow):
         self._model_fetch_btn.setMinimumHeight(36)
         self._model_fetch_btn.clicked.connect(self._model_fetch)
         fetch_row.addWidget(self._model_fetch_btn, 1)
+        self._model_timeline_btn = QPushButton("Timeline…")
+        self._model_timeline_btn.setMinimumHeight(36)
+        self._model_timeline_btn.setToolTip(
+            "Fetch several forecast hours into an animated timeline"
+        )
+        self._model_timeline_btn.clicked.connect(self._model_fetch_timeline)
+        fetch_row.addWidget(self._model_timeline_btn)
         self._model_cancel_btn = QPushButton("Cancel")
         self._model_cancel_btn.setMinimumHeight(36)
         self._model_cancel_btn.clicked.connect(self._cancel_model_fetch)
@@ -1381,16 +1448,10 @@ class PickerWindow(QMainWindow):
             area = self._model_area_combo.currentText() \
                 if hasattr(self, "_model_area_combo") else "United States (CONUS)"
             area_bounds = MAP_AREAS.get(area, MAP_AREAS["United States (CONUS)"])
-            regional = area in {
-                "United States (CONUS)", "North America", "Caribbean / Gulf"}
             configs = []
             for cfg in model_extract.available_models():
-                if regional:
-                    allowed = model_extract.domain_intersects_bounds(
-                        cfg, area_bounds)
-                else:
-                    allowed = model_extract.domain_contains_bounds(
-                        cfg, area_bounds)
+                allowed = model_extract.domain_intersects_bounds(
+                    cfg, area_bounds)
                 if allowed:
                     configs.append(cfg)
             for cfg in configs:
@@ -1552,17 +1613,18 @@ class PickerWindow(QMainWindow):
         # incompatible native library from QThread can terminate the process
         # instead of raising an ordinary Python exception.
         from sharpmod.tools import model_extract
-        try:
-            model_extract.require_runtime_dependencies()
-        except model_extract.RetrievalError:
-            _LOGGER.exception("model_availability.runtime_unavailable")
-            self._model_availability.set_status(
-                AVAIL_UNKNOWN,
-                "Forecast model runtime unavailable; Fetch remains available",
-            )
-            return
-
         model, run_time, fxx, member = request
+        if model_extract.requires_grib_runtime(model):
+            try:
+                model_extract.require_runtime_dependencies()
+            except model_extract.RetrievalError:
+                _LOGGER.exception("model_availability.runtime_unavailable")
+                self._model_availability.set_status(
+                    AVAIL_UNKNOWN,
+                    "Forecast model runtime unavailable; Fetch remains available",
+                )
+                return
+
         token = self._model_availability_token
         worker = _ModelAvailabilityWorker(
             model, run_time, fxx, member, token, parent=self)
@@ -1642,7 +1704,8 @@ class PickerWindow(QMainWindow):
                 or not hasattr(self, "_model_point_status"):
             return
         cfg = self._model_config()
-        busy = self._model_worker is not None
+        busy = self._model_worker is not None \
+            or getattr(self, "_model_timeline_worker", None) is not None
         if cfg is None:
             self._model_point_status.setText("")
             self._model_fetch_btn.setEnabled(False)
@@ -1662,13 +1725,16 @@ class PickerWindow(QMainWindow):
                 f"Selected {lat:.4f}, {lon:.4f} is outside {cfg.label} "
                 f"{cfg.domain} coverage")
         self._model_fetch_btn.setEnabled(ok and not busy)
+        if hasattr(self, "_model_timeline_btn"):
+            self._model_timeline_btn.setEnabled(ok and not busy)
 
-    def _model_fetch(self) -> None:
+    def _model_fetch(self, *_signal_args, cache_entry=None) -> None:
         cfg = self._model_config()
         if cfg is None:
             QMessageBox.warning(self, APP_NAME, "Choose a forecast model first.")
             return
-        if self._model_worker is not None:
+        if self._model_worker is not None \
+                or getattr(self, "_model_timeline_worker", None) is not None:
             QMessageBox.information(self, APP_NAME,
                                     "A model fetch is already in progress.")
             return
@@ -1684,22 +1750,50 @@ class PickerWindow(QMainWindow):
         # Keep native GRIB imports on the main Qt thread. The HRRR Zarr path
         # itself does not need ecCodes, but its automatic fallback does, and a
         # first native import from a Windows QThread can terminate the process.
-        try:
-            model_extract.require_runtime_dependencies()
-        except model_extract.RetrievalError as exc:
-            _LOGGER.exception("model_fetch.runtime_unavailable")
-            self.statusBar().showMessage(
-                "Forecast model support unavailable")
-            QMessageBox.critical(
-                self, APP_NAME,
-                f"Forecast model support is unavailable:\n{exc}")
-            return
+        if model_extract.requires_grib_runtime(cfg):
+            try:
+                model_extract.require_runtime_dependencies()
+            except model_extract.RetrievalError as exc:
+                _LOGGER.exception("model_fetch.runtime_unavailable")
+                self.statusBar().showMessage(
+                    "Forecast model support unavailable")
+                QMessageBox.critical(
+                    self, APP_NAME,
+                    f"Forecast model support is unavailable:\n{exc}")
+                return
+
+        cached_grib = None
+        if cache_entry is not None:
+            try:
+                candidates = self._model_disk_cache.valid_grib_paths(
+                    cache_entry.path
+                )
+            except (OSError, ValueError) as exc:
+                QMessageBox.warning(
+                    self, APP_NAME,
+                    f"The cached GRIB entry is no longer usable:\n{exc}",
+                )
+                return
+            if not candidates:
+                QMessageBox.warning(
+                    self, APP_NAME,
+                    "This cache entry no longer contains a complete GRIB "
+                    "payload.",
+                )
+                return
+            cached_grib = max(
+                candidates,
+                key=lambda path: path.stat().st_size,
+            )
+            self._model_availability_timer.stop()
+            self._model_availability_request = None
 
         self._cancel_model_prefetch(wait=True)
         fxx = self._model_selected_fxx()
         run_time = self._model_run_time()
         member = self._model_member_value()
         loc = f"{cfg.label} {lat:.2f}, {lon:.2f}"
+        self._remember_point(lat, lon, loc)
 
         download_dir = tempfile.mkdtemp(
             prefix=f"model_{cfg.key.replace('-', '_')}_{run_time:%Y%m%d%H}_"
@@ -1717,7 +1811,18 @@ class PickerWindow(QMainWindow):
         worker = _ModelFetchWorker(
             cfg.key, lat, lon, run_time, fxx, npz_path, loc=loc,
             member=member, download_dir=download_dir,
-            model_hour_cache=self._model_hour_cache, parent=self)
+            model_hour_cache=self._model_hour_cache,
+            cached_grib=cached_grib,
+            cached_source_fields=(
+                cache_entry.source_fields if cache_entry is not None else ()
+            ),
+            cached_cache=(
+                self._model_disk_cache if cache_entry is not None else None
+            ),
+            cached_directory=(
+                cache_entry.path if cache_entry is not None else None
+            ),
+            parent=self)
         self._model_worker = worker
         worker.finished_ok.connect(self._on_model_fetch_ok)
         worker.failed.connect(self._on_model_fetch_failed)
@@ -1726,12 +1831,252 @@ class PickerWindow(QMainWindow):
         worker.finished.connect(self._on_model_fetch_finished)
         worker.start()
 
+    def _model_fetch_timeline(self) -> None:
+        """Fetch a bounded forecast-hour range and stream it into one viewer."""
+        cfg = self._model_config()
+        if cfg is None:
+            QMessageBox.warning(self, APP_NAME, "Choose a forecast model first.")
+            return
+        if self._model_worker is not None \
+                or self._model_timeline_worker is not None:
+            QMessageBox.information(
+                self, APP_NAME, "A model fetch is already in progress."
+            )
+            return
+        lat = float(self._model_lat.value())
+        lon = float(self._model_lon.value())
+        if not self._model_point_ok():
+            QMessageBox.warning(
+                self, APP_NAME,
+                f"{cfg.label} does not cover {lat:.4f}, {lon:.4f}."
+            )
+            return
+
+        from sharpmod.tools import model_extract
+        if model_extract.requires_grib_runtime(cfg):
+            try:
+                model_extract.require_runtime_dependencies()
+            except model_extract.RetrievalError as exc:
+                QMessageBox.critical(
+                    self, APP_NAME,
+                    f"Forecast model support is unavailable:\n{exc}"
+                )
+                return
+        available = model_extract.forecast_hours(
+            cfg, cycle_hour=self._model_run_time().hour
+        )
+        try:
+            dialog = ForecastTimelineDialog(
+                available,
+                current=self._model_selected_fxx(),
+                parent=self,
+            )
+        except ValueError as exc:
+            QMessageBox.warning(self, APP_NAME, str(exc))
+            return
+        if dialog.exec() != QDialog.Accepted:
+            return
+        hours = dialog.hours()
+        if len(hours) < 2:
+            QMessageBox.information(
+                self, APP_NAME,
+                "Choose at least two forecast hours for a timeline."
+            )
+            return
+
+        self._cancel_model_prefetch(wait=True)
+        run_time = self._model_run_time()
+        member = self._model_member_value()
+        loc = f"{cfg.label} {lat:.2f}, {lon:.2f}"
+        output_dir = tempfile.mkdtemp(
+            prefix=(
+                f"timeline_{cfg.key.replace('-', '_')}_"
+                f"{run_time:%Y%m%d%H}_"
+            )
+        )
+        worker = ModelTimelineWorker(
+            cfg.key, lat, lon, run_time, hours, output_dir,
+            loc=loc, member=member, disk_cache=self._model_disk_cache,
+            parent=self,
+        )
+        worker._sharpmod_viewer = None
+        worker._sharpmod_collection = None
+        worker._sharpmod_paths = []
+        worker._sharpmod_failures = {}
+        worker._sharpmod_viewer_closed = False
+        self._model_timeline_worker = worker
+        self._remember_point(lat, lon, loc)
+        worker.item_ready.connect(self._on_timeline_item_ready)
+        worker.item_failed.connect(self._on_timeline_item_failed)
+        worker.progress.connect(self._on_timeline_progress)
+        worker.result_ready.connect(self._on_timeline_result)
+        worker.failed.connect(self._on_timeline_failed)
+        worker.finished.connect(self._on_timeline_finished)
+        self._set_model_busy(True)
+        self._model_progress_timer.stop()
+        self._model_fetch_btn.setText("Timeline queued…")
+        self._model_timeline_btn.setText("Timeline running…")
+        self._model_progress.setRange(0, len(hours))
+        self._model_progress.setValue(0)
+        self._model_progress.setFormat(f"0 / {len(hours)} hours")
+        self._model_progress_detail.setText(
+            f"Queued {len(hours)} forecast hours; completed hours will open "
+            "as they arrive."
+        )
+        self.statusBar().showMessage(
+            f"Fetching {cfg.label} timeline F{hours[0]:03d}–F{hours[-1]:03d}…"
+        )
+        worker.start()
+
+    def _on_timeline_item_ready(self, npz_path: str, fxx: int) -> None:
+        worker = self.sender()
+        if worker is not self._model_timeline_worker \
+                or getattr(worker, "_sharpmod_viewer_closed", False):
+            return
+        try:
+            prof_col, stn_id = _render().decode(npz_path)
+            collection = getattr(worker, "_sharpmod_collection", None)
+            if collection is None:
+                source_meta = dict(getattr(prof_col, "_meta", {}))
+                prof_col.setMeta("timeline", True)
+                prof_col.setMeta("timeline_count", 1)
+                prof_col.setMeta("timeline_hours", [int(fxx)])
+                prof_col.setMeta("timeline_sources", [str(npz_path)])
+                prof_col.setMeta("timeline_provenance", [source_meta])
+                self._prune_closed_viewers()
+                win = compose_interactive(
+                    self._config(), prof_col, self, stn_id=stn_id
+                )
+                win.setWindowTitle(
+                    f"{APP_NAME} — Forecast Timeline (1 hour loaded)"
+                )
+                self._viewers.append(win)
+                worker._sharpmod_viewer = win
+                worker._sharpmod_collection = prof_col
+                output_dir = worker.output_dir
+                win.destroyed.connect(
+                    lambda *_args, worker=worker, output_dir=output_dir:
+                    self._on_timeline_viewer_destroyed(worker, output_dir)
+                )
+            else:
+                from sharpmod.profile_timeline import append_collection
+                from sharpmod.gui_timeline import refresh_timeline_controls
+
+                append_collection(collection, prof_col)
+                win = worker._sharpmod_viewer
+                win.spc_widget.updateProfs()
+                refresh_timeline_controls(win)
+                count = int(collection.getMeta("timeline_count"))
+                win.setWindowTitle(
+                    f"{APP_NAME} — Forecast Timeline ({count} hours loaded)"
+                )
+            worker._sharpmod_paths.append(str(npz_path))
+        except Exception as exc:  # noqa: BLE001 - decode/render boundary
+            _LOGGER.exception(
+                "forecast_timeline.display_failed path=%s fxx=%s", npz_path, fxx
+            )
+            worker._sharpmod_failures[int(fxx)] = str(exc)
+            self.statusBar().showMessage(
+                f"F{int(fxx):03d} downloaded but could not be displayed"
+            )
+
+    def _on_timeline_item_failed(self, fxx: int, message: str) -> None:
+        worker = self.sender()
+        if worker is self._model_timeline_worker:
+            worker._sharpmod_failures[int(fxx)] = str(message)
+            self.statusBar().showMessage(
+                f"Timeline F{int(fxx):03d} unavailable: {message}", 7000
+            )
+
+    def _on_timeline_progress(
+            self, fxx: int, stage: str, completed: int, total: int) -> None:
+        if self.sender() is not self._model_timeline_worker:
+            return
+        completed = max(0, int(completed))
+        total = max(1, int(total))
+        self._model_progress.setRange(0, total)
+        self._model_progress.setValue(completed)
+        self._model_progress.setFormat(f"{completed} / {total} hours")
+        prefix = f"F{int(fxx):03d}" if int(fxx) >= 0 else "Timeline"
+        self._model_progress_detail.setText(
+            f"{prefix}: {str(stage).replace('_', ' ')} — "
+            f"{completed} of {total} complete"
+        )
+
+    def _on_timeline_result(self, result) -> None:
+        worker = self.sender()
+        if worker is not self._model_timeline_worker:
+            return
+        missing = [
+            item for item in result.items if item.status != "completed"
+        ]
+        if missing:
+            summary = ", ".join(
+                f"{item.id.upper()} ({item.status})" for item in missing
+            )
+            self.statusBar().showMessage(
+                f"Timeline kept {result.completed} completed hour(s); "
+                f"missing: {summary}", 12000
+            )
+            QMessageBox.information(
+                self,
+                "Forecast Timeline — Partial Result",
+                f"Kept {result.completed} completed forecast hour(s).\n\n"
+                f"Unavailable or cancelled hours:\n{summary}",
+            )
+        else:
+            self.statusBar().showMessage(
+                f"Forecast timeline complete: {result.completed} hours", 7000
+            )
+
+    def _on_timeline_failed(self, message: str) -> None:
+        worker = self.sender()
+        if worker is not self._model_timeline_worker:
+            return
+        if getattr(worker, "_sharpmod_paths", []):
+            QMessageBox.warning(
+                self, APP_NAME,
+                f"The remaining timeline queue stopped, but completed hours "
+                f"were kept:\n{message}"
+            )
+        else:
+            QMessageBox.critical(self, APP_NAME, str(message))
+
+    def _on_timeline_viewer_destroyed(self, worker, output_dir: str) -> None:
+        if self._model_timeline_worker is worker:
+            worker._sharpmod_viewer_closed = True
+            worker.requestInterruption()
+            return
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+    def _on_timeline_finished(self) -> None:
+        worker = self.sender()
+        if self._model_timeline_worker is worker:
+            self._model_timeline_worker = None
+            self._set_model_busy(False)
+        viewer = getattr(worker, "_sharpmod_viewer", None)
+        if viewer is None or getattr(worker, "_sharpmod_viewer_closed", False):
+            shutil.rmtree(worker.output_dir, ignore_errors=True)
+        worker.deleteLater()
+
     def _shutdown_model_cache(self) -> None:
-        """Close decoded hours, release disk leases, and enforce cache limits."""
+        """Stop fetch workers, release disk leases, and enforce cache limits."""
         self._cancel_model_prefetch(wait=True)
         if self._model_worker is not None:
             self._model_worker.requestInterruption()
             self._model_worker.wait(5000)
+        if self._model_timeline_worker is not None:
+            self._model_timeline_worker.requestInterruption()
+            self._model_timeline_worker.wait(5000)
+        for worker in (
+                self._era5_worker, self._wrf_inspect_worker,
+                self._wrf_extract_worker):
+            if worker is None:
+                continue
+            worker.requestInterruption()
+            if not worker.wait(5000):
+                _LOGGER.warning(
+                    "application.worker_still_stopping worker=%s", type(worker).__name__)
         self._model_hour_cache.clear()
         try:
             self._model_disk_cache.prune()
@@ -1761,6 +2106,7 @@ class PickerWindow(QMainWindow):
         if busy:
             QApplication.setOverrideCursor(Qt.WaitCursor)
             self._model_fetch_btn.setEnabled(False)
+            self._model_timeline_btn.setEnabled(False)
             self._model_cancel_btn.setEnabled(True)
             self._model_cancel_btn.setText("Cancel")
             self._model_cancel_btn.show()
@@ -1783,6 +2129,7 @@ class PickerWindow(QMainWindow):
             self._model_progress_total = 0
             self._model_cancel_btn.hide()
             self._model_fetch_btn.setText("Fetch && Display Forecast Sounding")
+            self._model_timeline_btn.setText("Timeline…")
             self._model_update_fetch_state()
 
     def _on_model_fetch_progress(self, stage: str, total_bytes: int) -> None:
@@ -1920,6 +2267,15 @@ class PickerWindow(QMainWindow):
         QMessageBox.critical(self, APP_NAME, message)
 
     def _cancel_model_fetch(self) -> None:
+        timeline = self._model_timeline_worker
+        if timeline is not None:
+            timeline.requestInterruption()
+            self._model_cancel_btn.setEnabled(False)
+            self._model_cancel_btn.setText("Cancelling queue…")
+            self.statusBar().showMessage(
+                "Cancelling remaining timeline hours; completed hours are kept…"
+            )
+            return
         worker = self._model_worker
         if worker is None:
             return
@@ -1935,7 +2291,9 @@ class PickerWindow(QMainWindow):
     def _start_model_prefetch(
         self, model, lat, lon, run_time, current_fxx, member,
     ) -> None:
-        if not self._model_prefetch_enabled() or self._model_worker is not None:
+        if not self._model_prefetch_enabled() \
+                or self._model_worker is not None \
+                or getattr(self, "_model_timeline_worker", None) is not None:
             return
         if self._model_prefetch_worker is not None:
             return
@@ -1993,10 +2351,13 @@ class PickerWindow(QMainWindow):
         worker.deleteLater()
 
     def _clear_model_cache(self) -> None:
-        if self._model_worker is not None:
+        if self._model_worker is not None \
+                or self._model_timeline_worker is not None \
+                or self._era5_worker is not None:
             QMessageBox.information(
                 self, APP_NAME,
-                "Wait for the active model fetch to finish or cancel it first.",
+                "Wait for the active model/ERA5 fetch to finish or cancel it "
+                "first.",
             )
             return
         self._cancel_model_prefetch(wait=True)
@@ -2008,6 +2369,541 @@ class PickerWindow(QMainWindow):
         )
 
     # ====================================================================== #
+    # Download library and saved/recent points
+    # ====================================================================== #
+    def _show_cache_manager(self) -> None:
+        dialog = CacheManagerDialog(
+            self._model_disk_cache,
+            use_callback=self._reuse_cache_entry,
+            parent=self,
+        )
+        dialog.exec()
+
+    def _reuse_cache_entry(self, entry) -> None:
+        """Open a portable cache item or re-extract from cached GRIB data."""
+        if entry.valid_sounding:
+            sounding = next(
+                (
+                    path for path in entry.path.rglob("*.npz")
+                    if path.with_suffix(".json").is_file()
+                ),
+                None,
+            )
+            if sounding is not None:
+                try:
+                    prof_col, stn_id = _render().decode(str(sounding))
+                    self._show_sounding(
+                        prof_col, stn_id,
+                        title=f"{APP_NAME} — Cached {entry.model.upper()} sounding",
+                    )
+                    self.statusBar().showMessage(
+                        f"Opened cached {entry.model.upper()} sounding offline",
+                        5000,
+                    )
+                except Exception as exc:  # noqa: BLE001 - cache/render boundary
+                    QMessageBox.critical(
+                        self, APP_NAME,
+                        f"The cached sounding could not be opened:\n{exc}",
+                    )
+                return
+
+        try:
+            run_time = datetime.fromisoformat(entry.run.replace("Z", "+00:00"))
+            if run_time.tzinfo is None:
+                run_time = run_time.replace(tzinfo=timezone.utc)
+            else:
+                run_time = run_time.astimezone(timezone.utc)
+        except (AttributeError, TypeError, ValueError):
+            QMessageBox.warning(
+                self, APP_NAME, "This cache entry has no usable run time."
+            )
+            return
+        point = parse_spatial_point(entry.spatial)
+        if entry.model.casefold() == "era5":
+            self._select_tab("Reanalysis (ERA5)")
+            self._era5_date.setDate(QDate(
+                run_time.year, run_time.month, run_time.day
+            ))
+            hour_index = self._era5_hour.findData(run_time.hour)
+            if hour_index >= 0:
+                self._era5_hour.setCurrentIndex(hour_index)
+            if point is not None:
+                self._era5_lat.setValue(point[0])
+                self._era5_lon.setValue(point[1])
+            self._era5_fetch()
+            return
+
+        from sharpmod.tools import model_extract
+        try:
+            cfg = model_extract.get_config(entry.model)
+        except Exception as exc:  # noqa: BLE001 - stale provider entry
+            QMessageBox.warning(
+                self, APP_NAME,
+                f"The cached model adapter is no longer available:\n{exc}",
+            )
+            return
+        preferred_area = {
+            "Alaska": "Alaska",
+            "Hawaii": "Hawaii",
+            "Puerto Rico": "Puerto Rico",
+            "CONUS": "United States (CONUS)",
+        }.get(cfg.domain, "World")
+        area_index = self._model_area_combo.findText(preferred_area)
+        if area_index >= 0:
+            self._model_area_combo.setCurrentIndex(area_index)
+        model_index = self._model_combo.findData(cfg.key)
+        if model_index < 0:
+            world_index = self._model_area_combo.findText("World")
+            if world_index >= 0:
+                self._model_area_combo.setCurrentIndex(world_index)
+            model_index = self._model_combo.findData(cfg.key)
+        if model_index < 0:
+            QMessageBox.warning(
+                self, APP_NAME,
+                f"{cfg.label} is not selectable in the current provider catalog.",
+            )
+            return
+        self._model_combo.setCurrentIndex(model_index)
+        self._model_date.setDate(QDate(
+            run_time.year, run_time.month, run_time.day
+        ))
+        cycle_index = self._model_cycle.findData(run_time.hour)
+        if cycle_index >= 0:
+            self._model_cycle.setCurrentIndex(cycle_index)
+        fxx_index = self._model_fxx_combo.findData(int(entry.fxx))
+        if fxx_index >= 0:
+            self._model_fxx_combo.setCurrentIndex(fxx_index)
+        if entry.member and self._model_member.isEnabled():
+            self._model_member.setText(entry.member)
+        if point is not None:
+            self._model_lat.setValue(point[0])
+            self._model_lon.setValue(point[1])
+        self._select_tab("Forecast Model")
+        self._model_fetch(cache_entry=entry)
+
+    def _select_tab(self, title: str) -> None:
+        for index in range(self._tabs.count()):
+            if self._tabs.tabText(index) == title:
+                self._tabs.setCurrentIndex(index)
+                return
+
+    def _current_location_point(self):
+        tab = self._tabs.tabText(self._tabs.currentIndex())
+        if tab == "Reanalysis (ERA5)":
+            return self._era5_lat.value(), self._era5_lon.value()
+        if tab == "Open File" and hasattr(self, "_file_modes") \
+                and self._file_modes.currentIndex() == 1:
+            return self._wrf_lat.value(), self._wrf_lon.value()
+        return self._model_lat.value(), self._model_lon.value()
+
+    def _show_saved_locations(self) -> None:
+        dialog = SavedLocationsDialog(
+            self._saved_location_store,
+            current_point=self._current_location_point,
+            use_callback=self._apply_saved_location,
+            parent=self,
+        )
+        dialog.exec()
+        self._refresh_location_markers()
+
+    def _apply_saved_location(self, location) -> None:
+        tab = self._tabs.tabText(self._tabs.currentIndex())
+        if tab == "Reanalysis (ERA5)":
+            self._era5_lat.setValue(location.lat)
+            self._era5_lon.setValue(location.lon)
+            self._era5_loc.setText(location.name)
+            self._era5_map.set_point(location.lat, location.lon, center=True)
+        elif tab == "Open File" and hasattr(self, "_file_modes") \
+                and self._file_modes.currentIndex() == 1:
+            self._wrf_lat.setValue(location.lat)
+            self._wrf_lon.setValue(location.lon)
+            self._wrf_map.set_point(location.lat, location.lon, center=True)
+        else:
+            self._select_tab("Forecast Model")
+            self._model_lat.setValue(location.lat)
+            self._model_lon.setValue(location.lon)
+            self._model_map.set_point(location.lat, location.lon, center=True)
+
+    def _safe_locations(self, store):
+        try:
+            return store.load()
+        except Exception:  # noqa: BLE001 - corrupt settings should not block GUI
+            _LOGGER.exception("saved_locations.load_failed key=%s", store.key)
+            return []
+
+    def _refresh_location_markers(self) -> None:
+        locations = self._safe_locations(self._saved_location_store)
+        for name in ("_model_map", "_era5_map", "_wrf_map"):
+            map_widget = getattr(self, name, None)
+            if map_widget is not None:
+                map_widget.set_saved_points(locations)
+
+    def _remember_point(self, lat, lon, label=None) -> None:
+        try:
+            self._recent_location_store.remember_recent(lat, lon, label)
+        except Exception:  # noqa: BLE001 - recents are never fetch-critical
+            _LOGGER.exception("recent_locations.save_failed")
+            return
+        self._refresh_recent_location_menu()
+
+    def _refresh_recent_location_menu(self) -> None:
+        menu = getattr(self, "_recent_locations_menu", None)
+        if menu is None:
+            return
+        menu.clear()
+        locations = self._safe_locations(self._recent_location_store)
+        for location in locations:
+            action = QAction(
+                f"{location.name}  ({location.lat:.4f}, {location.lon:.4f})",
+                menu,
+            )
+            action.triggered.connect(
+                lambda _checked=False, location=location:
+                self._apply_saved_location(location)
+            )
+            menu.addAction(action)
+        if not locations:
+            empty = QAction("(no recent points yet)", menu)
+            empty.setEnabled(False)
+            menu.addAction(empty)
+
+    # ====================================================================== #
+    # ERA5 reanalysis tab
+    # ====================================================================== #
+    def _build_era5_tab(self) -> QWidget:
+        w = QWidget()
+        outer = QHBoxLayout(w)
+        outer.setContentsMargins(10, 8, 10, 8)
+        outer.setSpacing(12)
+
+        self._era5_syncing_point = False
+        self._era5_map = PointMapWidget()
+        self._era5_map.pointSelected.connect(self._era5_on_map_point)
+        self._era5_map.pointActivated.connect(
+            lambda _lat, _lon: self._era5_fetch())
+        self._era5_map.set_domain(
+            (-180.0, 180.0, -90.0, 90.0), "ERA5 global 0.25° grid")
+
+        left = QVBoxLayout()
+        left.setSpacing(8)
+
+        area_box = QGroupBox("Region")
+        area_layout = QVBoxLayout(area_box)
+        self._era5_area_combo = QComboBox()
+        for name in MAP_AREAS:
+            self._era5_area_combo.addItem(name)
+        self._era5_area_combo.currentTextChanged.connect(
+            self._era5_map.set_area)
+        area_layout.addWidget(self._era5_area_combo)
+        zoom_row = QHBoxLayout()
+        zoom_out = QToolButton(); zoom_out.setText("−")
+        zoom_out.clicked.connect(lambda: self._era5_map.zoom(1.25))
+        zoom_in = QToolButton(); zoom_in.setText("+")
+        zoom_in.clicked.connect(lambda: self._era5_map.zoom(0.8))
+        zoom_reset = QToolButton(); zoom_reset.setText("Reset")
+        zoom_reset.clicked.connect(lambda: self._era5_map.reset_view())
+        zoom_row.addWidget(zoom_out)
+        zoom_row.addWidget(zoom_in)
+        zoom_row.addWidget(zoom_reset)
+        zoom_row.addStretch(1)
+        area_layout.addLayout(zoom_row)
+        left.addWidget(area_box)
+
+        time_box = QGroupBox("Analysis time (UTC)")
+        time_grid = QGridLayout(time_box)
+        time_grid.addWidget(QLabel("Date:"), 0, 0)
+        self._era5_date = QDateEdit()
+        self._era5_date.setDisplayFormat("yyyy-MM-dd")
+        self._era5_date.setCalendarPopup(True)
+        self._era5_date.setMinimumDate(QDate(1940, 1, 1))
+        self._era5_date.setMaximumDate(QDate.currentDate())
+        self._era5_date.dateChanged.connect(self._era5_update_state)
+        time_grid.addWidget(self._era5_date, 0, 1)
+        time_grid.addWidget(QLabel("Hour:"), 1, 0)
+        self._era5_hour = QComboBox()
+        for hour in range(24):
+            self._era5_hour.addItem(f"{hour:02d}Z", hour)
+        self._era5_hour.currentIndexChanged.connect(self._era5_update_state)
+        time_grid.addWidget(self._era5_hour, 1, 1)
+        recent = QToolButton()
+        recent.setText("Latest likely available")
+        recent.setToolTip(
+            "ERA5 normally appears several days after real time")
+        recent.clicked.connect(self._era5_set_recent)
+        time_grid.addWidget(recent, 2, 0, 1, 2)
+        left.addWidget(time_box)
+
+        point_box = QGroupBox("Point")
+        point_grid = QGridLayout(point_box)
+        point_grid.addWidget(QLabel("Latitude:"), 0, 0)
+        self._era5_lat = QDoubleSpinBox()
+        self._era5_lat.setRange(-90.0, 90.0)
+        self._era5_lat.setDecimals(4)
+        self._era5_lat.setSingleStep(0.25)
+        self._era5_lat.setValue(35.18)
+        self._era5_lat.valueChanged.connect(self._era5_point_from_spins)
+        point_grid.addWidget(self._era5_lat, 0, 1)
+        point_grid.addWidget(QLabel("Longitude:"), 1, 0)
+        self._era5_lon = QDoubleSpinBox()
+        self._era5_lon.setRange(-180.0, 180.0)
+        self._era5_lon.setDecimals(4)
+        self._era5_lon.setSingleStep(0.25)
+        self._era5_lon.setValue(-97.44)
+        self._era5_lon.valueChanged.connect(self._era5_point_from_spins)
+        point_grid.addWidget(self._era5_lon, 1, 1)
+        center = QToolButton()
+        center.setText("Center")
+        center.clicked.connect(lambda: self._era5_map.set_point(
+            self._era5_lat.value(), self._era5_lon.value(), center=True))
+        point_grid.addWidget(center, 0, 2, 2, 1)
+        self._era5_snapped = QLabel("")
+        self._era5_snapped.setWordWrap(True)
+        self._era5_snapped.setStyleSheet("color: gray;")
+        point_grid.addWidget(self._era5_snapped, 2, 0, 1, 3)
+        point_grid.addWidget(QLabel("Label:"), 3, 0)
+        self._era5_loc = QLineEdit()
+        self._era5_loc.setPlaceholderText("optional location label")
+        point_grid.addWidget(self._era5_loc, 3, 1, 1, 2)
+        left.addWidget(point_box)
+
+        self._era5_readiness = QLabel("")
+        self._era5_readiness.setWordWrap(True)
+        self._era5_readiness.setStyleSheet("color: #aeb8c8;")
+        left.addWidget(self._era5_readiness)
+
+        fetch_row = QHBoxLayout()
+        self._era5_fetch_btn = QPushButton("Fetch && Display ERA5 Sounding")
+        self._era5_fetch_btn.setMinimumHeight(36)
+        self._era5_fetch_btn.clicked.connect(self._era5_fetch)
+        fetch_row.addWidget(self._era5_fetch_btn, 1)
+        self._era5_cancel_btn = QPushButton("Cancel")
+        self._era5_cancel_btn.setMinimumHeight(36)
+        self._era5_cancel_btn.clicked.connect(self._cancel_era5_fetch)
+        self._era5_cancel_btn.hide()
+        fetch_row.addWidget(self._era5_cancel_btn)
+        left.addLayout(fetch_row)
+
+        self._era5_progress = QProgressBar()
+        self._era5_progress.setRange(0, 0)
+        self._era5_progress.hide()
+        left.addWidget(self._era5_progress)
+        self._era5_progress_detail = QLabel("")
+        self._era5_progress_detail.setWordWrap(True)
+        self._era5_progress_detail.setStyleSheet("color: #aeb8c8;")
+        self._era5_progress_detail.hide()
+        left.addWidget(self._era5_progress_detail)
+        left.addStretch(1)
+
+        left_w = QWidget()
+        left_w.setLayout(left)
+        left_w.setMinimumWidth(PICKER_RAIL_MIN_WIDTH)
+        left_w.setMaximumWidth(PICKER_RAIL_MAX_WIDTH)
+        left_w.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        outer.addWidget(left_w)
+        outer.addWidget(self._era5_map, 1)
+
+        self._era5_set_recent()
+        self._era5_point_from_spins(center=True)
+        self._era5_update_readiness()
+        return w
+
+    def _era5_update_readiness(self) -> None:
+        try:
+            from importlib.util import find_spec
+            missing = [
+                name for name in ("cdsapi", "cfgrib", "xarray")
+                if find_spec(name) is None
+            ]
+        except (ImportError, ValueError):
+            missing = []
+        if missing:
+            self._era5_readiness.setText(
+                "Missing ERA5 packages: " + ", ".join(missing)
+                + '. Install with pip install -e ".[era5]".')
+            return
+        rc_path = Path(os.environ.get(
+            "CDSAPI_RC", str(Path.home() / ".cdsapirc"))).expanduser()
+        env_profile = bool(
+            os.environ.get("CDSAPI_URL") and os.environ.get("CDSAPI_KEY"))
+        if not env_profile and not rc_path.is_file():
+            self._era5_readiness.setText(
+                "CDS credentials are not configured. Accept the ERA5 "
+                "pressure-level terms and save the API profile as "
+                "$HOME/.cdsapirc.")
+        else:
+            self._era5_readiness.setText(
+                "CDS profile detected. Dataset terms are verified when the "
+                "request is submitted; secret values are never displayed.")
+
+    def _era5_set_recent(self) -> None:
+        # ERA5 is not real-time; six days is a conservative one-click default.
+        recent = datetime.now(timezone.utc) - timedelta(days=6)
+        self._era5_date.setDate(QDate(
+            recent.year, recent.month, recent.day))
+        index = self._era5_hour.findData(recent.hour)
+        if index >= 0:
+            self._era5_hour.setCurrentIndex(index)
+        self._era5_update_state()
+
+    def _era5_valid_time(self) -> datetime:
+        day = self._era5_date.date()
+        hour = int(self._era5_hour.currentData() or 0)
+        return datetime(
+            day.year(), day.month(), day.day(), hour, tzinfo=timezone.utc)
+
+    def _era5_point_from_spins(self, *_args, center=False) -> None:
+        if getattr(self, "_era5_syncing_point", False):
+            return
+        self._era5_map.set_point(
+            self._era5_lat.value(), self._era5_lon.value(), center=center)
+        self._era5_update_state()
+
+    def _era5_on_map_point(self, lat, lon) -> None:
+        self._era5_syncing_point = True
+        try:
+            self._era5_lat.setValue(float(lat))
+            self._era5_lon.setValue(float(lon))
+        finally:
+            self._era5_syncing_point = False
+        self._era5_update_state()
+
+    def _era5_update_state(self, *_args) -> None:
+        if not hasattr(self, "_era5_snapped"):
+            return
+        from sharpmod.tools import era5_extract
+        lat = float(self._era5_lat.value())
+        lon = float(self._era5_lon.value())
+        snapped_lat, snapped_lon = era5_extract._nearest_era5_grid_point(
+            lat, lon)
+        self._era5_snapped.setText(
+            f"Requested {lat:.4f}, {lon:.4f} → ERA5 grid "
+            f"{snapped_lat:.2f}, {snapped_lon:.2f}")
+        valid = self._era5_valid_time()
+        self._era5_fetch_btn.setEnabled(
+            valid <= datetime.now(timezone.utc) and self._era5_worker is None)
+
+    def _era5_fetch(self) -> None:
+        if self._era5_worker is not None:
+            QMessageBox.information(
+                self, APP_NAME, "An ERA5 fetch is already in progress.")
+            return
+        from sharpmod.tools import era5_extract
+        try:
+            # Resolve cfgrib/ecCodes on the GUI thread before QThread work on
+            # Windows, and report credentials before any output directory.
+            era5_extract.require_runtime_dependencies()
+        except era5_extract.RetrievalError as exc:
+            self._era5_update_readiness()
+            self.statusBar().showMessage("ERA5 setup is incomplete")
+            QMessageBox.critical(self, APP_NAME, str(exc))
+            return
+
+        valid = self._era5_valid_time()
+        lat = float(self._era5_lat.value())
+        lon = float(self._era5_lon.value())
+        loc = self._era5_loc.text().strip() or f"ERA5 {lat:.2f}, {lon:.2f}"
+        self._remember_point(lat, lon, loc)
+        output_dir = tempfile.mkdtemp(
+            prefix=f"era5_{valid:%Y%m%d%H}_{lat:+07.2f}_{lon:+08.2f}_")
+        out_path = os.path.join(output_dir, "sounding.npz")
+        worker = _ERA5FetchWorker(
+            lat, lon, valid, out_path, loc=loc,
+            disk_cache=self._model_disk_cache, parent=self)
+        self._era5_worker = worker
+        worker.finished_ok.connect(self._on_era5_fetch_ok)
+        worker.failed.connect(self._on_era5_fetch_failed)
+        worker.cancelled.connect(self._on_era5_fetch_cancelled)
+        worker.progress.connect(self._on_era5_progress)
+        worker.finished.connect(self._on_era5_fetch_finished)
+        self._set_era5_busy(True)
+        worker.start()
+
+    def _set_era5_busy(self, busy) -> None:
+        if busy:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            self._era5_fetch_btn.setEnabled(False)
+            self._era5_fetch_btn.setText("Fetching ERA5…")
+            self._era5_cancel_btn.setEnabled(True)
+            self._era5_cancel_btn.setText("Cancel")
+            self._era5_cancel_btn.show()
+            self._era5_progress.show()
+            self._era5_progress_detail.setText(
+                "Validating the ERA5 request…")
+            self._era5_progress_detail.show()
+        else:
+            QApplication.restoreOverrideCursor()
+            self._era5_fetch_btn.setText("Fetch && Display ERA5 Sounding")
+            self._era5_cancel_btn.hide()
+            self._era5_progress.hide()
+            self._era5_progress_detail.hide()
+            self._era5_update_state()
+
+    def _on_era5_progress(self, stage) -> None:
+        messages = {
+            "validating": "Validating the ERA5 request…",
+            "queued": "Submitting the request to the Copernicus CDS queue…",
+            "retrieving": "Waiting for and downloading the CDS result…",
+            "decoding": "Decoding all 37 ERA5 pressure levels…",
+            "extracting": "Extracting the nearest ERA5 grid column…",
+            "cached": "Using the cached ERA5 point/hour…",
+            "writing": "Writing the viewer-owned sounding…",
+            "complete": "Preparing the ERA5 sounding display…",
+            "rendering": "Rendering the ERA5 sounding window…",
+        }
+        message = messages.get(str(stage), "Processing ERA5 data…")
+        self._era5_progress_detail.setText(message)
+        self.statusBar().showMessage(message)
+
+    def _cancel_era5_fetch(self) -> None:
+        worker = self._era5_worker
+        if worker is None:
+            return
+        worker.requestInterruption()
+        self._era5_cancel_btn.setEnabled(False)
+        self._era5_cancel_btn.setText("Cancellation requested")
+        self._era5_progress_detail.setText(
+            "Cancellation requested. A synchronous CDS request already in "
+            "flight must return before local cleanup can finish.")
+
+    def _on_era5_fetch_cancelled(self) -> None:
+        self.statusBar().showMessage("ERA5 fetch cancelled", 5000)
+
+    def _on_era5_fetch_failed(self, message) -> None:
+        self.statusBar().showMessage("ERA5 fetch failed")
+        QMessageBox.critical(self, APP_NAME, str(message))
+
+    def _on_era5_fetch_finished(self) -> None:
+        worker = self.sender()
+        if self._era5_worker is worker:
+            self._era5_worker = None
+            self._set_era5_busy(False)
+        worker.deleteLater()
+
+    def _on_era5_fetch_ok(
+            self, npz_path, valid_time, snapped_lat, snapped_lon,
+            cache_hit) -> None:
+        self._on_era5_progress("rendering")
+        QApplication.processEvents()
+        try:
+            R = _render()
+            prof_col, stn_id = R.decode(npz_path)
+            title = (
+                f"{APP_NAME} — ERA5 {valid_time:%Y-%m-%d %H}Z "
+                f"({snapped_lat:.2f}, {snapped_lon:.2f})")
+            win = self._show_sounding(prof_col, stn_id, title=title)
+            _retain_point_data_until_close(
+                win, npz_path, os.path.dirname(npz_path))
+        except Exception as exc:  # noqa: BLE001 - GUI/render boundary
+            _LOGGER.exception("era5_fetch.display_failed")
+            _cleanup_point_data(npz_path, os.path.dirname(npz_path))
+            QMessageBox.critical(
+                self, APP_NAME, f"Fetched, but could not display:\n{exc}")
+            return
+        suffix = " (cache hit)" if cache_hit else ""
+        self.statusBar().showMessage(
+            f"Opened ERA5 {valid_time:%Y-%m-%d %H}Z{suffix}", 5000)
+
+    # ====================================================================== #
     # Open File tab
     # ====================================================================== #
     def _build_file_tab(self) -> QWidget:
@@ -2015,12 +2911,17 @@ class PickerWindow(QMainWindow):
         layout = QVBoxLayout(w)
         layout.setSpacing(8)
 
+        modes = QTabWidget()
+        decoded = QWidget()
+        decoded_layout = QVBoxLayout(decoded)
+        decoded_layout.setSpacing(8)
+
         intro = QLabel(
             "Open a local sounding file \u2014 or drag one onto this window.\n"
             "Supported: .npz point soundings, SPC tabular, BUFKIT, PECAN, "
             "and WRF-ARW text.")
         intro.setWordWrap(True)
-        layout.addWidget(intro)
+        decoded_layout.addWidget(intro)
 
         row = QHBoxLayout()
         self._file_edit = QLineEdit()
@@ -2031,12 +2932,12 @@ class PickerWindow(QMainWindow):
         browse.clicked.connect(self._browse_file)
         row.addWidget(self._file_edit)
         row.addWidget(browse)
-        layout.addLayout(row)
+        decoded_layout.addLayout(row)
 
         open_btn = QPushButton("Open Sounding")
         open_btn.setMinimumHeight(32)
         open_btn.clicked.connect(self._open_from_edit)
-        layout.addWidget(open_btn)
+        decoded_layout.addWidget(open_btn)
 
         recent_box = QGroupBox("Recent files")
         rv = QVBoxLayout(recent_box)
@@ -2044,8 +2945,387 @@ class PickerWindow(QMainWindow):
         self._recent_list.itemDoubleClicked.connect(
             lambda item: self._open_file(item.data(Qt.UserRole)))
         rv.addWidget(self._recent_list)
-        layout.addWidget(recent_box, stretch=1)
+        decoded_layout.addWidget(recent_box, stretch=1)
+        modes.addTab(decoded, "Decoded Sounding")
+        modes.addTab(self._build_wrf_file_panel(), "Raw WRF wrfout")
+        layout.addWidget(modes)
+        self._file_modes = modes
         return w
+
+    def _build_wrf_file_panel(self) -> QWidget:
+        panel = QWidget()
+        outer = QHBoxLayout(panel)
+        outer.setContentsMargins(6, 6, 6, 6)
+        outer.setSpacing(12)
+
+        self._wrf_syncing_point = False
+        self._wrf_map = PointMapWidget()
+        self._wrf_map.set_area("World")
+        self._wrf_map.pointSelected.connect(self._wrf_on_map_point)
+        self._wrf_map.pointActivated.connect(
+            lambda _lat, _lon: self._wrf_extract())
+
+        left = QVBoxLayout()
+        left.setSpacing(8)
+
+        file_box = QGroupBox("Raw WRF-ARW output")
+        file_layout = QVBoxLayout(file_box)
+        explanation = QLabel(
+            "Choose a native wrfout* NetCDF file. Domain and time inspection "
+            "runs in the background before extraction is enabled.")
+        explanation.setWordWrap(True)
+        file_layout.addWidget(explanation)
+        file_row = QHBoxLayout()
+        self._wrf_path_edit = QLineEdit()
+        self._wrf_path_edit.setClearButtonEnabled(True)
+        self._wrf_path_edit.setPlaceholderText("Path to wrfout_d01_…")
+        self._wrf_path_edit.textChanged.connect(self._wrf_path_changed)
+        self._wrf_path_edit.returnPressed.connect(self._wrf_start_inspection)
+        browse = QPushButton("Browse…")
+        browse.clicked.connect(self._browse_wrf_file)
+        file_row.addWidget(self._wrf_path_edit, 1)
+        file_row.addWidget(browse)
+        file_layout.addLayout(file_row)
+        self._wrf_inspect_btn = QPushButton("Inspect Domain && Times")
+        self._wrf_inspect_btn.clicked.connect(self._wrf_start_inspection)
+        file_layout.addWidget(self._wrf_inspect_btn)
+        self._wrf_domain_status = QLabel("Choose a file to inspect.")
+        self._wrf_domain_status.setWordWrap(True)
+        self._wrf_domain_status.setStyleSheet("color: #aeb8c8;")
+        file_layout.addWidget(self._wrf_domain_status)
+        left.addWidget(file_box)
+
+        time_box = QGroupBox("Available time")
+        time_layout = QVBoxLayout(time_box)
+        self._wrf_time_combo = QComboBox()
+        self._wrf_time_combo.setEnabled(False)
+        time_layout.addWidget(self._wrf_time_combo)
+        left.addWidget(time_box)
+
+        point_box = QGroupBox("Point inside WRF domain")
+        point_grid = QGridLayout(point_box)
+        point_grid.addWidget(QLabel("Latitude:"), 0, 0)
+        self._wrf_lat = QDoubleSpinBox()
+        self._wrf_lat.setRange(-90.0, 90.0)
+        self._wrf_lat.setDecimals(4)
+        self._wrf_lat.setValue(35.18)
+        self._wrf_lat.valueChanged.connect(self._wrf_point_from_spins)
+        point_grid.addWidget(self._wrf_lat, 0, 1)
+        point_grid.addWidget(QLabel("Longitude:"), 1, 0)
+        self._wrf_lon = QDoubleSpinBox()
+        self._wrf_lon.setRange(-180.0, 180.0)
+        self._wrf_lon.setDecimals(4)
+        self._wrf_lon.setValue(-97.44)
+        self._wrf_lon.valueChanged.connect(self._wrf_point_from_spins)
+        point_grid.addWidget(self._wrf_lon, 1, 1)
+        center = QToolButton()
+        center.setText("Center")
+        center.clicked.connect(lambda: self._wrf_map.set_point(
+            self._wrf_lat.value(), self._wrf_lon.value(), center=True))
+        point_grid.addWidget(center, 0, 2, 2, 1)
+        self._wrf_point_status = QLabel("Inspect a WRF domain first.")
+        self._wrf_point_status.setWordWrap(True)
+        self._wrf_point_status.setStyleSheet("color: gray;")
+        point_grid.addWidget(self._wrf_point_status, 2, 0, 1, 3)
+        point_grid.addWidget(QLabel("Label:"), 3, 0)
+        self._wrf_loc = QLineEdit()
+        self._wrf_loc.setPlaceholderText("optional location label")
+        point_grid.addWidget(self._wrf_loc, 3, 1, 1, 2)
+        left.addWidget(point_box)
+
+        action_row = QHBoxLayout()
+        self._wrf_extract_btn = QPushButton("Extract && Display WRF Sounding")
+        self._wrf_extract_btn.setMinimumHeight(36)
+        self._wrf_extract_btn.setEnabled(False)
+        self._wrf_extract_btn.clicked.connect(self._wrf_extract)
+        action_row.addWidget(self._wrf_extract_btn, 1)
+        self._wrf_cancel_btn = QPushButton("Cancel")
+        self._wrf_cancel_btn.setMinimumHeight(36)
+        self._wrf_cancel_btn.clicked.connect(self._cancel_wrf_operation)
+        self._wrf_cancel_btn.hide()
+        action_row.addWidget(self._wrf_cancel_btn)
+        left.addLayout(action_row)
+        self._wrf_progress = QProgressBar()
+        self._wrf_progress.setRange(0, 0)
+        self._wrf_progress.hide()
+        left.addWidget(self._wrf_progress)
+        self._wrf_progress_detail = QLabel("")
+        self._wrf_progress_detail.setWordWrap(True)
+        self._wrf_progress_detail.setStyleSheet("color: #aeb8c8;")
+        self._wrf_progress_detail.hide()
+        left.addWidget(self._wrf_progress_detail)
+        left.addStretch(1)
+
+        left_w = QWidget()
+        left_w.setLayout(left)
+        left_w.setMinimumWidth(PICKER_RAIL_MIN_WIDTH)
+        left_w.setMaximumWidth(PICKER_RAIL_MAX_WIDTH + 70)
+        left_w.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        outer.addWidget(left_w)
+        outer.addWidget(self._wrf_map, 1)
+        self._wrf_point_from_spins(center=True)
+        return panel
+
+    def _browse_wrf_file(self) -> None:
+        start = self._settings.value(
+            "wrf/last_dir", self._settings.value("last_dir", "", str), str)
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open Raw WRF Output", start,
+            "WRF output (wrfout* *.nc *.nc4);;All files (*.*)")
+        if path:
+            self._wrf_path_edit.setText(path)
+            self._wrf_start_inspection()
+
+    def _wrf_path(self) -> str:
+        return self._wrf_path_edit.text().strip().strip('"')
+
+    def _wrf_path_changed(self, *_args) -> None:
+        path = self._wrf_path()
+        inspected = (self._wrf_domain or {}).get("source_file")
+        if inspected and os.path.abspath(path) == os.path.abspath(inspected):
+            return
+        self._wrf_domain = None
+        self._wrf_time_combo.clear()
+        self._wrf_time_combo.setEnabled(False)
+        self._wrf_map.set_domain(None)
+        self._wrf_domain_status.setText("Inspect this file before extraction.")
+        self._wrf_update_fetch_state()
+
+    def _wrf_start_inspection(self) -> None:
+        if self._wrf_inspect_worker is not None:
+            QMessageBox.information(
+                self, APP_NAME, "WRF inspection is already in progress.")
+            return
+        if self._wrf_extract_worker is not None:
+            QMessageBox.information(
+                self, APP_NAME, "Wait for the active WRF extraction first.")
+            return
+        path = self._wrf_path()
+        if not path or not os.path.isfile(path):
+            QMessageBox.warning(
+                self, APP_NAME, f"WRF output file not found:\n{path}")
+            return
+        from sharpmod.tools import wrf_extract
+        try:
+            wrf_extract.require_runtime_dependencies()
+        except wrf_extract.RetrievalError as exc:
+            QMessageBox.critical(self, APP_NAME, str(exc))
+            return
+        worker = _WRFInspectWorker(path, parent=self)
+        self._wrf_inspect_worker = worker
+        worker.inspected.connect(self._on_wrf_inspected)
+        worker.failed.connect(self._on_wrf_inspect_failed)
+        worker.cancelled.connect(self._on_wrf_cancelled)
+        worker.finished.connect(self._on_wrf_inspect_finished)
+        self._set_wrf_busy(True, "Inspecting WRF coordinates and times…")
+        worker.start()
+
+    @staticmethod
+    def _wrf_map_area(bounds) -> str:
+        lon0, lon1, lat0, lat1 = bounds
+        candidates = []
+        for name, (area_lon0, area_lon1, area_lat0, area_lat1) in \
+                MAP_AREAS.items():
+            if area_lon0 <= lon0 and lon1 <= area_lon1 \
+                    and area_lat0 <= lat0 and lat1 <= area_lat1:
+                size = (area_lon1 - area_lon0) * (area_lat1 - area_lat0)
+                candidates.append((size, name))
+        return min(candidates)[1] if candidates else "World"
+
+    def _on_wrf_inspected(self, domain) -> None:
+        worker = self.sender()
+        if os.path.abspath(self._wrf_path()) != os.path.abspath(worker._path):
+            _LOGGER.info("wrf_inspect.stale path=%s", worker._path)
+            return
+        self._wrf_domain = dict(domain)
+        self._wrf_time_combo.clear()
+        times = tuple(domain.get("times") or (None,))
+        for index, value in enumerate(times):
+            label = value.strftime("%Y-%m-%d %H:%MZ") \
+                if isinstance(value, datetime) else f"File time {index + 1}"
+            self._wrf_time_combo.addItem(label, value)
+        self._wrf_time_combo.setEnabled(bool(times))
+        ny, nx = domain["shape"]
+        lon0, lon1, lat0, lat1 = domain["bounds"]
+        self._wrf_domain_status.setText(
+            f"Grid {ny} × {nx}; {lat0:.3f}–{lat1:.3f}° latitude, "
+            f"{lon0:.3f}–{lon1:.3f}° longitude; {len(times)} time(s).")
+        self._wrf_map.set_area(self._wrf_map_area(domain["bounds"]))
+        self._wrf_map.set_domain(domain["bounds"], f"WRF grid {ny} × {nx}")
+        center_lat, center_lon = domain["center"]
+        self._wrf_syncing_point = True
+        try:
+            self._wrf_lat.setValue(float(center_lat))
+            self._wrf_lon.setValue(float(center_lon))
+        finally:
+            self._wrf_syncing_point = False
+        self._wrf_map.set_point(center_lat, center_lon, center=True)
+        self._settings.setValue("wrf/last_dir", os.path.dirname(worker._path))
+        self._wrf_update_fetch_state()
+
+    def _on_wrf_inspect_failed(self, message) -> None:
+        self._wrf_domain = None
+        self._wrf_domain_status.setText("WRF inspection failed.")
+        self.statusBar().showMessage("WRF inspection failed")
+        QMessageBox.critical(self, APP_NAME, str(message))
+
+    def _on_wrf_inspect_finished(self) -> None:
+        worker = self.sender()
+        if self._wrf_inspect_worker is worker:
+            self._wrf_inspect_worker = None
+            self._set_wrf_busy(False)
+        worker.deleteLater()
+
+    def _wrf_point_from_spins(self, *_args, center=False) -> None:
+        if getattr(self, "_wrf_syncing_point", False):
+            return
+        self._wrf_map.set_point(
+            self._wrf_lat.value(), self._wrf_lon.value(), center=center)
+        self._wrf_update_fetch_state()
+
+    def _wrf_on_map_point(self, lat, lon) -> None:
+        self._wrf_syncing_point = True
+        try:
+            self._wrf_lat.setValue(float(lat))
+            self._wrf_lon.setValue(float(lon))
+        finally:
+            self._wrf_syncing_point = False
+        self._wrf_update_fetch_state()
+
+    def _wrf_update_fetch_state(self) -> None:
+        if not hasattr(self, "_wrf_extract_btn"):
+            return
+        from sharpmod.tools import wrf_extract
+        lat = float(self._wrf_lat.value())
+        lon = float(self._wrf_lon.value())
+        ok = wrf_extract.point_in_domain(self._wrf_domain, lat, lon)
+        if self._wrf_domain is None:
+            self._wrf_point_status.setText("Inspect a WRF domain first.")
+        elif ok:
+            self._wrf_point_status.setText(
+                f"Selected {lat:.4f}, {lon:.4f} inside the WRF grid.")
+        else:
+            self._wrf_point_status.setText(
+                f"Selected {lat:.4f}, {lon:.4f} is outside the WRF grid.")
+        busy = self._wrf_inspect_worker is not None \
+            or self._wrf_extract_worker is not None
+        self._wrf_extract_btn.setEnabled(ok and not busy)
+
+    def _wrf_selected_time(self):
+        if self._wrf_time_combo.count() == 0:
+            return None
+        return self._wrf_time_combo.currentData()
+
+    def _wrf_extract(self) -> None:
+        if self._wrf_extract_worker is not None:
+            QMessageBox.information(
+                self, APP_NAME, "A WRF extraction is already in progress.")
+            return
+        if self._wrf_inspect_worker is not None:
+            QMessageBox.information(
+                self, APP_NAME, "Wait for WRF inspection to finish first.")
+            return
+        from sharpmod.tools import wrf_extract
+        lat = float(self._wrf_lat.value())
+        lon = float(self._wrf_lon.value())
+        if not wrf_extract.point_in_domain(self._wrf_domain, lat, lon):
+            QMessageBox.warning(
+                self, APP_NAME, "Choose a point inside the inspected WRF grid.")
+            return
+        path = self._wrf_path()
+        if not os.path.isfile(path):
+            QMessageBox.warning(self, APP_NAME, f"File not found:\n{path}")
+            return
+        valid = self._wrf_selected_time()
+        loc = self._wrf_loc.text().strip() or f"WRF {lat:.2f}, {lon:.2f}"
+        output_dir = tempfile.mkdtemp(prefix="wrf_gui_")
+        out_path = os.path.join(output_dir, "sounding.npz")
+        worker = _WRFExtractWorker(
+            path, lat, lon, out_path, valid_time=valid, loc=loc, parent=self)
+        self._wrf_extract_worker = worker
+        worker.finished_ok.connect(self._on_wrf_extract_ok)
+        worker.failed.connect(self._on_wrf_extract_failed)
+        worker.cancelled.connect(self._on_wrf_cancelled)
+        worker.progress.connect(self._on_wrf_progress)
+        worker.finished.connect(self._on_wrf_extract_finished)
+        self._set_wrf_busy(True, "Opening raw WRF output…")
+        worker.start()
+
+    def _set_wrf_busy(self, busy, message="") -> None:
+        if busy:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            self._wrf_inspect_btn.setEnabled(False)
+            self._wrf_extract_btn.setEnabled(False)
+            self._wrf_cancel_btn.setEnabled(True)
+            self._wrf_cancel_btn.setText("Cancel")
+            self._wrf_cancel_btn.show()
+            self._wrf_progress.show()
+            self._wrf_progress_detail.setText(message or "Processing WRF data…")
+            self._wrf_progress_detail.show()
+        else:
+            QApplication.restoreOverrideCursor()
+            self._wrf_inspect_btn.setEnabled(True)
+            self._wrf_cancel_btn.hide()
+            self._wrf_progress.hide()
+            self._wrf_progress_detail.hide()
+            self._wrf_extract_btn.setText("Extract && Display WRF Sounding")
+            self._wrf_update_fetch_state()
+
+    def _on_wrf_progress(self, stage) -> None:
+        messages = {
+            "validating": "Validating the WRF request…",
+            "opening": "Opening raw WRF NetCDF output…",
+            "extracting": "Destaggering and extracting the WRF column…",
+            "writing": "Writing the viewer-owned sounding…",
+            "complete": "Preparing the WRF sounding display…",
+            "rendering": "Rendering the WRF sounding window…",
+        }
+        message = messages.get(str(stage), "Processing WRF output…")
+        self._wrf_progress_detail.setText(message)
+        self.statusBar().showMessage(message)
+
+    def _cancel_wrf_operation(self) -> None:
+        worker = self._wrf_extract_worker or self._wrf_inspect_worker
+        if worker is None:
+            return
+        worker.requestInterruption()
+        self._wrf_cancel_btn.setEnabled(False)
+        self._wrf_cancel_btn.setText("Cancelling…")
+        self.statusBar().showMessage("Cancelling WRF operation…")
+
+    def _on_wrf_cancelled(self) -> None:
+        self.statusBar().showMessage("WRF operation cancelled", 5000)
+
+    def _on_wrf_extract_failed(self, message) -> None:
+        self.statusBar().showMessage("WRF extraction failed")
+        QMessageBox.critical(self, APP_NAME, str(message))
+
+    def _on_wrf_extract_finished(self) -> None:
+        worker = self.sender()
+        if self._wrf_extract_worker is worker:
+            self._wrf_extract_worker = None
+            self._set_wrf_busy(False)
+        worker.deleteLater()
+
+    def _on_wrf_extract_ok(self, npz_path, valid_time) -> None:
+        self._on_wrf_progress("rendering")
+        QApplication.processEvents()
+        try:
+            R = _render()
+            prof_col, stn_id = R.decode(npz_path)
+            suffix = valid_time.strftime(" %Y-%m-%d %H:%MZ") \
+                if isinstance(valid_time, datetime) else ""
+            title = f"{APP_NAME} — WRF-ARW{suffix}"
+            win = self._show_sounding(prof_col, stn_id, title=title)
+            _retain_point_data_until_close(
+                win, npz_path, os.path.dirname(npz_path))
+        except Exception as exc:  # noqa: BLE001 - GUI/render boundary
+            _LOGGER.exception("wrf_extract.display_failed")
+            _cleanup_point_data(npz_path, os.path.dirname(npz_path))
+            QMessageBox.critical(
+                self, APP_NAME, f"Extracted, but could not display:\n{exc}")
+            return
+        self.statusBar().showMessage("Opened raw WRF point sounding", 5000)
 
     def _browse_file(self) -> None:
         start = self._settings.value("last_dir", "", str)
@@ -2131,9 +3411,17 @@ class PickerWindow(QMainWindow):
         for url in event.mimeData().urls():
             path = url.toLocalFile()
             if path:
-                self._tabs.setCurrentIndex(1)  # show the Open File tab
-                self._file_edit.setText(path)
-                self._open_file(path)
+                self._tabs.setCurrentWidget(self._file_tab)
+                filename = os.path.basename(path).lower()
+                if filename.startswith("wrfout") \
+                        or filename.endswith((".nc", ".nc4")):
+                    self._file_modes.setCurrentIndex(1)
+                    self._wrf_path_edit.setText(path)
+                    self._wrf_start_inspection()
+                else:
+                    self._file_modes.setCurrentIndex(0)
+                    self._file_edit.setText(path)
+                    self._open_file(path)
                 break
 
     # ====================================================================== #

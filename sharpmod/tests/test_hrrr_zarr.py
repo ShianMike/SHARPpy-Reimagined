@@ -7,6 +7,7 @@ from numcodecs import get_codec
 import pytest
 
 from sharpmod.hrrr_zarr import (
+    _point_dataset_from_columns,
     decode_zarr_point,
     discover_pressure_plan,
     hrrr_grid_index,
@@ -64,3 +65,30 @@ def test_decode_zarr_point_handles_compressed_chunk():
     selected = decode_zarr_point(payload, metadata, iy=1, ix=0)
 
     assert selected == 3.0
+
+
+def test_point_columns_normalize_without_constructing_xarray():
+    from datetime import datetime, timezone
+
+    levels = (1000.0, 850.0)
+    columns = {
+        "HGT": np.asarray([100.0, 1500.0]),
+        "TMP": np.asarray([293.15, 283.15]),
+        "RH": np.asarray([50.0, 60.0]),
+        "UGRD": np.asarray([3.0, -5.0]),
+        "VGRD": np.asarray([4.0, 0.0]),
+        "VVEL": np.asarray([-0.2, -0.1]),
+        "ABSV": np.asarray([1.0e-4, 8.0e-5]),
+    }
+
+    dataset = _point_dataset_from_columns(
+        levels, columns, 35.0, -97.0,
+        datetime(2026, 7, 22, tzinfo=timezone.utc), 35.01, -97.01,
+    )
+
+    np.testing.assert_array_equal(dataset.decoded.pres, levels)
+    np.testing.assert_allclose(dataset.decoded.tmpc, [20.0, 10.0])
+    np.testing.assert_allclose(dataset.decoded.wspd, [9.71922245, 9.71922245])
+    assert dataset.decoded.surface_relative_vorticity is not None
+    assert dataset.requested_lat == pytest.approx(35.01)
+    assert dataset.requested_lon == pytest.approx(-97.01)

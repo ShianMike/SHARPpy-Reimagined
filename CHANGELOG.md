@@ -53,6 +53,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   intermediate xarray point construction. Unsupported layouts retain the
   existing compatibility fallbacks.
 
+### Fixed
+
+- Preserved the cancellation signal during raw WRF extraction after the input
+  dataset has opened, so cancelled GUI requests do not surface as failures.
+
 ## [0.4.2] - 2026-07-18
 
 ### Fixed

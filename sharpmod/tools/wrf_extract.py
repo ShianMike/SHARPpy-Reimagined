@@ -411,7 +411,12 @@ def extract(wrfout_path, lat, lon, out_path, valid_time=None,
         _emit_progress(progress_callback, "extracting")
         cols, sel = _build_columns(ds, lat, lon, valid_time)
         _check_cancelled(cancelled)
-    except (WRFExtractionError, ParameterRangeError, RetrievalError):
+    except (
+        WRFExtractionError,
+        ExtractionCancelled,
+        ParameterRangeError,
+        RetrievalError,
+    ):
         raise
     except Exception as exc:  # noqa: BLE001 - any field/shape error -> retrieval
         raise RetrievalError(

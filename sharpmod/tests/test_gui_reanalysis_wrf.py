@@ -211,6 +211,28 @@ def test_wrf_inspection_and_extraction_enforce_real_grid_perimeter(tmp_path):
     assert not outside.exists()
 
 
+def test_wrf_extraction_preserves_cancellation_after_opening_dataset(tmp_path):
+    dataset = _wrf_dataset()
+    checks = 0
+
+    def cancelled():
+        nonlocal checks
+        checks += 1
+        # The first check happens before opening the input.  Cancel at the
+        # next check, after the supplied WRF dataset is already available.
+        return checks >= 2
+
+    out = tmp_path / "cancelled-wrf.npz"
+    with pytest.raises(wrf_extract.ExtractionCancelled):
+        wrf_extract.extract(
+            "memory://wrfout_d01", 35.1, -98.1, out,
+            dataset=dataset, cancelled=cancelled,
+        )
+
+    assert not out.exists()
+    assert not out.with_suffix(".json").exists()
+
+
 def test_wrf_workers_surface_inspection_and_cleanup_on_cancel(
         qt_app, tmp_path, monkeypatch):
     domain = {

@@ -60,6 +60,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made town resolution strictly CONUS-only with bundled Census state polygons,
   offline-first lookup, settlement-only online parsing, and expiring positive,
   offline, failure, and negative cache entries.
+- Kept coordinate-only recent points eligible for automatic town resolution
+  when they are reused from the Forecast, ERA5, or raw-WRF source controls.
 - Kept town names only in the locator title, replaced synchronous county
   requests during hodograph painting with bounded local Census tiles, and
   prevented height dots from colliding with one another or being covered by

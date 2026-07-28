@@ -7,6 +7,8 @@ from sharpmod.saved_locations import (
     LocationFormatError,
     RECENT_SETTINGS_KEY,
     SavedLocationStore,
+    generated_recent_label,
+    is_generated_recent_label,
 )
 
 
@@ -35,6 +37,18 @@ def test_recent_points_are_bounded_and_deduplicate_coordinates(tmp_path):
     store.remember_recent(35, -97, "updated")
 
     assert [item.name for item in store.load()] == ["updated", "second"]
+
+
+def test_unnamed_recent_label_is_stable_and_distinguishable(tmp_path):
+    store = SavedLocationStore(
+        _settings(tmp_path), key=RECENT_SETTINGS_KEY, max_entries=2
+    )
+
+    recent = store.remember_recent(35.12344, -97.56784)
+
+    assert recent.name == generated_recent_label(recent.lat, recent.lon)
+    assert is_generated_recent_label(recent.name, recent.lat, recent.lon)
+    assert not is_generated_recent_label("Norman", recent.lat, recent.lon)
 
 
 def test_import_export_is_versioned_and_atomic(tmp_path):

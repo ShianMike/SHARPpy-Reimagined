@@ -91,6 +91,20 @@ def _parse_document(value) -> list[SavedLocation]:
     return result
 
 
+def generated_recent_label(lat, lon) -> str:
+    """Return the stable menu label used for an unnamed recent point."""
+    latitude = float(lat)
+    longitude = float(lon)
+    if longitude == 180.0:
+        longitude = -180.0
+    return f"{latitude:.4f}, {longitude:.4f}"
+
+
+def is_generated_recent_label(name, lat, lon) -> bool:
+    """Return whether *name* is the automatic coordinate label for a point."""
+    return str(name or "").strip() == generated_recent_label(lat, lon)
+
+
 class SavedLocationStore:
     """Persist a bounded location list in a QSettings-compatible object."""
 
@@ -153,7 +167,7 @@ class SavedLocationStore:
     def remember_recent(self, lat, lon, label=None) -> SavedLocation:
         latitude = float(lat)
         longitude = float(lon)
-        name = str(label or f"{latitude:.4f}, {longitude:.4f}").strip()
+        name = str(label or generated_recent_label(latitude, longitude)).strip()
         candidate = SavedLocation.create(name, latitude, longitude)
         existing = [
             item for item in self.load()
@@ -213,4 +227,6 @@ __all__ = [
     "SAVED_SETTINGS_KEY",
     "SavedLocation",
     "SavedLocationStore",
+    "generated_recent_label",
+    "is_generated_recent_label",
 ]

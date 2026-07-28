@@ -43,6 +43,7 @@ from sharpmod.model_hour_cache import ModelHourCache
 from sharpmod.saved_locations import (
     RECENT_SETTINGS_KEY,
     SavedLocationStore,
+    is_generated_recent_label,
 )
 from sharpmod.gui_sessions import _apply_viewer_session_state
 from sharpmod.gui_settings import (
@@ -2569,23 +2570,43 @@ class PickerWindow(QMainWindow):
         self._refresh_location_markers()
 
     def _apply_saved_location(self, location) -> None:
+        self._apply_location(location, preserve_label=True)
+
+    def _apply_recent_location(self, location) -> None:
+        """Apply a recent point without promoting its generated coordinates.
+
+        Recent points created without a user label are persisted with a
+        coordinate string so they remain identifiable in the menu.  Keeping
+        that generated string in the source label field would make the next
+        fetch treat it as an explicit place name and skip automatic town
+        resolution.
+        """
+        self._apply_location(
+            location,
+            preserve_label=not is_generated_recent_label(
+                location.name, location.lat, location.lon
+            ),
+        )
+
+    def _apply_location(self, location, *, preserve_label: bool) -> None:
+        label = location.name if preserve_label else ""
         tab = self._tabs.tabText(self._tabs.currentIndex())
         if tab == "Reanalysis (ERA5)":
             self._era5_lat.setValue(location.lat)
             self._era5_lon.setValue(location.lon)
-            self._era5_loc.setText(location.name)
+            self._era5_loc.setText(label)
             self._era5_map.set_point(location.lat, location.lon, center=True)
         elif tab == "Open File" and hasattr(self, "_file_modes") \
                 and self._file_modes.currentIndex() == 1:
             self._wrf_lat.setValue(location.lat)
             self._wrf_lon.setValue(location.lon)
-            self._wrf_loc.setText(location.name)
+            self._wrf_loc.setText(label)
             self._wrf_map.set_point(location.lat, location.lon, center=True)
         else:
             self._select_tab("Forecast Model")
             self._model_lat.setValue(location.lat)
             self._model_lon.setValue(location.lon)
-            self._model_loc.setText(location.name)
+            self._model_loc.setText(label)
             self._model_map.set_point(location.lat, location.lon, center=True)
 
     def _safe_locations(self, store):
@@ -2623,7 +2644,7 @@ class PickerWindow(QMainWindow):
             )
             action.triggered.connect(
                 lambda _checked=False, location=location:
-                self._apply_saved_location(location)
+                self._apply_recent_location(location)
             )
             menu.addAction(action)
         if not locations:

@@ -112,6 +112,26 @@ def test_picker_exposes_era5_and_guided_raw_wrf_tabs(
     picker._file_modes.setCurrentIndex(1)
     picker._apply_saved_location(saved)
     assert picker._wrf_loc.text() == "OUN"
+
+    coordinate_recent = picker._recent_location_store.remember_recent(
+        35.1234, -97.5678
+    )
+    picker._select_tab("Forecast Model")
+    picker._apply_recent_location(coordinate_recent)
+    assert picker._model_loc.text() == ""
+    picker._select_tab("Reanalysis (ERA5)")
+    picker._apply_recent_location(coordinate_recent)
+    assert picker._era5_loc.text() == ""
+    picker._select_tab("Open File")
+    picker._file_modes.setCurrentIndex(1)
+    picker._apply_recent_location(coordinate_recent)
+    assert picker._wrf_loc.text() == ""
+
+    named_recent = picker._recent_location_store.remember_recent(
+        35.22, -97.44, "Norman"
+    )
+    picker._apply_recent_location(named_recent)
+    assert picker._wrf_loc.text() == "Norman"
     picker.close()
 
 

@@ -1,6 +1,6 @@
 # Rust-primary backend
 
-SHARPpy Reimagined v0.4 supports `sharpmod_rs` as its primary numerical and
+SHARPpy Reimagined supports `sharpmod_rs` as its primary numerical and
 direct pressure-level GRIB point-decoding backend. Official Windows executables
 bundle the extension, and default `auto` mode selects Rust after validating its
 package version, backend API, and required operations. Rust works behind the
@@ -161,8 +161,7 @@ Existing setup continues to work unchanged:
 ```powershell
 py -3.11 -m venv .gribenv
 .\.gribenv\Scripts\Activate.ps1
-python -m pip install -e ".[dev,render]"
-python -m pip install --no-deps "SHARPpy==1.4.0a5"
+python scripts\install_sharppy_compat.py --extras dev,render
 ```
 
 With no extension installed, `auto` uses Python. `python` also works normally,
@@ -333,7 +332,7 @@ on:
 - macOS x86_64
 
 Those jobs prepare downloadable native-wheel CI artifacts; the wheels are not
-published as a separate package-index release. The official v0.4 Windows
+published as a separate package-index release. The official Windows
 release workflow builds and installs the extension before constructing and
 runtime-checking the one-folder and one-file PyInstaller applications. Rust is
 therefore the supported primary backend in those binaries. The Python-only
@@ -374,6 +373,6 @@ a compatible extension.
   validation and meteorological analysis paths.
 - The PyInstaller spec includes `sharpmod_rs` only when the extension is
   discoverable and collected successfully in the environment performing the
-  build. The official v0.4 release job builds and installs it before packaging;
+  build. The official release job builds and installs it before packaging;
   custom local builds that omit it log a warning and produce a fully functional
   Python-fallback bundle.

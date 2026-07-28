@@ -463,9 +463,11 @@ def _portable_pair_valid(npz_path) -> bool:
     if not os.path.isfile(npz_path) or not os.path.isfile(json_path):
         return False
     try:
-        with np.load(npz_path, allow_pickle=True) as data:
+        with np.load(npz_path, allow_pickle=False) as data:
             required = {"pres", "hght", "tmpc", "dwpc", "wdir", "wspd"}
             if not required.issubset(data.files) or np.asarray(data["pres"]).size < 2:
+                return False
+            if any(np.asarray(data[name]).dtype.hasobject for name in data.files):
                 return False
         with open(json_path, encoding="utf-8") as handle:
             return isinstance(json.load(handle), dict)
@@ -532,7 +534,7 @@ def _materialize_cached_sounding(source_npz, out_path, *, loc,
     source_json = os.path.splitext(source_npz)[0] + ".json"
     out_path = os.fspath(out_path)
     out_json = os.path.splitext(out_path)[0] + ".json"
-    with np.load(source_npz, allow_pickle=True) as source:
+    with np.load(source_npz, allow_pickle=False) as source:
         arrays = {name: source[name] for name in source.files}
     arrays["loc"] = str(loc)
     with open(source_json, encoding="utf-8") as handle:
@@ -564,14 +566,17 @@ class _ERA5FetchWorker(QThread):
     progress = Signal(str)
 
     def __init__(self, lat, lon, valid_time, out_path, *, loc="ERA5pt",
-                 disk_cache=None, parent=None):
+                 resolve_place=False, disk_cache=None, parent=None):
         super().__init__(parent)
         self._lat = float(lat)
         self._lon = float(lon)
         self._valid_time = valid_time
         self._out_path = os.fspath(out_path)
         self._output_dir = os.path.dirname(self._out_path)
-        self._loc = str(loc or "ERA5pt")
+        self._resolve_place = bool(resolve_place) and not loc
+        self._loc = str(loc).strip() if loc else (
+            None if self._resolve_place else "ERA5pt"
+        )
         self._disk_cache = disk_cache
         self._cancel_requested = False
 
@@ -592,6 +597,10 @@ class _ERA5FetchWorker(QThread):
         try:
             if self.cancellation_requested():
                 raise era5_extract.ExtractionCancelled("ERA5 fetch cancelled")
+            if self._resolve_place and not self._loc:
+                self._report_progress("town")
+                from sharpmod.place_names import reverse_town_name
+                self._loc = reverse_town_name(self._lat, self._lon) or "ERA5"
             snapped_lat, snapped_lon = era5_extract._nearest_era5_grid_point(
                 self._lat, self._lon)
             if self._disk_cache is None:
@@ -707,7 +716,7 @@ class _WRFExtractWorker(QThread):
     progress = Signal(str)
 
     def __init__(self, path, lat, lon, out_path, *, valid_time=None,
-                 loc="WRFpt", parent=None):
+                 loc="WRFpt", resolve_place=False, parent=None):
         super().__init__(parent)
         self._path = os.fspath(path)
         self._lat = float(lat)
@@ -715,7 +724,10 @@ class _WRFExtractWorker(QThread):
         self._out_path = os.fspath(out_path)
         self._output_dir = os.path.dirname(self._out_path)
         self._valid_time = valid_time
-        self._loc = str(loc or "WRFpt")
+        self._resolve_place = bool(resolve_place) and not loc
+        self._loc = str(loc).strip() if loc else (
+            None if self._resolve_place else "WRFpt"
+        )
         self._cancel_requested = False
 
     def requestInterruption(self):  # noqa: N802 - Qt API override
@@ -728,6 +740,10 @@ class _WRFExtractWorker(QThread):
     def run(self):
         from sharpmod.tools import wrf_extract
         try:
+            if self._resolve_place and not self._loc:
+                self.progress.emit("town")
+                from sharpmod.place_names import reverse_town_name
+                self._loc = reverse_town_name(self._lat, self._lon) or "WRF"
             path = wrf_extract.extract(
                 self._path, self._lat, self._lon, self._out_path,
                 valid_time=self._valid_time, loc=self._loc,
@@ -839,6 +855,7 @@ class _ModelFetchWorker(QThread):
 
     def __init__(self, model: str, lat: float, lon: float, run_time: datetime,
                  fxx: int, out_path: str, loc: str | None = None,
+                 resolve_place: bool = False,
                  member: str | None = None, download_dir: str | None = None,
                  model_hour_cache=None, cached_grib=None,
                  cached_source_fields=(), cached_cache=None,
@@ -851,6 +868,7 @@ class _ModelFetchWorker(QThread):
         self._fxx = int(fxx)
         self._out_path = out_path
         self._loc = loc
+        self._resolve_place = bool(resolve_place) and not loc
         self._member = member or None
         self._output_dir = download_dir or os.path.dirname(out_path)
         # The picker polls this path while a GRIB download is active.  A cache
@@ -882,6 +900,11 @@ class _ModelFetchWorker(QThread):
         try:
             from sharpmod.tools import model_extract
             cfg = model_extract.get_config(self._model)
+            if self._resolve_place and not self._loc:
+                self._report_progress("town")
+                from sharpmod.place_names import reverse_town_name
+                self._loc = reverse_town_name(
+                    self._lat, self._lon) or cfg.label
             cache_hit = False
             if self._cached_grib is not None:
                 protection = (

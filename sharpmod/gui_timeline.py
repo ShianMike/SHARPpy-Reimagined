@@ -124,7 +124,8 @@ class ModelTimelineWorker(QThread):
     failed = Signal(str)
 
     def __init__(self, model, lat, lon, run_time, hours, output_dir, *,
-                 loc=None, member=None, disk_cache=None, parent=None):
+                 loc=None, resolve_place=False, member=None, disk_cache=None,
+                 parent=None):
         super().__init__(parent)
         self.model = str(model)
         self.lat = float(lat)
@@ -133,6 +134,7 @@ class ModelTimelineWorker(QThread):
         self.hours = tuple(int(hour) for hour in hours)
         self.output_dir = os.fspath(output_dir)
         self.loc = str(loc) if loc else None
+        self.resolve_place = bool(resolve_place) and not loc
         self.member = str(member) if member else None
         self.disk_cache = disk_cache
         self._extractor = None
@@ -147,6 +149,12 @@ class ModelTimelineWorker(QThread):
         from sharpmod.batch_extract import BatchExtractor, BatchRequest
         from sharpmod.model_hour_cache import ModelHourCache
 
+        if self.resolve_place and not self.loc:
+            self.progress.emit(-1, "town", 0, len(self.hours))
+            from sharpmod.place_names import reverse_town_name
+            from sharpmod.tools import model_extract
+            self.loc = reverse_town_name(self.lat, self.lon) \
+                or model_extract.get_config(self.model).label
         requests = [
             BatchRequest(
                 id=f"f{hour:03d}", model=self.model, lat=self.lat,

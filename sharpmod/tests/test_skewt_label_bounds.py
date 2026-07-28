@@ -86,6 +86,7 @@ class _PanelPainter:
         self.current_font = None
         self.texts = []
         self.lines = []
+        self.rects = []
 
     def setPen(self, *_args):
         pass
@@ -99,8 +100,9 @@ class _PanelPainter:
     def drawEllipse(self, *_args):
         pass
 
-    def drawRect(self, *_args):
-        pass
+    def drawRect(self, *args):
+        if len(args) == 1 and hasattr(args[0], "x"):
+            self.rects.append(QtCore.QRectF(args[0]))
 
     def fillRect(self, *_args):
         pass
@@ -199,6 +201,23 @@ class _HodographRingWidget(_HodographWidget):
     def __init__(self):
         self.label_font = QtGui.QFont("Helvetica", 8)
         self.label_font.setBold(True)
+
+
+class _MeanWindWidget(_HodographWidget):
+    fg_color = QtGui.QColor("#000000")
+    bg_color = QtGui.QColor("#ffffff")
+    mean_lcl_el = (10.0, 20.0)
+    mean_lcl_el_vec = (248.0, 25.0)
+    wind_units = "knots"
+
+    def __init__(self, x=150.0, y=100.0):
+        self._point = (x, y)
+        self.label_font = QtGui.QFont("Helvetica", 8)
+        self.label_font.setBold(True)
+        self._sharpmod_hodo_annotation_rects = []
+
+    def uv_to_pix(self, _u, _v):
+        return self._point
 
 
 class _SpeedWidget:
@@ -435,6 +454,150 @@ def test_hodograph_ring_labels_use_only_natural_positions_that_fit(qt_app):
 
     assert labels[0].rect.center().y() < widget.centery
     assert labels[0].rect.center().x() > widget.centerx
+
+
+def test_mean_wind_label_has_real_gap_after_centered_square(qt_app):
+    pytest.importorskip("sharppy.viz.hodo")
+    render_mod._install_hodo_label_fit()
+
+    from sharppy.viz.hodo import plotHodo
+
+    widget = _MeanWindWidget()
+    painter = _PanelPainter()
+    plotHodo.drawLCLtoEL_MW(widget, painter)
+
+    marker = painter.rects[-1]
+    label = next(item for item in painter.texts if item.text == "248/25")
+
+    assert marker.center() == QtCore.QPointF(150.0, 100.0)
+    assert label.rect.left() - marker.right() >= 5
+    assert not label.rect.intersects(marker)
+    assert label.rect.right() <= widget.brx - 2
+    metrics = QtGui.QFontMetrics(label.font)
+    assert metrics.horizontalAdvance(label.text) <= label.rect.width() - 4
+
+
+def test_hodo_annotation_flips_away_from_edge_and_occupied_side():
+    widget = _HodographWidget()
+    near_right = QtCore.QRectF(284, 100, 8, 8)
+    flipped = render_mod._place_hodo_annotation_rect(
+        widget, QtCore, near_right, 60, 16, gap=5)
+
+    assert flipped.right() + 5 <= near_right.left()
+    assert flipped.left() >= widget.tlx + 2
+    assert flipped.right() <= widget.brx - 2
+
+    centered = QtCore.QRectF(140, 100, 8, 8)
+    occupied_right = QtCore.QRectF(153, 96, 70, 20)
+    avoided = render_mod._place_hodo_annotation_rect(
+        widget, QtCore, centered, 60, 16,
+        occupied=(occupied_right,), gap=5)
+
+    assert not avoided.intersects(occupied_right.adjusted(-5, -5, 5, 5))
+    assert not avoided.intersects(centered.adjusted(-5, -5, 5, 5))
+
+
+def test_surface_labels_pack_in_anchor_order_with_four_pixel_gap():
+    widget = _TraceWidget()
+    labels = [
+        {"center_x": 100, "line_y": 218, "width": 30, "height": 16},
+        {"center_x": 110, "line_y": 218, "width": 30, "height": 16},
+        {"center_x": 120, "line_y": 218, "width": 30, "height": 16},
+    ]
+
+    rects = render_mod._layout_skewt_surface_labels(
+        widget, QtCore, labels, gap=4)
+
+    assert [rect.left() for rect in rects] == sorted(
+        rect.left() for rect in rects)
+    for rect in rects:
+        _assert_inside_plot(widget, rect)
+    for left, right in zip(rects, rects[1:]):
+        assert right.left() - left.right() >= 4
+        assert not left.adjusted(-2, -2, 2, 2).intersects(right)
+
+
+def test_surface_labels_use_extra_rows_when_plot_is_too_narrow():
+    widget = SimpleNamespace(
+        lpad=0, brx=50, tpad=0, bry=120, wid=50, hgt=120)
+    labels = [
+        {"center_x": 10, "line_y": 95, "width": 40, "height": 16},
+        {"center_x": 25, "line_y": 95, "width": 40, "height": 16},
+        {"center_x": 40, "line_y": 95, "width": 40, "height": 16},
+    ]
+
+    rects = render_mod._layout_skewt_surface_labels(
+        widget, QtCore, labels, gap=4)
+
+    assert len({rect.top() for rect in rects}) > 1
+    for rect in rects:
+        assert rect.left() >= 2
+        assert rect.right() <= 48
+        assert rect.top() >= 2
+        assert rect.bottom() <= 118
+    for index, rect in enumerate(rects):
+        for other in rects[index + 1:]:
+            assert not rect.adjusted(-2, -2, 2, 2).intersects(other)
+
+
+def test_surface_label_rows_account_for_next_rows_taller_font():
+    widget = SimpleNamespace(
+        lpad=0, brx=70, tpad=0, bry=140, wid=70, hgt=140)
+    labels = [
+        {"center_x": 20, "line_y": 120, "width": 60, "height": 12},
+        {"center_x": 35, "line_y": 120, "width": 60, "height": 28},
+        {"center_x": 50, "line_y": 120, "width": 60, "height": 18},
+    ]
+
+    rects = render_mod._layout_skewt_surface_labels(
+        widget, QtCore, labels, gap=4)
+
+    for index, rect in enumerate(rects):
+        for other in rects[index + 1:]:
+            assert not rect.adjusted(-2, -2, 2, 2).intersects(other)
+
+
+def test_primary_surface_label_queue_replaces_duplicate_profile_pass():
+    queue = []
+    first = {"text": "81", "color": "ensemble"}
+    final = {"text": "81", "color": "primary"}
+
+    render_mod._upsert_skewt_surface_label(
+        queue, ("source", 123), first)
+    render_mod._upsert_skewt_surface_label(
+        queue, ("source", 123), final)
+
+    assert queue == [{
+        "text": "81",
+        "color": "primary",
+        "dedupe_key": ("source", 123),
+    }]
+
+
+def test_secondary_sounding_surface_label_joins_collision_queue(qt_app):
+    render_mod._install_skewt_sfc_label_mask()
+
+    from sharppy.viz.skew import plotSkewT
+
+    widget = _TraceWidget()
+    widget.wetbulb = ma.masked_array(
+        [20.0, 18.0], mask=[False, False])
+    widget.tmpc = ma.masked_array(
+        [22.0, 19.0], mask=[False, False])
+    widget.dwpc = ma.masked_array(
+        [18.0, 16.0], mask=[False, False])
+    widget._sharpmod_collect_sfc_labels = True
+    widget._sharpmod_sfc_label_queue = []
+    secondary = ma.masked_array(
+        [21.0, 17.0], mask=[False, False])
+    painter = _RecordingPainter()
+
+    plotSkewT.drawTrace(widget, secondary, "#888888", painter)
+
+    assert painter.texts == []
+    assert len(widget._sharpmod_sfc_label_queue) == 1
+    assert widget._sharpmod_sfc_label_queue[0]["dedupe_key"] == (
+        "source", id(secondary))
 
 
 def test_surface_trace_label_clamps_right_and_flips_above_bottom(qt_app):

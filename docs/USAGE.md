@@ -53,7 +53,7 @@ same way (and the same way as the bundled HRRR examples).
 | Fetch a forecast-model point sounding | No | `pip install -e ".[era5]"` |
 | Run a resumable model batch | No | `pip install -e ".[era5]"` |
 | Extract a WRF-ARW point sounding | No | `pip install -e ".[wrf]"` |
-| Render any sounding to PNG (`--render`) | **Yes** (`pip install --no-deps SHARPpy==1.4.0a5`) | No |
+| Render any sounding to PNG (`--render`) | **Yes** (`python scripts/install_sharppy_compat.py`) | No |
 
 > Data extraction never requires the render stack. Only rendering does.
 
@@ -88,6 +88,9 @@ The app opens on the **Sounding Picker** with five tabs:
   unknown or failed check does not block manual Fetch. Every published pressure
   level is fetched. The isolated GRIB and point-sounding data remain available
   while the sounding window is open, then are deleted when that window closes.
+  Enter an optional **Location/town** label, or choose a named saved location,
+  to display that name above the sounding's hodograph locator-map inset. If
+  left blank, Fetch resolves and caches the town in its background worker.
   **Timeline…** queues an inclusive range of up to 72 published hours into one
   sounding viewer. Its slider, previous/next, play, and loop controls update as
   results arrive; already completed hours survive cancellation and unavailable
@@ -97,12 +100,16 @@ The app opens on the **Sounding Picker** with five tabs:
   CDS setup, runs retrieval outside the Qt event loop, and reuses a completed
   cached point/hour. Cancel suppresses display and cleans the local output;
   the stable synchronous `cdsapi` call itself may need to return first.
+  Keep **Add to active sounding window** enabled and fetch another point/hour
+  to overlay several ERA5 profiles in the same analysis window.
 - **Open File** — load a local `.npz`, SPC (`.spc`/`.OAX`), BUFKIT (`.buf`),
   PECAN, or WRF-ARW text sounding. The nested **Raw WRF wrfout** workflow
   inspects domain coordinates and available times in a worker, provides a
   domain-aware point map, rejects points outside the real curvilinear grid
   perimeter, and extracts without blocking Qt. You can also **drag a file onto
-  the window**; raw `wrfout*`/NetCDF files route to this workflow.
+  the window**; raw `wrfout*`/NetCDF files route to this workflow. Its matching
+  **Add to active sounding window** control lets repeated available-time or
+  point selections build one multi-sounding WRF analysis.
 
 The station set shown on the map and in the list is refreshed from UWyo for the
 **selected observation time** (via the `/wsgi/sounding_json` endpoint), so
@@ -160,6 +167,23 @@ level nearest the right-click. It preserves vertical ordering, rejects dewpoint
 above temperature, and recalculates all parcel levels and indices. You can also
 click-and-drag temperature, dewpoint, or wind points for quicker edits. Mouse-
 wheel zooms, and double-clicking the lower-left inset swaps lifted parcels.
+The hodograph puts 0.5, 1, 3, 6, 9, and 12 inside colored dots on the active
+profile; its locator-map inset displays the active location/town in the title.
+Blank forecast, ERA5, and WRF location fields first use a bundled U.S. Census
+index with 31,540 incorporated/CDP places and 21,278 named towns/townships
+across CONUS and D.C. State polygons reject nearby points in Canada, Mexico,
+the Atlantic, and the Gulf. Only when the bundled lookup has no result can a
+cached, rate-limited OpenStreetMap Nominatim fallback run; entering a label
+skips lookup, and `SHARPMOD_GEOCODER_URL=off` disables the online fallback.
+Headless rendering follows the same path for model/coordinate-only labels.
+Town names are used only in the title and are never drawn inside the map. See
+the
+[Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/)
+and [OpenStreetMap attribution](https://www.openstreetmap.org/copyright).
+The [offline CONUS index notes](CONUS_PLACE_INDEX.md) document its annual
+refresh command and provenance. The map itself reads nearby geometry from
+separately bundled Census county-outline tiles, with no live map request or
+town-label layer.
 **File → Preferences** switches the color palette (Standard / Inverted /
 Protanopia), units, and the parcel visualized by default when a Skew-T opens.
 The `W` key returns to the picker. A tip bar along the bottom summarizes the
@@ -573,7 +597,7 @@ wrf-extract wrfout_d02_2024-05-20_00:00:00 41.32 -96.37 oax_wrf.npz --render
 
 - **`sharpmod-render` errors about `sharppy` / `sutils` / a Qt enum** — the
   render stack isn't installed (or not Qt6-compatible). Run
-  `pip install --no-deps "SHARPpy==1.4.0a5"` (see README → Rendering).
+  `python scripts/install_sharppy_compat.py` (see README → Rendering).
 - **`uwyo-sounding fetch` says the station/time is unavailable** — that site
   didn't report at that hour; try 00Z or 12Z, a nearby date, or use
   `observed-sounding fetch` for the explicit IEM fallback.
@@ -588,3 +612,14 @@ wrf-extract wrfout_d02_2024-05-20_00:00:00 41.32 -96.37 oax_wrf.npz --render
 - **A rendered PNG looks empty / a widget overflows** — extremely degenerate
   input (e.g. constant winds at every level) can overflow the storm-relative
   hodograph; use real data.
+- **Herbie prints a checkmark/emoji and Windows reports
+  `UnicodeEncodeError: 'charmap' codec can't encode...`** — importing
+  `sharpmod` now configures Windows stdout/stderr for non-throwing UTF-8 output.
+  For a standalone script that never imports this package, launch Python with
+  `python -X utf8 ...`.
+- **An inline `pwsh -Command` containing `DataObject`, `StringCollection`, or
+  `System.Drawing.Image` fails to parse** — keep the statements in a `.ps1`
+  file. For sounding images, run
+  `pwsh -NoProfile -File scripts/copy-image-to-clipboard.ps1 IMAGE.png`.
+- **`grep` is not found on Windows** — repository search examples use ripgrep:
+  install it with `winget install BurntSushi.ripgrep.MSVC`, then run `rg`.

@@ -1,8 +1,8 @@
 # Contributing
 
-Thanks for helping improve SHARPpy Reimagined. This project is a Python 3.11+
-modernization of SHARPpy with a focus on reproducible sounding rendering,
-decoder correctness, and weather-analysis tooling.
+Thanks for helping improve SHARPpy Reimagined. This project is a Python
+3.11–3.13 modernization of SHARPpy with a focus on reproducible sounding
+rendering, decoder correctness, and weather-analysis tooling.
 
 ## Local Setup
 
@@ -11,8 +11,12 @@ python -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev,era5,wrf,render]"
-python -m pip install --no-deps "SHARPpy==1.4.0a5"
+python scripts/install_sharppy_compat.py --sharppy-only
 ```
+
+The compatibility installer verifies the pinned upstream SHARPpy wheel,
+repairs only its obsolete NumPy dependency declaration, and finishes by
+running `pip check`.
 
 On Linux or macOS, activate the environment with:
 

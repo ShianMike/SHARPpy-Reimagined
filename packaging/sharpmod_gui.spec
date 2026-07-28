@@ -8,7 +8,8 @@ Builds a single windowed executable (no console) that bundles:
   ``datasources`` data files and all decoder submodules),
 * the scientific runtime (``metpy``/``pint``/``ecape``/``scipy``) that the
   derived-parameter layer needs at runtime,
-* live model/ERA5 retrieval (``herbie``/``cdsapi``/``cfgrib``/``eccodes``),
+* live model/ERA5 retrieval (``herbie``/``cdsapi``/``cfgrib``/``eccodes``)
+  and raw WRF NetCDF extraction (``netCDF4``),
   including ecCodes' Windows DLL and Herbie's model templates, plus the
   ``numcodecs``/``pyproj`` runtime used by fast HRRR Zarr point extraction.
 
@@ -44,8 +45,9 @@ hiddenimports = []
 # --- sharpmod's own bundled resources ---------------------------------------
 # ``sharpmod`` is an editable install, so PyInstaller's ``collect_data_files``
 # reports it as "not a package" and skips its data. Add the resources the app
-# resolves via importlib.resources (fonts, UWyo catalogue, GUI coastlines)
-# explicitly, preserving the package-relative layout the loaders expect.
+# resolves via importlib.resources (fonts, UWyo catalogue, GUI coastlines, and
+# the offline CONUS title-place/county indexes) explicitly, preserving the
+# package-relative layout the loaders expect.
 _REPO = os.path.dirname(SPECPATH)  # SPECPATH is this spec's dir (packaging/)
 _RES = os.path.join(_REPO, "sharpmod", "resources")
 
@@ -57,6 +59,10 @@ for _ic in glob.glob(os.path.join(_RES, "icons", "*")):
     datas.append((_ic, "sharpmod/resources/icons"))
 for _json in glob.glob(os.path.join(_RES, "*.json")):
     datas.append((_json, "sharpmod/resources"))
+for _gazetteer in glob.glob(os.path.join(_RES, "*.tsv.gz")):
+    datas.append((_gazetteer, "sharpmod/resources"))
+for _archive in glob.glob(os.path.join(_RES, "*.zip")):
+    datas.append((_archive, "sharpmod/resources"))
 for _ttf in glob.glob(os.path.join(_RES, "fonts", "*.ttf")):
     datas.append((_ttf, "sharpmod/resources/fonts"))
 
@@ -67,6 +73,7 @@ for _ttf in glob.glob(os.path.join(_RES, "fonts", "*.ttf")):
 for pkg in (
     "sharpmod", "sharppy", "sutils", "metpy", "pint", "ecape",
     "cdsapi", "ecmwf", "cfgrib", "eccodes", "numcodecs", "pyproj",
+    "netCDF4", "cftime",
 ):
     try:
         d, b, h = collect_all(pkg)
@@ -139,7 +146,7 @@ hiddenimports += collect_submodules(
     filter=lambda name: not name.startswith("herbie.toolbox"),
     on_error="ignore",
 )
-hiddenimports += ["xarray", "cfgrib.xarray_plugin"]
+hiddenimports += ["xarray", "cfgrib.xarray_plugin", "netCDF4", "cftime"]
 
 # The decoder registry imports these vendored decoders dynamically
 # (sharpmod.io.decoder.findDecoders); name them so the freezer keeps them.
@@ -170,7 +177,7 @@ a = Analysis(
     runtime_hooks=[],
     # Trim heavyweight, GUI-irrelevant optional deps to keep the bundle smaller.
     excludes=["tkinter", "PyQt5", "PyQt6", "PySide2", "IPython", "notebook",
-              "pytest", "hypothesis", "netCDF4",
+              "pytest", "hypothesis",
               # Test trees dragged in by scientific deps -- never needed at run.
               "pandas.tests", "scipy.tests", "numpy.tests", "matplotlib.tests",
               "xarray.tests", "sharpmod.tests",

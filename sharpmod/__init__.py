@@ -7,5 +7,17 @@ PySide6 (Qt6) with no legacy compatibility shims.
 """
 
 from ._version import __version__
+from .console import configure_windows_unicode_streams
 
-__all__ = ["__version__", "io", "sharptab", "viz", "tools"]
+# Configure this before model/provider modules are imported.  In particular,
+# Herbie may emit Unicode status glyphs to a redirected CP1252 Windows stream.
+configure_windows_unicode_streams()
+
+__all__ = [
+    "__version__",
+    "configure_windows_unicode_streams",
+    "io",
+    "sharptab",
+    "viz",
+    "tools",
+]

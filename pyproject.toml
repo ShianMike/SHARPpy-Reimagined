@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "sharpmod"
 dynamic = ["version"]
-description = "A modernized, standalone fork of the SHARPpy sounding renderer (Python 3.11+, NumPy 1.24+, Qt6/PySide6)."
+description = "A modernized, standalone fork of the SHARPpy sounding renderer (Python 3.11-3.13, NumPy 1.24+, Qt6/PySide6)."
 readme = "README.md"
-requires-python = ">=3.11"
-license = { text = "BSD-3-Clause" }
+requires-python = ">=3.11,<3.14"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 authors = [{ name = "SHARPpy Reimagined maintainers" }]
 keywords = [
     "meteorology",
@@ -24,24 +25,24 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: X11 Applications :: Qt",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Atmospheric Science",
 ]
 
 # Bounded runtime dependency pins (Requirement 15.3).
 #
-# NOTE ON SHARPpy / sutils: the renderer composes the vendored upstream
-# ``sharppy`` (and its bundled ``sutils`` package) at runtime. Upstream
+# NOTE ON SHARPpy / sutils: the renderer composes the upstream ``sharppy``
+# distribution (including its ``sutils`` package) at runtime. Upstream
 # ``SHARPpy==1.4.0a5`` is on PyPI, but its wheel metadata carries a stale
 # ``numpy==1.15.*`` pin that conflicts with the modern NumPy required here, so
 # it cannot be listed as a normal dependency (pip would fail to resolve). It is
-# therefore installed in a separate ``--no-deps`` step (see README
-# "Installation"); the ``[render]`` extra documents the transitive packages
-# that step needs so nothing is silently missing.
+# installed through ``scripts/install_sharppy_compat.py``, which hash-verifies
+# the official wheel and changes only that requirement metadata before running
+# ``pip check``. The ``[render]`` extra documents its transitive packages.
 dependencies = [
     "numpy>=1.24,<3.0",
     "PySide6>=6.5,<7.0",
@@ -77,13 +78,12 @@ era5 = [
 ]
 # WRF-ARW (wrfout NetCDF) point-sounding extraction tooling (optional extra).
 wrf = [
-    "xarray",
-    "netCDF4",
+    "xarray>=2024.7,<2027.0",
+    "netCDF4>=1.7,<2.0",
 ]
-# Transitive packages the upstream SHARPpy render stack needs. These ARE
-# resolvable normally; only ``SHARPpy`` itself must be installed --no-deps
-# (stale numpy pin), so keeping these here means the --no-deps step pulls in
-# nothing else. Install with:  pip install -e ".[render]"
+# Transitive packages the upstream SHARPpy render stack needs. The compatibility
+# installer installs this extra by default and then installs the verified,
+# metadata-corrected upstream wheel.
 render = [
     "requests>=2.28,<3.0",
 ]
@@ -118,6 +118,18 @@ sharpmod-rust-sync = "sharpmod.tools.rust_backend_sync:main"
 [tool.pytest.ini_options]
 testpaths = ["sharpmod/tests"]
 python_files = ["test_*.py"]
+filterwarnings = [
+    # Expected warnings in the pinned upstream SHARPpy/ECAPE code. Keep all
+    # other deprecations and runtime warnings visible.
+    "ignore:Warning.*converting a masked element to nan:UserWarning",
+    "ignore:datetime\\.datetime\\.utcnow\\(\\) is deprecated.*:DeprecationWarning:sharppy\\.io\\.spc_decoder",
+    "ignore:The 'warn' method is deprecated, use 'warning' instead:DeprecationWarning:gribapi\\.bindings",
+    "ignore:Temperature argument is unused and will be deprecated.*:PendingDeprecationWarning:ecape\\.calc",
+    "ignore:invalid value encountered in scalar divide:RuntimeWarning:sharppy\\.sharptab\\.params",
+    "ignore:Input line .* contained no data.*:UserWarning:sharppy\\.databases\\.sars",
+    "ignore:invalid value encountered in power:RuntimeWarning:sharppy\\.sharptab\\.thermo",
+    "ignore:divide by zero encountered in divide:RuntimeWarning:sharppy\\.sharptab\\.thermo",
+]
 
 [tool.setuptools]
 # Discover the top-level `sharpmod` package and its subpackages.
@@ -139,9 +151,10 @@ version = { attr = "sharpmod._version.__version__" }
 # Bundle the TTF fonts as package data so they resolve via importlib.resources
 # (never absolute paths) — Requirements 15.1, 15.2.
 "sharpmod.resources.fonts" = ["*.ttf"]
-# Bundle the full UWyo station catalogue and the GUI basemap coastlines so
-# every station is choosable offline and the picker map renders without network.
-"sharpmod.resources" = ["*.json"]
+# Bundle the full UWyo station catalogue, GUI basemap coastlines, and compact
+# Census title-place/county indexes so CONUS titles and map context work
+# offline.
+"sharpmod.resources" = ["*.json", "*.tsv.gz", "*.zip"]
 
 [tool.setuptools.exclude-package-data]
 "*" = ["*.pyc"]

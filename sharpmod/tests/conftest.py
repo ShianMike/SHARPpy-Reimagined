@@ -20,6 +20,9 @@ import os
 # Module-local ``setdefault`` calls are too late when an earlier collection
 # import has already loaded ``sharpmod.gui_common`` on Windows.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Unit and render-smoke tests must never depend on the public geocoder. Tests
+# that exercise reverse lookup replace this default with a controlled endpoint.
+os.environ.setdefault("SHARPMOD_GEOCODER_URL", "off")
 
 from hypothesis import HealthCheck, settings
 

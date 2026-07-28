@@ -7,7 +7,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from qtpy.QtCore import QPoint, QPointF, Qt
 from qtpy.QtGui import QPainter, QPixmap
-from qtpy.QtTest import QTest
 from qtpy.QtWidgets import QApplication
 
 from sharpmod.gui import PointMapWidget, StationMapWidget
@@ -79,10 +78,12 @@ def test_forecast_map_keeps_preview_across_notched_wheel_cadence():
     cached = widget._basemap_cache
 
     widget.wheelEvent(_WheelEvent())
-    QTest.qWait(100)
 
     # Consecutive physical mouse-wheel notches commonly arrive about 100 ms
-    # apart.  The expensive vector redraw must not run between those notches.
+    # apart. Assert the configured debounce contract directly; wall-clock
+    # sleeps are flaky when a busy Windows CI host deschedules this process
+    # past the timer deadline.
+    assert widget._basemap_refresh_timer.interval() >= 200
     assert widget._basemap_refresh_timer.isActive()
     assert widget._basemap_cache is cached
 
@@ -99,3 +100,31 @@ def test_forecast_map_drag_keeps_cached_basemap_during_mouse_moves():
 
     assert widget._basemap_refresh_timer.isActive()
     assert widget._basemap_cache is cached
+
+
+def test_forecast_map_accepts_curved_provider_domain_outline():
+    QApplication.instance() or QApplication([])
+    widget = PointMapWidget()
+    widget.resize(640, 480)
+    outline = (
+        (-125.0, 0.0),
+        (-60.0, 0.0),
+        (30.0, 50.0),
+        (145.0, 48.0),
+        (-125.0, 0.0),
+    )
+
+    widget.set_domain(
+        (-180.0, 180.0, -4.0, 90.0),
+        "rotated domain",
+        outline=outline,
+    )
+
+    assert widget._domain_outline == outline
+    target = QPixmap(widget.size())
+    target.fill()
+    painter = QPainter(target)
+    try:
+        widget._draw_domain(painter, widget._proj())
+    finally:
+        painter.end()

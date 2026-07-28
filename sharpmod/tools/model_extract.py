@@ -290,6 +290,7 @@ class ModelConfig:
         -180.0, 180.0, -90.0, 90.0)
     kwargs: dict[str, object] = field(default_factory=dict)
     notes: str = ""
+    domain_outline: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -307,6 +308,7 @@ class ProviderCapability:
     levels: str
     archive_window: str | None
     transports: tuple[str, ...]
+    domain_outline: tuple[tuple[float, float], ...] = ()
 
 
 GLOBAL_DOMAIN = (-180.0, 180.0, -90.0, 90.0)
@@ -416,7 +418,8 @@ _CONFIGS = (
         fxx_values=eccc_geomet.get_capability("rdps").forecast_hours,
         domain="North America and Arctic",
         domain_bounds=eccc_geomet.get_capability("rdps").domain_bounds,
-        notes="Regional ECCC GeoMet pressure-level point values"),
+        notes="Regional ECCC GeoMet pressure-level point values",
+        domain_outline=eccc_geomet.get_capability("rdps").domain_outline),
 )
 
 _ALIASES = {
@@ -543,6 +546,7 @@ def provider_capability(model, cycle_hour=None):
             ),
             archive_window=capability.archive_window,
             transports=capability.transports,
+            domain_outline=capability.domain_outline,
         )
     transports = ["herbie", "indexed-ranges"]
     if nomads_supported(cfg):
@@ -571,6 +575,7 @@ def provider_capability(model, cycle_hour=None):
         levels="all published pressure levels",
         archive_window=None,
         transports=tuple(transports),
+        domain_outline=cfg.domain_outline,
     )
 
 
@@ -583,6 +588,8 @@ def domain_label(model):
 def point_in_domain(model, lat, lon):
     """Return whether ``lat``/``lon`` is inside the model's configured domain."""
     cfg = _coerce_config(model)
+    if cfg.key in {"gdps", "rdps"}:
+        return eccc_geomet.point_in_domain(cfg.key, lat, lon)
     lon0, lon1, lat0, lat1 = cfg.domain_bounds
     lat = float(lat)
     lon = _normalize_lon180(lon)
@@ -605,6 +612,25 @@ def domain_intersects_bounds(model, bounds):
     ``bounds`` is ``(lon0, lon1, lat0, lat1)`` in degrees.
     """
     cfg = _coerce_config(model)
+    if cfg.domain_outline:
+        blo0, blo1, bla0, bla1 = bounds
+        lat_mid = (float(bla0) + float(bla1)) / 2.0
+        samples = []
+        for left, right in _longitude_segments(blo0, blo1):
+            lon_mid = (left + right) / 2.0
+            samples.extend(
+                (lat, lon)
+                for lat in (bla0, lat_mid, bla1)
+                for lon in (left, lon_mid, right)
+            )
+        if any(point_in_domain(cfg, lat, lon) for lat, lon in samples):
+            return True
+        return any(
+            bla0 <= lat <= bla1
+            and any(left <= lon <= right for left, right in
+                    _longitude_segments(blo0, blo1))
+            for lon, lat in cfg.domain_outline
+        )
     lon0, lon1, lat0, lat1 = cfg.domain_bounds
     blo0, blo1, bla0, bla1 = bounds
     if lat1 < bla0 or lat0 > bla1:
@@ -619,6 +645,14 @@ def domain_intersects_bounds(model, bounds):
 def domain_contains_bounds(model, bounds):
     """Return whether a model domain fully contains a map extent."""
     cfg = _coerce_config(model)
+    if cfg.domain_outline:
+        blo0, blo1, bla0, bla1 = bounds
+        return all(
+            point_in_domain(cfg, lat, lon)
+            for left, right in _longitude_segments(blo0, blo1)
+            for lon in (left, right)
+            for lat in (bla0, bla1)
+        )
     lon0, lon1, lat0, lat1 = cfg.domain_bounds
     blo0, blo1, bla0, bla1 = bounds
     if lat0 > bla0 or lat1 < bla1:

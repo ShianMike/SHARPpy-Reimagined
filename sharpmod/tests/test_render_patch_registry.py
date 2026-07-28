@@ -69,10 +69,22 @@ def test_renderer_declares_one_named_spec_per_patch_installer():
     patches = render.render_patch_specs()
     names = [patch.name for patch in patches]
 
-    assert len(patches) == 28
+    assert len(patches) == 29
     assert len(names) == len(set(names))
     assert names[0] == "title.override"
+    assert "hodo.height-levels" in names
+    assert names.index("hodo.locator") < names.index("hodo.height-levels")
     assert names[-1] == "tables.spacing"
+
+
+def test_hodo_height_markers_use_the_live_scale_aware_overlay():
+    render.install_render_patches()
+    from sharppy.viz.hodo import plotHodo
+
+    assert plotHodo._sharpmod_live_overlay_host is True
+    overlays = tuple(plotHodo._sharpmod_live_overlays)
+    assert [overlay.__name__ for overlay in overlays].count(
+        "height_level_overlay") == 1
 
 
 @pytest.mark.parametrize(

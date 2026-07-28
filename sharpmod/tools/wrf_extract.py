@@ -31,9 +31,10 @@ valid time (when several are present). The output is written atomically (temp
 file + rename) with a ``.json`` metadata sidecar recording the requested and
 selected coordinates and time, mirroring the ERA5 extractor.
 
-``xarray`` (plus a NetCDF backend such as ``netCDF4`` or ``h5netcdf``) is
-required to read ``wrfout`` files; it is imported lazily so importing this
-module never requires it.
+``xarray`` plus a NetCDF4/HDF5-capable backend (``netCDF4`` or ``h5netcdf``)
+is required to read ``wrfout`` files.  SciPy's xarray backend is intentionally
+not accepted because it can only read NetCDF3 files.  Dependencies are imported
+lazily so importing this module never requires them.
 """
 
 from __future__ import annotations
@@ -86,8 +87,32 @@ class WRFExtractionError(ERA5ExtractionError):
     """Base class for WRF extraction failures (shares the ERA5 hierarchy)."""
 
 
+def _preferred_netcdf_engine(xr):
+    """Return a NetCDF4/HDF5-capable xarray engine.
+
+    A WRF ``wrfout`` is commonly a NetCDF4/HDF5 file.  The ``scipy`` engine
+    advertises NetCDF support to xarray but only implements NetCDF3, so
+    accepting it here produces a misleading dependency check followed by a
+    ``not a valid NetCDF 3 file`` failure when the file is opened.
+    """
+    try:
+        engines = xr.backends.list_engines()
+    except Exception as exc:  # pragma: no cover - environment dependent
+        raise RetrievalError(
+            "xarray could not inspect its NetCDF backends: %s" % exc
+        ) from exc
+    for engine in ("netcdf4", "h5netcdf"):
+        if engine in engines:
+            return engine
+    raise RetrievalError(
+        "raw wrfout support needs a NetCDF4/HDF5 backend (netCDF4 or "
+        "h5netcdf); SciPy's NetCDF3-only backend is not sufficient. "
+        "Install it with: pip install -e \".[wrf]\""
+    )
+
+
 def require_runtime_dependencies():
-    """Validate xarray and a usable NetCDF engine with focused setup help."""
+    """Validate xarray and a NetCDF4-capable engine with focused setup help."""
     try:
         import xarray as xr
     except Exception as exc:  # pragma: no cover - environment dependent
@@ -96,18 +121,20 @@ def require_runtime_dependencies():
             "(xarray and netCDF4): %s. Install it with: "
             "pip install -e \".[wrf]\"" % exc
         ) from exc
-    try:
-        engines = xr.backends.list_engines()
-    except Exception as exc:  # pragma: no cover - environment dependent
-        raise RetrievalError(
-            "xarray could not inspect its NetCDF backends: %s" % exc
-        ) from exc
-    if not any(name in engines for name in ("netcdf4", "h5netcdf", "scipy")):
-        raise RetrievalError(
-            "raw wrfout support needs a NetCDF backend. Install it with: "
-            "pip install -e \".[wrf]\""
-        )
+    _preferred_netcdf_engine(xr)
     return True
+
+
+def _open_wrf_dataset(wrfout_path):
+    """Open a raw WRF file with an explicitly capable xarray backend."""
+    try:
+        import xarray as xr
+    except Exception as exc:  # pragma: no cover - guarded by caller
+        raise RetrievalError(
+            "raw wrfout support requires the optional [wrf] extra: %s" % exc
+        ) from exc
+    engine = _preferred_netcdf_engine(xr)
+    return xr.open_dataset(wrfout_path, engine=engine)
 
 
 # ---------------------------------------------------------------------------
@@ -321,9 +348,8 @@ def inspect_file(wrfout_path, dataset=None, cancelled=None):
     close_ds = False
     if dataset is None:
         require_runtime_dependencies()
-        import xarray as xr
         try:
-            ds = xr.open_dataset(wrfout_path)
+            ds = _open_wrf_dataset(wrfout_path)
             close_ds = True
         except Exception as exc:
             raise RetrievalError(
@@ -395,10 +421,9 @@ def extract(wrfout_path, lat, lon, out_path, valid_time=None,
     close_ds = False
     if dataset is None:
         require_runtime_dependencies()
-        import xarray as xr
         try:
             _emit_progress(progress_callback, "opening")
-            ds = xr.open_dataset(wrfout_path)
+            ds = _open_wrf_dataset(wrfout_path)
             close_ds = True
         except Exception as exc:
             raise RetrievalError(

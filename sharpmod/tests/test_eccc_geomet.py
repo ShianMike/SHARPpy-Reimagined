@@ -128,6 +128,33 @@ def test_provider_capabilities_are_real_point_routes():
     assert gdps.transports == ("wms-getfeatureinfo-point",)
     assert rdps.cycles == (0, 6, 12, 18)
     assert max(rdps.forecast_hours) == 84
+    assert len(rdps.domain_outline) > 40
+
+
+def test_rdps_domain_uses_rotated_grid_instead_of_global_envelope():
+    # The GeoMet WMS envelope spans all longitudes, but the operational
+    # RLatLon grid does not cover the western Pacific or the Philippines.
+    assert eccc_geomet.point_in_domain("rdps", 45.5, -73.6)
+    assert eccc_geomet.point_in_domain("rdps", 35.2, -97.4)
+    assert eccc_geomet.point_in_domain("rdps", 61.2, -149.9)
+    assert not eccc_geomet.point_in_domain("rdps", 14.5995, 120.9842)
+    assert not eccc_geomet.point_in_domain("rdps", 13.4443, 144.7937)
+
+    assert model_extract.point_in_domain("rdps", 45.5, -73.6)
+    assert not model_extract.point_in_domain("rdps", 14.5995, 120.9842)
+
+
+def test_rdps_rotated_grid_round_trip_matches_operational_corners():
+    grid = eccc_geomet.RDPS_ROTATED_DOMAIN
+
+    lat, lon = grid.to_geographic(
+        grid.rotated_lat_min, grid.rotated_lon_min)
+    rotated_lat, rotated_lon = grid.to_rotated(lat, lon)
+
+    assert lat == pytest.approx(-3.771776, abs=1e-5)
+    assert lon == pytest.approx(-124.613048, abs=1e-5)
+    assert rotated_lat == pytest.approx(grid.rotated_lat_min, abs=1e-8)
+    assert rotated_lon == pytest.approx(grid.rotated_lon_min, abs=1e-8)
 
 
 def test_feature_info_uses_wms_13_axis_order_and_exact_cycle():

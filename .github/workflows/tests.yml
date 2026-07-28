@@ -12,12 +12,12 @@ jobs:
   pytest:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
 
     env:
       QT_QPA_PLATFORM: offscreen
@@ -52,7 +52,37 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,era5,wrf,render]"
-          python -m pip install --no-deps "SHARPpy==1.4.0a5"
+          python scripts/install_sharppy_compat.py --sharppy-only
 
       - name: Run tests
         run: pytest
+
+  windows-wrf:
+    name: Windows WRF runtime
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    env:
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install WRF and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,wrf,render]"
+          python scripts/install_sharppy_compat.py --sharppy-only
+
+      - name: Exercise a real NetCDF4 WRF file
+        run: >-
+          python -m pytest -q
+          sharpmod/tests/test_gui_reanalysis_wrf.py
+          sharpmod/tests/test_model_fetch_packaging.py

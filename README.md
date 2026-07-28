@@ -2,10 +2,10 @@
 
 # SHARPpy Reimagined
 
-**Modern sounding analysis and SHARPpy-style rendering for Python 3.11+.**
+**Modern sounding analysis and SHARPpy-style rendering for Python 3.11–3.13.**
 
 [![Tests](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml/badge.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml)
-![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/python-3.11--3.13-3776AB?logo=python&logoColor=white)
 ![Qt6](https://img.shields.io/badge/Qt6-PySide6-41CD52?logo=qt&logoColor=white)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 
@@ -15,7 +15,8 @@
 
 SHARPpy Reimagined is a modernized, standalone fork of
 [SHARPpy](https://github.com/sharppy/SHARPpy), focused on packageable Python
-3.11+ workflows, Qt6/PySide6 rendering, and reproducible point-sounding tools.
+3.11–3.13 workflows, Qt6/PySide6 rendering, and reproducible point-sounding
+tools.
 It keeps the familiar SPC-style skew-T, hodograph, hazard, and derived-parameter
 views while adding clean command-line entry points, bundled resources, and a
 test-backed decoder/extractor layer.
@@ -40,11 +41,10 @@ test-backed decoder/extractor layer.
 
 ## Quick Start
 
-Requires Python 3.11 or newer.
+Requires Python 3.11, 3.12, or 3.13.
 
 ```bash
-python -m pip install -e ".[render]"
-python -m pip install --no-deps "SHARPpy==1.4.0a5"
+python scripts/install_sharppy_compat.py
 
 sharpmod-render examples/soundings/hrrr_point_36.68N_95.66W_f018.npz out.png
 ```
@@ -52,13 +52,15 @@ sharpmod-render examples/soundings/hrrr_point_36.68N_95.66W_f018.npz out.png
 `sharpmod-render` writes a 2x HD PNG by default; add `--uhd` for the larger
 2.8x export or `--lossless` for the original-size compact/lossless PNG.
 
-The upstream `SHARPpy==1.4.0a5` package is installed with `--no-deps` because
-its published metadata pins an old NumPy version. SHARPpy Reimagined provides
-the modern runtime dependencies separately.
+The installer hash-verifies the official `SHARPpy==1.4.0a5` wheel, corrects
+only its obsolete `numpy==1.15.*` requirement to this project's supported
+range, records that provenance, installs the editable project plus render
+stack, and requires `pip check` to pass. Use `--source-wheel PATH` for an
+offline copy of the exact pinned upstream wheel.
 
 ### Rust-primary backend
 
-Official v0.4 Windows executables bundle the supported `sharpmod_rs` extension,
+Official Windows executables bundle the supported `sharpmod_rs` extension,
 and the default `auto` mode uses Rust after validating its package version,
 backend API, and required operations. The independently optimized Python
 implementation remains a fully functional portable fallback, so source and
@@ -96,7 +98,7 @@ python -c "from sharpmod.backends import backend_info; print(backend_info())"
 ```
 
 Rust is the supported primary backend when a compatible extension is present;
-official v0.4 Windows binaries include it. Standalone native wheels are still
+official Windows binaries include it. Standalone native wheels are still
 CI/build artifacts rather than a separately published Python package. See the
 [Rust backend guide](docs/RUST_BACKEND.md) for source-build instructions,
 fallback behavior, platform status, limitations, tests, and benchmarks.
@@ -185,7 +187,9 @@ works:
 - **Click + drag** temperature / dewpoint / wind points to edit the profile —
   every index recalculates live.
 - **Mouse wheel** zooms; **right-click the hodograph** re-centers it, and
-  **double-clicking** the RM/LM markers sets the storm motion.
+  **double-clicking** the RM/LM markers sets the storm motion. The active
+  profile has colored dots with 0.5, 1, 3, 6, 9, and 12 inside them, and the
+  locator inset names the active sounding location/town in its title.
 - **Double-click the lower-left inset** to swap lifted parcels.
 - **Keys:** ← / → step in time, ↑ / ↓ change ensemble member, `Space` swaps
   focus, `I` interpolates, `C` collects observed, `W` returns to the picker.
@@ -208,6 +212,29 @@ palette, top/bottom readouts, default parcel, multi-sounding behavior, dismissed
 tips, recent files, and last selections. On Windows they are stored in
 `%APPDATA%\SHARPpy Reimagined\settings.ini`; set `SHARPMOD_SETTINGS_PATH` to
 use a different INI file.
+
+The ERA5 and raw-WRF source panels expose **Add to active sounding window**
+directly. Leave it enabled, change the point or available time, and fetch again
+to overlay several soundings; it stays synchronized with **File → Add New
+Soundings to Active Window**.
+
+Forecast, ERA5, and raw-WRF points accept an optional **Location/town** label.
+Named saved locations populate it directly. When it is blank, a bundled
+52,818-entry U.S. Census place/town index resolves and persistently caches the
+nearest title across the contiguous United States and D.C.; state polygons
+prevent nearby Canadian, Mexican, Atlantic, and Gulf points from receiving a
+U.S. name. The resulting name appears above the hodograph locator-map inset.
+A rate-limited OpenStreetMap Nominatim request is only a fallback when the
+bundled search has no result. Entering a label skips lookup entirely, and
+`SHARPMOD_GEOCODER_URL=off` disables that fallback. Headless rendering resolves
+generic labels such as `HRRR 41.53N 88.39W` through the same path. Names are
+used only for the title; no town labels are drawn inside the locator map. See
+the
+[Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/)
+and [OpenStreetMap attribution](https://www.openstreetmap.org/copyright), plus
+the [offline CONUS index notes](docs/CONUS_PLACE_INDEX.md). The locator's map
+context comes from separately bundled, one-degree Census county-outline tiles;
+it performs no live map request and loads only tiles around the sounding.
 
 The **Inverted** palette is a complete light theme. Applying it updates the
 Skew-T, hodograph, locator, storm slinky, inset products, IndexBoard, and
@@ -247,11 +274,17 @@ The sounding window's **Export** menu saves the current view:
 
 (The upstream `File → Save Image` / `Save Text` actions remain available too.)
 
+External Windows automation can use
+`pwsh -NoProfile -File scripts/copy-image-to-clipboard.ps1 IMAGE.png` instead
+of embedding `DataObject`, `StringCollection`, and `System.Drawing.Image`
+construction inside a quote-sensitive inline `pwsh -Command` string.
+
 ### Standalone executable (Windows)
 
 A one-folder, no-Python-required build is produced with PyInstaller:
 
 ```bash
+python scripts/install_sharppy_compat.py --extras render,era5,wrf
 python -m pip install pyinstaller
 pyinstaller packaging/sharpmod_gui.spec --noconfirm
 ```
@@ -259,7 +292,7 @@ pyinstaller packaging/sharpmod_gui.spec --noconfirm
 The result is `dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe`. Set
 `SHARPMOD_ONEFILE=1` in the build environment for a single self-extracting
 `dist/SHARPpy-Reimagined.exe` instead.
-The official v0.4 release workflow builds and installs `sharpmod_rs` before
+The official release workflow builds and installs `sharpmod_rs` before
 PyInstaller packages the executable, making Rust the `auto` backend in the
 published application. For custom local builds, the spec collects a compatible
 installed extension when present; otherwise it logs a warning and produces a
@@ -288,8 +321,7 @@ upstream SHARPpy runtime when `--render` is needed:
 python -m pip install -e ".[era5]"
 
 # Extraction plus PNG rendering
-python -m pip install -e ".[era5,render]"
-python -m pip install --no-deps "SHARPpy==1.4.0a5"
+python scripts/install_sharppy_compat.py --extras era5,render
 ```
 
 Discover the installed CLI and check remote inventory before a large fetch:
@@ -479,8 +511,7 @@ use Herbie and do not require CDS credentials.
 | `[rust-build]` | maturin | Build the supported Rust backend locally (Rust toolchain installed separately) |
 
 ```bash
-python -m pip install -e ".[dev,era5,wrf,render]"
-python -m pip install --no-deps "SHARPpy==1.4.0a5"
+python scripts/install_sharppy_compat.py --extras dev,era5,wrf,render
 pytest
 
 # Optional source-checkout Rust backend

@@ -17,7 +17,7 @@ body:
       description: Include the exact command, input format, and smallest data sample you can share.
       placeholder: |
         python -m pip install -e ".[render]"
-        python -m pip install --no-deps "SHARPpy==1.4.0a5"
+        python scripts/install_sharppy_compat.py --sharppy-only
         sharpmod-render examples/soundings/... out.png
     validations:
       required: true

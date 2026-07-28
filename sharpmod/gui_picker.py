@@ -132,6 +132,28 @@ from qtpy.QtWidgets import (
 _STABLE_GUI_RUNTIME_ENV = "SHARPMOD_GUI_STABLE_RUNTIME"
 
 
+def _town_lookup_attribution_label(parent=None) -> QLabel:
+    label = QLabel(
+        '<a href="https://www.census.gov/geographies/reference-files/'
+        'time-series/geo/gazetteer-files.html">'
+        "Automatic town lookup: U.S. Census (offline)</a>; "
+        '<a href="https://www.openstreetmap.org/copyright">'
+        "OpenStreetMap fallback</a>",
+        parent,
+    )
+    label.setOpenExternalLinks(True)
+    label.setStyleSheet("color: gray; font-size: 8pt;")
+    label.setWordWrap(True)
+    label.setToolTip(
+        "When the location label is blank, CONUS locations are resolved "
+        "locally from the bundled U.S. Census state and place index. Only "
+        "when the offline index has no result is the configured Nominatim "
+        "service tried, and the result is cached. Enter a label to skip "
+        "automatic lookup."
+    )
+    return label
+
+
 def _project_gui_runtime() -> tuple[Path, Path] | None:
     """Return a project Python suitable for the Windows desktop GUI.
 
@@ -271,6 +293,7 @@ class PickerWindow(QMainWindow):
         self._model_progress_timer.timeout.connect(
             self._poll_model_fetch_progress)
         self._settings = _build_settings()
+        self._multi_sounding_checkboxes: list[QCheckBox] = []
         self._saved_location_store = SavedLocationStore(self._settings)
         self._recent_location_store = SavedLocationStore(
             self._settings, key=RECENT_SETTINGS_KEY, max_entries=12
@@ -391,7 +414,7 @@ class PickerWindow(QMainWindow):
         combine_act = QAction("Add New Soundings to Active Window", self)
         combine_act.setCheckable(True)
         combine_act.setChecked(self._combine_soundings_enabled())
-        combine_act.toggled.connect(self._save_combine_soundings)
+        combine_act.toggled.connect(self._set_combine_soundings_enabled)
         filemenu.addAction(combine_act)
         self._combine_soundings_action = combine_act
         prefetch_act = QAction("Prefetch Next Forecast Hour", self)
@@ -673,6 +696,34 @@ class PickerWindow(QMainWindow):
         self._settings.setValue("viewer/combine_soundings", bool(enabled))
         self._settings.sync()
         _LOGGER.info("viewer.combine_soundings enabled=%s", bool(enabled))
+
+    def _set_combine_soundings_enabled(self, enabled: bool) -> None:
+        """Synchronize the File action with source-tab multi-sounding controls."""
+
+        enabled = bool(enabled)
+        action = getattr(self, "_combine_soundings_action", None)
+        if action is not None and action.isChecked() != enabled:
+            action.blockSignals(True)
+            action.setChecked(enabled)
+            action.blockSignals(False)
+        for checkbox in getattr(self, "_multi_sounding_checkboxes", ()):
+            if checkbox.isChecked() == enabled:
+                continue
+            checkbox.blockSignals(True)
+            checkbox.setChecked(enabled)
+            checkbox.blockSignals(False)
+        self._save_combine_soundings(enabled)
+
+    def _make_multi_sounding_checkbox(self, source: str) -> QCheckBox:
+        checkbox = QCheckBox("Add to active sounding window")
+        checkbox.setChecked(self._combine_soundings_enabled())
+        checkbox.setToolTip(
+            f"Keep this enabled, change the {source} time or point, and fetch "
+            "again to overlay multiple soundings in one analysis window."
+        )
+        checkbox.toggled.connect(self._set_combine_soundings_enabled)
+        self._multi_sounding_checkboxes.append(checkbox)
+        return checkbox
 
     def _apply_default_parcel_to_viewers(self, parcel_key) -> None:
         for viewer in list(getattr(self, "_viewers", [])):
@@ -1360,10 +1411,15 @@ class PickerWindow(QMainWindow):
         center.clicked.connect(lambda: self._model_map.set_point(
             self._model_lat.value(), self._model_lon.value(), center=True))
         point_grid.addWidget(center, 0, 2, 2, 1)
+        point_grid.addWidget(QLabel("Location/town:"), 2, 0)
+        self._model_loc = QLineEdit()
+        self._model_loc.setPlaceholderText("automatic town name")
+        point_grid.addWidget(self._model_loc, 2, 1, 1, 2)
+        point_grid.addWidget(_town_lookup_attribution_label(), 3, 0, 1, 3)
         self._model_point_status = QLabel("")
         self._model_point_status.setWordWrap(True)
         self._model_point_status.setStyleSheet("color: gray;")
-        point_grid.addWidget(self._model_point_status, 2, 0, 1, 3)
+        point_grid.addWidget(self._model_point_status, 4, 0, 1, 3)
         left.addWidget(point_box)
 
         member_box = QGroupBox("Member")
@@ -1503,7 +1559,10 @@ class PickerWindow(QMainWindow):
             f"{cfg.notes}\nDomain: {cfg.domain}")
         if hasattr(self, "_model_map"):
             self._model_map.set_domain(
-                cfg.domain_bounds, f"{cfg.label} domain: {cfg.domain}")
+                cfg.domain_bounds,
+                f"{cfg.label} domain: {cfg.domain}",
+                outline=cfg.domain_outline,
+            )
         ensemble = cfg.key in {"gefs", "cfs"}
         self._model_member.setEnabled(ensemble)
         if ensemble:
@@ -1792,7 +1851,7 @@ class PickerWindow(QMainWindow):
         fxx = self._model_selected_fxx()
         run_time = self._model_run_time()
         member = self._model_member_value()
-        loc = f"{cfg.label} {lat:.2f}, {lon:.2f}"
+        loc = self._model_loc.text().strip() or None
         self._remember_point(lat, lon, loc)
 
         download_dir = tempfile.mkdtemp(
@@ -1810,6 +1869,7 @@ class PickerWindow(QMainWindow):
             f"Fetching {cfg.label} F{fxx:03d} at {lat:.2f}, {lon:.2f}\u2026")
         worker = _ModelFetchWorker(
             cfg.key, lat, lon, run_time, fxx, npz_path, loc=loc,
+            resolve_place=not bool(loc),
             member=member, download_dir=download_dir,
             model_hour_cache=self._model_hour_cache,
             cached_grib=cached_grib,
@@ -1887,7 +1947,7 @@ class PickerWindow(QMainWindow):
         self._cancel_model_prefetch(wait=True)
         run_time = self._model_run_time()
         member = self._model_member_value()
-        loc = f"{cfg.label} {lat:.2f}, {lon:.2f}"
+        loc = self._model_loc.text().strip() or None
         output_dir = tempfile.mkdtemp(
             prefix=(
                 f"timeline_{cfg.key.replace('-', '_')}_"
@@ -1896,7 +1956,8 @@ class PickerWindow(QMainWindow):
         )
         worker = ModelTimelineWorker(
             cfg.key, lat, lon, run_time, hours, output_dir,
-            loc=loc, member=member, disk_cache=self._model_disk_cache,
+            loc=loc, resolve_place=not bool(loc), member=member,
+            disk_cache=self._model_disk_cache,
             parent=self,
         )
         worker._sharpmod_viewer = None
@@ -2157,6 +2218,7 @@ class PickerWindow(QMainWindow):
             return
 
         messages = {
+            "town": ("Resolving the selected town name…", "Locating town…"),
             "locating": ("Locating model run\u2026", "Locating\u2026"),
             "decoding": ("Decoding downloaded GRIB fields\u2026", "Decoding\u2026"),
             "cached": ("Using cached model hour\u2026", "Extracting\u2026"),
@@ -2517,11 +2579,13 @@ class PickerWindow(QMainWindow):
                 and self._file_modes.currentIndex() == 1:
             self._wrf_lat.setValue(location.lat)
             self._wrf_lon.setValue(location.lon)
+            self._wrf_loc.setText(location.name)
             self._wrf_map.set_point(location.lat, location.lon, center=True)
         else:
             self._select_tab("Forecast Model")
             self._model_lat.setValue(location.lat)
             self._model_lon.setValue(location.lon)
+            self._model_loc.setText(location.name)
             self._model_map.set_point(location.lat, location.lon, center=True)
 
     def _safe_locations(self, store):
@@ -2662,8 +2726,9 @@ class PickerWindow(QMainWindow):
         point_grid.addWidget(self._era5_snapped, 2, 0, 1, 3)
         point_grid.addWidget(QLabel("Label:"), 3, 0)
         self._era5_loc = QLineEdit()
-        self._era5_loc.setPlaceholderText("optional location label")
+        self._era5_loc.setPlaceholderText("automatic town name")
         point_grid.addWidget(self._era5_loc, 3, 1, 1, 2)
+        point_grid.addWidget(_town_lookup_attribution_label(), 4, 0, 1, 3)
         left.addWidget(point_box)
 
         self._era5_readiness = QLabel("")
@@ -2682,6 +2747,8 @@ class PickerWindow(QMainWindow):
         self._era5_cancel_btn.hide()
         fetch_row.addWidget(self._era5_cancel_btn)
         left.addLayout(fetch_row)
+        self._era5_multi_sounding = self._make_multi_sounding_checkbox("ERA5")
+        left.addWidget(self._era5_multi_sounding)
 
         self._era5_progress = QProgressBar()
         self._era5_progress.setRange(0, 0)
@@ -2801,13 +2868,14 @@ class PickerWindow(QMainWindow):
         valid = self._era5_valid_time()
         lat = float(self._era5_lat.value())
         lon = float(self._era5_lon.value())
-        loc = self._era5_loc.text().strip() or f"ERA5 {lat:.2f}, {lon:.2f}"
+        loc = self._era5_loc.text().strip() or None
         self._remember_point(lat, lon, loc)
         output_dir = tempfile.mkdtemp(
             prefix=f"era5_{valid:%Y%m%d%H}_{lat:+07.2f}_{lon:+08.2f}_")
         out_path = os.path.join(output_dir, "sounding.npz")
         worker = _ERA5FetchWorker(
             lat, lon, valid, out_path, loc=loc,
+            resolve_place=not bool(loc),
             disk_cache=self._model_disk_cache, parent=self)
         self._era5_worker = worker
         worker.finished_ok.connect(self._on_era5_fetch_ok)
@@ -2840,6 +2908,7 @@ class PickerWindow(QMainWindow):
 
     def _on_era5_progress(self, stage) -> None:
         messages = {
+            "town": "Resolving the selected town name…",
             "validating": "Validating the ERA5 request…",
             "queued": "Submitting the request to the Copernicus CDS queue…",
             "retrieving": "Waiting for and downloading the CDS result…",
@@ -3029,8 +3098,9 @@ class PickerWindow(QMainWindow):
         point_grid.addWidget(self._wrf_point_status, 2, 0, 1, 3)
         point_grid.addWidget(QLabel("Label:"), 3, 0)
         self._wrf_loc = QLineEdit()
-        self._wrf_loc.setPlaceholderText("optional location label")
+        self._wrf_loc.setPlaceholderText("automatic town name")
         point_grid.addWidget(self._wrf_loc, 3, 1, 1, 2)
+        point_grid.addWidget(_town_lookup_attribution_label(), 4, 0, 1, 3)
         left.addWidget(point_box)
 
         action_row = QHBoxLayout()
@@ -3045,6 +3115,8 @@ class PickerWindow(QMainWindow):
         self._wrf_cancel_btn.hide()
         action_row.addWidget(self._wrf_cancel_btn)
         left.addLayout(action_row)
+        self._wrf_multi_sounding = self._make_multi_sounding_checkbox("WRF")
+        left.addWidget(self._wrf_multi_sounding)
         self._wrf_progress = QProgressBar()
         self._wrf_progress.setRange(0, 0)
         self._wrf_progress.hide()
@@ -3237,11 +3309,12 @@ class PickerWindow(QMainWindow):
             QMessageBox.warning(self, APP_NAME, f"File not found:\n{path}")
             return
         valid = self._wrf_selected_time()
-        loc = self._wrf_loc.text().strip() or f"WRF {lat:.2f}, {lon:.2f}"
+        loc = self._wrf_loc.text().strip() or None
         output_dir = tempfile.mkdtemp(prefix="wrf_gui_")
         out_path = os.path.join(output_dir, "sounding.npz")
         worker = _WRFExtractWorker(
-            path, lat, lon, out_path, valid_time=valid, loc=loc, parent=self)
+            path, lat, lon, out_path, valid_time=valid, loc=loc,
+            resolve_place=not bool(loc), parent=self)
         self._wrf_extract_worker = worker
         worker.finished_ok.connect(self._on_wrf_extract_ok)
         worker.failed.connect(self._on_wrf_extract_failed)
@@ -3273,6 +3346,7 @@ class PickerWindow(QMainWindow):
 
     def _on_wrf_progress(self, stage) -> None:
         messages = {
+            "town": "Resolving the selected town name…",
             "validating": "Validating the WRF request…",
             "opening": "Opening raw WRF NetCDF output…",
             "extracting": "Destaggering and extracting the WRF column…",

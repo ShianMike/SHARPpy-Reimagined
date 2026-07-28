@@ -1,20 +1,74 @@
 """Frozen-app packaging contracts for live forecast-model support."""
 
 from pathlib import Path
+import tomllib
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_supported_python_and_wrf_dependencies_are_bounded():
+    with (ROOT / "pyproject.toml").open("rb") as stream:
+        project = tomllib.load(stream)["project"]
+
+    assert project["requires-python"] == ">=3.11,<3.14"
+    assert project["license"] == "BSD-3-Clause"
+    assert project["license-files"] == ["LICENSE"]
+    classifiers = set(project["classifiers"])
+    for minor in ("3.11", "3.12", "3.13"):
+        assert f"Programming Language :: Python :: {minor}" in classifiers
+    assert project["optional-dependencies"]["wrf"] == [
+        "xarray>=2024.7,<2027.0",
+        "netCDF4>=1.7,<2.0",
+    ]
+
+
+def test_ci_covers_supported_python_and_windows_wrf_runtime():
+    yaml = pytest.importorskip(
+        "yaml", reason="PyYAML is required only for workflow structure checks"
+    )
+    workflow = yaml.load(
+        (ROOT / ".github" / "workflows" / "tests.yml").read_text(
+            encoding="utf-8"
+        ),
+        Loader=yaml.BaseLoader,
+    )
+
+    triggers = workflow["on"]
+    assert triggers["pull_request"]["branches"] == ["main"]
+    assert "workflow_dispatch" in triggers
+    assert "push" not in triggers
+    python_job = workflow["jobs"]["pytest"]
+    assert python_job["timeout-minutes"] == "45"
+    assert python_job["strategy"]["matrix"]["python-version"] == [
+        "3.11", "3.12", "3.13",
+    ]
+
+    windows_job = workflow["jobs"]["windows-wrf"]
+    assert windows_job["runs-on"] == "windows-latest"
+    assert windows_job["timeout-minutes"] == "25"
+    scripts = "\n".join(
+        step.get("run", "") for step in windows_job["steps"]
+    )
+    assert 'python -m pip install -e ".[dev,wrf,render]"' in scripts
+    assert "scripts/install_sharppy_compat.py --sharppy-only" in scripts
+    assert "test_gui_reanalysis_wrf.py" in scripts
 
 
 def test_release_installs_model_fetch_dependencies():
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8"
     )
-    assert 'python -m pip install -e ".[render,era5]"' in workflow
+    assert 'python -m pip install -e ".[render,era5,wrf]"' in workflow
+    assert "python scripts/install_sharppy_compat.py --sharppy-only" in workflow
+    assert 'pip install --no-deps "SHARPpy' not in workflow
     assert "--model-fetch-runtime-check" in workflow
     assert "Verify frozen single-file runtime" in workflow
     assert workflow.count("--model-fetch-runtime-check") >= 2
     assert workflow.count("backend_kernel_ok") >= 2
+    assert workflow.count("wrf_runtime_ok") >= 2
     assert 'SHARPMOD_REQUIRE_RUST: "1"' in workflow
     assert 'SHARPMOD_BACKEND: "rust"' in workflow
     assert workflow.count('requested_backend -ne "rust"') >= 2
@@ -28,13 +82,14 @@ def test_pyinstaller_bundles_model_fetch_runtime():
     collection_block = spec.split("a = Analysis", 1)[0]
     for package in (
         "xarray", "herbie", "cfgrib", "eccodes", "cdsapi", "numcodecs",
-        "pyproj",
+        "pyproj", "netCDF4", "cftime",
     ):
         assert f'"{package}"' in collection_block
 
     excludes_block = spec.split("excludes=", 1)[1].split("]", 1)[0]
     assert '"cfgrib"' not in excludes_block
     assert '"herbie"' not in excludes_block
+    assert '"netCDF4"' not in excludes_block
 
     # The checkout lives inside a wrapper folder.  Analysis must use the
     # repository root resolved by the spec, not a relative parent directory,
@@ -72,9 +127,11 @@ def test_frozen_runtime_check_imports_cds_client():
 
     assert "import cdsapi" in launcher
     assert "import numcodecs" in launcher
+    assert "import netCDF4" in launcher
     assert "import pyproj" in launcher
     assert "from logging.handlers import RotatingFileHandler" in launcher
     assert "from sharpmod.backends import backend_info, wind_to_components" in launcher
     assert "backend_kernel_ok=backend_kernel_ok" in launcher
+    assert "wrf_runtime_ok=wrf_runtime_ok" in launcher
     assert "logging_handlers=bool(RotatingFileHandler)" in launcher
     assert "gui_entrypoint=callable(gui_main)" in launcher

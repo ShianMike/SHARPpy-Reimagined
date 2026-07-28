@@ -409,7 +409,7 @@ def test_runtime_dependencies_declare_version_constraints():
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("example_name", _EXAMPLE_INPUTS)
 def test_example_input_renders_to_decodable_png(
-    example_name, sounding_plots_dir, tmp_path
+    example_name, sounding_plots_dir, tmp_path, monkeypatch
 ):
     """A bundled example renders headless to a non-empty, decodable PNG.
 
@@ -425,7 +425,9 @@ def test_example_input_renders_to_decodable_png(
     """
     # Composing the window needs the upstream widget stack.
     pytest.importorskip("sharppy", reason="upstream sharppy widget stack required")
-    from sharpmod.render import render
+    from qtpy import QtGui, QtWidgets
+
+    from sharpmod import render as render_mod
 
     infile = sounding_plots_dir / example_name
     if not infile.is_file():
@@ -433,8 +435,37 @@ def test_example_input_renders_to_decodable_png(
 
     outfile = tmp_path / (infile.stem + ".png")
 
+    inspected_cache_counts = []
+    original_save = render_mod.save_widget_png
+
+    def inspect_density_then_save(widget, output_path, image_mode):
+        scale = render_mod._png_image_scale(image_mode)
+        caches = []
+        for child in widget.findChildren(QtWidgets.QWidget):
+            bitmap = getattr(child, "plotBitMap", None)
+            if bitmap is None or bitmap.isNull():
+                continue
+            caches.append(bitmap)
+            assert bitmap.devicePixelRatioF() == pytest.approx(scale)
+            logical = (bitmap.width(), bitmap.height())
+            physical = (
+                render_mod._NATIVE_QPIXMAP.width(bitmap),
+                render_mod._NATIVE_QPIXMAP.height(bitmap),
+            )
+            assert physical == (
+                round(logical[0] * scale),
+                round(logical[1] * scale),
+            )
+            assert isinstance(bitmap, QtGui.QPixmap)
+        inspected_cache_counts.append(len(caches))
+        return original_save(
+            widget, output_path, image_mode=image_mode)
+
+    monkeypatch.setattr(
+        render_mod, "save_widget_png", inspect_density_then_save)
+
     # 15.4: only input/output paths are passed; fonts/resources self-resolve.
-    result_path = render(str(infile), str(outfile))
+    result_path = render_mod.render(str(infile), str(outfile))
 
     # 11.5: the output exists, is non-empty, and decodes as a valid PNG. A
     # failed render must never leave a partial file (Req 11.7).
@@ -442,3 +473,5 @@ def test_example_input_renders_to_decodable_png(
     assert outfile.is_file(), "render reported success but wrote no file"
     assert outfile.stat().st_size > 0, "render produced an empty PNG"
     assert _decodes_as_png(str(outfile)), "output file is not a decodable PNG"
+    assert inspected_cache_counts
+    assert inspected_cache_counts[-1] >= 8

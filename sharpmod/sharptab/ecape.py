@@ -167,7 +167,10 @@ def _building_blocks(pres_f, hght_f, tmpc_f, dwpc_f, u_kt, v_kt):
     # Mirror the reference exactly: it receives specific humidity and recovers
     # the dewpoint from it, so round-trip through specific humidity here too.
     q = mpcalc.specific_humidity_from_dewpoint(p, td_in)
-    dewp = mpcalc.dewpoint_from_specific_humidity(p, t, q)
+    # MetPy 1.6+ deprecated the historical, unused temperature argument.
+    # The supported two-argument form is equivalent and avoids one warning per
+    # profile calculation.
+    dewp = mpcalc.dewpoint_from_specific_humidity(p, q)
 
     # --- undiluted (most-unstable) CAPE ------------------------------------
     cape_q, _cin = mpcalc.most_unstable_cape_cin(p, t, dewp)

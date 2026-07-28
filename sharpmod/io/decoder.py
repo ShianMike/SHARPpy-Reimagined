@@ -28,11 +28,15 @@ import importlib.machinery
 import importlib.util
 import json
 import logging
+import math
 import os
 import ssl
 import sys
+import zipfile
 from datetime import datetime
+from typing import Any
 from urllib.error import URLError
+from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 
 import certifi
@@ -48,6 +52,63 @@ HOME_DIR = os.path.join(os.path.expanduser("~"), ".sharppy", "decoders")
 
 # Format-name -> decoder-class registry, built lazily by ``findDecoders``.
 _decoders = {}
+
+DEFAULT_REMOTE_TIMEOUT_S = 15.0
+DEFAULT_MAX_REMOTE_BYTES = 32 * 1024 * 1024
+DEFAULT_MAX_NPZ_BYTES = 64 * 1024 * 1024
+DEFAULT_MAX_PROFILE_LEVELS = 20_000
+DEFAULT_MAX_SIDECAR_BYTES = 1 * 1024 * 1024
+
+
+def _positive_env_number(name, default, converter):
+    """Return a positive numeric environment override or ``default``."""
+    try:
+        value = converter(os.environ.get(name, default))
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return value if value > 0 else default
+
+
+def _remote_timeout() -> float:
+    return _positive_env_number(
+        "SHARPMOD_REMOTE_TIMEOUT", DEFAULT_REMOTE_TIMEOUT_S, float)
+
+
+def _max_remote_bytes() -> int:
+    return _positive_env_number(
+        "SHARPMOD_MAX_REMOTE_BYTES", DEFAULT_MAX_REMOTE_BYTES, int)
+
+
+def _is_http_url(value) -> bool:
+    try:
+        return urlparse(os.fspath(value)).scheme.casefold() in {"http", "https"}
+    except (TypeError, ValueError):
+        return False
+
+
+def _local_source_path(value) -> str:
+    """Return a filesystem path for a plain path or local ``file://`` URL."""
+    source = os.fspath(value)
+    parsed = urlparse(source)
+    if parsed.scheme.casefold() != "file":
+        return source
+    path = unquote(parsed.path)
+    if parsed.netloc and parsed.netloc.casefold() not in {"", "localhost"}:
+        path = f"//{parsed.netloc}{path}"
+    # ``urlparse('file:///C:/...').path`` starts with a slash on Windows.
+    if os.name == "nt" and len(path) >= 3 and path[0] == "/" \
+            and path[2] == ":":
+        path = path[1:]
+    return path
+
+
+def _read_bounded(stream, limit: int) -> bytes:
+    """Read at most ``limit`` bytes and reject a larger response."""
+    payload = stream.read(limit + 1)
+    if len(payload) > limit:
+        raise IOError(
+            f"input exceeds the configured {limit:,}-byte safety limit")
+    return payload
 
 
 class abstract(object):
@@ -86,22 +147,36 @@ class Decoder(object):
     def _downloadFile(self):
         """Return the decoded text of the decoder's source (URL or local file).
 
-        Tries an HTTPS fetch first (certificate verification on), then falls
-        back to reading a local path, mirroring the legacy behaviour without
-        the removed ``cafile`` keyword argument.
+        HTTP(S) inputs use certificate verification, a bounded timeout, a
+        bounded response size, and an explicitly closed response. Filesystem
+        inputs are opened directly instead of first being mistaken for URLs.
         """
-        try:
+        if _is_http_url(self._file_name):
             context = ssl.create_default_context(cafile=certifi.where())
-            f = urlopen(self._file_name, context=context)
-        except (ValueError, URLError, IOError):
-            fname = self._file_name[7:] \
-                if self._file_name.startswith('file://') else self._file_name
             try:
-                f = open(fname, 'rb')
-            except IOError:
-                raise IOError("File '%s' cannot be found" % self._file_name)
-        file_data = f.read()
-        return file_data.decode('utf-8')
+                with urlopen(
+                    self._file_name,
+                    timeout=_remote_timeout(),
+                    context=context,
+                ) as response:
+                    file_data = _read_bounded(
+                        response, _max_remote_bytes())
+            except (ValueError, URLError, OSError) as exc:
+                raise IOError(
+                    "Remote file '%s' could not be downloaded: %s"
+                    % (self._file_name, exc)
+                ) from exc
+        else:
+            fname = _local_source_path(self._file_name)
+            try:
+                with open(fname, "rb") as handle:
+                    file_data = _read_bounded(
+                        handle, _max_remote_bytes())
+            except OSError as exc:
+                raise IOError(
+                    "File '%s' cannot be found" % self._file_name
+                ) from exc
+        return file_data.decode("utf-8-sig")
 
     def getProfiles(self, indexes=None):
         """Return the parsed profile collection (optionally a subset)."""
@@ -297,6 +372,159 @@ def getDecoders():
     return _decoders
 
 
+def _validate_npz_container(filename) -> None:
+    """Reject oversized or malformed point-sounding archives before NumPy."""
+    path = os.path.abspath(os.fspath(filename))
+    size_limit = _positive_env_number(
+        "SHARPMOD_MAX_NPZ_BYTES", DEFAULT_MAX_NPZ_BYTES, int)
+    try:
+        if os.path.getsize(path) > size_limit:
+            raise ValueError(
+                f"portable sounding exceeds {size_limit:,} bytes")
+        with zipfile.ZipFile(path) as archive:
+            members = archive.infolist()
+            if len(members) > 64:
+                raise ValueError("portable sounding contains too many arrays")
+            expanded = sum(member.file_size for member in members)
+            if expanded > size_limit:
+                raise ValueError(
+                    "portable sounding expands beyond the configured "
+                    f"{size_limit:,}-byte safety limit")
+            if any(
+                member.file_size > size_limit
+                or not member.filename.endswith(".npy")
+                for member in members
+            ):
+                raise ValueError(
+                    "portable sounding contains an invalid array member")
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise ValueError(f"invalid portable sounding archive: {exc}") from exc
+
+
+def _npz_scalar(data, key, *, default=None):
+    """Read a non-object scalar from an already safely-open NPZ archive."""
+    if key not in data:
+        if default is not None:
+            return default
+        raise ValueError(f"portable sounding is missing required field {key!r}")
+    value = np.asarray(data[key])
+    if value.dtype.hasobject:
+        raise ValueError(
+            f"portable sounding field {key!r} uses unsafe object data")
+    if value.size != 1:
+        raise ValueError(
+            f"portable sounding field {key!r} must contain one value")
+    return value.reshape(-1)[0].item()
+
+
+def _npz_profile_array(data, key, expected_levels=None) -> np.ndarray:
+    """Read and validate one numeric, one-dimensional profile array."""
+    if key not in data:
+        raise ValueError(f"portable sounding is missing required field {key!r}")
+    value = np.asarray(data[key])
+    if value.dtype.hasobject or value.dtype.kind not in "fiu":
+        raise ValueError(
+            f"portable sounding field {key!r} must be a numeric array")
+    if value.ndim != 1:
+        raise ValueError(
+            f"portable sounding field {key!r} must be one-dimensional")
+    max_levels = _positive_env_number(
+        "SHARPMOD_MAX_PROFILE_LEVELS",
+        DEFAULT_MAX_PROFILE_LEVELS,
+        int,
+    )
+    if not 2 <= value.size <= max_levels:
+        raise ValueError(
+            f"portable sounding field {key!r} has an invalid level count")
+    if expected_levels is not None and value.size != expected_levels:
+        raise ValueError(
+            f"portable sounding field {key!r} has {value.size} levels; "
+            f"expected {expected_levels}")
+    return np.asarray(value, dtype=float)
+
+
+def _parse_portable_datetime(value, key: str) -> datetime:
+    text = str(value).strip()
+    for pattern in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(text, pattern)
+        except ValueError:
+            continue
+    raise ValueError(
+        f"portable sounding field {key!r} is not a supported date/time")
+
+
+def _read_json_sidecar(filename) -> tuple[dict[str, Any] | None, str]:
+    source_path = os.path.abspath(os.fspath(filename))
+    stem_path = os.path.splitext(source_path)[0] + ".json"
+    candidates = (
+        (stem_path,)
+        if source_path.lower().endswith(".npz")
+        else (source_path + ".json", stem_path)
+    )
+    for sidecar_path in dict.fromkeys(candidates):
+        try:
+            if os.path.getsize(sidecar_path) > _positive_env_number(
+                "SHARPMOD_MAX_SIDECAR_BYTES",
+                DEFAULT_MAX_SIDECAR_BYTES,
+                int,
+            ):
+                continue
+            with open(sidecar_path, encoding="utf-8") as sidecar_file:
+                sidecar = json.load(sidecar_file)
+        except (OSError, UnicodeError, ValueError, TypeError):
+            continue
+        if isinstance(sidecar, dict):
+            return sidecar, sidecar_path
+    return None, candidates[0]
+
+
+def attach_json_sidecar(prof_col, filename) -> dict[str, Any] | None:
+    """Attach safe adjacent JSON provenance to any decoded collection.
+
+    This is intentionally format-neutral so an SPC file and its extractor
+    sidecar retain the same model and coordinate metadata as the equivalent
+    portable NPZ file.
+    """
+    sidecar, sidecar_path = _read_json_sidecar(filename)
+    if sidecar is None:
+        return None
+
+    for raw_key, raw_value in sidecar.items():
+        key = str(raw_key)
+        value = raw_value
+        if key in {"run", "base_time"} and isinstance(value, str):
+            try:
+                value = _parse_portable_datetime(value, key)
+            except ValueError:
+                continue
+        elif key in {"lat", "lon", "requested_lat", "requested_lon",
+                     "selected_lat", "selected_lon"}:
+            try:
+                value = float(value)
+            except (TypeError, ValueError, OverflowError):
+                continue
+        elif key == "loc":
+            # A decoder-derived station name wins unless it is absent.
+            try:
+                if str(prof_col.getMeta("loc") or "").strip():
+                    continue
+            except Exception:
+                pass
+            value = str(value)
+        try:
+            prof_col.setMeta(key, value)
+        except Exception:
+            logger.debug(
+                "Could not attach sidecar metadata %s from %s",
+                key,
+                sidecar_path,
+                exc_info=True,
+            )
+    prof_col.setMeta("metadata_sidecar", sidecar_path)
+    return sidecar
+
+
 def load_npz(filename):
     """Build a profile collection from a NumPy ``.npz`` point-sounding sidecar.
 
@@ -315,75 +543,92 @@ def load_npz(filename):
     tuple(prof_collection.ProfCollection, str)
         The built profile collection and the station id / location label.
     """
-    d = np.load(filename, allow_pickle=True)
-    valid = datetime.strptime(str(d["valid"]), "%Y-%m-%d %H:%M")
-    run = datetime.strptime(str(d["run"]), "%Y-%m-%d %H:%M")
-    loc = str(d["loc"])
+    _validate_npz_container(filename)
+    with np.load(filename, allow_pickle=False) as d:
+        pres = _npz_profile_array(d, "pres")
+        level_count = pres.size
+        hght = _npz_profile_array(d, "hght", level_count)
+        tmpc = _npz_profile_array(d, "tmpc", level_count)
+        dwpc = _npz_profile_array(d, "dwpc", level_count)
+        wdir = _npz_profile_array(d, "wdir", level_count)
+        wspd = _npz_profile_array(d, "wspd", level_count)
+        omeg = _npz_profile_array(d, "omeg", level_count)
+        valid = _parse_portable_datetime(
+            _npz_scalar(d, "valid"), "valid")
+        run = _parse_portable_datetime(_npz_scalar(d, "run"), "run")
+        loc = str(_npz_scalar(d, "loc")).strip()
+        lat = float(_npz_scalar(d, "lat"))
+        lon = float(_npz_scalar(d, "lon")) if "lon" in d else None
+        if not math.isfinite(lat) or not -90.0 <= lat <= 90.0:
+            raise ValueError("portable sounding latitude is out of range")
+        if lon is not None and (
+            not math.isfinite(lon) or not -180.0 <= lon <= 180.0
+        ):
+            raise ValueError("portable sounding longitude is out of range")
+        model_name = str(_npz_scalar(d, "model", default="HRRR")).strip()
+        observed_value = (
+            bool(_npz_scalar(d, "observed"))
+            if "observed" in d
+            else model_name.casefold().startswith("observed")
+        )
+
+        optional_surface_fields = {}
+        for key in (
+            "surface_relative_vorticity",
+            "sfc_relative_vorticity",
+            "surface_vorticity",
+            "sfc_vorticity",
+            "vorticity",
+        ):
+            if key in d:
+                optional_surface_fields[key] = float(_npz_scalar(d, key))
+
+        provenance = {}
+        for key in (
+            "source", "source_provider", "source_provider_name",
+            "source_station", "source_url", "requested_station",
+        ):
+            if key in d:
+                provenance[key] = str(_npz_scalar(d, key))
+        if "fallback_from" in d:
+            fallback = np.asarray(d["fallback_from"])
+            if fallback.dtype.hasobject:
+                raise ValueError(
+                    "portable sounding field 'fallback_from' uses unsafe "
+                    "object data")
+            provenance["fallback_from"] = tuple(
+                str(value) for value in fallback.reshape(-1))
 
     prof = profile.create_profile(
-        profile="raw", pres=d["pres"], hght=d["hght"], tmpc=d["tmpc"],
-        dwpc=d["dwpc"], wdir=d["wdir"], wspd=d["wspd"], omeg=d["omeg"],
-        location=loc, date=valid, latitude=float(d["lat"]), missing=-9999.0)
-
-    optional_surface_fields = {}
-    for key in (
-        "surface_relative_vorticity",
-        "sfc_relative_vorticity",
-        "surface_vorticity",
-        "sfc_vorticity",
-        "vorticity",
-    ):
-        if key in d:
-            value = float(np.asarray(d[key]).reshape(-1)[0])
-            optional_surface_fields[key] = value
-            setattr(prof, key, value)
+        profile="raw", pres=pres, hght=hght, tmpc=tmpc,
+        dwpc=dwpc, wdir=wdir, wspd=wspd, omeg=omeg,
+        location=loc, date=valid, latitude=lat, missing=-9999.0)
+    for key, value in optional_surface_fields.items():
+        setattr(prof, key, value)
 
     pc = prof_collection.ProfCollection({"": [prof]}, [valid])
     pc.setMeta("loc", loc)
-    model_name = str(d["model"]) if "model" in d else "HRRR"
-    observed = model_name.casefold().startswith("observed")
-    if "observed" in d:
-        observed = bool(np.asarray(d["observed"]).reshape(-1)[0])
-    pc.setMeta("observed", observed)
+    pc.setMeta("observed", observed_value)
     pc.setMeta("base_time", run)
     pc.setMeta("run", run)
     pc.setMeta("model", model_name)
     pc.setMeta("npz_path", os.path.abspath(filename))
     pc.setMeta("decoder", "portable NPZ decoder")
     pc.setMeta("backend", "portable NPZ")
-    if "lat" in d:
-        pc.setMeta("lat", float(d["lat"]))
-    if "lon" in d:
-        pc.setMeta("lon", float(d["lon"]))
-    provenance = {}
-    for key in (
-        "source", "source_provider", "source_provider_name",
-        "source_station", "source_url", "requested_station",
-    ):
-        if key in d:
-            value = str(np.asarray(d[key]).reshape(-1)[0])
-            provenance[key] = value
-            pc.setMeta(key, value)
-    if "fallback_from" in d:
-        fallback_from = tuple(str(value) for value in np.asarray(
-            d["fallback_from"]
-        ).reshape(-1))
-        provenance["fallback_from"] = fallback_from
-        pc.setMeta("fallback_from", fallback_from)
+    pc.setMeta("lat", lat)
+    if lon is not None:
+        pc.setMeta("lon", lon)
+    for key, value in provenance.items():
+        pc.setMeta(key, value)
     if provenance:
         current_meta = dict(getattr(prof, "meta", {}) or {})
         current_meta.update(provenance)
-        current_meta["observed"] = observed
+        current_meta["observed"] = observed_value
         prof.meta = current_meta
     for key, value in optional_surface_fields.items():
         pc.setMeta(key, value)
-    sidecar_path = os.path.splitext(os.path.abspath(filename))[0] + ".json"
-    try:
-        with open(sidecar_path, encoding="utf-8") as sidecar_file:
-            sidecar = json.load(sidecar_file)
-    except (OSError, ValueError, TypeError):
-        sidecar = None
-    if isinstance(sidecar, dict):
+    sidecar, sidecar_path = _read_json_sidecar(filename)
+    if sidecar is not None:
         # Preserve datetime-valued core metadata established above. Everything
         # else is JSON-safe provenance produced by the extractor and can be
         # surfaced by the viewer's data-quality inspector or analysis sessions.
@@ -406,3 +651,13 @@ def load_npz(filename):
             for key, value in optional_surface_fields.items():
                 setattr(cur_prof, key, value)
     return pc, loc
+
+
+__all__ = [
+    "Decoder",
+    "attach_json_sidecar",
+    "findDecoders",
+    "getDecoder",
+    "getDecoders",
+    "load_npz",
+]

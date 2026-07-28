@@ -75,6 +75,130 @@ class GeoMetCapability:
     fields: tuple[str, ...]
     archive_window: str
     transports: tuple[str, ...]
+    domain_outline: tuple[tuple[float, float], ...] = ()
+
+
+@dataclass(frozen=True)
+class RotatedGridDomain:
+    """Geographic limits expressed in an ECCC rotated-lat/lon coordinate grid."""
+
+    north_pole_lat: float
+    north_pole_lon: float
+    rotated_lon_min: float
+    rotated_lon_max: float
+    rotated_lat_min: float
+    rotated_lat_max: float
+
+    def to_rotated(self, lat: float, lon: float) -> tuple[float, float]:
+        """Convert one geographic coordinate to this grid's rotated degrees."""
+
+        phi = math.radians(float(lat))
+        delta_lon = math.radians(
+            ((float(lon) - self.north_pole_lon + 180.0) % 360.0) - 180.0
+        )
+        pole_lat = math.radians(self.north_pole_lat)
+        rotated_lat = math.asin(
+            math.sin(phi) * math.sin(pole_lat)
+            + math.cos(phi) * math.cos(pole_lat) * math.cos(delta_lon)
+        )
+        rotated_lon = -math.atan2(
+            math.cos(phi) * math.sin(delta_lon),
+            math.sin(phi) * math.cos(pole_lat)
+            - math.cos(phi) * math.sin(pole_lat) * math.cos(delta_lon),
+        )
+        return math.degrees(rotated_lat), math.degrees(rotated_lon)
+
+    def to_geographic(
+        self, rotated_lat: float, rotated_lon: float
+    ) -> tuple[float, float]:
+        """Convert one rotated-grid coordinate to ``(lat, lon)`` degrees."""
+
+        phi_r = math.radians(float(rotated_lat))
+        lon_r = math.radians(float(rotated_lon))
+        pole_lat = math.radians(self.north_pole_lat)
+        lat = math.asin(
+            math.sin(phi_r) * math.sin(pole_lat)
+            + math.cos(phi_r) * math.cos(pole_lat) * math.cos(lon_r)
+        )
+        delta_lon = math.atan2(
+            -math.cos(phi_r) * math.sin(lon_r),
+            math.sin(phi_r) * math.cos(pole_lat)
+            - math.cos(phi_r) * math.sin(pole_lat) * math.cos(lon_r),
+        )
+        lon = self.north_pole_lon + math.degrees(delta_lon)
+        lon = ((lon + 180.0) % 360.0) - 180.0
+        return math.degrees(lat), lon
+
+    def contains(self, lat: float, lon: float) -> bool:
+        """Return whether a geographic point lies on the rotated model grid."""
+
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (TypeError, ValueError):
+            return False
+        if not math.isfinite(lat) or not math.isfinite(lon):
+            return False
+        if not -90.0 <= lat <= 90.0:
+            return False
+        rotated_lat, rotated_lon = self.to_rotated(lat, lon)
+        return (
+            self.rotated_lat_min <= rotated_lat <= self.rotated_lat_max
+            and self.rotated_lon_min <= rotated_lon <= self.rotated_lon_max
+        )
+
+    def outline(self, samples_per_edge: int = 28) -> tuple[
+        tuple[float, float], ...
+    ]:
+        """Return a sampled geographic perimeter as ``(lon, lat)`` points."""
+
+        count = max(2, int(samples_per_edge))
+
+        def values(start, stop):
+            return tuple(
+                start + (stop - start) * index / count
+                for index in range(count)
+            )
+
+        rotated = []
+        rotated.extend(
+            (self.rotated_lat_min, lon)
+            for lon in values(self.rotated_lon_min, self.rotated_lon_max)
+        )
+        rotated.extend(
+            (lat, self.rotated_lon_max)
+            for lat in values(self.rotated_lat_min, self.rotated_lat_max)
+        )
+        rotated.extend(
+            (self.rotated_lat_max, lon)
+            for lon in values(self.rotated_lon_max, self.rotated_lon_min)
+        )
+        rotated.extend(
+            (lat, self.rotated_lon_min)
+            for lat in values(self.rotated_lat_max, self.rotated_lat_min)
+        )
+        rotated.append(rotated[0])
+        return tuple(
+            (lon, lat) for lat, lon in (
+                self.to_geographic(rotated_lat, rotated_lon)
+                for rotated_lat, rotated_lon in rotated
+            )
+        )
+
+
+# The operational RLatLon0.09 grid metadata published by ECCC.  GeoMet reports
+# a nearly global geographic bounding box because this rotated rectangle wraps
+# across the antimeridian and around the Arctic.  Testing only that envelope
+# incorrectly advertises RDPS in places such as the Philippines.  Validate in
+# native rotated coordinates and expose the real curved perimeter to the map.
+RDPS_ROTATED_DOMAIN = RotatedGridDomain(
+    north_pole_lat=31.758312,
+    north_pole_lon=87.597031,
+    rotated_lon_min=-53.858588,
+    rotated_lon_max=48.990594,
+    rotated_lat_min=-48.805954,
+    rotated_lat_max=45.464939,
+)
 
 
 _CAPABILITIES = {
@@ -100,8 +224,8 @@ _CAPABILITIES = {
         provider="ECCC MSC GeoMet",
         layer_prefix="RDPS_10km",
         domain="North America and Arctic",
-        # The rotated grid crosses the antimeridian; this is the GeoMet layer
-        # bounding box.  A missing feature still produces a clear domain error.
+        # The envelope crosses the antimeridian. Precise acceptance uses
+        # ``RDPS_ROTATED_DOMAIN`` below rather than this coarse map extent.
         domain_bounds=(-180.0, 180.0, -3.825, 90.0),
         cycles=(0, 6, 12, 18),
         forecast_hours=tuple(range(0, 85)),
@@ -110,6 +234,7 @@ _CAPABILITIES = {
         fields=_REQUIRED_VARIABLES + ("VerticalVelocity",),
         archive_window="server-advertised rolling reference-time window",
         transports=("wms-getfeatureinfo-point",),
+        domain_outline=RDPS_ROTATED_DOMAIN.outline(),
     ),
 }
 
@@ -167,6 +292,25 @@ def get_capability(model) -> GeoMetCapability:
     if key is None:
         raise KeyError("unknown ECCC GeoMet model %r" % model)
     return _CAPABILITIES[key]
+
+
+def point_in_domain(model, lat, lon) -> bool:
+    """Return whether a point is inside the provider's actual model grid."""
+
+    capability = get_capability(model)
+    if capability.model_key == "rdps":
+        return RDPS_ROTATED_DOMAIN.contains(lat, lon)
+    try:
+        lat = float(lat)
+        lon = ((float(lon) + 180.0) % 360.0) - 180.0
+    except (TypeError, ValueError):
+        return False
+    if not math.isfinite(lat) or not math.isfinite(lon):
+        return False
+    lon0, lon1, lat0, lat1 = capability.domain_bounds
+    longitude_ok = lon0 <= lon <= lon1 if lon0 <= lon1 \
+        else lon >= lon0 or lon <= lon1
+    return lat0 <= lat <= lat1 and longitude_ok
 
 
 def worker_count(value=None) -> int:
@@ -501,10 +645,9 @@ def fetch_point(
     capability = get_capability(model)
     lat = float(lat)
     lon = ((float(lon) + 180.0) % 360.0) - 180.0
-    lon0, lon1, lat0, lat1 = capability.domain_bounds
     if not -90.0 <= lat <= 90.0:
         raise ParameterRangeError("latitude %.4f is outside [-90, 90]" % lat)
-    if not lat0 <= lat <= lat1 or not lon0 <= lon <= lon1:
+    if not point_in_domain(capability.model_key, lat, lon):
         raise ParameterRangeError(
             "%s does not cover %.4f, %.4f" % (capability.label, lat, lon)
         )

@@ -242,6 +242,9 @@ def _fill_metadata(prof_col, stn_id, model=None, run=None, loc=None) -> None:
         prof_col.setMeta("run", base)
     if not has("model"):
         prof_col.setMeta("model", "Archive" if observed else "Model")
+    # Match the headless renderer: generic model/coordinate station ids are
+    # replaced by the cached CONUS town title before any widget paints.
+    _render()._resolve_location_title(prof_col, explicit_loc=loc)
 
 
 def _settle_layout_events(app, passes: int = 2) -> None:

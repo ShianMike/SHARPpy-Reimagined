@@ -15,16 +15,20 @@ hypothesis>=6.0
 maturin>=1.9,<2
 
 [era5]
-herbie-data
-cfgrib
-xarray
+cdsapi>=0.7.7,<0.8
+herbie-data>=2026.3,<2027.0
+cfgrib>=0.9.15,<0.10
+eccodes>=2.47,<3.0
+xarray>=2026.4,<2027.0
+numcodecs>=0.11,<1.0
+pyproj>=3.5,<4.0
 
 [render]
 requests<3.0,>=2.28
 
 [wrf]
-xarray
-netCDF4
+xarray>=2024.7,<2027.0
+netCDF4>=1.7,<2.0
 
 ===========================================================================
  SHARPpy Reimagined — INSTALLATION REFERENCE
@@ -42,7 +46,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
 1. SYSTEM REQUIREMENTS
 ---------------------------------------------------------------------------
-  - Python >= 3.11  (64-bit; use 3.11-3.13 for Windows source GUI runs)
+  - Python >= 3.11,<3.14  (64-bit; supported versions are 3.11-3.13)
   - pip     >= 23   (needed for editable installs + modern resolver)
   - OS      : Windows, Linux, or macOS
   - Disk    : ~1.5 GB for the full render + scientific stack
@@ -57,13 +61,11 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
 2. QUICK INSTALL (copy/paste)
 ---------------------------------------------------------------------------
-  # 1) core library + CLI tools + render transitive deps
-  pip install -e ".[render]"
+  # Core library + render dependencies + verified SHARPpy compatibility wheel.
+  # This command finishes by running `pip check`.
+  python scripts/install_sharppy_compat.py
 
-  # 2) rendering engine (separate step — see section 4 for why)
-  pip install --no-deps "SHARPpy==1.4.0a5"
-
-  # 3) optional, only if you need them
+  # Optional, only if you need them
   pip install -e ".[era5]"     # ERA5 point-sounding extraction
   pip install -e ".[wrf]"      # WRF-ARW (wrfout NetCDF) extraction
   pip install -e ".[dev]"      # run the test suite
@@ -99,18 +101,26 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 
 
 ---------------------------------------------------------------------------
-4. RENDERING ENGINE — upstream SHARPpy  (installed with --no-deps)
+4. RENDERING ENGINE — verified upstream SHARPpy compatibility wheel
 ---------------------------------------------------------------------------
   Package : SHARPpy==1.4.0a5
   Provides: sharppy, sutils, datasources, runsharp
-  Install : pip install --no-deps "SHARPpy==1.4.0a5"
+  Install : python scripts/install_sharppy_compat.py
 
-  WHY A SEPARATE --no-deps STEP:
+  WHY THE COMPATIBILITY INSTALLER IS REQUIRED:
     SHARPpy 1.4.0a5's wheel metadata pins `numpy==1.15.*`, which conflicts
     with the modern NumPy required above (a normal `pip install SHARPpy`
     would fail to resolve, or try to downgrade NumPy and break everything).
-    Its real runtime needs — python-dateutil, requests, numpy — are ALREADY
-    provided by the core install, so --no-deps is safe.
+    Installing it with `--no-deps` avoids the downgrade but leaves a broken
+    environment according to `pip check`.
+
+    `scripts/install_sharppy_compat.py` pins the exact official wheel by URL,
+    byte size, and SHA-256; validates every upstream RECORD entry; changes only
+    the stale NumPy requirement to `numpy>=1.24,<3.0`; embeds an audit record;
+    regenerates RECORD; installs the result; and requires `pip check` to pass.
+    Every upstream package/data byte is retained unchanged. For offline use,
+    pass `--source-wheel PATH`; use `--wheel-dir DIR --build-only` to retain an
+    auditable corrected wheel without installing it.
 
   NEEDED ONLY FOR RENDERING (`sharpmod-render` or any `--render` flag).
   Fetching/extracting soundings does NOT require it.
@@ -132,7 +142,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
 6. RUST-PRIMARY BACKEND AND PYTHON FALLBACK
 ---------------------------------------------------------------------------
-  Official v0.4 Windows executables bundle the supported `sharpmod_rs`
+  Official Windows executables bundle the supported `sharpmod_rs`
   extension. The default `auto` mode validates and selects Rust when that
   extension is present. The independently optimized Python implementation
   remains a fully functional portable fallback, so a source or Python-only
@@ -176,7 +186,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   Inspect the requested/active backend, extension version, and fallback reason:
       python -c "from sharpmod.backends import backend_info; print(backend_info())"
 
-  The official v0.4 release workflow builds and installs `sharpmod_rs` before
+  The official release workflow builds and installs `sharpmod_rs` before
   PyInstaller runs, so the published executable uses Rust in `auto` mode. A
   custom local build collects a compatible installed extension when present;
   otherwise it logs a warning and produces a fully functional Python-fallback
@@ -232,9 +242,10 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 10. TROUBLESHOOTING
 ---------------------------------------------------------------------------
   - "No module named sharppy/sutils" or a Qt enum error when rendering:
-        pip install --no-deps "SHARPpy==1.4.0a5"
+        python scripts/install_sharppy_compat.py
   - ResolutionImpossible mentioning numpy==1.15:
-        you tried to install SHARPpy WITHOUT --no-deps; use the --no-deps form.
+        do not install the upstream wheel directly; use the compatibility
+        installer above, which preserves its payload and fixes its metadata.
   - ImportError for herbie/cfgrib or netCDF4:
         install the matching extra:  pip install -e ".[era5]"  /  ".[wrf]"
   - ERA5 reports missing CDS API credentials:

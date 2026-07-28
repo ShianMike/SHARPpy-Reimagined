@@ -561,6 +561,7 @@ class PointMapWidget(StationMapWidget):
         self._point_lonlat = (-97.44, 35.63)
         self._saved_points: tuple[tuple[str, float, float], ...] = ()
         self._domain_bounds: tuple[float, float, float, float] | None = None
+        self._domain_outline: tuple[tuple[float, float], ...] = ()
         self._domain_label = ""
 
     def set_saved_points(self, locations) -> None:
@@ -598,8 +599,9 @@ class PointMapWidget(StationMapWidget):
         else:
             self.update()
 
-    def set_domain(self, bounds, label: str = "") -> None:
+    def set_domain(self, bounds, label: str = "", outline=None) -> None:
         self._domain_bounds = tuple(bounds) if bounds is not None else None
+        self._domain_outline = tuple(outline or ())
         self._domain_label = label or ""
         self.update()
 
@@ -624,6 +626,30 @@ class PointMapWidget(StationMapWidget):
         edge = QColor("#79b8ff")
         qp.setBrush(QBrush(fill))
         qp.setPen(QPen(edge, 1.4, Qt.DashLine))
+        if self._domain_outline:
+            # A rotated grid can wrap around a pole. Filling its geographic
+            # polygon with a planar Qt winding rule shades the complement near
+            # the antimeridian, so render the precise perimeter only.
+            qp.setBrush(Qt.NoBrush)
+            unwrapped = []
+            previous_lon = None
+            for lon, lat in self._domain_outline:
+                lon = float(lon)
+                if previous_lon is not None:
+                    lon = previous_lon + (
+                        (lon - previous_lon + 180.0) % 360.0
+                    ) - 180.0
+                unwrapped.append((lon, float(lat)))
+                previous_lon = lon
+            # Draw adjacent longitude copies so an antimeridian-crossing
+            # rotated grid remains visible in both world and regional views.
+            for shift in (-360.0, 0.0, 360.0):
+                poly = QPolygonF([
+                    self._to_px(lon + shift, lat, p)
+                    for lon, lat in unwrapped
+                ])
+                qp.drawPolygon(poly)
+            return
         spans = ((lon0, lon1),) if lon0 <= lon1 else (
             (lon0, 180.0), (-180.0, lon1)
         )

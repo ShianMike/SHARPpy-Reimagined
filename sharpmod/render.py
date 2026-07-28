@@ -41,12 +41,16 @@ corrupt PNG and never disturbs a pre-existing output file
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import ssl
 import sys
 import tempfile
+import threading
 import warnings
+from contextlib import contextmanager
 from datetime import datetime
+from urllib.parse import urlparse
 
 # The vendored SHARPpy index/kinematics widgets format legitimately-missing
 # (masked) wind values for display by coercing them to float, e.g.
@@ -116,6 +120,9 @@ PARCEL_ATTRIBUTES = {
     "USER": "usrpcl",
 }
 DEFAULT_RENDER_PARCEL = "MU"
+_LOGGER = logging.getLogger(__name__)
+_NATIVE_QPIXMAP = QtGui.QPixmap
+_PIXMAP_DENSITY_LOCK = threading.RLock()
 
 __all__ = [
     "PNG_IMAGE_HD", "PNG_IMAGE_UHD", "PNG_IMAGE_LOSSLESS", "RenderError",
@@ -235,6 +242,148 @@ def _png_uhd_image_scale() -> float:
 def _png_uhd_compression_quality() -> int:
     """Return Qt's PNG compression setting for UHD exports."""
     return _bounded_int_env("SHARPMOD_UHD_PNG_QUALITY", 0, 0, 100)
+
+
+def _png_image_scale(image_mode: str | None) -> float:
+    """Return the target pixel-density multiplier for one export mode."""
+    mode = _normalise_png_image_mode(image_mode)
+    if mode == PNG_IMAGE_UHD:
+        return _png_uhd_image_scale()
+    if mode == PNG_IMAGE_HD:
+        return _png_hd_image_scale()
+    return 1.0
+
+
+def _make_density_pixmap_type(scale: float):
+    """Build a QPixmap type with high-density storage and logical geometry.
+
+    SHARPpy's scientific widgets paint into persistent ``plotBitMap`` caches.
+    Those caches are created with logical widget dimensions and then blitted by
+    each widget's paint event.  During HD/UHD capture, merely scaling the final
+    painter enlarges those already-rasterized caches, including their text.
+
+    This type keeps the geometry contract expected by the vendored widgets
+    while allocating ``scale`` times as many physical pixels.  Qt's device
+    pixel ratio then maps their unchanged logical paint coordinates onto the
+    denser storage.  Copy rectangles need the same logical-to-physical mapping
+    because the skew-T and hodograph keep secondary bitmap copies.
+    """
+    density = max(1.0, float(scale))
+    native_pixmap = _NATIVE_QPIXMAP
+
+    class DensityPixmap(native_pixmap):
+        _sharpmod_density_scale = density
+
+        def __init__(self, *args, **kwargs):
+            scaled = False
+            if not kwargs and len(args) == 2 and all(
+                    isinstance(value, int) for value in args):
+                super().__init__(
+                    max(0, int(round(args[0] * density))),
+                    max(0, int(round(args[1] * density))),
+                )
+                scaled = True
+            elif not kwargs and len(args) == 1 \
+                    and isinstance(args[0], QtCore.QSize):
+                size = args[0]
+                super().__init__(
+                    max(0, int(round(size.width() * density))),
+                    max(0, int(round(size.height() * density))),
+                )
+                scaled = True
+            else:
+                # Empty, filename, and QPixmap-copy constructors retain their
+                # normal Qt behavior.  The copy case also preserves its DPR.
+                super().__init__(*args, **kwargs)
+            if scaled:
+                self.setDevicePixelRatio(density)
+
+        def width(self):
+            raw = super().width()
+            dpr = self.devicePixelRatioF()
+            return int(round(raw / dpr)) if dpr > 1.0 else raw
+
+        def height(self):
+            raw = super().height()
+            dpr = self.devicePixelRatioF()
+            return int(round(raw / dpr)) if dpr > 1.0 else raw
+
+        def size(self):
+            return QtCore.QSize(self.width(), self.height())
+
+        def rect(self):
+            return QtCore.QRect(0, 0, self.width(), self.height())
+
+        @staticmethod
+        def _map_copy_axis(start, length, dpr, physical_extent):
+            physical_start = int(round(start * dpr))
+            if length < 0:
+                # Resolve Qt's -1 "through the edge" sentinel explicitly.
+                # Passing -1 with physical x/y through PySide can be treated
+                # as a null QRect and copy the entire pixmap instead.
+                return physical_start, max(
+                    0, int(physical_extent) - physical_start)
+            physical_end = int(round((start + length) * dpr))
+            return physical_start, max(0, physical_end - physical_start)
+
+        def copy(self, *args):
+            dpr = self.devicePixelRatioF()
+            mapped = args
+            if dpr > 1.0 and args:
+                if len(args) == 1 and isinstance(args[0], QtCore.QRect):
+                    rect = args[0]
+                    x, width = self._map_copy_axis(
+                        rect.x(), rect.width(), dpr, super().width())
+                    y, height = self._map_copy_axis(
+                        rect.y(), rect.height(), dpr, super().height())
+                    mapped = (QtCore.QRect(x, y, width, height),)
+                elif len(args) == 4:
+                    x, width = self._map_copy_axis(
+                        args[0], args[2], dpr, super().width())
+                    y, height = self._map_copy_axis(
+                        args[1], args[3], dpr, super().height())
+                    mapped = (x, y, width, height)
+
+            # The binding returns the native base type.  Re-wrap it so copied
+            # caches keep logical geometry and scaled-copy behavior.
+            return DensityPixmap(super().copy(*mapped))
+
+    DensityPixmap.__name__ = (
+        f"_DensityPixmap_{str(density).replace('.', '_')}")
+    return DensityPixmap
+
+
+@contextmanager
+def _target_density_pixmaps(scale: float):
+    """Create new render-window bitmap caches at ``scale`` pixel density.
+
+    ``QtGui.QPixmap`` is process-global, so the temporary substitution is
+    serialized, restricted to Qt's GUI thread, and restored even if window
+    composition or export fails.  The context must begin before composing the
+    offscreen window; changing an already-built tree leaves stale 1x caches.
+    """
+    density = max(1.0, float(scale))
+    if density <= 1.0:
+        yield _NATIVE_QPIXMAP
+        return
+
+    app = QApplication.instance()
+    if app is None:
+        raise RuntimeError(
+            "target-density pixmaps require an active QApplication")
+    if QtCore.QThread.currentThread() is not app.thread():
+        raise RuntimeError(
+            "target-density pixmaps must be created on the Qt GUI thread")
+
+    with _PIXMAP_DENSITY_LOCK:
+        if QtGui.QPixmap is not _NATIVE_QPIXMAP:
+            raise RuntimeError(
+                "QtGui.QPixmap is already temporarily overridden")
+        QtGui.QPixmap = _make_density_pixmap_type(density)
+        try:
+            yield _NATIVE_QPIXMAP
+        finally:
+            QtGui.QPixmap = _NATIVE_QPIXMAP
 
 
 # ===========================================================================
@@ -702,14 +851,18 @@ def _install_skewt_mixratio_mask():
 
 
 def _install_skewt_sfc_label_mask():
-    """Size the skew-T surface trace-value label's background mask to its text.
+    """Size and collision-pack the skew-T surface trace-value labels.
 
     The vendored ``plotSkewT.drawTrace`` masks each surface temperature /
     dewpoint / wet-bulb value with a fixed 16x12 px background rect. The wider
     bundled font overflows it, so the surface isobar behind the number bleeds
-    through the digit gaps. This replaces ``drawTrace`` with a faithful port
-    that sizes the label's mask rect from the font metrics; the trace path and
-    everything else are unchanged. Idempotent + guarded (per-call fallback).
+    through the digit gaps. Independently centering the three corrected masks
+    also makes them erase one another when their surface values are close.
+    This replaces ``drawTrace`` with a faithful port that sizes masks from font
+    metrics, then queues every displayed surface label so ``plotData`` can
+    deduplicate repeated profile passes and pack the full set with a real gap
+    before drawing every mask and glyph. The trace paths are unchanged.
+    Idempotent + guarded (per-call fallback).
     """
     cap = SFC_LABEL_MAX_PT
     try:
@@ -723,11 +876,24 @@ def _install_skewt_sfc_label_mask():
         _np = _skew.np
         _QPainterPath = _skew.QPainterPath
         _orig = _cls.drawTrace
+        _orig_plot_data = _cls.plotData
+
+        def _paint_surface_label(qp, entry, rect):
+            qp.setFont(entry["font"])
+            qp.setPen(_QtGui.QPen(
+                entry["background"], 0, _QtCore.Qt.SolidLine))
+            qp.setBrush(_QtGui.QBrush(
+                entry["background"], _QtCore.Qt.SolidPattern))
+            qp.drawRect(rect)
+            qp.setPen(_QtGui.QPen(
+                entry["color"], 3, _QtCore.Qt.SolidLine))
+            qp.drawText(rect, _QtCore.Qt.AlignCenter, entry["text"])
 
         def drawTrace(self, data, color, qp, width=3,
                       style=_QtCore.Qt.SolidLine, p=None, stdev=None,
                       label=True):
             try:
+                source_data = data
                 qp.setClipping(True)
                 pen = _QtGui.QPen(_QtGui.QColor(color), width, style)
                 qp.setPen(pen)
@@ -779,20 +945,117 @@ def _install_skewt_sfc_label_mask():
                     rect = _skewt_surface_label_rect(
                         self, _QtCore, x[0], y[0],
                         tw + 2 * pad_x, th + 2 * pad_y)
-                    qp.setPen(_QtGui.QPen(self.bg_color, 0,
-                                          _QtCore.Qt.SolidLine))
-                    qp.setBrush(_QtGui.QBrush(self.bg_color,
-                                             _QtCore.Qt.SolidPattern))
-                    qp.drawRect(rect)
-                    qp.setPen(_QtGui.QPen(_QtGui.QColor(color), 3,
-                                          _QtCore.Qt.SolidLine))
-                    qp.drawText(rect, _QtCore.Qt.AlignCenter, lbl_str)
+                    entry = {
+                        "center_x": float(x[0]),
+                        "line_y": float(y[0]),
+                        "width": float(rect.width()),
+                        "height": float(rect.height()),
+                        "text": lbl_str,
+                        "font": _QtGui.QFont(tf),
+                        "color": _QtGui.QColor(color),
+                        "background": _QtGui.QColor(self.bg_color),
+                    }
+                    primary_sources = (
+                        ("wetbulb", getattr(self, "wetbulb", None)),
+                        ("temperature", getattr(self, "tmpc", None)),
+                        ("dewpoint", getattr(self, "dwpc", None)),
+                    )
+                    collect = bool(getattr(
+                        self, "_sharpmod_collect_sfc_labels", False))
+                    primary_key = next((
+                        key for key, candidate in primary_sources
+                        if candidate is not None
+                        and source_data is candidate
+                    ), None)
+                    if collect:
+                        if primary_key is not None:
+                            entry["primary_key"] = primary_key
+                        # The focused profile is also present in SHARPpy's
+                        # ensemble/background pass, and other highlighted
+                        # collections are repeated by SHARPpy too. Deduplicate
+                        # by the source array identity while keeping the last
+                        # occurrence, whose color/width reflects the final
+                        # primary or highlighted-profile draw pass.
+                        _upsert_skewt_surface_label(
+                            self._sharpmod_sfc_label_queue,
+                            ("source", id(source_data)),
+                            entry,
+                        )
+                    else:
+                        _paint_surface_label(qp, entry, rect)
                     qp.setClipping(True)
             except Exception:
                 _orig(self, data, color, qp, width=width, style=style, p=p,
                       stdev=stdev, label=label)
 
+        _missing = object()
+
+        def plotData(self):
+            previous_collect = getattr(
+                self, "_sharpmod_collect_sfc_labels", _missing)
+            previous_queue = getattr(
+                self, "_sharpmod_sfc_label_queue", _missing)
+            self._sharpmod_collect_sfc_labels = True
+            self._sharpmod_sfc_label_queue = []
+            try:
+                result = _orig_plot_data(self)
+                queued = list(self._sharpmod_sfc_label_queue)
+            finally:
+                if previous_collect is _missing:
+                    try:
+                        del self._sharpmod_collect_sfc_labels
+                    except AttributeError:
+                        pass
+                else:
+                    self._sharpmod_collect_sfc_labels = previous_collect
+                if previous_queue is _missing:
+                    try:
+                        del self._sharpmod_sfc_label_queue
+                    except AttributeError:
+                        pass
+                else:
+                    self._sharpmod_sfc_label_queue = previous_queue
+
+            if not queued:
+                return result
+
+            rects = _layout_skewt_surface_labels(
+                self, _QtCore, queued, gap=4)
+            painter = _QtGui.QPainter()
+            try:
+                if not painter.begin(self.plotBitMap):
+                    return result
+                painter.setClipping(False)
+                painter.setRenderHint(
+                    _QtGui.QPainter.Antialiasing, True)
+                painter.setRenderHint(
+                    _QtGui.QPainter.TextAntialiasing, True)
+
+                # Paint every opaque mask first. Drawing mask/text pairs in
+                # sequence lets a later mask erase a neighboring earlier
+                # glyph even after their rectangles have been separated.
+                for entry, rect in zip(queued, rects):
+                    painter.setPen(_QtGui.QPen(
+                        entry["background"], 0,
+                        _QtCore.Qt.SolidLine))
+                    painter.setBrush(_QtGui.QBrush(
+                        entry["background"], _QtCore.Qt.SolidPattern))
+                    painter.drawRect(rect)
+                for entry, rect in zip(queued, rects):
+                    painter.setFont(entry["font"])
+                    painter.setPen(_QtGui.QPen(
+                        entry["color"], 3, _QtCore.Qt.SolidLine))
+                    painter.drawText(
+                        rect, _QtCore.Qt.AlignCenter, entry["text"])
+            except Exception:
+                _LOGGER.exception("skewt.surface_labels.draw_failed")
+            finally:
+                if painter.isActive():
+                    painter.end()
+            return result
+
         _cls.drawTrace = drawTrace
+        _cls.plotData = plotData
         _cls._sharpmod_sfc_mask = True
     except Exception:  # pragma: no cover - vendored module always present
         pass
@@ -1184,6 +1447,206 @@ def _skewt_surface_label_rect(widget, qtcore, center_x, line_y, width, height,
         top = float(line_y) - below_offset - float(height)
     rect = qtcore.QRectF(left, top, float(width), float(height))
     return _fit_rect_to_skewt_plot(widget, qtcore, rect, pad=pad)
+
+
+def _layout_skewt_surface_labels(widget, qtcore, labels, *, gap=4, pad=2):
+    """Pack surface-value labels into bounded, non-overlapping rows.
+
+    ``labels`` contains dictionaries with ``center_x``, ``line_y``, ``width``
+    and ``height``.  The returned rectangles follow the input order.  Anchors
+    are sorted only for layout, preserving their meteorological left-to-right
+    order while a forward/backward pass opens at least ``gap`` logical pixels
+    between adjacent masks.  A narrow plot automatically creates extra rows.
+    """
+    if not labels:
+        return []
+
+    gap = max(0.0, float(gap))
+    pad = max(0.0, float(pad))
+    left_limit = float(getattr(widget, "lpad", 0)) + pad
+    right_limit = float(getattr(
+        widget, "brx", getattr(widget, "wid", left_limit))) - pad
+    top_limit = float(getattr(widget, "tpad", 0)) + pad
+    bottom_limit = float(getattr(
+        widget, "bry", getattr(widget, "hgt", top_limit))) - pad
+    available = max(1.0, right_limit - left_limit)
+
+    prepared = []
+    for index, label in enumerate(labels):
+        width = min(max(1.0, float(label["width"])), available)
+        height = min(
+            max(1.0, float(label["height"])),
+            max(1.0, bottom_limit - top_limit),
+        )
+        preferred = _skewt_surface_label_rect(
+            widget,
+            qtcore,
+            float(label["center_x"]),
+            float(label["line_y"]),
+            width,
+            height,
+            pad=pad,
+        )
+        prepared.append({
+            "index": index,
+            "center_x": float(label["center_x"]),
+            "line_y": float(label["line_y"]),
+            "width": width,
+            "height": height,
+            "preferred": preferred,
+        })
+    prepared.sort(key=lambda item: (item["center_x"], item["index"]))
+
+    # Split only when the complete label cluster cannot fit in one row.
+    rows = []
+    row = []
+    used = 0.0
+    for item in prepared:
+        extra = item["width"] + (gap if row else 0.0)
+        if row and used + extra > available:
+            rows.append(row)
+            row = []
+            used = 0.0
+            extra = item["width"]
+        row.append(item)
+        used += extra
+    if row:
+        rows.append(row)
+
+    result = [None] * len(labels)
+    primary_above = sum(
+        item["preferred"].center().y() < item["line_y"]
+        for item in prepared
+    ) >= (len(prepared) / 2.0)
+    direction = -1.0 if primary_above else 1.0
+    base_top = min(
+        float(item["preferred"].top()) for item in prepared)
+    placed_rows = []
+
+    def _row_fits(top, height):
+        if top < top_limit or top + height > bottom_limit:
+            return False
+        return all(
+            top + height + gap <= other_top
+            or top >= other_top + other_height + gap
+            for other_top, other_height in placed_rows
+        )
+
+    for row_index, current in enumerate(rows):
+        row_height = max(item["height"] for item in current)
+        if row_index == 0:
+            row_top = min(
+                max(base_top, top_limit),
+                max(top_limit, bottom_limit - row_height),
+            )
+        else:
+            highest_top = min(top for top, _height in placed_rows)
+            lowest_bottom = max(
+                top + height for top, height in placed_rows)
+            above = highest_top - gap - row_height
+            below = lowest_bottom + gap
+            candidates = (
+                (above, below) if direction < 0 else (below, above)
+            )
+            row_top = next((
+                candidate for candidate in candidates
+                if _row_fits(candidate, row_height)
+            ), None)
+
+            if row_top is None:
+                # Search every remaining bounded vertical slot, nearest the
+                # preferred surface-label row first. This handles a first row
+                # that fits below its anchor but leaves room only above.
+                slot_candidates = [top_limit]
+                for other_top, other_height in placed_rows:
+                    slot_candidates.extend((
+                        other_top - gap - row_height,
+                        other_top + other_height + gap,
+                    ))
+                slot_candidates.sort(
+                    key=lambda candidate: abs(candidate - base_top))
+                row_top = next((
+                    candidate for candidate in slot_candidates
+                    if _row_fits(candidate, row_height)
+                ), None)
+
+            if row_top is None:
+                # The available vertical area is mathematically too small for
+                # another row. Keep the rectangle bounded and minimize overlap
+                # instead of collapsing every remaining row onto one edge.
+                bounded = [
+                    min(
+                        max(candidate, top_limit),
+                        max(top_limit, bottom_limit - row_height),
+                    )
+                    for candidate in (above, below, base_top)
+                ]
+
+                def overlap_cost(candidate):
+                    total = 0.0
+                    for other_top, other_height in placed_rows:
+                        overlap = min(
+                            candidate + row_height,
+                            other_top + other_height,
+                        ) - max(candidate, other_top)
+                        total += max(0.0, overlap + gap)
+                    return total
+
+                row_top = min(
+                    bounded,
+                    key=lambda candidate: (
+                        overlap_cost(candidate),
+                        abs(candidate - base_top),
+                    ),
+                )
+        placed_rows.append((row_top, row_height))
+
+        desired = [
+            min(
+                max(float(item["preferred"].left()), left_limit),
+                right_limit - item["width"],
+            )
+            for item in current
+        ]
+        lefts = []
+        cursor = left_limit
+        for item, wanted in zip(current, desired):
+            left = max(wanted, cursor)
+            lefts.append(left)
+            cursor = left + item["width"] + gap
+
+        # Project back from the right edge, then forward once more. Since rows
+        # were split by total width, these two passes always have a feasible
+        # non-overlapping solution.
+        cursor = right_limit
+        for index in range(len(current) - 1, -1, -1):
+            item = current[index]
+            lefts[index] = min(lefts[index], cursor - item["width"])
+            cursor = lefts[index] - gap
+        cursor = left_limit
+        for index, item in enumerate(current):
+            lefts[index] = max(lefts[index], cursor)
+            cursor = lefts[index] + item["width"] + gap
+
+        for item, left in zip(current, lefts):
+            top = row_top
+            if direction < 0:
+                # Bottom-align mixed font heights within an upward row.
+                top += row_height - item["height"]
+            result[item["index"]] = qtcore.QRectF(
+                left, top, item["width"], item["height"])
+
+    return result
+
+
+def _upsert_skewt_surface_label(queue, dedupe_key, entry):
+    """Keep the final draw pass for each displayed surface trace."""
+    entry["dedupe_key"] = dedupe_key
+    for index, queued in enumerate(queue):
+        if queued.get("dedupe_key") == dedupe_key:
+            queue[index] = entry
+            return
+    queue.append(entry)
 
 
 def _speed_axis_label_font(base_font, qtgui, text, max_width, max_height,
@@ -2094,9 +2557,10 @@ def grab_widget_pixmap(widget, scale: float = 1.0):
 
     ``scale=1`` intentionally mirrors upstream SHARPpy's ``SPCWidget`` grab so
     compact/lossless exports keep the original widget shape and dimensions.
-    HD exports render the widget through a scaled painter instead of resizing
-    the captured bitmap, so text, barbs, and grid lines are redrawn at the
-    higher pixel density rather than being blurred after the fact.
+    Higher scales render through a scaled painter instead of resizing a final
+    screenshot.  The headless :func:`render` path additionally composes its
+    scientific-panel caches inside :func:`_target_density_pixmaps`, so cached
+    text, barbs, and grid lines are rasterized at the final HD/UHD density.
     """
     scale = max(1.0, float(scale))
     if scale <= 1.0:
@@ -2105,7 +2569,10 @@ def grab_widget_pixmap(widget, scale: float = 1.0):
     size = widget.size()
     width = max(1, int(round(size.width() * scale)))
     height = max(1, int(round(size.height() * scale)))
-    pixmap = QtGui.QPixmap(width, height)
+    # The destination is already specified in physical output pixels.  Bypass
+    # the temporary density-aware cache constructor or it would be scaled a
+    # second time.
+    pixmap = _NATIVE_QPIXMAP(width, height)
     pixmap.fill(QtGui.QColor(0, 0, 0, 0))
 
     painter = QtGui.QPainter(pixmap)
@@ -2124,14 +2591,12 @@ def save_widget_png(widget, outfile: str,
                     image_mode: str = PNG_IMAGE_HD) -> bool:
     """Save ``widget`` as HD, UHD, or original-size lossless PNG."""
     mode = _normalise_png_image_mode(image_mode)
+    scale = _png_image_scale(mode)
     if mode == PNG_IMAGE_UHD:
-        scale = _png_uhd_image_scale()
         quality = _png_uhd_compression_quality()
     elif mode == PNG_IMAGE_HD:
-        scale = _png_hd_image_scale()
         quality = _png_hd_compression_quality()
     else:
-        scale = 1.0
         quality = _png_lossless_compression_quality()
     pixmap = grab_widget_pixmap(widget, scale=scale)
     return bool(pixmap.save(outfile, "PNG", quality))
@@ -2153,8 +2618,9 @@ def fetch_url(url: str, timeout: float = 30.0) -> bytes:
     context = ssl.create_default_context(cafile=certifi.where())
     try:
         with urlopen(url, timeout=timeout, context=context) as response:
-            return response.read()
-    except URLError as exc:  # surface TLS/network failures descriptively
+            return decoder_mod._read_bounded(  # noqa: SLF001
+                response, decoder_mod._max_remote_bytes())  # noqa: SLF001
+    except (URLError, OSError, ValueError) as exc:
         raise RenderError(url, f"remote fetch failed: {exc}", cause=exc)
 
 
@@ -2586,8 +3052,83 @@ def _fit_rect_to_hodo(widget, qtcore, rect, pad=2):
     return qtcore.QRectF(left, top, width, height)
 
 
+def _place_hodo_annotation_rect(widget, qtcore, marker_rect, width, height,
+                                *, occupied=(), gap=5, pad=2):
+    """Place a hodo label beside its marker without touching other annotations.
+
+    Right is preferred for the familiar marker-then-value reading order.  Near
+    an edge or an occupied annotation, the label automatically tries left,
+    below, then above before falling back to the least-overlapping fitted
+    candidate.
+    """
+    marker = qtcore.QRectF(marker_rect)
+    width = max(1.0, float(width))
+    height = max(1.0, float(height))
+    gap = max(0.0, float(gap))
+    pad = max(0.0, float(pad))
+    center = marker.center()
+
+    candidates = (
+        qtcore.QRectF(
+            marker.right() + gap, center.y() - height / 2.0,
+            width, height),
+        qtcore.QRectF(
+            marker.left() - gap - width, center.y() - height / 2.0,
+            width, height),
+        qtcore.QRectF(
+            center.x() - width / 2.0, marker.bottom() + gap,
+            width, height),
+        qtcore.QRectF(
+            center.x() - width / 2.0, marker.top() - gap - height,
+            width, height),
+    )
+
+    left_limit = float(getattr(widget, "tlx", 0)) + pad
+    right_limit = float(getattr(
+        widget, "brx", getattr(widget, "wid", left_limit))) - pad
+    top_limit = float(getattr(widget, "tly", 0)) + pad
+    bottom_limit = float(getattr(
+        widget, "bry", getattr(widget, "hgt", top_limit))) - pad
+    exclusions = [marker, *[qtcore.QRectF(rect) for rect in occupied]]
+
+    def inside(rect):
+        return (
+            rect.left() >= left_limit
+            and rect.right() <= right_limit
+            and rect.top() >= top_limit
+            and rect.bottom() <= bottom_limit
+        )
+
+    def collision_area(rect):
+        area = 0.0
+        for obstacle in exclusions:
+            expanded = qtcore.QRectF(obstacle).adjusted(
+                -gap, -gap, gap, gap)
+            overlap = rect.intersected(expanded)
+            if not overlap.isEmpty():
+                area += float(overlap.width()) * float(overlap.height())
+        return area
+
+    for candidate in candidates:
+        if inside(candidate) and collision_area(candidate) == 0:
+            return candidate
+
+    fitted = [
+        _fit_rect_to_hodo(widget, qtcore, candidate, pad=pad)
+        for candidate in candidates
+    ]
+    return min(
+        fitted,
+        key=lambda rect: (
+            collision_area(rect),
+            abs(rect.center().x() - center.x())
+            + abs(rect.center().y() - center.y()),
+        ),
+    )
+
+
 def _install_hodo_label_fit():
-    """Cap hodograph fonts and scale RM/LM + readout rects to the text.
+    """Cap hodo fonts and place vector labels from their measured bounds.
 
     The vendored ``backgroundHodo.initUI`` sizes ``label_font`` and
     ``readout_font`` with a height-proportional term (``self.hgt * 0.0045``)
@@ -2602,6 +3143,9 @@ def _install_hodo_label_fit():
        width and clamp inside the hodograph frame.
     3. Overrides ``drawSMV`` to size the RM/LM label rects from font metrics.
     4. Overrides ``paintEvent`` readout to size the cursor rect from metrics.
+    5. Sizes the Corfidi labels from their text.
+    6. Centers the LCL-EL mean-wind square and places its measured value label
+       on a free side with a visible marker gap.
 
     Idempotent + fully guarded.
     """
@@ -2654,6 +3198,17 @@ def _install_hodo_label_fit():
                 pass
 
         _bg.initUI = initUI
+
+        # Reset annotation occupancy once per data pass.  The dynamic label
+        # placers below append their final text/marker rectangles so later
+        # annotations can choose a free side instead of painting on top.
+        _orig_plot_data = _plot.plotData
+
+        def plotData(self):
+            self._sharpmod_hodo_annotation_rects = []
+            return _orig_plot_data(self)
+
+        _plot.plotData = plotData
 
         # --- 2. Override ring labels to use font-metrics-sized rects ---
         _orig_ring = _bg.draw_ring
@@ -2841,6 +3396,15 @@ def _install_hodo_label_fit():
                 # circles (drawn earlier); redraw them on top so they survive.
                 qp.drawEllipse(center_rm, 5, 5)
                 qp.drawEllipse(center_lm, 5, 5)
+                occupied = getattr(
+                    self, "_sharpmod_hodo_annotation_rects", None)
+                if isinstance(occupied, list):
+                    occupied.extend((
+                        _QtCore.QRectF(rm_rect),
+                        _QtCore.QRectF(lm_rect),
+                        _QtCore.QRectF(ruu - 5, rvv - 5, 10, 10),
+                        _QtCore.QRectF(luu - 5, lvv - 5, 10, 10),
+                    ))
             except Exception:
                 _orig_smv(self, qp)
 
@@ -2893,6 +3457,21 @@ def _install_hodo_label_fit():
                 qp.begin(self)
                 qp.drawPixmap(0, 0, self.plotBitMap)
 
+                # Scale-aware overlays are painted with this live widget
+                # painter so HD/UHD capture rasterizes their small text at
+                # the final target density. Keep them below the transient
+                # cursor readout, which must remain the topmost annotation.
+                for overlay in tuple(getattr(
+                        type(self), "_sharpmod_live_overlays", ())):
+                    try:
+                        overlay(self, qp)
+                    except Exception:
+                        _LOGGER.exception(
+                            "hodo_live_overlay.draw_failed",
+                            extra={"overlay": getattr(
+                                overlay, "__name__", repr(overlay))},
+                        )
+
                 if draw_readout and _tab.utils.QC(u_interp):
                     # Use a fixed small font for the readout, bypassing
                     # self.readout_font which may be rebuilt by other code.
@@ -2916,6 +3495,7 @@ def _install_hodo_label_fit():
                 _orig_paint(self, e)
 
         _plot.paintEvent = paintEvent
+        _plot._sharpmod_live_overlay_host = True
 
         # --- 5. Override drawCorfidi to use font-metrics-sized rects ---
         _orig_corfidi = _plot.drawCorfidi
@@ -2981,10 +3561,81 @@ def _install_hodo_label_fit():
                 qp.setPen(pen)
                 qp.drawText(up_rect, _QtCore.Qt.AlignCenter, up_text)
                 qp.drawText(dn_rect, _QtCore.Qt.AlignCenter, dn_text)
+                occupied = getattr(
+                    self, "_sharpmod_hodo_annotation_rects", None)
+                if isinstance(occupied, list):
+                    occupied.extend((
+                        _QtCore.QRectF(up_rect),
+                        _QtCore.QRectF(dn_rect),
+                        _QtCore.QRectF(up_u - 3, up_v - 3, 6, 6),
+                        _QtCore.QRectF(dn_u - 3, dn_v - 3, 6, 6),
+                    ))
             except Exception:
                 _orig_corfidi(self, qp)
 
         _plot.drawCorfidi = drawCorfidi
+
+        # --- 6. Keep the LCL-EL mean-wind value clear of its square marker ---
+        _orig_mean_wind = _plot.drawLCLtoEL_MW
+
+        def drawLCLtoEL_MW(self, qp):
+            try:
+                if not _tab.utils.QC(self.mean_lcl_el[0]):
+                    return
+                mean_u, mean_v = self.uv_to_pix(
+                    self.mean_lcl_el[0], self.mean_lcl_el[1])
+                marker_size = 8.0
+                marker_rect = _QtCore.QRectF(
+                    mean_u - marker_size / 2.0,
+                    mean_v - marker_size / 2.0,
+                    marker_size,
+                    marker_size,
+                )
+
+                speed = self.mean_lcl_el_vec[1]
+                if self.wind_units == 'm/s':
+                    speed = _tab.utils.KTS2MS(speed)
+                text = (
+                    _tab.utils.INT2STR(
+                        _np.float64(self.mean_lcl_el_vec[0]))
+                    + '/' + _tab.utils.INT2STR(speed)
+                )
+
+                qp.setFont(self.label_font)
+                fm = _QtGui.QFontMetrics(self.label_font)
+                text_rect = _place_hodo_annotation_rect(
+                    self,
+                    _QtCore,
+                    marker_rect,
+                    fm.horizontalAdvance(text) + 6,
+                    fm.height() + 2,
+                    occupied=getattr(
+                        self, "_sharpmod_hodo_annotation_rects", ()),
+                    gap=5,
+                )
+                mean_color = _semantic_qcolor(
+                    self, "orange", override="#B8860B")
+
+                qp.fillRect(text_rect, self.bg_color)
+                qp.setBrush(_QtGui.QBrush(_QtCore.Qt.NoBrush))
+                qp.setPen(_QtGui.QPen(mean_color, 2,
+                                      _QtCore.Qt.SolidLine))
+                qp.drawRect(marker_rect)
+                qp.setPen(_QtGui.QPen(mean_color, 1,
+                                      _QtCore.Qt.SolidLine))
+                qp.drawText(text_rect, _QtCore.Qt.AlignCenter, text)
+
+                occupied = getattr(
+                    self, "_sharpmod_hodo_annotation_rects", None)
+                if isinstance(occupied, list):
+                    occupied.extend((
+                        _QtCore.QRectF(marker_rect),
+                        _QtCore.QRectF(text_rect),
+                    ))
+            except Exception:
+                _orig_mean_wind(self, qp)
+
+        _plot.drawLCLtoEL_MW = drawLCLtoEL_MW
 
         _plot._sharpmod_label_fit = True
     except Exception:  # pragma: no cover - vendored module always present
@@ -2992,7 +3643,7 @@ def _install_hodo_label_fit():
 
 
 def _install_hodo_locator():
-    """Overlay a local county-outline locator after hodograph data is drawn."""
+    """Overlay the bundled offline locator after hodograph data is drawn."""
     try:
         import sharppy.viz.hodo as _hodo_mod
         from sharpmod.viz.hodo_locator import draw_hodo_locator
@@ -3007,12 +3658,61 @@ def _install_hodo_locator():
             try:
                 draw_hodo_locator(self)
             except Exception:
-                pass
+                _LOGGER.exception("hodo_locator.draw_failed")
 
         _plot.plotData = plotData
         _plot._sharpmod_locator = True
     except Exception:  # pragma: no cover - vendored module always present
-        pass
+        _LOGGER.exception("hodo_locator.install_failed")
+        raise
+
+
+def _install_hodo_height_levels():
+    """Annotate standard AGL levels on the live hodograph paint layer.
+
+    The hodograph's ``plotBitMap`` is a logical-resolution raster cache. HD
+    and UHD output scale that cache, so baking seven/eight-pixel numerals into
+    it makes them visibly softer than text painted by the widget itself.
+    Drawing after the normal ``paintEvent`` lets Qt rasterize the overlay
+    directly for the active screen or export resolution.
+    """
+    try:
+        import sharppy.viz.hodo as _hodo_mod
+        from sharpmod.viz.hodo_levels import draw_hodo_height_levels
+
+        _plot = _hodo_mod.plotHodo
+        if getattr(_plot, "_sharpmod_height_levels", False):
+            return
+
+        def height_level_overlay(widget, painter):
+            draw_hodo_height_levels(widget, painter=painter)
+
+        if getattr(_plot, "_sharpmod_live_overlay_host", False):
+            overlays = tuple(getattr(
+                _plot, "_sharpmod_live_overlays", ()))
+            _plot._sharpmod_live_overlays = overlays + (
+                height_level_overlay,)
+        else:
+            # Defensive fallback for an unexpected upstream widget where the
+            # label-fit paint host could not be installed.
+            _orig_paint_event = _plot.paintEvent
+
+            def paintEvent(self, event):
+                _orig_paint_event(self, event)
+                painter = _hodo_mod.QtGui.QPainter(self)
+                try:
+                    height_level_overlay(self, painter)
+                except Exception:
+                    _LOGGER.exception("hodo_height_levels.draw_failed")
+                finally:
+                    if painter.isActive():
+                        painter.end()
+
+            _plot.paintEvent = paintEvent
+        _plot._sharpmod_height_levels = True
+    except Exception:  # pragma: no cover - vendored module always present
+        _LOGGER.exception("hodo_height_levels.install_failed")
+        raise
 
 
 def _install_skewt_level_labels_fit():
@@ -3757,6 +4457,7 @@ def render_patch_specs():
         PatchSpec("hodo.interpolation-menu", _install_hodo_interpolation_menu),
         PatchSpec("hodo.label-fit", _install_hodo_label_fit),
         PatchSpec("hodo.locator", _install_hodo_locator),
+        PatchSpec("hodo.height-levels", _install_hodo_height_levels),
         PatchSpec("skewt.level-labels", _install_skewt_level_labels_fit),
         PatchSpec("stp.condense", _install_stp_condense),
         PatchSpec("stp.label-rename", _install_stp_label_rename),
@@ -3793,6 +4494,37 @@ def install_render_patches() -> tuple[str, ...]:
 # ---------------------------------------------------------------------------
 
 
+def _decode_local_input(infile: str, display_name: str):
+    """Decode one already-local input without repeating remote downloads."""
+    if infile.lower().endswith(".npz"):
+        return decoder_mod.load_npz(infile)
+
+    last_err: BaseException | None = None
+    for _name, cls in decoder_mod.getDecoders().items():
+        try:
+            dec = cls(infile)
+            prof_col = dec.getProfiles()
+            stn_id = dec.getStnId()
+            decoder_mod.attach_json_sidecar(prof_col, infile)
+            return prof_col, stn_id
+        except Exception as exc:  # noqa: BLE001 - try every decoder in turn
+            last_err = exc
+            continue
+    raise RenderError(
+        display_name,
+        f"no decoder could read it: {last_err}",
+        cause=last_err,
+    )
+
+
+def _remote_temp_suffix(url: str) -> str:
+    suffix = os.path.splitext(urlparse(url).path)[1].lower()
+    if suffix and len(suffix) <= 12 \
+            and suffix[1:].replace("-", "").isalnum():
+        return suffix
+    return ".txt"
+
+
 def decode(infile: str):
     """Decode ``infile`` into a profile collection and its station id.
 
@@ -3802,26 +4534,67 @@ def decode(infile: str):
     :func:`sharpmod.io.decoder.getDecoders`. Raises :class:`RenderError` naming
     ``infile`` if no decoder can read it.
     """
-    if infile.lower().endswith(".npz"):
-        return decoder_mod.load_npz(infile)
+    source = os.fspath(infile)
+    if not decoder_mod._is_http_url(source):  # noqa: SLF001
+        return _decode_local_input(
+            decoder_mod._local_source_path(source),  # noqa: SLF001
+            source,
+        )
 
-    last_err: BaseException | None = None
-    for name, cls in decoder_mod.getDecoders().items():
+    # Download a remote source exactly once. The decoder registry may contain
+    # several candidates and each legacy candidate otherwise fetches the same
+    # URL again before deciding the format is not its own.
+    payload = fetch_url(source)
+    fd, local_path = tempfile.mkstemp(suffix=_remote_temp_suffix(source))
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+        return _decode_local_input(local_path, source)
+    finally:
         try:
-            dec = cls(infile)
-            prof_col = dec.getProfiles()
-            stn_id = dec.getStnId()
-            return prof_col, stn_id
-        except Exception as exc:  # noqa: BLE001 - try every decoder in turn
-            last_err = exc
-            continue
-    raise RenderError(infile, f"no decoder could read it: {last_err}",
-                      cause=last_err)
+            os.remove(local_path)
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------------
+
+
+def _resolve_location_title(prof_col, explicit_loc: str | None = None) -> str:
+    """Replace a generic model/coordinate label with a cached town title."""
+
+    try:
+        current = prof_col.getMeta("loc")
+    except Exception:
+        current = ""
+    current = " ".join(str(current or "").split())
+
+    # A caller-supplied human-readable label always wins.
+    if explicit_loc is not None and str(explicit_loc).strip():
+        return current
+
+    try:
+        model = prof_col.getMeta("model")
+    except Exception:
+        model = ""
+
+    from sharpmod.place_names import needs_town_name, reverse_town_name
+
+    if not needs_town_name(current, model):
+        return current
+    try:
+        lat = float(prof_col.getMeta("lat"))
+        lon = float(prof_col.getMeta("lon"))
+    except (KeyError, TypeError, ValueError):
+        return current
+
+    place = reverse_town_name(lat, lon)
+    if place:
+        prof_col.setMeta("loc", place)
+        return place
+    return current
 
 
 def render(infile: str, outfile: str = "sharpmod_sounding.png",
@@ -3843,6 +4616,8 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
     parcel = _normalise_parcel_type(parcel)
     out_dir = os.path.dirname(os.path.abspath(outfile))
     os.makedirs(out_dir, exist_ok=True)
+    density_context = None
+    density_context_entered = False
 
     try:
         app = QApplication.instance() or QApplication(sys.argv)
@@ -3862,6 +4637,7 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
             prof_col.setMeta("run", run)
         if loc is not None:
             prof_col.setMeta("loc", loc)
+        _resolve_location_title(prof_col, explicit_loc=loc)
 
         # Fill in the metadata the title/header rendering dereferences, without
         # clobbering what the decoder already worked out.
@@ -3875,6 +4651,15 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
             prof_col.setMeta("run", base)
         if not has("model"):
             prof_col.setMeta("model", "Archive" if observed else "Model")
+
+        # Construct every scientific panel's persistent bitmap cache at the
+        # requested output density.  This context must begin before
+        # ``compose_window`` and remain active through the final capture;
+        # otherwise HD/UHD would smoothly enlarge already-rasterized 1x text.
+        density_context = _target_density_pixmaps(
+            _png_image_scale(image_mode))
+        density_context.__enter__()
+        density_context_entered = True
 
         # Compose SPCWindow with the real minimal controller. The controller is
         # the Qt parent SPCWindow connects its config/preferences hooks to; it
@@ -3940,6 +4725,9 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
         raise
     except Exception as exc:  # noqa: BLE001 - name the input in every failure
         raise RenderError(infile, str(exc), cause=exc)
+    finally:
+        if density_context_entered:
+            density_context.__exit__(None, None, None)
 
     return outfile
 

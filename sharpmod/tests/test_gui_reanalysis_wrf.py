@@ -87,6 +87,14 @@ def test_picker_exposes_era5_and_guided_raw_wrf_tabs(
     assert picker._file_modes.tabText(1) == "Raw WRF wrfout"
     assert picker._era5_map is not picker._model_map
     assert picker._wrf_map is not picker._model_map
+    assert picker._era5_multi_sounding.isChecked()
+    assert picker._wrf_multi_sounding.isChecked()
+    picker._era5_multi_sounding.setChecked(False)
+    assert not picker._wrf_multi_sounding.isChecked()
+    assert not picker._combine_soundings_action.isChecked()
+    picker._wrf_multi_sounding.setChecked(True)
+    assert picker._era5_multi_sounding.isChecked()
+    assert picker._combine_soundings_action.isChecked()
     assert picker._model_timeline_btn.text() == "Timeline…"
     assert picker._cache_library_action.text() == "Downloaded Data &Library…"
     assert picker._manage_locations_action.text() == "Manage Saved Locations…"
@@ -95,6 +103,15 @@ def test_picker_exposes_era5_and_guided_raw_wrf_tabs(
     marker = picker._model_map._saved_points[0]
     assert marker[0] == "OUN"
     assert marker[1:] == pytest.approx((-97.44, 35.22))
+    saved = picker._saved_location_store.load()[0]
+    picker._apply_saved_location(saved)
+    assert picker._tabs.tabText(picker._tabs.currentIndex()) == \
+        "Forecast Model"
+    assert picker._model_loc.text() == "OUN"
+    picker._select_tab("Open File")
+    picker._file_modes.setCurrentIndex(1)
+    picker._apply_saved_location(saved)
+    assert picker._wrf_loc.text() == "OUN"
     picker.close()
 
 
@@ -209,6 +226,30 @@ def test_wrf_inspection_and_extraction_enforce_real_grid_perimeter(tmp_path):
             dataset=dataset,
         )
     assert not outside.exists()
+
+
+def test_raw_wrf_netcdf4_file_uses_capable_xarray_engine(tmp_path):
+    """A real NetCDF4/HDF5 file opens through the same path used by the GUI."""
+    pytest.importorskip("netCDF4")
+    source = tmp_path / "wrfout_d01_2024-05-20_00_00_00"
+    dataset = _wrf_dataset()
+    dataset.to_netcdf(source, engine="netcdf4")
+
+    domain = wrf_extract.inspect_file(source)
+    assert domain["shape"] == (3, 3)
+
+    out = tmp_path / "raw-wrf.npz"
+    wrf_extract.extract(source, 35.1, -98.1, out)
+    assert out.exists()
+    assert out.with_suffix(".json").exists()
+
+
+def test_wrf_runtime_rejects_scipy_only_netcdf_backend():
+    fake_xarray = SimpleNamespace(
+        backends=SimpleNamespace(list_engines=lambda: {"scipy": object()}),
+    )
+    with pytest.raises(wrf_extract.RetrievalError, match="NetCDF3-only"):
+        wrf_extract._preferred_netcdf_engine(fake_xarray)
 
 
 def test_wrf_extraction_preserves_cancellation_after_opening_dataset(tmp_path):

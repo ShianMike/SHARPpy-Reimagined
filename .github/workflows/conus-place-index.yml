@@ -1,0 +1,88 @@
+name: CONUS locator data freshness
+
+on:
+  schedule:
+    # Census annual files are normally available late in the calendar year.
+    - cron: "23 9 1 12 *"
+  workflow_dispatch:
+    inputs:
+      year:
+        description: Census source year (blank tries this year, then last year)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    name: Rebuild official Census index
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Rebuild newest available annual data
+        id: rebuild
+        shell: pwsh
+        env:
+          REQUESTED_YEAR: ${{ inputs.year }}
+        run: |
+          $years = @()
+          if ($env:REQUESTED_YEAR) {
+            $years += [int]$env:REQUESTED_YEAR
+          } else {
+            $years += [DateTime]::UtcNow.Year
+            $years += ([DateTime]::UtcNow.Year - 1)
+          }
+          foreach ($year in $years) {
+            python scripts/build_conus_place_index.py --year $year
+            if ($LASTEXITCODE -eq 0) {
+              python scripts/build_conus_county_tiles.py --year $year
+            }
+            if ($LASTEXITCODE -eq 0) {
+              "year=$year" >> $env:GITHUB_OUTPUT
+              exit 0
+            }
+          }
+          throw "No complete Census annual dataset was available for: $years"
+
+      - name: Check whether bundled locator data is stale
+        id: diff
+        continue-on-error: true
+        run: >-
+          git diff --exit-code --
+          sharpmod/resources/conus-places.tsv.gz
+          sharpmod/resources/conus-places.metadata.json
+          sharpmod/resources/conus-counties.zip
+          sharpmod/resources/conus-counties.metadata.json
+
+      - name: Upload refreshed locator data for review
+        if: steps.diff.outcome == 'failure'
+        uses: actions/upload-artifact@v6
+        with:
+          name: conus-locator-data-${{ steps.rebuild.outputs.year }}
+          path: |
+            sharpmod/resources/conus-places.tsv.gz
+            sharpmod/resources/conus-places.metadata.json
+            sharpmod/resources/conus-counties.zip
+            sharpmod/resources/conus-counties.metadata.json
+
+      - name: Report stale bundled data
+        if: steps.diff.outcome == 'failure'
+        shell: pwsh
+        run: |
+          @"
+          The bundled CONUS locator data differs from the newest official
+          Census data (${{ steps.rebuild.outputs.year }}). Download the
+          conus-locator-data artifact, review its metadata/checksums, and
+          commit the generated resource files.
+          "@ >> $env:GITHUB_STEP_SUMMARY
+          throw "Bundled CONUS locator data needs its annual refresh"

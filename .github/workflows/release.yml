@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v0.5.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v0.6.0). Created if it does not exist."
         required: true
-        default: "v0.5.0"
+        default: "v0.6.0"
 
 permissions:
   contents: write
@@ -156,8 +156,8 @@ jobs:
       - name: Install package and build dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[render,era5]"
-          python -m pip install --no-deps "SHARPpy==1.4.0a5"
+          python -m pip install -e ".[render,era5,wrf]"
+          python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip install pyinstaller
 
       - name: Build and install locked Rust wheel
@@ -229,6 +229,7 @@ jobs:
           }
           $result = Get-Content $report -Raw | ConvertFrom-Json
           if (-not $result.ok -or -not $result.backend_kernel_ok -or `
+              -not $result.wrf_runtime_ok -or `
               $result.backend.requested_backend -ne "rust" -or `
               $result.backend.active_backend -ne "rust" -or `
               -not $result.backend.rust_installed -or `
@@ -260,6 +261,7 @@ jobs:
           }
           $result = Get-Content $report -Raw | ConvertFrom-Json
           if (-not $result.ok -or -not $result.backend_kernel_ok -or `
+              -not $result.wrf_runtime_ok -or `
               $result.backend.requested_backend -ne "rust" -or `
               $result.backend.active_backend -ne "rust" -or `
               -not $result.backend.rust_installed -or `

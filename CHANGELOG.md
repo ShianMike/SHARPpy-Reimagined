@@ -7,6 +7,77 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-28
+
+### Added
+
+- Added compact colored 0.5, 1, 3, 6, 9, and 12 km AGL dots with
+  solid black numbers inside the marker and extra edge clearance for the
+  `0.5` label, plus optional location/town
+  entry and a cached background town lookup for the locator-map title,
+  including coordinate-only files rendered outside the picker. A reproducible
+  52,818-entry Census place/town index provides offline CONUS title coverage
+  without drawing town names inside the map. Separately tiled and compressed
+  Census county outlines keep the local locator useful without network I/O.
+- Added visible, synchronized multi-sounding controls to the ERA5 and raw WRF
+  tabs so repeated point/time selections can be overlaid in one analysis
+  window.
+- Added an annual Census-index freshness workflow that rebuilds the newest
+  official CONUS place, state-boundary, and county-outline data and publishes
+  changed generated resources for review.
+- Added a hash-pinned SHARPpy compatibility installer that verifies the
+  official wheel and its `RECORD`, corrects only its obsolete NumPy dependency
+  metadata, records provenance, and requires `pip check` to pass.
+
+### Changed
+
+- Bounded supported source runtimes to Python 3.11–3.13, added Python 3.13 and
+  Windows WRF CI coverage, kept comprehensive testing on pull requests instead
+  of duplicating it after merge on `main`, and increased the full-suite timeout
+  to match measured runtime.
+- Reduced expected third-party warning noise while retaining unrecognized
+  deprecations and updated the local ECAPE path to MetPy's current
+  two-argument specific-humidity API.
+
+### Fixed
+
+- Prevented Herbie Unicode status glyphs from raising `UnicodeEncodeError` on
+  redirected CP1252 Windows consoles.
+- Replaced RDPS's misleading nearly-global WMS envelope with its operational
+  rotated-grid acceptance test and curved picker-map outline.
+- Added a file-based Windows clipboard helper for external automation, avoiding
+  fragile inline `pwsh -Command` parsing of .NET object construction.
+- Replaced Windows-incompatible `grep` instructions with `rg`/ripgrep usage and
+  installation guidance.
+- Restored raw WRF support in Windows releases by installing and bundling
+  `netCDF4`/`cftime`, explicitly selecting a NetCDF4-capable xarray engine, and
+  rejecting misleading SciPy-only NetCDF3 setups.
+- Disabled pickle loading for user and cache NPZ files, added bounded archive
+  and profile validation, and preserved adjacent JSON coordinates/model
+  metadata for SPC and other non-NPZ files.
+- Added timeouts, response limits, explicit resource closure, and one-download
+  decoder dispatch for remote sounding URLs.
+- Made town resolution strictly CONUS-only with bundled Census state polygons,
+  offline-first lookup, settlement-only online parsing, and expiring positive,
+  offline, failure, and negative cache entries.
+- Kept town names only in the locator title, replaced synchronous county
+  requests during hodograph painting with bounded local Census tiles, and
+  prevented height dots from colliding with one another or being covered by
+  the locator inset.
+- Painted hodograph height dots on the live, scale-aware widget layer so their
+  small black numerals stay crisp in HD/UHD exports instead of being enlarged
+  from the one-pixel-density hodograph bitmap cache.
+- Rebuilt all cached sounding panels at the requested HD/UHD pixel density so
+  titles, axes, parameter tables, insets, and scientific annotations render
+  with crisp antialiased text instead of being smoothly enlarged from 1x
+  backing pixmaps.
+- Centered the hodograph LCL-EL mean-wind square and gave its measured value
+  an edge-aware gap, kept height dots clear of vector annotations, and jointly
+  packed the near-surface labels from every displayed sounding so their masks
+  and numbers cannot overlap.
+- Replaced silent locator/height-overlay failures with diagnostic logging and
+  made GUI and headless file opens share the same town-title resolution path.
+
 ## [0.5.0] - 2026-07-22
 
 ### Added

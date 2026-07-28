@@ -27,13 +27,14 @@ def _model_fetch_runtime_check(output_path: str) -> int:
         import cfgrib
         import eccodes
         import herbie
+        import netCDF4
         import numcodecs
         import pyproj
         import xarray
 
         from sharpmod.backends import backend_info, wind_to_components
         from sharpmod.gui import main as gui_main
-        from sharpmod.tools import model_extract
+        from sharpmod.tools import model_extract, wrf_extract
 
         backend = backend_info()
         u_component, v_component = wind_to_components(270.0, 10.0)
@@ -46,6 +47,7 @@ def _model_fetch_runtime_check(output_path: str) -> int:
                 "backend wind_to_components smoke check returned "
                 f"u={u_component!r}, v={v_component!r}"
             )
+        wrf_runtime_ok = wrf_extract.require_runtime_dependencies()
 
         result.update(
             backend=backend,
@@ -54,10 +56,12 @@ def _model_fetch_runtime_check(output_path: str) -> int:
             cfgrib=cfgrib.__version__,
             eccodes=eccodes.codes_get_api_version(),
             herbie=herbie.__version__,
+            netcdf4=netCDF4.__version__,
             numcodecs=numcodecs.__version__,
             pyproj=pyproj.__version__,
             xarray=xarray.__version__,
             configured_models=len(model_extract.available_models()),
+            wrf_runtime_ok=wrf_runtime_ok,
             logging_handlers=bool(RotatingFileHandler),
             gui_entrypoint=callable(gui_main),
             ok=True,

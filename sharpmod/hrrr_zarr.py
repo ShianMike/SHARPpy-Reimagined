@@ -15,6 +15,7 @@ import threading
 import numpy as np
 
 from sharpmod.backends.grib import DecodedPoint, GRIB_COLUMN_NAMES
+from sharpmod.model_surface import merge_surface_level
 from sharpmod.model_transport import DownloadCancelled
 
 
@@ -23,6 +24,7 @@ HRRR_SHAPE = (1059, 1799)
 HRRR_X0 = -2697520.1425219304
 HRRR_Y0 = -1587306.1525566636
 HRRR_SPACING = 3000.0
+_POINT_CACHE_SCHEMA = 2
 
 
 class ZarrBackendUnavailable(RuntimeError):
@@ -34,6 +36,13 @@ class PressurePlan:
     levels: tuple[float, ...]
     fields: tuple[str, ...]
     arrays: dict[tuple[float, str], tuple[str, dict]]
+
+
+@dataclass(frozen=True)
+class SurfacePlan:
+    """Exact HRRR ground and near-ground arrays required for a surface row."""
+
+    arrays: dict[str, tuple[str, dict]]
 
 
 @dataclass
@@ -62,6 +71,14 @@ class HrrrZarrPointDataset:
 _ARRAY_PATTERN = re.compile(
     r"^((\d+(?:\.\d+)?)mb)/([A-Z0-9]+)/(\1)/(\3)/\.zarray$"
 )
+_SURFACE_ARRAY_PATHS = {
+    "PRES": "surface/PRES/surface/PRES/.zarray",
+    "HGT": "surface/HGT/surface/HGT/.zarray",
+    "TMP": "2m_above_ground/TMP/2m_above_ground/TMP/.zarray",
+    "DPT": "2m_above_ground/DPT/2m_above_ground/DPT/.zarray",
+    "UGRD": "10m_above_ground/UGRD/10m_above_ground/UGRD/.zarray",
+    "VGRD": "10m_above_ground/VGRD/10m_above_ground/VGRD/.zarray",
+}
 
 
 def discover_pressure_plan(metadata: dict) -> PressurePlan:
@@ -107,6 +124,27 @@ def discover_pressure_plan(metadata: dict) -> PressurePlan:
         for field in fields
     }
     return PressurePlan(levels, tuple(fields), arrays)
+
+
+def discover_surface_plan(metadata: dict) -> SurfacePlan:
+    """Return the verified HRRR surface arrays or fail the point backend."""
+    arrays = {}
+    missing = []
+    for field, metadata_key in _SURFACE_ARRAY_PATHS.items():
+        value = metadata.get(metadata_key)
+        if value is None:
+            missing.append(field)
+            continue
+        arrays[field] = (
+            metadata_key.removesuffix("/.zarray"),
+            dict(value),
+        )
+    if missing:
+        raise ZarrBackendUnavailable(
+            "HRRR Zarr metadata is missing verified surface arrays: "
+            + ", ".join(missing)
+        )
+    return SurfacePlan(arrays)
 
 
 def _hrrr_transformers():
@@ -188,7 +226,7 @@ def _root_url(run_dt: datetime) -> str:
 
 def _point_dataset_from_columns(
     levels, columns, selected_lat, selected_lon, run_dt,
-    requested_lat, requested_lon,
+    requested_lat, requested_lon, surface=None,
 ):
     """Normalize raw HRRR arrays directly into the shared compact matrix."""
     levels = np.asarray(levels, dtype=np.float64)
@@ -257,19 +295,59 @@ def _point_dataset_from_columns(
     if omega is not None:
         matrix[6] = omega
 
+    surface = {} if surface is None else surface
+    surface_merge = merge_surface_level(
+        {
+            name: matrix[index]
+            for index, name in enumerate(GRIB_COLUMN_NAMES)
+        },
+        {
+            "pres": (
+                float(surface["PRES"]) / 100.0
+                if "PRES" in surface else None
+            ),
+            "hght": surface.get("HGT"),
+            "tmpc": (
+                float(surface["TMP"]) - 273.15
+                if "TMP" in surface else None
+            ),
+            "dwpc": (
+                float(surface["DPT"]) - 273.15
+                if "DPT" in surface else None
+            ),
+            "u": surface.get("UGRD"),
+            "v": surface.get("VGRD"),
+        },
+        missing=missing,
+    )
+    if surface_merge is not None:
+        matrix = np.vstack([
+            surface_merge.columns[name] for name in GRIB_COLUMN_NAMES
+        ])
+
     surface_vorticity = None
     absolute_vorticity = values("ABSV")
     if absolute_vorticity is not None:
         coriolis = (
             2.0 * 7.2921159e-5 * np.sin(np.radians(float(selected_lat)))
         )
-        for value in absolute_vorticity:
+        for pressure, value in zip(levels, absolute_vorticity):
+            if (
+                surface_merge is not None
+                and pressure > surface_merge.surface_pressure
+            ):
+                continue
             if np.isfinite(value) and value != missing:
                 surface_vorticity = float(value - coriolis)
                 break
 
     decoded = DecodedPoint(
-        matrix, float(selected_lat), float(selected_lon), surface_vorticity
+        matrix,
+        float(selected_lat),
+        float(selected_lon),
+        surface_vorticity,
+        surface_merge is not None,
+        0 if surface_merge is None else surface_merge.removed_levels,
     )
     run_utc = run_dt
     if run_utc.tzinfo is None:
@@ -294,6 +372,8 @@ def _load_cached_point(path, run_dt, requested_lat, requested_lon, root_url):
         return None
     try:
         with np.load(path, allow_pickle=False) as cached:
+            if int(cached["schema_version"]) != _POINT_CACHE_SCHEMA:
+                return None
             if str(cached["run"]) != run_dt.isoformat():
                 return None
             if abs(float(cached["requested_lat"]) - requested_lat) > 1e-6:
@@ -302,20 +382,31 @@ def _load_cached_point(path, run_dt, requested_lat, requested_lon, root_url):
                 return None
             fields = tuple(str(value) for value in cached["fields"])
             columns = {field: cached[field] for field in fields}
+            surface_fields = tuple(
+                str(value) for value in cached["surface_fields"]
+            )
+            surface = {
+                field: float(cached[f"surface_{field}"])
+                for field in surface_fields
+            }
             dataset = _point_dataset_from_columns(
                 cached["levels"], columns,
                 float(cached["selected_lat"]),
                 float(cached["selected_lon"]), run_dt,
-                requested_lat, requested_lon,
+                requested_lat, requested_lon, surface,
             )
-        return dataset, HrrrZarrSource(root_url, root_url, fields)
+        return dataset, HrrrZarrSource(
+            root_url,
+            root_url,
+            fields + surface_fields,
+        )
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
 
 def _write_cached_point(
     path, run_dt, requested_lat, requested_lon, selected_lat, selected_lon,
-    plan, columns,
+    plan, surface_plan, columns, surface,
 ) -> None:
     if path is None:
         return
@@ -325,6 +416,7 @@ def _write_cached_point(
     )
     try:
         payload = {
+            "schema_version": _POINT_CACHE_SCHEMA,
             "run": run_dt.isoformat(),
             "requested_lat": float(requested_lat),
             "requested_lon": float(requested_lon),
@@ -332,7 +424,12 @@ def _write_cached_point(
             "selected_lon": float(selected_lon),
             "levels": np.asarray(plan.levels, dtype=float),
             "fields": np.asarray(plan.fields),
+            "surface_fields": np.asarray(tuple(surface_plan.arrays)),
             **columns,
+            **{
+                f"surface_{field}": float(value)
+                for field, value in surface.items()
+            },
         }
         with os.fdopen(fd, "wb") as handle:
             np.savez(handle, **payload)
@@ -418,11 +515,13 @@ def fetch_hrrr_zarr_point(
         metadata_payload = load(root_url + "/.zmetadata")
         consolidated = json.loads(metadata_payload.decode("utf-8"))
         plan = discover_pressure_plan(consolidated["metadata"])
+        surface_plan = discover_surface_plan(consolidated["metadata"])
         iy, ix, selected_lat, selected_lon = hrrr_grid_index(lat, lon)
         columns = {
             field: np.full(len(plan.levels), np.nan, dtype=float)
             for field in plan.fields
         }
+        surface = {}
         tasks = {}
         with ThreadPoolExecutor(max_workers=max(1, int(max_workers))) as executor:
             for level_index, level in enumerate(plan.levels):
@@ -432,22 +531,44 @@ def fetch_hrrr_zarr_point(
                     chunk_id = f"{iy // chunks[0]}.{ix // chunks[1]}"
                     url = f"{root_url}/{array_path}/{chunk_id}"
                     future = executor.submit(load, url)
-                    tasks[future] = (level_index, field, metadata)
+                    tasks[future] = (
+                        "pressure",
+                        level_index,
+                        field,
+                        metadata,
+                    )
+            for field, (array_path, metadata) in surface_plan.arrays.items():
+                chunks = tuple(int(value) for value in metadata["chunks"])
+                chunk_id = f"{iy // chunks[0]}.{ix // chunks[1]}"
+                url = f"{root_url}/{array_path}/{chunk_id}"
+                future = executor.submit(load, url)
+                tasks[future] = ("surface", None, field, metadata)
             for future in as_completed(tasks):
-                level_index, field, metadata = tasks[future]
-                columns[field][level_index] = decode_zarr_point(
-                    future.result(), metadata, iy=iy, ix=ix
-                )
+                kind, level_index, field, metadata = tasks[future]
+                value = decode_zarr_point(
+                    future.result(), metadata, iy=iy, ix=ix)
+                if kind == "pressure":
+                    columns[field][level_index] = value
+                else:
+                    surface[field] = value
         dataset = _point_dataset_from_columns(
             plan.levels, columns, selected_lat, selected_lon, run_dt,
-            lat, lon,
+            lat, lon, surface,
         )
         _write_cached_point(
             _cache_path(cache_dir), run_dt, float(lat), float(lon),
-            selected_lat, selected_lon, plan, columns,
+            selected_lat,
+            selected_lon,
+            plan,
+            surface_plan,
+            columns,
+            surface,
         )
         source = HrrrZarrSource(
-            root_url, root_url, plan.fields, downloaded_bytes=downloaded
+            root_url,
+            root_url,
+            plan.fields + tuple(surface_plan.arrays),
+            downloaded_bytes=downloaded,
         )
         return dataset, source
     except (DownloadCancelled, ZarrBackendUnavailable):

@@ -1,30 +1,66 @@
 name: Tests
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Weekly live-provider drift check.  The deterministic lanes still run on
+    # every push/PR; this lane exercises current public schemas and terrain.
+    - cron: "17 10 * * 2"
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact commit or ref to test
+        required: false
+        default: ""
+        type: string
+      run_live_providers:
+        description: Run opt-in public-provider contracts
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or ref to test (blank uses the selected ref)
+        required: false
+        default: ""
+        type: string
+      run_live_providers:
+        description: Run timeout-bounded public-provider contracts
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
+concurrency:
+  group: tests-${{ github.workflow }}-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_QPA_PLATFORM: offscreen
+
 jobs:
-  pytest:
-    name: Python ${{ matrix.python-version }}
+  fast:
+    name: Fast deterministic (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
 
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
 
-    env:
-      QT_QPA_PLATFORM: offscreen
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
 
       - name: Install Qt runtime libraries
         run: |
@@ -43,7 +79,7 @@ jobs:
             libxcb-xinput0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -51,26 +87,96 @@ jobs:
       - name: Install package and test dependencies
         run: |
           python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,quality,era5,wrf,render]"
+          python scripts/install_sharppy_compat.py --sharppy-only
+          python -m pip check
+
+      - name: Run fast deterministic lane with coverage
+        env:
+          SHARPMOD_HYPOTHESIS_PROFILE: fast
+        run: >-
+          python -m pytest -q
+          -m "not property and not live_provider"
+          --cov=sharpmod
+          --cov-report=term-missing:skip-covered
+          --cov-report=xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-python-${{ matrix.python-version }}
+          path: coverage.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  property:
+    name: Full properties (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Install Qt runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 \
+            libgl1 \
+            libxkbcommon-x11-0 \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libxcb-xinput0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install property-test dependencies
+        run: |
+          python -m pip install --upgrade pip
           python -m pip install -e ".[dev,era5,wrf,render]"
           python scripts/install_sharppy_compat.py --sharppy-only
 
-      - name: Run tests
-        run: pytest
+      - name: Run full property lane
+        env:
+          SHARPMOD_HYPOTHESIS_PROFILE: full
+        run: >-
+          python -m pytest -q
+          -m "property and not live_provider"
+          --timeout=900
 
   windows-wrf:
     name: Windows WRF runtime
     runs-on: windows-latest
     timeout-minutes: 25
 
-    env:
-      QT_QPA_PLATFORM: offscreen
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
           cache: pip
@@ -86,3 +192,76 @@ jobs:
           python -m pytest -q
           sharpmod/tests/test_gui_reanalysis_wrf.py
           sharpmod/tests/test_model_fetch_packaging.py
+
+  quality:
+    name: Static quality and dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install audited dependency surface
+        run: |
+          python -m pip install --upgrade \
+            "pip==26.2" \
+            "setuptools==83.0.0" \
+            "wheel==0.47.0"
+          python -m pip install -e ".[quality,era5,wrf,render]"
+          python scripts/install_sharppy_compat.py --sharppy-only
+          python -m pip check
+
+      - name: Run repository correctness lint
+        run: python -m ruff check sharpmod scripts packaging
+
+      - name: Run focused maintainability lint
+        run: >-
+          python -m ruff check
+          sharpmod/portable_sounding.py
+          sharpmod/model_disk_cache.py
+          sharpmod/model_sources.py
+          sharpmod/gui_cache.py
+          --select E,F,I,UP,B,SIM
+
+      - name: Audit installed dependencies
+        run: python -m pip_audit --skip-editable
+
+  live-provider:
+    name: Live provider contracts
+    if: ${{ inputs.run_live_providers == true || github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install provider runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,era5,render]"
+          python scripts/install_sharppy_compat.py --sharppy-only
+
+      - name: Run current public-provider contracts
+        env:
+          SHARPMOD_RUN_LIVE_PROVIDER_TESTS: "1"
+        run: python -m pytest -q -m live_provider

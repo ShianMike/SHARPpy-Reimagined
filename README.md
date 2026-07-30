@@ -67,6 +67,12 @@ implementation remains a fully functional portable fallback, so source and
 Python-only installations do not require Rust, Cargo, maturin, or a native
 extension to run.
 
+The native API accelerates standard kinematics, SB/MU/ML parcel summaries,
+traced surface/forecast/MU/ML/effective and user parcel ascents, DCAPE, and
+direct pressure-level GRIB point decoding. The GUI continues to expose
+SHARPpy-compatible profile and parcel objects, with automatic Python-oracle
+fallback if a native operation is unavailable.
+
 To add the Rust backend to a source installation, first install a stable Rust
 toolchain (Rust 1.88 or newer), then run these commands in the same Python
 environment as `sharpmod`:
@@ -297,6 +303,10 @@ PyInstaller packages the executable, making Rust the `auto` backend in the
 published application. For custom local builds, the spec collects a compatible
 installed extension when present; otherwise it logs a warning and produces a
 fully functional Python-fallback bundle.
+Official releases first run the reusable test workflow against the exact source
+commit, build with the direct dependency versions in
+`constraints/release.txt`, and publish from a separate artifact-only job. Only
+that final job receives GitHub `contents: write` permission.
 
 ## Command Line Tools
 
@@ -333,6 +343,10 @@ model-extract gfs --probe --fxx 0
 
 # Also download and open the pressure-level subset during the probe
 model-extract gfs --probe --fxx 0 --open-subset
+
+# Check recent completed cycles and fail until the verified ground contract
+# is complete (useful for provider monitoring)
+model-extract rrfs-a --probe --lookback-cycles 12 --require-surface-contract
 ```
 
 Fetch a point sounding by model key, latitude, and longitude:
@@ -356,9 +370,12 @@ model-extract gefs 35.18 -97.44 gefs_p01.npz --fxx 0 --member p01
 
 If `--run` is omitted, the CLI chooses the most recent configured cycle at or
 before the current UTC time; upstream publication can lag that cycle, so use
-`--probe` or pass an earlier `--run` when inventory is not available. Without
-`--render`, the `.npz` and `.json` outputs remain. With `--render`, only the PNG
-remains. The GUI instead retains fetched files until the sounding window closes.
+`--probe`, use `--lookback-cycles`, or pass an earlier `--run` when inventory is
+not available. `--require-surface-contract` makes a probe fail until surface
+pressure/height, 2 m thermodynamics, and both 10 m wind components are present,
+and lists the missing components. Without `--render`, the `.npz` and `.json`
+outputs remain. With `--render`, only the PNG remains. The GUI instead retains
+fetched files until the sounding window closes.
 
 #### Download acceleration and cache
 
@@ -366,9 +383,19 @@ The extractor keeps every pressure level published by the selected model while
 avoiding fields that are duplicates for sounding construction. It tries the
 smallest compatible route first:
 
+Every forecast extraction requires true surface pressure and terrain height,
+2-m temperature/moisture, and 10-m wind. Isobaric records whose pressure
+exceeds the selected point's surface pressure are discarded, then the verified
+ground row is prepended. ERA5 retrieves the matching single-level fields in a
+second colocated CDS request. A provider that does not publish the complete
+surface contract fails explicitly instead of emitting a pressure-only profile.
+The completed profile must also pass monotonic-pressure/height, thermodynamic,
+and wind quality checks before it is written.
+
 1. HRRR F000 analyses use direct point reads from the public HRRR Zarr archive
    and normalize those columns straight into the compact decoder contract;
-   Canadian GDPS/RDPS use ECCC GeoMet point queries with bounded layer fan-out.
+   Canadian GDPS/RDPS query their six surface layers first, then request only
+   pressure layers above that ground pressure with bounded GeoMet fan-out.
 2. Indexed subsets at or below 32 MiB use validated, coalesced HTTP byte ranges
    after selecting a healthy equivalent provider. Every indexed model uses up
    to four bounded range workers by default. Large coalesced spans are split
@@ -397,7 +424,9 @@ up to 3 GB and 48 hours by default. In the File menu, **Prefetch Next Forecast
 Hour** optionally warms the next valid hour, **Clear Downloaded Model Cache**
 removes retained entries, and the model tab's **Cancel** button stops the active
 request. Verified partial files from compatible range downloads are retained so
-the same request can resume.
+the same request can resume. Cache paths and metadata carry a contract version;
+payloads produced by an older extraction contract remain visible in the data
+library but are never reopened as current soundings.
 
 Advanced overrides are available for testing or constrained environments:
 
@@ -507,11 +536,20 @@ use Herbie and do not require CDS credentials.
 | `[render]` | SHARPpy runtime companions | PNG rendering |
 | `[era5]` | CDS API, Herbie, cfgrib, ecCodes, xarray, numcodecs, pyproj | ERA5 and public forecast-model point extraction |
 | `[wrf]` | xarray, netCDF4 | WRF-ARW NetCDF extraction |
-| `[dev]` | pytest, Hypothesis, PyYAML | Test and workflow-validation work |
+| `[dev]` | pytest, Hypothesis, pytest-timeout, PyYAML | Test and workflow-validation work |
+| `[quality]` | Ruff, pip-audit, pytest-cov | Static checks, dependency audit, and coverage |
 | `[rust-build]` | maturin | Build the supported Rust backend locally (Rust toolchain installed separately) |
 
 ```bash
-python scripts/install_sharppy_compat.py --extras dev,era5,wrf,render
+python scripts/install_sharppy_compat.py --extras dev,quality,era5,wrf,render
+
+# Fast deterministic feedback.
+SHARPMOD_HYPOTHESIS_PROFILE=fast pytest -m "not property and not live_provider"
+
+# Full 100-example scientific properties.
+SHARPMOD_HYPOTHESIS_PROFILE=full pytest -m "property and not live_provider" --timeout=900
+
+# Whole offline suite.
 pytest
 
 # Optional source-checkout Rust backend

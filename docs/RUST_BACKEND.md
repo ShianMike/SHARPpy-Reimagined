@@ -61,7 +61,7 @@ development and benchmark verification.
 An importable native module is not accepted on import success alone. Before
 activation, the selector requires its package version to match `sharpmod`
 exactly, its integer backend API version to equal the Python contract (currently
-`2`), and all seven operations listed below to be callable. In `auto` mode an old
+`6`), and all twelve operations listed below to be callable. In `auto` mode an old
 or incomplete extension falls back to Python and records the compatibility
 failure in `fallback_reason`; in forced `rust` mode the same mismatch raises
 `BackendUnavailableError` instead of reaching an operation with stale native
@@ -88,9 +88,26 @@ Both backends expose the same named operations:
   columns.
 - `parse_sounding_rows` parses the deliberately narrow, simple sounding-row
   representation supported by the backend contract.
+- `profile_kinematics` computes Bunkers storm motion plus the standard
+  SFC-to-0.5/1/3/4/6 km shear, mean-wind, storm-relative-wind, and SRH
+  workspace in one coarse-grained call.
+- `profile_parcels` computes surface-based, lowest-300-hPa most-unstable, and
+  100-hPa mixed-layer parcel summaries—including CAPE/CIN, LCL/LFC/EL, and
+  CAPE through 3/6 km—in one coarse-grained call. Cached 0–6 km CAPE is used
+  only when reported levels in that layer are no more than 500 m apart;
+  coarser soundings retain the reference integration.
+- `profile_convective_parcels` computes surface, forecast, most-unstable,
+  mixed-layer, and mean-effective parcel summaries and virtual-temperature
+  plotting traces together with effective-inflow-layer pressure bounds.
+- `lift_parcel` computes one explicit user-selected parcel summary and plotting
+  trace.
+- `profile_dcape` computes DCAPE, its source pressure/downrush temperature, and
+  the descending parcel-temperature trace.
 - `decode_grib_point` scans a local GRIB inventory, selects the nearest point
   once per distinct grid definition, verifies a consistent selected point, and
-  returns all sounding columns as one C-contiguous NumPy matrix.
+  returns all sounding columns as one C-contiguous NumPy matrix. When verified
+  surface messages are present, it removes below-ground isobars and prepends
+  surface pressure/height, 2-m thermodynamics, and 10-m wind.
 
 The shared behavior includes missing values, masks, NaNs, stable ordering,
 boundary results, error conditions, units, and output types. Python/Rust
@@ -114,17 +131,31 @@ decimal-digit category, such as Roman numerals and superscripts, remain errors.
 This deliberately mirrors Python `float()` rather than Rust's broader
 `char::is_numeric` predicate.
 
-No Qt, rendering, forecast downloading, or broad meteorological calculation has
-been ported. The Rust decoder receives a cache-owned local file from the Python
-retrieval layer. Rayon is not a dependency: profiling did not justify parallel
-decoding for ordinary point soundings, and calls made by the Rust decoder remain
-serialized.
+No Qt, rendering, or forecast downloading has been ported. A Python
+`AcceleratedConvectiveProfile` keeps SHARPpy's orchestration and public parcel
+objects while delegating its standard parcel/effective-layer searches and
+DCAPE integrations to the backend. The Skew-T user-parcel action delegates its
+explicit ascent through the same boundary. Backend failure falls back to the
+pinned SHARPpy routines. Advanced parcel fields that are not part of the traced
+parcel summary contract
+(for example cap strength and exact upstream MPL bookkeeping) remain
+Python-side compatibility concerns. ECAPE also retains a Python MUCAPE check
+for its exact pinned-oracle upper-bound contract. The Rust decoder receives a
+cache-owned local file from the Python retrieval layer. Rayon is not a
+dependency: profiling did not justify parallel decoding for ordinary point
+soundings, and calls made by the Rust decoder remain serialized.
 
 Repository-owned application call sites delegate wind-component creation,
 generic profile interpolation, ERA5/WRF wind conversion, pressure sorting and
-deduplication, and forecast-model GRIB point extraction through the facade.
-Basic QC and simple-row parsing remain equivalence-tested APIs without changing
-the SPC, UWyo, BUFKIT, WRF, or other decoder pipelines.
+deduplication, standard SharpTab kinematics, standard/full parcel workspaces,
+user parcel ascents, DCAPE, and
+forecast-model GRIB point extraction through the facade. A real `Profile`
+caches its immutable kinematics and three-parcel summary workspaces; full
+convective profiles consume the extended workspace once during construction.
+Nonstandard layers and any unavailable workspace continue through the existing
+Python routines. Basic QC and simple-row parsing remain
+equivalence-tested APIs without changing the SPC, UWyo, BUFKIT, WRF, or other
+decoder pipelines.
 
 ### Direct GRIB behavior
 
@@ -140,6 +171,14 @@ ecCodes handles that borrow each mapped message, and returns all nine columns in
 one NumPy-compatible matrix through one Python call. Its adapter keeps a bounded
 exact-point cache. Both caches include file size and modification time in their
 keys and invalidate when the downloaded file changes.
+
+For HRRR, retrieval includes `PRES` and `HGT` at the surface, `TMP` and `DPT`
+at 2 m, and `UGRD` and `VGRD` at 10 m. Both direct decoders and the cfgrib/Zarr
+compatibility routes use surface pressure to remove all subterranean isobars
+before inserting the real ground row. Model extraction fails closed if this
+verified merge is unavailable. The JSON sidecar records
+`surface_pressure_hpa`, `surface_merged`, and
+`below_ground_levels_removed`.
 
 Optimized Python and Rust return matching omega values and missing masks at the
 published pressure levels. For GEFS, the value published only at 850 hPa stays
@@ -247,8 +286,11 @@ The cross-backend harness requires a built extension and compares the Python
 and Rust backend methods on small profiles, ordinary profiles, a 100,000-value
 vector, a 2,048-by-128 batch of profiles, repeated calls, scalar 700 hPa
 lookups on 32/128 levels, six repeated fields, and real cached-selector
-`Profile` construction. It also prints an equal-work sequential-versus-two-
-thread diagnostic:
+`Profile` construction. It also measures the five-layer 128-level profile
+kinematics workspace, the three-parcel 128-level thermodynamic workspace, and
+the five-parcel traced convective workspace plus the DCAPE traced workspace, and
+prints an equal-work sequential-versus-two-thread diagnostic for the original
+array kernels:
 
 ```powershell
 $env:SHARPMOD_BACKEND = "rust"
@@ -262,14 +304,16 @@ relevant workload, and common single-profile operations may remain preferable
 in Python when boundary-crossing or conversion overhead dominates.
 
 The two-thread table is observational, not a pass/fail result or a promise of
-parallel scaling. Array kernels retain the Python GIL while borrowing NumPy
-input slices; releasing it could allow another Python thread to mutate storage
-that Rust is reading. GRIB decoding is different: its inputs are immutable path
-and scalar values, so PyO3 releases the GIL for the decode and returns one
-capsule-backed NumPy matrix. Calls made by the Rust decoder are serialized
-because the local point workload did not show a reason to add speculative
-parallel decoding. Python ecCodes/cfgrib calls use a separate lock, so callers
-should not mix the two decoder implementations concurrently in one process.
+parallel scaling. Small array kernels retain the Python GIL while borrowing
+NumPy input slices; releasing it could allow another Python thread to mutate
+storage that Rust is reading. The profile-kinematics and profile-parcel
+bindings instead copy their small input columns before releasing the GIL, so
+native computation never races with caller mutation. GRIB decoding likewise
+releases the GIL and returns one capsule-backed NumPy matrix. Calls made by the
+Rust decoder are serialized because the local point workload did not show a
+reason to add speculative parallel decoding. Python ecCodes/cfgrib calls use a
+separate lock, so callers should not mix the two decoder implementations
+concurrently in one process.
 
 ### Recorded local result
 
@@ -356,12 +400,21 @@ a compatible extension.
 - The declared NumPy range spans NumPy 1.x and 2.x; native compatibility must be
   tested across that range before publishing wheels.
 - Small arrays can cost more to cross the Python/Rust boundary than they save in
-  computation.
-- Array kernels retain the GIL while they borrow NumPy input slices. Direct
-  GRIB decoding releases it, but Rust-decoder ecCodes access is serialized;
-  concurrent point decodes are not currently expected to scale. Python
-  ecCodes/cfgrib calls are protected separately rather than by a shared
-  cross-language lock.
+  computation. The workspace APIs amortize that cost by returning all standard
+  layers or parcels together and caching each result on a `Profile`.
+- Borrowed array kernels retain the GIL. Profile kinematics and parcels own
+  copies before releasing it. Direct GRIB decoding also releases it, but
+  Rust-decoder ecCodes access is serialized; concurrent point decodes are not
+  currently expected to scale. Python ecCodes/cfgrib calls are protected
+  separately rather than by a shared cross-language lock.
+- The kinematics and parcel caches assume a `Profile`'s core reported-level
+  arrays remain unchanged after construction, matching the existing
+  derived-attribute cache contract. Build a new `Profile` after changing those
+  arrays.
+- Native parcel results intentionally exclude several advanced `Parcel` fields
+  outside the traced parcel summary contract, including cap-strength bookkeeping and
+  the pinned ECAPE upper-bound check. The Python compatibility layer derives or
+  masks those fields and retains the pinned SHARPpy fallback.
 - Direct GRIB caches are process-local and bounded. A cold request still scans
   message headers and ecCodes must unpack one selected element per field/level.
 - When a downloaded inventory has no usable relative/absolute-vorticity field,

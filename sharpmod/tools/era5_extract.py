@@ -43,6 +43,8 @@ from datetime import datetime, timezone
 import numpy as np
 
 from sharpmod import backends as _backends
+from sharpmod.model_surface import SURFACE_CONTRACT_VERSION, merge_surface_level
+from sharpmod.upstream_warnings import xarray_new_combine_defaults
 
 __all__ = [
     "extract",
@@ -71,6 +73,7 @@ LON_MIN, LON_MAX = -180.0, 360.0
 ERA5_START = datetime(1940, 1, 1, tzinfo=timezone.utc)
 
 ERA5_CDS_DATASET = "reanalysis-era5-pressure-levels"
+ERA5_CDS_SURFACE_DATASET = "reanalysis-era5-single-levels"
 ERA5_CDS_VARIABLES = (
     "geopotential",
     "relative_humidity",
@@ -78,6 +81,14 @@ ERA5_CDS_VARIABLES = (
     "u_component_of_wind",
     "v_component_of_wind",
     "vertical_velocity",
+)
+ERA5_CDS_SURFACE_VARIABLES = (
+    "surface_pressure",
+    "geopotential",
+    "2m_temperature",
+    "2m_dewpoint_temperature",
+    "10m_u_component_of_wind",
+    "10m_v_component_of_wind",
 )
 ERA5_PRESSURE_LEVELS = (
     "1", "2", "3", "5", "7", "10", "20", "30", "50", "70", "100",
@@ -302,6 +313,19 @@ _VAR_V = ("v", "v_component_of_wind", "vgrd")
 _VAR_W = ("w", "vertical_velocity", "vvel", "dzdt")
 _VAR_RELATIVE_VORTICITY = ("vo", "vort", "relative_vorticity", "relv")
 _VAR_ABSOLUTE_VORTICITY = ("absv", "absolute_vorticity")
+_VAR_SURFACE_PRESSURE = ("sp", "surface_pressure")
+_VAR_SURFACE_HEIGHT = (
+    "orog",
+    "surface_geopotential",
+    "surface_geopotential_height",
+    "surface_height",
+)
+_VAR_2M_TEMP = ("t2m", "2t", "2_metre_temperature")
+_VAR_2M_DEWPOINT = ("d2m", "2d", "2_metre_dewpoint_temperature")
+_VAR_2M_RH = ("r2", "rh2m", "2_metre_relative_humidity")
+_VAR_2M_Q = ("q2", "sh2", "2_metre_specific_humidity")
+_VAR_10M_U = ("u10", "10u", "10_metre_u_wind_component")
+_VAR_10M_V = ("v10", "10v", "10_metre_v_wind_component")
 
 EARTH_RADIUS_M = 6371008.8
 EARTH_ROTATION_RATE = 7.2921159e-5
@@ -542,7 +566,8 @@ def _first_surface_value(values):
 
 
 def _surface_relative_vorticity_from_column(values, levels, latitude=None,
-                                            absolute=False):
+                                            absolute=False,
+                                            surface_pressure=None):
     """Return the bottom-most relative-vorticity value from a level column."""
     if values is None:
         return None
@@ -553,7 +578,14 @@ def _surface_relative_vorticity_from_column(values, levels, latitude=None,
         arr = arr - _coriolis_parameter(latitude)
     if arr.size != np.asarray(levels).size:
         return None
-    ordered = _mark_missing(arr, arr.size)[np.argsort(-np.asarray(levels))]
+    levels = np.asarray(levels, dtype=float)
+    order = np.argsort(-levels)
+    ordered = _mark_missing(arr, arr.size)[order]
+    if surface_pressure is not None:
+        # A pressure level exactly coincident with the verified ground is a
+        # valid near-surface vorticity sample even though the aligned sounding
+        # row is replaced by the higher-quality 2 m/10 m surface merge.
+        ordered = ordered[levels[order] <= float(surface_pressure)]
     return _first_surface_value(ordered)
 
 
@@ -568,7 +600,8 @@ def _neighbor_pair(index, size):
     return index - 1, index + 1
 
 
-def _surface_relative_vorticity_from_wind_grid(ds, index_tuple, levels):
+def _surface_relative_vorticity_from_wind_grid(
+        ds, index_tuple, levels, surface_pressure=None):
     """Estimate surface relative vorticity from the gridded u/v wind fields."""
     if len(index_tuple) != 2:
         return None
@@ -594,7 +627,13 @@ def _surface_relative_vorticity_from_wind_grid(ds, index_tuple, levels):
         return None
 
     try:
-        surface_level = int(np.nanargmax(np.asarray(levels, dtype=float)))
+        levels = np.asarray(levels, dtype=float)
+        eligible = np.isfinite(levels)
+        if surface_pressure is not None:
+            eligible &= levels <= float(surface_pressure)
+        if not np.any(eligible):
+            return None
+        surface_level = int(np.nanargmax(np.where(eligible, levels, np.nan)))
     except Exception:
         return None
     x_pair = _neighbor_pair(ix, xsize)
@@ -690,6 +729,46 @@ def _build_columns(ds, index_tuple, latitude=None):
     iy, ix = index_tuple if index_is_regular else index_tuple
     get = _column(ds, iy, ix, index_is_regular)
 
+    surface_pressure = _first_surface_value(get(_VAR_SURFACE_PRESSURE))
+    if surface_pressure is not None and surface_pressure > 2000.0:
+        surface_pressure /= 100.0
+    surface_height_name = _first_present(ds, _VAR_SURFACE_HEIGHT)
+    surface_height = _first_surface_value(get(_VAR_SURFACE_HEIGHT))
+    if surface_height_name == "surface_geopotential" \
+            and surface_height is not None:
+        surface_height /= G0
+    surface_temperature = _first_surface_value(get(_VAR_2M_TEMP))
+    surface_dewpoint = _first_surface_value(get(_VAR_2M_DEWPOINT))
+    if surface_temperature is not None and surface_temperature > 150.0:
+        surface_temperature -= 273.15
+    if surface_dewpoint is not None and surface_dewpoint > 150.0:
+        surface_dewpoint -= 273.15
+    if surface_temperature is not None:
+        surface_rh = _first_surface_value(get(_VAR_2M_RH))
+        surface_q = _first_surface_value(get(_VAR_2M_Q))
+        # Specific humidity is tied directly to surface pressure and is the
+        # safest moisture source when a provider mixes surface grids (CFS).
+        if surface_q is not None and surface_pressure is not None:
+            surface_dewpoint = float(dewpoint_from_specific_humidity(
+                np.asarray([surface_q]),
+                np.asarray([surface_pressure]),
+            )[0])
+        elif surface_dewpoint is not None:
+            pass
+        elif surface_rh is not None:
+            surface_dewpoint = float(dewpoint_from_rh(
+                np.asarray([surface_temperature]),
+                np.asarray([surface_rh]),
+            )[0])
+    surface = {
+        "pres": surface_pressure,
+        "hght": surface_height,
+        "tmpc": surface_temperature,
+        "dwpc": surface_dewpoint,
+        "u": _first_surface_value(get(_VAR_10M_U)),
+        "v": _first_surface_value(get(_VAR_10M_V)),
+    }
+
     t_raw = get(_VAR_TEMP)
     tmpc = None if t_raw is None else t_raw - 273.15
 
@@ -727,7 +806,11 @@ def _build_columns(ds, index_tuple, latitude=None):
 
     vort_raw = get(_VAR_RELATIVE_VORTICITY)
     surface_relative_vorticity = _surface_relative_vorticity_from_column(
-        vort_raw, levels, latitude=latitude)
+        vort_raw,
+        levels,
+        latitude=latitude,
+        surface_pressure=surface_pressure,
+    )
     surface_vorticity_source = (
         "relative-vorticity pressure-level field"
         if surface_relative_vorticity is not None else None
@@ -735,14 +818,23 @@ def _build_columns(ds, index_tuple, latitude=None):
     if surface_relative_vorticity is None:
         absv_raw = get(_VAR_ABSOLUTE_VORTICITY)
         surface_relative_vorticity = _surface_relative_vorticity_from_column(
-            absv_raw, levels, latitude=latitude, absolute=True)
+            absv_raw,
+            levels,
+            latitude=latitude,
+            absolute=True,
+            surface_pressure=surface_pressure,
+        )
         if surface_relative_vorticity is not None:
             surface_vorticity_source = (
                 "absolute-vorticity pressure-level field minus Coriolis"
             )
     if surface_relative_vorticity is None:
         surface_relative_vorticity = _surface_relative_vorticity_from_wind_grid(
-            ds, index_tuple, levels)
+            ds,
+            index_tuple,
+            levels,
+            surface_pressure=surface_pressure,
+        )
         if surface_relative_vorticity is not None:
             surface_vorticity_source = "horizontal wind-gradient fallback"
 
@@ -768,10 +860,35 @@ def _build_columns(ds, index_tuple, latitude=None):
         raise RetrievalError("dataset has no usable pressure levels")
     for key in cols:
         cols[key] = cols[key][order]
+    surface_merge = merge_surface_level(cols, surface, missing=MISSING)
+    if surface_merge is not None:
+        cols = surface_merge.columns
+        cols["_surface_merged"] = True
+        cols["_surface_pressure_hpa"] = surface_merge.surface_pressure
+        cols["_below_ground_levels_removed"] = surface_merge.removed_levels
     if surface_relative_vorticity is not None:
         cols["surface_relative_vorticity"] = surface_relative_vorticity
         cols["_surface_vorticity_source"] = surface_vorticity_source
-    return cols, int(np.asarray(order).size)
+    return cols, int(np.asarray(cols["pres"]).size)
+
+
+def _require_profile_qc(columns, label):
+    """Reject physically inconsistent output before it reaches disk/cache."""
+    result = _backends.basic_sounding_qc(
+        columns["pres"],
+        columns["hght"],
+        columns["tmpc"],
+        columns["dwpc"],
+        columns["wdir"],
+        columns["wspd"],
+        missing=MISSING,
+    )
+    if not result.valid:
+        raise RetrievalError(
+            "%s sounding failed physical quality control: %s"
+            % (label, ", ".join(result.issues))
+        )
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -804,6 +921,23 @@ def _cds_pressure_level_request(lat, lon, valid_time):
     }
 
 
+def _cds_surface_request(lat, lon, valid_time):
+    """Build the colocated single-level request required by the ground merge."""
+    vt = _as_datetime(valid_time)
+    grid_lat, grid_lon = _nearest_era5_grid_point(lat, lon)
+    return {
+        "product_type": "reanalysis",
+        "variable": list(ERA5_CDS_SURFACE_VARIABLES),
+        "year": vt.strftime("%Y"),
+        "month": vt.strftime("%m"),
+        "day": vt.strftime("%d"),
+        "time": vt.strftime("%H:00"),
+        "area": [grid_lat, grid_lon, grid_lat, grid_lon],
+        "data_format": "grib",
+        "download_format": "unarchived",
+    }
+
+
 def _is_cds_credential_error(exc):
     message = str(exc).lower()
     return any(token in message for token in (
@@ -818,12 +952,7 @@ def _is_cds_credential_error(exc):
 
 def _retrieve_dataset(lat, lon, valid_time, progress_callback=None,
                       cancelled=None):
-    """Fetch one ERA5 pressure-level column through the official CDS API.
-
-    The requested GRIB contains only the nearest 0.25-degree point, the six
-    sounding variables, and all 37 published pressure levels. It is fully
-    loaded before the temporary download is removed.
-    """
+    """Fetch colocated ERA5 pressure-level and verified surface columns."""
     try:
         import cdsapi
         import cfgrib
@@ -833,10 +962,15 @@ def _retrieve_dataset(lat, lon, valid_time, progress_callback=None,
             "(cdsapi, cfgrib, xarray): %s" % exc) from exc
 
     vt = _as_datetime(valid_time)
-    request = _cds_pressure_level_request(lat, lon, vt)
+    pressure_request = _cds_pressure_level_request(lat, lon, vt)
+    surface_request = _cds_surface_request(lat, lon, vt)
     _check_cancelled(cancelled)
-    fd, grib_path = tempfile.mkstemp(prefix="sharpmod-era5-", suffix=".grib")
-    os.close(fd)
+    temporary_paths = []
+    for prefix in ("sharpmod-era5-pressure-", "sharpmod-era5-surface-"):
+        fd, path = tempfile.mkstemp(prefix=prefix, suffix=".grib")
+        os.close(fd)
+        temporary_paths.append(path)
+    pressure_path, surface_path = temporary_paths
     source_datasets = []
     try:  # pragma: no cover - live CDS/network path
         _emit_progress(progress_callback, "queued")
@@ -845,11 +979,21 @@ def _retrieve_dataset(lat, lon, valid_time, progress_callback=None,
         # cdsapi's stable client is synchronous.  A cancellation requested
         # while this call is in flight is observed immediately after it
         # returns; the remote CDS job itself may continue server-side.
-        client.retrieve(ERA5_CDS_DATASET, request, grib_path)
+        client.retrieve(ERA5_CDS_DATASET, pressure_request, pressure_path)
+        _check_cancelled(cancelled)
+        client.retrieve(
+            ERA5_CDS_SURFACE_DATASET,
+            surface_request,
+            surface_path,
+        )
         _check_cancelled(cancelled)
         _emit_progress(progress_callback, "decoding")
-        source_datasets = list(cfgrib.open_datasets(
-            grib_path, backend_kwargs={"indexpath": ""}))
+        source_datasets = []
+        for path in temporary_paths:
+            with xarray_new_combine_defaults():
+                source_datasets.extend(cfgrib.open_datasets(
+                    path, backend_kwargs={"indexpath": ""}
+                ))
         ds = _merge_datasets(source_datasets)
         ds.load()
         _check_cancelled(cancelled)
@@ -864,7 +1008,8 @@ def _retrieve_dataset(lat, lon, valid_time, progress_callback=None,
                 "$HOME/.cdsapirc; original error: %s" % exc) from exc
         if _cds_terms_error(exc):
             raise RetrievalError(
-                "ERA5 pressure-level dataset terms have not been accepted. "
+                "ERA5 pressure/single-level dataset terms have not been "
+                "accepted. "
                 "Sign in to the Copernicus Climate Data Store, open the ERA5 "
                 "hourly pressure-level dataset, and accept its terms before "
                 "retrying; original error: %s" % exc) from exc
@@ -877,26 +1022,45 @@ def _retrieve_dataset(lat, lon, valid_time, progress_callback=None,
                 source.close()
             except Exception:
                 pass
-        _quiet_remove(grib_path)
-        _quiet_remove(grib_path + ".idx")
+        for path in temporary_paths:
+            _quiet_remove(path)
+            _quiet_remove(path + ".idx")
 
 
 def _merge_datasets(ds_list):  # pragma: no cover - optional dependency path
     """Merge cfgrib's split datasets into one, importing xarray lazily."""
     import xarray as xr
     candidates = tuple(ds_list)
-    sources = tuple(
-        _promote_scalar_level_coordinate(d)
-        for d in candidates
-        if any(c in d.coords for c in _LEVEL_COORDS)
-    )
-    if not sources:
+    pressure_sources = [
+        _promote_scalar_level_coordinate(dataset)
+        for dataset in candidates
+        if any(coord in dataset.coords for coord in _LEVEL_COORDS)
+    ]
+    if not pressure_sources:
         for candidate in candidates:
             try:
                 candidate.close()
             except Exception:
                 pass
         raise RetrievalError("no pressure-level ERA5 dataset was returned")
+    surface_names = {
+        *_VAR_SURFACE_PRESSURE,
+        *_VAR_SURFACE_HEIGHT,
+        *_VAR_2M_TEMP,
+        *_VAR_2M_DEWPOINT,
+        *_VAR_10M_U,
+        *_VAR_10M_V,
+    }
+    surface_sources = []
+    for dataset in candidates:
+        if any(coord in dataset.coords for coord in _LEVEL_COORDS):
+            continue
+        if "z" in dataset.data_vars:
+            dataset = dataset.rename({"z": "surface_geopotential"})
+        if not surface_names.isdisjoint(dataset.data_vars) \
+                or "surface_geopotential" in dataset.data_vars:
+            surface_sources.append(dataset)
+    sources = tuple(pressure_sources + surface_sources)
     try:
         merged = xr.merge(sources, compat="override", join="outer")
     except BaseException:
@@ -1037,6 +1201,17 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt",
 
     # 5. Extract and convert the vertical column; mark per-level missing fields.
     cols, n_levels = _build_columns(ds_t, index_tuple, latitude=glat)
+    surface_merged = bool(cols.pop("_surface_merged", False))
+    surface_pressure_hpa = cols.pop("_surface_pressure_hpa", None)
+    below_ground_levels_removed = int(cols.pop(
+        "_below_ground_levels_removed", 0
+    ))
+    if not surface_merged:
+        raise RetrievalError(
+            "ERA5 point sounding has no verified surface merge; refusing "
+            "pressure-level values that may be extrapolated below terrain"
+        )
+    qc = _require_profile_qc(cols, "ERA5")
     _check_cancelled(cancelled)
 
     # 6. Assemble output arrays + metadata and write atomically.
@@ -1073,6 +1248,13 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt",
         "levels": int(n_levels),
         "backend": "xarray/cfgrib",
         "decoder": "ERA5 pressure-level column",
+        "surface_merged": True,
+        "surface_contract_version": SURFACE_CONTRACT_VERSION,
+        "surface_pressure_hpa": float(surface_pressure_hpa),
+        "below_ground_levels_removed": below_ground_levels_removed,
+        "qc_valid": qc.valid,
+        "qc_valid_level_count": qc.valid_level_count,
+        "qc_issues": list(qc.issues),
         "cache_hit": False,
     }
     if "surface_relative_vorticity" in cols:

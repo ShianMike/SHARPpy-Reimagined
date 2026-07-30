@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
+from datetime import UTC, datetime
 
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
@@ -121,7 +121,7 @@ class CacheManagerDialog(QDialog):
         for row, entry in enumerate(entries):
             try:
                 accessed = datetime.fromtimestamp(
-                    entry.accessed, timezone.utc
+                    entry.accessed, UTC
                 ).strftime(
                     "%Y-%m-%d %H:%M"
                 )
@@ -194,7 +194,7 @@ class CacheManagerDialog(QDialog):
             "source_fields": list(entry.source_fields),
             "path": str(entry.path),
             "accessed_utc": datetime.fromtimestamp(
-                entry.accessed, timezone.utc
+                entry.accessed, UTC
             ).isoformat(),
             "bytes": entry.size,
             "files": entry.file_count,

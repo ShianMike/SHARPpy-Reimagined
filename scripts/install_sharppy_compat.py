@@ -40,6 +40,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -167,6 +168,8 @@ def download_upstream_wheel(
     destination: Path,
     *,
     timeout: float = 60.0,
+    attempts: int = 3,
+    retry_delay: float = 1.0,
 ) -> Path:
     """Download the hash-pinned official PyPI wheel to ``destination``."""
     destination = Path(destination)
@@ -186,54 +189,68 @@ def download_upstream_wheel(
             f"refusing to overwrite partial download: {temporary}"
         )
 
-    digest = hashlib.sha256()
-    received = 0
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            final_url = urlparse(response.geturl())
-            if (
-                final_url.scheme != "https"
-                or final_url.hostname != "files.pythonhosted.org"
-            ):
-                raise CompatibilityInstallError(
-                    f"unexpected upstream download URL: {response.geturl()}"
-                )
-            length_header = response.headers.get("Content-Length")
-            if length_header is not None and int(length_header) != UPSTREAM_SIZE:
-                raise CompatibilityInstallError(
-                    "upstream Content-Length mismatch: expected "
-                    f"{UPSTREAM_SIZE}, got {length_header}"
-                )
-            with temporary.open("xb") as output:
-                while True:
-                    block = response.read(1024 * 1024)
-                    if not block:
-                        break
-                    received += len(block)
-                    if received > UPSTREAM_SIZE:
-                        raise CompatibilityInstallError(
-                            "upstream download exceeded its pinned size"
-                        )
-                    digest.update(block)
-                    output.write(block)
-        if received != UPSTREAM_SIZE:
-            raise CompatibilityInstallError(
-                "upstream download size mismatch: "
-                f"expected {UPSTREAM_SIZE}, got {received}"
-            )
-        if digest.hexdigest() != UPSTREAM_SHA256:
-            raise CompatibilityInstallError(
-                "upstream download SHA-256 mismatch: expected "
-                f"{UPSTREAM_SHA256}, got {digest.hexdigest()}"
-            )
-        os.replace(temporary, destination)
-    except BaseException:
+    attempts = int(attempts)
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
+    for attempt in range(1, attempts + 1):
+        digest = hashlib.sha256()
+        received = 0
         try:
-            temporary.unlink()
-        except FileNotFoundError:
-            pass
-        raise
-    return destination
+            with urlopen(request, timeout=timeout) as response:
+                final_url = urlparse(response.geturl())
+                if (
+                    final_url.scheme != "https"
+                    or final_url.hostname != "files.pythonhosted.org"
+                ):
+                    raise CompatibilityInstallError(
+                        f"unexpected upstream download URL: {response.geturl()}"
+                    )
+                length_header = response.headers.get("Content-Length")
+                if (
+                    length_header is not None
+                    and int(length_header) != UPSTREAM_SIZE
+                ):
+                    raise CompatibilityInstallError(
+                        "upstream Content-Length mismatch: expected "
+                        f"{UPSTREAM_SIZE}, got {length_header}"
+                    )
+                with temporary.open("xb") as output:
+                    while True:
+                        block = response.read(1024 * 1024)
+                        if not block:
+                            break
+                        received += len(block)
+                        if received > UPSTREAM_SIZE:
+                            raise CompatibilityInstallError(
+                                "upstream download exceeded its pinned size"
+                            )
+                        digest.update(block)
+                        output.write(block)
+            if received != UPSTREAM_SIZE:
+                raise CompatibilityInstallError(
+                    "upstream download size mismatch: "
+                    f"expected {UPSTREAM_SIZE}, got {received}"
+                )
+            if digest.hexdigest() != UPSTREAM_SHA256:
+                raise CompatibilityInstallError(
+                    "upstream download SHA-256 mismatch: expected "
+                    f"{UPSTREAM_SHA256}, got {digest.hexdigest()}"
+                )
+            os.replace(temporary, destination)
+            return destination
+        except BaseException as exc:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
+            if (
+                not isinstance(exc, OSError)
+                or isinstance(exc, CompatibilityInstallError)
+                or attempt == attempts
+            ):
+                raise
+            time.sleep(max(0.0, float(retry_delay)) * attempt)
+    raise AssertionError("download retry loop exited unexpectedly")
 
 
 def _validate_archive_names(archive: zipfile.ZipFile) -> None:

@@ -128,6 +128,7 @@ from qtpy.QtWidgets import (
     QGraphicsScene,
     QProgressBar,
     QMenu,
+    QLayout,
 )
 
 _STABLE_GUI_RUNTIME_ENV = "SHARPMOD_GUI_STABLE_RUNTIME"
@@ -153,6 +154,27 @@ def _town_lookup_attribution_label(parent=None) -> QLabel:
         "automatic lookup."
     )
     return label
+
+
+def _scrolling_control_rail(
+        layout: QLayout, *, maximum_width: int = PICKER_RAIL_MAX_WIDTH
+        ) -> QScrollArea:
+    """Return a vertically scrollable picker rail with stable control sizes."""
+    content = QWidget()
+    content.setLayout(layout)
+    content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
+    content.setMinimumWidth(0)
+
+    scroll = QScrollArea()
+    scroll.setFrameShape(QFrame.NoFrame)
+    scroll.setWidgetResizable(True)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    scroll.setMinimumWidth(PICKER_RAIL_MIN_WIDTH)
+    scroll.setMaximumWidth(int(maximum_width))
+    scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+    scroll.setWidget(content)
+    return scroll
 
 
 def _project_gui_runtime() -> tuple[Path, Path] | None:
@@ -964,12 +986,9 @@ class PickerWindow(QMainWindow):
         hint.setStyleSheet("color: gray;")
         left.addWidget(hint)
 
-        left_w = QWidget()
-        left_w.setLayout(left)
-        left_w.setMinimumWidth(PICKER_RAIL_MIN_WIDTH)
-        left_w.setMaximumWidth(PICKER_RAIL_MAX_WIDTH)
-        left_w.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        outer.addWidget(left_w)
+        self._map_controls_scroll = _scrolling_control_rail(
+            left, maximum_width=PICKER_RAIL_MAX_WIDTH + 40)
+        outer.addWidget(self._map_controls_scroll)
 
         # --- the map itself ---
         self._map = StationMapWidget(self._all_stations)
@@ -1467,12 +1486,8 @@ class PickerWindow(QMainWindow):
         left.addWidget(unsupported)
         left.addStretch(1)
 
-        left_w = QWidget()
-        left_w.setLayout(left)
-        left_w.setMinimumWidth(PICKER_RAIL_MIN_WIDTH)
-        left_w.setMaximumWidth(PICKER_RAIL_MAX_WIDTH)
-        left_w.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        outer.addWidget(left_w)
+        self._model_controls_scroll = _scrolling_control_rail(left)
+        outer.addWidget(self._model_controls_scroll)
         outer.addWidget(self._model_map, stretch=1)
 
         self._model_area_changed(self._model_area_combo.currentText())
@@ -1883,6 +1898,10 @@ class PickerWindow(QMainWindow):
             cached_directory=(
                 cache_entry.path if cache_entry is not None else None
             ),
+            cached_contract_version=(
+                cache_entry.contract_version
+                if cache_entry is not None else None
+            ),
             parent=self)
         self._model_worker = worker
         worker.finished_ok.connect(self._on_model_fetch_ok)
@@ -2122,23 +2141,101 @@ class PickerWindow(QMainWindow):
         worker.deleteLater()
 
     def _shutdown_model_cache(self) -> None:
-        """Stop fetch workers, release disk leases, and enforce cache limits."""
-        self._cancel_model_prefetch(wait=True)
-        if self._model_worker is not None:
-            self._model_worker.requestInterruption()
-            self._model_worker.wait(5000)
-        if self._model_timeline_worker is not None:
-            self._model_timeline_worker.requestInterruption()
-            self._model_timeline_worker.wait(5000)
-        for worker in (
-                self._era5_worker, self._wrf_inspect_worker,
-                self._wrf_extract_worker):
-            if worker is None:
+        """Stop every owned worker before Qt destroys its native thread."""
+        if getattr(self, "_shutdown_started", False):
+            return
+        self._shutdown_started = True
+
+        for name in (
+                "_avail_timer", "_catalog_timer",
+                "_model_availability_timer", "_model_progress_timer"):
+            timer = getattr(self, name, None)
+            if timer is not None:
+                timer.stop()
+        self._avail_request = None
+        self._catalog_request = None
+        self._model_availability_request = None
+        self._avail_token += 1
+        self._catalog_token += 1
+        self._model_availability_token += 1
+
+        advisory_workers = [
+            getattr(self, "_catalog_worker", None),
+            *list(getattr(self, "_avail_workers", ())),
+            *list(getattr(self, "_model_availability_workers", ())),
+        ]
+        active_workers = [
+            getattr(self, "_worker", None),
+            getattr(self, "_model_worker", None),
+            getattr(self, "_model_timeline_worker", None),
+            getattr(self, "_model_prefetch_worker", None),
+            getattr(self, "_era5_worker", None),
+            getattr(self, "_wrf_inspect_worker", None),
+            getattr(self, "_wrf_extract_worker", None),
+        ]
+        workers = []
+        advisory_ids = {
+            id(worker) for worker in advisory_workers if worker is not None
+        }
+        seen = set()
+        for worker in (*advisory_workers, *active_workers):
+            if worker is None or id(worker) in seen:
                 continue
-            worker.requestInterruption()
-            if not worker.wait(5000):
+            seen.add(id(worker))
+            workers.append(worker)
+
+        # Ask every worker to stop before waiting on any one of them. This lets
+        # cooperative downloads and extractors wind down concurrently.
+        for worker in workers:
+            try:
+                worker.requestInterruption()
+            except (AttributeError, RuntimeError):
+                continue
+
+        started = time.monotonic()
+        advisory_deadline = started + 1.0
+        active_deadline = started + 5.0
+        for worker in workers:
+            try:
+                if not worker.isRunning():
+                    continue
+                deadline = (
+                    advisory_deadline
+                    if id(worker) in advisory_ids
+                    else active_deadline
+                )
+                remaining = max(0, int(
+                    (deadline - time.monotonic()) * 1000))
+                if remaining > 0 and worker.wait(remaining):
+                    continue
+                # Network libraries can be blocked below Python and therefore
+                # cannot observe QThread interruption. At application exit,
+                # terminating that final native thread is safer than allowing
+                # Qt to destroy a running QThread and abort the process.
                 _LOGGER.warning(
-                    "application.worker_still_stopping worker=%s", type(worker).__name__)
+                    "application.worker_force_stop worker=%s",
+                    type(worker).__name__,
+                )
+                worker.terminate()
+                if not worker.wait(1000):
+                    _LOGGER.error(
+                        "application.worker_stop_failed worker=%s",
+                        type(worker).__name__,
+                    )
+            except RuntimeError:
+                continue
+
+        self._avail_workers.clear()
+        self._model_availability_workers.clear()
+        self._catalog_worker = None
+        self._worker = None
+        self._model_worker = None
+        self._model_timeline_worker = None
+        self._model_prefetch_worker = None
+        self._era5_worker = None
+        self._wrf_inspect_worker = None
+        self._wrf_extract_worker = None
+
         self._model_hour_cache.clear()
         try:
             self._model_disk_cache.prune()
@@ -2445,14 +2542,9 @@ class PickerWindow(QMainWindow):
     def _reuse_cache_entry(self, entry) -> None:
         """Open a portable cache item or re-extract from cached GRIB data."""
         if entry.valid_sounding:
-            sounding = next(
-                (
-                    path for path in entry.path.rglob("*.npz")
-                    if path.with_suffix(".json").is_file()
-                ),
-                None,
-            )
-            if sounding is not None:
+            soundings = self._model_disk_cache.valid_sounding_paths(entry.path)
+            if soundings:
+                sounding = soundings[0]
                 try:
                     prof_col, stn_id = _render().decode(str(sounding))
                     self._show_sounding(
@@ -2782,12 +2874,8 @@ class PickerWindow(QMainWindow):
         left.addWidget(self._era5_progress_detail)
         left.addStretch(1)
 
-        left_w = QWidget()
-        left_w.setLayout(left)
-        left_w.setMinimumWidth(PICKER_RAIL_MIN_WIDTH)
-        left_w.setMaximumWidth(PICKER_RAIL_MAX_WIDTH)
-        left_w.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        outer.addWidget(left_w)
+        self._era5_controls_scroll = _scrolling_control_rail(left)
+        outer.addWidget(self._era5_controls_scroll)
         outer.addWidget(self._era5_map, 1)
 
         self._era5_set_recent()
@@ -3149,12 +3237,9 @@ class PickerWindow(QMainWindow):
         left.addWidget(self._wrf_progress_detail)
         left.addStretch(1)
 
-        left_w = QWidget()
-        left_w.setLayout(left)
-        left_w.setMinimumWidth(PICKER_RAIL_MIN_WIDTH)
-        left_w.setMaximumWidth(PICKER_RAIL_MAX_WIDTH + 70)
-        left_w.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        outer.addWidget(left_w)
+        self._wrf_controls_scroll = _scrolling_control_rail(
+            left, maximum_width=PICKER_RAIL_MAX_WIDTH + 70)
+        outer.addWidget(self._wrf_controls_scroll)
         outer.addWidget(self._wrf_map, 1)
         self._wrf_point_from_spins(center=True)
         return panel

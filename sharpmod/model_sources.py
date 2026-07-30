@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
-from pathlib import Path
 import re
 import tempfile
 import threading
 import time
-from urllib.parse import quote, urlencode, urlparse, unquote
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import suppress
+from pathlib import Path
+from urllib.parse import quote, unquote, urlencode, urlparse
 
 from sharpmod.model_transport import DownloadCancelled, _valid_grib
 
@@ -31,7 +32,11 @@ NOMADS_ENDPOINTS = {
 }
 
 _MIRROR_NAMES = {"aws", "google", "azure", "ecmwf"}
-_PROVIDER_CACHE: dict[tuple[str, str], tuple[float, str]] = {}
+_PROVIDER_CACHE_MAX_ENTRIES = 256
+_PROVIDER_CACHE: dict[
+    tuple[str, str, tuple[tuple[str, str], ...]],
+    tuple[float, str, int],
+] = {}
 _PROVIDER_LOCK = threading.RLock()
 _NOMADS_LOCK = threading.RLock()
 _LAST_NOMADS_REQUEST = 0.0
@@ -164,7 +169,7 @@ def _probe_http_range(url: str) -> tuple[bool, int, float]:
 
 
 def select_herbie_provider(herbie, *, ttl_seconds: float = 6 * 3600):
-    """Select and remember the fastest compatible cloud mirror."""
+    """Select the fastest compatible mirror for this exact source object."""
     if os.environ.get("SHARPMOD_PROVIDER_RACING", "1").strip().lower() \
             in {"0", "false", "no", "off"}:
         return getattr(herbie, "grib_source", None)
@@ -176,16 +181,29 @@ def select_herbie_provider(herbie, *, ttl_seconds: float = 6 * 3600):
     }
     if len(sources) < 2:
         return getattr(herbie, "grib_source", None)
+    source_identity = tuple(sorted(sources.items()))
     cache_key = (
         str(getattr(herbie, "model", "")),
         str(getattr(herbie, "product", "")),
+        source_identity,
     )
     now = time.time()
     with _PROVIDER_LOCK:
+        expired = [
+            key for key, value in _PROVIDER_CACHE.items() if value[0] <= now
+        ]
+        for key in expired:
+            _PROVIDER_CACHE.pop(key, None)
         cached = _PROVIDER_CACHE.get(cache_key)
-    if cached is not None and cached[0] > now and cached[1] in sources:
-        selected_name = cached[1]
-    else:
+    selected_name = None
+    selected_size = 0
+    if cached is not None and cached[1] in sources:
+        cached_name, cached_size = cached[1], cached[2]
+        ok, current_size, _elapsed = _probe_http_range(sources[cached_name])
+        if ok and int(current_size) == int(cached_size):
+            selected_name = cached_name
+            selected_size = int(current_size)
+    if selected_name is None:
         results = {}
         with ThreadPoolExecutor(max_workers=min(4, len(sources))) as executor:
             futures = {
@@ -199,8 +217,20 @@ def select_herbie_provider(herbie, *, ttl_seconds: float = 6 * 3600):
             lambda url: results[url],
             reference_url=str(getattr(herbie, "grib", "")),
         )
+        selected_result = results.get(sources[selected_name], (False, 0, 99.0))
+        selected_size = int(selected_result[1]) if selected_result[0] else 0
         with _PROVIDER_LOCK:
-            _PROVIDER_CACHE[cache_key] = (now + float(ttl_seconds), selected_name)
+            _PROVIDER_CACHE[cache_key] = (
+                now + max(0.0, float(ttl_seconds)),
+                selected_name,
+                selected_size,
+            )
+            if len(_PROVIDER_CACHE) > _PROVIDER_CACHE_MAX_ENTRIES:
+                oldest = min(
+                    _PROVIDER_CACHE,
+                    key=lambda key: _PROVIDER_CACHE[key][0],
+                )
+                _PROVIDER_CACHE.pop(oldest, None)
     herbie.grib_source = selected_name
     herbie.grib = sources[selected_name]
     return selected_name
@@ -285,13 +315,11 @@ def download_nomads_subset(
         raise
     except Exception as exc:
         raise SourceRoutingUnavailable(
-            "NOMADS geographic subset failed: %s" % exc
+            f"NOMADS geographic subset failed: {exc}"
         ) from exc
     finally:
-        try:
+        with suppress(OSError):
             os.remove(temporary)
-        except OSError:
-            pass
         if owned_session:
             close = getattr(session, "close", None)
             if callable(close):

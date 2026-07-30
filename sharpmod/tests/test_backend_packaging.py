@@ -138,12 +138,25 @@ def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
         "-- -D warnings"
     ) in rust_steps
     assert "cargo +1.88.0 test --locked --all-targets" in rust_steps
+    assert '"pytest-timeout>=2.4,<3"' in rust_steps
+    assert (
+        "scripts/install_sharppy_compat.py --sharppy-only --skip-pip-check"
+        in rust_steps
+    )
 
     numpy_rows = jobs["numpy-compat"]["strategy"]["matrix"]["include"]
     assert {row["numpy"] for row in numpy_rows} == {
         "numpy==1.26.*",
         "numpy>=2,<3",
     }
+    numpy_scripts = "\n".join(
+        step.get("run", "") for step in jobs["numpy-compat"]["steps"]
+    )
+    assert '"pytest-timeout>=2.4,<3"' in numpy_scripts
+    assert (
+        "scripts/install_sharppy_compat.py --sharppy-only --skip-pip-check"
+        in numpy_scripts
+    )
     numpy_steps = jobs["numpy-compat"]["steps"]
     numpy_venv = next(
         step for step in numpy_steps
@@ -168,6 +181,14 @@ def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
     }
     assert all(row["python-tag"] in {"cp311", "cp312"} for row in wheel_rows)
     wheel_steps = jobs["wheels"]["steps"]
+    wheel_scripts = "\n".join(
+        step.get("run", "") for step in wheel_steps
+    )
+    assert '"pytest-timeout>=2.4,<3"' in wheel_scripts
+    assert (
+        "scripts/install_sharppy_compat.py --sharppy-only --skip-pip-check"
+        in wheel_scripts
+    )
     clean_install = next(
         step for step in wheel_steps
         if step.get("name") == "Resolve and smoke-test wheel in a clean environment"
@@ -183,16 +204,15 @@ def test_release_workflow_gates_tag_and_source_versions():
     dispatch = workflow["on"]["workflow_dispatch"]["inputs"]["tag"]
     assert dispatch["default"] == f"v{_python_source_version()}"
 
-    steps = workflow["jobs"]["build-windows-exe"]["steps"]
+    jobs = workflow["jobs"]
+    resolve = jobs["resolve-release"]
+    steps = resolve["steps"]
     names = [step.get("name") for step in steps]
     assert names.index("Resolve release tag and source") < names.index(
         "Check out release source"
     )
-    assert names.index("Check out release source") < names.index(
-        "Install package and build dependencies"
-    )
-    assert names.index("Validate release tag and source versions") < names.index(
-        "Install package and build dependencies"
+    assert names.index("Record immutable release source") < names.index(
+        "Validate release tag and source versions"
     )
 
     validation = next(
@@ -208,6 +228,21 @@ def test_release_workflow_gates_tag_and_source_versions():
     ):
         assert path in validation
     assert 'expected_tag = f"v{python_version}"' in validation
+
+    test_job = jobs["test-release"]
+    assert test_job["uses"] == "./.github/workflows/tests.yml"
+    assert test_job["with"]["ref"] == (
+        "${{ needs.resolve-release.outputs.source_sha }}"
+    )
+    build = jobs["build-windows-exe"]
+    assert set(build["needs"]) == {"resolve-release", "test-release"}
+    checkout = next(
+        step for step in build["steps"]
+        if step.get("name") == "Check out tested release source"
+    )
+    assert checkout["with"]["ref"] == (
+        "${{ needs.resolve-release.outputs.source_sha }}"
+    )
 
 
 def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
@@ -243,11 +278,18 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
         "Build and install locked Rust wheel"
     )
     script = build["run"]
-    assert "maturin==1.14.1" in script
     assert "maturin build --release --locked" in script
     assert "--interpreter python" in script
     assert "cp311-cp311-win_amd64.whl" in script
     assert "pip install --force-reinstall --no-deps" in script
+
+    install = next(
+        step for step in steps
+        if step.get("name") == "Install constrained package and build dependencies"
+    )
+    assert "constraints/release.txt" in install["run"]
+    assert 'pip install "pip==26.2"' in install["run"]
+    assert "pyinstaller maturin" in install["run"]
 
     verify = next(
         step for step in steps
@@ -290,21 +332,31 @@ def test_release_requires_rust_runtime_reports_and_uploads_wheel():
         assert "rust_installed" in script
         assert "rust_version" in script
 
+    stage = next(
+        step for step in steps
+        if step.get("name") == "Stage reproducible release artifacts"
+    )
+    assert 'Copy-Item "rust/sharpmod-rs/dist/*.whl"' in stage["run"]
+    assert "pip freeze --all" in stage["run"]
+
     upload = next(
-        step for step in steps if step.get("name") == "Upload build artifacts"
+        step for step in steps
+        if step.get("name") == "Upload tested release artifacts"
     )
+    publish_steps = workflow["jobs"]["publish"]["steps"]
     publish = next(
-        step for step in steps if step.get("name") == "Publish GitHub Release"
+        step for step in publish_steps
+        if step.get("name") == "Publish GitHub Release"
     )
-    wheel_glob = "rust/sharpmod-rs/dist/*.whl"
-    assert wheel_glob in upload["with"]["path"]
+    assert upload["with"]["path"] == "release-artifacts/*"
     assert upload["with"]["if-no-files-found"] == "error"
-    assert wheel_glob in publish["with"]["files"]
+    assert publish["with"]["files"] == "release-artifacts/*"
 
 
 def test_release_dispatch_pins_existing_and_new_tag_sources():
     workflow = _load_workflow("release.yml")
-    steps = workflow["jobs"]["build-windows-exe"]["steps"]
+    jobs = workflow["jobs"]
+    steps = jobs["resolve-release"]["steps"]
     names = [step.get("name") for step in steps]
 
     resolve = next(
@@ -326,13 +378,33 @@ def test_release_dispatch_pins_existing_and_new_tag_sources():
         "${{ steps.release.outputs.checkout_ref }}"
     )
 
+    build_names = [
+        step.get("name") for step in jobs["build-windows-exe"]["steps"]
+    ]
     publish = next(
-        step for step in steps if step.get("name") == "Publish GitHub Release"
+        step for step in jobs["publish"]["steps"]
+        if step.get("name") == "Publish GitHub Release"
     )
-    assert names.index("Build single-file executable") < names.index(
-        "Publish GitHub Release"
+    assert "Build single-file executable" in build_names
+    assert publish["with"]["tag_name"] == (
+        "${{ needs.resolve-release.outputs.tag }}"
     )
-    assert publish["with"]["tag_name"] == "${{ steps.release.outputs.tag }}"
     assert publish["with"]["target_commitish"] == (
-        "${{ steps.release.outputs.checkout_ref }}"
+        "${{ needs.resolve-release.outputs.source_sha }}"
     )
+
+
+def test_release_write_permission_is_isolated_and_actions_are_immutable():
+    workflow = _load_workflow("release.yml")
+    assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["jobs"]["build-windows-exe"]["permissions"] == {
+        "contents": "read"
+    }
+    assert workflow["jobs"]["publish"]["permissions"] == {"contents": "write"}
+
+    action_ref = re.compile(r"^[^@]+@[0-9a-f]{40}$")
+    for job in workflow["jobs"].values():
+        for step in job.get("steps", []):
+            uses = step.get("uses")
+            if uses is not None:
+                assert action_ref.fullmatch(uses), uses

@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from dataclasses import dataclass
-from datetime import timezone
+import errno
 import json
 import os
-from pathlib import Path
 import shutil
 import tempfile
 import threading
 import time
 import uuid
-import zipfile
+from contextlib import contextmanager, suppress
+from dataclasses import dataclass
+from datetime import UTC
+from pathlib import Path
 
+from sharpmod.portable_sounding import portable_sounding_pair_valid
 
 _METADATA = ".cache.json"
 _LEASE_PREFIX = ".lease-"
+_DEFAULT_LEASE_MAX_AGE_HOURS = 24.0
+MODEL_CACHE_CONTRACT_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,7 @@ class CacheEntry:
     valid_grib: bool
     valid_sounding: bool
     file_count: int
+    contract_version: int
 
 
 def default_model_cache_root() -> Path:
@@ -74,14 +78,10 @@ def _write_json(path: Path, payload: dict) -> None:
             json.dump(payload, handle, sort_keys=True)
         os.replace(temporary, path)
     except BaseException:
-        try:
+        with suppress(OSError):
             os.close(fd)
-        except OSError:
-            pass
-        try:
+        with suppress(OSError):
             os.remove(temporary)
-        except OSError:
-            pass
         raise
 
 
@@ -113,11 +113,12 @@ class ModelDiskCache:
         """Return and touch the deterministic directory for one model hour."""
         run = key.run_time
         if run.tzinfo is not None:
-            run = run.astimezone(timezone.utc)
+            run = run.astimezone(UTC)
         member = _safe(key.member or "deterministic")
         spatial = _safe(getattr(key, "spatial", None) or "full-grid")
         path = (
             self.root
+            / f"v{MODEL_CACHE_CONTRACT_VERSION}"
             / _safe(key.model)
             / run.strftime("%Y%m%d%H")
             / f"f{int(key.fxx):03d}-{member}-{spatial}"
@@ -131,6 +132,7 @@ class ModelDiskCache:
         directory = Path(directory)
         payload = {
             "accessed": float(time.time() if now is None else now),
+            "contract_version": MODEL_CACHE_CONTRACT_VERSION,
         }
         metadata = directory / _METADATA
         try:
@@ -187,10 +189,8 @@ class ModelDiskCache:
             self.touch(directory)
             yield directory
         finally:
-            try:
+            with suppress(OSError):
                 marker.unlink()
-            except OSError:
-                pass
             if directory.exists():
                 self.touch(directory)
 
@@ -201,10 +201,8 @@ class ModelDiskCache:
             for name in files:
                 if name == _METADATA or name.startswith(_LEASE_PREFIX):
                     continue
-                try:
+                with suppress(OSError):
                     total += (Path(root) / name).stat().st_size
-                except OSError:
-                    pass
         return total
 
     @staticmethod
@@ -249,34 +247,89 @@ class ModelDiskCache:
 
     @staticmethod
     def _valid_sounding(path: Path) -> bool:
-        if path.suffix.lower() != ".npz":
-            return False
-        sidecar = path.with_suffix(".json")
-        try:
-            if path.stat().st_size < 32 or not sidecar.is_file():
-                return False
-            required = {
-                "pres.npy", "hght.npy", "tmpc.npy", "dwpc.npy",
-                "wdir.npy", "wspd.npy", "omeg.npy", "valid.npy",
-                "run.npy", "loc.npy",
-            }
-            with zipfile.ZipFile(path) as archive:
-                if not required.issubset(archive.namelist()):
-                    return False
-            payload = json.loads(sidecar.read_text(encoding="utf-8"))
-            return isinstance(payload, dict)
-        except (OSError, ValueError, TypeError, zipfile.BadZipFile):
-            return False
+        return portable_sounding_pair_valid(path)
 
     @staticmethod
-    def _is_protected(directory: Path) -> bool:
+    def _lease_max_age_seconds() -> float:
+        try:
+            hours = float(
+                os.environ.get(
+                    "SHARPMOD_MODEL_CACHE_LEASE_HOURS",
+                    _DEFAULT_LEASE_MAX_AGE_HOURS,
+                )
+            )
+        except (TypeError, ValueError, OverflowError):
+            hours = _DEFAULT_LEASE_MAX_AGE_HOURS
+        return max(1.0, hours * 3600.0)
+
+    @staticmethod
+    def _process_is_running(pid: int) -> bool:
+        if pid <= 0:
+            return False
+        if pid == os.getpid():
+            return True
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError as exc:
+            return exc.errno == errno.EPERM or getattr(exc, "winerror", None) == 5
+        except SystemError as exc:
+            # CPython on Windows can surface ``os.kill(pid, 0)`` for an
+            # invalid/stale PID as a SystemError whose direct cause is
+            # WinError 87 instead of raising the OSError normally.
+            cause = exc.__cause__
+            if not isinstance(cause, OSError):
+                raise
+            return (
+                cause.errno == errno.EPERM
+                or getattr(cause, "winerror", None) == 5
+            )
+        return True
+
+    @classmethod
+    def _lease_is_active(cls, marker: Path, *, now: float | None = None) -> bool:
+        try:
+            age = float(time.time() if now is None else now) - marker.stat().st_mtime
+        except OSError:
+            return False
+        if age > cls._lease_max_age_seconds():
+            with suppress(OSError):
+                marker.unlink()
+            return False
+        try:
+            pid = int(marker.name[len(_LEASE_PREFIX):].split("-", 1)[0])
+        except (TypeError, ValueError):
+            return True
+        if cls._process_is_running(pid):
+            return True
+        with suppress(OSError):
+            marker.unlink()
+        return False
+
+    @classmethod
+    def _is_protected(cls, directory: Path) -> bool:
         try:
             return any(
                 child.name.startswith(_LEASE_PREFIX)
+                and cls._lease_is_active(child)
                 for child in directory.iterdir()
             )
         except OSError:
             return False
+
+    @staticmethod
+    def _remove_tree(directory: Path) -> bool:
+        """Remove one entry and report the filesystem result truthfully."""
+        try:
+            shutil.rmtree(directory)
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return not directory.exists()
+        return not directory.exists()
 
     def _entries(self):
         if not self.root.exists():
@@ -294,16 +347,23 @@ class ModelDiskCache:
                 accessed = 0.0
             files = self._entry_files(directory)
             payload_files = self._payload_files(directory, files)
+            try:
+                current_contract = (
+                    int(payload.get("contract_version", 0) or 0)
+                    == MODEL_CACHE_CONTRACT_VERSION
+                )
+            except (TypeError, ValueError, OverflowError):
+                current_contract = False
             result.append({
                 "path": directory,
                 "accessed": accessed,
                 "size": self._entry_size(directory),
                 "protected": self._is_protected(directory),
                 "pinned": bool(payload.get("pinned", False)),
-                "valid_grib": any(
+                "valid_grib": current_contract and any(
                     self._valid_grib(path) for path in payload_files
                 ),
-                "valid_sounding": any(
+                "valid_sounding": current_contract and any(
                     self._valid_sounding(path) for path in payload_files
                 ),
                 "file_count": len(payload_files),
@@ -324,6 +384,10 @@ class ModelDiskCache:
                 fxx = int(payload.get("fxx", 0))
             except (TypeError, ValueError, OverflowError):
                 fxx = 0
+            try:
+                contract_version = int(payload.get("contract_version", 0) or 0)
+            except (TypeError, ValueError, OverflowError):
+                contract_version = 0
             result.append(CacheEntry(
                 path=item["path"],
                 model=str(payload.get("model", "unknown")),
@@ -356,6 +420,7 @@ class ModelDiskCache:
                 valid_grib=item["valid_grib"],
                 valid_sounding=item["valid_sounding"],
                 file_count=item["file_count"],
+                contract_version=contract_version,
             ))
         return result
 
@@ -363,8 +428,33 @@ class ModelDiskCache:
         """Return complete reusable GRIB payloads in one managed entry."""
         with self._lock:
             target = self._managed_directory(directory)
+            if not self._current_contract(target):
+                return ()
             files = self._payload_files(target, self._entry_files(target))
             return tuple(path for path in files if self._valid_grib(path))
+
+    def valid_sounding_paths(self, directory) -> tuple[Path, ...]:
+        """Return safely decodable portable sounding pairs in one entry."""
+        with self._lock:
+            target = self._managed_directory(directory)
+            if not self._current_contract(target):
+                return ()
+            files = self._payload_files(target, self._entry_files(target))
+            return tuple(path for path in files if self._valid_sounding(path))
+
+    @staticmethod
+    def _current_contract(directory: Path) -> bool:
+        try:
+            payload = json.loads(
+                (directory / _METADATA).read_text(encoding="utf-8")
+            )
+            return (
+                isinstance(payload, dict)
+                and int(payload.get("contract_version", 0))
+                == MODEL_CACHE_CONTRACT_VERSION
+            )
+        except (OSError, TypeError, ValueError):
+            return False
 
     def _managed_directory(self, directory) -> Path:
         root = self.root.resolve()
@@ -397,8 +487,7 @@ class ModelDiskCache:
             target = self._managed_directory(directory)
             if self._is_protected(target):
                 return False
-            shutil.rmtree(target, ignore_errors=True)
-            return not target.exists()
+            return self._remove_tree(target)
 
     def prune(self, *, now: float | None = None) -> list[Path]:
         """Remove expired and least-recently-used entries under configured limits."""
@@ -411,8 +500,10 @@ class ModelDiskCache:
             for entry in entries:
                 if not entry["protected"] and not entry["pinned"] \
                         and entry["accessed"] < cutoff:
-                    shutil.rmtree(entry["path"], ignore_errors=True)
-                    removed.append(entry["path"])
+                    if self._remove_tree(entry["path"]):
+                        removed.append(entry["path"])
+                    else:
+                        kept.append(entry)
                 else:
                     kept.append(entry)
             total = sum(entry["size"] for entry in kept)
@@ -421,9 +512,9 @@ class ModelDiskCache:
                     break
                 if entry["protected"] or entry["pinned"]:
                     continue
-                shutil.rmtree(entry["path"], ignore_errors=True)
-                removed.append(entry["path"])
-                total -= entry["size"]
+                if self._remove_tree(entry["path"]):
+                    removed.append(entry["path"])
+                    total -= entry["size"]
         return removed
 
     def clear(self, *, include_pinned: bool = False) -> list[Path]:
@@ -435,9 +526,14 @@ class ModelDiskCache:
                     entry["pinned"] and not include_pinned
                 ):
                     continue
-                shutil.rmtree(entry["path"], ignore_errors=True)
-                removed.append(entry["path"])
+                if self._remove_tree(entry["path"]):
+                    removed.append(entry["path"])
         return removed
 
 
-__all__ = ["CacheEntry", "ModelDiskCache", "default_model_cache_root"]
+__all__ = [
+    "CacheEntry",
+    "MODEL_CACHE_CONTRACT_VERSION",
+    "ModelDiskCache",
+    "default_model_cache_root",
+]

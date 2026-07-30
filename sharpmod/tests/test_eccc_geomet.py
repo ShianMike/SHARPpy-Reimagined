@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from sharpmod import eccc_geomet
+from sharpmod.model_surface import SURFACE_CONTRACT_FIELDS
 from sharpmod.tools import model_extract
 
 
@@ -57,6 +58,16 @@ def small_gdps(monkeypatch):
 
 
 def _value(variable, level):
+    surface = {
+        "SurfacePressure": 90000.0,
+        "SurfaceHeight": 500.0,
+        "SurfaceTemperature": 15.0,
+        "SurfaceDewpoint": 10.0,
+        "SurfaceWindDir": 270.0,
+        "SurfaceWindSpeed": 10.0,
+    }
+    if variable in surface:
+        return surface[variable]
     return {
         "AirTemp": 14.0 - (1000 - level) * 0.006,
         "GeopotentialHeight": (1000 - level) * 16.0,
@@ -65,6 +76,28 @@ def _value(variable, level):
         "WindSpeed": 10.0,
         "VerticalVelocity": -0.2,
     }[variable]
+
+
+def _parse_layer(layer):
+    surface_suffixes = {
+        "Pressure": "SurfacePressure",
+        "GeopotentialHeight": "SurfaceHeight",
+        "AirTemp_2m": "SurfaceTemperature",
+        "DewPoint_2m": "SurfaceDewpoint",
+        "WindDir_10m": "SurfaceWindDir",
+        "WindSpeed_10m": "SurfaceWindSpeed",
+    }
+    for suffix, variable in surface_suffixes.items():
+        if layer.endswith("_" + suffix):
+            return variable, None
+    match = re.search(
+        r"_(AirTemp|GeopotentialHeight|SpecificHumidity|WindDir|"
+        r"WindSpeed|VerticalVelocity)_(\d+)mb$",
+        layer,
+    )
+    assert match, layer
+    variable, level_text = match.groups()
+    return variable, int(level_text)
 
 
 def _fake_get_factory(*, fail_layer=None, delay=0.0):
@@ -85,14 +118,7 @@ def _fake_get_factory(*, fail_layer=None, delay=0.0):
         try:
             if delay:
                 time.sleep(delay)
-            match = re.search(
-                r"_(AirTemp|GeopotentialHeight|SpecificHumidity|WindDir|"
-                r"WindSpeed|VerticalVelocity)_(\d+)mb$",
-                layer,
-            )
-            assert match, layer
-            variable, level_text = match.groups()
-            level = int(level_text)
+            variable, level = _parse_layer(layer)
             features = [] if layer == fail_layer else [{
                 "type": "Feature",
                 "geometry": {
@@ -173,6 +199,16 @@ def test_feature_info_uses_wms_13_axis_order_and_exact_cycle():
     assert params["I"] == params["J"] == "1"
     assert params["TIME"] == "2026-07-22T06:00:00Z"
     assert params["DIM_REFERENCE_TIME"] == "2026-07-22T00:00:00Z"
+    surface = eccc_geomet.build_feature_info_params(
+        "gdps",
+        "SurfacePressure",
+        None,
+        45.5,
+        -73.6,
+        RUN,
+        RUN,
+    )
+    assert surface["LAYERS"] == "GDPS_15km_Pressure"
 
 
 def test_latest_reference_time_uses_small_layer_capabilities(small_gdps):
@@ -182,6 +218,28 @@ def test_latest_reference_time_uses_small_layer_capabilities(small_gdps):
 
     assert result == RUN
     assert state["calls"] == []
+
+
+def test_probe_reports_complete_verified_surface_contract(small_gdps):
+    get, _state = _fake_get_factory()
+
+    result = eccc_geomet.probe(
+        "gdps",
+        run_time=RUN,
+        fxx=3,
+        request_get=get,
+    )
+
+    assert result["available"] is True
+    assert result["surface_contract_complete"] is True
+    assert result["surface_contract_present"] == list(SURFACE_CONTRACT_FIELDS)
+    assert result["surface_contract_missing"] == []
+    assert result["surface_contract_version"] == 1
+    assert result["inventory_rows"] == (
+        len(small_gdps.pressure_levels) * 5
+        + len(small_gdps.omega_levels)
+        + 6
+    )
 
 
 def test_bounded_fanout_normalizes_profile_columns(small_gdps):
@@ -198,16 +256,18 @@ def test_bounded_fanout_normalizes_profile_columns(small_gdps):
     )
 
     assert state["max_active"] == 2
-    assert len(state["calls"]) == 17
-    assert dataset.request_count == 17
+    assert len(state["calls"]) == 18
+    assert dataset.request_count == 18
     assert dataset.max_workers == 2
-    np.testing.assert_array_equal(dataset.columns["pres"], [1000, 850, 500])
+    np.testing.assert_array_equal(dataset.columns["pres"], [900, 850, 500])
     np.testing.assert_allclose(dataset.columns["wspd"], 19.4384449)
     np.testing.assert_allclose(dataset.columns["u"], 10.0, atol=1e-10)
     np.testing.assert_allclose(dataset.columns["v"], 0.0, atol=1e-10)
     assert np.all(np.isfinite(dataset.columns["dwpc"]))
     assert dataset.selected_lat == pytest.approx(45.45)
     assert dataset.selected_lon == pytest.approx(-73.65)
+    assert dataset.surface_merged
+    assert dataset.below_ground_levels_removed == 1
 
 
 def test_extract_writes_portable_npz_and_provenance(tmp_path, small_gdps):
@@ -233,12 +293,14 @@ def test_extract_writes_portable_npz_and_provenance(tmp_path, small_gdps):
         assert str(payload["model"]) == small_gdps.label
         assert str(payload["loc"]) == "Montreal"
         assert int(payload["fxx"]) == 3
-        np.testing.assert_array_equal(payload["pres"], [1000, 850, 500])
+        np.testing.assert_array_equal(payload["pres"], [900, 850, 500])
     metadata = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
     assert metadata["model_key"] == "gdps"
     assert metadata["provider"] == "ECCC MSC GeoMet"
     assert metadata["transport"] == "wms-getfeatureinfo-point"
-    assert metadata["request_count"] == 17
+    assert metadata["request_count"] == 18
+    assert metadata["surface_merged"] is True
+    assert metadata["below_ground_levels_removed"] == 1
     assert metadata["max_workers"] == 3
     assert [stage for stage, _total in stages] == [
         "locating", "downloading", "extracting", "writing", "complete"
@@ -342,15 +404,11 @@ def test_exact_reference_time_mismatch_is_rejected(small_gdps):
     def wrong_run_get(_url, *, params, headers, timeout):
         if params["REQUEST"] == "GetCapabilities":
             return _Response(text=_capabilities_xml())
-        variable, level = re.search(
-            r"_(AirTemp|GeopotentialHeight|SpecificHumidity|WindDir|"
-            r"WindSpeed|VerticalVelocity)_(\d+)mb$",
-            params["LAYERS"],
-        ).groups()
+        variable, level = _parse_layer(params["LAYERS"])
         return _Response(payload={"features": [{
             "geometry": {"coordinates": [-73.65, 45.45]},
             "properties": {
-                "value": _value(variable, int(level)),
+                "value": _value(variable, level),
                 "time": params["TIME"],
                 "dim_reference_time": "2026-07-21T12:00:00Z",
             },

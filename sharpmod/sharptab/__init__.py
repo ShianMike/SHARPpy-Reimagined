@@ -6,6 +6,7 @@ parameter computations plus the shared primitives in :mod:`sharpmod.sharptab.con
 
 from . import constants
 from . import interp
+from . import parcels
 from . import params
 from . import ecape
 from . import winds
@@ -15,6 +16,7 @@ from . import profile
 __all__ = [
     "constants",
     "interp",
+    "parcels",
     "params",
     "ecape",
     "winds",

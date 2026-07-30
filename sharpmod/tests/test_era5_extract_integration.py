@@ -48,13 +48,11 @@ def _dataset():
 
 def test_retrieve_dataset_uses_cds_pressure_level_request(monkeypatch):
     """Live ERA5 retrieval uses CDS, not Herbie's removed ERA5 model."""
-    calls = {}
+    calls = {"retrievals": [], "opened": []}
 
     class FakeClient:
         def retrieve(self, dataset, request, target):
-            calls["dataset"] = dataset
-            calls["request"] = request
-            calls["target"] = target
+            calls["retrievals"].append((dataset, request, target))
             Path(target).write_bytes(b"fake-grib")
 
     class FakeDataset:
@@ -71,7 +69,7 @@ def test_retrieve_dataset_uses_cds_pressure_level_request(monkeypatch):
     decoded = FakeDataset()
 
     def open_datasets(path, backend_kwargs=None):
-        calls["opened"] = path
+        calls["opened"].append(path)
         calls["backend_kwargs"] = backend_kwargs
         return [decoded]
 
@@ -88,8 +86,11 @@ def test_retrieve_dataset_uses_cds_pressure_level_request(monkeypatch):
     assert result is decoded
     assert decoded.loaded
     assert decoded.closed
-    assert calls["dataset"] == "reanalysis-era5-pressure-levels"
-    request = calls["request"]
+    assert [value[0] for value in calls["retrievals"]] == [
+        "reanalysis-era5-pressure-levels",
+        "reanalysis-era5-single-levels",
+    ]
+    request = calls["retrievals"][0][1]
     assert request["year"] == "2026"
     assert request["month"] == "06"
     assert request["day"] == "22"
@@ -106,8 +107,19 @@ def test_retrieve_dataset_uses_cds_pressure_level_request(monkeypatch):
     }
     assert request["data_format"] == "grib"
     assert request["download_format"] == "unarchived"
+    surface_request = calls["retrievals"][1][1]
+    assert set(surface_request["variable"]) == {
+        "surface_pressure",
+        "geopotential",
+        "2m_temperature",
+        "2m_dewpoint_temperature",
+        "10m_u_component_of_wind",
+        "10m_v_component_of_wind",
+    }
+    assert "pressure_level" not in surface_request
     assert calls["backend_kwargs"] == {"indexpath": ""}
-    assert not Path(calls["target"]).exists()
+    assert len(calls["opened"]) == 2
+    assert all(not Path(value[2]).exists() for value in calls["retrievals"])
 
 
 def test_retrieve_dataset_explains_missing_cds_credentials(monkeypatch):

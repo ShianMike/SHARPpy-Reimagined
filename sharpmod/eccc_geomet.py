@@ -25,6 +25,12 @@ from xml.etree import ElementTree
 
 import numpy as np
 
+from sharpmod import backends as _backends
+from sharpmod.model_surface import (
+    SURFACE_CONTRACT_FIELDS,
+    SURFACE_CONTRACT_VERSION,
+    merge_surface_level,
+)
 from sharpmod.model_transport import DownloadCancelled
 from sharpmod.tools.era5_extract import (
     ParameterRangeError,
@@ -55,6 +61,30 @@ _REQUIRED_VARIABLES = (
     "SpecificHumidity",
     "WindDir",
     "WindSpeed",
+)
+_SURFACE_VARIABLES = (
+    "SurfacePressure",
+    "SurfaceHeight",
+    "SurfaceTemperature",
+    "SurfaceDewpoint",
+    "SurfaceWindDir",
+    "SurfaceWindSpeed",
+)
+_SURFACE_LAYER_SUFFIX = {
+    "SurfacePressure": "Pressure",
+    "SurfaceHeight": "GeopotentialHeight",
+    "SurfaceTemperature": "AirTemp_2m",
+    "SurfaceDewpoint": "DewPoint_2m",
+    "SurfaceWindDir": "WindDir_10m",
+    "SurfaceWindSpeed": "WindSpeed_10m",
+}
+_SURFACE_CONTRACT_REQUIREMENTS = (
+    ("surface_pressure", ("SurfacePressure",)),
+    ("surface_height", ("SurfaceHeight",)),
+    ("two_metre_temperature", ("SurfaceTemperature",)),
+    ("two_metre_moisture", ("SurfaceDewpoint",)),
+    ("ten_metre_u_wind", ("SurfaceWindDir", "SurfaceWindSpeed")),
+    ("ten_metre_v_wind", ("SurfaceWindDir", "SurfaceWindSpeed")),
 )
 
 
@@ -214,7 +244,7 @@ _CAPABILITIES = {
         forecast_hours=tuple(range(0, 241, 3)),
         pressure_levels=PRESSURE_LEVELS,
         omega_levels=(850, 700, 600, 500, 250, 200),
-        fields=_REQUIRED_VARIABLES + ("VerticalVelocity",),
+        fields=_REQUIRED_VARIABLES + ("VerticalVelocity",) + _SURFACE_VARIABLES,
         archive_window="server-advertised rolling reference-time window",
         transports=("wms-getfeatureinfo-point",),
     ),
@@ -231,7 +261,7 @@ _CAPABILITIES = {
         forecast_hours=tuple(range(0, 85)),
         pressure_levels=PRESSURE_LEVELS,
         omega_levels=(850, 700, 500, 250),
-        fields=_REQUIRED_VARIABLES + ("VerticalVelocity",),
+        fields=_REQUIRED_VARIABLES + ("VerticalVelocity",) + _SURFACE_VARIABLES,
         archive_window="server-advertised rolling reference-time window",
         transports=("wms-getfeatureinfo-point",),
         domain_outline=RDPS_ROTATED_DOMAIN.outline(),
@@ -251,7 +281,7 @@ _ALIASES = {
 @dataclass(frozen=True)
 class _PointValue:
     variable: str
-    level: int
+    level: int | None
     value: float
     selected_lat: float
     selected_lon: float
@@ -274,6 +304,9 @@ class GeoMetPointDataset:
     fxx: int
     request_count: int
     max_workers: int
+    surface_pressure_hpa: float
+    below_ground_levels_removed: int
+    surface_merged: bool = True
 
     def close(self):
         """Match the model-hour cache dataset protocol (there is no handle)."""
@@ -490,9 +523,18 @@ def build_feature_info_params(
     capability = get_capability(capability)
     lat = float(lat)
     lon = ((float(lon) + 180.0) % 360.0) - 180.0
-    layer = "%s_%s_%dmb" % (
-        capability.layer_prefix, str(variable), int(level)
-    )
+    if level is None:
+        try:
+            suffix = _SURFACE_LAYER_SUFFIX[str(variable)]
+        except KeyError as exc:
+            raise ValueError(
+                "unknown GeoMet surface variable %r" % variable
+            ) from exc
+        layer = f"{capability.layer_prefix}_{suffix}"
+    else:
+        layer = "%s_%s_%dmb" % (
+            capability.layer_prefix, str(variable), int(level)
+        )
     # EPSG:4326 uses latitude,longitude axis order in WMS 1.3.  A 3x3
     # request with the middle pixel avoids boundary ambiguity at exact grid
     # coordinates while GetFeatureInfo still returns only one nearest value.
@@ -573,7 +615,7 @@ def _fetch_value(
         )
     return _PointValue(
         variable=str(variable),
-        level=int(level),
+        level=(int(level) if level is not None else None),
         value=value,
         selected_lat=selected_lat,
         selected_lon=((selected_lon + 180.0) % 360.0) - 180.0,
@@ -663,19 +705,10 @@ def fetch_point(
     ) if run_time is None else _floor_cycle(run_time, capability.cycles)
     valid_dt = run_dt + timedelta(hours=fxx)
 
-    tasks = [
-        (variable, level)
-        for level in capability.pressure_levels
-        for variable in _REQUIRED_VARIABLES
-    ]
-    tasks.extend(
-        ("VerticalVelocity", level) for level in capability.omega_levels
-    )
     workers = worker_count(max_workers)
     _emit(progress_callback, "downloading")
     values = {name: {} for name in capability.fields}
     points = []
-    errors = []
     lock = threading.Lock()
 
     def load(variable, level):
@@ -691,10 +724,8 @@ def fetch_point(
             cancelled=cancelled,
         )
 
-    with ThreadPoolExecutor(
-        max_workers=workers,
-        thread_name_prefix="sharpmod-geomet",
-    ) as executor:
+    def run_tasks(executor, tasks):
+        errors = []
         futures = {
             executor.submit(load, variable, level): (variable, level)
             for variable, level in tasks
@@ -717,13 +748,49 @@ def fetch_point(
             with lock:
                 values[variable][level] = point.value
                 points.append(point)
+        return errors
 
-    if errors:
-        variable, level, exc = errors[0]
-        raise RetrievalError(
-            "%s point profile is incomplete at %d mb (%s): %s"
-            % (capability.label, level, variable, exc)
-        ) from exc
+    surface_tasks = [(variable, None) for variable in _SURFACE_VARIABLES]
+    with ThreadPoolExecutor(
+        max_workers=workers,
+        thread_name_prefix="sharpmod-geomet",
+    ) as executor:
+        errors = run_tasks(executor, surface_tasks)
+        if errors:
+            variable, _level, exc = errors[0]
+            raise RetrievalError(
+                "%s verified surface is incomplete (%s): %s"
+                % (capability.label, variable, exc)
+            ) from exc
+        surface_pressure = float(values["SurfacePressure"][None])
+        if surface_pressure > 2000.0:
+            surface_pressure /= 100.0
+        eligible_levels = tuple(
+            level for level in capability.pressure_levels
+            if float(level) < surface_pressure
+        )
+        if not eligible_levels:
+            raise RetrievalError(
+                "%s surface pressure %.1f hPa leaves no atmospheric levels"
+                % (capability.label, surface_pressure)
+            )
+        pressure_tasks = [
+            (variable, level)
+            for level in eligible_levels
+            for variable in _REQUIRED_VARIABLES
+        ]
+        pressure_tasks.extend(
+            ("VerticalVelocity", level)
+            for level in capability.omega_levels
+            if level in eligible_levels
+        )
+        errors = run_tasks(executor, pressure_tasks)
+        if errors:
+            variable, level, exc = errors[0]
+            raise RetrievalError(
+                "%s point profile is incomplete at %d mb (%s): %s"
+                % (capability.label, level, variable, exc)
+            ) from exc
     if not points:
         raise RetrievalError("GeoMet returned no point data")
 
@@ -738,7 +805,7 @@ def fetch_point(
     ):
         raise RetrievalError("GeoMet layers selected inconsistent grid points")
 
-    levels = np.asarray(capability.pressure_levels, dtype=float)
+    levels = np.asarray(eligible_levels, dtype=float)
     tmpc = np.asarray(
         [values["AirTemp"][int(level)] for level in levels], dtype=float
     )
@@ -777,6 +844,28 @@ def fetch_point(
         "u": _mark_missing(uwnd, n_levels),
         "v": _mark_missing(vwnd, n_levels),
     }
+    surface_direction = float(values["SurfaceWindDir"][None])
+    surface_speed = float(values["SurfaceWindSpeed"][None])
+    surface_radians = np.deg2rad(surface_direction)
+    surface_merge = merge_surface_level(
+        columns,
+        {
+            "pres": surface_pressure,
+            "hght": values["SurfaceHeight"][None],
+            "tmpc": values["SurfaceTemperature"][None],
+            "dwpc": values["SurfaceDewpoint"][None],
+            "u": -surface_speed * np.sin(surface_radians),
+            "v": -surface_speed * np.cos(surface_radians),
+        },
+        missing=-9999.0,
+    )
+    if surface_merge is None:
+        raise RetrievalError(
+            "%s verified surface fields failed physical validation"
+            % capability.label
+        )
+    columns = surface_merge.columns
+    skipped_levels = len(capability.pressure_levels) - len(eligible_levels)
     _emit(progress_callback, "extracting")
     return GeoMetPointDataset(
         capability=capability,
@@ -788,8 +877,12 @@ def fetch_point(
         run_time=run_dt,
         valid_time=valid_dt,
         fxx=fxx,
-        request_count=len(tasks),
+        request_count=len(surface_tasks) + len(pressure_tasks),
         max_workers=workers,
+        surface_pressure_hpa=surface_merge.surface_pressure,
+        below_ground_levels_removed=(
+            skipped_levels + surface_merge.removed_levels
+        ),
     )
 
 
@@ -805,6 +898,25 @@ def write_point_dataset(dataset, out_path, *, loc=None, progress_callback=None):
     run_str = dataset.run_time.strftime("%Y-%m-%d %H:%M")
     valid_str = dataset.valid_time.strftime("%Y-%m-%d %H:%M")
     cols = dataset.columns
+    if not dataset.surface_merged:
+        raise RetrievalError(
+            "%s cached point dataset has no verified surface merge"
+            % capability.label
+        )
+    qc = _backends.basic_sounding_qc(
+        cols["pres"],
+        cols["hght"],
+        cols["tmpc"],
+        cols["dwpc"],
+        cols["wdir"],
+        cols["wspd"],
+        missing=-9999.0,
+    )
+    if not qc.valid:
+        raise RetrievalError(
+            "%s sounding failed physical quality control: %s"
+            % (capability.label, ", ".join(qc.issues))
+        )
     arrays = {
         "pres": cols["pres"],
         "hght": cols["hght"],
@@ -844,6 +956,13 @@ def write_point_dataset(dataset, out_path, *, loc=None, progress_callback=None):
         "max_workers": dataset.max_workers,
         "backend": "ECCC GeoMet point adapter",
         "decoder": "forecast pressure-level point values",
+        "surface_merged": True,
+        "surface_contract_version": SURFACE_CONTRACT_VERSION,
+        "surface_pressure_hpa": dataset.surface_pressure_hpa,
+        "below_ground_levels_removed": dataset.below_ground_levels_removed,
+        "qc_valid": qc.valid,
+        "qc_valid_level_count": qc.valid_level_count,
+        "qc_issues": list(qc.issues),
         "cache_hit": False,
     }
     if progress_callback is not None:
@@ -926,6 +1045,16 @@ def extract(
 def probe(model, run_time=None, fxx=0, *, request_get=None, cancelled=None):
     """Return a lightweight layer-capability availability probe."""
     capability = get_capability(model)
+    provider_fields = set(capability.fields)
+    contract_present = [
+        name
+        for name, required_fields in _SURFACE_CONTRACT_REQUIREMENTS
+        if all(field in provider_fields for field in required_fields)
+    ]
+    contract_missing = [
+        name for name in SURFACE_CONTRACT_FIELDS
+        if name not in contract_present
+    ]
     result = {
         "model": capability.model_key,
         "label": capability.label,
@@ -934,6 +1063,10 @@ def probe(model, run_time=None, fxx=0, *, request_get=None, cancelled=None):
         "subset_opened": False,
         "provider": capability.provider,
         "transport": "wms-getfeatureinfo-point",
+        "surface_contract_complete": not contract_missing,
+        "surface_contract_present": contract_present,
+        "surface_contract_missing": contract_missing,
+        "surface_contract_version": SURFACE_CONTRACT_VERSION,
     }
     try:
         latest = latest_reference_time(
@@ -952,6 +1085,7 @@ def probe(model, run_time=None, fxx=0, *, request_get=None, cancelled=None):
         result["inventory_rows"] = (
             len(capability.pressure_levels) * len(_REQUIRED_VARIABLES)
             + len(capability.omega_levels)
+            + len(_SURFACE_VARIABLES)
         )
         result["available"] = (
             int(fxx) in capability.forecast_hours

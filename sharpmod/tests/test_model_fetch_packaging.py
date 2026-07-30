@@ -38,15 +38,38 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
 
     triggers = workflow["on"]
     assert triggers["pull_request"]["branches"] == ["main"]
+    assert triggers["push"]["branches"] == ["main"]
+    assert triggers["schedule"] == [{"cron": "17 10 * * 2"}]
+    assert "workflow_call" in triggers
     assert "workflow_dispatch" in triggers
-    assert "push" not in triggers
-    python_job = workflow["jobs"]["pytest"]
-    assert python_job["timeout-minutes"] == "45"
-    assert python_job["strategy"]["matrix"]["python-version"] == [
-        "3.11", "3.12", "3.13",
-    ]
+    jobs = workflow["jobs"]
+    for lane in ("fast", "property"):
+        python_job = jobs[lane]
+        assert python_job["strategy"]["matrix"]["python-version"] == [
+            "3.11", "3.12", "3.13",
+        ]
+        lane_scripts = "\n".join(
+            step.get("run", "") for step in python_job["steps"]
+        )
+        assert "libegl1" in lane_scripts
+        checkout = next(
+            step for step in python_job["steps"]
+            if step.get("name") == "Check out tested source"
+        )
+        assert checkout["with"]["ref"] == "${{ inputs.ref || github.sha }}"
 
-    windows_job = workflow["jobs"]["windows-wrf"]
+    fast_scripts = "\n".join(
+        step.get("run", "") for step in jobs["fast"]["steps"]
+    )
+    assert '-m "not property and not live_provider"' in fast_scripts
+    assert "--cov=sharpmod" in fast_scripts
+    property_scripts = "\n".join(
+        step.get("run", "") for step in jobs["property"]["steps"]
+    )
+    assert '-m "property and not live_provider"' in property_scripts
+    assert "--timeout=900" in property_scripts
+
+    windows_job = jobs["windows-wrf"]
     assert windows_job["runs-on"] == "windows-latest"
     assert windows_job["timeout-minutes"] == "25"
     scripts = "\n".join(
@@ -56,12 +79,33 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     assert "scripts/install_sharppy_compat.py --sharppy-only" in scripts
     assert "test_gui_reanalysis_wrf.py" in scripts
 
+    quality_scripts = "\n".join(
+        step.get("run", "") for step in jobs["quality"]["steps"]
+    )
+    assert '"pip==26.2"' in quality_scripts
+    assert '"setuptools==83.0.0"' in quality_scripts
+    assert "ruff check sharpmod scripts packaging" in quality_scripts
+    assert "pip_audit --skip-editable" in quality_scripts
+    live_scripts = "\n".join(
+        step.get("run", "") for step in jobs["live-provider"]["steps"]
+    )
+    assert jobs["live-provider"]["if"] == (
+        "${{ inputs.run_live_providers == true || "
+        "github.event_name == 'schedule' }}"
+    )
+    assert jobs["live-provider"]["timeout-minutes"] == "20"
+    assert "SHARPMOD_RUN_LIVE_PROVIDER_TESTS" in str(
+        jobs["live-provider"]["steps"]
+    )
+    assert "-m live_provider" in live_scripts
+
 
 def test_release_installs_model_fetch_dependencies():
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8"
     )
-    assert 'python -m pip install -e ".[render,era5,wrf]"' in workflow
+    assert '-e ".[render,era5,wrf]"' in workflow
+    assert "constraints/release.txt" in workflow
     assert "python scripts/install_sharppy_compat.py --sharppy-only" in workflow
     assert 'pip install --no-deps "SHARPpy' not in workflow
     assert "--model-fetch-runtime-check" in workflow
@@ -73,6 +117,31 @@ def test_release_installs_model_fetch_dependencies():
     assert 'SHARPMOD_BACKEND: "rust"' in workflow
     assert workflow.count('requested_backend -ne "rust"') >= 2
     assert workflow.count('active_backend -ne "rust"') >= 2
+    assert "uses: ./.github/workflows/tests.yml" in workflow
+    assert "needs: [resolve-release, test-release]" in workflow
+    assert workflow.count("contents: write") == 1
+
+
+def test_test_profiles_timeouts_and_quality_tools_are_configured():
+    with (ROOT / "pyproject.toml").open("rb") as stream:
+        config = tomllib.load(stream)
+    pytest_options = config["tool"]["pytest"]["ini_options"]
+    assert pytest_options["timeout"] == 180
+    assert "property: Hypothesis-powered scientific/property coverage" in (
+        pytest_options["markers"]
+    )
+    assert set(config["project"]["optional-dependencies"]["quality"]) == {
+        "pip-audit==2.10.1",
+        "pytest-cov==7.1.0",
+        "ruff==0.16.0",
+    }
+    conftest = (ROOT / "sharpmod" / "tests" / "conftest.py").read_text(
+        encoding="utf-8"
+    )
+    assert "FULL_MAX_EXAMPLES = 100" in conftest
+    assert "FAST_MAX_EXAMPLES = 10" in conftest
+    assert "is_hypothesis_test" in conftest
+    assert "SHARPMOD_HYPOTHESIS_PROFILE" in conftest
 
 
 def test_pyinstaller_bundles_model_fetch_runtime():

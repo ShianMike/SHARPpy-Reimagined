@@ -112,6 +112,11 @@ def _load_backends() -> tuple[Any, Any, Any]:
             "wind_to_components",
             "components_to_wind",
             "interpolate_1d",
+            "profile_kinematics",
+            "profile_parcels",
+            "profile_convective_parcels",
+            "lift_parcel",
+            "profile_dcape",
         ):
             if not callable(getattr(backend, operation, None)):
                 raise RuntimeError(
@@ -315,6 +320,93 @@ def _validate_equivalence(python_backend: Any, rust_backend: Any) -> None:
                 operation="interpolate_1d",
             )
 
+    from sharpmod.backends.kinematics import profile_kinematics_to_raw
+    from sharpmod.backends.parcels import (
+        convective_workspace_to_raw,
+        downdraft_to_raw,
+        parcel_workspace_to_raw,
+    )
+
+    sounding = _sounding_inputs(128)
+    radians = np.deg2rad(sounding.wdir)
+    u = -sounding.wspd * np.sin(radians)
+    v = -sounding.wspd * np.cos(radians)
+    arguments = (
+        sounding.pres,
+        sounding.hght,
+        u,
+        v,
+        np.array([500.0, 1000.0, 3000.0, 4000.0, 6000.0]),
+    )
+    python_result = profile_kinematics_to_raw(
+        python_backend.profile_kinematics(*arguments),
+    )
+    rust_result = profile_kinematics_to_raw(
+        rust_backend.profile_kinematics(*arguments),
+    )
+    for python_value, rust_value in zip(python_result, rust_result):
+        np.testing.assert_allclose(
+            rust_value,
+            python_value,
+            rtol=1e-12,
+            atol=1e-10,
+            equal_nan=True,
+        )
+
+    parcel_arguments = (
+        sounding.pres,
+        sounding.hght,
+        sounding.tmpc,
+        sounding.dwpc,
+    )
+    python_parcels = parcel_workspace_to_raw(
+        python_backend.profile_parcels(*parcel_arguments),
+    )
+    rust_parcels = parcel_workspace_to_raw(
+        rust_backend.profile_parcels(*parcel_arguments),
+    )
+    np.testing.assert_allclose(
+        rust_parcels,
+        python_parcels,
+        rtol=3e-2,
+        atol=5.0,
+        equal_nan=True,
+    )
+    python_convective = convective_workspace_to_raw(
+        python_backend.profile_convective_parcels(*parcel_arguments),
+    )
+    rust_convective = convective_workspace_to_raw(
+        rust_backend.profile_convective_parcels(*parcel_arguments),
+    )
+    np.testing.assert_allclose(
+        rust_convective[0],
+        python_convective[0],
+        rtol=3e-2,
+        atol=5.1,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        rust_convective[1],
+        python_convective[1],
+        rtol=0.0,
+        atol=5.1,
+        equal_nan=True,
+    )
+    python_dcape = downdraft_to_raw(
+        python_backend.profile_dcape(*parcel_arguments),
+    )
+    rust_dcape = downdraft_to_raw(
+        rust_backend.profile_dcape(*parcel_arguments),
+    )
+    for python_value, rust_value in zip(python_dcape, rust_dcape):
+        np.testing.assert_allclose(
+            rust_value,
+            python_value,
+            rtol=1e-9,
+            atol=1e-8,
+            equal_nan=True,
+        )
+
 
 def _operation_arguments(data: ProfileInputs) -> dict[str, tuple[np.ndarray, ...]]:
     """Return arguments in the shared backend protocol order."""
@@ -445,6 +537,132 @@ def _record_production_interpolation(
         )
     )
     return records
+
+
+def _record_profile_kinematics(
+    python_backend: Any,
+    rust_backend: Any,
+    *,
+    calls: int,
+    repeat: int,
+    warmup: int,
+) -> list[Timing]:
+    """Measure one ordinary five-layer profile workspace."""
+
+    sounding = _sounding_inputs(128)
+    radians = np.deg2rad(sounding.wdir)
+    u = -sounding.wspd * np.sin(radians)
+    v = -sounding.wspd * np.cos(radians)
+    arguments = (
+        sounding.pres,
+        sounding.hght,
+        u,
+        v,
+        np.array([500.0, 1000.0, 3000.0, 4000.0, 6000.0]),
+    )
+    return _record_callable_scenario(
+        (
+            ("python", python_backend.profile_kinematics),
+            ("rust", rust_backend.profile_kinematics),
+        ),
+        arguments,
+        scenario="profile-kinematics-128",
+        operation="profile_kinematics",
+        calls=calls,
+        repeat=repeat,
+        warmup=warmup,
+    )
+
+
+def _record_profile_parcels(
+    python_backend: Any,
+    rust_backend: Any,
+    *,
+    calls: int,
+    repeat: int,
+    warmup: int,
+) -> list[Timing]:
+    """Measure one SB/MU/ML parcel workspace over an ordinary sounding."""
+
+    sounding = _sounding_inputs(128)
+    arguments = (
+        sounding.pres,
+        sounding.hght,
+        sounding.tmpc,
+        sounding.dwpc,
+    )
+    return _record_callable_scenario(
+        (
+            ("python", python_backend.profile_parcels),
+            ("rust", rust_backend.profile_parcels),
+        ),
+        arguments,
+        scenario="profile-parcels-128",
+        operation="profile_parcels",
+        calls=calls,
+        repeat=repeat,
+        warmup=warmup,
+    )
+
+
+def _record_profile_convective_parcels(
+    python_backend: Any,
+    rust_backend: Any,
+    *,
+    calls: int,
+    repeat: int,
+    warmup: int,
+) -> list[Timing]:
+    """Measure five standard parcel ascents, traces, and effective bounds."""
+    sounding = _sounding_inputs(128)
+    arguments = (
+        sounding.pres,
+        sounding.hght,
+        sounding.tmpc,
+        sounding.dwpc,
+    )
+    return _record_callable_scenario(
+        (
+            ("python", python_backend.profile_convective_parcels),
+            ("rust", rust_backend.profile_convective_parcels),
+        ),
+        arguments,
+        scenario="profile-convective-parcels-128",
+        operation="profile_convective_parcels",
+        calls=calls,
+        repeat=repeat,
+        warmup=warmup,
+    )
+
+
+def _record_profile_dcape(
+    python_backend: Any,
+    rust_backend: Any,
+    *,
+    calls: int,
+    repeat: int,
+    warmup: int,
+) -> list[Timing]:
+    """Measure one profile DCAPE summary and descending trace."""
+    sounding = _sounding_inputs(128)
+    arguments = (
+        sounding.pres,
+        sounding.hght,
+        sounding.tmpc,
+        sounding.dwpc,
+    )
+    return _record_callable_scenario(
+        (
+            ("python", python_backend.profile_dcape),
+            ("rust", rust_backend.profile_dcape),
+        ),
+        arguments,
+        scenario="profile-dcape-128",
+        operation="profile_dcape",
+        calls=calls,
+        repeat=repeat,
+        warmup=warmup,
+    )
 
 
 def _record_scenario(
@@ -907,6 +1125,42 @@ def main(argv: Sequence[str] | None = None) -> int:
     records.extend(
         _record_profile_construction(
             calls=arguments.profile_constructions,
+            repeat=arguments.repeat,
+            warmup=arguments.warmup,
+        )
+    )
+    records.extend(
+        _record_profile_kinematics(
+            python_backend,
+            rust_backend,
+            calls=max(1, arguments.repeated_calls // 10),
+            repeat=arguments.repeat,
+            warmup=arguments.warmup,
+        )
+    )
+    records.extend(
+        _record_profile_parcels(
+            python_backend,
+            rust_backend,
+            calls=max(1, arguments.repeated_calls // 100),
+            repeat=arguments.repeat,
+            warmup=arguments.warmup,
+        )
+    )
+    records.extend(
+        _record_profile_convective_parcels(
+            python_backend,
+            rust_backend,
+            calls=max(1, arguments.repeated_calls // 100),
+            repeat=arguments.repeat,
+            warmup=arguments.warmup,
+        )
+    )
+    records.extend(
+        _record_profile_dcape(
+            python_backend,
+            rust_backend,
+            calls=max(1, arguments.repeated_calls // 100),
             repeat=arguments.repeat,
             warmup=arguments.warmup,
         )

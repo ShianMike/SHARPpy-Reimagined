@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import errno
 import json
+import os
 from pathlib import Path
-import zipfile
 
+import numpy as np
 import pytest
 
-from sharpmod.model_disk_cache import ModelDiskCache, default_model_cache_root
+from sharpmod.model_disk_cache import (
+    MODEL_CACHE_CONTRACT_VERSION,
+    ModelDiskCache,
+    default_model_cache_root,
+)
 from sharpmod.model_hour_cache import ModelHourKey
 
 
@@ -18,6 +24,28 @@ RUN = datetime(2026, 7, 14, 0, tzinfo=timezone.utc)
 
 def _key(fxx=0):
     return ModelHourKey.create("hrrr", RUN, fxx)
+
+
+def _write_portable_pair(directory, name="era5-point"):
+    path = directory / f"{name}.npz"
+    levels = np.array([1000.0, 900.0, 800.0])
+    np.savez(
+        path,
+        pres=levels,
+        hght=np.array([100.0, 1000.0, 2000.0]),
+        tmpc=np.array([20.0, 15.0, 10.0]),
+        dwpc=np.array([15.0, 10.0, 5.0]),
+        wdir=np.array([180.0, 200.0, 220.0]),
+        wspd=np.array([10.0, 20.0, 30.0]),
+        omeg=np.array([0.0, -1.0, -2.0]),
+        valid="2026-07-14 00:00",
+        run="2026-07-14 00:00",
+        loc="ERA5",
+        lat=35.0,
+        lon=-97.0,
+    )
+    path.with_suffix(".json").write_text("{}", encoding="utf-8")
+    return path
 
 
 def test_default_cache_root_honors_explicit_environment(tmp_path, monkeypatch):
@@ -37,6 +65,9 @@ def test_directory_is_stable_and_survives_prune_under_limits(tmp_path):
     assert first == second
     assert first.exists()
     assert removed == []
+    assert first.relative_to(tmp_path).parts[0] == (
+        f"v{MODEL_CACHE_CONTRACT_VERSION}"
+    )
 
 
 def test_point_subset_regions_use_different_directories(tmp_path):
@@ -110,18 +141,63 @@ def test_entries_expose_metadata_validity_and_newest_first(tmp_path):
 def test_entries_recognize_portable_sounding_pair(tmp_path):
     cache = ModelDiskCache(tmp_path)
     directory = cache.directory_for(_key())
-    with zipfile.ZipFile(directory / "era5-point.npz", "w") as archive:
-        for name in (
-            "pres.npy", "hght.npy", "tmpc.npy", "dwpc.npy", "wdir.npy",
-            "wspd.npy", "omeg.npy", "valid.npy", "run.npy", "loc.npy",
-        ):
-            archive.writestr(name, b"value")
-    (directory / "era5-point.json").write_text("{}", encoding="utf-8")
+    sounding = _write_portable_pair(directory)
 
     entry = cache.entries()[0]
 
     assert entry.valid_grib is False
     assert entry.valid_sounding is True
+    assert cache.valid_sounding_paths(directory) == (sounding,)
+
+
+def test_stale_contract_payloads_are_visible_but_never_reused(tmp_path):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+    sounding = _write_portable_pair(directory)
+    grib = directory / "subset.grib2"
+    grib.write_bytes(b"GRIB7777")
+    metadata_path = directory / ".cache.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["contract_version"] = MODEL_CACHE_CONTRACT_VERSION - 1
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    entry = cache.entries()[0]
+
+    assert entry.contract_version == MODEL_CACHE_CONTRACT_VERSION - 1
+    assert entry.valid_grib is False
+    assert entry.valid_sounding is False
+    assert cache.valid_grib_paths(directory) == ()
+    assert cache.valid_sounding_paths(directory) == ()
+    assert sounding.exists()
+    assert grib.exists()
+
+
+def test_entries_reject_malformed_npz_members_and_select_only_valid_pairs(
+        tmp_path):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+    malformed = directory / "00-bad.npz"
+    malformed.write_bytes(b"not an npz")
+    malformed.with_suffix(".json").write_text("{}", encoding="utf-8")
+    valid = _write_portable_pair(directory, "01-good")
+
+    entry = cache.entries()[0]
+
+    assert entry.valid_sounding is True
+    assert cache.valid_sounding_paths(directory) == (valid,)
+
+
+def test_only_malformed_portable_pair_is_never_reported_ready(tmp_path):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+    malformed = directory / "bad.npz"
+    malformed.write_bytes(b"not an npz")
+    malformed.with_suffix(".json").write_text("{}", encoding="utf-8")
+
+    entry = cache.entries()[0]
+
+    assert entry.valid_sounding is False
+    assert cache.valid_sounding_paths(directory) == ()
 
 
 def test_source_provenance_can_be_copied_from_cache_entry(tmp_path):
@@ -188,3 +264,65 @@ def test_explicit_delete_rejects_unmanaged_and_respects_lease(tmp_path):
     with cache.protect(directory):
         assert cache.delete(directory) is False
     assert cache.delete(directory) is True
+
+
+def test_dead_process_lease_is_removed_and_does_not_block_clear(
+        tmp_path, monkeypatch):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+    marker = directory / ".lease-999999-dead"
+    marker.touch()
+    monkeypatch.setattr(cache, "_process_is_running", lambda _pid: False)
+
+    removed = cache.clear(include_pinned=True)
+
+    assert removed == [directory]
+    assert not directory.exists()
+
+
+def test_windows_invalid_pid_system_error_is_treated_as_not_running(
+        monkeypatch):
+    cause = OSError(errno.EINVAL, "The parameter is incorrect")
+
+    def invalid_pid(_pid, _signal):
+        raise SystemError(
+            "<built-in function kill> returned a result with an exception set"
+        ) from cause
+
+    monkeypatch.setattr(os, "kill", invalid_pid)
+
+    assert ModelDiskCache._process_is_running(999_999_999) is False
+
+
+def test_expired_unparseable_lease_is_removed(tmp_path, monkeypatch):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+    marker = directory / ".lease-legacy"
+    marker.touch()
+    monkeypatch.setenv("SHARPMOD_MODEL_CACHE_LEASE_HOURS", "1")
+    old = 1_000.0
+    marker.touch()
+    os.utime(marker, (old, old))
+
+    assert cache._lease_is_active(marker, now=old + 3601.0) is False
+    assert not marker.exists()
+
+
+def test_clear_does_not_report_failed_deletion(tmp_path, monkeypatch):
+    cache = ModelDiskCache(tmp_path)
+    directory = cache.directory_for(_key())
+    (directory / "subset.grib2").write_bytes(b"GRIB7777")
+    monkeypatch.setattr(cache, "_remove_tree", lambda _path: False)
+
+    assert cache.clear(include_pinned=True) == []
+    assert directory.exists()
+
+
+def test_prune_keeps_failed_deletion_in_size_accounting(tmp_path, monkeypatch):
+    cache = ModelDiskCache(tmp_path, max_bytes=1, max_age_hours=0)
+    directory = cache.directory_for(_key())
+    (directory / "subset.grib2").write_bytes(b"GRIB7777")
+    monkeypatch.setattr(cache, "_remove_tree", lambda _path: False)
+
+    assert cache.prune(now=10_000_000_000.0) == []
+    assert directory.exists()

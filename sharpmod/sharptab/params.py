@@ -23,9 +23,12 @@ import numpy as np
 import numpy.ma as ma
 
 from . import interp
+from . import parcels
 from .constants import MISSING, is_missing
 
 __all__ = ["lapse_rate", "layer_cape_agl", "layer_cape_isotherm"]
+
+_MAX_NATIVE_SIX_KM_CAPE_LEVEL_GAP_M = 500.0
 
 
 def lapse_rate(prof, lower, upper, agl=False):
@@ -225,6 +228,41 @@ def _layer_cape(prof, pbot, ptop):
     return bplus
 
 
+def _native_six_km_cape_eligible(prof) -> bool:
+    """Return whether reported-level spacing is dense enough for cached 6CAPE.
+
+    The native parcel workspace closely matches the reference integral on
+    model-style profiles, but the two integrations can diverge materially when
+    the environmental column has kilometre-scale gaps. Include the interpolated
+    6-km boundary in the spacing check so a large final gap cannot slip through.
+    """
+    hght = _get_masked_field(prof, "hght")
+    if hght is None or hght.size < 2:
+        return False
+
+    try:
+        sfc = int(getattr(prof, "sfc", 0))
+        surface_height = float(hght[sfc])
+    except (IndexError, TypeError, ValueError):
+        return False
+    if not np.isfinite(surface_height):
+        return False
+
+    reported_agl = np.asarray(hght.filled(np.nan), dtype=float) - surface_height
+    in_layer = (
+        np.isfinite(reported_agl)
+        & (reported_agl >= 0.0)
+        & (reported_agl <= 6000.0)
+    )
+    levels = np.unique(
+        np.concatenate(([0.0], reported_agl[in_layer], [6000.0])),
+    )
+    return bool(
+        levels.size >= 2
+        and np.max(np.diff(levels)) <= _MAX_NATIVE_SIX_KM_CAPE_LEVEL_GAP_M
+    )
+
+
 def layer_cape_agl(prof, bottom, top):
     """Compute CAPE (J/kg) integrated over the ``bottom`` -> ``top`` m AGL layer.
 
@@ -259,8 +297,9 @@ def layer_cape_agl(prof, bottom, top):
     Notes
     -----
     The layer-bound pressures are interpolated from the reported levels via
-    :func:`interp.pres_at_hght_agl` (Requirement 21.3); the buoyancy integral is
-    delegated to the reference ``sharppy`` parcel ascent. Never raises.
+    :func:`interp.pres_at_hght_agl` (Requirement 21.3). The cached native
+    surface-parcel result is reused for sufficiently resolved 0--6 km columns;
+    sparse columns retain the reference ``sharppy`` parcel ascent. Never raises.
     """
     if top <= bottom:
         return MISSING
@@ -275,6 +314,15 @@ def layer_cape_agl(prof, bottom, top):
     if pbot <= ptop:
         # Degenerate: the top is at or below the bottom in pressure terms.
         return MISSING
+
+    if (
+        np.isclose(bottom, 0.0)
+        and np.isclose(top, 6000.0)
+        and _native_six_km_cape_eligible(prof)
+    ):
+        sbpcl = parcels.parcel(prof, "surface")
+        if sbpcl is not None and np.isfinite(sbpcl.cape_6km):
+            return float(sbpcl.cape_6km)
 
     return _layer_cape(prof, pbot, ptop)
 

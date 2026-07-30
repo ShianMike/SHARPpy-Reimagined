@@ -598,6 +598,8 @@ class BatchExtractor:
                                     decoded.selected_lat,
                                     decoded.selected_lon,
                                     targeted_vorticity[point_index],
+                                    decoded.surface_merged,
+                                    decoded.below_ground_levels_removed,
                                 )
                                 vorticity_source = (
                                     "targeted horizontal wind-gradient fallback"

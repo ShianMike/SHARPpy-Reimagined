@@ -41,6 +41,9 @@ import pytest
 
 from sharpmod.io import decoder as decoder_mod
 from sharpmod.tests._examples import examples_dir
+from sharpmod.upstream_warnings import (
+    known_netcdf4_numpy_shape_deprecation,
+)
 
 # The bundled example soundings live in "<repo root>/examples/soundings"
 # (resolved robustly, with fallbacks, by ``examples_dir``).
@@ -209,46 +212,57 @@ def _write_wrf_arw_sample(path: Path, nt=1, nz=12, ny=3, nx=3) -> Path:
     G = 9.80665
     ds = Dataset(str(path), "w", format="NETCDF4")
     try:
-        ds.START_DATE = "2014-06-16_19:00:00"
-        ds.createDimension("Time", nt)
-        ds.createDimension("bt", nz)
-        ds.createDimension("bts", nz + 1)
-        ds.createDimension("sn", ny)
-        ds.createDimension("we", nx)
-        ds.createDimension("DateStrLen", 19)
+        with known_netcdf4_numpy_shape_deprecation():
+            ds.START_DATE = "2014-06-16_19:00:00"
+            ds.createDimension("Time", nt)
+            ds.createDimension("bt", nz)
+            ds.createDimension("bts", nz + 1)
+            ds.createDimension("sn", ny)
+            ds.createDimension("we", nx)
+            ds.createDimension("DateStrLen", 19)
 
-        pres_pa = np.linspace(1000.0, 150.0, nz) * 100.0
-        theta = np.linspace(300.0, 370.0, nz)
-        hstag = np.linspace(0.0, 16000.0, nz + 1)
+            pres_pa = np.linspace(1000.0, 150.0, nz) * 100.0
+            theta = np.linspace(300.0, 370.0, nz)
+            hstag = np.linspace(0.0, 16000.0, nz + 1)
 
-        def _v4(name, col):
-            var = ds.createVariable(name, "f4", ("Time", "bt", "sn", "we"))
-            var[:] = np.broadcast_to(col[None, :, None, None], (nt, nz, ny, nx))
+            def _v4(name, col):
+                var = ds.createVariable(name, "f4", ("Time", "bt", "sn", "we"))
+                var[:] = np.broadcast_to(
+                    col[None, :, None, None],
+                    (nt, nz, ny, nx),
+                )
 
-        _v4("T", theta - 300.0)          # perturbation potential temperature
-        _v4("QVAPOR", np.full(nz, 0.008))  # kg/kg
-        _v4("P", np.zeros(nz))           # perturbation pressure (Pa)
-        _v4("PB", pres_pa)               # base-state pressure (Pa)
-        _v4("U", np.full(nz, 10.0))      # m/s (grid-relative)
-        _v4("V", np.full(nz, 5.0))
+            _v4("T", theta - 300.0)          # perturbation potential temperature
+            _v4("QVAPOR", np.full(nz, 0.008))  # kg/kg
+            _v4("P", np.zeros(nz))           # perturbation pressure (Pa)
+            _v4("PB", pres_pa)               # base-state pressure (Pa)
+            _v4("U", np.full(nz, 10.0))      # m/s (grid-relative)
+            _v4("V", np.full(nz, 5.0))
 
-        for name in ("PH", "PHB"):
-            var = ds.createVariable(name, "f4", ("Time", "bts", "sn", "we"))
-            col = (hstag * G) if name == "PHB" else np.zeros(nz + 1)
-            var[:] = np.broadcast_to(col[None, :, None, None], (nt, nz + 1, ny, nx))
+            for name in ("PH", "PHB"):
+                var = ds.createVariable(
+                    name,
+                    "f4",
+                    ("Time", "bts", "sn", "we"),
+                )
+                col = (hstag * G) if name == "PHB" else np.zeros(nz + 1)
+                var[:] = np.broadcast_to(
+                    col[None, :, None, None],
+                    (nt, nz + 1, ny, nx),
+                )
 
-        lons = np.linspace(-97.0, -95.0, nx)
-        lats = np.linspace(40.0, 42.0, ny)
-        lon_grid, lat_grid = np.meshgrid(lons, lats)
-        for name, grid in (("XLONG", lon_grid), ("XLAT", lat_grid)):
-            var = ds.createVariable(name, "f4", ("Time", "sn", "we"))
-            var[:] = np.broadcast_to(grid[None], (nt, ny, nx))
-        for name, val in (("COSALPHA", 1.0), ("SINALPHA", 0.0)):
-            var = ds.createVariable(name, "f4", ("Time", "sn", "we"))
-            var[:] = val
+            lons = np.linspace(-97.0, -95.0, nx)
+            lats = np.linspace(40.0, 42.0, ny)
+            lon_grid, lat_grid = np.meshgrid(lons, lats)
+            for name, grid in (("XLONG", lon_grid), ("XLAT", lat_grid)):
+                var = ds.createVariable(name, "f4", ("Time", "sn", "we"))
+                var[:] = np.broadcast_to(grid[None], (nt, ny, nx))
+            for name, val in (("COSALPHA", 1.0), ("SINALPHA", 0.0)):
+                var = ds.createVariable(name, "f4", ("Time", "sn", "we"))
+                var[:] = val
 
-        times = ds.createVariable("Times", "S1", ("Time", "DateStrLen"))
-        times[0] = np.array(list("2014-06-16_19:00:00"), dtype="S1")
+            times = ds.createVariable("Times", "S1", ("Time", "DateStrLen"))
+            times[0] = np.array(list("2014-06-16_19:00:00"), dtype="S1")
     finally:
         ds.close()
     return path

@@ -149,6 +149,14 @@ def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
         "numpy==1.26.*",
         "numpy>=2,<3",
     }
+    numpy_scripts = "\n".join(
+        step.get("run", "") for step in jobs["numpy-compat"]["steps"]
+    )
+    assert '"pytest-timeout>=2.4,<3"' in numpy_scripts
+    assert (
+        "scripts/install_sharppy_compat.py --sharppy-only --skip-pip-check"
+        in numpy_scripts
+    )
     numpy_steps = jobs["numpy-compat"]["steps"]
     numpy_venv = next(
         step for step in numpy_steps
@@ -173,6 +181,14 @@ def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
     }
     assert all(row["python-tag"] in {"cp311", "cp312"} for row in wheel_rows)
     wheel_steps = jobs["wheels"]["steps"]
+    wheel_scripts = "\n".join(
+        step.get("run", "") for step in wheel_steps
+    )
+    assert '"pytest-timeout>=2.4,<3"' in wheel_scripts
+    assert (
+        "scripts/install_sharppy_compat.py --sharppy-only --skip-pip-check"
+        in wheel_scripts
+    )
     clean_install = next(
         step for step in wheel_steps
         if step.get("name") == "Resolve and smoke-test wheel in a clean environment"

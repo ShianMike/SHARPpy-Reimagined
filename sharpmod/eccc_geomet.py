@@ -26,7 +26,11 @@ from xml.etree import ElementTree
 import numpy as np
 
 from sharpmod import backends as _backends
-from sharpmod.model_surface import SURFACE_CONTRACT_VERSION, merge_surface_level
+from sharpmod.model_surface import (
+    SURFACE_CONTRACT_FIELDS,
+    SURFACE_CONTRACT_VERSION,
+    merge_surface_level,
+)
 from sharpmod.model_transport import DownloadCancelled
 from sharpmod.tools.era5_extract import (
     ParameterRangeError,
@@ -74,6 +78,14 @@ _SURFACE_LAYER_SUFFIX = {
     "SurfaceWindDir": "WindDir_10m",
     "SurfaceWindSpeed": "WindSpeed_10m",
 }
+_SURFACE_CONTRACT_REQUIREMENTS = (
+    ("surface_pressure", ("SurfacePressure",)),
+    ("surface_height", ("SurfaceHeight",)),
+    ("two_metre_temperature", ("SurfaceTemperature",)),
+    ("two_metre_moisture", ("SurfaceDewpoint",)),
+    ("ten_metre_u_wind", ("SurfaceWindDir", "SurfaceWindSpeed")),
+    ("ten_metre_v_wind", ("SurfaceWindDir", "SurfaceWindSpeed")),
+)
 
 
 @dataclass(frozen=True)
@@ -1033,6 +1045,16 @@ def extract(
 def probe(model, run_time=None, fxx=0, *, request_get=None, cancelled=None):
     """Return a lightweight layer-capability availability probe."""
     capability = get_capability(model)
+    provider_fields = set(capability.fields)
+    contract_present = [
+        name
+        for name, required_fields in _SURFACE_CONTRACT_REQUIREMENTS
+        if all(field in provider_fields for field in required_fields)
+    ]
+    contract_missing = [
+        name for name in SURFACE_CONTRACT_FIELDS
+        if name not in contract_present
+    ]
     result = {
         "model": capability.model_key,
         "label": capability.label,
@@ -1041,6 +1063,10 @@ def probe(model, run_time=None, fxx=0, *, request_get=None, cancelled=None):
         "subset_opened": False,
         "provider": capability.provider,
         "transport": "wms-getfeatureinfo-point",
+        "surface_contract_complete": not contract_missing,
+        "surface_contract_present": contract_present,
+        "surface_contract_missing": contract_missing,
+        "surface_contract_version": SURFACE_CONTRACT_VERSION,
     }
     try:
         latest = latest_reference_time(
@@ -1059,6 +1085,7 @@ def probe(model, run_time=None, fxx=0, *, request_get=None, cancelled=None):
         result["inventory_rows"] = (
             len(capability.pressure_levels) * len(_REQUIRED_VARIABLES)
             + len(capability.omega_levels)
+            + len(_SURFACE_VARIABLES)
         )
         result["available"] = (
             int(fxx) in capability.forecast_hours

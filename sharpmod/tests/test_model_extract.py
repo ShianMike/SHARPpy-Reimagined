@@ -1153,13 +1153,14 @@ def test_surface_contract_probe_uses_latest_available_completed_cycle(
         monkeypatch):
     calls = []
 
-    def fake_probe(model, run_time=None, **_kwargs):
-        calls.append(run_time)
+    def fake_probe(model, run_time=None, open_subset=False, **_kwargs):
+        calls.append((run_time, open_subset))
         available = len(calls) == 3
         return {
             "model": model,
             "run": run_time.strftime("%Y-%m-%d %H:%M"),
             "available": available,
+            "subset_opened": available and open_subset,
             "surface_contract_complete": False,
             "surface_contract_missing": ["surface_pressure"],
         }
@@ -1169,12 +1170,40 @@ def test_surface_contract_probe_uses_latest_available_completed_cycle(
         "rrfs-a",
         reference_time=datetime(2026, 7, 30, 8, 30, tzinfo=timezone.utc),
         lookback_cycles=5,
+        open_subset=True,
     )
 
-    assert [value.hour for value in calls] == [8, 7, 6]
+    assert [value.hour for value, _open in calls] == [8, 7, 6]
+    assert [open_subset for _value, open_subset in calls] == [True, True, True]
     assert result["available"] is True
+    assert result["subset_opened"] is True
     assert len(result["attempted_runs"]) == 3
     assert result["lookback_cycles"] == 5
+
+
+def test_probe_cli_propagates_open_subset_during_lookback(monkeypatch):
+    seen = {}
+
+    def fake_recent(model, **kwargs):
+        seen.update(model=model, **kwargs)
+        return {"available": True, "subset_opened": True}
+
+    monkeypatch.setattr(
+        model_extract,
+        "probe_recent_surface_contract",
+        fake_recent,
+    )
+
+    result = model_extract.main([
+        "rrfs-a",
+        "--probe",
+        "--lookback-cycles",
+        "2",
+        "--open-subset",
+    ])
+
+    assert result == 0
+    assert seen["open_subset"] is True
 
 
 def test_render_mode_removes_fetched_data_but_keeps_png(tmp_path, monkeypatch):

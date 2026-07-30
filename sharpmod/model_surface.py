@@ -20,6 +20,14 @@ PROFILE_COLUMN_NAMES = (
 )
 
 SURFACE_CONTRACT_VERSION = 1
+SURFACE_CONTRACT_FIELDS = (
+    "surface_pressure",
+    "surface_height",
+    "two_metre_temperature",
+    "two_metre_moisture",
+    "ten_metre_u_wind",
+    "ten_metre_v_wind",
+)
 
 
 @dataclass(frozen=True, slots=True)

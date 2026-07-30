@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from sharpmod import eccc_geomet
+from sharpmod.model_surface import SURFACE_CONTRACT_FIELDS
 from sharpmod.tools import model_extract
 
 
@@ -217,6 +218,28 @@ def test_latest_reference_time_uses_small_layer_capabilities(small_gdps):
 
     assert result == RUN
     assert state["calls"] == []
+
+
+def test_probe_reports_complete_verified_surface_contract(small_gdps):
+    get, _state = _fake_get_factory()
+
+    result = eccc_geomet.probe(
+        "gdps",
+        run_time=RUN,
+        fxx=3,
+        request_get=get,
+    )
+
+    assert result["available"] is True
+    assert result["surface_contract_complete"] is True
+    assert result["surface_contract_present"] == list(SURFACE_CONTRACT_FIELDS)
+    assert result["surface_contract_missing"] == []
+    assert result["surface_contract_version"] == 1
+    assert result["inventory_rows"] == (
+        len(small_gdps.pressure_levels) * 5
+        + len(small_gdps.omega_levels)
+        + 6
+    )
 
 
 def test_bounded_fanout_normalizes_profile_columns(small_gdps):

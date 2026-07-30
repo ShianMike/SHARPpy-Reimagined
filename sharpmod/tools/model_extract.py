@@ -45,7 +45,10 @@ from sharpmod.model_transport import (
     range_worker_count,
     ranges_from_inventory,
 )
-from sharpmod.model_surface import SURFACE_CONTRACT_VERSION
+from sharpmod.model_surface import (
+    SURFACE_CONTRACT_FIELDS,
+    SURFACE_CONTRACT_VERSION,
+)
 from sharpmod.upstream_warnings import (
     known_herbie_deprecations,
     xarray_new_combine_defaults,
@@ -1851,6 +1854,7 @@ def probe_recent_surface_contract(
     fxx=0,
     member=None,
     lookback_cycles=8,
+    open_subset=False,
 ):
     """Probe completed cycles until one live inventory can be classified."""
     config = get_config(model)
@@ -1884,7 +1888,7 @@ def probe_recent_surface_contract(
             run_time=candidate,
             fxx=fxx,
             member=member,
-            open_subset=False,
+            open_subset=open_subset,
         )
         attempts.append({
             "run": last.get("run", candidate.strftime("%Y-%m-%d %H:%M")),
@@ -1976,6 +1980,7 @@ def main(argv=None):  # pragma: no cover - CLI wrapper
                 fxx=args.fxx,
                 member=args.member,
                 lookback_cycles=args.lookback_cycles,
+                open_subset=args.open_subset,
             )
         else:
             info = probe(

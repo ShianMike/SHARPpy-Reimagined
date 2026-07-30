@@ -68,7 +68,10 @@ def test_render_decode_uses_native_profile_without_python_integrators(
 ):
     monkeypatch.setenv("SHARPMOD_BACKEND", "rust")
     backends.reset_backend_cache()
-    backend = backends.backend_info()
+    try:
+        backend = backends.backend_info()
+    except backends.BackendUnavailableError as exc:
+        pytest.skip(f"compatible Rust backend unavailable: {exc}")
     if backend["active_backend"] != "rust":
         pytest.skip(
             f"compatible Rust backend unavailable: {backend['fallback_reason']}"

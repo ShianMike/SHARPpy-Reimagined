@@ -68,6 +68,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install "numpy>=1.24,<3" "pytest>=7" "pytest-timeout>=2.4,<3" "hypothesis>=6" "PyYAML>=6" "maturin==1.14.1"
           python -m pip install -e . --no-deps
+          python scripts/install_sharppy_compat.py --sharppy-only
 
       - name: Check Rust formatting on stable
         working-directory: rust/sharpmod-rs

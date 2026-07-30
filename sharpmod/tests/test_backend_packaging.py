@@ -139,6 +139,7 @@ def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
     ) in rust_steps
     assert "cargo +1.88.0 test --locked --all-targets" in rust_steps
     assert '"pytest-timeout>=2.4,<3"' in rust_steps
+    assert "scripts/install_sharppy_compat.py --sharppy-only" in rust_steps
 
     numpy_rows = jobs["numpy-compat"]["strategy"]["matrix"]["include"]
     assert {row["numpy"] for row in numpy_rows} == {

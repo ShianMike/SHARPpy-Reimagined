@@ -93,6 +93,57 @@ def test_pinned_upstream_artifact_contract_is_explicit():
     assert compat.UPSTREAM_URL.endswith(compat.UPSTREAM_FILENAME)
 
 
+def test_download_retries_transient_connection_reset(tmp_path, monkeypatch):
+    payload = b"verified"
+    calls = []
+    sleeps = []
+
+    class Response:
+        headers = {"Content-Length": str(len(payload))}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        @staticmethod
+        def geturl():
+            return compat.UPSTREAM_URL
+
+        def read(self, _size):
+            nonlocal payload
+            result, payload = payload, b""
+            return result
+
+    def fake_urlopen(_request, *, timeout):
+        calls.append(timeout)
+        if len(calls) == 1:
+            raise ConnectionResetError("connection reset by peer")
+        return Response()
+
+    verified = b"verified"
+    monkeypatch.setattr(compat, "UPSTREAM_SIZE", len(verified))
+    monkeypatch.setattr(
+        compat,
+        "UPSTREAM_SHA256",
+        hashlib.sha256(verified).hexdigest(),
+    )
+    monkeypatch.setattr(compat, "urlopen", fake_urlopen)
+    monkeypatch.setattr(compat.time, "sleep", sleeps.append)
+
+    destination = tmp_path / compat.UPSTREAM_FILENAME
+    result = compat.download_upstream_wheel(
+        destination,
+        timeout=12.0,
+        retry_delay=0.25,
+    )
+
+    assert result.read_bytes() == verified
+    assert calls == [12.0, 12.0]
+    assert sleeps == [0.25]
+
+
 def test_repack_changes_only_metadata_and_auditing_files(tmp_path):
     source = _synthetic_upstream_wheel(
         tmp_path / compat.UPSTREAM_FILENAME

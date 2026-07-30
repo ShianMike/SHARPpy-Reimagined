@@ -20,6 +20,7 @@ import numpy as np
 
 from sharpmod.gui_common import _LOGGER, _uwyo_decoder_classes
 from sharpmod.model_hour_cache import ModelHourKey
+from sharpmod.portable_sounding import portable_sounding_pair_valid
 
 from qtpy.QtCore import (
     Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
@@ -210,6 +211,8 @@ class _AvailabilityWorker(QThread):
         self._station = station
 
     def run(self):  # noqa: D401 - QThread entry point
+        if self.isInterruptionRequested():
+            return
         try:
             StationLookupError, UWyo_Decoder, UWyoError = _uwyo_decoder_classes()
         except Exception:  # noqa: BLE001
@@ -246,6 +249,8 @@ class _AvailabilityWorker(QThread):
 
         label = _station_label(meta.id, meta.name)
 
+        if self.isInterruptionRequested():
+            return
         try:
             prof = decoder.fetch(meta.id, self._when)
         except SoundingParseError:
@@ -269,6 +274,8 @@ class _AvailabilityWorker(QThread):
                               "Unavailable (unexpected error)", label)
             return
 
+        if self.isInterruptionRequested():
+            return
         status, message = _classify_availability(prof)
         self.checked.emit(self._query, self._when, status, message, label)
 
@@ -352,6 +359,8 @@ class _FetchWorker(QThread):
         self._station = station
 
     def run(self):  # noqa: D401 - QThread entry point
+        if self.isInterruptionRequested():
+            return
         try:
             from sharpmod.observations import (
                 IEMObservedProvider,
@@ -382,6 +391,8 @@ class _FetchWorker(QThread):
             self.failed.emit(f"Observed-sounding providers are unavailable: {exc}")
             return
 
+        if self.isInterruptionRequested():
+            return
         npz_path = None
         try:
             metadata = dict(result.metadata)
@@ -410,6 +421,9 @@ class _FetchWorker(QThread):
             self.failed.emit(f"Could not save fetched sounding: {exc}")
             return
 
+        if self.isInterruptionRequested():
+            _cleanup_point_data(npz_path, None)
+            return
         self.finished_ok.emit(npz_path, meta, self._when)
 
 
@@ -458,21 +472,7 @@ def _retain_model_data_until_close(viewer, npz_path: str,
 
 def _portable_pair_valid(npz_path) -> bool:
     """Return whether a cached portable sounding and sidecar are complete."""
-    npz_path = os.fspath(npz_path)
-    json_path = os.path.splitext(npz_path)[0] + ".json"
-    if not os.path.isfile(npz_path) or not os.path.isfile(json_path):
-        return False
-    try:
-        with np.load(npz_path, allow_pickle=False) as data:
-            required = {"pres", "hght", "tmpc", "dwpc", "wdir", "wspd"}
-            if not required.issubset(data.files) or np.asarray(data["pres"]).size < 2:
-                return False
-            if any(np.asarray(data[name]).dtype.hasobject for name in data.files):
-                return False
-        with open(json_path, encoding="utf-8") as handle:
-            return isinstance(json.load(handle), dict)
-    except (OSError, ValueError, TypeError, json.JSONDecodeError):
-        return False
+    return portable_sounding_pair_valid(npz_path)
 
 
 def _atomic_npz(path, arrays) -> None:
@@ -813,6 +813,8 @@ class _ModelAvailabilityWorker(QThread):
             candidates = [self._run_time]
 
         for index, run_time in enumerate(candidates):
+            if self.isInterruptionRequested():
+                return
             try:
                 result = model_extract.probe(
                     self._model, run_time=run_time, fxx=self._fxx,
@@ -820,6 +822,8 @@ class _ModelAvailabilityWorker(QThread):
             except Exception as exc:  # noqa: BLE001 - network/catalog failure
                 result = {"available": False, "error": str(exc)}
             if result.get("available"):
+                if self.isInterruptionRequested():
+                    return
                 if index == 0:
                     status = AVAIL_AVAILABLE
                     message = f"Selected cycle {run_time:%Y-%m-%d %H}Z is available"
@@ -859,7 +863,8 @@ class _ModelFetchWorker(QThread):
                  member: str | None = None, download_dir: str | None = None,
                  model_hour_cache=None, cached_grib=None,
                  cached_source_fields=(), cached_cache=None,
-                 cached_directory=None, parent=None):
+                 cached_directory=None, cached_contract_version=None,
+                 parent=None):
         super().__init__(parent)
         self._model = model
         self._lat = float(lat)
@@ -882,6 +887,7 @@ class _ModelFetchWorker(QThread):
         self._cached_source_fields = tuple(cached_source_fields or ())
         self._cached_cache = cached_cache
         self._cached_directory = cached_directory
+        self._cached_contract_version = cached_contract_version
         self._cancel_requested = False
 
     def requestInterruption(self):  # noqa: N802 - Qt API override
@@ -900,6 +906,22 @@ class _ModelFetchWorker(QThread):
         try:
             from sharpmod.tools import model_extract
             cfg = model_extract.get_config(self._model)
+            if self._cached_grib is not None and not (
+                model_extract.cached_source_fields_compatible(
+                    cfg,
+                    self._cached_source_fields,
+                    self._cached_contract_version,
+                )
+            ):
+                _LOGGER.info(
+                    "model_fetch.cache_contract_miss model=%s path=%s "
+                    "fields=%s",
+                    cfg.key,
+                    self._cached_grib,
+                    self._cached_source_fields,
+                )
+                self._cached_grib = None
+                self._cached_source_fields = ()
             if self._resolve_place and not self._loc:
                 self._report_progress("town")
                 from sharpmod.place_names import reverse_town_name
@@ -1130,10 +1152,14 @@ class _StationListWorker(QThread):
         self.token = token
 
     def run(self):  # noqa: D401 - QThread entry point
+        if self.isInterruptionRequested():
+            return
         try:
             from sharpmod.io import uwyo_catalog as catalog
             stations = catalog.fetch_stations_for_datetime(self._when)
         except Exception as exc:  # noqa: BLE001 - never crash the UI thread
             self.failed.emit(self._when, str(exc))
+            return
+        if self.isInterruptionRequested():
             return
         self.loaded.emit(self._when, stations)

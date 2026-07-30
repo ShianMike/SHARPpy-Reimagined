@@ -20,6 +20,8 @@ import threading
 
 import numpy as np
 
+from sharpmod.model_surface import merge_surface_level
+
 
 GRIB_COLUMN_NAMES = (
     "pres",
@@ -60,6 +62,8 @@ class DecodedPoint:
     selected_lat: float
     selected_lon: float
     surface_relative_vorticity: float | None = None
+    surface_merged: bool = False
+    below_ground_levels_removed: int = 0
 
     def __post_init__(self):
         # PyO3/Numpy may return a C-contiguous ndarray whose memory is owned by
@@ -81,6 +85,9 @@ class DecodedPoint:
             if not np.isfinite(vorticity):
                 vorticity = None
         object.__setattr__(self, "surface_relative_vorticity", vorticity)
+        object.__setattr__(self, "surface_merged", bool(self.surface_merged))
+        removed = max(0, int(self.below_ground_levels_removed))
+        object.__setattr__(self, "below_ground_levels_removed", removed)
 
     @property
     def pres(self):
@@ -152,6 +159,7 @@ class _RoleMessages:
 class _Inventory:
     levels: tuple[float, ...]
     roles: tuple[_RoleMessages, ...]
+    surface_roles: tuple[_RoleMessages, ...]
     representative_offset: int
     representative_field_index: int
 
@@ -377,10 +385,63 @@ _ROLE_ALIASES = (
 )
 _RELEVANT_SHORT_NAMES = frozenset(
     alias for _role, aliases in _ROLE_ALIASES for alias in aliases)
+_SURFACE_SHORT_NAMES = frozenset({
+    "sp",
+    "pres",
+    "orog",
+    "z",
+    "2t",
+    "t2m",
+    "2d",
+    "d2m",
+    "2r",
+    "rh2m",
+    "2sh",
+    "sh2",
+    "10u",
+    "u10",
+    "10v",
+    "v10",
+})
+
+
+def _surface_role(short_name, level_type, level):
+    """Classify the exact ground/near-ground records used by the merge."""
+    short_name = str(short_name).strip().lower()
+    level_type = str(level_type).strip().lower()
+    try:
+        level = float(level)
+    except (TypeError, ValueError):
+        return None
+    if level_type == "surface" and np.isclose(level, 0.0):
+        if short_name in {"sp", "pres"}:
+            return "surface_pressure"
+        if short_name == "z":
+            return "surface_geopotential"
+        if short_name in {"orog", "gh", "hgt", "geopotential_height"}:
+            return "surface_height"
+    if level_type == "heightaboveground" and np.isclose(level, 2.0):
+        if short_name in {"2t", "t2m", "tmp", "t", "temperature"}:
+            return "surface_temperature"
+        if short_name in {"2d", "d2m", "dpt", "dewpoint"}:
+            return "surface_dewpoint"
+        if short_name in {"2r", "rh2m", "r", "rh", "relative_humidity"}:
+            return "surface_rh"
+        if short_name in {
+            "2sh", "sh2", "q", "spfh", "specific_humidity",
+        }:
+            return "surface_q"
+    if level_type == "heightaboveground" and np.isclose(level, 10.0):
+        if short_name in {"10u", "u10", "ugrd", "u"}:
+            return "surface_u"
+        if short_name in {"10v", "v10", "vgrd", "v"}:
+            return "surface_v"
+    return None
 
 
 def _scan_inventory(identity: _FileIdentity, eccodes) -> _Inventory:
     raw_messages = []
+    raw_surface_messages = []
     grid_signatures = set()
     fields_by_offset = defaultdict(int)
     with _multi_field_source(identity, eccodes) as source:
@@ -395,16 +456,23 @@ def _scan_inventory(identity: _FileIdentity, eccodes) -> _Inventory:
                 fields_by_offset[offset] += 1
                 level_type = str(_safe_get(
                     eccodes, message, "typeOfLevel", ""))
-                if level_type not in {"isobaricInhPa", "isobaricInPa"}:
-                    continue
                 short_name = str(_safe_get(
                     eccodes, message, "shortName", "")).lower()
-                if short_name not in _RELEVANT_SHORT_NAMES:
+                level = float(_safe_get(eccodes, message, "level", np.nan))
+                surface_role = _surface_role(short_name, level_type, level)
+                is_pressure = level_type in {
+                    "isobaricInhPa",
+                    "isobaricInPa",
+                }
+                if (
+                    not is_pressure
+                    and surface_role is None
+                ):
                     continue
-                pressure = float(eccodes.codes_get(message, "level"))
-                if level_type == "isobaricInPa":
-                    pressure /= 100.0
-                if not np.isfinite(pressure) or pressure <= 0.0:
+                if (
+                    is_pressure
+                    and short_name not in _RELEVANT_SHORT_NAMES
+                ):
                     continue
                 missing_value = _safe_get(eccodes, message, "missingValue")
                 try:
@@ -413,14 +481,31 @@ def _scan_inventory(identity: _FileIdentity, eccodes) -> _Inventory:
                     missing_value = None
                 signature = _grid_signature(eccodes, message)
                 grid_signatures.add(signature)
-                raw_messages.append((
-                    offset,
-                    field_index,
-                    short_name,
-                    pressure,
-                    missing_value,
-                    signature,
-                ))
+                if is_pressure:
+                    pressure = level
+                    if level_type == "isobaricInPa":
+                        pressure /= 100.0
+                    if not np.isfinite(pressure) or pressure <= 0.0:
+                        continue
+                    raw_messages.append((
+                        offset,
+                        field_index,
+                        short_name,
+                        pressure,
+                        missing_value,
+                        signature,
+                    ))
+                else:
+                    raw_surface_messages.append((
+                        surface_role,
+                        short_name,
+                        _MessageRef(
+                            offset,
+                            field_index,
+                            0.0,
+                            missing_value,
+                        ),
+                    ))
             finally:
                 eccodes.codes_release(message)
 
@@ -467,6 +552,13 @@ def _scan_inventory(identity: _FileIdentity, eccodes) -> _Inventory:
     if any(role.role == "vort" for role in selected_roles):
         selected_roles = [role for role in selected_roles if role.role != "absv"]
 
+    selected_surface = {}
+    for role, short_name, reference in raw_surface_messages:
+        selected_surface.setdefault(
+            role,
+            _RoleMessages(role, short_name, (reference,)),
+        )
+
     present_roles = {role.role for role in selected_roles}
     requirements = (
         ("height", {"hght"}),
@@ -501,6 +593,7 @@ def _scan_inventory(identity: _FileIdentity, eccodes) -> _Inventory:
     return _Inventory(
         levels,
         tuple(selected_roles),
+        tuple(selected_surface.values()),
         representative[0],
         representative[1],
     )
@@ -520,7 +613,8 @@ def _normalize_longitude(longitude):
 
 
 def _nearest_point(identity, inventory, latitude, longitude, eccodes):
-    request_key = (identity, float(latitude), _normalize_longitude(longitude))
+    normalized_longitude = _normalize_longitude(longitude)
+    request_key = (identity, float(latitude), normalized_longitude)
     point = _cache_get("nearest", _NEAREST_CACHE, request_key)
     if point is not None:
         return point
@@ -532,8 +626,50 @@ def _nearest_point(identity, inventory, latitude, longitude, eccodes):
             inventory.representative_field_index,
         )
         try:
-            nearest = eccodes.codes_grib_find_nearest(
-                message, float(latitude), _normalize_longitude(longitude))
+            nearest = None
+            error = None
+            # ecCodes rejects an otherwise equivalent -105 request when a
+            # geographically subsetted grid advertises 0..360 longitudes.
+            # Try the canonical value first, then its wrapped equivalents.
+            for candidate in (
+                normalized_longitude,
+                normalized_longitude + 360.0,
+                normalized_longitude - 360.0,
+            ):
+                try:
+                    nearest = eccodes.codes_grib_find_nearest(
+                        message, float(latitude), candidate
+                    )
+                    break
+                except Exception as exc:
+                    error = exc
+            if nearest is None:
+                try:
+                    point_count = int(eccodes.codes_get(
+                        message, "numberOfPoints"
+                    ))
+                    grid_latitude = float(eccodes.codes_get(
+                        message, "latitudeOfFirstGridPointInDegrees"
+                    ))
+                    grid_longitude = float(eccodes.codes_get(
+                        message, "longitudeOfFirstGridPointInDegrees"
+                    ))
+                except Exception:
+                    point_count = 0
+                if (
+                    point_count == 1
+                    and abs(grid_latitude - float(latitude)) <= 1.0
+                    and abs(_normalize_longitude(
+                        grid_longitude - normalized_longitude
+                    )) <= 1.0
+                ):
+                    nearest = [{
+                        "index": 0,
+                        "lat": grid_latitude,
+                        "lon": grid_longitude,
+                    }]
+            if nearest is None and error is not None:
+                raise error
         finally:
             eccodes.codes_release(message)
     if not nearest:
@@ -823,7 +959,7 @@ def decode_grib_wind_vorticity(path, lat, lon) -> float:
 
 def _decode_selected_values(identity, inventory, point, missing, eccodes):
     selections = defaultdict(dict)
-    for role in inventory.roles:
+    for role in inventory.roles + inventory.surface_roles:
         for reference in role.messages:
             selections[reference.offset][reference.field_index] = (
                 role, reference
@@ -875,7 +1011,7 @@ def _decode_selected_values_many(
         identity, inventory, points, missing, eccodes):
     """Decode N point columns with one vector value read per GRIB field."""
     selections = defaultdict(dict)
-    for role in inventory.roles:
+    for role in inventory.roles + inventory.surface_roles:
         for reference in role.messages:
             selections[reference.offset][reference.field_index] = (
                 role, reference
@@ -953,6 +1089,16 @@ def _dewpoint_from_q(specific_humidity, pressure_hpa):
     return (b * logarithm) / (a - logarithm)
 
 
+def _decoded_surface_value(decoded, role, missing):
+    values = decoded.get(role, {})
+    if not values:
+        return None
+    value = float(next(iter(values.values())))
+    if not np.isfinite(value) or value == missing:
+        return None
+    return value
+
+
 def _assemble_point(inventory, point, decoded, missing):
     levels = np.asarray(inventory.levels, dtype=np.float64)
     matrix = np.full(
@@ -994,11 +1140,68 @@ def _assemble_point(inventory, point, decoded, missing):
         270.0 - np.degrees(np.arctan2(v, u))) % 360.0
     matrix[5, good_wind] = np.hypot(u, v) * _MS_TO_KNOTS
 
+    surface_pressure = _decoded_surface_value(
+        decoded, "surface_pressure", missing)
+    if surface_pressure is not None and surface_pressure > 2000.0:
+        surface_pressure /= 100.0
+    surface_height = _decoded_surface_value(
+        decoded, "surface_height", missing)
+    surface_geopotential = _decoded_surface_value(
+        decoded, "surface_geopotential", missing)
+    if surface_height is None and surface_geopotential is not None:
+        surface_height = surface_geopotential / _G0
+    surface_temperature = _decoded_surface_value(
+        decoded, "surface_temperature", missing)
+    surface_dewpoint = _decoded_surface_value(
+        decoded, "surface_dewpoint", missing)
+    if surface_temperature is not None:
+        surface_temperature -= _KELVIN_OFFSET
+    surface_rh = _decoded_surface_value(decoded, "surface_rh", missing)
+    surface_q = _decoded_surface_value(decoded, "surface_q", missing)
+    if surface_q is not None and surface_pressure is not None:
+        surface_dewpoint = float(_dewpoint_from_q(
+            np.asarray([surface_q]),
+            np.asarray([surface_pressure]),
+        )[0])
+    elif surface_dewpoint is not None:
+        surface_dewpoint -= _KELVIN_OFFSET
+    elif surface_temperature is not None:
+        if surface_rh is not None:
+            surface_dewpoint = float(_dewpoint_from_rh(
+                np.asarray([surface_temperature]),
+                np.asarray([surface_rh]),
+            )[0])
+
+    surface_merge = merge_surface_level(
+        {
+            name: matrix[index]
+            for index, name in enumerate(GRIB_COLUMN_NAMES)
+        },
+        {
+            "pres": surface_pressure,
+            "hght": surface_height,
+            "tmpc": surface_temperature,
+            "dwpc": surface_dewpoint,
+            "u": _decoded_surface_value(decoded, "surface_u", missing),
+            "v": _decoded_surface_value(decoded, "surface_v", missing),
+        },
+        missing=missing,
+    )
+    if surface_merge is not None:
+        matrix = np.vstack([
+            surface_merge.columns[name] for name in GRIB_COLUMN_NAMES
+        ])
+
     surface_vorticity = None
     vorticity_role = "vort" if "vort" in decoded else \
         "absv" if "absv" in decoded else None
     if vorticity_role is not None:
         for level in inventory.levels:
+            if (
+                surface_merge is not None
+                and level > surface_merge.surface_pressure
+            ):
+                continue
             value = decoded[vorticity_role].get(level, missing)
             if not np.isfinite(value) or value == missing:
                 continue
@@ -1016,6 +1219,8 @@ def _assemble_point(inventory, point, decoded, missing):
         point.latitude,
         point.longitude,
         surface_vorticity,
+        surface_merge is not None,
+        0 if surface_merge is None else surface_merge.removed_levels,
     )
 
 

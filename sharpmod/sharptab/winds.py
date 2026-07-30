@@ -32,6 +32,8 @@ from __future__ import annotations
 import numpy as np
 import numpy.ma as ma
 
+from sharpmod import backends as _backends
+
 from . import interp
 from .constants import MISSING, is_missing, KTS_PER_MS
 
@@ -47,6 +49,12 @@ __all__ = [
     "storm_motion",
     "sfc_500m_kinematics",
 ]
+
+_KINEMATICS_CACHE_ATTR = "_sharpmod_profile_kinematics"
+_KINEMATICS_CACHE_MISS = object()
+_STANDARD_LAYER_TOPS_AGL = (500.0, 1000.0, 3000.0, 4000.0, 6000.0)
+_MATCH_RTOL = 1.0e-9
+_MATCH_ATOL = 1.0e-6
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +103,90 @@ def _sfc_pres(prof):
     return float(val)
 
 
+def _profile_kinematics(prof):
+    """Return the cached coarse-grained backend workspace when available.
+
+    Real :class:`~sharpmod.sharptab.profile.Profile` objects cache the immutable
+    result in their instance dictionary. Lightweight or slotted profile-like
+    objects remain supported; they simply recompute instead of caching.
+    """
+    cached = getattr(prof, _KINEMATICS_CACHE_ATTR, _KINEMATICS_CACHE_MISS)
+    if cached is not _KINEMATICS_CACHE_MISS:
+        return cached
+    try:
+        result = _backends.profile_kinematics(
+            prof.pres,
+            prof.hght,
+            prof.u,
+            prof.v,
+            _STANDARD_LAYER_TOPS_AGL,
+            sfc=_sfc_index(prof),
+        )
+    except Exception:
+        result = None
+    try:
+        setattr(prof, _KINEMATICS_CACHE_ATTR, result)
+    except (AttributeError, TypeError):
+        pass
+    return result
+
+
+def _workspace_layer_for_pressures(prof, pbot, ptop, *, workspace=None):
+    """Return a standard surface layer matching ``pbot``/``ptop``."""
+    surface_pressure = _sfc_pres(prof)
+    if is_missing(surface_pressure) or not np.isclose(
+        float(pbot),
+        float(surface_pressure),
+        rtol=_MATCH_RTOL,
+        atol=_MATCH_ATOL,
+    ):
+        return None
+    if workspace is None:
+        workspace = _profile_kinematics(prof)
+    if workspace is None:
+        return None
+    for layer in workspace.layers:
+        if np.isfinite(layer.top_pressure) and np.isclose(
+            float(ptop),
+            layer.top_pressure,
+            rtol=_MATCH_RTOL,
+            atol=_MATCH_ATOL,
+        ):
+            return layer
+    return None
+
+
+def _workspace_layer_for_height(prof, lower, upper, *, workspace=None):
+    """Return a standard surface-to-height layer matching AGL bounds."""
+    if not np.isclose(
+        float(lower), 0.0, rtol=0.0, atol=_MATCH_ATOL,
+    ):
+        return None
+    if workspace is None:
+        workspace = _profile_kinematics(prof)
+    if workspace is None:
+        return None
+    return workspace.layer(float(upper), tolerance=_MATCH_ATOL)
+
+
+def _finite_values(*values):
+    return all(
+        not is_missing(value) and np.isfinite(float(value))
+        for value in values
+    )
+
+
+def _same_right_mover(workspace, stu, stv):
+    if workspace is None:
+        return False
+    rstu, rstv = workspace.storm_motion[:2]
+    return (
+        _finite_values(rstu, rstv, stu, stv)
+        and np.isclose(float(stu), rstu, rtol=_MATCH_RTOL, atol=_MATCH_ATOL)
+        and np.isclose(float(stv), rstv, rtol=_MATCH_RTOL, atol=_MATCH_ATOL)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Shear / mean wind
 # ---------------------------------------------------------------------------
@@ -107,6 +199,11 @@ def wind_shear(prof, pbot, ptop):
     """
     if not _has_winds(prof) or is_missing(pbot) or is_missing(ptop):
         return MISSING, MISSING
+    layer = _workspace_layer_for_pressures(prof, pbot, ptop)
+    if layer is not None and _finite_values(
+        layer.pressure_shear_u, layer.pressure_shear_v,
+    ):
+        return layer.pressure_shear_u, layer.pressure_shear_v
     ubot, vbot = interp.components(prof, pbot)
     utop, vtop = interp.components(prof, ptop)
     if is_missing(ubot) or is_missing(utop):
@@ -124,6 +221,10 @@ def mean_wind(prof, pbot, ptop, dp=-1, stu=0, stv=0):
     """
     if not _has_winds(prof) or is_missing(pbot) or is_missing(ptop):
         return MISSING, MISSING
+    if abs(float(dp)) == 1.0 and _finite_values(stu, stv):
+        layer = _workspace_layer_for_pressures(prof, pbot, ptop)
+        if layer is not None and _finite_values(layer.mean_u, layer.mean_v):
+            return layer.mean_u - float(stu), layer.mean_v - float(stv)
     if dp > 0:
         dp = -dp
     ps = np.arange(pbot, ptop + dp, dp)
@@ -147,6 +248,15 @@ def mean_wind_npw(prof, pbot, ptop, dp=-1, stu=0, stv=0):
     """
     if not _has_winds(prof) or is_missing(pbot) or is_missing(ptop):
         return MISSING, MISSING
+    if abs(float(dp)) == 1.0 and _finite_values(stu, stv):
+        layer = _workspace_layer_for_pressures(prof, pbot, ptop)
+        if layer is not None and _finite_values(
+            layer.mean_npw_u, layer.mean_npw_v,
+        ):
+            return (
+                layer.mean_npw_u - float(stu),
+                layer.mean_npw_v - float(stv),
+            )
     if dp > 0:
         dp = -dp
     ps = np.arange(pbot, ptop + dp, dp)
@@ -187,12 +297,28 @@ def helicity(prof, lower, upper, stu=0, stv=0):
         layer falls outside the reported profile. ``total`` is the combined
         (positive + negative) helicity used as the reported SRH.
     """
-    if not _has_winds(prof) or is_missing(lower) or is_missing(upper) \
-            or is_missing(stu) or is_missing(stv):
+    if (
+        not _has_winds(prof)
+        or is_missing(lower)
+        or is_missing(upper)
+        or not _finite_values(stu, stv)
+    ):
         return MISSING, MISSING, MISSING
 
     if lower == upper:
         return 0.0, 0.0, 0.0
+    workspace = _profile_kinematics(prof)
+    layer = _workspace_layer_for_height(
+        prof, lower, upper, workspace=workspace,
+    )
+    if (
+        layer is not None
+        and _same_right_mover(workspace, stu, stv)
+        and _finite_values(
+            layer.srh_total, layer.srh_positive, layer.srh_negative,
+        )
+    ):
+        return layer.srh_total, layer.srh_positive, layer.srh_negative
 
     lower_msl = interp.to_msl(prof, lower)
     upper_msl = interp.to_msl(prof, upper)
@@ -215,11 +341,19 @@ def helicity(prof, lower, upper, stu=0, stv=0):
 
     u1, v1 = interp.components(prof, plower)
     u2, v2 = interp.components(prof, pupper)
-    if is_missing(u1) or is_missing(u2):
+    if not _finite_values(u1, v1, u2, v2):
         return MISSING, MISSING, MISSING
 
-    u = np.concatenate([[u1], u_arr[ind1:ind2 + 1].compressed(), [u2]])
-    v = np.concatenate([[v1], v_arr[ind1:ind2 + 1].compressed(), [v2]])
+    u_layer = ma.asanyarray(u_arr[ind1:ind2 + 1], dtype=float)
+    v_layer = ma.asanyarray(v_arr[ind1:ind2 + 1], dtype=float)
+    valid = (
+        ~ma.getmaskarray(u_layer)
+        & ~ma.getmaskarray(v_layer)
+        & np.isfinite(u_layer.filled(np.nan))
+        & np.isfinite(v_layer.filled(np.nan))
+    )
+    u = np.concatenate([[u1], np.asarray(u_layer.data)[valid], [u2]])
+    v = np.concatenate([[v1], np.asarray(v_layer.data)[valid], [v2]])
 
     sru = kts2ms(u - stu)
     srv = kts2ms(v - stv)
@@ -233,7 +367,7 @@ def helicity(prof, lower, upper, stu=0, stv=0):
 # Bunkers storm motion
 # ---------------------------------------------------------------------------
 
-def non_parcel_bunkers_motion(prof):
+def non_parcel_bunkers_motion(prof, *, _workspace=None):
     """Compute the Bunkers (2000) non-parcel storm motion.
 
     Returns ``(rstu, rstv, lstu, lstv)`` -- the right- and left-mover
@@ -242,6 +376,13 @@ def non_parcel_bunkers_motion(prof):
     """
     if not _has_winds(prof):
         return MISSING, MISSING, MISSING, MISSING
+    workspace = (
+        _profile_kinematics(prof)
+        if _workspace is None
+        else _workspace
+    )
+    if workspace is not None and _finite_values(*workspace.storm_motion):
+        return workspace.storm_motion
 
     d = ms2kts(7.5)  # 7.5 m/s empirical deviation
     psfc = _sfc_pres(prof)
@@ -266,7 +407,7 @@ def non_parcel_bunkers_motion(prof):
     return float(rstu), float(rstv), float(lstu), float(lstv)
 
 
-def storm_motion(prof):
+def storm_motion(prof, *, _workspace=None):
     """Return the ``(rstu, rstv, lstu, lstv)`` storm motion (kt) used for SRH.
 
     Single source of the Bunkers storm-motion vector so that every SRH layer
@@ -291,7 +432,7 @@ def storm_motion(prof):
             return vec[0], vec[1], vec[2], vec[3]
         if len(vec) == 2:
             return vec[0], vec[1], MISSING, MISSING
-    return non_parcel_bunkers_motion(prof)
+    return non_parcel_bunkers_motion(prof, _workspace=_workspace)
 
 
 # ---------------------------------------------------------------------------
@@ -329,6 +470,10 @@ def sfc_500m_kinematics(prof):
 
     if not _has_winds(prof):
         return MISSING, MISSING, MISSING, MISSING
+    workspace = _profile_kinematics(prof)
+    layer = _workspace_layer_for_height(
+        prof, 0.0, top_agl, workspace=workspace,
+    )
 
     # Reject profiles that do not span the SFC->500 m AGL layer.
     hght = ma.asanyarray(prof.hght)
@@ -341,26 +486,45 @@ def sfc_500m_kinematics(prof):
         return MISSING, MISSING, MISSING, MISSING
 
     # --- bulk shear: |V(500 m) - V(sfc)| (kt) -------------------------------
-    u_sfc, v_sfc = interp.components_at_hght_agl(prof, 0.0)
-    u_top, v_top = interp.components_at_hght_agl(prof, top_agl)
-    if is_missing(u_sfc) or is_missing(u_top):
-        shear_kt = MISSING
+    if layer is not None and _finite_values(
+        layer.height_shear_u, layer.height_shear_v,
+    ):
+        shear_kt = float(mag(layer.height_shear_u, layer.height_shear_v))
     else:
-        shear_kt = float(mag(u_top - u_sfc, v_top - v_sfc))
+        u_sfc, v_sfc = interp.components_at_hght_agl(prof, 0.0)
+        u_top, v_top = interp.components_at_hght_agl(prof, top_agl)
+        shear_kt = (
+            MISSING
+            if is_missing(u_sfc) or is_missing(u_top)
+            else float(mag(u_top - u_sfc, v_top - v_sfc))
+        )
+    if is_missing(shear_kt):
+        shear_kt = MISSING
 
     # --- pressure-weighted mean wind (kt), returned as a (u, v) vector -------
     psfc = _sfc_pres(prof)
     ptop = interp.pres_at_hght_agl(prof, top_agl)
-    mnu, mnv = mean_wind(prof, psfc, ptop)
+    if layer is not None and _finite_values(layer.mean_u, layer.mean_v):
+        mnu, mnv = layer.mean_u, layer.mean_v
+    else:
+        mnu, mnv = mean_wind(prof, psfc, ptop)
     mean_wind_uv = MISSING if is_missing(mnu) else (mnu, mnv)
 
     # --- storm motion (shared Bunkers right-mover) --------------------------
-    rstu, rstv, _lstu, _lstv = storm_motion(prof)
+    rstu, rstv, _lstu, _lstv = storm_motion(
+        prof, _workspace=workspace,
+    )
     have_motion = not (is_missing(rstu) or is_missing(rstv))
 
     # --- storm-relative helicity (m^2/s^2), shared Bunkers storm motion ------
     if not have_motion:
         srh = MISSING
+    elif (
+        layer is not None
+        and _same_right_mover(workspace, rstu, rstv)
+        and np.isfinite(layer.srh_total)
+    ):
+        srh = float(layer.srh_total)
     else:
         total, _phel, _nhel = helicity(prof, 0.0, top_agl, stu=rstu, stv=rstv)
         srh = MISSING if is_missing(total) else float(total)
@@ -369,8 +533,9 @@ def sfc_500m_kinematics(prof):
     # The layer mean wind with the shared Bunkers right-mover motion removed.
     if not have_motion:
         srw_uv = MISSING
+    elif not is_missing(mean_wind_uv):
+        srw_uv = (mnu - rstu, mnv - rstv)
     else:
-        sru, srv = mean_wind(prof, psfc, ptop, stu=rstu, stv=rstv)
-        srw_uv = MISSING if is_missing(sru) else (sru, srv)
+        srw_uv = MISSING
 
     return srh, shear_kt, mean_wind_uv, srw_uv

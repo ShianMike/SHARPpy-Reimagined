@@ -7,6 +7,84 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-30
+
+### Added
+
+- Added a cached Python/Rust SB/MU/100-hPa-ML parcel workspace with CAPE/CIN,
+  LCL/LFC/EL, and 3/6-km CAPE summaries.
+- Added the API 6 traced convective workspace for forecast, surface, MU, ML,
+  and effective parcels, explicit Skew-T user-parcel ascents, and DCAPE with
+  Python-oracle fallback.
+- Added a coarse-grained Python/Rust profile-kinematics backend that computes
+  and caches standard layer shear, mean wind, storm-relative wind, SRH, and
+  Bunkers motion while retaining Python fallback for nonstandard layers.
+- Added strict, lightweight validation for cached portable-sounding NPZ/JSON
+  pairs, including array-shape, metadata, archive-size, and member-count
+  checks.
+- Added separate fast, full-property, and opt-in live-provider CI lanes with
+  bounded test runtimes, branch coverage, focused Ruff checks, and dependency
+  vulnerability auditing.
+- Added a weekly live HRRR Denver regression that verifies the current provider
+  schema still yields a real high-terrain surface and no below-ground isobars.
+- Added an explainable recent-cycle surface-contract probe for provider
+  monitoring, including a failing CLI mode that lists missing ground fields.
+- Added exact release constraints and release-workflow contract tests for
+  source-SHA, action pinning, permissions, and artifact-only publication.
+
+### Changed
+
+- Reuse the standard parcel workspace across eligible SharpTab composite
+  indices and cache failed full-convective-oracle construction, avoiding
+  repeated Python parcel ascents for one immutable `Profile`.
+- Upgrade decoded GUI/render collections to an accelerated convective profile
+  that preserves SHARPpy's public objects while removing repeated Python parcel
+  and DCAPE integrations.
+- Revalidate cached provider mirrors before reuse and key provider decisions
+  by the exact source set instead of retaining stale process-wide choices.
+- Gate releases on the exact source commit that passed the reusable test
+  workflow, build from constrained dependencies, and limit write permission to
+  the artifact-only publish job.
+- Fetch ECCC surface fields first and skip every pressure-level layer at or
+  below the selected point's ground pressure, reducing unnecessary GeoMet
+  point requests.
+- Namespace persistent forecast caches by contract version; older payloads
+  remain inspectable but cannot be reused as current soundings.
+
+### Fixed
+
+- Build ERA5 and every forecast profile from a verified model surface: fetch
+  surface pressure/height, 2-m temperature/moisture, and 10-m wind; remove
+  every below-ground isobar; and fail closed when a provider does not publish
+  the complete ground contract.
+- Decode one-point NOMADS subsets reliably when ecCodes cannot select an exact
+  nearest grid point from the cropped payload.
+- Decode CFS pressure and surface fields on their independently published
+  regular and Gaussian grids, including surface dewpoint derived from specific
+  humidity.
+- Reject physically inconsistent extracted and cached profiles, including
+  non-monotonic pressure/height and dewpoint warmer than temperature, before
+  they can be written or reused.
+- Promote unrecognized test warnings to errors, guard project-owned non-finite
+  kinematic arithmetic, opt cfgrib into xarray's new merge defaults, and
+  narrowly contain documented warnings from pinned scientific dependencies.
+- Keep sparse soundings on the reference 0–6 km CAPE integral instead of
+  applying the dense model-profile native shortcut across kilometre-scale gaps.
+- Recover expired or orphaned model-cache leases so abandoned entries can be
+  pruned.
+- Report cache entries as removed only after deletion actually succeeds, and
+  ignore malformed or incomplete portable-sounding pairs during cache reuse.
+- Stop every picker-owned Qt worker before application teardown, including
+  advisory station and model-availability probes that may be blocked in a
+  network library.
+- Keep the map, forecast-model, ERA5, and raw-WRF control rails usable at the
+  picker's minimum size by scrolling them vertically instead of compressing
+  their controls.
+- Refit native-size sounding windows after realization so menu-bar height does
+  not create unnecessary scroll bars or clip the bottom analysis row.
+- Treat Windows' `SystemError` wrapper for an invalid `os.kill(pid, 0)` probe
+  as a stale model-cache lease instead of failing GUI startup.
+
 ## [0.6.0] - 2026-07-28
 
 ### Added

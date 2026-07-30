@@ -82,6 +82,62 @@ def _write_message(eccodes, output, short_name, level, point_value):
         eccodes.codes_release(message)
 
 
+def _write_surface_message(
+        eccodes, output, short_name, level_type, level, point_value):
+    message = eccodes.codes_grib_new_from_samples("regular_ll_sfc_grib2")
+    settings = {
+        "Ni": 3,
+        "Nj": 2,
+        "latitudeOfFirstGridPointInDegrees": 10.0,
+        "longitudeOfFirstGridPointInDegrees": 100.0,
+        "latitudeOfLastGridPointInDegrees": 11.0,
+        "longitudeOfLastGridPointInDegrees": 102.0,
+        "iDirectionIncrementInDegrees": 1.0,
+        "jDirectionIncrementInDegrees": 1.0,
+        "jScansPositively": 1,
+        "typeOfLevel": level_type,
+        "level": int(level),
+        "shortName": short_name,
+    }
+    try:
+        for key, value in settings.items():
+            eccodes.codes_set(message, key, value)
+        values = float(point_value) + np.arange(-4.0, 2.0)
+        eccodes.codes_set_values(message, values)
+        eccodes.codes_write(message, output)
+    finally:
+        eccodes.codes_release(message)
+
+
+def _write_single_point_message(
+        eccodes, output, short_name, level_type, level, point_value,
+        *, latitude=39.75, longitude=255.0):
+    sample = (
+        "regular_ll_pl_grib2"
+        if level_type == "isobaricInhPa"
+        else "regular_ll_sfc_grib2"
+    )
+    message = eccodes.codes_grib_new_from_samples(sample)
+    settings = {
+        "Ni": 1,
+        "Nj": 1,
+        "latitudeOfFirstGridPointInDegrees": latitude,
+        "longitudeOfFirstGridPointInDegrees": longitude,
+        "latitudeOfLastGridPointInDegrees": latitude,
+        "longitudeOfLastGridPointInDegrees": longitude,
+        "typeOfLevel": level_type,
+        "level": int(level),
+        "shortName": short_name,
+    }
+    try:
+        for key, value in settings.items():
+            eccodes.codes_set(message, key, value)
+        eccodes.codes_set_values(message, [float(point_value)])
+        eccodes.codes_write(message, output)
+    finally:
+        eccodes.codes_release(message)
+
+
 def _write_multifield_wind_message(eccodes, output, level, u_value, v_value):
     u_message = _message_handle(eccodes, "u", level, u_value)
     v_message = _message_handle(eccodes, "v", level, v_value)
@@ -158,6 +214,135 @@ def no_vorticity_grib(tmp_path):
     return path, eccodes
 
 
+@pytest.fixture
+def terrain_surface_grib(tmp_path):
+    try:
+        eccodes = load_eccodes()
+    except RuntimeError as exc:
+        pytest.skip(str(exc))
+
+    path = tmp_path / "terrain-surface-merge.grib2"
+    levels = (1013.2, 1000.0, 975.0, 950.0, 925.0, 900.0, 875.0, 850.0, 825.0)
+    with path.open("wb") as output:
+        for level in levels:
+            for short_name, value in (
+                ("gh", 100.0 + (1013.2 - level) * 9.0),
+                ("t", 293.15),
+                ("r", 50.0),
+                ("u", 3.0),
+                ("v", 4.0),
+                ("absv", level * 1.0e-7),
+            ):
+                _write_message(eccodes, output, short_name, level, value)
+        for short_name, level_type, level, value in (
+            ("sp", "surface", 0, 84060.0),
+            ("orog", "surface", 0, 1655.0),
+            ("2t", "heightAboveGround", 2, 298.15),
+            ("2d", "heightAboveGround", 2, 288.15),
+            ("10u", "heightAboveGround", 10, 5.0),
+            ("10v", "heightAboveGround", 10, 0.0),
+        ):
+            _write_surface_message(
+                eccodes,
+                output,
+                short_name,
+                level_type,
+                level,
+                value,
+            )
+    return path, eccodes
+
+
+@pytest.fixture
+def single_point_surface_grib(tmp_path):
+    try:
+        eccodes = load_eccodes()
+    except RuntimeError as exc:
+        pytest.skip(str(exc))
+
+    path = tmp_path / "single-point-surface.grib2"
+    with path.open("wb") as output:
+        for level, height, temperature in (
+            (850.0, 1500.0, 285.15),
+            (800.0, 2000.0, 280.15),
+            (700.0, 3000.0, 270.15),
+        ):
+            for short_name, value in (
+                ("gh", height),
+                ("t", temperature),
+                ("r", 50.0),
+                ("u", 3.0),
+                ("v", 4.0),
+            ):
+                _write_single_point_message(
+                    eccodes,
+                    output,
+                    short_name,
+                    "isobaricInhPa",
+                    level,
+                    value,
+                )
+        for short_name, level_type, level, value in (
+            ("sp", "surface", 0, 83600.0),
+            ("orog", "surface", 0, 1633.5),
+            ("2t", "heightAboveGround", 2, 298.15),
+            ("2d", "heightAboveGround", 2, 288.15),
+            ("10u", "heightAboveGround", 10, 5.0),
+            ("10v", "heightAboveGround", 10, 0.0),
+        ):
+            _write_single_point_message(
+                eccodes,
+                output,
+                short_name,
+                level_type,
+                level,
+                value,
+            )
+    return path, eccodes
+
+
+@pytest.fixture
+def mixed_grid_surface_grib(tmp_path):
+    try:
+        eccodes = load_eccodes()
+    except RuntimeError as exc:
+        pytest.skip(str(exc))
+
+    path = tmp_path / "mixed-grid-surface.grib2"
+    with path.open("wb") as output:
+        for level, height, temperature in (
+            (850.0, 1500.0, 283.15),
+            (700.0, 3000.0, 270.15),
+        ):
+            for short_name, value in (
+                ("gh", height),
+                ("t", temperature),
+                ("r", 50.0),
+                ("u", 3.0),
+                ("v", 4.0),
+            ):
+                _write_message(eccodes, output, short_name, level, value)
+        for short_name, level_type, level, value in (
+            ("sp", "surface", 0, 90000.0),
+            ("orog", "surface", 0, 500.0),
+            ("2t", "heightAboveGround", 2, 298.15),
+            ("2d", "heightAboveGround", 2, 288.15),
+            ("10u", "heightAboveGround", 10, 5.0),
+            ("10v", "heightAboveGround", 10, 0.0),
+        ):
+            _write_single_point_message(
+                eccodes,
+                output,
+                short_name,
+                level_type,
+                level,
+                value,
+                latitude=11.0,
+                longitude=101.0,
+            )
+    return path, eccodes
+
+
 @pytest.fixture(autouse=True)
 def isolated_grib_caches():
     clear_grib_caches()
@@ -213,6 +398,98 @@ def test_rust_decoder_reads_both_fields_from_multifield_messages(
 
     np.testing.assert_allclose(actual.matrix, expected.matrix, rtol=1e-12)
     np.testing.assert_allclose(actual.v, [4.0, 0.0])
+
+
+def test_direct_decoders_merge_ground_and_remove_subsurface_levels(
+        terrain_surface_grib):
+    native = pytest.importorskip("sharpmod_rs")
+    path, _eccodes = terrain_surface_grib
+
+    expected = PythonBackend().decode_grib_point(path, 10.9, 101.1)
+    actual = RustBackend(native).decode_grib_point(path, 10.9, 101.1)
+
+    assert expected.surface_merged
+    assert expected.below_ground_levels_removed == 8
+    np.testing.assert_allclose(expected.pres, [840.6, 825.0])
+    np.testing.assert_allclose(expected.hght, [1655.0, 1793.8])
+    np.testing.assert_allclose(expected.tmpc, [25.0, 20.0])
+    np.testing.assert_allclose(expected.dwpc[0], 15.0)
+    np.testing.assert_allclose(expected.u, [5.0, 3.0])
+    np.testing.assert_allclose(expected.v, [0.0, 4.0])
+    assert expected.omeg[0] == -9999.0
+    assert actual.surface_merged
+    assert actual.below_ground_levels_removed == 8
+    np.testing.assert_allclose(actual.matrix, expected.matrix, rtol=1e-12)
+
+
+def test_direct_decoders_accept_nearby_request_for_one_point_subset(
+        single_point_surface_grib):
+    native = pytest.importorskip("sharpmod_rs")
+    path, _eccodes = single_point_surface_grib
+
+    expected = PythonBackend().decode_grib_point(
+        path, 39.7392, -104.9903
+    )
+    actual = RustBackend(native).decode_grib_point(
+        path, 39.7392, -104.9903
+    )
+
+    assert expected.surface_merged
+    assert expected.below_ground_levels_removed == 1
+    assert expected.selected_lat == pytest.approx(39.75)
+    assert expected.selected_lon == pytest.approx(-105.0)
+    np.testing.assert_allclose(expected.pres, [836.0, 800.0, 700.0])
+    np.testing.assert_allclose(actual.matrix, expected.matrix, rtol=1e-12)
+
+
+def test_rust_decoder_selects_each_required_grid_independently(
+        mixed_grid_surface_grib):
+    native = pytest.importorskip("sharpmod_rs")
+    path, _eccodes = mixed_grid_surface_grib
+
+    actual = RustBackend(native).decode_grib_point(
+        path, 10.9, 101.1
+    )
+
+    assert actual.surface_merged
+    assert actual.below_ground_levels_removed == 0
+    assert actual.selected_lat == pytest.approx(11.0)
+    assert actual.selected_lon == pytest.approx(101.0)
+    np.testing.assert_allclose(actual.pres, [900.0, 850.0, 700.0])
+    np.testing.assert_allclose(actual.hght, [500.0, 1500.0, 3000.0])
+
+
+def test_xarray_fallback_applies_the_same_verified_surface_merge(
+        terrain_surface_grib):
+    from sharpmod.tools import model_extract
+
+    path, _eccodes = terrain_surface_grib
+    source = model_extract._LocalGribDataset(path)
+    fallback = None
+    try:
+        fallback = source.fallback_point_dataset(
+            10.9,
+            101.1,
+            datetime(2026, 7, 16, tzinfo=timezone.utc),
+        )
+        columns, count, *_rest = model_extract._xarray_point_columns(
+            fallback,
+            10.9,
+            101.1,
+            datetime(2026, 7, 16, tzinfo=timezone.utc),
+            0,
+            "synthetic",
+        )
+    finally:
+        if fallback is not None:
+            fallback.close()
+        source.close()
+
+    assert columns["_surface_merged"] is True
+    assert columns["_below_ground_levels_removed"] == 8
+    assert count == 2
+    np.testing.assert_allclose(columns["pres"], [840.6, 825.0])
+    np.testing.assert_allclose(columns["hght"], [1655.0, 1793.8])
 
 
 def test_direct_decoder_rejects_missing_required_core_column(tmp_path):
@@ -393,10 +670,12 @@ def test_direct_decoder_matches_existing_xarray_column_science(compact_grib):
     path, _eccodes = compact_grib
     cfgrib = pytest.importorskip("cfgrib")
     from sharpmod.tools import era5_extract
+    from sharpmod.upstream_warnings import xarray_new_combine_defaults
 
     direct = decode_grib_point(path, 10.9, 101.1)
-    source_datasets = list(cfgrib.open_datasets(
-        path, backend_kwargs={"indexpath": ""}))
+    with xarray_new_combine_defaults():
+        source_datasets = list(cfgrib.open_datasets(
+            path, backend_kwargs={"indexpath": ""}))
     dataset = era5_extract._merge_datasets(source_datasets)
     try:
         _, lats = era5_extract._coord_values(dataset, era5_extract._LAT_COORDS)
@@ -526,7 +805,7 @@ def test_rust_adapter_caches_one_native_matrix_by_file_identity(
         def decode_grib_point(*args):
             calls.append(args)
             matrix = np.arange(18.0, dtype=np.float64).reshape(9, 2)
-            return matrix, 11.0, 101.0, None
+            return matrix, 11.0, 101.0, None, False, 0
 
     monkeypatch.setattr(
         rust_backend, "_eccodes_library_path", lambda: "eccodes-library"
@@ -578,6 +857,9 @@ def test_retrieval_returns_local_grib_without_constructing_xarray(
         "_planned_model_search",
         lambda *_args: ("pressure-search", fields, []),
     )
+    monkeypatch.setattr(
+        model_extract, "_inventory_has_surface_contract", lambda _value: True
+    )
     monkeypatch.setattr(model_extract, "select_herbie_provider", lambda _h: None)
     monkeypatch.setattr(
         model_extract,
@@ -600,11 +882,11 @@ def test_retrieval_returns_local_grib_without_constructing_xarray(
 
 
 def test_model_extract_direct_source_preserves_npz_and_metadata_contract(
-        compact_grib, tmp_path, monkeypatch):
+        terrain_surface_grib, tmp_path, monkeypatch):
     from sharpmod import backends
     from sharpmod.tools import model_extract
 
-    path, _eccodes = compact_grib
+    path, _eccodes = terrain_surface_grib
     output = tmp_path / "direct-point.npz"
     source = model_extract._LocalGribDataset(path)
     progress = []

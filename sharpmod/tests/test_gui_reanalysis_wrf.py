@@ -149,7 +149,10 @@ def test_era5_worker_reuses_snapped_point_hour_cache(
             "pres": [1000.0, 850.0], "hght": [100.0, 1500.0],
             "tmpc": [20.0, 10.0], "dwpc": [15.0, 5.0],
             "wdir": [180.0, 200.0], "wspd": [10.0, 20.0],
+            "omeg": [0.0, 0.0],
             "loc": loc, "model": "ERA5", "lat": lat, "lon": lon,
+            "valid": valid_time.strftime("%Y-%m-%d %H:%M"),
+            "run": valid_time.strftime("%Y-%m-%d %H:%M"),
         }
         era5_extract._atomic_write_npz(out_path, arrays)
         era5_extract._atomic_write_json(

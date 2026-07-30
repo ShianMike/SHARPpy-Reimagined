@@ -133,6 +133,78 @@ def prepare_qc_columns(columns, names):
     return arrays
 
 
+def prepare_profile_kinematics(
+    pres,
+    hght,
+    u,
+    v,
+    layer_tops_agl,
+    *,
+    missing,
+):
+    """Normalize one profile for the coarse-grained kinematics backend call."""
+    names = ("pres", "hght", "u", "v")
+    arrays = prepare_qc_columns((pres, hght, u, v), names)
+    if missing is not None:
+        normalized = []
+        for array in arrays:
+            if np.any(array == missing):
+                array = np.array(array, copy=True, order="C")
+                array[array == missing] = np.nan
+            normalized.append(array)
+        arrays = tuple(normalized)
+
+    layer_tops = prepare_1d(layer_tops_agl, name="layer_tops_agl")
+    if np.any(~np.isfinite(layer_tops)) or np.any(layer_tops < 0.0):
+        raise ValueError(
+            "layer_tops_agl must contain finite, non-negative heights"
+        )
+    return (*arrays, layer_tops)
+
+
+def prepare_profile_parcels(
+    pres,
+    hght,
+    tmpc,
+    dwpc,
+    *,
+    missing,
+):
+    """Normalize one thermodynamic profile for the parcel workspace."""
+    names = ("pres", "hght", "tmpc", "dwpc")
+    arrays = prepare_qc_columns((pres, hght, tmpc, dwpc), names)
+    if missing is None:
+        return arrays
+    normalized = []
+    for array in arrays:
+        if np.any(array == missing):
+            array = np.array(array, copy=True, order="C")
+            array[array == missing] = np.nan
+        normalized.append(array)
+    return tuple(normalized)
+
+
+def prepare_sfc_index(sfc, profile_length):
+    """Validate and return one integer surface index."""
+    if isinstance(sfc, (bool, np.bool_)):
+        raise ValueError("sfc must be an integer profile index")
+    try:
+        index = int(sfc)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("sfc must be an integer profile index") from exc
+    try:
+        exact = float(sfc) == float(index)
+    except (TypeError, ValueError, OverflowError):
+        exact = False
+    if not exact:
+        raise ValueError("sfc must be an integer profile index")
+    if profile_length and not 0 <= index < profile_length:
+        raise ValueError("sfc is outside the profile")
+    if not profile_length and index != 0:
+        raise ValueError("sfc is outside the profile")
+    return index
+
+
 def missing_mask(array, missing):
     mask = ~np.isfinite(array)
     if missing is not None:

@@ -107,6 +107,17 @@ pub fn basic_sounding_qc(
     {
         issues.push("dewpoint_below_absolute_zero".to_owned());
     }
+    if tmpc
+        .iter()
+        .copied()
+        .zip(dwpc.iter().copied())
+        .filter(|(temperature, dewpoint)| {
+            !is_missing(*temperature, missing) && !is_missing(*dewpoint, missing)
+        })
+        .any(|(temperature, dewpoint)| dewpoint > temperature)
+    {
+        issues.push("dewpoint_above_temperature".to_owned());
+    }
     if wdir
         .iter()
         .copied()
@@ -224,6 +235,7 @@ mod tests {
             vec![
                 "temperature_below_absolute_zero",
                 "dewpoint_below_absolute_zero",
+                "dewpoint_above_temperature",
                 "wind_direction_out_of_range",
                 "negative_wind_speed",
             ]
@@ -265,13 +277,14 @@ mod tests {
     }
 
     #[test]
-    fn dewpoint_warmer_than_temperature_is_not_an_extra_qc_rule() {
+    fn dewpoint_warmer_than_temperature_is_rejected() {
         let (pres, hght, tmpc, mut dwpc, wdir, wspd) = valid_columns();
         dwpc[0] = tmpc[0] + 10.0;
 
         let result =
             basic_sounding_qc(&pres, &hght, &tmpc, &dwpc, &wdir, &wspd, Some(MISSING)).unwrap();
 
-        assert!(result.valid);
+        assert!(!result.valid);
+        assert_eq!(result.issues, vec!["dewpoint_above_temperature"]);
     }
 }

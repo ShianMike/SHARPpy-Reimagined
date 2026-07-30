@@ -31,6 +31,9 @@ const LEVEL_KEY: &[u8] = b"level\0";
 const GRID_HASH_KEY: &[u8] = b"md5GridSection\0";
 const VALUES_KEY: &[u8] = b"values\0";
 const MISSING_VALUE_KEY: &[u8] = b"missingValue\0";
+const NUMBER_OF_POINTS_KEY: &[u8] = b"numberOfPoints\0";
+const FIRST_LATITUDE_KEY: &[u8] = b"latitudeOfFirstGridPointInDegrees\0";
+const FIRST_LONGITUDE_KEY: &[u8] = b"longitudeOfFirstGridPointInDegrees\0";
 
 static ECCODES_CALL_LOCK: Mutex<()> = Mutex::new(());
 static ECCODES_API: OnceLock<EccodesApi> = OnceLock::new();
@@ -62,6 +65,8 @@ pub struct DecodedPoint {
     pub selected_latitude: f64,
     pub selected_longitude: f64,
     pub surface_relative_vorticity: Option<f64>,
+    pub surface_merged: bool,
+    pub below_ground_levels_removed: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -544,6 +549,19 @@ enum FieldKind {
     AbsoluteVorticity,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SurfaceFieldKind {
+    Pressure,
+    Height,
+    Geopotential,
+    Temperature,
+    Dewpoint,
+    RelativeHumidity,
+    SpecificHumidity,
+    UWind,
+    VWind,
+}
+
 fn classify_field(short_name: &str) -> Option<FieldKind> {
     match short_name.trim().to_ascii_lowercase().as_str() {
         "t" | "tmp" | "temperature" => Some(FieldKind::Temperature),
@@ -570,6 +588,47 @@ fn pressure_hpa(type_of_level: &str, level: f64) -> Option<f64> {
         _ => return None,
     };
     (pressure > 0.0).then_some(pressure)
+}
+
+fn classify_surface_field(
+    short_name: &str,
+    type_of_level: &str,
+    level: f64,
+) -> Option<SurfaceFieldKind> {
+    if !level.is_finite() {
+        return None;
+    }
+    let short_name = short_name.trim().to_ascii_lowercase();
+    let level_type = type_of_level.trim().to_ascii_lowercase();
+    if level_type == "surface" && level == 0.0 {
+        return match short_name.as_str() {
+            "sp" | "pres" => Some(SurfaceFieldKind::Pressure),
+            "z" | "geopotential" => Some(SurfaceFieldKind::Geopotential),
+            "orog" | "gh" | "hgt" | "geopotential_height" => Some(SurfaceFieldKind::Height),
+            _ => None,
+        };
+    }
+    if level_type == "heightaboveground" && level == 2.0 {
+        return match short_name.as_str() {
+            "2t" | "t2m" | "tmp" | "t" | "temperature" => Some(SurfaceFieldKind::Temperature),
+            "2d" | "d2m" | "dpt" | "dewpoint" => Some(SurfaceFieldKind::Dewpoint),
+            "2r" | "rh2m" | "r" | "rh" | "relative_humidity" => {
+                Some(SurfaceFieldKind::RelativeHumidity)
+            }
+            "2sh" | "sh2" | "q" | "spfh" | "specific_humidity" => {
+                Some(SurfaceFieldKind::SpecificHumidity)
+            }
+            _ => None,
+        };
+    }
+    if level_type == "heightaboveground" && level == 10.0 {
+        return match short_name.as_str() {
+            "10u" | "u10" | "ugrd" | "u" => Some(SurfaceFieldKind::UWind),
+            "10v" | "v10" | "vgrd" | "v" => Some(SurfaceFieldKind::VWind),
+            _ => None,
+        };
+    }
+    None
 }
 
 #[derive(Clone, Debug)]
@@ -635,6 +694,15 @@ struct RecordAssembler {
     saw_specific_humidity: bool,
     saw_u_wind: bool,
     saw_v_wind: bool,
+    surface_pressure: Option<f64>,
+    surface_height: Option<f64>,
+    surface_geopotential: Option<f64>,
+    surface_temperature: Option<f64>,
+    surface_dewpoint: Option<f64>,
+    surface_relative_humidity: Option<f64>,
+    surface_specific_humidity: Option<f64>,
+    surface_u_wind: Option<f64>,
+    surface_v_wind: Option<f64>,
 }
 
 impl RecordAssembler {
@@ -661,6 +729,23 @@ impl RecordAssembler {
             self.levels.last_mut().expect("a level was just inserted")
         };
         record.insert(kind, value);
+    }
+
+    fn insert_surface(&mut self, kind: SurfaceFieldKind, value: f64) {
+        let slot = match kind {
+            SurfaceFieldKind::Pressure => &mut self.surface_pressure,
+            SurfaceFieldKind::Height => &mut self.surface_height,
+            SurfaceFieldKind::Geopotential => &mut self.surface_geopotential,
+            SurfaceFieldKind::Temperature => &mut self.surface_temperature,
+            SurfaceFieldKind::Dewpoint => &mut self.surface_dewpoint,
+            SurfaceFieldKind::RelativeHumidity => &mut self.surface_relative_humidity,
+            SurfaceFieldKind::SpecificHumidity => &mut self.surface_specific_humidity,
+            SurfaceFieldKind::UWind => &mut self.surface_u_wind,
+            SurfaceFieldKind::VWind => &mut self.surface_v_wind,
+        };
+        if slot.is_none() {
+            *slot = Some(value);
+        }
     }
 
     fn assemble(
@@ -708,10 +793,97 @@ impl RecordAssembler {
         let output_missing = missing
             .filter(|value| value.is_finite())
             .unwrap_or(f64::NAN);
-        let level_count = self.levels.len();
+        let surface_pressure = usable(self.surface_pressure, missing)
+            .map(|value| if value > 2000.0 { value / 100.0 } else { value })
+            .filter(|value| *value > 0.0);
+        let surface_height = usable(self.surface_height, missing)
+            .or_else(|| usable(self.surface_geopotential, missing).map(|value| value / G0));
+        let surface_temperature = usable(self.surface_temperature, missing);
+        let surface_dewpoint = surface_pressure
+            .and_then(|pressure| {
+                usable(self.surface_specific_humidity, missing)
+                    .map(|humidity| dewpoint_from_specific_humidity(humidity, pressure))
+            })
+            .or_else(|| usable(self.surface_dewpoint, missing).map(|value| value - KELVIN_OFFSET))
+            .or_else(|| {
+                surface_temperature.and_then(|temperature| {
+                    usable(self.surface_relative_humidity, missing)
+                        .map(|humidity| dewpoint_from_rh(temperature - KELVIN_OFFSET, humidity))
+                })
+            });
+        let surface_u = usable(self.surface_u_wind, missing);
+        let surface_v = usable(self.surface_v_wind, missing);
+        let surface = surface_pressure
+            .zip(surface_height)
+            .zip(surface_temperature.map(|value| value - KELVIN_OFFSET))
+            .zip(surface_dewpoint)
+            .zip(surface_u)
+            .zip(surface_v)
+            .map(|(((((pressure, height), temperature), dewpoint), u), v)| {
+                (pressure, height, temperature, dewpoint, u, v)
+            })
+            .filter(|(pressure, height, temperature, dewpoint, u, v)| {
+                (100.0..=1100.0).contains(pressure)
+                    && (-1000.0..=10_000.0).contains(height)
+                    && (-120.0..=70.0).contains(temperature)
+                    && (-150.0..=*temperature + 1.0e-6).contains(dewpoint)
+                    && u.abs() <= 200.0
+                    && v.abs() <= 200.0
+            });
+        // Preserve a vorticity sample that is exactly coincident with the
+        // verified ground. The profile row at that pressure is replaced by
+        // the 2 m/10 m merge, but the pressure-level vorticity is still the
+        // closest valid atmospheric diagnostic.
+        let surface_relative_vorticity = first_usable(
+            self.levels
+                .iter()
+                .filter(|record| {
+                    surface_pressure
+                        .map(|pressure| record.pressure <= pressure)
+                        .unwrap_or(true)
+                })
+                .map(|record| record.relative_vorticity),
+            missing,
+        )
+        .or_else(|| {
+            first_usable(
+                self.levels
+                    .iter()
+                    .filter(|record| {
+                        surface_pressure
+                            .map(|pressure| record.pressure <= pressure)
+                            .unwrap_or(true)
+                    })
+                    .map(|record| record.absolute_vorticity),
+                missing,
+            )
+            .map(|absolute| absolute - coriolis_parameter(selected.latitude))
+        });
+        let original_level_count = self.levels.len();
+        if let Some((pressure, _, _, _, _, _)) = surface {
+            self.levels.retain(|record| record.pressure < pressure);
+        }
+        let below_ground_levels_removed = original_level_count - self.levels.len();
+        let surface_merged = surface.is_some();
+        let profile_offset = usize::from(surface_merged);
+        let level_count = self.levels.len() + profile_offset;
         let mut matrix = vec![output_missing; COLUMN_COUNT * level_count];
 
+        if let Some((pressure, height, temperature, dewpoint, u, v)) = surface {
+            let direction = (270.0 - v.atan2(u).to_degrees()).rem_euclid(360.0);
+            let speed = u.hypot(v) * MPS_TO_KNOTS;
+            matrix[0] = pressure;
+            matrix[level_count] = height;
+            matrix[2 * level_count] = temperature;
+            matrix[3 * level_count] = dewpoint;
+            matrix[4 * level_count] = direction;
+            matrix[5 * level_count] = speed;
+            matrix[7 * level_count] = u;
+            matrix[8 * level_count] = v;
+        }
+
         for (index, record) in self.levels.iter().enumerate() {
+            let index = index + profile_offset;
             let temperature_kelvin = usable(record.temperature, missing);
             let temperature_c = temperature_kelvin
                 .map(|value| value - KELVIN_OFFSET)
@@ -761,24 +933,14 @@ impl RecordAssembler {
             matrix[8 * level_count + index] = v.unwrap_or(output_missing);
         }
 
-        let surface_relative_vorticity = first_usable(
-            self.levels.iter().map(|record| record.relative_vorticity),
-            missing,
-        )
-        .or_else(|| {
-            first_usable(
-                self.levels.iter().map(|record| record.absolute_vorticity),
-                missing,
-            )
-            .map(|absolute| absolute - coriolis_parameter(selected.latitude))
-        });
-
         Ok(DecodedPoint {
             matrix,
             level_count,
             selected_latitude: selected.latitude,
             selected_longitude: normalize_longitude(selected.longitude),
             surface_relative_vorticity,
+            surface_merged,
+            below_ground_levels_removed,
         })
     }
 }
@@ -821,9 +983,36 @@ fn normalize_longitude(longitude: f64) -> f64 {
     (longitude + 180.0).rem_euclid(360.0) - 180.0
 }
 
-fn points_match(left: GridPoint, right: GridPoint) -> bool {
-    (left.latitude - right.latitude).abs() <= 1.0e-8
-        && normalize_longitude(left.longitude - right.longitude).abs() <= 1.0e-8
+fn find_nearest_wrapped(
+    api: &EccodesApi,
+    handle: *const c_void,
+    latitude: f64,
+    longitude: f64,
+) -> Result<GridPoint, GribError> {
+    let normalized = normalize_longitude(longitude);
+    let mut last_error = None;
+    for candidate in [normalized, normalized + 360.0, normalized - 360.0] {
+        match api.find_nearest(handle, latitude, candidate) {
+            Ok(point) => return Ok(point),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    if api.get_long_value(handle, NUMBER_OF_POINTS_KEY).ok() == Some(1) {
+        let grid_latitude = api.get_optional_double(handle, FIRST_LATITUDE_KEY);
+        let grid_longitude = api.get_optional_double(handle, FIRST_LONGITUDE_KEY);
+        if let (Some(grid_latitude), Some(grid_longitude)) = (grid_latitude, grid_longitude) {
+            if (grid_latitude - latitude).abs() <= 1.0
+                && normalize_longitude(grid_longitude - normalized).abs() <= 1.0
+            {
+                return Ok(GridPoint {
+                    index: 0,
+                    latitude: grid_latitude,
+                    longitude: normalize_longitude(grid_longitude),
+                });
+            }
+        }
+    }
+    Err(last_error.unwrap_or_else(|| GribError::new("ecCodes nearest lookup failed")))
 }
 
 /// Decode one nearest-grid-point sounding with one Python-to-Rust call.
@@ -873,7 +1062,8 @@ pub fn decode_grib_point(
     let api = EccodesApi::cached(eccodes_library_path)?;
     let _multi_support = api.enable_multi_support();
     let mut grids = HashMap::<String, GridPoint>::new();
-    let mut selected_point = None;
+    let mut selected_pressure_point = None;
+    let mut selected_surface_point = None;
     let mut assembler = RecordAssembler::default();
     let mut message_order = 0;
 
@@ -899,18 +1089,18 @@ pub fn decode_grib_point(
             let Ok(short_name) = api.get_string_value(handle.as_ptr(), SHORT_NAME_KEY) else {
                 continue;
             };
-            let Some(kind) = classify_field(&short_name) else {
-                continue;
-            };
             let Ok(type_of_level) = api.get_string_value(handle.as_ptr(), TYPE_OF_LEVEL_KEY) else {
                 continue;
             };
             let Ok(level) = api.get_double_value(handle.as_ptr(), LEVEL_KEY) else {
                 continue;
             };
-            let Some(pressure) = pressure_hpa(&type_of_level, level) else {
+            let pressure_field =
+                pressure_hpa(&type_of_level, level).zip(classify_field(&short_name));
+            let surface_field = classify_surface_field(&short_name, &type_of_level, level);
+            if pressure_field.is_none() && surface_field.is_none() {
                 continue;
-            };
+            }
 
             let grid_key = api
                 .get_optional_string(handle.as_ptr(), GRID_HASH_KEY)
@@ -919,18 +1109,14 @@ pub fn decode_grib_point(
             let point = if let Some(point) = grids.get(&grid_key).copied() {
                 point
             } else {
-                let point = api.find_nearest(handle.as_ptr(), latitude, longitude)?;
+                let point = find_nearest_wrapped(api, handle.as_ptr(), latitude, longitude)?;
                 grids.insert(grid_key, point);
                 point
             };
-            if let Some(selected) = selected_point {
-                if !points_match(selected, point) {
-                    return Err(GribError::new(
-                        "required GRIB fields resolve to inconsistent nearest grid points",
-                    ));
-                }
+            if pressure_field.is_some() {
+                selected_pressure_point.get_or_insert(point);
             } else {
-                selected_point = Some(point);
+                selected_surface_point.get_or_insert(point);
             }
 
             let raw_value = api.get_element(handle.as_ptr(), point.index)?;
@@ -944,11 +1130,16 @@ pub fn decode_grib_point(
             } else {
                 raw_value
             };
-            assembler.insert(pressure, kind, value, order);
+            if let Some((pressure, kind)) = pressure_field {
+                assembler.insert(pressure, kind, value, order);
+            } else if let Some(kind) = surface_field {
+                assembler.insert_surface(kind, value);
+            }
         }
     }
 
-    let selected = selected_point
+    let selected = selected_pressure_point
+        .or(selected_surface_point)
         .ok_or_else(|| GribError::new("no required pressure-level GRIB fields were found"))?;
     assembler.assemble(selected, missing)
 }
@@ -1050,6 +1241,18 @@ mod tests {
         assert_eq!(pressure_hpa("isobaricInhPa", 850.0), Some(850.0));
         assert_eq!(pressure_hpa("isobaricInPa", 85_000.0), Some(850.0));
         assert_eq!(pressure_hpa("surface", 0.0), None);
+        assert_eq!(
+            classify_surface_field("sp", "surface", 0.0),
+            Some(SurfaceFieldKind::Pressure)
+        );
+        assert_eq!(
+            classify_surface_field("2t", "heightAboveGround", 2.0),
+            Some(SurfaceFieldKind::Temperature)
+        );
+        assert_eq!(
+            classify_surface_field("10v", "heightAboveGround", 10.0),
+            Some(SurfaceFieldKind::VWind)
+        );
     }
 
     #[test]
@@ -1101,6 +1304,55 @@ mod tests {
         assert_eq!(decoded.selected_longitude, -90.0);
         let expected_vorticity = 2.0e-4 - coriolis_parameter(30.0);
         assert!((decoded.surface_relative_vorticity.unwrap() - expected_vorticity).abs() < 1.0e-15);
+        assert!(!decoded.surface_merged);
+        assert_eq!(decoded.below_ground_levels_removed, 0);
+    }
+
+    #[test]
+    fn verified_surface_removes_every_below_ground_isobar() {
+        let mut assembler = RecordAssembler::default();
+        let levels = [
+            1013.2, 1000.0, 975.0, 950.0, 925.0, 900.0, 875.0, 850.0, 825.0, 840.6,
+        ];
+        for (order, pressure) in levels.into_iter().enumerate() {
+            assembler.insert(pressure, FieldKind::GeopotentialHeight, 100.0, order);
+            assembler.insert(pressure, FieldKind::Temperature, 293.15, order);
+            assembler.insert(pressure, FieldKind::RelativeHumidity, 50.0, order);
+            assembler.insert(pressure, FieldKind::UWind, 3.0, order);
+            assembler.insert(pressure, FieldKind::VWind, 4.0, order);
+            assembler.insert(
+                pressure,
+                FieldKind::RelativeVorticity,
+                pressure * 1.0e-7,
+                order,
+            );
+        }
+        assembler.insert_surface(SurfaceFieldKind::Pressure, 84_060.0);
+        assembler.insert_surface(SurfaceFieldKind::Height, 1655.0);
+        assembler.insert_surface(SurfaceFieldKind::Temperature, 298.15);
+        assembler.insert_surface(SurfaceFieldKind::Dewpoint, 288.15);
+        assembler.insert_surface(SurfaceFieldKind::UWind, 5.0);
+        assembler.insert_surface(SurfaceFieldKind::VWind, 0.0);
+
+        let decoded = assembler
+            .assemble(
+                GridPoint {
+                    index: 0,
+                    latitude: 39.7,
+                    longitude: -105.0,
+                },
+                Some(-9999.0),
+            )
+            .unwrap();
+
+        assert!(decoded.surface_merged);
+        assert_eq!(decoded.below_ground_levels_removed, 9);
+        assert_eq!(decoded.level_count, 2);
+        assert_eq!(&decoded.matrix[0..2], &[840.6, 825.0]);
+        assert_eq!(&decoded.matrix[2..4], &[1655.0, 100.0]);
+        assert!((decoded.matrix[4] - 25.0).abs() < 1.0e-12);
+        assert!((decoded.matrix[6] - 15.0).abs() < 1.0e-12);
+        assert_eq!(decoded.surface_relative_vorticity, Some(840.6 * 1.0e-7),);
     }
 
     #[test]

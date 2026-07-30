@@ -7,6 +7,22 @@ import re
 
 NOAA_REQUIRED_FIELDS = ("HGT", "TMP", "UGRD", "VGRD")
 IFS_REQUIRED_FIELDS = ("gh", "t", "u", "v")
+NOAA_SURFACE_FIELDS = ("PRES", "DPT", "RH", "SPFH")
+NOAA_SURFACE_SEARCH = (
+    r":(?:PRES|HGT):surface:"
+    r"|:(?:TMP|DPT|RH|SPFH):2 m above ground:"
+    r"|:(?:UGRD|VGRD):10 m above ground:"
+)
+# CFS flux fields are split across regular latitude/longitude and Gaussian
+# grids. Specific humidity shares the pressure/terrain/temperature Gaussian
+# grid, so deriving dewpoint from it keeps the inserted ground row colocated.
+CFS_SURFACE_SEARCH = (
+    r":(?:PRES|HGT):surface:"
+    r"|:(?:TMP|SPFH):2 m above ground:"
+    r"|:(?:UGRD|VGRD):10 m above ground:"
+)
+IFS_SURFACE_FIELDS = ("z", "sp", "2t", "2d", "10u", "10v")
+IFS_SURFACE_SEARCH = r":(?:z|sp|2t|2d|10u|10v):sfc:"
 
 
 def _available_variables(inventory, *, upper: bool) -> set[str]:
@@ -71,15 +87,31 @@ def choose_ifs_fields(inventory) -> tuple[str, ...]:
 
 
 def build_noaa_search(fields) -> str:
-    """Build an all-published-pressure-level NOAA inventory regex."""
+    """Build an all-level NOAA search plus the verified surface inputs."""
     names = "|".join(re.escape(str(field).upper()) for field in fields)
-    return rf":({names}):\d+(?:\.\d+)? mb:"
+    pressure = rf":(?:{names}):\d+(?:\.\d+)? mb:"
+    return rf"(?:{pressure})|(?:{NOAA_SURFACE_SEARCH})"
+
+
+def supports_noaa_surface_merge(fields) -> bool:
+    """Return whether provenance proves all ground-level inputs were fetched."""
+    available = {str(field).upper() for field in (fields or ())}
+    required = set(NOAA_REQUIRED_FIELDS) | {"PRES"}
+    moisture = {"DPT", "RH", "SPFH"}
+    return required.issubset(available) and not moisture.isdisjoint(available)
+
+
+def supports_ifs_surface_merge(fields) -> bool:
+    """Return whether provenance includes the complete IFS ground contract."""
+    available = {str(field).lower() for field in (fields or ())}
+    return set(IFS_REQUIRED_FIELDS + IFS_SURFACE_FIELDS).issubset(available)
 
 
 def build_ifs_search(fields) -> str:
     """Build an all-published-pressure-level ECMWF inventory regex."""
     names = "|".join(re.escape(str(field).lower()) for field in fields)
-    return rf":({names}):\d+:pl:"
+    pressure = rf":(?:{names}):\d+:pl:"
+    return rf"(?:{pressure})|(?:{IFS_SURFACE_SEARCH})"
 
 
 def choose_search(config, inventory) -> tuple[str, tuple[str, ...]]:

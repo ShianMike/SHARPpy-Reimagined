@@ -114,7 +114,9 @@ def test_multi_point_local_grib_uses_one_vectorized_decode(
         return source, SimpleNamespace(
             grib="https://example.invalid/batch.grib2",
             _sharpmod_source_url="https://example.invalid/batch.grib2",
-            _sharpmod_fields=("HGT", "TMP", "RH", "UGRD", "VGRD", "ABSV"),
+            _sharpmod_fields=(
+                "HGT", "TMP", "RH", "UGRD", "VGRD", "ABSV", "PRES", "DPT",
+            ),
             _sharpmod_transport="optimized-ranges",
         )
 
@@ -133,7 +135,9 @@ def test_multi_point_local_grib_uses_one_vectorized_decode(
                 [0.0, 3.0],
                 [5.0, 4.0],
             ])
-            results.append(DecodedPoint(matrix, lat, lon, 8.0e-5 + index))
+            results.append(DecodedPoint(
+                matrix, lat, lon, 8.0e-5 + index, True, 0
+            ))
         return tuple(results)
 
     monkeypatch.setattr(model_extract, "_retrieve_dataset", retrieve)
@@ -177,7 +181,8 @@ def test_multi_point_missing_vorticity_uses_one_vectorized_wind_stencil(
             [-0.2, -0.1], [0.0, 3.0], [5.0, 4.0],
         ])
         return tuple(
-            DecodedPoint(matrix, lat, lon, None) for lat, lon in points
+            DecodedPoint(matrix, lat, lon, None, True, 0)
+            for lat, lon in points
         )
 
     def bulk_wind(_path, points):

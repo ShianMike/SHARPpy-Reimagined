@@ -7,21 +7,24 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v0.6.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v0.7.0). Created if it does not exist."
         required: true
-        default: "v0.6.0"
+        default: "v0.7.0"
 
+# Build and test jobs are read-only. Only the isolated publish job below can
+# create a tag or GitHub Release.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-windows-exe:
-    name: Build Windows executable
-    runs-on: windows-latest
-    timeout-minutes: 60
-    env:
-      SHARPMOD_BACKEND: "rust"
-      SHARPMOD_REQUIRE_RUST: "1"
+  resolve-release:
+    name: Resolve and validate release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      tag_exists: ${{ steps.release.outputs.tag_exists }}
+      source_sha: ${{ steps.source.outputs.sha }}
 
     steps:
       - name: Resolve release tag and source
@@ -59,15 +62,13 @@ jobs:
               checkout_ref="refs/tags/$tag"
               tag_exists=true
             elif [ "$status" -eq 2 ]; then
-              # GITHUB_SHA is the immutable commit selected in the Run workflow
-              # ref picker. The release action creates the new tag there later.
               checkout_ref="$GITHUB_SHA"
             else
               echo "Unable to determine whether release tag $tag exists" >&2
               exit "$status"
             fi
           else
-            checkout_ref="$GITHUB_REF"
+            checkout_ref="$GITHUB_SHA"
             tag_exists=true
           fi
           printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
@@ -75,23 +76,15 @@ jobs:
           printf 'tag_exists=%s\n' "$tag_exists" >> "$GITHUB_OUTPUT"
 
       - name: Check out release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ steps.release.outputs.checkout_ref }}
+          persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Set up Rust 1.88 toolchain
+      - name: Record immutable release source
+        id: source
         shell: bash
-        run: |
-          set -euo pipefail
-          rustup toolchain install 1.88.0 --profile minimal
-          rustup default 1.88.0
-          rustc --version | grep -E '^rustc 1\.88\.0 '
+        run: printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Validate release tag and source versions
         shell: bash
@@ -153,17 +146,63 @@ jobs:
           print(f"Validated {release_tag} against {versions}")
           PY
 
-      - name: Install package and build dependencies
+  test-release:
+    name: Test exact release source
+    needs: resolve-release
+    permissions:
+      contents: read
+    uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ needs.resolve-release.outputs.source_sha }}
+      run_live_providers: false
+
+  build-windows-exe:
+    name: Build Windows executable
+    needs: [resolve-release, test-release]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      SHARPMOD_BACKEND: "rust"
+      SHARPMOD_REQUIRE_RUST: "1"
+
+    steps:
+      - name: Check out tested release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.resolve-release.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Set up Rust 1.88 toolchain
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[render,era5,wrf]"
+          set -euo pipefail
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup default 1.88.0
+          rustc --version | grep -E '^rustc 1\.88\.0 '
+
+      - name: Install constrained package and build dependencies
+        shell: pwsh
+        run: |
+          $constraint = (Resolve-Path "constraints/release.txt").Path
+          $env:PIP_CONSTRAINT = $constraint
+          python -m pip install "pip==26.2"
+          python -m pip install --constraint $constraint `
+            -e ".[render,era5,wrf]"
           python scripts/install_sharppy_compat.py --sharppy-only
-          python -m pip install pyinstaller
+          python -m pip install --constraint $constraint pyinstaller maturin
+          python -m pip check
 
       - name: Build and install locked Rust wheel
         shell: pwsh
         run: |
-          python -m pip install "maturin==1.14.1"
           Push-Location "rust/sharpmod-rs"
           try {
             python -m maturin build --release --locked --interpreter python --out dist
@@ -210,7 +249,6 @@ jobs:
 
       - name: Generate application icon
         run: python packaging/make_icon.py
-        continue-on-error: true
 
       - name: Build one-folder executable
         run: pyinstaller packaging/sharpmod_gui.spec --noconfirm
@@ -274,36 +312,52 @@ jobs:
           }
           $result | ConvertTo-Json -Depth 5
 
-      - name: Package one-folder build as zip
+      - name: Stage reproducible release artifacts
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
         run: |
-          $tag = "${{ steps.release.outputs.tag }}"
+          New-Item -ItemType Directory -Path "release-artifacts" -Force | Out-Null
           Compress-Archive -Path "dist/SHARPpy-Reimagined/*" `
-            -DestinationPath "dist/SHARPpy-Reimagined-$tag-windows-x64.zip" -Force
+            -DestinationPath "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip" -Force
           Copy-Item "dist/SHARPpy-Reimagined.exe" `
-            "dist/SHARPpy-Reimagined-$tag-windows-x64.exe" -Force
+            "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.exe"
+          Copy-Item "rust/sharpmod-rs/dist/*.whl" "release-artifacts/"
+          python -m pip freeze --all |
+            Set-Content -Encoding utf8 `
+              "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-dependencies.txt"
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
+      - name: Upload tested release artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: windows-build
-          path: |
-            dist/SHARPpy-Reimagined-*-windows-x64.zip
-            dist/SHARPpy-Reimagined-*-windows-x64.exe
-            rust/sharpmod-rs/dist/*.whl
+          name: windows-release-${{ needs.resolve-release.outputs.tag }}
+          path: release-artifacts/*
           if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: [resolve-release, test-release, build-windows-exe]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download tested release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: windows-release-${{ needs.resolve-release.outputs.tag }}
+          path: release-artifacts
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
-          tag_name: ${{ steps.release.outputs.tag }}
-          target_commitish: ${{ steps.release.outputs.checkout_ref }}
-          name: SHARPpy Reimagined ${{ steps.release.outputs.tag }}
+          tag_name: ${{ needs.resolve-release.outputs.tag }}
+          target_commitish: ${{ needs.resolve-release.outputs.source_sha }}
+          name: SHARPpy Reimagined ${{ needs.resolve-release.outputs.tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: |
-            dist/SHARPpy-Reimagined-*-windows-x64.zip
-            dist/SHARPpy-Reimagined-*-windows-x64.exe
-            rust/sharpmod-rs/dist/*.whl
+          files: release-artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

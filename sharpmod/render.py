@@ -98,6 +98,20 @@ _qt6_compat.apply()
 from sharppy.viz.preferences import PrefDialog  # noqa: E402
 from sutils.config import Config  # noqa: E402
 
+
+def _safe_config_to_file(self):
+    """Replace sutils' leaking one-line config writer with a closed handle."""
+    with open(self._file_name, "w") as stream:  # noqa: PTH123
+        self._cfg.write(stream)
+
+
+# sutils 0.3.0 calls ``open`` inside ``RawConfigParser.write`` without ever
+# closing the returned stream. Patch that dependency boundary once so GUI,
+# headless rendering, and direct Config users all receive deterministic writes.
+if not getattr(Config, "_sharpmod_safe_writer", False):
+    Config.toFile = _safe_config_to_file
+    Config._sharpmod_safe_writer = True
+
 from sharpmod import colors  # noqa: E402
 from sharpmod.io import decoder as decoder_mod  # noqa: E402
 from sharpmod.resources import font_resolver  # noqa: E402
@@ -4448,6 +4462,10 @@ def render_patch_specs():
     from sharpmod.render_patch_registry import PatchSpec
 
     return (
+        PatchSpec(
+            "skewt.user-parcel-backend",
+            _install_user_parcel_acceleration,
+        ),
         PatchSpec("title.override", _install_title_override),
         PatchSpec("skewt.title-shrink", _install_skewt_title_shrink),
         PatchSpec("title.top", _install_title_top),
@@ -4482,6 +4500,14 @@ def render_patch_specs():
     )
 
 
+def _install_user_parcel_acceleration():
+    from sharpmod.sharptab.accelerated_profile import (
+        install_user_parcel_acceleration,
+    )
+
+    install_user_parcel_acceleration()
+
+
 def install_render_patches() -> tuple[str, ...]:
     """Validate SHARPpy then install the ordered render patch registry."""
     from sharpmod.render_patch_registry import apply_patch_registry
@@ -4497,7 +4523,8 @@ def install_render_patches() -> tuple[str, ...]:
 def _decode_local_input(infile: str, display_name: str):
     """Decode one already-local input without repeating remote downloads."""
     if infile.lower().endswith(".npz"):
-        return decoder_mod.load_npz(infile)
+        prof_col, station_id = decoder_mod.load_npz(infile)
+        return _accelerate_decoded_collection(prof_col), station_id
 
     last_err: BaseException | None = None
     for _name, cls in decoder_mod.getDecoders().items():
@@ -4506,7 +4533,7 @@ def _decode_local_input(infile: str, display_name: str):
             prof_col = dec.getProfiles()
             stn_id = dec.getStnId()
             decoder_mod.attach_json_sidecar(prof_col, infile)
-            return prof_col, stn_id
+            return _accelerate_decoded_collection(prof_col), stn_id
         except Exception as exc:  # noqa: BLE001 - try every decoder in turn
             last_err = exc
             continue
@@ -4515,6 +4542,14 @@ def _decode_local_input(infile: str, display_name: str):
         f"no decoder could read it: {last_err}",
         cause=last_err,
     )
+
+
+def _accelerate_decoded_collection(prof_collection):
+    from sharpmod.sharptab.accelerated_profile import (
+        accelerate_profile_collection,
+    )
+
+    return accelerate_profile_collection(prof_collection)
 
 
 def _remote_temp_suffix(url: str) -> str:

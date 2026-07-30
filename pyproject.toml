@@ -90,9 +90,18 @@ render = [
 # Development / test tooling: pytest + Hypothesis power the property-based and
 # unit test suites (shared ``profiles()`` strategy, >=100 iterations).
 dev = [
-    "pytest>=7.0",
-    "hypothesis>=6.0",
+    "pytest>=7.0,<10.0",
+    "hypothesis>=6.0,<7.0",
+    "pytest-timeout>=2.4,<3.0",
     "PyYAML>=6.0,<7.0",
+]
+# Repeatable CI quality tooling. These tools are intentionally isolated from
+# the runtime dependency surface and pinned so lint/audit behavior cannot drift
+# between otherwise identical commits.
+quality = [
+    "pip-audit==2.10.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.16.0",
 ]
 # Build frontend for the optional local Rust extension. This does not install
 # Rust itself or make the extension a requirement of the Python package.
@@ -118,18 +127,60 @@ sharpmod-rust-sync = "sharpmod.tools.rust_backend_sync:main"
 [tool.pytest.ini_options]
 testpaths = ["sharpmod/tests"]
 python_files = ["test_*.py"]
+timeout = 180
+timeout_method = "thread"
+markers = [
+    "property: Hypothesis-powered scientific/property coverage",
+    "live_provider: opt-in checks against current public data providers",
+]
 filterwarnings = [
-    # Expected warnings in the pinned upstream SHARPpy/ECAPE code. Keep all
-    # other deprecations and runtime warnings visible.
+    # Fail on every warning except exact, documented compatibility noise from
+    # pinned scientific dependencies. This prevents a warning backlog from
+    # silently returning.
+    "error",
     "ignore:Warning.*converting a masked element to nan:UserWarning",
     "ignore:datetime\\.datetime\\.utcnow\\(\\) is deprecated.*:DeprecationWarning:sharppy\\.io\\.spc_decoder",
     "ignore:The 'warn' method is deprecated, use 'warning' instead:DeprecationWarning:gribapi\\.bindings",
     "ignore:Temperature argument is unused and will be deprecated.*:PendingDeprecationWarning:ecape\\.calc",
     "ignore:invalid value encountered in scalar divide:RuntimeWarning:sharppy\\.sharptab\\.params",
+    "ignore:divide by zero encountered in scalar divide:RuntimeWarning:sharppy\\.sharptab\\.params",
+    "ignore:divide by zero encountered in scalar divide:RuntimeWarning:sharppy\\.sharptab\\.winds",
+    "ignore:invalid value encountered in scalar multiply:RuntimeWarning:sharppy\\.sharptab\\.winds",
+    "ignore:divide by zero encountered in log10:RuntimeWarning:sharppy\\.sharptab\\.thermo",
     "ignore:Input line .* contained no data.*:UserWarning:sharppy\\.databases\\.sars",
     "ignore:invalid value encountered in power:RuntimeWarning:sharppy\\.sharptab\\.thermo",
     "ignore:divide by zero encountered in divide:RuntimeWarning:sharppy\\.sharptab\\.thermo",
+    "ignore:invalid value encountered in divide:RuntimeWarning:numpy\\.ma\\.extras",
+    "ignore:numpy\\.ndarray size changed, may indicate binary incompatibility\\..*:RuntimeWarning",
+    "ignore:.*Custom model templates in the config path is deprecated\\..*:DeprecationWarning",
+    "ignore:Timestamp\\.utcnow is deprecated.*:DeprecationWarning:herbie\\.core",
 ]
+
+[tool.coverage.run]
+branch = true
+source = ["sharpmod"]
+omit = ["sharpmod/tests/*"]
+
+[tool.coverage.report]
+fail_under = 35
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+exclude = [
+    ".gribenv",
+    ".griblenv",
+    "attic",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# Apply high-confidence correctness checks across the legacy-heavy tree.
+# Focused modules receive the broader rule set in CI.
+select = ["E9", "F63", "F7", "F82"]
 
 [tool.setuptools]
 # Discover the top-level `sharpmod` package and its subpackages.

@@ -10,6 +10,13 @@ import pytest
 
 from sharpmod import __version__ as sharpmod_version
 from sharpmod import backends as backend_facade
+from sharpmod.backends.kinematics import profile_kinematics_to_raw
+from sharpmod.backends.parcels import (
+    convective_workspace_to_raw,
+    downdraft_to_raw,
+    parcel_ascent_to_raw,
+    parcel_workspace_to_raw,
+)
 from sharpmod.backends.protocol import BACKEND_API_VERSION
 from sharpmod.backends.python_backend import PythonBackend
 from sharpmod.backends.rust_backend import RustBackend
@@ -75,6 +82,232 @@ def _assert_pair_equivalent(python_pair, rust_pair, *, atol=1e-12):
     assert len(python_pair) == len(rust_pair) == 2
     _assert_equivalent(python_pair[0], rust_pair[0], atol=atol)
     _assert_equivalent(python_pair[1], rust_pair[1], atol=atol)
+
+
+@pytest.mark.parametrize(
+    ("limit", "sfc"),
+    [
+        (8, 0),
+        (5, 0),
+        (8, 1),
+    ],
+)
+def test_profile_kinematics_equivalence(backends, limit, sfc):
+    python, rust = backends
+    hght = np.array(
+        [0.0, 250.0, 500.0, 1000.0, 2000.0, 3000.0, 4000.0, 6500.0],
+    )[:limit]
+    pres = (1000.0 * np.exp(-hght / 8000.0))[:limit]
+    u = np.array([0.0, 2.0, 7.0, 12.0, 28.0, 42.0, 50.0, 64.0])[:limit]
+    v = np.array([10.0, 14.0, 18.0, 21.0, 19.0, 15.0, 7.0, -2.0])[:limit]
+    tops = np.array([500.0, 1000.0, 3000.0, 4000.0, 6000.0])
+
+    python_raw = profile_kinematics_to_raw(
+        python.profile_kinematics(pres, hght, u, v, tops, sfc=sfc),
+    )
+    rust_raw = profile_kinematics_to_raw(
+        rust.profile_kinematics(pres, hght, u, v, tops, sfc=sfc),
+    )
+
+    for python_value, rust_value in zip(python_raw, rust_raw):
+        np.testing.assert_allclose(
+            rust_value,
+            python_value,
+            rtol=1e-12,
+            atol=5e-12,
+            equal_nan=True,
+        )
+
+
+def test_profile_kinematics_mask_and_sentinel_equivalence(backends):
+    python, rust = backends
+    hght = np.arange(0.0, 7000.0, 1000.0)
+    pres = 1000.0 * np.exp(-hght / 8000.0)
+    u = ma.array(
+        np.linspace(0.0, 60.0, hght.size),
+        mask=[0, 0, 1, 0, 0, 0, 0],
+    )
+    v = np.linspace(10.0, -5.0, hght.size)
+    v[3] = -9999.0
+    tops = [500.0, 1000.0, 3000.0, 6000.0]
+
+    python_raw = profile_kinematics_to_raw(
+        python.profile_kinematics(pres, hght, u, v, tops),
+    )
+    rust_raw = profile_kinematics_to_raw(
+        rust.profile_kinematics(pres, hght, u, v, tops),
+    )
+
+    for python_value, rust_value in zip(python_raw, rust_raw):
+        np.testing.assert_allclose(
+            rust_value,
+            python_value,
+            rtol=1e-12,
+            atol=5e-12,
+            equal_nan=True,
+        )
+
+
+@pytest.mark.parametrize("profile_kind", ["unstable", "stable", "elevated"])
+def test_profile_parcels_equivalence(backends, profile_kind):
+    python, rust = backends
+    pres = np.geomspace(1000.0, 100.0, 96)
+    hght = 44330.0 * (1.0 - (pres / 1013.25) ** 0.1903)
+    if profile_kind == "unstable":
+        tmpc = 31.0 - (7.2 * hght / 1000.0)
+        dwpc = tmpc - (4.0 + hght / 2500.0)
+    elif profile_kind == "stable":
+        tmpc = 18.0 - (4.2 * hght / 1000.0)
+        dwpc = tmpc - 14.0
+    else:
+        tmpc = 25.0 - (6.8 * hght / 1000.0)
+        dwpc = tmpc - 13.0
+        elevated = (pres <= 925.0) & (pres >= 825.0)
+        dwpc[elevated] = tmpc[elevated] - 2.0
+
+    python_raw = parcel_workspace_to_raw(
+        python.profile_parcels(pres, hght, tmpc, dwpc),
+    )
+    rust_raw = parcel_workspace_to_raw(
+        rust.profile_parcels(pres, hght, tmpc, dwpc),
+    )
+
+    np.testing.assert_allclose(
+        rust_raw,
+        python_raw,
+        rtol=3e-2,
+        atol=5.0,
+        equal_nan=True,
+    )
+
+
+def test_profile_parcels_mask_and_sentinel_equivalence(backends):
+    python, rust = backends
+    pres = np.geomspace(1000.0, 100.0, 80)
+    hght = 44330.0 * (1.0 - (pres / 1013.25) ** 0.1903)
+    tmpc = 30.0 - (7.0 * hght / 1000.0)
+    dwpc = tmpc - (4.0 + hght / 3000.0)
+    tmpc = ma.array(tmpc, mask=np.arange(tmpc.size) == 35)
+    dwpc[50] = -9999.0
+
+    python_raw = parcel_workspace_to_raw(
+        python.profile_parcels(pres, hght, tmpc, dwpc),
+    )
+    rust_raw = parcel_workspace_to_raw(
+        rust.profile_parcels(pres, hght, tmpc, dwpc),
+    )
+
+    np.testing.assert_allclose(
+        rust_raw,
+        python_raw,
+        rtol=1e-1,
+        atol=5.0,
+        equal_nan=True,
+    )
+
+
+def test_extended_parcel_and_dcape_equivalence(backends):
+    python, rust = backends
+    pres = np.geomspace(1000.0, 100.0, 96)
+    hght = 44330.0 * (1.0 - (pres / 1013.25) ** 0.1903)
+    tmpc = 31.0 - (7.2 * np.minimum(hght, 12000.0) / 1000.0)
+    tmpc += 1.4 * np.maximum(hght - 12000.0, 0.0) / 1000.0
+    dwpc = tmpc - (4.0 + hght / 2800.0)
+
+    python_raw = convective_workspace_to_raw(
+        python.profile_convective_parcels(pres, hght, tmpc, dwpc),
+    )
+    rust_raw = convective_workspace_to_raw(
+        rust.profile_convective_parcels(pres, hght, tmpc, dwpc),
+    )
+    np.testing.assert_allclose(
+        rust_raw[0],
+        python_raw[0],
+        rtol=3e-2,
+        atol=5.1,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        rust_raw[1],
+        python_raw[1],
+        rtol=0.0,
+        atol=5.1,
+        equal_nan=True,
+    )
+    for python_pressure, rust_pressure in zip(
+        python_raw[2],
+        rust_raw[2],
+    ):
+        np.testing.assert_allclose(
+            rust_pressure,
+            python_pressure,
+            rtol=0.0,
+            atol=0.6,
+        )
+    for python_temperature, rust_temperature in zip(
+        python_raw[3],
+        rust_raw[3],
+    ):
+        np.testing.assert_allclose(
+            rust_temperature,
+            python_temperature,
+            rtol=0.0,
+            atol=0.05,
+        )
+
+    parcel_pressure = 850.0
+    parcel_temperature = float(np.interp(
+        np.log10(parcel_pressure),
+        np.log10(pres[::-1]),
+        tmpc[::-1],
+    ))
+    parcel_dewpoint = float(np.interp(
+        np.log10(parcel_pressure),
+        np.log10(pres[::-1]),
+        dwpc[::-1],
+    ))
+    python_ascent = parcel_ascent_to_raw(python.lift_parcel(
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        parcel_pressure,
+        parcel_temperature,
+        parcel_dewpoint,
+    ))
+    rust_ascent = parcel_ascent_to_raw(rust.lift_parcel(
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        parcel_pressure,
+        parcel_temperature,
+        parcel_dewpoint,
+    ))
+    np.testing.assert_allclose(
+        rust_ascent[0],
+        python_ascent[0],
+        rtol=5e-3,
+        atol=0.25,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(rust_ascent[1], python_ascent[1], atol=0.01)
+    np.testing.assert_allclose(rust_ascent[2], python_ascent[2], atol=0.01)
+
+    python_dcape = downdraft_to_raw(
+        python.profile_dcape(pres, hght, tmpc, dwpc),
+    )
+    rust_dcape = downdraft_to_raw(
+        rust.profile_dcape(pres, hght, tmpc, dwpc),
+    )
+    for python_value, rust_value in zip(python_dcape, rust_dcape):
+        np.testing.assert_allclose(
+            rust_value,
+            python_value,
+            rtol=1e-9,
+            atol=1e-8,
+            equal_nan=True,
+        )
 
 
 @pytest.mark.parametrize(
@@ -388,6 +621,18 @@ def test_mismatched_lengths_raise_in_both_backends(backends):
                 [1000.0, 900.0], [100.0], [20.0, 10.0], [15.0, 5.0],
                 [180.0, 190.0], [10.0, 20.0],
             )
+        with pytest.raises(ValueError):
+            backend.profile_kinematics(
+                [1000.0, 900.0], [100.0], [10.0, 20.0], [0.0, 5.0],
+                [500.0],
+            )
+        with pytest.raises(ValueError):
+            backend.profile_parcels(
+                [1000.0, 900.0],
+                [100.0],
+                [20.0, 10.0],
+                [15.0, 5.0],
+            )
 
 
 def test_raw_extension_reports_version_and_value_errors():
@@ -421,3 +666,84 @@ def test_raw_extension_accepts_none_missing_policy():
     matrix = sharpmod_rs.parse_sounding_rows(
         "1000,100,20,,nan,inf", None)
     assert np.isnan(matrix[0, 3:]).all()
+
+
+def test_raw_extension_profile_kinematics_shape():
+    hght = np.array([0.0, 1000.0, 3000.0, 6000.0])
+    pres = 1000.0 * np.exp(-hght / 8000.0)
+    u = np.array([0.0, 10.0, 30.0, 60.0])
+    v = np.array([10.0, 15.0, 10.0, 0.0])
+    tops = np.array([500.0, 1000.0, 3000.0, 6000.0])
+
+    storm, layers = sharpmod_rs.profile_kinematics(
+        pres, hght, u, v, tops, 0, None,
+    )
+
+    assert storm.shape == (4,)
+    assert layers.shape == (4, 15)
+
+
+def test_raw_extension_profile_parcels_shape():
+    pres = np.geomspace(1000.0, 100.0, 64)
+    hght = 44330.0 * (1.0 - (pres / 1013.25) ** 0.1903)
+    tmpc = 30.0 - (7.0 * hght / 1000.0)
+    dwpc = tmpc - (4.0 + hght / 3000.0)
+
+    result = sharpmod_rs.profile_parcels(
+        pres, hght, tmpc, dwpc, 0, None,
+    )
+
+    assert result.shape == (3, 14)
+
+
+def test_raw_extension_extended_parcel_shapes():
+    pres = np.geomspace(1000.0, 100.0, 64)
+    hght = 44330.0 * (1.0 - (pres / 1013.25) ** 0.1903)
+    tmpc = 30.0 - (7.0 * hght / 1000.0)
+    dwpc = tmpc - (4.0 + hght / 3000.0)
+
+    parcels, bounds, pressure_traces, temperature_traces = (
+        sharpmod_rs.profile_convective_parcels(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            0,
+            None,
+        )
+    )
+    assert parcels.shape == (5, 14)
+    assert bounds.shape == (2,)
+    assert len(pressure_traces) == len(temperature_traces) == 5
+    assert all(
+        len(pressure) == len(temperature)
+        for pressure, temperature in zip(
+            pressure_traces,
+            temperature_traces,
+        )
+    )
+
+    ascent = sharpmod_rs.lift_parcel(
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        850.0,
+        18.0,
+        14.0,
+        0,
+        None,
+    )
+    assert np.asarray(ascent[0]).shape == (14,)
+    assert len(ascent[1]) == len(ascent[2])
+
+    downdraft = sharpmod_rs.profile_dcape(
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        0,
+        None,
+    )
+    assert np.asarray(downdraft[0]).shape == (3,)
+    assert len(downdraft[1]) == len(downdraft[2])

@@ -9,7 +9,10 @@ from types import SimpleNamespace
 import time
 
 from sharpmod import gui, gui_picker, gui_workers
-from sharpmod.model_disk_cache import ModelDiskCache
+from sharpmod.model_disk_cache import (
+    MODEL_CACHE_CONTRACT_VERSION,
+    ModelDiskCache,
+)
 from sharpmod.model_hour_cache import ModelHourCache, ModelHourKey
 from sharpmod.tests.era5_synth import make_era5_dataset
 from sharpmod.tools import model_extract
@@ -230,8 +233,12 @@ def test_gui_model_worker_reextracts_complete_grib_without_network(
     worker = gui_workers._ModelFetchWorker(
         "gfs", 35.0, -99.0, run_time, 0, str(out_path),
         download_dir=str(output_dir), model_hour_cache=ModelHourCache(),
-        cached_grib=grib, cached_source_fields=("TMP", "HGT"),
+        cached_grib=grib,
+        cached_source_fields=(
+            "HGT", "TMP", "RH", "UGRD", "VGRD", "PRES", "DPT",
+        ),
         cached_cache=cache, cached_directory=cache_dir,
+        cached_contract_version=MODEL_CACHE_CONTRACT_VERSION,
     )
     worker.finished_ok.connect(lambda path, *_args: completed.append(path))
 
@@ -242,6 +249,66 @@ def test_gui_model_worker_reextracts_complete_grib_without_network(
     metadata = json.loads(out_path.with_suffix(".json").read_text("utf-8"))
     assert metadata["cache_hit"] is True
     assert cache.entries()[0].protected is False
+
+
+def test_gui_hrrr_worker_refetches_cache_without_surface_contract(
+        tmp_path, monkeypatch):
+    run_time = datetime(2026, 7, 14, 0, tzinfo=timezone.utc)
+    stale_grib = tmp_path / "stale-hrrr.grib2"
+    stale_grib.write_bytes(b"GRIB7777")
+    output_dir = tmp_path / "refetched"
+    output_dir.mkdir()
+    out_path = output_dir / "sounding.npz"
+    retrieved = []
+    fresh_dataset = object()
+    surface_fields = ("HGT", "TMP", "UGRD", "VGRD", "PRES", "DPT")
+
+    def fake_retrieve(*_args, **kwargs):
+        retrieved.append(Path(kwargs["download_dir"]))
+        source = SimpleNamespace(
+            grib="memory://fresh-hrrr",
+            _sharpmod_fields=surface_fields,
+            _sharpmod_transport="test",
+        )
+        return fresh_dataset, source
+
+    def fake_extract(*_args, **kwargs):
+        assert kwargs["dataset"] is fresh_dataset
+        assert kwargs["source_fields"] == surface_fields
+        target = Path(kwargs["out_path"])
+        target.write_bytes(b"portable")
+        target.with_suffix(".json").write_text(
+            json.dumps({"backend": "test"}), encoding="utf-8"
+        )
+        return str(target)
+
+    monkeypatch.setattr(
+        model_extract,
+        "_LocalGribDataset",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("stale HRRR GRIB was decoded")
+        ),
+    )
+    monkeypatch.setattr(model_extract, "_retrieve_dataset", fake_retrieve)
+    monkeypatch.setattr(model_extract, "extract", fake_extract)
+    completed = []
+    failed = []
+    worker = gui_workers._ModelFetchWorker(
+        "hrrr", 39.74, -104.99, run_time, 0, str(out_path),
+        download_dir=str(output_dir), model_hour_cache=ModelHourCache(),
+        cached_grib=stale_grib,
+        cached_source_fields=("HGT", "TMP", "UGRD", "VGRD", "RH"),
+    )
+    worker.finished_ok.connect(lambda path, *_args: completed.append(path))
+    worker.failed.connect(failed.append)
+
+    worker.run()
+
+    assert completed == [str(out_path)]
+    assert failed == []
+    assert len(retrieved) == 1
+    metadata = json.loads(out_path.with_suffix(".json").read_text("utf-8"))
+    assert metadata["cache_hit"] is False
 
 
 def test_gui_debug_log_directory_can_be_overridden(tmp_path, monkeypatch):

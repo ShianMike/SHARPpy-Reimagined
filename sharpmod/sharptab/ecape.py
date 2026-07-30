@@ -68,6 +68,11 @@ from __future__ import annotations
 import numpy as np
 import numpy.ma as ma
 
+from sharpmod.upstream_warnings import (
+    known_metpy_bounds_warning,
+    known_sharppy_numerical_warnings,
+)
+
 from .constants import (
     KTS_PER_MS,
     MISSING,
@@ -144,6 +149,7 @@ def _ecape_a(sr_wind, psi, ncape, cape):
 # MetPy-based building blocks (mirror ECAPE_FUNCTIONS exactly)
 # ---------------------------------------------------------------------------
 
+@known_metpy_bounds_warning()
 def _building_blocks(pres_f, hght_f, tmpc_f, dwpc_f, u_kt, v_kt):
     """Compute ``(cape, ncape, sr_wind, el_z)`` via MetPy, mirroring calc_ecape.
 
@@ -258,6 +264,7 @@ def _building_blocks(pres_f, hght_f, tmpc_f, dwpc_f, u_kt, v_kt):
     return {"cape": cape, "ncape": ncape, "sr_wind": sr_wind, "el_z": el_z}
 
 
+@known_sharppy_numerical_warnings()
 def _sharppy_mucape(pres_f, hght_f, tmpc_f, dwpc_f, wdir_f, wspd_f):
     """Undiluted most-unstable CAPE (J/kg) via the sharppy oracle, or ``None``.
 
@@ -374,7 +381,14 @@ def _ecape_impl(prof):
     # --- undiluted-CAPE bound (contract quantity; Req 5.4 / 5.5) -----------
     # The sharppy most-unstable CAPE is the sanctioned parcel-ascent oracle and
     # the exact bound the upper-bound property (Req 5.4) checks against.
-    mucape_bound = _sharppy_mucape(pres_f, hght_f, tmpc_f, dwpc_f, wdir_f, wspd_f)
+    mucape_bound = _sharppy_mucape(
+        pres_f,
+        hght_f,
+        tmpc_f,
+        dwpc_f,
+        wdir_f,
+        wspd_f,
+    )
     if mucape_bound is not None and (not np.isfinite(mucape_bound)):
         mucape_bound = None
     # Requirement 5.5: zero undiluted CAPE -> exactly zero ECAPE.

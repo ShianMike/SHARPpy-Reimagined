@@ -3,6 +3,8 @@
 
 pub mod grib;
 pub mod interpolation;
+pub mod kinematics;
+pub mod parcels;
 pub mod parsing;
 pub mod quality_control;
 pub mod records;
@@ -14,8 +16,23 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
 type PyArrayPair<'py> = (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>);
-type PyDecodedPoint<'py> = (Bound<'py, PyArray2<f64>>, f64, f64, Option<f64>);
-const BACKEND_API_VERSION: u32 = 2;
+type PyDecodedPoint<'py> = (
+    Bound<'py, PyArray2<f64>>,
+    f64,
+    f64,
+    Option<f64>,
+    bool,
+    usize,
+);
+type PyKinematics<'py> = (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray2<f64>>);
+type PyParcelAscent<'py> = (Bound<'py, PyArray1<f64>>, Vec<f64>, Vec<f64>);
+type PyConvectiveParcels<'py> = (
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Vec<Vec<f64>>,
+    Vec<Vec<f64>>,
+);
+const BACKEND_API_VERSION: u32 = 6;
 
 fn value_error(message: String) -> PyErr {
     PyValueError::new_err(message)
@@ -114,6 +131,206 @@ fn py_pressure_sort_dedup_indices<'py>(
 }
 
 #[pyfunction(
+    name = "profile_kinematics",
+    signature = (pres, hght, u, v, layer_tops_agl, sfc=0, missing=-9999.0)
+)]
+#[allow(clippy::too_many_arguments)]
+fn py_profile_kinematics<'py>(
+    py: Python<'py>,
+    pres: PyReadonlyArray1<'py, f64>,
+    hght: PyReadonlyArray1<'py, f64>,
+    u: PyReadonlyArray1<'py, f64>,
+    v: PyReadonlyArray1<'py, f64>,
+    layer_tops_agl: PyReadonlyArray1<'py, f64>,
+    sfc: usize,
+    missing: Option<f64>,
+) -> PyResult<PyKinematics<'py>> {
+    // Own the compact profile before releasing the GIL. A typical sounding is
+    // only tens of levels, while the grouped interpolation/integration work is
+    // large enough to amortize these copies and can safely overlap elsewhere.
+    let pres = pres.as_slice()?.to_vec();
+    let hght = hght.as_slice()?.to_vec();
+    let u = u.as_slice()?.to_vec();
+    let v = v.as_slice()?.to_vec();
+    let layer_tops_agl = layer_tops_agl.as_slice()?.to_vec();
+    let result = py
+        .detach(move || {
+            kinematics::profile_kinematics(&pres, &hght, &u, &v, &layer_tops_agl, sfc, missing)
+        })
+        .map_err(value_error)?;
+    let layer_count = result.layers.len();
+    let flat = result.layers.into_iter().flatten().collect();
+    let matrix = Array2::from_shape_vec((layer_count, kinematics::LAYER_WIDTH), flat)
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    Ok((
+        result.storm_motion.to_vec().into_pyarray(py),
+        matrix.into_pyarray(py),
+    ))
+}
+
+#[pyfunction(
+    name = "profile_parcels",
+    signature = (pres, hght, tmpc, dwpc, sfc=0, missing=-9999.0)
+)]
+#[allow(clippy::too_many_arguments)]
+fn py_profile_parcels<'py>(
+    py: Python<'py>,
+    pres: PyReadonlyArray1<'py, f64>,
+    hght: PyReadonlyArray1<'py, f64>,
+    tmpc: PyReadonlyArray1<'py, f64>,
+    dwpc: PyReadonlyArray1<'py, f64>,
+    sfc: usize,
+    missing: Option<f64>,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let pres = pres.as_slice()?.to_vec();
+    let hght = hght.as_slice()?.to_vec();
+    let tmpc = tmpc.as_slice()?.to_vec();
+    let dwpc = dwpc.as_slice()?.to_vec();
+    let result = py
+        .detach(move || parcels::profile_parcels(&pres, &hght, &tmpc, &dwpc, sfc, missing))
+        .map_err(value_error)?;
+    let flat: Vec<f64> = result.into_iter().flatten().collect();
+    let matrix = Array2::from_shape_vec((parcels::PARCEL_COUNT, parcels::PARCEL_WIDTH), flat)
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    Ok(matrix.into_pyarray(py))
+}
+
+#[pyfunction(
+    name = "profile_convective_parcels",
+    signature = (pres, hght, tmpc, dwpc, sfc=0, missing=-9999.0)
+)]
+#[allow(clippy::too_many_arguments)]
+fn py_profile_convective_parcels<'py>(
+    py: Python<'py>,
+    pres: PyReadonlyArray1<'py, f64>,
+    hght: PyReadonlyArray1<'py, f64>,
+    tmpc: PyReadonlyArray1<'py, f64>,
+    dwpc: PyReadonlyArray1<'py, f64>,
+    sfc: usize,
+    missing: Option<f64>,
+) -> PyResult<PyConvectiveParcels<'py>> {
+    let pres = pres.as_slice()?.to_vec();
+    let hght = hght.as_slice()?.to_vec();
+    let tmpc = tmpc.as_slice()?.to_vec();
+    let dwpc = dwpc.as_slice()?.to_vec();
+    let result = py
+        .detach(move || {
+            parcels::profile_convective_parcels(&pres, &hght, &tmpc, &dwpc, sfc, missing)
+        })
+        .map_err(value_error)?;
+    let mut diagnostics =
+        Vec::with_capacity(parcels::CONVECTIVE_PARCEL_COUNT * parcels::PARCEL_WIDTH);
+    let mut pressure_traces = Vec::with_capacity(parcels::CONVECTIVE_PARCEL_COUNT);
+    let mut temperature_traces = Vec::with_capacity(parcels::CONVECTIVE_PARCEL_COUNT);
+    for ascent in result.parcels {
+        diagnostics.extend(ascent.diagnostics);
+        pressure_traces.push(ascent.pressure_trace);
+        temperature_traces.push(ascent.temperature_trace);
+    }
+    let matrix = Array2::from_shape_vec(
+        (parcels::CONVECTIVE_PARCEL_COUNT, parcels::PARCEL_WIDTH),
+        diagnostics,
+    )
+    .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    let bounds = vec![
+        result.effective_bottom_pressure,
+        result.effective_top_pressure,
+    ];
+    Ok((
+        matrix.into_pyarray(py),
+        bounds.into_pyarray(py),
+        pressure_traces,
+        temperature_traces,
+    ))
+}
+
+#[pyfunction(
+    name = "lift_parcel",
+    signature = (
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        parcel_pressure,
+        parcel_temperature,
+        parcel_dewpoint,
+        sfc=0,
+        missing=-9999.0
+    )
+)]
+#[allow(clippy::too_many_arguments)]
+fn py_lift_parcel<'py>(
+    py: Python<'py>,
+    pres: PyReadonlyArray1<'py, f64>,
+    hght: PyReadonlyArray1<'py, f64>,
+    tmpc: PyReadonlyArray1<'py, f64>,
+    dwpc: PyReadonlyArray1<'py, f64>,
+    parcel_pressure: f64,
+    parcel_temperature: f64,
+    parcel_dewpoint: f64,
+    sfc: usize,
+    missing: Option<f64>,
+) -> PyResult<PyParcelAscent<'py>> {
+    let pres = pres.as_slice()?.to_vec();
+    let hght = hght.as_slice()?.to_vec();
+    let tmpc = tmpc.as_slice()?.to_vec();
+    let dwpc = dwpc.as_slice()?.to_vec();
+    let result = py
+        .detach(move || {
+            parcels::explicit_parcel(
+                &pres,
+                &hght,
+                &tmpc,
+                &dwpc,
+                parcel_pressure,
+                parcel_temperature,
+                parcel_dewpoint,
+                sfc,
+                missing,
+            )
+        })
+        .map_err(value_error)?;
+    Ok((
+        result.diagnostics.to_vec().into_pyarray(py),
+        result.pressure_trace,
+        result.temperature_trace,
+    ))
+}
+
+#[pyfunction(
+    name = "profile_dcape",
+    signature = (pres, hght, tmpc, dwpc, sfc=0, missing=-9999.0)
+)]
+#[allow(clippy::too_many_arguments)]
+fn py_profile_dcape<'py>(
+    py: Python<'py>,
+    pres: PyReadonlyArray1<'py, f64>,
+    hght: PyReadonlyArray1<'py, f64>,
+    tmpc: PyReadonlyArray1<'py, f64>,
+    dwpc: PyReadonlyArray1<'py, f64>,
+    sfc: usize,
+    missing: Option<f64>,
+) -> PyResult<PyParcelAscent<'py>> {
+    let pres = pres.as_slice()?.to_vec();
+    let hght = hght.as_slice()?.to_vec();
+    let tmpc = tmpc.as_slice()?.to_vec();
+    let dwpc = dwpc.as_slice()?.to_vec();
+    let result = py
+        .detach(move || parcels::profile_dcape(&pres, &hght, &tmpc, &dwpc, sfc, missing))
+        .map_err(value_error)?;
+    Ok((
+        vec![
+            result.cape,
+            result.source_pressure,
+            result.downrush_temperature,
+        ]
+        .into_pyarray(py),
+        result.pressure_trace,
+        result.temperature_trace,
+    ))
+}
+
+#[pyfunction(
     name = "parse_sounding_rows",
     signature = (text, missing=-9999.0)
 )]
@@ -160,6 +377,8 @@ fn py_decode_grib_point<'py>(
         selected_latitude,
         selected_longitude,
         surface_relative_vorticity,
+        surface_merged,
+        below_ground_levels_removed,
     } = decoded;
     let matrix = Array2::from_shape_vec((9, level_count), matrix)
         .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
@@ -168,6 +387,8 @@ fn py_decode_grib_point<'py>(
         selected_latitude,
         selected_longitude,
         surface_relative_vorticity,
+        surface_merged,
+        below_ground_levels_removed,
     ))
 }
 
@@ -180,6 +401,11 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(py_interpolate_1d, module)?)?;
     module.add_function(wrap_pyfunction!(py_basic_sounding_qc, module)?)?;
     module.add_function(wrap_pyfunction!(py_pressure_sort_dedup_indices, module)?)?;
+    module.add_function(wrap_pyfunction!(py_profile_kinematics, module)?)?;
+    module.add_function(wrap_pyfunction!(py_profile_parcels, module)?)?;
+    module.add_function(wrap_pyfunction!(py_profile_convective_parcels, module)?)?;
+    module.add_function(wrap_pyfunction!(py_lift_parcel, module)?)?;
+    module.add_function(wrap_pyfunction!(py_profile_dcape, module)?)?;
     module.add_function(wrap_pyfunction!(py_parse_sounding_rows, module)?)?;
     module.add_function(wrap_pyfunction!(py_decode_grib_point, module)?)?;
     Ok(())

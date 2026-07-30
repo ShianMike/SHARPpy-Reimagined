@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 
 from sharpmod.io import decoder as decoder_mod
+from sharpmod.model_surface import PROFILE_COLUMN_NAMES, merge_surface_level
 from sharpmod.tools import model_extract
 from sharpmod.tests.era5_synth import make_era5_dataset
 
@@ -26,9 +27,69 @@ def _dataset():
         levels=[1000.0, 850.0, 700.0],
         times=[datetime(2026, 7, 8, 0, tzinfo=timezone.utc)],
         seed=20,
+        include_surface=False,
     )
     vo = np.full(ds["t"].shape, 8.0e-5, dtype=float)
     return ds.assign(vo=(ds["t"].dims, vo))
+
+
+def _dataset_with_surface():
+    ds = _dataset()
+    dims = ("time", "latitude", "longitude")
+    shape = (1, 2, 2)
+    return ds.assign(
+        sp=(dims, np.full(shape, 90000.0)),
+        orog=(dims, np.full(shape, 500.0)),
+        t2m=(dims, np.full(shape, 298.15)),
+        d2m=(dims, np.full(shape, 288.15)),
+        u10=(dims, np.full(shape, 3.0)),
+        v10=(dims, np.full(shape, 4.0)),
+    )
+
+
+@pytest.mark.parametrize(
+    ("surface_pressure", "removed"),
+    (
+        (1013.7, 0),
+        (1007.2, 1),
+        (969.2, 3),
+        (840.6, 8),
+    ),
+)
+def test_verified_surface_merge_matches_terrain_level_counts(
+        surface_pressure, removed):
+    levels = np.asarray(
+        [1013.2, 1000.0, 975.0, 950.0, 925.0, 900.0, 875.0, 850.0,
+         825.0, 800.0],
+    )
+    columns = {
+        name: (
+            levels.copy()
+            if name == "pres"
+            else np.arange(levels.size, dtype=float)
+        )
+        for name in PROFILE_COLUMN_NAMES
+    }
+
+    result = merge_surface_level(
+        columns,
+        {
+            "pres": surface_pressure,
+            "hght": 1655.0,
+            "tmpc": 25.0,
+            "dwpc": 15.0,
+            "u": 5.0,
+            "v": 0.0,
+        },
+    )
+
+    assert result is not None
+    assert result.removed_levels == removed
+    assert result.columns["pres"][0] == pytest.approx(surface_pressure)
+    assert np.all(result.columns["pres"][1:] < surface_pressure)
+    assert result.columns["hght"][0] == 1655.0
+    assert result.columns["tmpc"][0] == 25.0
+    assert result.columns["dwpc"][0] == 15.0
 
 
 def test_model_aliases_resolve_to_supported_configs():
@@ -49,6 +110,85 @@ def test_every_model_search_accepts_non_mandatory_pressure_levels():
         sample = ":t:975:pl:" if cfg.key.startswith("ecmwf-") \
             else ":TMP:975 mb:"
         assert re.search(cfg.search, sample), cfg.key
+
+
+def test_surface_inventory_contract_requires_every_ground_input():
+    rows = [
+        ":PRES:surface:",
+        ":HGT:surface:",
+        ":TMP:2 m above ground:",
+        ":RH:2 m above ground:",
+        ":UGRD:10 m above ground:",
+        ":VGRD:10 m above ground:",
+    ]
+    inventory = pd.DataFrame({"search_this": rows})
+
+    assert model_extract._inventory_has_surface_contract(inventory)
+    status = model_extract.surface_contract_status(inventory)
+    assert status["complete"] is True
+    assert status["missing"] == ()
+    assert set(status["present"]) == set(status["required"])
+    for index in range(len(rows)):
+        incomplete = inventory.drop(index=index)
+        assert not model_extract._inventory_has_surface_contract(incomplete)
+        missing = model_extract.surface_contract_status(incomplete)["missing"]
+        assert len(missing) == 1
+
+    ifs = pd.DataFrame({"search_this": [
+        ":sp:sfc:",
+        ":z:sfc:",
+        ":2t:sfc:",
+        ":2d:sfc:",
+        ":10u:sfc:",
+        ":10v:sfc:",
+    ]})
+    assert model_extract._inventory_has_surface_contract(ifs)
+
+
+def test_ifs_planned_search_retains_verified_surface_records():
+    rows = [
+        ("gh", ":gh:1000:pl:"),
+        ("t", ":t:1000:pl:"),
+        ("u", ":u:1000:pl:"),
+        ("v", ":v:1000:pl:"),
+        ("r", ":r:1000:pl:"),
+        ("z", ":z:sfc:"),
+        ("sp", ":sp:sfc:"),
+        ("2t", ":2t:sfc:"),
+        ("2d", ":2d:sfc:"),
+        ("10u", ":10u:sfc:"),
+        ("10v", ":10v:sfc:"),
+    ]
+    inventory = pd.DataFrame(rows, columns=("variable", "search_this"))
+    herbie = SimpleNamespace(inventory=lambda _search: inventory)
+
+    search, fields, planned = model_extract._planned_model_search(
+        herbie, model_extract.get_config("ecmwf-ifs")
+    )
+
+    assert model_extract._inventory_has_surface_contract(planned)
+    assert {"z", "sp", "2t", "2d", "10u", "10v"}.issubset(fields)
+    for field in ("z", "sp", "2t", "2d", "10u", "10v"):
+        assert re.search(search, f":{field}:sfc:")
+
+
+def test_cached_source_provenance_requires_surface_fields_for_all_models():
+    gfs = model_extract.get_config("gfs")
+    ifs = model_extract.get_config("ecmwf-ifs")
+
+    assert not model_extract.cached_source_fields_compatible(
+        gfs, ("HGT", "TMP", "RH", "UGRD", "VGRD")
+    )
+    assert model_extract.cached_source_fields_compatible(
+        gfs, ("HGT", "TMP", "RH", "UGRD", "VGRD", "PRES")
+    )
+    assert not model_extract.cached_source_fields_compatible(
+        ifs, ("gh", "t", "r", "u", "v")
+    )
+    assert model_extract.cached_source_fields_compatible(
+        ifs,
+        ("gh", "t", "r", "u", "v", "z", "sp", "2t", "2d", "10u", "10v"),
+    )
 
 
 def test_every_selectable_forecast_model_exists_in_herbie_registry():
@@ -126,7 +266,7 @@ def test_provider_capability_publishes_rrfs_domain_and_transport_contract():
 
 def test_model_extract_writes_loadable_npz(tmp_path, monkeypatch):
     """A supported model writes the shared point-sounding format."""
-    ds = _dataset()
+    ds = _dataset_with_surface()
 
     def _fake_retrieve(
             config, run_dt, fxx, member=None, download_dir=None, **_kwargs):
@@ -157,6 +297,67 @@ def test_model_extract_writes_loadable_npz(tmp_path, monkeypatch):
     assert prof_collection.getMeta("model") == "GFS"
     assert prof_collection.getMeta("surface_relative_vorticity") == pytest.approx(
         8.0e-5)
+
+
+def test_hrrr_extract_requires_and_records_verified_surface_merge(tmp_path):
+    output = tmp_path / "hrrr_surface.npz"
+
+    model_extract.extract(
+        "hrrr",
+        35.0,
+        -99.0,
+        run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+        out_path=output,
+        dataset=_dataset_with_surface(),
+    )
+
+    with np.load(output, allow_pickle=False) as payload:
+        np.testing.assert_allclose(payload["pres"], [900.0, 850.0, 700.0])
+        assert float(payload["hght"][0]) == 500.0
+        assert float(payload["tmpc"][0]) == pytest.approx(25.0)
+        assert float(payload["dwpc"][0]) == pytest.approx(15.0)
+    import json
+    metadata = json.loads(output.with_suffix(".json").read_text("utf-8"))
+    assert metadata["surface_merged"] is True
+    assert metadata["surface_pressure_hpa"] == 900.0
+    assert metadata["below_ground_levels_removed"] == 1
+
+
+def test_hrrr_extract_fails_closed_without_verified_surface(tmp_path):
+    with pytest.raises(
+        model_extract.RetrievalError,
+        match="no verified surface merge",
+    ):
+        model_extract.extract(
+            "hrrr",
+            35.0,
+            -99.0,
+            run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+            out_path=tmp_path / "unsafe.npz",
+            dataset=_dataset(),
+        )
+
+
+def test_extract_rejects_dewpoint_above_temperature_before_write(tmp_path):
+    dataset = _dataset_with_surface().copy()
+    dataset["r"] = dataset["r"] * 0.0 + 150.0
+    output = tmp_path / "unphysical.npz"
+
+    with pytest.raises(
+        model_extract.RetrievalError,
+        match="dewpoint_above_temperature",
+    ):
+        model_extract.extract(
+            "gfs",
+            35.0,
+            -99.0,
+            run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+            out_path=output,
+            dataset=dataset,
+        )
+
+    assert not output.exists()
+    assert not output.with_suffix(".json").exists()
 
 
 def test_owned_dataset_closes_when_cancelled_after_retrieval(
@@ -194,7 +395,7 @@ def test_direct_failure_uses_compact_xarray_fallback(
     path = tmp_path / "fallback.grib2"
     path.write_bytes(b"GRIB-fallback-7777")
     source = model_extract._LocalGribDataset(path)
-    fallback = _dataset()
+    fallback = _dataset_with_surface()
     seen = {"fallback": 0}
 
     def fail_direct(*_args, **_kwargs):
@@ -233,7 +434,7 @@ def test_direct_profile_uses_targeted_wind_stencil_when_vorticity_is_absent(
     path.write_bytes(b"GRIB-targeted-vorticity-7777")
     source = model_extract._LocalGribDataset(path)
     columns, _count = model_extract._build_columns(
-        _dataset(), (1, 1), latitude=35.0
+        _dataset_with_surface(), (1, 1), latitude=35.0
     )
     columns.pop("surface_relative_vorticity", None)
     columns.pop("_surface_vorticity_source", None)
@@ -244,6 +445,8 @@ def test_direct_profile_uses_targeted_wind_stencil_when_vorticity_is_absent(
     ])
     decoded = SimpleNamespace(
         surface_relative_vorticity=None,
+        surface_merged=True,
+        below_ground_levels_removed=1,
         selected_lat=35.0,
         selected_lon=-99.0,
         pres=columns["pres"],
@@ -368,7 +571,7 @@ def test_extract_forwards_isolated_download_directory(tmp_path, monkeypatch):
     def _fake_retrieve(
             config, run_dt, fxx, member=None, download_dir=None, **_kwargs):
         seen["download_dir"] = download_dir
-        return _dataset(), SimpleNamespace(grib="memory://gfs")
+        return _dataset_with_surface(), SimpleNamespace(grib="memory://gfs")
 
     monkeypatch.setattr(model_extract, "_retrieve_dataset", _fake_retrieve)
     download_dir = tmp_path / "downloads"
@@ -413,6 +616,9 @@ def test_retrieve_dataset_suppresses_herbie_download_output(tmp_path, monkeypatc
             pass
 
     monkeypatch.setitem(sys.modules, "herbie", SimpleNamespace(Herbie=FakeHerbie))
+    monkeypatch.setattr(
+        model_extract, "_inventory_has_surface_contract", lambda _value: True
+    )
     monkeypatch.setattr(sys, "stdout", Cp1252Stream())
     config = model_extract.get_config("hrrr")
     returned, _herbie = model_extract._retrieve_dataset(
@@ -428,6 +634,75 @@ def test_retrieve_dataset_suppresses_herbie_download_output(tmp_path, monkeypatc
     assert seen["xarray"]["verbose"] is False
     assert seen["xarray"]["remove_grib"] is False
     assert seen["xarray"]["save_dir"] == str(tmp_path)
+
+
+def test_cfs_surface_companion_uses_flux_product_and_complete_contract(
+        tmp_path, monkeypatch):
+    calls = {}
+    payload = tmp_path / "cfs-flux.grib2"
+    payload.write_bytes(b"GRIB-surface-7777")
+    inventory = pd.DataFrame({
+        "variable": ["PRES", "HGT", "TMP", "SPFH", "UGRD", "VGRD"],
+        "search_this": [
+            ":PRES:surface:",
+            ":HGT:surface:",
+            ":TMP:2 m above ground:",
+            ":SPFH:2 m above ground:",
+            ":UGRD:10 m above ground:",
+            ":VGRD:10 m above ground:",
+        ],
+    })
+
+    class FakeHerbie:
+        grib = "https://example.invalid/cfs-flux.grib2"
+
+        def __init__(self, *args, **kwargs):
+            calls["constructor"] = (args, kwargs)
+
+        def inventory(self, search):
+            calls["search"] = search
+            return inventory
+
+    def fake_download(companion, search, **kwargs):
+        calls["download"] = (companion, search, kwargs)
+        return payload, payload.stat().st_size
+
+    monkeypatch.setattr(model_extract, "download_herbie_subset", fake_download)
+
+    result, size, url, fields = model_extract._cfs_surface_companion(
+        FakeHerbie,
+        model_extract.get_config("cfs"),
+        datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+        6,
+        None,
+        tmp_path,
+        None,
+    )
+
+    assert calls["constructor"][1]["kind"] == "flxf"
+    assert result == payload.resolve()
+    assert size == payload.stat().st_size
+    assert url == FakeHerbie.grib
+    assert fields == ("PRES", "HGT", "TMP", "SPFH", "UGRD", "VGRD")
+    assert calls["download"][2]["save_dir"] == tmp_path
+
+
+def test_grib_stream_combination_is_atomic_and_ordered(tmp_path):
+    pressure = tmp_path / "pressure.grib2"
+    surface = tmp_path / "surface.grib2"
+    output = tmp_path / "combined.grib2"
+    pressure.write_bytes(b"GRIB-pressure-7777")
+    surface.write_bytes(b"GRIB-surface-7777")
+
+    result = model_extract._combine_grib_payloads(
+        (pressure, surface), output
+    )
+
+    assert result == output.resolve()
+    assert output.read_bytes() == (
+        pressure.read_bytes() + surface.read_bytes()
+    )
+    assert not list(tmp_path.glob("combined.grib2.*.tmp"))
 
 
 def test_retrieve_dataset_reports_real_download_and_decode_stages(
@@ -461,6 +736,9 @@ def test_retrieve_dataset_reports_real_download_and_decode_stages(
 
     monkeypatch.setattr(model_extract, "require_runtime_dependencies", lambda: None)
     monkeypatch.setitem(sys.modules, "herbie", SimpleNamespace(Herbie=FakeHerbie))
+    monkeypatch.setattr(
+        model_extract, "_inventory_has_surface_contract", lambda _value: True
+    )
     config = model_extract.get_config("hrrr")
 
     returned, _herbie = model_extract._retrieve_dataset(
@@ -524,6 +802,9 @@ def test_retrieve_dataset_uses_pruned_search_and_optimized_transport(
         model_extract, "download_herbie_subset", fake_optimized, raising=False
     )
     monkeypatch.setitem(sys.modules, "herbie", SimpleNamespace(Herbie=FakeHerbie))
+    monkeypatch.setattr(
+        model_extract, "_inventory_has_surface_contract", lambda _value: True
+    )
 
     returned, herbie = model_extract._retrieve_dataset(
         model_extract.get_config("hrrr"),
@@ -534,12 +815,13 @@ def test_retrieve_dataset_uses_pruned_search_and_optimized_transport(
 
     assert returned is dataset
     search = seen["optimized"][1]
-    assert "SPFH" not in search
+    assert re.search(r":SPFH:\d+(?:\.\d+)? mb:", search) is None
     assert "DZDT" not in search
     assert len(seen["inventory"]) == 1
     assert seen["xarray"][0] == search
     assert herbie._sharpmod_fields == (
-        "HGT", "TMP", "UGRD", "VGRD", "RH", "VVEL", "ABSV"
+        "HGT", "TMP", "UGRD", "VGRD", "RH", "VVEL", "ABSV",
+        "PRES", "DPT", "SPFH",
     )
     assert seen["optimized"][2]["workers"] == 4
 
@@ -595,6 +877,9 @@ def test_retrieve_dataset_prefers_nomads_point_subset_when_coordinates_exist(
         ),
     )
     monkeypatch.setitem(sys.modules, "herbie", SimpleNamespace(Herbie=FakeHerbie))
+    monkeypatch.setattr(
+        model_extract, "_inventory_has_surface_contract", lambda _value: True
+    )
 
     returned, herbie = model_extract._retrieve_dataset(
         model_extract.get_config("hrrr"),
@@ -651,6 +936,9 @@ def test_small_indexed_subset_prefers_ranges_over_nomads(tmp_path, monkeypatch):
 
     monkeypatch.setattr(model_extract, "download_herbie_subset", fake_ranges)
     monkeypatch.setitem(sys.modules, "herbie", SimpleNamespace(Herbie=FakeHerbie))
+    monkeypatch.setattr(
+        model_extract, "_inventory_has_surface_contract", lambda _value: True
+    )
 
     _returned, herbie = model_extract._retrieve_dataset(
         model_extract.get_config("rap"),
@@ -703,6 +991,9 @@ def test_point_backend_grib_mode_bypasses_nomads(tmp_path, monkeypatch):
     monkeypatch.setattr(model_extract, "select_herbie_provider", lambda _h: None)
     monkeypatch.setattr(model_extract, "download_herbie_subset", fake_ranges)
     monkeypatch.setitem(sys.modules, "herbie", SimpleNamespace(Herbie=FakeHerbie))
+    monkeypatch.setattr(
+        model_extract, "_inventory_has_surface_contract", lambda _value: True
+    )
 
     returned, herbie = model_extract._retrieve_dataset(
         model_extract.get_config("rap"),
@@ -831,7 +1122,59 @@ def test_probe_preflights_runtime_before_importing_herbie(monkeypatch):
     )
 
     assert result["available"] is True
+    assert result["surface_contract_complete"] is False
+    assert result["surface_contract_missing"]
     assert events == ["runtime"]
+
+
+def test_probe_cli_can_fail_until_surface_contract_is_complete(
+        monkeypatch, capsys):
+    result = {
+        "available": True,
+        "surface_contract_complete": False,
+        "surface_contract_missing": ["surface_pressure"],
+    }
+    monkeypatch.setattr(model_extract, "probe", lambda *_a, **_k: result)
+
+    exit_code = model_extract.main([
+        "rrfs-a", "--probe", "--require-surface-contract",
+    ])
+
+    assert exit_code == 1
+    assert "surface_contract_complete: False" in capsys.readouterr().out
+
+    result["surface_contract_complete"] = True
+    assert model_extract.main([
+        "rrfs-a", "--probe", "--require-surface-contract",
+    ]) == 0
+
+
+def test_surface_contract_probe_uses_latest_available_completed_cycle(
+        monkeypatch):
+    calls = []
+
+    def fake_probe(model, run_time=None, **_kwargs):
+        calls.append(run_time)
+        available = len(calls) == 3
+        return {
+            "model": model,
+            "run": run_time.strftime("%Y-%m-%d %H:%M"),
+            "available": available,
+            "surface_contract_complete": False,
+            "surface_contract_missing": ["surface_pressure"],
+        }
+
+    monkeypatch.setattr(model_extract, "probe", fake_probe)
+    result = model_extract.probe_recent_surface_contract(
+        "rrfs-a",
+        reference_time=datetime(2026, 7, 30, 8, 30, tzinfo=timezone.utc),
+        lookback_cycles=5,
+    )
+
+    assert [value.hour for value in calls] == [8, 7, 6]
+    assert result["available"] is True
+    assert len(result["attempted_runs"]) == 3
+    assert result["lookback_cycles"] == 5
 
 
 def test_render_mode_removes_fetched_data_but_keeps_png(tmp_path, monkeypatch):

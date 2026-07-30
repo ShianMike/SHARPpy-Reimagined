@@ -235,7 +235,16 @@ def restore_collection(payload: dict):
     meta = _decode_value(payload.get("meta") or {})
     if not isinstance(meta, dict):
         raise SessionFormatError("session collection metadata is malformed")
-    restored = prof_collection.ProfCollection(profiles, dates, **meta)
+    from sharpmod.sharptab.accelerated_profile import (
+        AcceleratedConvectiveProfile,
+    )
+
+    restored = prof_collection.ProfCollection(
+        profiles,
+        dates,
+        target_type=AcceleratedConvectiveProfile,
+        **meta,
+    )
     restored._meta = meta
     highlight = str(payload.get("highlight", ""))
     restored._highlight = highlight if highlight in profiles else next(iter(profiles))

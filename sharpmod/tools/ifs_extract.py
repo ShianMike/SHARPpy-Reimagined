@@ -36,6 +36,7 @@ import os
 from datetime import datetime, timezone
 
 from sharpmod.tools import era5_extract as _e5
+from sharpmod.upstream_warnings import known_herbie_deprecations
 from sharpmod.tools.era5_extract import (
     ERA5ExtractionError as IFSExtractionError,  # re-export under IFS names
     ParameterRangeError,
@@ -112,7 +113,8 @@ def _retrieve_dataset(valid_time):
     :class:`RetrievalError` so no partial output is written.
     """
     try:
-        from herbie import Herbie  # noqa: F401  (optional [era5] extra)
+        with known_herbie_deprecations():
+            from herbie import Herbie
     except Exception as exc:  # pragma: no cover - depends on optional extra
         raise RetrievalError(
             "ECMWF IFS support requires the optional [era5] extra "
@@ -129,8 +131,13 @@ def _retrieve_dataset(valid_time):
     # step back up to ~2 days of cycles to find the newest usable run/step.
     for _ in range(8):
         try:  # pragma: no cover - network / optional dependency path
-            H = Herbie(run.strftime("%Y-%m-%d %H:%M"), model="ifs",
-                       product="oper", fxx=fxx)
+            with known_herbie_deprecations():
+                H = Herbie(
+                    run.strftime("%Y-%m-%d %H:%M"),
+                    model="ifs",
+                    product="oper",
+                    fxx=fxx,
+                )
             if H.grib is None:
                 raise RetrievalError(
                     "no IFS grib for run %s F%03d" % (run.isoformat(), fxx))

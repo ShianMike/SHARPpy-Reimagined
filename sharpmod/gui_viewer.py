@@ -537,24 +537,20 @@ def _fit_window_to_screen(app, win) -> None:
 
 
 def _finalize_scaled_fit(app, win) -> None:
-    """Snap the window to wrap the scaled sounding exactly (post-realize).
+    """Snap the window to wrap the sounding exactly after native realization.
 
     Runs after the window is shown, when the *actual* menu-bar / window-frame
-    heights are known (the pre-show pass can only estimate them). It recomputes
-    the largest uniform scale that fits the sounding in the work area using the
-    measured chrome, then sizes the window so its viewport matches the scaled
-    sounding's aspect ratio -- eliminating the black band that an over-estimated
-    chrome height would otherwise leave below the index tables.
+    heights are known (the pre-show pass can only estimate them). Native 1:1
+    windows grow their viewport to the exact sounding size so transient scroll
+    bars do not consume 12-13 pixels. Scaled windows recompute the largest
+    uniform scale that fits the work area using the measured chrome.
     """
     try:
         view = win.centralWidget()
-        if not isinstance(view, _ScaledSoundingView):
-            return  # native 1:1 path -- nothing to correct
         vp = view.viewport().size()
         if vp.width() <= 1 or vp.height() <= 1:
             return
 
-        nat = view._natural
         scr = app.primaryScreen().availableGeometry()
 
         # Measured chrome: everything in the window that is NOT the viewport
@@ -564,19 +560,36 @@ def _finalize_scaled_fit(app, win) -> None:
         frame_w = max(0, win.frameGeometry().width() - win.width())
         frame_h = max(0, win.frameGeometry().height() - win.height())
 
-        avail_vp_w = scr.width() - frame_w - chrome_w
-        avail_vp_h = scr.height() - frame_h - chrome_h
-        if avail_vp_w <= 1 or avail_vp_h <= 1:
+        if isinstance(view, _FixedSoundingScrollArea):
+            nat = view._natural_size
+            new_w = nat.width() + chrome_w
+            new_h = nat.height() + chrome_h
+            if new_w + frame_w <= scr.width() \
+                    and new_h + frame_h <= scr.height():
+                win.resize(new_w, new_h)
+        elif isinstance(view, _ScaledSoundingView):
+            nat = view._natural
+            avail_vp_w = scr.width() - frame_w - chrome_w
+            avail_vp_h = scr.height() - frame_h - chrome_h
+            if avail_vp_w <= 1 or avail_vp_h <= 1:
+                return
+
+            scale = min(
+                avail_vp_w / nat.width(),
+                avail_vp_h / nat.height(),
+                1.0,
+            )
+            vp_w = int(round(nat.width() * scale))
+            vp_h = int(round(nat.height() * scale))
+            new_w = vp_w + chrome_w
+            new_h = vp_h + chrome_h
+
+            if abs(new_w - win.width()) > 2 \
+                    or abs(new_h - win.height()) > 2:
+                win.resize(new_w, new_h)
+            view._refit()
+        else:
             return
-
-        scale = min(avail_vp_w / nat.width(), avail_vp_h / nat.height(), 1.0)
-        vp_w = int(round(nat.width() * scale))
-        vp_h = int(round(nat.height() * scale))
-        new_w = vp_w + chrome_w
-        new_h = vp_h + chrome_h
-
-        if abs(new_w - win.width()) > 2 or abs(new_h - win.height()) > 2:
-            win.resize(new_w, new_h)
 
         # Re-centre on the work area, keeping the title bar reachable.
         frame = win.frameGeometry()
@@ -585,7 +598,6 @@ def _finalize_scaled_fit(app, win) -> None:
         tl.setX(max(scr.left(), tl.x()))
         tl.setY(max(scr.top(), tl.y()))
         win.move(tl)
-        view._refit()
     except Exception:
         pass
 

@@ -9,12 +9,22 @@ from ._common import (
     prepare_1d,
     prepare_broadcast_pair,
     prepare_interpolation,
+    prepare_profile_kinematics,
+    prepare_profile_parcels,
     prepare_qc_columns,
+    prepare_sfc_index,
     restore_array,
     restore_pair,
 )
 from .protocol import QualityControlResult
 from .grib import decode_grib_point as _decode_grib_point
+from .kinematics import compute_profile_kinematics
+from .parcels import (
+    compute_lift_parcel,
+    compute_profile_convective_parcels,
+    compute_profile_dcape,
+    compute_profile_parcels,
+)
 
 
 _CORE_FIELDS = ("pres", "hght", "tmpc", "dwpc", "wdir", "wspd")
@@ -87,6 +97,117 @@ class PythonBackend:
             keep.append(int(index))
         return np.asarray(keep, dtype=np.intp)
 
+    def profile_kinematics(
+        self,
+        pres,
+        hght,
+        u,
+        v,
+        layer_tops_agl,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_kinematics(
+            pres,
+            hght,
+            u,
+            v,
+            layer_tops_agl,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        return compute_profile_kinematics(*columns, sfc=index)
+
+    def profile_parcels(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_parcels(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        return compute_profile_parcels(*columns, sfc=index)
+
+    def profile_convective_parcels(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_parcels(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        return compute_profile_convective_parcels(*columns, sfc=index)
+
+    def lift_parcel(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        parcel_pressure,
+        parcel_temperature,
+        parcel_dewpoint,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_parcels(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        return compute_lift_parcel(
+            *columns,
+            float(parcel_pressure),
+            float(parcel_temperature),
+            float(parcel_dewpoint),
+            sfc=index,
+        )
+
+    def profile_dcape(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_parcels(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        return compute_profile_dcape(*columns, sfc=index)
+
     def basic_sounding_qc(
         self,
         pres,
@@ -126,6 +247,9 @@ class PythonBackend:
             issues.append("temperature_below_absolute_zero")
         if np.any(dwpc[~td_missing] <= -273.15):
             issues.append("dewpoint_below_absolute_zero")
+        paired_thermodynamics = ~t_missing & ~td_missing
+        if np.any(dwpc[paired_thermodynamics] > tmpc[paired_thermodynamics]):
+            issues.append("dewpoint_above_temperature")
         valid_direction = wdir[~wd_missing]
         if np.any((valid_direction < 0.0) | (valid_direction > 360.0)):
             issues.append("wind_direction_out_of_range")

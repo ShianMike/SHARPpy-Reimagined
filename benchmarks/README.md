@@ -146,13 +146,20 @@ duplicate fixture bytes assigned to different model names.
 | Scalar pressure interpolation | 32 and 128 levels, one 700 hPa target | Mirrors the scalar lookup shape used by SharpTab pressure helpers instead of using a target vector as large as the profile. |
 | Repeated profile fields | Six fields at 700 hPa on 128 levels | Measures the common pattern of resolving height, temperature, dewpoint, `u`, `v`, and omega against one pressure grid. One reported call is one six-field bundle. |
 | Cached-selector `Profile` construction | 128 levels | Constructs the real `Profile` type after resolving a forced backend outside the timer, so the public facade and cached selector remain in the measured path. |
+| Profile kinematics workspace | 128 levels and five standard layers | Measures one coarse call returning Bunkers motion, shear, mean wind, storm-relative wind, and SRH for SFC-to-0.5/1/3/4/6 km. |
+| Profile parcel workspace | 128 levels and three standard parcels | Measures one coarse call returning SB/MU/100-hPa-ML CAPE/CIN, LCL/LFC/EL, and 3/6-km CAPE summaries. |
+| Convective parcel workspace | 128 levels and five standard parcels | Measures one coarse call returning surface/forecast/MU/ML/effective summaries, plotting traces, and effective-layer bounds. |
+| DCAPE workspace | 128 levels | Measures one coarse call returning DCAPE, source/downrush values, and the descending temperature trace. |
 | Two-thread diagnostic | Configurable, default 100,000 values and 10 calls per worker | Compares the same total work sequentially and in two persistent Python threads. It is diagnostic output, not a scaling assertion or gate. |
 
-The harness times the shared array kernels
-`wind_to_components`, `components_to_wind`, and `interpolate_1d`. It validates
-Python/Rust numerical agreement before timing, including both scalar profile
-sizes, every repeated field, two-dimensional wind inputs, and threaded return
-values. Parsing, QC, and pressure-record normalization should be added with
+The harness times the shared array kernels `wind_to_components`,
+`components_to_wind`, `interpolate_1d`, `profile_kinematics`,
+`profile_parcels`, `profile_convective_parcels`, and `profile_dcape`. It
+validates Python/Rust numerical agreement before timing,
+including both scalar profile sizes, every repeated field, two-dimensional wind
+inputs, the complete kinematics and parcel results, and threaded return values
+for the original array kernels.
+Parsing, QC, and pressure-record normalization should be added with
 representative data once their benchmark corpora are stable; synthetic rows
 alone are not evidence for real decoder performance. Batched interpolation is
 not reported because the current backend contract interpolates one coordinate
@@ -162,13 +169,14 @@ would produce a misleading benchmark.
 The concurrency table compares two sequential workers with two persistent
 `ThreadPoolExecutor` workers performing the same number of calls. A ratio below
 one indicates overlap in that run; it does not establish general parallel
-scaling. The current Rust bindings intentionally retain the Python GIL while a
-kernel is running. They borrow NumPy storage through `PyReadonlyArray1` and use
-the resulting slices directly; releasing the GIL without first owning the data
-or otherwise excluding mutation could let another Python thread alter that
-storage while Rust reads it. The diagnostic exists to quantify whether a future
-safe ownership or copying design is worth its overhead before changing that
-contract.
+scaling. The small Rust array bindings retain the Python GIL while a kernel is
+running. They borrow NumPy storage through `PyReadonlyArray1` and use the
+resulting slices directly; releasing the GIL without first owning the data or
+otherwise excluding mutation could let another Python thread alter that
+storage while Rust reads it. Profile kinematics, profile parcels, and DCAPE
+first own their small input columns and then release the GIL. The diagnostic exists to
+quantify whether a future safe ownership or copying design is worth its
+overhead before changing the remaining borrowed-array contracts.
 
 ## Run
 

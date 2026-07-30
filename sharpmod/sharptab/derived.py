@@ -49,11 +49,15 @@ Contract (Requirements 2.1, 2.2, 2.4, 2.5):
 from __future__ import annotations
 
 import math
+from types import SimpleNamespace
 
 import numpy as np
 import numpy.ma as ma
 
+from sharpmod.upstream_warnings import known_sharppy_numerical_warnings
+
 from . import interp
+from . import parcels
 from . import winds
 from .constants import KTS_PER_MS, MISSING, is_missing
 
@@ -84,6 +88,7 @@ _MNWIND_NORM = 16.0     # kt (0-6 km mean wind speed)
 _SFC_TOP_AGL = 6000.0   # SFC->6 km AGL layer top
 _VGP_TOP_AGL = 4000.0   # SFC->4 km AGL layer top for VGP shear
 _SFC_1500M_AGL = 1500.0
+_ORACLE_CACHE_MISS = object()
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +140,7 @@ def _sfc_pres(prof):
 # DCAPE / MUCAPE via the installed sharppy oracle
 # ---------------------------------------------------------------------------
 
-def _dcape_mucape(pres, hght, tmpc, dwpc, wdir, wspd):
+def _dcape_mucape(pres, hght, tmpc, dwpc, wdir, wspd, *, mucape=None):
     """Return ``(dcape, mucape)`` (J/kg) for the profile via ``sharppy``.
 
     DCAPE comes from ``sharppy.sharptab.params.dcape`` and MUCAPE from the
@@ -163,8 +168,9 @@ def _dcape_mucape(pres, hght, tmpc, dwpc, wdir, wspd):
             strictQC=False,
         )
 
-        mupcl = sp_params.parcelx(prof, flag=3)  # most-unstable parcel
-        mucape = getattr(mupcl, "bplus", None)
+        if mucape is None:
+            mupcl = sp_params.parcelx(prof, flag=3)  # most-unstable parcel
+            mucape = getattr(mupcl, "bplus", None)
         if mucape is None or is_missing(mucape) or not np.isfinite(mucape):
             return None
 
@@ -267,7 +273,9 @@ def _dcp_impl(prof):
     arrays = _profile_columns(prof)
     if arrays is None:
         return MISSING
-    buoyancy = _dcape_mucape(*arrays)
+    mupcl = parcels.parcel(prof, "most_unstable")
+    mucape = None if mupcl is None else mupcl.cape
+    buoyancy = _dcape_mucape(*arrays, mucape=mucape)
     if buoyancy is None:
         return MISSING
     dcape, mucape = buoyancy
@@ -412,10 +420,18 @@ def _normalized_cape_cin_impl(prof):
     if arrays is None:
         return MISSING, MISSING
 
-    terms = _mu_parcel_terms(*arrays)
-    if terms is None:
-        return MISSING, MISSING
-    mucape, cin, lfc_agl, el_agl, mu_start_agl = terms
+    mupcl = parcels.parcel(prof, "most_unstable")
+    if mupcl is None:
+        terms = _mu_parcel_terms(*arrays)
+        if terms is None:
+            return MISSING, MISSING
+        mucape, cin, lfc_agl, el_agl, mu_start_agl = terms
+    else:
+        mucape = _finite_or_none(mupcl.cape)
+        cin = _finite_or_none(mupcl.cin)
+        lfc_agl = _finite_or_none(mupcl.lfc_height)
+        el_agl = _finite_or_none(mupcl.el_height)
+        mu_start_agl = _finite_or_none(mupcl.start_height)
 
     # --- NCAPE: MUCAPE / (EL - LFC) ----------------------------------------
     ncape = MISSING
@@ -574,7 +590,8 @@ def _ehi_impl(prof, layer):
     arrays = _profile_columns(prof)
     if arrays is None:
         return MISSING
-    cape = _sfc_cape(*arrays)
+    sbpcl = parcels.parcel(prof, "surface")
+    cape = _sfc_cape(*arrays) if sbpcl is None else sbpcl.cape
     if cape is None or not np.isfinite(cape):
         return MISSING
 
@@ -681,7 +698,8 @@ def _vgp_impl(prof):
     arrays = _profile_columns(prof)
     if arrays is None:
         return MISSING
-    cape = _sfc_cape(*arrays)
+    sbpcl = parcels.parcel(prof, "surface")
+    cape = _sfc_cape(*arrays) if sbpcl is None else sbpcl.cape
     if cape is None or not np.isfinite(cape) or cape < 0.0:
         return MISSING
     if cape == 0.0:
@@ -815,6 +833,7 @@ _MOSHE_LAYER_DEPTH_KM = 2.0
 _MOSHE_LAYER_TOPS_AGL = tuple(np.arange(2000.0, 6000.0 + 0.1, 500.0))
 
 
+@known_sharppy_numerical_warnings()
 def _oracle_profile(prof):
     """Build the shared ``sharppy`` "default" Profile oracle for ``prof``.
 
@@ -824,6 +843,12 @@ def _oracle_profile(prof):
     analyzed columns are missing/masked (via :func:`_profile_columns`) or when
     ``sharppy`` is unavailable / the ascent cannot be run. Never raises.
     """
+    cache_attr = "_sharpmod_default_oracle"
+    cache_miss = _ORACLE_CACHE_MISS
+    cached = getattr(prof, cache_attr, cache_miss)
+    if cached is not cache_miss:
+        return cached
+
     arrays = _profile_columns(prof)
     if arrays is None:
         return None
@@ -844,15 +869,41 @@ def _oracle_profile(prof):
             missing=-9999.0, strictQC=False,
         )
         # Augment with the attributes the convective routines expect.
-        sp.mupcl = sp_params.parcelx(sp, flag=3)  # most-unstable parcel
+        mupcl = parcels.parcel(prof, "most_unstable")
+        if mupcl is None or not np.isfinite(
+            [mupcl.el_pressure, mupcl.start_pressure, mupcl.start_dewpoint],
+        ).all():
+            sp.mupcl = sp_params.parcelx(sp, flag=3)
+        else:
+            sp.mupcl = SimpleNamespace(
+                bplus=mupcl.cape,
+                bminus=mupcl.cin,
+                pres=mupcl.start_pressure,
+                tmpc=mupcl.start_temperature,
+                dwpc=mupcl.start_dewpoint,
+                lclpres=mupcl.lcl_pressure,
+                lclhght=mupcl.lcl_height,
+                lfcpres=mupcl.lfc_pressure,
+                lfchght=mupcl.lfc_height,
+                elpres=mupcl.el_pressure,
+                elhght=mupcl.el_height,
+                b3km=mupcl.cape_3km,
+                b6km=mupcl.cape_6km,
+            )
         sfcp = sp.pres[sp.sfc]
         p6km = sp_interp.pres(sp, sp_interp.to_msl(sp, 6000.0))
         sp.sfc_6km_shear = sp_winds.wind_shear(sp, pbot=sfcp, ptop=p6km)
         sp.lapserate_700_500 = sp_params.lapse_rate(sp, 700.0, 500.0, pres=True)
         sp.srwind = sp_winds.non_parcel_bunkers_motion(sp)
-        return sp
+        result = sp
     except Exception:
-        return None
+        result = None
+
+    try:
+        setattr(prof, cache_attr, result)
+    except (AttributeError, TypeError):
+        pass
+    return result
 
 
 def _finite_or_none(value):
@@ -896,10 +947,12 @@ def _metadata_raw(prof, *names):
     return None
 
 
+@known_sharppy_numerical_warnings()
 def _convective_oracle_profile(prof):
     """Return a cached upstream SHARPpy ConvectiveProfile for SPC composites."""
-    cached = getattr(prof, "_sharpmod_convective_oracle", None)
-    if cached is not None:
+    cache_attr = "_sharpmod_convective_oracle"
+    cached = getattr(prof, cache_attr, _ORACLE_CACHE_MISS)
+    if cached is not _ORACLE_CACHE_MISS:
         return cached
 
     arrays = _profile_columns(prof)
@@ -940,10 +993,10 @@ def _convective_oracle_profile(prof):
     try:
         oracle = sp_profile.create_profile(**kwargs)
     except Exception:
-        return None
+        oracle = None
 
     try:
-        setattr(prof, "_sharpmod_convective_oracle", oracle)
+        setattr(prof, cache_attr, oracle)
     except Exception:
         pass
     return oracle
@@ -1232,7 +1285,13 @@ def _peskov_index_impl(prof):
         return MISSING
 
     # Surface-based CAPE ("energy of instability").
-    sbcape = _finite_or_none(getattr(sp_params.parcelx(sp, flag=1), "bplus", None))
+    sbpcl = parcels.parcel(prof, "surface")
+    if sbpcl is None:
+        sbcape = _finite_or_none(
+            getattr(sp_params.parcelx(sp, flag=1), "bplus", None),
+        )
+    else:
+        sbcape = _finite_or_none(sbpcl.cape)
     if sbcape is None:
         return MISSING
 

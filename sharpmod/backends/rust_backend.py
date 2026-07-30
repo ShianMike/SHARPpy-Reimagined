@@ -15,11 +15,21 @@ from ._common import (
     prepare_1d,
     prepare_broadcast_pair,
     prepare_interpolation,
+    prepare_profile_kinematics,
+    prepare_profile_parcels,
     prepare_qc_columns,
+    prepare_sfc_index,
     restore_array,
     restore_pair,
 )
 from .grib import DecodedPoint, GribDecodeError, load_eccodes
+from .kinematics import profile_kinematics_from_raw
+from .parcels import (
+    convective_workspace_from_raw,
+    downdraft_from_raw,
+    parcel_ascent_from_raw,
+    parcel_workspace_from_raw,
+)
 from .protocol import QualityControlResult
 
 
@@ -100,6 +110,133 @@ class RustBackend:
         result = self._module.pressure_sort_dedup_indices(values, missing)
         return np.asarray(result, dtype=np.intp)
 
+    def profile_kinematics(
+        self,
+        pres,
+        hght,
+        u,
+        v,
+        layer_tops_agl,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_kinematics(
+            pres,
+            hght,
+            u,
+            v,
+            layer_tops_agl,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        raw = self._module.profile_kinematics(*columns, index, None)
+        try:
+            storm_motion, layer_matrix = raw
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(
+                "sharpmod_rs.profile_kinematics returned an invalid result"
+            ) from exc
+        return profile_kinematics_from_raw(storm_motion, layer_matrix)
+
+    def profile_parcels(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_parcels(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        return parcel_workspace_from_raw(
+            self._module.profile_parcels(*columns, index, None),
+        )
+
+    def profile_convective_parcels(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_parcels(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        return convective_workspace_from_raw(
+            self._module.profile_convective_parcels(*columns, index, None),
+        )
+
+    def lift_parcel(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        parcel_pressure,
+        parcel_temperature,
+        parcel_dewpoint,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_parcels(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        return parcel_ascent_from_raw(
+            self._module.lift_parcel(
+                *columns,
+                float(parcel_pressure),
+                float(parcel_temperature),
+                float(parcel_dewpoint),
+                index,
+                None,
+            ),
+        )
+
+    def profile_dcape(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_parcels(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        return downdraft_from_raw(
+            self._module.profile_dcape(*columns, index, None),
+        )
+
     def basic_sounding_qc(
         self,
         pres,
@@ -171,7 +308,14 @@ class RustBackend:
             missing_value,
         )
         try:
-            matrix, selected_lat, selected_lon, vorticity = raw
+            (
+                matrix,
+                selected_lat,
+                selected_lon,
+                vorticity,
+                surface_merged,
+                below_ground_levels_removed,
+            ) = raw
         except (TypeError, ValueError) as exc:
             raise RuntimeError(
                 "sharpmod_rs.decode_grib_point returned an invalid result"
@@ -201,6 +345,8 @@ class RustBackend:
             selected_lat,
             selected_lon,
             vorticity,
+            bool(surface_merged),
+            int(below_ground_levels_removed),
         )
         with self._grib_cache_lock:
             existing = self._grib_point_cache.get(cache_key)

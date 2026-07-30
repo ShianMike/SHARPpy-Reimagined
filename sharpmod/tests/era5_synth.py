@@ -21,7 +21,15 @@ import xarray as xr
 G0 = 9.80665
 
 
-def make_era5_dataset(lats, lons, levels, times, seed=0):
+def make_era5_dataset(
+    lats,
+    lons,
+    levels,
+    times,
+    seed=0,
+    *,
+    include_surface=True,
+):
     """Return a synthetic ERA5-like pressure-level ``xarray.Dataset``.
 
     Parameters
@@ -85,6 +93,33 @@ def make_era5_dataset(lats, lons, levels, times, seed=0):
             "longitude": ("longitude", lons),
         },
     )
+    if include_surface:
+        surface_index = int(np.nanargmax(levels))
+        surface_dims = ("time", "latitude", "longitude")
+        surface_temperature = t[:, surface_index]
+        temperature_c = surface_temperature - 273.15
+        surface_rh = np.clip(r[:, surface_index], 1.0e-3, 100.0)
+        a, b = 17.625, 243.04
+        gamma = (
+            np.log(surface_rh / 100.0)
+            + (a * temperature_c) / (b + temperature_c)
+        )
+        surface_dewpoint = (b * gamma) / (a - gamma) + 273.15
+        surface_shape = (nt, ny, nx)
+        ds = ds.assign(
+            sp=(
+                surface_dims,
+                np.full(surface_shape, levels[surface_index] * 100.0),
+            ),
+            orog=(
+                surface_dims,
+                np.full(surface_shape, height_m[surface_index]),
+            ),
+            t2m=(surface_dims, surface_temperature),
+            d2m=(surface_dims, surface_dewpoint),
+            u10=(surface_dims, u[:, surface_index]),
+            v10=(surface_dims, v[:, surface_index]),
+        )
     return ds
 
 

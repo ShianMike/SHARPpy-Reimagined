@@ -337,7 +337,7 @@ python -m sharpmod.tools.build_uwyo_catalog --years 2024 2015
 
 Requires the `[era5]` extra (`cdsapi`, `cfgrib`, `xarray`), a free Copernicus
 Climate Data Store account, and network access. Accept the ERA5 pressure-level
-dataset licence and copy the credentials from
+and single-level dataset licences and copy the credentials from
 <https://cds.climate.copernicus.eu/how-to-api> into `$HOME/.cdsapirc`.
 The GUI exposes the same extractor on **Reanalysis (ERA5)** and never displays
 credential values.
@@ -354,7 +354,11 @@ time, extracts the vertical column, and writes the `.npz` plus a `.json`
 metadata sidecar recording the requested vs. selected coordinates/time.
 Retrieval uses the official `reanalysis-era5-pressure-levels` CDS dataset and
 requests only the nearest 0.25-degree point, six sounding variables, and all 37
-pressure levels. It does not depend on a Herbie `era5` model plugin.
+pressure levels. A colocated `reanalysis-era5-single-levels` request supplies
+surface pressure/geopotential, 2-m temperature/dewpoint, and 10-m wind. The
+extractor drops pressure levels below terrain, inserts that verified ground
+row, and fails without writing when the merge or physical profile QC fails. It
+does not depend on a Herbie `era5` model plugin.
 
 ### Python API
 
@@ -381,6 +385,9 @@ models and their forecast ranges.
 model-extract gfs 35.18 -97.44 --run "2024-05-20 00:00" --fxx 6
 model-extract hrrr 35.18 -97.44 --run "2024-05-20 00:00" --fxx 18 --render hrrr.png
 model-extract gdps 45.50 -73.60 --run "2026-07-22 00:00" --fxx 6
+
+# Provider-contract monitoring across recent completed cycles
+model-extract aigfs --probe --lookback-cycles 8 --require-surface-contract
 ```
 
 The extractor requests every pressure level published for the chosen model,
@@ -388,6 +395,20 @@ not only the standard mandatory levels. Without `--render`, it keeps the
 portable `.npz` and `.json` sidecar. With `--render`, the PNG is the served
 artifact: the downloaded GRIB subset and transient `.npz`/`.json` are removed
 after rendering, including failure cleanup.
+
+The contract probe reports every present and missing ground component.
+`--require-surface-contract` returns a failing exit status until all six
+components are published, while `--lookback-cycles` avoids mistaking a
+not-yet-published wall-clock cycle for provider schema drift.
+
+Every forecast request must include surface pressure/height, 2-m
+temperature/moisture, and both 10-m wind components. The extractor drops every
+isobar whose pressure is greater than the selected point's surface pressure
+and prepends this verified ground row. It refuses any profile when those
+surface fields are missing, preventing provider below-terrain fill from
+becoming SHARPpy's surface. Products whose current public inventory lacks this
+complete contract report that limitation explicitly rather than producing a
+plausible-looking unsafe sounding.
 
 Retrieval automatically uses the smallest compatible source: the public HRRR
 Zarr point archive for F000 analyses, a small NOAA NOMADS geographic subset for
@@ -421,9 +442,12 @@ transport as the other indexed models; its retained multi-cycle benchmark is
 documented in `benchmarks/results/2026-07-22-rrfs-range-workers.md`.
 
 Canadian `gdps` and `rdps` use ECCC MSC GeoMet's point-value route. The adapter
-fans out the required variable/pressure layers with four bounded workers,
+fetches six surface layers first, skips isobaric layers at or below the point's
+surface pressure, then fans out the remaining variable/pressure layers with
+four bounded workers,
 checks the exact model reference and valid times returned by every layer, and
-normalizes 33 pressure levels into the same portable sounding contract. Set
+normalizes the verified ground plus all above-terrain published levels into
+the same portable sounding contract. Set
 `SHARPMOD_GEOMET_WORKERS` from 1-8 to tune that network fan-out. GDPS supports
 00/12Z through F240 every three hours; RDPS supports 00/06/12/18Z through F084
 hourly.
@@ -434,7 +458,9 @@ Forecast Hour** action in the File menu, and provides a Cancel button on the
 model tab. Set `SHARPMOD_MODEL_CACHE`, `SHARPMOD_MODEL_CACHE_GB`, or
 `SHARPMOD_MODEL_CACHE_HOURS` to change retention. Set
 `SHARPMOD_POINT_BACKENDS=grib` or `SHARPMOD_HRRR_BACKEND=grib` to bypass the
-point routes while troubleshooting.
+point routes while troubleshooting. The cache namespace is versioned with the
+extraction contract; old entries are shown for inspection but are not reused.
+Portable profiles are physically revalidated before cache reuse.
 
 ### Resumable batch API and CLI (`model-batch-extract`)
 

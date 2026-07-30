@@ -8,8 +8,10 @@ import pytest
 
 from sharpmod.hrrr_zarr import (
     _point_dataset_from_columns,
+    ZarrBackendUnavailable,
     decode_zarr_point,
     discover_pressure_plan,
+    discover_surface_plan,
     hrrr_grid_index,
 )
 
@@ -57,6 +59,27 @@ def test_metadata_plan_keeps_all_levels_and_prunes_equivalent_fields():
     assert len(plan.arrays) == len(plan.levels) * len(plan.fields)
 
 
+def test_metadata_plan_requires_all_verified_surface_arrays():
+    metadata = {}
+    paths = {
+        "PRES": "surface/PRES/surface/PRES/.zarray",
+        "HGT": "surface/HGT/surface/HGT/.zarray",
+        "TMP": "2m_above_ground/TMP/2m_above_ground/TMP/.zarray",
+        "DPT": "2m_above_ground/DPT/2m_above_ground/DPT/.zarray",
+        "UGRD": "10m_above_ground/UGRD/10m_above_ground/UGRD/.zarray",
+        "VGRD": "10m_above_ground/VGRD/10m_above_ground/VGRD/.zarray",
+    }
+    for path in paths.values():
+        metadata[path] = _array_metadata()
+
+    plan = discover_surface_plan(metadata)
+
+    assert tuple(plan.arrays) == tuple(paths)
+    del metadata[paths["DPT"]]
+    with pytest.raises(ZarrBackendUnavailable, match="DPT"):
+        discover_surface_plan(metadata)
+
+
 def test_decode_zarr_point_handles_compressed_chunk():
     metadata = _array_metadata(shape=(2, 2), chunks=(2, 2))
     values = np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype="<f4")
@@ -84,11 +107,22 @@ def test_point_columns_normalize_without_constructing_xarray():
     dataset = _point_dataset_from_columns(
         levels, columns, 35.0, -97.0,
         datetime(2026, 7, 22, tzinfo=timezone.utc), 35.01, -97.01,
+        {
+            "PRES": 92500.0,
+            "HGT": 500.0,
+            "TMP": 298.15,
+            "DPT": 288.15,
+            "UGRD": 3.0,
+            "VGRD": 4.0,
+        },
     )
 
-    np.testing.assert_array_equal(dataset.decoded.pres, levels)
-    np.testing.assert_allclose(dataset.decoded.tmpc, [20.0, 10.0])
+    np.testing.assert_array_equal(dataset.decoded.pres, [925.0, 850.0])
+    np.testing.assert_allclose(dataset.decoded.hght, [500.0, 1500.0])
+    np.testing.assert_allclose(dataset.decoded.tmpc, [25.0, 10.0])
     np.testing.assert_allclose(dataset.decoded.wspd, [9.71922245, 9.71922245])
+    assert dataset.decoded.surface_merged
+    assert dataset.decoded.below_ground_levels_removed == 1
     assert dataset.decoded.surface_relative_vorticity is not None
     assert dataset.requested_lat == pytest.approx(35.01)
     assert dataset.requested_lon == pytest.approx(-97.01)

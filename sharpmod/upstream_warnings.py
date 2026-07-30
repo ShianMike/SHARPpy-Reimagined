@@ -78,6 +78,21 @@ def known_herbie_deprecations():
 
 
 @contextmanager
+def known_netcdf4_numpy_shape_deprecation():
+    """Contain netCDF4's NumPy 2.5 shape assignment in fixture writes."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                r"Setting the shape on a NumPy array has been deprecated "
+                r"in NumPy 2\.5\."
+            ),
+            category=DeprecationWarning,
+        )
+        yield
+
+
+@contextmanager
 def xarray_new_combine_defaults():
     """Use xarray's future merge defaults while cfgrib catches up."""
     import xarray as xr

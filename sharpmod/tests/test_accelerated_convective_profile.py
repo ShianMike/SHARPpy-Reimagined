@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from sharpmod import backends, render
 from sharpmod.backends.protocol import (
@@ -67,6 +68,11 @@ def test_render_decode_uses_native_profile_without_python_integrators(
 ):
     monkeypatch.setenv("SHARPMOD_BACKEND", "rust")
     backends.reset_backend_cache()
+    backend = backends.backend_info()
+    if backend["active_backend"] != "rust":
+        pytest.skip(
+            f"compatible Rust backend unavailable: {backend['fallback_reason']}"
+        )
     from sharppy.sharptab import params as sp_params
 
     parcel_calls = 0

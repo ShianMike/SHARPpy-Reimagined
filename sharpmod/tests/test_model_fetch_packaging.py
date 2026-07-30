@@ -48,6 +48,10 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         assert python_job["strategy"]["matrix"]["python-version"] == [
             "3.11", "3.12", "3.13",
         ]
+        lane_scripts = "\n".join(
+            step.get("run", "") for step in python_job["steps"]
+        )
+        assert "libegl1" in lane_scripts
         checkout = next(
             step for step in python_job["steps"]
             if step.get("name") == "Check out tested source"

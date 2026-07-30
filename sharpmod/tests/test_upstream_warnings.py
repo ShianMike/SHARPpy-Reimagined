@@ -7,6 +7,7 @@ import warnings
 from sharpmod.upstream_warnings import (
     known_herbie_deprecations,
     known_metpy_bounds_warning,
+    known_netcdf4_numpy_shape_deprecation,
     known_sharppy_numerical_warnings,
     xarray_new_combine_defaults,
 )
@@ -56,6 +57,23 @@ def test_herbie_guard_suppresses_only_pinned_deprecations():
             warnings.warn("new Herbie deprecation", DeprecationWarning)
 
     assert _messages(caught) == ["new Herbie deprecation"]
+
+
+def test_netcdf4_guard_suppresses_only_numpy_25_shape_deprecation():
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with known_netcdf4_numpy_shape_deprecation():
+            warnings.warn(
+                "Setting the shape on a NumPy array has been deprecated "
+                "in NumPy 2.5.",
+                DeprecationWarning,
+            )
+            warnings.warn(
+                "different netCDF4 deprecation",
+                DeprecationWarning,
+            )
+
+    assert _messages(caught) == ["different netCDF4 deprecation"]
 
 
 def test_xarray_context_enables_and_restores_new_combine_defaults():

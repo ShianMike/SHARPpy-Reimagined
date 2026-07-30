@@ -15,6 +15,9 @@ from sharpmod import gui_picker, gui_workers
 from sharpmod.model_disk_cache import ModelDiskCache
 from sharpmod.tests.era5_synth import make_era5_dataset
 from sharpmod.tools import era5_extract, wrf_extract
+from sharpmod.upstream_warnings import (
+    known_netcdf4_numpy_shape_deprecation,
+)
 
 
 @pytest.fixture(scope="module")
@@ -256,7 +259,8 @@ def test_raw_wrf_netcdf4_file_uses_capable_xarray_engine(tmp_path):
     pytest.importorskip("netCDF4")
     source = tmp_path / "wrfout_d01_2024-05-20_00_00_00"
     dataset = _wrf_dataset()
-    dataset.to_netcdf(source, engine="netcdf4")
+    with known_netcdf4_numpy_shape_deprecation():
+        dataset.to_netcdf(source, engine="netcdf4")
 
     domain = wrf_extract.inspect_file(source)
     assert domain["shape"] == (3, 3)

@@ -17,7 +17,7 @@ cdsapi==0.7.7
 herbie-data==2026.3.0
 cfgrib==0.9.15.1
 eccodes==2.47.0
-xarray==2026.4.0
+xarray==2026.7.0
 numcodecs==0.16.5
 pyproj==3.7.2
 netCDF4==1.7.4

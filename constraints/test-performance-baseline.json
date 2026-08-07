@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Checked pytest wall-time baseline. Full correctness counts are preserved; tolerances absorb normal hosted-runner variance.",
+  "description": "Checked pytest wall-time baseline. Local Rust-enabled limits stay strict; explicit GitHub Actions overrides cover the slower Python fallback on hosted runners.",
   "defaults": {
     "relative_tolerance": 0.6,
     "absolute_tolerance_seconds": 2.0
@@ -20,11 +20,23 @@
     },
     "property": {
       "baseline_seconds": 137.09,
-      "maximum_seconds": 260.0
+      "maximum_seconds": 260.0,
+      "environment_overrides": {
+        "github-actions": {
+          "baseline_seconds": 446.35,
+          "maximum_seconds": 650.0
+        }
+      }
     },
     "serial-release": {
       "baseline_seconds": 316.51,
-      "maximum_seconds": 600.0
+      "maximum_seconds": 600.0,
+      "environment_overrides": {
+        "github-actions": {
+          "baseline_seconds": 1022.16,
+          "maximum_seconds": 1350.0
+        }
+      }
     },
     "windows-wrf": {
       "baseline_seconds": 4.84,
@@ -38,7 +50,23 @@
       "suite_overrides": {
         "property": {
           "baseline_seconds": 75.91,
-          "maximum_seconds": 135.0
+          "maximum_seconds": 135.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 314.8,
+              "maximum_seconds": 460.0
+            }
+          }
+        },
+        "serial-release": {
+          "baseline_seconds": 34.55,
+          "maximum_seconds": 58.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 256.02,
+              "maximum_seconds": 350.0
+            }
+          }
         }
       }
     },
@@ -48,7 +76,23 @@
       "suite_overrides": {
         "property": {
           "baseline_seconds": 60.29,
-          "maximum_seconds": 100.0
+          "maximum_seconds": 100.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 124.48,
+              "maximum_seconds": 190.0
+            }
+          }
+        },
+        "serial-release": {
+          "baseline_seconds": 33.55,
+          "maximum_seconds": 57.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 71.31,
+              "maximum_seconds": 110.0
+            }
+          }
         }
       }
     },
@@ -58,7 +102,23 @@
       "suite_overrides": {
         "property": {
           "baseline_seconds": 49.77,
-          "maximum_seconds": 85.0
+          "maximum_seconds": 85.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 369.06,
+              "maximum_seconds": 540.0
+            }
+          }
+        },
+        "serial-release": {
+          "baseline_seconds": 35.85,
+          "maximum_seconds": 60.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 298.22,
+              "maximum_seconds": 400.0
+            }
+          }
         }
       }
     },
@@ -88,7 +148,13 @@
       "suite_overrides": {
         "property": {
           "baseline_seconds": 46.92,
-          "maximum_seconds": 80.0
+          "maximum_seconds": 80.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 69.44,
+              "maximum_seconds": 110.0
+            }
+          }
         }
       }
     },

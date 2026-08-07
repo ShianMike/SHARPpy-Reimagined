@@ -123,10 +123,22 @@ def read_baseline(path: Path) -> dict:
     return data
 
 
-def _limit(entry: dict, defaults: dict, suite_name: str) -> tuple[float, float]:
+def _limit(
+    entry: dict,
+    defaults: dict,
+    suite_name: str,
+    *,
+    environment_profile: str | None = None,
+) -> tuple[float, float]:
     override = entry.get("suite_overrides", {}).get(suite_name, {})
     if override:
         entry = {**entry, **override}
+    if environment_profile:
+        environment_override = entry.get("environment_overrides", {}).get(
+            environment_profile, {}
+        )
+        if environment_override:
+            entry = {**entry, **environment_override}
     baseline = _positive_float(entry.get("baseline_seconds"), "baseline_seconds")
     if "maximum_seconds" in entry:
         maximum = _positive_float(
@@ -158,6 +170,7 @@ def evaluate(
     suite_seconds: float,
     durations: tuple[TestDuration, ...],
     baseline: dict,
+    environment_profile: str | None = None,
 ) -> tuple[tuple[BudgetViolation, ...], int]:
     """Compare one run with its suite and per-test budgets."""
 
@@ -169,7 +182,12 @@ def evaluate(
             f"unknown suite {suite_name!r}; expected one of: {known}"
         ) from exc
     defaults = baseline.get("defaults", {})
-    suite_baseline, suite_limit = _limit(suite_entry, defaults, suite_name)
+    suite_baseline, suite_limit = _limit(
+        suite_entry,
+        defaults,
+        suite_name,
+        environment_profile=environment_profile,
+    )
     violations: list[BudgetViolation] = []
     if suite_seconds > suite_limit:
         violations.append(
@@ -191,7 +209,12 @@ def evaluate(
         if lanes is not None and suite_name not in lanes:
             continue
         tracked += 1
-        test_baseline, test_limit = _limit(entry, defaults, suite_name)
+        test_baseline, test_limit = _limit(
+            entry,
+            defaults,
+            suite_name,
+            environment_profile=environment_profile,
+        )
         if duration.seconds > test_limit:
             violations.append(
                 BudgetViolation(
@@ -217,12 +240,14 @@ def _markdown_summary(
     suite_seconds: float,
     top: tuple[TestDuration, ...],
     violations: tuple[BudgetViolation, ...],
+    environment_profile: str | None,
 ) -> str:
     status = "PASS" if not violations else "FAIL"
     lines = [
         f"### Test performance: {suite_name} - {status}",
         "",
         f"Suite wall time: **{_seconds(suite_seconds)}**",
+        f"Budget profile: **{environment_profile or 'default'}**",
         "",
         "| Slowest test | Time |",
         "|---|---:|",
@@ -251,6 +276,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--json-out", type=Path, help="write machine-readable report")
     parser.add_argument("--top", type=int, default=15, help="slow tests to report")
     parser.add_argument(
+        "--environment-profile",
+        default=(
+            "github-actions"
+            if os.environ.get("GITHUB_ACTIONS", "").strip().casefold() == "true"
+            else None
+        ),
+        help="optional checked environment override (auto-detects GitHub Actions)",
+    )
+    parser.add_argument(
         "--no-enforce",
         action="store_true",
         help="report regressions but return success",
@@ -269,11 +303,18 @@ def main(argv: list[str] | None = None) -> int:
         suite_seconds=suite_seconds,
         durations=durations,
         baseline=baseline,
+        environment_profile=args.environment_profile,
     )
     top = tuple(
         sorted(durations, key=lambda item: item.seconds, reverse=True)[: args.top]
     )
-    summary = _markdown_summary(args.suite, suite_seconds, top, violations)
+    summary = _markdown_summary(
+        args.suite,
+        suite_seconds,
+        top,
+        violations,
+        args.environment_profile,
+    )
     print(summary, end="")
     print(f"Tracked tests present in this lane: {tracked}")
 
@@ -281,6 +322,7 @@ def main(argv: list[str] | None = None) -> int:
         "schema_version": 1,
         "generated_at": datetime.now(UTC).isoformat(),
         "suite": args.suite,
+        "environment_profile": args.environment_profile or "default",
         "suite_seconds": suite_seconds,
         "tracked_tests_present": tracked,
         "slowest_tests": [asdict(item) for item in top],

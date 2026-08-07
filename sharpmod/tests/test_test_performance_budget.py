@@ -156,3 +156,66 @@ def test_parallel_lane_can_override_a_serial_test_baseline():
 
     assert tracked == 1
     assert violations == ()
+
+
+def test_environment_profile_overrides_preserve_the_default_budget():
+    baseline = {
+        "defaults": {},
+        "suites": {
+            "property": {
+                "baseline_seconds": 10.0,
+                "maximum_seconds": 15.0,
+                "environment_overrides": {
+                    "github-actions": {
+                        "baseline_seconds": 20.0,
+                        "maximum_seconds": 30.0,
+                    }
+                },
+            }
+        },
+        "tests": {
+            "sample::test_value": {
+                "baseline_seconds": 4.0,
+                "maximum_seconds": 6.0,
+                "suite_overrides": {
+                    "property": {
+                        "baseline_seconds": 5.0,
+                        "maximum_seconds": 7.0,
+                        "environment_overrides": {
+                            "github-actions": {
+                                "baseline_seconds": 8.0,
+                                "maximum_seconds": 10.0,
+                            }
+                        },
+                    }
+                },
+            }
+        },
+    }
+    durations = (
+        performance.TestDuration(
+            key="sample::test_value",
+            display_name="sample.py::test_value",
+            seconds=9.0,
+        ),
+    )
+
+    default_violations, _ = performance.evaluate(
+        suite_name="property",
+        suite_seconds=25.0,
+        durations=durations,
+        baseline=baseline,
+    )
+    hosted_violations, _ = performance.evaluate(
+        suite_name="property",
+        suite_seconds=25.0,
+        durations=durations,
+        baseline=baseline,
+        environment_profile="github-actions",
+    )
+
+    assert {item.name for item in default_violations} == {
+        "suite:property",
+        "sample.py::test_value",
+    }
+    assert hosted_violations == ()

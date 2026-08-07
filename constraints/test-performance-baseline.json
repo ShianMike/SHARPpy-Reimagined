@@ -138,7 +138,13 @@
       "suite_overrides": {
         "property": {
           "baseline_seconds": 33.17,
-          "maximum_seconds": 60.0
+          "maximum_seconds": 60.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 60.26,
+              "maximum_seconds": 95.0
+            }
+          }
         }
       }
     },

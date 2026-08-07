@@ -780,11 +780,14 @@ def test_index_board_agl_barbs_use_a_compact_scale(qt_app, monkeypatch):
         latitude=44.83,
     )
     scales = []
+    paths = []
     original_path = board._barb_path
 
     def capture_path(wdir, wspd, shemis, scale):
         scales.append(scale)
-        return original_path(wdir, wspd, shemis, scale)
+        path = original_path(wdir, wspd, shemis, scale)
+        paths.append(path)
+        return path
 
     monkeypatch.setattr(board, "_barb_path", capture_path)
     pixmap = QtGui.QPixmap(240, 130)
@@ -803,10 +806,10 @@ def test_index_board_agl_barbs_use_a_compact_scale(qt_app, monkeypatch):
                 points.append((x, y))
 
     assert points
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
-    assert max(xs) - min(xs) + 1 >= 48
-    assert max(ys) - min(ys) + 1 >= 44
+    assert len(paths) == 2
+    bounds = paths[0].boundingRect().united(paths[1].boundingRect())
+    assert 30 <= bounds.width() <= 45
+    assert 35 <= bounds.height() <= 50
     assert scales
     assert max(scales) <= 1.25
 

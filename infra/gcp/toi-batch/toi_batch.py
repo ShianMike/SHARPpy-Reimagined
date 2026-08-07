@@ -645,7 +645,7 @@ def budget_guard(config: BatchConfig, usage: Mapping[str, Any]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def render_task_script(config: BatchConfig, *, catalog_object: str) -> str:
+def render_task_script(config: BatchConfig) -> str:
     """Render the Batch script runnable. No container image is involved."""
 
     bucket = config.default_bucket
@@ -661,6 +661,9 @@ RUN_URI="${{BUCKET}}/${{RUN_PREFIX}}"
 WORK="/mnt/work/${{SHARD_ID}}"
 # Raw GRIB stays here and is NEVER uploaded.
 RAW="${{WORK}}/raw"
+MIRROR_INTERVAL_SECONDS=300
+ARCHIVE_PID=""
+MIRROR_PID=""
 
 log() {{ echo "[$(date -u +%FT%TZ)] $*"; }}
 
@@ -691,18 +694,8 @@ python{config.python_version} -m venv /opt/venv
 /opt/venv/bin/python -m pip install --quiet -e '.[era5]'
 
 log "fetching catalogue shard"
-gcloud storage cp "${{RUN_URI}}/{catalog_object}" "${{WORK}}/catalog.json"
-
-# --- bounded, resumable extraction with job-side hard caps ---
-log "running archive shard"
-/opt/venv/bin/python -m sharpmod.tools.guidance_cli run-toi-archive \\
-  --catalog "${{WORK}}/catalog.json" \\
-  --work-dir "${{WORK}}" \\
-  --max-cases {config.max_cases_per_task} \\
-  --max-transfer-gib {config.max_input_gib_per_task} \\
-  --max-seconds {config.max_task_wall_seconds} \\
-  --min-free-gib {config.min_free_gib} \\
-  --allow-failures
+gcloud storage cp "${{RUN_URI}}/shards/${{SHARD_ID}}.json" \\
+  "${{WORK}}/catalog.json"
 
 # --- durable mirror: explicit upload plus checksum verification ---
 mirror() {{
@@ -715,18 +708,92 @@ mirror() {{
   log "mirrored ${{src}} -> ${{dst}} (local ${{local_sum}})"
 }}
 
-log "mirroring case files and checkpoint"
-if [ -d "${{WORK}}/cases" ]; then
-  gcloud storage rsync -r "${{WORK}}/cases" \\
-    "${{RUN_URI}}/${{SHARD_ID}}/cases"
-fi
-if [ -f "${{WORK}}/checkpoint.jsonl" ]; then
-  mirror "${{WORK}}/checkpoint.jsonl" \\
-    "${{RUN_URI}}/${{SHARD_ID}}/checkpoint.jsonl"
-fi
+mirror_progress() {{
+  # Freeze the append-only checkpoint first, upload the corresponding case
+  # files, and only then publish the snapshot. A retry can never observe a
+  # successful checkpoint row before its case artifact is durable.
+  local snapshot="${{WORK}}/.checkpoint-mirror.jsonl"
+  local status=0
+  rm -f "${{snapshot}}"
+  if [ -f "${{WORK}}/checkpoint.jsonl" ]; then
+    cp "${{WORK}}/checkpoint.jsonl" "${{snapshot}}" || status=$?
+  fi
+  if [ "${{status}}" -eq 0 ] && [ -d "${{WORK}}/cases" ]; then
+    gcloud storage rsync -r "${{WORK}}/cases" \\
+      "${{RUN_URI}}/${{SHARD_ID}}/cases" || status=$?
+  fi
+  if [ "${{status}}" -eq 0 ] && [ -f "${{snapshot}}" ]; then
+    mirror "${{snapshot}}" \\
+      "${{RUN_URI}}/${{SHARD_ID}}/checkpoint.jsonl" || status=$?
+  fi
+  rm -f "${{snapshot}}"
+  return "${{status}}"
+}}
+
+stop_periodic_mirror() {{
+  if [ -n "${{MIRROR_PID}}" ]; then
+    kill "${{MIRROR_PID}}" 2>/dev/null || true
+    wait "${{MIRROR_PID}}" 2>/dev/null || true
+    MIRROR_PID=""
+  fi
+}}
+
+periodic_mirror() {{
+  while kill -0 "${{ARCHIVE_PID}}" 2>/dev/null; do
+    sleep "${{MIRROR_INTERVAL_SECONDS}}"
+    kill -0 "${{ARCHIVE_PID}}" 2>/dev/null || break
+    if ! mirror_progress; then
+      log "periodic checkpoint mirror failed; retrying next interval"
+    fi
+  done
+}}
+
+archive_interrupted() {{
+  trap - INT TERM
+  log "archive interrupted; mirroring latest completed cases"
+  if [ -n "${{ARCHIVE_PID}}" ]; then
+    kill -TERM "${{ARCHIVE_PID}}" 2>/dev/null || true
+    wait "${{ARCHIVE_PID}}" 2>/dev/null || true
+    ARCHIVE_PID=""
+  fi
+  stop_periodic_mirror
+  mirror_progress || log "final interrupt mirror failed"
+  exit 143
+}}
+
+# --- bounded, resumable extraction with job-side hard caps ---
+log "running archive shard"
+/opt/venv/bin/python -m sharpmod.tools.guidance_cli run-toi-archive \\
+  --catalog "${{WORK}}/catalog.json" \\
+  --work-dir "${{WORK}}" \\
+  --max-cases {config.max_cases_per_task} \\
+  --max-transfer-gib {config.max_input_gib_per_task} \\
+  --max-seconds {config.max_task_wall_seconds} \\
+  --min-free-gib {config.min_free_gib} \\
+  --allow-failures &
+ARCHIVE_PID=$!
+periodic_mirror &
+MIRROR_PID=$!
+trap archive_interrupted INT TERM
+trap stop_periodic_mirror EXIT
+
+set +e
+wait "${{ARCHIVE_PID}}"
+ARCHIVE_STATUS=$?
+set -e
+ARCHIVE_PID=""
+stop_periodic_mirror
+trap - INT TERM
+
+log "mirroring final case files and checkpoint"
+mirror_progress
 if [ -f "${{WORK}}/run-report.json" ]; then
   mirror "${{WORK}}/run-report.json" \\
     "${{RUN_URI}}/${{SHARD_ID}}/run-report.json"
+fi
+if [ "${{ARCHIVE_STATUS}}" -ne 0 ]; then
+  log "archive runner exited with status ${{ARCHIVE_STATUS}}"
+  exit "${{ARCHIVE_STATUS}}"
 fi
 
 log "verifying extracted output"
@@ -1116,7 +1183,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
     )
     out = Path(args.out_dir)
     job_name = args.job_name
-    script = render_task_script(config, catalog_object="shards/shard-00.json")
+    script = render_task_script(config)
     script_path = out / "task-script.sh"
     script_path.parent.mkdir(parents=True, exist_ok=True)
     script_path.write_text(script, encoding="utf-8", newline="\n")

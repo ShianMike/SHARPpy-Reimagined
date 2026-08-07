@@ -471,13 +471,16 @@ def test_rendered_job_is_a_script_runnable_with_spot_retry():
 def test_task_script_restores_state_and_never_uploads_raw_grib():
     config = planner.BatchConfig(project="p")
 
-    script = planner.render_task_script(config, catalog_object="shards/shard-00.json")
+    script = planner.render_task_script(config)
 
     assert script.startswith("#!/usr/bin/env bash")
     assert "set -Eeuo pipefail" in script
     # Resume before continuing.
     assert "restoring checkpoint" in script
     assert "checkpoint.jsonl" in script
+    # Each Batch task fetches its own catalogue instead of repeating shard 00.
+    assert 'shards/${SHARD_ID}.json' in script
+    assert "shards/shard-00.json" not in script
     # A preempted VM's stale lock must not wedge the retry.
     assert "rm -f" in script and "run.lock" in script
     # Explicit upload plus checksum verification, not FUSE rename semantics.
@@ -491,6 +494,14 @@ def test_task_script_restores_state_and_never_uploads_raw_grib():
     assert "--max-transfer-gib" in script
     assert "--max-seconds" in script
     assert "--min-free-gib" in script
+    # Completed cases are mirrored during the archive process, not only after
+    # a potentially day-long subprocess exits.
+    assert "MIRROR_INTERVAL_SECONDS=300" in script
+    assert 'while kill -0 "${ARCHIVE_PID}"' in script
+    assert "periodic_mirror &" in script
+    mirror_start = script.index("periodic_mirror &")
+    assert mirror_start < script.index('wait "${ARCHIVE_PID}"', mirror_start)
+    assert "archive_interrupted" in script
     # No container build anywhere.
     assert "docker" not in script.lower()
     assert "artifactregistry" not in script.lower()

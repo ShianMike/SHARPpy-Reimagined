@@ -907,25 +907,19 @@ class ArchiveRunner:
     # -- checkpointing --------------------------------------------------- #
 
     def completed_keys(self) -> dict[str, str]:
-        """Return ``{cache_key: status}`` for every checkpointed case."""
+        """Return terminal checkpoint results that a resume may safely skip.
 
-        if not self.checkpoint_path.exists():
-            return {}
+        Successful cases already have a verified case artifact, while an
+        intentional skip is terminal for the same catalogue inputs.  Failed or
+        unknown records are deliberately excluded so a later invocation retries
+        them instead of silently treating an incomplete run as finished.
+        """
+
         done: dict[str, str] = {}
-        with open(self.checkpoint_path, encoding="utf-8") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    # A crash can truncate the final line; ignore it and let the
-                    # case be retried rather than trusting a partial record.
-                    continue
-                key = record.get("cache_key")
-                if key:
-                    done[str(key)] = str(record.get("status", "unknown"))
+        for key, record in self.checkpoint_records().items():
+            status = str(record.get("status", "unknown"))
+            if status in {"success", "skipped"}:
+                done[key] = status
         return done
 
     def _append_checkpoint(self, outcome: CaseOutcome) -> None:

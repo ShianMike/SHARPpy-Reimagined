@@ -700,6 +700,33 @@ def test_runner_ignores_a_truncated_final_checkpoint_line(tmp_path):
     assert len(runner.completed_keys()) == 1
 
 
+def test_runner_retries_a_failed_checkpoint_on_resume(tmp_path):
+    archive = FakeArchive(payload_bytes=512)
+    runner = _runner(tmp_path, archive)
+    case = _case("retry-after-failure")
+    key = case_cache_key(case)
+    failed = CaseOutcome(
+        event_id=case.event_id,
+        run_time=case.run_time.isoformat(),
+        cache_key=key,
+        status="failed",
+        reason="transient archive outage",
+    )
+    runner.checkpoint_path.write_text(
+        json.dumps(failed.to_mapping()) + "\n", encoding="utf-8"
+    )
+
+    assert runner.checkpoint_records()[key]["status"] == "failed"
+    assert runner.completed_keys() == {}
+
+    report = runner.run([case])
+
+    assert len(report.succeeded) == 1
+    assert report.succeeded[0].cache_key == key
+    assert archive.calls
+    assert runner.completed_keys() == {key: "success"}
+
+
 def test_runner_stops_at_the_case_budget(tmp_path):
     runner = _runner(tmp_path, FakeArchive(payload_bytes=512), maximum_cases=2)
 

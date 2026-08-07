@@ -402,9 +402,10 @@ def verify_archive_command(args: argparse.Namespace) -> int:
         f"failures: {manifest['failure_count']}",
         flush=True,
     )
-    checkpoint = runner.completed_keys()
+    checkpoint = runner.checkpoint_records()
     statuses: dict[str, int] = {}
-    for status in checkpoint.values():
+    for record in checkpoint.values():
+        status = str(record.get("status", "unknown"))
         statuses[status] = statuses.get(status, 0) + 1
     print(f"Checkpoint entries: {len(checkpoint)} {statuses}", flush=True)
     for failure in manifest["failures"][:10]:

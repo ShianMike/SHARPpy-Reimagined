@@ -1,0 +1,16 @@
+{
+  "blockers": [
+    "dedicated bucket does not exist yet (planned only)",
+    "offline preflight: API and bucket state unverified, rerun without --offline before submitting"
+  ],
+  "checked_at": "2026-08-06T06:17:27+00:00",
+  "mutations_performed": [],
+  "offline": true,
+  "project": "project-ab691722-e43c-472e-a9e",
+  "read_only": true,
+  "ready_to_submit": false,
+  "services": {
+    "note": "offline mode: no gcloud calls made"
+  },
+  "tool_version": "toi_batch_planner_v1"
+}

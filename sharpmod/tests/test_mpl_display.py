@@ -7,17 +7,10 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import pytest
-from qtpy import QtWidgets
 from qtpy.QtCore import QRect
 
 from sharpmod.viz.index_board import IndexBoard
 from sharpmod.viz.skew import parcel_level_markers
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
 def test_parcel_level_markers_include_mpl():

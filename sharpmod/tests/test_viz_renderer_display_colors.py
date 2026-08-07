@@ -31,7 +31,7 @@ from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from qtpy import QtGui, QtWidgets
+from qtpy import QtGui
 
 from sharpmod import colors
 from sharpmod.sharptab.constants import MISSING
@@ -49,15 +49,6 @@ from sharpmod.viz.SPCWindow import reapply_color_scheme
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="module")
-def qt_app():
-    """A single offscreen QApplication for the module's widget tests."""
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication([])
-    return app
-
 
 #: A Profile exposing a value for every derived-index attribute.
 _FULL_DERIVED = SimpleNamespace(

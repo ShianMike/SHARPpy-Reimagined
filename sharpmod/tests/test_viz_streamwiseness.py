@@ -10,17 +10,9 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from qtpy import QtCore, QtGui, QtWidgets
+from qtpy import QtCore, QtGui
 
 from sharpmod.viz.streamwiseness import plotStreamwiseness, streamwiseness_profile
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication([])
-    return app
 
 
 def _circular_profile(*, clockwise=False):
@@ -300,11 +292,15 @@ def test_family_panel_growth_ignores_stale_pre_layout_text_height(
             text.sizeHint().height(),
         )
         assert stale_height > settled_hint
+        minimum_before_growth = text.minimumHeight()
 
         render_mod._grow_for_family_panels(win)
 
-        assert text.minimumHeight() == (
-            settled_hint + render_mod.CHART_HEIGHT_GROW)
+        if render_mod.CHART_HEIGHT_GROW > 0:
+            assert text.minimumHeight() == (
+                settled_hint + render_mod.CHART_HEIGHT_GROW)
+        else:
+            assert text.minimumHeight() == minimum_before_growth
     finally:
         win.close()
         controller.close()

@@ -69,11 +69,12 @@ def test_renderer_declares_one_named_spec_per_patch_installer():
     patches = render.render_patch_specs()
     names = [patch.name for patch in patches]
 
-    assert len(patches) == 30
+    assert len(patches) == 31
     assert len(names) == len(set(names))
     assert names[0] == "skewt.user-parcel-backend"
     assert names[1] == "title.override"
     assert "hodo.height-levels" in names
+    assert names.index("hodo.zoom") < names.index("hodo.mean-wind-default")
     assert names.index("hodo.locator") < names.index("hodo.height-levels")
     assert names[-1] == "tables.spacing"
 

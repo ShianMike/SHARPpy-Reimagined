@@ -6,18 +6,9 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import pytest
-from qtpy import QtGui, QtWidgets
+from qtpy import QtGui
 
 from sharpmod.viz import inset_layout
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication([])
-    return app
 
 
 class _ThetaeStub:

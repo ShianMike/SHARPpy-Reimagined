@@ -30,6 +30,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from qtpy import QtWidgets
 
+from sharpmod.tests._hypothesis import profiled_examples
 from sharpmod.viz import custom_panel
 from sharpmod.viz.custom_panel import CustomPanel, PanelItem
 
@@ -87,7 +88,7 @@ _arbitrary_length = st.lists(
 )
 
 
-@settings(max_examples=150)
+@settings(max_examples=profiled_examples(150))
 @given(names=_arbitrary_length)
 def test_property_24_truncates_over_twelve(qt_app, names):
     """At most 12 items render; overflow indicator appears iff length > 12."""

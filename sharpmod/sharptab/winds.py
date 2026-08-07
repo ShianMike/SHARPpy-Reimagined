@@ -55,6 +55,9 @@ _KINEMATICS_CACHE_MISS = object()
 _STANDARD_LAYER_TOPS_AGL = (500.0, 1000.0, 3000.0, 4000.0, 6000.0)
 _MATCH_RTOL = 1.0e-9
 _MATCH_ATOL = 1.0e-6
+# Pressures closer than this to the layer top are treated as the top itself, so
+# floating-point drift in the sample increment cannot append a duplicate level.
+_SAMPLE_SNAP_HPA = 1.0e-9
 
 
 # ---------------------------------------------------------------------------
@@ -176,6 +179,42 @@ def _finite_values(*values):
     )
 
 
+def _pressure_samples(pbot, ptop, dp=-1.0):
+    """Return the layer sample pressures, ending exactly at ``ptop``.
+
+    A fixed increment cannot land on ``ptop`` for a layer whose depth is not a
+    whole multiple of ``dp``, so a plain ``arange`` over ``[pbot, ptop + dp]``
+    takes one step *past* the layer top. When that overshoot leaves the reported
+    profile the sample interpolates to :data:`MISSING` and is silently dropped
+    from the layer mean, which makes the reported mean wind depend on where the
+    increment happens to fall rather than on the requested layer. Sampling the
+    exact top instead keeps the integration bounded by ``[pbot, ptop]`` and
+    removes the dependence on out-of-profile extrapolation.
+
+    Returns an empty array when the bounds are unusable, so callers keep their
+    existing ``MISSING`` behaviour.
+    """
+    pbot = float(pbot)
+    ptop = float(ptop)
+    step = -abs(float(dp))
+    if (
+        not np.isfinite(pbot)
+        or not np.isfinite(ptop)
+        or not np.isfinite(step)
+        or step == 0.0
+        or pbot < ptop
+    ):
+        return np.empty(0, dtype=float)
+
+    # ``arange`` excludes its stop value, so this yields only levels strictly
+    # above ``ptop`` in pressure; the exact top is then added once.
+    ps = np.arange(pbot, ptop, step, dtype=float)
+    if ps.size and abs(float(ps[-1]) - ptop) <= _SAMPLE_SNAP_HPA:
+        ps[-1] = ptop
+        return ps
+    return np.append(ps, ptop)
+
+
 def _same_right_mover(workspace, stu, stv):
     if workspace is None:
         return False
@@ -227,7 +266,7 @@ def mean_wind(prof, pbot, ptop, dp=-1, stu=0, stv=0):
             return layer.mean_u - float(stu), layer.mean_v - float(stv)
     if dp > 0:
         dp = -dp
-    ps = np.arange(pbot, ptop + dp, dp)
+    ps = _pressure_samples(pbot, ptop, dp)
     if ps.size == 0:
         return MISSING, MISSING
     u, v = interp.components(prof, ps)
@@ -259,7 +298,7 @@ def mean_wind_npw(prof, pbot, ptop, dp=-1, stu=0, stv=0):
             )
     if dp > 0:
         dp = -dp
-    ps = np.arange(pbot, ptop + dp, dp)
+    ps = _pressure_samples(pbot, ptop, dp)
     if ps.size == 0:
         return MISSING, MISSING
     u, v = interp.components(prof, ps)

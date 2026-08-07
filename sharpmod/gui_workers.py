@@ -929,6 +929,8 @@ class _ModelFetchWorker(QThread):
                     self._lat, self._lon) or cfg.label
             cache_hit = False
             if self._cached_grib is not None:
+                if self._cached_directory is not None:
+                    self._download_dir = os.fspath(self._cached_directory)
                 protection = (
                     self._cached_cache.protect(self._cached_directory)
                     if self._cached_cache is not None
@@ -951,6 +953,7 @@ class _ModelFetchWorker(QThread):
                             loc=self._loc,
                             member=self._member,
                             dataset=dataset,
+                            download_dir=self._cached_directory,
                             source_grib=self._cached_grib,
                             source_fields=self._cached_source_fields,
                             source_transport="offline-cache",
@@ -1021,6 +1024,7 @@ class _ModelFetchWorker(QThread):
                         loc=self._loc,
                         member=self._member,
                         dataset=entry.dataset,
+                        download_dir=entry.download_dir,
                         source_grib=entry.source_grib,
                         source_fields=entry.source_fields,
                         source_transport=entry.source_transport,

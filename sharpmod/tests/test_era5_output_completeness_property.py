@@ -29,8 +29,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from sharpmod.io import decoder as decoder_mod
-from sharpmod.tools import era5_extract as era5
+from sharpmod.tests._hypothesis import profiled_examples
 from sharpmod.tests.era5_synth import make_era5_dataset
+from sharpmod.tools import era5_extract as era5
 
 MISSING = -9999.0
 
@@ -73,7 +74,7 @@ def _finite_valid(arr):
     return finite[finite != MISSING]
 
 
-@settings(max_examples=120, deadline=None)
+@settings(max_examples=profiled_examples(120), deadline=None)
 @given(_extraction_request())
 def test_era5_output_is_complete_and_loads_through_shared_path(data):
     """ERA5 output populates every per-level field and loads via load_npz.

@@ -6,8 +6,8 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Weekly live-provider drift check.  The deterministic lanes still run on
-    # every push/PR; this lane exercises current public schemas and terrain.
+    # Weekly live-provider drift check. Deterministic lanes still run on every
+    # push/PR; this lane exercises current public schemas and terrain.
     - cron: "17 10 * * 2"
   workflow_call:
     inputs:
@@ -18,6 +18,11 @@ on:
         type: string
       run_live_providers:
         description: Run opt-in public-provider contracts
+        required: false
+        default: false
+        type: boolean
+      run_serial_release:
+        description: Run the complete non-parallel release gate
         required: false
         default: false
         type: boolean
@@ -33,6 +38,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_serial_release:
+        description: Run the complete non-parallel release gate
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -43,17 +53,18 @@ concurrency:
 
 env:
   QT_QPA_PLATFORM: offscreen
+  SHARPMOD_TEST_WORKERS: "4"
 
 jobs:
-  fast:
-    name: Fast deterministic (Python ${{ matrix.python-version }})
+  compatibility:
+    name: Compatibility smoke (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12"]
 
     steps:
       - name: Check out tested source
@@ -62,7 +73,8 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
-      - name: Install Qt runtime libraries
+      - &install_qt
+        name: Install Qt runtime libraries
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -87,38 +99,26 @@ jobs:
       - name: Install package and test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,quality,era5,wrf,render]"
+          python -m pip install -e ".[dev,era5,wrf,render]"
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip check
 
-      - name: Run fast deterministic lane with coverage
-        env:
-          SHARPMOD_HYPOTHESIS_PROFILE: fast
-        run: >-
-          python -m pytest -q
-          -m "not property and not live_provider"
-          --cov=sharpmod
-          --cov-report=term-missing:skip-covered
-          --cov-report=xml
+      - name: Run bounded all-offline compatibility smoke
+        run: python scripts/run_test_lane.py compatibility --workers 4
 
-      - name: Upload coverage report
+      - name: Upload compatibility timing artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: coverage-python-${{ matrix.python-version }}
-          path: coverage.xml
+          name: test-timing-compatibility-python-${{ matrix.python-version }}
+          path: .test-results/compatibility*
           if-no-files-found: warn
           retention-days: 14
 
-  property:
-    name: Full properties (Python ${{ matrix.python-version }})
+  fast:
+    name: Deterministic and coverage (Python 3.13)
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+    timeout-minutes: 20
 
     steps:
       - name: Check out tested source
@@ -127,41 +127,117 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
-      - name: Install Qt runtime libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libegl1 \
-            libgl1 \
-            libxkbcommon-x11-0 \
-            libxcb-cursor0 \
-            libxcb-icccm4 \
-            libxcb-image0 \
-            libxcb-keysyms1 \
-            libxcb-randr0 \
-            libxcb-render-util0 \
-            libxcb-xinerama0 \
-            libxcb-xinput0
+      - *install_qt
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
           cache: pip
 
-      - name: Install property-test dependencies
+      - name: Install package and coverage dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,quality,era5,wrf,render]"
+          python scripts/install_sharppy_compat.py --sharppy-only
+          python -m pip check
+
+      - name: Run grouped deterministic lane with coverage
+        run: >-
+          python scripts/run_test_lane.py fast
+          --workers 4
+          --coverage
+          --coverage-xml coverage.xml
+
+      - name: Upload coverage and timing reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-and-timing-python-3.13
+          path: |
+            coverage.xml
+            .test-results/fast*
+          if-no-files-found: warn
+          retention-days: 14
+
+  property:
+    name: Full properties (Python 3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - *install_qt
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install full property-test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,era5,wrf,render]"
           python scripts/install_sharppy_compat.py --sharppy-only
+          python -m pip check
 
       - name: Run full property lane
-        env:
-          SHARPMOD_HYPOTHESIS_PROFILE: full
-        run: >-
-          python -m pytest -q
-          -m "property and not live_provider"
-          --timeout=900
+        run: python scripts/run_test_lane.py property --workers 4
+
+      - name: Upload property timing artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: test-timing-property-python-3.13
+          path: .test-results/property*
+          if-no-files-found: warn
+          retention-days: 14
+
+  serial-release:
+    name: Complete serial release gate (Python 3.13)
+    if: ${{ inputs.run_serial_release == true || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - *install_qt
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install complete offline test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,era5,wrf,render]"
+          python scripts/install_sharppy_compat.py --sharppy-only
+          python -m pip check
+
+      - name: Run every offline test without xdist
+        run: python scripts/run_test_lane.py serial-release
+
+      - name: Upload serial timing artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: test-timing-serial-release-python-3.13
+          path: .test-results/serial-release*
+          if-no-files-found: warn
+          retention-days: 14
 
   windows-wrf:
     name: Windows WRF runtime
@@ -188,10 +264,16 @@ jobs:
           python scripts/install_sharppy_compat.py --sharppy-only
 
       - name: Exercise a real NetCDF4 WRF file
-        run: >-
-          python -m pytest -q
-          sharpmod/tests/test_gui_reanalysis_wrf.py
-          sharpmod/tests/test_model_fetch_packaging.py
+        run: python scripts/run_test_lane.py windows-wrf
+
+      - name: Upload Windows WRF timing artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: test-timing-windows-wrf-python-3.13
+          path: .test-results/windows-wrf*
+          if-no-files-found: warn
+          retention-days: 14
 
   quality:
     name: Static quality and dependency audit
@@ -262,6 +344,13 @@ jobs:
           python scripts/install_sharppy_compat.py --sharppy-only
 
       - name: Run current public-provider contracts
-        env:
-          SHARPMOD_RUN_LIVE_PROVIDER_TESTS: "1"
-        run: python -m pytest -q -m live_provider
+        run: python scripts/run_test_lane.py live-provider
+
+      - name: Upload live-provider timing artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: test-timing-live-provider-python-3.13
+          path: .test-results/live-provider*
+          if-no-files-found: warn
+          retention-days: 14

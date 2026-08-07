@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import numpy as np
 import numpy.ma as ma
 import pytest
-from qtpy.QtWidgets import QApplication, QMainWindow, QMenu, QStatusBar
+from qtpy.QtWidgets import QMainWindow, QMenu, QStatusBar
 
 from sharppy.sharptab import prof_collection, profile
 
@@ -23,11 +23,6 @@ from sharpmod.sessions import (
     write_session,
 )
 from sharpmod import gui, gui_picker
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    return QApplication.instance() or QApplication([])
 
 
 def _collection(*, temperature=20.0):

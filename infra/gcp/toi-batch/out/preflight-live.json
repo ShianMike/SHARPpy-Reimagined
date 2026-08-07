@@ -1,0 +1,72 @@
+{
+  "blockers": [
+    "API not enabled: batch.googleapis.com",
+    "dedicated bucket does not exist yet (planned only)"
+  ],
+  "buckets": {
+    "dedicated_bucket_exists": false,
+    "existing": [
+      "project-ab691722-e43c-472e-a9e-modelforecastpy-cache",
+      "project-ab691722-e43c-472e-a9e_cloudbuild"
+    ],
+    "protected_untouched": [
+      "project-ab691722-e43c-472e-a9e-modelforecastpy-cache",
+      "project-ab691722-e43c-472e-a9e_cloudbuild"
+    ]
+  },
+  "checked_at": "2026-08-06T06:41:18+00:00",
+  "mutations_performed": [],
+  "project": "project-ab691722-e43c-472e-a9e",
+  "read_only": true,
+  "ready_to_submit": false,
+  "services": {
+    "enabled_sample": [
+      "agentregistry.googleapis.com",
+      "aiplatform.googleapis.com",
+      "analyticshub.googleapis.com",
+      "apphub.googleapis.com",
+      "apptopology.googleapis.com",
+      "artifactregistry.googleapis.com",
+      "bigquery.googleapis.com",
+      "bigqueryconnection.googleapis.com",
+      "bigquerydatapolicy.googleapis.com",
+      "bigquerydatatransfer.googleapis.com",
+      "bigquerymigration.googleapis.com",
+      "bigqueryreservation.googleapis.com",
+      "bigquerystorage.googleapis.com",
+      "cloudapiregistry.googleapis.com",
+      "cloudapis.googleapis.com",
+      "cloudbuild.googleapis.com",
+      "cloudresourcemanager.googleapis.com",
+      "cloudtrace.googleapis.com",
+      "compute.googleapis.com",
+      "containerregistry.googleapis.com",
+      "dataform.googleapis.com",
+      "dataplex.googleapis.com",
+      "datastore.googleapis.com",
+      "edgecache.googleapis.com",
+      "iam.googleapis.com",
+      "iamconnectorcredentials.googleapis.com",
+      "iamconnectors.googleapis.com",
+      "iamcredentials.googleapis.com",
+      "iap.googleapis.com",
+      "logging.googleapis.com",
+      "modelarmor.googleapis.com",
+      "monitoring.googleapis.com",
+      "networksecurity.googleapis.com",
+      "networkservices.googleapis.com",
+      "notebooks.googleapis.com",
+      "observability.googleapis.com",
+      "oslogin.googleapis.com",
+      "pubsub.googleapis.com",
+      "run.googleapis.com",
+      "saasservicemgmt.googleapis.com"
+    ],
+    "raw_error": null,
+    "required_missing": [
+      "batch.googleapis.com"
+    ],
+    "storage_enabled": true
+  },
+  "tool_version": "toi_batch_planner_v1"
+}

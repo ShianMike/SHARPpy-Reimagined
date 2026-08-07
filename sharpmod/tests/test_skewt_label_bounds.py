@@ -10,17 +10,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import numpy as np
 import numpy.ma as ma
 import pytest
-from qtpy import QtCore, QtGui, QtWidgets
+from qtpy import QtCore, QtGui
 
 from sharpmod import render as render_mod
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication([])
-    return app
 
 
 class _RecordingPainter:

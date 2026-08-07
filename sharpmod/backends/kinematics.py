@@ -23,6 +23,9 @@ KINEMATIC_LAYER_FIELDS = tuple(
 KINEMATIC_LAYER_WIDTH = len(KINEMATIC_LAYER_FIELDS)
 _KTS_PER_MS = 1.9438444924406046
 _MAX_PRESSURE_SAMPLES = 5_000
+# Pressures closer than this to the layer top count as the top itself, so
+# floating-point drift in the increment cannot append a duplicate level.
+_SAMPLE_SNAP_HPA = 1.0e-9
 _NAN4 = (np.nan, np.nan, np.nan, np.nan)
 
 
@@ -66,13 +69,32 @@ def _interp(target, coordinate, values, *, log_output=False):
 
 
 def _pressure_samples(pbot, ptop):
+    """Layer sample pressures for the 1 hPa layer means, ending at ``ptop``.
+
+    A fixed 1 hPa increment cannot land on ``ptop`` for a layer whose depth is
+    not a whole number of hectopascals, so stepping to ``ptop - 1.0`` takes one
+    sample *past* the layer top. When that overshoot leaves the reported profile
+    it interpolates to missing and is dropped from the mean, which makes the
+    layer mean wind depend on where the increment happens to fall rather than on
+    the requested layer. Sampling the exact top keeps the integration bounded by
+    ``[pbot, ptop]``.
+
+    Mirrors ``sharpmod.sharptab.winds._pressure_samples`` and the Rust
+    ``pressure_samples`` so all three paths stay in parity.
+    """
     if not np.isfinite(pbot) or not np.isfinite(ptop) or pbot < ptop:
         return np.array([], dtype=np.float64)
     if pbot - ptop > _MAX_PRESSURE_SAMPLES:
         raise ValueError(
             "profile kinematics pressure span exceeds the safety limit"
         )
-    return np.arange(pbot, ptop - 1.0, -1.0, dtype=np.float64)
+    # ``arange`` excludes its stop value, so this yields only levels strictly
+    # above ``ptop`` in pressure; the exact top is then added once.
+    samples = np.arange(pbot, ptop, -1.0, dtype=np.float64)
+    if samples.size and abs(float(samples[-1]) - ptop) <= _SAMPLE_SNAP_HPA:
+        samples[-1] = ptop
+        return samples
+    return np.append(samples, np.float64(ptop))
 
 
 def _mean(values, weights=None):

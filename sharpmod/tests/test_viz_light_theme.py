@@ -15,7 +15,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
-from qtpy import QtGui, QtWidgets
+from qtpy import QtGui
 from sharppy.viz.preferences import PrefDialog
 from sutils.config import Config
 
@@ -26,14 +26,6 @@ from sharpmod.gui_settings import (
 )
 from sharpmod.tests._examples import examples_dir
 from sharpmod.viz.SPCWindow import compose_window
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication([])
-    return app
 
 
 @pytest.fixture(scope="module")

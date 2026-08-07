@@ -392,3 +392,87 @@ def test_load_batch_spec_requires_versioned_nonempty_requests(tmp_path):
     assert len(requests) == 1
     assert requests[0].run_time == RUN
     assert requests[0].fxx == 6
+
+
+def test_batch_skips_experimental_regional_guidance_by_default():
+    """Bulk jobs must not pay for the experimental TOI guidance unasked.
+
+    It costs seven extra regional HRRR frames per point and measured AUC 0.462
+    on the 339-case archive, so an unattended job downloading it for every point
+    spends real bandwidth on a value nobody is reading.
+    """
+
+    assert BatchExtractor.DEFAULT_LIVE_REGIONAL_GUIDANCE is False
+    assert BatchExtractor()._live_regional_guidance is False
+    assert BatchExtractor(live_regional_guidance=None)._live_regional_guidance is False
+
+
+@pytest.mark.parametrize("requested", [True, False])
+def test_batch_regional_guidance_is_explicitly_overridable(requested):
+    extractor = BatchExtractor(live_regional_guidance=requested)
+
+    assert extractor._live_regional_guidance is requested
+
+
+def test_batch_forwards_the_regional_guidance_decision_to_each_extraction(
+    tmp_path, monkeypatch
+):
+    """The setting must reach ``model_extract.extract``, not just be stored."""
+
+    seen = []
+    real_extract = model_extract.extract
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs.get("live_regional_guidance"))
+        return real_extract(*args, **kwargs)
+
+    monkeypatch.setattr(
+        model_extract,
+        "_retrieve_dataset",
+        lambda *_a, **_k: (_dataset(), SimpleNamespace(grib="memory://gfs")),
+    )
+    monkeypatch.setattr(model_extract, "extract", spy)
+
+    BatchExtractor().run(_requests(), output_dir=tmp_path / "default")
+    assert seen == [False, False]
+
+    seen.clear()
+    BatchExtractor(live_regional_guidance=True).run(
+        _requests(), output_dir=tmp_path / "optin"
+    )
+    assert seen == [True, True]
+
+
+def test_batch_cli_defaults_off_and_opts_in_with_the_flag(tmp_path, monkeypatch):
+    """``--regional-guidance`` is the only way a batch job turns it on."""
+
+    from sharpmod.tools import batch_extract as batch_cli
+
+    spec = tmp_path / "job.json"
+    spec.write_text(json.dumps({
+        "version": 1,
+        "requests": [{
+            "id": "oun", "model": "gfs", "lat": 35.18, "lon": -97.44,
+            "run": "2026-07-08T00:00:00Z", "fxx": 6,
+        }],
+    }), encoding="utf-8")
+    captured = []
+
+    class FakeExtractor:
+        def __init__(self, *, progress_callback=None, live_regional_guidance=None):
+            captured.append(live_regional_guidance)
+
+        def run(self, *_args, **_kwargs):
+            return SimpleNamespace(
+                completed=1, failed=0, cancelled=0, skipped=0,
+                manifest_path=tmp_path / "manifest.json", ok=True,
+            )
+
+    monkeypatch.setattr(batch_cli, "BatchExtractor", FakeExtractor)
+
+    base = [str(spec), "--output-dir", str(tmp_path), "--quiet"]
+    assert batch_cli.main(base) == 0
+    assert batch_cli.main([*base, "--regional-guidance"]) == 0
+
+    # None defers to the class default (off); True is an explicit opt-in.
+    assert captured == [None, True]

@@ -9,6 +9,9 @@ use crate::interpolation::interpolate_1d;
 pub const LAYER_WIDTH: usize = 15;
 const KTS_PER_MS: f64 = 1.943_844_492_440_604_6;
 const MAX_PRESSURE_SAMPLES: usize = 5_000;
+/// Pressures within this distance of the layer top count as the top itself, so
+/// floating-point drift cannot append a duplicate level.
+const SAMPLE_SNAP_HPA: f64 = 1.0e-9;
 const NAN4: [f64; 4] = [f64::NAN; 4];
 
 #[derive(Clone, Copy)]
@@ -44,6 +47,15 @@ fn interp_scalar(
     interpolate_1d(&[target], coordinate, values, missing, log_output).map(|output| output[0])
 }
 
+/// Layer sample pressures for the 1 hPa layer means, ending exactly at `ptop`.
+///
+/// A fixed 1 hPa increment cannot land on `ptop` for a layer whose depth is not
+/// a whole number of hectopascals, so stepping to `ptop - 1.0` takes one sample
+/// *past* the layer top. When that overshoot leaves the reported profile it
+/// interpolates to missing and is dropped from the mean, which makes the layer
+/// mean wind depend on where the increment happens to fall rather than on the
+/// requested layer. Sampling the exact top keeps the integration bounded by
+/// `[pbot, ptop]` and matches `sharpmod.sharptab.winds._pressure_samples`.
 fn pressure_samples(pbot: f64, ptop: f64) -> Result<Vec<f64>, String> {
     if !pbot.is_finite() || !ptop.is_finite() || pbot < ptop {
         return Ok(Vec::new());
@@ -53,12 +65,13 @@ fn pressure_samples(pbot: f64, ptop: f64) -> Result<Vec<f64>, String> {
         return Err("profile kinematics pressure span exceeds the safety limit".to_string());
     }
     let mut samples = Vec::with_capacity(span.ceil() as usize + 1);
-    let stop = ptop - 1.0;
+    let stop = ptop + SAMPLE_SNAP_HPA;
     let mut pressure = pbot;
     while pressure > stop {
         samples.push(pressure);
         pressure -= 1.0;
     }
+    samples.push(ptop);
     Ok(samples)
 }
 
@@ -373,7 +386,28 @@ pub fn profile_kinematics(
 
 #[cfg(test)]
 mod tests {
-    use super::profile_kinematics;
+    use super::{pressure_samples, profile_kinematics};
+
+    #[test]
+    fn layer_samples_end_exactly_at_the_layer_top() {
+        // Fractional layer depth: the last whole step must not overshoot the
+        // top, and the exact top must be the final sample.
+        let samples = pressure_samples(1_004.0, 479.017_644_789_354_56).unwrap();
+        assert_eq!(*samples.last().unwrap(), 479.017_644_789_354_56);
+        assert_eq!(samples.len(), 526);
+        assert!(samples.iter().all(|value| *value >= 479.017_644_789_354_56));
+
+        // Whole-hectopascal depth keeps the historical sample set.
+        let whole = pressure_samples(1_000.0, 500.0).unwrap();
+        assert_eq!(whole.len(), 501);
+        assert_eq!(*whole.first().unwrap(), 1_000.0);
+        assert_eq!(*whole.last().unwrap(), 500.0);
+
+        // Degenerate and inverted layers keep their previous behaviour.
+        assert_eq!(pressure_samples(700.0, 700.0).unwrap(), vec![700.0]);
+        assert!(pressure_samples(500.0, 700.0).unwrap().is_empty());
+        assert!(pressure_samples(f64::NAN, 700.0).unwrap().is_empty());
+    }
 
     #[test]
     fn linear_profile_produces_all_requested_layers() {

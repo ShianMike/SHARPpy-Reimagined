@@ -1,0 +1,59 @@
+{
+  "case_selection_rules": "Stratified sample of NCEI Storm Events convective days 2015-2025: 60 high-end outbreak, 240 ordinary severe, 300 null convective-season controls, one event id per convective day, 06Z cycle on D-1, forecast hours 6/12/18 clamped to what each HRRR era publishes. Anchors resolved at issuance from forecast proxy-STP risk objects only.",
+  "criteria": {
+    "bootstrap_confidence": 0.95,
+    "bootstrap_samples": 1000,
+    "criteria_version": "toi_research_target_v1",
+    "minimum_development_years": 8,
+    "minimum_event_groups": 200,
+    "minimum_fold_negative_events": 10,
+    "minimum_fold_positive_events": 3,
+    "minimum_negative_events": 100,
+    "minimum_positive_events": 30,
+    "minimum_prospective_event_groups": 40,
+    "minimum_prospective_positive_events": 5,
+    "minimum_stratum_brier_skill_score": -0.05,
+    "minimum_stratum_cases": 25,
+    "minimum_test_negative_events": 40,
+    "minimum_test_positive_events": 10,
+    "minimum_test_years": 3,
+    "require_bootstrap_improvement_over_anchor": true,
+    "require_bootstrap_improvement_over_climatology": true,
+    "require_chronological_test_period": true,
+    "require_every_fold_evaluated": true,
+    "require_frozen_plan": true,
+    "require_prospective_evaluation": true,
+    "require_stratified_reporting": true,
+    "scientific": true
+  },
+  "development_years": [
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022
+  ],
+  "experimental_not_official": true,
+  "feature_schema": [
+    "toi_score",
+    "peak_stp_bin"
+  ],
+  "frozen_at": "2026-08-06T09:01:14+00:00",
+  "l2_penalty": 1.0,
+  "notes": "Frozen after archive collection and dataset compilation, before any held-out result was examined. Dataset hash dd4f68220e44fdc5.",
+  "plan_hash": "b3b983f473b5e11bff6c5a99ffafd08991b4e9b644c9248609a53ba29aeb748a",
+  "plan_version": "toi_hrrr_2015_2022_real_v1",
+  "prospective_season": "2027 spring severe-weather season",
+  "schema_version": "sharpmod_toi_validation_plan_v1",
+  "target_definition": "high_risk_worthy_proxy_v1",
+  "test_years": [
+    2023,
+    2024,
+    2025
+  ],
+  "validation_scheme": "expanding-year",
+  "weighting": "population"
+}

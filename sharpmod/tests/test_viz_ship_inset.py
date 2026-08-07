@@ -29,7 +29,6 @@ from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from qtpy import QtWidgets
 from qtpy.QtGui import QColor
 
 from sharpmod.sharptab.constants import MISSING
@@ -39,15 +38,6 @@ from sharpmod.viz.ship import MISSING_STR, SHIP_SCALE_MAX, plotSHIP
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="module")
-def qt_app():
-    """A single offscreen QApplication for the module's widget tests."""
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication([])
-    return app
-
 
 def _make_widget(qt_app, size=(160, 80)):
     """Create a plotSHIP sized to a known panel region."""

@@ -27,16 +27,20 @@ source .venv/bin/activate
 ## Test Before Opening a PR
 
 ```powershell
-# Fast deterministic feedback (the same lane used by CI).
-$env:SHARPMOD_HYPOTHESIS_PROFILE = "fast"
-python -m pytest -m "not property and not live_provider"
+# Fast deterministic feedback (grouped across four bounded workers).
+python scripts/run_test_lane.py fast --workers 4
 
-# Full scientific properties (100 Hypothesis examples per property).
-$env:SHARPMOD_HYPOTHESIS_PROFILE = "full"
-python -m pytest -m "property and not live_provider" --timeout=900
+# Full scientific properties (the original 100-200 examples are preserved).
+python scripts/run_test_lane.py property --workers 4
 
-# Whole offline suite.
-python -m pytest
+# The 3.11/3.12 compatibility smoke includes 10 examples per property.
+python scripts/run_test_lane.py compatibility --workers 4
+
+# Exact complete non-parallel gate used by official releases.
+python scripts/run_test_lane.py serial-release
+
+# Python 3.13 is the only coverage lane.
+python scripts/run_test_lane.py fast --workers 4 --coverage
 
 # Static correctness, focused maintainability, and dependency checks.
 python -m ruff check sharpmod scripts packaging
@@ -50,16 +54,24 @@ on extraction tools, add focused tests that avoid live network dependencies when
 possible. Current public-provider contracts can be run locally on demand:
 
 ```powershell
-$env:SHARPMOD_RUN_LIVE_PROVIDER_TESTS = "1"
-python -m pytest -m live_provider
+python scripts/run_test_lane.py live-provider
 ```
 
+Each runner invocation writes JUnit XML and a JSON timing report under
+`.test-results/`, reports its 15 slowest tests, and checks the reviewed budgets
+in `constraints/test-performance-baseline.json`. Parallel and serial test
+durations have separate baselines because CPU contention changes individual
+test time. Do not raise a budget merely to make a regression pass: reproduce
+the lane, explain the change, and update the checked value in the same review.
+
 Every test has a 180-second safety timeout by default; the deliberately
-expensive full-property lane raises that guard to 900 seconds per test. Pull
-requests, pushes to `main`, and official releases run the fast and
-full-property lanes separately. A weekly scheduled lane runs the live-provider
-checks, including the high-terrain HRRR surface regression. Releases reuse this
-workflow at the exact immutable commit that is packaged.
+expensive full-property and serial-release lanes raise that guard to 900 seconds
+per test. Pull requests run 3.11/3.12 compatibility smoke, Python 3.13
+deterministic coverage, and the full Python 3.13 property lane. Pushes to
+`main` also run the complete serial gate. Official releases force that serial
+gate against the exact immutable commit that is packaged. A weekly scheduled
+lane runs the live-provider checks, including the multi-region CONUS HRRR
+surface regression.
 
 ## Project Conventions
 

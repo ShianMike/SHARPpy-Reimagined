@@ -323,6 +323,64 @@ def test_hrrr_extract_requires_and_records_verified_surface_merge(tmp_path):
     assert metadata["below_ground_levels_removed"] == 1
 
 
+def test_hrrr_extract_attaches_live_regional_guidance_to_sidecar(
+        tmp_path, monkeypatch):
+    output = tmp_path / "hrrr_regional.npz"
+    seen = {}
+
+    def fake_guidance(run_dt, fxx, lat, lon, **kwargs):
+        seen.update(
+            run_dt=run_dt,
+            fxx=fxx,
+            lat=lat,
+            lon=lon,
+            download_dir=kwargs["download_dir"],
+        )
+        return {
+            "schema_version": 2,
+            "experimental_not_official": True,
+            "toi": {
+                "state": "experimental",
+                "method_version": "live-test-v1",
+                "features": {
+                    "pressure_level_hpa": 300,
+                    "translation_speed_kt": 41.0,
+                    "maximum_jet_speed_kt": 90.0,
+                    "jet_to_risk_distance_km": 250.0,
+                    "jet_to_risk_bearing_deg": 325.0,
+                    "maximum_stp": 4.0,
+                    "month": 7,
+                },
+            },
+        }
+
+    monkeypatch.setattr(
+        model_extract, "_live_hrrr_guidance_mapping", fake_guidance
+    )
+    downloads = tmp_path / "downloads"
+    model_extract.extract(
+        "hrrr",
+        35.0,
+        -99.0,
+        run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+        fxx=6,
+        out_path=output,
+        dataset=_dataset_with_surface(),
+        download_dir=downloads,
+        source_grib="https://example.invalid/hrrr.grib2",
+    )
+
+    import json
+
+    metadata = json.loads(output.with_suffix(".json").read_text("utf-8"))
+    assert metadata["regional_guidance"]["toi"]["state"] == "experimental"
+    assert metadata["regional_guidance"]["toi"]["features"][
+        "translation_speed_kt"
+    ] == pytest.approx(41.0)
+    assert seen["download_dir"] == downloads
+    assert (seen["fxx"], seen["lat"], seen["lon"]) == (6, 35.0, -99.0)
+
+
 def test_hrrr_extract_fails_closed_without_verified_surface(tmp_path):
     with pytest.raises(
         model_extract.RetrievalError,

@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v0.7.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v0.8.0). Created if it does not exist."
         required: true
-        default: "v0.7.0"
+        default: "v0.8.0"
 
 # Build and test jobs are read-only. Only the isolated publish job below can
 # create a tag or GitHub Release.
@@ -155,6 +155,7 @@ jobs:
     with:
       ref: ${{ needs.resolve-release.outputs.source_sha }}
       run_live_providers: false
+      run_serial_release: true
 
   build-windows-exe:
     name: Build Windows executable

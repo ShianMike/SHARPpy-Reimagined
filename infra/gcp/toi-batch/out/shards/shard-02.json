@@ -1,0 +1,46 @@
+{
+  "cases": [
+    {
+      "anchor_source": "model_forecast_maximum_stp",
+      "case_class": "severe",
+      "event_id": "severe-2016-03-31",
+      "forecast_hour": 12,
+      "latitude": 39.0,
+      "longitude": -98.0,
+      "notes": "pilot event day 2016-03-31 (HRRRv1)",
+      "observed": {
+        "ef2_plus_count": 1,
+        "ef3_plus_count": 0,
+        "ef4_plus_count": 0,
+        "longest_ef2_plus_path_miles": 6.0,
+        "tornado_count": 7
+      },
+      "run_time": "2016-03-30T06:00:00+00:00"
+    },
+    {
+      "anchor_source": "model_forecast_maximum_stp",
+      "case_class": "outbreak",
+      "event_id": "outbreak-2023-03-31",
+      "forecast_hour": 6,
+      "latitude": 39.0,
+      "longitude": -98.0,
+      "notes": "pilot event day 2023-03-31 (HRRRv4)",
+      "observed": {
+        "ef2_plus_count": 25,
+        "ef3_plus_count": 9,
+        "ef4_plus_count": 1,
+        "longest_ef2_plus_path_miles": 59.0,
+        "tornado_count": 146
+      },
+      "run_time": "2023-03-30T06:00:00+00:00"
+    }
+  ],
+  "dataset_kind": "historical",
+  "experimental_not_official": true,
+  "label_source": "pilot catalogue; observed counts transcribed for label input only",
+  "notes": "Bounded pilot proving the archive runner end to end.",
+  "population_base_rate": 0.02,
+  "shard_id": "shard-02",
+  "shard_index": 2,
+  "target_definition": "high_risk_worthy_proxy_v1"
+}

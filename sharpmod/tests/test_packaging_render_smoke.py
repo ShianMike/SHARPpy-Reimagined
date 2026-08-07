@@ -119,8 +119,8 @@ def test_top_level_package_and_subpackages_importable():
     import importlib
 
     assert sharpmod.__name__ == "sharpmod"
-    for sub in ("sharpmod.io", "sharpmod.sharptab", "sharpmod.viz",
-                "sharpmod.tools", "sharpmod.resources"):
+    for sub in ("sharpmod.io", "sharpmod.guidance", "sharpmod.sharptab",
+                "sharpmod.viz", "sharpmod.tools", "sharpmod.resources"):
         module = importlib.import_module(sub)
         assert module is not None
 
@@ -302,6 +302,7 @@ def test_render_cli_defaults_to_hd_and_accepts_lossless(monkeypatch, tmp_path):
             outfile,
             kwargs.get("image_mode"),
             kwargs.get("parcel"),
+            kwargs.get("regional_guidance"),
         ))
         return outfile
 
@@ -310,19 +311,28 @@ def test_render_cli_defaults_to_hd_and_accepts_lossless(monkeypatch, tmp_path):
     assert render_mod.main(["input.npz", str(tmp_path / "hd.png")]) == 0
     assert calls[-1] == (
         "input.npz", str(tmp_path / "hd.png"), render_mod.PNG_IMAGE_HD,
-        "MU")
+        "MU", None)
 
     assert render_mod.main(["--uhd", "--parcel", "ml", "input.npz",
                             str(tmp_path / "uhd.png")]) == 0
     assert calls[-1] == (
         "input.npz", str(tmp_path / "uhd.png"), render_mod.PNG_IMAGE_UHD,
-        "ML")
+        "ML", None)
 
     assert render_mod.main([
         "--lossless", "input.npz", str(tmp_path / "lossless.png")]) == 0
     assert calls[-1] == (
         "input.npz", str(tmp_path / "lossless.png"),
-        render_mod.PNG_IMAGE_LOSSLESS, "MU")
+        render_mod.PNG_IMAGE_LOSSLESS, "MU", None)
+
+    guidance_path = str(tmp_path / "regional.json")
+    assert render_mod.main([
+        "--guidance-json", guidance_path, "input.npz",
+        str(tmp_path / "guided.png"),
+    ]) == 0
+    assert calls[-1] == (
+        "input.npz", str(tmp_path / "guided.png"), render_mod.PNG_IMAGE_HD,
+        "MU", guidance_path)
 
 
 def test_apply_render_parcel_uses_sharppy_update_path():

@@ -6,7 +6,111 @@ from qtpy import QtCore, QtGui
 
 
 UNIT_FONT_SCALE = 0.78
+
+#: Glyph rasterisation settings for crisp text in both the GUI and the PNG
+#: export path.  Lives here because this module depends only on ``qtpy``, so both
+#: ``sharpmod.render`` and the ``sharpmod.viz`` widgets can use it without an
+#: import cycle.
+#:
+#: MEASURED on a 13px sample string as the share of inked pixels left at mid-tone
+#: (a soft edge ramps over several pixels, so lower is crisper):
+#:
+#:   mode        default   vertical hinting
+#:   lossless      0.649     0.547   (-15.7%, solid ink 0.251 -> 0.370)
+#:   hd 2x         0.398     0.367   ( -7.8%)
+#:   uhd 2.8x      0.362     0.343   ( -5.3%)
+#:
+#: ``PreferVerticalHinting`` keeps baselines and x-heights snapped to the pixel
+#: grid, which is what makes text look sharp, while dropping *horizontal*
+#: hinting, which distorts stem positions and advance widths.  That distortion is
+#: worst in the export path because the painter is scaled: glyphs are hinted in
+#: unscaled design space and the snapped positions then land between physical
+#: pixels.  ``PreferNoHinting`` measured identically at 2x/2.8x but clearly worse
+#: at 1x, so vertical hinting is used for being the only setting that never loses.
+RENDER_FONT_STYLE_STRATEGY = (
+    QtGui.QFont.StyleStrategy.PreferAntialias
+    | QtGui.QFont.StyleStrategy.PreferQuality
+)
+
+#: Hinting used only when painting into a density-scaled export surface.
+RENDER_FONT_SCALED_HINTING = QtGui.QFont.HintingPreference.PreferVerticalHinting
+
+#: Hinting used everywhere else.  Set explicitly rather than left alone so the
+#: function is deterministic: a font built while a scaled export was active must
+#: be returnable to unscaled behaviour instead of silently keeping the scaled
+#: hinting it was constructed with.
+RENDER_FONT_DEFAULT_HINTING = QtGui.QFont.HintingPreference.PreferDefaultHinting
+
+#: At 1x, full hinting is what snaps stems onto whole pixels, so the default is
+#: left alone.  MEASURED on real renders (share of inked pixels fully on, higher
+#: is crisper), which is why this is scale-dependent rather than global:
+#:
+#:   mode        default   vertical hinting
+#:   lossless 1x   0.226     0.202   <- WORSE, so 1x keeps the default
+#:   hd 2x         0.357     0.374   <- better
+#:   uhd 2.8x      0.527     0.570   <- better
+#:
+#: For comparison, rasterising the same face natively at the matching physical
+#: size scores 0.377 at 18px and 0.553 at 25px, so the scaled modes now land at
+#: or above native quality and the export path is not the limiting factor.
+_scaled_export = False
+
+
+def set_scaled_export(enabled):
+    """Declare whether painting targets a density-scaled export surface.
+
+    Returns the previous value so a caller can restore it.
+    """
+    global _scaled_export
+    previous = _scaled_export
+    _scaled_export = bool(enabled)
+    return previous
+
+
+def scaled_export_active():
+    """Is density-scaled export painting currently declared?"""
+    return _scaled_export
+
+
+def apply_render_font_quality(font, scaled=None):
+    """Apply the measured crisp-text rasterisation settings to ``font``.
+
+    ``scaled`` defaults to the current export state.  Returns the same object so
+    it can be used inline.
+    """
+    use_scaled = _scaled_export if scaled is None else bool(scaled)
+    try:
+        font.setStyleStrategy(RENDER_FONT_STYLE_STRATEGY)
+        font.setHintingPreference(
+            RENDER_FONT_SCALED_HINTING
+            if use_scaled
+            else RENDER_FONT_DEFAULT_HINTING
+        )
+    except (AttributeError, TypeError):  # pragma: no cover - binding guard
+        pass
+    return font
+
+
+#: Short marker for a value that has not been validated against outcomes, as
+#: opposed to a settled forecast quantity.  It is not a unit, but it is rendered
+#: through the same smaller-suffix path so the qualifier stays attached to the
+#: number and cannot be separated from it by a line break or a copy/paste.
+#:
+#: Named for its role rather than its wording, so changing the word does not
+#: require renaming every call site.
+#:
+#: MEASURED against the real TOI cell at Space Grotesk 13px: the cell is 122px,
+#: the "TOI = " label takes 34px and the value "4.2" another 19px, leaving a 67px
+#: suffix budget.  Because the marker is listed in ``_UNIT_SUFFIXES`` below it is
+#: drawn at ``UNIT_FONT_SCALE`` (10px), where " hypothetical" measures 65px and
+#: fits with 2px spare.  That margin is thin by design of the layout, not by
+#: choice, so ``IndexBoard._suffix_fits`` still drops the marker whole if a
+#: platform substitutes a wider face -- registration makes it fit, it does not
+#: make it guaranteed.
+UNVALIDATED_SUFFIX = " hypothetical"
+
 _UNIT_SUFFIXES = tuple(sorted((
+    UNVALIDATED_SUFFIX,
     " degrees C/km",
     " degrees C",
     " m\u00b3/s\u00b3",

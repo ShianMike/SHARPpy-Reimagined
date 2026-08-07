@@ -1,0 +1,28 @@
+{
+  "retained_forever_note": "Final manifests, source records, validation reports, and promoted model artifacts live under toi-archive/final/ and have no delete rule.",
+  "rule": [
+    {
+      "action": {
+        "type": "Delete"
+      },
+      "condition": {
+        "age": 14,
+        "matchesPrefix": [
+          "toi-archive/shards/",
+          "toi-archive/tmp/"
+        ]
+      }
+    },
+    {
+      "action": {
+        "type": "Delete"
+      },
+      "condition": {
+        "age": 30,
+        "matchesPrefix": [
+          "toi-archive/source/"
+        ]
+      }
+    }
+  ]
+}

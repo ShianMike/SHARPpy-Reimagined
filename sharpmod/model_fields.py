@@ -23,13 +23,42 @@ CFS_SURFACE_SEARCH = (
 )
 IFS_SURFACE_FIELDS = ("z", "sp", "2t", "2d", "10u", "10v")
 IFS_SURFACE_SEARCH = r":(?:z|sp|2t|2d|10u|10v):sfc:"
+# Terrain height is time-invariant, and several products publish it only in
+# the step-0 file of a run. ECMWF open data carries it as surface geopotential
+# (``z:sfc``) and GEFS carries it as surface geopotential height
+# (``HGT:surface``); both omit it from every forecast hour after F000 while
+# still publishing the rest of the ground contract. The verified surface row
+# therefore sources height from the same run's analysis file.
+IFS_INVARIANT_FIELDS = ("z",)
+IFS_INVARIANT_SEARCH = r":z:sfc:"
+NOAA_INVARIANT_FIELDS = ("HGT",)
+NOAA_INVARIANT_SEARCH = r":HGT:surface:"
+
+
+# Herbie names the variable column differently per index style: ``variable``
+# for the wgrib2 ``.idx`` files NOAA publishes, and ``param`` for the eccodes
+# ``.index`` files ECMWF open data publishes. Field planning has to read both.
+_VARIABLE_COLUMNS = ("variable", "param")
+
+
+def variable_column(inventory) -> str | None:
+    """Return the column naming each record's variable, or ``None``."""
+    for name in _VARIABLE_COLUMNS:
+        try:
+            if name in inventory:
+                return name
+        except TypeError:
+            return None
+    return None
 
 
 def _available_variables(inventory, *, upper: bool) -> set[str]:
-    try:
-        values = inventory["variable"]
-    except (KeyError, TypeError) as exc:
-        raise ValueError("model inventory has no variable column") from exc
+    column = variable_column(inventory)
+    if column is None:
+        raise ValueError(
+            "model inventory has no variable or param column"
+        )
+    values = inventory[column]
     if upper:
         return {str(value).upper() for value in values}
     return {str(value).lower() for value in values}

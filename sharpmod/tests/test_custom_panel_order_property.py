@@ -33,9 +33,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from qtpy import QtWidgets
 
+from sharpmod.tests._hypothesis import profiled_examples
 from sharpmod.viz import custom_panel
-from sharpmod.viz.custom_panel import CustomPanel, PanelItem, UNRESOLVED_STR
-
+from sharpmod.viz.custom_panel import UNRESOLVED_STR, CustomPanel, PanelItem
 
 # ---------------------------------------------------------------------------
 # Recording QPainter
@@ -129,7 +129,7 @@ _names = st.lists(
 )
 
 
-@settings(max_examples=150)
+@settings(max_examples=profiled_examples(150))
 @given(data=st.data())
 def test_property_23_order_and_unresolved(qt_app, data):
     """Configured items render in order; an unresolved item shows "??" in place."""

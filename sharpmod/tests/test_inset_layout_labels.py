@@ -8,15 +8,7 @@ from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from qtpy import QtCore, QtGui, QtWidgets
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication([])
-    return app
+from qtpy import QtCore, QtGui
 
 
 class _RecordingPainter:

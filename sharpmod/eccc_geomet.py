@@ -78,6 +78,11 @@ _SURFACE_LAYER_SUFFIX = {
     "SurfaceWindDir": "WindDir_10m",
     "SurfaceWindSpeed": "WindSpeed_10m",
 }
+# Terrain height never changes through a run, and GeoMet advertises the
+# surface geopotential-height layer with a single-instant time dimension (the
+# analysis). Requesting it at a later valid time returns a WMS
+# ServiceException, so these variables are always read at the run time itself.
+_ANALYSIS_ONLY_SURFACE = frozenset({"SurfaceHeight"})
 _SURFACE_CONTRACT_REQUIREMENTS = (
     ("surface_pressure", ("SurfacePressure",)),
     ("surface_height", ("SurfaceHeight",)),
@@ -712,13 +717,19 @@ def fetch_point(
     lock = threading.Lock()
 
     def load(variable, level):
+        # Time-invariant surface fields exist only at the analysis instant.
+        when = (
+            run_dt
+            if level is None and str(variable) in _ANALYSIS_ONLY_SURFACE
+            else valid_dt
+        )
         return _fetch_value(
             capability,
             variable,
             level,
             lat,
             lon,
-            valid_dt,
+            when,
             run_dt,
             request_get=request_get,
             cancelled=cancelled,

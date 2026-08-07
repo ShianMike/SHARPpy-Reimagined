@@ -9,7 +9,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from qtpy.QtWidgets import QApplication
 
 from sharpmod import gui_picker, gui_workers
 from sharpmod.model_disk_cache import ModelDiskCache
@@ -18,11 +17,6 @@ from sharpmod.tools import era5_extract, wrf_extract
 from sharpmod.upstream_warnings import (
     known_netcdf4_numpy_shape_deprecation,
 )
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    return QApplication.instance() or QApplication([])
 
 
 def _wrf_dataset():

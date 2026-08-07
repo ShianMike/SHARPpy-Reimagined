@@ -16,18 +16,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from qtpy import QtCore
 from qtpy.QtGui import QColor, QPixmap
-from qtpy.QtWidgets import QApplication
 
 from sharpmod import colors
 from sharpmod.viz import hodo_locator
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    return app
 
 
 def test_zoom_bounds_center_the_sounding_and_stay_local():

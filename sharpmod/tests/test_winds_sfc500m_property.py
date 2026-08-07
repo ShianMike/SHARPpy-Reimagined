@@ -102,8 +102,43 @@ def _f(x):
     return None if not np.isfinite(xf) else xf
 
 
+def _oracle_bunkers_layer_is_resolvable(prof):
+    """True when the oracle's SFC-6 km mean-wind samples all resolve.
+
+    The oracle integrates its layer means at a fixed 1 hPa increment over
+    ``[psfc, p6km + dp]``, which takes one step *past* the layer top. When the
+    6 km AGL level is the profile's own top level that overshoot leaves the
+    reported profile, and upstream's handling of the out-of-domain sample is not
+    consistent: it is silently dropped for some profiles and resolved to the
+    edge value for others. Either way the oracle's SFC-6 km mean wind -- and so
+    its Bunkers storm motion -- is then computed from a sample set that is not
+    the requested layer, which makes it an unusable reference for an end-to-end
+    SRH comparison. Detect that state by observation rather than inference.
+    """
+    psfc = _f(prof.pres[prof.sfc])
+    if psfc is None:
+        return False
+    p6km = _f(_sp_interp.pres(prof, _sp_interp.to_msl(prof, 6000.0)))
+    if p6km is None:
+        return False
+    ps = np.arange(psfc, p6km - 1.0, -1.0)
+    if ps.size == 0:
+        return False
+    u, v = _sp_interp.components(prof, ps)
+    return (
+        int(ma.count(ma.asanyarray(u))) == ps.size
+        and int(ma.count(ma.asanyarray(v))) == ps.size
+    )
+
+
 def _sharppy_reference(data):
-    """Reference SFC-500m (srh, shear, (mnu, mnv)) via upstream SHARPpy."""
+    """Reference SFC-500m ``(srh, shear, (mnu, mnv), motion, motion_usable)``.
+
+    ``motion`` is the oracle's own Bunkers right-mover vector, so the SRH
+    integration can be compared apples-to-apples independently of any
+    storm-motion difference. ``motion_usable`` reports whether that vector was
+    derived from a fully resolved SFC-6 km layer.
+    """
     kw = data.to_profile_kwargs()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -111,8 +146,10 @@ def _sharppy_reference(data):
         rstu, rstv, _lstu, _lstv = _sp_winds.non_parcel_bunkers_motion(prof)
         if is_missing(rstu) or is_missing(rstv):
             srh = None
+            motion = None
         else:
             srh = _f(_sp_winds.helicity(prof, 0, TOP_AGL, stu=rstu, stv=rstv)[0])
+            motion = (_f(rstu), _f(rstv))
 
         psfc = prof.pres[prof.sfc]
         p500 = _sp_interp.pres(prof, _sp_interp.to_msl(prof, TOP_AGL))
@@ -120,7 +157,8 @@ def _sharppy_reference(data):
         shear = None if is_missing(shu) else _f(np.hypot(shu, shv))
         mnu, mnv = _sp_winds.mean_wind(prof, psfc, p500)
         mw = (_f(mnu), _f(mnv))
-    return srh, shear, mw
+        motion_usable = _oracle_bunkers_layer_is_resolvable(prof)
+    return srh, shear, mw, motion, motion_usable
 
 
 def _handrolled_reference(data):  # pragma: no cover - fallback path only
@@ -153,6 +191,7 @@ def _handrolled_reference(data):  # pragma: no cover - fallback path only
     rstu, rstv, _l1, _l2 = sm_winds.non_parcel_bunkers_motion(data)
     if is_missing(rstu):
         srh = None
+        motion = None
     else:
         hs = np.arange(0.0, TOP_AGL + 10.0, 10.0)
         us = np.array([sm_interp.components_at_hght_agl(data, h)[0] for h in hs])
@@ -161,7 +200,10 @@ def _handrolled_reference(data):  # pragma: no cover - fallback path only
         srv = sm_winds.kts2ms(vs - float(rstv))
         layers = (sru[1:] * srv[:-1]) - (sru[:-1] * srv[1:])
         srh = _f(np.nansum(layers))
-    return srh, shear, mw
+        motion = (_f(rstu), _f(rstv))
+    # The hand-rolled fallback integrates the layer directly, so its storm
+    # motion is always derived from the requested layer.
+    return srh, shear, mw, motion, True
 
 
 def _reference(data):
@@ -186,15 +228,39 @@ def test_sfc_500m_kinematics_agree_with_reference(data):
     Validates Requirements 1.1, 1.2, 1.3, 1.4, 1.7.
     """
     srh_sm, shear_sm, mw_sm, _srw_sm = sm_winds.sfc_500m_kinematics(data)
-    srh_ref, shear_ref, mw_ref = _reference(data)
+    srh_ref, shear_ref, mw_ref, motion_ref, motion_usable = _reference(data)
 
     # --- SRH (Requirements 1.1, 1.5, 1.7) --------------------------------- #
     srh_sm_f = _f(srh_sm)
     if srh_sm_f is not None and srh_ref is not None:
-        assert _within(srh_sm_f, srh_ref, SRH_RTOL, SRH_ATOL), (
-            f"SFC-500m SRH {srh_sm_f} m^2/s^2 disagrees with reference "
-            f"{srh_ref} beyond tol=max({SRH_RTOL:.0%}, {SRH_ATOL} m^2/s^2) "
-            f"[oracle={_ORACLE}]")
+        # (a) The SRH integration itself, compared apples-to-apples on the
+        # oracle's own storm motion. This isolates the layer integration from
+        # any storm-motion difference and is always a valid comparison.
+        if motion_ref is not None:
+            srh_shared = _f(
+                sm_winds.helicity(
+                    data, 0.0, TOP_AGL, stu=motion_ref[0], stv=motion_ref[1]
+                )[0]
+            )
+            assert srh_shared is not None and _within(
+                srh_shared, srh_ref, SRH_RTOL, SRH_ATOL
+            ), (
+                f"SFC-500m SRH {srh_shared} m^2/s^2 computed on the reference "
+                f"storm motion disagrees with reference {srh_ref} beyond "
+                f"tol=max({SRH_RTOL:.0%}, {SRH_ATOL} m^2/s^2) "
+                f"[oracle={_ORACLE}]")
+
+        # (b) The end-to-end value, which also exercises the shared Bunkers
+        # storm motion. Skipped when the oracle's SFC-6 km mean wind was built
+        # from a sample set that is not the requested layer, because its storm
+        # motion is then not a reference (see
+        # ``_oracle_bunkers_layer_is_resolvable``). Requirement 1.5 is covered
+        # independently by ``test_winds_storm_motion.py``.
+        if motion_usable:
+            assert _within(srh_sm_f, srh_ref, SRH_RTOL, SRH_ATOL), (
+                f"SFC-500m SRH {srh_sm_f} m^2/s^2 disagrees with reference "
+                f"{srh_ref} beyond tol=max({SRH_RTOL:.0%}, {SRH_ATOL} m^2/s^2) "
+                f"[oracle={_ORACLE}]")
 
     # --- bulk shear (Requirements 1.2, 1.4, 1.7) -------------------------- #
     shear_sm_f = _f(shear_sm)

@@ -8,19 +8,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from qtpy.QtCore import QPoint
-from qtpy.QtWidgets import QApplication
 
 from sharpmod import render as render_mod
 from sharpmod.tests._examples import examples_dir
 from sharpmod.viz.SPCWindow import compose_window
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    return app
 
 
 def _action(menu, text):

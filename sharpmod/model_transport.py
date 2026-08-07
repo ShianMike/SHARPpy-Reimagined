@@ -161,6 +161,28 @@ def plan_ranges(
     return planned
 
 
+def inclusive_end_bytes(herbie, inventory):
+    """Normalize eccodes-style end offsets to inclusive HTTP range bounds.
+
+    Herbie's wgrib2 inventories set ``end_byte`` to the last byte of a message
+    (the next message's start minus one), which is what an inclusive HTTP
+    ``Range`` header needs. Its eccodes inventories (ECMWF open data) instead
+    set ``end_byte`` to ``_offset + _length``, the *first byte of the next
+    message*, so requesting that range over-reads by one byte and the
+    assembled stream no longer ends at the GRIB ``7777`` trailer. That only
+    stayed invisible while a selection happened to include the file's final
+    message, where the server clamps the range at EOF.
+    """
+    if str(getattr(herbie, "IDX_STYLE", "wgrib2")).lower() != "eccodes":
+        return inventory
+    columns = getattr(inventory, "columns", ())
+    if "end_byte" not in tuple(columns):
+        return inventory
+    adjusted = inventory.copy()
+    adjusted["end_byte"] = adjusted["end_byte"] - 1
+    return adjusted
+
+
 def ranges_from_inventory(
     inventory,
     *,
@@ -958,6 +980,7 @@ def download_herbie_subset(
             inventory = herbie.inventory(search).copy()
         else:
             inventory = inventory.copy()
+        inventory = inclusive_end_bytes(herbie, inventory)
         output = Path(herbie.get_localFilePath(search))
     except Exception as exc:
         raise OptimizedTransportUnavailable(

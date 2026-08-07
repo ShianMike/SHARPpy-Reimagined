@@ -27,8 +27,9 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from sharpmod.tools import era5_extract as era5
+from sharpmod.tests._hypothesis import profiled_examples
 from sharpmod.tests.era5_synth import make_era5_dataset
+from sharpmod.tools import era5_extract as era5
 
 _LAT_VALUES = st.integers(min_value=-85, max_value=85)
 _LON_VALUES = st.integers(min_value=1, max_value=358)
@@ -59,7 +60,7 @@ def _extraction_request(draw):
             float(req_lat), float(req_lon), req_time)
 
 
-@settings(max_examples=120, deadline=None)
+@settings(max_examples=profiled_examples(120), deadline=None)
 @given(_extraction_request())
 def test_metadata_records_requested_and_selected(data):
     """The .json sidecar records requested + selected lat/lon/time.

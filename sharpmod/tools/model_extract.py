@@ -28,7 +28,11 @@ from sharpmod import backends as _backends
 from sharpmod import eccc_geomet
 from sharpmod.model_fields import (
     CFS_SURFACE_SEARCH,
+    IFS_INVARIANT_FIELDS,
+    IFS_INVARIANT_SEARCH,
     IFS_SURFACE_FIELDS,
+    NOAA_INVARIANT_FIELDS,
+    NOAA_INVARIANT_SEARCH,
     NOAA_SURFACE_FIELDS,
     NOAA_SURFACE_SEARCH,
     build_ifs_search,
@@ -64,6 +68,7 @@ from sharpmod.hrrr_zarr import (
     ZarrBackendUnavailable,
     fetch_hrrr_zarr_point,
 )
+from sharpmod.guidance.schemas import REGIONAL_GUIDANCE_META_KEY
 
 from sharpmod.tools.era5_extract import (
     ERA5ExtractionError as ModelExtractionError,
@@ -334,6 +339,9 @@ class ModelConfig:
     kwargs: dict[str, object] = field(default_factory=dict)
     notes: str = ""
     domain_outline: tuple[tuple[float, float], ...] = ()
+    # Set when a product is still described here but cannot currently produce a
+    # sounding, so it is withheld from every selectable model list.
+    unavailable_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -362,6 +370,21 @@ PUERTO_RICO_DOMAIN = (-70.0, -62.0, 15.0, 22.0)
 RRFS_CYCLES = tuple(range(24))
 RRFS_EXTENDED_CYCLES = (0, 6, 12, 18)
 
+# Products that are described here but withheld from selection because no
+# published file can complete the verified ground row. Both were confirmed
+# against live inventories rather than assumed; see CHANGELOG for the audit.
+RRFS_NO_SURFACE_REASON = (
+    "The published RRFS-A prslev index carries pressure levels only - no "
+    "surface, 2-m, or 10-m records - and the natlev/testbed/ififip products "
+    "are not published, so no verified ground row can be built."
+)
+AIGFS_NO_SURFACE_REASON = (
+    "AIGFS splits pressure and surface products, and its sfc product "
+    "publishes only 2-m temperature, 10-m winds, and mean-sea-level pressure. "
+    "Surface pressure, terrain height, and 2-m moisture are absent from every "
+    "AIGFS product, so no verified ground row can be built."
+)
+
 
 def _hours(stop, step=1):
     return tuple(range(0, int(stop) + 1, int(step)))
@@ -373,6 +396,19 @@ def _gfs_hours():
 
 def _ifs_hours():
     return tuple(range(0, 145, 3)) + tuple(range(150, 361, 6))
+
+
+def _aifs_hours():
+    """AIFS publishes 6-hourly steps only, at every cycle, out to F360."""
+    return tuple(range(0, 361, 6))
+
+
+# ECMWF IFS runs a short cut-off forecast at 06Z and 18Z that stops at F144.
+# Since IFS Cycle 50r1 (13 May 2026) those cycles are published under
+# ``stream=oper`` rather than the retired ``scda`` stream, but they still carry
+# no step beyond F144. AIFS has no such cut-off.
+IFS_SHORT_CUTOFF_CYCLES = (6, 18)
+IFS_SHORT_CUTOFF_MAX_FXX = 144
 
 
 _CONFIGS = (
@@ -392,38 +428,45 @@ _CONFIGS = (
         "nam-3km-conus", "NAM 3km CONUS", "nam", "conusnest.hiresf",
         fxx_values=_hours(60), domain="CONUS", domain_bounds=CONUS_DOMAIN,
         notes="NAM CONUS nest pressure-level forecast grids"),
+    # HiResW CONUS nests run twice a day; 06Z and 18Z are never published.
     ModelConfig(
         "hrw-wrf-arw", "HRW WRF-ARW", "hiresw", "arw_5km",
+        cycles=(0, 12),
         fxx_values=_hours(48), domain="CONUS", domain_bounds=CONUS_DOMAIN,
-        notes="NOAA HiResW ARW 5-km pressure-level grids"),
+        notes="NOAA HiResW ARW 5-km pressure-level grids, 00Z/12Z"),
     ModelConfig(
         "hrw-fv3", "HRW FV3", "hiresw", "fv3_5km",
+        cycles=(0, 12),
         fxx_values=_hours(48), domain="CONUS", domain_bounds=CONUS_DOMAIN,
-        notes="NOAA HiResW FV3 5-km pressure-level grids"),
+        notes="NOAA HiResW FV3 5-km pressure-level grids, 00Z/12Z"),
     ModelConfig(
         "rrfs-a", "RRFS A", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="CONUS", domain_bounds=CONUS_DOMAIN,
         kwargs={"domain": "conus"},
-        notes="RRFS-A 3-km pressure-level grids"),
+        notes="RRFS-A 3-km pressure-level grids",
+        unavailable_reason=RRFS_NO_SURFACE_REASON),
     ModelConfig(
         "rrfs-a-alaska", "RRFS A Alaska", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="Alaska", domain_bounds=ALASKA_DOMAIN,
         kwargs={"domain": "alaska"},
-        notes="RRFS-A 3-km Alaska pressure-level grids"),
+        notes="RRFS-A 3-km Alaska pressure-level grids",
+        unavailable_reason=RRFS_NO_SURFACE_REASON),
     ModelConfig(
         "rrfs-a-hawaii", "RRFS A Hawaii", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="Hawaii", domain_bounds=HAWAII_DOMAIN,
         kwargs={"domain": "hawaii"},
-        notes="RRFS-A 2.5-km Hawaii pressure-level grids"),
+        notes="RRFS-A 2.5-km Hawaii pressure-level grids",
+        unavailable_reason=RRFS_NO_SURFACE_REASON),
     ModelConfig(
         "rrfs-a-puerto-rico", "RRFS A Puerto Rico", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="Puerto Rico", domain_bounds=PUERTO_RICO_DOMAIN,
         kwargs={"domain": "puerto rico"},
-        notes="RRFS-A 2.5-km Puerto Rico pressure-level grids"),
+        notes="RRFS-A 2.5-km Puerto Rico pressure-level grids",
+        unavailable_reason=RRFS_NO_SURFACE_REASON),
     ModelConfig(
         "gfs", "GFS", "gfs", "pgrb2.0p25",
         fxx_values=_gfs_hours(),
@@ -431,7 +474,8 @@ _CONFIGS = (
     ModelConfig(
         "aigfs", "AIGFS", "aigfs", "pres",
         fxx_values=_hours(384, 6),
-        notes="AI-GFS pressure-level grids; humidity from SPFH"),
+        notes="AI-GFS pressure-level grids; humidity from SPFH",
+        unavailable_reason=AIGFS_NO_SURFACE_REASON),
     ModelConfig(
         "cfs", "CFS", "cfs", "6_hourly",
         fxx_values=_hours(384, 6),
@@ -443,8 +487,8 @@ _CONFIGS = (
         notes="ECMWF open-data deterministic IFS pressure levels"),
     ModelConfig(
         "ecmwf-aifs", "ECMWF-AIFS", "aifs", "oper",
-        search=IFS_PRESSURE_SEARCH, fxx_values=_ifs_hours(),
-        notes="ECMWF open-data AIFS pressure levels"),
+        search=IFS_PRESSURE_SEARCH, fxx_values=_aifs_hours(),
+        notes="ECMWF open-data AIFS pressure levels, 6-hourly steps"),
     ModelConfig(
         "gefs", "GEFS", "gefs", "atmos.5",
         fxx_values=_hours(384, 3),
@@ -526,8 +570,32 @@ UNSUPPORTED_MODELS = {
 
 
 def available_models():
-    """Return supported forecast model configs as a tuple."""
-    return _CONFIGS
+    """Return the forecast model configs that can produce a sounding."""
+    return tuple(cfg for cfg in _CONFIGS if not cfg.unavailable_reason)
+
+
+def withheld_models():
+    """Return ``{key: reason}`` for configured products that cannot be used."""
+    return {
+        cfg.key: cfg.unavailable_reason
+        for cfg in _CONFIGS
+        if cfg.unavailable_reason
+    }
+
+
+def model_unavailable_reason(model) -> str:
+    """Return why ``model`` cannot produce a sounding, or an empty string."""
+    return _coerce_config(model).unavailable_reason
+
+
+def _require_selectable(config):
+    """Refuse a product that cannot complete the verified ground row."""
+    if config.unavailable_reason:
+        raise RetrievalError(
+            "%s cannot produce a sounding: %s"
+            % (config.label, config.unavailable_reason)
+        )
+    return config
 
 
 def requires_grib_runtime(model) -> bool:
@@ -552,7 +620,8 @@ def forecast_hours(model, cycle_hour=None):
     """Return selectable forecast hours for ``model``.
 
     Most products have one cadence. HRRR and RRFS publish longer forecasts on
-    major synoptic cycles than on their off-hour cycles.
+    major synoptic cycles than on their off-hour cycles, and ECMWF IFS runs a
+    short cut-off forecast at 06Z and 18Z that stops at F144.
     """
     cfg = _coerce_config(model)
     values = cfg.fxx_values or (cfg.default_fxx,)
@@ -562,6 +631,11 @@ def forecast_hours(model, cycle_hour=None):
     if cfg.herbie_model == "rrfs" and cycle_hour is not None \
             and int(cycle_hour) not in RRFS_EXTENDED_CYCLES:
         return tuple(v for v in values if int(v) <= 18)
+    if cfg.key == "ecmwf-ifs" and cycle_hour is not None \
+            and int(cycle_hour) in IFS_SHORT_CUTOFF_CYCLES:
+        return tuple(
+            v for v in values if int(v) <= IFS_SHORT_CUTOFF_MAX_FXX
+        )
     return values
 
 
@@ -709,8 +783,8 @@ def domain_contains_bounds(model, bounds):
 
 
 def unsupported_models():
-    """Return known screenshot models that are not selectable here yet."""
-    return dict(UNSUPPORTED_MODELS)
+    """Return every known model that is not selectable here, with the reason."""
+    return {**UNSUPPORTED_MODELS, **withheld_models()}
 
 
 def get_config(model):
@@ -882,13 +956,18 @@ def _prefer_nomads_subset(expected_range_bytes):
     return size == 0 or size > _NOMADS_MIN_RANGE_BYTES
 
 
+def _is_ecmwf_open_data(config) -> bool:
+    """Return whether ``config`` uses an ECMWF open-data eccodes index."""
+    return str(getattr(config, "herbie_model", "")).lower() in {"ifs", "aifs"}
+
+
 def _planned_model_search(herbie, config):
     """Choose one field from each equivalent group without dropping levels."""
     try:
         inventory = herbie.inventory(config.search).copy()
         search, fields = choose_search(config, inventory)
         selected_fields = tuple(fields)
-        if str(config.herbie_model).lower() in {"ifs", "aifs"}:
+        if _is_ecmwf_open_data(config):
             selected_fields += tuple(
                 field for field in IFS_SURFACE_FIELDS
                 if field not in selected_fields
@@ -898,10 +977,18 @@ def _planned_model_search(herbie, config):
                 field for field in NOAA_SURFACE_FIELDS
                 if field not in selected_fields
             )
+        # Narrow with the chosen search rather than by variable name. Name
+        # matching alone cannot express levels, so it both over-selects (NOAA
+        # ``TMP`` at 80 m above ground) and would mis-select for ECMWF, where
+        # ``z`` is the invariant surface field *and* a pressure-level field on
+        # every published isobar. Matching the search keeps the planned byte
+        # ranges identical to what the download expression asks for.
         planned = inventory
-        if selected_fields and "variable" in inventory:
+        if "search_this" in inventory:
             planned = inventory[
-                inventory["variable"].astype(str).isin(selected_fields)
+                inventory["search_this"].astype(str).str.contains(
+                    search, regex=True, na=False
+                )
             ].copy()
         # Confirm the in-memory narrowed inventory really contains records
         # before using the expression to name a persistent subset file.  This
@@ -984,7 +1071,7 @@ def cached_source_fields_compatible(
                 return False
         except (TypeError, ValueError, OverflowError):
             return False
-    if str(config.herbie_model).lower() in {"ifs", "aifs"}:
+    if _is_ecmwf_open_data(config):
         return supports_ifs_surface_merge(source_fields)
     return supports_noaa_surface_merge(source_fields)
 
@@ -1113,6 +1200,98 @@ def _cfs_surface_companion(
     return local_path, int(transferred or 0), str(companion.grib), fields
 
 
+def _invariant_height_plan(config):
+    """Return the ``(search, fields)`` naming this product's terrain height."""
+    if _is_ecmwf_open_data(config):
+        return IFS_INVARIANT_SEARCH, IFS_INVARIANT_FIELDS
+    return NOAA_INVARIANT_SEARCH, NOAA_INVARIANT_FIELDS
+
+
+def _f000_publishes_surface_height(Herbie, config, run_dt, member=None):
+    """Return whether this run's F000 file carries the invariant terrain height."""
+    search, _fields = _invariant_height_plan(config)
+    try:
+        companion = _create_herbie(
+            Herbie,
+            run_dt.strftime("%Y-%m-%d %H:%M"),
+            model=config.herbie_model,
+            product=config.product,
+            fxx=0,
+            verbose=False,
+            **_herbie_kwargs(config, member=member),
+        )
+        if companion.grib is None:
+            return False
+        return len(companion.inventory(search)) > 0
+    except Exception:
+        return False
+
+
+def _surface_height_companion(
+    Herbie,
+    config,
+    run_dt,
+    member,
+    download_dir,
+    cancelled,
+):
+    """Download the run's step-0 terrain height for a later forecast hour.
+
+    Terrain height never changes through a run, and ECMWF open data
+    (``z:sfc``) and GEFS (``HGT:surface``) publish it only in the F000 file.
+    Every later forecast hour needs that one message to complete the verified
+    ground row.
+    """
+    search, fields = _invariant_height_plan(config)
+    companion = _create_herbie(
+        Herbie,
+        run_dt.strftime("%Y-%m-%d %H:%M"),
+        model=config.herbie_model,
+        product=config.product,
+        fxx=0,
+        verbose=False,
+        **_herbie_kwargs(config, member=member),
+    )
+    if companion.grib is None:
+        raise RetrievalError(
+            "%s F000 surface-height companion is unavailable" % config.label
+        )
+    inventory = companion.inventory(search).copy()
+    if len(inventory) == 0:
+        raise RetrievalError(
+            "%s F000 file does not publish the invariant surface height "
+            "needed for a verified ground row" % config.label
+        )
+    try:
+        path, transferred = download_herbie_subset(
+            companion,
+            search,
+            inventory=inventory,
+            save_dir=download_dir,
+            cancelled=cancelled,
+            workers=range_worker_count(default=4),
+        )
+    except OptimizedTransportUnavailable as exc:
+        # A companion must never be the reason a whole sounding fails, so fall
+        # back to Herbie's own subset download like the pressure-level path.
+        _LOGGER.info(
+            "model_transport.companion_fallback model=%s run=%s reason=%s",
+            config.key, run_dt.isoformat(), exc,
+        )
+        download_kwargs = {"verbose": False}
+        if download_dir is not None:
+            download_kwargs["save_dir"] = os.fspath(download_dir)
+        with redirect_stdout(io.StringIO()):
+            path = companion.download(search, **download_kwargs)
+        transferred = 0
+    local_path = _local_grib_path(path)
+    if local_path is None:
+        raise RetrievalError(
+            "%s surface-height companion download is incomplete" % config.label
+        )
+    return local_path, int(transferred or 0), str(companion.grib), fields
+
+
 def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                       progress_callback=None, cancelled=None, lat=None,
                       lon=None):
@@ -1195,15 +1374,26 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
             download_kwargs["save_dir"] = os.fspath(download_dir)
         search, selected_fields, planned_inventory = _planned_model_search(
             H, config)
-        needs_cfs_surface = not _inventory_has_surface_contract(
-            planned_inventory
+        contract_complete = _inventory_has_surface_contract(planned_inventory)
+        missing_surface = () if contract_complete else tuple(
+            surface_contract_status(planned_inventory)["missing"]
         )
+        # Terrain height is time-invariant, and ECMWF open data and GEFS
+        # publish it only in the run's F000 file. When that single field is
+        # all that is missing, complete the contract from the analysis file
+        # instead of refusing.
+        needs_invariant_height = (
+            not contract_complete
+            and int(fxx) != 0
+            and missing_surface == ("surface_height",)
+        )
+        needs_cfs_surface = not contract_complete and not needs_invariant_height
         if needs_cfs_surface and config.key != "cfs":
             raise RetrievalError(
                 "%s currently publishes no complete verified-surface "
                 "contract (surface pressure/height, 2-m thermodynamics, and "
-                "10-m winds); refusing a pressure-only sounding"
-                % config.label
+                "10-m winds); refusing a pressure-only sounding (missing: %s)"
+                % (config.label, ", ".join(missing_surface) or "unknown")
             )
         expected_bytes = _subset_download_bytes(planned_inventory)
         _emit_progress(progress_callback, "downloading", expected_bytes)
@@ -1308,6 +1498,36 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
             expected_bytes += companion_bytes
             source_url = f"{source_url};{companion_url}"
             transport = f"{transport}+surface-companion"
+        elif needs_invariant_height:
+            (
+                companion_path,
+                companion_bytes,
+                companion_url,
+                companion_fields,
+            ) = _surface_height_companion(
+                Herbie,
+                config,
+                run_dt,
+                member,
+                download_dir,
+                cancelled,
+            )
+            if local_path is None:
+                raise RetrievalError(
+                    "%s pressure-level download is incomplete" % config.label
+                )
+            combined_name = (
+                f"{config.key}-{run_dt:%Y%m%d%H}-f{int(fxx):03d}"
+                "-verified-surface.grib2"
+            )
+            combined_dir = Path(download_dir or local_path.parent)
+            local_path = _combine_grib_payloads(
+                (local_path, companion_path),
+                combined_dir / combined_name,
+            )
+            expected_bytes += companion_bytes
+            source_url = f"{source_url};{companion_url}"
+            transport = f"{transport}+invariant-height-companion"
         H._sharpmod_fields = selected_fields
         if companion_fields:
             H._sharpmod_fields = tuple(dict.fromkeys(
@@ -1318,7 +1538,9 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
         H._sharpmod_source_url = source_url
 
         if local_path is not None and (
-            _direct_grib_enabled() or needs_cfs_surface
+            _direct_grib_enabled()
+            or needs_cfs_surface
+            or needs_invariant_height
         ):
             return _LocalGribDataset(local_path), H
 
@@ -1432,6 +1654,70 @@ def _decode_local_point(source, lat, lon):
         return PythonBackend().decode_grib_point(source.path, lat, lon)
 
 
+def _live_regional_guidance_enabled(value, source_grib) -> bool:
+    """Resolve the explicit/env/automatic live-HRRR guidance policy."""
+
+    if isinstance(value, bool):
+        return value
+    raw = value
+    if raw is None:
+        raw = os.environ.get("SHARPMOD_REGIONAL_GUIDANCE", "auto")
+    mode = str(raw).strip().casefold()
+    if mode in {"0", "false", "no", "off", "disabled"}:
+        return False
+    if mode in {"1", "true", "yes", "on", "enabled", "force"}:
+        return True
+    # Automatic mode avoids surprising network access for caller-injected test
+    # datasets, while accepting HTTP, Zarr, and local cache sources used by the
+    # real GUI/CLI extraction paths.
+    source = str(source_grib or "").strip()
+    return bool(source) and not source.casefold().startswith("memory://")
+
+
+def _live_hrrr_guidance_mapping(
+    run_dt,
+    fxx,
+    lat,
+    lon,
+    *,
+    download_dir=None,
+    progress_callback=None,
+    cancelled=None,
+):
+    """Generate supplemental guidance without making point extraction brittle."""
+
+    try:
+        from sharpmod.guidance.hrrr import build_live_hrrr_guidance
+
+        return build_live_hrrr_guidance(
+            run_dt,
+            fxx,
+            lat,
+            lon,
+            download_dir=download_dir,
+            progress_callback=progress_callback,
+            cancelled=cancelled,
+        ).to_mapping()
+    except DownloadCancelled:
+        raise
+    except Exception as exc:  # supplemental guidance must be failure-soft
+        _LOGGER.exception(
+            "regional_guidance.hrrr_generation_failed run=%s fxx=%03d",
+            run_dt,
+            int(fxx),
+        )
+        try:
+            from sharpmod.guidance.hrrr import unavailable_hrrr_guidance
+
+            return unavailable_hrrr_guidance(
+                "live experimental TOI unavailable: "
+                f"{type(exc).__name__}: {exc}",
+                run_time=run_dt,
+            ).to_mapping()
+        except Exception:
+            return None
+
+
 def _xarray_point_columns(ds, lat, lon, run_dt, fxx, label):
     """Return the legacy xarray point result while materializing only columns."""
     ds_t, selected_time = _select_time(ds, run_dt)
@@ -1460,13 +1746,14 @@ def _xarray_point_columns(ds, lat, lon, run_dt, fxx, label):
 def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
             member=None, dataset=None, download_dir=None,
             source_grib=None, source_fields=None, source_transport=None,
-            progress_callback=None, cancelled=None):
+            progress_callback=None, cancelled=None,
+            live_regional_guidance=None):
     """Extract a public forecast-model point sounding to ``out_path``.
 
     Parameters mirror the CLI: choose a supported ``model`` key, a latitude and
     longitude, a model run time/cycle, and a forecast hour.
     """
-    config = get_config(model)
+    config = _require_selectable(get_config(model))
     lat = float(lat)
     lon = float(lon)
     fxx = int(fxx if fxx is not None else config.default_fxx)
@@ -1747,6 +2034,21 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
             "direct pressure-level vorticity field",
         )
 
+    if config.key == "hrrr" and _live_regional_guidance_enabled(
+        live_regional_guidance, source_grib
+    ):
+        regional_mapping = _live_hrrr_guidance_mapping(
+            run_dt,
+            fxx,
+            lat,
+            lon,
+            download_dir=download_dir,
+            progress_callback=progress_callback,
+            cancelled=cancelled,
+        )
+        if regional_mapping is not None:
+            meta[REGIONAL_GUIDANCE_META_KEY] = regional_mapping
+
     if cancelled is not None and cancelled():
         raise DownloadCancelled("forecast-model download cancelled")
     _emit_progress(progress_callback, "writing")
@@ -1780,6 +2082,17 @@ def cleanup_transient_data(npz_path=None, download_dir=None):
 def probe(model, run_time=None, fxx=0, member=None, open_subset=False):
     """Return a live availability probe dict for one supported model."""
     config = get_config(model)
+    if config.unavailable_reason:
+        return {
+            "model": config.key,
+            "label": config.label,
+            "fxx": int(fxx),
+            "available": False,
+            "subset_opened": False,
+            "surface_contract_complete": False,
+            "error": "%s cannot produce a sounding: %s"
+            % (config.label, config.unavailable_reason),
+        }
     if config.key in {"gdps", "rdps"}:
         if member is not None:
             return {
@@ -1836,6 +2149,23 @@ def probe(model, run_time=None, fxx=0, member=None, open_subset=False):
         result["surface_contract_present"] = list(contract["present"])
         result["surface_contract_missing"] = list(contract["missing"])
         result["surface_contract_version"] = SURFACE_CONTRACT_VERSION
+        if (
+            not contract["complete"]
+            and int(fxx) != 0
+            and tuple(contract["missing"]) == ("surface_height",)
+            and _f000_publishes_surface_height(
+                Herbie, config, run_dt, member=member
+            )
+        ):
+            # Extraction completes this from the run's F000 invariant terrain
+            # height, so the request is usable even though this one forecast
+            # hour does not carry it.
+            result["surface_contract_invariant_companion"] = True
+            result["surface_contract_complete"] = True
+            result["surface_contract_present"] = [
+                *contract["present"], "surface_height",
+            ]
+            result["surface_contract_missing"] = []
         if open_subset and result["available"]:
             ds = H.xarray(config.search, remove_grib=False)
             if isinstance(ds, list):
@@ -1930,6 +2260,11 @@ def main(argv=None):  # pragma: no cover - CLI wrapper
     parser.add_argument("--loc", default=None, help="location label")
     parser.add_argument("--render", nargs="?", const="", default=None,
                         metavar="PNG", help="also render the sounding to PNG")
+    parser.add_argument(
+        "--no-regional-guidance",
+        action="store_true",
+        help="skip live experimental HRRR regional TOI guidance",
+    )
     parser.add_argument("--list", action="store_true",
                         help="list supported and known unsupported models")
     parser.add_argument("--probe", action="store_true",
@@ -2008,7 +2343,9 @@ def main(argv=None):  # pragma: no cover - CLI wrapper
             path = extract(
                 args.model, args.lat, args.lon, run_time=run, fxx=args.fxx,
                 out_path=args.out, loc=args.loc, member=args.member,
-                download_dir=download_dir)
+                download_dir=download_dir,
+                live_regional_guidance=(False if args.no_regional_guidance else None),
+            )
         except (ModelExtractionError, KeyError) as exc:
             print("ERROR: %s" % exc)
             return 1

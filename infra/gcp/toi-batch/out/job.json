@@ -1,0 +1,65 @@
+{
+  "allocationPolicy": {
+    "instances": [
+      {
+        "policy": {
+          "bootDisk": {
+            "sizeGb": 50,
+            "type": "pd-balanced"
+          },
+          "machineType": "e2-standard-4",
+          "provisioningModel": "SPOT"
+        }
+      }
+    ],
+    "location": {
+      "allowedLocations": [
+        "regions/us-east1"
+      ]
+    }
+  },
+  "labels": {
+    "app": "sharppy",
+    "workload": "toi-archive"
+  },
+  "logsPolicy": {
+    "destination": "CLOUD_LOGGING"
+  },
+  "taskGroups": [
+    {
+      "parallelism": 1,
+      "taskCount": 4,
+      "taskSpec": {
+        "computeResource": {
+          "bootDiskMib": 51200,
+          "cpuMilli": 4000,
+          "memoryMib": 16384
+        },
+        "lifecyclePolicies": [
+          {
+            "action": "RETRY_TASK",
+            "actionCondition": {
+              "exitCodes": [
+                50001
+              ]
+            }
+          }
+        ],
+        "maxRetryCount": 3,
+        "maxRunDuration": "86400s",
+        "runnables": [
+          {
+            "environment": {
+              "variables": {
+                "SHARPMOD_TOI_RUN_PREFIX": "toi-archive"
+              }
+            },
+            "script": {
+              "path": "/mnt/share/task-script.sh"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "description": "Checked pytest wall-time baseline. Local Rust-enabled limits stay strict; explicit GitHub Actions overrides cover the slower Python fallback on hosted runners.",
+  "defaults": {
+    "relative_tolerance": 0.6,
+    "absolute_tolerance_seconds": 2.0
+  },
+  "suites": {
+    "compatibility": {
+      "baseline_seconds": 56.91,
+      "maximum_seconds": 150.0
+    },
+    "fast": {
+      "baseline_seconds": 81.22,
+      "maximum_seconds": 180.0
+    },
+    "live-provider": {
+      "baseline_seconds": 90.0,
+      "maximum_seconds": 600.0
+    },
+    "property": {
+      "baseline_seconds": 137.09,
+      "maximum_seconds": 260.0,
+      "environment_overrides": {
+        "github-actions": {
+          "baseline_seconds": 446.35,
+          "maximum_seconds": 650.0
+        }
+      }
+    },
+    "serial-release": {
+      "baseline_seconds": 316.51,
+      "maximum_seconds": 600.0,
+      "environment_overrides": {
+        "github-actions": {
+          "baseline_seconds": 1022.16,
+          "maximum_seconds": 1350.0
+        }
+      }
+    },
+    "windows-wrf": {
+      "baseline_seconds": 4.84,
+      "maximum_seconds": 60.0
+    }
+  },
+  "tests": {
+    "sharpmod.tests.test_derived_decoder_agnostic_property::test_derived_parameters_are_decoder_agnostic": {
+      "baseline_seconds": 34.55,
+      "maximum_seconds": 58.0,
+      "suite_overrides": {
+        "property": {
+          "baseline_seconds": 75.91,
+          "maximum_seconds": 135.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 314.8,
+              "maximum_seconds": 460.0
+            }
+          }
+        },
+        "serial-release": {
+          "baseline_seconds": 34.55,
+          "maximum_seconds": 58.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 256.02,
+              "maximum_seconds": 350.0
+            }
+          }
+        }
+      }
+    },
+    "sharpmod.tests.test_derived_idempotent_reads_property::test_derived_reads_are_idempotent": {
+      "baseline_seconds": 33.55,
+      "maximum_seconds": 57.0,
+      "suite_overrides": {
+        "property": {
+          "baseline_seconds": 60.29,
+          "maximum_seconds": 100.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 124.48,
+              "maximum_seconds": 190.0
+            }
+          }
+        },
+        "serial-release": {
+          "baseline_seconds": 33.55,
+          "maximum_seconds": 57.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 71.31,
+              "maximum_seconds": 110.0
+            }
+          }
+        }
+      }
+    },
+    "sharpmod.tests.test_derived_masking_isolation_property::test_masking_input_degrades_cleanly_and_isolates_other_profiles": {
+      "baseline_seconds": 35.85,
+      "maximum_seconds": 60.0,
+      "suite_overrides": {
+        "property": {
+          "baseline_seconds": 49.77,
+          "maximum_seconds": 85.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 369.06,
+              "maximum_seconds": 540.0
+            }
+          }
+        },
+        "serial-release": {
+          "baseline_seconds": 35.85,
+          "maximum_seconds": 60.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 298.22,
+              "maximum_seconds": 400.0
+            }
+          }
+        }
+      }
+    },
+    "sharpmod.tests.test_derived_physical_range_property::test_derived_values_within_physical_range": {
+      "baseline_seconds": 59.65,
+      "maximum_seconds": 96.0,
+      "suite_overrides": {
+        "property": {
+          "baseline_seconds": 58.33,
+          "maximum_seconds": 100.0
+        }
+      }
+    },
+    "sharpmod.tests.test_era5_output_completeness_property::test_era5_output_is_complete_and_loads_through_shared_path": {
+      "baseline_seconds": 42.89,
+      "maximum_seconds": 72.0,
+      "suite_overrides": {
+        "property": {
+          "baseline_seconds": 33.17,
+          "maximum_seconds": 60.0
+        }
+      }
+    },
+    "sharpmod.tests.test_hazard_single_label_property::test_classify_returns_exactly_one_valid_label": {
+      "baseline_seconds": 41.58,
+      "maximum_seconds": 70.0,
+      "suite_overrides": {
+        "property": {
+          "baseline_seconds": 46.92,
+          "maximum_seconds": 80.0,
+          "environment_overrides": {
+            "github-actions": {
+              "baseline_seconds": 69.44,
+              "maximum_seconds": 110.0
+            }
+          }
+        }
+      }
+    },
+    "sharpmod.tests.test_packaging_render_smoke::test_example_input_renders_to_decodable_png[14061619.OAX]": {
+      "baseline_seconds": 6.99,
+      "maximum_seconds": 14.0,
+      "suite_overrides": {
+        "fast": {
+          "baseline_seconds": 12.45,
+          "maximum_seconds": 23.0
+        }
+      }
+    },
+    "sharpmod.tests.test_packaging_render_smoke::test_example_input_renders_to_decodable_png[hrrr_kbvo_20260625_06z.buf]": {
+      "baseline_seconds": 5.75,
+      "maximum_seconds": 13.0,
+      "suite_overrides": {
+        "fast": {
+          "baseline_seconds": 11.0,
+          "maximum_seconds": 22.0
+        }
+      }
+    },
+    "sharpmod.tests.test_packaging_render_smoke::test_example_input_renders_to_decodable_png[hrrr_point_36.68N_95.66W_f018.npz]": {
+      "baseline_seconds": 6.92,
+      "maximum_seconds": 14.0,
+      "suite_overrides": {
+        "fast": {
+          "baseline_seconds": 14.42,
+          "maximum_seconds": 25.0
+        }
+      }
+    },
+    "sharpmod.tests.test_packaging_render_smoke::test_example_input_renders_to_decodable_png[hrrr_point_36.68N_95.66W_f018.spc]": {
+      "baseline_seconds": 6.44,
+      "maximum_seconds": 14.0,
+      "suite_overrides": {
+        "fast": {
+          "baseline_seconds": 14.52,
+          "maximum_seconds": 25.0
+        }
+      }
+    }
+  }
+}

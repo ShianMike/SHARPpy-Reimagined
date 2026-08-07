@@ -1,0 +1,19 @@
+{
+  "bucket": "project-ab691722-e43c-472e-a9e-toi-archive",
+  "deleted": [],
+  "dry_run": true,
+  "generated_at": "2026-08-06T05:59:13+00:00",
+  "protected_buckets_untouched": [
+    "-modelforecastpy-cache",
+    "_cloudbuild"
+  ],
+  "tool_version": "toi_batch_planner_v1",
+  "would_delete_prefixes": [
+    "gs://project-ab691722-e43c-472e-a9e-toi-archive/toi-archive/shards/",
+    "gs://project-ab691722-e43c-472e-a9e-toi-archive/toi-archive/tmp/"
+  ],
+  "would_retain": [
+    "gs://project-ab691722-e43c-472e-a9e-toi-archive/toi-archive/final/",
+    "gs://project-ab691722-e43c-472e-a9e-toi-archive/toi-archive/source/bundle.sha256"
+  ]
+}

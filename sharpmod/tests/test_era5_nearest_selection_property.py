@@ -32,6 +32,7 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from sharpmod.tests._hypothesis import profiled_examples
 from sharpmod.tools import era5_extract as era5
 
 # --------------------------------------------------------------------------- #
@@ -74,7 +75,7 @@ def _times_and_target(draw):
 # --------------------------------------------------------------------------- #
 # Property 17 -- nearest grid point
 # --------------------------------------------------------------------------- #
-@settings(max_examples=200)
+@settings(max_examples=profiled_examples(200))
 @given(_grid_and_point())
 def test_selected_grid_point_minimizes_great_circle_distance(data):
     """The selected grid point achieves the minimum great-circle distance.
@@ -106,7 +107,7 @@ def test_selected_grid_point_minimizes_great_circle_distance(data):
         f"selected distance {selected_dist} exceeds brute-force min {best}")
 
 
-@settings(max_examples=200)
+@settings(max_examples=profiled_examples(200))
 @given(_grid_and_point())
 def test_selected_grid_point_2d_curvilinear(data):
     """Selection also minimizes distance for 2-D (curvilinear) coordinates.
@@ -163,7 +164,7 @@ def test_regular_grid_selection_does_not_materialize_meshgrids(monkeypatch):
 # --------------------------------------------------------------------------- #
 # Property 17 -- nearest analysis time
 # --------------------------------------------------------------------------- #
-@settings(max_examples=200)
+@settings(max_examples=profiled_examples(200))
 @given(_times_and_target())
 def test_selected_time_minimizes_absolute_difference(data):
     """The selected analysis time minimizes |selected - target|.
@@ -187,7 +188,7 @@ def test_selected_time_minimizes_absolute_difference(data):
         f"{best}s")
 
 
-@settings(max_examples=200)
+@settings(max_examples=profiled_examples(200))
 @given(_times_and_target())
 def test_selected_time_accepts_datetime64(data):
     """Selection works on NumPy datetime64 inputs (the ERA5 coord dtype).

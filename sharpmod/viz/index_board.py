@@ -12,7 +12,8 @@ Columns:
      BRN Shear / 4-6km SR wind, the Storm-Motion vectors, and the coloured
      Supercell / STP(cin) / STP(fix) / SHIP / DCP severe box.
   3. Composite Indices -- the SHARPpy Reimagined-derived composites: EHI 0-1/0-3km,
-     VGP, Peskov, MCS, and HGZ CAPE / NCAPE / WBZ Height / ECAPE.
+     VGP, Peskov, MCS, HGZ CAPE / NCAPE / WBZ Height / ECAPE, plus the
+     embedded regional Tornado Outbreak Indicator (TOI) readout.
 
 Existing values are read from the analyzed SHARPpy convective profile; the new
 ones from the SHARPpy Reimagined derived Profile. Nothing is recomputed (Req 13.3);
@@ -28,7 +29,13 @@ from qtpy.QtCore import QRect, Qt, Signal
 from qtpy.QtWidgets import QFrame
 
 from sharpmod import colors
-from sharpmod.viz.unit_text import draw_text_with_smaller_unit, value_unit_width
+from sharpmod.viz.guidance import toi_probability_is_supported
+from sharpmod.viz.unit_text import (
+    UNVALIDATED_SUFFIX,
+    apply_render_font_quality,
+    draw_text_with_smaller_unit,
+    value_unit_width,
+)
 
 #: Parcel display-name -> Profile attribute (the six SHARPpy parcels).
 PCL_ATTR = {
@@ -40,6 +47,7 @@ from sharpmod.sharptab.constants import is_missing
 __all__ = ["IndexBoard"]
 
 MISS = colors.MISSING_STR
+_GUIDANCE_UNSET = object()
 
 
 def _f(v):
@@ -105,11 +113,14 @@ class IndexBoard(QFrame):
     #: Emitted with a parcel key ("SFC"/"ML"/...) when a parcel row is clicked
     #: (sets that parcel's trace on the Skew-T, like legacy SHARPpy).
     parcelClicked = Signal(str)
+    #: Emitted with the complete regional payload when the TOI cell is clicked.
+    toiDetailsRequested = Signal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.sp = None
         self.dp = None
+        self.regional_guidance = None
         #: Which four parcels the convective column shows (matches the vendored
         #: ``plotText`` selection; updated when the user picks via "Show
         #: Parcels"). Defaults keep the headless PNG render unchanged.
@@ -120,11 +131,18 @@ class IndexBoard(QFrame):
         #: (key, QRect) for each drawn parcel row, so a single click can select
         #: that parcel's trace on the Skew-T.
         self._parcel_rows = []
+        #: Screen rect of the embedded TOI row, populated during composite paint.
+        self._toi_rect = QRect()
         self._outer_border_lines = ()
         self.temp_units = "Fahrenheit"
         self.wind_units = "knots"
         self.pw_units = "in"
         self.setMinimumHeight(240)
+        self.setMouseTracking(True)
+        self.setAccessibleDescription(
+            "Click the TOI probability row for inputs, score breakdown, "
+            "versions, and provenance."
+        )
         self.bg = QtGui.QColor(colors.BG_COLOR)
         self.fg = QtGui.QColor(colors.FG_COLOR)
         self._apply_palette(colors.ALERT_L2_COLOR)
@@ -137,10 +155,10 @@ class IndexBoard(QFrame):
         # "Helvetica" (substituted on Windows) can fall back to a bitmap/hinted
         # face that renders pixelated -- unlike the smooth vendored STP/SARS
         # insets -- so the board text stays visually consistent with them.
-        _strat = (QtGui.QFont.StyleStrategy.PreferAntialias
-                  | QtGui.QFont.StyleStrategy.PreferQuality)
+        # Shared with the PNG export path: antialiased quality plus vertical-only
+        # hinting, which measured crisper in every image mode (see unit_text).
         for _f in (self.hf, self.rf, self.hfs):
-            _f.setStyleStrategy(_strat)
+            apply_render_font_quality(_f)
         self.plotBitMap = QtGui.QPixmap(max(1, self.width()), max(1, self.height()))
         self.plotBitMap.fill(self.bg)
 
@@ -175,6 +193,13 @@ class IndexBoard(QFrame):
         self.green = QtGui.QColor(palette["green"])
         self.orange = QtGui.QColor(palette["orange"])
         self.blue = QtGui.QColor(palette["blue"])
+        self.guidance_colors = {
+            "unavailable": QtGui.QColor(palette["marker_gray"]),
+            "external": QtGui.QColor(palette["cyan"]),
+            "proxy": QtGui.QColor(palette["yellow"]),
+            "experimental": QtGui.QColor(palette["magenta"]),
+            "official": QtGui.QColor(palette["green"]),
+        }
         self.setStyleSheet(
             "QFrame { background-color: %s; border: 0px; margin: 0px; }"
             % self.bg.name())
@@ -183,9 +208,16 @@ class IndexBoard(QFrame):
         return QtGui.QColor(colors.resolve_theme_color(
             color, self.bg.name(), self.fg.name(), minimum=minimum))
 
-    def setData(self, sp, dp):
+    def setData(self, sp, dp, regional_guidance=_GUIDANCE_UNSET):
         self.sp, self.dp = sp, dp
+        if regional_guidance is not _GUIDANCE_UNSET:
+            self.regional_guidance = regional_guidance
         self._sweat_cache = "unset"
+        self.clearData(); self.plotData(); self.update()
+
+    def setGuidance(self, regional_guidance):
+        """Update the regional TOI readout without changing sounding data."""
+        self.regional_guidance = regional_guidance
         self.clearData(); self.plotData(); self.update()
 
     def clearData(self):
@@ -201,18 +233,33 @@ class IndexBoard(QFrame):
         qp.setClipRect(self.rect()); qp.drawPixmap(0, 0, self.plotBitMap); qp.end()
 
     def mousePressEvent(self, e):
-        """Single-click a parcel row -> show that parcel's trace on the Skew-T.
+        """Open TOI details or select a parcel from the relevant painted row.
 
         Mirrors legacy SHARPpy ("clicking on any of the 4 parcels changes the
         parcel trace drawn on the Skew-T"). The interactive GUI connects
         :attr:`parcelClicked`; headless renders leave it unconnected (no-op).
         """
         pos = e.position().toPoint() if hasattr(e, "position") else e.pos()
+        if not self._toi_rect.isNull() and self._toi_rect.contains(pos):
+            self.toiDetailsRequested.emit(self.regional_guidance)
+            return
         for key, rect in self._parcel_rows:
             if rect.contains(pos):
                 self.parcelClicked.emit(key)
                 return
         super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):
+        """Advertise the TOI details action only while its painted row is hovered."""
+
+        pos = e.position().toPoint() if hasattr(e, "position") else e.pos()
+        if not self._toi_rect.isNull() and self._toi_rect.contains(pos):
+            self.setCursor(Qt.PointingHandCursor)
+            self.setToolTip("Click for TOI inputs, method, and provenance")
+        else:
+            self.unsetCursor()
+            self.setToolTip("")
+        super().mouseMoveEvent(e)
 
     def mouseDoubleClickEvent(self, e):
         """Double-click the parcel column -> open the "Show Parcels" selector.
@@ -239,6 +286,50 @@ class IndexBoard(QFrame):
 
     def _d(self, a):
         return _f(getattr(self.dp, a, None)) if self.dp is not None else None
+
+    @staticmethod
+    def _suffix_fits(font, column_width, label, value, suffix):
+        """Would ``value + suffix`` still fit beside its label in this column?
+
+        Mirrors ``row_at``: the label is drawn first and the value takes the
+        remainder, so both compete for one width budget.
+        """
+        label_width = QtGui.QFontMetrics(font).horizontalAdvance(f"{label} = ")
+        needed = value_unit_width(font, f"{value}{suffix}")
+        return label_width + needed + 2 <= int(column_width)
+
+    def _toi_display_value(self):
+        """Return the TOI readout: a probability only when one is supported.
+
+        MEASURED on a 337-case archive: the shipped probability transform scored
+        a Brier skill of -0.561 against climatology, and its 77% bin verified at
+        7.3%.  Rendering that as a percentage beside real parameters asserts a
+        calibration that does not exist, so the percentage is shown only when a
+        validated calibration artifact is in use and the experimental score is
+        shown otherwise.  The row, its position, and its width are unchanged.
+        """
+        product = getattr(self.regional_guidance, "toi", None)
+        if product is None or not bool(getattr(product, "available", False)):
+            return MISS, self.fg
+
+        probability = _f(getattr(product, "high_risk_probability", None))
+        if probability is not None and toi_probability_is_supported(
+            self.regional_guidance
+        ):
+            # Probability strength, rather than experimental/official state,
+            # drives the same white -> yellow -> red -> pink scale used by nearby
+            # indices.  Fifty percent is the public TOI High-Risk consideration
+            # threshold; 75% and above is the strongest tier.
+            color = self._wyrp(probability, 0.25, 0.50, 0.75, higher=True)
+            return f"{round(probability * 100):d}%", color
+
+        score = _f(getattr(product, "score", None))
+        if score is None:
+            return MISS, self.fg
+        # Same colour ramp on the 0-5 experimental scale, so the row keeps its
+        # visual meaning without implying a calibrated probability.
+        color = self._wyrp(score, 1.25, 2.50, 3.75, higher=True)
+        return f"{score:.1f}", color
 
     def _dr(self, a):
         # Raw derived-profile read (no float coercion) so vector-valued
@@ -935,6 +1026,7 @@ class IndexBoard(QFrame):
     # ---- column 3: composite indices ----------------------------------
     def _col_comp(self, qp, R, rh):
         x, y, w = R.x(), R.y(), R.width()
+        self._toi_rect = QRect()
         qp.setFont(self.rf)
         fm = QtGui.QFontMetrics(self.rf)
 
@@ -976,6 +1068,17 @@ class IndexBoard(QFrame):
         ncape = self._d("ncape")
         wbz = self._d("wbz_height")
         ecape = self._d("ecape")
+        toi_value, toi_color = self._toi_display_value()
+        # The marker qualifies an *unvalidated* number.  A validated calibration
+        # earns its percentage, so labelling that "hypothetical" would be wrong,
+        # and an unavailable readout already reads "--" so a qualifier there is
+        # only noise.  Scoping it this way also keeps the widest case out of the
+        # cell: "68% hypothetical" needs 127px against 122px, whereas
+        # "4.2 hypothetical" needs 120px and fits.
+        toi_marked = toi_value != MISS and not toi_probability_is_supported(
+            self.regional_guidance
+        )
+        toi_suffix = UNVALIDATED_SUFFIX if toi_marked else ""
         # CAPE-energy rows use the white->yellow->red->pink scale; WBZ is neutral.
         bot = [(("HGZ CAPE", i0(hgz), " J/kg",
                  self._wyrp(hgz, 1000, 2500, 4000, higher=True)),
@@ -986,7 +1089,12 @@ class IndexBoard(QFrame):
                 ("ECAPE", i0(ecape), " J/kg",
                  self._wyrp(ecape, 1000, 2500, 4000, higher=True))),
                (("LSCP", f1(lscp), "",
-                 self._wyrp(lscp, -1.0, -4.0, -8.0, higher=False)), None),
+                 self._wyrp(lscp, -1.0, -4.0, -8.0, higher=False)),
+                # TOI carries an explicit "hypo" marker: measured Brier skill is
+                # -0.561 for its probability transform and its score cannot be
+                # distinguished from chance, so the readout must not look like a
+                # settled index sitting among validated ones.
+                ("TOI", toi_value, toi_suffix, toi_color)),
                (("WBZ Height", i0(wbz), " m AGL", self.fg), None)]
         # SHIP box-and-whisker chart at the TOP (above the EHI indices), then
         # the indices, then the CAPE block pushed to the bottom.
@@ -1041,6 +1149,19 @@ class IndexBoard(QFrame):
                 row_at(x, left_w, y, lbl,
                        (val + sfx) if val != MISS else MISS, c)
                 r_lbl, r_val, r_sfx, r_c = right
+                if r_lbl == "TOI":
+                    self._toi_rect = QRect(col_x[1], y, right_w, rh)
+                    # This row clips rather than elides, and a half-drawn
+                    # qualifier is worse than none, so the marker is
+                    # only drawn when it demonstrably fits the column at the
+                    # face actually in use.  Font substitution varies by
+                    # platform, so this is measured rather than assumed; the
+                    # tooltip, accessible description, and details dialog carry
+                    # the experimental status regardless.
+                    if r_sfx and not self._suffix_fits(
+                        self.rf, right_w, r_lbl, r_val, r_sfx
+                    ):
+                        r_sfx = ""
                 row_at(col_x[1], right_w, y, r_lbl,
                        (r_val + r_sfx) if r_val != MISS else MISS, r_c)
             y += rh

@@ -1,0 +1,55 @@
+{
+  "completed_at": "2026-08-06T13:14:54+00:00",
+  "concurrency": 6,
+  "failures": [
+    "shard-01.json",
+    "shard-03.json",
+    "shard-00.json",
+    "shard-02.json",
+    "shard-05.json",
+    "shard-04.json"
+  ],
+  "sequential_equivalent_hours": 3.059,
+  "shards": [
+    {
+      "exit_code": 1,
+      "log": "archive\\toi\\shard-01\\worker.log",
+      "seconds": 1812.5,
+      "shard": "shard-01.json"
+    },
+    {
+      "exit_code": 1,
+      "log": "archive\\toi\\shard-03\\worker.log",
+      "seconds": 1818.5,
+      "shard": "shard-03.json"
+    },
+    {
+      "exit_code": 1,
+      "log": "archive\\toi\\shard-00\\worker.log",
+      "seconds": 1820.5,
+      "shard": "shard-00.json"
+    },
+    {
+      "exit_code": 1,
+      "log": "archive\\toi\\shard-02\\worker.log",
+      "seconds": 1846.5,
+      "shard": "shard-02.json"
+    },
+    {
+      "exit_code": 1,
+      "log": "archive\\toi\\shard-05\\worker.log",
+      "seconds": 1854.5,
+      "shard": "shard-05.json"
+    },
+    {
+      "exit_code": 1,
+      "log": "archive\\toi\\shard-04\\worker.log",
+      "seconds": 1860.5,
+      "shard": "shard-04.json"
+    }
+  ],
+  "succeeded_cases": 111,
+  "transfer_mib": 10459.3,
+  "wall_hours": 0.517,
+  "wall_seconds": 1860.6
+}

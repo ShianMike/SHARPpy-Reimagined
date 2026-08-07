@@ -1,10 +1,9 @@
 """Frozen-app packaging contracts for live forecast-model support."""
 
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 import pytest
-
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -42,12 +41,15 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     assert triggers["schedule"] == [{"cron": "17 10 * * 2"}]
     assert "workflow_call" in triggers
     assert "workflow_dispatch" in triggers
+    assert triggers["workflow_call"]["inputs"]["run_serial_release"][
+        "default"
+    ] == "false"
     jobs = workflow["jobs"]
-    for lane in ("fast", "property"):
+    assert jobs["compatibility"]["strategy"]["matrix"][
+        "python-version"
+    ] == ["3.11", "3.12"]
+    for lane in ("compatibility", "fast", "property", "serial-release"):
         python_job = jobs[lane]
-        assert python_job["strategy"]["matrix"]["python-version"] == [
-            "3.11", "3.12", "3.13",
-        ]
         lane_scripts = "\n".join(
             step.get("run", "") for step in python_job["steps"]
         )
@@ -58,16 +60,28 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         )
         assert checkout["with"]["ref"] == "${{ inputs.ref || github.sha }}"
 
-    fast_scripts = "\n".join(
-        step.get("run", "") for step in jobs["fast"]["steps"]
+        assert "run_test_lane.py" in lane_scripts
+
+    compatibility_scripts = "\n".join(
+        step.get("run", "") for step in jobs["compatibility"]["steps"]
     )
-    assert '-m "not property and not live_provider"' in fast_scripts
-    assert "--cov=sharpmod" in fast_scripts
+    assert "run_test_lane.py compatibility --workers 4" in compatibility_scripts
+    fast_scripts = "\n".join(step.get("run", "") for step in jobs["fast"]["steps"])
+    assert "run_test_lane.py fast" in fast_scripts
+    assert "--coverage" in fast_scripts
     property_scripts = "\n".join(
         step.get("run", "") for step in jobs["property"]["steps"]
     )
-    assert '-m "property and not live_provider"' in property_scripts
-    assert "--timeout=900" in property_scripts
+    assert "run_test_lane.py property --workers 4" in property_scripts
+    serial_scripts = "\n".join(
+        step.get("run", "") for step in jobs["serial-release"]["steps"]
+    )
+    assert "run_test_lane.py serial-release" in serial_scripts
+    assert jobs["serial-release"]["if"] == (
+        "${{ inputs.run_serial_release == true || "
+        "github.ref == 'refs/heads/main' }}"
+    )
+    assert "test-timing" in str(workflow)
 
     windows_job = jobs["windows-wrf"]
     assert windows_job["runs-on"] == "windows-latest"
@@ -77,7 +91,7 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     )
     assert 'python -m pip install -e ".[dev,wrf,render]"' in scripts
     assert "scripts/install_sharppy_compat.py --sharppy-only" in scripts
-    assert "test_gui_reanalysis_wrf.py" in scripts
+    assert "run_test_lane.py windows-wrf" in scripts
 
     quality_scripts = "\n".join(
         step.get("run", "") for step in jobs["quality"]["steps"]
@@ -95,9 +109,9 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     )
     assert jobs["live-provider"]["timeout-minutes"] == "20"
     assert "SHARPMOD_RUN_LIVE_PROVIDER_TESTS" in str(
-        jobs["live-provider"]["steps"]
+        (ROOT / "scripts" / "run_test_lane.py").read_text(encoding="utf-8")
     )
-    assert "-m live_provider" in live_scripts
+    assert "run_test_lane.py live-provider" in live_scripts
 
 
 def test_release_installs_model_fetch_dependencies():
@@ -118,6 +132,7 @@ def test_release_installs_model_fetch_dependencies():
     assert workflow.count('requested_backend -ne "rust"') >= 2
     assert workflow.count('active_backend -ne "rust"') >= 2
     assert "uses: ./.github/workflows/tests.yml" in workflow
+    assert "run_serial_release: true" in workflow
     assert "needs: [resolve-release, test-release]" in workflow
     assert workflow.count("contents: write") == 1
 
@@ -130,6 +145,15 @@ def test_test_profiles_timeouts_and_quality_tools_are_configured():
     assert "property: Hypothesis-powered scientific/property coverage" in (
         pytest_options["markers"]
     )
+    assert "serial: test that must remain in the non-parallel release gate" in (
+        pytest_options["markers"]
+    )
+    assert "xdist_group(name): keep tests sharing process-global state on one worker" in (
+        pytest_options["markers"]
+    )
+    assert "pytest-xdist>=3.6,<4.0" in config["project"][
+        "optional-dependencies"
+    ]["dev"]
     assert set(config["project"]["optional-dependencies"]["quality"]) == {
         "pip-audit==2.10.1",
         "pytest-cov==7.1.0",

@@ -228,13 +228,11 @@ def compose_window(config, prof_col=None, *, check_integrity=False,
         When ``True``, mount the SHARPpy Reimagined products onto the composed window via
         :func:`mount_products`: the three grouped derived-parameter
         ``CustomPanel`` widgets are placed *inside* the vendored bottom table
-        band (``grid3``) as a second row, each directly beneath its family
-        column (thermodynamics, kinematics, and -- spanning the freed SARS
-        column -- the composite indices), the vendored SARS analogues inset is
-        detached to make room, and the skew-T HGZ overlay is attached. No strip
-        is added. The resulting :class:`MountResult` is attached to the window
-        as ``win.sharpmod_products``. Defaults to ``False`` so existing callers
-        are unaffected.
+        band (``grid3``), attaches the skew-T HGZ overlay, and embeds the
+        regional Tornado Outbreak Indicator in the composite-index block. The
+        resulting :class:`MountResult` is attached to the window as
+        ``win.sharpmod_products``. Defaults to ``False`` so existing callers are
+        unaffected.
     custom_config, custom_sars_lines : optional, keyword-only
         Accepted for backward compatibility; currently unused (the vendored
         SARS inset is left pristine).
@@ -275,7 +273,7 @@ def compose_window(config, prof_col=None, *, check_integrity=False,
 
     if mount:
         prof = _highlighted_profile(prof_col)
-        win.sharpmod_products = mount_products(win, prof)
+        win.sharpmod_products = mount_products(win, prof, prof_col=prof_col)
     # One complete initial application follows the same path as a live picker
     # change.  This updates every vendored surface plus all mounted products.
     apply_preferences_to_window(win, config)
@@ -558,10 +556,9 @@ PANEL_MIN_HEIGHT = 180
 class MountResult:
     """Outcome of :func:`mount_products`.
 
-    The SHARPpy Reimagined derived-parameter families are mounted as real
-    :class:`~sharpmod.viz.custom_panel.CustomPanel` widgets placed *inside* the
-    vendored bottom table band (``grid3``), each directly beneath its family
-    column -- there is no separate strip and no extra top-level row.
+    SHARPpy Reimagined products are mounted inside the vendored bottom table
+    band (``grid3``). Regional TOI guidance is embedded in the composite-index
+    block; no second-row guidance footer is mounted.
 
     ``mounted`` names each panel that was placed into ``grid3`` (with its grid
     cell); ``blocked`` names any step that could not complete (with the reason),
@@ -571,9 +568,8 @@ class MountResult:
     column. ``kinematic``/``thermo``/``composite`` reference the mounted
     ``CustomPanel`` widgets (or ``None`` when that panel was blocked).
     ``streamwiseness`` references the 0-6 km chart mounted beside the narrowed
-    right/STP inset. ``ship`` is ``None`` -- the SHIP inset is not mounted in
-    this family layout (the vendored ``plotText`` panel already carries the
-    SHIP composite).
+    right/STP inset. ``ship`` is ``None`` -- the SHIP inset is not mounted in this family layout
+    (the vendored ``plotText`` panel already carries the SHIP composite).
     """
 
     ship: Optional[object] = None
@@ -682,11 +678,26 @@ def _refresh_mounted_products(sw):
     if prof is None:
         return
     derived = _derived_profile(prof)
+    regional_guidance = None
+    try:
+        from sharpmod.guidance import guidance_from_collection
+
+        collections = getattr(sw, "prof_collections", ())
+        index = int(getattr(sw, "pc_idx", 0))
+        collection = collections[index] if collections else getattr(
+            sw, "_sharpmod_guidance_collection", None
+        )
+        regional_guidance = guidance_from_collection(collection)
+    except Exception:
+        pass
 
     board = getattr(sw, "index_board", None)
     if board is not None:
         try:
             board.setData(prof, derived)
+            set_guidance = getattr(board, "setGuidance", None)
+            if regional_guidance is not None and callable(set_guidance):
+                set_guidance(regional_guidance)
         except Exception:
             pass
 
@@ -1082,24 +1093,21 @@ def _mount_family_panel(sw, grid3, title, items, cell, derived):
     return panel
 
 
-def mount_products(win, prof=None, *, custom_config=None, custom_sars_lines=None):
+def mount_products(
+    win,
+    prof=None,
+    *,
+    prof_col=None,
+    custom_config=None,
+    custom_sars_lines=None,
+):
     """Place the SHARPpy Reimagined derived-parameter family panels INSIDE the chart.
 
-    The three grouped :class:`~sharpmod.viz.custom_panel.CustomPanel` widgets are
-    added to the vendored bottom table band (``grid3``) as a *second row*, each
-    directly beneath its family column -- there is no separate strip and no extra
-    top-level row:
-
-    * layer thermodynamics -> ``grid3`` (1, 0)  (below the convective table),
-    * SFC-500 m kinematics  -> ``grid3`` (1, 1)  (below the kinematics table),
-    * composite indices     -> ``grid3`` (1, 2, 1, 2)  (below the STP chart,
-      spanning the freed SARS column).
-
-    Before placing the panels the vendored SARS analogues inset is detached from
-    ``grid3`` (0, 2) to reclaim its column (:func:`_detach_sars_inset`); the
-    Streamwiseness is placed at (0, 3) and the Effective Layer STP chart moves
-    to (0, 4), splitting its former width allocation. The skew-T HGZ overlay is
-    also attached (Requirement 19.9).
+    The combined IndexBoard spans row 0 columns 0-2, Streamwiseness occupies
+    row 0 column 3, and the Effective Layer STP chart occupies row 0 column 4.
+    Regional TOI guidance occupies the IndexBoard's unused lower-right cells;
+    no footer row is added. The skew-T HGZ overlay is also attached
+    (Requirement 19.9).
 
     Values are read OFF a SHARPpy Reimagined Profile derived from ``prof``
     (:func:`_derived_profile`) and never recomputed (Requirement 13.3);
@@ -1117,6 +1125,10 @@ def mount_products(win, prof=None, *, custom_config=None, custom_sars_lines=None
         one itself).
     prof : optional
         The analyzed Profile the derived Profile is built from.
+    prof_col : optional
+        Profile collection whose validated ``regional_guidance`` metadata is
+        used for the embedded TOI readout. The value is never derived from
+        ``prof``.
     custom_config, custom_sars_lines : optional
         Accepted for backward compatibility; currently unused.
 
@@ -1130,6 +1142,7 @@ def mount_products(win, prof=None, *, custom_config=None, custom_sars_lines=None
     sw = getattr(win, "spc_widget", None) or win
     derived = _derived_profile(prof)
     result = MountResult()
+    sw._sharpmod_guidance_collection = prof_col
 
     # Refactor: within the vendored bottom band (grid3), replace the
     # convective / kinematics / SARS panels with the SHARPpy Reimagined IndexBoard (a
@@ -1138,7 +1151,10 @@ def mount_products(win, prof=None, *, custom_config=None, custom_sars_lines=None
     # vendored Effective Layer STP graphic is kept but later moved beside the
     # streamwiseness chart. The board spans grid3 columns 0-2.
     try:
+        from sharpmod.guidance import guidance_from_collection
+        from sharpmod.viz.guidance import TOIExplanationDialog
         from sharpmod.viz.index_board import IndexBoard
+
         grid3 = getattr(sw, "grid3", None)
         for attr in ("convective", "kinematic", "left_inset_ob"):
             wdg = getattr(sw, attr, None)
@@ -1149,7 +1165,24 @@ def mount_products(win, prof=None, *, custom_config=None, custom_sars_lines=None
                 except Exception:
                     pass
         board = IndexBoard(parent=getattr(sw, "text", None) or sw)
-        board.setData(prof, derived)
+        board.setData(prof, derived, guidance_from_collection(prof_col))
+
+        def show_toi_explanation(summary):
+            dialog = getattr(board, "_toi_explanation_dialog", None)
+            if dialog is None:
+                dialog = TOIExplanationDialog(summary, parent=board.window())
+                dialog.panel.setPreferences(
+                    bg_color=board.bg.name(), fg_color=board.fg.name()
+                )
+                board._toi_explanation_dialog = dialog
+            else:
+                dialog.setGuidance(summary)
+            dialog.show()
+            dialog.raise_()
+            dialog.activateWindow()
+
+        board._show_toi_explanation = show_toi_explanation
+        board.toiDetailsRequested.connect(show_toi_explanation)
         if grid3 is not None:
             grid3.addWidget(board, 0, 0, 1, 3)
             # Give Effective Layer STP a larger dedicated column. The IndexBoard

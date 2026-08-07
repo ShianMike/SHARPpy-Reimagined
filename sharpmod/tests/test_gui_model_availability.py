@@ -6,14 +6,9 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
-from qtpy.QtWidgets import QApplication, QComboBox, QDateEdit, QPushButton
+from qtpy.QtWidgets import QComboBox, QDateEdit, QPushButton
 
 from sharpmod import gui, gui_picker
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    return QApplication.instance() or QApplication([])
 
 
 def test_hourly_model_candidates_walk_back_one_cycle_at_a_time():

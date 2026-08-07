@@ -10,17 +10,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import numpy as np
 import numpy.ma as ma
 import pytest
-from qtpy import QtCore, QtGui, QtWidgets
+from qtpy import QtCore, QtGui
 
 from sharpmod import render as render_mod
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication([])
-    return app
 
 
 class _RecordingPainter:
@@ -432,15 +424,22 @@ def test_hodograph_ring_labels_use_only_natural_positions_that_fit(qt_app):
                for label in labels_80)
 
     labels_90 = [item for item in painter.texts if item.text == "90"]
-    assert len(labels_90) == 3
+    # The right-side label sits exactly at the two-pixel frame margin with
+    # some Qt/font combinations and one pixel beyond it with others.  It is
+    # therefore valid only when the measured glyph width actually fits; the
+    # top, bottom, and left natural positions must always remain present.
+    assert len(labels_90) in {3, 4}
     assert any(label.rect.center().y() < widget.centery
                for label in labels_90)
     assert any(label.rect.center().y() > widget.centery
                for label in labels_90)
     assert any(label.rect.center().x() < widget.centerx
                for label in labels_90)
-    assert not any(label.rect.left() > widget.centerx + 50
-                   for label in labels_90)
+    for label in labels_90:
+        assert label.rect.left() >= widget.tlx + 2
+        assert label.rect.right() <= widget.brx - 2
+        assert label.rect.top() >= widget.tly + 2
+        assert label.rect.bottom() <= widget.bry - 2
 
     labels = [item for item in painter.texts if item.text == "100"]
     assert len(labels) == 1

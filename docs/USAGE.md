@@ -167,8 +167,12 @@ level nearest the right-click. It preserves vertical ordering, rejects dewpoint
 above temperature, and recalculates all parcel levels and indices. You can also
 click-and-drag temperature, dewpoint, or wind points for quicker edits. Mouse-
 wheel zooms, and double-clicking the lower-left inset swaps lifted parcels.
-The hodograph puts 0.5, 1, 3, 6, 9, and 12 inside colored dots on the active
-profile; its locator-map inset displays the active location/town in the title.
+The hodograph defaults to centering the display on the LCL-to-EL mean-wind
+vector instead of the zero-wind origin, with a viewport 20% tighter than the
+previous 200-kt full-width view. Right-click it to choose Mean Wind, Normal, or
+Storm Relative centering. It puts 0.5, 1, 3, 6, 9, and 12 inside colored dots on
+the active profile; its locator-map inset displays the active location/town in
+the title.
 Blank forecast, ERA5, and WRF location fields first use a bundled U.S. Census
 index with 31,540 incorporated/CDP places and 21,278 named towns/townships
 across CONUS and D.C. State polygons reject nearby points in Canada, Mexico,
@@ -390,6 +394,25 @@ model-extract gdps 45.50 -73.60 --run "2026-07-22 00:00" --fxx 6
 model-extract aigfs --probe --lookback-cycles 8 --require-surface-contract
 ```
 
+For a normal live HRRR extraction, regional TOI guidance is generated and
+embedded automatically. The bounded workflow requests compact HRRR `sfc` field
+subsets every three hours across the applicable 18-hour window — normally seven
+frames (`0,3,6,9,12,15,18`), or eight when the requested forecast hour falls off
+that interval — analyzes a 1400-km radius at roughly 12-km sampling, tracks the
+300-hPa jet in June-August (500 hPa otherwise), and uses the nearest connected
+fixed-layer STP proxy region at or above 0.5. It records the exact run,
+requested and successful hours, frame count, time coverage, sampling interval,
+source URLs, risk-mask method, proxy equation, and shear interpretation in
+`regional_guidance.provenance`.
+
+Each subset is about 8-11 MiB, so a cold-cache TOI fetch adds roughly 60-85 MiB
+across the sampled window (measured against the official archive on
+2026-08-05). The plan is capped at eight sequential requests, and the workflow is
+failure-soft: a delayed field or a benign environment leaves TOI explicitly
+`UNAVAILABLE` without failing the sounding, and partial sampling is marked
+`degraded` rather than presented as complete. Use `--no-regional-guidance` to
+omit the supplemental fetch.
+
 The extractor requests every pressure level published for the chosen model,
 not only the standard mandatory levels. Without `--render`, it keeps the
 portable `.npz` and `.json` sidecar. With `--render`, the PNG is the served
@@ -497,6 +520,17 @@ failed, cancelled, interrupted, missing, or corrupt requests are retried. Use
 `--no-resume` to force every request. Output paths in the job must be relative
 to `--output-dir`.
 
+Experimental HRRR regional TOI guidance is **off in batch by default**. It needs
+seven extra regional frames per point, roughly 60-85 MiB and tens of seconds, and
+measured AUC 0.462 on the 339-case archive, so an unattended job should not pay
+for it silently. Interactive paths are unchanged — the GUI and single-point
+`model-extract` still follow the `auto` policy, and `SHARPMOD_REGIONAL_GUIDANCE`
+still overrides globally. Add `--regional-guidance` to opt a batch job in:
+
+```bash
+model-batch-extract job.json --output-dir batch-output --regional-guidance
+```
+
 Python callers can use `sharpmod.batch_extract.run_batch(...)` or retain a
 `BatchExtractor` and call `cancel()`. `BatchRunResult.items` and
 `output_paths` preserve input order, including heterogeneous forecast hours.
@@ -563,6 +597,605 @@ Choose the parcel visualized on the Skew-T with `--parcel SFC`, `--parcel ML`,
 `--parcel FCST`, `--parcel MU`, `--parcel EFF`, or `--parcel USER`. Parcel keys
 are case-insensitive and default to `MU`, matching the GUI's original behavior.
 
+### Regional Tornado Outbreak Indicator
+
+Tornado Outbreak Indicator (TOI) is a regional product, not a parameter that a
+point profile can calculate. Its compact readout uses one previously unused
+right-hand row of the composite-index block and follows the neighboring index
+design: `TOI = 4.2 hypothetical` for the experimental 0-5 score, or `TOI = --` when
+regional guidance is unavailable. Live HRRR extraction supplies an explicitly
+experimental score from a versioned public-method reconstruction.
+
+The `hypothetical` marker keeps the readout from reading as a settled index beside
+validated ones. It renders in the same smaller font used for unit suffixes, so it
+stays subordinate to the value and attached to it. This row clips rather than
+elides and font substitution varies by platform, so the marker is drawn only when
+it is measured to fit the column at the resolved face and is dropped whole
+otherwise — a half-drawn qualifier would be worse than none. Experimental status
+is also carried by the row tooltip, the accessible description, and the details
+dialog, none of which depend on column width.
+
+The marker fits only because it is a *registered* suffix. MEASURED inside the
+render at Space Grotesk 13px: the TOI cell is 122px, the `TOI = ` label takes
+34px and the value `4.2` another 19px, leaving a 67px suffix budget. Listed in
+`_UNIT_SUFFIXES`, the marker draws at `UNIT_FONT_SCALE` (10px) where
+` hypothetical` measures 65px and fits with 2px spare. An *unregistered* suffix is
+measured at full size instead, which is why the spelled-out word first appeared to
+be 20px too wide.
+
+The marker is attached only to an unvalidated number. A validated calibration
+earns its percentage, so calling that hypothetical would be wrong, and the same
+rule keeps the widest string out of the cell: `68% hypothetical` needs 127px
+against the 122px column, while `4.2 hypothetical` needs 120px.
+
+**A percentage is shown only when a validated calibration supports one.** This
+is measured, not stylistic. On the 337-case archive the shipped probability
+transform scored a Brier skill of -0.561 against climatology, and its most
+confident bin forecast 77% while verifying at 7.3% — below the base rate. A
+number rendered as a percentage beside real thermodynamic parameters reads as a
+calibrated probability whether or not it is one, and a caveat inside a
+click-through dialog does not reach a reader who never clicks. So
+`toi_probability_is_supported()` gates the display on evidence: a percentage
+appears only when an offline artifact that passed the promotion gate is selected,
+and the score is shown otherwise. If an artifact is ever validated the percentage
+and its colour ramp return with no code change. The row, its position, its width,
+and its white/yellow/red/pink ramp are unchanged; only the claim the number makes
+has changed.
+
+In the interactive sounding viewer, click the `TOI` row to open its explanation
+panel. It leads with the measured skill of whatever it is showing, then the
+raw probability (labelled `uncalibrated` unless validated) and colour tier,
+experimental score,
+jet layer and motion, maximum jet, jet/risk distance and bearing, peak STP,
+seasonal month, score-component weights, method and probability versions,
+valid period, source, limitations, and all embedded provenance. An unavailable
+TOI opens the same panel with `--` values and the exact missing-input reason;
+the panel does not add a footer or alter the sounding layout.
+
+The producer needs multiple regional forecast times, not one sounding. It uses
+the 500-hPa jet outside June-August and the 300-hPa jet during those months,
+jet-object translation speed, maximum jet speed, total/east-west distance and
+bearing from the objective risk centroid, month, and peak fixed-layer STP in
+that risk region. Translation dominates below about 45 kt; position matters
+more for faster jets; a maximum jet near 90 kt is favoured; and July receives
+the published seasonal treatment. Peak STP changes the probability but not the
+TOI score.
+
+#### Temporal sampling
+
+Published TOI evaluates the midlevel jet across an 18-hour window, nominally
+06Z the day before the event through 00Z on the event day. The live producer
+requests HRRR frames every three hours across that window, so a normal run
+samples seven forecast hours (`0,3,6,9,12,15,18`) plus the requested forecast
+hour when it falls off the interval. Duplicates are removed, the plan is
+capped at eight frames so denser sampling can never become an unbounded
+download, requests stay sequential, and every successfully decoded frame is
+used in valid-time order.
+
+Sampling is failure-soft. Missing hours do not stop the remaining requests. As
+long as at least two frames decoded and they still span at least nine hours,
+TOI is produced and marked `degraded`; otherwise TOI is returned unavailable
+with the exact reason. Every run records its sampling audit in provenance:
+
+| Provenance key | Meaning |
+|---|---|
+| `toi_requested_forecast_hours` | The planned three-hourly sample |
+| `toi_successful_forecast_hours` | Hours that decoded, in valid-time order |
+| `toi_failed_forecast_hours` | Hours that failed, or `none` |
+| `toi_frame_count` | Frames used in jet tracking |
+| `toi_time_coverage_hours` | Span between the first and last used frame |
+| `toi_sampling_interval_hours` | Requested sampling interval |
+| `toi_maximum_sampling_gap_hours` | Largest hole between used frames |
+| `toi_sampling_status` | `complete` or `degraded` |
+| `toi_sampling_degraded_reason` | Present only when degraded |
+
+The regional-guidance contract and sounding display contain only TOI.
+
+Supply the payload either as the `regional_guidance` object in the sounding's
+adjacent `.json` sidecar, or as a separate document:
+
+```bash
+sharpmod-render point.npz point.png --guidance-json regional-guidance.json
+```
+
+Probabilities are fractions from 0 through 1. This illustrative payload shows
+the versioned TOI schema and provenance state:
+
+```json
+{
+  "schema_version": 2,
+  "experimental_not_official": true,
+  "source": "regional-workflow-example",
+  "toi": {
+    "state": "experimental",
+    "score": 4.2,
+    "high_risk_probability": 0.68,
+    "method_version": "toi_omega2024_experimental_v1",
+    "calibration_version": "example-only",
+    "features": {
+      "pressure_level_hpa": 500,
+      "translation_speed_kt": 43.8,
+      "maximum_jet_speed_kt": 92.1,
+      "jet_to_risk_distance_km": 318.0,
+      "jet_to_risk_bearing_deg": 329.0,
+      "maximum_stp": 7.3,
+      "month": 4
+    }
+  }
+}
+```
+
+The experimental Tornado Outbreak Indicator helpers in `sharpmod.guidance`
+extract the publicly described regional features (500/300-hPa jet-object
+translation, jet/risk geometry, and peak STP), apply the public calculator's
+published bins, and generate a versioned probability. The live HRRR adapter uses
+surface CAPE, 0-1-km SRH, 0-6-km bulk shear, and a Bolton surface-LCL estimate
+in SHARPpy's fixed-layer STP equation to construct an explicitly named proxy
+risk mask. The scorecard and probability transform are SHARPpy reconstructions,
+not official SPC output: unpublished SPC weights are replaced by documented
+public-rule weights, and the transform is anchored to the paper's April 27,
+2024 example (TOI 4.35, peak STP 8-or-9, 87%). Official SPC weights and
+calibration remain unpublished. The method reference is SPC's
+[OMEGA Project paper](https://www.spc.noaa.gov/publications/broyles/omega.pdf).
+
+### Offline TOI calibration (`sharpmod-guidance`)
+
+`sharpmod-guidance` is an offline research pipeline. It never runs during
+rendering, and it does not change the shipped default probability transform.
+Its purpose is to make a *fitted* TOI calibration possible, reproducible, and
+auditable — and to make an unvalidated one impossible to mistake for a
+validated one.
+
+```bash
+# 1. Extract one row per independent historical forecast case.
+sharpmod-guidance build-toi-dataset \
+  --manifest manifests/toi_cases_2015_2024.json \
+  --output data/toi_dataset.json \
+  --csv data/toi_dataset.csv \
+  --weights population \
+  --download-dir /data/hrrr-cache
+
+# 2. Fit the regularized logistic calibrator, holding out a test period.
+sharpmod-guidance train-toi \
+  --dataset data/toi_dataset.json \
+  --output models/toi_logistic_v1.json \
+  --calibration-version toi_logistic_2015_2022_v1 \
+  --test-years 2023,2024 \
+  --scheme leave-one-year-out \
+  --l2 1.0 \
+  --bootstrap 1000 \
+  --report reports/toi_training.json
+
+# 3. Verify against the shipped transform and climatology.
+sharpmod-guidance evaluate-toi \
+  --dataset data/toi_dataset.json \
+  --artifact models/toi_logistic_v1.json \
+  --scheme expanding-year \
+  --report reports/toi_evaluation.json
+```
+
+**Feature extraction reuses the operational code.** `build-toi-dataset` calls
+the same `build_live_hrrr_guidance` producer the GUI uses, so archived cases see
+identical jet tracking, objective risk-region selection, fixed-layer STP proxy,
+scorecard, and three-hourly temporal sampling. There is no separate
+training-only feature path to drift out of sync. Archived HRRR input comes from
+the NOAA Open Data archive (2014 onward) through the same Herbie-backed
+fetcher; `--fetcher module:function` can substitute a local archive reader.
+
+**Labels are either supplied or transparently derived, and never claimed to be
+official.** SHARPpy does define one outcome of its own, but it is a documented,
+versioned proxy rule over public observations rather than an official label.
+Two target definitions exist:
+
+| Target | Meaning |
+|---|---|
+| `manifest_label_v1` | Binary outcome supplied verbatim by the manifest |
+| `high_risk_worthy_proxy_v1` | A named, versioned SHARPpy screen over NCEI Storm Events tornado counts, intensities, and path lengths |
+
+`high_risk_worthy_proxy_v1` is SHARPpy's own definition, stated openly as a
+rule you can read and disagree with: an EF4+ tornado, two or more EF3+
+tornadoes, twenty or more tornadoes including an EF2+, or an EF2+ tornado with
+a path of 40 miles or more. It is a coarse screen, not a reconstruction of any
+SPC quantity.
+
+Official Risk Impact Value is not an available target. Its weights, impact
+terms, and event-separation rules are unpublished, so no artifact here may
+claim to predict official RIV, and the proxy is never labelled RIV.
+
+A manifest must contain outbreak, ordinary severe-weather, and null/control
+cases. Either the natural sampled frequency is kept (`--weights natural`) or a
+documented `population_base_rate` restores it (`--weights population`), so
+fitted probabilities are not inflated by oversampling outbreaks.
+
+**Leakage is blocked, not just discouraged.** Every case declares how its
+forecast anchor point was chosen, and anchors derived from observed tornado
+locations (`observed_tornado_locations`, `storm_report_centroid`, and similar)
+are rejected. The risk region itself is always the objective forecast proxy-STP
+region derived at issuance.
+
+A minimal manifest looks like this:
+
+```json
+{
+  "target_definition": "high_risk_worthy_proxy_v1",
+  "label_source": "NCEI Storm Events export 2025-01, tornado segments",
+  "dataset_kind": "historical",
+  "population_base_rate": 0.02,
+  "cases": [
+    {
+      "event_id": "2023-03-31-midsouth",
+      "case_class": "outbreak",
+      "run_time": "2023-03-30T06:00:00+00:00",
+      "forecast_hour": 6,
+      "latitude": 35.1,
+      "longitude": -90.0,
+      "anchor_source": "spc_outlook_centroid_at_issuance",
+      "observed": {
+        "tornado_count": 146,
+        "ef2_plus_count": 25,
+        "ef3_plus_count": 9,
+        "ef4_plus_count": 1,
+        "longest_ef2_plus_path_miles": 59.0
+      }
+    }
+  ]
+}
+```
+
+**Validation is blocked by year and event, never by random row.** Successive
+cycles inside one outbreak are not independent samples. Each event id is
+assigned one `event_year` — taken from its earliest issuance — and every split
+and fold uses that, so an event whose cycles straddle 31 December and 1 January
+stays inside a single fold instead of appearing in both training and test. A
+dataset whose rows disagree about an event's blocking year is rejected outright.
+`train-toi` runs leave-one-year-out or expanding-year cross-validation on the
+training years and keeps `--test-years` completely untouched. Reports contain
+Brier score, Brier
+skill, reliability bins on SPC-style outlook edges, calibration intercept and
+slope, POD, FAR, CSI, frequency bias, ROC area, average precision, and
+event-blocked bootstrap confidence intervals — always alongside the shipped
+public-anchor transform and climatology on the same cases.
+
+**Artifacts are portable and honest.** The exported JSON carries coefficients,
+standardization statistics, the feature schema, training and test years, the
+target definition, base rate, full metrics, the dataset content hash, method
+version, and calibration version. Runtime inference is plain arithmetic:
+scikit-learn is never required to evaluate a calibrated probability.
+
+#### The promotion gate
+
+An artifact is marked `"validated": true` only when it clears a configurable,
+pre-registered gate. The default is `research-target`, not a convenience
+setting, so an unconfigured run is held to the strict bar.
+
+| Gate | Purpose |
+|---|---|
+| `research-target` | The scientific bar. `scientific: true`. |
+| `pipeline-smoke` | Exercises the code path only. `scientific: false`, so it **can never promote anything**, whatever the metrics say. |
+
+The research gate requires all of the following, and reports every unmet item as
+a named blocker:
+
+- **Sample size.** At least 8 chronological development years, 3 untouched test
+  years, 200 independent event groups, 30 positive event groups, and 100
+  negative event groups.
+- **Per-fold floors.** Every cross-validation fold needs at least 3 positive and
+  10 negative event groups, and no fold may fail to evaluate. The untouched test
+  period needs at least 10 positive and 40 negative event groups. This is what
+  stops a nominally large dataset with a handful of positives from passing.
+- **Chronology.** The test period must start strictly after the last development
+  year.
+- **Uncertainty, not point estimates.** A grouped, *paired* bootstrap of the
+  Brier difference against both climatology and the public-anchor transform must
+  have its whole confidence interval above zero. Two separately computed
+  intervals that happen not to overlap is a weaker claim, and a point-estimate
+  gain is no claim at all.
+- **Stratified behaviour.** Calibration and skill must be reported by region,
+  season, forecast lead, and HRRR operational era, each with its own sample
+  counts, and no stratum above `minimum_stratum_cases` may degrade past
+  `minimum_stratum_brier_skill_score`.
+- **Pre-registration.** A frozen plan must exist and the realized split and
+  criteria must match it.
+- **Prospective evidence.** A reserved future severe-weather season must be
+  evaluated with the frozen artifact.
+
+Freeze the pre-registration *before* looking at any held-out number:
+
+```bash
+sharpmod-guidance freeze-toi-plan \
+  --output plans/toi_hrrr_2015_2022_v1.json \
+  --plan-version toi_hrrr_2015_2022_v1 \
+  --development-years 2015,2016,2017,2018,2019,2020,2021,2022 \
+  --test-years 2023,2024,2025 \
+  --prospective-season "2026 spring severe-weather season" \
+  --criteria research-target
+
+sharpmod-guidance train-toi \
+  --dataset data/toi_dataset.json \
+  --output models/toi_logistic_v1.json \
+  --calibration-version toi_logistic_2015_2022_v1 \
+  --plan plans/toi_hrrr_2015_2022_v1.json \
+  --prospective reports/prospective_2026_spring.json \
+  --report reports/toi_training.json
+```
+
+The plan hashes the target definition, case-selection rules, feature schema,
+split years, and every promotion threshold. Editing any of them afterwards —
+shrinking the test period, loosening a minimum count — changes the hash and is
+rejected on load. The artifact records the plan hash, so a reviewer can tie a
+result back to the pre-registration that produced it.
+
+Synthetic fixtures exercise the whole pipeline but can never set the validated
+flag, and the shipped transform stays the default until a real dataset earns the
+replacement. Select a validated artifact explicitly:
+
+```python
+from sharpmod.guidance import TOICalibrationArtifact, build_live_hrrr_guidance
+
+artifact = TOICalibrationArtifact.load("models/toi_logistic_v1.json")
+guidance = build_live_hrrr_guidance(
+    run_time, 6, 35.2, -97.4, calibrator=artifact
+)
+```
+
+The selected calibration's version, training years, target, and validation
+state then appear in TOI provenance and in the click-through TOI details panel.
+
+#### Building the real 2015-2025 archive dataset
+
+Four commands cover the data-collection half of the programme. They are separate
+from `build-toi-dataset` because a multi-thousand-download job needs its own
+resumable, bounded runner.
+
+```bash
+# 1. Audit before transferring anything: disk, caches, sources, estimates.
+sharpmod-guidance audit-archive --work-dir archive/toi --report reports/audit.json
+
+# 2. Download the versioned NCEI Storm Events files and record their hashes.
+#    Keeping the raw CSVs is what makes label provenance auditable: NCEI
+#    republishes corrected years, so d2018_c20260323 is a different dataset
+#    from a later build of the same year. Re-running skips existing files.
+python scripts/fetch_ncei_storm_events.py \
+  --out-dir archive/ncei --first-year 2015 --last-year 2025
+
+# 3. Generate the stratified 2015-2025 catalogue from those exact files.
+sharpmod-guidance build-toi-catalog \
+  --output archive/catalog-2015-2025.json \
+  --first-year 2015 --last-year 2025 \
+  --positive-cases 60 --severe-cases 240 --null-cases 300 \
+  --outcomes-dir archive/ncei
+
+# 4. Pilot a bounded batch first, spanning classes, years, leads, and eras.
+sharpmod-guidance run-toi-archive \
+  --catalog archive/pilot-catalog.json --work-dir archive/pilot \
+  --max-cases 8 --max-transfer-gib 2 --max-seconds 1800 --min-free-gib 20
+
+# 5. Split into event-indivisible shards and run them in parallel. This is what
+#    makes the collection practical; see the note below on why it is not cloud
+#    work. Re-running resumes every shard from its own checkpoint.
+python infra/gcp/toi-batch/toi_batch.py shard \
+  --catalog archive/catalog-2015-2025.json --shards 6 --out-dir archive/shards
+
+python scripts/run_toi_archive_parallel.py \
+  --shard-dir archive/shards --work-root archive/toi \
+  --max-transfer-gib 12 --max-seconds 28800 --allow-failures \
+  --report archive/full-run-timing.json
+
+# 6. Or stay single-process, in resumable batches, if wall time does not matter.
+sharpmod-guidance run-toi-archive \
+  --catalog archive/catalog-2015-2025.json --work-dir archive/toi \
+  --max-cases 100 --max-transfer-gib 10 --max-seconds 21600 --min-free-gib 20
+
+sharpmod-guidance verify-toi-archive \
+  --work-dir archive/toi --output reports/archive-manifest.json
+```
+
+**Parallel collection is local work, not cloud work.** The ~15 h single-worker
+figure is dominated by ~24,000 sequential archive requests, not computation, so
+moving the same parallelism-1 job to a cloud VM takes just as long at additional
+cost. Speed comes from running shards concurrently, which behaves identically on
+a laptop. `run_toi_archive_parallel.py` uses *processes*, not threads: the
+runner's correctness rests on a single-writer `run.lock`, atomic `.partial`
+writes, and a per-run checkpoint, and threading would move all three onto shared
+mutable state. Each shard instead owns its catalogue, work directory, checkpoint,
+and lock, so N workers are N independent already-tested runs. **Measured on 6
+workers: 230 s wall against 882 s of summed shard time, a 3.8x speedup.**
+
+Two budget details matter. Every budget is applied **per shard**, so
+`--max-transfer-gib 12` allows 12 GiB each. And an unset `--max-cases` means
+"the whole shard": the underlying runner defaults to 12 cases, so forwarding
+nothing would silently stop each shard at 12 with `case_budget_reached`.
+
+**Measured resource costs** (official archive, 2026-08-05):
+
+| Quantity | Measured |
+|---|---|
+| GRIB messages matched per frame | 8, identical in every HRRR era |
+| Bounded subset per frame | 7.98 MiB (v1) to 10.78 MiB (v4); full `wrfsfc` file is 86-151 MiB |
+| Frames per case | 7 sampled + 1 anchor frame |
+| Transfer per case | 60-85 MiB (pilot mean 69.7 MiB) |
+| Wall time per case | 60-124 s (pilot mean 84.8 s) |
+| Requests per case | ~40 |
+| Retained output per case | ~4.7 KiB of JSON |
+| Peak raw disk | ~18 MiB, because each subset is deleted after extraction |
+
+Raw GRIB is discarded immediately after extraction, which is what makes the
+programme feasible: a 600-case run transfers ~43 GiB but retains under 3 MiB.
+`--keep-raw` disables that and is only for debugging.
+
+**Projected full runs** at measured rates: 200 cases ≈ 14.3 GiB / 5.0 h; 400 ≈
+28.7 GiB / 9.9 h; 600 ≈ 43.0 GiB / 14.9 h; 900 ≈ 64.5 GiB / 22.3 h. The binding
+constraint is wall time, not disk.
+
+**Runner guarantees.** Deterministic cache keys hash every feature-changing
+input including the method version, so an incompatible cached extract is never
+reused. Artifacts are written to `.partial` then renamed. A JSONL checkpoint
+records each completed case, and a truncated final line from a crash is skipped
+rather than trusted. A `run.lock` file enforces a single writer per run
+directory. Transfer bytes, case count, wall time, and free-disk headroom are all
+capped, and the run stops with a named reason such as
+`transfer_budget_reached` or `disk_headroom_exhausted`. Retries use exponential
+backoff with full jitter under a seeded RNG, and a minimum request interval
+respects the service. Every case ends `success`, `skipped`, or `failed` with a
+stated reason.
+
+**Two measured findings that shape the science:**
+
+1. **No F18 before HRRRv2.** At 06Z the archive publishes forecasts only through
+   F15 until 2016-08-23. A 2015-2016 case therefore reaches six sampled frames
+   and 15 h of coverage and is reported `degraded`, never as complete. This is an
+   era-dependent sampling non-stationarity, which is exactly why per-era
+   stratified skill is a promotion requirement. Starting development at 2017
+   buys uniform 18-h sampling at the cost of two years of cases.
+2. **Quiet days are outside TOI's domain.** A genuinely quiet control day has no
+   connected forecast proxy-STP region, so TOI is *undefined* rather than
+   negative, and the runner correctly skips it. Negative cases must therefore
+   come from days where TOI is computable but the outcome was not high-end.
+   Null controls are drawn from convective-season days without tornado reports;
+   remaining skips are still recorded with their reason.
+3. **A single grid maximum is a noise detector.** The first pilot anchored cases
+   on the largest CONUS proxy-STP grid value. That put 2018-11-05 at 30.30N
+   76.69W in the Atlantic and 2023-03-31 at 27.79N 94.06W in the Gulf, the
+   latter with a peak proxy STP of 0.31 during a major outbreak. Anchors are now
+   selected as *objects*: connected components are thresholded, filtered by
+   minimum area, intensity, and land fraction against the bundled Census county
+   land domain, and ranked by an integrated score (summed intensity over area,
+   discounted by non-land fraction). Re-running those two cases moved
+   2023-03-31 to 33.70N 98.66W in north Texas with land fraction 1.0 over
+   209,635 km², and correctly reported 2018-11-05 as `anchor unavailable`
+   (26 candidates, none qualifying) rather than inventing an offshore point.
+   **The original pilot was therefore not regionally representative**, and its
+   seven case files are superseded.
+4. **Era limits must constrain case *generation*, not just reporting.** The
+   catalogue builder recorded the pre-HRRRv2 F15 ceiling but still assigned
+   forecast hours round-robin, so 32 of 600 real cases were 06Z F018 requests in
+   2015-2016 that the archive never published. Each consumed four retries with
+   backoff before failing. Knowing a limitation and enforcing it are different
+   things: requested hours are now clamped at generation, the fetcher refuses an
+   unpublished hour without issuing a request, and a missing extra anchor hour
+   degrades the anchor search instead of discarding the case. That last point
+   matters more than it looks, because failing those cases would have quietly
+   removed 2015-2016 from an 8-development-year requirement that has no slack.
+5. **Case yield varies sharply by class, and that is the binding constraint.**
+   MEASURED over the first 88 cases of the real run: outbreak days resolve an
+   anchor 83% of the time (48/58) but ordinary-severe days only 37% (11/30),
+   because many have no region clearing the minimum area, intensity, and land
+   support. That is the object rule working, not failing. But it means the
+   *negative* sample is the scarce resource, not the positive one, and the
+   honest response is to sample more candidate days rather than to relax the
+   anchor rule after seeing which cases failed. Loosening a threshold chosen
+   against observed attrition is the researcher-degrees-of-freedom leakage that
+   makes a held-out test period meaningless.
+
+#### Compiling the archive into a trainable dataset
+
+Archive collection is a one-time cost. `compile-toi-dataset` turns verified
+extracted case JSON into a `TOIDataset` with **zero network access**, so
+retraining never refetches HRRR:
+
+```bash
+sharpmod-guidance verify-toi-archive --work-dir archive/toi \
+  --output reports/archive-manifest.json
+
+sharpmod-guidance compile-toi-dataset \
+  --archive-work-dir archive/toi \
+  --catalog archive/catalog-2015-2025.json \
+  --label-source "NCEI Storm Events export d2015-d2025 c20260728" \
+  --weights population --population-base-rate 0.02 \
+  --output data/toi_dataset.json --report reports/compile.json
+```
+
+Compilation refuses unverified input by default, rejects duplicate cache keys,
+preserves skip reasons, and carries event/year/region/season/lead/HRRR-era plus
+source and hash provenance into the dataset. The output is accepted directly by
+`train-toi` and `evaluate-toi`.
+
+#### Deploying the collection on Google Cloud Batch (planned only)
+
+`infra/gcp/toi-batch/toi_batch.py` renders a cost-bounded deployment. It is a
+planner: every mutating subcommand is dry-run by default and each real mutation
+needs its own flag (`--confirm-enable-apis`, `--confirm-create-bucket`,
+`--confirm-build`, `--confirm-submit`, `--confirm-delete`). Configuration never
+implies permission.
+
+```bash
+cd infra/gcp/toi-batch
+python toi_batch.py preflight --offline          # read-only audit
+python toi_batch.py bundle                       # dry-run source bundle
+python toi_batch.py shard --catalog ../../../archive/catalog-2015-2025.json
+python toi_batch.py plan --total-cases 600 --mib-per-case 73.4 \
+    --seconds-per-case 89.3 --shards 4 --parallelism 1
+```
+
+Design points: Batch **script** runnables (no container image, no Artifact
+Registry, no Cloud Build, no Cloud Run); `us-east1`, SPOT `e2-standard-4`, 50 GiB
+`pd-balanced`, Cloud Logging, 24 h max duration, automatic retry on Spot
+preemption, labels `app=sharppy` / `workload=toi-archive`; deterministic
+event-indivisible sharding where all cycles of one `event_id` stay in one shard;
+raw GRIB stays VM-local and is never uploaded, while the compact case JSON and
+checkpoint are mirrored to a dedicated run prefix with explicit upload plus
+checksum verification (no Cloud Storage FUSE rename semantics); a dedicated new
+bucket only, with a 14-day lifecycle on temporary prefixes and no delete rule for
+final manifests, source records, validation reports, or promoted artifacts.
+
+Because a billing alert is not a cap, hard caps on cases, input bytes, wall
+time, task count, retries, disk, and output bytes are enforced *inside* each
+task, and `plan` exits non-zero if a projection breaches them.
+
+#### What is enforced today, and what still needs real data
+
+The gate machinery is complete and tested. What is missing is the archive, and
+no amount of code can substitute for it. Keeping these two lists separate is the
+point of this section.
+
+**Enforced in code today** — every item below is implemented and covered by
+tests, and each produces a named blocker when unmet:
+
+| Enforced now | Mechanism |
+|---|---|
+| Model stays simple | One regularized logistic fit on TOI score and peak-STP bin; no epochs, no architecture search |
+| Event-indivisible blocking | `event_year` per event id, rejected if rows disagree |
+| Chronological split | Test period must start after the last development year |
+| Sample-size floors | Development years, test years, event groups, positive and negative event groups |
+| Per-fold floors | Minimum positive and negative event groups in every fold and in the test set |
+| Unevaluated folds | A fold that cannot be fitted blocks promotion instead of being skipped |
+| Interval-based improvement | Grouped paired bootstrap over climatology and the anchor, lower bound must exceed zero |
+| Stratified reporting | Region, season, forecast lead, HRRR era, each with sample counts and a degradation floor |
+| Pre-registration | Hashed frozen plan; split and criteria must match it |
+| Prospective requirement | A shadow-season record is required and cannot be synthesized here |
+| Synthetic isolation | `dataset_kind` and the non-scientific `pipeline-smoke` flag both block promotion |
+| Deterministic scientific hashing | `scientific_content_sha256` over versioned scientific inputs only, plus `artifact_sha256` over final file bytes |
+| Real verification | `verify-toi-archive` recomputes every hash and cache key and fails with counts and paths |
+| Zero-network compilation | `compile-toi-dataset` reads verified case JSON only; no HRRR refetch |
+| Object-based anchors | Connected proxy-STP components, land mask, area/intensity/support floors, integrated score |
+| Bounded, resumable retrieval | Deterministic keys, atomic writes, checkpoints, single-writer lock, transfer/case/time/disk caps, backoff, explicit outcomes |
+| Documented provenance | Source URLs, licenses, retrieval dates, file names, and SHA-256 recorded per run |
+
+**Requires collecting real historical data** — these are data-gathering tasks,
+not code tasks:
+
+1. **Build the case catalogue.** Roughly 8-10 years of archived HRRR cases
+   (2015-2022 development, 2023-2025 untouched test), hundreds of independent
+   event groups, and dozens of positive high-end cases, mixing outbreak,
+   ordinary severe, and null/control dates with explicit sampling weights.
+   HRRR archives start in 2014, so this is close to the maximum a current
+   archive supports.
+2. **Export verified outcomes.** An NCEI Storm Events / SPC report export
+   covering the same period, versioned, feeding either a manifest label or
+   `high_risk_worthy_proxy_v1`.
+3. **Retrieve the archive at scale.** Seven frames per case across the sampling
+   window, several hundred cases.
+4. **Run the shadow season.** Freeze the artifact, then evaluate a reserved
+   future season with no refitting and produce the prospective record.
+5. **Expect era-dependent behaviour.** HRRR v1-v4 span the development window.
+   The per-era report exists specifically so a model that only works under the
+   configuration dominating the training years is visible rather than hidden by
+   a pooled average.
+
+Until items 1-4 exist, the honest answer stays the same: TOI is an experimental
+reconstruction with an uncalibrated public-anchor transform. The gate is
+designed so that answer is produced automatically rather than asserted.
+
 ### Python API
 
 ```python
@@ -583,6 +1216,7 @@ render_npz("oun.npz")                 # -> oun.png (PNG next to the .npz)
 | `CHART_FONT` | `Space Grotesk` | Chart font family (empty string uses SHARPpy's default) |
 | `SHARPMOD_HD_SCALE` | `2.0` | Pixel scale for HD PNG exports |
 | `SHARPMOD_UHD_SCALE` | `2.8` | Pixel scale for UHD PNG exports |
+| `SHARPMOD_REGIONAL_GUIDANCE` | `auto` | Live experimental HRRR TOI fetch; set `off` to disable or `on` to force |
 
 ```bash
 # Example: force headless explicitly (the renderer already defaults to it)

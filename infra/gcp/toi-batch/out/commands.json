@@ -1,0 +1,44 @@
+{
+  "commands": [
+    {
+      "command": "gcloud services enable batch.googleapis.com compute.googleapis.com --project=project-ab691722-e43c-472e-a9e",
+      "requires": "--confirm-enable-apis",
+      "step": "enable-apis"
+    },
+    {
+      "command": "gcloud storage buckets create gs://project-ab691722-e43c-472e-a9e-toi-archive --project=project-ab691722-e43c-472e-a9e --location=us-east1 --uniform-bucket-level-access --public-access-prevention",
+      "requires": "--confirm-create-bucket",
+      "step": "create-dedicated-bucket"
+    },
+    {
+      "command": "gcloud storage buckets update gs://project-ab691722-e43c-472e-a9e-toi-archive --lifecycle-file=lifecycle.json",
+      "requires": "--confirm-create-bucket",
+      "step": "set-lifecycle"
+    },
+    {
+      "command": "gcloud storage cp out/bundle.tar.gz out/bundle.sha256 gs://project-ab691722-e43c-472e-a9e-toi-archive/toi-archive/source/",
+      "requires": "--confirm-submit",
+      "step": "upload-source-bundle"
+    },
+    {
+      "command": "gcloud storage cp C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\infra\\gcp\\toi-batch\\out\\task-script.sh out/shards/*.json gs://project-ab691722-e43c-472e-a9e-toi-archive/toi-archive/",
+      "requires": "--confirm-submit",
+      "step": "upload-shards-and-script"
+    },
+    {
+      "command": "gcloud batch jobs submit toi-archive-2015-2025 --project=project-ab691722-e43c-472e-a9e --location=us-east1 --config=C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\infra\\gcp\\toi-batch\\out\\job.json",
+      "requires": "--confirm-submit",
+      "step": "submit-job"
+    },
+    {
+      "command": "gcloud batch jobs describe toi-archive-2015-2025 --project=project-ab691722-e43c-472e-a9e --location=us-east1",
+      "requires": "none (read-only)",
+      "step": "watch-status"
+    },
+    {
+      "command": "gcloud storage rm -r gs://project-ab691722-e43c-472e-a9e-toi-archive/toi-archive/shards/",
+      "requires": "--confirm-delete",
+      "step": "cleanup-temp-prefixes"
+    }
+  ]
+}

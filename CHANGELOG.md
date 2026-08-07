@@ -5,7 +5,800 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-08-07
+
+**TOI status, stated plainly.** The full offline programme has now been executed
+end to end on real data, and the honest result is that **TOI does not beat
+climatology on held-out years**. A real model was fitted and it was *not*
+promoted. Details are in "Measured result" below. TOI remains experimental, is
+not official SPC guidance, and its `high_risk_worthy_proxy_v1` target is a
+transparent, versioned SHARPpy-defined proxy that is never labelled official Risk
+Impact Value.
+
+### Measured result (v1 method — SUPERSEDED, see "Re-measured on v2" below)
+
+> The tables in this section were produced with the anchor and jet-tracking
+> defects described in "Two method defects" below. They are kept because they are
+> what the shipped transform was evaluated against at the time, and because the
+> v1-to-v2 movement is itself the evidence that the defects mattered. **For
+> current numbers use "Re-measured on the corrected method (v2)".**
+Collected 337 usable cases from a 600-case stratified catalogue built from
+versioned NOAA NCEI Storm Events exports (11 files, SHA-256 recorded per year),
+development years 2015-2022 and untouched test years 2023-2025, event-blocked,
+population-weighted, plan frozen at hash `b3b983f473b5e11b` before any held-out
+number was examined.
+
+Held-out 2023-2025 (105 cases, 18 positive event groups):
+
+| Forecast | Brier | Brier skill vs climatology |
+|---|---:|---:|
+| Climatology (reference) | 0.0809 | 0.000 |
+| Fitted logistic calibration | 0.0820 | **-0.013** |
+| Shipped public-anchor transform | 0.1263 | **-0.561** |
+
+Grouped paired bootstrap of the Brier improvement: versus climatology
+-0.0011 with a 95% interval of [-0.0058, +0.0039], which straddles zero, so **no
+improvement is demonstrated**; versus the shipped public-anchor transform
++0.0443 with [+0.0130, +0.0767], which **is** a real improvement.
+
+Two conclusions follow, and they point in opposite directions:
+
+1. The current two-feature calibration (TOI score, peak-STP bin) adds no
+   demonstrable skill over simply quoting the base rate. Fitted slope 0.469 and
+   intercept -1.146 indicate an over-spread, miscalibrated forecast. Stratified
+   skill is worse still in places: summer -0.153 over 48 cases and the northern
+   plains/midwest region -0.282 over 25 cases.
+2. The shipped public-anchor probability transform is **substantially worse than
+   climatology** (Brier skill -0.561, FAR 0.905), and the fitted model beats it
+   with a confident interval. That is evidence about the shipped default, not
+   just about the candidate.
+
+The artifact is therefore recorded as `validated: false` and the shipped
+transform remains the default, unchanged. Promotion blockers as reported by the
+gate: no Brier improvement over climatology at 95% confidence, three degraded
+strata, negative held-out Brier skill, and no prospective shadow season. The
+prospective season reserved in the frozen plan is 2027 spring, which by
+construction cannot be evaluated yet.
+
+Remaining work is scientific, not mechanical: the feature set needs to improve
+before a promotion attempt is meaningful. Enlarging the catalogue would firm up
+the intervals but would not turn a negative skill score positive.
+
+### Feature diagnostic (development years only)
+
+`scripts/diagnose_toi_features.py` compares candidate feature sets by
+leave-one-year-out cross-validation **inside the development years**, reusing the
+production estimator. It never reads 2023-2025: fitting a different feature set
+and scoring it on the reserved test period would use that period to *choose* a
+model, which is the contamination the pre-registration exists to prevent, and it
+would spend a test set that can only be spent once. The output is a direction to
+pre-register, never evidence of skill.
+
+Pooled out-of-fold over 234 development cases with 32 positives, re-run on the
+corrected v2 archive (v1 figures in brackets):
+
+| Feature set | Brier skill | AUC |
+|---|---:|---:|
+| STP bin only | +0.0099 [+0.0132] | 0.623 [0.639] |
+| Raw peak STP only | +0.0095 [+0.0211] | 0.643 [0.659] |
+| STP bin + raw STP | +0.0072 [+0.0200] | 0.639 [0.655] |
+| STP bin + jet-to-risk distance | +0.0061 [+0.0080] | 0.599 [0.604] |
+| Frozen plan: score + STP bin | +0.0037 [+0.0198] | 0.608 [0.640] |
+| Experimental TOI score only | **-0.0061** [-0.0029] | **0.462** [0.526] |
+| All six features | -0.0102 [+0.0124] | 0.561 [0.603] |
+
+The ordering is unchanged in the part that matters and the composite score got
+*worse*, not better: alone it now scores AUC 0.462, below a coin flip, and the
+frozen plan's own schema fell from +0.0198 to +0.0037. Correcting the two defects
+removed spurious variance that the score had been borrowing from; what is left
+discriminates less. Peak STP alone still carries whatever signal exists.
+
+Three conclusions, and the third is the one that matters:
+
+1. **The composite TOI score is the weakest input, not the strongest.** Alone it
+   is worse than climatology and barely better than a coin flip. Peak STP - a
+   standard parameter the sounding already displays - carries whatever signal
+   exists, and adding jet-to-risk distance to it makes the result worse.
+2. **Adding features hurts.** All six together score below raw peak STP alone,
+   which is what overfitting looks like with 32 positive cases.
+3. **Switching features will not rescue TOI.** The frozen plan's schema scored
+   +0.0198 in development and **-0.013** on held-out years. A development gain of
+   +0.0211 is therefore entirely consistent with zero or negative test skill, and
+   the differences between the top rows are well inside the noise of 32
+   positives. The problem is not the weighting; the whole feature set tops out
+   near AUC 0.66, which for a ~7% base rate yields negligible Brier improvement.
+
+The blunt implication: TOI currently adds nothing over reading peak STP, which is
+already on screen. No feature-reweighting change is therefore proposed, because
+proposing one would imply a fix that the evidence does not support.
+
+### Two method defects found and fixed, and what they invalidate
+
+Auditing the highest-scoring archive cases exposed two defects in the TOI feature
+method itself, not in its weighting. Both were measured against the shipped
+337-case dataset before being fixed.
+
+**1. The anchor could escape the CONUS land domain.** Anchor selection scored
+objects by integrated proxy-STP discounted by land fraction, then took the
+intensity-weighted centroid of *every* member point. For a large land-and-ocean
+crescent that centroid can sit in water even though the object passes the 0.5
+land-fraction minimum. An earlier fix rejected offshore *peaks*; it never
+constrained offshore *centroids*.
+
+Measured in the shipped dataset: **11 of 337 anchors (3.3%) fall outside the
+CONUS land mask** — open Atlantic and Gulf water plus one point in Manitoba — and
+**all 11 are negative cases**. The defect only ever manufactured false alarms,
+which is consistent with the measured FAR of 0.905. The worst example is the
+archive's highest-scoring case overall: `null-2018-04-16`, score 4.49, a
+**zero-tornado day** anchored at 31.75N 79.74W, roughly 200 km off Georgia, from
+a 403,143 km² / 400-point object with land fraction 0.698.
+
+Exposure across the archive, counted from the 335 of 337 per-case payloads that
+still resolve by cache key: **109 (32.5%) selected a mixed land-and-ocean object**
+(land fraction below 1.0, minimum 0.500), which is the precondition for the
+escape; 134 (40.0%) exceeded 100,000 km², largest 1,693,203 km², median 62,487 km²;
+and 68 were both mixed and larger than 100,000 km².
+
+The anchor is now built in two steps that cannot leave land: the
+intensity-weighted centroid is taken over the object's **land members only**,
+then snapped to the land member nearest it. The result is always an actual land
+grid point belonging to the object. Both the pre-snap land centroid and the snap
+distance are recorded in provenance so the constraint is auditable rather than
+asserted.
+
+The snap distance is *not* bounded by one grid step, and an earlier draft of this
+entry wrongly claimed it was. Archive anchor resolution decodes at stride 12,
+about 36 km on the 3 km HRRR grid, and a land centroid falling in a wide water gap
+snaps to the nearest land member — measured up to roughly 90 km during collection.
+That is recorded per case as `anchor_snap_km`. It remains a strict improvement,
+because every alternative leaves the anchor in open water.
+
+**2. Jet-object association was bounded in distance but not in speed.** Tracking
+used a fixed match radius — 1200 km by default, 1800 km in the live HRRR producer
+— with no reference to the gap between frames. At the 3-hourly TOI sampling
+interval an 1800 km jump implies 324 kt, so the matcher could link two unrelated
+jet streaks and the endpoint-to-endpoint translation speed inherited the jump.
+
+Measured in the shipped dataset: translation speed reaches **257.3 kt**, with
+**44 of 337 cases (13.1%)** above the new ceiling and 89 above 50 kt, where the
+scorecard's translation component already saturates. Translation carries weight
+0.45–0.75, so these artifacts populate the top of the score range. `null-2018-04-16`
+carries both defects at once: an offshore anchor *and* 135.7 kt translation.
+
+Association now applies a kinematic ceiling of `DEFAULT_MAX_JET_TRANSLATION_KT`
+(90 kt) over the actual inter-frame gap, additionally clamped to the stronger of
+the two objects' peak winds, since a coherent jet maximum cannot propagate faster
+than the flow that forms it. Because the endpoint great-circle displacement can
+never exceed the sum of the per-step displacements, bounding each step also
+bounds each track's reported translation speed by the same ceiling — the
+invariant is a consequence of the fix, not a separate clamp, and is covered by a
+parametrised test.
+
+**What this invalidated.** `TOI_RISK_OBJECT_METHOD_VERSION` is bumped to
+`sharpmod_toi_risk_object_selection_v2` and feeds the archive scientific content
+hash and every case cache key, so v1 cache entries cannot be silently reused. A
+resume therefore re-collects rather than skipping, which is what
+`case_cache_key` already documented as a requirement. The raw regional grids were
+not retained, so features could not be recomputed in place; the archive was
+re-collected in full (see "Re-measured on the corrected method (v2)").
+
+**Verified on the real cycle that produced the defect.** Both fixes were
+re-checked against the same live HRRR data, not a synthetic grid, by re-resolving
+`null-2018-04-16` from the 2018-04-15 06Z cycle at F018. Recorded in
+`archive/null-2018-04-16-v2-recheck.json`:
+
+| Quantity | v1 | v2 |
+|---|---:|---:|
+| Anchor | 31.7462N 79.7385W (**Atlantic**) | 33.1733N 79.8410W (**land**) |
+| Jet translation | 135.71 kt | **22.88 kt** |
+| Maximum jet | 60.86 kt | 71.35 kt |
+| Experimental score | 4.49 | **2.47** |
+| Public-anchor probability | 0.6918 | **0.0380** |
+
+The selected object is *identical* — 403,143.6 km², land fraction 0.698 — which
+confirms detection and scoring are untouched and only the anchor placement
+changed. The land centroid resolved to 33.2958N 79.9189W and snapped 15.43 km
+onto the grid. Temporal sampling stayed `complete` at 7 frames over 18 h.
+
+So the archive's highest-scoring case, a **zero-tornado day** that the shipped
+transform rated a 69% high-risk probability, now scores 2.47 at 3.8%. That is the
+dataset's single largest false alarm corrected by roughly 18x in probability.
+
+### Re-measured on the corrected method (v2)
+
+The archive was recollected end to end under v2 and the whole pipeline re-run.
+**90.8 min wall across 6 shards against 8.41 h of summed shard time (5.6x), 34.2
+GiB transferred, 339 verified cases, zero verification failures.**
+
+The v2 results now occupy the canonical paths — `data/toi_dataset.{json,csv}`,
+`models/toi-calibration.json`, `reports/{compile,train,feature-diagnostic}.json`,
+plus the new `reports/evaluate-v2.json` — and the complete v1 set is preserved
+unmodified under `archive/v1-artifacts/`. Leaving the default paths on v1 was
+briefly the state of this branch and was wrong: `scripts/diagnose_toi_features.py`
+defaults to `data/toi_dataset.json`, so anyone running it would have silently
+analysed defective-method data. The frozen plan `reports/toi-plan.json` is
+deliberately **not** rewritten; it is the pre-registration as it was frozen, and
+its `notes` still name the v1 dataset hash `dd4f68220e44fdc5` so the reuse is
+visible rather than papered over. The v2 dataset hash is `f0a42da4938972c8`.
+
+**No case regressed.** Of the 475 events attempted under both methods, every
+single one ended in the same state: 264 success, 160 failed, 51 skipped. The v2
+run additionally reached 121 events the v1 run never attempted, which is where
+the extra successes came from. The anchor fix did not make anchor resolution
+stricter; it changed only where an accepted object is anchored.
+
+Both defects are gone from the data:
+
+| Invariant | v1 | v2 |
+|---|---:|---:|
+| Anchors outside the CONUS land mask | 11 | **0** |
+| Maximum jet translation | 257.3 kt | **59.8 kt** |
+| Cases above the 90 kt ceiling | 44 | **0** |
+
+Held-out 2023-2025, same 105 cases and 18 positive event groups, same frozen
+plan and feature schema:
+
+| Forecast | v1 Brier | v1 skill | v2 Brier | v2 skill |
+|---|---:|---:|---:|---:|
+| Climatology (reference) | 0.0809 | 0.000 | 0.0814 | 0.000 |
+| Fitted logistic | 0.0820 | -0.013 | 0.0822 | **-0.010** |
+| Shipped public-anchor transform | 0.1263 | -0.561 | 0.0910 | **-0.118** |
+
+Grouped paired bootstrap of the Brier improvement, 1000 resamples:
+
+| Comparison | v1 | v2 |
+|---|---|---|
+| vs climatology | -0.0011 [-0.0058, +0.0039] | -0.0008 [-0.0046, +0.0034] |
+| vs shipped transform | +0.0443 [+0.0130, +0.0767] **significant** | +0.0088 [-0.0060, +0.0264] **not significant** |
+
+Held-out AUC rose slightly for both: fitted 0.6149 to 0.6373, transform 0.5504
+to 0.5661. The transform's false-alarm ratio fell from 0.905 to 0.678.
+
+Three conclusions, and the middle one is a correction to what this changelog
+previously claimed:
+
+1. **The defects mattered, and mostly to the shipped transform.** Its Brier skill
+   improved from -0.561 to -0.118, nearly five times less bad, and its FAR fell
+   from 0.905 to 0.678. Most of its apparent badness was the two defects
+   manufacturing confident false alarms, not the transform's own shape.
+2. **The fitted model no longer beats the shipped transform.** Under v1 that
+   margin was +0.0443 with a 95% interval clear of zero, and this changelog
+   called it "a real improvement". Under v2 it is +0.0088 with an interval that
+   straddles zero. That earlier claim does not survive the correction and is
+   withdrawn.
+3. **TOI still does not beat climatology.** Brier skill -0.010, bootstrap
+   -0.0008 with a 95% interval of [-0.0046, +0.0034] straddling zero. The
+   headline conclusion is unchanged: fixing two real defects moved the numbers
+   without producing skill.
+
+The promotion gate still refuses, now on seven blockers: no Brier improvement
+over climatology at 95% confidence, no improvement over the shipped transform,
+three degraded strata (northern plains/midwest -0.259 over 25 cases, southern
+plains/lower Mississippi -0.054 over 59, summer -0.121 over 48), negative
+held-out Brier skill, and no prospective shadow season. The artifact is recorded
+`validated: false`, the shipped transform remains the default, and the sounding
+continues to display the unvalidated 0-5 `hypothetical` score rather than a
+percentage.
+
+One caveat stated plainly: the pre-registered plan was frozen before any v1
+held-out number was examined, but those years have now been examined twice, once
+per method. This is a re-derivation of the same pre-registered analysis on
+corrected inputs, not a fresh pre-registration, and no feature or model choice
+was changed in response to seeing v1 results. The reserved prospective season is
+still 2027 spring.
+
+`TOI_MEASURED_SKILL_VERSION` advances to
+`sharpmod_toi_measured_skill_2015_2025_v2` and the note shown in the details
+dialog now carries the v2 numbers, because a disclosure quoting a superseded
+measurement is a wrong disclosure.
+
+### What the measurement changes about where TOI runs
+
+Now that the experimental readout is measured at AUC 0.462 — below a coin flip —
+the question is no longer whether it is honest, because the `hypothetical` marker
+and the `Measured skill` row already handle that. The question is whether it is
+worth its cost, and the cost is unrelated to labelling: the guidance needs seven
+extra regional HRRR frames, roughly 60-85 MiB and tens of seconds, on **every**
+extraction.
+
+That splits cleanly by whether a human is looking:
+
+- **Interactive extraction is unchanged.** The GUI and single-point
+  `model-extract` still follow the `auto` policy, so a forecaster deliberately
+  pulling one sounding still gets the experimental readout. Choosing to look at a
+  clearly labelled research number is legitimate, and nothing here removes it.
+- **Bulk extraction now skips it.** `BatchExtractor.DEFAULT_LIVE_REGIONAL_GUIDANCE`
+  is `False`, so an unattended job no longer downloads seven extra frames per
+  point for a row nobody is reading. `model-batch-extract --regional-guidance`
+  and `BatchExtractor(live_regional_guidance=True)` opt back in, and the global
+  `SHARPMOD_REGIONAL_GUIDANCE` override still wins.
+
+No layout changed and no display logic changed: a point with no guidance payload
+already renders `--` in the TOI row, which is an existing, tested path.
+
+Deliberately **not** done: porting TOI to RAP, NAM 3 km CONUS nest, or HiResW.
+The inventory probe confirmed all three already publish the five required searches
+in the very product the app downloads, so the port would be cheap — which is
+exactly the trap. It would multiply the download cost by four to spread a number
+that measures at chance. The feasibility findings are recorded so the decision can
+be revisited if a future version earns it.
+
+### Added
+
+- The TOI details dialog now states the **measured** skill of the probability it
+  is showing. `TOI_MEASURED_SKILL_NOTE` and `TOI_MEASURED_SKILL_VERSION` record
+  that the shipped public-anchor transform scored a Brier skill of -0.118 against
+  climatology with a false-alarm ratio of 0.678 on the 339-case v2 archive, so it
+  is measurably worse than quoting the base rate, and that no fitted alternative
+  beat climatology either. (The first release of this note quoted -0.561 and
+  0.905, measured before the anchor and jet-tracking defects were fixed; the
+  version string is what lets a reader tell the two apart.) The note is promoted to a `Measured skill` row
+  immediately after `Status / limitation` rather than left at the bottom of the
+  generic provenance dump, because a disclosure that lives only in a changelog is
+  not a disclosure. The evaluation is versioned so a later one supersedes it, the
+  note is attached only to the shipped transform (a selected offline artifact
+  carries its own validation state), and a test asserts the text fits the
+  provenance length cap — a warning truncated mid-sentence would be worse than
+  none. **The sounding layout is unchanged and the default transform is
+  unchanged**; only the explanation is now honest about measured performance.
+- Added `scientific_content_sha256`, a versioned hash computed from canonical
+  strict JSON over only the schema-versioned scientific inputs of a case: cache
+  inputs, case and label data, the resolved anchor, operational guidance and
+  features, method and schema versions, and source identities. Timestamps, retry
+  timing and logs, elapsed time, and transfer bytes are excluded, so an identical
+  rerun on a different clock reproduces the same hash. The previous case hash
+  included `extracted_at` and therefore changed on every rerun. A separate
+  `artifact_sha256` over the final file bytes is recorded in the checkpoint and
+  manifest rather than embedded self-referentially inside the file it describes.
+- Hardened `verify-toi-archive` into a real verifier. It recomputes every
+  scientific and artifact hash instead of trusting the embedded values,
+  recomputes cache keys from the recorded cache inputs, validates strict schema
+  and finite values, and reports filename/cache-key mismatches, duplicate event
+  or cache keys, orphan and missing case files, checkpoint/file status
+  disagreement, target/method/source mismatches, truncated or tampered JSON, and
+  missing source hashes. Any failure exits non-zero with explicit counts and
+  paths.
+- Added `sharpmod-guidance compile-toi-dataset`, which turns verified extracted
+  case JSON into a `TOIDataset` with **zero network access**, so the roughly
+  43 GiB archive collection is a one-time cost and retraining never refetches
+  HRRR. It maps the exact operational TOI features and documented labels and
+  weights, carries event, `event_year`, region, season, lead, HRRR-era, source,
+  and hash provenance through to the dataset, refuses unverified input and
+  duplicate cache keys, preserves skip reasons, and emits the format `train-toi`
+  and `evaluate-toi` accept directly.
+- Added `scripts/fetch_ncei_storm_events.py`, which downloads the versioned NCEI
+  Storm Events detail files and writes a manifest recording each file name, URL,
+  byte count, and SHA-256. Retaining the raw versioned CSVs is what makes label
+  provenance auditable: NCEI republishes corrected years, so the `c20260323`
+  build of 2018 is a different dataset from a later one. Downloads skip files
+  already present, so the script is resumable.
+- Added `scripts/run_toi_archive_parallel.py`, which runs event-indivisible
+  shards as isolated parallel processes. This is what makes the collection
+  practical: the sequential runner needs ~15 h for 600 cases, and moving it to a
+  cloud VM at parallelism 1 would take exactly as long. Processes are used rather
+  than threads because the runner's correctness already rests on a single-writer
+  `run.lock`, atomic `.partial` writes, and a per-run checkpoint; threading would
+  put all three onto shared mutable state, whereas each shard gets its own
+  catalogue, work directory, checkpoint, and lock, so N workers are N independent
+  proven-correct runs. **Measured on 6 workers: 230 s wall against 882 s of
+  summed shard time, a 3.8x speedup**, with budgets applied per shard.
+- Added a real-data TOI training programme for the 2015-2025 HRRR archive:
+  `sharpmod-guidance audit-archive`, `build-toi-catalog`, `run-toi-archive`, and
+  `verify-toi-archive`. The catalogue generator reads official NOAA NCEI Storm
+  Events bulk CSV exports (recording each file name, retrieval date, byte count,
+  and SHA-256), reduces tornado segments to one record per convective day,
+  applies the named `high_risk_worthy_proxy_v1` screen, and samples a stratified
+  outbreak / ordinary-severe / null catalogue across regions, seasons, forecast
+  leads, and HRRR eras with the measured population base rate preserved. One
+  event id per convective day keeps every cycle of an event in one `event_year`.
+  Case anchors are resolved at run time from forecast proxy-STP around a fixed
+  CONUS centre, so no predictor or anchor can use later tornado locations.
+- Added a production-grade resumable archive runner: deterministic cache keys
+  hashing every feature-changing input including the method version, atomic
+  `.partial` writes, SHA-256 content hashes, a JSONL checkpoint that tolerates a
+  crash-truncated final line, a `run.lock` single-writer guard, exponential
+  backoff with seeded full jitter, a minimum request interval, cancellation, and
+  hard caps on transfer bytes, case count, wall time, and free-disk headroom.
+  Raw GRIB subsets are deleted immediately after extraction, so a 600-case run
+  transfers about 43 GiB but retains under 3 MiB. Feature extraction is
+  delegated verbatim to the operational producer, so archived cases use exactly
+  the live sampling and feature code.
+- Documented two measured archive findings: the official bucket publishes no F18
+  at 06Z before HRRRv2 (2016-08-23), so 2015-2016 cases reach only 15 h of
+  coverage and are reported `degraded`; and a genuinely quiet control day has no
+  forecast proxy-STP region at all, which makes TOI undefined rather than
+  negative, so null controls are drawn from convective-season days.
+- Added an offline, reproducible TOI calibration pipeline behind a new
+  `sharpmod-guidance` CLI (`build-toi-dataset`, `train-toi`, `evaluate-toi`).
+  Historical feature extraction reuses the operational live producer, so
+  archived cases get identical jet tracking, objective risk-region selection,
+  STP proxy, and three-hourly temporal sampling. Outcomes either come verbatim
+  from a documented label manifest, or from a transparent, versioned
+  SHARPpy-defined `high_risk_worthy_proxy_v1` screen over NCEI tornado data;
+  official Risk Impact Value is not an available target and the proxy is never
+  labelled RIV. Manifests must cover outbreak, ordinary severe, and null cases,
+  and anchors derived from observed tornado locations are rejected as leakage.
+- Added a regularized logistic TOI calibrator with year- and event-blocked
+  validation (leave-one-year-out or expanding-year) plus an untouched test
+  period. Each event id is assigned one `event_year`, so a case series that
+  crosses a New Year boundary stays inside a single fold instead of straddling
+  training and test, and a dataset whose rows disagree about an event's blocking
+  year is rejected. Reports cover Brier score and skill, reliability bins,
+  calibration intercept/slope, POD, FAR, CSI, frequency bias, ROC area, average
+  precision, and event-blocked bootstrap intervals against both the shipped
+  public-anchor transform and climatology. Fitted models export a portable JSON
+  artifact whose runtime inference needs no scikit-learn, and an artifact is
+  marked validated only when a declared multi-year historical dataset beats both
+  references on held-out years. The shipped transform remains the default and a
+  validated artifact must be selected explicitly; its version, training years,
+  target, and validation state appear in TOI provenance and the details panel.
+- Every dataset, artifact, and report writer emits strict, portable JSON
+  (`allow_nan=False`). Empty reliability bins and contingency scores without a
+  denominator serialize as `null` instead of `NaN`, and a non-finite metric is
+  refused with a clear error rather than written as a non-standard token.
+- Average precision now groups tied forecast probabilities into one operating
+  point, making it permutation-invariant; a completely uninformative forecast
+  scores exactly the weighted event base rate.
+- Dataset rows record the scorecard version and the public-anchor
+  probability-transform version in separate, clearly named fields
+  (`scorecard_version` and `public_anchor_probability_version`).
+- Added a validated regional Tornado Outbreak Indicator (TOI) contract plus
+  experimental midlevel jet tracking. The shared GUI/headless sounding display
+  embeds a normal `TOI = probability` row in the composite-index block.
+- Added a bounded live HRRR regional producer that automatically embeds
+  experimental TOI guidance in forecast soundings. It tracks 300/500-hPa jets
+  across up to 18 hours, derives a fully provenance-labeled fixed-layer STP
+  proxy risk region, and applies a versioned non-official scorecard/probability
+  transform anchored to the bins and examples in the public SPC paper.
+- Added a click-through TOI explanation dialog without changing the sounding
+  layout. It exposes the probability/color tier, experimental score, every
+  regional input, score-component weighting, method/calibration versions,
+  limitation text, valid period, source, and full embedded provenance; an
+  unavailable result shows `--` plus its exact reason.
+- Added checked JUnit performance budgets and JSON timing artifacts, bounded
+  pytest-xdist lanes with one Qt/render worker group, a 3.11/3.12 compatibility
+  smoke, one Python 3.13 coverage lane, one full 100-200-example property lane,
+  and an exact non-parallel release gate.
+
+### Fixed
+
+- Bounded the 1 hPa layer-mean sampling by the layer it is asked for. Both
+  `mean_wind` and `mean_wind_npw` built their sample pressures with
+  `arange(pbot, ptop + dp, dp)`, which takes one step **past** the layer top
+  whenever the layer depth is not a whole number of hectopascals. When that
+  overshoot left the reported profile the sample interpolated to `MISSING` and
+  was silently dropped, so the layer mean depended on where the fixed increment
+  happened to fall rather than on the requested layer. The samples now end
+  exactly at `ptop`, so the integration is bounded by `[pbot, ptop]` and never
+  relies on extrapolating outside the profile.
+
+  This is a real error, not a rounding difference: when the layer top *is* the
+  profile's top level, the dropped sample removed the top wind from the mean
+  entirely. MEASURED on the profile that exposed it, a 33-level sounding whose
+  SFC-6 km layer is calm except at its 6 km top, the SFC-6 km non-pressure-weighted
+  mean wind moved from `(-0.606, -2.719)` to `(-0.724, -2.850)` kt, which shifted
+  the Bunkers right-mover motion by `0.18` kt and SFC-500 m SRH by
+  `1.01 m^2/s^2` -- enough to disagree with upstream SHARPpy beyond the
+  documented 1% tolerance. Agreement improved from `1.0142` to
+  `0.000175 m^2/s^2`, roughly 5800x. Real soundings extend well past 6 km, so
+  there the only change is the position of the final sample by at most 1 hPa.
+
+  Fixed identically in the Python path and in the Rust `pressure_samples`
+  backend so the two stay in parity, with the invariant pinned by tests on both
+  sides. A whole-hectopascal layer keeps its historical sample set exactly.
+
+  The property test that caught this now also compares the SRH **integration**
+  on the oracle's own storm motion, which isolates the integration from any
+  storm-motion difference. Its end-to-end comparison is skipped in the one state
+  where upstream is not a reference: when the oracle's own SFC-6 km sampling
+  steps outside its profile, its storm motion is built from a sample set that is
+  not the requested layer. Upstream is not self-consistent there -- the
+  out-of-domain sample is dropped for some profiles and resolved to the edge
+  value for others -- so no single behaviour can match it, and the corrected
+  reading is the one that includes the layer top. Requirement 1.5 remains
+  covered by `test_winds_storm_motion.py`.
+
+- Sharpened exported PNG text in the scaled image modes. Fonts are now created
+  with `PreferAntialias | PreferQuality`, which `index_board` had applied locally
+  after finding its bold face rendered pixelated, and with vertical-only hinting
+  **while painting a density-scaled export surface**. Horizontal hinting snaps
+  stems and advance widths in unscaled design space, and those snapped positions
+  then land between physical pixels once the painter is scaled.
+
+  MEASURED on real renders as the share of inked pixels fully on (higher is
+  crisper): `hd` 0.357 to 0.372, `uhd` 0.527 to 0.568, with `uhd` now above the
+  0.552 scored by rasterising the same face natively at the matching 25px size.
+
+  The setting is deliberately scale-dependent rather than global: at 1x it
+  measured **worse** (0.226 to 0.202), because full hinting is exactly what snaps
+  stems onto whole pixels when there is no transform. `lossless` therefore keeps
+  Qt's default hinting and is unchanged.
+
+  Investigation also established what is *not* wrong, which bounds any further
+  work here: HD and UHD are true high-resolution renders rather than upscales of
+  a 1x raster, and their text already matched native rasterisation at the
+  corresponding physical size before this change. The remaining softness at small
+  sizes is a property of the bundled display face - at 9px it leaves only about
+  5% of inked pixels fully on - which is a typography choice rather than a
+  rendering defect, so it is left alone.
+- **Every forecast hour after F000 was broken for five products** because
+  terrain height is time-invariant and their providers publish it only at the
+  run's analysis step. The verified-surface check read a single forecast-hour
+  inventory, saw `surface_height` missing, and refused the sounding, so these
+  models worked at F000 and failed at every other lead time. An audit of all
+  eighteen configured products at F000 plus three later hours each found:
+
+  | Product | Height field | Published at |
+  | --- | --- | --- |
+  | ECMWF IFS, ECMWF-AIFS | `z:sfc` (surface geopotential) | F000 only |
+  | GEFS | `HGT:surface` | F000 only |
+  | Canadian GDPS, RDPS | `*_GeopotentialHeight` WMS layer | analysis instant only |
+
+  When surface height is the *only* missing element, GRIB extraction now
+  downloads that one invariant message from the same run's F000 file and
+  concatenates it into the subset, mirroring the existing CFS surface-companion
+  route; the ECCC point provider requests its height layer at the run time
+  instead of the forecast valid time. Verified end to end: terrain height is now
+  identical between F000 and the completed forecast hour for all five products
+  (IFS 355 m, AIFS 368 m, GEFS 342 m, GDPS 361 m, RDPS 340 m at Norman, OK). The
+  refusal remains for genuinely incomplete products and its message now names the
+  missing fields. `probe` reports these hours as complete with a
+  `surface_contract_invariant_companion` flag, and it confirms the F000 file
+  really carries the field rather than assuming it, so availability checks and
+  the fetch path agree.
+- Fixed a one-byte over-read in ECMWF byte-range downloads. Herbie's wgrib2
+  inventories set `end_byte` to a message's last byte, but its eccodes
+  inventories (ECMWF open data) set it to `_offset + _length`, which is the
+  *first byte of the next message*. An inclusive HTTP `Range` therefore fetched
+  one byte too many and the assembled stream did not end at the GRIB `7777`
+  trailer. This stayed hidden only because a pressure-level selection happened to
+  include the file's last message, where the server clamps the range at EOF;
+  requesting any interior message on its own failed range validation and fell
+  back to a full-file Herbie download. Eccodes inventories are now normalized to
+  inclusive bounds before range planning.
+- HiResW WRF-ARW and FV3 no longer advertise 06Z and 18Z cycles. NCEP runs the
+  CONUS nests twice a day, so half the offered cycles could only ever fail with
+  "no GRIB for run". Both are now configured for 00Z/12Z.
+- ECMWF-AIFS forecast hours are 6-hourly, not 3-hourly. AIFS publishes steps
+  0-360 by 6 at every cycle, but the picker offered the IFS 3-hourly ladder, so
+  24 of 85 selectable hours (F003, F009, F015, ...) could only fail with "no
+  ECMWF-AIFS GRIB for run".
+- ECMWF IFS 06Z and 18Z now stop at F144. Those cycles are a short cut-off
+  forecast; since IFS Cycle 50r1 (13 May 2026) they publish under `stream=oper`
+  rather than the retired `scda` stream, but they still carry no step past F144.
+  All 85 hours were previously offered at every cycle, so 36 of them always
+  failed at 06Z and 18Z. Verified against live data: 00/12Z serve F360, while
+  06/18Z serve F144 and nothing beyond.
+- A failed ground-field companion download no longer fails the whole sounding.
+  The companion path falls back to Herbie's own subset download on
+  `OptimizedTransportUnavailable`, as the pressure-level path already did.
+- ECMWF field planning was silently disabled, and every model downloaded
+  redundant fields. `choose_*_fields` read an inventory column named
+  `variable`, which is what Herbie's wgrib2 `.idx` inventories use, but ECMWF
+  open data ships eccodes `.index` inventories whose column is `param`. Every
+  ECMWF fetch therefore raised `model inventory has no variable column`, fell
+  back to the broad configured search, and returned empty field provenance -
+  which in turn made `cached_source_fields_compatible` always false, so the
+  model disk cache was never reused for IFS or AIFS. Field selection now reads
+  either column.
+
+  Inventory narrowing was a second, separate defect: it matched records by
+  variable *name*, which cannot express levels. That over-selected for NOAA
+  products and would have mis-selected for ECMWF, where `z` is both the
+  invariant surface field and a pressure-level field on every isobar. Narrowing
+  now matches the chosen search expression, so the planned byte ranges are
+  exactly what the download asks for. Measured against real inventories:
+
+  | Product | Planned transfer before | After | Dropped |
+  | --- | --- | --- | --- |
+  | HRRR `wrfprs` F024 | 295.5 MB | 226.3 MB | 40 redundant pressure-level `SPFH` messages (`RH` is preferred) |
+  | ECMWF IFS F036 | 99.9 MB | 91.2 MB | 14 redundant pressure-level `q` messages (`r` is preferred) |
+
+  All 40 HRRR pressure levels are retained for all seven needed fields, and no
+  pressure-level `z` is pulled for ECMWF. Verified end to end across all 13
+  selectable products: identical level counts and identical surface rows to
+  before the change, with field provenance now populated (13 fields for IFS, 12
+  for AIFS, 10 for NOAA products) so cached subsets are reusable.
+
+### Changed
+
+- **Products that cannot produce a sounding are no longer offered.** RRFS-A
+  (CONUS, Alaska, Hawaii, Puerto Rico) and AIGFS were selectable in the picker
+  and the CLI but could only ever end in a verified-surface refusal, because no
+  file they publish carries a complete ground row:
+
+  | Withheld | Measured cause |
+  | --- | --- |
+  | `rrfs-a` and its three domains | The `prslev` index has 675 records, all pressure levels - no `:surface:`, `:2 m above ground:`, or `:10 m above ground:` entries - and `natlev`, `testbed`, and `ififip` return no GRIB. |
+  | `aigfs` | The `pres` product has no ground fields, and the companion `sfc` product publishes only four messages: 2-m temperature, 10-m U/V, and mean-sea-level pressure. Surface pressure, terrain height, and 2-m moisture are absent from both. |
+
+  `ModelConfig` now carries an `unavailable_reason`, and `available_models()`
+  returns only products that can produce a sounding, which is the single list
+  the picker and `--list` both read. The configs stay registered so keys,
+  aliases, domains, and archived provenance still resolve, and `--list` reports
+  them under "Known but not enabled" with the reason. Asking for one explicitly
+  now fails immediately with that reason instead of a generic contract refusal.
+  Restoring either product is a one-field change if NOAA publishes the missing
+  fields. The remaining thirteen products were each confirmed end to end to
+  return a sounding with a merged verified surface row.
+- `compile-toi-dataset` can now consume a sharded archive run. `--archive-work-dir`
+  is repeatable and also accepts a parent directory containing `shard-*`
+  subdirectories, which is required because a parallel run produces one work
+  directory per shard and the flag was singular. Duplicate cache-key detection
+  is deliberately **global** across shards, so an overlapping split fails loudly
+  naming both directories rather than double-weighting a case in training.
+- Fixed `compile-toi-dataset --catalog`, which had never been exercised. It
+  called `compile_from_manifest_labels(catalog)` as if that returned a label
+  mapping, but the function is a full compile wrapper taking a work directory and
+  a manifest path, so the command raised `TypeError` on any invocation that
+  supplied a catalogue.
+- The catalogue builder no longer queues cases that can only ever fail. It
+  reported the measured pre-HRRRv2 F15 ceiling but still assigned forecast hours
+  round-robin, so **32 of 600 real cases** were 06Z F018 requests in 2015-2016 —
+  a frame the archive never published — and each burned four retries with
+  backoff before failing. Requested hours above what a cycle serves are now
+  clamped down to the largest *planned* hour it can serve, and the count is
+  recorded as `forecast_hours_clamped`. Clamping to a planned hour (12) rather
+  than the true maximum (15) is deliberate: an f015 bin would have contained
+  only pre-HRRRv2 cases, making forecast lead perfectly confounded with model
+  era so neither stratum could be interpreted.
+- `ResilientFrameFetcher` now raises `FrameNotPublished` immediately for a
+  forecast hour the archive era never published, instead of spending its full
+  retry budget on a request that cannot succeed. No request is issued and no
+  backoff is slept.
+- Anchor resolution degrades instead of failing when one of its extra sampling
+  hours is unpublished. Previously a missing pre-HRRRv2 F018 aborted the whole
+  case, which would have silently cost the archive its 2015-2016 development
+  years — years the 8-year sample-size floor cannot spare. The remaining
+  published hours are used and `anchor_unpublished_hours` plus
+  `anchor_frames_complete` record the degradation.
+- Fixed year parsing for locally supplied NCEI files. `--outcomes-dir` split
+  each filename on `"_d"`, but the literal `StormEvents_details` already
+  contains `_d`, so every file parsed its year as `"etai"` and the command
+  crashed. Matching now uses the documented filename pattern, prefers the newest
+  creation date when a year has been republished, and names any missing year.
+- Closed a hole in the promotion gate: a prospective shadow-validation record
+  was checked for a matching plan hash and event counts, but never for *when*
+  the season happened. A matching hash proves which plan was used, not that the
+  season postdated it, so an already-completed historical season could have been
+  submitted as prospective evidence and satisfied the strongest requirement in
+  the gate. `evaluate_promotion` now requires the prospective start date to be
+  on or after the plan's `frozen_at`, rejects dates it cannot parse rather than
+  treating them as acceptable, rejects an end date before the start date, and
+  records `plan_frozen_at`, `prospective_start_date`, and
+  `prospective_starts_after_freeze` in the decision report for audit.
+
+### Changed
+
+- **The TOI row no longer shows a percentage unless a validated calibration
+  backs it.** Acting on the measured result above: the shipped transform's most
+  confident bin forecast 77% and verified at 7.3%, below the base rate, so
+  rendering it as a percentage beside real thermodynamic parameters asserted a
+  calibration that does not exist. A caveat inside a click-through dialog does
+  not reach a reader who never clicks.
+
+  `toi_probability_is_supported()` now gates the display on evidence rather than
+  on the feature: a percentage appears only when an offline artifact that
+  actually passed the promotion gate is in use, and the experimental score (which
+  makes no calibration claim) is shown otherwise. This is deliberately a policy
+  and not a one-off edit — if an artifact is ever validated, the probability and
+  its colour ramp return with no further code change, which a regression test
+  asserts directly. The details dialog still reports the raw probability, now
+  labelled `uncalibrated`, alongside the measured-skill row.
+
+  **The sounding layout is unchanged**: same row, same position, same width, same
+  white/yellow/red/pink ramp, rescaled to the 0-5 experimental range. What
+  changed is only the claim the number makes. The fitted model was *not*
+  substituted, because it is not validated either and swapping one unsupported
+  probability for another would be worse than withholding both.
+- The TOI readout now carries a `hypothetical` marker, so it reads
+  `TOI = 4.2 hypothetical` rather than sitting unqualified among validated
+  indices. It is attached only to an *unvalidated* number: a validated
+  calibration earns its percentage, so labelling that hypothetical would be
+  wrong. The marker uses the
+  existing smaller-suffix path, which keeps it visually subordinate to the value
+  and attached to it. Because this row clips rather than elides and font
+  substitution varies by platform, the marker is drawn only when it is measured
+  to fit the column at the resolved face, and is dropped whole otherwise: a
+  half-drawn qualifier would be worse than none. The tooltip, accessible
+  description, and details dialog carry experimental status regardless of width.
+  `--` is left unmarked, since an unavailable readout needs no qualifier.
+
+  The spelled-out word fits only because the marker is a *registered* suffix.
+  MEASURED inside the render at Space Grotesk 13px: the cell is 122px, the
+  `TOI = ` label takes 34px and the value `4.2` another 19px, leaving 67px; drawn
+  at `UNIT_FONT_SCALE` (10px), ` hypothetical` measures 65px and fits with 2px
+  spare. An unregistered suffix is measured at full size instead, which is why the
+  word first appeared 20px too wide. Scoping the marker to unvalidated values also
+  keeps the widest string out of the cell: `68% hypothetical` needs 127px and would
+  be dropped, `4.2 hypothetical` needs 120px. The constant is named
+  `UNVALIDATED_SUFFIX` for its role rather than its wording, so changing the word
+  again does not require renaming call sites.
+- **Corrected objective anchor selection, which changes previously reported
+  pilot anchors.** The first pilot anchored each case on a single unconstrained
+  CONUS-wide proxy-STP grid maximum, which is a noise detector: it placed
+  2018-11-05 at 30.30N 76.69W in the Atlantic and 2023-03-31 at 27.79N 94.06W in
+  the Gulf, the latter with a peak proxy STP of 0.31 during a major outbreak.
+  Anchors are now issuance-time-only candidate  ar*objects*: connected proxy-STP
+  components are thresholded, filtered by minimum area, intensity, support, and
+  land fraction against a reproducible CONUS land domain built from the bundled
+  Census county tiles, and ranked by a documented integrated object score rather
+  than a peak grid value. If no candidate qualifies, the result is `unavailable`
+  with an exact reason instead of an invented point. Candidate count, selected
+  object area and score, land fraction, selection method and version, and the
+  resolved region are all recorded. An archived SPC outlook polygon is acceptable
+  only when its issuance timestamp proves it predated the forecast; later tornado
+  locations are never used, and leakage guards test this.
+  A bounded local re-run of exactly the two offshore cases (130.26 MiB, 92.7 s)
+  moved 2023-03-31 to 33.70N 98.66W in north Texas with land fraction 1.0 over
+  209,635 km2 from 11 candidates, and now correctly reports 2018-11-05 as anchor
+  unavailable after rejecting all 26 candidates. **The original pilot was
+  therefore not regionally representative, and its case hashes and anchors are
+  superseded.**
+- Source-bundle exclusions now apply to cache and history directories at any
+  depth, not only at the repository root. The root-anchored globs let
+  `sharpmod/.hypothesis` ship a local Hypothesis example database; the bundle is
+  now 274 files and 14.21 MiB instead of 317 files and 14.24 MiB, with SHA-256
+  `e4231b925927211376bae387cbedeb34249f47c20821d4583d040599e777d0fc`.
+- Removed unused placeholder regional products from the API, sidecar payload,
+  exports, and optional guidance strip. Regional-guidance schema v2 contains
+  only TOI, while the loader still accepts the TOI portion of schema-v1 files.
+- Corrected the stale TOI documentation that described the live workflow as
+  downloading "two compact HRRR `sfc` field subsets". Current temporal sampling
+  requests seven frames (eight when the requested forecast hour is off-interval),
+  each about 8-11 MiB, for roughly 60-85 MiB per cold-cache fetch.
+- Replaced the TOI promotion gate. The previous 3-year / 30-event check was a
+  pipeline smoke gate, not scientific validation, and is now named as such:
+  `TOIPromotionCriteria.pipeline_smoke()` is flagged non-scientific and can never
+  promote an artifact. The default `research-target` gate requires 8
+  chronological development years, 3 untouched test years, 200 independent event
+  groups, 30 positive and 100 negative event groups, minimum positive and
+  negative event counts in every cross-validation fold and in the test set, no
+  unevaluated folds, a strictly later test period, grouped *paired* bootstrap
+  intervals whose lower bound exceeds zero against both climatology and the
+  public-anchor transform, stratified reporting with a per-stratum degradation
+  floor, a frozen pre-registration, and a prospective shadow season.
+- Added `TOIValidationPlan`: a hashed pre-registration of the target definition,
+  case-selection rules, feature schema, split years, and every promotion
+  threshold, frozen via `sharpmod-guidance freeze-toi-plan` before held-out
+  results are examined. Shrinking the test period or loosening a threshold
+  afterwards changes the hash and is rejected on load, and the training report
+  records the plan hash. `TOIProspectiveRecord` carries a reserved future
+  season's evaluation; nothing in the repository can synthesize one, so today's
+  honest outcome is always "not validated".
+- Added `bootstrap_brier_difference`: a grouped, paired bootstrap of the Brier
+  improvement itself, so promotion depends on an interval above zero rather than
+  a point-estimate gain or two separately computed intervals that happen not to
+  overlap.
+- Added `sharpmod.guidance.toi_strata` and stratified training reports covering
+  region, season, forecast lead, and documented HRRR operational era (v1-v4),
+  each with its own case, event, and positive-event counts so a favourable
+  number over a handful of cases is visibly not evidence.
+- Live experimental TOI now samples the applicable 18-hour window every three
+  hours (normally seven frames) instead of stopping after the first two
+  successful HRRR frames, and uses every decoded frame in valid-time order for
+  jet-object tracking. The plan includes the requested forecast hour, removes
+  duplicates, stays capped at eight sequential requests, and does not change
+  download concurrency. Partial sampling still produces TOI when at least two
+  frames span nine hours or more, marked `degraded` in provenance; otherwise TOI
+  is unavailable with the exact reason. Requested, successful, and failed hours,
+  frame count, time coverage, sampling interval, largest gap, and sampling
+  status are all recorded in TOI provenance.
+- Centralized each test worker's `QApplication`, made explicitly elevated
+  Hypothesis example counts respect the ten-example compatibility profile, and
+  moved coverage/property compatibility duplication out of CI while preserving
+  the complete scientific and release checks.
+- Defaulted new hodograph displays to LCL-to-EL mean-wind centering with a
+  20%-tighter 160-kt viewport, while preserving user-selected Normal and Storm
+  Relative modes across profile and geometry updates.
+- Re-rendered the README example sounding and added Inverted (light) and
+  Protanopia (colorblind) palette screenshots. Both palette screenshots use the
+  bundled OAX 2014-06-16 19Z observed sounding, deliberately a different profile
+  from the dark HRRR example, so the palette change is visible independently of
+  the data. All three are produced through the shipped `render()` pipeline with
+  the persisted `color_style` preference, not by overriding palette internals.
+  MEASURED mean luminance: dark `0.050`, Inverted `0.946`, Protanopia `0.051`,
+  and Protanopia differs from a Standard render of the same sounding.
 
 ## [0.7.0] - 2026-07-30
 
@@ -25,8 +818,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Added separate fast, full-property, and opt-in live-provider CI lanes with
   bounded test runtimes, branch coverage, focused Ruff checks, and dependency
   vulnerability auditing.
-- Added a weekly live HRRR Denver regression that verifies the current provider
-  schema still yields a real high-terrain surface and no below-ground isobars.
+- Added a weekly live HRRR CONUS terrain matrix spanning the Pacific Northwest,
+  Intermountain West, Rockies, central Plains, Southeast coast, and Northeast.
+  It verifies that the current provider schema yields each point's local model
+  surface and removes below-ground isobars rather than special-casing Denver.
 - Added an explainable recent-cycle surface-contract probe for provider
   monitoring, including a failing CLI mode that lists missing ground fields.
 - Added exact release constraints and release-workflow contract tests for

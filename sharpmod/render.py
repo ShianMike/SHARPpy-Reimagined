@@ -118,7 +118,9 @@ from sharpmod.resources import font_resolver  # noqa: E402
 # Window composition (real minimal controller; no fake parent window). Importing
 # it also performs the Qt ``offscreen``/PySide6 + bundled-font environment
 # setup before the first Qt widget import.
+from sharpmod.viz import unit_text  # noqa: E402
 from sharpmod.viz.SPCWindow import RenderController, compose_window  # noqa: E402
+from sharpmod.viz.unit_text import apply_render_font_quality  # noqa: E402
 
 PNG_IMAGE_HD = "hd"
 PNG_IMAGE_UHD = "uhd"
@@ -378,6 +380,8 @@ def _target_density_pixmaps(scale: float):
     """
     density = max(1.0, float(scale))
     if density <= 1.0:
+        # Original-size export: leave font hinting at Qt's default, which
+        # measured crisper than vertical-only hinting at 1x.
         yield _NATIVE_QPIXMAP
         return
 
@@ -394,9 +398,14 @@ def _target_density_pixmaps(scale: float):
             raise RuntimeError(
                 "QtGui.QPixmap is already temporarily overridden")
         QtGui.QPixmap = _make_density_pixmap_type(density)
+        # Glyphs painted into these density caches are rasterised through a
+        # scaled transform, where vertical-only hinting measured crisper.  Every
+        # font is created after this point, so the flag is set before the tree.
+        previous_scaled = unit_text.set_scaled_export(True)
         try:
             yield _NATIVE_QPIXMAP
         finally:
+            unit_text.set_scaled_export(previous_scaled)
             QtGui.QPixmap = _NATIVE_QPIXMAP
 
 
@@ -473,9 +482,9 @@ COND_PROB_LABEL_MAX_PT = int(os.environ.get("COND_PROB_LABEL_MAX_PT", "10"))
 # Maximum point size for the winter/DGZ panel. The vendored widget scales text
 # by panel height and writes long strings into tiny rects with TextDontClip.
 WINTER_LABEL_MAX_PT = int(os.environ.get("WINTER_LABEL_MAX_PT", "11"))
-# Extra vertical space (px) added to the window/canvas so the SHARPpy Reimagined family
-# panels -- placed as a second row in the vendored bottom table band -- render
-# fully below the index tables without overlap (Step 4 -- in-grid placement).
+# Extra vertical space (px) that preserves the established scientific-panel
+# proportions after the combined IndexBoard and Streamwiseness chart are
+# mounted. This remains necessary even though TOI no longer adds a footer row.
 CHART_HEIGHT_GROW = int(os.environ.get("CHART_HEIGHT_GROW", "120"))
 # Extra horizontal space (px) added to the window/canvas so the widened bottom
 # index board has room for the storm-motion vectors AND the 1 km / 6 km AGL
@@ -541,11 +550,22 @@ def install_font(app):
     except Exception:
         loaded = False
 
-    if not loaded:
-        # No bundled fonts could be registered; leave SHARPpy on system fonts.
-        return
-
     _OrigQFont = QtGui.QFont
+
+    if not loaded:
+        # No bundled fonts could be registered, so the family stays on the
+        # system font.  Text quality must not depend on that: apply the
+        # rasterisation settings anyway, since a substituted face is exactly the
+        # case that rendered pixelated.
+        class _QualityFont(_OrigQFont):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                apply_render_font_quality(self)
+
+        QtGui.QFont = _QualityFont
+        app.setFont(apply_render_font_quality(_QualityFont(app.font())))
+        _font_installed = True
+        return
 
     class _ForcedFont(_OrigQFont):
         def __init__(self, *args, **kwargs):
@@ -562,6 +582,8 @@ def install_font(app):
                 ps = self.pointSizeF()
                 if ps > 0:
                     self.setPointSizeF(ps * FONT_SCALE)
+            # Crisp glyph rasterisation, measured; see the constants above.
+            apply_render_font_quality(self)
 
         def setPixelSize(self, px):
             # The lower table panels (thermo/kinematics) size their font in
@@ -743,14 +765,12 @@ def enlarge_panel_fonts(spc_widget):
 
 
 def _grow_for_family_panels(win):
-    """Grow the window/canvas to fit the ``grid3`` family-panel row + barbs.
+    """Preserve the ``grid3`` panel height and make room for its wind barbs.
 
-    The SHARPpy Reimagined family panels are mounted as a second row inside the vendored
-    bottom table band (``grid3``, owned by ``spc_widget.text``). To keep them
-    from overlapping the index tables above, this grows the window height by
-    :data:`CHART_HEIGHT_GROW`, resizes the grabbed ``spc_widget`` to match, and
-    raises the ``text`` frame's minimum height so the layout allocates the extra
-    space to the table band (rather than the expandable skew-T).
+    The established lower scientific band needs :data:`CHART_HEIGHT_GROW` even
+    without a footer; removing it compresses the parcel/index tables and the
+    Streamwiseness/STP charts. Width growth keeps the storm-motion vectors and
+    1/6-km wind barbs from clipping.
 
     It also grows the window/canvas *width* by :data:`CHART_WIDTH_GROW` so the
     widened bottom index board has room for the storm-motion vectors AND the
@@ -766,9 +786,8 @@ def _grow_for_family_panels(win):
         sw = getattr(win, "spc_widget", None)
         if sw is None:
             return
-        # Give the vendored text band (grid3 owner) room for the second row so
-        # the added panels do not overlap the tables above them, and extra
-        # width so the widened index board fits the barbs beside the vectors.
+        # Preserve the established text-band height and give the widened index
+        # board enough width for the barbs beside the storm-motion vectors.
         text = getattr(sw, "text", None)
         if text is not None:
             try:
@@ -2755,10 +2774,11 @@ def _install_skewt_title_shrink():
 
 HODO_0_500_COLOR = os.environ.get("HODO_0_500_COLOR", "#FF00FF")
 
-# Default hodograph zoom, expressed as the knots magnitude spanning the full
-# widget width. The x-axis reaches +/- HODO_ZOOM_KTS / 2, so 200 kt -> x up to
-# 100 kt (and y up to ~70 kt at the widget's ~0.7 aspect ratio).
-HODO_ZOOM_KTS = float(os.environ.get("HODO_ZOOM_KTS", "200"))
+# Default hodograph viewport, expressed as the knot span across the full widget
+# width. A 160-kt span is 20% tighter than the previous 200-kt view, so wind
+# vectors and annotations render 25% larger while retaining the same values.
+# ``HODO_ZOOM_KTS`` remains an environment override for specialized displays.
+HODO_ZOOM_KTS = float(os.environ.get("HODO_ZOOM_KTS", "160"))
 
 
 def _install_hodo_0500():
@@ -2842,16 +2862,13 @@ def _install_hodo_0500():
 
 
 def _install_hodo_zoom():
-    """Zoom the hodograph out so the x-axis reaches ~100 kt (y ~70 kt).
+    """Use a 20%-tighter default hodograph viewport.
 
     The vendored ``backgroundHodo`` scales uniformly from ``hodomag`` -- the
-    wind magnitude (in the active units) that spans the full widget width --
-    centered on the origin, so the x-axis extends +/- ``hodomag`` / 2. Upstream
-    defaults to ``hodomag = 160`` kt (x reaches +/- 80 kt), with the y-axis
-    following the widget's ~0.7 aspect ratio (~+/- 56 kt). Bumping the knots
-    default to :data:`HODO_ZOOM_KTS` (200 kt) makes the x-axis reach +/- 100 kt
-    and, at that aspect ratio, the y-axis reach ~+/- 70 kt. The metric default
-    is scaled proportionally (kept within the vendored ``max_zoom``). Applied by
+    wind magnitude (in the active units) spanning the full widget width. The
+    prior 200-kt view is reduced by 20% to :data:`HODO_ZOOM_KTS` (160 kt),
+    increasing visual magnification by 25%. The metric default is scaled
+    proportionally and kept within the vendored ``max_zoom``. Applied by
     wrapping ``backgroundHodo.__init__`` (initial draw) and
     ``plotHodo.setPreferences`` (units / preference changes) so the zoom
     survives both. Falls back to the vendored behavior on any error. Idempotent.
@@ -2868,8 +2885,7 @@ def _install_hodo_zoom():
 
         _kts = float(HODO_ZOOM_KTS)
         # Metric equivalent, rounded to the vendored 5 m/s ring increment and
-        # clamped to the vendored metric max_zoom (100 m/s) so zoom-out stays
-        # in bounds.
+        # clamped to the vendored metric max_zoom (100 m/s).
         _ms = min(round(_tab.utils.KTS2MS(_kts) / 5.0) * 5.0, 100.0)
 
         def _apply_zoom(self):
@@ -2927,6 +2943,133 @@ def _install_hodo_zoom():
         _bg.__init__ = __init__
         _plot.setPreferences = setPreferences
         _bg._sharpmod_zoom = True
+    except Exception:  # pragma: no cover - vendored module always present
+        pass
+
+
+def _install_hodo_mean_wind_center():
+    """Default the hodograph to its LCL-to-EL mean-wind center.
+
+    Vendored SHARPpy exposes ``Mean Wind`` in the hodograph context menu but
+    initializes every widget in ``Normal`` mode, centered on the zero-wind
+    origin. The mean vector is unavailable until a profile collection becomes
+    active, so this patch selects the mode at construction and applies it after
+    profile activation. It also reapplies the selected non-normal center after
+    resizes, preference changes, and wheel zooms, all of which rebuild the
+    vendored background around the origin.
+
+    A later user choice remains authoritative: selecting ``Normal`` stops the
+    automatic mean-wind recentering, while ``Storm Relative`` continues to use
+    the active profile's right-moving storm vector.
+    """
+    try:
+        import sharppy.sharptab as _tab
+        import sharppy.viz.hodo as _hodo_mod
+
+        _plot = _hodo_mod.plotHodo
+        if getattr(_plot, "_sharpmod_mean_wind_default", False):
+            return
+
+        def _checked_mode(self):
+            modes = {
+                "centered": "Normal",
+                "stormrelative": "Storm Relative",
+                "meanwind": "Mean Wind",
+            }
+            selected = modes.get(getattr(self, "center_loc", ""))
+            try:
+                for action in self.popupmenu.actions():
+                    if action.text() in modes.values():
+                        action.setChecked(action.text() == selected)
+            except Exception:
+                pass
+
+        def _valid_vector(vector):
+            try:
+                return (
+                    vector is not None
+                    and len(vector) >= 2
+                    and _tab.utils.QC(vector[0])
+                    and _tab.utils.QC(vector[1])
+                )
+            except Exception:
+                return False
+
+        def _selected_vector(self):
+            mode = getattr(self, "center_loc", "centered")
+            if mode == "meanwind":
+                return getattr(self, "mean_lcl_el", None)
+            if mode == "stormrelative":
+                storm_motion = getattr(self, "srwind", None)
+                if storm_motion is not None and len(storm_motion) >= 2:
+                    return storm_motion[:2]
+            return None
+
+        def _apply_selected_center(self):
+            vector = _selected_vector(self)
+            if not _valid_vector(vector):
+                _checked_mode(self)
+                return False
+
+            # Rebase first so center_hodo never applies a new scale/size to an
+            # offset retained from the previous profile or widget geometry.
+            self.centerx = self.wid / 2.0
+            self.centery = self.hgt / 2.0
+            self.point = (0, 0)
+            self.centered = (vector[0], vector[1])
+            self.clearData()
+            self.center_hodo(self.centered)
+            try:
+                self.updateDraggables()
+            except Exception:
+                pass
+            self.plotData()
+            self.update()
+            _checked_mode(self)
+            return True
+
+        _orig_init = _plot.__init__
+
+        def __init__(self, **kwargs):
+            _orig_init(self, **kwargs)
+            self.centered = (0, 0)
+            self.center_loc = "meanwind"
+            _checked_mode(self)
+
+        _orig_set_active = _plot.setActiveCollection
+
+        def setActiveCollection(self, pc_idx, **kwargs):
+            result = _orig_set_active(self, pc_idx, **kwargs)
+            _apply_selected_center(self)
+            return result
+
+        _orig_resize = _plot.resizeEvent
+
+        def resizeEvent(self, event):
+            result = _orig_resize(self, event)
+            _apply_selected_center(self)
+            return result
+
+        _orig_prefs = _plot.setPreferences
+
+        def setPreferences(self, update_gui=True, **kwargs):
+            result = _orig_prefs(self, update_gui=update_gui, **kwargs)
+            _apply_selected_center(self)
+            return result
+
+        _orig_wheel = _plot.wheelEvent
+
+        def wheelEvent(self, event):
+            result = _orig_wheel(self, event)
+            _apply_selected_center(self)
+            return result
+
+        _plot.__init__ = __init__
+        _plot.setActiveCollection = setActiveCollection
+        _plot.resizeEvent = resizeEvent
+        _plot.setPreferences = setPreferences
+        _plot.wheelEvent = wheelEvent
+        _plot._sharpmod_mean_wind_default = True
     except Exception:  # pragma: no cover - vendored module always present
         pass
 
@@ -4472,6 +4615,7 @@ def render_patch_specs():
         PatchSpec("barbs.custom", _install_custom_barbs),
         PatchSpec("hodo.0500", _install_hodo_0500),
         PatchSpec("hodo.zoom", _install_hodo_zoom),
+        PatchSpec("hodo.mean-wind-default", _install_hodo_mean_wind_center),
         PatchSpec("hodo.interpolation-menu", _install_hodo_interpolation_menu),
         PatchSpec("hodo.label-fit", _install_hodo_label_fit),
         PatchSpec("hodo.locator", _install_hodo_locator),
@@ -4636,7 +4780,8 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
            model: str | None = None, run: datetime | None = None,
            loc: str | None = None,
            image_mode: str = PNG_IMAGE_HD,
-           parcel: str = DEFAULT_RENDER_PARCEL) -> str:
+           parcel: str = DEFAULT_RENDER_PARCEL,
+           regional_guidance=None) -> str:
     """Render ``infile`` to ``outfile`` and return the output path.
 
     Composes :class:`~sharppy.viz.SPCWindow.SPCWindow` with a real
@@ -4646,7 +4791,11 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
     produced into a temporary file in the destination directory and renamed
     onto ``outfile`` only after a non-empty image exists. On any failure a
     :class:`RenderError` naming ``infile`` is raised and no partial PNG is left
-    behind (Requirements 11.4, 11.7, 15.5).
+    behind (Requirements 11.4, 11.7, 15.5). ``regional_guidance`` may be a
+    validated guidance object, a mapping, or a JSON path; adjacent sounding
+    sidecars are also discovered automatically. Its TOI value is displayed in
+    the composite-index block and is never inferred from the point profile;
+    the other regional products remain metadata-only.
     """
     parcel = _normalise_parcel_type(parcel)
     out_dir = os.path.dirname(os.path.abspath(outfile))
@@ -4672,6 +4821,22 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
             prof_col.setMeta("run", run)
         if loc is not None:
             prof_col.setMeta("loc", loc)
+        if regional_guidance is not None:
+            from sharpmod.guidance import (
+                REGIONAL_GUIDANCE_META_KEY,
+                coerce_regional_guidance,
+                load_regional_guidance_json,
+            )
+
+            guidance = (
+                load_regional_guidance_json(regional_guidance)
+                if isinstance(regional_guidance, (str, os.PathLike))
+                else coerce_regional_guidance(regional_guidance)
+            )
+            prof_col.setMeta(
+                REGIONAL_GUIDANCE_META_KEY,
+                guidance.to_mapping(),
+            )
         _resolve_location_title(prof_col, explicit_loc=loc)
 
         # Fill in the metadata the title/header rendering dereferences, without
@@ -4699,10 +4864,8 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
         # Compose SPCWindow with the real minimal controller. The controller is
         # the Qt parent SPCWindow connects its config/preferences hooks to; it
         # must outlive the window, so keep a reference for the render duration.
-        # ``mount=True`` appends the SHARPpy Reimagined derived-parameter family rows INTO
-        # the vendored index panels (kinematics, thermodynamics, and the STP
-        # composite area) and attaches the skew-T HGZ overlay -- no strip is
-        # added and the canvas keeps its original size. The mount is fully
+        # ``mount=True`` installs the combined index board (including TOI),
+        # Streamwiseness, and skew-T overlays. The mount is fully
         # guarded (see ``mount_products``); the outcome is recorded on
         # ``win.sharpmod_products`` for inspection.
         win, controller = compose_window(config, prof_col, mount=True)
@@ -4720,14 +4883,8 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
         # widget never crashes the render.
         apply_layout_compensation(win.spc_widget)
 
-        # The SHARPpy Reimagined family panels are placed INSIDE the vendored bottom
-        # table band (``grid3``) as a second row beneath their family columns
-        # (see ``mount_products``). That new row needs vertical room, so grow
-        # the window/canvas height by ``CHART_HEIGHT_GROW`` and give the
-        # vendored text frame (which owns ``grid3``) a matching larger minimum
-        # height, so the panels render fully below the index tables without
-        # overlapping them. Fully guarded so a missing widget never aborts the
-        # render.
+        # Preserve the lower scientific-band proportions and make horizontal
+        # room for the wind barbs. TOI itself reuses an existing index cell.
         _grow_for_family_panels(win)
 
         # Grow the overall canvas so the outer-grid stretch (which makes the
@@ -4793,6 +4950,13 @@ def _build_cli_parser() -> argparse.ArgumentParser:
         "--parcel", type=str.upper, choices=PARCEL_TYPES,
         default=DEFAULT_RENDER_PARCEL,
         help="parcel visualized on the Skew-T (default: MU)")
+    parser.add_argument(
+        "--guidance-json",
+        help=(
+            "validated regional tornado-guidance JSON; its TOI value is "
+            "embedded in the composite-index block"
+        ),
+    )
     return parser
 
 
@@ -4810,6 +4974,7 @@ def main(argv: list[str] | None = None) -> int:
             ns.outfile,
             image_mode=ns.image_mode,
             parcel=ns.parcel,
+            regional_guidance=ns.guidance_json,
         )
     except RenderError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

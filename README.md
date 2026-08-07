@@ -13,6 +13,29 @@
 
 ![Example SHARPpy Reimagined sounding](examples/example_sounding.png)
 
+<sub>HRRR forecast point 36.68N 95.66W, F018, in the default Standard (dark)
+palette — rendered from
+[`examples/soundings/hrrr_point_36.68N_95.66W_f018.npz`](examples/soundings/hrrr_point_36.68N_95.66W_f018.npz).
+`TOI = --` because no regional guidance payload is attached to this file.</sub>
+
+<details>
+<summary><b>Light and colorblind palettes</b> (OAX 2014-06-16 19Z observed sounding)</summary>
+
+Both palettes below render the same *different* sounding — the bundled OAX
+observed profile — so the theme change is visible independently of the data.
+Switch palettes with **File → Preferences** (Standard / Inverted / Protanopia);
+the choice persists across launches and applies to every panel and inset.
+
+**Inverted (light mode)**
+
+![SHARPpy Reimagined sounding in the Inverted light palette](docs/images/v0.8.0/sounding-light-mode.png)
+
+**Protanopia (colorblind mode)**
+
+![SHARPpy Reimagined sounding in the Protanopia colorblind palette](docs/images/v0.8.0/sounding-protanopia.png)
+
+</details>
+
 SHARPpy Reimagined is a modernized, standalone fork of
 [SHARPpy](https://github.com/sharppy/SHARPpy), focused on packageable Python
 3.11–3.13 workflows, Qt6/PySide6 rendering, and reproducible point-sounding
@@ -35,6 +58,16 @@ test-backed decoder/extractor layer.
   13 configured public forecast models.
 - A complete inverted/light sounding palette shared by the interactive GUI and
   headless renderer, including contrast-aware labels and derived displays.
+- A compact `TOI` row embedded in the composite-index block. Live HRRR guidance
+  uses a versioned, non-official public-method reconstruction. The row shows the
+  experimental 0-5 score marked `hypothetical`, e.g. `TOI = 4.2 hypothetical`,
+  and shows a *probability* only when a
+  calibration artifact that passed the promotion gate is selected; missing
+  regional inputs remain `TOI = --`. That gate is measured, not stylistic: on a
+  337-case archive the shipped probability transform scored a Brier skill of
+  -0.561 against climatology, and its 77% bin verified at 7.3%. Click the TOI row
+  to inspect every regional input, score component, version, measured skill,
+  limitation, and provenance field.
 - Offline UWyo station catalog plus package-relative bundled fonts.
 - Property-based pytest coverage for decoders, derived parameters, hazards,
   renderer-facing widgets, and extraction paths.
@@ -111,7 +144,7 @@ fallback behavior, platform status, limitations, tests, and benchmarks.
 
 ### Forecast-decoder performance and validation
 
-Version 0.4.1 includes the two independently optimized GRIB implementations
+Version 0.8.0 includes the two independently optimized GRIB implementations
 introduced in v0.4.0. The Python backend reuses a file inventory and
 nearest-point selection, reads only the required scalar fields, and keeps
 bounded inventory, point-selection, and decoded-sounding caches. The Rust
@@ -192,10 +225,12 @@ works:
   lifting, and reset.
 - **Click + drag** temperature / dewpoint / wind points to edit the profile —
   every index recalculates live.
-- **Mouse wheel** zooms; **right-click the hodograph** re-centers it, and
-  **double-clicking** the RM/LM markers sets the storm motion. The active
-  profile has colored dots with 0.5, 1, 3, 6, 9, and 12 inside them, and the
-  locator inset names the active sounding location/town in its title.
+- The hodograph defaults to **Mean Wind** centering with a 20%-tighter viewport.
+  **Mouse wheel** zooms; **right-click the hodograph** selects Mean Wind,
+  Normal, or Storm Relative centering, and **double-clicking** the RM/LM markers
+  sets the storm motion. The active profile has colored dots with 0.5, 1, 3, 6,
+  9, and 12 inside them, and the locator inset names the active sounding
+  location/town in its title.
 - **Double-click the lower-left inset** to swap lifted parcels.
 - **Keys:** ← / → step in time, ↑ / ↓ change ensemble member, `Space` swaps
   focus, `I` interpolates, `C` collects observed, `W` returns to the picker.
@@ -319,6 +354,7 @@ that final job receives GitHub `contents: write` permission.
 | `model-extract` | Fetch all pressure levels for a supported forecast-model point sounding |
 | `model-batch-extract` | Run a resumable multi-point/multi-hour model job |
 | `wrf-extract` | Extract a WRF-ARW point sounding to `.npz` |
+| `sharpmod-guidance` | Build, collect, verify, compile, train, and evaluate the experimental TOI calibration programme |
 | `sharpmod-rust-sync` | Check, rebuild when needed, and verify the local Rust backend |
 
 ### Forecast-model extraction (`model-extract`)
@@ -367,6 +403,22 @@ model-extract hrrr 35.18 -97.44 --fxx 0 --render
 # Select an ensemble member (GEFS defaults to c00)
 model-extract gefs 35.18 -97.44 gefs_p01.npz --fxx 0 --member p01
 ```
+
+Live HRRR extraction also samples the applicable 18-hour window every three
+hours, normally seven compact regional `sfc` subsets of roughly 8-11 MiB each
+(eight when the requested forecast hour is off-interval), and embeds an
+experimental TOI score and probability in the JSON sidecar. Every decoded frame
+is used in valid-time order. Partial sampling still yields TOI when at least two
+frames span nine hours or more, marked `degraded` in provenance; otherwise TOI is
+unavailable with the exact reason.
+It uses 300-hPa jet motion during June-August, 500 hPa otherwise, and
+a transparently labeled fixed-layer STP proxy. Its scorecard follows the public
+SPC bins and qualitative rules, while its probability transform is anchored to
+the public 4.35/87% example. Because SPC did not publish its exact weights or
+calibration equation, both are explicitly marked non-official and versioned.
+The regional-guidance payload contains only TOI. Pass `--no-regional-guidance`
+(or set `SHARPMOD_REGIONAL_GUIDANCE=off`) to skip the supplemental regional
+fetch.
 
 If `--run` is omitted, the CLI chooses the most recent configured cycle at or
 before the current UTC time; upstream publication can lag that cycle, so use
@@ -471,11 +523,18 @@ atomic, so rerunning the same command validates and skips completed outputs.
 model-batch-extract job.json --output-dir batch-output --workers 2
 ```
 
+Batch runs **skip** the experimental HRRR regional TOI guidance by default,
+because it costs roughly 60-85 MiB and tens of seconds per point and nobody is
+reading the readout while an unattended job runs. Interactive extraction is
+unaffected: the GUI and single-point `model-extract` still compute it. Add
+`--regional-guidance` to opt a batch job back in.
+
 The Python API is `sharpmod.batch_extract.run_batch(...)`; it accepts ordered
 `BatchRequest` values and returns ordered per-request results plus completed
 NPZ paths. Call `BatchExtractor.cancel()` for cooperative cancellation.
 Pass an existing `ModelHourCache` as `model_hour_cache=` when a GUI or service
 owns a longer-lived cache; the batch runner leases it but does not clear it.
+`BatchExtractor(live_regional_guidance=True)` is the API equivalent of the flag.
 
 #### Configured models
 
@@ -489,20 +548,25 @@ enabled. Remote run availability still depends on the upstream provider.
 | `rap` | RAP 13 km AWIPS pressure levels | CONUS | F000-F051 hourly | — |
 | `nam` | NAM 12 km pressure levels | CONUS | F000-F084 every 3 hours | — |
 | `nam-3km-conus` | NAM 3 km CONUS nest | CONUS | F000-F060 hourly | `nam3`, `nam-3km` |
-| `hrw-wrf-arw` | NOAA HiResW WRF-ARW 5 km | CONUS | F000-F048 hourly | `hiresw-arw`, `hrw-arw` |
-| `hrw-fv3` | NOAA HiResW FV3 5 km | CONUS | F000-F048 hourly | `hiresw-fv3` |
-| `rrfs-a` | RRFS-A 3 km pressure levels | CONUS | 00/06/12/18Z: F000-F084 hourly; other cycles: F000-F018 hourly | `rrfs` |
-| `rrfs-a-alaska` | RRFS-A 3 km pressure levels | Alaska | 00/06/12/18Z: F000-F084 hourly; other cycles: F000-F018 hourly | `rrfs-ak`, `rrfs-alaska` |
-| `rrfs-a-hawaii` | RRFS-A 2.5 km pressure levels | Hawaii | 00/06/12/18Z: F000-F084 hourly; other cycles: F000-F018 hourly | `rrfs-hi`, `rrfs-hawaii` |
-| `rrfs-a-puerto-rico` | RRFS-A 2.5 km pressure levels | Puerto Rico | 00/06/12/18Z: F000-F084 hourly; other cycles: F000-F018 hourly | `rrfs-pr`, `rrfs-puerto-rico` |
+| `hrw-wrf-arw` | NOAA HiResW WRF-ARW 5 km | CONUS | F000-F048 hourly | 00/12Z only; `hiresw-arw`, `hrw-arw` |
+| `hrw-fv3` | NOAA HiResW FV3 5 km | CONUS | F000-F048 hourly | 00/12Z only; `hiresw-fv3` |
 | `gfs` | GFS 0.25-degree pressure levels | Global | F000-F120 hourly, then every 3 hours to F384 | — |
-| `aigfs` | AI-GFS pressure levels | Global | F000-F384 every 6 hours | Humidity is read from specific humidity |
 | `cfs` | CFS 6-hourly pressure levels | Global | F000-F384 every 6 hours | Member 1 by default |
-| `ecmwf-ifs` | ECMWF IFS Open Data | Global | F000-F144 every 3 hours, then every 6 hours to F360 | `ecmwf`, `ifs` |
-| `ecmwf-aifs` | ECMWF-AIFS Open Data | Global | F000-F144 every 3 hours, then every 6 hours to F360 | `aifs` |
+| `ecmwf-ifs` | ECMWF IFS Open Data | Global | 00/12Z: F000-F144 every 3 hours, then every 6 hours to F360; 06/18Z short cut-off stops at F144 | `ecmwf`, `ifs` |
+| `ecmwf-aifs` | ECMWF-AIFS Open Data | Global | F000-F360 every 6 hours | `aifs` |
 | `gefs` | GEFS 0.5-degree pressure levels | Global | F000-F384 every 3 hours | Control member `c00` by default |
 | `gdps` | Canadian GDPS 15 km point profile | Global | F000-F240 every 3 hours | 00/12Z; `gem-global`, `cmc-global` |
 | `rdps` | Canadian RDPS 10 km point profile | North America / Arctic | F000-F084 hourly | 00/06/12/18Z; `gem-regional`, `cmc-regional` |
+
+Every product in that table was confirmed against live data to return a
+sounding with a merged verified surface row. Products that cannot are withheld
+from the picker and the CLI rather than offered and then refused; `model-extract
+--list` prints them with the measured reason. Two are currently withheld:
+
+| Canonical key | Why it cannot produce a sounding |
+| --- | --- |
+| `rrfs-a` and its Alaska, Hawaii, and Puerto Rico domains | The published `prslev` index carries pressure levels only, with no surface, 2-m, or 10-m records, and the `natlev`, `testbed`, and `ififip` products are not published. |
+| `aigfs` | AIGFS splits pressure and surface products, and its `sfc` product publishes only 2-m temperature, 10-m winds, and mean-sea-level pressure. Surface pressure, terrain height, and 2-m moisture are absent from every AIGFS product. |
 
 ```bash
 # Observed sounding: try UWyo, then the independent IEM RAOB archive
@@ -536,21 +600,21 @@ use Herbie and do not require CDS credentials.
 | `[render]` | SHARPpy runtime companions | PNG rendering |
 | `[era5]` | CDS API, Herbie, cfgrib, ecCodes, xarray, numcodecs, pyproj | ERA5 and public forecast-model point extraction |
 | `[wrf]` | xarray, netCDF4 | WRF-ARW NetCDF extraction |
-| `[dev]` | pytest, Hypothesis, pytest-timeout, PyYAML | Test and workflow-validation work |
+| `[dev]` | pytest, Hypothesis, pytest-xdist, pytest-timeout, PyYAML | Test and workflow-validation work |
 | `[quality]` | Ruff, pip-audit, pytest-cov | Static checks, dependency audit, and coverage |
 | `[rust-build]` | maturin | Build the supported Rust backend locally (Rust toolchain installed separately) |
 
 ```bash
 python scripts/install_sharppy_compat.py --extras dev,quality,era5,wrf,render
 
-# Fast deterministic feedback.
-SHARPMOD_HYPOTHESIS_PROFILE=fast pytest -m "not property and not live_provider"
+# Fast deterministic feedback with bounded, Qt-safe worker grouping.
+python scripts/run_test_lane.py fast --workers 4
 
-# Full 100-example scientific properties.
-SHARPMOD_HYPOTHESIS_PROFILE=full pytest -m "property and not live_provider" --timeout=900
+# Full 100-200-example scientific properties.
+python scripts/run_test_lane.py property --workers 4
 
-# Whole offline suite.
-pytest
+# Exact non-parallel release gate.
+python scripts/run_test_lane.py serial-release
 
 # Optional source-checkout Rust backend
 python -m pip install -e ".[rust-build]"

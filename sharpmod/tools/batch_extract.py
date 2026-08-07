@@ -49,6 +49,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="rerun every request instead of validating completed artifacts",
     )
     parser.add_argument(
+        "--regional-guidance",
+        action="store_true",
+        help=(
+            "also compute experimental HRRR regional TOI guidance for each "
+            "point; off by default in batch because it adds about 60-85 MiB "
+            "and tens of seconds per point"
+        ),
+    )
+    parser.add_argument(
         "--quiet", action="store_true", help="only print the final summary"
     )
     return parser
@@ -67,7 +76,8 @@ def main(argv=None) -> int:
     try:
         requests = load_batch_spec(args.spec)
         extractor = BatchExtractor(
-            progress_callback=None if args.quiet else _progress
+            progress_callback=None if args.quiet else _progress,
+            live_regional_guidance=True if args.regional_guidance else None,
         )
         result = extractor.run(
             requests,

@@ -264,12 +264,32 @@ def _contained_path(root: Path, relative: str) -> Path:
 class BatchExtractor:
     """Execute bounded, cancellable, resumable model point jobs."""
 
+    #: Bulk runs do not compute experimental regional TOI guidance by default.
+    #:
+    #: MEASURED: the guidance needs seven extra regional HRRR frames, roughly
+    #: 60-85 MiB and tens of seconds per point, and the value it produces scored
+    #: AUC 0.462 on the 339-case archive - below a coin flip - with held-out
+    #: Brier skill -0.010.  Paying that on every point of an unattended job buys
+    #: nothing, because nobody is reading the row while the job runs.
+    #:
+    #: Interactive extraction is deliberately left alone: the GUI and the
+    #: single-point CLI still follow the ``auto`` policy, so a forecaster looking
+    #: at one sounding still gets the experimental readout.  Pass
+    #: ``live_regional_guidance=True`` to opt a batch job back in.
+    DEFAULT_LIVE_REGIONAL_GUIDANCE = False
+
     def __init__(
         self,
         *,
         progress_callback: Callable[[Mapping[str, object]], None] | None = None,
+        live_regional_guidance: bool | None = None,
     ):
         self._progress_callback = progress_callback
+        self._live_regional_guidance = (
+            self.DEFAULT_LIVE_REGIONAL_GUIDANCE
+            if live_regional_guidance is None
+            else bool(live_regional_guidance)
+        )
         self._cancel_event = threading.Event()
         self._run_lock = threading.Lock()
         self._manifest_lock = threading.RLock()
@@ -663,11 +683,13 @@ class BatchExtractor:
                             dataset=bulk_points.get(
                                 item.request.id, entry.dataset
                             ),
+                            download_dir=entry.download_dir,
                             source_grib=entry.source_grib,
                             source_fields=entry.source_fields,
                             source_transport=entry.source_transport,
                             progress_callback=point_progress,
                             cancelled=lambda: self._cancelled(external_cancelled),
+                            live_regional_guidance=self._live_regional_guidance,
                         )
                         with item.sidecar_path.open(
                             "r", encoding="utf-8"

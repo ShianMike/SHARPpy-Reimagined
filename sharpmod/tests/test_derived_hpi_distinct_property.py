@@ -185,21 +185,34 @@ def test_hpi_not_identically_equal_across_inputs():
     *not* element-wise equal to SHIP over the collected set -- proving HPI is a
     genuinely distinct quantity rather than the same function under another name.
 
-    Must run after the collecting tests; pytest executes tests top-to-bottom
-    within a module, and the deterministic hail-sounding test above always
-    contributes at least one all-present triple when the oracle is available.
+    The deterministic hail-favorable sounding is evaluated *here* rather than
+    relying on the collecting tests above having run in this same process. Under
+    ``pytest -n N --dist=load`` the module's tests are scattered across worker
+    processes that each hold their own ``_COLLECTED``, so a worker could
+    otherwise see only generated soundings whose HPI and LRGHAIL both degrade to
+    the same value while the guaranteed-distinct triple lands elsewhere.
+    Evaluating the fixture locally makes the assertion independent of worker
+    scheduling; ``_COLLECTED`` still contributes whatever this worker gathered.
 
     Feature: sharppy-modernization, Property 9: HPI is a distinct quantity
     Validates: Requirements 6.3
     """
-    if not _COLLECTED:
+    collected = list(_COLLECTED)
+    snd = _hpi_distinct_sounding()
+    hpi = derived_mod.hail_possibility_index(snd)
+    lrghail = derived_mod.large_hail_parameter(snd)
+    ship = _ship(snd)
+    if not is_missing(hpi) and not is_missing(lrghail) and ship is not None:
+        collected.append((float(hpi), float(lrghail), float(ship)))
+
+    if not collected:
         # Oracle unavailable this environment: structural distinctness
         # (test_hpi_lrghail_ship_are_distinct_functions) still holds.
         return
 
-    hpi_vals = [t[0] for t in _COLLECTED]
-    lrghail_vals = [t[1] for t in _COLLECTED]
-    ship_vals = [t[2] for t in _COLLECTED]
+    hpi_vals = [t[0] for t in collected]
+    lrghail_vals = [t[1] for t in collected]
+    ship_vals = [t[2] for t in collected]
 
     assert any(h != l for h, l in zip(hpi_vals, lrghail_vals)), (
         "HPI is identically equal to LRGHAIL across every collected sounding; "

@@ -7,10 +7,10 @@ import sys
 import tempfile
 import time
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-
-import numpy as np
+from types import MappingProxyType
 
 """Interactive station and point-selection map widgets."""
 
@@ -90,6 +90,45 @@ def _load_basemap() -> dict:
         return {"coastline": [], "countries": [], "states": []}
 
 
+def _prepare_basemap_layers(basemap: dict) -> MappingProxyType:
+    """Freeze basemap polylines and precompute their clipping bounds.
+
+    Map widgets only read this geometry.  Freezing every container makes it
+    safe for all picker tabs to share one prepared copy while their view,
+    raster, timer, station, and selection state remains widget-local.
+    """
+    prepared = {}
+    for name in ("coastline", "countries", "states"):
+        lines = []
+        for points in basemap.get(name, ()):
+            if len(points) < 2:
+                continue
+
+            frozen_points = []
+            min_lon = min_lat = float("inf")
+            max_lon = max_lat = float("-inf")
+            for point in points:
+                lon, lat = point[0], point[1]
+                frozen_points.append((lon, lat))
+                min_lon = min(min_lon, lon)
+                max_lon = max(max_lon, lon)
+                min_lat = min(min_lat, lat)
+                max_lat = max(max_lat, lat)
+
+            lines.append((
+                (min_lon, max_lon, min_lat, max_lat),
+                tuple(frozen_points),
+            ))
+        prepared[name] = tuple(lines)
+    return MappingProxyType(prepared)
+
+
+@lru_cache(maxsize=1)
+def _shared_basemap_layers() -> MappingProxyType:
+    """Return the process-wide immutable, clipping-ready basemap geometry."""
+    return _prepare_basemap_layers(_load_basemap())
+
+
 #: Named map extents for the "Map Area" selector: (lon0, lon1, lat0, lat1).
 MAP_AREAS: dict[str, tuple[float, float, float, float]] = {
     "United States (CONUS)": (-125.0, -66.0, 23.0, 50.0),
@@ -129,7 +168,7 @@ class StationMapWidget(QWidget):
     def __init__(self, stations, parent=None):
         super().__init__(parent)
         self._stations = list(stations)
-        self._layers = self._prep_layers(_load_basemap())
+        self._layers = _shared_basemap_layers()
         self._area_name = "United States (CONUS)"
         self._lon0, self._lon1, self._lat0, self._lat1 = MAP_AREAS[
             self._area_name]
@@ -155,20 +194,9 @@ class StationMapWidget(QWidget):
 
     # -- data prep ----------------------------------------------------------- #
     @staticmethod
-    def _prep_layers(basemap: dict) -> dict:
+    def _prep_layers(basemap: dict) -> MappingProxyType:
         """Precompute each polyline's lon/lat bounding box for fast clipping."""
-        out = {}
-        for name, lines in basemap.items():
-            prepped = []
-            for pts in lines:
-                if len(pts) < 2:
-                    continue
-                lons = [p[0] for p in pts]
-                lats = [p[1] for p in pts]
-                bbox = (min(lons), max(lons), min(lats), max(lats))
-                prepped.append((bbox, pts))
-            out[name] = prepped
-        return out
+        return _prepare_basemap_layers(basemap)
 
     # -- public API ---------------------------------------------------------- #
     def set_area(self, name: str) -> None:

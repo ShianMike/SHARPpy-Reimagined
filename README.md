@@ -322,17 +322,22 @@ construction inside a quote-sensitive inline `pwsh -Command` string.
 
 ### Standalone executable (Windows)
 
-A one-folder, no-Python-required build is produced with PyInstaller:
+A one-folder, no-Python-required build is produced with PyInstaller. Install
+the checkout itself first so the freezer can validate and bundle matching
+package metadata:
 
 ```bash
-python scripts/install_sharppy_compat.py --extras render,era5,wrf
+python -m pip install ".[render,era5,wrf]"
+python scripts/install_sharppy_compat.py --sharppy-only
 python -m pip install pyinstaller
 pyinstaller packaging/sharpmod_gui.spec --noconfirm
 ```
 
 The result is `dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe`. Set
 `SHARPMOD_ONEFILE=1` in the build environment for a single self-extracting
-`dist/SHARPpy-Reimagined.exe` instead.
+`dist/SHARPpy-Reimagined.exe` instead. The one-folder ZIP is the recommended
+Windows download because it starts substantially faster; the release page
+labels the one-file build `portable-slower-startup` so the tradeoff is clear.
 The official release workflow builds and installs `sharpmod_rs` before
 PyInstaller packages the executable, making Rust the `auto` backend in the
 published application. For custom local builds, the spec collects a compatible
@@ -341,7 +346,17 @@ fully functional Python-fallback bundle.
 Official releases first run the reusable test workflow against the exact source
 commit, build with the direct dependency versions in
 `constraints/release.txt`, and publish from a separate artifact-only job. Only
-that final job receives GitHub `contents: write` permission.
+that final job receives GitHub `contents: write` permission. The build rejects
+stale or in-tree release metadata, embeds `FileVersion` and `ProductVersion`
+from `sharpmod/_version.py`, and verifies the source, Python metadata, Rust
+module/metadata, frozen runtime, and PE fields all agree.
+
+Authenticode signing is optional. Configure both repository secrets
+`WINDOWS_SIGNING_CERTIFICATE_BASE64` (a base64-encoded PFX) and
+`WINDOWS_SIGNING_CERTIFICATE_PASSWORD` to activate it; optionally set the
+`WINDOWS_SIGNING_TIMESTAMP_URL` repository variable. With neither secret, the
+workflow remains usable but marks the executables and release manifest
+explicitly as unsigned. Supplying only one signing secret fails the build.
 
 ## Command Line Tools
 

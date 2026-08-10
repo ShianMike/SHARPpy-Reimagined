@@ -118,12 +118,13 @@ def test_release_installs_model_fetch_dependencies():
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8"
     )
-    assert '-e ".[render,era5,wrf]"' in workflow
+    assert '".[render,era5,wrf]"' in workflow
+    assert '-e ".[render,era5,wrf]"' not in workflow
     assert "constraints/release.txt" in workflow
     assert "python scripts/install_sharppy_compat.py --sharppy-only" in workflow
     assert 'pip install --no-deps "SHARPpy' not in workflow
     assert "--model-fetch-runtime-check" in workflow
-    assert "Verify frozen single-file runtime" in workflow
+    assert "Verify portable single-file artifact" in workflow
     assert workflow.count("--model-fetch-runtime-check") >= 2
     assert workflow.count("backend_kernel_ok") >= 2
     assert workflow.count("wrf_runtime_ok") >= 2
@@ -131,6 +132,7 @@ def test_release_installs_model_fetch_dependencies():
     assert 'SHARPMOD_BACKEND: "rust"' in workflow
     assert workflow.count('requested_backend -ne "rust"') >= 2
     assert workflow.count('active_backend -ne "rust"') >= 2
+    assert workflow.count("version_consistent") >= 2
     assert "uses: ./.github/workflows/tests.yml" in workflow
     assert "run_serial_release: true" in workflow
     assert "needs: [resolve-release, test-release]" in workflow

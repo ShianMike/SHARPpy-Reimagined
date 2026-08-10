@@ -10,8 +10,6 @@ from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-import numpy as np
-
 """Analysis-session state and menu integration for sounding viewers."""
 
 from sharpmod.gui_common import APP_NAME, _LOGGER

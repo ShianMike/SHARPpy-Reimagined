@@ -1,7 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for the standalone SHARPpy Reimagined GUI (.exe).
 
-Builds a single windowed executable (no console) that bundles:
+Builds a windowed executable (no console), in the recommended one-folder layout
+by default or as an explicitly selected portable one-file bundle, that includes:
 
 * the ``sharpmod`` package (with its TTF fonts + UWyo station catalogue),
 * the vendored upstream ``sharppy`` render stack (with its ``databases`` +
@@ -26,17 +27,58 @@ import glob
 import importlib.machinery
 import importlib.util
 import os
+import runpy
 
 from PyInstaller.utils.hooks import (
     collect_all,
     collect_data_files,
     collect_submodules,
+    copy_metadata,
 )
 
 # --- one-folder (default) vs one-file toggle --------------------------------
 # Overridable from the environment so we can build either layout without editing
 # the spec:  set SHARPMOD_ONEFILE=1 for a single self-extracting .exe.
 ONEFILE = os.environ.get("SHARPMOD_ONEFILE", "0") == "1"
+RELEASE_BUILD = os.environ.get("SHARPMOD_RELEASE_BUILD", "0") == "1"
+
+# Resolve every release field from the checked-out source, then validate the
+# installed metadata before PyInstaller can copy it. This fails closed when an
+# older editable install or a stale in-tree ``sharpmod.egg-info`` shadows the
+# wheel that the official workflow installs.
+_REPO = os.path.dirname(SPECPATH)  # SPECPATH is this spec's dir (packaging/)
+_CONTRACT = runpy.run_path(os.path.join(SPECPATH, "release_contract.py"))
+_SOURCE_VERSION = _CONTRACT["read_source_version"](_REPO)
+_METADATA_REPORT = _CONTRACT["validate_installed_sharpmod"](
+    _REPO,
+    require_dist_info=RELEASE_BUILD,
+    require_external_metadata=RELEASE_BUILD,
+)
+_WINDOWS_VERSION_INFO = _CONTRACT["build_windows_version_info"](_REPO)
+_SHARPMOD_METADATA = copy_metadata("sharpmod")
+if len(_SHARPMOD_METADATA) != 1:
+    raise RuntimeError(
+        "expected exactly one installed sharpmod metadata directory, found "
+        f"{_SHARPMOD_METADATA!r}"
+    )
+_metadata_source, _metadata_destination = _SHARPMOD_METADATA[0]
+if os.path.normcase(os.path.abspath(_metadata_source)) != os.path.normcase(
+    _METADATA_REPORT["metadata_path"]
+):
+    raise RuntimeError(
+        "PyInstaller selected different sharpmod metadata than the validated "
+        f"distribution: {_metadata_source!r} != "
+        f"{_METADATA_REPORT['metadata_path']!r}"
+    )
+if RELEASE_BUILD and not _metadata_destination.lower().endswith(".dist-info"):
+    raise RuntimeError(
+        "official releases must bundle wheel-style sharpmod .dist-info; found "
+        f"{_metadata_destination!r}"
+    )
+print(
+    "Validated frozen release metadata: "
+    f"version={_SOURCE_VERSION}, path={_metadata_source}"
+)
 
 datas = []
 binaries = []
@@ -48,7 +90,6 @@ hiddenimports = []
 # resolves via importlib.resources (fonts, UWyo catalogue, GUI coastlines, and
 # the offline CONUS title-place/county indexes) explicitly, preserving the
 # package-relative layout the loaders expect.
-_REPO = os.path.dirname(SPECPATH)  # SPECPATH is this spec's dir (packaging/)
 _RES = os.path.join(_REPO, "sharpmod", "resources")
 
 # Application icon baked into the .exe (and bundled so the running app can set
@@ -77,6 +118,14 @@ for pkg in (
 ):
     try:
         d, b, h = collect_all(pkg)
+        if pkg == "sharpmod":
+            # ``collect_all`` copies distribution metadata as a side effect.
+            # Discard it and add only the exact metadata validated above so an
+            # alternate egg-info/dist-info directory cannot enter the bundle.
+            d = [
+                item for item in d
+                if not _CONTRACT["is_sharpmod_metadata_destination"](item[1])
+            ]
         datas += d
         binaries += b
         hiddenimports += h
@@ -84,6 +133,8 @@ for pkg in (
         # A package that is not installed (e.g. an optional extra) is skipped;
         # the app degrades gracefully at runtime.
         pass
+
+datas += _SHARPMOD_METADATA
 
 # Rust release contract: official binaries set SHARPMOD_REQUIRE_RUST=1 and must
 # fail closed if the native extension cannot be collected.  Keeping the flag
@@ -233,6 +284,7 @@ if ONEFILE:
         codesign_identity=None,
         entitlements_file=None,
         icon=_ICON,
+        version=_WINDOWS_VERSION_INFO,
     )
 else:
     exe = EXE(
@@ -252,6 +304,7 @@ else:
         codesign_identity=None,
         entitlements_file=None,
         icon=_ICON,
+        version=_WINDOWS_VERSION_INFO,
     )
     coll = COLLECT(
         exe,

@@ -158,7 +158,7 @@ jobs:
       run_serial_release: true
 
   build-windows-exe:
-    name: Build Windows executable
+    name: Build Windows downloads
     needs: [resolve-release, test-release]
     runs-on: windows-latest
     timeout-minutes: 60
@@ -167,6 +167,7 @@ jobs:
     env:
       SHARPMOD_BACKEND: "rust"
       SHARPMOD_REQUIRE_RUST: "1"
+      SHARPMOD_RELEASE_BUILD: "1"
 
     steps:
       - name: Check out tested release source
@@ -174,6 +175,24 @@ jobs:
         with:
           ref: ${{ needs.resolve-release.outputs.source_sha }}
           persist-credentials: false
+
+      - name: Clean generated package metadata and build outputs
+        shell: pwsh
+        run: |
+          $generated = @(
+            Get-ChildItem -LiteralPath "." -Force -Directory |
+              Where-Object {
+                $_.Name -match '^sharpmod(?:[-_]\d.*)?\.(egg|dist)-info$'
+              }
+          )
+          foreach ($path in $generated) {
+            Remove-Item -LiteralPath $path.FullName -Recurse -Force
+          }
+          foreach ($path in @("build", "dist", "release-artifacts", "release-staging", "rust/sharpmod-rs/dist")) {
+            if (Test-Path -LiteralPath $path) {
+              Remove-Item -LiteralPath $path -Recurse -Force
+            }
+          }
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -196,10 +215,24 @@ jobs:
           $env:PIP_CONSTRAINT = $constraint
           python -m pip install --upgrade --constraint $constraint pip
           python -m pip install --constraint $constraint `
-            -e ".[render,era5,wrf]"
+            ".[render,era5,wrf]"
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip install --constraint $constraint pyinstaller maturin
           python -m pip check
+          Get-ChildItem -LiteralPath "." -Force -Directory |
+            Where-Object {
+              $_.Name -match '^sharpmod(?:[-_]\d.*)?\.(egg|dist)-info$'
+            } |
+            ForEach-Object {
+              Remove-Item -LiteralPath $_.FullName -Recurse -Force
+            }
+
+      - name: Verify canonical installed package metadata
+        run: >-
+          python packaging/release_contract.py
+          --repo-root .
+          --require-dist-info
+          --require-external-metadata
 
       - name: Build and install locked Rust wheel
         shell: pwsh
@@ -254,9 +287,92 @@ jobs:
       - name: Build one-folder executable
         run: pyinstaller packaging/sharpmod_gui.spec --noconfirm
 
-      - name: Verify frozen model-fetch runtime
+      - name: Build portable single-file executable
+        env:
+          SHARPMOD_ONEFILE: "1"
+        run: pyinstaller packaging/sharpmod_gui.spec --noconfirm
+
+      - name: Sign Windows executables when credentials are configured
+        id: signing
         shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+          WINDOWS_SIGNING_TIMESTAMP_URL: ${{ vars.WINDOWS_SIGNING_TIMESTAMP_URL }}
         run: |
+          $certificateBase64 = $env:WINDOWS_SIGNING_CERTIFICATE_BASE64
+          $certificatePassword = $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($certificateBase64)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($certificatePassword)
+          if ($hasCertificate -xor $hasPassword) {
+            throw "Configure both WINDOWS_SIGNING_CERTIFICATE_BASE64 and WINDOWS_SIGNING_CERTIFICATE_PASSWORD, or neither"
+          }
+          if (-not $hasCertificate) {
+            "mode=Unsigned" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Write-Warning "No signing certificate configured; release artifacts will be explicitly marked unsigned"
+            exit 0
+          }
+
+          $signToolCommand = Get-Command "signtool.exe" -ErrorAction SilentlyContinue
+          $signToolPath = if ($null -ne $signToolCommand) {
+            $signToolCommand.Source
+          }
+          else {
+            $kitsRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits/10/bin"
+            $candidate = Get-ChildItem -LiteralPath $kitsRoot -Filter "signtool.exe" `
+              -File -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match '[\\/]x64[\\/]signtool\.exe$' } |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+            if ($null -eq $candidate) { $null } else { $candidate.FullName }
+          }
+          if ([string]::IsNullOrWhiteSpace($signToolPath)) {
+            throw "Signing credentials were supplied, but signtool.exe was not found"
+          }
+
+          $timestampUrl = $env:WINDOWS_SIGNING_TIMESTAMP_URL
+          if ([string]::IsNullOrWhiteSpace($timestampUrl)) {
+            $timestampUrl = "http://timestamp.digicert.com"
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP "sharpmod-signing.pfx"
+          $targets = @(
+            "dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe",
+            "dist/SHARPpy-Reimagined.exe"
+          )
+          try {
+            $certificateBytes = [Convert]::FromBase64String(
+              ($certificateBase64 -replace '\s', '')
+            )
+            [IO.File]::WriteAllBytes($certificatePath, $certificateBytes)
+            foreach ($target in $targets) {
+              & $signToolPath sign /fd SHA256 /td SHA256 /tr $timestampUrl `
+                /f $certificatePath /p $certificatePassword $target
+              if ($LASTEXITCODE -ne 0) {
+                throw "Authenticode signing failed for $target"
+              }
+              & $signToolPath verify /pa /all $target
+              if ($LASTEXITCODE -ne 0) {
+                throw "Authenticode verification failed for $target"
+              }
+            }
+          }
+          finally {
+            if (Test-Path -LiteralPath $certificatePath) {
+              Remove-Item -LiteralPath $certificatePath -Force
+            }
+          }
+          "mode=Signed" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Verify recommended one-folder artifact
+        shell: pwsh
+        env:
+          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
+        run: |
+          $expectedVersion = (& python -c "from sharpmod._version import __version__; print(__version__)").Trim()
+          & "packaging/verify_windows_artifact.ps1" `
+            -Executable "dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe" `
+            -ExpectedVersion $expectedVersion `
+            -SigningMode $env:SIGNING_MODE
           $report = Join-Path $env:RUNNER_TEMP "model-fetch-runtime.json"
           $process = Start-Process `
             -FilePath "dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe" `
@@ -267,7 +383,13 @@ jobs:
             throw "Frozen model-fetch runtime check failed"
           }
           $result = Get-Content $report -Raw | ConvertFrom-Json
-          if (-not $result.ok -or -not $result.backend_kernel_ok -or `
+          if (-not $result.ok -or -not $result.version_consistent -or `
+              $result.versions.sharpmod -ne $expectedVersion -or `
+              $result.versions.sharpmod_metadata -ne $expectedVersion -or `
+              $result.versions.sharpmod_rs -ne $expectedVersion -or `
+              $result.versions.sharpmod_rs_metadata -ne $expectedVersion -or `
+              $result.versions.backend_rust -ne $expectedVersion -or `
+              -not $result.backend_kernel_ok -or `
               -not $result.wrf_runtime_ok -or `
               $result.backend.requested_backend -ne "rust" -or `
               $result.backend.active_backend -ne "rust" -or `
@@ -281,14 +403,16 @@ jobs:
           }
           $result | ConvertTo-Json -Depth 5
 
-      - name: Build single-file executable
-        env:
-          SHARPMOD_ONEFILE: "1"
-        run: pyinstaller packaging/sharpmod_gui.spec --noconfirm
-
-      - name: Verify frozen single-file runtime
+      - name: Verify portable single-file artifact
         shell: pwsh
+        env:
+          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
         run: |
+          $expectedVersion = (& python -c "from sharpmod._version import __version__; print(__version__)").Trim()
+          & "packaging/verify_windows_artifact.ps1" `
+            -Executable "dist/SHARPpy-Reimagined.exe" `
+            -ExpectedVersion $expectedVersion `
+            -SigningMode $env:SIGNING_MODE
           $report = Join-Path $env:RUNNER_TEMP "single-file-runtime.json"
           $process = Start-Process `
             -FilePath "dist/SHARPpy-Reimagined.exe" `
@@ -299,7 +423,13 @@ jobs:
             throw "Frozen single-file runtime check failed"
           }
           $result = Get-Content $report -Raw | ConvertFrom-Json
-          if (-not $result.ok -or -not $result.backend_kernel_ok -or `
+          if (-not $result.ok -or -not $result.version_consistent -or `
+              $result.versions.sharpmod -ne $expectedVersion -or `
+              $result.versions.sharpmod_metadata -ne $expectedVersion -or `
+              $result.versions.sharpmod_rs -ne $expectedVersion -or `
+              $result.versions.sharpmod_rs_metadata -ne $expectedVersion -or `
+              $result.versions.backend_rust -ne $expectedVersion -or `
+              -not $result.backend_kernel_ok -or `
               -not $result.wrf_runtime_ok -or `
               $result.backend.requested_backend -ne "rust" -or `
               $result.backend.active_backend -ne "rust" -or `
@@ -313,20 +443,65 @@ jobs:
           }
           $result | ConvertTo-Json -Depth 5
 
-      - name: Stage reproducible release artifacts
+      - name: Stage clearly labeled release artifacts
         shell: pwsh
         env:
           RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
+          RELEASE_SOURCE_SHA: ${{ needs.resolve-release.outputs.source_sha }}
+          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
         run: |
           New-Item -ItemType Directory -Path "release-artifacts" -Force | Out-Null
-          Compress-Archive -Path "dist/SHARPpy-Reimagined/*" `
-            -DestinationPath "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip" -Force
+          New-Item -ItemType Directory -Path "release-staging" -Force | Out-Null
+          Copy-Item -LiteralPath "dist/SHARPpy-Reimagined" `
+            -Destination "release-staging/SHARPpy-Reimagined" -Recurse
+
+          $recommendedName = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64-RECOMMENDED.zip"
+          $portableName = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64-portable-slower-startup.exe"
+          @"
+          SHARPpy Reimagined $env:RELEASE_TAG for Windows x64
+
+          This one-folder package is the recommended Windows download because it starts
+          substantially faster than the self-extracting portable executable.
+
+          Extract the entire SHARPpy-Reimagined folder, keep its _internal directory
+          beside the executable, and run SHARPpy-Reimagined.exe.
+
+          Authenticode status for this release: $env:SIGNING_MODE
+          "@ | Set-Content -Encoding utf8 `
+            "release-staging/SHARPpy-Reimagined/README-WINDOWS.txt"
+          Compress-Archive -Path "release-staging/SHARPpy-Reimagined" `
+            -DestinationPath "release-artifacts/$recommendedName" -Force
           Copy-Item "dist/SHARPpy-Reimagined.exe" `
-            "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.exe"
+            "release-artifacts/$portableName"
           Copy-Item "rust/sharpmod-rs/dist/*.whl" "release-artifacts/"
           python -m pip freeze --all |
             Set-Content -Encoding utf8 `
               "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-dependencies.txt"
+
+          $sourceVersion = (& python -c "from sharpmod._version import __version__; print(__version__)").Trim()
+          [ordered]@{
+            product = "SHARPpy Reimagined"
+            version = $sourceVersion
+            source_sha = $env:RELEASE_SOURCE_SHA
+            authenticode = $env:SIGNING_MODE.ToLowerInvariant()
+            recommended_artifact = $recommendedName
+            portable_artifact = $portableName
+            portable_note = "Self-extracting convenience build; slower startup than the recommended one-folder ZIP."
+          } | ConvertTo-Json | Set-Content -Encoding utf8 `
+            "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-manifest.json"
+          "Authenticode status: $env:SIGNING_MODE" | Set-Content -Encoding ascii `
+            "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-Authenticode-$env:SIGNING_MODE.txt"
+
+          $checksumLines = @(
+            Get-ChildItem -LiteralPath "release-artifacts" -File |
+              Sort-Object Name |
+              ForEach-Object {
+                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$hash  $($_.Name)"
+              }
+          )
+          $checksumLines | Set-Content -Encoding ascii `
+            "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-SHA256SUMS.txt"
 
       - name: Upload tested release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -358,6 +533,12 @@ jobs:
           target_commitish: ${{ needs.resolve-release.outputs.source_sha }}
           name: SHARPpy Reimagined ${{ needs.resolve-release.outputs.tag }}
           generate_release_notes: true
+          body: |
+            **Recommended Windows download:** `SHARPpy-Reimagined-${{ needs.resolve-release.outputs.tag }}-windows-x64-RECOMMENDED.zip`
+
+            Extract the ZIP and run `SHARPpy-Reimagined.exe` inside its folder. This one-folder build starts substantially faster than the self-extracting portable executable.
+
+            The file ending in `portable-slower-startup.exe` is retained for single-file convenience. The release manifest states explicitly whether these executables were Authenticode-signed.
           fail_on_unmatched_files: true
           files: release-artifacts/*
         env:

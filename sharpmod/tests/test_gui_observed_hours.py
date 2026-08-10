@@ -29,6 +29,7 @@ def test_observed_pickers_offer_every_three_hour_utc_cycle():
 
     picker = gui.PickerWindow()
     try:
+        picker._select_tab("Station List")
         picker._catalog_timer.stop()
         picker._avail_timer.stop()
         picker._model_availability_timer.stop()

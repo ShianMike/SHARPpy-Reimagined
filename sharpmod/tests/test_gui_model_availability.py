@@ -304,6 +304,7 @@ def test_use_available_cycle_changes_date_and_cycle_explicitly(qt_app):
 def test_picker_rechecks_inventory_inputs_but_not_point_coordinates(qt_app):
     picker = gui.PickerWindow()
     try:
+        picker._select_tab("Forecast Model")
         picker._catalog_timer.stop()
         picker._avail_timer.stop()
         picker._model_availability_timer.stop()

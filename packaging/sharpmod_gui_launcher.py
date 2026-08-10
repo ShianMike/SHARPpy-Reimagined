@@ -1,15 +1,16 @@
 """Frozen-app entry point for the SHARPpy Reimagined GUI.
 
-PyInstaller freezes THIS module as the executable's entry script. It simply
-delegates to :func:`sharpmod.gui.main`, but keeping a dedicated launcher (rather
-than pointing PyInstaller at ``sharpmod/gui.py`` directly) gives the bundle a
-stable, import-safe ``__main__`` that never runs as part of the package.
+PyInstaller freezes THIS module as the executable's entry script. It delegates
+directly to :func:`sharpmod.gui_picker.main`, while keeping a dedicated launcher
+that gives the bundle a stable, import-safe ``__main__`` and avoids loading the
+compatibility facade before the picker appears.
 """
 
 from __future__ import annotations
 
-import multiprocessing
+import importlib.metadata
 import json
+import multiprocessing
 import sys
 from pathlib import Path
 
@@ -19,6 +20,7 @@ def _model_fetch_runtime_check(output_path: str) -> int:
     result = {
         "ok": False,
         "frozen": bool(getattr(sys, "frozen", False)),
+        "version_consistent": False,
     }
     try:
         from logging.handlers import RotatingFileHandler
@@ -30,17 +32,29 @@ def _model_fetch_runtime_check(output_path: str) -> int:
         import netCDF4
         import numcodecs
         import pyproj
+        import sharpmod
+        import sharpmod_rs
         import xarray
 
         from sharpmod.backends import backend_info, wind_to_components
-        from sharpmod.gui import main as gui_main
+        from sharpmod.gui_picker import main as gui_main
         from sharpmod.tools import model_extract, wrf_extract
 
         backend = backend_info()
+        runtime_versions = {
+            "sharpmod": sharpmod.__version__,
+            "sharpmod_metadata": importlib.metadata.version("sharpmod"),
+            "sharpmod_rs": sharpmod_rs.__version__,
+            "sharpmod_rs_metadata": importlib.metadata.version("sharpmod-rs"),
+            "backend_rust": str(backend["rust_version"]),
+        }
+        if len(set(runtime_versions.values())) != 1:
+            raise RuntimeError(
+                f"frozen runtime versions do not match: {runtime_versions}"
+            )
         u_component, v_component = wind_to_components(270.0, 10.0)
         backend_kernel_ok = (
-            abs(u_component - 10.0) <= 1.0e-12
-            and abs(v_component) <= 1.0e-12
+            abs(u_component - 10.0) <= 1.0e-12 and abs(v_component) <= 1.0e-12
         )
         if not backend_kernel_ok:
             raise RuntimeError(
@@ -51,6 +65,8 @@ def _model_fetch_runtime_check(output_path: str) -> int:
 
         result.update(
             backend=backend,
+            versions=runtime_versions,
+            version_consistent=True,
             backend_kernel_ok=backend_kernel_ok,
             cdsapi=bool(cdsapi.Client),
             cfgrib=cfgrib.__version__,
@@ -78,7 +94,10 @@ def _model_fetch_runtime_check(output_path: str) -> int:
 def _run() -> int:
     if len(sys.argv) == 3 and sys.argv[1] == "--model-fetch-runtime-check":
         return _model_fetch_runtime_check(sys.argv[2])
-    from sharpmod.gui import main
+    # Import the picker directly so the frozen startup path does not load the
+    # compatibility facade (and its viewer stack) before the first window.
+    from sharpmod.gui_picker import main
+
     return main(sys.argv)
 
 

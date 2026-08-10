@@ -12,8 +12,6 @@ from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-import numpy as np
-
 """Sounding picker/controller window and desktop application entry point."""
 
 from sharpmod.gui_common import (
@@ -37,9 +35,6 @@ from sharpmod.gui_common import (
 from sharpmod.gui_maps import MAP_AREAS, PointMapWidget, StationMapWidget
 from sharpmod.gui_cache import CacheManagerDialog, parse_spatial_point
 from sharpmod.gui_locations import SavedLocationsDialog
-from sharpmod.gui_timeline import ForecastTimelineDialog, ModelTimelineWorker
-from sharpmod.model_disk_cache import ModelDiskCache
-from sharpmod.model_hour_cache import ModelHourCache
 from sharpmod.saved_locations import (
     RECENT_SETTINGS_KEY,
     SavedLocationStore,
@@ -66,8 +61,8 @@ from sharpmod.gui_settings import (
     _write_config_preferences,
     _write_unit_preferences_to_config,
 )
-from sharpmod.gui_viewer import compose_interactive
 from sharpmod.gui_workers import (
+    AVAIL_AVAILABLE,
     AVAIL_CHECKING,
     AVAIL_FALLBACK,
     AVAIL_UNKNOWN,
@@ -77,6 +72,7 @@ from sharpmod.gui_workers import (
     _FetchWorker,
     _ERA5FetchWorker,
     _ModelAvailabilityWorker,
+    _ModelCachePruneWorker,
     _ModelFetchWorker,
     _ModelPrefetchWorker,
     _StationListWorker,
@@ -132,6 +128,18 @@ from qtpy.QtWidgets import (
 )
 
 _STABLE_GUI_RUNTIME_ENV = "SHARPMOD_GUI_STABLE_RUNTIME"
+
+
+def compose_interactive(*args, **kwargs):
+    """Import the heavy sounding-viewer stack only when a viewer is opened.
+
+    Keeping this module-level shim preserves the public/monkeypatch surface
+    while allowing the picker itself to reach first paint without importing
+    NumPy and the full SHARPpy rendering graph.
+    """
+    from sharpmod.gui_viewer import compose_interactive as _compose_interactive
+
+    return _compose_interactive(*args, **kwargs)
 
 
 def _town_lookup_attribution_label(parent=None) -> QLabel:
@@ -281,7 +289,7 @@ class PickerWindow(QMainWindow):
         self._viewers: list = []
         self._worker: _FetchWorker | None = None
         self._model_worker: _ModelFetchWorker | None = None
-        self._model_timeline_worker: ModelTimelineWorker | None = None
+        self._model_timeline_worker = None
         self._model_timeline_viewer = None
         self._model_timeline_collection = None
         self._model_timeline_output_dir: str | None = None
@@ -293,18 +301,12 @@ class PickerWindow(QMainWindow):
         self._wrf_inspect_worker: _WRFInspectWorker | None = None
         self._wrf_extract_worker: _WRFExtractWorker | None = None
         self._wrf_domain: dict | None = None
-        self._model_disk_cache = ModelDiskCache()
-        try:
-            self._model_disk_cache.prune()
-        except OSError:
-            _LOGGER.exception("model_disk_cache.startup_prune_failed")
-        self._model_hour_cache = ModelHourCache(
-            max_entries=1,
-            directory_factory=self._model_disk_cache.directory_for,
-            directory_protector=self._model_disk_cache.protect,
-            metadata_writer=self._model_disk_cache.annotate,
-            delete_download_dirs=False,
-        )
+        # The persistent cache imports NumPy-backed sounding validation and its
+        # prune walks every cached payload. Create it only when a model/ERA5 or
+        # library action actually needs it, then prune on a worker thread.
+        self._model_disk_cache = None
+        self._model_hour_cache = None
+        self._model_cache_prune_worker: _ModelCachePruneWorker | None = None
         app = QApplication.instance()
         if app is not None:
             app.aboutToQuit.connect(self._shutdown_model_cache)
@@ -335,6 +337,7 @@ class PickerWindow(QMainWindow):
         self._avail_latest: dict[int, int] = {}
         self._avail_token = 0
         self._avail_request: tuple | None = None
+        self._observed_profile_cache: dict[tuple[str, datetime], object] = {}
         self._avail_timer = QTimer(self)
         self._avail_timer.setSingleShot(True)
         self._avail_timer.setInterval(350)
@@ -377,12 +380,15 @@ class PickerWindow(QMainWindow):
 
         self._tabs = QTabWidget()
         self._tabs.addTab(self._build_map_tab(), "Station Map")
-        self._tabs.addTab(self._build_uwyo_tab(), "Station List")
-        self._tabs.addTab(self._build_model_tab(), "Forecast Model")
-        self._tabs.addTab(self._build_era5_tab(), "Reanalysis (ERA5)")
-        self._file_tab = self._build_file_tab()
-        self._tabs.addTab(self._file_tab, "Open File")
-        self._tabs.currentChanged.connect(self._sync_tab_status)
+        self._lazy_tab_builders = {
+            "Station List": self._build_uwyo_tab,
+            "Forecast Model": self._build_model_tab,
+            "Reanalysis (ERA5)": self._build_era5_tab,
+            "Open File": self._build_file_tab,
+        }
+        for title in self._lazy_tab_builders:
+            self._tabs.addTab(self._lazy_tab_placeholder(title), title)
+        self._tabs.currentChanged.connect(self._on_tab_changed)
         self.setCentralWidget(self._tabs)
 
         self.setStatusBar(QStatusBar())
@@ -393,9 +399,57 @@ class PickerWindow(QMainWindow):
         self._refresh_location_markers()
         self._refresh_recent_location_menu()
 
-        # Populate the live, datetime-aware station set for the default cycle in
-        # the background (the bundled catalogue shows immediately as fallback).
-        self._refresh_station_catalog(self._selected_when())
+    @staticmethod
+    def _lazy_tab_placeholder(title: str) -> QWidget:
+        placeholder = QWidget()
+        layout = QVBoxLayout(placeholder)
+        label = QLabel(f"Preparing {title}…")
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet("color: gray;")
+        layout.addWidget(label, 1)
+        return placeholder
+
+    def _ensure_tab(self, title: str) -> QWidget | None:
+        """Materialize one expensive tab on first use, preserving its index."""
+        builder = self._lazy_tab_builders.pop(title, None)
+        for index in range(self._tabs.count()):
+            if self._tabs.tabText(index) == title:
+                break
+        else:
+            return None
+        if builder is None:
+            return self._tabs.widget(index)
+
+        previous_title = self._tabs.tabText(self._tabs.currentIndex())
+        placeholder = self._tabs.widget(index)
+        widget = builder()
+        self._tabs.blockSignals(True)
+        try:
+            self._tabs.removeTab(index)
+            self._tabs.insertTab(index, widget, title)
+            for current in range(self._tabs.count()):
+                if self._tabs.tabText(current) == previous_title:
+                    self._tabs.setCurrentIndex(current)
+                    break
+        finally:
+            self._tabs.blockSignals(False)
+        placeholder.deleteLater()
+
+        if title == "Station List":
+            self._restore_station_list_selection()
+            self._refresh_station_catalog(self._selected_when())
+        elif title == "Open File":
+            self._file_tab = widget
+            self._load_recent_files()
+        self._refresh_location_markers()
+        return widget
+
+    def _on_tab_changed(self, index: int) -> None:
+        if index < 0:
+            return
+        title = self._tabs.tabText(index)
+        self._ensure_tab(title)
+        self._sync_tab_status()
 
     def _sync_tab_status(self, *_args) -> None:
         if not hasattr(self, "_tabs") or self.statusBar() is None:
@@ -782,6 +836,13 @@ class PickerWindow(QMainWindow):
         if not sid:
             indicator.set_status(AVAIL_UNKNOWN)
             return
+        cached = self._observed_profile_cache.get(
+            self._observed_cache_key(sid, when)
+        )
+        if cached is not None:
+            _fetched, message, station_label = cached
+            indicator.set_status(AVAIL_AVAILABLE, message, station_label)
+            return
         indicator.set_status(
             AVAIL_CHECKING,
             _AVAIL_LABELS[AVAIL_CHECKING],
@@ -806,8 +867,15 @@ class PickerWindow(QMainWindow):
         self._avail_workers.append(worker)
         worker.start()
 
+    @staticmethod
+    def _observed_cache_key(sid: str, when: datetime):
+        if when.tzinfo is not None:
+            when = when.astimezone(timezone.utc).replace(tzinfo=None)
+        return str(sid).strip().casefold(), when.replace(microsecond=0)
+
     def _on_availability_checked(self, _sid: str, _when, status: str,
-                                 message: str, station_label: str) -> None:
+                                 message: str, station_label: str,
+                                 fetched=None) -> None:
         worker = self.sender()
         token = getattr(worker, "token", None)
         indicator = self._avail_pending.pop(token, None)
@@ -819,6 +887,17 @@ class PickerWindow(QMainWindow):
         if self._avail_latest.get(id(indicator)) != token:
             return
         indicator.set_status(status, message, station_label)
+        key = self._observed_cache_key(_sid, _when)
+        if status == AVAIL_AVAILABLE and fetched is not None:
+            self._observed_profile_cache[key] = (
+                fetched, message, station_label
+            )
+            while len(self._observed_profile_cache) > 4:
+                self._observed_profile_cache.pop(
+                    next(iter(self._observed_profile_cache))
+                )
+        else:
+            self._observed_profile_cache.pop(key, None)
 
     # ====================================================================== #
     # Datetime-aware station catalogue refresh
@@ -1019,7 +1098,7 @@ class PickerWindow(QMainWindow):
         h = int(self._map_cycle.currentData())
         return datetime(d.year(), d.month(), d.day(), h, 0)
 
-    def _map_on_select(self, sid: str) -> None:
+    def _map_on_select(self, sid: str, *, check_availability=True) -> None:
         self._map_selected_id = sid
         st = next((s for s in self._all_stations if s["id"] == sid), None)
         if st is not None:
@@ -1030,7 +1109,8 @@ class PickerWindow(QMainWindow):
             self._map_sel_lbl.setText(sid)
         self._map_gen_btn.setEnabled(
             not (self._worker is not None and self._worker.isRunning()))
-        self._queue_availability(sid, self._map_when(), self._map_avail)
+        if check_availability:
+            self._queue_availability(sid, self._map_when(), self._map_avail)
 
     def _map_recheck_availability(self) -> None:
         # Refresh the datetime-aware station set for the newly chosen cycle,
@@ -1201,6 +1281,8 @@ class PickerWindow(QMainWindow):
         return str(sid) if sid else None
 
     def _sync_fetch_enabled(self) -> None:
+        if not hasattr(self, "_fetch_btn"):
+            return
         busy = self._worker is not None and self._worker.isRunning()
         self._fetch_btn.setEnabled(
             not busy and self._selected_station_id() is not None)
@@ -1239,6 +1321,18 @@ class PickerWindow(QMainWindow):
         _LOGGER.info("observed_fetch.start station=%s valid=%s", sid, when)
         self._settings.setValue("last_station", sid)
 
+        cached = self._observed_profile_cache.get(
+            self._observed_cache_key(sid, when)
+        )
+        if cached is not None:
+            fetched, _message, _station_label = cached
+            _LOGGER.info(
+                "observed_fetch.preflight_cache_hit station=%s valid=%s",
+                sid, when,
+            )
+            self._display_prefetched_observation(fetched, sid, when)
+            return
+
         self._set_busy(True)
         self.statusBar().showMessage(
             f"Fetching {sid} at {when:%Y-%m-%d %H}Z "
@@ -1251,20 +1345,72 @@ class PickerWindow(QMainWindow):
         self._worker.finished.connect(lambda: self._set_busy(False))
         self._worker.start()
 
+    def _display_prefetched_observation(
+        self, fetched, requested_sid: str, when: datetime
+    ) -> None:
+        """Display the profile already decoded by the availability worker."""
+        from sharppy.sharptab.prof_collection import ProfCollection
+
+        station_id = str(
+            getattr(fetched, "station_id", None) or requested_sid
+        )
+        provider = str(getattr(fetched, "provider", "uwyo")).upper()
+        prof_col = ProfCollection(
+            {"": [fetched.profile]},
+            [when],
+            observed=True,
+            base_time=when,
+            run=when,
+            model=provider,
+            loc=station_id,
+        )
+        self._set_busy(True)
+        self.statusBar().showMessage(
+            f"Rendering {station_id} from the completed availability check…"
+        )
+        QApplication.processEvents()
+        try:
+            title = (
+                f"{APP_NAME} — {station_id} {when:%Y-%m-%d %H}Z "
+                f"[{provider}]"
+            )
+            self._show_sounding(prof_col, station_id, title=title)
+            self.statusBar().showMessage(
+                f"Opened {station_id} {when:%Y-%m-%d %H}Z from {provider} "
+                "(reused availability download)"
+            )
+            _LOGGER.info(
+                "observed_fetch.displayed_from_preflight station=%s valid=%s",
+                station_id, when,
+            )
+        except Exception as exc:  # noqa: BLE001 - GUI/render boundary
+            _LOGGER.exception(
+                "observed_fetch.preflight_display_failed station=%s valid=%s",
+                station_id, when,
+            )
+            QMessageBox.critical(
+                self, APP_NAME,
+                f"Fetched, but could not display:\n{exc}",
+            )
+        finally:
+            self._set_busy(False)
+
     def _set_busy(self, busy: bool) -> None:
         _LOGGER.debug(
             "uwyo_fetch.ui_busy busy=%s worker=%s",
             busy, id(self._worker) if self._worker else None)
         if busy:
             QApplication.setOverrideCursor(Qt.WaitCursor)
-            self._fetch_btn.setEnabled(False)
-            self._fetch_btn.setText("Fetching\u2026")
+            if hasattr(self, "_fetch_btn"):
+                self._fetch_btn.setEnabled(False)
+                self._fetch_btn.setText("Fetching\u2026")
             if hasattr(self, "_map_gen_btn"):
                 self._map_gen_btn.setEnabled(False)
                 self._map_gen_btn.setText("Fetching\u2026")
         else:
             QApplication.restoreOverrideCursor()
-            self._fetch_btn.setText("Fetch && Display Sounding")
+            if hasattr(self, "_fetch_btn"):
+                self._fetch_btn.setText("Fetch && Display Sounding")
             self._sync_fetch_enabled()
             if hasattr(self, "_map_gen_btn"):
                 self._map_gen_btn.setText("Generate Sounding")
@@ -1882,6 +2028,7 @@ class PickerWindow(QMainWindow):
                     f"Forecast model support is unavailable:\n{exc}")
                 return
 
+        self._ensure_model_cache()
         cached_grib = None
         if cache_entry is not None:
             try:
@@ -1958,6 +2105,11 @@ class PickerWindow(QMainWindow):
 
     def _model_fetch_timeline(self) -> None:
         """Fetch a bounded forecast-hour range and stream it into one viewer."""
+        from sharpmod.gui_timeline import (
+            ForecastTimelineDialog,
+            ModelTimelineWorker,
+        )
+
         cfg = self._model_config()
         if cfg is None:
             QMessageBox.warning(self, APP_NAME, "Choose a forecast model first.")
@@ -1968,6 +2120,7 @@ class PickerWindow(QMainWindow):
                 self, APP_NAME, "A model fetch is already in progress."
             )
             return
+        self._ensure_model_cache()
         lat = float(self._model_lat.value())
         lon = float(self._model_lon.value())
         if not self._model_point_ok():
@@ -2185,6 +2338,47 @@ class PickerWindow(QMainWindow):
             shutil.rmtree(worker.output_dir, ignore_errors=True)
         worker.deleteLater()
 
+    def _ensure_model_cache(self):
+        """Create model caches on demand and prune them off the UI thread."""
+        if self._model_disk_cache is not None:
+            return self._model_disk_cache, self._model_hour_cache
+
+        from sharpmod.model_disk_cache import ModelDiskCache
+        from sharpmod.model_hour_cache import ModelHourCache
+
+        disk_cache = ModelDiskCache()
+        hour_cache = ModelHourCache(
+            max_entries=1,
+            directory_factory=disk_cache.directory_for,
+            directory_protector=disk_cache.protect,
+            metadata_writer=disk_cache.annotate,
+            delete_download_dirs=False,
+        )
+        self._model_disk_cache = disk_cache
+        self._model_hour_cache = hour_cache
+
+        worker = _ModelCachePruneWorker(disk_cache, parent=self)
+        self._model_cache_prune_worker = worker
+        worker.pruned.connect(
+            lambda count: _LOGGER.info(
+                "model_disk_cache.background_prune removed=%d", count
+            )
+        )
+        worker.failed.connect(
+            lambda message: _LOGGER.warning(
+                "model_disk_cache.background_prune_failed error=%s", message
+            )
+        )
+        worker.finished.connect(self._on_model_cache_prune_finished)
+        worker.start()
+        return disk_cache, hour_cache
+
+    def _on_model_cache_prune_finished(self) -> None:
+        worker = self.sender()
+        if self._model_cache_prune_worker is worker:
+            self._model_cache_prune_worker = None
+        worker.deleteLater()
+
     def _shutdown_model_cache(self) -> None:
         """Stop every owned worker before Qt destroys its native thread."""
         if getattr(self, "_shutdown_started", False):
@@ -2218,6 +2412,7 @@ class PickerWindow(QMainWindow):
             getattr(self, "_era5_worker", None),
             getattr(self, "_wrf_inspect_worker", None),
             getattr(self, "_wrf_extract_worker", None),
+            getattr(self, "_model_cache_prune_worker", None),
         ]
         workers = []
         advisory_ids = {
@@ -2292,12 +2487,16 @@ class PickerWindow(QMainWindow):
         self._era5_worker = None
         self._wrf_inspect_worker = None
         self._wrf_extract_worker = None
+        self._model_cache_prune_worker = None
 
-        self._model_hour_cache.clear()
-        try:
-            self._model_disk_cache.prune()
-        except OSError:
-            _LOGGER.exception("model_disk_cache.shutdown_prune_failed")
+        hour_cache = getattr(self, "_model_hour_cache", None)
+        if hour_cache is not None:
+            hour_cache.clear()
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt override
+        """Stop owned QThreads when the picker window itself is closed."""
+        self._shutdown_model_cache()
+        super().closeEvent(event)
 
     def _on_model_fetch_finished(self) -> None:
         """Release a completed worker before enabling the next request."""
@@ -2563,6 +2762,7 @@ class PickerWindow(QMainWindow):
             return
         if self._model_prefetch_worker is not None:
             return
+        self._ensure_model_cache()
         from sharpmod.tools import model_extract
         cfg = model_extract.get_config(model)
         hours = model_extract.forecast_hours(
@@ -2626,6 +2826,7 @@ class PickerWindow(QMainWindow):
                 "first.",
             )
             return
+        self._ensure_model_cache()
         self._cancel_model_prefetch(wait=True)
         self._model_hour_cache.clear()
         removed = self._model_disk_cache.clear()
@@ -2638,6 +2839,7 @@ class PickerWindow(QMainWindow):
     # Download library and saved/recent points
     # ====================================================================== #
     def _show_cache_manager(self) -> None:
+        self._ensure_model_cache()
         dialog = CacheManagerDialog(
             self._model_disk_cache,
             use_callback=self._reuse_cache_entry,
@@ -2647,6 +2849,7 @@ class PickerWindow(QMainWindow):
 
     def _reuse_cache_entry(self, entry) -> None:
         """Open a portable cache item or re-extract from cached GRIB data."""
+        self._ensure_model_cache()
         if entry.valid_sounding:
             soundings = self._model_disk_cache.valid_sounding_paths(entry.path)
             if soundings:
@@ -2694,6 +2897,7 @@ class PickerWindow(QMainWindow):
             self._era5_fetch()
             return
 
+        self._select_tab("Forecast Model")
         from sharpmod.tools import model_extract
         try:
             cfg = model_extract.get_config(entry.model)
@@ -2739,10 +2943,10 @@ class PickerWindow(QMainWindow):
         if point is not None:
             self._model_lat.setValue(point[0])
             self._model_lon.setValue(point[1])
-        self._select_tab("Forecast Model")
         self._model_fetch(cache_entry=entry)
 
     def _select_tab(self, title: str) -> None:
+        self._ensure_tab(title)
         for index in range(self._tabs.count()):
             if self._tabs.tabText(index) == title:
                 self._tabs.setCurrentIndex(index)
@@ -2750,12 +2954,14 @@ class PickerWindow(QMainWindow):
 
     def _current_location_point(self):
         tab = self._tabs.tabText(self._tabs.currentIndex())
-        if tab == "Reanalysis (ERA5)":
+        if tab == "Reanalysis (ERA5)" and hasattr(self, "_era5_lat"):
             return self._era5_lat.value(), self._era5_lon.value()
         if tab == "Open File" and hasattr(self, "_file_modes") \
                 and self._file_modes.currentIndex() == 1:
             return self._wrf_lat.value(), self._wrf_lon.value()
-        return self._model_lat.value(), self._model_lon.value()
+        if hasattr(self, "_model_lat"):
+            return self._model_lat.value(), self._model_lon.value()
+        return None
 
     def _show_saved_locations(self) -> None:
         dialog = SavedLocationsDialog(
@@ -3069,6 +3275,7 @@ class PickerWindow(QMainWindow):
             QMessageBox.information(
                 self, APP_NAME, "An ERA5 fetch is already in progress.")
             return
+        self._ensure_model_cache()
         from sharpmod.tools import era5_extract
         try:
             # Resolve cfgrib/ecCodes on the GUI thread before QThread work on
@@ -3623,6 +3830,7 @@ class PickerWindow(QMainWindow):
             self._open_file(path)
 
     def _browse_and_open(self) -> None:
+        self._select_tab("Open File")
         self._browse_file()
 
     def _open_from_edit(self) -> None:
@@ -3671,6 +3879,8 @@ class PickerWindow(QMainWindow):
         self._load_recent_files(recents)
 
     def _load_recent_files(self, recents=None) -> None:
+        if not hasattr(self, "_recent_list"):
+            return
         if recents is None:
             recents = list(self._settings.value("recent_files", [], list) or [])
         self._recent_list.clear()
@@ -3697,7 +3907,7 @@ class PickerWindow(QMainWindow):
         for url in event.mimeData().urls():
             path = url.toLocalFile()
             if path:
-                self._tabs.setCurrentWidget(self._file_tab)
+                self._select_tab("Open File")
                 filename = os.path.basename(path).lower()
                 if filename.startswith("wrfout") \
                         or filename.endswith((".nc", ".nc4")):
@@ -3766,20 +3976,25 @@ class PickerWindow(QMainWindow):
             "viewer.prune before=%d after=%d", before, len(self._viewers))
 
     def _restore_state(self) -> None:
-        self._load_recent_files()
         last = self._settings.value("last_station", "", str)
-        if last:
-            for i in range(self._station_list.count()):
-                if self._station_list.item(i).data(Qt.UserRole) == last:
-                    self._station_list.setCurrentRow(i)
-                    self._station_list.scrollToItem(
-                        self._station_list.item(i))
-                    break
-            # Mirror the selection onto the map and centre it there.
-            if self._station(last) is not None:
-                self._map.set_selected(last)
-                self._map.center_on(last)
-                self._map_on_select(last)
+        self._restored_last_station = last
+        # Restore the visible map immediately, but do not start a network probe
+        # before first paint. Selecting/changing a station still probes as usual.
+        if last and self._station(last) is not None:
+            self._map.set_selected(last)
+            self._map.center_on(last)
+            self._map_on_select(last, check_availability=False)
+
+    def _restore_station_list_selection(self) -> None:
+        last = getattr(self, "_restored_last_station", "")
+        if not last or not hasattr(self, "_station_list"):
+            return
+        for index in range(self._station_list.count()):
+            item = self._station_list.item(index)
+            if item.data(Qt.UserRole) == last:
+                self._station_list.setCurrentRow(index)
+                self._station_list.scrollToItem(item)
+                return
 
     def _station(self, sid):
         return next((s for s in self._all_stations if s["id"] == sid), None)

@@ -14,13 +14,9 @@ from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-import numpy as np
-
 """Observed and forecast fetch, availability, and catalog workers."""
 
 from sharpmod.gui_common import _LOGGER, _uwyo_decoder_classes
-from sharpmod.model_hour_cache import ModelHourKey
-from sharpmod.portable_sounding import portable_sounding_pair_valid
 
 from qtpy.QtCore import (
     Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
@@ -189,18 +185,38 @@ def _classify_availability(prof) -> tuple[str, str]:
     return AVAIL_AVAILABLE, f"Available ({n_thermo} levels)"
 
 
+class _ModelCachePruneWorker(QThread):
+    """Prune the persistent model cache without blocking the GUI thread."""
+
+    pruned = Signal(int)
+    failed = Signal(str)
+
+    def __init__(self, cache, parent=None):
+        super().__init__(parent)
+        self._cache = cache
+
+    def run(self):  # noqa: D401 - QThread entry point
+        try:
+            removed = self._cache.prune()
+        except OSError as exc:
+            self.failed.emit(str(exc))
+            return
+        self.pruned.emit(len(removed))
+
+
 class _AvailabilityWorker(QThread):
     """Probe UWyo for a station/time and classify the result off the UI thread.
 
-    Emits :attr:`checked` with ``(station_id, when, status, message)`` where
-    ``status`` is one of the ``AVAIL_*`` constants. The full fetch is performed
-    (the availability of a *usable* sounding cannot be known without decoding
-    it), so this shares the exact retrieval/decode path as a real fetch.
+    Emits :attr:`checked` with status text plus the decoded profile on success.
+    The full fetch is required to know whether a sounding is usable, so the
+    picker retains that result and reuses it when Generate is pressed.
     """
 
-    #: (query, when, status, message, station_label). ``station_label`` is a
-    #: "index \u2014 city" string once the station resolves, else "".
-    checked = Signal(str, object, str, str, str)
+    #: (query, when, status, message, station_label, fetched). ``fetched`` is
+    #: the already-decoded profile plus station metadata on a usable result,
+    #: otherwise ``None``. Keeping it lets Generate reuse the preflight request
+    #: instead of downloading and decoding the same sounding twice.
+    checked = Signal(str, object, str, str, str, object)
 
     def __init__(self, station_query: str, when_utc: datetime, token: int,
                  parent=None, station: dict | None = None):
@@ -217,7 +233,7 @@ class _AvailabilityWorker(QThread):
             StationLookupError, UWyo_Decoder, UWyoError = _uwyo_decoder_classes()
         except Exception:  # noqa: BLE001
             self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
-                              "Unavailable (decoder)", "")
+                              "Unavailable (decoder)", "", None)
             return
 
         # Typed errors let us distinguish "nothing archived" (red) from
@@ -240,11 +256,11 @@ class _AvailabilityWorker(QThread):
             meta = decoder.resolve_station(seeded_query or self._query)
         except StationLookupError:
             self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
-                              "Unavailable (station lookup)", "")
+                              "Unavailable (station lookup)", "", None)
             return
         except Exception:  # noqa: BLE001
             self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
-                              "Unavailable (station lookup)", "")
+                              "Unavailable (station lookup)", "", None)
             return
 
         label = _station_label(meta.id, meta.name)
@@ -255,29 +271,39 @@ class _AvailabilityWorker(QThread):
             prof = decoder.fetch(meta.id, self._when)
         except SoundingParseError:
             self.checked.emit(self._query, self._when, AVAIL_INSUFFICIENT,
-                              "Limited (data unreadable)", label)
+                              "Limited (data unreadable)", label, None)
             return
         except StationTimeUnavailableError:
             self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
-                              "Unavailable (no sounding)", label)
+                              "Unavailable (no sounding)", label, None)
             return
         except RetrievalError:
             self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
-                              "Unavailable (service unreachable)", label)
+                              "Unavailable (service unreachable)", label, None)
             return
         except UWyoError:
             self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
-                              "Unavailable (fetch failed)", label)
+                              "Unavailable (fetch failed)", label, None)
             return
         except Exception:  # noqa: BLE001 - never crash the UI thread
             self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
-                              "Unavailable (unexpected error)", label)
+                              "Unavailable (unexpected error)", label, None)
             return
 
         if self.isInterruptionRequested():
             return
         status, message = _classify_availability(prof)
-        self.checked.emit(self._query, self._when, status, message, label)
+        fetched = None
+        if status == AVAIL_AVAILABLE:
+            fetched = SimpleNamespace(
+                profile=prof,
+                station_id=str(meta.id),
+                station_name=str(meta.name),
+                provider="uwyo",
+            )
+        self.checked.emit(
+            self._query, self._when, status, message, label, fetched
+        )
 
 
 class _AvailabilityIndicator(QWidget):
@@ -472,10 +498,14 @@ def _retain_model_data_until_close(viewer, npz_path: str,
 
 def _portable_pair_valid(npz_path) -> bool:
     """Return whether a cached portable sounding and sidecar are complete."""
+    from sharpmod.portable_sounding import portable_sounding_pair_valid
+
     return portable_sounding_pair_valid(npz_path)
 
 
 def _atomic_npz(path, arrays) -> None:
+    import numpy as np
+
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)
     fd, temporary = tempfile.mkstemp(suffix=".npz", dir=directory)
@@ -530,6 +560,8 @@ def _materialize_cached_sounding(source_npz, out_path, *, loc,
                                  requested_lat, requested_lon,
                                  cache_hit=False) -> None:
     """Create a viewer-owned copy while retaining current request metadata."""
+    import numpy as np
+
     source_npz = os.fspath(source_npz)
     source_json = os.path.splitext(source_npz)[0] + ".json"
     out_path = os.fspath(out_path)
@@ -611,6 +643,8 @@ class _ERA5FetchWorker(QThread):
                     cancelled=self.cancellation_requested,
                 )
             else:
+                from sharpmod.model_hour_cache import ModelHourKey
+
                 valid = era5_extract._as_datetime(self._valid_time)
                 if valid.tzinfo is None:
                     valid = valid.replace(tzinfo=timezone.utc)
@@ -988,6 +1022,8 @@ class _ModelFetchWorker(QThread):
                     cancelled=self.cancellation_requested,
                 )
             else:
+                from sharpmod.model_hour_cache import ModelHourKey
+
                 run_dt = model_extract._run_datetime(self._run_time, cfg)
                 key = ModelHourKey.create(
                     cfg.key,
@@ -1127,6 +1163,8 @@ class _ModelPrefetchWorker(QThread):
             return
         try:
             from sharpmod.tools import model_extract
+            from sharpmod.model_hour_cache import ModelHourKey
+
             cfg = model_extract.get_config(self._model)
             run_dt = model_extract._run_datetime(self._run_time, cfg)
             key = ModelHourKey.create(

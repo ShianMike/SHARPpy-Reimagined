@@ -33,6 +33,7 @@ resolved package-relative (never an absolute development path).
 from __future__ import annotations
 
 import os
+from contextlib import suppress
 
 # --- Qt platform / binding setup (must precede the first Qt import) --------
 # Render without a physical display. ``setdefault`` lets a caller override
@@ -61,7 +62,7 @@ from dataclasses import dataclass, field  # noqa: E402
 from typing import List, Optional  # noqa: E402
 
 from qtpy import QtGui  # noqa: E402
-from qtpy.QtCore import QRect, Qt, Signal  # noqa: E402
+from qtpy.QtCore import QObject, QRect, Qt, Signal  # noqa: E402
 from qtpy.QtWidgets import QWidget  # noqa: E402
 
 # Restore Qt5-style unscoped enum access (e.g. ``qp.Antialiasing``) that the
@@ -266,8 +267,22 @@ def compose_window(config, prof_col=None, *, check_integrity=False,
     def _apply_preferences(changed_config):
         apply_preferences_to_window(win, changed_config)
 
-    controller.config_changed.connect(_apply_preferences)
+    preferences_connection = controller.config_changed.connect(
+        _apply_preferences
+    )
     win._sharpmod_preferences_slot = _apply_preferences
+    win._sharpmod_preferences_connection = preferences_connection
+
+    # ``config_changed`` belongs to the longer-lived picker/controller.  A
+    # plain Python closure is not disconnected automatically when ``win``'s
+    # C++ object is deleted, so it would retain the dead wrapper and call back
+    # into already-destroyed child widgets on the next Preferences change.
+    def _disconnect_preferences(*_args):
+        with suppress(TypeError, RuntimeError):
+            QObject.disconnect(preferences_connection)
+
+    win.destroyed.connect(_disconnect_preferences)
+    win._sharpmod_preferences_disconnect_slot = _disconnect_preferences
     if prof_col is not None:
         win.addProfileCollection(prof_col, check_integrity=check_integrity)
 

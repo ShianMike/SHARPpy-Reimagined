@@ -190,7 +190,10 @@ def test_live_builder_requests_every_three_hours_and_uses_all_frames(tmp_path):
     )
 
     assert [hour for hour, _dir in calls] == [0, 3, 6, 9, 12, 15, 18]
-    assert all(directory == str(tmp_path) for _hour, directory in calls)
+    assert all(
+        directory == str(tmp_path / "regional-guidance")
+        for _hour, directory in calls
+    )
     assert result.toi.state is GuidanceState.EXPERIMENTAL
     assert result.toi.high_risk_probability is not None
     provenance = result.provenance

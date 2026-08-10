@@ -1073,3 +1073,224 @@ def download_herbie_subset(
             close = getattr(session, "close", None)
             if callable(close):
                 close()
+
+
+def download_herbie_subset_fallback(
+    herbie,
+    search: str,
+    *,
+    inventory=None,
+    save_dir=None,
+    session=None,
+    cancelled: Callable[[], bool] | None = None,
+    progress: Callable[[int, int], None] | None = None,
+    timeout=(10, 30),
+    chunk_size: int = 256 * 1024,
+) -> tuple[Path, int]:
+    """Compatibility subset transfer with bounded, cancellable I/O.
+
+    This is the final fallback for servers whose range metadata is too weak
+    for the resumable transport.  It deliberately mirrors Herbie's permissive
+    sequential behavior, including accepting a full HTTP 200 payload when a
+    server ignores ``Range``, while retaining SHARPmod's cancellation,
+    timeout, atomic-write, and GRIB-integrity guarantees.
+    """
+
+    source_value = getattr(herbie, "grib", None)
+    source = os.fspath(source_value) if source_value is not None else ""
+    if not source:
+        raise OptimizedTransportUnavailable(
+            "Herbie compatibility fallback has no source payload"
+        )
+    if save_dir is not None:
+        herbie.save_dir = Path(save_dir).expanduser()
+    try:
+        selected = (
+            herbie.inventory(search).copy()
+            if inventory is None
+            else inventory.copy()
+        )
+        selected = inclusive_end_bytes(herbie, selected)
+        ranges = ranges_from_inventory(
+            selected, max_gap=0, max_overhead_ratio=0.0
+        )
+        output = Path(herbie.get_localFilePath(search))
+    except Exception as exc:
+        raise OptimizedTransportUnavailable(
+            "Herbie compatibility fallback could not plan the subset: %s"
+            % exc
+        ) from exc
+
+    _check_cancelled(cancelled)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if output.exists() and _valid_grib(output):
+        size = output.stat().st_size
+        if progress is not None:
+            progress(size, size)
+        return output.resolve(), size
+
+    planned_total = sum(item.size for item in ranges)
+    owned_session = session is None
+    if owned_session and source.startswith(("http://", "https://")):
+        try:
+            import requests
+        except ImportError as exc:  # pragma: no cover - required dependency
+            raise OptimizedTransportUnavailable(
+                "requests is unavailable for model download fallback"
+            ) from exc
+        session = requests.Session()
+
+    fd, temporary = tempfile.mkstemp(
+        prefix=output.name + ".", suffix=".tmp", dir=output.parent
+    )
+    temporary_path = Path(temporary)
+    monitor_done = threading.Event()
+    active_lock = threading.Lock()
+    active_responses = []
+
+    def close_active_io():
+        with active_lock:
+            responses = list(active_responses)
+        for response in responses:
+            close = getattr(response, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:
+                    pass
+        close = getattr(session, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
+
+    monitor_thread = None
+    if cancelled is not None:
+        def monitor_cancellation():
+            while not monitor_done.wait(0.05):
+                try:
+                    requested = bool(cancelled())
+                except Exception:
+                    return
+                if requested:
+                    close_active_io()
+                    return
+
+        monitor_thread = threading.Thread(
+            target=monitor_cancellation,
+            name="sharpmod-herbie-fallback-cancel",
+            daemon=True,
+        )
+        monitor_thread.start()
+
+    completed = 0
+    try:
+        with os.fdopen(fd, "wb") as destination:
+            fd = -1
+            if source.startswith(("http://", "https://")):
+                for item in ranges:
+                    _check_cancelled(cancelled)
+                    response_context = session.get(
+                        source,
+                        headers={"Range": f"bytes={item.start}-{item.end}"},
+                        stream=True,
+                        timeout=timeout,
+                    )
+                    with response_context as response:
+                        with active_lock:
+                            active_responses.append(response)
+                        try:
+                            status = int(getattr(response, "status_code", 0))
+                            if status not in {200, 206}:
+                                raise OptimizedTransportUnavailable(
+                                    "Herbie compatibility fallback returned "
+                                    f"HTTP {status}"
+                                )
+                            if status == 200 and completed:
+                                destination.seek(0)
+                                destination.truncate()
+                                completed = 0
+                            received = 0
+                            for chunk in response.iter_content(
+                                chunk_size=max(1, int(chunk_size))
+                            ):
+                                if not chunk:
+                                    continue
+                                destination.write(chunk)
+                                received += len(chunk)
+                                completed += len(chunk)
+                                if progress is not None:
+                                    progress(completed, planned_total)
+                                _check_cancelled(cancelled)
+                            if status == 206 and received != item.size:
+                                raise OptimizedTransportUnavailable(
+                                    "Herbie compatibility fallback returned "
+                                    "an incomplete byte range"
+                                )
+                            if status == 200:
+                                # The server ignored Range and returned the
+                                # complete source; it already contains every
+                                # selected message, so no later group is needed.
+                                break
+                        finally:
+                            with active_lock:
+                                try:
+                                    active_responses.remove(response)
+                                except ValueError:
+                                    pass
+            else:
+                source_path = Path(source).expanduser().resolve(strict=True)
+                with source_path.open("rb") as source_handle:
+                    for item in ranges:
+                        _check_cancelled(cancelled)
+                        source_handle.seek(item.start)
+                        remaining = item.size
+                        while remaining:
+                            chunk = source_handle.read(
+                                min(max(1, int(chunk_size)), remaining)
+                            )
+                            if not chunk:
+                                raise OptimizedTransportUnavailable(
+                                    "local compatibility source ended early"
+                                )
+                            destination.write(chunk)
+                            completed += len(chunk)
+                            remaining -= len(chunk)
+                            if progress is not None:
+                                progress(completed, planned_total)
+                            _check_cancelled(cancelled)
+        _check_cancelled(cancelled)
+        if not _valid_grib(temporary_path):
+            raise OptimizedTransportUnavailable(
+                "Herbie compatibility fallback did not produce a valid GRIB"
+            )
+        os.replace(temporary_path, output)
+        return output.resolve(), completed
+    except DownloadCancelled:
+        raise
+    except OptimizedTransportUnavailable:
+        _check_cancelled(cancelled)
+        raise
+    except Exception as exc:
+        _check_cancelled(cancelled)
+        raise OptimizedTransportUnavailable(
+            "Herbie compatibility fallback failed: %s" % exc
+        ) from exc
+    finally:
+        monitor_done.set()
+        if monitor_thread is not None:
+            monitor_thread.join(timeout=0.2)
+        if fd >= 0:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        if owned_session and session is not None:
+            close = getattr(session, "close", None)
+            if callable(close):
+                close()

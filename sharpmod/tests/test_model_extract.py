@@ -368,6 +368,7 @@ def test_hrrr_extract_attaches_live_regional_guidance_to_sidecar(
         dataset=_dataset_with_surface(),
         download_dir=downloads,
         source_grib="https://example.invalid/hrrr.grib2",
+        live_regional_guidance=True,
     )
 
     import json
@@ -379,6 +380,48 @@ def test_hrrr_extract_attaches_live_regional_guidance_to_sidecar(
     ] == pytest.approx(41.0)
     assert seen["download_dir"] == downloads
     assert (seen["fxx"], seen["lat"], seen["lon"]) == (6, 35.0, -99.0)
+
+
+def test_hrrr_extract_skips_regional_guidance_by_default(tmp_path, monkeypatch):
+    """A point sounding must not wait for seven supplemental HRRR frames."""
+
+    output = tmp_path / "hrrr_fast_default.npz"
+
+    def unexpected_guidance(*_args, **_kwargs):
+        raise AssertionError("default extraction started regional guidance")
+
+    monkeypatch.delenv("SHARPMOD_REGIONAL_GUIDANCE", raising=False)
+    monkeypatch.setattr(
+        model_extract, "_live_hrrr_guidance_mapping", unexpected_guidance
+    )
+
+    model_extract.extract(
+        "hrrr",
+        35.0,
+        -99.0,
+        run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+        out_path=output,
+        dataset=_dataset_with_surface(),
+        source_grib="https://example.invalid/hrrr.grib2",
+    )
+
+    import json
+
+    metadata = json.loads(output.with_suffix(".json").read_text("utf-8"))
+    assert "regional_guidance" not in metadata
+
+
+def test_regional_guidance_environment_can_opt_in(monkeypatch):
+    monkeypatch.delenv("SHARPMOD_REGIONAL_GUIDANCE", raising=False)
+    source = "https://example.invalid/hrrr.grib2"
+
+    assert model_extract._live_regional_guidance_enabled(None, source) is False
+
+    monkeypatch.setenv("SHARPMOD_REGIONAL_GUIDANCE", "on")
+    assert model_extract._live_regional_guidance_enabled(None, source) is True
+
+    monkeypatch.setenv("SHARPMOD_REGIONAL_GUIDANCE", "auto")
+    assert model_extract._live_regional_guidance_enabled(None, source) is True
 
 
 def test_hrrr_extract_fails_closed_without_verified_surface(tmp_path):
@@ -643,7 +686,7 @@ def test_extract_forwards_isolated_download_directory(tmp_path, monkeypatch):
     assert seen["download_dir"] == str(download_dir)
 
 
-def test_retrieve_dataset_suppresses_herbie_download_output(tmp_path, monkeypatch):
+def test_retrieve_dataset_suppresses_herbie_xarray_output(tmp_path, monkeypatch):
     """Herbie must not print Unicode status glyphs in Windows worker consoles."""
     seen = {}
     dataset = _dataset()
@@ -654,10 +697,8 @@ def test_retrieve_dataset_suppresses_herbie_download_output(tmp_path, monkeypatc
         def __init__(self, *args, **kwargs):
             seen["constructor"] = kwargs
 
-        def download(self, search, **kwargs):
-            seen["download"] = kwargs
-            print("👨🏻‍🏭 Created directory")
-            return tmp_path / "subset.grib2"
+        def download(self, *_args, **_kwargs):
+            raise AssertionError("cancellable fallback must replace download")
 
         def xarray(self, search, **kwargs):
             seen["search"] = search
@@ -673,7 +714,16 @@ def test_retrieve_dataset_suppresses_herbie_download_output(tmp_path, monkeypatc
         def flush(self):
             pass
 
+    def fake_fallback(_herbie, _search, **kwargs):
+        seen["fallback"] = kwargs
+        return tmp_path / "missing.grib2", 0
+
     monkeypatch.setitem(sys.modules, "herbie", SimpleNamespace(Herbie=FakeHerbie))
+    monkeypatch.setattr(
+        model_extract,
+        "download_herbie_subset_fallback",
+        fake_fallback,
+    )
     monkeypatch.setattr(
         model_extract, "_inventory_has_surface_contract", lambda _value: True
     )
@@ -687,8 +737,8 @@ def test_retrieve_dataset_suppresses_herbie_download_output(tmp_path, monkeypatc
     )
 
     assert returned is dataset
-    assert seen["download"]["verbose"] is False
-    assert seen["download"]["save_dir"] == str(tmp_path)
+    assert seen["fallback"]["save_dir"] == tmp_path
+    assert seen["fallback"]["cancelled"] is None
     assert seen["xarray"]["verbose"] is False
     assert seen["xarray"]["remove_grib"] is False
     assert seen["xarray"]["save_dir"] == str(tmp_path)
@@ -785,8 +835,9 @@ def test_retrieve_dataset_reports_real_download_and_decode_stages(
             })
 
         def download(self, search, **kwargs):
-            seen["download"] = (search, kwargs)
-            return tmp_path / "subset.grib2"
+            raise AssertionError(
+                "retrieval must not enter Herbie's cancellation-blind download"
+            )
 
         def xarray(self, search, **kwargs):
             seen["xarray"] = (search, kwargs)
@@ -796,6 +847,17 @@ def test_retrieve_dataset_reports_real_download_and_decode_stages(
     monkeypatch.setitem(sys.modules, "herbie", SimpleNamespace(Herbie=FakeHerbie))
     monkeypatch.setattr(
         model_extract, "_inventory_has_surface_contract", lambda _value: True
+    )
+    subset_path = tmp_path / "subset.grib2"
+
+    def compatibility_download(_herbie, search, **kwargs):
+        seen["compatibility_download"] = (search, kwargs)
+        return subset_path, 300
+
+    monkeypatch.setattr(
+        model_extract,
+        "download_herbie_subset_fallback",
+        compatibility_download,
     )
     config = model_extract.get_config("hrrr")
 
@@ -813,8 +875,8 @@ def test_retrieve_dataset_reports_real_download_and_decode_stages(
         ("downloading", 300),
         ("decoding", 300),
     ]
-    assert seen["download"][1]["save_dir"] == str(tmp_path)
-    assert seen["download"][1]["verbose"] is False
+    assert seen["compatibility_download"][1]["save_dir"] == tmp_path
+    assert seen["compatibility_download"][1]["cancelled"] is None
     assert seen["xarray"][1]["remove_grib"] is False
     assert seen["xarray"][1]["save_dir"] == str(tmp_path)
 
@@ -1185,6 +1247,93 @@ def test_probe_preflights_runtime_before_importing_herbie(monkeypatch):
     assert events == ["runtime"]
 
 
+def test_availability_probe_http_proxy_bounds_requests_and_honors_cancel():
+    calls = []
+
+    class Requests:
+        def head(self, url, **kwargs):
+            calls.append((url, kwargs))
+            return object()
+
+    cancelled = False
+    proxy = model_extract._BoundedHerbieRequests(
+        Requests(),
+        owner_thread=model_extract.threading.get_ident(),
+        request_timeout=2.0,
+        deadline=None,
+        cancelled=lambda: cancelled,
+    )
+
+    proxy.head("https://example.invalid/model.grib2", timeout=30)
+    assert calls[0][1]["timeout"] == 2.0
+
+    cancelled = True
+    with pytest.raises(
+        model_extract.DownloadCancelled,
+        match="availability probe cancelled",
+    ):
+        proxy.head("https://example.invalid/other.grib2")
+    assert len(calls) == 1
+
+
+def test_probe_scopes_bounded_http_calls_and_restores_herbie_requests(
+        monkeypatch):
+    import herbie.core as herbie_core
+
+    calls = []
+
+    class Requests:
+        def head(self, url, **kwargs):
+            calls.append((url, kwargs))
+            return object()
+
+    delegate = Requests()
+    monkeypatch.setattr(herbie_core, "requests", delegate)
+    monkeypatch.setattr(
+        model_extract, "require_runtime_dependencies", lambda: None
+    )
+
+    class FakeHerbie:
+        def __init__(self, *_args, **_kwargs):
+            self.grib = "https://example.invalid/model.grib2"
+
+        @staticmethod
+        def inventory():
+            herbie_core.requests.head(
+                "https://example.invalid/model.grib2", timeout=30
+            )
+            return pd.DataFrame({"variable": ["TMP"]})
+
+    monkeypatch.setattr(
+        model_extract, "_load_herbie_class", lambda: FakeHerbie
+    )
+
+    result = model_extract.probe(
+        "hrrr",
+        datetime(2026, 7, 14, 0, tzinfo=timezone.utc),
+        request_timeout=0.25,
+        deadline_seconds=1.0,
+    )
+
+    assert result["available"] is True
+    assert calls == [(
+        "https://example.invalid/model.grib2",
+        {"timeout": 0.25},
+    )]
+    assert herbie_core.requests is delegate
+
+
+def test_cancelled_probe_stops_before_loading_native_runtime(monkeypatch):
+    monkeypatch.setattr(
+        model_extract,
+        "require_runtime_dependencies",
+        lambda: pytest.fail("cancelled probe loaded the GRIB runtime"),
+    )
+
+    with pytest.raises(model_extract.DownloadCancelled):
+        model_extract.probe("hrrr", cancelled=lambda: True)
+
+
 def test_probe_cli_can_fail_until_surface_contract_is_complete(
         monkeypatch, capsys):
     result = {
@@ -1262,6 +1411,24 @@ def test_probe_cli_propagates_open_subset_during_lookback(monkeypatch):
 
     assert result == 0
     assert seen["open_subset"] is True
+
+
+def test_model_extract_cli_regional_guidance_is_opt_in(monkeypatch, capsys):
+    seen = []
+
+    def fake_extract(*_args, **kwargs):
+        seen.append(kwargs["live_regional_guidance"])
+        return "point.npz"
+
+    monkeypatch.setattr(model_extract, "extract", fake_extract)
+    base = ["hrrr", "35", "-99"]
+
+    assert model_extract.main(base) == 0
+    assert model_extract.main([*base, "--regional-guidance"]) == 0
+    assert model_extract.main([*base, "--no-regional-guidance"]) == 0
+
+    assert seen == [None, True, False]
+    capsys.readouterr()
 
 
 def test_render_mode_removes_fetched_data_but_keeps_png(tmp_path, monkeypatch):

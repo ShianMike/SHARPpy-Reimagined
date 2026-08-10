@@ -404,21 +404,21 @@ model-extract hrrr 35.18 -97.44 --fxx 0 --render
 model-extract gefs 35.18 -97.44 gefs_p01.npz --fxx 0 --member p01
 ```
 
-Live HRRR extraction also samples the applicable 18-hour window every three
-hours, normally seven compact regional `sfc` subsets of roughly 8-11 MiB each
-(eight when the requested forecast hour is off-interval), and embeds an
+Live HRRR extraction can optionally sample the applicable 18-hour window every
+three hours, normally seven compact regional `sfc` subsets of roughly 8-11 MiB
+each (eight when the requested forecast hour is off-interval), and embeds an
 experimental TOI score and probability in the JSON sidecar. Every decoded frame
 is used in valid-time order. Partial sampling still yields TOI when at least two
-frames span nine hours or more, marked `degraded` in provenance; otherwise TOI is
-unavailable with the exact reason.
+frames span nine hours or more, marked `degraded` in provenance; otherwise TOI
+is unavailable with the exact reason.
 It uses 300-hPa jet motion during June-August, 500 hPa otherwise, and
 a transparently labeled fixed-layer STP proxy. Its scorecard follows the public
 SPC bins and qualitative rules, while its probability transform is anchored to
 the public 4.35/87% example. Because SPC did not publish its exact weights or
 calibration equation, both are explicitly marked non-official and versioned.
-The regional-guidance payload contains only TOI. Pass `--no-regional-guidance`
-(or set `SHARPMOD_REGIONAL_GUIDANCE=off`) to skip the supplemental regional
-fetch.
+The regional-guidance payload contains only TOI. It is off by default so the
+extra frames do not delay the requested sounding. Pass `--regional-guidance`
+(or set `SHARPMOD_REGIONAL_GUIDANCE=on`) to opt in.
 
 If `--run` is omitted, the CLI chooses the most recent configured cycle at or
 before the current UTC time; upstream publication can lag that cycle, so use
@@ -523,11 +523,10 @@ atomic, so rerunning the same command validates and skips completed outputs.
 model-batch-extract job.json --output-dir batch-output --workers 2
 ```
 
-Batch runs **skip** the experimental HRRR regional TOI guidance by default,
-because it costs roughly 60-85 MiB and tens of seconds per point and nobody is
-reading the readout while an unattended job runs. Interactive extraction is
-unaffected: the GUI and single-point `model-extract` still compute it. Add
-`--regional-guidance` to opt a batch job back in.
+All point and batch extraction paths **skip** the experimental HRRR regional
+TOI guidance by default because it costs roughly 60-85 MiB and tens of seconds
+per point. Add `--regional-guidance` to opt a CLI job in; Python callers use
+`live_regional_guidance=True`.
 
 The Python API is `sharpmod.batch_extract.run_batch(...)`; it accepts ordered
 `BatchRequest` values and returns ordered per-request results plus completed

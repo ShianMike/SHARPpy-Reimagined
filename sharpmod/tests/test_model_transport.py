@@ -20,6 +20,7 @@ from sharpmod.model_transport import (
     OptimizedTransportUnavailable,
     RangeTransferMetrics,
     download_herbie_subset,
+    download_herbie_subset_fallback,
     download_ranges,
     parallelize_range_plan,
     plan_ranges,
@@ -265,6 +266,143 @@ def test_server_that_ignores_ranges_uses_fallback_exception(tmp_path):
             [ByteRange(0, len(payload) - 1)],
             tmp_path / "subset.grib2",
         )
+
+
+def test_compatibility_fallback_accepts_full_payload_without_herbie_download(
+        tmp_path):
+    payload = b"GRIB" + (b"x" * 24) + b"7777"
+    session = _RangeSession(payload, ignore_ranges=True)
+
+    class Herbie:
+        grib = "https://data/file"
+        save_dir = tmp_path
+
+        def inventory(self, _search):
+            return pd.DataFrame({
+                "start_byte": [4],
+                "end_byte": [11],
+            })
+
+        def get_localFilePath(self, _search):
+            return Path(self.save_dir) / "compat.grib2"
+
+        def download(self, *_args, **_kwargs):
+            raise AssertionError("fallback re-entered Herbie.download")
+
+    output, transferred = download_herbie_subset_fallback(
+        Herbie(), ":chosen:", session=session
+    )
+
+    assert output.read_bytes() == payload
+    assert transferred == len(payload)
+
+
+def test_compatibility_fallback_cancels_during_response_stream(tmp_path):
+    payload = b"GRIB" + (b"x" * 24) + b"7777"
+    cancel = threading.Event()
+
+    class Response(_Response):
+        def iter_content(self, chunk_size=64 * 1024):
+            yield self.content[:4]
+            cancel.set()
+            yield self.content[4:]
+
+    class Session:
+        def get(self, *_args, **_kwargs):
+            return Response(
+                206,
+                payload,
+                {"Content-Range": f"bytes 0-{len(payload) - 1}/{len(payload)}"},
+            )
+
+        def close(self):
+            pass
+
+    class Herbie:
+        grib = "https://data/file"
+        save_dir = tmp_path
+
+        def inventory(self, _search):
+            return pd.DataFrame({
+                "start_byte": [0],
+                "end_byte": [len(payload) - 1],
+            })
+
+        def get_localFilePath(self, _search):
+            return Path(self.save_dir) / "cancelled-compat.grib2"
+
+    output = tmp_path / "cancelled-compat.grib2"
+    with pytest.raises(DownloadCancelled):
+        download_herbie_subset_fallback(
+            Herbie(), ":chosen:", session=Session(), cancelled=cancel.is_set
+        )
+
+    assert not output.exists()
+    assert not list(tmp_path.glob("cancelled-compat.grib2.*.tmp"))
+
+
+def test_compatibility_fallback_unblocks_a_stalled_response_on_cancel(
+        tmp_path):
+    payload = b"GRIB" + (b"x" * 24) + b"7777"
+    cancel = threading.Event()
+
+    class Response(_Response):
+        def __init__(self):
+            super().__init__(
+                206,
+                payload,
+                {"Content-Range": f"bytes 0-{len(payload) - 1}/{len(payload)}"},
+            )
+            self.closed = threading.Event()
+
+        def iter_content(self, chunk_size=64 * 1024):
+            del chunk_size
+            self.closed.wait(timeout=2.0)
+            raise OSError("response was closed")
+            yield  # pragma: no cover - preserve generator semantics
+
+        def close(self):
+            self.closed.set()
+
+    response = Response()
+
+    class Session:
+        def get(self, *_args, **_kwargs):
+            return response
+
+        def close(self):
+            pass
+
+    class Herbie:
+        grib = "https://data/file"
+        save_dir = tmp_path
+
+        def inventory(self, _search):
+            return pd.DataFrame({
+                "start_byte": [0],
+                "end_byte": [len(payload) - 1],
+            })
+
+        def get_localFilePath(self, _search):
+            return Path(self.save_dir) / "stalled-compat.grib2"
+
+    timer = threading.Timer(0.1, cancel.set)
+    started = time.monotonic()
+    timer.start()
+    try:
+        with pytest.raises(DownloadCancelled):
+            download_herbie_subset_fallback(
+                Herbie(),
+                ":chosen:",
+                session=Session(),
+                cancelled=cancel.is_set,
+            )
+    finally:
+        timer.cancel()
+
+    assert time.monotonic() - started < 1.0
+    assert response.closed.is_set()
+    assert not (tmp_path / "stalled-compat.grib2").exists()
 
 
 def test_cancellation_preserves_resumable_fragment(tmp_path):

@@ -38,7 +38,17 @@ def test_model_availability_worker_offers_first_earlier_cycle(
     requested = datetime(2026, 7, 14, 5, tzinfo=timezone.utc)
     calls = []
 
-    def fake_probe(model, run_time, fxx, member, open_subset=False):
+    def fake_probe(
+        model,
+        run_time,
+        fxx,
+        member,
+        open_subset=False,
+        **kwargs,
+    ):
+        assert callable(kwargs["cancelled"])
+        assert kwargs["request_timeout"] == 2.0
+        assert kwargs["deadline_seconds"] == 8.0
         calls.append(run_time)
         return {"available": len(calls) == 2}
 
@@ -93,6 +103,40 @@ class _RecordingIndicator:
 class _FakeSignal:
     def connect(self, _slot):
         pass
+
+
+def test_running_availability_probe_is_single_flight(monkeypatch):
+    requested = datetime(2026, 7, 14, 6, tzinfo=timezone.utc)
+
+    class RunningWorker:
+        def __init__(self):
+            self.interruptions = 0
+
+        def isRunning(self):  # noqa: N802 - QThread compatibility
+            return True
+
+        def requestInterruption(self):  # noqa: N802 - QThread compatibility
+            self.interruptions += 1
+
+    running = RunningWorker()
+    monkeypatch.setattr(
+        gui_picker,
+        "_ModelAvailabilityWorker",
+        lambda *_args, **_kwargs: pytest.fail(
+            "a second availability worker was started"
+        ),
+    )
+    owner = SimpleNamespace(
+        _model_availability_request=("gfs", requested, 0, None),
+        _model_availability_token=9,
+        _model_availability_workers=[running],
+        _model_availability_waiting_for_worker=False,
+    )
+
+    gui.PickerWindow._run_model_availability(owner)
+
+    assert running.interruptions == 1
+    assert owner._model_availability_waiting_for_worker is True
 
 
 def test_availability_preflights_native_runtime_before_worker_start(

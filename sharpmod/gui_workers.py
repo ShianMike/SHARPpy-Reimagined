@@ -818,7 +818,14 @@ class _ModelAvailabilityWorker(QThread):
             try:
                 result = model_extract.probe(
                     self._model, run_time=run_time, fxx=self._fxx,
-                    member=self._member, open_subset=False)
+                    member=self._member,
+                    open_subset=False,
+                    cancelled=self.isInterruptionRequested,
+                    request_timeout=2.0,
+                    deadline_seconds=8.0,
+                )
+            except model_extract.DownloadCancelled:
+                return
             except Exception as exc:  # noqa: BLE001 - network/catalog failure
                 result = {"available": False, "error": str(exc)}
             if result.get("available"):
@@ -855,7 +862,8 @@ class _ModelFetchWorker(QThread):
     finished_ok = Signal(str, str, object, int)
     failed = Signal(str)
     cancelled = Signal()
-    progress = Signal(str, int)
+    # stage, expected bytes, bytes already in the isolated tree, transfer start
+    progress = Signal(str, int, int, float)
 
     def __init__(self, model: str, lat: float, lon: float, run_time: datetime,
                  fxx: int, out_path: str, loc: str | None = None,
@@ -889,6 +897,8 @@ class _ModelFetchWorker(QThread):
         self._cached_directory = cached_directory
         self._cached_contract_version = cached_contract_version
         self._cancel_requested = False
+        self._progress_download_baseline = 0
+        self._progress_transfer_started = 0.0
 
     def requestInterruption(self):  # noqa: N802 - Qt API override
         self._cancel_requested = True
@@ -1053,7 +1063,34 @@ class _ModelFetchWorker(QThread):
 
     def _report_progress(self, stage: str, total_bytes: int = 0) -> None:
         """Forward extractor progress safely across the Qt thread boundary."""
-        self.progress.emit(str(stage), max(0, int(total_bytes or 0)))
+        stage = str(stage)
+        if stage in {"downloading", "regional_downloading"}:
+            baseline = 0
+            try:
+                for root, _dirs, files in os.walk(self._download_dir):
+                    for filename in files:
+                        if filename.lower().endswith(
+                            (".grib2", ".grib", ".grb2", ".grb", ".part")
+                        ):
+                            try:
+                                baseline += os.path.getsize(
+                                    os.path.join(root, filename)
+                                )
+                            except OSError:
+                                pass
+            except OSError:
+                pass
+            # Capture on the worker thread before the transfer begins. The Qt
+            # signal is queued, so sampling this baseline in the UI slot can
+            # otherwise count bytes that arrived between emit and delivery.
+            self._progress_download_baseline = baseline
+            self._progress_transfer_started = time.monotonic()
+        self.progress.emit(
+            stage,
+            max(0, int(total_bytes or 0)),
+            int(self._progress_download_baseline),
+            float(self._progress_transfer_started),
+        )
 
 
 class _ModelPrefetchWorker(QThread):

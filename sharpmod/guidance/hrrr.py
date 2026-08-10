@@ -9,11 +9,10 @@ guidance or turns a point sounding into regional TOI.
 
 from __future__ import annotations
 
-import io
 import math
 import os
 import tempfile
-from contextlib import nullcontext, redirect_stdout
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -66,6 +65,7 @@ TOI_WINDOW_HOURS = 18
 TOI_SAMPLING_INTERVAL_HOURS = 3
 # Seven planned window frames, plus at most one off-interval requested hour.
 TOI_MAXIMUM_FRAMES = 8
+REGIONAL_GUIDANCE_DOWNLOAD_DIRNAME = "regional-guidance"
 # Feature extraction needs two times; below half the published window the
 # translation speed becomes a short-baseline extrapolation rather than a
 # measurement of the 18-hour jet evolution.
@@ -771,6 +771,7 @@ def fetch_hrrr_regional_frame(
     from sharpmod.model_sources import select_herbie_provider
     from sharpmod.model_transport import (
         download_herbie_subset,
+        download_herbie_subset_fallback,
         range_worker_count,
     )
     from sharpmod.tools import model_extract
@@ -796,7 +797,7 @@ def fetch_hrrr_regional_frame(
             f"HRRR F{int(forecast_hour):03d} lacks required regional TOI inputs"
         )
     expected_bytes = model_extract._subset_download_bytes(inventory)
-    _emit_progress(progress_callback, "downloading", expected_bytes)
+    _emit_progress(progress_callback, "regional_downloading", expected_bytes)
     _cancel_if_requested(cancelled)
     try:
         path, _planned = download_herbie_subset(
@@ -809,16 +810,18 @@ def fetch_hrrr_regional_frame(
         )
         local_path = model_extract._local_grib_path(path)
     except OptimizedTransportUnavailable:
-        kwargs = {"verbose": False}
-        if download_dir is not None:
-            kwargs["save_dir"] = os.fspath(download_dir)
-        with redirect_stdout(io.StringIO()):
-            downloaded = H.download(search, **kwargs)
+        downloaded, _transferred = download_herbie_subset_fallback(
+            H,
+            search,
+            inventory=inventory,
+            save_dir=download_dir,
+            cancelled=cancelled,
+        )
         local_path = model_extract._local_grib_path(downloaded)
     if local_path is None:
         raise RuntimeError("HRRR regional subset download is incomplete")
     _cancel_if_requested(cancelled)
-    _emit_progress(progress_callback, "decoding", expected_bytes)
+    _emit_progress(progress_callback, "regional_decoding", expected_bytes)
     return decode_hrrr_regional_frame(
         local_path,
         run_time=run_time,
@@ -1075,6 +1078,15 @@ def build_live_hrrr_guidance(
     )
     try:
         with context as active_download_dir:
+            # Keep supplemental fields outside the reusable point-GRIB
+            # namespace. Otherwise an HRRR Zarr F000 entry (which has no
+            # primary GRIB) can be misclassified as reusable solely because
+            # one of these regional-only frames is present.
+            regional_download_dir = (
+                Path(active_download_dir)
+                / REGIONAL_GUIDANCE_DOWNLOAD_DIRNAME
+            )
+            regional_download_dir.mkdir(parents=True, exist_ok=True)
             # One sequential request per planned hour: the sample is denser but
             # the plan stays bounded and concurrency is unchanged.
             for candidate in requested_hours:
@@ -1086,7 +1098,7 @@ def build_live_hrrr_guidance(
                         point_latitude,
                         point_longitude,
                         pressure_level,
-                        download_dir=active_download_dir,
+                        download_dir=os.fspath(regional_download_dir),
                         progress_callback=progress_callback,
                         cancelled=cancelled,
                         region_radius_km=region_radius_km,
@@ -1158,6 +1170,7 @@ __all__ = [
     "HRRR_TOI_METHOD_VERSION",
     "HrrrRegionalFrame",
     "ObjectiveRiskRegion",
+    "REGIONAL_GUIDANCE_DOWNLOAD_DIRNAME",
     "TOI_DEGRADED_GAP_HOURS",
     "TOI_MAXIMUM_FRAMES",
     "TOI_MINIMUM_COVERAGE_HOURS",

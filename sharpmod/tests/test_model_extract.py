@@ -1334,6 +1334,36 @@ def test_cancelled_probe_stops_before_loading_native_runtime(monkeypatch):
         model_extract.probe("hrrr", cancelled=lambda: True)
 
 
+def test_eccc_probe_receives_gui_timeout_and_deadline(monkeypatch):
+    seen = {}
+
+    def fake_probe(model, **kwargs):
+        seen.update(model=model, **kwargs)
+        return {"available": True}
+
+    cancelled = lambda: False
+    monkeypatch.setattr(model_extract.eccc_geomet, "probe", fake_probe)
+
+    result = model_extract.probe(
+        "gdps",
+        run_time=datetime(2026, 7, 14, 0, tzinfo=timezone.utc),
+        fxx=3,
+        cancelled=cancelled,
+        request_timeout=2.0,
+        deadline_seconds=8.0,
+    )
+
+    assert result["available"] is True
+    assert seen == {
+        "model": "gdps",
+        "run_time": datetime(2026, 7, 14, 0, tzinfo=timezone.utc),
+        "fxx": 3,
+        "cancelled": cancelled,
+        "request_timeout": 2.0,
+        "deadline_seconds": 8.0,
+    }
+
+
 def test_probe_cli_can_fail_until_surface_contract_is_complete(
         monkeypatch, capsys):
     result = {

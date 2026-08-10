@@ -2251,6 +2251,8 @@ def probe(
             run_time=run_time,
             fxx=fxx,
             cancelled=cancelled,
+            request_timeout=request_timeout,
+            deadline_seconds=deadline_seconds,
         )
         if open_subset:
             result["note"] = (

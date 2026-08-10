@@ -289,12 +289,20 @@ def test_compatibility_fallback_accepts_full_payload_without_herbie_download(
         def download(self, *_args, **_kwargs):
             raise AssertionError("fallback re-entered Herbie.download")
 
+    observed_parts = []
     output, transferred = download_herbie_subset_fallback(
-        Herbie(), ":chosen:", session=session
+        Herbie(),
+        ":chosen:",
+        session=session,
+        progress=lambda *_args: observed_parts.extend(
+            tmp_path.glob("compat.grib2.*.part")
+        ),
     )
 
     assert output.read_bytes() == payload
     assert transferred == len(payload)
+    assert observed_parts
+    assert not list(tmp_path.glob("compat.grib2.*.part"))
 
 
 def test_compatibility_fallback_cancels_during_response_stream(tmp_path):
@@ -338,7 +346,7 @@ def test_compatibility_fallback_cancels_during_response_stream(tmp_path):
         )
 
     assert not output.exists()
-    assert not list(tmp_path.glob("cancelled-compat.grib2.*.tmp"))
+    assert not list(tmp_path.glob("cancelled-compat.grib2.*.part"))
 
 
 def test_compatibility_fallback_unblocks_a_stalled_response_on_cancel(
@@ -403,6 +411,7 @@ def test_compatibility_fallback_unblocks_a_stalled_response_on_cancel(
     assert time.monotonic() - started < 1.0
     assert response.closed.is_set()
     assert not (tmp_path / "stalled-compat.grib2").exists()
+    assert not list(tmp_path.glob("stalled-compat.grib2.*.part"))
 
 
 def test_cancellation_preserves_resumable_fragment(tmp_path):

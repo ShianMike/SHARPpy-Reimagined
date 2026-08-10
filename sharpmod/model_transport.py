@@ -1141,7 +1141,7 @@ def download_herbie_subset_fallback(
         session = requests.Session()
 
     fd, temporary = tempfile.mkstemp(
-        prefix=output.name + ".", suffix=".tmp", dir=output.parent
+        prefix=output.name + ".", suffix=".part", dir=output.parent
     )
     temporary_path = Path(temporary)
     monitor_done = threading.Event()

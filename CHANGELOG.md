@@ -9,6 +9,21 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Reduced Windows first-window time by lazily constructing inactive picker
+  tabs, deferring model-cache imports and pruning, importing the analysis stack
+  only when a sounding opens, and sharing immutable basemap geometry.
+- Reused a successful observed-sounding availability download when Generate is
+  pressed instead of fetching and decoding the same profile twice.
+- Deleted ordinary sounding viewers when closed, released picker references,
+  and collected their Python widget cycles on the next event-loop turn so
+  repeated open/close sessions no longer retain one viewer heap per cycle.
+- Hardened Windows packaging so source, bundled Python metadata, Rust metadata,
+  frozen runtime, and PE file/product versions must agree; official builds now
+  reject stale editable metadata and optionally Authenticode-sign when both
+  certificate secrets are configured.
+- Made the faster one-folder ZIP the prominently labeled recommended Windows
+  download while retaining the one-file build as an explicitly slower portable
+  option, with signing state recorded in the release manifest.
 - Restored normal HRRR point-sounding latency by making experimental regional
   TOI guidance explicit opt-in. Version 0.8.0 synchronously requested up to
   eight extra regional frames before writing and displaying an otherwise-ready

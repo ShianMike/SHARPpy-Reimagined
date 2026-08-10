@@ -81,6 +81,9 @@ def test_picker_exposes_era5_and_guided_raw_wrf_tabs(
 
     assert "Reanalysis (ERA5)" in labels
     assert "Open File" in labels
+    picker._select_tab("Forecast Model")
+    picker._select_tab("Reanalysis (ERA5)")
+    picker._select_tab("Open File")
     assert picker._file_modes.tabText(1) == "Raw WRF wrfout"
     assert picker._era5_map is not picker._model_map
     assert picker._wrf_map is not picker._model_map

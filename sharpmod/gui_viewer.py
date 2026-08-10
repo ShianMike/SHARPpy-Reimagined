@@ -6,6 +6,7 @@ import re
 import sys
 import tempfile
 import time
+import weakref
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -253,6 +254,52 @@ def _settle_layout_events(app, passes: int = 2) -> None:
         app.processEvents()
 
 
+def _collect_closed_viewer_cycles() -> None:
+    """Collect Python cycles after a deleted viewer returns to the event loop."""
+    import gc
+
+    collected = gc.collect()
+    _LOGGER.debug("viewer.gc_after_close collected=%d", collected)
+
+
+def _install_viewer_lifecycle(win, controller) -> None:
+    """Delete a sounding window on close and release picker ownership.
+
+    ``QWidget.close()`` hides a window by default.  Sounding viewers are large
+    object trees, so merely hiding one leaves its Qt widgets and render state
+    alive for the rest of the picker session.  Deleting the native object also
+    guarantees that any data-cleanup hooks attached to ``destroyed`` run.
+    """
+    win.setAttribute(Qt.WA_DeleteOnClose, True)
+
+    # PickerWindow retains viewers so preferences and multi-sounding mode can
+    # address them.  Remove the dead wrapper as soon as Qt destroys the native
+    # window; capture only weak/id references so this hook cannot itself keep
+    # either QObject alive.
+    try:
+        controller_ref = weakref.ref(controller)
+    except TypeError:
+        return
+    viewer_id = id(win)
+
+    def _release_reference(*_args) -> None:
+        owner = controller_ref()
+        if owner is None:
+            return
+        viewers = getattr(owner, "_viewers", None)
+        if isinstance(viewers, list):
+            viewers[:] = [viewer for viewer in viewers
+                          if id(viewer) != viewer_id]
+        # SPCWindow's interconnected widgets/signals form Python cycles. Qt has
+        # deleted the native tree at this point, but waiting for an arbitrary
+        # later cyclic-GC pass retains roughly one viewer's heap per close.
+        # Run collection on the next event-loop turn, outside the destruction
+        # callback itself, so repeated open/close sessions plateau promptly.
+        QTimer.singleShot(0, _collect_closed_viewer_cycles)
+
+    win.destroyed.connect(_release_reference)
+
+
 def compose_interactive(config, prof_col, controller, *, stn_id=None,
                         model=None, run=None, loc=None):
     """Compose and show a fully interactive SPC-style sounding window.
@@ -281,6 +328,7 @@ def compose_interactive(config, prof_col, controller, *, stn_id=None,
     # index band and attaches the skew-T HGZ overlay; controller=picker wires
     # the config/preferences/focus contract to the picker window.
     win, _ = _compose_window()(config, prof_col, mount=True, controller=controller)
+    _install_viewer_lifecycle(win, controller)
 
     # The vendored SPCWindow.__initUI calls self.show() as soon as it is
     # constructed, so an empty white window flashes on screen while we still

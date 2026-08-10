@@ -10,8 +10,6 @@ from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-import numpy as np
-
 """Durable GUI preferences, units, parcels, and settings dialogs."""
 
 from sharpmod.gui_common import APP_NAME

@@ -123,11 +123,13 @@ def test_shutdown_stops_every_owned_gui_worker():
     assert owner._worker is None
     assert owner._model_worker is None
     assert cache.calls == 1
-    assert disk_cache.calls == 1
+    # Persistent-cache pruning is now handled by a background worker at first
+    # use, not synchronously while the GUI exits.
+    assert disk_cache.calls == 0
 
     gui_picker.PickerWindow._shutdown_model_cache(owner)
     assert cache.calls == 1
-    assert disk_cache.calls == 1
+    assert disk_cache.calls == 0
 
 
 def test_minimum_picker_size_scrolls_instead_of_collapsing_controls(
@@ -152,6 +154,9 @@ def test_minimum_picker_size_scrolls_instead_of_collapsing_controls(
     picker.resize(900, 620)
     picker.show()
     app.processEvents()
+
+    picker._select_tab("Forecast Model")
+    picker._select_tab("Reanalysis (ERA5)")
 
     rails = (
         (0, picker._map_controls_scroll),

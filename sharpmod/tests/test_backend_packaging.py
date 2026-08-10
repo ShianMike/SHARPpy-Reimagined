@@ -251,6 +251,7 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
     assert job["env"] == {
         "SHARPMOD_BACKEND": "rust",
         "SHARPMOD_REQUIRE_RUST": "1",
+        "SHARPMOD_RELEASE_BUILD": "1",
     }
 
     steps = job["steps"]
@@ -302,7 +303,7 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
 
     build_names = {
         "Build one-folder executable",
-        "Build single-file executable",
+        "Build portable single-file executable",
     }
     assert build_names <= {step.get("name") for step in steps}
     for name in build_names:
@@ -319,8 +320,8 @@ def test_release_requires_rust_runtime_reports_and_uploads_wheel():
     verifications = [
         step for step in steps
         if step.get("name") in {
-            "Verify frozen model-fetch runtime",
-            "Verify frozen single-file runtime",
+            "Verify recommended one-folder artifact",
+            "Verify portable single-file artifact",
         }
     ]
     assert len(verifications) == 2
@@ -334,7 +335,7 @@ def test_release_requires_rust_runtime_reports_and_uploads_wheel():
 
     stage = next(
         step for step in steps
-        if step.get("name") == "Stage reproducible release artifacts"
+        if step.get("name") == "Stage clearly labeled release artifacts"
     )
     assert 'Copy-Item "rust/sharpmod-rs/dist/*.whl"' in stage["run"]
     assert "pip freeze --all" in stage["run"]
@@ -385,7 +386,7 @@ def test_release_dispatch_pins_existing_and_new_tag_sources():
         step for step in jobs["publish"]["steps"]
         if step.get("name") == "Publish GitHub Release"
     )
-    assert "Build single-file executable" in build_names
+    assert "Build portable single-file executable" in build_names
     assert publish["with"]["tag_name"] == (
         "${{ needs.resolve-release.outputs.tag }}"
     )

@@ -288,7 +288,7 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
         if step.get("name") == "Install constrained package and build dependencies"
     )
     assert "constraints/release.txt" in install["run"]
-    assert 'pip install "pip==26.2"' in install["run"]
+    assert "pip install --upgrade --constraint $constraint pip" in install["run"]
     assert "pyinstaller maturin" in install["run"]
 
     verify = next(

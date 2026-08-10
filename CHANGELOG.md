@@ -5,6 +5,24 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-08-10
+
+### Fixed
+
+- Restored normal HRRR point-sounding latency by making experimental regional
+  TOI guidance explicit opt-in. Version 0.8.0 synchronously requested up to
+  eight extra regional frames before writing and displaying an otherwise-ready
+  point sounding; `--regional-guidance`, `live_regional_guidance=True`, or
+  `SHARPMOD_REGIONAL_GUIDANCE=on` now enable that supplemental work deliberately.
+- Made model downloads and GUI availability checks cancellation-aware and
+  bounded, kept stale availability probes single-flight, isolated supplemental
+  HRRR frames from reusable point-sounding cache payloads, corrected per-frame
+  byte progress, and disconnected closed sounding windows from live preference
+  updates.
+- Updated the locked release toolchain to pip 26.2.1, Ruff 0.16.1, and PyO3
+  0.29.2, while keeping workflow bootstrap pins sourced from the release
+  constraints so patch updates cannot make the release build self-conflicting.
+
 ## [0.8.0] - 2026-08-07
 
 **TOI status, stated plainly.** The full offline programme has now been executed

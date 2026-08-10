@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v0.8.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v0.8.1). Created if it does not exist."
         required: true
-        default: "v0.8.0"
+        default: "v0.8.1"
 
 # Build and test jobs are read-only. Only the isolated publish job below can
 # create a tag or GitHub Release.
@@ -194,7 +194,7 @@ jobs:
         run: |
           $constraint = (Resolve-Path "constraints/release.txt").Path
           $env:PIP_CONSTRAINT = $constraint
-          python -m pip install "pip==26.2"
+          python -m pip install --upgrade --constraint $constraint pip
           python -m pip install --constraint $constraint `
             -e ".[render,era5,wrf]"
           python scripts/install_sharppy_compat.py --sharppy-only

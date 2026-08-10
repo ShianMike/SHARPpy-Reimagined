@@ -1,6 +1,6 @@
 # Reproducible direct runtime and build inputs for the official Windows release.
 # Transitive requirements remain constrained by their parent distributions.
-pip==26.2
+pip==26.2.1
 setuptools==83.0.0
 wheel==0.47.0
 

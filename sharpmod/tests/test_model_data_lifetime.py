@@ -127,7 +127,8 @@ def test_gui_workers_reuse_one_decoded_model_hour(tmp_path, monkeypatch):
             download_dir=str(point_dir), model_hour_cache=cache,
         )
         worker.progress.connect(
-            lambda stage, total, target=progress[index]: target.append(
+            lambda stage, total, _baseline, _started,
+            target=progress[index]: target.append(
                 (stage, total)
             )
         )
@@ -445,3 +446,85 @@ def test_model_download_progress_uses_bytes_written_and_expected_total(tmp_path)
     assert "250 B / 1000 B" in detail.text
     assert button.text == "Downloading\u2026 25%"
     assert statuses[-1].startswith("Downloading HRRR: 25%")
+
+
+def test_worker_captures_download_baseline_before_queued_progress(
+        qt_app, tmp_path):
+    prior = tmp_path / "primary.grib2"
+    prior.write_bytes(b"x" * 207)
+    worker = gui_workers._ModelFetchWorker(
+        "hrrr",
+        40.0,
+        -90.0,
+        datetime(2026, 8, 8, 2, tzinfo=timezone.utc),
+        0,
+        str(tmp_path / "sounding.npz"),
+        download_dir=str(tmp_path),
+    )
+    events = []
+    worker.progress.connect(lambda *args: events.append(args))
+
+    worker._report_progress("regional_downloading", 10)
+
+    assert worker._progress_download_baseline == 207
+    assert worker._progress_transfer_started > 0
+    assert events == [(
+        "regional_downloading",
+        10,
+        207,
+        worker._progress_transfer_started,
+    )]
+
+
+def test_regional_progress_excludes_previous_gribs_and_names_stage(tmp_path):
+    prior = tmp_path / "primary.grib2"
+    prior.write_bytes(b"x" * 207)
+    progress = _FakeProgressWidget()
+    detail = _FakeTextWidget()
+    button = _FakeTextWidget()
+    statuses = []
+    worker = SimpleNamespace(
+        _download_dir=str(tmp_path),
+        _model="hrrr",
+        _progress_download_baseline=207,
+        _progress_transfer_started=time.monotonic() - 1.0,
+    )
+    picker = SimpleNamespace(
+        _model_worker=worker,
+        _model_progress=progress,
+        _model_progress_detail=detail,
+        _model_fetch_btn=button,
+        _model_progress_stage="",
+        _model_progress_total=0,
+        _model_progress_started=0.0,
+        _model_progress_download_baseline=0,
+        statusBar=lambda: SimpleNamespace(showMessage=statuses.append),
+    )
+    picker._poll_model_fetch_progress = lambda: (
+        gui.PickerWindow._poll_model_fetch_progress(picker)
+    )
+    event_started = worker._progress_transfer_started
+    # Simulate a later frame overwriting the worker's mutable fields before
+    # Qt delivers this queued event. The event's own snapshot must win.
+    worker._progress_download_baseline = 999
+    worker._progress_transfer_started = time.monotonic()
+
+    gui.PickerWindow._on_model_fetch_progress(
+        picker,
+        "regional_downloading",
+        10,
+        207,
+        event_started,
+    )
+    assert progress.value == 0
+    assert detail.text.startswith("0 B / 10 B")
+
+    (tmp_path / "regional-guidance.part").write_bytes(b"x" * 5)
+    gui.PickerWindow._poll_model_fetch_progress(picker)
+
+    assert progress.value == 50
+    assert detail.text.startswith("5 B / 10 B")
+    assert button.text == "Regional guidance\u2026 50%"
+    assert statuses[-1].startswith(
+        "Downloading regional guidance for HRRR: 50%"
+    )

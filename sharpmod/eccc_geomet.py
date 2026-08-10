@@ -390,7 +390,28 @@ def _floor_cycle(value, cycles) -> datetime:
     return value.replace(hour=hour, minute=0, second=0, microsecond=0)
 
 
-def _default_get(url, *, cancelled=None, **kwargs):
+def _deadline_passed(deadline) -> bool:
+    return deadline is not None and time.monotonic() >= float(deadline)
+
+
+def _timeout_within_deadline(timeout, deadline):
+    if deadline is None:
+        return timeout
+    remaining = float(deadline) - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("GeoMet availability deadline expired")
+
+    def clamp(value):
+        return max(0.001, min(float(value), remaining))
+
+    if timeout is None:
+        return max(0.001, remaining)
+    if isinstance(timeout, (tuple, list)):
+        return tuple(clamp(value) for value in timeout)
+    return clamp(timeout)
+
+
+def _default_get(url, *, cancelled=None, deadline=None, **kwargs):
     """Issue one request, closing active I/O when cancellation is requested.
 
     ``requests.get`` is otherwise a blocking call: the surrounding executor
@@ -404,21 +425,27 @@ def _default_get(url, *, cancelled=None, **kwargs):
         import requests
     except ImportError as exc:  # pragma: no cover - core dependency in project
         raise RetrievalError("ECCC GeoMet extraction requires requests") from exc
-    if cancelled is None:
+    if cancelled is None and deadline is None:
         return requests.get(url, **kwargs)
 
     session = requests.Session()
     response_holder = []
     done = threading.Event()
+    timed_out = threading.Event()
 
     def monitor():
         while not done.wait(0.05):
-            try:
-                requested = bool(cancelled())
-            except Exception:
-                return
-            if not requested:
+            requested = False
+            if cancelled is not None:
+                try:
+                    requested = bool(cancelled())
+                except Exception:
+                    return
+            deadline_reached = _deadline_passed(deadline)
+            if not requested and not deadline_reached:
                 continue
+            if deadline_reached and not requested:
+                timed_out.set()
             for response in list(response_holder):
                 close = getattr(response, "close", None)
                 if callable(close):
@@ -446,8 +473,10 @@ def _default_get(url, *, cancelled=None, **kwargs):
         # Buffer the small XML/JSON response while the cancellation monitor is
         # still active; Response.json()/text then use this cached content.
         _ = response.content
-        if cancelled():
+        if cancelled is not None and cancelled():
             raise DownloadCancelled("ECCC GeoMet extraction cancelled")
+        if timed_out.is_set() or _deadline_passed(deadline):
+            raise TimeoutError("GeoMet availability deadline expired")
         return response
     finally:
         done.set()
@@ -477,20 +506,30 @@ def _request(
     cancelled=None,
     retries=2,
     timeout=(10, 30),
+    deadline=None,
 ):
     """Issue one retry-bounded GeoMet request."""
     last_error = None
     for attempt in range(max(0, int(retries)) + 1):
         if cancelled is not None and cancelled():
             raise DownloadCancelled("ECCC GeoMet extraction cancelled")
+        if _deadline_passed(deadline):
+            raise RetrievalError("GeoMet availability probe timed out")
         try:
+            effective_timeout = _timeout_within_deadline(timeout, deadline)
             response = request_get(
                 GEOMET_URL,
                 params=params,
                 headers={"User-Agent": USER_AGENT},
-                timeout=timeout,
-                **({"cancelled": cancelled} if request_get is _default_get else {}),
+                timeout=effective_timeout,
+                **(
+                    {"cancelled": cancelled, "deadline": deadline}
+                    if request_get is _default_get
+                    else {}
+                ),
             )
+            if _deadline_passed(deadline):
+                raise RetrievalError("GeoMet availability probe timed out")
             status = int(getattr(response, "status_code", 0))
             if status == 200:
                 return response
@@ -505,13 +544,30 @@ def _request(
         except RetrievalError:
             raise
         except Exception as exc:  # network exceptions are safe to retry
+            if cancelled is not None and cancelled():
+                raise DownloadCancelled(
+                    "ECCC GeoMet extraction cancelled"
+                ) from exc
+            if _deadline_passed(deadline):
+                raise RetrievalError(
+                    "GeoMet availability probe timed out"
+                ) from exc
             last_error = exc
         if attempt < int(retries):
-            deadline = time.monotonic() + min(1.0, 0.2 * (2 ** attempt))
-            while time.monotonic() < deadline:
+            pause_until = time.monotonic() + min(
+                1.0, 0.2 * (2 ** attempt)
+            )
+            if deadline is not None:
+                pause_until = min(pause_until, float(deadline))
+            while time.monotonic() < pause_until:
                 if cancelled is not None and cancelled():
                     raise DownloadCancelled("ECCC GeoMet extraction cancelled")
-                time.sleep(min(0.05, deadline - time.monotonic()))
+                time.sleep(max(
+                    0.0,
+                    min(0.05, pause_until - time.monotonic()),
+                ))
+            if _deadline_passed(deadline):
+                raise RetrievalError("GeoMet availability probe timed out")
     raise RetrievalError("GeoMet request failed: %s" % last_error) from last_error
 
 
@@ -656,13 +712,24 @@ def _dimension_defaults(xml_text: str) -> dict[str, str]:
     return values
 
 
-def latest_reference_time(model, *, request_get=None, cancelled=None) -> datetime:
+def latest_reference_time(
+    model,
+    *,
+    request_get=None,
+    cancelled=None,
+    timeout=(10, 30),
+    retries=2,
+    deadline=None,
+) -> datetime:
     """Return the latest run advertised by layer-specific capabilities."""
     capability = get_capability(model)
     response = _request(
         request_get or _default_get,
         params=_capabilities_params(capability),
         cancelled=cancelled,
+        timeout=timeout,
+        retries=retries,
+        deadline=deadline,
     )
     defaults = _dimension_defaults(_response_text(response))
     value = defaults.get("reference_time")
@@ -1053,7 +1120,16 @@ def extract(
     )
 
 
-def probe(model, run_time=None, fxx=0, *, request_get=None, cancelled=None):
+def probe(
+    model,
+    run_time=None,
+    fxx=0,
+    *,
+    request_get=None,
+    cancelled=None,
+    request_timeout=None,
+    deadline_seconds=None,
+):
     """Return a lightweight layer-capability availability probe."""
     capability = get_capability(model)
     provider_fields = set(capability.fields)
@@ -1080,10 +1156,17 @@ def probe(model, run_time=None, fxx=0, *, request_get=None, cancelled=None):
         "surface_contract_version": SURFACE_CONTRACT_VERSION,
     }
     try:
+        deadline = (
+            None
+            if deadline_seconds is None
+            else time.monotonic() + max(0.001, float(deadline_seconds))
+        )
         latest = latest_reference_time(
             capability,
             request_get=request_get,
             cancelled=cancelled,
+            timeout=(10, 30) if request_timeout is None else request_timeout,
+            deadline=deadline,
         )
         run_dt = latest if run_time is None else _floor_cycle(
             run_time, capability.cycles
@@ -1104,6 +1187,8 @@ def probe(model, run_time=None, fxx=0, *, request_get=None, cancelled=None):
             and run_dt >= latest - timedelta(days=2)
         )
         result["grib"] = GEOMET_URL
+    except DownloadCancelled:
+        raise
     except Exception as exc:
         result["error"] = "%s: %s" % (type(exc).__name__, exc)
     return result

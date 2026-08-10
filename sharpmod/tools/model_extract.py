@@ -16,7 +16,8 @@ import shutil
 import sys
 import tempfile
 import threading
-from contextlib import redirect_stdout
+import time
+from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -46,6 +47,7 @@ from sharpmod.model_transport import (
     OptimizedTransportUnavailable,
     _valid_grib,
     download_herbie_subset,
+    download_herbie_subset_fallback,
     range_worker_count,
     ranges_from_inventory,
 )
@@ -1207,10 +1209,23 @@ def _invariant_height_plan(config):
     return NOAA_INVARIANT_SEARCH, NOAA_INVARIANT_FIELDS
 
 
-def _f000_publishes_surface_height(Herbie, config, run_dt, member=None):
+def _probe_cancel_if_requested(cancelled) -> None:
+    if cancelled is not None and cancelled():
+        raise DownloadCancelled("forecast-model availability probe cancelled")
+
+
+def _f000_publishes_surface_height(
+    Herbie,
+    config,
+    run_dt,
+    member=None,
+    *,
+    cancelled=None,
+):
     """Return whether this run's F000 file carries the invariant terrain height."""
     search, _fields = _invariant_height_plan(config)
     try:
+        _probe_cancel_if_requested(cancelled)
         companion = _create_herbie(
             Herbie,
             run_dt.strftime("%Y-%m-%d %H:%M"),
@@ -1220,9 +1235,14 @@ def _f000_publishes_surface_height(Herbie, config, run_dt, member=None):
             verbose=False,
             **_herbie_kwargs(config, member=member),
         )
+        _probe_cancel_if_requested(cancelled)
         if companion.grib is None:
             return False
-        return len(companion.inventory(search)) > 0
+        available = len(companion.inventory(search)) > 0
+        _probe_cancel_if_requested(cancelled)
+        return available
+    except DownloadCancelled:
+        raise
     except Exception:
         return False
 
@@ -1272,18 +1292,20 @@ def _surface_height_companion(
             workers=range_worker_count(default=4),
         )
     except OptimizedTransportUnavailable as exc:
-        # A companion must never be the reason a whole sounding fails, so fall
-        # back to Herbie's own subset download like the pressure-level path.
+        # A companion must never be the reason a whole sounding fails. Retain
+        # the permissive compatibility route without entering Herbie's
+        # synchronous, cancellation-blind ``download`` implementation.
         _LOGGER.info(
             "model_transport.companion_fallback model=%s run=%s reason=%s",
             config.key, run_dt.isoformat(), exc,
         )
-        download_kwargs = {"verbose": False}
-        if download_dir is not None:
-            download_kwargs["save_dir"] = os.fspath(download_dir)
-        with redirect_stdout(io.StringIO()):
-            path = companion.download(search, **download_kwargs)
-        transferred = 0
+        path, transferred = download_herbie_subset_fallback(
+            companion,
+            search,
+            inventory=inventory,
+            save_dir=download_dir,
+            cancelled=cancelled,
+        )
     local_path = _local_grib_path(path)
     if local_path is None:
         raise RetrievalError(
@@ -1364,14 +1386,12 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
             raise RetrievalError(
                 "no %s GRIB for run %s F%03d"
                 % (config.label, run_dt.isoformat(), int(fxx)))
-        # Herbie's download layer prints Unicode status glyphs by default.
-        # Windows GUI/worker streams can use CP1252, where those glyphs raise
-        # UnicodeEncodeError before the download even starts.
+        # Keep Herbie's xarray wrapper quiet if it consults its download cache.
+        # Windows GUI/worker streams can use CP1252, where Herbie's Unicode
+        # status glyphs otherwise raise before decoding starts.
         xarray_kwargs = {"remove_grib": False, "verbose": False}
-        download_kwargs = {"verbose": False}
         if download_dir is not None:
             xarray_kwargs["save_dir"] = os.fspath(download_dir)
-            download_kwargs["save_dir"] = os.fspath(download_dir)
         search, selected_fields, planned_inventory = _planned_model_search(
             H, config)
         contract_complete = _inventory_has_surface_contract(planned_inventory)
@@ -1453,15 +1473,24 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                 if transferred_bytes:
                     expected_bytes = int(transferred_bytes)
             except OptimizedTransportUnavailable as exc:
-                transport = "herbie"
+                transport = "compat-ranges"
                 _LOGGER.info(
                     "model_transport.fallback model=%s run=%s fxx=%03d "
                     "reason=%s",
                     config.key, run_dt.isoformat(), int(fxx), exc,
                 )
-                with redirect_stdout(io.StringIO()):
-                    downloaded = H.download(search, **download_kwargs)
+                downloaded, transferred_bytes = (
+                    download_herbie_subset_fallback(
+                        H,
+                        search,
+                        inventory=planned_inventory,
+                        save_dir=download_dir,
+                        cancelled=cancelled,
+                    )
+                )
                 local_path = _local_grib_path(downloaded)
+                if transferred_bytes:
+                    expected_bytes = int(transferred_bytes)
         if cancelled is not None and cancelled():
             raise DownloadCancelled("forecast-model download cancelled")
         if local_path is None:
@@ -1655,21 +1684,26 @@ def _decode_local_point(source, lat, lon):
 
 
 def _live_regional_guidance_enabled(value, source_grib) -> bool:
-    """Resolve the explicit/env/automatic live-HRRR guidance policy."""
+    """Resolve the explicit/env live-HRRR guidance policy.
+
+    Regional TOI is supplemental and costs up to eight additional sequential
+    HRRR frame requests.  It must therefore be opted into instead of delaying
+    the point sounding that the caller actually requested.  ``auto`` remains a
+    supported explicit compatibility mode, but it is no longer the default.
+    """
 
     if isinstance(value, bool):
         return value
     raw = value
     if raw is None:
-        raw = os.environ.get("SHARPMOD_REGIONAL_GUIDANCE", "auto")
+        raw = os.environ.get("SHARPMOD_REGIONAL_GUIDANCE", "off")
     mode = str(raw).strip().casefold()
     if mode in {"0", "false", "no", "off", "disabled"}:
         return False
     if mode in {"1", "true", "yes", "on", "enabled", "force"}:
         return True
-    # Automatic mode avoids surprising network access for caller-injected test
-    # datasets, while accepting HTTP, Zarr, and local cache sources used by the
-    # real GUI/CLI extraction paths.
+    # ``auto`` is retained for callers that deliberately want the v0.8.0
+    # source-aware behavior.  Normal extraction now resolves to ``off`` above.
     source = str(source_grib or "").strip()
     return bool(source) and not source.casefold().startswith("memory://")
 
@@ -2079,8 +2113,116 @@ def cleanup_transient_data(npz_path=None, download_dir=None):
         shutil.rmtree(os.fspath(download_dir), ignore_errors=True)
 
 
-def probe(model, run_time=None, fxx=0, member=None, open_subset=False):
+_HERBIE_PROBE_REQUEST_LOCK = threading.RLock()
+
+
+class _BoundedHerbieRequests:
+    """Thread-scoped timeout/cancellation proxy for Herbie's HTTP calls."""
+
+    def __init__(
+        self,
+        delegate,
+        *,
+        owner_thread: int,
+        request_timeout: float,
+        deadline: float | None,
+        cancelled,
+    ):
+        self._delegate = delegate
+        self._owner_thread = int(owner_thread)
+        self._request_timeout = max(0.1, float(request_timeout))
+        self._deadline = deadline
+        self._cancelled = cancelled
+
+    def __getattr__(self, name):
+        return getattr(self._delegate, name)
+
+    def _owner_call(self) -> bool:
+        return threading.get_ident() == self._owner_thread
+
+    def _remaining(self) -> float:
+        _probe_cancel_if_requested(self._cancelled)
+        if self._deadline is None:
+            return self._request_timeout
+        remaining = self._deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("forecast-model availability probe timed out")
+        return min(self._request_timeout, remaining)
+
+    @staticmethod
+    def _clamp_timeout(value, limit: float):
+        if value is None:
+            return limit
+        if isinstance(value, (tuple, list)):
+            return tuple(min(max(0.1, float(item)), limit) for item in value)
+        return min(max(0.1, float(value)), limit)
+
+    def _request(self, method: str, *args, **kwargs):
+        if not self._owner_call():
+            return getattr(self._delegate, method)(*args, **kwargs)
+        limit = self._remaining()
+        kwargs["timeout"] = self._clamp_timeout(kwargs.get("timeout"), limit)
+        response = getattr(self._delegate, method)(*args, **kwargs)
+        self._remaining()
+        return response
+
+    def get(self, *args, **kwargs):
+        return self._request("get", *args, **kwargs)
+
+    def head(self, *args, **kwargs):
+        return self._request("head", *args, **kwargs)
+
+
+@contextmanager
+def _bounded_herbie_probe_requests(
+    *,
+    request_timeout: float | None,
+    deadline_seconds: float | None,
+    cancelled,
+):
+    """Bound only this probe thread without changing concurrent downloads."""
+
+    if request_timeout is None and deadline_seconds is None:
+        yield
+        return
+    import herbie.core as herbie_core
+
+    timeout = 5.0 if request_timeout is None else float(request_timeout)
+    deadline = (
+        None
+        if deadline_seconds is None
+        else time.monotonic() + max(0.1, float(deadline_seconds))
+    )
+    with _HERBIE_PROBE_REQUEST_LOCK:
+        original = herbie_core.requests
+        proxy = _BoundedHerbieRequests(
+            original,
+            owner_thread=threading.get_ident(),
+            request_timeout=timeout,
+            deadline=deadline,
+            cancelled=cancelled,
+        )
+        herbie_core.requests = proxy
+        try:
+            yield
+        finally:
+            if herbie_core.requests is proxy:
+                herbie_core.requests = original
+
+
+def probe(
+    model,
+    run_time=None,
+    fxx=0,
+    member=None,
+    open_subset=False,
+    *,
+    cancelled=None,
+    request_timeout: float | None = None,
+    deadline_seconds: float | None = None,
+):
     """Return a live availability probe dict for one supported model."""
+    _probe_cancel_if_requested(cancelled)
     config = get_config(model)
     if config.unavailable_reason:
         return {
@@ -2105,7 +2247,12 @@ def probe(model, run_time=None, fxx=0, member=None, open_subset=False):
                 % config.label,
             }
         result = eccc_geomet.probe(
-            config.key, run_time=run_time, fxx=fxx
+            config.key,
+            run_time=run_time,
+            fxx=fxx,
+            cancelled=cancelled,
+            request_timeout=request_timeout,
+            deadline_seconds=deadline_seconds,
         )
         if open_subset:
             result["note"] = (
@@ -2129,49 +2276,68 @@ def probe(model, run_time=None, fxx=0, member=None, open_subset=False):
         "surface_contract_version": SURFACE_CONTRACT_VERSION,
     }
     try:
+        _probe_cancel_if_requested(cancelled)
         require_runtime_dependencies()
         Herbie = _load_herbie_class()
-        H = _create_herbie(
-            Herbie,
-            run_dt.strftime("%Y-%m-%d %H:%M"),
-            model=config.herbie_model,
-            product=config.product,
-            fxx=int(fxx),
-            verbose=False,
-            **_herbie_kwargs(config, member=member),
+        request_context = _bounded_herbie_probe_requests(
+            request_timeout=request_timeout,
+            deadline_seconds=deadline_seconds,
+            cancelled=cancelled,
         )
-        result["grib"] = str(H.grib)
-        inv = H.inventory()
-        result["inventory_rows"] = 0 if inv is None else int(len(inv))
-        result["available"] = H.grib is not None and inv is not None and len(inv) > 0
-        contract = surface_contract_status(inv)
-        result["surface_contract_complete"] = contract["complete"]
-        result["surface_contract_present"] = list(contract["present"])
-        result["surface_contract_missing"] = list(contract["missing"])
-        result["surface_contract_version"] = SURFACE_CONTRACT_VERSION
-        if (
-            not contract["complete"]
-            and int(fxx) != 0
-            and tuple(contract["missing"]) == ("surface_height",)
-            and _f000_publishes_surface_height(
-                Herbie, config, run_dt, member=member
+        with request_context:
+            _probe_cancel_if_requested(cancelled)
+            H = _create_herbie(
+                Herbie,
+                run_dt.strftime("%Y-%m-%d %H:%M"),
+                model=config.herbie_model,
+                product=config.product,
+                fxx=int(fxx),
+                verbose=False,
+                **_herbie_kwargs(config, member=member),
             )
-        ):
-            # Extraction completes this from the run's F000 invariant terrain
-            # height, so the request is usable even though this one forecast
-            # hour does not carry it.
-            result["surface_contract_invariant_companion"] = True
-            result["surface_contract_complete"] = True
-            result["surface_contract_present"] = [
-                *contract["present"], "surface_height",
-            ]
-            result["surface_contract_missing"] = []
-        if open_subset and result["available"]:
-            ds = H.xarray(config.search, remove_grib=False)
-            if isinstance(ds, list):
-                ds = _merge_datasets(ds)
-            result["subset_opened"] = True
-            result["data_vars"] = sorted(str(v) for v in ds.data_vars)
+            _probe_cancel_if_requested(cancelled)
+            result["grib"] = str(H.grib)
+            inv = H.inventory()
+            _probe_cancel_if_requested(cancelled)
+            result["inventory_rows"] = 0 if inv is None else int(len(inv))
+            result["available"] = (
+                H.grib is not None and inv is not None and len(inv) > 0
+            )
+            contract = surface_contract_status(inv)
+            result["surface_contract_complete"] = contract["complete"]
+            result["surface_contract_present"] = list(contract["present"])
+            result["surface_contract_missing"] = list(contract["missing"])
+            result["surface_contract_version"] = SURFACE_CONTRACT_VERSION
+            if (
+                not contract["complete"]
+                and int(fxx) != 0
+                and tuple(contract["missing"]) == ("surface_height",)
+                and _f000_publishes_surface_height(
+                    Herbie,
+                    config,
+                    run_dt,
+                    member=member,
+                    cancelled=cancelled,
+                )
+            ):
+                # Extraction completes this from the run's F000 invariant
+                # terrain height, so this request remains usable.
+                result["surface_contract_invariant_companion"] = True
+                result["surface_contract_complete"] = True
+                result["surface_contract_present"] = [
+                    *contract["present"], "surface_height",
+                ]
+                result["surface_contract_missing"] = []
+            if open_subset and result["available"]:
+                _probe_cancel_if_requested(cancelled)
+                ds = H.xarray(config.search, remove_grib=False)
+                _probe_cancel_if_requested(cancelled)
+                if isinstance(ds, list):
+                    ds = _merge_datasets(ds)
+                result["subset_opened"] = True
+                result["data_vars"] = sorted(str(v) for v in ds.data_vars)
+    except DownloadCancelled:
+        raise
     except Exception as exc:
         result["error"] = "%s: %s" % (type(exc).__name__, exc)
     return result
@@ -2260,10 +2426,19 @@ def main(argv=None):  # pragma: no cover - CLI wrapper
     parser.add_argument("--loc", default=None, help="location label")
     parser.add_argument("--render", nargs="?", const="", default=None,
                         metavar="PNG", help="also render the sounding to PNG")
-    parser.add_argument(
+    regional_guidance = parser.add_mutually_exclusive_group()
+    regional_guidance.add_argument(
+        "--regional-guidance",
+        action="store_true",
+        help=(
+            "also fetch live experimental HRRR regional TOI guidance "
+            "(up to eight extra frames)"
+        ),
+    )
+    regional_guidance.add_argument(
         "--no-regional-guidance",
         action="store_true",
-        help="skip live experimental HRRR regional TOI guidance",
+        help="explicitly skip live experimental HRRR regional TOI guidance",
     )
     parser.add_argument("--list", action="store_true",
                         help="list supported and known unsupported models")
@@ -2344,7 +2519,11 @@ def main(argv=None):  # pragma: no cover - CLI wrapper
                 args.model, args.lat, args.lon, run_time=run, fxx=args.fxx,
                 out_path=args.out, loc=args.loc, member=args.member,
                 download_dir=download_dir,
-                live_regional_guidance=(False if args.no_regional_guidance else None),
+                live_regional_guidance=(
+                    True
+                    if args.regional_guidance
+                    else False if args.no_regional_guidance else None
+                ),
             )
         except (ModelExtractionError, KeyError) as exc:
             print("ERROR: %s" % exc)

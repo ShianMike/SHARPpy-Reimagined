@@ -400,6 +400,51 @@ def test_default_request_cancellation_closes_blocked_sessions(
     assert time.monotonic() - began < 1.0
 
 
+def test_probe_deadline_closes_blocked_default_session(
+    small_gdps, monkeypatch
+):
+    import requests
+
+    started = threading.Event()
+    observed = {}
+
+    class BlockingSession:
+        def __init__(self):
+            self.closed = threading.Event()
+
+        def get(self, *_args, **kwargs):
+            observed["timeout"] = kwargs["timeout"]
+            started.set()
+            if not self.closed.wait(2.0):
+                raise TimeoutError("test deadline did not close the session")
+            raise OSError("socket closed at availability deadline")
+
+        def close(self):
+            self.closed.set()
+
+    monkeypatch.setattr(requests, "Session", BlockingSession)
+    began = time.monotonic()
+
+    result = eccc_geomet.probe(
+        "gdps",
+        run_time=RUN,
+        fxx=0,
+        request_timeout=2.0,
+        deadline_seconds=0.1,
+    )
+
+    assert started.is_set()
+    assert time.monotonic() - began < 1.0
+    assert 0 < observed["timeout"] <= 0.11
+    assert result["available"] is False
+    assert "timed out" in result["error"]
+
+
+def test_probe_propagates_cancellation_instead_of_returning_error(small_gdps):
+    with pytest.raises(eccc_geomet.DownloadCancelled):
+        eccc_geomet.probe("gdps", cancelled=lambda: True)
+
+
 def test_exact_reference_time_mismatch_is_rejected(small_gdps):
     def wrong_run_get(_url, *, params, headers, timeout):
         if params["REQUEST"] == "GetCapabilities":

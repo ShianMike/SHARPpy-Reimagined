@@ -311,6 +311,8 @@ class PickerWindow(QMainWindow):
         self._model_progress_stage = ""
         self._model_progress_total = 0
         self._model_progress_started = 0.0
+        self._model_progress_download_baseline = 0
+        self._model_availability_waiting_for_worker = False
         self._model_progress_timer = QTimer(self)
         self._model_progress_timer.setInterval(500)
         self._model_progress_timer.timeout.connect(
@@ -749,12 +751,20 @@ class PickerWindow(QMainWindow):
         return checkbox
 
     def _apply_default_parcel_to_viewers(self, parcel_key) -> None:
+        self._prune_closed_viewers()
         for viewer in list(getattr(self, "_viewers", [])):
-            _apply_default_parcel_to_window(viewer, parcel_key)
+            try:
+                _apply_default_parcel_to_window(viewer, parcel_key)
+            except RuntimeError:
+                continue
 
     def _apply_unit_preferences_to_viewers(self, config) -> None:
+        self._prune_closed_viewers()
         for viewer in list(getattr(self, "_viewers", [])):
-            _apply_unit_preferences_to_window(viewer, config)
+            try:
+                _apply_unit_preferences_to_window(viewer, config)
+            except RuntimeError:
+                continue
 
     # ====================================================================== #
     # Availability pre-flight check (green / red / gray)
@@ -1660,6 +1670,13 @@ class PickerWindow(QMainWindow):
             return
         self._model_availability_token += 1
         self._model_availability_timer.stop()
+        self._model_availability_waiting_for_worker = False
+        for worker in list(self._model_availability_workers):
+            try:
+                if worker.isRunning():
+                    worker.requestInterruption()
+            except RuntimeError:
+                continue
         self._model_available_run = None
         self._model_use_available_btn.hide()
         cfg = self._model_config()
@@ -1682,6 +1699,27 @@ class PickerWindow(QMainWindow):
         request = self._model_availability_request
         if request is None:
             return
+
+        # Keep this advisory path strictly single-flight. A stale Herbie probe
+        # may still be returning from one bounded network request; starting a
+        # replacement alongside it only multiplies network/native work and
+        # leaves several QThreads for shutdown to force-stop.
+        running = []
+        for worker in list(self._model_availability_workers):
+            try:
+                if worker.isRunning():
+                    running.append(worker)
+            except RuntimeError:
+                continue
+        if running:
+            self._model_availability_waiting_for_worker = True
+            for worker in running:
+                try:
+                    worker.requestInterruption()
+                except RuntimeError:
+                    pass
+            return
+        self._model_availability_waiting_for_worker = False
 
         # Resolve the native GRIB boundary on the GUI thread before the probe
         # worker imports Herbie/ecCodes.  On Windows, first loading an
@@ -1736,6 +1774,13 @@ class PickerWindow(QMainWindow):
         except ValueError:
             pass
         worker.deleteLater()
+        if (
+            getattr(self, "_model_availability_waiting_for_worker", False)
+            and self._model_availability_request is not None
+            and not getattr(self, "_shutdown_started", False)
+        ):
+            self._model_availability_waiting_for_worker = False
+            QTimer.singleShot(0, self._run_model_availability)
 
     def _use_model_available_run(self) -> None:
         """Apply the offered fallback only after the user explicitly opts in."""
@@ -2155,6 +2200,7 @@ class PickerWindow(QMainWindow):
         self._avail_request = None
         self._catalog_request = None
         self._model_availability_request = None
+        self._model_availability_waiting_for_worker = False
         self._avail_token += 1
         self._catalog_token += 1
         self._model_availability_token += 1
@@ -2194,16 +2240,27 @@ class PickerWindow(QMainWindow):
 
         started = time.monotonic()
         advisory_deadline = started + 1.0
+        model_availability_deadline = started + 5.0
         active_deadline = started + 5.0
+        model_availability_ids = {
+            id(worker)
+            for worker in getattr(self, "_model_availability_workers", ())
+            if worker is not None
+        }
         for worker in workers:
             try:
                 if not worker.isRunning():
                     continue
-                deadline = (
-                    advisory_deadline
-                    if id(worker) in advisory_ids
-                    else active_deadline
-                )
+                if id(worker) in model_availability_ids:
+                    # Probe HTTP calls are bounded to two seconds. Give that
+                    # cooperative cancellation path time to return before the
+                    # emergency QThread termination reserved for stuck native
+                    # code at application exit.
+                    deadline = model_availability_deadline
+                elif id(worker) in advisory_ids:
+                    deadline = advisory_deadline
+                else:
+                    deadline = active_deadline
                 remaining = max(0, int(
                     (deadline - time.monotonic()) * 1000))
                 if remaining > 0 and worker.wait(remaining):
@@ -2273,6 +2330,7 @@ class PickerWindow(QMainWindow):
             self._model_progress_stage = "locating"
             self._model_progress_total = 0
             self._model_progress_started = time.monotonic()
+            self._model_progress_download_baseline = 0
             self._model_progress.setRange(0, 0)
             self._model_progress.setFormat("")
             self._model_progress.show()
@@ -2286,12 +2344,19 @@ class PickerWindow(QMainWindow):
             self._model_progress_detail.hide()
             self._model_progress_stage = ""
             self._model_progress_total = 0
+            self._model_progress_download_baseline = 0
             self._model_cancel_btn.hide()
             self._model_fetch_btn.setText("Fetch && Display Forecast Sounding")
             self._model_timeline_btn.setText("Timeline…")
             self._model_update_fetch_state()
 
-    def _on_model_fetch_progress(self, stage: str, total_bytes: int) -> None:
+    def _on_model_fetch_progress(
+        self,
+        stage: str,
+        total_bytes: int,
+        download_baseline: int | None = None,
+        transfer_started: float | None = None,
+    ) -> None:
         """Switch the visible model-fetch progress to a real worker stage."""
         stage = str(stage)
         total_bytes = max(0, int(total_bytes or 0))
@@ -2304,7 +2369,23 @@ class PickerWindow(QMainWindow):
             "model_fetch.progress stage=%s total_bytes=%d",
             stage, self._model_progress_total)
 
-        if stage == "downloading":
+        if stage in {"downloading", "regional_downloading"}:
+            worker = self._model_worker
+            self._model_progress_download_baseline = max(
+                0,
+                int(
+                    download_baseline
+                    if download_baseline is not None
+                    else getattr(worker, "_progress_download_baseline", 0)
+                    or 0
+                ),
+            )
+            self._model_progress_started = float(
+                transfer_started
+                if transfer_started is not None
+                else getattr(worker, "_progress_transfer_started", 0.0)
+                or time.monotonic()
+            )
             if self._model_progress_total:
                 self._model_progress.setRange(0, 100)
                 self._model_progress.setValue(0)
@@ -2319,6 +2400,10 @@ class PickerWindow(QMainWindow):
             "town": ("Resolving the selected town name…", "Locating town…"),
             "locating": ("Locating model run\u2026", "Locating\u2026"),
             "decoding": ("Decoding downloaded GRIB fields\u2026", "Decoding\u2026"),
+            "regional_decoding": (
+                "Decoding supplemental regional guidance\u2026",
+                "Regional guidance\u2026",
+            ),
             "cached": ("Using cached model hour\u2026", "Extracting\u2026"),
             "extracting": ("Extracting the nearest grid point\u2026", "Extracting\u2026"),
             "writing": ("Writing the point sounding\u2026", "Writing\u2026"),
@@ -2335,7 +2420,9 @@ class PickerWindow(QMainWindow):
 
     def _poll_model_fetch_progress(self) -> None:
         """Update download percentage from bytes in the isolated GRIB tree."""
-        if self._model_progress_stage != "downloading":
+        if self._model_progress_stage not in {
+            "downloading", "regional_downloading"
+        }:
             return
         worker = self._model_worker
         if worker is None:
@@ -2354,10 +2441,16 @@ class PickerWindow(QMainWindow):
         except OSError:
             pass
 
+        downloaded = max(
+            0,
+            downloaded
+            - int(getattr(self, "_model_progress_download_baseline", 0) or 0),
+        )
         total = self._model_progress_total
         elapsed = max(0.001, time.monotonic() - self._model_progress_started)
         rate = downloaded / elapsed
         model_label = worker._model.upper()
+        regional = self._model_progress_stage == "regional_downloading"
         if total > 0:
             percent = min(100, max(0, int(downloaded * 100 / total)))
             self._model_progress.setRange(0, 100)
@@ -2371,16 +2464,29 @@ class PickerWindow(QMainWindow):
                 detail += (
                     f" \u2022 {_format_progress_bytes(rate)}/s"
                     f" \u2022 ~{_format_progress_duration(remaining)} left")
-            self._model_fetch_btn.setText(f"Downloading\u2026 {percent}%")
-            status = f"Downloading {model_label}: {percent}% \u2014 {detail}"
+            self._model_fetch_btn.setText(
+                f"{'Regional guidance' if regional else 'Downloading'}\u2026 "
+                f"{percent}%"
+            )
+            operation = (
+                f"Downloading regional guidance for {model_label}"
+                if regional else f"Downloading {model_label}"
+            )
+            status = f"{operation}: {percent}% \u2014 {detail}"
         else:
             self._model_progress.setRange(0, 0)
             self._model_progress.setFormat("")
             detail = _format_progress_bytes(downloaded)
             if rate > 0:
                 detail += f" \u2022 {_format_progress_bytes(rate)}/s"
-            self._model_fetch_btn.setText("Downloading\u2026")
-            status = f"Downloading {model_label}: {detail}"
+            self._model_fetch_btn.setText(
+                "Regional guidance\u2026" if regional else "Downloading\u2026"
+            )
+            operation = (
+                f"Downloading regional guidance for {model_label}"
+                if regional else f"Downloading {model_label}"
+            )
+            status = f"{operation}: {detail}"
         self._model_progress_detail.setText(detail)
         self.statusBar().showMessage(status)
 

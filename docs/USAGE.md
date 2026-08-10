@@ -394,9 +394,9 @@ model-extract gdps 45.50 -73.60 --run "2026-07-22 00:00" --fxx 6
 model-extract aigfs --probe --lookback-cycles 8 --require-surface-contract
 ```
 
-For a normal live HRRR extraction, regional TOI guidance is generated and
-embedded automatically. The bounded workflow requests compact HRRR `sfc` field
-subsets every three hours across the applicable 18-hour window — normally seven
+Regional TOI guidance is an explicit opt-in for live HRRR extraction. The
+bounded workflow requests compact HRRR `sfc` field subsets every three hours
+across the applicable 18-hour window — normally seven
 frames (`0,3,6,9,12,15,18`), or eight when the requested forecast hour falls off
 that interval — analyzes a 1400-km radius at roughly 12-km sampling, tracks the
 300-hPa jet in June-August (500 hPa otherwise), and uses the nearest connected
@@ -410,8 +410,9 @@ across the sampled window (measured against the official archive on
 2026-08-05). The plan is capped at eight sequential requests, and the workflow is
 failure-soft: a delayed field or a benign environment leaves TOI explicitly
 `UNAVAILABLE` without failing the sounding, and partial sampling is marked
-`degraded` rather than presented as complete. Use `--no-regional-guidance` to
-omit the supplemental fetch.
+`degraded` rather than presented as complete. Use `--regional-guidance` (or set
+`SHARPMOD_REGIONAL_GUIDANCE=on`) to request the supplemental fetch. It is off by
+default so it cannot delay the point sounding.
 
 The extractor requests every pressure level published for the chosen model,
 not only the standard mandatory levels. Without `--render`, it keeps the
@@ -520,12 +521,11 @@ failed, cancelled, interrupted, missing, or corrupt requests are retried. Use
 `--no-resume` to force every request. Output paths in the job must be relative
 to `--output-dir`.
 
-Experimental HRRR regional TOI guidance is **off in batch by default**. It needs
-seven extra regional frames per point, roughly 60-85 MiB and tens of seconds, and
-measured AUC 0.462 on the 339-case archive, so an unattended job should not pay
-for it silently. Interactive paths are unchanged — the GUI and single-point
-`model-extract` still follow the `auto` policy, and `SHARPMOD_REGIONAL_GUIDANCE`
-still overrides globally. Add `--regional-guidance` to opt a batch job in:
+Experimental HRRR regional TOI guidance is **off by default in every extraction
+path**. It needs seven extra regional frames per point, roughly 60-85 MiB and
+tens of seconds, and measured AUC 0.462 on the 339-case archive, so neither an
+interactive sounding nor an unattended job should pay for it silently. Add
+`--regional-guidance` to opt a CLI job in:
 
 ```bash
 model-batch-extract job.json --output-dir batch-output --regional-guidance
@@ -1216,7 +1216,7 @@ render_npz("oun.npz")                 # -> oun.png (PNG next to the .npz)
 | `CHART_FONT` | `Space Grotesk` | Chart font family (empty string uses SHARPpy's default) |
 | `SHARPMOD_HD_SCALE` | `2.0` | Pixel scale for HD PNG exports |
 | `SHARPMOD_UHD_SCALE` | `2.8` | Pixel scale for UHD PNG exports |
-| `SHARPMOD_REGIONAL_GUIDANCE` | `auto` | Live experimental HRRR TOI fetch; set `off` to disable or `on` to force |
+| `SHARPMOD_REGIONAL_GUIDANCE` | `off` | Live experimental HRRR TOI fetch; set `on` to enable or `auto` for legacy source-aware behavior |
 
 ```bash
 # Example: force headless explicitly (the renderer already defaults to it)

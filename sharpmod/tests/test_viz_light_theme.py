@@ -15,7 +15,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest
-from qtpy import QtGui
+from qtpy import QtCore, QtGui
 from sharppy.viz.preferences import PrefDialog
 from sutils.config import Config
 
@@ -59,6 +59,39 @@ def _apply_style(qt_app, controller, config, style):
     controller.config_changed.emit(config)
     for _ in range(4):
         qt_app.processEvents()
+
+
+def test_destroyed_window_disconnects_live_preference_callback(
+        qt_app, tmp_path, monkeypatch):
+    """A picker-owned signal must never retain a deleted sounding window."""
+
+    example = examples_dir() / "hrrr_point_36.68N_95.66W_f018.npz"
+    if not example.exists():
+        pytest.skip("HRRR .npz example unavailable")
+
+    render_mod.install_font(qt_app)
+    render_mod.install_render_patches()
+    prof_col, _stn_id = render_mod.decode(str(example))
+    config = render_mod.build_config(str(tmp_path))
+    win, controller = compose_window(config, prof_col, mount=False)
+
+    calls = []
+    monkeypatch.setattr(
+        "sharpmod.viz.SPCWindow.apply_preferences_to_window",
+        lambda target, changed: calls.append((target, changed)),
+    )
+    controller.config_changed.emit(config)
+    assert len(calls) == 1
+
+    win.deleteLater()
+    QtCore.QCoreApplication.sendPostedEvents(
+        None, QtCore.QEvent.DeferredDelete
+    )
+    qt_app.processEvents()
+    controller.config_changed.emit(config)
+
+    assert len(calls) == 1
+    controller.deleteLater()
 
 
 def _renderer_surfaces(sw):

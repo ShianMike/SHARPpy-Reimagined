@@ -257,6 +257,9 @@ a = Analysis(
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
+    # Keep Python bytecode in the fast PYZ archive. The recommended one-folder
+    # build sideloads its PKG beside the launcher below, so the PE itself does
+    # not need a large opaque archive appended to it.
     noarchive=False,
 )
 
@@ -274,7 +277,7 @@ if ONEFILE:
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
-        upx=True,
+        upx=False,
         upx_exclude=[],
         runtime_tmpdir=None,
         console=False,  # windowed GUI app -- no console window
@@ -296,7 +299,7 @@ else:
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
-        upx=True,
+        upx=False,
         console=False,  # windowed GUI app -- no console window
         disable_windowed_traceback=False,
         argv_emulation=False,
@@ -305,6 +308,7 @@ else:
         entitlements_file=None,
         icon=_ICON,
         version=_WINDOWS_VERSION_INFO,
+        append_pkg=False,
     )
     coll = COLLECT(
         exe,
@@ -312,7 +316,7 @@ else:
         a.zipfiles,
         a.datas,
         strip=False,
-        upx=True,
+        upx=False,
         upx_exclude=[],
         name="SHARPpy-Reimagined",
     )

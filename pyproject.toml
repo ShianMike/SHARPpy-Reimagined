@@ -9,7 +9,7 @@ description = "A modernized, standalone fork of the SHARPpy sounding renderer (P
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = "BSD-3-Clause"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "SHARPpy Reimagined maintainers" }]
 keywords = [
     "meteorology",

@@ -351,12 +351,26 @@ stale or in-tree release metadata, embeds `FileVersion` and `ProductVersion`
 from `sharpmod/_version.py`, and verifies the source, Python metadata, Rust
 module/metadata, frozen runtime, and PE fields all agree.
 
-Authenticode signing is optional. Configure both repository secrets
+### Code signing policy
+
+See the project [code signing policy](CODE_SIGNING_POLICY.md) for provider,
+maintainer-role, privacy, signature-verification, and release-provenance
+details.
+
+The release workflow supports SignPath open-source signing and a PFX fallback.
+SignPath uses the `SIGNPATH_API_TOKEN` repository secret together with the
+`SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`,
+`SIGNPATH_SIGNING_POLICY_SLUG`, and
+`SIGNPATH_ARTIFACT_CONFIGURATION_SLUG` repository variables. The constrained
+artifact definition is in
+`packaging/signpath-artifact-configuration.xml`.
+
+For a traditional certificate, configure both
 `WINDOWS_SIGNING_CERTIFICATE_BASE64` (a base64-encoded PFX) and
-`WINDOWS_SIGNING_CERTIFICATE_PASSWORD` to activate it; optionally set the
-`WINDOWS_SIGNING_TIMESTAMP_URL` repository variable. With neither secret, the
-workflow remains usable but marks the executables and release manifest
-explicitly as unsigned. Supplying only one signing secret fails the build.
+`WINDOWS_SIGNING_CERTIFICATE_PASSWORD`; optionally set the
+`WINDOWS_SIGNING_TIMESTAMP_URL` repository variable. The workflow rejects
+partial or mixed provider configuration. With no provider configured, it marks
+the executables and release manifest explicitly as unsigned.
 
 ## Command Line Tools
 
@@ -688,4 +702,4 @@ docs/
 
 This project builds on the abandoned upstream
 [SHARPpy](https://github.com/sharppy/SHARPpy) project. See [`LICENSE`](LICENSE)
-for license terms and attribution.
+for the BSD 3-Clause terms and [`NOTICE`](NOTICE) for upstream attribution.

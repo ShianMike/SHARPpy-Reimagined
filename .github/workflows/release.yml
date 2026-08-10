@@ -11,7 +11,8 @@ on:
         required: true
         default: "v0.8.1"
 
-# Build and test jobs are read-only. Only the isolated publish job below can
+# Build and test jobs have no repository write permission. A dedicated job can
+# write only provenance attestations, and only the isolated publish job can
 # create a tag or GitHub Release.
 permissions:
   contents: read
@@ -161,8 +162,9 @@ jobs:
     name: Build Windows downloads
     needs: [resolve-release, test-release]
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
+      actions: read
       contents: read
     env:
       SHARPMOD_BACKEND: "rust"
@@ -292,8 +294,60 @@ jobs:
           SHARPMOD_ONEFILE: "1"
         run: pyinstaller packaging/sharpmod_gui.spec --noconfirm
 
-      - name: Sign Windows executables when credentials are configured
-        id: signing
+      - name: Select Windows signing provider
+        id: signing-provider
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+        run: |
+          $pfxFields = @(
+            $env:WINDOWS_SIGNING_CERTIFICATE_BASE64,
+            $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD
+          )
+          $pfxCount = @(
+            $pfxFields | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          ).Count
+          if ($pfxCount -ne 0 -and $pfxCount -ne $pfxFields.Count) {
+            throw "Configure both WINDOWS_SIGNING_CERTIFICATE_BASE64 and WINDOWS_SIGNING_CERTIFICATE_PASSWORD, or neither"
+          }
+
+          $signPathFields = @(
+            $env:SIGNPATH_API_TOKEN,
+            $env:SIGNPATH_ORGANIZATION_ID,
+            $env:SIGNPATH_PROJECT_SLUG,
+            $env:SIGNPATH_SIGNING_POLICY_SLUG,
+            $env:SIGNPATH_ARTIFACT_CONFIGURATION_SLUG
+          )
+          $signPathCount = @(
+            $signPathFields | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          ).Count
+          if ($signPathCount -ne 0 -and $signPathCount -ne $signPathFields.Count) {
+            throw "Configure every SIGNPATH_* secret/variable, or none of them"
+          }
+          if ($pfxCount -gt 0 -and $signPathCount -gt 0) {
+            throw "Configure exactly one Windows signing provider, not both PFX and SignPath"
+          }
+
+          $provider = if ($signPathCount -gt 0) {
+            "SignPath"
+          }
+          elseif ($pfxCount -gt 0) {
+            "PFX"
+          }
+          else {
+            Write-Warning "No signing provider configured; release artifacts will be explicitly marked unsigned"
+            "Unsigned"
+          }
+          "provider=$provider" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Sign Windows executables with PFX
+        if: steps.signing-provider.outputs.provider == 'PFX'
         shell: pwsh
         env:
           WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
@@ -302,16 +356,6 @@ jobs:
         run: |
           $certificateBase64 = $env:WINDOWS_SIGNING_CERTIFICATE_BASE64
           $certificatePassword = $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD
-          $hasCertificate = -not [string]::IsNullOrWhiteSpace($certificateBase64)
-          $hasPassword = -not [string]::IsNullOrWhiteSpace($certificatePassword)
-          if ($hasCertificate -xor $hasPassword) {
-            throw "Configure both WINDOWS_SIGNING_CERTIFICATE_BASE64 and WINDOWS_SIGNING_CERTIFICATE_PASSWORD, or neither"
-          }
-          if (-not $hasCertificate) {
-            "mode=Unsigned" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-            Write-Warning "No signing certificate configured; release artifacts will be explicitly marked unsigned"
-            exit 0
-          }
 
           $signToolCommand = Get-Command "signtool.exe" -ErrorAction SilentlyContinue
           $signToolPath = if ($null -ne $signToolCommand) {
@@ -361,7 +405,85 @@ jobs:
               Remove-Item -LiteralPath $certificatePath -Force
             }
           }
-          "mode=Signed" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Stage Windows executables for SignPath
+        id: signpath-input
+        if: steps.signing-provider.outputs.provider == 'SignPath'
+        shell: pwsh
+        run: |
+          $version = (& python -c "from sharpmod._version import __version__; print(__version__)").Trim()
+          New-Item -ItemType Directory -Path "signpath-input/recommended" -Force | Out-Null
+          New-Item -ItemType Directory -Path "signpath-input/portable" -Force | Out-Null
+          Copy-Item -LiteralPath "dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe" `
+            -Destination "signpath-input/recommended/SHARPpy-Reimagined.exe"
+          Copy-Item -LiteralPath "dist/SHARPpy-Reimagined.exe" `
+            -Destination "signpath-input/portable/SHARPpy-Reimagined.exe"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload unsigned executables for SignPath
+        id: upload-unsigned-signpath
+        if: steps.signing-provider.outputs.provider == 'SignPath'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: unsigned-windows-signpath-${{ needs.resolve-release.outputs.tag }}
+          path: |
+            signpath-input/recommended/SHARPpy-Reimagined.exe
+            signpath-input/portable/SHARPpy-Reimagined.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Submit SignPath signing request
+        if: steps.signing-provider.outputs.provider == 'SignPath'
+        uses: signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned-signpath.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signpath-output
+          parameters: |
+            version: ${{ toJSON(steps.signpath-input.outputs.version) }}
+
+      - name: Install and verify SignPath-signed executables
+        if: steps.signing-provider.outputs.provider == 'SignPath'
+        shell: pwsh
+        run: |
+          $signedTargets = @(
+            @{
+              Source = "signpath-output/recommended/SHARPpy-Reimagined.exe"
+              Destination = "dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe"
+            },
+            @{
+              Source = "signpath-output/portable/SHARPpy-Reimagined.exe"
+              Destination = "dist/SHARPpy-Reimagined.exe"
+            }
+          )
+          foreach ($target in $signedTargets) {
+            if (-not (Test-Path -LiteralPath $target.Source -PathType Leaf)) {
+              throw "SignPath output is missing $($target.Source)"
+            }
+            $signature = Get-AuthenticodeSignature -LiteralPath $target.Source
+            if ($signature.Status -ne "Valid") {
+              throw "SignPath output has invalid Authenticode status $($signature.Status): $($target.Source)"
+            }
+            Copy-Item -LiteralPath $target.Source -Destination $target.Destination -Force
+          }
+
+      - name: Record Windows signing result
+        id: signing
+        shell: pwsh
+        env:
+          SIGNING_PROVIDER: ${{ steps.signing-provider.outputs.provider }}
+        run: |
+          $provider = $env:SIGNING_PROVIDER
+          $mode = if ($provider -eq "Unsigned") { "Unsigned" } else { "Signed" }
+          "provider=$provider" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "mode=$mode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Verify recommended one-folder artifact
         shell: pwsh
@@ -449,6 +571,7 @@ jobs:
           RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
           RELEASE_SOURCE_SHA: ${{ needs.resolve-release.outputs.source_sha }}
           SIGNING_MODE: ${{ steps.signing.outputs.mode }}
+          SIGNING_PROVIDER: ${{ steps.signing.outputs.provider }}
         run: |
           New-Item -ItemType Directory -Path "release-artifacts" -Force | Out-Null
           New-Item -ItemType Directory -Path "release-staging" -Force | Out-Null
@@ -467,6 +590,7 @@ jobs:
           beside the executable, and run SHARPpy-Reimagined.exe.
 
           Authenticode status for this release: $env:SIGNING_MODE
+          Signing provider: $env:SIGNING_PROVIDER
           "@ | Set-Content -Encoding utf8 `
             "release-staging/SHARPpy-Reimagined/README-WINDOWS.txt"
           Compress-Archive -Path "release-staging/SHARPpy-Reimagined" `
@@ -484,6 +608,7 @@ jobs:
             version = $sourceVersion
             source_sha = $env:RELEASE_SOURCE_SHA
             authenticode = $env:SIGNING_MODE.ToLowerInvariant()
+            signing_provider = $env:SIGNING_PROVIDER
             recommended_artifact = $recommendedName
             portable_artifact = $portableName
             portable_note = "Self-extracting convenience build; slower startup than the recommended one-folder ZIP."
@@ -511,9 +636,32 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  attest-windows-release:
+    name: Attest Windows release provenance
+    needs: [resolve-release, build-windows-exe]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download tested release artifacts for attestation
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: windows-release-${{ needs.resolve-release.outputs.tag }}
+          path: release-artifacts
+
+      - name: Attest tested release artifacts
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: release-artifacts/*
+
   publish:
     name: Publish GitHub Release
-    needs: [resolve-release, test-release, build-windows-exe]
+    needs: [resolve-release, test-release, build-windows-exe, attest-windows-release]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -539,7 +687,29 @@ jobs:
             Extract the ZIP and run `SHARPpy-Reimagined.exe` inside its folder. This one-folder build starts substantially faster than the self-extracting portable executable.
 
             The file ending in `portable-slower-startup.exe` is retained for single-file convenience. The release manifest states explicitly whether these executables were Authenticode-signed.
+
+            **Code signing policy:** https://github.com/ShianMike/SHARPpy-Reimagined/blob/main/CODE_SIGNING_POLICY.md
+
+            Verify GitHub build provenance after downloading an asset with `gh attestation verify PATH-TO-ASSET --repo ShianMike/SHARPpy-Reimagined`.
+          overwrite_files: true
           fail_on_unmatched_files: true
           files: release-artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Remove stale opposite signing marker
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if compgen -G 'release-artifacts/*-Authenticode-Signed.txt' >/dev/null; then
+            stale="SHARPpy-Reimagined-$RELEASE_TAG-Authenticode-Unsigned.txt"
+          else
+            stale="SHARPpy-Reimagined-$RELEASE_TAG-Authenticode-Signed.txt"
+          fi
+          assets=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
+          if printf '%s\n' "$assets" | grep -Fxq -- "$stale"; then
+            gh release delete-asset "$RELEASE_TAG" "$stale" --yes
+          fi

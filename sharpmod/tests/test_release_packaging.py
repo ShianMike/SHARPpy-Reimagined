@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 import sys
+import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -132,6 +133,10 @@ def test_pyinstaller_uses_validated_metadata_and_source_pe_version():
     assert "is_sharpmod_metadata_destination" in spec
     assert "datas += _SHARPMOD_METADATA" in spec
     assert spec.count("version=_WINDOWS_VERSION_INFO") == 2
+    assert "noarchive=False" in spec
+    assert "append_pkg=False" in spec
+    assert spec.count("upx=False") == 3
+    assert "upx=True" not in spec
 
 
 def test_frozen_launcher_reports_every_version_and_uses_lazy_picker_entrypoint():
@@ -170,15 +175,37 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
     assert "--require-dist-info" in metadata_check
     assert "--require-external-metadata" in metadata_check
 
-    signing = by_name["Sign Windows executables when credentials are configured"]
+    assert job["permissions"]["actions"] == "read"
+    assert "attestations" not in job["permissions"]
+    assert "id-token" not in job["permissions"]
+
+    provider = by_name["Select Windows signing provider"]
+    assert provider["id"] == "signing-provider"
+    provider_script = provider["run"]
+    assert "WINDOWS_SIGNING_CERTIFICATE_BASE64" in str(provider)
+    assert "WINDOWS_SIGNING_CERTIFICATE_PASSWORD" in str(provider)
+    assert "SIGNPATH_API_TOKEN" in str(provider)
+    assert "SIGNPATH_ARTIFACT_CONFIGURATION_SLUG" in str(provider)
+    assert "exactly one Windows signing provider" in provider_script
+
+    pfx_signing = by_name["Sign Windows executables with PFX"]
+    assert "signtool.exe" in pfx_signing["run"]
+    assert "steps.signing-provider.outputs.provider == 'PFX'" in pfx_signing["if"]
+
+    signpath = by_name["Submit SignPath signing request"]
+    assert signpath["uses"].startswith(
+        "signpath/github-action-submit-signing-request@"
+    )
+    assert signpath["with"]["github-artifact-id"].endswith(
+        ".outputs.artifact-id }}"
+    )
+    assert signpath["with"]["wait-for-completion"] == "true"
+    assert signpath["with"]["parameters"].strip().startswith("version:")
+
+    signing = by_name["Record Windows signing result"]
     assert signing["id"] == "signing"
-    signing_script = signing["run"]
-    assert "WINDOWS_SIGNING_CERTIFICATE_BASE64" in str(signing)
-    assert "WINDOWS_SIGNING_CERTIFICATE_PASSWORD" in str(signing)
-    assert "signtool.exe" in signing_script
-    assert "mode=Unsigned" in signing_script
-    assert "mode=Signed" in signing_script
-    assert "-xor" in signing_script
+    assert "mode=$mode" in signing["run"]
+    assert "provider=$provider" in signing["run"]
 
     verification_names = {
         "Verify recommended one-folder artifact",
@@ -197,12 +224,63 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
     assert "windows-x64-portable-slower-startup.exe" in stage
     assert "recommended_artifact" in stage
     assert "authenticode" in stage
+    assert "signing_provider" in stage
     assert "Authenticode-$env:SIGNING_MODE.txt" in stage
     assert "SHA256SUMS" in stage
 
-    publish = workflow["jobs"]["publish"]["steps"][-1]["with"]
+    attestation_job = workflow["jobs"]["attest-windows-release"]
+    assert attestation_job["permissions"]["attestations"] == "write"
+    assert attestation_job["permissions"]["id-token"] == "write"
+    attestation_by_name = {
+        step.get("name"): step for step in attestation_job["steps"]
+    }
+    attestation = attestation_by_name["Attest tested release artifacts"]
+    assert attestation["uses"].startswith("actions/attest@")
+    assert attestation["with"]["subject-path"] == "release-artifacts/*"
+
+    publish_steps = workflow["jobs"]["publish"]["steps"]
+    publish_by_name = {step.get("name"): step for step in publish_steps}
+    publish = publish_by_name["Publish GitHub Release"]["with"]
     assert "Recommended Windows download" in publish["body"]
     assert "portable-slower-startup.exe" in publish["body"]
+    assert "Code signing policy" in publish["body"]
+    assert "gh attestation verify" in publish["body"]
+    assert publish["overwrite_files"] == "true"
+    stale_cleanup = publish_by_name["Remove stale opposite signing marker"]["run"]
+    assert "Authenticode-Unsigned.txt" in stale_cleanup
+    assert "Authenticode-Signed.txt" in stale_cleanup
+    assert "gh release view" in stale_cleanup
+    assert "grep -Fxq" in stale_cleanup
+    assert "|| true" not in stale_cleanup
+
+
+def test_signpath_policy_and_artifact_configuration_are_constrained():
+    policy = (ROOT / "CODE_SIGNING_POLICY.md").read_text(encoding="utf-8")
+    assert "# Code signing policy" in policy
+    assert "Free code signing provided by" in policy
+    assert "certificate by" in policy
+    assert "Authors and committers" in policy
+    assert "Signing approver" in policy
+    assert "no advertising, analytics, or telemetry" in policy
+
+    config_path = ROOT / "packaging" / "signpath-artifact-configuration.xml"
+    tree = ET.parse(config_path)
+    namespace = {"sp": "http://signpath.io/artifact-configuration/v1"}
+    parameter = tree.find("sp:parameters/sp:parameter", namespace)
+    assert parameter is not None
+    assert parameter.attrib == {"name": "version", "required": "true"}
+
+    pe_set = tree.find("sp:zip-file/sp:pe-file-set", namespace)
+    assert pe_set is not None
+    assert pe_set.attrib["product-name"] == "SHARPpy Reimagined"
+    assert pe_set.attrib["product-version"] == "${version}"
+    assert pe_set.attrib["file-version"] == "${version}"
+    includes = pe_set.findall("sp:include", namespace)
+    assert [include.attrib["path"] for include in includes] == [
+        "recommended/SHARPpy-Reimagined.exe",
+        "portable/SHARPpy-Reimagined.exe",
+    ]
+    assert pe_set.find("sp:for-each/sp:authenticode-sign", namespace) is not None
 
 
 def test_windows_artifact_check_requires_pe_versions_and_explicit_signing_state():

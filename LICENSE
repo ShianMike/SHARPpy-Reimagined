@@ -4,10 +4,6 @@ Copyright (c) 2026, SHARPpy Reimagined maintainers
 Portions Copyright (c) 2015, SHARPpy developers
 (Patrick Marsh, Kelton Halbert, Greg Blumberg, Tim Supinie, and contributors)
 
-SHARPpy Reimagined is a modernized, standalone fork of the SHARPpy project. The original
-SHARPpy is distributed under the BSD 3-Clause License; this fork continues under
-the same terms.
-
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 

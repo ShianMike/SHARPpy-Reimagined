@@ -399,9 +399,25 @@ def test_release_write_permission_is_isolated_and_actions_are_immutable():
     workflow = _load_workflow("release.yml")
     assert workflow["permissions"] == {"contents": "read"}
     assert workflow["jobs"]["build-windows-exe"]["permissions"] == {
-        "contents": "read"
+        "actions": "read",
+        "contents": "read",
+    }
+    assert workflow["jobs"]["attest-windows-release"]["permissions"] == {
+        "actions": "read",
+        "attestations": "write",
+        "contents": "read",
+        "id-token": "write",
     }
     assert workflow["jobs"]["publish"]["permissions"] == {"contents": "write"}
+
+    for job_name, job in workflow["jobs"].items():
+        for permission, value in job.get("permissions", {}).items():
+            if value == "write":
+                assert (job_name, permission) in {
+                    ("attest-windows-release", "attestations"),
+                    ("attest-windows-release", "id-token"),
+                    ("publish", "contents"),
+                }
 
     action_ref = re.compile(r"^[^@]+@[0-9a-f]{40}$")
     for job in workflow["jobs"].values():

@@ -249,6 +249,9 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
     stale_cleanup = publish_by_name["Remove stale opposite signing marker"]["run"]
     assert "Authenticode-Unsigned.txt" in stale_cleanup
     assert "Authenticode-Signed.txt" in stale_cleanup
+    assert "gh release view" in stale_cleanup
+    assert "grep -Fxq" in stale_cleanup
+    assert "|| true" not in stale_cleanup
 
 
 def test_signpath_policy_and_artifact_configuration_are_constrained():

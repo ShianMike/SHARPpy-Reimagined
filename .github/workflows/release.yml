@@ -709,4 +709,7 @@ jobs:
           else
             stale="SHARPpy-Reimagined-$RELEASE_TAG-Authenticode-Signed.txt"
           fi
-          gh release delete-asset "$RELEASE_TAG" "$stale" --yes 2>/dev/null || true
+          assets=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
+          if printf '%s\n' "$assets" | grep -Fxq -- "$stale"; then
+            gh release delete-asset "$RELEASE_TAG" "$stale" --yes
+          fi

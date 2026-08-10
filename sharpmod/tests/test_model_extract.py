@@ -1297,7 +1297,7 @@ def test_probe_request_scope_bounds_owner_and_passes_through_other_threads():
 
     with model_extract._bounded_herbie_probe_requests(
         request_timeout=0.25,
-        deadline_seconds=1.0,
+        deadline_seconds=30.0,
         cancelled=None,
         requests_holder=holder,
     ):

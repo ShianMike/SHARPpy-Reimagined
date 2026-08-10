@@ -296,9 +296,8 @@ jobs:
       - name: Install audited dependency surface
         run: |
           python -m pip install --upgrade \
-            "pip==26.2" \
-            "setuptools==83.0.0" \
-            "wheel==0.47.0"
+            --constraint constraints/release.txt \
+            pip setuptools wheel
           python -m pip install -e ".[quality,era5,wrf,render]"
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip check

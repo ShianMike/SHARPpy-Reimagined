@@ -194,7 +194,7 @@ jobs:
         run: |
           $constraint = (Resolve-Path "constraints/release.txt").Path
           $env:PIP_CONSTRAINT = $constraint
-          python -m pip install "pip==26.2"
+          python -m pip install --upgrade --constraint $constraint pip
           python -m pip install --constraint $constraint `
             -e ".[render,era5,wrf]"
           python scripts/install_sharppy_compat.py --sharppy-only

@@ -96,8 +96,8 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     quality_scripts = "\n".join(
         step.get("run", "") for step in jobs["quality"]["steps"]
     )
-    assert '"pip==26.2"' in quality_scripts
-    assert '"setuptools==83.0.0"' in quality_scripts
+    assert "--constraint constraints/release.txt" in quality_scripts
+    assert "pip setuptools wheel" in quality_scripts
     assert "ruff check sharpmod scripts packaging" in quality_scripts
     assert "pip_audit --skip-editable" in quality_scripts
     live_scripts = "\n".join(
@@ -154,11 +154,11 @@ def test_test_profiles_timeouts_and_quality_tools_are_configured():
     assert "pytest-xdist>=3.6,<4.0" in config["project"][
         "optional-dependencies"
     ]["dev"]
-    assert set(config["project"]["optional-dependencies"]["quality"]) == {
-        "pip-audit==2.10.1",
-        "pytest-cov==7.1.0",
-        "ruff==0.16.0",
-    }
+    quality_requirements = config["project"]["optional-dependencies"]["quality"]
+    assert all(requirement.count("==") == 1 for requirement in quality_requirements)
+    quality_pins = dict(requirement.split("==", 1) for requirement in quality_requirements)
+    assert set(quality_pins) == {"pip-audit", "pytest-cov", "ruff"}
+    assert all(version for version in quality_pins.values())
     conftest = (ROOT / "sharpmod" / "tests" / "conftest.py").read_text(
         encoding="utf-8"
     )

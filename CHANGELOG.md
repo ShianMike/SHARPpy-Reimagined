@@ -19,6 +19,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   HRRR frames from reusable point-sounding cache payloads, corrected per-frame
   byte progress, and disconnected closed sounding windows from live preference
   updates.
+- Updated the locked release toolchain to pip 26.2.1, Ruff 0.16.1, and PyO3
+  0.29.2, while keeping workflow bootstrap pins sourced from the release
+  constraints so patch updates cannot make the release build self-conflicting.
 
 ## [0.8.0] - 2026-08-07
 

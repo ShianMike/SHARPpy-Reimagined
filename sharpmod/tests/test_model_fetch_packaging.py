@@ -14,7 +14,7 @@ def test_supported_python_and_wrf_dependencies_are_bounded():
 
     assert project["requires-python"] == ">=3.11,<3.14"
     assert project["license"] == "BSD-3-Clause"
-    assert project["license-files"] == ["LICENSE"]
+    assert project["license-files"] == ["LICENSE", "NOTICE"]
     classifiers = set(project["classifiers"])
     for minor in ("3.11", "3.12", "3.13"):
         assert f"Programming Language :: Python :: {minor}" in classifiers

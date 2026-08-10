@@ -1276,19 +1276,67 @@ def test_availability_probe_http_proxy_bounds_requests_and_honors_cancel():
     assert len(calls) == 1
 
 
-def test_probe_scopes_bounded_http_calls_and_restores_herbie_requests(
-        monkeypatch):
-    import herbie.core as herbie_core
-
+def test_probe_request_scope_bounds_owner_and_passes_through_other_threads():
     calls = []
 
     class Requests:
         def head(self, url, **kwargs):
-            calls.append((url, kwargs))
+            calls.append((model_extract.threading.get_ident(), url, kwargs))
             return object()
 
     delegate = Requests()
-    monkeypatch.setattr(herbie_core, "requests", delegate)
+    holder = SimpleNamespace(requests=delegate)
+    owner_thread = model_extract.threading.get_ident()
+    other_thread = {}
+
+    def concurrent_request():
+        other_thread["id"] = model_extract.threading.get_ident()
+        holder.requests.head(
+            "https://example.invalid/concurrent.grib2", timeout=30
+        )
+
+    with model_extract._bounded_herbie_probe_requests(
+        request_timeout=0.25,
+        deadline_seconds=1.0,
+        cancelled=None,
+        requests_holder=holder,
+    ):
+        worker = model_extract.threading.Thread(target=concurrent_request)
+        worker.start()
+        worker.join(timeout=1.0)
+        assert not worker.is_alive()
+        holder.requests.head(
+            "https://example.invalid/model.grib2", timeout=30
+        )
+
+    assert [call[1:] for call in calls if call[0] == owner_thread] == [(
+        "https://example.invalid/model.grib2",
+        {"timeout": 0.25},
+    )]
+    assert [call[1:] for call in calls if call[0] == other_thread["id"]] == [(
+        "https://example.invalid/concurrent.grib2",
+        {"timeout": 30},
+    )]
+    assert holder.requests is delegate
+
+
+def test_probe_forwards_bounds_to_scoped_herbie_requests(monkeypatch):
+    owner_thread = model_extract.threading.get_ident()
+    events = []
+
+    class RequestScope:
+        def __init__(self, **kwargs):
+            self._kwargs = kwargs
+
+        def __enter__(self):
+            events.append((model_extract.threading.get_ident(), self._kwargs))
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(
+        model_extract, "_bounded_herbie_probe_requests", RequestScope
+    )
     monkeypatch.setattr(
         model_extract, "require_runtime_dependencies", lambda: None
     )
@@ -1299,9 +1347,6 @@ def test_probe_scopes_bounded_http_calls_and_restores_herbie_requests(
 
         @staticmethod
         def inventory():
-            herbie_core.requests.head(
-                "https://example.invalid/model.grib2", timeout=30
-            )
             return pd.DataFrame({"variable": ["TMP"]})
 
     monkeypatch.setattr(
@@ -1316,11 +1361,11 @@ def test_probe_scopes_bounded_http_calls_and_restores_herbie_requests(
     )
 
     assert result["available"] is True
-    assert calls == [(
-        "https://example.invalid/model.grib2",
-        {"timeout": 0.25},
-    )]
-    assert herbie_core.requests is delegate
+    assert [event[1] for event in events if event[0] == owner_thread] == [{
+        "request_timeout": 0.25,
+        "deadline_seconds": 1.0,
+        "cancelled": None,
+    }]
 
 
 def test_cancelled_probe_stops_before_loading_native_runtime(monkeypatch):

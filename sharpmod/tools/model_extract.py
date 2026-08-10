@@ -2179,13 +2179,15 @@ def _bounded_herbie_probe_requests(
     request_timeout: float | None,
     deadline_seconds: float | None,
     cancelled,
+    requests_holder=None,
 ):
     """Bound only this probe thread without changing concurrent downloads."""
 
     if request_timeout is None and deadline_seconds is None:
         yield
         return
-    import herbie.core as herbie_core
+    if requests_holder is None:
+        import herbie.core as requests_holder
 
     timeout = 5.0 if request_timeout is None else float(request_timeout)
     deadline = (
@@ -2194,7 +2196,7 @@ def _bounded_herbie_probe_requests(
         else time.monotonic() + max(0.1, float(deadline_seconds))
     )
     with _HERBIE_PROBE_REQUEST_LOCK:
-        original = herbie_core.requests
+        original = requests_holder.requests
         proxy = _BoundedHerbieRequests(
             original,
             owner_thread=threading.get_ident(),
@@ -2202,12 +2204,12 @@ def _bounded_herbie_probe_requests(
             deadline=deadline,
             cancelled=cancelled,
         )
-        herbie_core.requests = proxy
+        requests_holder.requests = proxy
         try:
             yield
         finally:
-            if herbie_core.requests is proxy:
-                herbie_core.requests = original
+            if requests_holder.requests is proxy:
+                requests_holder.requests = original
 
 
 def probe(

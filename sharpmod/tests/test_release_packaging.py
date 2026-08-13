@@ -250,7 +250,9 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
     assert "Code signing policy" in publish["body"]
     assert "gh attestation verify" in publish["body"]
     assert publish["overwrite_files"] == "true"
-    stale_cleanup = publish_by_name["Remove stale opposite signing marker"]["run"]
+    stale_cleanup = publish_by_name["Remove stale release assets"]["run"]
+    assert "windows-x64-RECOMMENDED.zip" in stale_cleanup
+    assert "portable-slower-startup.exe" in stale_cleanup
     assert "Authenticode-Unsigned.txt" in stale_cleanup
     assert "Authenticode-Signed.txt" in stale_cleanup
     assert "gh release view" in stale_cleanup

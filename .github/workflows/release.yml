@@ -697,19 +697,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Remove stale opposite signing marker
+      - name: Remove stale release assets
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
         run: |
           set -euo pipefail
+          assets=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
+
+          for stale in \
+            "SHARPpy-Reimagined-$RELEASE_TAG-windows-x64-RECOMMENDED.zip" \
+            "SHARPpy-Reimagined-$RELEASE_TAG-windows-x64-portable-slower-startup.exe"
+          do
+            if printf '%s\n' "$assets" | grep -Fxq -- "$stale"; then
+              gh release delete-asset "$RELEASE_TAG" "$stale" --yes
+            fi
+          done
+
           if compgen -G 'release-artifacts/*-Authenticode-Signed.txt' >/dev/null; then
             stale="SHARPpy-Reimagined-$RELEASE_TAG-Authenticode-Unsigned.txt"
           else
             stale="SHARPpy-Reimagined-$RELEASE_TAG-Authenticode-Signed.txt"
           fi
-          assets=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
           if printf '%s\n' "$assets" | grep -Fxq -- "$stale"; then
             gh release delete-asset "$RELEASE_TAG" "$stale" --yes
           fi

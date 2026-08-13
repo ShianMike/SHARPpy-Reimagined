@@ -337,7 +337,7 @@ The result is `dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe`. Set
 `SHARPMOD_ONEFILE=1` in the build environment for a single self-extracting
 `dist/SHARPpy-Reimagined.exe` instead. The one-folder ZIP is the recommended
 Windows download because it starts substantially faster; the release page
-labels the one-file build `portable-slower-startup` so the tradeoff is clear.
+labels the one-file build `portable` and explains the startup tradeoff in prose.
 The official release workflow builds and installs `sharpmod_rs` before
 PyInstaller packages the executable, making Rust the `auto` backend in the
 published application. For custom local builds, the spec collects a compatible

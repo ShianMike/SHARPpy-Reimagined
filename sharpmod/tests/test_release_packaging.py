@@ -220,8 +220,10 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
         assert "sharpmod_rs_metadata" in script
 
     stage = by_name["Stage clearly labeled release artifacts"]["run"]
-    assert "windows-x64-RECOMMENDED.zip" in stage
-    assert "windows-x64-portable-slower-startup.exe" in stage
+    assert "windows-x64.zip" in stage
+    assert "windows-x64-portable.exe" in stage
+    assert "windows-x64-RECOMMENDED.zip" not in stage
+    assert "portable-slower-startup.exe" not in stage
     assert "recommended_artifact" in stage
     assert "authenticode" in stage
     assert "signing_provider" in stage
@@ -242,7 +244,9 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
     publish_by_name = {step.get("name"): step for step in publish_steps}
     publish = publish_by_name["Publish GitHub Release"]["with"]
     assert "Recommended Windows download" in publish["body"]
-    assert "portable-slower-startup.exe" in publish["body"]
+    assert "portable.exe" in publish["body"]
+    assert "windows-x64-RECOMMENDED.zip" not in publish["body"]
+    assert "portable-slower-startup.exe" not in publish["body"]
     assert "Code signing policy" in publish["body"]
     assert "gh attestation verify" in publish["body"]
     assert publish["overwrite_files"] == "true"

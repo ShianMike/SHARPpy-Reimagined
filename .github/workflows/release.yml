@@ -578,8 +578,8 @@ jobs:
           Copy-Item -LiteralPath "dist/SHARPpy-Reimagined" `
             -Destination "release-staging/SHARPpy-Reimagined" -Recurse
 
-          $recommendedName = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64-RECOMMENDED.zip"
-          $portableName = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64-portable-slower-startup.exe"
+          $recommendedName = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip"
+          $portableName = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64-portable.exe"
           @"
           SHARPpy Reimagined $env:RELEASE_TAG for Windows x64
 
@@ -682,11 +682,11 @@ jobs:
           name: SHARPpy Reimagined ${{ needs.resolve-release.outputs.tag }}
           generate_release_notes: true
           body: |
-            **Recommended Windows download:** `SHARPpy-Reimagined-${{ needs.resolve-release.outputs.tag }}-windows-x64-RECOMMENDED.zip`
+            **Recommended Windows download:** `SHARPpy-Reimagined-${{ needs.resolve-release.outputs.tag }}-windows-x64.zip`
 
             Extract the ZIP and run `SHARPpy-Reimagined.exe` inside its folder. This one-folder build starts substantially faster than the self-extracting portable executable.
 
-            The file ending in `portable-slower-startup.exe` is retained for single-file convenience. The release manifest states explicitly whether these executables were Authenticode-signed.
+            The file ending in `portable.exe` is retained for single-file convenience and starts more slowly because it self-extracts at launch. The release manifest states explicitly whether these executables were Authenticode-signed.
 
             **Code signing policy:** https://github.com/ShianMike/SHARPpy-Reimagined/blob/main/CODE_SIGNING_POLICY.md
 
@@ -697,19 +697,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Remove stale opposite signing marker
+      - name: Remove stale release assets
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
         run: |
           set -euo pipefail
+          assets=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
+
+          for stale in \
+            "SHARPpy-Reimagined-$RELEASE_TAG-windows-x64-RECOMMENDED.zip" \
+            "SHARPpy-Reimagined-$RELEASE_TAG-windows-x64-portable-slower-startup.exe"
+          do
+            if printf '%s\n' "$assets" | grep -Fxq -- "$stale"; then
+              gh release delete-asset "$RELEASE_TAG" "$stale" --yes
+            fi
+          done
+
           if compgen -G 'release-artifacts/*-Authenticode-Signed.txt' >/dev/null; then
             stale="SHARPpy-Reimagined-$RELEASE_TAG-Authenticode-Unsigned.txt"
           else
             stale="SHARPpy-Reimagined-$RELEASE_TAG-Authenticode-Signed.txt"
           fi
-          assets=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
           if printf '%s\n' "$assets" | grep -Fxq -- "$stale"; then
             gh release delete-asset "$RELEASE_TAG" "$stale" --yes
           fi

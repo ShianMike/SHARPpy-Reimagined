@@ -288,6 +288,7 @@ def test_model_extract_writes_loadable_npz(tmp_path, monkeypatch):
         assert str(npz["model"]) == "GFS"
         assert str(npz["loc"]) == "test-point"
         assert int(npz["fxx"]) == 6
+        assert bool(npz["observed"]) is False
         value = float(np.asarray(
             npz["surface_relative_vorticity"]).reshape(-1)[0])
         assert value == pytest.approx(8.0e-5)
@@ -295,6 +296,7 @@ def test_model_extract_writes_loadable_npz(tmp_path, monkeypatch):
     prof_collection, loc = decoder_mod.load_npz(str(out_path))
     assert loc == "test-point"
     assert prof_collection.getMeta("model") == "GFS"
+    assert prof_collection.getMeta("observed") is False
     assert prof_collection.getMeta("surface_relative_vorticity") == pytest.approx(
         8.0e-5)
 
@@ -321,107 +323,6 @@ def test_hrrr_extract_requires_and_records_verified_surface_merge(tmp_path):
     assert metadata["surface_merged"] is True
     assert metadata["surface_pressure_hpa"] == 900.0
     assert metadata["below_ground_levels_removed"] == 1
-
-
-def test_hrrr_extract_attaches_live_regional_guidance_to_sidecar(
-        tmp_path, monkeypatch):
-    output = tmp_path / "hrrr_regional.npz"
-    seen = {}
-
-    def fake_guidance(run_dt, fxx, lat, lon, **kwargs):
-        seen.update(
-            run_dt=run_dt,
-            fxx=fxx,
-            lat=lat,
-            lon=lon,
-            download_dir=kwargs["download_dir"],
-        )
-        return {
-            "schema_version": 2,
-            "experimental_not_official": True,
-            "toi": {
-                "state": "experimental",
-                "method_version": "live-test-v1",
-                "features": {
-                    "pressure_level_hpa": 300,
-                    "translation_speed_kt": 41.0,
-                    "maximum_jet_speed_kt": 90.0,
-                    "jet_to_risk_distance_km": 250.0,
-                    "jet_to_risk_bearing_deg": 325.0,
-                    "maximum_stp": 4.0,
-                    "month": 7,
-                },
-            },
-        }
-
-    monkeypatch.setattr(
-        model_extract, "_live_hrrr_guidance_mapping", fake_guidance
-    )
-    downloads = tmp_path / "downloads"
-    model_extract.extract(
-        "hrrr",
-        35.0,
-        -99.0,
-        run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
-        fxx=6,
-        out_path=output,
-        dataset=_dataset_with_surface(),
-        download_dir=downloads,
-        source_grib="https://example.invalid/hrrr.grib2",
-        live_regional_guidance=True,
-    )
-
-    import json
-
-    metadata = json.loads(output.with_suffix(".json").read_text("utf-8"))
-    assert metadata["regional_guidance"]["toi"]["state"] == "experimental"
-    assert metadata["regional_guidance"]["toi"]["features"][
-        "translation_speed_kt"
-    ] == pytest.approx(41.0)
-    assert seen["download_dir"] == downloads
-    assert (seen["fxx"], seen["lat"], seen["lon"]) == (6, 35.0, -99.0)
-
-
-def test_hrrr_extract_skips_regional_guidance_by_default(tmp_path, monkeypatch):
-    """A point sounding must not wait for seven supplemental HRRR frames."""
-
-    output = tmp_path / "hrrr_fast_default.npz"
-
-    def unexpected_guidance(*_args, **_kwargs):
-        raise AssertionError("default extraction started regional guidance")
-
-    monkeypatch.delenv("SHARPMOD_REGIONAL_GUIDANCE", raising=False)
-    monkeypatch.setattr(
-        model_extract, "_live_hrrr_guidance_mapping", unexpected_guidance
-    )
-
-    model_extract.extract(
-        "hrrr",
-        35.0,
-        -99.0,
-        run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
-        out_path=output,
-        dataset=_dataset_with_surface(),
-        source_grib="https://example.invalid/hrrr.grib2",
-    )
-
-    import json
-
-    metadata = json.loads(output.with_suffix(".json").read_text("utf-8"))
-    assert "regional_guidance" not in metadata
-
-
-def test_regional_guidance_environment_can_opt_in(monkeypatch):
-    monkeypatch.delenv("SHARPMOD_REGIONAL_GUIDANCE", raising=False)
-    source = "https://example.invalid/hrrr.grib2"
-
-    assert model_extract._live_regional_guidance_enabled(None, source) is False
-
-    monkeypatch.setenv("SHARPMOD_REGIONAL_GUIDANCE", "on")
-    assert model_extract._live_regional_guidance_enabled(None, source) is True
-
-    monkeypatch.setenv("SHARPMOD_REGIONAL_GUIDANCE", "auto")
-    assert model_extract._live_regional_guidance_enabled(None, source) is True
 
 
 def test_hrrr_extract_fails_closed_without_verified_surface(tmp_path):
@@ -1486,24 +1387,6 @@ def test_probe_cli_propagates_open_subset_during_lookback(monkeypatch):
 
     assert result == 0
     assert seen["open_subset"] is True
-
-
-def test_model_extract_cli_regional_guidance_is_opt_in(monkeypatch, capsys):
-    seen = []
-
-    def fake_extract(*_args, **kwargs):
-        seen.append(kwargs["live_regional_guidance"])
-        return "point.npz"
-
-    monkeypatch.setattr(model_extract, "extract", fake_extract)
-    base = ["hrrr", "35", "-99"]
-
-    assert model_extract.main(base) == 0
-    assert model_extract.main([*base, "--regional-guidance"]) == 0
-    assert model_extract.main([*base, "--no-regional-guidance"]) == 0
-
-    assert seen == [None, True, False]
-    capsys.readouterr()
 
 
 def test_render_mode_removes_fetched_data_but_keeps_png(tmp_path, monkeypatch):

@@ -504,6 +504,8 @@ def attach_json_sidecar(prof_col, filename) -> dict[str, Any] | None:
                 value = float(value)
             except (TypeError, ValueError, OverflowError):
                 continue
+        elif key == "observed" and not isinstance(value, bool):
+            continue
         elif key == "loc":
             # A decoder-derived station name wins unless it is absent.
             try:
@@ -566,11 +568,14 @@ def load_npz(filename):
         ):
             raise ValueError("portable sounding longitude is out of range")
         model_name = str(_npz_scalar(d, "model", default="HRRR")).strip()
-        observed_value = (
-            bool(_npz_scalar(d, "observed"))
-            if "observed" in d
-            else model_name.casefold().startswith("observed")
-        )
+        if "observed" in d:
+            observed_value = _npz_scalar(d, "observed")
+            if not isinstance(observed_value, bool):
+                raise ValueError(
+                    "portable sounding field 'observed' must be a Boolean"
+                )
+        else:
+            observed_value = model_name.casefold().startswith("observed")
 
         optional_surface_fields = {}
         for key in (

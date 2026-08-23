@@ -91,26 +91,7 @@ def apply_render_font_quality(font, scaled=None):
     return font
 
 
-#: Short marker for a value that has not been validated against outcomes, as
-#: opposed to a settled forecast quantity.  It is not a unit, but it is rendered
-#: through the same smaller-suffix path so the qualifier stays attached to the
-#: number and cannot be separated from it by a line break or a copy/paste.
-#:
-#: Named for its role rather than its wording, so changing the word does not
-#: require renaming every call site.
-#:
-#: MEASURED against the real TOI cell at Space Grotesk 13px: the cell is 122px,
-#: the "TOI = " label takes 34px and the value "4.2" another 19px, leaving a 67px
-#: suffix budget.  Because the marker is listed in ``_UNIT_SUFFIXES`` below it is
-#: drawn at ``UNIT_FONT_SCALE`` (10px), where " hypothetical" measures 65px and
-#: fits with 2px spare.  That margin is thin by design of the layout, not by
-#: choice, so ``IndexBoard._suffix_fits`` still drops the marker whole if a
-#: platform substitutes a wider face -- registration makes it fit, it does not
-#: make it guaranteed.
-UNVALIDATED_SUFFIX = " hypothetical"
-
 _UNIT_SUFFIXES = tuple(sorted((
-    UNVALIDATED_SUFFIX,
     " degrees C/km",
     " degrees C",
     " m\u00b3/s\u00b3",

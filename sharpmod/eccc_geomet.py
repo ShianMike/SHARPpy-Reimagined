@@ -1012,6 +1012,7 @@ def write_point_dataset(dataset, out_path, *, loc=None, progress_callback=None):
         "run": run_str,
         "valid": valid_str,
         "fxx": dataset.fxx,
+        "observed": False,
     }
     meta = {
         "model": capability.label,
@@ -1024,6 +1025,7 @@ def write_point_dataset(dataset, out_path, *, loc=None, progress_callback=None):
         "run": run_str,
         "valid": valid_str,
         "fxx": dataset.fxx,
+        "observed": False,
         "npz": os.path.abspath(out_path),
         "levels": int(np.asarray(cols["pres"]).size),
         "provider": capability.provider,

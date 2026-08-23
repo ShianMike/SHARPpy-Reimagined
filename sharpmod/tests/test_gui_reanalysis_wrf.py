@@ -241,6 +241,9 @@ def test_wrf_inspection_and_extraction_enforce_real_grid_perimeter(tmp_path):
     assert metadata["backend"] == "xarray/NetCDF WRF"
     assert metadata["decoder"] == "raw wrfout pressure-column extractor"
     assert metadata["cache_hit"] is False
+    assert metadata["observed"] is False
+    with np.load(out, allow_pickle=False) as payload:
+        assert bool(payload["observed"]) is False
 
     outside = tmp_path / "outside.npz"
     with pytest.raises(wrf_extract.ParameterRangeError, match="outside"):

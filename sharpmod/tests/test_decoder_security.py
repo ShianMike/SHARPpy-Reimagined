@@ -104,6 +104,29 @@ def test_npz_decoder_rejects_invalid_coordinates(
         decoder.load_npz(archive)
 
 
+@pytest.mark.parametrize("invalid_observed", ["false", 0, 1])
+def test_npz_decoder_rejects_non_boolean_observed_flag(
+        tmp_path, invalid_observed):
+    """Text and integer truthiness must not invert forecast classification."""
+    archive = tmp_path / "invalid-observed.npz"
+    np.savez(
+        archive,
+        **_portable_arrays(observed=invalid_observed),
+    )
+
+    with pytest.raises(ValueError, match="observed.*Boolean"):
+        decoder.load_npz(archive)
+
+
+def test_npz_decoder_accepts_boolean_observed_flag(tmp_path):
+    archive = tmp_path / "forecast.npz"
+    np.savez(archive, **_portable_arrays(observed=np.bool_(False)))
+
+    collection, _station_id = decoder.load_npz(archive)
+
+    assert collection.getMeta("observed") is False
+
+
 def test_spc_decode_attaches_adjacent_coordinate_sidecar():
     sounding = (
         examples_dir()
@@ -117,7 +140,49 @@ def test_spc_decode_attaches_adjacent_coordinate_sidecar():
     assert collection.getMeta("lat") == pytest.approx(36.675168663242175)
     assert collection.getMeta("lon") == pytest.approx(-95.65655745938363)
     assert collection.getMeta("run") == datetime(2026, 6, 25, 6)
+    assert collection.getMeta("observed") is False
     assert collection.getMeta("metadata_sidecar").endswith(".spc.json")
+
+
+def test_spc_decode_uses_generated_common_stem_forecast_sidecar(tmp_path):
+    """Extractor-style ``forecast.json`` preserves forecast classification."""
+    source = examples_dir() / "hrrr_point_36.68N_95.66W_f018.spc"
+    sounding = tmp_path / "forecast.spc"
+    sounding.write_bytes(source.read_bytes())
+    sounding.with_suffix(".json").write_text(
+        '{"model": "HRRR", "run": "2026-06-25 06:00", '
+        '"observed": false}',
+        encoding="utf-8",
+    )
+
+    collection, _station_id = render.decode(str(sounding))
+
+    assert collection.getMeta("model") == "HRRR"
+    assert collection.getMeta("observed") is False
+    assert collection.getMeta("metadata_sidecar").endswith("forecast.json")
+
+
+def test_sidecar_rejects_string_observed_flag(tmp_path):
+    sounding = tmp_path / "forecast.spc"
+    sounding.with_suffix(".spc.json").write_text(
+        '{"observed": "false"}', encoding="utf-8"
+    )
+
+    class Collection:
+        def __init__(self):
+            self.metadata = {"loc": "TEST"}
+
+        def getMeta(self, key):
+            return self.metadata[key]
+
+        def setMeta(self, key, value):
+            self.metadata[key] = value
+
+    collection = Collection()
+    decoder.attach_json_sidecar(collection, sounding)
+
+    assert "observed" not in collection.metadata
+    assert collection.metadata["metadata_sidecar"].endswith(".spc.json")
 
 
 def test_remote_decode_downloads_once_before_trying_registry(monkeypatch):

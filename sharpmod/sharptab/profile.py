@@ -74,6 +74,11 @@ from .constants import MISSING, is_missing, PARAM_REGISTRY
 
 __all__ = ["Profile", "create_profile", "DERIVED_ATTRS"]
 
+# Numeric sentinel required by the upstream Profile.copy compatibility
+# attributes below. Keep it local: decoding/extraction is a supported base
+# install path and must not import the optional SHARPpy rendering stack.
+SHARPPY_MISSING = -9999.0
+
 
 # ---------------------------------------------------------------------------
 # Derived-attribute dispatch tables
@@ -232,6 +237,28 @@ class Profile:
         self.wetbulb = None if wetbulb is None else \
             ma.masked_invalid(ma.asarray(wetbulb, dtype=float))
         self.meta = dict(meta) if meta else {}
+
+        # The interactive viewer promotes raw profiles through the upstream
+        # ``sharppy`` Profile.copy contract. That contract reads these legacy
+        # attributes directly from ``__dict__`` rather than consulting
+        # ``meta``. Mirror the metadata here so a profile fetched during an
+        # availability check can be displayed directly without a temporary
+        # NPZ encode/decode round trip.
+        self.location = self.meta.get(
+            "location", self.meta.get("loc")
+        )
+        self.date = self.meta.get(
+            "date", self.meta.get("valid", self.meta.get("run"))
+        )
+        self.latitude = self.meta.get(
+            "latitude", self.meta.get("lat", ma.masked)
+        )
+        self.strictQC = False
+        # Upstream Profile.copy and ConvectiveProfile treat this as a numeric
+        # fill sentinel.  The fork's masked ``MISSING`` object remains correct
+        # for lazy derived values, but using it here makes upstream masked-array
+        # fill values collapse to 0.0 during viewer promotion/export.
+        self.missing = SHARPPY_MISSING
 
         # Preserve any explicitly requested masks from the source arrays.
         for name, src in (("pres", pres), ("hght", hght), ("tmpc", tmpc),

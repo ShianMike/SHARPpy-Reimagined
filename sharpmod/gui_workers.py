@@ -1100,7 +1100,7 @@ class _ModelFetchWorker(QThread):
     def _report_progress(self, stage: str, total_bytes: int = 0) -> None:
         """Forward extractor progress safely across the Qt thread boundary."""
         stage = str(stage)
-        if stage in {"downloading", "regional_downloading"}:
+        if stage == "downloading":
             baseline = 0
             try:
                 for root, _dirs, files in os.walk(self._download_dir):

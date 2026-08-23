@@ -263,7 +263,7 @@ def extract(lat, lon, valid_time=None, out_path=None, dataset=None,
         "dwpc": cols["dwpc"], "wdir": cols["wdir"], "wspd": cols["wspd"],
         "omeg": cols["omeg"], "uwnd": cols["u"], "vwnd": cols["v"],
         "lat": glat, "lon": glon, "loc": loc, "model": MODEL_LABEL,
-        "run": run_str, "valid": valid_str, "fxx": fxx,
+        "run": run_str, "valid": valid_str, "fxx": fxx, "observed": False,
     }
     if "surface_relative_vorticity" in cols:
         arrays["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
@@ -280,6 +280,7 @@ def extract(lat, lon, valid_time=None, out_path=None, dataset=None,
         "run": run_str,
         "valid": valid_str,
         "fxx": fxx,
+        "observed": False,
         "npz": os.path.abspath(out_path),
         "levels": int(n_levels),
     }

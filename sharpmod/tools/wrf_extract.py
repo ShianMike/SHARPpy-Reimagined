@@ -465,7 +465,7 @@ def extract(wrfout_path, lat, lon, out_path, valid_time=None,
         "dwpc": cols["dwpc"], "wdir": cols["wdir"], "wspd": cols["wspd"],
         "omeg": omeg, "lat": sel["glat"], "lon": sel["glon"],
         "loc": loc, "model": "WRF-ARW", "run": run_str, "valid": run_str,
-        "fxx": 0,
+        "fxx": 0, "observed": False,
     }
 
     req_valid = None
@@ -486,6 +486,7 @@ def extract(wrfout_path, lat, lon, out_path, valid_time=None,
         "run": run_str,
         "valid": run_str,
         "fxx": 0,
+        "observed": False,
         "npz": os.path.abspath(out_path),
         "levels": int(n),
         "backend": "xarray/NetCDF WRF",

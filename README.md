@@ -15,8 +15,7 @@
 
 <sub>HRRR forecast point 36.68N 95.66W, F018, in the default Standard (dark)
 palette — rendered from
-[`examples/soundings/hrrr_point_36.68N_95.66W_f018.npz`](examples/soundings/hrrr_point_36.68N_95.66W_f018.npz).
-`TOI = --` because no regional guidance payload is attached to this file.</sub>
+[`examples/soundings/hrrr_point_36.68N_95.66W_f018.npz`](examples/soundings/hrrr_point_36.68N_95.66W_f018.npz).</sub>
 
 <details>
 <summary><b>Light and colorblind palettes</b> (OAX 2014-06-16 19Z observed sounding)</summary>
@@ -58,16 +57,6 @@ test-backed decoder/extractor layer.
   13 configured public forecast models.
 - A complete inverted/light sounding palette shared by the interactive GUI and
   headless renderer, including contrast-aware labels and derived displays.
-- A compact `TOI` row embedded in the composite-index block. Live HRRR guidance
-  uses a versioned, non-official public-method reconstruction. The row shows the
-  experimental 0-5 score marked `hypothetical`, e.g. `TOI = 4.2 hypothetical`,
-  and shows a *probability* only when a
-  calibration artifact that passed the promotion gate is selected; missing
-  regional inputs remain `TOI = --`. That gate is measured, not stylistic: on a
-  337-case archive the shipped probability transform scored a Brier skill of
-  -0.561 against climatology, and its 77% bin verified at 7.3%. Click the TOI row
-  to inspect every regional input, score component, version, measured skill,
-  limitation, and provenance field.
 - Offline UWyo station catalog plus package-relative bundled fonts.
 - Property-based pytest coverage for decoders, derived parameters, hazards,
   renderer-facing widgets, and extraction paths.
@@ -383,7 +372,6 @@ the executables and release manifest explicitly as unsigned.
 | `model-extract` | Fetch all pressure levels for a supported forecast-model point sounding |
 | `model-batch-extract` | Run a resumable multi-point/multi-hour model job |
 | `wrf-extract` | Extract a WRF-ARW point sounding to `.npz` |
-| `sharpmod-guidance` | Build, collect, verify, compile, train, and evaluate the experimental TOI calibration programme |
 | `sharpmod-rust-sync` | Check, rebuild when needed, and verify the local Rust backend |
 
 ### Forecast-model extraction (`model-extract`)
@@ -432,22 +420,6 @@ model-extract hrrr 35.18 -97.44 --fxx 0 --render
 # Select an ensemble member (GEFS defaults to c00)
 model-extract gefs 35.18 -97.44 gefs_p01.npz --fxx 0 --member p01
 ```
-
-Live HRRR extraction can optionally sample the applicable 18-hour window every
-three hours, normally seven compact regional `sfc` subsets of roughly 8-11 MiB
-each (eight when the requested forecast hour is off-interval), and embeds an
-experimental TOI score and probability in the JSON sidecar. Every decoded frame
-is used in valid-time order. Partial sampling still yields TOI when at least two
-frames span nine hours or more, marked `degraded` in provenance; otherwise TOI
-is unavailable with the exact reason.
-It uses 300-hPa jet motion during June-August, 500 hPa otherwise, and
-a transparently labeled fixed-layer STP proxy. Its scorecard follows the public
-SPC bins and qualitative rules, while its probability transform is anchored to
-the public 4.35/87% example. Because SPC did not publish its exact weights or
-calibration equation, both are explicitly marked non-official and versioned.
-The regional-guidance payload contains only TOI. It is off by default so the
-extra frames do not delay the requested sounding. Pass `--regional-guidance`
-(or set `SHARPMOD_REGIONAL_GUIDANCE=on`) to opt in.
 
 If `--run` is omitted, the CLI chooses the most recent configured cycle at or
 before the current UTC time; upstream publication can lag that cycle, so use
@@ -552,17 +524,11 @@ atomic, so rerunning the same command validates and skips completed outputs.
 model-batch-extract job.json --output-dir batch-output --workers 2
 ```
 
-All point and batch extraction paths **skip** the experimental HRRR regional
-TOI guidance by default because it costs roughly 60-85 MiB and tens of seconds
-per point. Add `--regional-guidance` to opt a CLI job in; Python callers use
-`live_regional_guidance=True`.
-
 The Python API is `sharpmod.batch_extract.run_batch(...)`; it accepts ordered
 `BatchRequest` values and returns ordered per-request results plus completed
 NPZ paths. Call `BatchExtractor.cancel()` for cooperative cancellation.
 Pass an existing `ModelHourCache` as `model_hour_cache=` when a GUI or service
 owns a longer-lived cache; the batch runner leases it but does not clear it.
-`BatchExtractor(live_regional_guidance=True)` is the API equivalent of the flag.
 
 #### Configured models
 
@@ -611,9 +577,10 @@ wrf-extract wrfout_d01_2024-05-20_00:00:00 35.18 -97.44 wrf.npz --render
 model-extract gdps 45.50 -73.60 montreal.npz --run "2026-07-22 00" --fxx 6
 ```
 
-`era5-extract` retrieves all 37 pressure levels from the official Copernicus
-Climate Data Store API. Create a free CDS account, accept the ERA5 dataset
-licence, and copy the credentials shown on the
+`era5-extract` retrieves all 37 pressure levels plus a colocated surface record
+from the official Copernicus Climate Data Store API. Create a free CDS account,
+accept both the ERA5 pressure-level and single-level dataset licences, and copy
+the credentials shown on the
 [CDS API setup page](https://cds.climate.copernicus.eu/how-to-api) into
 `$HOME/.cdsapirc` before the first request. Public forecast models continue to
 use Herbie and do not require CDS credentials.

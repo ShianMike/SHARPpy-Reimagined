@@ -78,7 +78,6 @@ _QT_TEST_PREFIXES = (
     "test_mounted_profile_refresh",
     "test_mpl_display",
     "test_packaging_render_smoke",
-    "test_regional_guidance",
     "test_render_density",
     "test_skewt_",
     "test_viz_",

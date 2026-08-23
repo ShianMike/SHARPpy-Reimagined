@@ -330,6 +330,8 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
+      - *install_qt
+
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:

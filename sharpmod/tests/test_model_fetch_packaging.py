@@ -103,6 +103,7 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     live_scripts = "\n".join(
         step.get("run", "") for step in jobs["live-provider"]["steps"]
     )
+    assert "libegl1" in live_scripts
     assert jobs["live-provider"]["if"] == (
         "${{ inputs.run_live_providers == true || "
         "github.event_name == 'schedule' }}"

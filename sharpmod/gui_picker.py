@@ -142,6 +142,13 @@ def compose_interactive(*args, **kwargs):
     return _compose_interactive(*args, **kwargs)
 
 
+def _fill_profile_metadata(*args, **kwargs):
+    """Lazily normalize metadata before adding to an existing viewer."""
+    from sharpmod.gui_viewer import _fill_metadata
+
+    return _fill_metadata(*args, **kwargs)
+
+
 def _town_lookup_attribution_label(parent=None) -> QLabel:
     label = QLabel(
         '<a href="https://www.census.gov/geographies/reference-files/'
@@ -2568,7 +2575,7 @@ class PickerWindow(QMainWindow):
             "model_fetch.progress stage=%s total_bytes=%d",
             stage, self._model_progress_total)
 
-        if stage in {"downloading", "regional_downloading"}:
+        if stage == "downloading":
             worker = self._model_worker
             self._model_progress_download_baseline = max(
                 0,
@@ -2599,10 +2606,6 @@ class PickerWindow(QMainWindow):
             "town": ("Resolving the selected town name…", "Locating town…"),
             "locating": ("Locating model run\u2026", "Locating\u2026"),
             "decoding": ("Decoding downloaded GRIB fields\u2026", "Decoding\u2026"),
-            "regional_decoding": (
-                "Decoding supplemental regional guidance\u2026",
-                "Regional guidance\u2026",
-            ),
             "cached": ("Using cached model hour\u2026", "Extracting\u2026"),
             "extracting": ("Extracting the nearest grid point\u2026", "Extracting\u2026"),
             "writing": ("Writing the point sounding\u2026", "Writing\u2026"),
@@ -2619,9 +2622,7 @@ class PickerWindow(QMainWindow):
 
     def _poll_model_fetch_progress(self) -> None:
         """Update download percentage from bytes in the isolated GRIB tree."""
-        if self._model_progress_stage not in {
-            "downloading", "regional_downloading"
-        }:
+        if self._model_progress_stage != "downloading":
             return
         worker = self._model_worker
         if worker is None:
@@ -2649,7 +2650,6 @@ class PickerWindow(QMainWindow):
         elapsed = max(0.001, time.monotonic() - self._model_progress_started)
         rate = downloaded / elapsed
         model_label = worker._model.upper()
-        regional = self._model_progress_stage == "regional_downloading"
         if total > 0:
             percent = min(100, max(0, int(downloaded * 100 / total)))
             self._model_progress.setRange(0, 100)
@@ -2663,14 +2663,8 @@ class PickerWindow(QMainWindow):
                 detail += (
                     f" \u2022 {_format_progress_bytes(rate)}/s"
                     f" \u2022 ~{_format_progress_duration(remaining)} left")
-            self._model_fetch_btn.setText(
-                f"{'Regional guidance' if regional else 'Downloading'}\u2026 "
-                f"{percent}%"
-            )
-            operation = (
-                f"Downloading regional guidance for {model_label}"
-                if regional else f"Downloading {model_label}"
-            )
+            self._model_fetch_btn.setText(f"Downloading\u2026 {percent}%")
+            operation = f"Downloading {model_label}"
             status = f"{operation}: {percent}% \u2014 {detail}"
         else:
             self._model_progress.setRange(0, 0)
@@ -2678,13 +2672,8 @@ class PickerWindow(QMainWindow):
             detail = _format_progress_bytes(downloaded)
             if rate > 0:
                 detail += f" \u2022 {_format_progress_bytes(rate)}/s"
-            self._model_fetch_btn.setText(
-                "Regional guidance\u2026" if regional else "Downloading\u2026"
-            )
-            operation = (
-                f"Downloading regional guidance for {model_label}"
-                if regional else f"Downloading {model_label}"
-            )
+            self._model_fetch_btn.setText("Downloading\u2026")
+            operation = f"Downloading {model_label}"
             status = f"{operation}: {detail}"
         self._model_progress_detail.setText(detail)
         self.statusBar().showMessage(status)
@@ -3216,8 +3205,8 @@ class PickerWindow(QMainWindow):
         if not env_profile and not rc_path.is_file():
             self._era5_readiness.setText(
                 "CDS credentials are not configured. Accept the ERA5 "
-                "pressure-level terms and save the API profile as "
-                "$HOME/.cdsapirc.")
+                "pressure-level and single-level terms, then save the API "
+                "profile as $HOME/.cdsapirc.")
         else:
             self._era5_readiness.setText(
                 "CDS profile detected. Dataset terms are verified when the "
@@ -3824,7 +3813,8 @@ class PickerWindow(QMainWindow):
         start = self._settings.value("last_dir", "", str)
         path, _ = QFileDialog.getOpenFileName(
             self, "Open Sounding File", start,
-            "Soundings (*.npz *.txt *.buf);;All files (*.*)")
+            "Soundings (*.npz *.spc *.SPC *.oax *.OAX *.buf *.pecan *.txt);;"
+            "All files (*.*)")
         if path:
             self._file_edit.setText(path)
             self._open_file(path)
@@ -3857,14 +3847,27 @@ class PickerWindow(QMainWindow):
                 self, APP_NAME,
                 f"Could not decode this file:\n{path}\n\n{exc}")
             return
+        display_error = None
         try:
             self._show_sounding(
                 prof_col, stn_id,
                 title=f"{APP_NAME} \u2014 {os.path.basename(path)}")
-            self._settings.setValue("last_dir", os.path.dirname(path))
-            self._remember_recent_file(path)
+        except Exception as exc:  # noqa: BLE001 - GUI/render boundary
+            _LOGGER.exception("local_file.display_failed path=%s", path)
+            self.statusBar().showMessage("Display failed")
+            display_error = exc
         finally:
             QApplication.restoreOverrideCursor()
+        if display_error is not None:
+            # Restore the normal cursor before entering the blocking modal;
+            # otherwise the failure dialog itself misleadingly shows busy.
+            QMessageBox.critical(
+                self, APP_NAME,
+                "Decoded, but could not display this file:\n"
+                f"{path}\n\n{display_error}")
+            return
+        self._settings.setValue("last_dir", os.path.dirname(path))
+        self._remember_recent_file(path)
         self.statusBar().showMessage(f"Opened {os.path.basename(path)}")
 
     # -- recents ------------------------------------------------------------- #
@@ -3927,6 +3930,7 @@ class PickerWindow(QMainWindow):
         self._prune_closed_viewers()
         if self._combine_soundings_enabled() and self._viewers:
             win = self._viewers[-1]
+            _fill_profile_metadata(prof_col, stn_id)
             win.addProfileCollection(
                 prof_col,
                 focus=True,

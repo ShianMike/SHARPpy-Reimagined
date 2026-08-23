@@ -103,7 +103,7 @@ dev = [
 quality = [
     "pip-audit==2.10.1",
     "pytest-cov==7.1.0",
-    "ruff==0.16.1",
+    "ruff==0.16.3",
 ]
 # Build frontend for the optional local Rust extension. This does not install
 # Rust itself or make the extension a requirement of the Python package.
@@ -118,8 +118,6 @@ sharpmod-gui = "sharpmod.gui:main"
 [project.scripts]
 # Console entry points installed on `pip install .`.
 sharpmod-render = "sharpmod.render:main"
-sharpmod-guidance = "sharpmod.tools.guidance_cli:main"
-sharpmod-toi-batch = "sharpmod.tools.gcp_batch_cli:main"
 uwyo-sounding = "sharpmod.tools.uwyo_sounding:main"
 observed-sounding = "sharpmod.tools.observed_sounding:main"
 era5-extract = "sharpmod.tools.era5_extract:main"
@@ -193,7 +191,6 @@ select = ["E9", "F63", "F7", "F82"]
 packages = [
     "sharpmod",
     "sharpmod.backends",
-    "sharpmod.guidance",
     "sharpmod.sharptab",
     "sharpmod.io",
     "sharpmod.viz",

@@ -241,22 +241,6 @@ def test_complete_grib_payload_can_be_opened_for_offline_reextract(tmp_path):
     assert cache.valid_grib_paths(directory) == (grib,)
 
 
-def test_supplemental_guidance_gribs_are_not_point_cache_payloads(tmp_path):
-    cache = ModelDiskCache(tmp_path)
-    directory = cache.directory_for(_key())
-    supplemental = directory / "regional-guidance"
-    supplemental.mkdir()
-    guidance = supplemental / "hrrr-regional-f000.grib2"
-    guidance.write_bytes(b"GRIB7777")
-
-    entry = cache.entries()[0]
-
-    assert entry.valid_grib is False
-    assert entry.file_count == 0
-    assert entry.size == guidance.stat().st_size
-    assert cache.valid_grib_paths(directory) == ()
-
-
 def test_pinned_entries_survive_prune_and_default_clear(tmp_path):
     cache = ModelDiskCache(tmp_path, max_bytes=1, max_age_hours=0)
     directory = cache.directory_for(_key())

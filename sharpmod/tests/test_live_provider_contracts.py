@@ -122,7 +122,6 @@ def test_live_hrrr_conus_profiles_start_at_local_verified_ground(
                 fxx=0,
                 out_path=first_output,
                 loc=f"{first[0]} live surface contract",
-                live_regional_guidance=False,
             )
             selected_run = candidate_run
             break
@@ -155,7 +154,6 @@ def test_live_hrrr_conus_profiles_start_at_local_verified_ground(
                 fxx=0,
                 out_path=output,
                 loc=f"{label} live surface contract",
-                live_regional_guidance=False,
             )
         except model_extract.RetrievalError as exc:
             pytest.fail(f"{label} failed the shared live HRRR cycle: {exc}")

@@ -333,6 +333,7 @@ def main():
         "run": run_str,
         "valid": valid_str,
         "fxx": FXX,
+        "observed": False,
     }
     if "surface_relative_vorticity" in cols:
         arrays["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
@@ -363,6 +364,7 @@ def main():
         "run": run_str,
         "valid": valid_str,
         "fxx": FXX,
+        "observed": False,
         "levels": n_levels,
         "npz": os.path.abspath(OUT_NPZ),
     }

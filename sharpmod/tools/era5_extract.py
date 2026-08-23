@@ -37,6 +37,7 @@ functions that need them; importing this module never requires them.
 import json
 import importlib
 import os
+import sys
 import tempfile
 from datetime import datetime, timezone
 
@@ -157,15 +158,15 @@ def require_runtime_dependencies(require_credentials=True):
         )
     if require_credentials:
         try:
-            modules["cdsapi"].Client()
+            _new_cds_client(modules["cdsapi"])
         except Exception as exc:
             if _is_cds_credential_error(exc):
                 raise RetrievalError(
                     "ERA5 retrieval requires CDS API credentials. Create a "
-                    "free Climate Data Store account, accept the ERA5 "
-                    "pressure-level dataset terms, then save the API profile "
-                    "as $HOME/.cdsapirc (or configure CDSAPI_URL and "
-                    "CDSAPI_KEY)."
+                    "free Climate Data Store account, accept both the ERA5 "
+                    "pressure-level and single-level dataset terms, then save "
+                    "the API profile as $HOME/.cdsapirc (or configure "
+                    "CDSAPI_URL and CDSAPI_KEY)."
                 ) from exc
             raise RetrievalError(
                 "could not initialize the Copernicus CDS client: %s" % exc
@@ -950,6 +951,26 @@ def _is_cds_credential_error(exc):
     ))
 
 
+def _new_cds_client(cdsapi):
+    """Create a CDS client that is safe in a windowed/frozen process.
+
+    PyInstaller's windowed mode intentionally leaves ``sys.stderr`` unset.
+    The CDS client's default tqdm progress renderer writes to that stream and
+    otherwise crashes a successful download with ``NoneType.write``. Keep the
+    normal CDS console output for command-line users, while disabling both the
+    logger and progress renderer when no writable stderr exists.
+    """
+    stderr = getattr(sys, "stderr", None)
+    stderr_unavailable = (
+        stderr is None
+        or bool(getattr(stderr, "closed", False))
+        or not callable(getattr(stderr, "write", None))
+    )
+    if stderr_unavailable:
+        return cdsapi.Client(quiet=True, progress=False)
+    return cdsapi.Client()
+
+
 def _retrieve_dataset(lat, lon, valid_time, progress_callback=None,
                       cancelled=None):
     """Fetch colocated ERA5 pressure-level and verified surface columns."""
@@ -974,7 +995,7 @@ def _retrieve_dataset(lat, lon, valid_time, progress_callback=None,
     source_datasets = []
     try:  # pragma: no cover - live CDS/network path
         _emit_progress(progress_callback, "queued")
-        client = cdsapi.Client()
+        client = _new_cds_client(cdsapi)
         _emit_progress(progress_callback, "retrieving")
         # cdsapi's stable client is synchronous.  A cancellation requested
         # while this call is in flight is observed immediately after it
@@ -1010,9 +1031,10 @@ def _retrieve_dataset(lat, lon, valid_time, progress_callback=None,
             raise RetrievalError(
                 "ERA5 pressure/single-level dataset terms have not been "
                 "accepted. "
-                "Sign in to the Copernicus Climate Data Store, open the ERA5 "
-                "hourly pressure-level dataset, and accept its terms before "
-                "retrying; original error: %s" % exc) from exc
+                "Sign in to the Copernicus Climate Data Store, open both the "
+                "ERA5 hourly pressure-level and single-level datasets, and "
+                "accept their terms before retrying; original error: %s"
+                % exc) from exc
         raise RetrievalError(
             "failed to retrieve ERA5 data from the Copernicus CDS for %s at "
             "(%.4f, %.4f): %s" % (vt.isoformat(), lat, lon, exc)) from exc
@@ -1223,7 +1245,7 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt",
         "dwpc": cols["dwpc"], "wdir": cols["wdir"], "wspd": cols["wspd"],
         "omeg": cols["omeg"], "uwnd": cols["u"], "vwnd": cols["v"],
         "lat": glat, "lon": glon, "loc": loc, "model": "ERA5",
-        "run": run_str, "valid": valid_str, "fxx": 0,
+        "run": run_str, "valid": valid_str, "fxx": 0, "observed": False,
     }
     if "surface_relative_vorticity" in cols:
         arrays["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
@@ -1244,6 +1266,7 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt",
         "run": run_str,
         "valid": selected_valid_str,
         "fxx": 0,
+        "observed": False,
         "npz": os.path.abspath(out_path),
         "levels": int(n_levels),
         "backend": "xarray/cfgrib",

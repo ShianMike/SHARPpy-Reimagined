@@ -346,12 +346,7 @@ def compose_interactive(config, prof_col, controller, *, stn_id=None,
         loc_lbl = stn_id
     win.setWindowTitle(f"{APP_NAME} \u2014 {loc_lbl or 'Sounding'}")
     win.setStyleSheet(SOUNDING_LIGHT_QSS)
-    try:
-        for _lbl in win.findChildren(QLabel):
-            if _lbl.text().startswith("SHARPpy"):
-                _lbl.setText(f"{APP_NAME} v{APP_VERSION}")
-    except Exception:
-        pass
+    R.rebrand_version_label(win, f"{APP_NAME} v{APP_VERSION}")
 
     # Level the top frame so the upper-right panel band lines up with the
     # skew-T top border (and the brand label lines up with the skew-T title) --
@@ -863,6 +858,8 @@ def _install_level_editor(win) -> None:
 
     skewt._sharpmod_level_editor_action = edit_action
     skewt._sharpmod_level_editor_installed = True
+
+
 def _default_export_basename(prof_col) -> str:
     """Build a friendly export filename stem like ``OUN_2024052000Z``."""
     base = "sounding"
@@ -873,6 +870,15 @@ def _default_export_basename(prof_col) -> str:
     except Exception:
         pass
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", base) or "sounding"
+
+
+def _focused_profile_collection(win, fallback):
+    """Return the collection currently focused in a combined viewer."""
+    try:
+        widget = win.spc_widget
+        return widget.prof_collections[int(widget.pc_idx)]
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return fallback
 
 
 def _install_export_menu(win, prof_col, controller) -> None:
@@ -887,7 +893,6 @@ def _install_export_menu(win, prof_col, controller) -> None:
     """
     R = _render()
     settings = getattr(controller, "_settings", None)
-    base = _default_export_basename(prof_col)
 
     def _start_dir() -> str:
         if settings is not None:
@@ -915,6 +920,8 @@ def _install_export_menu(win, prof_col, controller) -> None:
                 ("Lossless", "_lossless"),
         }
         label, suffix = labels.get(image_mode, ("HD", "_hd"))
+        focused = _focused_profile_collection(win, prof_col)
+        base = _default_export_basename(focused)
         start = os.path.join(_start_dir(), base + suffix + ".png")
         fn, _ok = QFileDialog.getSaveFileName(
             win, f"Export Sounding {label} Image", start,
@@ -939,6 +946,8 @@ def _install_export_menu(win, prof_col, controller) -> None:
                                 f"Could not copy image:\n{exc}")
 
     def export_text() -> None:
+        focused = _focused_profile_collection(win, prof_col)
+        base = _default_export_basename(focused)
         start = os.path.join(_start_dir(), base + ".txt")
         fn, _ok = QFileDialog.getSaveFileName(
             win, "Export Sounding Text (SHARPpy)", start,

@@ -35,6 +35,7 @@ def test_composed_viewer_is_destroyed_and_released_on_close(
         apply_layout_compensation=lambda *_args: None,
         _grow_for_family_panels=lambda *_args: None,
         enlarge_canvas=lambda *_args: None,
+        rebrand_version_label=lambda *_args: None,
     )
 
     monkeypatch.setattr(gui_viewer, "_ensure_setup", lambda _app: None)

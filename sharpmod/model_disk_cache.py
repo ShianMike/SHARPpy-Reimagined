@@ -20,11 +20,9 @@ from sharpmod.portable_sounding import portable_sounding_pair_valid
 _METADATA = ".cache.json"
 _LEASE_PREFIX = ".lease-"
 _DEFAULT_LEASE_MAX_AGE_HOURS = 24.0
-_SUPPLEMENTAL_DIRECTORIES = frozenset({"regional-guidance"})
-# v3 separates reusable point-sounding payloads from supplemental HRRR frames.
-# Invalidating v2 also prevents already-created v0.8 caches from presenting a
-# regional-only GRIB as an offline point-sounding source.
-MODEL_CACHE_CONTRACT_VERSION = 3
+# v4 invalidates cache trees produced by product surfaces that are no longer
+# part of the application.
+MODEL_CACHE_CONTRACT_VERSION = 4
 
 
 @dataclass(frozen=True)
@@ -229,11 +227,6 @@ class ModelDiskCache:
             except ValueError:
                 continue
             if any(part.endswith(".ranges") for part in relative.parts[:-1]):
-                continue
-            if any(
-                part.casefold() in _SUPPLEMENTAL_DIRECTORIES
-                for part in relative.parts[:-1]
-            ):
                 continue
             name = path.name.lower()
             if name.endswith((".part", ".tmp", ".idx")):

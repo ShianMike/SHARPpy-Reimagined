@@ -12,7 +12,6 @@ from sharpmod.viz.unit_text import (
     RENDER_FONT_DEFAULT_HINTING,
     RENDER_FONT_SCALED_HINTING,
     RENDER_FONT_STYLE_STRATEGY,
-    UNVALIDATED_SUFFIX,
     apply_render_font_quality,
     scaled_export_active,
     set_scaled_export,
@@ -36,33 +35,6 @@ def test_compact_unit_width_is_smaller_than_full_value_width():
     metrics = QtGui.QFontMetrics(font)
 
     assert value_unit_width(font, "14.86 g/kg") < metrics.horizontalAdvance("14.86 g/kg")
-
-
-def test_unvalidated_suffix_is_recognised_like_a_unit():
-    """Registration is what makes the marker affordable.
-
-    An unregistered suffix is measured at full size, which is why the spelled-out
-    word looked 20px too wide until it was added to the suffix list; registered,
-    it renders at ``UNIT_FONT_SCALE`` and fits.
-    """
-    assert UNVALIDATED_SUFFIX == " hypothetical"
-    assert split_value_unit("4.2" + UNVALIDATED_SUFFIX) == (
-        "4.2",
-        UNVALIDATED_SUFFIX,
-    )
-    assert split_value_unit("68%" + UNVALIDATED_SUFFIX) == (
-        "68%",
-        UNVALIDATED_SUFFIX,
-    )
-
-    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-    _ = app
-    font = QtGui.QFont("Helvetica")
-    font.setPixelSize(13)
-    marked = "4.2" + UNVALIDATED_SUFFIX
-    assert value_unit_width(font, marked) < QtGui.QFontMetrics(
-        font
-    ).horizontalAdvance(marked)
 
 
 def test_font_quality_hinting_is_applied_only_for_scaled_export():

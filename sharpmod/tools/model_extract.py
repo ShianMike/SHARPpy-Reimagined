@@ -70,8 +70,6 @@ from sharpmod.hrrr_zarr import (
     ZarrBackendUnavailable,
     fetch_hrrr_zarr_point,
 )
-from sharpmod.guidance.schemas import REGIONAL_GUIDANCE_META_KEY
-
 from sharpmod.tools.era5_extract import (
     ERA5ExtractionError as ModelExtractionError,
     ParameterRangeError,
@@ -1683,75 +1681,6 @@ def _decode_local_point(source, lat, lon):
         return PythonBackend().decode_grib_point(source.path, lat, lon)
 
 
-def _live_regional_guidance_enabled(value, source_grib) -> bool:
-    """Resolve the explicit/env live-HRRR guidance policy.
-
-    Regional TOI is supplemental and costs up to eight additional sequential
-    HRRR frame requests.  It must therefore be opted into instead of delaying
-    the point sounding that the caller actually requested.  ``auto`` remains a
-    supported explicit compatibility mode, but it is no longer the default.
-    """
-
-    if isinstance(value, bool):
-        return value
-    raw = value
-    if raw is None:
-        raw = os.environ.get("SHARPMOD_REGIONAL_GUIDANCE", "off")
-    mode = str(raw).strip().casefold()
-    if mode in {"0", "false", "no", "off", "disabled"}:
-        return False
-    if mode in {"1", "true", "yes", "on", "enabled", "force"}:
-        return True
-    # ``auto`` is retained for callers that deliberately want the v0.8.0
-    # source-aware behavior.  Normal extraction now resolves to ``off`` above.
-    source = str(source_grib or "").strip()
-    return bool(source) and not source.casefold().startswith("memory://")
-
-
-def _live_hrrr_guidance_mapping(
-    run_dt,
-    fxx,
-    lat,
-    lon,
-    *,
-    download_dir=None,
-    progress_callback=None,
-    cancelled=None,
-):
-    """Generate supplemental guidance without making point extraction brittle."""
-
-    try:
-        from sharpmod.guidance.hrrr import build_live_hrrr_guidance
-
-        return build_live_hrrr_guidance(
-            run_dt,
-            fxx,
-            lat,
-            lon,
-            download_dir=download_dir,
-            progress_callback=progress_callback,
-            cancelled=cancelled,
-        ).to_mapping()
-    except DownloadCancelled:
-        raise
-    except Exception as exc:  # supplemental guidance must be failure-soft
-        _LOGGER.exception(
-            "regional_guidance.hrrr_generation_failed run=%s fxx=%03d",
-            run_dt,
-            int(fxx),
-        )
-        try:
-            from sharpmod.guidance.hrrr import unavailable_hrrr_guidance
-
-            return unavailable_hrrr_guidance(
-                "live experimental TOI unavailable: "
-                f"{type(exc).__name__}: {exc}",
-                run_time=run_dt,
-            ).to_mapping()
-        except Exception:
-            return None
-
-
 def _xarray_point_columns(ds, lat, lon, run_dt, fxx, label):
     """Return the legacy xarray point result while materializing only columns."""
     ds_t, selected_time = _select_time(ds, run_dt)
@@ -1780,8 +1709,7 @@ def _xarray_point_columns(ds, lat, lon, run_dt, fxx, label):
 def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
             member=None, dataset=None, download_dir=None,
             source_grib=None, source_fields=None, source_transport=None,
-            progress_callback=None, cancelled=None,
-            live_regional_guidance=None):
+            progress_callback=None, cancelled=None):
     """Extract a public forecast-model point sounding to ``out_path``.
 
     Parameters mirror the CLI: choose a supported ``model`` key, a latitude and
@@ -2013,7 +1941,7 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
         "dwpc": cols["dwpc"], "wdir": cols["wdir"], "wspd": cols["wspd"],
         "omeg": cols["omeg"], "uwnd": cols["u"], "vwnd": cols["v"],
         "lat": glat, "lon": glon, "loc": loc_label, "model": config.label,
-        "run": run_str, "valid": valid_str, "fxx": fxx,
+        "run": run_str, "valid": valid_str, "fxx": fxx, "observed": False,
     }
     if "surface_relative_vorticity" in cols:
         arrays["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
@@ -2029,6 +1957,7 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
         "run": run_str,
         "valid": valid_str,
         "fxx": fxx,
+        "observed": False,
         "npz": os.path.abspath(out_path),
         "levels": int(n_levels),
         "herbie_model": config.herbie_model,
@@ -2067,21 +1996,6 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
             "_surface_vorticity_source",
             "direct pressure-level vorticity field",
         )
-
-    if config.key == "hrrr" and _live_regional_guidance_enabled(
-        live_regional_guidance, source_grib
-    ):
-        regional_mapping = _live_hrrr_guidance_mapping(
-            run_dt,
-            fxx,
-            lat,
-            lon,
-            download_dir=download_dir,
-            progress_callback=progress_callback,
-            cancelled=cancelled,
-        )
-        if regional_mapping is not None:
-            meta[REGIONAL_GUIDANCE_META_KEY] = regional_mapping
 
     if cancelled is not None and cancelled():
         raise DownloadCancelled("forecast-model download cancelled")
@@ -2428,20 +2342,6 @@ def main(argv=None):  # pragma: no cover - CLI wrapper
     parser.add_argument("--loc", default=None, help="location label")
     parser.add_argument("--render", nargs="?", const="", default=None,
                         metavar="PNG", help="also render the sounding to PNG")
-    regional_guidance = parser.add_mutually_exclusive_group()
-    regional_guidance.add_argument(
-        "--regional-guidance",
-        action="store_true",
-        help=(
-            "also fetch live experimental HRRR regional TOI guidance "
-            "(up to eight extra frames)"
-        ),
-    )
-    regional_guidance.add_argument(
-        "--no-regional-guidance",
-        action="store_true",
-        help="explicitly skip live experimental HRRR regional TOI guidance",
-    )
     parser.add_argument("--list", action="store_true",
                         help="list supported and known unsupported models")
     parser.add_argument("--probe", action="store_true",
@@ -2521,11 +2421,6 @@ def main(argv=None):  # pragma: no cover - CLI wrapper
                 args.model, args.lat, args.lon, run_time=run, fxx=args.fxx,
                 out_path=args.out, loc=args.loc, member=args.member,
                 download_dir=download_dir,
-                live_regional_guidance=(
-                    True
-                    if args.regional_guidance
-                    else False if args.no_regional_guidance else None
-                ),
             )
         except (ModelExtractionError, KeyError) as exc:
             print("ERROR: %s" % exc)

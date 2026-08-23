@@ -61,6 +61,26 @@ def _apply_style(qt_app, controller, config, style):
         qt_app.processEvents()
 
 
+def test_version_and_sample_climo_use_custom_emphasis_font(
+        qt_app, mounted_sounding):
+    """Branding and the STP sample-climatology row use the chart face."""
+    from sharppy.viz.stp import plotSTP
+
+    win, _controller, _config = mounted_sounding
+    brand = render_mod.rebrand_version_label(win)
+    assert brand is not None
+    assert brand.font().family().casefold() == render_mod.FONT_FAMILY.casefold()
+    assert brand.font().weight() == QtGui.QFont.Weight.DemiBold
+
+    stp_widgets = win.spc_widget.findChildren(plotSTP)
+    assert stp_widgets
+    stp_widgets[0].plotData()
+    qt_app.processEvents()
+    header_font = stp_widgets[0]._sharpmod_box_header_font
+    assert header_font.family().casefold() == render_mod.FONT_FAMILY.casefold()
+    assert header_font.weight() == QtGui.QFont.Weight.DemiBold
+
+
 def test_destroyed_window_disconnects_live_preference_callback(
         qt_app, tmp_path, monkeypatch):
     """A picker-owned signal must never retain a deleted sounding window."""

@@ -464,19 +464,19 @@ def test_worker_captures_download_baseline_before_queued_progress(
     events = []
     worker.progress.connect(lambda *args: events.append(args))
 
-    worker._report_progress("regional_downloading", 10)
+    worker._report_progress("downloading", 10)
 
     assert worker._progress_download_baseline == 207
     assert worker._progress_transfer_started > 0
     assert events == [(
-        "regional_downloading",
+        "downloading",
         10,
         207,
         worker._progress_transfer_started,
     )]
 
 
-def test_regional_progress_excludes_previous_gribs_and_names_stage(tmp_path):
+def test_download_progress_excludes_previous_gribs_and_names_stage(tmp_path):
     prior = tmp_path / "primary.grib2"
     prior.write_bytes(b"x" * 207)
     progress = _FakeProgressWidget()
@@ -511,7 +511,7 @@ def test_regional_progress_excludes_previous_gribs_and_names_stage(tmp_path):
 
     gui.PickerWindow._on_model_fetch_progress(
         picker,
-        "regional_downloading",
+        "downloading",
         10,
         207,
         event_started,
@@ -519,12 +519,10 @@ def test_regional_progress_excludes_previous_gribs_and_names_stage(tmp_path):
     assert progress.value == 0
     assert detail.text.startswith("0 B / 10 B")
 
-    (tmp_path / "regional-guidance.part").write_bytes(b"x" * 5)
+    (tmp_path / "download.part").write_bytes(b"x" * 5)
     gui.PickerWindow._poll_model_fetch_progress(picker)
 
     assert progress.value == 50
     assert detail.text.startswith("5 B / 10 B")
-    assert button.text == "Regional guidance\u2026 50%"
-    assert statuses[-1].startswith(
-        "Downloading regional guidance for HRRR: 50%"
-    )
+    assert button.text == "Downloading\u2026 50%"
+    assert statuses[-1].startswith("Downloading HRRR: 50%")

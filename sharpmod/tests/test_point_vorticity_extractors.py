@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
+import inspect
 import json
+import textwrap
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,6 +36,28 @@ def _add_vo(ds, surface_value):
     return ds.assign(vo=(dims, vo))
 
 
+def test_hrrr_outputs_explicitly_identify_as_forecasts():
+    """Both HRRR output records must prevent heuristic observation labels."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(hrrr.main)))
+    output_records = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        values = {
+            key.value: value
+            for key, value in zip(node.keys, node.values)
+            if isinstance(key, ast.Constant) and isinstance(key.value, str)
+        }
+        if "model" in values and "fxx" in values:
+            output_records.append(values)
+
+    assert len(output_records) == 2
+    for record in output_records:
+        observed = record.get("observed")
+        assert isinstance(observed, ast.Constant)
+        assert observed.value is False
+
+
 def test_ifs_extract_writes_surface_relative_vorticity_to_npz(tmp_path):
     """IFS ``vo`` reaches the archive, sidecar, decoder, and profile metadata."""
     levels = [850.0, 1000.0, 700.0]
@@ -55,14 +80,17 @@ def test_ifs_extract_writes_surface_relative_vorticity_to_npz(tmp_path):
         value = float(np.asarray(
             npz["surface_relative_vorticity"]).reshape(-1)[0])
         assert value == pytest.approx(8.0e-5)
+        assert bool(npz["observed"]) is False
 
     with open(out_path.with_suffix(".json"), encoding="utf-8") as fh:
         meta = json.load(fh)
     assert meta["surface_relative_vorticity"] == pytest.approx(8.0e-5)
+    assert meta["observed"] is False
 
     prof_collection, _ = decoder_mod.load_npz(str(out_path))
     assert prof_collection.getMeta("surface_relative_vorticity") == pytest.approx(
         8.0e-5)
+    assert prof_collection.getMeta("observed") is False
     prof = next(iter(prof_collection._profs.values()))[0]
     assert prof.surface_relative_vorticity == pytest.approx(8.0e-5)
 

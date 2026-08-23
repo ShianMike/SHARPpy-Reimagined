@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v0.8.1). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v0.8.2). Created if it does not exist."
         required: true
-        default: "v0.8.1"
+        default: "v0.8.2"
 
 # Build and test jobs have no repository write permission. A dedicated job can
 # write only provenance attestations, and only the isolated publish job can
@@ -435,7 +435,7 @@ jobs:
 
       - name: Submit SignPath signing request
         if: steps.signing-provider.outputs.provider == 'SignPath'
-        uses: signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}

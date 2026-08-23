@@ -484,7 +484,7 @@ COND_PROB_LABEL_MAX_PT = int(os.environ.get("COND_PROB_LABEL_MAX_PT", "10"))
 WINTER_LABEL_MAX_PT = int(os.environ.get("WINTER_LABEL_MAX_PT", "11"))
 # Extra vertical space (px) that preserves the established scientific-panel
 # proportions after the combined IndexBoard and Streamwiseness chart are
-# mounted. This remains necessary even though TOI no longer adds a footer row.
+# mounted.
 CHART_HEIGHT_GROW = int(os.environ.get("CHART_HEIGHT_GROW", "120"))
 # Extra horizontal space (px) added to the window/canvas so the widened bottom
 # index board has room for the storm-motion vectors AND the 1 km / 6 km AGL
@@ -2496,6 +2496,15 @@ def application_label() -> str:
     return f"SHARPpy Reimagined v{__version__}"
 
 
+def _custom_emphasis_font(font):
+    """Return ``font`` in the configured chart face with visible emphasis."""
+    emphasized = QtGui.QFont(font)
+    if USE_CUSTOM_FONT:
+        emphasized.setFamily(FONT_FAMILY)
+    emphasized.setWeight(QtGui.QFont.Weight.DemiBold)
+    return apply_render_font_quality(emphasized)
+
+
 def rebrand_version_label(win, text=None):
     """Rename the vendored top-right ``SHARPpy v...`` label to the fork's brand.
 
@@ -2508,6 +2517,11 @@ def rebrand_version_label(win, text=None):
         for lbl in win.findChildren(QLabel):
             if lbl.text().startswith("SHARPpy"):
                 lbl.setText(text)
+                # This label is created by the vendored window before it is
+                # rebranded.  Set the face explicitly instead of relying on
+                # inherited application styling, which can be lost when the
+                # widget's theme stylesheet is reapplied.
+                lbl.setFont(_custom_emphasis_font(lbl.font()))
                 return lbl
     except Exception:
         pass
@@ -4412,6 +4426,9 @@ def _install_stp_prob_box_spacing():
                 # the inset's right edge, so the wide right-hand whitespace is
                 # removed. The value column sits just past the longest label.
                 _box_font = _QtGui.QFont(self.box_font)
+                if USE_CUSTOM_FONT:
+                    _box_font.setFamily(FONT_FAMILY)
+                apply_render_font_quality(_box_font)
                 _fm = _QtGui.QFontMetrics(_box_font)
                 _adv = getattr(_fm, "horizontalAdvance", None) or _fm.width
                 _labels = ['based on CAPE:', 'based on LCL:', 'based on ESRH:',
@@ -4486,6 +4503,9 @@ def _install_stp_prob_box_spacing():
                 ## header/title rows
                 pen = _QtGui.QPen(self.fg_color, 1, _QtCore.Qt.SolidLine)
                 qp.setPen(pen)
+                _header_font = _custom_emphasis_font(_box_font)
+                self._sharpmod_box_header_font = _header_font
+                qp.setFont(_header_font)
                 for text in ['Prob EF2+ torn with supercell',
                              'Sample CLIMO = .15 sigtor']:
                     rect = _QtCore.QRectF(x1, y1, text_w, box_height)
@@ -4499,6 +4519,7 @@ def _install_stp_prob_box_spacing():
                 y1 += div_gap
 
                 ## variable rows
+                qp.setFont(_box_font)
                 texts = ['based on CAPE:', 'based on LCL:', 'based on ESRH:',
                          'based on EBWD:', 'based on STPC:', 'based on STP_fixed:']
                 probs = [self.cape_p, self.lcl_p, self.esrh_p,
@@ -4780,8 +4801,7 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
            model: str | None = None, run: datetime | None = None,
            loc: str | None = None,
            image_mode: str = PNG_IMAGE_HD,
-           parcel: str = DEFAULT_RENDER_PARCEL,
-           regional_guidance=None) -> str:
+           parcel: str = DEFAULT_RENDER_PARCEL) -> str:
     """Render ``infile`` to ``outfile`` and return the output path.
 
     Composes :class:`~sharppy.viz.SPCWindow.SPCWindow` with a real
@@ -4791,11 +4811,7 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
     produced into a temporary file in the destination directory and renamed
     onto ``outfile`` only after a non-empty image exists. On any failure a
     :class:`RenderError` naming ``infile`` is raised and no partial PNG is left
-    behind (Requirements 11.4, 11.7, 15.5). ``regional_guidance`` may be a
-    validated guidance object, a mapping, or a JSON path; adjacent sounding
-    sidecars are also discovered automatically. Its TOI value is displayed in
-    the composite-index block and is never inferred from the point profile;
-    the other regional products remain metadata-only.
+    behind (Requirements 11.4, 11.7, 15.5).
     """
     parcel = _normalise_parcel_type(parcel)
     out_dir = os.path.dirname(os.path.abspath(outfile))
@@ -4821,22 +4837,6 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
             prof_col.setMeta("run", run)
         if loc is not None:
             prof_col.setMeta("loc", loc)
-        if regional_guidance is not None:
-            from sharpmod.guidance import (
-                REGIONAL_GUIDANCE_META_KEY,
-                coerce_regional_guidance,
-                load_regional_guidance_json,
-            )
-
-            guidance = (
-                load_regional_guidance_json(regional_guidance)
-                if isinstance(regional_guidance, (str, os.PathLike))
-                else coerce_regional_guidance(regional_guidance)
-            )
-            prof_col.setMeta(
-                REGIONAL_GUIDANCE_META_KEY,
-                guidance.to_mapping(),
-            )
         _resolve_location_title(prof_col, explicit_loc=loc)
 
         # Fill in the metadata the title/header rendering dereferences, without
@@ -4864,8 +4864,8 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
         # Compose SPCWindow with the real minimal controller. The controller is
         # the Qt parent SPCWindow connects its config/preferences hooks to; it
         # must outlive the window, so keep a reference for the render duration.
-        # ``mount=True`` installs the combined index board (including TOI),
-        # Streamwiseness, and skew-T overlays. The mount is fully
+        # ``mount=True`` installs the combined index board, Streamwiseness,
+        # and skew-T overlays. The mount is fully
         # guarded (see ``mount_products``); the outcome is recorded on
         # ``win.sharpmod_products`` for inspection.
         win, controller = compose_window(config, prof_col, mount=True)
@@ -4884,7 +4884,7 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
         apply_layout_compensation(win.spc_widget)
 
         # Preserve the lower scientific-band proportions and make horizontal
-        # room for the wind barbs. TOI itself reuses an existing index cell.
+        # room for the wind barbs.
         _grow_for_family_panels(win)
 
         # Grow the overall canvas so the outer-grid stretch (which makes the
@@ -4950,13 +4950,6 @@ def _build_cli_parser() -> argparse.ArgumentParser:
         "--parcel", type=str.upper, choices=PARCEL_TYPES,
         default=DEFAULT_RENDER_PARCEL,
         help="parcel visualized on the Skew-T (default: MU)")
-    parser.add_argument(
-        "--guidance-json",
-        help=(
-            "validated regional tornado-guidance JSON; its TOI value is "
-            "embedded in the composite-index block"
-        ),
-    )
     return parser
 
 
@@ -4974,7 +4967,6 @@ def main(argv: list[str] | None = None) -> int:
             ns.outfile,
             image_mode=ns.image_mode,
             parcel=ns.parcel,
-            regional_guidance=ns.guidance_json,
         )
     except RenderError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

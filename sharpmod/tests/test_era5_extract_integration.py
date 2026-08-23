@@ -51,6 +51,9 @@ def test_retrieve_dataset_uses_cds_pressure_level_request(monkeypatch):
     calls = {"retrievals": [], "opened": []}
 
     class FakeClient:
+        def __init__(self, **kwargs):
+            calls["client_kwargs"] = kwargs
+
         def retrieve(self, dataset, request, target):
             calls["retrievals"].append((dataset, request, target))
             Path(target).write_bytes(b"fake-grib")
@@ -79,13 +82,18 @@ def test_retrieve_dataset_uses_cds_pressure_level_request(monkeypatch):
         sys.modules, "cfgrib", SimpleNamespace(open_datasets=open_datasets))
     monkeypatch.setattr(era5, "_merge_datasets", lambda values: values[0])
 
-    result = era5._retrieve_dataset(
-        58.26, 59.73,
-        datetime(2026, 6, 22, 12, tzinfo=timezone.utc))
+    # Windowed PyInstaller applications have no stderr. The CDS progress bar
+    # must be disabled there or its download path raises NoneType.write.
+    with monkeypatch.context() as no_console:
+        no_console.setattr(sys, "stderr", None)
+        result = era5._retrieve_dataset(
+            58.26, 59.73,
+            datetime(2026, 6, 22, 12, tzinfo=timezone.utc))
 
     assert result is decoded
     assert decoded.loaded
     assert decoded.closed
+    assert calls["client_kwargs"] == {"quiet": True, "progress": False}
     assert [value[0] for value in calls["retrievals"]] == [
         "reanalysis-era5-pressure-levels",
         "reanalysis-era5-single-levels",
@@ -142,6 +150,28 @@ def test_retrieve_dataset_explains_missing_cds_credentials(monkeypatch):
         era5._retrieve_dataset(
             58.26, 59.73,
             datetime(2026, 6, 22, 12, tzinfo=timezone.utc))
+
+
+def test_retrieve_dataset_explains_both_required_cds_licences(monkeypatch):
+    """CDS terms failures identify every dataset the extractor requests."""
+    class TermsClient:
+        def retrieve(self, _dataset, _request, _target):
+            raise RuntimeError("required licences not accepted")
+
+    monkeypatch.setitem(
+        sys.modules, "cdsapi", SimpleNamespace(Client=TermsClient))
+    monkeypatch.setitem(
+        sys.modules, "cfgrib",
+        SimpleNamespace(open_datasets=lambda *_args, **_kwargs: []))
+
+    with pytest.raises(era5.RetrievalError) as caught:
+        era5._retrieve_dataset(
+            58.26, 59.73,
+            datetime(2026, 6, 22, 12, tzinfo=timezone.utc))
+
+    message = str(caught.value)
+    assert "pressure-level and single-level datasets" in message
+    assert "accept their terms" in message
 
 
 def test_merged_dataset_closes_every_cfgrib_source():
@@ -211,6 +241,7 @@ def test_extract_selects_nearest_point_and_time_and_writes_atomically(tmp_path):
         assert float(npz["lat"]) == true_lat
         assert float(npz["lon"]) == true_lon_norm
         assert str(npz["valid"]) == true_time.strftime("%Y-%m-%d %H:%M")
+        assert bool(npz["observed"]) is False
 
     with open(json_path, encoding="utf-8") as fh:
         meta = json.load(fh)
@@ -219,10 +250,12 @@ def test_extract_selects_nearest_point_and_time_and_writes_atomically(tmp_path):
     assert meta["selected_valid"] == true_time.strftime("%Y-%m-%d %H:%M")
     assert meta["backend"] == "xarray/cfgrib"
     assert meta["cache_hit"] is False
+    assert meta["observed"] is False
 
     # The output loads through the shared point-sounding path.
     prof_collection, loc = decoder_mod.load_npz(out_path)
     assert loc
+    assert prof_collection.getMeta("observed") is False
     prof = next(iter(prof_collection._profs.values()))[0]
     assert np.asarray(prof.pres).size == len(_LEVELS)
 

@@ -26,9 +26,12 @@ least 100 examples.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import numpy as np
 import numpy.ma as ma
 from hypothesis import given
+from sharppy.sharptab.prof_collection import ProfCollection
 
 from sharpmod.io.uwyo_decoder import UWyo_Decoder
 from sharpmod.tests.uwyo_fixtures import (
@@ -110,6 +113,40 @@ def test_roundtrip_preserves_masked_levels():
     assert ma.getmaskarray(prof_rt.tmpc)[1]
     assert ma.getmaskarray(prof_rt.dwpc)[2]
     assert ma.getmaskarray(prof_rt.wspd)[3]
+
+
+def test_decoded_profile_supports_sharppy_viewer_promotion():
+    """A cached availability profile satisfies upstream Profile.copy metadata."""
+    decoder = UWyo_Decoder()
+    valid = datetime(2026, 8, 14, 0, tzinfo=timezone.utc)
+    intermediate = {
+        "pres": np.array([1000.0, 850.0, 700.0, 500.0]),
+        "hght": np.array([110.0, 1480.0, 3050.0, 5760.0]),
+        "tmpc": np.array([24.0, 14.0, 4.0, -12.0]),
+        "dwpc": np.array([20.0, 10.0, -2.0, -25.0]),
+        "wdir": np.array([160.0, 210.0, 240.0, 270.0]),
+        "wspd": np.array([10.0, 35.0, 48.0, 60.0]),
+        "omeg": None,
+        "meta": {
+            "loc": "BINTULU, Malaysia",
+            "valid": valid,
+            "lat": 3.121,
+        },
+    }
+
+    prof = decoder.from_intermediate(intermediate)
+    collection = ProfCollection(
+        {"": [prof]},
+        [valid],
+        observed=True,
+        loc="96441",
+    )
+
+    promoted = collection.getHighlightedProf()
+    assert promoted.location == "BINTULU, Malaysia"
+    assert promoted.date == valid
+    assert promoted.latitude == 3.121
+    assert promoted.missing == -9999.0
 
 
 if __name__ == "__main__":  # pragma: no cover

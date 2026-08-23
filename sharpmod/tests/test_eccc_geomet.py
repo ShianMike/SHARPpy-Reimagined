@@ -293,6 +293,7 @@ def test_extract_writes_portable_npz_and_provenance(tmp_path, small_gdps):
         assert str(payload["model"]) == small_gdps.label
         assert str(payload["loc"]) == "Montreal"
         assert int(payload["fxx"]) == 3
+        assert bool(payload["observed"]) is False
         np.testing.assert_array_equal(payload["pres"], [900, 850, 500])
     metadata = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
     assert metadata["model_key"] == "gdps"
@@ -302,6 +303,7 @@ def test_extract_writes_portable_npz_and_provenance(tmp_path, small_gdps):
     assert metadata["surface_merged"] is True
     assert metadata["below_ground_levels_removed"] == 1
     assert metadata["max_workers"] == 3
+    assert metadata["observed"] is False
     assert [stage for stage, _total in stages] == [
         "locating", "downloading", "extracting", "writing", "complete"
     ]

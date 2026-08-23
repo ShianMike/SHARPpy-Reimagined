@@ -38,6 +38,8 @@ Portability notes (this suite is intended to also run on a fresh Linux VM):
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from types import SimpleNamespace
 
 # Headless Qt must be selected before qtpy imports a platform plugin. The
@@ -64,6 +66,32 @@ _EXAMPLE_INPUTS = [
     "hrrr_point_36.68N_95.66W_f018.spc",  # SPC tabular (model point)
     "hrrr_kbvo_20260625_06z.buf",         # BUFKIT model sounding
 ]
+
+
+def test_base_uwyo_decoder_import_does_not_require_sharppy():
+    """Base extraction imports remain usable without the render dependency."""
+    code = """
+import builtins
+
+real_import = builtins.__import__
+
+def guarded_import(name, *args, **kwargs):
+    if name == "sharppy" or name.startswith("sharppy."):
+        raise ModuleNotFoundError("blocked optional render dependency")
+    return real_import(name, *args, **kwargs)
+
+builtins.__import__ = guarded_import
+import sharpmod.io.uwyo_decoder
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
 
 
 # --------------------------------------------------------------------------- #
@@ -119,8 +147,8 @@ def test_top_level_package_and_subpackages_importable():
     import importlib
 
     assert sharpmod.__name__ == "sharpmod"
-    for sub in ("sharpmod.io", "sharpmod.guidance", "sharpmod.sharptab",
-                "sharpmod.viz", "sharpmod.tools", "sharpmod.resources"):
+    for sub in ("sharpmod.io", "sharpmod.sharptab", "sharpmod.viz",
+                "sharpmod.tools", "sharpmod.resources"):
         module = importlib.import_module(sub)
         assert module is not None
 
@@ -302,7 +330,6 @@ def test_render_cli_defaults_to_hd_and_accepts_lossless(monkeypatch, tmp_path):
             outfile,
             kwargs.get("image_mode"),
             kwargs.get("parcel"),
-            kwargs.get("regional_guidance"),
         ))
         return outfile
 
@@ -311,28 +338,19 @@ def test_render_cli_defaults_to_hd_and_accepts_lossless(monkeypatch, tmp_path):
     assert render_mod.main(["input.npz", str(tmp_path / "hd.png")]) == 0
     assert calls[-1] == (
         "input.npz", str(tmp_path / "hd.png"), render_mod.PNG_IMAGE_HD,
-        "MU", None)
+        "MU")
 
     assert render_mod.main(["--uhd", "--parcel", "ml", "input.npz",
                             str(tmp_path / "uhd.png")]) == 0
     assert calls[-1] == (
         "input.npz", str(tmp_path / "uhd.png"), render_mod.PNG_IMAGE_UHD,
-        "ML", None)
+        "ML")
 
     assert render_mod.main([
         "--lossless", "input.npz", str(tmp_path / "lossless.png")]) == 0
     assert calls[-1] == (
         "input.npz", str(tmp_path / "lossless.png"),
-        render_mod.PNG_IMAGE_LOSSLESS, "MU", None)
-
-    guidance_path = str(tmp_path / "regional.json")
-    assert render_mod.main([
-        "--guidance-json", guidance_path, "input.npz",
-        str(tmp_path / "guided.png"),
-    ]) == 0
-    assert calls[-1] == (
-        "input.npz", str(tmp_path / "guided.png"), render_mod.PNG_IMAGE_HD,
-        "MU", guidance_path)
+        render_mod.PNG_IMAGE_LOSSLESS, "MU")
 
 
 def test_apply_render_parcel_uses_sharppy_update_path():

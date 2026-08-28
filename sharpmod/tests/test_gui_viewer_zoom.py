@@ -147,6 +147,45 @@ def test_fit_mode_tracks_the_viewport_across_resizes(scaled_view, qt_app):
     assert view.current_scale() != pytest.approx(before)
 
 
+def test_native_size_window_keeps_zoom_when_resized_smaller(qt_app):
+    """A viewer that opens at 1:1 must not permanently lose its zoom controls."""
+    gui_theme.apply_theme(qt_app, color_style="standard")
+    window = QMainWindow()
+    gui_viewer._install_view_controls(window)
+    canvas = QWidget()
+    natural = QSize(400, 300)
+    canvas.setFixedSize(natural)
+    window.spc_widget = canvas
+    window.setCentralWidget(canvas)
+
+    gui_viewer._fit_window_to_screen(qt_app, window)
+    gui_viewer._bind_view_controls(window)
+    window.show()
+    for _ in range(6):
+        qt_app.processEvents()
+
+    try:
+        view = window.centralWidget()
+        assert isinstance(view, gui_viewer._ScaledSoundingView)
+        assert view.current_scale() == pytest.approx(1.0)
+        assert all(action.isEnabled()
+                   for action in window._sharpmod_view_actions.values())
+        assert window._sharpmod_zoom_slider.isEnabled()
+
+        # Height is the binding axis, independent of a window manager's minimum
+        # toolbar width. Fit mode must follow the smaller viewport automatically.
+        window.resize(window.width(), 180)
+        for _ in range(6):
+            qt_app.processEvents()
+
+        assert view.current_scale() < 1.0
+        assert view.current_scale() == pytest.approx(view.fit_scale())
+        assert window._sharpmod_view_actions["fit"].isEnabled()
+        assert window._sharpmod_zoom_slider.isEnabled()
+    finally:
+        window.close()
+
+
 def test_scrollbars_are_hidden_while_fitting(scaled_view):
     """Nothing can overflow in fit mode, so the bars would be noise."""
     view, _canvas, _window = scaled_view
@@ -961,6 +1000,35 @@ def test_ctrl_wheel_zooms_from_every_device(scaled_view, qt_app, label, angle,
         f"{label}: Ctrl+wheel did not zoom (scale stayed "
         f"{view.current_scale():.4f})")
     assert not view.is_fit_mode(), f"{label}: Ctrl+wheel is a manual zoom"
+
+
+@pytest.mark.parametrize("delta", [15, -15, 60, -60, 120, -120])
+def test_ctrl_wheel_zoom_is_proportional_to_delta(scaled_view, qt_app, delta):
+    """Partial touchpad events must be partial steps, not repeated 25% jumps."""
+    view, _canvas, _window = scaled_view
+    before = view.current_scale()
+    expected = before * view.ZOOM_STEP ** (delta / view._WHEEL_NOTCH)
+
+    point = view.viewport().rect().center()
+    view.wheelEvent(_wheel_at(view, point, angle=delta,
+                              modifiers=Qt.ControlModifier))
+    qt_app.processEvents()
+
+    assert view.current_scale() == pytest.approx(expected)
+
+
+def test_ctrl_wheel_partial_stream_equals_one_full_notch(scaled_view, qt_app):
+    """A touchpad stream totaling 120 units should equal one wheel notch."""
+    view, _canvas, _window = scaled_view
+    before = view.current_scale()
+    point = view.viewport().rect().center()
+
+    for _ in range(8):
+        view.wheelEvent(_wheel_at(view, point, angle=15,
+                                  modifiers=Qt.ControlModifier))
+    qt_app.processEvents()
+
+    assert view.current_scale() == pytest.approx(before * view.ZOOM_STEP)
 
 
 def test_ctrl_wheel_with_no_delta_is_not_swallowed(scaled_view, qt_app):

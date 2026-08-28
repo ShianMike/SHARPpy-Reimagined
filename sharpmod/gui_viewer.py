@@ -774,7 +774,11 @@ class _ScaledSoundingView(QGraphicsView):
         previous_anchor = self.transformationAnchor()
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         try:
-            step = self.ZOOM_STEP if delta > 0 else 1.0 / self.ZOOM_STEP
+            # A full 120-unit wheel notch remains one ZOOM_STEP. Precision
+            # touchpads report streams of partial angle deltas, so scale those
+            # proportionally instead of turning every nonzero event into a full
+            # 25% jump.
+            step = self.ZOOM_STEP ** (delta / self._WHEEL_NOTCH)
             self.zoom_to(self._scale * step)
         finally:
             self.setTransformationAnchor(previous_anchor)
@@ -849,13 +853,9 @@ def _fit_window_to_screen(app, win) -> None:
         # Toolbars are stacked above the central widget, so they cost the
         # sounding height exactly as the menu bar does. This was omitted, which
         # understated the chrome by the View toolbar's ~57px (and by the timeline
-        # toolbar's as well, on a forecast sounding). That mattered beyond a
-        # mis-sized window: the same comparison below picks the host, so a screen
-        # where the sounding fits without the toolbars but not with them landed
-        # on _FixedSoundingScrollArea -- which has no transform, so
-        # _bind_view_controls disabled every zoom control and explained that
-        # "the sounding already fits this screen at actual size" while the lower
-        # index rows were only reachable by scrolling.
+        # toolbar's as well, on a forecast sounding). The resulting initial scale
+        # was too large and the lower index rows were only reachable by scrolling
+        # until the post-show fit corrected it.
         chrome_h = mb_h + _reserved_toolbar_height(win)
         screen = app.primaryScreen().availableGeometry()
 
@@ -877,17 +877,13 @@ def _fit_window_to_screen(app, win) -> None:
         content_max_h = max(1, avail_h - chrome_h)
         scale = min(avail_w / nat_w, content_max_h / nat_h, 1.0)
 
-        if scale >= 0.999:
-            # Fits at native size: show it 1:1.
-            win.setCentralWidget(_FixedSoundingScrollArea(sw, natural, win))
-            client_w, client_h = nat_w, nat_h
-        else:
-            # Too big for this screen (e.g. 1920x1080): scale the whole sounding
-            # down uniformly. Size the window to wrap the scaled sounding so the
-            # entire layout is visible with no wasted letterbox and no cutoff.
-            win.setCentralWidget(_ScaledSoundingView(sw, natural, win))
-            client_w = int(round(nat_w * scale))
-            client_h = int(round(nat_h * scale))
+        # Use the transform-capable host even when the sounding initially fits at
+        # 1:1. A native-size window can later be shrunk or moved to a smaller
+        # display; keeping the same host lets fit mode respond to that resize and
+        # keeps the zoom controls useful for the lifetime of the viewer.
+        win.setCentralWidget(_ScaledSoundingView(sw, natural, win))
+        client_w = int(round(nat_w * scale))
+        client_h = int(round(nat_h * scale))
 
         # client_w is the sounding's width; the window also has to hold the
         # docked panel beside it, and the menu bar plus toolbars above it.
@@ -1093,10 +1089,10 @@ def _install_view_controls(win) -> None:
 def _bind_view_controls(win) -> None:
     """Connect the View actions to the sounding host created by the fit.
 
-    Zoom is only available on :class:`_ScaledSoundingView`. When the sounding
-    fits the screen at 1:1 the fit uses :class:`_FixedSoundingScrollArea`, a
-    plain scroll host with no transform -- there the controls are disabled and
-    say why, rather than being present but inert.
+    Zoom is available on :class:`_ScaledSoundingView`, which the production fit
+    path uses even when the sounding initially fits at 1:1 so later resizes stay
+    responsive. A fixed host supplied by another caller has no transform; there
+    the controls are disabled and say why rather than being present but inert.
     """
     actions = getattr(win, "_sharpmod_view_actions", None)
     if not actions:

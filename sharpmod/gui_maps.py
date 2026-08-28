@@ -16,6 +16,18 @@ from types import MappingProxyType
 
 # Importing common first applies the native Qt platform policy.
 from sharpmod import gui_common as _gui_common
+from sharpmod.gui_theme import current_theme, mono_font, ui_font
+from sharpmod.theme import MapPalette, map_palette
+
+
+def _map() -> MapPalette:
+    """Return the map palette paired with the active chrome theme.
+
+    Resolved on each call rather than cached on the widget, because the theme
+    can change at runtime (File -> Preferences) and the maps repaint in response
+    without being rebuilt.
+    """
+    return map_palette(current_theme())
 
 from qtpy.QtCore import (
     Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
@@ -326,22 +338,30 @@ class StationMapWidget(QWidget):
 
     # -- basemap raster (cached per extent + size) --------------------------- #
     def _basemap_pixmap(self):
+        # The palette is part of the key: the rendered pixmap bakes in the
+        # background, graticule, and border colours, so switching theme has to
+        # invalidate it or the previous theme's basemap stays on screen. The
+        # palette is a frozen dataclass of strings, hence hashable.
         key = (self.width(), self.height(),
                round(self._lon0, 4), round(self._lon1, 4),
-               round(self._lat0, 4), round(self._lat1, 4))
+               round(self._lat0, 4), round(self._lat1, 4),
+               _map())
         if self._basemap_cache is not None and self._cache_key == key:
             return self._basemap_cache
 
         pm = QPixmap(self.size())
-        pm.fill(QColor("#05070d"))
+        pm.fill(QColor(_map().background))
         qp = QPainter(pm)
         qp.setRenderHint(QPainter.Antialiasing, True)
         p = self._proj()
         self._draw_graticule(qp, p)
         # Draw borders first (dim), coastline last (bright) so it reads on top.
-        self._draw_layer(qp, self._layers.get("states", []), "#2c3e55", 1.0, p)
-        self._draw_layer(qp, self._layers.get("countries", []), "#54697f", 1.0, p)
-        self._draw_layer(qp, self._layers.get("coastline", []), "#a9c0dc", 1.4, p)
+        self._draw_layer(qp, self._layers.get("states", []),
+                         _map().states, 1.0, p)
+        self._draw_layer(qp, self._layers.get("countries", []),
+                         _map().countries, 1.0, p)
+        self._draw_layer(qp, self._layers.get("coastline", []),
+                         _map().coastline, 1.4, p)
         qp.end()
 
         self._basemap_cache = pm
@@ -399,9 +419,12 @@ class StationMapWidget(QWidget):
         span = self._lon1 - self._lon0
         step = 5 if span <= 40 else (10 if span <= 90 else
                                      (20 if span <= 200 else 30))
-        grid = QPen(QColor("#141d2e"), 1)
-        label = QColor("#3a4a63")
-        qp.setFont(QFont("Helvetica", 8))
+        grid = QPen(QColor(_map().graticule), 1)
+        label = QColor(_map().graticule_label)
+        # Graticule labels are figures, so the tabular family keeps the degree
+        # values aligned. "Helvetica" here resolved to a silent substitution on
+        # Windows, and changed again once render.install_font replaced QFont.
+        qp.setFont(mono_font("caption"))
         lon = int(self._lon0 // step * step)
         while lon <= self._lon1:
             qp.setPen(grid)
@@ -467,16 +490,16 @@ class StationMapWidget(QWidget):
                 continue
             sid = s["id"]
             if sid == self._selected_id:
-                qp.setBrush(QBrush(QColor("#ffd000")))
-                qp.setPen(QPen(QColor("#ffffff"), 1.5))
+                qp.setBrush(QBrush(QColor(_map().selected)))
+                qp.setPen(QPen(QColor(_map().selected_edge), 1.5))
                 qp.drawEllipse(pt, r + 2.5, r + 2.5)
             elif sid == self._hover_id:
-                qp.setBrush(QBrush(QColor("#ff8a8a")))
-                qp.setPen(QPen(QColor("#ffffff"), 1))
+                qp.setBrush(QBrush(QColor(_map().station_hover)))
+                qp.setPen(QPen(QColor(_map().station_hover_edge), 1))
                 qp.drawEllipse(pt, r + 1.5, r + 1.5)
             else:
-                qp.setBrush(QBrush(QColor("#e03030")))
-                qp.setPen(QPen(QColor("#7a1414"), 1))
+                qp.setBrush(QBrush(QColor(_map().station)))
+                qp.setPen(QPen(QColor(_map().station_edge), 1))
                 qp.drawEllipse(pt, r, r)
 
     def _draw_readout(self, qp) -> None:
@@ -490,15 +513,16 @@ class StationMapWidget(QWidget):
                 lines.append(f"{st['id']}  {st['name']}")
         if not lines:
             return
-        qp.setFont(QFont("Helvetica", 10))
+        # Station id plus place name: mixed text, so the UI family reads better.
+        qp.setFont(ui_font("body"))
         # Shadowed text for legibility over any basemap color.
         y = 18
         for text in lines:
             rect = QRectF(8, y - 14, self.width() - 16, 18)
-            qp.setPen(QPen(QColor("#000000")))
+            qp.setPen(QPen(QColor(_map().readout_shadow)))
             qp.drawText(rect.translated(1, 1),
                         Qt.AlignLeft | Qt.AlignVCenter, text)
-            qp.setPen(QPen(QColor("#eef2f8")))
+            qp.setPen(QPen(QColor(_map().readout_text)))
             qp.drawText(rect, Qt.AlignLeft | Qt.AlignVCenter, text)
             y += 18
 
@@ -651,7 +675,7 @@ class PointMapWidget(StationMapWidget):
         if lon0 <= -179.0 and lon1 >= 179.0 and lat0 <= -85.0 and lat1 >= 85.0:
             return
         fill = QColor(80, 140, 220, 34)
-        edge = QColor("#79b8ff")
+        edge = QColor(_map().domain_edge)
         qp.setBrush(QBrush(fill))
         qp.setPen(QPen(edge, 1.4, Qt.DashLine))
         if self._domain_outline:
@@ -692,17 +716,18 @@ class PointMapWidget(StationMapWidget):
             qp.drawPolygon(poly)
 
     def _draw_saved_points(self, qp, p) -> None:
-        qp.setFont(QFont("Helvetica", 8))
+        # User-supplied place labels: prose, not figures.
+        qp.setFont(ui_font("caption"))
         for name, lon, lat in self._saved_points:
             pt = self._to_px(lon, lat, p)
             if pt.x() < -20 or pt.y() < -20 \
                     or pt.x() > self.width() + 20 \
                     or pt.y() > self.height() + 20:
                 continue
-            qp.setBrush(QBrush(QColor("#44d7ff")))
-            qp.setPen(QPen(QColor("#07131b"), 1.3))
+            qp.setBrush(QBrush(QColor(_map().saved)))
+            qp.setPen(QPen(QColor(_map().saved_edge), 1.3))
             qp.drawEllipse(pt, 4.0, 4.0)
-            qp.setPen(QPen(QColor("#eafaff"), 1.0))
+            qp.setPen(QPen(QColor(_map().readout_text), 1.0))
             qp.drawText(QPointF(pt.x() + 6, pt.y() - 5), name)
 
     def _draw_point(self, qp, p) -> None:
@@ -711,10 +736,12 @@ class PointMapWidget(StationMapWidget):
         if pt.x() < -20 or pt.y() < -20 \
                 or pt.x() > self.width() + 20 or pt.y() > self.height() + 20:
             return
-        qp.setBrush(QBrush(QColor("#ffd000")))
-        qp.setPen(QPen(QColor("#ffffff"), 2.0))
+        qp.setBrush(QBrush(QColor(_map().selected)))
+        qp.setPen(QPen(QColor(_map().selected_edge), 2.0))
         qp.drawEllipse(pt, 7.0, 7.0)
-        qp.setPen(QPen(QColor("#0a0d13"), 1.4))
+        # Drawn across the marker itself, so it contrasts with `selected`
+        # rather than with the basemap.
+        qp.setPen(QPen(QColor(_map().selected_crosshair), 1.4))
         qp.drawLine(QPointF(pt.x() - 10, pt.y()), QPointF(pt.x() + 10, pt.y()))
         qp.drawLine(QPointF(pt.x(), pt.y() - 10), QPointF(pt.x(), pt.y() + 10))
 
@@ -727,14 +754,16 @@ class PointMapWidget(StationMapWidget):
         lines.append(f"Point   {lat:.3f}, {lon:.3f}")
         if self._domain_label:
             lines.append(self._domain_label)
-        qp.setFont(QFont("Helvetica", 10))
+        # Coordinate readout: monospace so the digits do not shift as the
+        # pointer moves across the map.
+        qp.setFont(mono_font("body"))
         y = 18
         for text in lines:
             rect = QRectF(8, y - 14, self.width() - 16, 18)
-            qp.setPen(QPen(QColor("#000000")))
+            qp.setPen(QPen(QColor(_map().readout_shadow)))
             qp.drawText(rect.translated(1, 1),
                         Qt.AlignLeft | Qt.AlignVCenter, text)
-            qp.setPen(QPen(QColor("#eef2f8")))
+            qp.setPen(QPen(QColor(_map().readout_text)))
             qp.drawText(rect, Qt.AlignLeft | Qt.AlignVCenter, text)
             y += 18
 

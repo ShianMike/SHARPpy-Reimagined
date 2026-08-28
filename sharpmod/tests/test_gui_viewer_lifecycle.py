@@ -101,3 +101,86 @@ def test_composed_viewer_is_destroyed_and_released_on_close(
 
     controller.deleteLater()
     _flush_deferred_deletes(qt_app)
+
+def _closures_capturing(code, path, out, name="win"):
+    """Recursively collect nested functions whose closure captures ``name``."""
+    for const in code.co_consts:
+        if hasattr(const, "co_freevars"):
+            if name in const.co_freevars:
+                out.append(f"{path} -> {const.co_name}")
+            _closures_capturing(const, f"{path}/{const.co_name}", out, name)
+
+
+def test_no_installer_handler_closes_over_the_window():
+    """A handler capturing ``win`` crashes teardown, not just leaks memory.
+
+    Every ``_install_*`` helper attaches actions and widgets that are children
+    of the sounding window, and Qt holds their signal connections C++-side. A
+    closure that captures ``win`` strongly therefore closes
+
+        win -> action -> connection -> closure -> win
+
+    across an edge Python's cyclic collector cannot traverse. The window's
+    wrapper survives to interpreter exit, by which point Qt has torn the C++
+    side down, and freeing it is an access violation: 0xC0000005 with no Python
+    traceback, because it happens after the last frame is gone.
+
+    That was not theoretical. ``_install_tip_bar``'s "Full guide" button used a
+    ``lambda`` capturing ``win`` and crashed the test process on exit in 6 of 14
+    runs; holding the window weakly gave 0 in 14. Intermittent, silent, and it
+    would abort the app when the user quits it.
+
+    Checked against bytecode rather than by reading the source, because the
+    condition is exactly "``win`` is in ``co_freevars``" -- and the fix (rebind
+    ``win = win_ref()`` inside the handler, making it a local) is invisible to a
+    grep for ``weakref``.
+
+    Discovery is deliberately wide. A first version of this test looked only at
+    ``gui_viewer`` and ``gui_sessions`` for names starting with ``_install`` or
+    ``_bind``, and missed ``gui_timeline.install_timeline_controls`` -- which has
+    no leading underscore, lives in a third module, and runs for every forecast
+    sounding. A guard narrower than the defect it guards is worse than none,
+    because it reads as coverage.
+
+    The same rule covers ``dialog``, for the same reason: a preferences dialog
+    built with ``parent=None`` owns its own C++ lifetime exactly as a top-level
+    window does, so a handler on one of its children that captures it strongly
+    retains it just as durably.
+    """
+    from sharpmod import gui_common, gui_sessions, gui_settings, gui_timeline
+
+    offenders = []
+    audited = []
+    modules = (gui_viewer, gui_sessions, gui_timeline, gui_common, gui_settings)
+    for module in modules:
+        for name in sorted(dir(module)):
+            if not ("install" in name or "bind" in name):
+                continue
+            code = getattr(getattr(module, name), "__code__", None)
+            if code is None:
+                continue
+            params = code.co_varnames[:code.co_argcount]
+            owner = next((p for p in ("win", "dialog") if p in params), None)
+            if owner is None:
+                continue
+            audited.append(f"{module.__name__}.{name}")
+            _closures_capturing(code, name, offenders, owner)
+
+    # Guards the guard: if discovery ever stops finding installers, this test
+    # would pass by examining nothing. Named explicitly rather than counted, so
+    # a rename cannot quietly drop one out of scope.
+    assert len(audited) >= 12, f"only audited {audited}"
+    for required in ("sharpmod.gui_timeline.install_timeline_controls",
+                     "sharpmod.gui_viewer._install_tip_bar",
+                     "sharpmod.gui_viewer._install_export_menu",
+                     "sharpmod.gui_settings._install_palette_preview",
+                     "sharpmod.gui_sessions._install_analysis_actions"):
+        assert required in audited, (
+            f"{required} is no longer being audited; discovery is narrower "
+            f"than the defect again. Audited: {audited}")
+
+    assert not offenders, (
+        "these handlers capture their own top-level window or dialog strongly, "
+        "which makes an uncollectable cycle and an intermittent segfault at "
+        "exit; resolve it from a weakref into a local of the same name, or pass "
+        "in only the values the handler needs:\n  " + "\n  ".join(offenders))

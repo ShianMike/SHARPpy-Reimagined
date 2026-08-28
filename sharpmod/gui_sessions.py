@@ -6,6 +6,7 @@ import re
 import sys
 import tempfile
 import time
+import weakref
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -176,14 +177,26 @@ def _install_analysis_actions(win, controller) -> None:
         undo_action.setText(f"Undo {undo_label}" if undo_label else "Undo")
         redo_action.setText(f"Redo {redo_label}" if redo_label else "Redo")
 
+    # Resolved into a local of the same name inside each handler, so none of
+    # them closes over the outer ``win``. These actions are children of the
+    # window and Qt holds their connections C++-side, so a strong capture makes
+    # win -> action -> connection -> closure -> win a cycle Python's cyclic
+    # collector cannot break. The window's wrapper then survives to interpreter
+    # exit, after Qt has torn the C++ side down, and freeing it is an access
+    # violation -- measured at 6 crashes in 14 runs on an equivalent handler in
+    # gui_viewer._install_tip_bar, 0 in 14 once held weakly.
+    win_ref = weakref.ref(win)
+
     def _undo():
+        win = win_ref()
         label = history.undo()
-        if label:
+        if label and win is not None:
             win.statusBar().showMessage(f"Undid {label}", 3000)
 
     def _redo():
+        win = win_ref()
         label = history.redo()
-        if label:
+        if label and win is not None:
             win.statusBar().showMessage(f"Redid {label}", 3000)
 
     undo_action.triggered.connect(_undo)
@@ -201,6 +214,9 @@ def _install_analysis_actions(win, controller) -> None:
         save_session.setShortcut("Ctrl+Shift+E")
 
         def _save_session():
+            win = win_ref()
+            if win is None:
+                return
             suggested = str(getattr(win, "_sharpmod_session_path", "")
                             or _session_default_path())
             path, _ = QFileDialog.getSaveFileName(

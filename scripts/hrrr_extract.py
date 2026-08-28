@@ -1,16 +1,33 @@
-"""Extract an HRRR point sounding and write it as a .npz file.
+"""One-off development script: extract a single HRRR point sounding to .npz.
 
-Fetches HRRR model data from the 2026-04-27 00Z run, forecast hour 24
-(valid 2026-04-28 00Z) at lat=37.671072, lon=-90.201396 and writes a
-portable .npz sounding compatible with sharpmod-render and sharpmod-gui.
+**Not a supported entry point.** Use the ``model-extract`` console script for
+real work::
+
+    model-extract hrrr 37.671072 -90.201396 out.npz --run "2026-06-11 00" --fxx 24
+
+``model-extract`` is parameterized, caches downloads, writes atomically, and --
+importantly -- merges the *verified surface row* (surface pressure and terrain
+height, 2 m thermodynamics, 10 m wind) and discards isobaric levels below ground
+before running quality checks. This script requests pressure levels only, so the
+profile it produces is the pressure-only kind the supported extractor refuses to
+emit. Treat its output as a development artifact, not a sounding to forecast off.
+
+Every parameter below is hardcoded and was edited in place per run: it currently
+fetches the ``RUN_DATE`` 00Z run at forecast hour ``FXX``, at (``LAT``, ``LON``),
+and writes ``OUT_NPZ``. Change the constants, not the call site.
+
+It is retained because ``sharpmod/tests/test_point_vorticity_extractors.py``
+covers :func:`extract_column`'s conversion of HRRR ``ABSV`` (absolute vorticity)
+into relative vorticity by subtracting the Coriolis term -- a conversion worth
+pinning wherever it lives.
 
 Usage:
     # From the .gribenv virtual environment (has herbie + cfgrib + xarray):
-    .gribenv\\Scripts\\python.exe hrrr_extract.py
+    .gribenv\\Scripts\\python.exe scripts\\hrrr_extract.py
 
     # Or activate the venv first:
     .gribenv\\Scripts\\activate
-    python hrrr_extract.py
+    python scripts/hrrr_extract.py
 """
 
 import json

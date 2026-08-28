@@ -19,9 +19,6 @@ from sharpmod.gui_common import (
     APP_VERSION,
     CONTROLS_HTML,
     MAX_RECENTS,
-    PICKER_DARK_QSS,
-    PICKER_RAIL_MAX_WIDTH,
-    PICKER_RAIL_MIN_WIDTH,
     SYNOPTIC_HOURS,
     _LOGGER,
     _configure_debug_logging,
@@ -29,8 +26,26 @@ from sharpmod.gui_common import (
     _format_progress_duration,
     _most_recent_synoptic,
     _render,
+    _install_fullscreen_action,
     _show_controls_dialog,
     _uwyo_catalog,
+)
+from sharpmod.gui_shell import SourceSelector
+from sharpmod.gui_theme import apply_theme, ensure_theme_applied
+from sharpmod.theme import (
+    CONTROL_H,
+    FIELD_W,
+    OBJ_ATTRIBUTION,
+    OBJ_EMPHASIS,
+    OBJ_GHOST,
+    OBJ_HINT,
+    OBJ_PRIMARY,
+    OBJ_PROGRESS_DETAIL,
+    OBJ_STATUS,
+    PROGRESS_H,
+    RAIL_W,
+    SCROLLBAR_W,
+    SPACE,
 )
 from sharpmod.gui_maps import MAP_AREAS, PointMapWidget, StationMapWidget
 from sharpmod.gui_cache import CacheManagerDialog, parse_spatial_point
@@ -159,7 +174,7 @@ def _town_lookup_attribution_label(parent=None) -> QLabel:
         parent,
     )
     label.setOpenExternalLinks(True)
-    label.setStyleSheet("color: gray; font-size: 8pt;")
+    label.setObjectName(OBJ_ATTRIBUTION)
     label.setWordWrap(True)
     label.setToolTip(
         "When the location label is blank, CONUS locations are resolved "
@@ -172,24 +187,66 @@ def _town_lookup_attribution_label(parent=None) -> QLabel:
 
 
 def _scrolling_control_rail(
-        layout: QLayout, *, maximum_width: int = PICKER_RAIL_MAX_WIDTH
-        ) -> QScrollArea:
-    """Return a vertically scrollable picker rail with stable control sizes."""
+        layout: QLayout, *, content_width: int = RAIL_W["max"]) -> QScrollArea:
+    """Return a vertically scrollable control rail of a fixed usable width.
+
+    ``content_width`` is the width available to the cards. The vertical
+    scrollbar is added on top, because horizontal scrolling is disabled: if the
+    bar were allowed to eat into the content width, the widest card would be
+    clipped the moment the rail became tall enough to scroll. That is exactly
+    what happened in the forecast panel, whose "Point" card is 4 px wider than
+    the viewport the old 380 px cap left behind.
+
+    Minimum and maximum are set to the same value so the rail keeps one width
+    across every panel. Content-sized rails looked inconsistent and moved the
+    map divider whenever the user switched source.
+    """
     content = QWidget()
     content.setLayout(layout)
     content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
     content.setMinimumWidth(0)
+
+    total_width = int(content_width) + SCROLLBAR_W
 
     scroll = QScrollArea()
     scroll.setFrameShape(QFrame.NoFrame)
     scroll.setWidgetResizable(True)
     scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    scroll.setMinimumWidth(PICKER_RAIL_MIN_WIDTH)
-    scroll.setMaximumWidth(int(maximum_width))
-    scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+    scroll.setMinimumWidth(total_width)
+    scroll.setMaximumWidth(total_width)
+    scroll.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
     scroll.setWidget(content)
     return scroll
+
+
+#: Qt property holding a button's idle label while it shows a busy one.
+_IDLE_TEXT_PROPERTY = "sharpmodIdleText"
+
+
+def _set_button_busy(button, busy: bool, busy_text: str) -> None:
+    """Show or clear a busy label on ``button`` without duplicating its text.
+
+    The idle label is stashed on the widget the first time it goes busy and
+    restored from there afterwards. Each busy handler previously re-typed the
+    label as a literal -- ``"Fetch && Display Sounding"`` and friends appeared
+    once in the panel builder and again in the restore path -- so renaming a
+    button in one place silently reverted it in the other after the first fetch.
+
+    Enabled state is left to the caller: each panel re-enables on a different
+    condition (a selected station, a validated point, a chosen file).
+    """
+    if button is None:
+        return
+    if busy:
+        if not button.property(_IDLE_TEXT_PROPERTY):
+            button.setProperty(_IDLE_TEXT_PROPERTY, button.text())
+        button.setEnabled(False)
+        button.setText(busy_text)
+        return
+    idle = button.property(_IDLE_TEXT_PROPERTY)
+    if idle:
+        button.setText(idle)
 
 
 def _project_gui_runtime() -> tuple[Path, Path] | None:
@@ -284,10 +341,20 @@ class PickerWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        # The chrome theme is applied once on the QApplication, not per window:
+        # four of the five source panels below are built lazily and every dialog
+        # is constructed on demand, so a window-level style sheet would miss
+        # everything created after this point.
+        #
+        # ``main`` applies it before the first widget exists, which avoids a
+        # visible restyle at startup. This call covers the other entry points --
+        # the test suite and any embedder construct PickerWindow directly -- and
+        # is a no-op when the theme is already applied.
+        ensure_theme_applied(color_style=_startup_color_style())
+
         self.setWindowTitle(f"{APP_NAME} \u2014 Sounding Picker")
         self.resize(1000, 720)
         self.setMinimumSize(900, 620)
-        self.setStyleSheet(PICKER_DARK_QSS)
         self.setAcceptDrops(True)  # drag a sounding file onto the window
 
         # Keep every opened sounding window alive. Each vendored ``SPCWindow`` is
@@ -385,7 +452,14 @@ class PickerWindow(QMainWindow):
         # window appears before the heavy render stack is imported.
         self.config = None
 
-        self._tabs = QTabWidget()
+        # A left navigation rail rather than a top tab bar. ``SourceSelector``
+        # keeps the QTabWidget surface (addTab / tabText / setCurrentIndex /
+        # currentChanged), so the ~40 title-keyed call sites below and the lazy
+        # placeholder swap in ``_ensure_tab`` are unchanged.
+        # "Load from" rather than "Source": two of the five entries (Station Map
+        # and Station List) are the same UWyo source reached two ways, and the
+        # map panel already has a "Sounding source" card naming the provider.
+        self._tabs = SourceSelector(header="LOAD FROM")
         self._tabs.addTab(self._build_map_tab(), "Station Map")
         self._lazy_tab_builders = {
             "Station List": self._build_uwyo_tab,
@@ -412,7 +486,7 @@ class PickerWindow(QMainWindow):
         layout = QVBoxLayout(placeholder)
         label = QLabel(f"Preparing {title}…")
         label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet("color: gray;")
+        label.setObjectName(OBJ_HINT)
         layout.addWidget(label, 1)
         return placeholder
 
@@ -530,6 +604,11 @@ class PickerWindow(QMainWindow):
         locations_menu.addAction(manage_locations)
         self._manage_locations_action = manage_locations
         self._recent_locations_menu = locations_menu.addMenu("Recent Points")
+
+        # A View menu holding one item, because full screen is where users look
+        # for it, and the same key works in the sounding window.
+        viewmenu = self.menuBar().addMenu("&View")
+        _install_fullscreen_action(self, viewmenu)
 
         helpmenu = self.menuBar().addMenu("&Help")
         controls_act = QAction("Sounding Window &Controls", self)
@@ -671,6 +750,22 @@ class PickerWindow(QMainWindow):
             # before the single live-window signal is emitted.
             _apply_selected_color_style(config)
             self._save_config_preferences(config)
+            # Retheme the chrome to match the newly chosen canvas palette,
+            # before the signal, so an open sounding window repaints its canvas
+            # and its frame in the same event-loop turn instead of briefly
+            # showing a light canvas inside dark chrome.
+            #
+            # Guarded and resolved via getattr: this is presentation only and
+            # must never prevent a preference from being persisted or the
+            # config_changed fan-out from running. ``preferencesbox`` is also
+            # invoked unbound against a duck-typed owner, which need not supply
+            # the chrome hook at all.
+            reapply_chrome = getattr(self, "_apply_chrome_theme", None)
+            if callable(reapply_chrome):
+                try:
+                    reapply_chrome(config)
+                except Exception:
+                    _LOGGER.exception("chrome_theme.preferences_reapply_failed")
             self.config_changed.emit(config)
             if parcel_box is not None:
                 parcel_key = _normalize_default_parcel(parcel_box.currentData())
@@ -686,6 +781,27 @@ class PickerWindow(QMainWindow):
             config = self._config()
             _write_unit_preferences_to_config(config, prefs)
             self.config_changed.emit(config)
+
+    def _apply_chrome_theme(self, config=None) -> None:
+        """Re-apply the chrome theme paired with the current canvas palette.
+
+        Reads the palette choice from ``config`` when supplied, so this runs
+        after :func:`_apply_selected_color_style` has normalized it, and falls
+        back to the persisted value otherwise.
+
+        Applied on the ``QApplication``, so every open sounding window and all
+        lazily-built panels pick it up without being enumerated here.
+        """
+        style = None
+        if config is not None:
+            style = _read_config_preferences(config).get("color_style")
+        if style is None:
+            style = _read_settings_preferences(
+                getattr(self, "_settings", None)).get("color_style")
+        try:
+            apply_theme(QApplication.instance(), color_style=style)
+        except Exception:
+            _LOGGER.exception("chrome_theme.reapply_failed")
 
     def focusPicker(self) -> None:  # noqa: N802 - matches SPCWindow's caller
         """Bring the picker back to the front (the ``W`` key target)."""
@@ -984,12 +1100,13 @@ class PickerWindow(QMainWindow):
     def _build_map_tab(self) -> QWidget:
         w = QWidget()
         outer = QHBoxLayout(w)
-        outer.setContentsMargins(10, 8, 10, 8)
-        outer.setSpacing(12)
+        outer.setContentsMargins(SPACE["md"], SPACE["sm"],
+                                 SPACE["md"], SPACE["sm"])
+        outer.setSpacing(SPACE["md"])
 
         # --- left control column ---
         left = QVBoxLayout()
-        left.setSpacing(8)
+        left.setSpacing(SPACE["md"])
         left.setContentsMargins(0, 0, 0, 0)
 
         src_box = QGroupBox("Sounding source")
@@ -1010,18 +1127,18 @@ class PickerWindow(QMainWindow):
         self._map_date.setCalendarPopup(True)
         self._map_date.setDate(default_date)
         self._map_date.setMaximumDate(QDate.currentDate().addDays(1))
-        self._map_date.setMinimumWidth(118)
+        self._map_date.setMinimumWidth(FIELD_W["date"])
         cg.addWidget(self._map_date, 0, 1)
         cg.addWidget(QLabel("Time:"), 1, 0)
         self._map_cycle = QComboBox()
         for h in SYNOPTIC_HOURS:
             self._map_cycle.addItem(f"{h:02d}Z", h)
         self._map_cycle.setCurrentIndex(SYNOPTIC_HOURS.index(default_hour))
-        self._map_cycle.setMinimumWidth(72)
+        self._map_cycle.setMinimumWidth(FIELD_W["compact"])
         cg.addWidget(self._map_cycle, 1, 1)
         recent = QToolButton()
         recent.setText("Most recent")
-        recent.setMinimumWidth(96)
+        recent.setMinimumWidth(FIELD_W["action"])
         recent.clicked.connect(self._map_set_recent)
         cg.addWidget(recent, 1, 2)
         left.addWidget(cycle_box)
@@ -1052,13 +1169,14 @@ class PickerWindow(QMainWindow):
 
         self._map_sel_lbl = QLabel("No station selected")
         self._map_sel_lbl.setWordWrap(True)
-        self._map_sel_lbl.setStyleSheet("font-weight: bold;")
+        self._map_sel_lbl.setObjectName(OBJ_EMPHASIS)
         left.addWidget(self._map_sel_lbl)
 
         avail_box = QGroupBox("Availability")
-        avail_box.setMinimumHeight(88)
+        # No minimum height: the indicator sizes to its own content. A fixed 88 px
+        # floor left the card mostly empty for the common two-line state.
         avb = QVBoxLayout(avail_box)
-        avb.setContentsMargins(10, 10, 10, 10)
+        avb.setContentsMargins(0, 0, 0, 0)
         self._map_avail = _AvailabilityIndicator()
         avb.addWidget(self._map_avail)
         left.addWidget(avail_box)
@@ -1068,10 +1186,9 @@ class PickerWindow(QMainWindow):
         self._map_cycle.currentIndexChanged.connect(
             self._map_recheck_availability)
 
-        left.addStretch(1)
-
         self._map_gen_btn = QPushButton("Generate Sounding")
-        self._map_gen_btn.setMinimumHeight(36)
+        self._map_gen_btn.setObjectName(OBJ_PRIMARY)
+        self._map_gen_btn.setMinimumHeight(CONTROL_H["lg"])
         self._map_gen_btn.setEnabled(False)
         self._map_gen_btn.clicked.connect(self._map_generate)
         left.addWidget(self._map_gen_btn)
@@ -1079,11 +1196,16 @@ class PickerWindow(QMainWindow):
         hint = QLabel("Click a station dot to select \u2014 double-click to "
                       "open. Scroll to zoom, drag to pan.")
         hint.setWordWrap(True)
-        hint.setStyleSheet("color: gray;")
+        hint.setObjectName(OBJ_HINT)
         left.addWidget(hint)
 
-        self._map_controls_scroll = _scrolling_control_rail(
-            left, maximum_width=PICKER_RAIL_MAX_WIDTH + 40)
+        # The stretch goes *last*, so the controls and their primary action form
+        # one top-aligned group and any spare height collects below. It used to
+        # sit above the button, which pushed the action to the bottom of the rail
+        # and opened a large empty gap in the middle.
+        left.addStretch(1)
+
+        self._map_controls_scroll = _scrolling_control_rail(left)
         outer.addWidget(self._map_controls_scroll)
 
         # --- the map itself ---
@@ -1141,16 +1263,32 @@ class PickerWindow(QMainWindow):
     # Observed (UWyo) list tab
     # ====================================================================== #
     def _build_uwyo_tab(self) -> QWidget:
+        # Structured as [control rail | content], matching the other four source
+        # panels. It used to be one full-width column, which was tolerable at the
+        # old window proportions but stretched the search field, date edit, and
+        # primary button across the full width once the navigation rail freed up
+        # horizontal space.
         w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setSpacing(8)
+        outer = QHBoxLayout(w)
+        outer.setContentsMargins(SPACE["md"], SPACE["sm"],
+                                 SPACE["md"], SPACE["sm"])
+        outer.setSpacing(SPACE["md"])
+
+        # --- left: cycle, availability, primary action ---
+        left = QVBoxLayout()
+        left.setSpacing(SPACE["md"])
+        left.setContentsMargins(0, 0, 0, 0)
+
+        # --- right: the searchable station catalogue ---
+        content = QVBoxLayout()
+        content.setSpacing(SPACE["sm"])
+        content.setContentsMargins(0, 0, 0, 0)
 
         help_lbl = QLabel("Fetch an observed radiosonde sounding from the "
                           "University of Wyoming archive.")
         help_lbl.setWordWrap(True)
-        layout.addWidget(help_lbl)
+        content.addWidget(help_lbl)
 
-        # --- Station filter + list ---
         self._uwyo_search = QLineEdit()
         self._uwyo_search.setClearButtonEnabled(True)
         self._uwyo_search.setPlaceholderText(
@@ -1158,18 +1296,23 @@ class PickerWindow(QMainWindow):
         # Live filtering: no button to press.
         self._uwyo_search.textChanged.connect(self._filter_stations)
         self._uwyo_search.returnPressed.connect(self._focus_first_station)
-        layout.addWidget(self._uwyo_search)
+        content.addWidget(self._uwyo_search)
 
         self._station_list = QListWidget()
         self._station_list.setAlternatingRowColors(True)
+        # A few catalogue entries are wider than the viewport, which otherwise
+        # adds a horizontal scrollbar for the sake of two or three rows. Elide
+        # instead: the station id leads each row and is what the user scans.
+        self._station_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._station_list.setTextElideMode(Qt.ElideRight)
         self._station_list.itemSelectionChanged.connect(self._sync_fetch_enabled)
         self._station_list.itemDoubleClicked.connect(
             lambda _item: self._fetch_selected())
-        layout.addWidget(self._station_list, stretch=1)
+        content.addWidget(self._station_list, stretch=1)
 
         self._count_lbl = QLabel("")
-        self._count_lbl.setStyleSheet("color: gray;")
-        layout.addWidget(self._count_lbl)
+        self._count_lbl.setObjectName(OBJ_HINT)
+        content.addWidget(self._count_lbl)
 
         # --- Observation time ---
         time_box = QGroupBox("Observation time (UTC)")
@@ -1184,7 +1327,7 @@ class PickerWindow(QMainWindow):
         self._date_edit.setCalendarPopup(True)
         self._date_edit.setDate(default_date)
         self._date_edit.setMaximumDate(QDate.currentDate().addDays(1))
-        self._date_edit.setMinimumWidth(118)
+        self._date_edit.setMinimumWidth(FIELD_W["date"])
         self._date_edit.dateChanged.connect(self._update_valid_label)
         tg.addWidget(self._date_edit, 0, 1)
 
@@ -1193,33 +1336,48 @@ class PickerWindow(QMainWindow):
         for h in SYNOPTIC_HOURS:
             self._cycle_combo.addItem(f"{h:02d}Z", h)
         self._cycle_combo.setCurrentIndex(SYNOPTIC_HOURS.index(default_hour))
-        self._cycle_combo.setMinimumWidth(72)
+        self._cycle_combo.setMinimumWidth(FIELD_W["compact"])
         self._cycle_combo.currentIndexChanged.connect(self._update_valid_label)
         tg.addWidget(self._cycle_combo, 1, 1)
 
         recent_btn = QToolButton()
         recent_btn.setText("Most recent")
-        recent_btn.setMinimumWidth(96)
+        recent_btn.setMinimumWidth(FIELD_W["action"])
         recent_btn.clicked.connect(self._set_most_recent)
         tg.addWidget(recent_btn, 1, 2)
 
         self._valid_lbl = QLabel("")
-        self._valid_lbl.setStyleSheet("font-weight: bold;")
+        self._valid_lbl.setObjectName(OBJ_EMPHASIS)
         tg.addWidget(self._valid_lbl, 2, 0, 1, 3)
-        layout.addWidget(time_box)
+        left.addWidget(time_box)
 
         # --- Availability pre-flight ---
-        avail_row = QHBoxLayout()
+        avail_box = QGroupBox("Availability")
+        avb = QVBoxLayout(avail_box)
+        avb.setContentsMargins(0, 0, 0, 0)
         self._uwyo_avail = _AvailabilityIndicator()
-        avail_row.addWidget(self._uwyo_avail, 1)
-        layout.addLayout(avail_row)
+        avb.addWidget(self._uwyo_avail)
+        left.addWidget(avail_box)
 
         # --- Primary action ---
         self._fetch_btn = QPushButton("Fetch && Display Sounding")
+        self._fetch_btn.setObjectName(OBJ_PRIMARY)
         self._fetch_btn.setDefault(True)
-        self._fetch_btn.setMinimumHeight(36)
+        self._fetch_btn.setMinimumHeight(CONTROL_H["lg"])
         self._fetch_btn.clicked.connect(self._fetch_selected)
-        layout.addWidget(self._fetch_btn)
+        left.addWidget(self._fetch_btn)
+
+        hint = QLabel("Filter the catalogue, pick a station, then fetch \u2014 "
+                      "or double-click a row to open it directly.")
+        hint.setWordWrap(True)
+        hint.setObjectName(OBJ_HINT)
+        left.addWidget(hint)
+
+        left.addStretch(1)
+
+        self._uwyo_controls_scroll = _scrolling_control_rail(left)
+        outer.addWidget(self._uwyo_controls_scroll)
+        outer.addLayout(content, 1)
 
         # Re-probe availability when the selection or requested cycle changes.
         self._station_list.itemSelectionChanged.connect(
@@ -1408,20 +1566,18 @@ class PickerWindow(QMainWindow):
             busy, id(self._worker) if self._worker else None)
         if busy:
             QApplication.setOverrideCursor(Qt.WaitCursor)
-            if hasattr(self, "_fetch_btn"):
-                self._fetch_btn.setEnabled(False)
-                self._fetch_btn.setText("Fetching\u2026")
-            if hasattr(self, "_map_gen_btn"):
-                self._map_gen_btn.setEnabled(False)
-                self._map_gen_btn.setText("Fetching\u2026")
+            _set_button_busy(getattr(self, "_fetch_btn", None), True,
+                             "Fetching\u2026")
+            _set_button_busy(getattr(self, "_map_gen_btn", None), True,
+                             "Fetching\u2026")
         else:
             QApplication.restoreOverrideCursor()
-            if hasattr(self, "_fetch_btn"):
-                self._fetch_btn.setText("Fetch && Display Sounding")
+            _set_button_busy(getattr(self, "_fetch_btn", None), False, "")
             self._sync_fetch_enabled()
-            if hasattr(self, "_map_gen_btn"):
-                self._map_gen_btn.setText("Generate Sounding")
-                self._map_gen_btn.setEnabled(bool(self._map_selected_id))
+            map_btn = getattr(self, "_map_gen_btn", None)
+            _set_button_busy(map_btn, False, "")
+            if map_btn is not None:
+                map_btn.setEnabled(bool(self._map_selected_id))
 
     def _on_fetch_ok(self, npz_path, meta, when) -> None:
         self.statusBar().showMessage(
@@ -1469,8 +1625,9 @@ class PickerWindow(QMainWindow):
     def _build_model_tab(self) -> QWidget:
         w = QWidget()
         outer = QHBoxLayout(w)
-        outer.setContentsMargins(10, 8, 10, 8)
-        outer.setSpacing(12)
+        outer.setContentsMargins(SPACE["md"], SPACE["sm"],
+                                 SPACE["md"], SPACE["sm"])
+        outer.setSpacing(SPACE["md"])
 
         self._model_syncing_point = False
         self._model_map = PointMapWidget()
@@ -1479,7 +1636,7 @@ class PickerWindow(QMainWindow):
             lambda _lat, _lon: self._model_fetch())
 
         left = QVBoxLayout()
-        left.setSpacing(8)
+        left.setSpacing(SPACE["md"])
         left.setContentsMargins(0, 0, 0, 0)
 
         area_box = QGroupBox("Region")
@@ -1513,49 +1670,49 @@ class PickerWindow(QMainWindow):
         model_layout.addWidget(self._model_combo)
         self._model_notes = QLabel("")
         self._model_notes.setWordWrap(True)
-        self._model_notes.setStyleSheet("color: gray;")
+        self._model_notes.setObjectName(OBJ_HINT)
         model_layout.addWidget(self._model_notes)
         left.addWidget(model_box)
 
         time_box = QGroupBox("Run / valid time (UTC)")
         time_box.setMinimumHeight(210)
         time_grid = QGridLayout(time_box)
-        time_grid.setVerticalSpacing(8)
+        time_grid.setVerticalSpacing(SPACE["sm"])
         time_grid.setColumnStretch(1, 1)
         for row in range(3):
-            time_grid.setRowMinimumHeight(row, 32)
+            time_grid.setRowMinimumHeight(row, CONTROL_H["md"])
         time_grid.addWidget(QLabel("Date:"), 0, 0)
         self._model_date = QDateEdit()
         self._model_date.setDisplayFormat("yyyy-MM-dd")
         self._model_date.setCalendarPopup(True)
         self._model_date.setDate(QDate.currentDate())
         self._model_date.setMaximumDate(QDate.currentDate().addDays(1))
-        self._model_date.setMinimumWidth(132)
-        self._model_date.setMinimumHeight(30)
+        self._model_date.setMinimumWidth(FIELD_W["wide"])
+        self._model_date.setMinimumHeight(CONTROL_H["md"])
         self._model_date.dateChanged.connect(self._model_update_valid_label)
         time_grid.addWidget(self._model_date, 0, 1)
         time_grid.addWidget(QLabel("Cycle:"), 1, 0)
         self._model_cycle = QComboBox()
-        self._model_cycle.setMinimumWidth(132)
-        self._model_cycle.setMinimumHeight(30)
+        self._model_cycle.setMinimumWidth(FIELD_W["wide"])
+        self._model_cycle.setMinimumHeight(CONTROL_H["md"])
         self._model_cycle.currentIndexChanged.connect(self._model_update_fxx)
         time_grid.addWidget(self._model_cycle, 1, 1)
         recent = QToolButton()
         recent.setText("Most recent")
-        recent.setMinimumWidth(96)
-        recent.setMinimumHeight(30)
+        recent.setMinimumWidth(FIELD_W["action"])
+        recent.setMinimumHeight(CONTROL_H["md"])
         recent.clicked.connect(self._model_set_recent)
         time_grid.addWidget(recent, 1, 2)
         time_grid.addWidget(QLabel("Forecast:"), 2, 0)
         self._model_fxx_combo = QComboBox()
         self._model_fxx_combo.setMaxVisibleItems(24)
-        self._model_fxx_combo.setMinimumWidth(132)
-        self._model_fxx_combo.setMinimumHeight(30)
+        self._model_fxx_combo.setMinimumWidth(FIELD_W["wide"])
+        self._model_fxx_combo.setMinimumHeight(CONTROL_H["md"])
         self._model_fxx_combo.currentIndexChanged.connect(
             self._model_update_valid_label)
         time_grid.addWidget(self._model_fxx_combo, 2, 1, 1, 2)
         self._model_valid_lbl = QLabel("")
-        self._model_valid_lbl.setStyleSheet("font-weight: bold;")
+        self._model_valid_lbl.setObjectName(OBJ_EMPHASIS)
         time_grid.addWidget(self._model_valid_lbl, 3, 0, 1, 3)
         self._model_availability = _AvailabilityIndicator()
         self._model_availability.setToolTip(
@@ -1601,7 +1758,7 @@ class PickerWindow(QMainWindow):
         point_grid.addWidget(_town_lookup_attribution_label(), 3, 0, 1, 3)
         self._model_point_status = QLabel("")
         self._model_point_status.setWordWrap(True)
-        self._model_point_status.setStyleSheet("color: gray;")
+        self._model_point_status.setObjectName(OBJ_HINT)
         point_grid.addWidget(self._model_point_status, 4, 0, 1, 3)
         left.addWidget(point_box)
 
@@ -1615,37 +1772,39 @@ class PickerWindow(QMainWindow):
 
         fetch_row = QHBoxLayout()
         self._model_fetch_btn = QPushButton("Fetch && Display Forecast Sounding")
-        self._model_fetch_btn.setMinimumHeight(36)
+        self._model_fetch_btn.setObjectName(OBJ_PRIMARY)
+        self._model_fetch_btn.setMinimumHeight(CONTROL_H["lg"])
         self._model_fetch_btn.clicked.connect(self._model_fetch)
         fetch_row.addWidget(self._model_fetch_btn, 1)
         self._model_timeline_btn = QPushButton("Timeline…")
-        self._model_timeline_btn.setMinimumHeight(36)
+        self._model_timeline_btn.setMinimumHeight(CONTROL_H["lg"])
         self._model_timeline_btn.setToolTip(
             "Fetch several forecast hours into an animated timeline"
         )
         self._model_timeline_btn.clicked.connect(self._model_fetch_timeline)
         fetch_row.addWidget(self._model_timeline_btn)
         self._model_cancel_btn = QPushButton("Cancel")
-        self._model_cancel_btn.setMinimumHeight(36)
+        self._model_cancel_btn.setObjectName(OBJ_GHOST)
+        self._model_cancel_btn.setMinimumHeight(CONTROL_H["lg"])
         self._model_cancel_btn.clicked.connect(self._cancel_model_fetch)
         self._model_cancel_btn.hide()
         fetch_row.addWidget(self._model_cancel_btn)
         left.addLayout(fetch_row)
 
         self._model_progress = QProgressBar()
-        self._model_progress.setMinimumHeight(18)
+        self._model_progress.setMinimumHeight(PROGRESS_H)
         self._model_progress.setTextVisible(True)
         self._model_progress.hide()
         left.addWidget(self._model_progress)
         self._model_progress_detail = QLabel("")
         self._model_progress_detail.setWordWrap(True)
-        self._model_progress_detail.setStyleSheet("color: #aeb8c8;")
+        self._model_progress_detail.setObjectName(OBJ_PROGRESS_DETAIL)
         self._model_progress_detail.hide()
         left.addWidget(self._model_progress_detail)
 
         unsupported = QLabel(self._model_unsupported_text())
         unsupported.setWordWrap(True)
-        unsupported.setStyleSheet("color: gray;")
+        unsupported.setObjectName(OBJ_HINT)
         left.addWidget(unsupported)
         left.addStretch(1)
 
@@ -2530,9 +2689,9 @@ class PickerWindow(QMainWindow):
             self._model_fetch_btn.setEnabled(False)
             self._model_timeline_btn.setEnabled(False)
             self._model_cancel_btn.setEnabled(True)
-            self._model_cancel_btn.setText("Cancel")
+            _set_button_busy(self._model_cancel_btn, False, "")
             self._model_cancel_btn.show()
-            self._model_fetch_btn.setText("Fetching\u2026")
+            _set_button_busy(self._model_fetch_btn, True, "Fetching\u2026")
             self._model_progress_stage = "locating"
             self._model_progress_total = 0
             self._model_progress_started = time.monotonic()
@@ -2552,8 +2711,8 @@ class PickerWindow(QMainWindow):
             self._model_progress_total = 0
             self._model_progress_download_baseline = 0
             self._model_cancel_btn.hide()
-            self._model_fetch_btn.setText("Fetch && Display Forecast Sounding")
-            self._model_timeline_btn.setText("Timeline…")
+            _set_button_busy(self._model_fetch_btn, False, "")
+            _set_button_busy(self._model_timeline_btn, False, "")
             self._model_update_fetch_state()
 
     def _on_model_fetch_progress(
@@ -2725,7 +2884,8 @@ class PickerWindow(QMainWindow):
         if timeline is not None:
             timeline.requestInterruption()
             self._model_cancel_btn.setEnabled(False)
-            self._model_cancel_btn.setText("Cancelling queue…")
+            _set_button_busy(self._model_cancel_btn, True,
+                             "Cancelling queue…")
             self.statusBar().showMessage(
                 "Cancelling remaining timeline hours; completed hours are kept…"
             )
@@ -2735,7 +2895,7 @@ class PickerWindow(QMainWindow):
             return
         worker.requestInterruption()
         self._model_cancel_btn.setEnabled(False)
-        self._model_cancel_btn.setText("Cancelling…")
+        _set_button_busy(self._model_cancel_btn, True, "Cancelling…")
         self.statusBar().showMessage("Cancelling forecast-model fetch…")
 
     def _on_model_fetch_cancelled(self) -> None:
@@ -3051,8 +3211,9 @@ class PickerWindow(QMainWindow):
     def _build_era5_tab(self) -> QWidget:
         w = QWidget()
         outer = QHBoxLayout(w)
-        outer.setContentsMargins(10, 8, 10, 8)
-        outer.setSpacing(12)
+        outer.setContentsMargins(SPACE["md"], SPACE["sm"],
+                                 SPACE["md"], SPACE["sm"])
+        outer.setSpacing(SPACE["md"])
 
         self._era5_syncing_point = False
         self._era5_map = PointMapWidget()
@@ -3063,7 +3224,7 @@ class PickerWindow(QMainWindow):
             (-180.0, 180.0, -90.0, 90.0), "ERA5 global 0.25° grid")
 
         left = QVBoxLayout()
-        left.setSpacing(8)
+        left.setSpacing(SPACE["md"])
 
         area_box = QGroupBox("Region")
         area_layout = QVBoxLayout(area_box)
@@ -3136,7 +3297,7 @@ class PickerWindow(QMainWindow):
         point_grid.addWidget(center, 0, 2, 2, 1)
         self._era5_snapped = QLabel("")
         self._era5_snapped.setWordWrap(True)
-        self._era5_snapped.setStyleSheet("color: gray;")
+        self._era5_snapped.setObjectName(OBJ_HINT)
         point_grid.addWidget(self._era5_snapped, 2, 0, 1, 3)
         point_grid.addWidget(QLabel("Label:"), 3, 0)
         self._era5_loc = QLineEdit()
@@ -3147,16 +3308,18 @@ class PickerWindow(QMainWindow):
 
         self._era5_readiness = QLabel("")
         self._era5_readiness.setWordWrap(True)
-        self._era5_readiness.setStyleSheet("color: #aeb8c8;")
+        self._era5_readiness.setObjectName(OBJ_STATUS)
         left.addWidget(self._era5_readiness)
 
         fetch_row = QHBoxLayout()
         self._era5_fetch_btn = QPushButton("Fetch && Display ERA5 Sounding")
-        self._era5_fetch_btn.setMinimumHeight(36)
+        self._era5_fetch_btn.setObjectName(OBJ_PRIMARY)
+        self._era5_fetch_btn.setMinimumHeight(CONTROL_H["lg"])
         self._era5_fetch_btn.clicked.connect(self._era5_fetch)
         fetch_row.addWidget(self._era5_fetch_btn, 1)
         self._era5_cancel_btn = QPushButton("Cancel")
-        self._era5_cancel_btn.setMinimumHeight(36)
+        self._era5_cancel_btn.setObjectName(OBJ_GHOST)
+        self._era5_cancel_btn.setMinimumHeight(CONTROL_H["lg"])
         self._era5_cancel_btn.clicked.connect(self._cancel_era5_fetch)
         self._era5_cancel_btn.hide()
         fetch_row.addWidget(self._era5_cancel_btn)
@@ -3170,7 +3333,7 @@ class PickerWindow(QMainWindow):
         left.addWidget(self._era5_progress)
         self._era5_progress_detail = QLabel("")
         self._era5_progress_detail.setWordWrap(True)
-        self._era5_progress_detail.setStyleSheet("color: #aeb8c8;")
+        self._era5_progress_detail.setObjectName(OBJ_PROGRESS_DETAIL)
         self._era5_progress_detail.hide()
         left.addWidget(self._era5_progress_detail)
         left.addStretch(1)
@@ -3301,9 +3464,9 @@ class PickerWindow(QMainWindow):
         if busy:
             QApplication.setOverrideCursor(Qt.WaitCursor)
             self._era5_fetch_btn.setEnabled(False)
-            self._era5_fetch_btn.setText("Fetching ERA5…")
+            _set_button_busy(self._era5_fetch_btn, True, "Fetching ERA5…")
             self._era5_cancel_btn.setEnabled(True)
-            self._era5_cancel_btn.setText("Cancel")
+            _set_button_busy(self._era5_cancel_btn, False, "")
             self._era5_cancel_btn.show()
             self._era5_progress.show()
             self._era5_progress_detail.setText(
@@ -3311,7 +3474,7 @@ class PickerWindow(QMainWindow):
             self._era5_progress_detail.show()
         else:
             QApplication.restoreOverrideCursor()
-            self._era5_fetch_btn.setText("Fetch && Display ERA5 Sounding")
+            _set_button_busy(self._era5_fetch_btn, False, "")
             self._era5_cancel_btn.hide()
             self._era5_progress.hide()
             self._era5_progress_detail.hide()
@@ -3340,7 +3503,8 @@ class PickerWindow(QMainWindow):
             return
         worker.requestInterruption()
         self._era5_cancel_btn.setEnabled(False)
-        self._era5_cancel_btn.setText("Cancellation requested")
+        _set_button_busy(self._era5_cancel_btn, True,
+                         "Cancellation requested")
         self._era5_progress_detail.setText(
             "Cancellation requested. A synchronous CDS request already in "
             "flight must return before local cleanup can finish.")
@@ -3389,12 +3553,12 @@ class PickerWindow(QMainWindow):
     def _build_file_tab(self) -> QWidget:
         w = QWidget()
         layout = QVBoxLayout(w)
-        layout.setSpacing(8)
+        layout.setSpacing(SPACE["sm"])
 
         modes = QTabWidget()
         decoded = QWidget()
         decoded_layout = QVBoxLayout(decoded)
-        decoded_layout.setSpacing(8)
+        decoded_layout.setSpacing(SPACE["sm"])
 
         intro = QLabel(
             "Open a local sounding file \u2014 or drag one onto this window.\n"
@@ -3415,7 +3579,8 @@ class PickerWindow(QMainWindow):
         decoded_layout.addLayout(row)
 
         open_btn = QPushButton("Open Sounding")
-        open_btn.setMinimumHeight(32)
+        open_btn.setObjectName(OBJ_PRIMARY)
+        open_btn.setMinimumHeight(CONTROL_H["md"])
         open_btn.clicked.connect(self._open_from_edit)
         decoded_layout.addWidget(open_btn)
 
@@ -3435,8 +3600,9 @@ class PickerWindow(QMainWindow):
     def _build_wrf_file_panel(self) -> QWidget:
         panel = QWidget()
         outer = QHBoxLayout(panel)
-        outer.setContentsMargins(6, 6, 6, 6)
-        outer.setSpacing(12)
+        outer.setContentsMargins(SPACE["md"], SPACE["sm"],
+                                 SPACE["md"], SPACE["sm"])
+        outer.setSpacing(SPACE["md"])
 
         self._wrf_syncing_point = False
         self._wrf_map = PointMapWidget()
@@ -3446,7 +3612,7 @@ class PickerWindow(QMainWindow):
             lambda _lat, _lon: self._wrf_extract())
 
         left = QVBoxLayout()
-        left.setSpacing(8)
+        left.setSpacing(SPACE["md"])
 
         file_box = QGroupBox("Raw WRF-ARW output")
         file_layout = QVBoxLayout(file_box)
@@ -3471,7 +3637,7 @@ class PickerWindow(QMainWindow):
         file_layout.addWidget(self._wrf_inspect_btn)
         self._wrf_domain_status = QLabel("Choose a file to inspect.")
         self._wrf_domain_status.setWordWrap(True)
-        self._wrf_domain_status.setStyleSheet("color: #aeb8c8;")
+        self._wrf_domain_status.setObjectName(OBJ_STATUS)
         file_layout.addWidget(self._wrf_domain_status)
         left.addWidget(file_box)
 
@@ -3505,7 +3671,7 @@ class PickerWindow(QMainWindow):
         point_grid.addWidget(center, 0, 2, 2, 1)
         self._wrf_point_status = QLabel("Inspect a WRF domain first.")
         self._wrf_point_status.setWordWrap(True)
-        self._wrf_point_status.setStyleSheet("color: gray;")
+        self._wrf_point_status.setObjectName(OBJ_HINT)
         point_grid.addWidget(self._wrf_point_status, 2, 0, 1, 3)
         point_grid.addWidget(QLabel("Label:"), 3, 0)
         self._wrf_loc = QLineEdit()
@@ -3516,12 +3682,14 @@ class PickerWindow(QMainWindow):
 
         action_row = QHBoxLayout()
         self._wrf_extract_btn = QPushButton("Extract && Display WRF Sounding")
-        self._wrf_extract_btn.setMinimumHeight(36)
+        self._wrf_extract_btn.setObjectName(OBJ_PRIMARY)
+        self._wrf_extract_btn.setMinimumHeight(CONTROL_H["lg"])
         self._wrf_extract_btn.setEnabled(False)
         self._wrf_extract_btn.clicked.connect(self._wrf_extract)
         action_row.addWidget(self._wrf_extract_btn, 1)
         self._wrf_cancel_btn = QPushButton("Cancel")
-        self._wrf_cancel_btn.setMinimumHeight(36)
+        self._wrf_cancel_btn.setObjectName(OBJ_GHOST)
+        self._wrf_cancel_btn.setMinimumHeight(CONTROL_H["lg"])
         self._wrf_cancel_btn.clicked.connect(self._cancel_wrf_operation)
         self._wrf_cancel_btn.hide()
         action_row.addWidget(self._wrf_cancel_btn)
@@ -3534,13 +3702,12 @@ class PickerWindow(QMainWindow):
         left.addWidget(self._wrf_progress)
         self._wrf_progress_detail = QLabel("")
         self._wrf_progress_detail.setWordWrap(True)
-        self._wrf_progress_detail.setStyleSheet("color: #aeb8c8;")
+        self._wrf_progress_detail.setObjectName(OBJ_PROGRESS_DETAIL)
         self._wrf_progress_detail.hide()
         left.addWidget(self._wrf_progress_detail)
         left.addStretch(1)
 
-        self._wrf_controls_scroll = _scrolling_control_rail(
-            left, maximum_width=PICKER_RAIL_MAX_WIDTH + 70)
+        self._wrf_controls_scroll = _scrolling_control_rail(left)
         outer.addWidget(self._wrf_controls_scroll)
         outer.addWidget(self._wrf_map, 1)
         self._wrf_point_from_spins(center=True)
@@ -3738,7 +3905,7 @@ class PickerWindow(QMainWindow):
             self._wrf_inspect_btn.setEnabled(False)
             self._wrf_extract_btn.setEnabled(False)
             self._wrf_cancel_btn.setEnabled(True)
-            self._wrf_cancel_btn.setText("Cancel")
+            _set_button_busy(self._wrf_cancel_btn, False, "")
             self._wrf_cancel_btn.show()
             self._wrf_progress.show()
             self._wrf_progress_detail.setText(message or "Processing WRF data…")
@@ -3749,7 +3916,7 @@ class PickerWindow(QMainWindow):
             self._wrf_cancel_btn.hide()
             self._wrf_progress.hide()
             self._wrf_progress_detail.hide()
-            self._wrf_extract_btn.setText("Extract && Display WRF Sounding")
+            _set_button_busy(self._wrf_extract_btn, False, "")
             self._wrf_update_fetch_state()
 
     def _on_wrf_progress(self, stage) -> None:
@@ -3772,7 +3939,7 @@ class PickerWindow(QMainWindow):
             return
         worker.requestInterruption()
         self._wrf_cancel_btn.setEnabled(False)
-        self._wrf_cancel_btn.setText("Cancelling…")
+        _set_button_busy(self._wrf_cancel_btn, True, "Cancelling…")
         self.statusBar().showMessage("Cancelling WRF operation…")
 
     def _on_wrf_cancelled(self) -> None:
@@ -4027,6 +4194,51 @@ def _app_icon() -> QIcon:
     return QIcon()
 
 
+def _startup_color_style() -> str:
+    """Read the persisted palette choice before any widget is built.
+
+    The chrome theme is paired with the canvas palette, so it has to be known
+    before the first window appears -- otherwise the app flashes the default
+    dark chrome and then repaints light for an ``inverted`` user. Reads the
+    durable INI directly rather than going through
+    :meth:`PickerWindow._config`, which builds the heavy render config.
+
+    Never raises: an unreadable settings file falls back to the default.
+    """
+    try:
+        settings = _build_settings()
+        return _read_settings_preferences(settings).get("color_style", "standard")
+    except Exception:
+        _LOGGER.warning("startup.color_style_unreadable", exc_info=True)
+        return "standard"
+
+
+def _configure_high_dpi() -> None:
+    """Opt into fractional display scaling before ``QApplication`` exists.
+
+    Qt6 enables high-DPI scaling by default but still *rounds* the scale factor,
+    so a 150% display is treated as either 100% or 200%. ``PassThrough`` keeps
+    the true factor, which matters here because the chrome uses hairline (1 px)
+    borders that vanish or double under rounding.
+
+    Must run before the application object is constructed; Qt ignores it
+    afterwards.
+    """
+    try:
+        from qtpy.QtCore import Qt as _Qt
+        from qtpy.QtGui import QGuiApplication
+
+        if QApplication.instance() is not None:
+            # An application already exists (embedded or test host), so the
+            # policy is locked in and setting it now would be a no-op warning.
+            return
+        QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+            _Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    except Exception:
+        # Older bindings lack the enum; default rounding is still usable.
+        _LOGGER.debug("startup.high_dpi_policy_unavailable", exc_info=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Launch the interactive picker. Entry point for ``sharpmod-gui``."""
     _configure_debug_logging()
@@ -4035,10 +4247,17 @@ def main(argv: list[str] | None = None) -> int:
     if _relaunch_stable_windows_gui(relaunch_arguments):
         return 0
     _LOGGER.info("application.start argv=%r", sys.argv if argv is None else argv)
+
+    _configure_high_dpi()
+
     app = QApplication.instance() or QApplication(sys.argv if argv is None
                                                   else argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
+
+    # Style, palette, bundled chrome fonts, and the generated style sheet, in
+    # one place and before the first widget is constructed.
+    apply_theme(app, color_style=_startup_color_style())
 
     icon = _app_icon()
     if not icon.isNull():

@@ -17,6 +17,14 @@ from pathlib import Path
 """Observed and forecast fetch, availability, and catalog workers."""
 
 from sharpmod.gui_common import _LOGGER, _uwyo_decoder_classes
+from sharpmod.theme import (
+    AVAIL_STATUS_ROLES,
+    OBJ_AVAIL_DOT,
+    OBJ_AVAIL_STATION,
+    OBJ_AVAIL_TEXT,
+    PROP_AVAIL_STATUS,
+    SPACE,
+)
 
 from qtpy.QtCore import (
     Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
@@ -70,15 +78,21 @@ AVAIL_FALLBACK = "fallback"        # amber -- an earlier model cycle exists
 AVAIL_INSUFFICIENT = "insufficient"  # gray -- present but corrupt/too sparse
 AVAIL_UNAVAILABLE = "unavailable"  # red   -- nothing archived / unreachable
 
-#: Dot color per state (green available, red unavailable, gray insufficient).
-_AVAIL_COLORS = {
-    AVAIL_UNKNOWN: "#6f7d8f",
-    AVAIL_CHECKING: "#e0a030",
-    AVAIL_AVAILABLE: "#3fbf5f",
-    AVAIL_FALLBACK: "#e0a030",
-    AVAIL_INSUFFICIENT: "#9aa4b0",
-    AVAIL_UNAVAILABLE: "#e0433a",
-}
+#: Every state the indicator can display, in escalating order of concern.
+#:
+#: Colours are **not** defined here. Each state maps to a semantic theme role in
+#: :data:`sharpmod.theme.AVAIL_STATUS_ROLES`, and the chip is styled through the
+#: normal style-sheet cascade via a dynamic Qt property. The previous module-level
+#: colour table rewrote the widget's own style sheet on every update, which
+#: overrode whatever theme was active.
+AVAIL_STATES = (
+    AVAIL_UNKNOWN,
+    AVAIL_CHECKING,
+    AVAIL_AVAILABLE,
+    AVAIL_FALLBACK,
+    AVAIL_INSUFFICIENT,
+    AVAIL_UNAVAILABLE,
+)
 
 #: Default label per state (overridable with a specific message).
 _AVAIL_LABELS = {
@@ -315,40 +329,54 @@ class _AvailabilityIndicator(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
-        self.setMinimumHeight(50)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(0, 2, 0, 2)
-        lay.setSpacing(8)
+        lay.setContentsMargins(0, SPACE["xxs"], 0, SPACE["xxs"])
+        lay.setSpacing(SPACE["sm"])
         self._dot = QLabel()
+        self._dot.setObjectName(OBJ_AVAIL_DOT)
         self._dot.setFixedSize(14, 14)
         text_col = QVBoxLayout()
         text_col.setContentsMargins(0, 0, 0, 0)
-        text_col.setSpacing(1)
+        text_col.setSpacing(SPACE["xxs"])
         self._station = QLabel()
+        self._station.setObjectName(OBJ_AVAIL_STATION)
         self._station.setWordWrap(True)
-        self._station.setMinimumHeight(18)
         self._station.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
-        self._station.setStyleSheet("color:#d5e0ef; font-weight:bold;")
+            QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._station.setVisible(False)
         self._text = QLabel()
+        self._text.setObjectName(OBJ_AVAIL_TEXT)
         self._text.setWordWrap(True)
-        self._text.setMinimumHeight(24)
         self._text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self._text.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
+            QSizePolicy.Expanding, QSizePolicy.Preferred)
         text_col.addWidget(self._station)
         text_col.addWidget(self._text)
         lay.addWidget(self._dot, 0, Qt.AlignTop)
         lay.addLayout(text_col, 1)
         self.set_status(AVAIL_UNKNOWN)
 
+    def _apply_status_property(self, status: str) -> None:
+        """Publish ``status`` as a Qt property and force a restyle.
+
+        Qt resolves property selectors when a widget is polished, so a property
+        change after construction needs an explicit unpolish/polish to take
+        effect. This is what replaces the old per-update ``setStyleSheet``,
+        which overrode the theme cascade.
+        """
+        for widget in (self._dot, self._text):
+            widget.setProperty(PROP_AVAIL_STATUS, status)
+            style = widget.style()
+            style.unpolish(widget)
+            style.polish(widget)
+            widget.update()
+
     def set_status(self, status: str, message: str | None = None,
                    station_label: str | None = None) -> None:
-        color = _AVAIL_COLORS.get(status, _AVAIL_COLORS[AVAIL_UNKNOWN])
-        self._dot.setStyleSheet(
-            f"background:{color}; border-radius:7px; border:1px solid #0c1118;")
+        if status not in AVAIL_STATUS_ROLES:
+            status = AVAIL_UNKNOWN
+        self._apply_status_property(status)
         label = (station_label or "").strip()
         if " \u2014 " in label:
             display_label = label.split(" \u2014 ", 1)[0]
@@ -358,9 +386,10 @@ class _AvailabilityIndicator(QWidget):
             display_label = label
         self._station.setText(display_label)
         self._station.setVisible(bool(label))
+        # The text label is always present, so the state is never conveyed by
+        # colour alone.
         text = message or _AVAIL_LABELS.get(status, "")
         self._text.setText(text)
-        self._text.setStyleSheet(f"color:{color}; font-weight:bold;")
         self.setToolTip(f"{label}\n{text}".strip() if label else text)
 
 

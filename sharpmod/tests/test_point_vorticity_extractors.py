@@ -21,8 +21,17 @@ from sharpmod.tests.era5_synth import make_era5_dataset
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+# Loaded by path rather than imported: this is a development script under
+# scripts/, not part of the installed ``sharpmod`` package, so there is no module
+# path to import it from. It moved out of the repository root in 0.9.0 -- it was
+# never an entry point, and sitting beside pyproject.toml implied it was one.
+#
+# What is worth testing here is the ABSV -> relative-vorticity conversion below;
+# the supported extraction route is ``model-extract``, which additionally merges
+# the verified surface row this script does not fetch.
 _HRRR_SPEC = importlib.util.spec_from_file_location(
-    "hrrr_extract", ROOT / "hrrr_extract.py")
+    "hrrr_extract", ROOT / "scripts" / "hrrr_extract.py")
 hrrr = importlib.util.module_from_spec(_HRRR_SPEC)
 _HRRR_SPEC.loader.exec_module(hrrr)
 

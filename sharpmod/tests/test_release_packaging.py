@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 import sys
-import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -47,14 +46,25 @@ def _version_root(tmp_path: Path, version: str = "0.8.1") -> Path:
     return root
 
 
+def _workflow_path() -> Path:
+    return ROOT / ".github" / "workflows" / "release.yml"
+
+
+def _workflow_text() -> str:
+    """The workflow as raw text, for asserting that something is absent.
+
+    Parsed structure is the right tool for checking a step's shape, but a token
+    can hide in a script body, an env block, or a comment -- so absence is
+    checked against the file itself.
+    """
+    return _workflow_path().read_text(encoding="utf-8")
+
+
 def _workflow() -> dict:
     yaml = pytest.importorskip(
         "yaml", reason="PyYAML is required only for workflow structure checks"
     )
-    return yaml.load(
-        (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"),
-        Loader=yaml.BaseLoader,
-    )
+    return yaml.load(_workflow_text(), Loader=yaml.BaseLoader)
 
 
 def test_release_contract_reads_source_and_maps_pe_version():
@@ -179,33 +189,18 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
     assert "attestations" not in job["permissions"]
     assert "id-token" not in job["permissions"]
 
-    provider = by_name["Select Windows signing provider"]
-    assert provider["id"] == "signing-provider"
-    provider_script = provider["run"]
-    assert "WINDOWS_SIGNING_CERTIFICATE_BASE64" in str(provider)
-    assert "WINDOWS_SIGNING_CERTIFICATE_PASSWORD" in str(provider)
-    assert "SIGNPATH_API_TOKEN" in str(provider)
-    assert "SIGNPATH_ARTIFACT_CONFIGURATION_SLUG" in str(provider)
-    assert "exactly one Windows signing provider" in provider_script
-
-    pfx_signing = by_name["Sign Windows executables with PFX"]
-    assert "signtool.exe" in pfx_signing["run"]
-    assert "steps.signing-provider.outputs.provider == 'PFX'" in pfx_signing["if"]
-
-    signpath = by_name["Submit SignPath signing request"]
-    assert signpath["uses"].startswith(
-        "signpath/github-action-submit-signing-request@"
-    )
-    assert signpath["with"]["github-artifact-id"].endswith(
-        ".outputs.artifact-id }}"
-    )
-    assert signpath["with"]["wait-for-completion"] == "true"
-    assert signpath["with"]["parameters"].strip().startswith("version:")
-
-    signing = by_name["Record Windows signing result"]
-    assert signing["id"] == "signing"
-    assert "mode=$mode" in signing["run"]
-    assert "provider=$provider" in signing["run"]
+    # Code signing was removed in 0.9.0: the certificate requirements were never
+    # going to be met, so the workflow no longer carries a signing provider,
+    # signtool/SignPath steps, or a signing-state output. Asserted as an absence
+    # so the machinery cannot creep back in unnoticed.
+    assert not [
+        name for name in by_name
+        if name and ("sign" in name.lower() or "SignPath" in name)
+    ], "signing steps are back in the release workflow"
+    workflow_text = _workflow_text()
+    for token in ("SIGNPATH_API_TOKEN", "WINDOWS_SIGNING_CERTIFICATE_BASE64",
+                  "signtool.exe", "Get-AuthenticodeSignature"):
+        assert token not in workflow_text, f"{token} is back in the workflow"
 
     verification_names = {
         "Verify recommended one-folder artifact",
@@ -225,9 +220,9 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
     assert "windows-x64-RECOMMENDED.zip" not in stage
     assert "portable-slower-startup.exe" not in stage
     assert "recommended_artifact" in stage
-    assert "authenticode" in stage
-    assert "signing_provider" in stage
-    assert "Authenticode-$env:SIGNING_MODE.txt" in stage
+    # No signing state in the manifest, and no Authenticode marker asset. The
+    # checksums are what a downloader verifies against now.
+    assert "authenticode" not in stage.lower()
     assert "SHA256SUMS" in stage
 
     attestation_job = workflow["jobs"]["attest-windows-release"]
@@ -247,12 +242,18 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
     assert "portable.exe" in publish["body"]
     assert "windows-x64-RECOMMENDED.zip" not in publish["body"]
     assert "portable-slower-startup.exe" not in publish["body"]
-    assert "Code signing policy" in publish["body"]
+    # The notes no longer link a signing policy, but they must still tell a
+    # downloader that the binaries are unsigned and how to check them.
+    assert "Code signing policy" not in publish["body"]
+    assert "not code-signed" in publish["body"]
+    assert "SHA256SUMS" in publish["body"]
     assert "gh attestation verify" in publish["body"]
     assert publish["overwrite_files"] == "true"
     stale_cleanup = publish_by_name["Remove stale release assets"]["run"]
     assert "windows-x64-RECOMMENDED.zip" in stale_cleanup
     assert "portable-slower-startup.exe" in stale_cleanup
+    # Earlier releases published Authenticode marker assets; the cleanup still
+    # removes them so re-running a release drops the stale files.
     assert "Authenticode-Unsigned.txt" in stale_cleanup
     assert "Authenticode-Signed.txt" in stale_cleanup
     assert "gh release view" in stale_cleanup
@@ -260,43 +261,26 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
     assert "|| true" not in stale_cleanup
 
 
-def test_signpath_policy_and_artifact_configuration_are_constrained():
-    policy = (ROOT / "CODE_SIGNING_POLICY.md").read_text(encoding="utf-8")
-    assert "# Code signing policy" in policy
-    assert "Free code signing provided by" in policy
-    assert "certificate by" in policy
-    assert "Authors and committers" in policy
-    assert "Signing approver" in policy
-    assert "no advertising, analytics, or telemetry" in policy
+def test_code_signing_artifacts_are_gone():
+    """Signing was removed in 0.9.0; its files must not come back.
 
-    config_path = ROOT / "packaging" / "signpath-artifact-configuration.xml"
-    tree = ET.parse(config_path)
-    namespace = {"sp": "http://signpath.io/artifact-configuration/v1"}
-    parameter = tree.find("sp:parameters/sp:parameter", namespace)
-    assert parameter is not None
-    assert parameter.attrib == {"name": "version", "required": "true"}
-
-    pe_set = tree.find("sp:zip-file/sp:pe-file-set", namespace)
-    assert pe_set is not None
-    assert pe_set.attrib["product-name"] == "SHARPpy Reimagined"
-    assert pe_set.attrib["product-version"] == "${version}"
-    assert pe_set.attrib["file-version"] == "${version}"
-    includes = pe_set.findall("sp:include", namespace)
-    assert [include.attrib["path"] for include in includes] == [
-        "recommended/SHARPpy-Reimagined.exe",
-        "portable/SHARPpy-Reimagined.exe",
-    ]
-    assert pe_set.find("sp:for-each/sp:authenticode-sign", namespace) is not None
+    The certificate requirements were never going to be met, so the policy
+    document and the SignPath artifact configuration were deleted rather than
+    left in place describing a process that does not run.
+    """
+    assert not (ROOT / "CODE_SIGNING_POLICY.md").exists()
+    assert not (ROOT / "packaging" / "signpath-artifact-configuration.xml").exists()
 
 
-def test_windows_artifact_check_requires_pe_versions_and_explicit_signing_state():
+def test_windows_artifact_check_requires_pe_versions():
     verifier = (ROOT / "packaging" / "verify_windows_artifact.ps1").read_text(
         encoding="utf-8"
     )
 
     assert "$versionInfo.FileVersion -ne $ExpectedVersion" in verifier
     assert "$versionInfo.ProductVersion -ne $ExpectedVersion" in verifier
-    assert 'ValidateSet("Signed", "Unsigned")' in verifier
-    assert "Get-AuthenticodeSignature" in verifier
-    assert '$signature.Status -ne "Valid"' in verifier
-    assert '$signature.Status -ne "NotSigned"' in verifier
+    assert "OriginalFilename" in verifier
+    # The signature checks are gone along with signing itself, so the verifier
+    # no longer takes a signing mode.
+    assert "SigningMode" not in verifier
+    assert "Get-AuthenticodeSignature" not in verifier

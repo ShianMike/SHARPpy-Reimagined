@@ -12,7 +12,7 @@ from pathlib import Path
 
 """Durable GUI preferences, units, parcels, and settings dialogs."""
 
-from sharpmod.gui_common import APP_NAME
+from sharpmod.gui_common import APP_NAME, _LOGGER
 
 from qtpy.QtCore import (
     Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
@@ -211,7 +211,88 @@ def _build_preferences_dialog(config, parent=None):
                 labels_by_value.get(bottom, "Dewpoint (C)"))
             return box
 
-    return _Qt6PreferencesDialog(config, parent=parent)
+    dialog = _Qt6PreferencesDialog(config, parent=parent)
+    _install_palette_preview(dialog)
+    return dialog
+
+
+def _install_palette_preview(dialog) -> None:
+    """Replace the upstream colour preview with a live palette swatch.
+
+    Upstream's ``ColorPreview`` loads ``rc/sample_std.png`` from
+    ``sharppy/viz/../../rc``. That is a *top-level* directory in site-packages
+    rather than package data inside ``sharppy``, so ``collect_all("sharppy")``
+    never collected it and the frozen application has no ``_internal/rc``. The
+    pixmap came back null and the Colors tab was simply blank in every release
+    build.
+
+    :class:`~sharpmod.gui_shell.PalettePreview` draws the swatch from the
+    palette this fork will actually apply, which also fixes the accuracy problem
+    the screenshots had -- they were captures of upstream's layout and never
+    showed this fork's alert-colour substitutions or added panels.
+
+    Never raises: a failure here must not stop Preferences opening, since that
+    dialog is the only way to change units and the default parcel.
+    """
+    try:
+        from sharppy.viz.preferences import ColorPreview
+
+        from sharpmod.gui_shell import PalettePreview
+    except Exception:
+        _LOGGER.debug("palette_preview.import_failed", exc_info=True)
+        return
+
+    try:
+        legacy = dialog.findChild(ColorPreview)
+        if legacy is None:
+            return
+        container = legacy.parentWidget()
+        layout = container.layout() if container is not None else None
+        if layout is None:
+            return
+
+        index = layout.indexOf(legacy)
+        if index < 0:
+            return
+
+        preview = PalettePreview(parent=container)
+        layout.removeWidget(legacy)
+        legacy.hide()
+        legacy.deleteLater()
+        layout.insertWidget(index, preview, 1)
+
+        # Read the starting style once, here, so the handler below needs only a
+        # string and the preview widget. Reaching back into ``dialog`` from
+        # inside the handler would close the cycle
+        #     dialog -> combo -> connection -> _refresh -> dialog
+        # across an edge Python's cyclic collector cannot traverse, and this
+        # dialog is created with ``parent=None`` from the picker, so it owns its
+        # own C++ lifetime and the cycle genuinely retains it. ``preview`` is a
+        # child of the dialog, so capturing that is contained in the subtree and
+        # released with it.
+        initial_style = getattr(dialog, "_color_style", "standard") or "standard"
+
+        def _refresh(style):
+            try:
+                preview.set_palette(_color_style_preferences(style))
+            except Exception:
+                _LOGGER.debug("palette_preview.refresh_failed", exc_info=True)
+
+        _refresh(initial_style)
+
+        # Follow the palette combo so the swatch updates before Accept. The
+        # combo is the only QComboBox in the Colors tab.
+        combo = None
+        for candidate in container.findChildren(QComboBox):
+            combo = candidate
+            break
+        if combo is not None:
+            combo.currentTextChanged.connect(
+                lambda text: _refresh(text.strip().lower() or initial_style))
+
+        dialog._sharpmod_palette_preview = preview
+    except Exception:
+        _LOGGER.exception("palette_preview.install_failed")
 
 
 def _add_default_parcel_tab(dialog, current_key):

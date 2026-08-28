@@ -5,6 +5,191 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-08-28
+
+A redesign of the desktop application's interface. The scientific canvas — the
+Skew-T, hodograph, and index panels — is deliberately untouched: its geometry
+and colours are unchanged, and `sharpmod-render` produces byte-comparable
+output. Everything described here is the surrounding application.
+
+### Added
+
+- Introduced a design token layer as the single source of truth for the
+  interface: spacing and radius scales, control heights, a type ramp, three
+  chrome themes (neutral dark, warm light, protanopia-safe dark), paired map
+  palettes, and a generated style sheet. Colours, spacing, and control sizes are
+  now named roles rather than literals repeated at each call site.
+- Bundled Space Grotesk and JetBrains Mono for the interface and registered them
+  at startup, so the typography is identical in the frozen executable instead of
+  falling back to whatever the platform substitutes.
+- Added user-controlled zoom to the sounding viewer: `Ctrl`+mouse wheel zooms
+  about the cursor, middle-button drag pans, and a toolbar carries fit / actual
+  size / step controls plus a continuous 20–400% slider and a percentage
+  readout. `Ctrl+0` fits, `Ctrl+1` is actual size, `Ctrl+plus` and `Ctrl+minus`
+  step. Plain wheel still reaches the canvas, which uses it for its own zoom.
+- Added a "Sounding Panel" sidebar to the viewer (`Ctrl+B`) that lists every
+  loaded sounding and marks which one is focused, so switching between them is
+  one click instead of a walk through `Profiles` → a per-sounding submenu →
+  `Focus`. It also exposes ensemble member selection, which previously had no
+  on-screen control at all, and a shortcut to the source and quality report.
+  The panel occupies horizontal space the sounding cannot use, so it does not
+  shrink the plot.
+- Replaced the picker's five-tab strip with a left navigation rail, which no
+  longer truncates the longer source names.
+- Added a live palette preview to Preferences → Colors, which previously showed
+  an empty area in released builds.
+- Added full screen on **`F11`** to both the picker and the sounding window, with
+  `Escape` to leave and a **View → Full Screen** entry. It earns its place in the
+  sounding window: the fit is limited by height, so the title bar and taskbar it
+  reclaims make the sounding about 8% larger on a 1080p display. Leaving full
+  screen returns a maximized window to maximized rather than dropping it to its
+  small floating size.
+- Gave the sounding window a **Help** menu, with the full interaction guide on
+  `F1` and a switch to bring back the tips strip along the top. The window
+  previously had no Help menu: the guide could only be opened from a button on
+  that strip, and the strip's dismiss button is remembered between sessions, so
+  closing it removed the only route to the guide permanently.
+
+### Changed
+
+- Applied one theme across the whole application, so the picker and every
+  sounding window share a single visual language. Opening a sounding no longer
+  jumps from dark interface chrome to light.
+- Rebuilt the colour ramps as neutral graphite and warm paper. Every surface,
+  border, and text role was previously tinted blue — the default dark ramp
+  shipped by most interface frameworks — which both looked generic and competed
+  with the canvas, where saturated colour carries meaning. Chrome now holds
+  almost no colour of its own, and the accent is a muted steel blue rather than
+  a bright primary.
+- Restyled the station and point-selection maps to neutral terrain. The
+  landmass, borders, coastline, model-domain outline, and station markers were
+  all shades of navy, so nothing separated the map from the data drawn on it.
+  Terrain is now neutral and the overlays keep their colour: red for an
+  available station, amber for the current selection, cyan for a saved location,
+  blue for the model domain. Marker meanings are unchanged.
+- Made the availability indicator follow the theme instead of painting fixed
+  colours, and moved the "checking" state from amber to blue — it reports
+  progress, not a problem.
+- Stopped busy states overwriting button labels, so a button that has been
+  renamed keeps its name while it works.
+- Replaced the interface's inline style sheets with semantic roles. Inline
+  styles blocked the application-wide theme from reaching those widgets, which
+  is why parts of the interface stayed unthemed.
+- The sounding parameter guide is now part of the repository. It documents every
+  displayed index — formula, the clamps applied in code, colour thresholds, and
+  literature citation — along with which module owns each calculation, since the
+  classic SPC composites come from vendored upstream while this fork adds ECAPE,
+  the hazard classifier, and the kinematics. It had been excluded as a stale
+  local copy.
+- Moved `hrrr_extract.py` from the repository root to `scripts/`. It is a
+  hardcoded one-off development script, not an entry point, and sitting beside
+  `pyproject.toml` implied otherwise; its docstring now says so and points at
+  `model-extract`, which is the supported route and merges the verified surface
+  row this script never fetched. Behaviour is unchanged.
+
+### Fixed
+
+- Reclaimed the empty bands either side of the sounding when the viewer is
+  maximized. On a 1920x1080 screen the fit is limited by height, which left
+  about 459 pixels of unused width; the sidebar now occupies that space at no
+  cost to the plot's scale.
+- Rewrote the interaction guide's account of zooming, and made the guide window
+  scrollable and screen-sized. Zooming had a single line — "zoom the Skew-T or
+  hodograph" — which gave no direction, did not say that zooming out stops at the
+  normal view, and did not distinguish zooming one panel from zooming the whole
+  image on the same gesture. The guide also grew taller than a 1080p screen with
+  no way to scroll, because it was laid out as a message box.
+- Restored mouse-wheel zoom on the Skew-T and hodograph for laptop trackpads.
+  The panels take their zoom from the wheel's angular delta and expect the
+  discrete notches a mouse wheel sends. A precision trackpad sends neither:
+  every event after the first in a gesture is marked as a continuation, and
+  those were discarded before reaching the panel, while events reporting only a
+  pixel distance carried nothing the zoom could read. Scroll is now translated
+  for the panels, so a trackpad zooms smoothly and a wheel behaves as before.
+  Zoom also now centres exactly on the pointer.
+- Stopped fit-to-window cutting off the bottom of the sounding. The sounding
+  was placed into the scaling view still carrying the vertical offset it had as
+  the window's central widget, which pushed its lowest rows — the lapse rates,
+  Corfidi vectors, and significant-tornado plot — below the region the fit
+  covered. Because fitting hides the scrollbars, there was no way to reach them
+  and no sign they existed.
+- Stopped the sidebar cropping the sounding at actual size. The panel was wide
+  enough to push the viewport below the sounding's own width, so the
+  pressure-axis labels were cut off the left edge at 100% — the one view that is
+  pixel-exact, since the sounding is drawn at that size and any other scale is
+  resampled. The panel is now sized so 100% shows the full width, leaving only a
+  short vertical scroll to the lower panels.
+- Set the source and quality report in a fixed-width face and stopped it
+  wrapping. It was rendered in the proportional interface font, which left every
+  value column ragged, and wrapped at the panel width, which broke long data
+  URLs and file paths mid-path. The window is also larger, so the whole report
+  is visible without scrolling.
+- Corrected interface contrast against WCAG AA. Control outlines sat at 1.65:1
+  against the darkest surface, effectively invisible, and are now 3.58:1;
+  tertiary text moved from 4.06:1 to 4.86:1. Every text and control-boundary
+  pair is checked against its threshold in all three themes.
+- Fixed the map falling back to a platform font, which silently substituted a
+  different face for every label on the map.
+- Fixed the picker's control rail clipping the widest panel's contents.
+- Fixed an intermittent crash when quitting the application. Menu and toolbar
+  handlers in the sounding window held a strong reference back to the window
+  they belonged to, forming a cycle that Qt keeps outside Python's reach. The
+  window then survived until the interpreter shut down, by which point the
+  underlying object was already gone, and releasing it was an invalid memory
+  access. It struck in roughly 4 of 10 runs, left nothing in the log, and
+  affected every window with a tips strip, every forecast sounding through the
+  playback toolbar, and the preferences dialog. All such handlers now hold their
+  window weakly, and a test rejects any new handler that does not.
+- Restored Ctrl+scroll zoom of the whole sounding on laptop trackpads. It read
+  only the wheel's angular delta, which a precision trackpad leaves empty, so
+  the gesture the guide documents did nothing at all — and because the event was
+  still marked as handled, nothing else could act on it either. Zooming one
+  panel had already been fixed for these devices; zooming the whole image had
+  not.
+- Fixed the sounding window sizing itself as though it had no toolbars. Only the
+  menu bar was counted, so on some screens the window opened taller than the
+  work area, and — because the same measurement decides whether the sounding
+  fits at 1:1 — it could open in the non-zoomable view with every zoom control
+  greyed out and a message claiming the sounding already fitted, while the lower
+  index rows needed scrolling to reach.
+- Fixed dismissing the tips strip with its own close button leaving the Help
+  menu's "Show Interaction Tips" entry ticked, so bringing the strip back took
+  two clicks.
+- Fixed the forecast playback dialog's summary line keeping dark-theme colours
+  on the light theme, where its validation message was pale grey on white.
+- Fixed the sounding viewer retaining a window after it was closed when the new
+  sidebar was present.
+- Fixed the interaction guide and the source and quality report accumulating a
+  window for every time they were opened. Both were kept alive by the sounding
+  window rather than released on close, so repeatedly consulting the guide —
+  which is expected while learning the zoom gestures — steadily grew the
+  application's memory use.
+- Fixed the sounding window opening narrower than it should when the sidebar is
+  present, which briefly squeezed the plot before it settled. The width
+  reserved for the panel was measured with a test that is never true before the
+  window is first shown, so nothing was reserved.
+- Fixed the Help menu's "Show Interaction Tips" entry opening unticked while the
+  tips strip was visible, which made the first click do nothing and dismissing
+  the strip take two.
+- Fixed the surround immediately around the sounding keeping the previous
+  theme's colour when the colour style was changed with a sounding open.
+- Brightened the map's degree labels and state borders, which were close enough
+  to the landmass to be hard to read.
+
+### Removed
+
+- Removed Windows code signing and its policy. The certificate requirements were
+  not going to be met, so the release workflow no longer carries a signing
+  provider, `signtool` step, SignPath submission, or signing-state output, and
+  the policy document and SignPath artifact configuration are gone rather than
+  left describing a process that never runs. Downloads are still verifiable: the
+  release publishes `SHA256SUMS.txt` and GitHub build provenance, and the release
+  notes and bundled README now say plainly that the executables are unsigned so
+  SmartScreen may warn on first launch.
+- Removed roughly 120 lines of dead hardcoded style sheets left behind when the
+  design-token layer replaced them; both constants were defined and never read.
+
+
 ## [0.8.2] - 2026-08-23
 
 ### Fixed

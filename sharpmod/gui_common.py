@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import tempfile
+import weakref
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -24,12 +25,17 @@ from qtpy.QtCore import (
 )
 from qtpy.QtGui import (
     QAction, QPainter, QColor, QPen, QBrush, QPolygonF, QFont, QPixmap, QIcon,
-    QTransform, QDesktopServices,
+    QTransform, QDesktopServices, QTextCursor,
 )
+
+# theme is deliberately Qt-free and imports nothing from sharpmod, so this
+# cannot close an import cycle.
+from sharpmod.theme import OBJ_GUIDE_BODY, OBJ_GUIDE_DIALOG
 from qtpy.QtWidgets import (
     QApplication,
     QMainWindow,
     QWidget,
+    QTextBrowser,
     QVBoxLayout,
     QHBoxLayout,
     QGridLayout,
@@ -196,15 +202,46 @@ CONTROLS_HTML = (
     "profile (indices recalculate live).<br>"
     "LCL, LFC, EL, MPL, and other diagnostics are recalculated results, so "
     "they are not edited directly.<br>"
-    "<b>Mouse wheel</b> \u2014 zoom the Skew-T or hodograph.<br>"
     "The hodograph defaults to <b>Mean Wind</b> centering; "
     "<b>right-click it</b> to change the center; "
     "<b>double-click</b> the RM / LM markers to set the storm motion.<br>"
     "<b>Double-click the lower-left inset</b> \u2014 swap lifted parcels.<br><br>"
+    # Zoom is two separate things on the same gesture, which is not guessable.
+    # Spelling out the direction and the limit matters: zooming out stops at the
+    # normal view, so scrolling that way at the default does nothing at all and
+    # reads as broken.
+    "<b>Zooming \u2014 one panel</b><br>"
+    "Point at the Skew-T or the hodograph and <b>scroll</b>. Scroll <b>up</b> "
+    "to magnify, <b>down</b> to come back out. Each panel zooms on its own, and "
+    "the zoom centres on the pointer, so aim at what you want enlarged.<br>"
+    "Zooming out stops at the normal view \u2014 it will not go wider than that, "
+    "so at the default scrolling down does nothing. That is also how you reset: "
+    "scroll down until it stops.<br>"
+    "There is no drag-to-pan inside a magnified panel, because dragging edits "
+    "the profile. To move elsewhere, reset and magnify again with the pointer "
+    "over the part you want.<br><br>"
+    "<b>Zooming \u2014 the whole sounding</b><br>"
+    "<b>Ctrl+scroll</b> zooms the entire image, as do the <b>View</b> toolbar's "
+    "Fit to Window / Actual Size buttons and the zoom slider.<br>"
+    "<b>Ctrl+0</b> fits the whole sounding to the window; <b>Ctrl+1</b> shows it "
+    "at 100%, which is the sharpest view because the sounding is drawn at that "
+    "size; <b>Ctrl++ / Ctrl+-</b> step. <b>Middle-button drag</b> pans when the "
+    "image is larger than the window.<br>"
+    "<b>F11</b> goes full screen (<b>Escape</b> leaves). Worth using: the fit is "
+    "limited by height, so the title bar and taskbar it reclaims make the "
+    "sounding roughly 8% larger.<br><br>"
     "<b>Keys:</b> \u2190/\u2192 step in time, \u2191/\u2193 change ensemble "
     "member, <b>Space</b> swap focus, <b>I</b> interpolate, "
     "<b>C</b> collect observed, <b>W</b> back to the picker, "
-    "<b>Ctrl+Z / Ctrl+Y</b> undo / redo analysis edits.<br><br>"
+    "<b>Ctrl+Z / Ctrl+Y</b> undo / redo analysis edits, <b>F1</b> this guide."
+    "<br><br>"
+    "<b>Sounding panel</b> (<b>Ctrl+B</b>) \u2014 the strip on the right lists "
+    "every loaded sounding and marks which one is in focus; click to switch. It "
+    "also selects the ensemble member and opens the source and quality "
+    "report.<br><br>"
+    "<b>Forecast timeline</b> \u2014 when a sounding covers several times, a "
+    "second toolbar appears with previous / next, a scrub slider, and looping "
+    "playback.<br><br>"
     "<b>Sessions:</b> File \u2192 Save Analysis Session preserves every loaded "
     "sounding and its current analysis state; Open Analysis Session restores "
     "them together in one viewer.<br><br>"
@@ -214,140 +251,153 @@ CONTROLS_HTML = (
     "into the app "
     "(File \u2192 Save Image / Save Text also work).")
 
-PICKER_DARK_QSS = """
-QMainWindow, QWidget {
-    background: #10141c;
-    color: #e7edf5;
-    font-family: "Segoe UI", "Arial";
-}
-QMenuBar, QMenu {
-    background: #151b25;
-    color: #e7edf5;
-    border: 1px solid #273244;
-}
-QMenuBar::item:selected, QMenu::item:selected {
-    background: #263247;
-}
-QTabWidget::pane {
-    border: 1px solid #263247;
-    background: #10141c;
-}
-QTabBar::tab {
-    background: #182131;
-    color: #b8c5d6;
-    padding: 8px 14px;
-    border: 1px solid #263247;
-    border-bottom: 0;
-}
-QTabBar::tab:selected {
-    background: #223047;
-    color: #ffffff;
-}
-QGroupBox {
-    border: 1px solid #2a374b;
-    border-radius: 6px;
-    margin-top: 14px;
-    padding: 10px 8px 8px 8px;
-    background: #151b25;
-}
-QGroupBox::title {
-    subcontrol-origin: margin;
-    left: 8px;
-    padding: 0 4px;
-    color: #d5e0ef;
-}
-QLineEdit, QComboBox, QDateEdit, QListWidget {
-    background: #0c1118;
-    color: #edf3fb;
-    border: 1px solid #2b3950;
-    border-radius: 5px;
-    padding: 6px;
-    selection-background-color: #315d8f;
-}
-QListWidget::item {
-    padding: 5px;
-}
-QListWidget::item:selected {
-    background: #315d8f;
-    color: #ffffff;
-}
-QPushButton, QToolButton {
-    background: #24334a;
-    color: #f4f8ff;
-    border: 1px solid #3a4e6b;
-    border-radius: 5px;
-    padding: 6px 10px;
-}
-QPushButton:hover, QToolButton:hover {
-    background: #2f4564;
-}
-QPushButton:pressed, QToolButton:pressed {
-    background: #1b283b;
-}
-QPushButton:disabled, QToolButton:disabled, QLineEdit:disabled, QComboBox:disabled {
-    color: #6f7d8f;
-    background: #151b25;
-    border-color: #253044;
-}
-QStatusBar {
-    background: #0c1118;
-    color: #aebbd0;
-    border-top: 1px solid #263247;
-}
-QScrollBar:vertical, QScrollBar:horizontal {
-    background: #10141c;
-    width: 12px;
-    height: 12px;
-}
-QScrollBar::handle {
-    background: #334258;
-    border-radius: 5px;
-}
-"""
-
-SOUNDING_LIGHT_QSS = """
-QMainWindow {
-    background: #f3f6fa;
-    color: #18202c;
-}
-QMenuBar, QMenu {
-    background: #ffffff;
-    color: #18202c;
-    border: 1px solid #d7dde6;
-}
-QMenuBar::item:selected, QMenu::item:selected {
-    background: #e8eef7;
-}
-QStatusBar {
-    background: #ffffff;
-    color: #39475a;
-    border-top: 1px solid #d7dde6;
-}
-QScrollArea {
-    background: #f3f6fa;
-    border: 0;
-}
-QToolButton {
-    background: transparent;
-    border: 0;
-    color: #34506f;
-    padding: 2px 5px;
-}
-QToolButton:hover {
-    background: #e8eef7;
-    border-radius: 4px;
-}
-"""
 
 
 def _show_controls_dialog(parent) -> None:
-    """Show the shared interaction guide as a message box."""
-    QMessageBox.information(parent, "Sounding Window Controls", CONTROLS_HTML)
+    """Show the shared interaction guide in a scrollable, resizable dialog.
+
+    Deliberately not a ``QMessageBox``: a message box lays its text out at
+    whatever height the content needs and cannot scroll, so the guide grew to
+    about 400x1224 px -- narrower than a paragraph wants and taller than a
+    1080p screen, with the overflow simply unreachable.
+
+    The dialog is disposed of explicitly at the end. It is parented to the
+    window so it centres on it and stays in front, which also means Qt keeps it
+    alive until the *window* dies -- so without this every F1 press left another
+    760x620 dialog and its fully populated ``QTextBrowser`` attached to the
+    window, and this is a guide people open repeatedly while learning the zoom
+    gestures. ``QMessageBox.information`` had no such problem, so the leak
+    arrived with the scrollable rewrite.
+    """
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Sounding Window Controls")
+    dialog.setObjectName(OBJ_GUIDE_DIALOG)
+    dialog.resize(760, 620)
+
+    layout = QVBoxLayout(dialog)
+    body = QTextBrowser(dialog)
+    body.setObjectName(OBJ_GUIDE_BODY)
+    body.setOpenExternalLinks(True)
+    body.setHtml(CONTROLS_HTML)
+    # Start at the top: QTextBrowser otherwise keeps whatever scroll position
+    # the layout pass left behind.
+    body.moveCursor(QTextCursor.Start)
+    layout.addWidget(body, 1)
+
+    buttons = QDialogButtonBox(QDialogButtonBox.Close, parent=dialog)
+    # One connection, not three. A Close button carries RejectRole, so
+    # ``accepted`` can never fire, and the extra ``clicked`` lambda both raced
+    # ``rejected`` (Qt emits clicked first, so the dialog resolved Accepted then
+    # Rejected) and captured ``dialog`` on one of its own children.
+    buttons.rejected.connect(dialog.reject)
+    layout.addWidget(buttons)
+
+    try:
+        dialog.exec()
+    finally:
+        # deleteLater *after* exec returns -- not WA_DeleteOnClose. That
+        # attribute deletes the dialog from inside the close that ends the modal
+        # loop, while QDialog::exec is still on the stack and about to touch its
+        # own members; it segfaults on teardown (0xC0000005 here). Scheduling
+        # the delete once exec has unwound frees the dialog just as reliably and
+        # leaves nothing for Qt to touch.
+        #
+        # Guarded, because the dialog is a child of the window: if the parent is
+        # destroyed while the modal is up, the C++ object goes with it and this
+        # wrapper is already stale, so the call would raise RuntimeError out of
+        # whatever opened the guide.
+        try:
+            dialog.deleteLater()
+        except RuntimeError:
+            pass
 #: Three-hourly UTC observation times offered for regular and special launches.
 SYNOPTIC_HOURS = tuple(range(0, 24, 3))
 
 #: How many recent files / stations to remember.
 MAX_RECENTS = 8
+def _install_fullscreen_action(win, menu):
+    """Add a Full Screen toggle (F11) for ``win`` to ``menu``.
+
+    Shared by the picker and the sounding window so the gesture is the same in
+    both. Worth having in the sounding window in particular: the fit scale there
+    is limited by *height*, so reclaiming the title bar and the taskbar makes the
+    sounding meaningfully larger rather than merely tidier.
+
+    Two details that are easy to get wrong:
+
+    * Leaving full screen uses ``showMaximized`` when the window was maximized
+      going in. ``showNormal`` is the obvious call and is wrong -- it drops a
+      maximized window back to its small floating size, so F11 twice would not
+      return you where you started.
+    * ``Escape`` also leaves full screen, which is the near-universal
+      convention, but its action is *disabled* whenever the window is not full
+      screen. A permanently enabled Escape shortcut would silently swallow the
+      key everywhere else in the window.
+    """
+    action = QAction("&Full Screen", win)
+    action.setShortcut("F11")
+    action.setCheckable(True)
+    action.setChecked(win.isFullScreen())
+    action.setToolTip(
+        "Use the whole screen (F11, or Escape to leave)")
+
+    escape = QAction("Leave Full Screen", win)
+    escape.setShortcut("Esc")
+    escape.setEnabled(win.isFullScreen())
+    # Not in any menu: F11 is the advertised way back, and a second visible
+    # entry for the same thing is noise.
+    win.addAction(escape)
+
+    # Weak, deliberately. Both actions are children of the window, so Qt holds
+    # their connections C++-side where Python's cyclic GC cannot see them. A
+    # closure capturing ``win`` strongly therefore pins the window's wrapper for
+    # the life of the process, and every viewer open/close cycle would retain a
+    # whole sounding window. See test_gui_viewer_lifecycle.
+    win_ref = weakref.ref(win)
+
+    def _apply(enable: bool) -> None:
+        window = win_ref()
+        if window is None:
+            return
+        if enable:
+            window._sharpmod_pre_fullscreen_maximized = window.isMaximized()
+            window.showFullScreen()
+        elif getattr(window, "_sharpmod_pre_fullscreen_maximized", False):
+            window.showMaximized()
+        else:
+            window.showNormal()
+        escape.setEnabled(window.isFullScreen())
+
+    action.toggled.connect(_apply)
+
+    def _leave() -> None:
+        window = win_ref()
+        if window is not None and window.isFullScreen():
+            action.setChecked(False)
+
+    escape.triggered.connect(_leave)
+
+    # The window can leave full screen without going through either action --
+    # a window-manager shortcut, for instance -- so re-read the real state
+    # whenever the menu is about to be shown. That is the only moment the
+    # checkmark is visible, so it is the only moment it has to be right.
+    def _sync() -> None:
+        window = win_ref()
+        if window is None:
+            return
+        was = action.blockSignals(True)
+        try:
+            action.setChecked(window.isFullScreen())
+        finally:
+            action.blockSignals(was)
+        escape.setEnabled(window.isFullScreen())
+
+    menu.aboutToShow.connect(_sync)
+    menu.addAction(action)
+    win._sharpmod_fullscreen_action = action
+    return action
+
+
 def _most_recent_synoptic() -> tuple[QDate, int]:
     """Return the most recent (00Z/12Z) sounding time likely to be available.
 

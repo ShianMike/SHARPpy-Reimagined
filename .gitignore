@@ -1,12 +1,21 @@
 # ---------------------------------------------------------------------------
-# AI-agent working material (kept locally; not part of consumer releases)
+# Working material (kept locally; not part of consumer releases)
 # ---------------------------------------------------------------------------
 /docs/superpowers/
 /docs/ENGINEERING_BACKLOG.md
 /foundissues/
+/AGENTS.md
+
+# Agent / assistant tooling state. Local configuration and caches, not project
+# source. (.kiro/ previously sat under virtual environments, which it is not.)
 /.agents/
 /.codex/
-/AGENTS.md
+/.codex-worktrees/
+.kiro/
+
+# Generated code-review output. Written per run and named by timestamp, so it
+# would otherwise pile up one untracked file at a time.
+/semantic-review/
 
 # Local sounding render outputs
 /rendered_soundings/*
@@ -20,7 +29,6 @@
 .griblenv/
 .rendertest/
 .venv/
-.kiro/
 venv/
 env/
 ENV/
@@ -99,10 +107,15 @@ sharpmod-gui.log*
 /ifs_point_*.png
 
 # ---------------------------------------------------------------------------
-# Historical prototypes and stale local-only copies are not shipped.
+# Historical prototypes are not shipped.
 # ---------------------------------------------------------------------------
 /attic/
-/sounding_parameter_guide.md
+
+# sounding_parameter_guide.md was listed here as a stale local-only copy. It is
+# now a maintained reference for every displayed index -- formula, clamps,
+# colour thresholds, and literature citation -- kept in step with
+# sharpmod/sharptab/ and sharpmod/colors.py, and linked from the README. It
+# ships.
 
 # ---------------------------------------------------------------------------
 # Editor / OS cruft
@@ -117,5 +130,13 @@ desktop.ini
 
 # Local scratch helpers kept out of the repository on purpose. These are
 # personal one-off utilities, not project entry points.
+#
+# Root-anchored globs rather than a list of exact filenames: these accumulate one
+# per investigation, and an explicit list only ever catches the ones that already
+# existed when someone remembered to update it. The leading slash matters -- it
+# keeps them off the real extractors under sharpmod/tools/ and the maintained
+# helpers under scripts/, both of which are tracked.
 /copy_clipboard.ps1
 /run_hrrr_uhd.py
+/extract_*.py
+/generate_*.py

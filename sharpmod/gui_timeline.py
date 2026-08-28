@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import weakref
 
 from qtpy.QtCore import Qt, QThread, QTimer, Signal
 from qtpy.QtGui import QAction
@@ -19,6 +20,7 @@ from qtpy.QtWidgets import (
 )
 
 from sharpmod.profile_timeline import forecast_hour_range
+from sharpmod.theme import OBJ_ERROR_TEXT, OBJ_STATUS
 
 
 MAX_TIMELINE_HOURS = 72
@@ -93,14 +95,28 @@ class ForecastTimelineDialog(QDialog):
             )
         return hours
 
+    def _set_summary_role(self, object_name):
+        """Swap the summary's semantic role, re-polishing so QSS re-resolves.
+
+        Qt does not re-evaluate style-sheet selectors when an object name
+        changes, so without the unpolish/polish pair the label keeps whichever
+        rule matched at construction.
+        """
+        if self.summary.objectName() == object_name:
+            return
+        self.summary.setObjectName(object_name)
+        style = self.summary.style()
+        style.unpolish(self.summary)
+        style.polish(self.summary)
+
     def _update_summary(self, *_args):
         try:
             hours = self.hours()
         except ValueError as exc:
             self.summary.setText(str(exc))
-            self.summary.setStyleSheet("color: #ff9a9a;")
+            self._set_summary_role(OBJ_ERROR_TEXT)
             return
-        self.summary.setStyleSheet("color: #aeb8c8;")
+        self._set_summary_role(OBJ_STATUS)
         self.summary.setText(
             f"{len(hours)} hour{'s' if len(hours) != 1 else ''}: "
             + ", ".join(f"F{hour:03d}" for hour in hours)
@@ -268,6 +284,9 @@ def install_timeline_controls(win, collection) -> QToolBar | None:
     timer = QTimer(win)
     timer.setInterval(900)
 
+    # See set_index below for why this is weak.
+    win_ref = weakref.ref(win)
+
     def current_index():
         dates = _collection_dates(collection)
         try:
@@ -276,6 +295,19 @@ def install_timeline_controls(win, collection) -> QToolBar | None:
             return 0
 
     def set_index(index):
+        # Resolved from the weakref into a local of the same name, so this
+        # closure does not capture the outer ``win``. The slider, actions and
+        # timer are all children of the window and Qt holds their connections
+        # C++-side, so a strong capture makes win -> slider -> connection ->
+        # set_index -> win an uncollectable cycle. That is not only a leak: the
+        # window's wrapper then survives to interpreter exit, after Qt has torn
+        # the C++ side down, and freeing it is an access violation. Measured on
+        # the equivalent handler in gui_viewer._install_tip_bar: 6 crashes in 14
+        # runs with a strong capture, 0 in 14 once held weakly. This installer
+        # runs for every multi-time collection, i.e. every forecast sounding.
+        win = win_ref()
+        if win is None:
+            return
         dates = _collection_dates(collection)
         if not dates:
             return

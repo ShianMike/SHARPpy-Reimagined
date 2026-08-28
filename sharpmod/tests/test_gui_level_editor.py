@@ -18,6 +18,18 @@ from qtpy.QtWidgets import QApplication, QMenu, QWidget  # noqa: E402
 from sharpmod import gui  # noqa: E402
 
 
+class _StubWindow:
+    """A weakref-able stand-in for the sounding window.
+
+    ``SimpleNamespace`` cannot be the target of a weak reference, and the
+    installers hold the window weakly so their handlers cannot pin it. A plain
+    class has a ``__weakref__`` slot, which is what a real ``QMainWindow`` has.
+    """
+
+    def __init__(self, **attrs):
+        self.__dict__.update(attrs)
+
+
 @pytest.fixture(scope="module", autouse=True)
 def qapp():
     """Keep one QApplication alive for the dialog tests."""
@@ -97,9 +109,12 @@ def test_installer_adds_one_editor_and_expands_reset_fields():
     reset = QAction("Reset Skew-T", skew)
     reset.triggered.connect(lambda: old_reset_calls.append(True))
     skew.popupmenu.addAction(reset)
-    window = SimpleNamespace(
-        spc_widget=SimpleNamespace(sound=skew),
-    )
+    # A plain class, not SimpleNamespace: the installer holds the window through
+    # a weakref so its handler cannot pin it (see
+    # test_gui_viewer_lifecycle.test_no_installer_handler_closes_over_the_window),
+    # and SimpleNamespace does not support weak references. The real caller
+    # always passes a QMainWindow, which does.
+    window = _StubWindow(spc_widget=SimpleNamespace(sound=skew))
     emitted = []
     skew.reset.connect(emitted.append)
 

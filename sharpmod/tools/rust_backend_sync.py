@@ -10,6 +10,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from packaging.version import InvalidVersion, Version
+
 from sharpmod._version import __version__
 
 
@@ -156,7 +158,11 @@ def verify_rust_backend() -> dict:
 def _version_problem(installed: str | None) -> str | None:
     if installed is None:
         return "sharpmod_rs is not installed"
-    if installed != __version__:
+    try:
+        matches = Version(installed) == Version(__version__)
+    except InvalidVersion:
+        matches = False
+    if not matches:
         return (
             f"installed sharpmod_rs {installed} does not match "
             f"expected {__version__}"

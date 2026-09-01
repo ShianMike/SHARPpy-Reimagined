@@ -7,6 +7,7 @@ unavailable map service must never stall a hodograph repaint.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from functools import lru_cache
 from importlib.resources import files
 import io
@@ -35,6 +36,11 @@ _COUNTY_TILE_DEGREES = 1
 _COUNTY_COORDINATE_PRECISION = 5
 _COUNTY_MAX_QUERY_TILES = 64
 _COUNTY_ARCHIVE_LOCK = threading.RLock()
+#: Overlay fills are a little more opaque here than on the picker maps: the
+#: inset is small, so a wash faint enough to read well at full size disappears.
+_OVERLAY_FILL_ALPHA = 90
+_OVERLAY_HATCH_ALPHA = 200
+_OVERLAY_STROKE_WIDTH = 1.2
 _COORDINATE_LABEL_RE = re.compile(
     r"(?ix)"
     r"(?:\b\d{1,2}(?:\.\d+)?\s*[NS]\s*[,/ ]+\s*"
@@ -129,11 +135,247 @@ def location_name_from_widget(widget: Any) -> str:
     return ""
 
 
+def valid_time_from_widget(widget: Any) -> datetime | None:
+    """Return the focused sounding's valid time as tz-aware UTC, or ``None``.
+
+    Tries the collection's own accessor first, then the metadata mirrors, then
+    the profile attribute, because the loaders do not all populate the same one.
+
+    A naive result is treated as UTC. Every cycle, forecast hour, and analysis
+    time in this application is UTC, but not every decoder attaches a timezone,
+    and the consumers of this value reject naive input outright rather than
+    guess. Resolving the assumption here keeps that strictness meaningful.
+    """
+    candidates = []
+    try:
+        collection = widget.prof_collections[widget.pc_idx]
+    except (AttributeError, IndexError, TypeError):
+        collection = None
+    if collection is not None:
+        try:
+            candidates.append(collection.getCurrentDate())
+        except (AttributeError, KeyError, TypeError, IndexError):
+            pass
+    candidates.append(_collection_meta(widget, "valid"))
+    candidates.append(_collection_meta(widget, "date"))
+    candidates.append(getattr(getattr(widget, "prof", None), "date", None))
+
+    for value in candidates:
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc)
+            return value.astimezone(timezone.utc)
+    return None
+
+
+def overlay_layers_for_widget(widget: Any) -> tuple[Any, ...]:
+    """Return locator overlays attached to the focused sounding.
+
+    Only layers whose validity window contains the sounding's valid time are
+    returned, so switching focus between profiles at different times cannot
+    leave the previous one's overlay on screen.
+    """
+    try:
+        collection = widget.prof_collections[widget.pc_idx]
+    except (AttributeError, IndexError, TypeError):
+        return ()
+    try:
+        from sharpmod.map_overlays import locator_overlays, overlays_covering
+        layers = locator_overlays(collection)
+        if not layers:
+            return ()
+        return overlays_covering(layers, valid_time_from_widget(widget))
+    except Exception:  # noqa: BLE001 - an overlay must never break the render
+        return ()
+
+
+def overlay_label_at_point(
+        layers: tuple[Any, ...],
+        lat: float,
+        lon: float,
+) -> tuple[str, str, str] | None:
+    """Return ``(label, stroke, fill)`` for the category covering the point.
+
+    The inset spans under two degrees, so it is usually filled entirely by one
+    category and the wash alone cannot say which. Naming the category at the
+    sounding's own position is the part that actually reports the risk.
+    """
+    try:
+        from sharpmod.map_overlays import shape_at
+        # The graded band, not the hatched qualifier drawn over it: the
+        # significant-severe area outranks every band so that it paints on top,
+        # and answering with it would report "SIGN" while discarding the
+        # probability the point actually sits in.
+        shape = shape_at(layers, lon, lat, hatch=False)
+        qualifier = shape_at(layers, lon, lat, hatch=True)
+    except Exception:  # noqa: BLE001 - never break the render for a label
+        return None
+    if shape is None or not shape.label:
+        return None
+
+    # A probability label is a bare quantity: "5%" does not say whether it is
+    # tornado, wind, or hail, and the badge is the only text the inset shows for
+    # the overlay. Prefix the hazard when the product supplies one.
+    text = shape.label
+    for layer in layers:
+        if shape in getattr(layer, "shapes", ()):
+            short = getattr(layer, "short_name", "")
+            if short:
+                text = f"{short} {shape.label}"
+            break
+    if qualifier is not None:
+        # SPC's Conditional Intensity Groups grade how strong the hazard could
+        # become if it occurs, so the level is reported rather than the bare
+        # presence of a qualifier. Pre-2026 outlooks carry the ungraded "SIGN"
+        # area instead, which has no level to name.
+        level = getattr(qualifier, "hatch_level", 0)
+        text = f"{text} CIG{level}" if level else f"{text} SIG"
+    return text, shape.stroke, (shape.fill or shape.stroke)
+
+
+def _draw_overlay_badge(
+        painter: Any,
+        label: tuple[str, str, str],
+        rect: Any,
+        qtcore: Any,
+        qtgui: Any) -> None:
+    """Draw a small chip naming the risk category at the sounding's point."""
+    text, stroke, fill = label
+    font = qtgui.QFont("Helvetica", 7)
+    font.setBold(True)
+    painter.setFont(font)
+    metrics = qtgui.QFontMetrics(font)
+    padding = 3.0
+    width = metrics.horizontalAdvance(text) + padding * 2.0
+    height = metrics.height() + 1.0
+    chip = qtcore.QRectF(
+        rect.left() + 4.0,
+        rect.bottom() - height - 4.0,
+        width,
+        height,
+    )
+    background = qtgui.QColor(fill)
+    if not background.isValid():
+        return
+    background.setAlpha(235)
+    painter.setBrush(qtgui.QBrush(background))
+    edge = qtgui.QColor(stroke)
+    painter.setPen(qtgui.QPen(edge if edge.isValid() else background, 1.0))
+    painter.drawRect(chip)
+    # Chosen against the chip's own fill rather than the map background, since
+    # the chip is opaque and the categories run from pale green to deep magenta.
+    painter.setPen(qtgui.QPen(
+        qtgui.QColor("#000000") if background.lightnessF() >= 0.5
+        else qtgui.QColor("#FFFFFF")))
+    painter.drawText(chip, qtcore.Qt.AlignCenter, text)
+
+
+def _hatch_brush(qtcore: Any, qtgui: Any, colour: Any, level: int) -> Any:
+    """Return the graded hatch brush shared with the picker maps.
+
+    Falls back to the plain diagonal rather than losing the area entirely: this
+    is a paint path, and an overlay detail is never worth failing a render for.
+    """
+    try:
+        from sharpmod.overlay_hatch import hatch_brush
+    except Exception:  # noqa: BLE001 - keep painting without the graded form
+        return qtgui.QBrush(colour, qtcore.Qt.BDiagPattern)
+    return hatch_brush(qtcore, qtgui, colour, level)
+
+
+def _draw_overlay_layers(
+        painter: Any,
+        layers: tuple[Any, ...],
+        rect: Any,
+        bounds: tuple[float, float, float, float],
+        qtcore: Any,
+        qtgui: Any) -> None:
+    """Fill and outline overlay polygons inside the locator's interior.
+
+    Shapes whose own bounding box misses the view are skipped: the inset spans
+    well under two degrees while a convective outlook spans the continent, so
+    almost every shape in a layer is irrelevant to a given sounding.
+    """
+    west, south, east, north = bounds
+    for layer in layers:
+        for shape in getattr(layer, "shapes", ()):
+            try:
+                min_lon, max_lon, min_lat, max_lat = shape.bounds
+            except (AttributeError, TypeError, ValueError):
+                continue
+            if max_lon < west or min_lon > east \
+                    or max_lat < south or min_lat > north:
+                continue
+
+            path = qtgui.QPainterPath()
+            # Odd-even filling makes an interior ring a hole whichever way it is
+            # wound, which is what keeps each risk category filled exactly once.
+            path.setFillRule(qtcore.Qt.OddEvenFill)
+            for ring in shape.rings:
+                if len(ring) < 3:
+                    continue
+                started = False
+                for ring_lon, ring_lat in ring:
+                    x, y = _map_point(rect, bounds, ring_lat, ring_lon)
+                    if started:
+                        path.lineTo(x, y)
+                    else:
+                        path.moveTo(x, y)
+                        started = True
+                if started:
+                    path.closeSubpath()
+            if path.isEmpty():
+                continue
+
+            fill = getattr(shape, "fill", None)
+            if fill:
+                colour = qtgui.QColor(fill)
+                if colour.isValid():
+                    if getattr(shape, "hatch", False):
+                        colour.setAlpha(_OVERLAY_HATCH_ALPHA)
+                        painter.fillPath(path, _hatch_brush(
+                            qtcore, qtgui, colour,
+                            getattr(shape, "hatch_level", 0)))
+                    else:
+                        colour.setAlpha(_OVERLAY_FILL_ALPHA)
+                        painter.fillPath(path, qtgui.QBrush(colour))
+            stroke = getattr(shape, "stroke", None)
+            if stroke:
+                colour = qtgui.QColor(stroke)
+                if colour.isValid():
+                    painter.strokePath(path, qtgui.QPen(
+                        colour, _OVERLAY_STROKE_WIDTH))
+
+
+#: Half-height of the locator's geographic extent, in degrees of latitude, so
+#: the inset spans twice this from north to south -- about 218 km at 0.98.
+#:
+#: This is the inset's only zoom control; the longitude half-width and every
+#: drawn layer derive from it.
+#:
+#: Raised from 0.70 (1.40 degrees, ~156 km), which was tight enough that a
+#: sounding's surroundings gave little sense of where it was. Measured across
+#: four sites, 0.98 puts about 47% more boundary linework in the inset while
+#: leaving roughly 90% of it empty, so it reads as more context rather than as
+#: clutter.
+#:
+#: It is also the ceiling. ``zoom_bounds`` is contracted to stay local -- under
+#: two degrees of latitude -- so 0.98 is the largest value that still satisfies
+#: it, with very little to spare. Going further is a deliberate decision to
+#: widen that contract, and past roughly 1.4 the fixed-size marker grows
+#: comparable to the county it sits in and starts hiding the thing it points at.
+LOCATOR_HALF_LAT_DEGREES = 0.98
+
+#: Longitude is widened by this before the cosine-of-latitude correction, so the
+#: extent matches the inset's landscape aspect and reads as near-square.
+LOCATOR_LON_ASPECT = 1.35
+
+
 def zoom_bounds(lat: float, lon: float) -> tuple[float, float, float, float]:
     """Return a local, near-square geographic extent centered on ``lat/lon``."""
-    half_lat = 0.70
+    half_lat = LOCATOR_HALF_LAT_DEGREES
     cos_lat = max(0.35, math.cos(math.radians(lat)))
-    half_lon = half_lat * 1.35 / cos_lat
+    half_lon = half_lat * LOCATOR_LON_ASPECT / cos_lat
     return lon - half_lon, lat - half_lat, lon + half_lon, lat + half_lat
 
 
@@ -445,6 +687,7 @@ def draw_hodo_locator(widget: Any) -> bool:
         global_layers = global_lines_for_bounds(bounds)
     except Exception:
         global_layers = {name: () for name in _GLOBAL_LAYER_NAMES}
+    overlay_layers = overlay_layers_for_widget(widget)
 
     bg_color = QtGui.QColor(getattr(widget, "bg_color", _MAP_FILL))
     fg_color = QtGui.QColor(getattr(widget, "fg_color", _MAP_BORDER))
@@ -487,6 +730,14 @@ def draw_hodo_locator(widget: Any) -> bool:
         interior = rect.adjusted(padding, padding, -padding, -padding)
         painter.save()
         painter.setClipRect(interior)
+        # Overlays go under the boundary linework and the marker: they are areal
+        # context, and the point being analysed plus the geography locating it
+        # must stay readable through them.
+        try:
+            _draw_overlay_layers(
+                painter, overlay_layers, interior, bounds, QtCore, QtGui)
+        except Exception:  # noqa: BLE001 - never lose the locator to an overlay
+            pass
         _draw_global_lines(
             painter, global_layers.get("states", ()),
             state_outline, 0.8, interior, bounds, QtCore, QtGui)
@@ -533,6 +784,13 @@ def draw_hodo_locator(widget: Any) -> bool:
         painter.drawLine(point_x - 7.0, point_y, point_x + 7.0, point_y)
         painter.drawLine(point_x, point_y - 7.0, point_x, point_y + 7.0)
         painter.restore()
+        if overlay_layers:
+            badge = overlay_label_at_point(overlay_layers, lat, lon)
+            if badge is not None:
+                try:
+                    _draw_overlay_badge(painter, badge, rect, QtCore, QtGui)
+                except Exception:  # noqa: BLE001
+                    pass
         if location_name:
             font = QtGui.QFont("Helvetica", 8)
             font.setBold(True)

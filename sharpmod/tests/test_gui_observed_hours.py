@@ -21,11 +21,18 @@ def _combo_labels(combo):
 
 
 def test_observed_pickers_offer_every_three_hour_utc_cycle():
+    """Every three-hourly cycle is offered, newest first.
+
+    The constant stays ascending because it describes the schedule; only the
+    presentation is reversed, so the most recent launch is the first entry
+    instead of sitting at the bottom of the list.
+    """
     QApplication.instance() or QApplication([])
-    expected_hours = tuple(range(0, 24, 3))
+    expected_hours = tuple(reversed(range(0, 24, 3)))
     expected_labels = tuple(f"{hour:02d}Z" for hour in expected_hours)
 
-    assert SYNOPTIC_HOURS == expected_hours
+    assert SYNOPTIC_HOURS == tuple(range(0, 24, 3))
+    assert sorted(expected_hours) == list(SYNOPTIC_HOURS)
 
     picker = gui.PickerWindow()
     try:

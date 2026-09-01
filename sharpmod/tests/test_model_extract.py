@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from sharpmod import rrfs_nomads
 from sharpmod.io import decoder as decoder_mod
 from sharpmod.model_surface import PROFILE_COLUMN_NAMES, merge_surface_level
 from sharpmod.tools import model_extract
@@ -191,16 +192,120 @@ def test_cached_source_provenance_requires_surface_fields_for_all_models():
     )
 
 
-def test_every_selectable_forecast_model_exists_in_herbie_registry():
-    """No picker model may fail with a missing ``herbie.models`` attribute."""
+def test_every_herbie_backed_model_exists_in_herbie_registry():
+    """No picker model may fail with a missing ``herbie.models`` attribute.
+
+    Two groups are excluded because they never reach Herbie. Point providers
+    carry a sentinel ``herbie_model`` tag rather than a registry name; the ECCC
+    entries happened to satisfy this check anyway, since Herbie also ships
+    ``gdps`` and ``rdps``, which hid the distinction until a provider arrived
+    whose name Herbie has never heard of. Direct-GRIB models locate their own
+    files, so their registry name is incidental -- RRFS would pass this check
+    today purely by coincidence, which is exactly the kind of accident the
+    exclusion above was added to stop relying on.
+    """
     herbie_models = pytest.importorskip("herbie.models")
+    exempt = (
+        model_extract.POINT_PROVIDER_KEYS | model_extract.DIRECT_GRIB_KEYS
+    )
     missing = sorted({
         cfg.herbie_model
         for cfg in model_extract.available_models()
-        if not hasattr(herbie_models, cfg.herbie_model)
+        if cfg.key not in exempt
+        and not hasattr(herbie_models, cfg.herbie_model)
     })
 
     assert missing == []
+
+
+def test_point_providers_are_excluded_from_the_herbie_registry_check():
+    """The exclusion above must not become a way to skip real models.
+
+    Every point-provider key has to be a model the facade actually offers, so a
+    stale or misspelled entry in that set cannot quietly widen the exemption.
+    """
+    selectable = {cfg.key for cfg in model_extract.available_models()}
+    for key in model_extract.POINT_PROVIDER_KEYS:
+        assert key in selectable, key
+        assert not model_extract.requires_grib_runtime(key)
+        assert model_extract.point_only_provider(key)
+
+
+def test_direct_grib_models_are_excluded_but_still_real_grib_models():
+    """The direct-GRIB exemption must not hide a broken or absent model.
+
+    These keys skip Herbie's file location, not GRIB decoding, so they must
+    still be selectable, still require the GRIB runtime, and must not be
+    mistaken for point providers.
+    """
+    selectable = {cfg.key for cfg in model_extract.available_models()}
+    assert model_extract.DIRECT_GRIB_KEYS
+    for key in model_extract.DIRECT_GRIB_KEYS:
+        assert key in selectable, key
+        assert model_extract.requires_grib_runtime(key)
+        assert not model_extract.point_only_provider(key)
+    assert not (
+        model_extract.DIRECT_GRIB_KEYS & model_extract.POINT_PROVIDER_KEYS
+    )
+
+
+@pytest.mark.parametrize("key", sorted(model_extract.POINT_PROVIDER_KEYS))
+def test_retrieve_dataset_routes_every_point_provider_away_from_herbie(
+        key, monkeypatch):
+    """``_retrieve_dataset`` needs its own point-provider branch.
+
+    ``extract`` returns early for these models, but the GUI's model-hour cache
+    calls this helper directly to populate a shared entry. A provider missing
+    from here therefore works on the command line and fails only in the GUI,
+    with ``module 'herbie.models' has no attribute <sharppy key>`` -- Herbie
+    being blamed for a name it was never asked about.
+
+    Parametrized over the whole set so a provider added later cannot reintroduce
+    this by being handled in ``extract`` alone.
+    """
+    from types import SimpleNamespace
+
+    from sharpmod import eccc_geomet, openmeteo
+
+    sentinel = SimpleNamespace(
+        _sharpmod_source_url="stub://point",
+        _sharpmod_fields=("a", "b"),
+        _sharpmod_transport="stub-transport",
+    )
+
+    def fake_fetch_point(model_key, lat, lon, **kwargs):
+        assert model_key == key
+        return sentinel
+
+    def refuse_herbie():
+        raise AssertionError(
+            "%s reached Herbie; it is a point provider" % key)
+
+    monkeypatch.setattr(eccc_geomet, "fetch_point", fake_fetch_point)
+    monkeypatch.setattr(openmeteo, "fetch_point", fake_fetch_point)
+    monkeypatch.setattr(model_extract, "_load_herbie_class", refuse_herbie)
+
+    cfg = model_extract.get_config(key)
+    run_dt = datetime(2026, 8, 31, tzinfo=timezone.utc)
+    dataset, source = model_extract._retrieve_dataset(
+        cfg, run_dt, 0, lat=41.13, lon=-100.76)
+
+    assert dataset is sentinel
+    # The hour cache duck-types on these three, so every branch must supply them.
+    assert source._sharpmod_source_url
+    assert source._sharpmod_fields
+    assert source._sharpmod_transport
+    assert getattr(source, "grib", None)
+
+
+@pytest.mark.parametrize("key", sorted(model_extract.POINT_PROVIDER_KEYS))
+def test_retrieve_dataset_requires_a_point_for_a_point_provider(key):
+    """Without lat/lon these providers have nothing to request."""
+    cfg = model_extract.get_config(key)
+    run_dt = datetime(2026, 8, 31, tzinfo=timezone.utc)
+    with pytest.raises(model_extract.RetrievalError) as excinfo:
+        model_extract._retrieve_dataset(cfg, run_dt, 0)
+    assert "requires lat/lon" in str(excinfo.value)
 
 
 def test_forecast_hours_are_model_specific():
@@ -217,9 +322,15 @@ def test_forecast_hours_are_model_specific():
     assert cfs_hours[:3] == (0, 6, 12)
     assert max(cfs_hours) == 384
 
-    assert model_extract.cycle_hours("rrfs-a") == tuple(range(24))
-    assert max(model_extract.forecast_hours("rrfs-a", cycle_hour=0)) == 84
-    assert max(model_extract.forecast_hours("rrfs-a", cycle_hour=5)) == 18
+    # RRFS publishes its pressure-level product only on the synoptic cycles.
+    # The off-hour cycles carry a sub-hourly two-dimensional product and no
+    # sounding at any forecast hour, so they are excluded from the cycle list
+    # rather than advertised with a shortened forecast.
+    assert model_extract.cycle_hours("rrfs-a") == (0, 6, 12, 18)
+    for cycle in model_extract.cycle_hours("rrfs-a"):
+        hours = model_extract.forecast_hours("rrfs-a", cycle_hour=cycle)
+        assert max(hours) == 84, cycle
+        assert len(hours) == 85, cycle
 
 
 def test_domain_helpers_reject_out_of_region_points():
@@ -252,16 +363,52 @@ def test_domain_helpers_reject_out_of_region_points():
 
 def test_provider_capability_publishes_rrfs_domain_and_transport_contract():
     capability = model_extract.provider_capability(
-        "rrfs-hi", cycle_hour=5
+        "rrfs-hi", cycle_hour=0
     )
 
     assert capability.model_key == "rrfs-a-hawaii"
     assert capability.domain == "Hawaii"
-    assert capability.cycles == tuple(range(24))
-    assert max(capability.forecast_hours) == 18
-    assert capability.levels == "all published pressure levels"
+    assert capability.cycles == (0, 6, 12, 18)
+    assert max(capability.forecast_hours) == 84
     assert capability.members == ()
-    assert capability.transports == ("herbie", "indexed-ranges")
+    # RRFS is located and fetched by this project rather than by Herbie, so a
+    # capability naming Herbie would misreport where the bytes come from.
+    assert capability.provider == rrfs_nomads.PROVIDER
+    assert capability.transports == (
+        rrfs_nomads.TRANSPORT, "verified-surface-companion",
+    )
+    assert capability.levels == "45 published pressure levels, 1000 hPa to 2 hPa"
+    # No VVEL is published and DZDT is not a usable substitute.
+    assert "VVEL" not in capability.fields
+    assert "DZDT" not in capability.fields
+    assert "ABSV" in capability.fields
+
+
+def test_rrfs_configs_are_direct_grib_and_map_to_published_domains():
+    """Every RRFS config must name a domain this route can actually build.
+
+    A typo in a config's domain tag would otherwise surface only as a failed
+    live fetch, since the tag is no longer a Herbie argument but the token this
+    project puts into the NOMADS URL.
+    """
+    keys = {
+        cfg.key for cfg in model_extract.available_models()
+        if cfg.herbie_model == "rrfs"
+    }
+    assert keys == model_extract.DIRECT_GRIB_KEYS
+    assert keys, "RRFS configs disappeared from the selectable set"
+
+    for key in sorted(keys):
+        cfg = model_extract.get_config(key)
+        domain = rrfs_nomads.domain_for(cfg.kwargs["domain"])
+        assert domain.tag in {"conus", "ak", "hi", "pr", "na"}
+        assert domain.resolution in {"3km", "2p5km", "13km"}
+        # These still decode GRIB and still cache a grid-level dataset, so they
+        # are not point providers; they only skip Herbie's location layer.
+        assert model_extract.requires_grib_runtime(key)
+        assert not model_extract.point_only_provider(key)
+        assert key not in model_extract.POINT_PROVIDER_KEYS
+        assert model_extract.spatial_cache_key(cfg, 35.0, -97.0) is None
 
 
 def test_model_extract_writes_loadable_npz(tmp_path, monkeypatch):
@@ -1356,7 +1503,11 @@ def test_surface_contract_probe_uses_latest_available_completed_cycle(
         open_subset=True,
     )
 
-    assert [value.hour for value, _open in calls] == [8, 7, 6]
+    # RRFS publishes pressure levels only at 00/06/12/18Z, so a lookback from
+    # 08:30 walks 06Z, then 00Z, then the previous day's 18Z. Stepping by one
+    # hour here would probe cycles that do not exist.
+    assert [value.hour for value, _open in calls] == [6, 0, 18]
+    assert [value.day for value, _open in calls] == [30, 30, 29]
     assert [open_subset for _value, open_subset in calls] == [True, True, True]
     assert result["available"] is True
     assert result["subset_opened"] is True

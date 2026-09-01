@@ -69,14 +69,55 @@ def test_renderer_declares_one_named_spec_per_patch_installer():
     patches = render.render_patch_specs()
     names = [patch.name for patch in patches]
 
-    assert len(patches) == 31
+    assert len(patches) == 33
     assert len(names) == len(set(names))
     assert names[0] == "skewt.user-parcel-backend"
     assert names[1] == "title.override"
     assert "hodo.height-levels" in names
+    assert "skewt.lapse-rate-label-transparency" in names
+    assert "hodo.storm-motion-label-transparency" in names
     assert names.index("hodo.zoom") < names.index("hodo.mean-wind-default")
     assert names.index("hodo.locator") < names.index("hodo.height-levels")
     assert names[-1] == "tables.spacing"
+
+
+def test_the_lapse_rate_label_patch_installs_on_the_vendored_skewt():
+    render.install_render_patches()
+    from sharppy.viz.skew import plotSkewT
+
+    assert plotSkewT._sharpmod_lapse_rate_label_transparent is True
+
+
+def test_the_rect_suppressing_painter_drops_only_draw_rect():
+    """The patch removes a background plate without restating the draw method.
+
+    Everything about the max-lapse-rate label -- its tier colours, geometry, and
+    text -- stays in the vendored method. Only the opaque rectangle it fills
+    first is dropped, so this proxy has to forward every other painter call
+    untouched or the label would lose its bracket or its colour.
+    """
+    calls = []
+
+    class _Recorder:
+        def __getattr__(self, name):
+            def record(*_args, **_kwargs):
+                calls.append(name)
+                return name
+            return record
+
+    proxy = render._RectSuppressingPainter(_Recorder())
+
+    assert proxy.drawRect(1, 2, 3, 4) is None, "the plate must be dropped"
+    assert proxy.drawText("rect", 0, "6.5 C/km") == "drawText"
+    proxy.setPen("pen")
+    proxy.setBrush("brush")
+    proxy.drawLine(0, 0, 1, 1)
+    proxy.setFont("font")
+    proxy.setClipping(False)
+
+    assert "drawRect" not in calls
+    assert calls == ["drawText", "setPen", "setBrush", "drawLine",
+                     "setFont", "setClipping"]
 
 
 def test_hodo_height_markers_use_the_live_scale_aware_overlay():

@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import tomllib
 
+from packaging.version import Version
 import pytest
 
 from sharpmod._version import __version__
@@ -45,6 +46,10 @@ def test_current_extension_is_verified_without_rebuild(monkeypatch, capsys):
     output = capsys.readouterr()
     assert f"sharpmod_rs {__version__} already matches" in output.out
     assert "active backend: rust" in output.out
+
+
+def test_normalized_prerelease_metadata_is_current():
+    assert sync._version_problem(str(Version(__version__))) is None
 
 
 @pytest.mark.parametrize("installed", [None, "0.3.1", "0.4.1"])

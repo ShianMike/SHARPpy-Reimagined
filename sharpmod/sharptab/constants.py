@@ -37,6 +37,7 @@ import numpy as np
 
 __all__ = [
     "MISSING",
+    "OPTIONAL_SOURCE_SURFACE_FIELDS",
     "is_missing",
     "ZEROCNK",
     "G",
@@ -125,6 +126,27 @@ P0 = 1000.0
 KTS_PER_MS = 1.9438444924406046
 #: Numerical tolerance used to guard degenerate layers / division by zero.
 TOL = 1e-10
+
+#: Scalar surface values that only a data source can supply, never a single
+#: sounding column, listed in the order they are searched.
+#:
+#: Surface relative vorticity is the whole reason this exists. It is a horizontal
+#: derivative of the wind field, so it cannot be recovered from one profile at
+#: all -- it has to be read from neighbouring grid points at extraction time and
+#: carried along with the sounding. :func:`derived.non_supercell_tornado_parameter`
+#: is the only consumer, and it reports missing without it.
+#:
+#: These names are collected here because the vendored ``Profile.copy`` copies a
+#: fixed whitelist of arrays and drops every other attribute. A profile upgraded
+#: to a different class therefore silently loses them unless the upgrade path
+#: carries them across explicitly.
+OPTIONAL_SOURCE_SURFACE_FIELDS: tuple[str, ...] = (
+    "surface_relative_vorticity",
+    "sfc_relative_vorticity",
+    "surface_vorticity",
+    "sfc_vorticity",
+    "vorticity",
+)
 
 
 # ---------------------------------------------------------------------------

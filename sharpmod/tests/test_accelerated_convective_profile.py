@@ -141,3 +141,52 @@ def test_accelerated_profile_falls_back_to_sharppy(monkeypatch):
     assert np.isfinite(prof.dcape)
     assert calls["parcel"] >= 4
     assert calls["dcape"] >= 1
+
+
+def test_copy_carries_source_supplied_surface_scalars():
+    """The vendored ``copy`` drops every attribute outside its whitelist.
+
+    A profile collection re-upgrades its profiles whenever the target type
+    changes, and selecting the accelerated class is exactly such a change. So a
+    sounding that arrived with surface relative vorticity attached had it
+    stripped the moment the renderer chose this class. NSTP is that value's only
+    consumer, so it reported missing for every rendered sounding while computing
+    correctly for the same sounding outside the renderer -- the kind of gap that
+    looks like a broken formula rather than a lost input.
+    """
+    from sharpmod.sharptab.constants import OPTIONAL_SOURCE_SURFACE_FIELDS
+
+    collection, _ = decoder.load_npz(str(SAMPLE))
+    raw = next(iter(collection._profs.values()))[0]
+    raw.surface_relative_vorticity = 1.4e-4
+
+    prof = AcceleratedConvectiveProfile.copy(raw)
+
+    assert prof.surface_relative_vorticity == pytest.approx(1.4e-4)
+    # Absent fields must not be invented, only carried when present.
+    for name in OPTIONAL_SOURCE_SURFACE_FIELDS:
+        if name != "surface_relative_vorticity":
+            assert not hasattr(prof, name), name
+
+
+def test_nstp_survives_the_accelerated_profile_upgrade():
+    """End to end: the value has to reach the panel that reads it.
+
+    Guards the whole chain rather than just the copy, because the value passes
+    through the decoder, a profile upgrade, and the derived-profile builder
+    before anything displays it, and it was silently lost in the middle.
+    """
+    from sharpmod.sharptab import constants, derived
+    from sharpmod.viz.SPCWindow import _derived_profile
+
+    collection, _ = decoder.load_npz(str(SAMPLE))
+    raw = next(iter(collection._profs.values()))[0]
+    raw.surface_relative_vorticity = 1.4e-4
+
+    prof = AcceleratedConvectiveProfile.copy(raw)
+    derived_prof = _derived_profile(prof)
+
+    assert derived._surface_relative_vorticity(derived_prof) == pytest.approx(
+        1.4e-4)
+    # Without the carry this is MISSING, which renders as the "--" indicator.
+    assert not constants.is_missing(derived_prof.nstp)

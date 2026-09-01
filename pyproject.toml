@@ -72,7 +72,7 @@ era5 = [
     "cdsapi>=0.7.7,<0.8",
     "herbie-data>=2026.3,<2027.0",
     "cfgrib>=0.9.15,<0.10",
-    "eccodes>=2.47,<3.0",
+    "eccodes>=2.48,<3.0",
     "xarray>=2026.4,<2027.0",
     "numcodecs>=0.11,<1.0",
     "pyproj>=3.5,<4.0",
@@ -103,12 +103,12 @@ dev = [
 quality = [
     "pip-audit==2.10.1",
     "pytest-cov==7.1.0",
-    "ruff==0.16.3",
+    "ruff==0.16.4",
 ]
 # Build frontend for the optional local Rust extension. This does not install
 # Rust itself or make the extension a requirement of the Python package.
 rust-build = [
-    "maturin>=1.9,<2",
+    "maturin>=1.15,<2",
 ]
 
 [project.gui-scripts]

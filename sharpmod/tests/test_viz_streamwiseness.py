@@ -241,8 +241,12 @@ def test_streamwiseness_is_mounted_immediately_left_of_narrowed_stp(
         assert sw.text.objectName() != "sharpmod_bottom_band"
         assert "border-width: 2px" in sw.text.styleSheet()
         assert sw.index_board._outer_border_lines == ()
-        stream_plot = stream._geometry()
-        assert stream.width() - stream_plot.right() == pytest.approx(25)
+        # The column now holds a swappable slot showing streamwiseness by
+        # default, so the chart's own geometry is read through the slot.
+        assert stream.currentChart() == "streamwiseness"
+        assert isinstance(stream.chart, plotStreamwiseness)
+        stream_plot = stream.chart._geometry()
+        assert stream.chart.width() - stream_plot.right() == pytest.approx(25)
 
         sw.toggleVector("left")
         assert stream.use_left is True

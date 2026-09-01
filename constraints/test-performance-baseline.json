@@ -8,11 +8,23 @@
   "suites": {
     "compatibility": {
       "baseline_seconds": 56.91,
-      "maximum_seconds": 150.0
+      "maximum_seconds": 150.0,
+      "environment_overrides": {
+        "github-actions": {
+          "baseline_seconds": 115.06,
+          "maximum_seconds": 260.0
+        }
+      }
     },
     "fast": {
       "baseline_seconds": 81.22,
-      "maximum_seconds": 180.0
+      "maximum_seconds": 180.0,
+      "environment_overrides": {
+        "github-actions": {
+          "baseline_seconds": 149.98,
+          "maximum_seconds": 270.0
+        }
+      }
     },
     "live-provider": {
       "baseline_seconds": 90.0,
@@ -29,12 +41,12 @@
       }
     },
     "serial-release": {
-      "baseline_seconds": 786.07,
-      "maximum_seconds": 1000.0,
+      "baseline_seconds": 1149.2,
+      "maximum_seconds": 1500.0,
       "environment_overrides": {
         "github-actions": {
-          "baseline_seconds": 1022.16,
-          "maximum_seconds": 1350.0
+          "baseline_seconds": 1539.41,
+          "maximum_seconds": 2050.0
         }
       }
     },

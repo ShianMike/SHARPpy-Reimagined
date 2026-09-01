@@ -13,6 +13,7 @@ from sharpmod._version import __version__ as package_version
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = ROOT / "packaging" / "release_contract.py"
+LAUNCHER_PATH = ROOT / "packaging" / "sharpmod_gui_launcher.py"
 
 
 def _load_contract():
@@ -27,6 +28,20 @@ def _load_contract():
 
 
 CONTRACT = _load_contract()
+
+
+def _load_launcher():
+    spec = importlib.util.spec_from_file_location(
+        "_sharpmod_gui_launcher_tests", LAUNCHER_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+LAUNCHER = _load_launcher()
 
 
 class _FakeDistribution:
@@ -93,6 +108,25 @@ def test_release_contract_rejects_mismatched_installed_metadata(tmp_path, monkey
 
     with pytest.raises(CONTRACT.ReleaseContractError, match="versions do not match"):
         CONTRACT.validate_installed_sharpmod(root)
+
+
+def test_release_contract_accepts_normalized_prerelease_metadata(
+    tmp_path, monkeypatch
+):
+    root = _version_root(tmp_path, "1.0.0-beta1")
+    metadata_path = tmp_path / "site" / "sharpmod-1.0.0b1.dist-info"
+    metadata_path.mkdir(parents=True)
+    distribution = _FakeDistribution("1.0.0b1", metadata_path)
+    monkeypatch.setattr(
+        CONTRACT.importlib_metadata,
+        "distribution",
+        lambda _name: distribution,
+    )
+
+    report = CONTRACT.validate_installed_sharpmod(root)
+
+    assert report["source_version"] == "1.0.0-beta1"
+    assert report["installed_version"] == "1.0.0b1"
 
 
 def test_official_contract_requires_external_wheel_metadata(tmp_path, monkeypatch):
@@ -165,7 +199,26 @@ def test_frozen_launcher_reports_every_version_and_uses_lazy_picker_entrypoint()
     ):
         assert key in launcher
     assert "version_consistent=True" in launcher
-    assert "len(set(runtime_versions.values())) != 1" in launcher
+    assert "_versions_consistent(runtime_versions)" in launcher
+    runtime_check = launcher.split("def _model_fetch_runtime_check", 1)[1]
+    assert runtime_check.index("from sharpmod.gui_picker import main") < (
+        runtime_check.index("import cdsapi")
+    )
+
+
+def test_frozen_launcher_accepts_normalized_prerelease_metadata():
+    assert LAUNCHER._versions_consistent(
+        {
+            "sharpmod": "1.0.0-beta1",
+            "sharpmod_metadata": "1.0.0b1",
+            "sharpmod_rs": "1.0.0-beta1",
+            "sharpmod_rs_metadata": "1.0.0b1",
+            "backend_rust": "1.0.0-beta1",
+        }
+    )
+    assert not LAUNCHER._versions_consistent(
+        {"sharpmod": "1.0.0-beta1", "sharpmod_metadata": "1.0.0"}
+    )
 
 
 def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
@@ -213,6 +266,8 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
         assert "version_consistent" in script
         assert "sharpmod_metadata" in script
         assert "sharpmod_rs_metadata" in script
+        assert "sharpmod_metadata -ne $expectedVersion" not in script
+        assert "sharpmod_rs_metadata -ne $expectedVersion" not in script
 
     stage = by_name["Stage clearly labeled release artifacts"]["run"]
     assert "windows-x64.zip" in stage

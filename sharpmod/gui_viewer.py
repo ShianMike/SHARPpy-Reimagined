@@ -270,6 +270,150 @@ def _fill_metadata(prof_col, stn_id, model=None, run=None, loc=None) -> None:
     _render()._resolve_location_title(prof_col, explicit_loc=loc)
 
 
+def _locator_overlay_point(prof_col):
+    """Return the sounding's ``(lat, lon)`` for overlay coverage checks."""
+    lat = lon = None
+    for key, target in (("lat", "lat"), ("lon", "lon")):
+        try:
+            value = prof_col.getMeta(key)
+        except (AttributeError, KeyError, TypeError):
+            value = None
+        if key == "lat":
+            lat = value
+        else:
+            lon = value
+    if lat is None or lon is None:
+        profile = None
+        try:
+            profile = prof_col.getHighlightedProf()
+        except (AttributeError, IndexError, TypeError):
+            profile = None
+        lat = lat if lat is not None else getattr(profile, "latitude", None)
+        lon = lon if lon is not None else getattr(profile, "longitude", None)
+    return lat, lon
+
+
+def _controller_overlay_product(controller):
+    """Return the overlay product the picker currently has selected.
+
+    Duck-typed rather than imported so the viewer keeps no dependency on the
+    picker. ``None`` means "no preference", which resolves to the categorical
+    outlook.
+    """
+    getter = getattr(controller, "selected_overlay_product", None)
+    if not callable(getter):
+        return None
+    try:
+        return getter()
+    except Exception:  # noqa: BLE001 - a preference is not worth an exception
+        return None
+
+
+def _repaint_locator_insets(win) -> None:
+    """Force the hodographs to re-run their render pass.
+
+    The locator inset is painted during the hodograph's cached-bitmap pass, so a
+    layer that arrives after the window is up only appears once that pass runs
+    again. Mirrors the clear/plot/update sequence
+    :func:`sharpmod.viz.SPCWindow._refresh_mounted_products` already uses.
+    """
+    try:
+        from sharppy.viz.hodo import plotHodo
+    except Exception:  # pragma: no cover - vendored module always present
+        return
+    for hodo in win.findChildren(plotHodo):
+        try:
+            hodo.clearData()
+            hodo.plotData()
+            hodo.update()
+        except Exception:  # noqa: BLE001 - a repaint failure is not fatal
+            continue
+
+
+def start_locator_overlay_fetch(win, prof_col, *, product=None) -> None:
+    """Fetch this sounding's map overlay and attach it for the locator inset.
+
+    Runs on a worker thread and attaches the result to the profile collection,
+    because the inset is painted from inside a vendored render pass that must
+    never touch the network -- an unreachable service would otherwise stall a
+    hodograph repaint.
+
+    Silent by design. The overlay is context on a locator thumbnail, so a
+    missing outlook, a sounding outside the forecast area, or a failed request
+    all simply leave the inset as it was rather than reporting anything.
+    """
+    try:
+        from sharpmod import spc_outlook
+        from sharpmod.gui_workers import _SpcOutlookWorker
+        from sharpmod.map_overlays import attach_locator_overlay
+    except Exception:  # noqa: BLE001 - the overlay is optional
+        return
+
+    valid = None
+    try:
+        valid = prof_col.getCurrentDate()
+    except (AttributeError, KeyError, TypeError, IndexError):
+        valid = None
+    if not isinstance(valid, datetime):
+        return
+    if valid.tzinfo is None:
+        valid = valid.replace(tzinfo=timezone.utc)
+    else:
+        valid = valid.astimezone(timezone.utc)
+
+    lat, lon = _locator_overlay_point(prof_col)
+    if not spc_outlook.covers_location(lat, lon):
+        return
+
+    collection = weakref.ref(prof_col)
+    window = weakref.ref(win)
+
+    def _on_loaded(_token, _valid_time, layer) -> None:
+        target = collection()
+        host = window()
+        if target is None or host is None:
+            return
+        try:
+            attach_locator_overlay(
+                target, layer, key=spc_outlook.OVERLAY_KEY)
+        except Exception:  # noqa: BLE001
+            return
+        if layer:
+            _repaint_locator_insets(host)
+
+    # Parented to the application rather than the window. Viewers are closed
+    # with WA_DeleteOnClose and their `destroyed` signal fires after the native
+    # tree is already gone, which is too late to interrupt a child thread -- Qt
+    # would warn that a running thread was destroyed. The application outlives
+    # the fetch, and the weak references above mean a result arriving after the
+    # viewer closed is simply dropped.
+    app_parent = QApplication.instance()
+    worker = _SpcOutlookWorker(
+        valid, 0, parent=app_parent,
+        product=product or spc_outlook.DEFAULT_PRODUCT)
+    worker.loaded.connect(_on_loaded)
+
+    # Tracked on the window purely so it is observable, and pruned on completion
+    # so opening many soundings does not accumulate finished threads.
+    tracked = getattr(win, "_sharpmod_overlay_workers", None)
+    if tracked is None:
+        tracked = []
+        win._sharpmod_overlay_workers = tracked
+    tracked.append(worker)
+
+    def _finished() -> None:
+        host = window()
+        if host is not None:
+            remaining = getattr(host, "_sharpmod_overlay_workers", None)
+            if isinstance(remaining, list):
+                remaining[:] = [
+                    item for item in remaining if item is not worker]
+        worker.deleteLater()
+
+    worker.finished.connect(_finished)
+    worker.start()
+
+
 def _settle_layout_events(app, passes: int = 2) -> None:
     """Let Qt apply pending layout/resize work between manual grow passes.
 
@@ -373,6 +517,12 @@ def compose_interactive(config, prof_col, controller, *, stn_id=None,
     # the config/preferences/focus contract to the picker window.
     win, _ = _compose_window()(config, prof_col, mount=True, controller=controller)
     _install_viewer_lifecycle(win, controller)
+    # Started once the window exists, and before the layout passes so the fetch
+    # can land during them. The hazard follows whatever the picker has selected,
+    # so opening a sounding from a tornado-probability map does not silently
+    # switch the inset to the categorical outlook.
+    start_locator_overlay_fetch(
+        win, prof_col, product=_controller_overlay_product(controller))
 
     # The vendored SPCWindow.__initUI calls self.show() as soon as it is
     # constructed, so an empty white window flashes on screen while we still

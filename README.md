@@ -7,15 +7,15 @@
 [![Tests](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml/badge.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11--3.13-3776AB?logo=python&logoColor=white)
 ![Qt6](https://img.shields.io/badge/Qt6-PySide6-41CD52?logo=qt&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.9.0-blue)
+![Version](https://img.shields.io/badge/version-1.0.0--beta1-blue)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 
 </div>
 
-![Example SHARPpy Reimagined sounding](examples/example_sounding.png)
+![Example SHARPpy Reimagined sounding with the Storm-Relative Wind chart selected](examples/example_sounding.png)
 
 <sub>HRRR forecast point 36.68N 95.66W, F018, in the default Standard (dark)
-palette — rendered from
+palette with the Storm-Relative Wind chart selected — rendered from
 [`examples/soundings/hrrr_point_36.68N_95.66W_f018.npz`](examples/soundings/hrrr_point_36.68N_95.66W_f018.npz).</sub>
 
 SHARPpy Reimagined is a modernized, standalone fork of
@@ -34,18 +34,18 @@ observed profile — so the palette change is visible independently of the data.
 Switch with **File → Preferences** (Standard / Inverted / Protanopia); the
 choice persists across launches and applies to every panel and inset.
 
-**Inverted (light mode)**
+**Inverted (light mode) — θ / θe Profile**
 
-![SHARPpy Reimagined sounding in the Inverted light palette](docs/images/v0.8.0/sounding-light-mode.png)
+![SHARPpy Reimagined sounding in the Inverted light palette with the theta and theta-e profile chart selected](docs/images/v1.0.0-beta1/sounding-theta-light-mode.png)
 
-**Protanopia (colorblind mode)**
+**Protanopia (colorblind mode) — Streamwiseness**
 
-![SHARPpy Reimagined sounding in the Protanopia colorblind palette](docs/images/v0.8.0/sounding-protanopia.png)
+![SHARPpy Reimagined sounding in the Protanopia colorblind palette with the Streamwiseness chart selected](docs/images/v1.0.0-beta1/sounding-streamwiseness-protanopia.png)
 
-These captures are from 0.8.0. The scientific canvas is unchanged in 0.9.0 —
-it is shared byte-for-byte with the PNG renderer — but the surrounding
-application chrome was redesigned, so the window frame, menus, and toolbars
-look different from these images.
+All three captures were regenerated from 1.0.0-beta1. Together they demonstrate
+three choices in the right-clickable chart slot: Storm-Relative Wind in the
+Standard example above, θ / θe Profile in Inverted, and Streamwiseness in
+Protanopia.
 
 </details>
 
@@ -53,7 +53,7 @@ look different from these images.
 
 ## Contents
 
-- [What's new in 0.9.0](#whats-new-in-090)
+- [What's new in 1.0.0-beta1](#whats-new-in-100-beta1)
 - [Highlights](#highlights)
 - [Quick start](#quick-start)
 - [Desktop GUI](#desktop-gui)
@@ -76,54 +76,28 @@ look different from these images.
 
 ---
 
-## What's new in 0.9.0
+## What's new in 1.0.0-beta1
 
-0.9.0 is a redesign of the desktop application. The scientific canvas is
-deliberately untouched: the skew-T, hodograph, and index panels keep their
-geometry and colours because they are shared with the `sharpmod-render` PNG
-output, which must stay byte-identical.
+1.0.0-beta1 keeps the default scientific canvas from 0.9.0 while expanding the
+data and controls around it:
 
-**A token-driven interface theme.** Chrome colours, spacing, type, and control
-sizes now come from one design-token module applied at the application level
-instead of per-window style sheets. The interface theme follows the canvas
-palette automatically, so the window stops being dark while the sounding is
-light:
-
-| Canvas palette (File → Preferences) | Interface theme |
-| --- | --- |
-| Standard | `graphite-dark` |
-| Inverted | `paper-light` |
-| Protanopia | `protanopia-dark` |
-
-Every text and control-boundary pair in all three themes is checked against its
-WCAG AA threshold by the test suite.
-
-**Zoom that works.** The sounding window gained a View toolbar with *Fit to
-Window*, *Actual Size*, stepped zoom, and a 20–400% slider. Individual vendored
-panels still zoom on a plain scroll; `Ctrl+scroll` zooms the whole image;
-middle-drag pans. Trackpad scrolling is translated for both gestures, which
-previously did nothing on precision touchpads.
-
-**A context sidebar** (`Ctrl+B`) in the ~250 px of horizontal space the fit
-cannot use at 1080p, listing loaded soundings, the focused one, ensemble member
-selection, and the source and quality report.
-
-**An in-app guide** (`F1`) covering every mouse and keyboard interaction, plus
-a dismissible one-line tips strip in the menu bar.
-
-**Full screen** (`F11`, `Escape` to leave) in both the picker and the sounding
-window. The sounding's fit is limited by height, so reclaiming the title bar
-and taskbar makes it roughly 8% larger on a 1080p display.
-
-**Reliability fixes.** An intermittent crash on quit was traced to menu and
-toolbar handlers holding a strong reference back to their own window, forming a
-cycle Qt keeps outside Python's reach; the window then outlived the underlying
-object and releasing it was an invalid memory access. All such handlers now hold
-their window weakly, and a test rejects any new handler that does not. Two
-dialogs that accumulated one instance per open are now released on close.
-
-Code signing was removed from the release process. See
-[Verifying a download](#verifying-a-download) for what is published instead.
+- **Four charts in one slot.** Right-click the streamwiseness chart to switch
+  among Streamwiseness, Storm-Relative Wind, θ / θe Profile, and Stepwise CIN &
+  CAPE. The more expensive alternatives are computed only when opened and then
+  cached.
+- **RRFS-A on a project-owned NOMADS route.** The app pairs the published
+  pressure-level and ground products directly, enabling five domains: CONUS,
+  Alaska, Hawaii, Puerto Rico, and 13 km North America.
+- **DWD ICON Global through Open-Meteo.** The new `icon` route provides global
+  11 km point profiles without requiring a local GRIB runtime, using only the
+  pressure levels and forecast hours the model actually publishes.
+- **Live map overlays.** The Station Map and Forecast Model tabs can display a
+  NOAA MRMS radar mosaic and a time-aware SPC convective outlook, including
+  categorical risk and tornado, wind, and hail probabilities. Both remain off
+  until requested.
+- **A consistent picker control rail.** Shared layout and control patterns align
+  the source panels, and the compact forecast rail now fits a maximized window
+  without putting point and fetch controls below the fold.
 
 The full list is in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -134,14 +108,16 @@ The full list is in [`CHANGELOG.md`](CHANGELOG.md).
 - Headless PNG rendering for `.npz`, SPC tabular, BUFKIT, PECAN, and WRF-ARW
   text sounding inputs.
 - Portable `.npz` point-sounding output from UWyo, the independent IEM RAOB
-  archive, ERA5, WRF-ARW, Herbie-backed forecast models, and ECCC GeoMet.
+  archive, ERA5, WRF-ARW, Herbie-backed forecast models, RRFS-A over NOAA
+  NOMADS, ECCC GeoMet, and Open-Meteo.
 - Resumable multi-point/multi-hour jobs with one download per shared model hour,
   bounded concurrency, atomic outputs, and a checksummed versioned manifest.
 - A redesigned Qt6/PySide6 desktop application over the upstream SHARPpy widget
   stack, with compatibility shims rather than forked widgets.
 - A supported Rust-primary numerical and point-decoding backend, with an
-  independently optimized Python fallback and equivalence coverage across all
-  13 configured public forecast models.
+  independently optimized Python fallback and byte-level equivalence coverage
+  across the GRIB-decoding models. 19 public forecast products are configured;
+  see [Configured models](#configured-models).
 - A complete inverted/light sounding palette shared by the interactive GUI and
   headless renderer, including contrast-aware labels and derived displays.
 - Offline UWyo station catalog plus package-relative bundled fonts.
@@ -520,10 +496,16 @@ enabled. Remote run availability still depends on the upstream provider.
 | `nam-3km-conus` | NAM 3 km CONUS nest | CONUS | F000-F060 hourly | `nam3`, `nam-3km` |
 | `hrw-wrf-arw` | NOAA HiResW WRF-ARW 5 km | CONUS | F000-F048 hourly | 00/12Z only; `hiresw-arw`, `hrw-arw` |
 | `hrw-fv3` | NOAA HiResW FV3 5 km | CONUS | F000-F048 hourly | 00/12Z only; `hiresw-fv3` |
+| `rrfs-a` | RRFS-A 3 km pressure levels | CONUS | F000-F084 hourly | 00/06/12/18Z only; `rrfs`; no omega; ~340 MB per model hour |
+| `rrfs-a-alaska` | RRFS-A 3 km Alaska nest | Alaska | F000-F084 hourly | 00/06/12/18Z only; `rrfs-ak`, `rrfs-alaska` |
+| `rrfs-a-hawaii` | RRFS-A 2.5 km Hawaii nest | Hawaii | F000-F084 hourly | 00/06/12/18Z only; `rrfs-hi`, `rrfs-hawaii` |
+| `rrfs-a-puerto-rico` | RRFS-A 2.5 km Puerto Rico nest | Puerto Rico | F000-F084 hourly | 00/06/12/18Z only; `rrfs-pr`, `rrfs-puerto-rico` |
+| `rrfs-a-north-america` | RRFS-A 13 km North America | North America | F000-F084 hourly | 00/06/12/18Z only; `rrfs-na`; cheapest RRFS domain covering CONUS |
 | `gfs` | GFS 0.25-degree pressure levels | Global | F000-F120 hourly, then every 3 hours to F384 | — |
 | `cfs` | CFS 6-hourly pressure levels | Global | F000-F384 every 6 hours | Member 1 by default |
 | `ecmwf-ifs` | ECMWF IFS Open Data | Global | 00/12Z: F000-F144 every 3 hours, then every 6 hours to F360; 06/18Z short cut-off stops at F144 | `ecmwf`, `ifs` |
 | `ecmwf-aifs` | ECMWF-AIFS Open Data | Global | F000-F360 every 6 hours | `aifs` |
+| `openmeteo-icon-global` | DWD ICON Global 11 km point profile | Global | F000-F078 hourly, then every 3 hours to F180; 06/18Z stops at F120 | `icon`, `icon-global`, `om-icon`; 12 measured pressure levels |
 | `gefs` | GEFS 0.5-degree pressure levels | Global | F000-F384 every 3 hours | Control member `c00` by default |
 | `gdps` | Canadian GDPS 15 km point profile | Global | F000-F240 every 3 hours | 00/12Z; `gem-global`, `cmc-global` |
 | `rdps` | Canadian RDPS 10 km point profile | North America / Arctic | F000-F084 hourly | 00/06/12/18Z; `gem-regional`, `cmc-regional` |
@@ -531,11 +513,10 @@ enabled. Remote run availability still depends on the upstream provider.
 Every product in that table was confirmed against live data to return a
 sounding with a merged verified surface row. Products that cannot are withheld
 from the picker and the CLI rather than offered and then refused; `model-extract
---list` prints them with the measured reason. Two are currently withheld:
+--list` prints them with the measured reason. One is currently withheld:
 
 | Canonical key | Why it cannot produce a sounding |
 | --- | --- |
-| `rrfs-a` and its Alaska, Hawaii, and Puerto Rico domains | The published `prslev` index carries pressure levels only, with no surface, 2-m, or 10-m records, and the `natlev`, `testbed`, and `ififip` products are not published. |
 | `aigfs` | AIGFS splits pressure and surface products, and its `sfc` product publishes only 2-m temperature, 10-m winds, and mean-sea-level pressure. Surface pressure, terrain height, and 2-m moisture are absent from every AIGFS product. |
 
 ---
@@ -654,7 +635,13 @@ smallest compatible route first:
 3. Larger HRRR, RAP, NAM, NAM 3 km, HRW WRF-ARW/FV3, GFS, CFS, and GEFS
    transfers use a small NOAA NOMADS geographic subset; other indexed products
    retain the range route.
-4. Any unavailable or incompatible optimization falls back automatically to
+4. RRFS bypasses Herbie entirely and reads the published NOMADS `.idx`
+   inventory itself, pulling both the `prslev` and `2dfld` products over byte
+   ranges with eight workers by default. NOMADS offers RRFS no geographic
+   subset, so a field plan costs its full domain footprint; the combined
+   payload is cached per model hour and a provenance sidecar lets a repeat
+   request skip the network. See [USAGE](docs/USAGE.md) for the per-domain cost.
+5. Any unavailable or incompatible optimization falls back automatically to
    the standard Herbie download path.
 
 Local GRIB files decode directly into compact NumPy columns. Products without

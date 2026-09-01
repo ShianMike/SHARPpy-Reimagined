@@ -16,6 +16,8 @@ from pathlib import Path
 import re
 from typing import Any
 
+from packaging.version import InvalidVersion, Version
+
 
 class ReleaseContractError(RuntimeError):
     """The build environment cannot produce a version-consistent release."""
@@ -109,7 +111,11 @@ def validate_installed_sharpmod(
         raise ReleaseContractError(
             f"installed distribution has unexpected name {metadata_name!r}"
         )
-    if len(set(versions.values())) != 1:
+    try:
+        parsed_versions = {Version(str(value)) for value in versions.values()}
+    except InvalidVersion:
+        parsed_versions = set()
+    if len(parsed_versions) != 1:
         raise ReleaseContractError(f"sharpmod versions do not match: {versions}")
     if not metadata_path.exists():
         raise ReleaseContractError(

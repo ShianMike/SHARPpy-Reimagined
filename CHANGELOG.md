@@ -5,6 +5,644 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.0.0-beta1] - 2026-09-01
+
+First beta of 1.0.0. The scientific canvas is unchanged from 0.9.0; this release
+is about the desktop application around it -- new data sources, map overlays, a
+switchable chart slot, and a pass over the picker's layout.
+
+### Added
+
+- **The sounding window's streamwiseness slot is switchable.** Right-click it to
+  choose between four charts instead of the one it always showed:
+
+  | Chart | What it plots |
+  | --- | --- |
+  | Streamwiseness | unchanged, and still the default |
+  | Storm-Relative Wind | storm-relative speed against height AGL |
+  | θ / θe Profile | both traces, with the gap between them shaded |
+  | Stepwise CIN & CAPE | CAPE and CIN for a parcel lifted from each level |
+
+  The three new charts share one `HeightChartInset` base extracted from the
+  streamwiseness chart's own drawing grammar -- title placement, dashed grid,
+  rotated height axis, tinted fill, legend box, left border -- so they cannot
+  drift apart from it or from each other. Each supplies only its data and its
+  series. Axes scale to the sounding with rounded ticks rather than being fixed,
+  because a chart that clips its own trace is worse than one with an unfamiliar
+  axis.
+
+  The slot is lazy. Setting a profile costs the visible chart only, so the
+  stepwise CAPE chart -- which lifts a parcel per level and takes about
+  three-quarters of a second -- is not computed unless it is actually opened,
+  and is cached afterwards. It forwards the whole inset contract, so
+  `sw.streamwiseness`, the deviant-vector toggle, and the profile refresh all
+  keep addressing it as the single widget that column used to hold.
+
+  Two upstream limitations had to be worked around to get the data. Upstream's
+  `thermo.thetae` is scalar-only -- handed arrays it fails deep inside with
+  `'float' object is not subscriptable` -- so it is applied per level. And
+  `params.parcelx` needs virtual temperature, which this project's `Profile`
+  does not publish, so every lift failed with `AttributeError: 'Profile' object
+  has no attribute 'vtmp'`; the stepwise chart routes through the cached
+  convective-oracle profile the derived module already builds, which also means
+  its CAPE cannot disagree with the parcel values shown elsewhere in the window.
+
+- **RRFS-A is selectable again, on a project-owned route.** All four domains had
+  been withheld because no published file could complete the verified ground
+  row. That was true of the file the previous adapter was looking at, and it is
+  no longer the whole picture: RRFS splits each cycle into a pressure-level
+  `prslev` product and a two-dimensional `2dfld` product, and the ground row
+  lives in the second one. Pairing them produces a complete sounding, so the
+  four domains are enabled and a fifth is added.
+
+  Herbie cannot reach either file. Its `rrfs` template still points at the
+  `noaa-rrfs-pds/rrfs_a/` prefix on AWS, which no longer carries operational
+  output — the bucket now holds only retrospective, DESI, and sample
+  collections, so `Herbie(...).grib` is `None` for every RRFS run — and its
+  product list predates the split and rejects `2dfld` outright. RRFS is
+  therefore the one product this project locates itself, in a new
+  `sharpmod/rrfs_nomads.py`: it resolves the NOMADS release directory, parses
+  the published wgrib2 `.idx` inventory, and pulls the selected GRIB messages
+  over HTTP byte ranges through the existing shared transport. Nothing about
+  decoding changes; only file location and inventory are project-owned, which is
+  why these keys still require the GRIB runtime and still cache a grid-level
+  dataset rather than becoming point providers.
+
+  Every fact behind the route was measured against live inventories:
+
+  | Domain | Grid | `prslev` file | Field plan | Ground file |
+  | --- | --- | --- | --- | --- |
+  | `rrfs-a` | 3 km CONUS | 596 MB | 338 MB | 14 MB |
+  | `rrfs-a-alaska` | 3 km | 536 MB | ~305 MB | ~12 MB |
+  | `rrfs-a-north-america` | 13 km | 312 MB | ~178 MB | ~6 MB |
+  | `rrfs-a-puerto-rico` | 2.5 km | 51 MB | 29 MB | 1.2 MB |
+  | `rrfs-a-hawaii` | 2.5 km | 21 MB | 13 MB | 0.4 MB |
+
+  NOMADS publishes no spatial subsetting for RRFS: there is no `filter_*.pl`
+  CGI, no OpenDAP dataset, and no pressure-level AWIPS subset, all three
+  confirmed rather than assumed. A field plan therefore costs its full domain
+  footprint. Three things make that acceptable. The payload is grid-level, not
+  point-bound, so one transfer serves every point at that run and forecast hour.
+  The transfer runs with eight range workers instead of the shared default of
+  four, measured at 8.5 MB/s against 1.4 MB/s sequential, which puts a 3-km
+  CONUS hour at about 35 seconds end to end. And the new 13-km
+  `rrfs-a-north-america` domain covers CONUS for roughly half the bytes of the
+  3-km domain, for callers who would rather trade resolution for time.
+
+  Two smaller decisions are worth recording. The shared byte-range merge budget
+  of a 2 MiB gap and 25 percent overhead is too loose here, because a field plan
+  selects 270 of 675 messages and merging across those gaps re-reads whole
+  unwanted ones: it cost 25 percent on a Hawaii plan and 24 MB on a CONUS plan.
+  Tightening it to 512 KiB and 5 percent holds waste near one percent while
+  still collapsing 270 messages into about 60 requests, comfortably more than
+  the worker count. Separately, the two component subsets are deleted once they
+  are concatenated, because keeping them would double a 3-km forecast hour to
+  about 700 MB and let only four of them fill the default 3 GB cache budget,
+  while buying nothing — pruning removes a whole model-hour entry, so a
+  surviving component could never be reused alone. A small provenance sidecar
+  beside the combined file records which fields were actually fetched, so a
+  repeat request rebuilds its provenance truthfully and touches the network zero
+  times instead of re-deriving a plan it would then have to re-download.
+
+  The release directory is probed as `prod`, then `para`, then `v1.0`, and the
+  winner is remembered for the process. RRFS reaches operational status at 12Z
+  on 6 October 2026 and `prod` answers HTTP 403 until then, so this ordering
+  migrates the route on implementation day with no code change, while a later
+  removal of `para` still resolves because the full list stays available.
+
+  **RRFS soundings have no vertical velocity.** It publishes DZDT and no VVEL,
+  and although the shared field planner treats DZDT as a VVEL substitute, it is
+  not one here: cfgrib decodes it as `wz`, geometric vertical velocity in m/s,
+  while `Profile.omeg` is *pressure* vertical velocity in Pa/s with the opposite
+  sign convention, and no decode path converts between them. Fetching it would
+  add 45 messages — 37 MB on the 3-km domain — that no panel can read, and
+  mapping it through unconverted would render inverted values two orders of
+  magnitude too large. Those messages are not requested and omega reads as
+  missing, the same call already made for Open-Meteo ICON. Absolute vorticity
+  *is* fetched at all 45 levels, so NSTP computes; it was verified live at 2.17
+  for Hilo and 2.46 for San Juan rather than reporting `--`.
+
+- Added `rrfs-a-north-america`, the 13-km RRFS domain, aliased `rrfs-na`. It
+  covers North America including all of CONUS for roughly half the transfer of
+  the 3-km CONUS domain.
+
+- Added map overlays: the picker maps can now host named, toggleable layers of
+  geographic polygons above the basemap and below the station and point markers.
+  Overlay geometry is decoded off the GUI thread into a frozen, Qt-free model
+  with per-shape bounding boxes, so off-screen shapes are rejected without being
+  projected, and one decoded layer can be shared between maps. Interior rings
+  are honoured, which lets a category be filled exactly once instead of being
+  blended with the categories stacked beneath it.
+- Added **raster overlay support** to the picker maps, and with it the first
+  image layer: a **live radar mosaic** from NOAA's MRMS products, on the Station
+  Map and Forecast Model tabs. Composite reflectivity is the default, because
+  the depth of a storm is the question a sounding is being drawn to
+  investigate and base reflectivity would under-represent an elevated core;
+  base reflectivity and enhanced echo tops are also selectable. Off by default,
+  with an opacity slider.
+
+  The imagery is served by NCEP's public GeoServer, which was chosen over the
+  usual community NEXRAD mosaic for three reasons: it publishes true composite
+  reflectivity rather than a mosaic of base reflectivity, it is the originating
+  agency rather than a courtesy service that asks not to be leaned on, and it
+  offers a plate-carrée projection that this application's own map transform can
+  blit directly with no resampling. No credential is involved.
+
+  Frames are requested at a **fixed continental extent** rather than at the
+  map's current viewport. One request therefore serves every tab whichever way
+  each is panned, panning and zooming cost nothing because only the image's
+  corners are re-projected, and a frame stays locked to the basemap during the
+  wheel-zoom preview. Only the visible portion of the frame is drawn, so zooming
+  in does not scale the whole continent and then discard it.
+
+  The frame is fetched at 1.9 km per pixel, against the source's own 1 km grid.
+  An earlier draft asked for a quarter of those pixels and was visibly soft the
+  moment the map was zoomed past a continental view. Magnification is
+  nearest-neighbour rather than smoothed: interpolating a reflectivity field
+  between data cells manufactures values the source never published, which is
+  what reads as blur, so the overlay shows the cells that were actually
+  measured. Shrinking is still smoothed, which keeps isolated cells from
+  flickering as the map moves.
+
+  Requests are made only while the overlay is switched on, at the source's own
+  publication cadence of roughly two minutes and no faster, since polling ahead
+  of publication returns the same pixels. A map looking somewhere outside the
+  covered area says so instead of fetching a frame it could not draw. Changing
+  opacity re-uses the frame already in hand and costs neither a request nor an
+  image decode. A failed refresh leaves the previous frame on screen rather
+  than blanking the map, and every frame is labelled with its own age and
+  marked when it has outlived its refresh cycle, so an image that has quietly
+  stopped updating cannot pass for a current one.
+
+  Two failure modes specific to this kind of service are handled explicitly. A
+  WMS reports errors as an XML document with a success status code, so payloads
+  are identified by their own signature rather than by the response code, and
+  the service's explanation is surfaced instead of the raw XML. And the WMS 1.3
+  standard reversed the axis order of the usual latitude/longitude coordinate
+  reference system, which would transpose the request and still return a
+  plausible-looking image; the unambiguous longitude-first alternative is used
+  instead.
+
+  Overlay attribution is now drawn in the map legend. Every remote overlay has
+  recorded its source since overlays were introduced, and none of them were
+  crediting it on screen.
+- Added the first overlay: the **time-aware SPC convective outlook**, available
+  on the Station Map and Forecast Model tabs, with a selector for the
+  categorical risk, the tornado, wind, and hail probabilities, or the Day 3
+  total-severe probability. One hazard is shown at a time, as in SPC's own
+  graphics, because the probability bands nest the way the categorical ones do
+  and two hazards at once cannot be read. Areas that qualify the band beneath
+  them are drawn hatched over it rather than as a solid wash that would hide it.
+  Each product states which outlook days publish it, so a selection those days
+  cannot reach reports that plainly instead of requesting products that do not
+  exist.
+
+  The overlay resolves the outlook that actually covers the selected valid time
+  rather than simply fetching the latest one. SPC convective days run 12Z to
+  12Z, so an overnight 06Z sounding is matched against the outlook issued the
+  previous morning, and an 18Z sounding gets the 1630Z issuance in force at that
+  hour rather than the later 2000Z update. Day 1 is preferred, falling back to
+  Day 2 and Day 3 for forecast times whose Day 1 outlook has not been issued
+  yet. The map legend names the product, states its validity window, and says so
+  plainly when an attached outlook does not cover the selected time.
+
+  The overlay is off by default and issues no network requests until enabled.
+  Responses are size-bounded and fetched over verified HTTPS on a worker thread,
+  never from the paint path.
+
+  Request volume is bounded at four levels, so moving through times cannot turn
+  into a request per selection: changes are debounced, so dragging a date field
+  across forty days issues one request for the value it lands on rather than
+  forty; a time already inside the loaded outlook's window issues none at all,
+  which covers scrubbing forecast hours within a day; resolved outlooks and
+  whole-day "nothing on file" verdicts are both cached, so revisiting a range
+  already seen is free; and times before the service's 2020 GeoJSON archive or
+  beyond Day 3 are answered locally without contacting SPC. A day's verdict is
+  keyed by the set of products that existed when it was reached, so a newly
+  issued outlook re-opens the question by itself. Transport and server errors
+  are never cached as settled answers, so an outage does not suppress retries.
+  Hiding the overlay keeps its geometry, making re-enabling free.
+
+  Archived issuances are also cached on disk, so a case revisited in a later
+  session costs nothing. Only archived products are stored, because those never
+  change once published; the live endpoint advances through the day and a 404
+  may become a real product later, so neither is persisted. The files are a few
+  kilobytes each and the directory is capped by size and age. Set
+  `SHARPMOD_OUTLOOK_CACHE=off` to disable it, or to a path to relocate it;
+  `SHARPMOD_OUTLOOK_CACHE_MB` and `SHARPMOD_OUTLOOK_CACHE_DAYS` adjust the caps.
+  A damaged or unwritable cache degrades to in-memory behaviour rather than
+  failing.
+
+  The outlook on screen is replaced whenever a different one now applies, which
+  takes more than checking that the displayed product still covers the selected
+  time — it almost always will. Every issuance of a convective day expires at
+  the same 12Z, so the 1630Z outlook still covers 00Z the next morning even
+  though the 2000Z update has superseded it for that hour; and a Day 3 outlook's
+  window still contains the target long after the Day 1 for the same day has
+  been issued. So each result records the ordered list of products that produced
+  it, re-derived whenever the selection changes and every five minutes
+  otherwise. Stepping forecast hours moves to the issuance in force at each
+  hour, a target day advancing from Day 3 to Day 2 to Day 1 brings the overlay
+  with it, and a hazard that publishes nothing for Day 3 appears by itself once
+  the target becomes Day 2. Re-deriving the list is arithmetic, so hours that
+  share an issuance still cost no request.
+
+- Added the convective outlook to the **locator inset on the hodograph**, so an
+  open sounding shows the risk at its own location and valid time without going
+  back to the picker. The inset spans well under two degrees, so it is usually
+  filled entirely by one category and a colour wash alone could not say which;
+  a small chip names the category covering the sounding's exact point, resolved
+  by an odd-even containment test that reads holes correctly and so reports the
+  most severe area that actually applies.
+
+  The inset is painted from inside a vendored widget's render pass, which
+  receives nothing but the widget and must never touch the network — an
+  unreachable service would otherwise stall a hodograph repaint, and that pass
+  re-runs continuously while a window is resized. Overlays therefore travel with
+  the sounding as profile-collection metadata: the viewer fetches on a worker
+  thread when a sounding opens, attaches the result, and asks the hodographs to
+  repaint. The paint path only ever reads what is already attached, and a
+  regression test asserts it makes no network calls.
+
+  Layers are matched to the sounding's own valid time, since one window can hold
+  several profiles at different times and switch focus between them; a layer that
+  does not cover the focused profile draws nothing rather than something wrong.
+  Soundings outside the forecast area skip the request entirely.
+
+  The inset follows the hazard selected in the picker, so opening a sounding
+  while looking at the tornado probability keeps showing that hazard rather than
+  reverting to the categorical outlook. Two tabs own an overlay, and the one in
+  front decides: fetching from the Forecast Model tab uses that tab's hazard even
+  when the Station Map tab also has an overlay switched on. Tabs that host no
+  overlay of their own fall back to whichever is configured, preferring an
+  enabled one.
+
+  The seam is generic rather than outlook-specific: layers are keyed by product
+  and replace only their own key, so a forecast-model product can be attached
+  alongside the outlook later without touching the paint path.
+- Labelled the hazard on the probability overlays. SPC publishes a probability
+  as a bare decimal, so a legend that read `0.05` said neither that it was five
+  percent nor whether it measured tornado, wind, or hail. Bands now read `5%`,
+  the first legend swatch carries the hazard (`HAIL 5%`), and the locator badge
+  — the only overlay text the inset has room for — names it in full, as in
+  `TOR 15% CIG2`. A hatched area is reported as a qualifier on the band rather
+  than in place of it: it deliberately outranks every band so that it paints on
+  top, so answering with it alone would have dropped the probability the point
+  actually sits in.
+- Added SPC's **Conditional Intensity Groups**, which replaced the binary
+  significant-severe area from the 1630Z Day 1 outlook on 3 March 2026. Where
+  the old area only said "significant severe possible", these grade how strong
+  the hazard could become if it occurs: tornado and wind publish three levels,
+  hail and the Day 3 total severe two. Tornado CIG1 is a reasonable maximum of
+  EF2, CIG2 of EF3, CIG3 of EF4+; wind runs 65, 73, and 82 knots; hail 2 and
+  3.5 inches.
+
+  SPC distinguishes the levels by pattern alone — every level publishes the same
+  grey fill — so the pattern carries the data and is drawn as one family of
+  increasing density: CIG1 a broken diagonal, CIG2 the same diagonal unbroken,
+  CIG3 a diagonal cross. The map legend and the hodograph's locator inset use
+  the same textures as the map, defined once so the two cannot drift, and the
+  locator badge names the level rather than only the presence of a qualifier.
+
+  The label is the only usable key for these areas. Colour cannot separate them,
+  and `DN` collides with the probability scale, since CIG1 and the tornado 2%
+  band are both `DN=2`. Levels rank above every probability band so a qualifier
+  paints over the band it annotates, and above each other so a point inside CIG2
+  reports CIG2 rather than the CIG1 area surrounding it.
+
+  Outlooks issued before the change carry the old ungraded `SIGN` area instead.
+  The archive read here reaches back to 2020, so both forms are decoded: `SIGN`
+  keeps the single diagonal it was always drawn with, and is reported without a
+  level, since claiming one would assert an intensity SPC never published for it.
+- Added the **Day 3 total-severe probability** as its own product. Day 3 does not
+  publish the individual tornado, wind, and hail probabilities; it publishes one
+  combined probability with its own probability-to-category conversion, and it
+  is where Day 3's intensity groups live. Without it a Day 3 selection could only
+  show the categorical risk. It is offered as a separate entry rather than
+  substituted for a hazard the day does not carry, because it measures a
+  different quantity. Wind's 75% and 90% bands, added by SPC in the same change,
+  are also recognised.
+- Added **DWD ICON Global at 11 km through Open-Meteo** as a new forecast-model
+  route, selectable as `icon`. ICON has never been reachable here: the installed
+  Herbie has no loader for it, because DWD publishes split variables on native
+  model levels and an icosahedral grid. This route needs no GRIB runtime at all,
+  so `icon` now resolves instead of explaining why it cannot. Nothing resolved
+  that name before, so no existing command or saved session changes meaning, and
+  `ecmwf`, `ifs`, and `aifs` still point at the built-in routes they always did.
+
+  Hours follow DWD's own cadence rather than the provider's: hourly to F078 and
+  three-hourly after it, reaching F180 from 00Z and 12Z and F120 from 06Z and
+  18Z. Open-Meteo will interpolate the later gaps back to hourly, but those
+  values are not model output, so they are not offered.
+
+  One sounding is one request. All 65 hourly variables — five fields across the
+  twelve pressure levels from 1000 to 100 hPa that this model actually
+  publishes, plus the five surface fields — travel together, because a request
+  per level would multiply a user's metered calls twelvefold for no benefit. The
+  level list is measured, not taken from the schema: Open-Meteo advertises the
+  same twenty-six levels for every model and no model fills more than twelve, so
+  asking for the rest would buy nothing and still be billed. Availability is
+  answered from a static manifest rather than by probing, so changing a
+  selection costs nothing; the run is confirmed when the sounding is fetched.
+
+  The ground row is derived from the model's own geopotential-height profile at
+  the reported surface pressure, not from the provider's terrain elevation. The
+  two come from different datasets and can disagree: a reported 142 m sat above
+  the 1000 hPa geopotential height of 110.9 m, which made height non-monotonic
+  and failed quality control. Interpolating the model's own profile is
+  self-consistent, and it interpolates between bracketing levels so high terrain
+  stays accurate — a 700 hPa surface resolves to within a metre of the
+  standard-atmosphere height.
+
+  Vertical velocity is deliberately not carried. Open-Meteo publishes it as a
+  geometric velocity in m/s while this format's `omeg` field is a pressure
+  velocity, so passing one through as the other would be wrong; the field is left
+  missing and one variable per level is saved.
+
+  Requests are made from the user's own machine against their own allowance.
+  There is no relay, no shared credential, and no key anywhere in the repository
+  or package. Free access needs no key at all. A paid subscription is used by
+  setting `SHARPMOD_OPENMETEO_API_KEY` locally, and that key is attached only
+  after the exact official customer host is re-checked at the point the request
+  leaves; it is scrubbed from error messages, which matters because the HTTP
+  library embeds full request URLs in its own exceptions, and it never reaches a
+  sidecar, cache entry, or log. Data is attributed to Open-Meteo under CC BY 4.0
+  and to Deutscher Wetterdienst as the originating centre.
+
+  Only ICON Global is enabled, and every excluded identifier is listed with its
+  reason rather than being quietly absent. Combined "best match" and "seamless"
+  products cannot name the model that produced a value, and ensemble means are
+  not physically consistent profiles.
+
+  **ECMWF IFS is not among the available models, despite being the obvious thing
+  to reach for.** A live audit of twenty-seven identifiers found that Open-Meteo
+  serves ECMWF IFS without any pressure-level fields. The failure looks like
+  success: the run resolves, every surface variable arrives, and the elevation is
+  reported, yet all five pressure families return zero levels, so no sounding can
+  be built. The same audit found the advertised level ladders to be far more
+  optimistic than reality across the board, which is why each model now carries a
+  measured ladder. Twelve identifiers were confirmed usable; the eleven that
+  publish no pressure data are mostly convection-allowing models. Three answered
+  with a body that was not JSON and are withheld until that is understood.
+- Added a UTC clock to the top-right corner of the picker's menu bar, showing
+  the date and time to the second and the four-digit Zulu group beside it, as in
+  `UTC 2026-08-30 02:57:34 · 0257Z`. Every run, cycle, and valid time in this
+  application is UTC while the operating system clock is not, so the conversion
+  was being made in the user's head on every selection. The Zulu group is
+  spelled out because that is the form the cycle and forecast-hour fields take.
+  Monospaced, so its width does not twitch as the digits change, and its timer
+  stops with the window.
+
+### Changed
+
+- **Version is now 1.0.0-beta1**, spelled that way deliberately. Semver rejects
+  `1.0.0b1`, PEP 440 needs a pre-release marker, and the Rust extension exposes
+  `CARGO_PKG_VERSION` verbatim while a test asserts it equals the Python
+  package's version. `1.0.0-beta1` is legal in both grammars, so one literal
+  string satisfies the crate, the package, and that equality check; the built
+  wheel normalizes to `1.0.0b1`, which sorts before `1.0.0` as a pre-release
+  must. Bumping the crate also required refreshing `Cargo.lock`, since the
+  rebuild runs `--locked` and the lock still recorded the old version.
+
+- Raised the eccodes floor to **2.48.0** and the maturin floor to **1.15.0**, and
+  pinned ruff to **0.16.4**. The eccodes bump is the only one that touches
+  decoding, so it was verified rather than assumed: a full RRFS extract under
+  2.48.0 produced byte-identical output to 2.47.0 -- same 46 levels, same
+  surface pressure, temperature and dewpoint, same surface relative vorticity.
+  Both of CI's ruff invocations are clean on 0.16.4.
+
+- **The picker's control rails are one design again, and the forecast panel no
+  longer scrolls on a maximized window.** Its rail needed 1267 px of a 973 px
+  viewport, so the point and fetch controls sat below the fold on every screen.
+  It now measures 867 px and fits with room to spare, while still scrolling when
+  the window is genuinely too short -- at 1600x900 and below -- which is what the
+  scroll area is for.
+
+  | Rail | Before | After |
+  | --- | --- | --- |
+  | Forecast Model | 1267 px (scrolled) | 867 px |
+  | Station Map | 941 px | 659 px |
+  | Reanalysis (ERA5) | 690 px | 566 px |
+
+  Nothing was removed to get there. The height came from four things that were
+  wrong on their own terms:
+
+  - **Every card was padded twice.** The style sheet already pads a card, and
+    each card's inner layout added its own default margin inside that. Only the
+    two availability cards had ever zeroed it, which is why they alone looked
+    tight. Fixing it in the shared builders recovered about 18 px per card.
+  - **The overlay cards each held a single switch.** The product and opacity
+    controls of an overlay that is switched off cannot affect anything, so they
+    now appear with the overlay instead of holding the card open. Both
+    controllers then fit in one "Map overlays" card rather than two mostly empty
+    ones.
+  - **The ensemble member field was always shown, disabled.** A member is
+    meaningless for HRRR or RRFS, so the card is hidden for deterministic
+    models rather than present and dead.
+  - **A hardcoded 210 px floor** on the run/valid-time card padded it well past
+    its own contents, and the list of withheld models held three word-wrapped
+    lines open at the bottom of the rail to say something that belongs on the
+    model chooser's tooltip.
+
+- **Combo boxes look like combo boxes again.** The style sheet restyled the
+  drop-down sub-control but supplied no arrow image for it, and giving that
+  sub-control any property makes Qt paint it from the style sheet instead of
+  from the style. The arrow therefore vanished everywhere: the model, region,
+  cycle, forecast, and overlay-product menus were indistinguishable from
+  read-only text fields, while the date edit beside them kept its arrow. The
+  rule is gone, so Fusion draws a palette-aware arrow again.
+
+- **The three source panels now agree with each other.** They had each
+  hand-rolled their own cards and grids, so the same control differed by tab.
+  Two shared builders and a shared row helper replace that, and with them:
+  one label-column width so every field starts at the same x down the whole
+  rail rather than stepping in and out; "Region" and "Reset" everywhere
+  (the station map said "Map area" and "Reset view"); "Cycle:" and "Town:"
+  everywhere; the same inline placement and label for "Most recent" (ERA5 had a
+  full-width "Latest likely available", with the ERA5 publication lag moved to
+  its tooltip); tooltips on all three zoom buttons; and the same zeroed rail
+  margins on the ERA5 panel, which was the only one still inset. The station
+  map's selection line, the one ungrouped control in any rail, now shares a
+  "Selected station" card with the availability it describes.
+
+  The Census/OpenStreetMap credit for town lookups stays visible rather than
+  moving to a tooltip, since OpenStreetMap's licence asks for attribution where
+  the data is shown; it is just worded to fit one line instead of three.
+
+### Fixed
+
+- **The hodograph's `RM` and `LM` labels no longer sit on an opaque plate.**
+  Upstream positions those two labels with rectangles its own comment calls "the
+  invisible rectangles", and tries to hide them by setting an alpha-zero *pen*.
+  It never clears the *brush*, so the rectangles were filled with whatever brush
+  the previous draw call happened to leave active -- painting a solid block over
+  the hodograph rings and traces behind each label. The two `drawRect` calls are
+  now suppressed, which is what upstream intended; the text is drawn from the
+  same rectangles and is unaffected.
+
+  The same block also does `color = self.bg_color` followed by
+  `color.setAlpha(0)`. That is not a copy: it mutates the widget's own
+  background colour in place and left its alpha at zero for everything drawn
+  afterwards. The alpha is now restored when the call returns.
+
+- **The Skew-T's `SFC` label is back.** The effective-inflow label refit in this
+  release had dropped `TextDontClip` and left clipping enabled around the bottom
+  label. That label sits *below* the inflow layer's lower line, which for a
+  surface-based layer is at or under the plot's bottom edge, so it was being
+  clipped away entirely -- upstream lifts clipping for exactly that draw, and
+  now so does the refit.
+
+- **The UTC clock no longer renders as `JTC`.** The label was created empty and
+  filled by a timer, but a menu bar sizes its corner widget from the size hint
+  the widget had when it was attached -- so it stayed too narrow, and because the
+  text is right-aligned the overflow was clipped off its *left* edge. It is now
+  built from a full-width sample and pinned to that width.
+
+  The same label was also losing its monospaced face: a style-sheet
+  `font-family` beats `setFont`, so the base chrome rule kept putting the
+  proportional UI font back, and the "does not twitch as the digits change"
+  promise was not being kept. It now carries the numeric object name the style
+  sheet keys the tabular family on.
+
+- **RRFS no longer advertises 20 cycles that cannot produce a sounding.** It was
+  configured for all 24 hourly cycles, with the off-hour ones advertising
+  F000-F018 and the synoptic ones F000-F084. Live inventories show the off-hour
+  cycles publish a sub-hourly two-dimensional product and *no pressure levels at
+  all*, so they carry no sounding at any forecast hour rather than a shorter one.
+  The cycle list is now `(0, 6, 12, 18)` and the RRFS forecast-hour trimming rule
+  is gone, since every remaining cycle publishes the full F000-F084 hourly range.
+  This also corrects `--probe --lookback-cycles`, which was stepping back one
+  hour at a time through cycles that do not exist; it now walks the real ones.
+
+- Fixed NSTP reporting missing for every rendered sounding. The Non-Supercell
+  Tornado Parameter needs surface relative vorticity, which is a horizontal
+  derivative of the wind field and so cannot be recovered from a single sounding
+  column — it is read from neighbouring grid points at extraction time and
+  carried along with the profile. The extractors were supplying it and the
+  formula was computing correctly, but the value was being dropped in transit.
+
+  The vendored profile copy rebuilds a profile from a fixed whitelist of arrays
+  and re-attaches only the storm-motion vectors, discarding every other
+  attribute. A profile collection re-copies its profiles whenever the target
+  type changes, and selecting the accelerated parcel path is exactly such a
+  change — so the vorticity was stripped the moment the renderer chose it. The
+  same sounding computed NSTP correctly outside the renderer, which made it look
+  like a broken formula rather than a lost input. The accelerated profile now
+  carries these source-supplied surface scalars across a copy.
+
+  Also stopped an optional enrichment from being able to discard a good decode.
+  The wind-stencil estimate, used only when a model publishes no vorticity field
+  at all, raises when it cannot produce a value, and it shared a `try` block with
+  the primary GRIB decode. Its failure therefore threw away a complete profile
+  and silently re-derived everything through the slower cfgrib/xarray path,
+  recording a different backend in the sidecar. The enrichment is now attempted
+  on its own, after the decode has succeeded, so a failed estimate costs only
+  NSTP instead of the whole fast path.
+
+  This is a narrow trade rather than a pure win: the discarded-decode behaviour
+  did incidentally reach the xarray path's own stencil, which is a separate
+  implementation and could have succeeded where the direct one failed. It is an
+  acceptable trade because every GRIB-backed model here requests either `ABSV` or
+  `vo`, so vorticity is resolved from a published field and the stencil is a
+  safety net that should not normally be reached.
+
+- Fixed the Skew-T's effective-inflow-layer and maximum-lapse-rate labels
+  punching opaque rectangles out of the chart behind them. Each was drawn onto a
+  plate filled with the plot's own background colour, so the plate added no
+  legibility the background had not already provided while breaking every
+  isotherm, dry adiabat, and mixing-ratio line that passed behind the text. The
+  labels now sit directly on the chart and the linework runs through unbroken.
+
+  The lapse-rate label comes from vendored code, so rather than restate the
+  method — and risk drifting from its colour tiers and geometry — the original
+  runs against a painter that forwards everything except the rectangle fill.
+
+- Fixed the cycle lists running oldest to newest, which put the freshest run
+  furthest from the cursor. An hourly model publishes 24 cycles, so the newest
+  sat off the bottom of a scrolling list while 00Z — by then most of a day stale
+  — was the first entry. Every cycle selector now lists the newest first, the
+  hourly forecast-model one and the three-hourly observed ones alike.
+
+  The cycle still selected by default is the same one as before: the most recent
+  that has come round today. It is now looked up by hour rather than by position
+  in the list, because position no longer tracks the clock. Every cycle each
+  model publishes is still offered, since a past date needs all of them, and the
+  availability check continues to report when a specific cycle is not out yet.
+
+- Fixed every entry in the overlay's product selector claiming the same outlook
+  days regardless of the selection. The day range was written once when the
+  selector was built, from the days each product publishes, so a Day 2 or Day 3
+  selection still read `Tornado probability (Day 1–2)` and looked like a
+  statement about the day on screen. Each entry now names the day the product
+  would actually resolve to, and states which days publish it only when the
+  selection reaches none of them.
+
+  The day is asked of the resolver that performs the fetch rather than derived
+  from the date, so the two cannot disagree. Availability does not follow from
+  the date alone: a hazard with no Day 3 product becomes reachable the moment
+  that convective day's Day 2 outlook is published, which happens partway
+  through the span the arithmetic still calls Day 3. Entries also refresh as the
+  clock advances, since a selection moves from Day 3 to Day 2 to Day 1 while the
+  window sits open. Resolving a day is arithmetic over candidate URLs, so
+  restating the entries costs no requests.
+- Fixed the sounding window's HD and UHD image exports being visibly softer than
+  `sharpmod-render` output at identical pixel dimensions. Every scientific panel
+  paints into a persistent bitmap cache and blits it, and the command-line
+  renderer composes its whole window with those caches allocated at the export
+  density, so text is rasterized once at final size. The interactive window is
+  composed at screen density, so exporting it enlarged caches that had already
+  been rasterized — smoothly, which is precisely what made it look soft.
+
+  The export now re-rasterizes those caches at the target density first.
+  Measured on the same sounding at 3260x2198, as the share of inked pixels
+  sitting at mid-tone (a crisp edge ramps over about one pixel, a stretched one
+  over several, so lower is sharper): the command line scores 0.5074, the export
+  scored 0.7417 before this change and scores 0.5078 after, with the number of
+  inked pixels landing within 0.1% of the command line's. A 46% gap closes to
+  0.1%.
+
+  Rebuilding runs each panel's background pass, snapshots it where the panel
+  keeps a background cache, then runs its data pass. It deliberately does not
+  call ``clearData``: that is a reset for when the profile changes, and most of
+  these panels keep no background snapshot for it to restore from, so it simply
+  allocates a blank cache. Calling it between the two passes discarded
+  everything the background pass had drawn, leaving HD and UHD exports without
+  axes, tick labels, titles, or legends, and in some cases without a whole panel
+  — the effective-layer STP box plots among them.
+
+  Only the caches are rebuilt, and the originals are restored afterwards, so
+  exporting leaves the window on screen byte-identical and does not disturb the
+  hodograph centring or skew-T zoom the user has set — the widgets' own
+  initialisation, which would recompute both, is deliberately not re-run. Output
+  dimensions are unchanged in all three modes, and lossless export is untouched
+  because at 1x there is nothing to enlarge.
+- Fixed the SPC outlook overlay keeping an earlier issuance after the selected
+  forecast hour moved past a later one. Stepping a forecast hour from 18Z to 00Z
+  stays inside one convective day and can reach exactly the same set of
+  published products, so the overlay saw nothing new available and held the
+  1630Z outlook when the 2000Z update was the one in force. The staleness check
+  now compares the ordered resolution rather than the set of available products,
+  since the ordering is what selects between issuances that are all equally
+  available.
+- Renamed the issuance in the overlay caption from, for example, `Day 1 1630Z`
+  to `Day 1 · 1630Z issuance`, and the map legend now states whether the
+  selected time falls inside the outlook instead of only warning when it does
+  not. An SPC convective day runs 12Z to 12Z, so a sounding valid 00Z is
+  correctly matched to the previous calendar day's outlook; seeing the two dates
+  differ with nothing on screen to explain it read as a fault.
+- Fixed the date-picker calendar popup, which showed an ellipsis in place of
+  most day numbers and offered days from the neighbouring months. A
+  `QCalendarWidget` is a `QTableView` internally, so the chrome style sheet's
+  generic item padding also applied to its day cells and left too little room
+  for two digits, at which point the item delegate elided them. The day cells
+  are now painted directly, which removes the elision and lets days outside the
+  month on show be left blank; the week-number column is dropped, returning its
+  width to the day columns, and the weekday header uses single letters so it
+  cannot elide either. Selection, the weekend tint, and any configured date
+  range are unchanged.
+
 ## [0.9.0] - 2026-08-28
 
 A redesign of the desktop application's interface. The scientific canvas — the

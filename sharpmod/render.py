@@ -41,6 +41,7 @@ corrupt PNG and never disturbs a pre-existing output file
 from __future__ import annotations
 
 import argparse
+import inspect
 import logging
 import os
 import ssl
@@ -86,7 +87,7 @@ import certifi  # noqa: E402
 from urllib.error import URLError  # noqa: E402
 from urllib.request import urlopen  # noqa: E402
 
-from qtpy import QtCore, QtGui  # noqa: E402
+from qtpy import QtCore, QtGui, QtWidgets  # noqa: E402
 from qtpy.QtWidgets import QApplication  # noqa: E402
 
 # Restore Qt5-style unscoped enum access for the vendored ``sharppy.viz`` stack
@@ -1166,30 +1167,131 @@ def _install_skewt_effective_layer_label_fit():
                 rect3 = _label_rect(x1 - 15.0, y2 - rect_h,
                                     text_esrh, 50.0)
 
-                qp.setPen(_QtGui.QPen(self.bg_color, 0,
-                                      _QtCore.Qt.SolidLine))
-                qp.setBrush(_QtGui.QBrush(self.bg_color,
-                                          _QtCore.Qt.SolidPattern))
-                qp.drawRect(rect1)
-                qp.drawRect(rect2)
-                qp.drawRect(rect3)
+                # No background plate behind these three labels. The vendored
+                # method fills each rect with ``bg_color`` first, but that is
+                # the plot's own background colour, so the plate adds no
+                # contrast the plot did not already give -- it only punches a
+                # hole in the isotherms, dry adiabats, and mixing-ratio lines
+                # passing behind the text. The rects are still needed, as they
+                # position the text below.
 
                 qp.setPen(_QtGui.QPen(self.eff_layer_color, 2,
                                       _QtCore.Qt.SolidLine))
                 qp.drawLine(x1 - line_len, y1, x1 + line_len, y1)
                 qp.drawLine(x1 - line_len, y2, x1 + line_len, y2)
                 qp.drawLine(x1, y1, x1, y2)
-                qp.drawText(rect1, _QtCore.Qt.AlignLeft |
-                            _QtCore.Qt.AlignVCenter, text_bot)
-                qp.drawText(rect2, _QtCore.Qt.AlignLeft |
-                            _QtCore.Qt.AlignVCenter, text_top)
-                qp.drawText(rect3, _QtCore.Qt.AlignLeft |
-                            _QtCore.Qt.AlignVCenter, text_esrh)
+
+                # ``TextDontClip`` on all three, and clipping lifted for the
+                # bottom one, exactly as upstream does. That bottom label sits
+                # *below* the inflow layer's lower line, which for a
+                # surface-based layer is at or under the plot's bottom edge, so
+                # with clipping left on it is discarded -- which is how the
+                # ``SFC`` label went missing.
+                flags = (_QtCore.Qt.TextDontClip | _QtCore.Qt.AlignLeft
+                         | _QtCore.Qt.AlignVCenter)
+                qp.setClipping(False)
+                qp.drawText(rect1, flags, text_bot)
+                qp.setClipping(True)
+                qp.drawText(rect2, flags, text_top)
+                qp.drawText(rect3, flags, text_esrh)
             except Exception:
                 _orig(self, qp)
 
         _cls.draw_effective_layer = draw_effective_layer
         _cls._sharpmod_effective_layer_fit = True
+    except Exception:  # pragma: no cover - vendored module always present
+        pass
+
+
+class _RectSuppressingPainter:
+    """Forward every painter call except ``drawRect``.
+
+    Lets a vendored draw method run untouched while the opaque background plate
+    it paints first is dropped, so its label sits directly on the plot and the
+    linework behind stays continuous.
+
+    Used instead of restating the method so the colours, geometry, and text
+    remain upstream and cannot drift from it.
+    """
+
+    __slots__ = ("_qp",)
+
+    def __init__(self, qp):
+        self._qp = qp
+
+    def drawRect(self, *_args, **_kwargs):  # noqa: N802 - Qt API name
+        return None
+
+    def __getattr__(self, name):
+        return getattr(self._qp, name)
+
+
+def _install_skewt_lapse_rate_label_transparency():
+    """Drop the opaque plate behind the skew-T max-lapse-rate label.
+
+    Same reasoning as the effective-inflow labels: the plate is filled with
+    ``bg_color``, which is already the colour behind it, so it contributes no
+    legibility and instead cuts a rectangular gap out of the background
+    isopleths crossing the label.
+    """
+    try:
+        import sharppy.viz.skew as _skew
+
+        _cls = _skew.plotSkewT
+        if getattr(_cls, "_sharpmod_lapse_rate_label_transparent", False):
+            return
+        _orig = _cls.draw_max_lapse_rate_layer
+
+        def draw_max_lapse_rate_layer(self, qp, *args, **kwargs):
+            try:
+                _orig(self, _RectSuppressingPainter(qp), *args, **kwargs)
+            except Exception:  # pragma: no cover - vendored failure path
+                _orig(self, qp, *args, **kwargs)
+
+        _cls.draw_max_lapse_rate_layer = draw_max_lapse_rate_layer
+        _cls._sharpmod_lapse_rate_label_transparent = True
+    except Exception:  # pragma: no cover - vendored module always present
+        pass
+
+
+def _install_hodo_storm_motion_label_transparency():
+    """Drop the plate behind the hodograph's ``RM``/``LM`` labels.
+
+    ``drawSMV`` positions those two labels with rectangles it intends to be
+    invisible -- its own comment calls them "the invisible rectangles" -- and it
+    tries to achieve that by setting an alpha-zero *pen*. It never sets a
+    *brush*, so the rectangles are filled with whatever brush the previous draw
+    call happened to leave active, which paints a solid plate over the hodograph
+    rings and traces behind each label. Suppressing the two ``drawRect`` calls
+    honours the upstream intent; the text is drawn from the same rectangles and
+    is unaffected.
+
+    The same block also does ``color = self.bg_color`` followed by
+    ``color.setAlpha(0)``. That is not a copy -- it mutates the widget's own
+    background colour in place and leaves its alpha at zero for everything drawn
+    afterwards, so the alpha is restored once the call returns.
+    """
+    try:
+        import sharppy.viz.hodo as _hodo
+
+        _cls = _hodo.plotHodo
+        if getattr(_cls, "_sharpmod_smv_label_transparent", False):
+            return
+        _orig = _cls.drawSMV
+
+        def drawSMV(self, qp, *args, **kwargs):  # noqa: N802 - upstream Qt API
+            background = getattr(self, "bg_color", None)
+            alpha = background.alpha() if background is not None else None
+            try:
+                _orig(self, _RectSuppressingPainter(qp), *args, **kwargs)
+            except Exception:  # pragma: no cover - vendored failure path
+                _orig(self, qp, *args, **kwargs)
+            finally:
+                if background is not None and alpha is not None:
+                    background.setAlpha(alpha)
+
+        _cls.drawSMV = drawSMV
+        _cls._sharpmod_smv_label_transparent = True
     except Exception:  # pragma: no cover - vendored module always present
         pass
 
@@ -2634,9 +2736,147 @@ def grab_widget_pixmap(widget, scale: float = 1.0):
     return pixmap
 
 
+def _zero_arg_method(widget, name):
+    """Return ``widget.name`` only if it is callable with no arguments.
+
+    The vendored panels are not uniform: most paint into their cache from
+    ``plotData()``, but a few take the live widget painter instead
+    (``plotAdvection.plotData(qp)`` draws its data straight onto the widget and
+    keeps only the background in its cache). Those must not be invoked here --
+    and they do not need to be, since anything painted live is already
+    rasterized at the export density.
+    """
+    method = getattr(widget, name, None)
+    if not callable(method):
+        return None
+    try:
+        signature = inspect.signature(method)
+    except (TypeError, ValueError):  # pragma: no cover - C-implemented slot
+        return method
+    for parameter in signature.parameters.values():
+        if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
+            continue
+        if parameter.default is parameter.empty:
+            return None
+    return method
+
+
+def _panel_background_colour(widget):
+    """Return the fill a scientific panel expects behind its background pass."""
+    for name in ("bg_color", "bg", "backgroundColor"):
+        value = getattr(widget, name, None)
+        if isinstance(value, QtGui.QColor) and value.isValid():
+            return value
+        if isinstance(value, str) and value:
+            colour = QtGui.QColor(value)
+            if colour.isValid():
+                return colour
+    return QtGui.QColor(0, 0, 0)
+
+
+def _cached_panels(root):
+    """Yield every widget in ``root``'s tree that keeps a ``plotBitMap`` cache."""
+    candidates = [root]
+    try:
+        candidates.extend(root.findChildren(QtWidgets.QWidget))
+    except (AttributeError, RuntimeError):
+        pass
+    for widget in candidates:
+        bitmap = getattr(widget, "plotBitMap", None)
+        if bitmap is None:
+            continue
+        try:
+            if bitmap.isNull():
+                continue
+        except (AttributeError, RuntimeError):
+            continue
+        yield widget
+
+
+@contextmanager
+def _panels_at_target_density(root, scale: float):
+    """Re-rasterize a live widget tree's panel caches at ``scale`` density.
+
+    Every scientific panel paints into a persistent ``plotBitMap`` and blits it
+    from ``paintEvent``. The headless renderer gets those caches at the export
+    density for free, because it composes the whole window inside
+    :func:`_target_density_pixmaps`. An interactive window is composed at 1x, so
+    capturing it through a scaled painter enlarges caches that were already
+    rasterized -- text included -- which is what makes an on-screen export look
+    softer than the command-line one at the same pixel dimensions.
+
+    Rebuilding the caches here closes that gap for the live window. Only the
+    cache is replaced: the widgets' own ``initUI`` is deliberately *not* re-run,
+    because it recomputes fonts and geometry and would discard the hodograph
+    centring and skew-T zoom the user has set. Each panel's existing cache
+    supplies the logical size it chose for itself, and the originals are put
+    back afterwards so the window on screen is left exactly as it was.
+    """
+    density = max(1.0, float(scale))
+    if density <= 1.0:
+        yield 0
+        return
+
+    saved: list[tuple] = []
+    rebuilt = 0
+    try:
+        with _target_density_pixmaps(density):
+            for panel in _cached_panels(root):
+                original = panel.plotBitMap
+                original_background = getattr(panel, "backgroundBitMap", None)
+                try:
+                    replacement = QtGui.QPixmap(original.size())
+                    replacement.fill(_panel_background_colour(panel))
+                    panel.plotBitMap = replacement
+                    saved.append((panel, original, original_background))
+
+                    # Order mirrors the widgets' own initialisation: the
+                    # background pass paints into the fresh cache, the background
+                    # snapshot is taken from it, and the data pass draws on top.
+                    #
+                    # ``clearData`` is deliberately not called. It is a reset for
+                    # when the profile changes, not a step in the draw sequence,
+                    # and most panels here have no ``backgroundBitMap`` for it to
+                    # restore from -- it simply allocates a blank cache. Calling
+                    # it between the two passes therefore discarded everything
+                    # the background pass had just drawn, and the data pass put
+                    # back only the data: axes, tick labels, titles, and legends
+                    # were silently missing from HD and UHD exports.
+                    plot_background = _zero_arg_method(panel, "plotBackground")
+                    if plot_background is not None:
+                        plot_background()
+                    if original_background is not None:
+                        panel.backgroundBitMap = panel.plotBitMap.copy()
+                    plot_data = _zero_arg_method(panel, "plotData")
+                    if plot_data is not None:
+                        plot_data()
+                    rebuilt += 1
+                except Exception:  # noqa: BLE001 - one panel must not fail all
+                    _LOGGER.exception(
+                        "export.panel_density_failed panel=%s",
+                        type(panel).__name__)
+            yield rebuilt
+    finally:
+        # Restore outside the density context so the live window goes back to
+        # its 1x caches even if the capture raised.
+        for panel, original, original_background in saved:
+            try:
+                panel.plotBitMap = original
+                if original_background is not None:
+                    panel.backgroundBitMap = original_background
+            except (AttributeError, RuntimeError):
+                continue
+
+
 def save_widget_png(widget, outfile: str,
                     image_mode: str = PNG_IMAGE_HD) -> bool:
-    """Save ``widget`` as HD, UHD, or original-size lossless PNG."""
+    """Save ``widget`` as HD, UHD, or original-size lossless PNG.
+
+    When the caller has not already composed the tree at the export density --
+    which is the interactive viewer's case -- the panel caches are re-rasterized
+    at that density first, so an on-screen export is as crisp as the equivalent
+    ``sharpmod-render`` output rather than a smooth enlargement of 1x text.
+    """
     mode = _normalise_png_image_mode(image_mode)
     scale = _png_image_scale(mode)
     if mode == PNG_IMAGE_UHD:
@@ -2645,7 +2885,19 @@ def save_widget_png(widget, outfile: str,
         quality = _png_hd_compression_quality()
     else:
         quality = _png_lossless_compression_quality()
-    pixmap = grab_widget_pixmap(widget, scale=scale)
+
+    already_dense = QtGui.QPixmap is not _NATIVE_QPIXMAP
+    if scale > 1.0 and not already_dense:
+        try:
+            with _panels_at_target_density(widget, scale):
+                pixmap = grab_widget_pixmap(widget, scale=scale)
+        except RuntimeError:
+            # No QApplication, wrong thread, or a nested override: the export is
+            # still worth producing, just without the density rebuild.
+            _LOGGER.debug("export.density_rebuild_unavailable", exc_info=True)
+            pixmap = grab_widget_pixmap(widget, scale=scale)
+    else:
+        pixmap = grab_widget_pixmap(widget, scale=scale)
     return bool(pixmap.save(outfile, "PNG", quality))
 
 
@@ -4658,6 +4910,12 @@ def render_patch_specs():
         PatchSpec(
             "skewt.effective-layer-label-fit",
             _install_skewt_effective_layer_label_fit),
+        PatchSpec(
+            "skewt.lapse-rate-label-transparency",
+            _install_skewt_lapse_rate_label_transparency),
+        PatchSpec(
+            "hodo.storm-motion-label-transparency",
+            _install_hodo_storm_motion_label_transparency),
         PatchSpec("skewt.frame-on-top", _install_skewt_frame_ontop),
         PatchSpec("skewt.isotherm-label-fit", _install_skewt_isotherm_label_fit),
         PatchSpec("slinky.title-fit", _install_slinky_title_fit),

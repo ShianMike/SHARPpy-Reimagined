@@ -164,6 +164,10 @@ FIELD_W: dict[str, int] = {
     "action": 96,    # an inline button such as "Most recent"
     "date": 118,     # an ISO date edit
     "wide": 132,     # a date/cycle/forecast control in the model panel
+    #: Label column in a rail form card. Sized for the longest label any panel
+    #: uses ("Longitude:") so that every field in every card starts at the same
+    #: x -- per-card label columns made the rows step in and out down the rail.
+    "label": 76,
 }
 
 #: Progress-bar track height. Deliberately slim: the bar reports transfer
@@ -679,6 +683,7 @@ OBJ_PROGRESS_DETAIL = "progressDetail"   # byte counts / phase under a bar
 OBJ_SECTION_LABEL = "sectionLabel"   # small caps-ish group heading
 OBJ_CARD = "card"                    # flat panel replacing QGroupBox
 OBJ_CARD_TITLE = "cardTitle"
+OBJ_PLAIN = "plainContainer"         # groups widgets without painting anything
 OBJ_HEADER_BAR = "headerBar"         # window-top identity/breadcrumb strip
 OBJ_NAV_RAIL = "navRail"             # left source navigation
 OBJ_NAV_RAIL_HEADER = "navRailHeader"  # small caption above the rail entries
@@ -992,26 +997,40 @@ QLabel#{OBJ_CARD_TITLE} {{
     font-weight: {WEIGHT['semibold']};
 }}
 
+/* A bare container used only to group widgets. The base `QWidget` rule paints
+ * the window surface, which is a different colour from a card's raised
+ * surface, so an unnamed grouping widget inside a card drew a visible panel of
+ * the wrong shade behind its children. The id selector applies to the
+ * container alone and is not inherited by what it holds. */
+QWidget#{OBJ_PLAIN} {{
+    background: transparent;
+}}
+
 /* QGroupBox stays styled while panels are migrated to cards, so the app
  * is coherent at every commit rather than only at the end.
  *
  * The title is placed *inside* the border, as a card header. The default
  * `subcontrol-origin: margin` draws it in the margin band above the frame,
  * which reads as a detached floating label rather than a heading that belongs
- * to the panel. Top padding reserves the row the title occupies. */
+ * to the panel. Top padding reserves the row the title occupies.
+ *
+ * That reserved row is `xxl` rather than `xxxl`: the title is one line of the
+ * small font, so `xxxl` left a visible empty band under every heading. At eight
+ * pixels per card that band was also the single largest avoidable cost in the
+ * control rails, where the forecast panel stacks seven cards. */
 QGroupBox {{
     background: {t.surface_raised};
     border: 1px solid {t.border};
     border-radius: {r['lg']}px;
     margin-top: 0;
-    padding: {s['xxxl']}px {s['md']}px {s['md']}px {s['md']}px;
+    padding: {s['xxl']}px {s['md']}px {s['md']}px {s['md']}px;
     font-weight: {WEIGHT['semibold']};
 }}
 
 QGroupBox::title {{
     subcontrol-origin: border;
     subcontrol-position: top left;
-    margin: {s['md']}px 0 0 {s['md']}px;
+    margin: {s['sm']}px 0 0 {s['md']}px;
     padding: 0;
     /* Explicitly transparent: without this the title sub-control picks up the
      * window `surface` from the QWidget rule and paints a mismatched strip
@@ -1108,12 +1127,15 @@ QComboBox:disabled {{
     color: {t.text_disabled};
 }}
 
-QComboBox::drop-down {{
-    border: 0;
-    width: {s['xxl']}px;
-    subcontrol-origin: padding;
-    subcontrol-position: center right;
-}}
+/* The drop-down sub-control is deliberately *not* restyled.
+ *
+ * Giving it any property makes Qt render that sub-control from the style sheet
+ * instead of from the style, and a style sheet cannot draw the arrow without an
+ * `image:` asset. The previous rule set only a border and a width, so the arrow
+ * vanished and every combo box in the application looked exactly like a
+ * read-only text field -- there was no way to tell "United States (CONUS)" or
+ * "HRRR" was a menu. Leaving it alone lets Fusion paint a palette-aware arrow,
+ * which matches the date edit's arrow beside it. */
 
 /* The popup is a separate top-level window, so it needs its own
  * surface, border, and selection colours. */

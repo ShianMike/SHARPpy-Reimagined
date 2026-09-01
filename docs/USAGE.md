@@ -439,11 +439,35 @@ selected message is unpacked once for every point. HRRR Zarr columns likewise
 normalize directly into the compact point contract without constructing an
 intermediate xarray dataset.
 
-RRFS-A exposes separate `rrfs-a`, `rrfs-a-alaska`, `rrfs-a-hawaii`, and
-`rrfs-a-puerto-rico` adapters. Its 00/06/12/18Z cycles advertise F000-F084;
-off-hour cycles advertise F000-F018. RRFS uses the same four-worker validated
-transport as the other indexed models; its retained multi-cycle benchmark is
-documented in `benchmarks/results/2026-07-22-rrfs-range-workers.md`.
+RRFS-A exposes separate `rrfs-a`, `rrfs-a-alaska`, `rrfs-a-hawaii`,
+`rrfs-a-puerto-rico`, and `rrfs-a-north-america` adapters, all F000-F084
+hourly. It is the one product this project locates itself instead of through
+Herbie, whose `rrfs` template still resolves to a retired AWS prefix and whose
+product list predates the current file layout. The adapter reads the published
+NOMADS `.idx` inventory and pulls the selected GRIB messages over HTTP byte
+ranges with eight workers by default, tuned by `SHARPMOD_RANGE_WORKERS`.
+
+Three RRFS-specific consequences are worth knowing:
+
+- **Only the 00/06/12/18Z cycles are selectable.** The off-hour cycles publish
+  a sub-hourly two-dimensional product and no pressure levels, so they cannot
+  produce a sounding at any forecast hour.
+- **Every sounding needs two files.** `prslev` carries 45 pressure levels
+  (1000-2 hPa) and no ground records; `2dfld` carries the complete verified
+  ground row and no pressure levels. Both are fetched and concatenated, and a
+  provenance sidecar next to the combined file lets a repeat request skip the
+  network entirely.
+- **There is no omega.** RRFS publishes DZDT (geometric vertical velocity in
+  m/s) rather than VVEL, and `omeg` is pressure vertical velocity in Pa/s with
+  the opposite sign convention, so those messages are not fetched and vertical
+  velocity reads as missing.
+
+NOMADS offers no spatial subsetting for RRFS, so a field plan costs its full
+domain footprint: roughly 340 MB for 3-km CONUS or Alaska, 190 MB for 13-km
+North America, and 13-35 MB for the 2.5-km Hawaii and Puerto Rico domains. The
+payload is cached per model hour rather than per point, so one transfer serves
+every point at that run and forecast hour. Prefer `rrfs-a-north-america` for a
+cheaper CONUS-covering option.
 
 Canadian `gdps` and `rdps` use ECCC MSC GeoMet's point-value route. The adapter
 fetches six surface layers first, skips isobaric layers at or below the point's

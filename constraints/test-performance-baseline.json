@@ -8,7 +8,13 @@
   "suites": {
     "compatibility": {
       "baseline_seconds": 56.91,
-      "maximum_seconds": 150.0
+      "maximum_seconds": 150.0,
+      "environment_overrides": {
+        "github-actions": {
+          "baseline_seconds": 115.06,
+          "maximum_seconds": 260.0
+        }
+      }
     },
     "fast": {
       "baseline_seconds": 81.22,

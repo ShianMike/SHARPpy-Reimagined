@@ -203,7 +203,10 @@ jobs:
     name: Complete serial release gate (Python 3.13)
     if: ${{ inputs.run_serial_release == true || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Raised from 30 so the lane's own 2050s budget is what fails a slow run.
+    # At 30 the job was killed first, which reports a timeout instead of the
+    # measured overrun and leaves no timing artifact to compare against.
+    timeout-minutes: 40
 
     steps:
       - name: Check out tested source

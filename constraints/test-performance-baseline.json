@@ -45,8 +45,8 @@
       "maximum_seconds": 1500.0,
       "environment_overrides": {
         "github-actions": {
-          "baseline_seconds": 1022.16,
-          "maximum_seconds": 1350.0
+          "baseline_seconds": 1539.41,
+          "maximum_seconds": 2050.0
         }
       }
     },

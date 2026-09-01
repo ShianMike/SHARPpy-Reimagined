@@ -18,7 +18,13 @@
     },
     "fast": {
       "baseline_seconds": 81.22,
-      "maximum_seconds": 180.0
+      "maximum_seconds": 180.0,
+      "environment_overrides": {
+        "github-actions": {
+          "baseline_seconds": 149.98,
+          "maximum_seconds": 270.0
+        }
+      }
     },
     "live-provider": {
       "baseline_seconds": 90.0,

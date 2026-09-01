@@ -432,6 +432,80 @@ def test_runtime_dependencies_declare_version_constraints():
     )
 
 
+def test_release_pins_satisfy_the_declared_requirements():
+    """Every release pin must sit inside the range the manifest declares.
+
+    The release build exports ``constraints/release.txt`` as ``PIP_CONSTRAINT``
+    and then installs ``.[render,era5,wrf]``, so a pin outside the declared
+    range is not a stale number -- it is an unsatisfiable install that fails the
+    build. Raising a floor in ``pyproject.toml`` without moving the matching pin
+    did exactly that, and nothing here noticed, so this compares the two
+    directly rather than checking that each file is individually well formed.
+    """
+    tomllib = pytest.importorskip(
+        "tomllib", reason="tomllib (Python 3.11+) required to parse pyproject")
+    packaging_requirements = pytest.importorskip(
+        "packaging.requirements", reason="packaging required to compare pins")
+    packaging_version = pytest.importorskip(
+        "packaging.version", reason="packaging required to compare pins")
+    packaging_utils = pytest.importorskip(
+        "packaging.utils", reason="packaging required to compare pins")
+    # PEP 503 canonicalisation, not lowercase-and-underscore: it also folds
+    # dots and runs of punctuation, so `zope.interface` and `zope-interface`
+    # agree on one key. Getting this wrong fails silently -- the pin looks
+    # absent, the pair goes unchecked, and the guard passes.
+    canonical = packaging_utils.canonicalize_name
+
+    pkg_dir = Path(sharpmod.__file__).resolve().parent
+    root = next(
+        (parent for parent in [pkg_dir, *pkg_dir.parents]
+         if (parent / "pyproject.toml").is_file()),
+        None,
+    )
+    assert root is not None, f"packaging manifest missing at or above {pkg_dir}"
+
+    constraints = root / "constraints" / "release.txt"
+    assert constraints.is_file(), f"release constraints missing: {constraints}"
+
+    pinned: dict[str, str] = {}
+    for line in constraints.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "==" not in line:
+            continue
+        name, _, version = line.partition("==")
+        pinned[canonical(name.strip())] = version.strip()
+    assert pinned, "no pins parsed from the release constraints"
+
+    with open(root / "pyproject.toml", "rb") as fh:
+        manifest = tomllib.load(fh)
+    project = manifest["project"]
+    declared = list(project.get("dependencies", ()))
+    for extra in project.get("optional-dependencies", {}).values():
+        declared.extend(extra)
+    # Build-system requirements count too. The release job exports
+    # PIP_CONSTRAINT before installing the project, so an isolated build has to
+    # reconcile the setuptools and wheel pins against these floors, and a
+    # mismatch there fails the install exactly as a runtime one does.
+    declared.extend(manifest.get("build-system", {}).get("requires", ()))
+
+    conflicts = []
+    for raw in declared:
+        requirement = packaging_requirements.Requirement(raw)
+        version = pinned.get(canonical(requirement.name))
+        if version is None or not requirement.specifier:
+            continue
+        # Pre-releases are opted into explicitly: a pin naming one is a
+        # deliberate choice, not something to filter out as ineligible.
+        if not requirement.specifier.contains(
+                packaging_version.Version(version), prereleases=True):
+            conflicts.append(f"{requirement.name}=={version} violates {raw!r}")
+
+    assert not conflicts, (
+        "constraints/release.txt cannot satisfy pyproject.toml, so the release "
+        "build cannot resolve:\n  " + "\n  ".join(conflicts)
+    )
+
+
 # --------------------------------------------------------------------------- #
 # 11.5 / 15.4 -- render a bundled example to a decodable PNG, no path config
 # --------------------------------------------------------------------------- #

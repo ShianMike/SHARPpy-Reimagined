@@ -14,6 +14,7 @@ from qtpy.QtCore import QEventLoop, QTimer
 
 from sharpmod import (
     gui_maps,
+    gui_overlay_controls,
     map_overlays as mo,
     radar_mosaic,
     spc_outlook,
@@ -132,6 +133,92 @@ def _tracked_fetch(monkeypatch, valid_from, valid_to):
     return calls
 
 
+class _FakeSignal:
+    """The two operations :class:`_WorkerFleet` needs from ``finished``."""
+
+    def __init__(self) -> None:
+        self._slots: list = []
+
+    def connect(self, slot) -> None:
+        self._slots.append(slot)
+
+    def emit(self) -> None:
+        for slot in tuple(self._slots):
+            slot()
+
+
+class _FakeWorker:
+    """A thread that ignores interruption, as one in a socket read does."""
+
+    def __init__(self, running: bool = True) -> None:
+        self._running = running
+        self.interrupted = 0
+        self.waited: list[int] = []
+        self.finished = _FakeSignal()
+
+    def isRunning(self) -> bool:  # noqa: N802 - Qt's spelling
+        return self._running
+
+    def requestInterruption(self) -> None:  # noqa: N802 - Qt's spelling
+        self.interrupted += 1
+
+    def wait(self, ms: int) -> bool:
+        self.waited.append(ms)
+        self._running = False
+        return True
+
+
+def test_the_fleet_drains_every_outstanding_worker():
+    """The regression: only the newest worker was ever waited on.
+
+    ``requestInterruption`` is advisory, so replacing a worker that is blocked
+    in a socket read leaves it running. Qt aborts rather than raises if it has
+    to destroy a running thread, and these are parented to the controller.
+    """
+    fleet = gui_overlay_controls._WorkerFleet()
+    first, second = _FakeWorker(), _FakeWorker()
+    fleet.track(first)
+    fleet.track(second)
+
+    fleet.drain(2000)
+
+    assert (first.interrupted, second.interrupted) == (1, 1)
+    assert first.waited and second.waited, "both had to be waited on"
+    assert all(ms <= 2000 for ms in first.waited + second.waited), \
+        "the grace period is shared, not granted afresh to each worker"
+
+
+def test_a_finished_worker_leaves_the_fleet():
+    """Retirement keeps a long session from accumulating dead references."""
+    fleet = gui_overlay_controls._WorkerFleet()
+    worker = _FakeWorker()
+    fleet.track(worker)
+
+    worker.finished.emit()
+    fleet.drain(2000)
+
+    assert worker.interrupted == 0, "a finished worker needs no interruption"
+    assert worker.waited == []
+
+
+def test_an_interrupted_worker_stays_tracked_across_a_new_request(
+        bound, monkeypatch):
+    """A replaced worker must remain drainable, not be dropped on the floor."""
+    controller, _widget = bound
+    valid_from = datetime(2024, 5, 1, 13, tzinfo=UTC)
+    valid_to = datetime(2024, 5, 2, 12, tzinfo=UTC)
+    _tracked_fetch(monkeypatch, valid_from, valid_to)
+    stale = _FakeWorker()
+    controller._workers.track(stale)
+
+    controller.set_valid_time(datetime(2024, 5, 1, 18, tzinfo=UTC))
+    _pump()
+    assert stale.interrupted >= 1, "the new request had to interrupt it"
+
+    controller.shutdown()
+    assert stale.waited, "shutdown still had to wait for it"
+
+
 def test_hours_inside_one_issuance_need_no_request(bound, monkeypatch):
     """Stepping forecast hours within a single issuance must be free.
 
@@ -202,33 +289,69 @@ def test_repeating_the_same_time_is_idempotent(bound, recorded):
     assert len(recorded) == 1
 
 
-def test_toggling_back_on_reuses_a_covering_layer(qt_app, recorded):
-    """Hiding and re-showing must not refetch geometry already in hand."""
-    widget = gui_maps.StationMapWidget([])
-    controller = OutlookOverlayController(widget, enabled=True)
-    try:
-        valid_from = datetime(2024, 5, 1, 13, tzinfo=UTC)
-        valid_to = datetime(2024, 5, 2, 12, tzinfo=UTC)
-        layer = _layer(valid_from, valid_to)
-        controller.set_valid_time(valid_from.replace(hour=18))
-        widget.set_overlay(spc_outlook.OVERLAY_KEY, layer)
-        recorded.clear()
+def test_toggling_back_on_reuses_a_covering_layer(bound, monkeypatch):
+    """Hiding and re-showing must not refetch geometry already in hand.
 
-        controller.set_enabled(False)
-        # Hidden, not detached: the geometry stays so re-enabling is free.
-        assert not widget.is_overlay_visible(spc_outlook.OVERLAY_KEY)
-        assert widget._visible_overlays() == []
-        assert widget.overlay(spc_outlook.OVERLAY_KEY) is layer
+    Resolved through the controller for the reason
+    :func:`test_hours_inside_one_issuance_need_no_request` gives: re-enabling is
+    only free when the layer carries the basis it was resolved from, and one
+    attached behind the controller's back carries none.
+    """
+    controller, widget = bound
+    valid_from = datetime(2024, 5, 1, 13, tzinfo=UTC)
+    valid_to = datetime(2024, 5, 2, 12, tzinfo=UTC)
+    calls = _tracked_fetch(monkeypatch, valid_from, valid_to)
 
-        controller.set_enabled(True)
-        _pump(700)
+    controller.set_valid_time(datetime(2024, 5, 1, 18, tzinfo=UTC))
+    _pump()
+    assert len(calls) == 1, "the first selection resolves the outlook"
+    layer = widget.overlay(spc_outlook.OVERLAY_KEY)
+    assert layer is not None
 
-        assert recorded == [], "the layer was already covering this time"
-        assert widget.overlay(spc_outlook.OVERLAY_KEY) is layer
-        assert widget.is_overlay_visible(spc_outlook.OVERLAY_KEY)
-    finally:
-        controller.shutdown()
-        widget.close()
+    controller.set_enabled(False)
+    # Hidden, not detached: the geometry stays so re-enabling is free.
+    assert not widget.is_overlay_visible(spc_outlook.OVERLAY_KEY)
+    assert widget._visible_overlays() == []
+    assert widget.overlay(spc_outlook.OVERLAY_KEY) is layer
+
+    controller.set_enabled(True)
+    _pump()
+
+    assert len(calls) == 1, "the same time still resolves to the same outlook"
+    assert widget.overlay(spc_outlook.OVERLAY_KEY) is layer
+    assert widget.is_overlay_visible(spc_outlook.OVERLAY_KEY)
+
+
+def test_toggling_back_on_revalidates_a_superseded_outlook(bound, monkeypatch):
+    """A selection that crossed an issuance while hidden must resolve again.
+
+    The companion to :func:`test_crossing_an_issuance_boundary_does_refetch`,
+    for the path that reaches the same stale layer through the toggle instead of
+    the clock. ``set_valid_time`` records a new time without resolving it while
+    the overlay is off, so coverage on the way back on says nothing: the 1630Z
+    outlook still covers 00Z after the 2000Z update replaced it for that hour.
+    """
+    controller, widget = bound
+    valid_from = datetime(2026, 4, 15, 13, tzinfo=UTC)
+    valid_to = datetime(2026, 4, 16, 12, tzinfo=UTC)
+    calls = _tracked_fetch(monkeypatch, valid_from, valid_to)
+
+    controller.set_valid_time(datetime(2026, 4, 15, 18, tzinfo=UTC))
+    _pump()
+    assert len(calls) == 1
+
+    controller.set_enabled(False)
+    controller.set_valid_time(datetime(2026, 4, 16, 0, tzinfo=UTC))
+    _pump()
+    assert len(calls) == 1, "switched off, so nothing may reach the network"
+    assert widget.overlay(spc_outlook.OVERLAY_KEY).covers(
+        datetime(2026, 4, 16, 0, tzinfo=UTC)), \
+        "sanity: coverage alone would have accepted this layer"
+
+    controller.set_enabled(True)
+    _pump()
+    assert len(calls) == 2, \
+        "re-enabling past the 2000Z issuance must resolve again"
 
 
 def test_a_resolved_layer_is_attached_and_described(qt_app, monkeypatch):

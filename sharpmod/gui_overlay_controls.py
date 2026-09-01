@@ -14,6 +14,7 @@ should not issue network requests to SPC before the user asks for it.
 from __future__ import annotations
 
 from datetime import datetime
+from time import monotonic
 
 from qtpy.QtCore import QObject, Qt, QTimer, Signal
 from qtpy.QtWidgets import (
@@ -37,6 +38,69 @@ _SUPERSEDE_CHECK_MS = 5 * 60 * 1000
 
 #: Bounded grace period for an interrupted fetch to unwind on window close.
 _SHUTDOWN_WAIT_MS = 2000
+
+
+class _WorkerFleet:
+    """Keeps every started worker reachable until it has actually finished.
+
+    ``QThread.requestInterruption`` is advisory: it is observed at checkpoints,
+    so a worker blocked in a socket read keeps running after a newer request
+    replaces it. A controller therefore owns several live threads at once
+    whenever the user outruns the network.
+
+    Holding only the newest reference left the older ones unreferenced while
+    they were still running and still parented to the controller, so closing
+    the picker could destroy a running ``QThread`` -- which aborts the process
+    rather than raising. Draining the whole fleet on close is what rules that
+    out; tracking exists to make the drain possible.
+    """
+
+    def __init__(self) -> None:
+        self._live: list = []
+
+    def track(self, worker) -> None:
+        """Adopt ``worker``, releasing it again once it reports finished.
+
+        Connect this before ``deleteLater`` so the bookkeeping runs while the
+        object is still valid.
+        """
+        self._live.append(worker)
+        worker.finished.connect(lambda: self.retire(worker))
+
+    def retire(self, worker) -> None:
+        """Forget ``worker``, comparing by identity.
+
+        Equality would touch a C++ object ``deleteLater`` may already have
+        taken away.
+        """
+        self._live = [live for live in self._live if live is not worker]
+
+    def interrupt(self) -> None:
+        """Ask every live worker to stop at its next checkpoint."""
+        for worker in tuple(self._live):
+            try:
+                if worker.isRunning():
+                    worker.requestInterruption()
+            except RuntimeError:  # already gone; nothing left to interrupt
+                self.retire(worker)
+
+    def drain(self, budget_ms: int) -> None:
+        """Interrupt everything, then wait out one shared deadline.
+
+        The budget is shared rather than per worker, so closing the window
+        cannot take N times longer because N requests happened to be in flight.
+        """
+        self.interrupt()
+        deadline = monotonic() + budget_ms / 1000.0
+        for worker in tuple(self._live):
+            remaining_ms = int((deadline - monotonic()) * 1000.0)
+            if remaining_ms <= 0:
+                break
+            try:
+                if worker.isRunning():
+                    worker.wait(remaining_ms)
+            except RuntimeError:
+                self.retire(worker)
 
 
 def _resolved_day(valid_time: datetime | None, product: str) -> int | None:
@@ -94,7 +158,7 @@ class OutlookOverlayController(QObject):
         self._map = map_widget
         self._valid_time: datetime | None = None
         self._token = 0
-        self._worker: _SpcOutlookWorker | None = None
+        self._workers = _WorkerFleet()
         #: The candidate set the attached result was resolved from. Compared
         #: against the current one to notice that SPC has since issued a newer
         #: or lower-numbered outlook for the same target day.
@@ -252,22 +316,12 @@ class OutlookOverlayController(QObject):
         """Interrupt any in-flight fetch and wait briefly, for window close."""
         self._timer.stop()
         self._supersede_timer.stop()
-        worker = self._worker
-        self._worker = None
-        if worker is None:
-            return
-        try:
-            if not worker.isRunning():
-                return
-            worker.requestInterruption()
-            # Interruption is only observed between candidates, so a worker
-            # inside a socket read keeps going until its own timeout. Give it a
-            # moment rather than letting Qt warn that a running thread was
-            # destroyed; the wait is bounded so a hung request cannot delay the
-            # window closing for longer than this.
-            worker.wait(_SHUTDOWN_WAIT_MS)
-        except RuntimeError:
-            pass
+        # Every worker, not just the newest. Interruption is only observed
+        # between candidates, so one inside a socket read keeps going until its
+        # own timeout, and a user who outran the network leaves more than one
+        # of those behind. The wait is bounded and shared, so a hung request
+        # cannot delay the window closing.
+        self._workers.drain(_SHUTDOWN_WAIT_MS)
 
     # -- internals ----------------------------------------------------------- #
     def _on_product_changed(self, *_args) -> None:
@@ -304,7 +358,16 @@ class OutlookOverlayController(QObject):
             return
         self._supersede_timer.start()
         layer = self._map.overlay(spc_outlook.OVERLAY_KEY)
-        if layer is not None and layer.covers(self._valid_time):
+        if layer is not None and layer.covers(self._valid_time) \
+                and self._current_signature() == self._signature:
+            # Same test as set_valid_time, and for the same reason. The valid
+            # time can move while the overlay is off -- set_valid_time records
+            # it and returns without resolving anything -- so coverage alone
+            # would restore a superseded issuance here too: a 1630Z outlook
+            # covers 00Z long after the 2000Z update replaced it for that hour.
+            # Requiring the basis to match means a time that moved across an
+            # issuance while hidden refetches on the way back on, instead of
+            # showing a stale hazard until the supersede timer next fires.
             self._map.set_overlay_visible(spc_outlook.OVERLAY_KEY, True)
             self._set_status(self._describe(layer))
             return
@@ -326,27 +389,22 @@ class OutlookOverlayController(QObject):
         self._token += 1
         token = self._token
 
-        previous = self._worker
-        self._worker = None
-        if previous is not None:
-            try:
-                if previous.isRunning():
-                    previous.requestInterruption()
-            except RuntimeError:
-                pass
+        # Ask anything still running to stop, but keep it tracked: the token
+        # bump above has already orphaned its result, and the thread itself has
+        # to be waited on at close whether or not we still want the answer.
+        self._workers.interrupt()
 
         worker = _SpcOutlookWorker(self._valid_time, token, parent=self,
                                    product=self.product())
         worker.loaded.connect(self._on_loaded)
         worker.failed.connect(self._on_failed)
+        self._workers.track(worker)
         worker.finished.connect(worker.deleteLater)
-        self._worker = worker
         worker.start()
 
     def _on_loaded(self, token, valid_time, layer) -> None:
         if token != self._token or not self._check.isChecked():
             return  # superseded, or switched off while in flight
-        self._worker = None
         # Remember the basis of this answer, including when the answer was
         # "nothing": a hazard that publishes no Day 3 product must be retried
         # once the target becomes Day 2 and one exists.
@@ -364,7 +422,6 @@ class OutlookOverlayController(QObject):
     def _on_failed(self, token, valid_time, message) -> None:
         if token != self._token:
             return
-        self._worker = None
         # Leave the signature unset so the next opportunity retries. A failure
         # is not an answer about what SPC holds.
         self._signature = None
@@ -434,7 +491,7 @@ class RadarOverlayController(QObject):
         super().__init__(parent)
         self._map = map_widget
         self._token = 0
-        self._worker: _RadarMosaicWorker | None = None
+        self._workers = _WorkerFleet()
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -533,20 +590,12 @@ class RadarOverlayController(QObject):
         """Interrupt any in-flight fetch and wait briefly, for window close."""
         self._timer.stop()
         self._refresh_timer.stop()
-        worker = self._worker
-        self._worker = None
-        if worker is None:
-            return
-        try:
-            if not worker.isRunning():
-                return
-            worker.requestInterruption()
-            # Interruption is only observed around the request, so a worker
-            # inside a socket read runs to its own timeout. Bounded so a hung
-            # request cannot hold the window open.
-            worker.wait(_SHUTDOWN_WAIT_MS)
-        except RuntimeError:
-            pass
+        # Drain the whole fleet, not just the newest worker. Interruption is
+        # only observed around the request, so one inside a socket read runs to
+        # its own timeout; the refresh timer can have left several of those
+        # behind. Bounded and shared, so a hung request cannot hold the window
+        # open.
+        self._workers.drain(_SHUTDOWN_WAIT_MS)
 
     # -- internals ----------------------------------------------------------- #
     def _spec(self):
@@ -646,27 +695,21 @@ class RadarOverlayController(QObject):
         self._token += 1
         token = self._token
 
-        previous = self._worker
-        self._worker = None
-        if previous is not None:
-            try:
-                if previous.isRunning():
-                    previous.requestInterruption()
-            except RuntimeError:
-                pass
+        # Interrupt but keep tracking: the token bump already orphaned the
+        # result, yet the thread still has to be waited on at close.
+        self._workers.interrupt()
 
         worker = _RadarMosaicWorker(token, parent=self, product=self.product(),
                                     opacity=self.opacity())
         worker.loaded.connect(self._on_loaded)
         worker.failed.connect(self._on_failed)
+        self._workers.track(worker)
         worker.finished.connect(worker.deleteLater)
-        self._worker = worker
         worker.start()
 
     def _on_loaded(self, token, raster) -> None:
         if token != self._token or not self._check.isChecked():
             return  # superseded, or switched off while in flight
-        self._worker = None
         if raster is None:
             self._set_status("No radar frame was returned")
             return
@@ -676,7 +719,6 @@ class RadarOverlayController(QObject):
     def _on_failed(self, token, message) -> None:
         if token != self._token:
             return
-        self._worker = None
         # The previous frame is left attached on purpose. It is labelled with
         # its own age, so an ageing image plus a stated failure is more useful
         # than a blank map, and the legend marks it stale once it is too old.

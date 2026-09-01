@@ -17,6 +17,8 @@ from types import MappingProxyType
 # Importing common first applies the native Qt platform policy.
 from sharpmod import gui_common as _gui_common
 from sharpmod.gui_theme import current_theme, mono_font, ui_font
+from sharpmod.map_overlays import OverlayRaster, format_age
+from sharpmod.overlay_hatch import hatch_brush as _overlay_hatch_brush
 from sharpmod.theme import MapPalette, map_palette
 
 
@@ -29,12 +31,13 @@ def _map() -> MapPalette:
     """
     return map_palette(current_theme())
 
+from qtpy import QtCore, QtGui
 from qtpy.QtCore import (
     Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
 )
 from qtpy.QtGui import (
-    QAction, QPainter, QColor, QPen, QBrush, QPolygonF, QFont, QPixmap, QIcon,
-    QTransform, QDesktopServices,
+    QAction, QPainter, QColor, QPen, QBrush, QPolygonF, QPainterPath, QFont,
+    QPixmap, QImage, QIcon, QTransform, QDesktopServices,
 )
 from qtpy.QtWidgets import (
     QApplication,
@@ -141,6 +144,27 @@ def _shared_basemap_layers() -> MappingProxyType:
     return _prepare_basemap_layers(_load_basemap())
 
 
+#: Alpha applied to an overlay's published fill colour. SPC's palette is built
+#: for opaque printing on white, so it is drawn translucent here to keep the
+#: coastline, borders, and station dots readable underneath it.
+OVERLAY_FILL_ALPHA = 68
+#: The legend swatch is small, so it needs more opacity than the map area to
+#: read as the same colour.
+OVERLAY_LEGEND_FILL_ALPHA = 150
+#: Hatched areas annotate the band beneath them, so the strokes stay legible.
+OVERLAY_HATCH_ALPHA = 190
+OVERLAY_STROKE_WIDTH = 1.8
+
+def hatch_brush(colour: QColor, level: int) -> QBrush:
+    """Return the brush for an overlay hatch qualifier at ``level``.
+
+    Delegates so the picker maps and the hodograph's locator inset cannot drift
+    apart on a pattern that is the only thing distinguishing one SPC intensity
+    group from the next. Bound at import rather than per call, because this runs
+    once per hatched shape inside a repaint.
+    """
+    return _overlay_hatch_brush(QtCore, QtGui, colour, level)
+
 #: Named map extents for the "Map Area" selector: (lon0, lon1, lat0, lat1).
 MAP_AREAS: dict[str, tuple[float, float, float, float]] = {
     "United States (CONUS)": (-125.0, -66.0, 23.0, 50.0),
@@ -189,6 +213,28 @@ class StationMapWidget(QWidget):
         self._hover_lonlat: tuple[float, float] | None = None
         self._drag_last: QPointF | None = None
         self._dragged = False
+        # Overlays are drawn live rather than baked into the basemap raster:
+        # they depend on the selected valid time, which is not part of the
+        # raster's cache key, and they are small enough (hundreds of points)
+        # that redrawing them on hover costs nothing.
+        self._overlays: dict[str, object] = {}
+        # Raster overlays live in their own registry rather than beside the
+        # vector layers. Every consumer of ``_overlays`` reaches for
+        # ``layer.shapes``, so a raster mixed in there would have to be filtered
+        # out at each of those sites; keeping them apart means the vector paint
+        # path and legend need no type checks at all. The two share
+        # ``_overlay_visible``, which is keyed only by string, and one key may
+        # not name both.
+        self._rasters: dict[str, OverlayRaster] = {}
+        #: ``{key: (image_bytes, QPixmap | None)}``. Decoding a full-extent
+        #: radar frame costs milliseconds and ``paintEvent`` runs on every mouse
+        #: move, so the decode is cached. The key half is the *bytes object*, so
+        #: re-wrapping the same payload at a new opacity reuses the pixmap while
+        #: a genuinely new frame replaces it. ``None`` records a failed decode so
+        #: a corrupt payload is not re-attempted on every repaint.
+        self._raster_pixmaps: dict[str, tuple[bytes, QPixmap | None]] = {}
+        self._overlay_visible: dict[str, bool] = {}
+        self._valid_time: datetime | None = None
         self._basemap_cache = None
         self._cache_key = None
         self._cache_proj = None
@@ -261,6 +307,121 @@ class StationMapWidget(QWidget):
         self._lon0, self._lon1 = st["lon"] - span_lon, st["lon"] + span_lon
         self._lat0, self._lat1 = st["lat"] - span_lat, st["lat"] + span_lat
         self._invalidate()
+
+    def view_bounds(self) -> tuple[float, float, float, float]:
+        """Return the visible extent as ``(lon0, lon1, lat0, lat1)``.
+
+        Exists so a controller can decide whether a regional product could be
+        seen at all before spending a request on it, without reaching into the
+        widget's private viewport fields.
+        """
+        return (self._lon0, self._lon1, self._lat0, self._lat1)
+
+    # -- overlays ------------------------------------------------------------ #
+    def set_overlay(self, key: str, layer, *, visible: bool | None = None
+                    ) -> None:
+        """Attach or replace the overlay stored under ``key``.
+
+        Passing ``None`` for ``layer`` removes it. Visibility is remembered
+        across replacements so refreshing an overlay for a new valid time does
+        not silently re-enable one the user turned off; pass ``visible`` to set
+        it explicitly.
+        """
+        if layer is None:
+            self.remove_overlay(key)
+            return
+        # Routed on type so callers attach either kind through one method. A key
+        # is claimed by whichever kind arrives, and the other registry is cleared
+        # of it so a product that changes representation cannot leave a stale
+        # twin drawing underneath.
+        if isinstance(layer, OverlayRaster):
+            self._overlays.pop(key, None)
+            self._rasters[key] = layer
+        else:
+            self._rasters.pop(key, None)
+            self._raster_pixmaps.pop(key, None)
+            self._overlays[key] = layer
+        if visible is not None:
+            self._overlay_visible[key] = bool(visible)
+        else:
+            self._overlay_visible.setdefault(key, True)
+        self.update()
+
+    def remove_overlay(self, key: str) -> None:
+        """Detach the overlay stored under ``key``, keeping its toggle state."""
+        removed = self._overlays.pop(key, None) is not None
+        removed |= self._rasters.pop(key, None) is not None
+        self._raster_pixmaps.pop(key, None)
+        if removed:
+            self.update()
+
+    def overlay(self, key: str):
+        """Return the overlay stored under ``key``, vector or raster, or ``None``."""
+        layer = self._overlays.get(key)
+        if layer is not None:
+            return layer
+        return self._rasters.get(key)
+
+    def overlay_keys(self) -> tuple[str, ...]:
+        return tuple(self._overlays) + tuple(self._rasters)
+
+    def set_overlay_visible(self, key: str, visible: bool) -> None:
+        """Show or hide one overlay without discarding its geometry.
+
+        The layer is kept so toggling back on is instant and needs no refetch.
+        """
+        visible = bool(visible)
+        if self._overlay_visible.get(key) == visible:
+            return
+        self._overlay_visible[key] = visible
+        self.update()
+
+    def is_overlay_visible(self, key: str) -> bool:
+        return bool(self._overlay_visible.get(key, True))
+
+    def set_valid_time(self, when: datetime | None) -> None:
+        """Record the valid time the map's overlays should describe.
+
+        Only used for display: the map reports when an attached overlay does
+        not cover this time so a mismatched product cannot pass for a current
+        one. Fetching the right overlay stays the caller's job.
+        """
+        if self._valid_time == when:
+            return
+        self._valid_time = when
+        if self._overlays:
+            self.update()
+
+    def valid_time(self) -> datetime | None:
+        return self._valid_time
+
+    def _visible_overlays(self) -> list:
+        return [layer for key, layer in self._overlays.items()
+                if self._overlay_visible.get(key, True) and layer]
+
+    def _raster_decode_failed(self, key: str, raster: OverlayRaster) -> bool:
+        """Report whether this exact payload has already failed to decode."""
+        cached = self._raster_pixmaps.get(key)
+        return (cached is not None and cached[1] is None
+                and cached[0] is raster.image_bytes)
+
+    def _visible_rasters(self) -> list[tuple[str, OverlayRaster]]:
+        """Return visible raster overlays that overlap the current view.
+
+        The view test happens here rather than in the paint loop so a product
+        covering somewhere the map is not looking never has its payload decoded.
+
+        A payload already known not to decode is dropped too. That is what keeps
+        the legend honest: it is drawn from this same list, so without the filter
+        a corrupt frame would be captioned and credited on screen while nothing
+        at all had been painted. The entry clears itself when a new frame
+        arrives, because the decode cache is keyed on the payload object.
+        """
+        view = (self._lon0, self._lon1, self._lat0, self._lat1)
+        return [(key, raster) for key, raster in self._rasters.items()
+                if self._overlay_visible.get(key, True) and raster
+                and raster.intersects(view)
+                and not self._raster_decode_failed(key, raster)]
 
     def _invalidate(self) -> None:
         self._basemap_refresh_timer.stop()
@@ -472,13 +633,296 @@ class StationMapWidget(QWidget):
                 poly.append(self._to_px(lon, lat, p))
             qp.drawPolyline(poly)
 
+    # -- raster overlay painting --------------------------------------------- #
+    def _raster_pixmap(self, key: str, raster: OverlayRaster):
+        """Return the decoded pixmap for ``raster``, decoding at most once.
+
+        The no-data pixels in a WMS radar frame are white with zero alpha, so the
+        image is converted to a premultiplied format before it is ever scaled.
+        Scaling straight ARGB32 interpolates those white pixels into the edge of
+        every echo and rings each storm with a pale halo.
+        """
+        cached = self._raster_pixmaps.get(key)
+        if cached is not None and cached[0] is raster.image_bytes:
+            return cached[1]
+
+        image = QImage()
+        if not image.loadFromData(raster.image_bytes):
+            # Remember the failure. Retrying a corrupt payload on every repaint
+            # would burn the decode cost dozens of times a second while hovering.
+            self._raster_pixmaps[key] = (raster.image_bytes, None)
+            return None
+        image = image.convertToFormat(QImage.Format_ARGB32_Premultiplied)
+        pixmap = QPixmap.fromImage(image)
+        if pixmap.isNull():
+            self._raster_pixmaps[key] = (raster.image_bytes, None)
+            return None
+        self._raster_pixmaps[key] = (raster.image_bytes, pixmap)
+        return pixmap
+
+    def _draw_raster_overlays(self, qp, p) -> None:
+        """Blit every visible georeferenced image into the current projection.
+
+        Only the visible sub-rectangle of the source is drawn. Zoomed in far
+        enough, the full destination rectangle would be orders of magnitude
+        larger than the widget, and letting Qt scale the whole frame and then
+        clip it wastes that work on pixels nobody sees.
+
+        This projection is equirectangular and axis-aligned, so a lon/lat box
+        maps to an axis-aligned pixel box and a plate-carree source needs no
+        resampling beyond the scale Qt is already doing.
+        """
+        for key, raster in self._visible_rasters():
+            pixmap = self._raster_pixmap(key, raster)
+            if pixmap is None:
+                continue
+
+            min_lon, max_lon, min_lat, max_lat = raster.bounds
+            lon_span = max_lon - min_lon
+            lat_span = max_lat - min_lat
+            if lon_span <= 0.0 or lat_span <= 0.0:
+                continue
+
+            # Visible window, clamped to what the image actually covers.
+            vlon0 = max(min_lon, min(self._lon0, self._lon1))
+            vlon1 = min(max_lon, max(self._lon0, self._lon1))
+            vlat0 = max(min_lat, min(self._lat0, self._lat1))
+            vlat1 = min(max_lat, max(self._lat0, self._lat1))
+            if vlon1 <= vlon0 or vlat1 <= vlat0:
+                continue
+
+            img_w = float(pixmap.width())
+            img_h = float(pixmap.height())
+            # Source pixels: x grows east, y grows south from the north edge.
+            sx0 = (vlon0 - min_lon) / lon_span * img_w
+            sx1 = (vlon1 - min_lon) / lon_span * img_w
+            sy0 = (max_lat - vlat1) / lat_span * img_h
+            sy1 = (max_lat - vlat0) / lat_span * img_h
+            source = QRectF(sx0, sy0, sx1 - sx0, sy1 - sy0)
+            if source.width() <= 0.0 or source.height() <= 0.0:
+                continue
+
+            destination = QRectF(
+                self._to_px(vlon0, vlat1, p),
+                self._to_px(vlon1, vlat0, p),
+            )
+
+            # Smooth only when shrinking the image. Magnifying a reflectivity
+            # field bilinearly invents gradients between data cells, which is
+            # what makes a zoomed-in radar overlay look blurred rather than
+            # coarse; nearest-neighbour keeps the cells the source actually
+            # published, the way dedicated radar displays present them. When
+            # minifying, smoothing is still wanted -- it stops isolated cells
+            # aliasing in and out as the view moves.
+            magnifying = (destination.width() > source.width()
+                          or destination.height() > source.height())
+            qp.save()
+            qp.setRenderHint(QPainter.SmoothPixmapTransform, not magnifying)
+            qp.setOpacity(raster.opacity)
+            qp.drawPixmap(destination, pixmap, source)
+            qp.restore()
+
+    # -- overlay painting ---------------------------------------------------- #
+    def _draw_overlays(self, qp, p) -> None:
+        """Fill and outline every visible overlay shape inside the view."""
+        layers = self._visible_overlays()
+        if not layers:
+            return
+        # Same padded clip window as the basemap layers, so a shape that only
+        # partly intersects the view still draws its visible portion.
+        lon_pad = (self._lon1 - self._lon0) * 0.15
+        lat_pad = (self._lat1 - self._lat0) * 0.15
+        vlon0, vlon1 = self._lon0 - lon_pad, self._lon1 + lon_pad
+        vlat0, vlat1 = self._lat0 - lat_pad, self._lat1 + lat_pad
+
+        qp.save()
+        for layer in layers:
+            for shape in layer.shapes:
+                blo0, blo1, bla0, bla1 = shape.bounds
+                if blo1 < vlon0 or blo0 > vlon1 \
+                        or bla1 < vlat0 or bla0 > vlat1:
+                    continue
+                path = QPainterPath()
+                # Odd-even filling makes an interior ring a hole regardless of
+                # its winding direction. The source data's ring order is not
+                # guaranteed, and with the winding rule a hole wound the same
+                # way as its exterior fills solid instead.
+                path.setFillRule(Qt.OddEvenFill)
+                for ring in shape.rings:
+                    poly = QPolygonF()
+                    for lon, lat in ring:
+                        poly.append(self._to_px(lon, lat, p))
+                    path.addPolygon(poly)
+                    path.closeSubpath()
+                if shape.fill:
+                    fill = QColor(shape.fill)
+                    if shape.hatch:
+                        # A hatch qualifies the band it sits on, so it keeps
+                        # more opacity than a wash and lets the colour beneath
+                        # show through the gaps rather than replacing it.
+                        fill.setAlpha(OVERLAY_HATCH_ALPHA)
+                        qp.fillPath(path, hatch_brush(
+                            fill, getattr(shape, "hatch_level", 0)))
+                    else:
+                        fill.setAlpha(OVERLAY_FILL_ALPHA)
+                        qp.fillPath(path, QBrush(fill))
+                if shape.stroke:
+                    qp.strokePath(path, QPen(
+                        QColor(shape.stroke), OVERLAY_STROKE_WIDTH))
+        qp.restore()
+
+    def _overlay_legend_rows(self) -> list[tuple[str, str, str, int]]:
+        """Return ``(label, stroke, fill, hatch_level)`` per distinct category.
+
+        A category arrives as several shapes when its area is a multi-polygon,
+        so the legend would otherwise repeat "MRGL" three times.
+
+        The hatch level travels with the row because SPC's intensity groups all
+        publish the same grey: without it the CIG1, CIG2, and CIG3 swatches
+        would be three identical squares.
+        """
+        rows: list[tuple[str, str, str, int]] = []
+        seen: set[tuple[str, str, str, int]] = set()
+        for layer in self._visible_overlays():
+            # Prefix the hazard on the first swatch of a probability product.
+            # "5% 15% 30%" alone does not say what is being measured, and
+            # repeating the hazard on every swatch would not fit the row.
+            prefix = getattr(layer, "short_name", "")
+            for shape in layer.shapes:
+                if not shape.label:
+                    continue
+                label = shape.label
+                if prefix:
+                    label = f"{prefix} {label}"
+                    prefix = ""
+                row = (label, shape.stroke, shape.fill or "",
+                       getattr(shape, "hatch_level", 0) if shape.hatch else 0)
+                if row in seen:
+                    continue
+                seen.add(row)
+                rows.append(row)
+        return rows
+
+    def _draw_overlay_legend(self, qp) -> None:
+        """Draw the overlay title, validity, and category swatches.
+
+        Bottom-left, because the coordinate readout owns the top-left corner.
+        The validity line is the visible half of "time aware": it states the
+        window the product covers, and says so plainly when that window does
+        not contain the map's selected valid time.
+        """
+        layers = self._visible_overlays()
+        rasters = self._visible_rasters()
+        if not layers and not rasters:
+            return
+
+        captions: list[str] = []
+        credits: list[str] = []
+        for layer in layers:
+            captions.append(layer.title)
+            if layer.subtitle:
+                captions.append(layer.subtitle)
+            # State the relationship either way rather than only warning on a
+            # mismatch. An SPC convective day runs 12Z to 12Z, so a sounding
+            # valid 00Z belongs to the previous calendar day's outlook; seeing
+            # the two dates differ with nothing to explain it reads as a fault.
+            if self._valid_time is not None:
+                if layer.covers(self._valid_time):
+                    captions.append(
+                        f"Selected {self._valid_time:%d %b %H%M}Z is within "
+                        "this outlook")
+                else:
+                    captions.append(
+                        f"\u26a0 Selected {self._valid_time:%d %b %H%M}Z is "
+                        "outside this outlook")
+            credit = getattr(layer, "attribution", "")
+            if credit and credit not in credits:
+                credits.append(credit)
+
+        for _key, raster in rasters:
+            # Age belongs on the same line as the title. A live image with no
+            # time on it invites the assumption that it is current, which is
+            # exactly the assumption that misleads once a fetch starts failing.
+            age = format_age(raster.age_seconds())
+            title = raster.title
+            if age:
+                marker = "\u26a0 " if raster.is_stale() else ""
+                title = f"{marker}{title} \u00b7 {age}"
+            captions.append(title)
+            credit = getattr(raster, "attribution", "")
+            if credit and credit not in credits:
+                credits.append(credit)
+
+        # Attribution is drawn here because nothing else draws it. Every remote
+        # overlay records a credit, and until now the map showed none of them.
+        if credits:
+            captions.append("Source: " + ", ".join(credits))
+
+        rows = self._overlay_legend_rows()
+        if not captions and not rows:
+            return
+
+        line_h = 15
+        swatch_h = 13 if rows else 0
+        block_h = len(captions) * line_h + swatch_h
+        y = self.height() - 8 - block_h
+
+        if rows:
+            qp.setFont(mono_font("caption"))
+            x = 10.0
+            swatch_y = y + 1.0
+            for label, stroke, fill, hatch_level in rows:
+                box = QRectF(x, swatch_y, 11.0, 11.0)
+                if fill:
+                    patch = QColor(fill)
+                    patch.setAlpha(OVERLAY_LEGEND_FILL_ALPHA)
+                    # Hatched categories show their pattern here too, since it
+                    # is the only thing separating one intensity group from the
+                    # next on the map.
+                    qp.setBrush(hatch_brush(patch, hatch_level)
+                                if hatch_level else QBrush(patch))
+                else:
+                    qp.setBrush(Qt.NoBrush)
+                qp.setPen(QPen(QColor(stroke), 1.4))
+                qp.drawRect(box)
+                text_w = qp.fontMetrics().horizontalAdvance(label) + 6.0
+                qp.setPen(QPen(QColor(_map().readout_shadow)))
+                qp.drawText(QRectF(x + 14.0, swatch_y - 1.0, text_w, 13.0)
+                            .translated(1, 1),
+                            Qt.AlignLeft | Qt.AlignVCenter, label)
+                qp.setPen(QPen(QColor(_map().readout_text)))
+                qp.drawText(QRectF(x + 14.0, swatch_y - 1.0, text_w, 13.0),
+                            Qt.AlignLeft | Qt.AlignVCenter, label)
+                x += 14.0 + text_w + 6.0
+            y += swatch_h
+
+        # Product name and validity window: prose, so the UI family reads best.
+        qp.setFont(ui_font("caption"))
+        for text in captions:
+            rect = QRectF(8, y, self.width() - 16, line_h)
+            qp.setPen(QPen(QColor(_map().readout_shadow)))
+            qp.drawText(rect.translated(1, 1),
+                        Qt.AlignLeft | Qt.AlignVCenter, text)
+            qp.setPen(QPen(QColor(_map().readout_text)))
+            qp.drawText(rect, Qt.AlignLeft | Qt.AlignVCenter, text)
+            y += line_h
+
     # -- painting ------------------------------------------------------------ #
     def paintEvent(self, _event) -> None:  # noqa: N802 (Qt override)
         qp = QPainter(self)
         self._draw_basemap(qp)
         qp.setRenderHint(QPainter.Antialiasing, True)
-        self._draw_stations(qp, self._proj())
+        p = self._proj()
+        # Rasters go down first, directly on the basemap: a radar mosaic is
+        # imagery to sit behind everything, and drawn later it would bury the
+        # vector outlines and the stations.
+        self._draw_raster_overlays(qp, p)
+        # Overlays sit above the basemap but below the markers, so a risk area
+        # never hides the station the user is trying to click.
+        self._draw_overlays(qp, p)
+        self._draw_stations(qp, p)
         self._draw_readout(qp)
+        self._draw_overlay_legend(qp)
         qp.end()
 
     def _draw_stations(self, qp, p) -> None:
@@ -662,10 +1106,16 @@ class PointMapWidget(StationMapWidget):
         self._draw_basemap(qp)
         qp.setRenderHint(QPainter.Antialiasing, True)
         p = self._proj()
+        # Imagery first, beneath the domain outline and the picked point. See
+        # StationMapWidget.paintEvent -- both orders are hardcoded, so a new
+        # layer has to be added to each.
+        self._draw_raster_overlays(qp, p)
+        self._draw_overlays(qp, p)
         self._draw_domain(qp, p)
         self._draw_saved_points(qp, p)
         self._draw_point(qp, p)
         self._draw_readout(qp)
+        self._draw_overlay_legend(qp)
         qp.end()
 
     def _draw_domain(self, qp, p) -> None:

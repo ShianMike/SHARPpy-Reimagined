@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -25,13 +26,15 @@ from sharpmod.gui_common import (
     _format_progress_bytes,
     _format_progress_duration,
     _most_recent_synoptic,
+    as_utc,
+    install_month_calendar,
     _render,
     _install_fullscreen_action,
     _show_controls_dialog,
     _uwyo_catalog,
 )
 from sharpmod.gui_shell import SourceSelector
-from sharpmod.gui_theme import apply_theme, ensure_theme_applied
+from sharpmod.gui_theme import apply_theme, ensure_theme_applied, mono_font
 from sharpmod.theme import (
     CONTROL_H,
     FIELD_W,
@@ -39,6 +42,7 @@ from sharpmod.theme import (
     OBJ_EMPHASIS,
     OBJ_GHOST,
     OBJ_HINT,
+    OBJ_NUMERIC,
     OBJ_PRIMARY,
     OBJ_PROGRESS_DETAIL,
     OBJ_STATUS,
@@ -54,6 +58,10 @@ from sharpmod.saved_locations import (
     RECENT_SETTINGS_KEY,
     SavedLocationStore,
     is_generated_recent_label,
+)
+from sharpmod.gui_overlay_controls import (
+    OutlookOverlayController,
+    RadarOverlayController,
 )
 from sharpmod.gui_sessions import _apply_viewer_session_state
 from sharpmod.gui_settings import (
@@ -132,7 +140,7 @@ from qtpy.QtWidgets import (
     QFrame,
     QDialog,
     QDialogButtonBox,
-    QFormLayout,
+
     QCheckBox,
     QSizePolicy,
     QGraphicsView,
@@ -157,6 +165,80 @@ def compose_interactive(*args, **kwargs):
     return _compose_interactive(*args, **kwargs)
 
 
+def _select_cycle(combo, hour) -> None:
+    """Select cycle ``hour`` in ``combo``, leaving it alone if not offered."""
+    index = combo.findData(int(hour))
+    if index >= 0:
+        combo.setCurrentIndex(index)
+
+
+def _fill_cycle_combo(combo, hours, selected=None) -> None:
+    """Populate ``combo`` with UTC cycle hours, newest first.
+
+    Newest first because the freshest run is the one usually wanted. Ascending
+    order buried it: an hourly model publishes 24 cycles, so the newest sat off
+    the bottom of a scrolling list while 00Z -- by then most of a day stale --
+    sat under the cursor as the first entry.
+
+    Hours travel as item data, so callers select by hour rather than by position
+    and the display order is free to change without breaking them.
+    """
+    combo.clear()
+    for hour in sorted({int(value) for value in hours}, reverse=True):
+        combo.addItem(f"{hour:02d}Z", hour)
+    if selected is not None:
+        _select_cycle(combo, selected)
+
+
+def _newest_cycle_not_after(hours, hour: int) -> int:
+    """Return the newest cycle at or before ``hour``.
+
+    Falls back to the earliest cycle when none qualifies, which is the case for
+    a time earlier than the day's first run.
+    """
+    ordered = sorted({int(value) for value in hours})
+    if not ordered:
+        return 0
+    eligible = [value for value in ordered if value <= int(hour)]
+    return eligible[-1] if eligible else ordered[0]
+
+
+#: Source tab title -> the overlay controller attribute that tab owns. Tabs
+#: absent from this map host no overlay of their own. Keyed by title because
+#: that is what ``SourceSelector`` exposes and what the rest of the picker keys
+#: on; the tab order is not stable enough to index by.
+TAB_OVERLAY_CONTROLLERS = {
+    "Station Map": "_map_outlook",
+    "Forecast Model": "_model_outlook",
+}
+
+
+def _overlay_product_for(owner):
+    """Return ``owner``'s selected overlay hazard, tolerating a minimal owner.
+
+    Some entry points are driven with a stand-in object that implements only the
+    handful of attributes they touch, so this must not require the full picker
+    surface. Resolved through the viewer's own duck-typed reader so both sides
+    agree on what "no preference" means.
+    """
+    from sharpmod.gui_viewer import _controller_overlay_product
+
+    return _controller_overlay_product(owner)
+
+
+def _start_locator_overlay_fetch(*args, **kwargs):
+    """Lazily fetch a sounding's locator-inset overlay.
+
+    Needed on the paths that add a collection to an existing viewer rather than
+    composing a new one, since only :func:`compose_interactive` starts the fetch
+    itself. Without this, a sounding opened in combine mode or restored from a
+    session would show no risk on its inset.
+    """
+    from sharpmod.gui_viewer import start_locator_overlay_fetch
+
+    return start_locator_overlay_fetch(*args, **kwargs)
+
+
 def _fill_profile_metadata(*args, **kwargs):
     """Lazily normalize metadata before adding to an existing viewer."""
     from sharpmod.gui_viewer import _fill_metadata
@@ -164,25 +246,36 @@ def _fill_profile_metadata(*args, **kwargs):
     return _fill_metadata(*args, **kwargs)
 
 
+#: Explains the two-stage town lookup. Shared by the attribution line and the
+#: town fields themselves, so the visible text can stay short.
+_TOWN_LOOKUP_TOOLTIP = (
+    "When the location label is blank, CONUS locations are resolved "
+    "locally from the bundled U.S. Census state and place index. Only "
+    "when the offline index has no result is the configured Nominatim "
+    "service tried, and the result is cached. Enter a label to skip "
+    "automatic lookup."
+)
+
+
 def _town_lookup_attribution_label(parent=None) -> QLabel:
+    """Return the one-line Census/OpenStreetMap credit for town lookups.
+
+    Kept visible rather than folded into a tooltip: OpenStreetMap's licence
+    asks for attribution where the data is shown. It is worded tightly so it
+    fits one line at the rail width -- the longer sentence it replaced wrapped
+    to three lines in both panels that carry it.
+    """
     label = QLabel(
+        "Town names: "
         '<a href="https://www.census.gov/geographies/reference-files/'
-        'time-series/geo/gazetteer-files.html">'
-        "Automatic town lookup: U.S. Census (offline)</a>; "
-        '<a href="https://www.openstreetmap.org/copyright">'
-        "OpenStreetMap fallback</a>",
+        'time-series/geo/gazetteer-files.html">Census</a> / '
+        '<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         parent,
     )
     label.setOpenExternalLinks(True)
     label.setObjectName(OBJ_ATTRIBUTION)
     label.setWordWrap(True)
-    label.setToolTip(
-        "When the location label is blank, CONUS locations are resolved "
-        "locally from the bundled U.S. Census state and place index. Only "
-        "when the offline index has no result is the configured Nominatim "
-        "service tried, and the result is cached. Enter a label to skip "
-        "automatic lookup."
-    )
+    label.setToolTip(_TOWN_LOOKUP_TOOLTIP)
     return label
 
 
@@ -219,6 +312,98 @@ def _scrolling_control_rail(
     scroll.setWidget(content)
     return scroll
 
+
+def _rail_card(title: str) -> tuple[QGroupBox, QVBoxLayout]:
+    """Return one rail card and its stacked layout.
+
+    Every rail card goes through here or :func:`_rail_form` so the three source
+    panels cannot drift apart again. They previously each hand-rolled their own
+    group box and grid, which is how the same conceptual control ended up with
+    different titles, field widths, and column stretch depending on which tab
+    you were looking at.
+    """
+    box = QGroupBox(title)
+    layout = QVBoxLayout(box)
+    # The card's padding already comes from the style sheet, so the inner
+    # layout must not add its own default margin on top of it. Only the two
+    # availability cards used to do this, which is why they alone looked tight
+    # while every other card carried a double inset.
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(SPACE["sm"])
+    return box, layout
+
+
+def _rail_form(title: str) -> tuple[QGroupBox, QGridLayout]:
+    """Return one rail card whose body is a label / field / action grid.
+
+    Column 0 holds the labels, column 1 the field that should absorb slack, and
+    column 2 an optional inline action. Fixing that here is what makes the
+    "Date:" fields line up at the same x across all three panels.
+    """
+    box = QGroupBox(title)
+    grid = QGridLayout(box)
+    grid.setContentsMargins(0, 0, 0, 0)
+    grid.setVerticalSpacing(SPACE["sm"])
+    grid.setHorizontalSpacing(SPACE["sm"])
+    # One label column width for every card, so fields line up down the whole
+    # rail instead of stepping in and out as the label text changes length.
+    grid.setColumnMinimumWidth(0, FIELD_W["label"])
+    grid.setColumnStretch(1, 1)
+    return box, grid
+
+
+def _rail_row(grid: QGridLayout, row: int, label: str, field, *,
+              trailing=None, width: str = "wide"):
+    """Place one ``label: field [action]`` row in a rail form grid.
+
+    The field spans into the action column when there is no action, so a row
+    without a button still reaches the card's right edge instead of stopping
+    short and leaving a ragged gap the other rows do not have.
+    """
+    grid.addWidget(QLabel(label), row, 0)
+    field.setMinimumWidth(FIELD_W[width])
+    field.setMinimumHeight(CONTROL_H["md"])
+    if trailing is None:
+        grid.addWidget(field, row, 1, 1, 2)
+    else:
+        grid.addWidget(field, row, 1)
+        trailing.setMinimumWidth(FIELD_W["action"])
+        trailing.setMinimumHeight(CONTROL_H["md"])
+        grid.addWidget(trailing, row, 2)
+    return field
+
+
+def _rail_zoom_row(map_widget) -> QHBoxLayout:
+    """Return the shared zoom-out / zoom-in / reset row for a map card.
+
+    All three panels show the same three buttons, but one of them used to label
+    the third "Reset view" while the others said "Reset", and only two gave the
+    buttons tooltips.
+    """
+    row = QHBoxLayout()
+    row.setSpacing(SPACE["sm"])
+    zoom_out = QToolButton()
+    zoom_out.setText("\u2212")
+    zoom_out.setToolTip("Zoom out")
+    zoom_out.clicked.connect(lambda: map_widget.zoom(1.25))
+    zoom_in = QToolButton()
+    zoom_in.setText("+")
+    zoom_in.setToolTip("Zoom in")
+    zoom_in.clicked.connect(lambda: map_widget.zoom(0.8))
+    reset = QToolButton()
+    reset.setText("Reset")
+    reset.setToolTip("Reset the view to the selected region")
+    reset.clicked.connect(lambda: map_widget.reset_view())
+    for button in (zoom_out, zoom_in, reset):
+        button.setMinimumHeight(CONTROL_H["md"])
+        row.addWidget(button)
+    row.addStretch(1)
+    return row
+
+
+#: A widest-case instant for measuring the UTC clock label. Every field in the
+#: clock's format is fixed width, so one sample sizes them all.
+_UTC_CLOCK_SAMPLE = datetime(2026, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
 
 #: Qt property holding a button's idle label while it shows a busy one.
 _IDLE_TEXT_PROPERTY = "sharpmodIdleText"
@@ -281,6 +466,46 @@ def _show_stable_gui_runtime_required() -> None:
         print(message, file=sys.stderr)
 
 
+#: Held open for the process lifetime once ``faulthandler`` is armed against it.
+_NATIVE_FAULT_STREAM = None
+
+
+def _native_crash_capture():
+    """Return an appendable file for the relaunched child's console output.
+
+    The relaunch target is ``pythonw.exe``, which has no console, and the child
+    inherits nothing to write to. Anything it emits outside the logging system
+    is therefore discarded -- including the interpreter's own report for a
+    native crash, which is exactly the failure mode this relaunch exists to
+    work around. When that happened the rotating log simply stopped mid
+    startup with no exit and no traceback, which is unfalsifiable: it looks
+    identical to the user closing the window.
+
+    Capturing the stream to a bounded file beside the rotating log makes the
+    next hard crash diagnosable instead. Returns ``None`` if the file cannot be
+    opened, because losing diagnostics is far better than refusing to start.
+    """
+    try:
+        path = Path(_configure_debug_logging()).with_name(
+            "sharpmod-gui-native.log")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Trim before handing the handle over rather than mid-write, since the
+        # child holds it open for its whole life and cannot roll it over.
+        if path.is_file() and path.stat().st_size > 1_000_000:
+            path.unlink()
+        stream = open(path, "a", encoding="utf-8", errors="replace")
+        stream.write(
+            "\n=== relaunch %s pid=%d ===\n"
+            % (datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               os.getpid())
+        )
+        stream.flush()
+        return stream
+    except OSError:
+        _LOGGER.warning("application.native_capture_unavailable", exc_info=True)
+        return None
+
+
 def _relaunch_stable_windows_gui(arguments: list[str]) -> bool:
     """Relaunch an unfrozen Python 3.14 Windows GUI with project Python.
 
@@ -288,6 +513,10 @@ def _relaunch_stable_windows_gui(arguments: list[str]) -> bool:
     dispatching the visible Windows picker, leaving no catchable traceback.
     The project/release runtime is Python 3.11, so switch before QApplication
     starts rather than allowing a native crash.
+
+    The child is started with ``faulthandler`` enabled and its console output
+    captured, so a crash that Python cannot raise as an exception still leaves
+    a stack behind. See :func:`_native_crash_capture`.
     """
     if sys.platform != "win32" or sys.version_info < (3, 14):
         return False
@@ -305,18 +534,29 @@ def _relaunch_stable_windows_gui(arguments: list[str]) -> bool:
     python, project_root = runtime
     environment = os.environ.copy()
     environment[_STABLE_GUI_RUNTIME_ENV] = "1"
+    # Turn an uncatchable native fault into a printed stack. Cheap at runtime
+    # and worthless only if nothing ever crashes.
+    environment.setdefault("PYTHONFAULTHANDLER", "1")
     command = [str(python), "-m", "sharpmod.gui", *arguments]
+    capture = _native_crash_capture()
     try:
         subprocess.Popen(
             command,
             cwd=str(project_root),
             env=environment,
             close_fds=True,
+            stdout=capture,
+            stderr=subprocess.STDOUT if capture is not None else None,
         )
     except OSError:
         _LOGGER.exception(
             "application.stable_runtime_relaunch_failed runtime=%s", python)
         return False
+    finally:
+        # The child received its own duplicated handle, so this copy is done.
+        if capture is not None:
+            with suppress(OSError):
+                capture.close()
 
     _LOGGER.info(
         "application.stable_runtime_relaunch source=%s target=%s",
@@ -476,6 +716,7 @@ class PickerWindow(QMainWindow):
         self._sync_tab_status()
 
         self._build_menu()
+        self._install_utc_clock()
         self._restore_state()
         self._refresh_location_markers()
         self._refresh_recent_location_menu()
@@ -548,6 +789,62 @@ class PickerWindow(QMainWindow):
         else:
             self.statusBar().showMessage(
                 "Ready \u2014 pick a station and press Fetch")
+
+    # -- UTC clock ----------------------------------------------------------- #
+    def _install_utc_clock(self) -> None:
+        """Show the current UTC time in the menu bar's top-right corner.
+
+        Every run, cycle, and valid time in this application is UTC, and the
+        operating system clock is not, so the conversion was being done in the
+        user's head on every selection. The four-digit Zulu group is shown
+        alongside because that is the form the cycle and valid-time fields use.
+
+        Monospaced, so the width does not twitch as the digits change.
+        """
+        # Built with a full-width sample rather than an empty string. A menu bar
+        # sizes its corner widget from the size hint the widget had when it was
+        # attached, and this label's real text only arrives from the timer after
+        # that -- so an empty start left it too narrow forever. Because the text
+        # is right-aligned, the overflow was clipped on its *left* edge, which
+        # rendered "UTC" as "JTC".
+        self._utc_clock = QLabel(self._format_utc_clock(_UTC_CLOCK_SAMPLE))
+        # The object name is what actually delivers the monospaced family: a
+        # style-sheet `font-family` beats `setFont`, so the base chrome rule was
+        # silently putting the proportional UI face back and the "does not
+        # twitch" promise above was not being kept. The `setFont` call remains
+        # for hosts that never apply the style sheet at all.
+        self._utc_clock.setObjectName(OBJ_NUMERIC)
+        self._utc_clock.setFont(mono_font("caption"))
+        self._utc_clock.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._utc_clock.setContentsMargins(
+            SPACE["sm"], 0, SPACE["md"], 0)
+        # Pin the width the sample needs. The format is fixed and the font is
+        # monospaced, so this measurement holds for every future value.
+        self._utc_clock.setMinimumWidth(
+            self._utc_clock.sizeHint().width() + SPACE["xs"])
+        self.menuBar().setCornerWidget(self._utc_clock, Qt.TopRightCorner)
+
+        self._utc_timer = QTimer(self)
+        self._utc_timer.setInterval(1000)
+        self._utc_timer.timeout.connect(self._update_utc_clock)
+        self._utc_timer.start()
+        self._update_utc_clock()
+
+    @staticmethod
+    def _format_utc_clock(now) -> str:
+        """Return the clock's text. Shared so the measured sample cannot drift."""
+        return f"UTC {now:%Y-%m-%d %H:%M:%S}  \u00b7  {now:%H%M}Z"
+
+    def _update_utc_clock(self) -> None:
+        clock = getattr(self, "_utc_clock", None)
+        if clock is None:
+            return
+        now = datetime.now(timezone.utc)
+        clock.setText(self._format_utc_clock(now))
+        clock.setToolTip(
+            f"Current UTC time: {now:%Y-%m-%d %H:%M:%S}Z\n"
+            f"Zulu is the same instant, written {now:%H%M}Z.\n"
+            "Model runs, cycles, and valid times here are all UTC.")
 
     # -- menu ---------------------------------------------------------------- #
     def _build_menu(self) -> None:
@@ -675,6 +972,8 @@ class PickerWindow(QMainWindow):
             for collection in collections[1:]:
                 win.addProfileCollection(
                     collection, focus=True, check_integrity=False)
+                _start_locator_overlay_fetch(
+                    win, collection, product=_overlay_product_for(self))
             _apply_viewer_session_state(
                 win,
                 document.get("active_collection", 0),
@@ -1104,82 +1403,80 @@ class PickerWindow(QMainWindow):
                                  SPACE["md"], SPACE["sm"])
         outer.setSpacing(SPACE["md"])
 
+        # The map is built before the control rail because the overlay toggle
+        # binds directly to it, and the rail is sealed into a scroll area as
+        # soon as it is complete. Its placement in ``outer`` is unchanged.
+        self._map = StationMapWidget(self._all_stations)
+        self._map.stationSelected.connect(self._map_on_select)
+        self._map.stationActivated.connect(self._map_on_activate)
+
         # --- left control column ---
         left = QVBoxLayout()
         left.setSpacing(SPACE["md"])
         left.setContentsMargins(0, 0, 0, 0)
 
-        src_box = QGroupBox("Sounding source")
-        sb = QVBoxLayout(src_box)
+        src_box, sb = _rail_card("Sounding source")
         src_combo = QComboBox()
         src_combo.addItem("Observed (UWyo / IEM fallback)")
         src_combo.setEnabled(False)
+        src_combo.setMinimumHeight(CONTROL_H["md"])
         sb.addWidget(src_combo)
         left.addWidget(src_box)
 
-        cycle_box = QGroupBox("Cycle (UTC)")
-        cg = QGridLayout(cycle_box)
-        cg.setColumnStretch(1, 1)
+        cycle_box, cg = _rail_form("Run time (UTC)")
         default_date, default_hour = _most_recent_synoptic()
-        cg.addWidget(QLabel("Date:"), 0, 0)
         self._map_date = QDateEdit()
         self._map_date.setDisplayFormat("yyyy-MM-dd")
         self._map_date.setCalendarPopup(True)
+        install_month_calendar(self._map_date)
         self._map_date.setDate(default_date)
         self._map_date.setMaximumDate(QDate.currentDate().addDays(1))
-        self._map_date.setMinimumWidth(FIELD_W["date"])
-        cg.addWidget(self._map_date, 0, 1)
-        cg.addWidget(QLabel("Time:"), 1, 0)
+        _rail_row(cg, 0, "Date:", self._map_date)
         self._map_cycle = QComboBox()
-        for h in SYNOPTIC_HOURS:
-            self._map_cycle.addItem(f"{h:02d}Z", h)
-        self._map_cycle.setCurrentIndex(SYNOPTIC_HOURS.index(default_hour))
-        self._map_cycle.setMinimumWidth(FIELD_W["compact"])
-        cg.addWidget(self._map_cycle, 1, 1)
+        _fill_cycle_combo(self._map_cycle, SYNOPTIC_HOURS, default_hour)
         recent = QToolButton()
         recent.setText("Most recent")
-        recent.setMinimumWidth(FIELD_W["action"])
+        recent.setToolTip("Jump to the most recent synoptic cycle")
         recent.clicked.connect(self._map_set_recent)
-        cg.addWidget(recent, 1, 2)
+        _rail_row(cg, 1, "Cycle:", self._map_cycle, trailing=recent)
         left.addWidget(cycle_box)
 
-        area_box = QGroupBox("Map area")
-        ab = QVBoxLayout(area_box)
+        area_box, ab = _rail_card("Region")
         self._area_combo = QComboBox()
         for name in MAP_AREAS:
             self._area_combo.addItem(name)
+        self._area_combo.setMinimumHeight(CONTROL_H["md"])
         self._area_combo.currentTextChanged.connect(
             lambda name: self._map.set_area(name))
         ab.addWidget(self._area_combo)
-        zoom_row = QHBoxLayout()
-        zin = QToolButton(); zin.setText("\u2212")   # minus: zoom out
-        zin.setToolTip("Zoom out")
-        zin.clicked.connect(lambda: self._map.zoom(1.25))
-        zout = QToolButton(); zout.setText("+")       # plus: zoom in
-        zout.setToolTip("Zoom in")
-        zout.clicked.connect(lambda: self._map.zoom(0.8))
-        zreset = QToolButton(); zreset.setText("Reset view")
-        zreset.clicked.connect(lambda: self._map.reset_view())
-        zoom_row.addWidget(zin)
-        zoom_row.addWidget(zout)
-        zoom_row.addWidget(zreset)
-        zoom_row.addStretch(1)
-        ab.addLayout(zoom_row)
+        ab.addLayout(_rail_zoom_row(self._map))
         left.addWidget(area_box)
 
+        # Both overlays share one card. Each is a single switch plus the detail
+        # it only shows while it is on, so a card apiece read as two mostly
+        # empty panels and cost twice the chrome for one idea: what to draw over
+        # the map.
+        overlay_box, overlay_layout = _rail_card("Map overlays")
+        self._map_outlook = OutlookOverlayController(self._map, parent=self)
+        overlay_layout.addWidget(self._map_outlook.controls_widget())
+        self._map_radar = RadarOverlayController(self._map, parent=self)
+        overlay_layout.addWidget(self._map_radar.controls_widget())
+        left.addWidget(overlay_box)
+
+        # One card for "which station, and can it be fetched". The selection
+        # line used to sit loose between two cards, the only ungrouped control
+        # in any rail, and its availability lived in a separate card that
+        # repeated the same subject.
+        sel_box, selb = _rail_card("Selected station")
         self._map_sel_lbl = QLabel("No station selected")
         self._map_sel_lbl.setWordWrap(True)
         self._map_sel_lbl.setObjectName(OBJ_EMPHASIS)
-        left.addWidget(self._map_sel_lbl)
-
-        avail_box = QGroupBox("Availability")
+        selb.addWidget(self._map_sel_lbl)
         # No minimum height: the indicator sizes to its own content. A fixed 88 px
         # floor left the card mostly empty for the common two-line state.
-        avb = QVBoxLayout(avail_box)
-        avb.setContentsMargins(0, 0, 0, 0)
         self._map_avail = _AvailabilityIndicator()
-        avb.addWidget(self._map_avail)
-        left.addWidget(avail_box)
+        selb.addWidget(self._map_avail)
+        left.addWidget(sel_box)
 
         # Re-probe when the requested cycle changes for the current selection.
         self._map_date.dateChanged.connect(self._map_recheck_availability)
@@ -1208,19 +1505,17 @@ class PickerWindow(QMainWindow):
         self._map_controls_scroll = _scrolling_control_rail(left)
         outer.addWidget(self._map_controls_scroll)
 
-        # --- the map itself ---
-        self._map = StationMapWidget(self._all_stations)
-        self._map.stationSelected.connect(self._map_on_select)
-        self._map.stationActivated.connect(self._map_on_activate)
+        # --- the map itself (constructed above, placed here) ---
         outer.addWidget(self._map, stretch=1)
 
         self._map_selected_id: str | None = None
+        self._map_outlook.set_valid_time(as_utc(self._map_when()))
         return w
 
     def _map_set_recent(self) -> None:
         d, h = _most_recent_synoptic()
         self._map_date.setDate(d)
-        self._map_cycle.setCurrentIndex(SYNOPTIC_HOURS.index(h))
+        _select_cycle(self._map_cycle, h)
 
     def _map_when(self) -> datetime:
         d = self._map_date.date()
@@ -1247,6 +1542,9 @@ class PickerWindow(QMainWindow):
         self._refresh_station_catalog(self._map_when())
         self._queue_availability(
             self._map_selected_id, self._map_when(), self._map_avail)
+        # The chosen cycle is also the overlay's valid time.
+        if hasattr(self, "_map_outlook"):
+            self._map_outlook.set_valid_time(as_utc(self._map_when()))
 
     def _map_on_activate(self, sid: str) -> None:
         self._map_on_select(sid)
@@ -1325,6 +1623,7 @@ class PickerWindow(QMainWindow):
         self._date_edit = QDateEdit()
         self._date_edit.setDisplayFormat("yyyy-MM-dd")
         self._date_edit.setCalendarPopup(True)
+        install_month_calendar(self._date_edit)
         self._date_edit.setDate(default_date)
         self._date_edit.setMaximumDate(QDate.currentDate().addDays(1))
         self._date_edit.setMinimumWidth(FIELD_W["date"])
@@ -1333,9 +1632,7 @@ class PickerWindow(QMainWindow):
 
         tg.addWidget(QLabel("Cycle:"), 1, 0)
         self._cycle_combo = QComboBox()
-        for h in SYNOPTIC_HOURS:
-            self._cycle_combo.addItem(f"{h:02d}Z", h)
-        self._cycle_combo.setCurrentIndex(SYNOPTIC_HOURS.index(default_hour))
+        _fill_cycle_combo(self._cycle_combo, SYNOPTIC_HOURS, default_hour)
         self._cycle_combo.setMinimumWidth(FIELD_W["compact"])
         self._cycle_combo.currentIndexChanged.connect(self._update_valid_label)
         tg.addWidget(self._cycle_combo, 1, 1)
@@ -1456,7 +1753,7 @@ class PickerWindow(QMainWindow):
     def _set_most_recent(self) -> None:
         d, h = _most_recent_synoptic()
         self._date_edit.setDate(d)
-        self._cycle_combo.setCurrentIndex(SYNOPTIC_HOURS.index(h))
+        _select_cycle(self._cycle_combo, h)
         self._update_valid_label()
 
     def _selected_when(self) -> datetime:
@@ -1639,33 +1936,29 @@ class PickerWindow(QMainWindow):
         left.setSpacing(SPACE["md"])
         left.setContentsMargins(0, 0, 0, 0)
 
-        area_box = QGroupBox("Region")
-        area_layout = QVBoxLayout(area_box)
+        area_box, area_layout = _rail_card("Region")
         self._model_area_combo = QComboBox()
         for name in MAP_AREAS:
             self._model_area_combo.addItem(name)
+        self._model_area_combo.setMinimumHeight(CONTROL_H["md"])
         self._model_area_combo.currentTextChanged.connect(
             self._model_area_changed)
         area_layout.addWidget(self._model_area_combo)
-        zoom_row = QHBoxLayout()
-        zoom_out = QToolButton(); zoom_out.setText("\u2212")
-        zoom_out.setToolTip("Zoom out")
-        zoom_out.clicked.connect(lambda: self._model_map.zoom(1.25))
-        zoom_in = QToolButton(); zoom_in.setText("+")
-        zoom_in.setToolTip("Zoom in")
-        zoom_in.clicked.connect(lambda: self._model_map.zoom(0.8))
-        zoom_reset = QToolButton(); zoom_reset.setText("Reset")
-        zoom_reset.clicked.connect(lambda: self._model_map.reset_view())
-        zoom_row.addWidget(zoom_out)
-        zoom_row.addWidget(zoom_in)
-        zoom_row.addWidget(zoom_reset)
-        zoom_row.addStretch(1)
-        area_layout.addLayout(zoom_row)
+        area_layout.addLayout(_rail_zoom_row(self._model_map))
         left.addWidget(area_box)
 
-        model_box = QGroupBox("Model")
-        model_layout = QVBoxLayout(model_box)
+        overlay_box, overlay_layout = _rail_card("Map overlays")
+        self._model_outlook = OutlookOverlayController(
+            self._model_map, parent=self)
+        overlay_layout.addWidget(self._model_outlook.controls_widget())
+        self._model_radar = RadarOverlayController(
+            self._model_map, parent=self)
+        overlay_layout.addWidget(self._model_radar.controls_widget())
+        left.addWidget(overlay_box)
+
+        model_box, model_layout = _rail_card("Model")
         self._model_combo = QComboBox()
+        self._model_combo.setMinimumHeight(CONTROL_H["md"])
         self._model_combo.currentIndexChanged.connect(self._model_update_cycles)
         model_layout.addWidget(self._model_combo)
         self._model_notes = QLabel("")
@@ -1674,43 +1967,30 @@ class PickerWindow(QMainWindow):
         model_layout.addWidget(self._model_notes)
         left.addWidget(model_box)
 
-        time_box = QGroupBox("Run / valid time (UTC)")
-        time_box.setMinimumHeight(210)
-        time_grid = QGridLayout(time_box)
-        time_grid.setVerticalSpacing(SPACE["sm"])
-        time_grid.setColumnStretch(1, 1)
-        for row in range(3):
-            time_grid.setRowMinimumHeight(row, CONTROL_H["md"])
-        time_grid.addWidget(QLabel("Date:"), 0, 0)
+        # No minimum height: the card sizes to its own rows. A fixed 210 px
+        # floor padded it well past its content and was the largest single
+        # reason this rail scrolled on a maximized window.
+        time_box, time_grid = _rail_form("Run / valid time (UTC)")
         self._model_date = QDateEdit()
         self._model_date.setDisplayFormat("yyyy-MM-dd")
         self._model_date.setCalendarPopup(True)
+        install_month_calendar(self._model_date)
         self._model_date.setDate(QDate.currentDate())
         self._model_date.setMaximumDate(QDate.currentDate().addDays(1))
-        self._model_date.setMinimumWidth(FIELD_W["wide"])
-        self._model_date.setMinimumHeight(CONTROL_H["md"])
         self._model_date.dateChanged.connect(self._model_update_valid_label)
-        time_grid.addWidget(self._model_date, 0, 1)
-        time_grid.addWidget(QLabel("Cycle:"), 1, 0)
+        _rail_row(time_grid, 0, "Date:", self._model_date)
         self._model_cycle = QComboBox()
-        self._model_cycle.setMinimumWidth(FIELD_W["wide"])
-        self._model_cycle.setMinimumHeight(CONTROL_H["md"])
         self._model_cycle.currentIndexChanged.connect(self._model_update_fxx)
-        time_grid.addWidget(self._model_cycle, 1, 1)
         recent = QToolButton()
         recent.setText("Most recent")
-        recent.setMinimumWidth(FIELD_W["action"])
-        recent.setMinimumHeight(CONTROL_H["md"])
+        recent.setToolTip("Jump to the most recent published cycle")
         recent.clicked.connect(self._model_set_recent)
-        time_grid.addWidget(recent, 1, 2)
-        time_grid.addWidget(QLabel("Forecast:"), 2, 0)
+        _rail_row(time_grid, 1, "Cycle:", self._model_cycle, trailing=recent)
         self._model_fxx_combo = QComboBox()
         self._model_fxx_combo.setMaxVisibleItems(24)
-        self._model_fxx_combo.setMinimumWidth(FIELD_W["wide"])
-        self._model_fxx_combo.setMinimumHeight(CONTROL_H["md"])
         self._model_fxx_combo.currentIndexChanged.connect(
             self._model_update_valid_label)
-        time_grid.addWidget(self._model_fxx_combo, 2, 1, 1, 2)
+        _rail_row(time_grid, 2, "Forecast:", self._model_fxx_combo)
         self._model_valid_lbl = QLabel("")
         self._model_valid_lbl.setObjectName(OBJ_EMPHASIS)
         time_grid.addWidget(self._model_valid_lbl, 3, 0, 1, 3)
@@ -1725,10 +2005,7 @@ class PickerWindow(QMainWindow):
         time_grid.addWidget(self._model_use_available_btn, 5, 0, 1, 3)
         left.addWidget(time_box)
 
-        point_box = QGroupBox("Point")
-        point_grid = QGridLayout(point_box)
-        point_grid.setColumnStretch(1, 1)
-        point_grid.addWidget(QLabel("Latitude:"), 0, 0)
+        point_box, point_grid = _rail_form("Point")
         self._model_lat = QDoubleSpinBox()
         self._model_lat.setRange(-90.0, 90.0)
         self._model_lat.setDecimals(4)
@@ -1736,8 +2013,13 @@ class PickerWindow(QMainWindow):
         self._model_lat.setValue(35.6300)
         self._model_lat.valueChanged.connect(
             lambda _value: self._model_point_from_spins())
-        point_grid.addWidget(self._model_lat, 0, 1)
-        point_grid.addWidget(QLabel("Longitude:"), 1, 0)
+        center = QToolButton()
+        center.setText("Center")
+        center.setToolTip("Center the map on this point")
+        center.clicked.connect(lambda: self._model_map.set_point(
+            self._model_lat.value(), self._model_lon.value(), center=True))
+        _rail_row(point_grid, 0, "Latitude:", self._model_lat,
+                  trailing=center)
         self._model_lon = QDoubleSpinBox()
         self._model_lon.setRange(-180.0, 180.0)
         self._model_lon.setDecimals(4)
@@ -1745,16 +2027,11 @@ class PickerWindow(QMainWindow):
         self._model_lon.setValue(-97.4400)
         self._model_lon.valueChanged.connect(
             lambda _value: self._model_point_from_spins())
-        point_grid.addWidget(self._model_lon, 1, 1)
-        center = QToolButton()
-        center.setText("Center")
-        center.clicked.connect(lambda: self._model_map.set_point(
-            self._model_lat.value(), self._model_lon.value(), center=True))
-        point_grid.addWidget(center, 0, 2, 2, 1)
-        point_grid.addWidget(QLabel("Location/town:"), 2, 0)
+        _rail_row(point_grid, 1, "Longitude:", self._model_lon)
         self._model_loc = QLineEdit()
         self._model_loc.setPlaceholderText("automatic town name")
-        point_grid.addWidget(self._model_loc, 2, 1, 1, 2)
+        self._model_loc.setToolTip(_TOWN_LOOKUP_TOOLTIP)
+        _rail_row(point_grid, 2, "Town:", self._model_loc)
         point_grid.addWidget(_town_lookup_attribution_label(), 3, 0, 1, 3)
         self._model_point_status = QLabel("")
         self._model_point_status.setWordWrap(True)
@@ -1762,13 +2039,18 @@ class PickerWindow(QMainWindow):
         point_grid.addWidget(self._model_point_status, 4, 0, 1, 3)
         left.addWidget(point_box)
 
-        member_box = QGroupBox("Member")
-        member_layout = QVBoxLayout(member_box)
+        # Only the ensemble products take a member, so the card is hidden for
+        # the deterministic ones rather than shown permanently disabled. It is
+        # meaningless for HRRR or RRFS and cost a full card of height on every
+        # model.
+        self._model_member_box, member_layout = _rail_card("Ensemble member")
         self._model_member = QLineEdit()
+        self._model_member.setMinimumHeight(CONTROL_H["md"])
         self._model_member.textChanged.connect(
             self._queue_model_availability)
         member_layout.addWidget(self._model_member)
-        left.addWidget(member_box)
+        self._model_member_box.hide()
+        left.addWidget(self._model_member_box)
 
         fetch_row = QHBoxLayout()
         self._model_fetch_btn = QPushButton("Fetch && Display Forecast Sounding")
@@ -1802,10 +2084,12 @@ class PickerWindow(QMainWindow):
         self._model_progress_detail.hide()
         left.addWidget(self._model_progress_detail)
 
-        unsupported = QLabel(self._model_unsupported_text())
-        unsupported.setWordWrap(True)
-        unsupported.setObjectName(OBJ_HINT)
-        left.addWidget(unsupported)
+        # The withheld-model list is reference detail about the choice above,
+        # not a control, so it rides on the model combo's tooltip instead of
+        # holding three word-wrapped lines open at the bottom of the rail.
+        unsupported_text = self._model_unsupported_text()
+        if unsupported_text:
+            self._model_combo.setToolTip(unsupported_text)
         left.addStretch(1)
 
         self._model_controls_scroll = _scrolling_control_rail(left)
@@ -1883,14 +2167,13 @@ class PickerWindow(QMainWindow):
             self._model_update_fxx()
             self._model_update_fetch_state()
             return
-        for hour in cfg.cycles:
-            self._model_cycle.addItem(f"{hour:02d}Z", hour)
+        # Newest first, and the default is still the newest cycle that has come
+        # round today -- unchanged behaviour, just chosen by hour instead of by
+        # position now that position no longer tracks the clock.
         now = datetime.now(timezone.utc)
-        idx = 0
-        for i, hour in enumerate(cfg.cycles):
-            if hour <= now.hour:
-                idx = i
-        self._model_cycle.setCurrentIndex(idx)
+        _fill_cycle_combo(
+            self._model_cycle, cfg.cycles,
+            _newest_cycle_not_after(cfg.cycles, now.hour))
         self._model_cycle.blockSignals(False)
 
         self._model_notes.setText(
@@ -1903,6 +2186,10 @@ class PickerWindow(QMainWindow):
             )
         ensemble = cfg.key in {"gefs", "cfs"}
         self._model_member.setEnabled(ensemble)
+        # Hidden rather than shown-but-disabled: a deterministic model has no
+        # member, and an always-present dead field cost a card of rail height.
+        if hasattr(self, "_model_member_box"):
+            self._model_member_box.setVisible(ensemble)
         if ensemble:
             if cfg.key == "gefs":
                 self._model_member.setPlaceholderText("default c00; e.g. p01")
@@ -1966,6 +2253,10 @@ class PickerWindow(QMainWindow):
         valid = run + timedelta(hours=fxx)
         self._model_valid_lbl.setText(
             f"Run {run:%Y-%m-%d %H}Z  \u2192  Valid {valid:%Y-%m-%d %H}Z")
+        # The overlay tracks the forecast *valid* time, not the run time: a
+        # sounding is compared against the outlook covering the hour it depicts.
+        if hasattr(self, "_model_outlook"):
+            self._model_outlook.set_valid_time(as_utc(valid))
         if hasattr(self, "_model_availability"):
             self._queue_model_availability()
 
@@ -2552,7 +2843,7 @@ class PickerWindow(QMainWindow):
         self._shutdown_started = True
 
         for name in (
-                "_avail_timer", "_catalog_timer",
+                "_avail_timer", "_catalog_timer", "_utc_timer",
                 "_model_availability_timer", "_model_progress_timer"):
             timer = getattr(self, name, None)
             if timer is not None:
@@ -2662,6 +2953,15 @@ class PickerWindow(QMainWindow):
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt override
         """Stop owned QThreads when the picker window itself is closed."""
         self._shutdown_model_cache()
+        # Radar controllers are torn down here but are deliberately absent from
+        # TAB_OVERLAY_CONTROLLERS: that map answers "which SPC hazard is the user
+        # looking at" for the sounding locator, and a radar product key is not an
+        # answer to that question.
+        for attr in ("_map_outlook", "_model_outlook",
+                     "_map_radar", "_model_radar"):
+            controller = getattr(self, attr, None)
+            if controller is not None:
+                controller.shutdown()
         super().closeEvent(event)
 
     def _on_model_fetch_finished(self) -> None:
@@ -3225,84 +3525,72 @@ class PickerWindow(QMainWindow):
 
         left = QVBoxLayout()
         left.setSpacing(SPACE["md"])
+        left.setContentsMargins(0, 0, 0, 0)
 
-        area_box = QGroupBox("Region")
-        area_layout = QVBoxLayout(area_box)
+        area_box, area_layout = _rail_card("Region")
         self._era5_area_combo = QComboBox()
         for name in MAP_AREAS:
             self._era5_area_combo.addItem(name)
+        self._era5_area_combo.setMinimumHeight(CONTROL_H["md"])
         self._era5_area_combo.currentTextChanged.connect(
             self._era5_map.set_area)
         area_layout.addWidget(self._era5_area_combo)
-        zoom_row = QHBoxLayout()
-        zoom_out = QToolButton(); zoom_out.setText("−")
-        zoom_out.clicked.connect(lambda: self._era5_map.zoom(1.25))
-        zoom_in = QToolButton(); zoom_in.setText("+")
-        zoom_in.clicked.connect(lambda: self._era5_map.zoom(0.8))
-        zoom_reset = QToolButton(); zoom_reset.setText("Reset")
-        zoom_reset.clicked.connect(lambda: self._era5_map.reset_view())
-        zoom_row.addWidget(zoom_out)
-        zoom_row.addWidget(zoom_in)
-        zoom_row.addWidget(zoom_reset)
-        zoom_row.addStretch(1)
-        area_layout.addLayout(zoom_row)
+        area_layout.addLayout(_rail_zoom_row(self._era5_map))
         left.addWidget(area_box)
 
-        time_box = QGroupBox("Analysis time (UTC)")
-        time_grid = QGridLayout(time_box)
-        time_grid.addWidget(QLabel("Date:"), 0, 0)
+        time_box, time_grid = _rail_form("Analysis time (UTC)")
         self._era5_date = QDateEdit()
         self._era5_date.setDisplayFormat("yyyy-MM-dd")
         self._era5_date.setCalendarPopup(True)
+        install_month_calendar(self._era5_date)
         self._era5_date.setMinimumDate(QDate(1940, 1, 1))
         self._era5_date.setMaximumDate(QDate.currentDate())
         self._era5_date.dateChanged.connect(self._era5_update_state)
-        time_grid.addWidget(self._era5_date, 0, 1)
-        time_grid.addWidget(QLabel("Hour:"), 1, 0)
+        _rail_row(time_grid, 0, "Date:", self._era5_date)
         self._era5_hour = QComboBox()
         for hour in range(24):
             self._era5_hour.addItem(f"{hour:02d}Z", hour)
         self._era5_hour.currentIndexChanged.connect(self._era5_update_state)
-        time_grid.addWidget(self._era5_hour, 1, 1)
         recent = QToolButton()
-        recent.setText("Latest likely available")
+        # Same label and place in the grid as the other two panels; the ERA5
+        # caveat lives in the tooltip rather than in a wider button that pushed
+        # this row out of line with everything else.
+        recent.setText("Most recent")
         recent.setToolTip(
-            "ERA5 normally appears several days after real time")
+            "Latest analysis likely to be published. ERA5 normally appears "
+            "several days after real time.")
         recent.clicked.connect(self._era5_set_recent)
-        time_grid.addWidget(recent, 2, 0, 1, 2)
+        _rail_row(time_grid, 1, "Hour:", self._era5_hour, trailing=recent)
         left.addWidget(time_box)
 
-        point_box = QGroupBox("Point")
-        point_grid = QGridLayout(point_box)
-        point_grid.addWidget(QLabel("Latitude:"), 0, 0)
+        point_box, point_grid = _rail_form("Point")
         self._era5_lat = QDoubleSpinBox()
         self._era5_lat.setRange(-90.0, 90.0)
         self._era5_lat.setDecimals(4)
         self._era5_lat.setSingleStep(0.25)
         self._era5_lat.setValue(35.18)
         self._era5_lat.valueChanged.connect(self._era5_point_from_spins)
-        point_grid.addWidget(self._era5_lat, 0, 1)
-        point_grid.addWidget(QLabel("Longitude:"), 1, 0)
+        center = QToolButton()
+        center.setText("Center")
+        center.setToolTip("Center the map on this point")
+        center.clicked.connect(lambda: self._era5_map.set_point(
+            self._era5_lat.value(), self._era5_lon.value(), center=True))
+        _rail_row(point_grid, 0, "Latitude:", self._era5_lat, trailing=center)
         self._era5_lon = QDoubleSpinBox()
         self._era5_lon.setRange(-180.0, 180.0)
         self._era5_lon.setDecimals(4)
         self._era5_lon.setSingleStep(0.25)
         self._era5_lon.setValue(-97.44)
         self._era5_lon.valueChanged.connect(self._era5_point_from_spins)
-        point_grid.addWidget(self._era5_lon, 1, 1)
-        center = QToolButton()
-        center.setText("Center")
-        center.clicked.connect(lambda: self._era5_map.set_point(
-            self._era5_lat.value(), self._era5_lon.value(), center=True))
-        point_grid.addWidget(center, 0, 2, 2, 1)
+        _rail_row(point_grid, 1, "Longitude:", self._era5_lon)
+        self._era5_loc = QLineEdit()
+        self._era5_loc.setPlaceholderText("automatic town name")
+        self._era5_loc.setToolTip(_TOWN_LOOKUP_TOOLTIP)
+        _rail_row(point_grid, 2, "Town:", self._era5_loc)
         self._era5_snapped = QLabel("")
         self._era5_snapped.setWordWrap(True)
         self._era5_snapped.setObjectName(OBJ_HINT)
-        point_grid.addWidget(self._era5_snapped, 2, 0, 1, 3)
-        point_grid.addWidget(QLabel("Label:"), 3, 0)
-        self._era5_loc = QLineEdit()
-        self._era5_loc.setPlaceholderText("automatic town name")
-        point_grid.addWidget(self._era5_loc, 3, 1, 1, 2)
+        point_grid.addWidget(self._era5_snapped, 3, 0, 1, 3)
         point_grid.addWidget(_town_lookup_attribution_label(), 4, 0, 1, 3)
         left.addWidget(point_box)
 
@@ -4093,6 +4381,60 @@ class PickerWindow(QMainWindow):
     # ====================================================================== #
     # Shared / lifecycle
     # ====================================================================== #
+    def _active_overlay_controller(self):
+        """Return the overlay controller owned by the tab currently in front."""
+        tabs = getattr(self, "_tabs", None)
+        if tabs is None:
+            return None
+        try:
+            title = tabs.tabText(tabs.currentIndex())
+        except (AttributeError, RuntimeError):
+            return None
+        attribute = TAB_OVERLAY_CONTROLLERS.get(title)
+        if attribute is None:
+            return None
+        return getattr(self, attribute, None)
+
+    def selected_overlay_product(self) -> str | None:
+        """Return the map-overlay hazard the user has selected, if any.
+
+        Read by the sounding viewer so a sounding opened while looking at, say,
+        the wind probability keeps showing that hazard on its locator inset
+        rather than reverting to the categorical outlook.
+
+        The tab in front decides. Two tabs own an overlay, and ranking them in a
+        fixed order answered with whichever came first in that order: a sounding
+        fetched from the Forecast Model tab while showing the wind probability
+        came back categorical whenever the Station Map tab happened to have its
+        own overlay switched on. Tabs that host no overlay of their own fall back
+        to a configured one, preferring an enabled overlay over a merely
+        configured one. ``None`` leaves the choice to the default.
+        """
+        active = self._active_overlay_controller()
+        if active is not None:
+            try:
+                return active.product()
+            except (AttributeError, RuntimeError):
+                pass
+
+        controllers = [
+            getattr(self, name, None)
+            for name in TAB_OVERLAY_CONTROLLERS.values()
+        ]
+        controllers = [c for c in controllers if c is not None]
+        for controller in controllers:
+            try:
+                if controller.is_enabled():
+                    return controller.product()
+            except (AttributeError, RuntimeError):
+                continue
+        for controller in controllers:
+            try:
+                return controller.product()
+            except (AttributeError, RuntimeError):
+                continue
+        return None
+
     def _show_sounding(self, prof_col, stn_id, title=None):
         self._prune_closed_viewers()
         if self._combine_soundings_enabled() and self._viewers:
@@ -4103,6 +4445,8 @@ class PickerWindow(QMainWindow):
                 focus=True,
                 check_integrity=False,
             )
+            _start_locator_overlay_fetch(
+                win, prof_col, product=_overlay_product_for(self))
             count = len(getattr(win.spc_widget, "prof_collections", []))
             win.setWindowTitle(
                 f"{APP_NAME} — {count} Sounding{'s' if count != 1 else ''}")
@@ -4239,9 +4583,44 @@ def _configure_high_dpi() -> None:
         _LOGGER.debug("startup.high_dpi_policy_unavailable", exc_info=True)
 
 
+def _enable_native_fault_reports() -> None:
+    """Dump a stack to the native log if the interpreter faults.
+
+    A segmentation fault or access violation cannot be raised as a Python
+    exception, so the excepthook installed by ``_configure_debug_logging`` never
+    sees it and the rotating log just stops. Arming ``faulthandler`` against a
+    file this application owns means such a crash is still described somewhere,
+    whichever way the GUI was launched -- the relaunch path is not the only one
+    that can fault.
+    """
+    global _NATIVE_FAULT_STREAM
+    if _NATIVE_FAULT_STREAM is not None:
+        return
+    try:
+        import faulthandler
+
+        path = Path(_configure_debug_logging()).with_name(
+            "sharpmod-gui-native.log")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        stream = open(path, "a", encoding="utf-8", errors="replace")
+        stream.write(
+            "\n=== faulthandler armed %s pid=%d python=%s ===\n"
+            % (datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               os.getpid(), sys.version.split()[0])
+        )
+        stream.flush()
+        # Held for the process lifetime: faulthandler writes to the file
+        # descriptor, so letting this be collected would arm a closed stream.
+        _NATIVE_FAULT_STREAM = stream
+        faulthandler.enable(file=stream, all_threads=True)
+    except Exception:  # noqa: BLE001 - diagnostics must never block startup
+        _LOGGER.debug("startup.faulthandler_unavailable", exc_info=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Launch the interactive picker. Entry point for ``sharpmod-gui``."""
     _configure_debug_logging()
+    _enable_native_fault_reports()
     relaunch_arguments = (
         list(sys.argv[1:]) if argv is None else list(argv[1:]))
     if _relaunch_stable_windows_gui(relaunch_arguments):

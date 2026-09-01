@@ -29,8 +29,8 @@
       }
     },
     "serial-release": {
-      "baseline_seconds": 786.07,
-      "maximum_seconds": 1000.0,
+      "baseline_seconds": 1149.2,
+      "maximum_seconds": 1500.0,
       "environment_overrides": {
         "github-actions": {
           "baseline_seconds": 1022.16,

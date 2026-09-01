@@ -1271,3 +1271,101 @@ class _StationListWorker(QThread):
         if self.isInterruptionRequested():
             return
         self.loaded.emit(self._when, stations)
+
+
+# ===========================================================================
+# SPC convective outlook overlay worker
+# ===========================================================================
+class _SpcOutlookWorker(QThread):
+    """Resolve and decode the SPC outlook covering one valid time.
+
+    Kept off the GUI thread for the same reason the hodograph locator refuses
+    to touch the network while painting: the overlay is an embellishment, and a
+    slow or unreachable SPC must never stall the picker.
+
+    ``token`` lets the caller discard a result that arrived after the user moved
+    on, matching the availability probes' staleness handling. "No outlook
+    exists" is reported through :attr:`loaded` with a ``None`` layer rather than
+    :attr:`failed`, because it is the correct answer for a date outside the
+    2020+ archive or beyond Day 3, not an error worth alarming the user about.
+    """
+
+    #: (token, valid_time, layer_or_None)
+    loaded = Signal(object, object, object)
+    #: (token, valid_time, human-readable message)
+    failed = Signal(object, object, str)
+
+    def __init__(self, valid_time: datetime, token: int, parent=None,
+                 product: str = "cat"):
+        super().__init__(parent)
+        self._valid_time = valid_time
+        self._product = product
+        self.token = token
+
+    def run(self):  # noqa: D401 - QThread entry point
+        if self.isInterruptionRequested():
+            return
+        try:
+            from sharpmod import spc_outlook
+            layer = spc_outlook.fetch_layer(
+                self._valid_time,
+                product=self._product,
+                should_cancel=self.isInterruptionRequested,
+            )
+        except Exception as exc:  # noqa: BLE001 - never crash the UI thread
+            _LOGGER.debug("spc_outlook.worker_failed valid=%s err=%s",
+                          self._valid_time, exc)
+            self.failed.emit(self.token, self._valid_time, str(exc))
+            return
+        if self.isInterruptionRequested():
+            return
+        self.loaded.emit(self.token, self._valid_time, layer)
+
+
+# ===========================================================================
+# Live radar mosaic overlay worker
+# ===========================================================================
+class _RadarMosaicWorker(QThread):
+    """Fetch one live radar frame off the GUI thread.
+
+    Shaped like :class:`_SpcOutlookWorker`, with one difference worth naming:
+    there is no valid time. A radar frame is always "the newest one", so a
+    result cannot be stale with respect to a selection -- only with respect to a
+    later fetch, which ``token`` already handles.
+
+    A cancelled fetch emits nothing at all. :func:`radar_mosaic.fetch_frame`
+    answers ``None`` for cancellation and raises for every real failure, so the
+    two are never confused into reporting an error the user caused by switching
+    the overlay off.
+    """
+
+    #: (token, raster_or_None)
+    loaded = Signal(object, object)
+    #: (token, human-readable message)
+    failed = Signal(object, str)
+
+    def __init__(self, token: int, parent=None, product: str | None = None,
+                 opacity: float = 1.0):
+        super().__init__(parent)
+        self._product = product
+        self._opacity = float(opacity)
+        self.token = token
+
+    def run(self):  # noqa: D401 - QThread entry point
+        if self.isInterruptionRequested():
+            return
+        try:
+            from sharpmod import radar_mosaic
+            raster = radar_mosaic.fetch_frame(
+                self._product,
+                opacity=self._opacity,
+                should_cancel=self.isInterruptionRequested,
+            )
+        except Exception as exc:  # noqa: BLE001 - never crash the UI thread
+            _LOGGER.debug("radar_mosaic.worker_failed product=%s err=%s",
+                          self._product, exc)
+            self.failed.emit(self.token, str(exc))
+            return
+        if self.isInterruptionRequested() or raster is None:
+            return
+        self.loaded.emit(self.token, raster)

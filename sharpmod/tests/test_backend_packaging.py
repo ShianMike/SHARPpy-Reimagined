@@ -11,6 +11,7 @@ import re
 import tomllib
 from zipfile import ZipFile
 
+from packaging.version import Version
 import pytest
 
 
@@ -98,7 +99,11 @@ def test_native_wheel_metadata_declares_compatible_numpy():
             )
 
         assert metadata["Name"] == "sharpmod-rs"
-        assert metadata["Version"] == expected_version
+        # Compared as parsed versions, not strings. A build backend writes the
+        # PEP 440 *normalized* form into wheel metadata, so a pre-release such
+        # as ``1.0.0-beta1`` is recorded as ``1.0.0b1``; string equality only
+        # ever held while the version had no pre-release segment.
+        assert Version(metadata["Version"]) == Version(expected_version)
         requirements = metadata.get_all("Requires-Dist", [])
         numpy_requirements = [
             requirement for requirement in requirements

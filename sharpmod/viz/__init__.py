@@ -23,6 +23,17 @@ from .streamwiseness import (
     plotStreamwiseness,
     streamwiseness_profile,
 )
+from .height_charts import (
+    HeightChartInset,
+    HeightSeries,
+    SwappableHeightChart,
+    plotStepwiseCape,
+    plotStormRelativeWind,
+    plotThetaProfile,
+    stepwise_cape_profile,
+    storm_relative_wind_profile,
+    theta_profile,
+)
 from .thermo import (
     plotDerivedIndices,
     derived_rows,
@@ -50,6 +61,16 @@ __all__ = [
     "StreamwisenessData",
     "plotStreamwiseness",
     "streamwiseness_profile",
+    # Swappable height-profile charts sharing the streamwiseness look
+    "HeightChartInset",
+    "HeightSeries",
+    "SwappableHeightChart",
+    "plotStepwiseCape",
+    "plotStormRelativeWind",
+    "plotThetaProfile",
+    "stepwise_cape_profile",
+    "storm_relative_wind_profile",
+    "theta_profile",
     # Derived-parameter index table (task 17.2)
     "plotDerivedIndices",
     "derived_rows",

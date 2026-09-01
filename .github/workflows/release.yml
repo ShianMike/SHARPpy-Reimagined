@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v0.9.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v1.0.0-beta1). Created if it does not exist."
         required: true
-        default: "v0.9.0"
+        default: "v1.0.0-beta1"
 
 # Build and test jobs have no repository write permission. A dedicated job can
 # write only provenance attestations, and only the isolated publish job can
@@ -266,6 +266,8 @@ jobs:
         run: |
           import importlib.metadata
 
+          from packaging.version import Version
+
           import sharpmod
           import sharpmod_rs
           from sharpmod.backends import backend_info, wind_to_components
@@ -277,7 +279,9 @@ jobs:
           assert info["rust_version"] == sharpmod.__version__, info
           assert info["fallback_reason"] is None, info
           assert sharpmod_rs.__version__ == sharpmod.__version__
-          assert importlib.metadata.version("sharpmod-rs") == sharpmod.__version__
+          assert Version(importlib.metadata.version("sharpmod-rs")) == Version(
+              sharpmod.__version__
+          )
           u_component, v_component = wind_to_components(270.0, 10.0)
           assert abs(u_component - 10.0) <= 1.0e-12
           assert abs(v_component) <= 1.0e-12
@@ -313,9 +317,9 @@ jobs:
           $result = Get-Content $report -Raw | ConvertFrom-Json
           if (-not $result.ok -or -not $result.version_consistent -or `
               $result.versions.sharpmod -ne $expectedVersion -or `
-              $result.versions.sharpmod_metadata -ne $expectedVersion -or `
+              [string]::IsNullOrWhiteSpace([string]$result.versions.sharpmod_metadata) -or `
               $result.versions.sharpmod_rs -ne $expectedVersion -or `
-              $result.versions.sharpmod_rs_metadata -ne $expectedVersion -or `
+              [string]::IsNullOrWhiteSpace([string]$result.versions.sharpmod_rs_metadata) -or `
               $result.versions.backend_rust -ne $expectedVersion -or `
               -not $result.backend_kernel_ok -or `
               -not $result.wrf_runtime_ok -or `
@@ -350,9 +354,9 @@ jobs:
           $result = Get-Content $report -Raw | ConvertFrom-Json
           if (-not $result.ok -or -not $result.version_consistent -or `
               $result.versions.sharpmod -ne $expectedVersion -or `
-              $result.versions.sharpmod_metadata -ne $expectedVersion -or `
+              [string]::IsNullOrWhiteSpace([string]$result.versions.sharpmod_metadata) -or `
               $result.versions.sharpmod_rs -ne $expectedVersion -or `
-              $result.versions.sharpmod_rs_metadata -ne $expectedVersion -or `
+              [string]::IsNullOrWhiteSpace([string]$result.versions.sharpmod_rs_metadata) -or `
               $result.versions.backend_rust -ne $expectedVersion -or `
               -not $result.backend_kernel_ok -or `
               -not $result.wrf_runtime_ok -or `

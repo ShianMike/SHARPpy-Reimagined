@@ -257,6 +257,10 @@ def test_live_controller_signal_applies_inverted_palette_to_every_surface(
         "yellow": "yellow",
     }.items():
         assert getattr(sw.index_board, attr).name().lower() == semantic[role].lower()
+    # These are the colours a chart *draws* a profile with, so they are asserted
+    # on the visible chart rather than on the swappable slot that hosts it. The
+    # slot carries only the palette it uses itself, which ``_surface_colors``
+    # above already checks.
     for attr, role in {
         "text_color": "neutral",
         "profile_color": "profile",
@@ -269,7 +273,7 @@ def test_live_controller_signal_applies_inverted_palette_to_every_surface(
         "marker_yellow": "marker_yellow",
     }.items():
         assert (
-            getattr(sw.streamwiseness, attr).name().lower()
+            getattr(sw.streamwiseness.chart, attr).name().lower()
             == semantic[role].lower()
         )
 

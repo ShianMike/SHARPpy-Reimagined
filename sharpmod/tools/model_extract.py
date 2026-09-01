@@ -27,6 +27,8 @@ import numpy as np
 
 from sharpmod import backends as _backends
 from sharpmod import eccc_geomet
+from sharpmod import openmeteo
+from sharpmod import rrfs_nomads
 from sharpmod.model_fields import (
     CFS_SURFACE_SEARCH,
     IFS_INVARIANT_FIELDS,
@@ -367,17 +369,15 @@ CONUS_DOMAIN = (-130.0, -60.0, 20.0, 55.0)
 ALASKA_DOMAIN = (160.0, -120.0, 40.0, 80.0)
 HAWAII_DOMAIN = (-162.5, -152.5, 16.0, 24.0)
 PUERTO_RICO_DOMAIN = (-70.0, -62.0, 15.0, 22.0)
-RRFS_CYCLES = tuple(range(24))
-RRFS_EXTENDED_CYCLES = (0, 6, 12, 18)
+NORTH_AMERICA_DOMAIN = (-180.0, -20.0, 5.0, 80.0)
+# Only the synoptic cycles publish the RRFS pressure-level product. The
+# off-hour cycles publish a sub-hourly two-dimensional product and nothing
+# else, so they carry no sounding at any forecast hour; see rrfs_nomads.
+RRFS_CYCLES = rrfs_nomads.PRESSURE_CYCLES
 
 # Products that are described here but withheld from selection because no
-# published file can complete the verified ground row. Both were confirmed
-# against live inventories rather than assumed; see CHANGELOG for the audit.
-RRFS_NO_SURFACE_REASON = (
-    "The published RRFS-A prslev index carries pressure levels only - no "
-    "surface, 2-m, or 10-m records - and the natlev/testbed/ififip products "
-    "are not published, so no verified ground row can be built."
-)
+# published file can complete the verified ground row. Confirmed against live
+# inventories rather than assumed; see CHANGELOG for the audit.
 AIGFS_NO_SURFACE_REASON = (
     "AIGFS splits pressure and surface products, and its sfc product "
     "publishes only 2-m temperature, 10-m winds, and mean-sea-level pressure. "
@@ -439,34 +439,43 @@ _CONFIGS = (
         cycles=(0, 12),
         fxx_values=_hours(48), domain="CONUS", domain_bounds=CONUS_DOMAIN,
         notes="NOAA HiResW FV3 5-km pressure-level grids, 00Z/12Z"),
+    # RRFS bypasses Herbie entirely; see rrfs_nomads and DIRECT_GRIB_KEYS.
+    # ``herbie_model`` and ``product`` stay truthful because they still name
+    # the published product, and ``kwargs["domain"]`` is now this route's own
+    # domain tag rather than a Herbie argument.
     ModelConfig(
         "rrfs-a", "RRFS A", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="CONUS", domain_bounds=CONUS_DOMAIN,
         kwargs={"domain": "conus"},
-        notes="RRFS-A 3-km pressure-level grids",
-        unavailable_reason=RRFS_NO_SURFACE_REASON),
+        notes="RRFS-A 3-km pressure-level grids; no VVEL published"),
     ModelConfig(
         "rrfs-a-alaska", "RRFS A Alaska", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="Alaska", domain_bounds=ALASKA_DOMAIN,
         kwargs={"domain": "alaska"},
-        notes="RRFS-A 3-km Alaska pressure-level grids",
-        unavailable_reason=RRFS_NO_SURFACE_REASON),
+        notes="RRFS-A 3-km Alaska pressure-level grids; no VVEL published"),
     ModelConfig(
         "rrfs-a-hawaii", "RRFS A Hawaii", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="Hawaii", domain_bounds=HAWAII_DOMAIN,
         kwargs={"domain": "hawaii"},
-        notes="RRFS-A 2.5-km Hawaii pressure-level grids",
-        unavailable_reason=RRFS_NO_SURFACE_REASON),
+        notes="RRFS-A 2.5-km Hawaii pressure-level grids; no VVEL published"),
     ModelConfig(
         "rrfs-a-puerto-rico", "RRFS A Puerto Rico", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="Puerto Rico", domain_bounds=PUERTO_RICO_DOMAIN,
         kwargs={"domain": "puerto rico"},
-        notes="RRFS-A 2.5-km Puerto Rico pressure-level grids",
-        unavailable_reason=RRFS_NO_SURFACE_REASON),
+        notes="RRFS-A 2.5-km Puerto Rico pressure-level grids; "
+              "no VVEL published"),
+    ModelConfig(
+        "rrfs-a-north-america", "RRFS A North America", "rrfs", "prslev",
+        cycles=RRFS_CYCLES, fxx_values=_hours(84),
+        domain="North America", domain_bounds=NORTH_AMERICA_DOMAIN,
+        kwargs={"domain": "north america"},
+        notes="RRFS-A 13-km North America pressure-level grids; "
+              "covers CONUS for roughly half the transfer of the 3-km "
+              "domain; no VVEL published"),
     ModelConfig(
         "gfs", "GFS", "gfs", "pgrb2.0p25",
         fxx_values=_gfs_hours(),
@@ -489,6 +498,18 @@ _CONFIGS = (
         "ecmwf-aifs", "ECMWF-AIFS", "aifs", "oper",
         search=IFS_PRESSURE_SEARCH, fxx_values=_aifs_hours(),
         notes="ECMWF open-data AIFS pressure levels, 6-hourly steps"),
+    # Open-Meteo point provider. ``herbie_model`` and ``product`` are sentinels
+    # here, as they are for the ECCC entries: this route never reaches Herbie.
+    # This is the only route to ICON in the application, since the installed
+    # Herbie cannot load DWD's split native-level GRIB.
+    ModelConfig(
+        "openmeteo-icon-global",
+        openmeteo.CAPABILITIES["openmeteo-icon-global"].label,
+        "openmeteo-icon-global", "open-meteo-point",
+        cycles=openmeteo.CAPABILITIES["openmeteo-icon-global"].cycles,
+        fxx_values=openmeteo.CAPABILITIES[
+            "openmeteo-icon-global"].forecast_hours,
+        notes=openmeteo.CAPABILITIES["openmeteo-icon-global"].notes),
     ModelConfig(
         "gefs", "GEFS", "gefs", "atmos.5",
         fxx_values=_hours(384, 3),
@@ -532,6 +553,9 @@ _ALIASES = {
     "rrfs-pr": "rrfs-a-puerto-rico",
     "rrfs-puerto-rico": "rrfs-a-puerto-rico",
     "rrfs-a-puerto-rico": "rrfs-a-puerto-rico",
+    "rrfs-na": "rrfs-a-north-america",
+    "rrfs-north-america": "rrfs-a-north-america",
+    "rrfs-a-north-america": "rrfs-a-north-america",
     "gfs": "gfs",
     "aigfs": "aigfs",
     "cfs": "cfs",
@@ -539,6 +563,16 @@ _ALIASES = {
     "ifs": "ecmwf-ifs",
     "ecmwf-ifs": "ecmwf-ifs",
     "aifs": "ecmwf-aifs",
+    # Bare "icon" is claimed here, unlike "ecmwf" above. Nothing resolved it
+    # before -- it raised with "the installed Herbie has no ICON loader" -- so
+    # no existing command or saved session changes meaning, and this is the only
+    # ICON route the application has. The regional ICON variants stay
+    # namespaced, so "icon-eu" and "icon-d2" remain free for later.
+    "icon": "openmeteo-icon-global",
+    "icon-global": "openmeteo-icon-global",
+    "openmeteo-icon-global": "openmeteo-icon-global",
+    "openmeteo-icon": "openmeteo-icon-global",
+    "om-icon": "openmeteo-icon-global",
     "ecmwf-aifs": "ecmwf-aifs",
     "gefs": "gefs",
     "gdps": "gdps",
@@ -552,10 +586,10 @@ _ALIASES = {
 _CONFIG_BY_KEY = {cfg.key: cfg for cfg in _CONFIGS}
 
 UNSUPPORTED_MODELS = {
-    "icon": (
-        "The installed Herbie has no ICON loader; DWD publishes split "
-        "variables on native model levels/icosahedral grids."
-    ),
+    # "icon" used to sit here, explaining that the installed Herbie has no ICON
+    # loader. That is still true of the GRIB route, but ICON now reaches this
+    # application as an Open-Meteo point sounding, so the key resolves and must
+    # not also be reported as unavailable.
     "ukmet": "UKMET global GRIB access is not public through Herbie here.",
     "eps": "ECMWF EPS products need separate ensemble handling.",
     "eps-opendata": "ECMWF EPS open data needs separate ensemble handling.",
@@ -598,14 +632,32 @@ def _require_selectable(config):
     return config
 
 
+#: Model keys answered by a point provider rather than a grid subset. These need
+#: no GRIB runtime and their reusable dataset is bound to one requested point.
+#: Collected once so the seams below ask a single question instead of repeating a
+#: literal set, which is how the second provider came to need seven edits.
+ECCC_POINT_KEYS = frozenset({"gdps", "rdps"})
+OPENMETEO_POINT_KEYS = frozenset(openmeteo.CAPABILITIES)
+POINT_PROVIDER_KEYS = ECCC_POINT_KEYS | OPENMETEO_POINT_KEYS
+
+#: Model keys that fetch published GRIB directly instead of through Herbie.
+#: These still need the native GRIB runtime to decode and still cache a
+#: grid-level dataset, so they are not point providers; they only skip Herbie's
+#: file location and inventory layer. Asked as one question for the same reason
+#: as the sets above.
+DIRECT_GRIB_KEYS = frozenset({
+    cfg.key for cfg in _CONFIGS if cfg.herbie_model == "rrfs"
+})
+
+
 def requires_grib_runtime(model) -> bool:
     """Whether a model route imports the native ecCodes/cfgrib stack."""
-    return _coerce_config(model).key not in {"gdps", "rdps"}
+    return _coerce_config(model).key not in POINT_PROVIDER_KEYS
 
 
 def point_only_provider(model) -> bool:
     """Whether a reusable source dataset is tied to one requested point."""
-    return _coerce_config(model).key in {"gdps", "rdps"}
+    return _coerce_config(model).key in POINT_PROVIDER_KEYS
 
 
 def _normalize_lon180(lon):
@@ -619,17 +671,22 @@ def _coerce_config(model):
 def forecast_hours(model, cycle_hour=None):
     """Return selectable forecast hours for ``model``.
 
-    Most products have one cadence. HRRR and RRFS publish longer forecasts on
-    major synoptic cycles than on their off-hour cycles, and ECMWF IFS runs a
-    short cut-off forecast at 06Z and 18Z that stops at F144.
+    Most products have one cadence. HRRR publishes longer forecasts on major
+    synoptic cycles than on its off-hour cycles, and ECMWF IFS runs a short
+    cut-off forecast at 06Z and 18Z that stops at F144.
+
+    RRFS needs no such rule: it publishes pressure levels only on the synoptic
+    cycles, so ``cycle_hours`` already excludes the off-hour cycles rather than
+    advertising a shorter forecast for them.
     """
     cfg = _coerce_config(model)
     values = cfg.fxx_values or (cfg.default_fxx,)
+    if cfg.key in OPENMETEO_POINT_KEYS:
+        # The provider adapter owns its own cadence and cut-off rules, so ask it
+        # rather than restating them here.
+        return openmeteo.get_capability(cfg.key).hours_for_cycle(cycle_hour)
     if cfg.key == "hrrr" and cycle_hour is not None \
             and int(cycle_hour) not in (0, 6, 12, 18):
-        return tuple(v for v in values if int(v) <= 18)
-    if cfg.herbie_model == "rrfs" and cycle_hour is not None \
-            and int(cycle_hour) not in RRFS_EXTENDED_CYCLES:
         return tuple(v for v in values if int(v) <= 18)
     if cfg.key == "ecmwf-ifs" and cycle_hour is not None \
             and int(cycle_hour) in IFS_SHORT_CUTOFF_CYCLES:
@@ -647,7 +704,28 @@ def cycle_hours(model):
 def provider_capability(model, cycle_hour=None):
     """Return the normalized capability contract for one model adapter."""
     cfg = _coerce_config(model)
-    if cfg.key in {"gdps", "rdps"}:
+    if cfg.key in OPENMETEO_POINT_KEYS:
+        capability = openmeteo.get_capability(cfg.key)
+        return ProviderCapability(
+            model_key=cfg.key,
+            provider=capability.provider,
+            domain=capability.domain,
+            domain_bounds=capability.domain_bounds,
+            cycles=capability.cycles,
+            forecast_hours=capability.hours_for_cycle(cycle_hour),
+            members=(),
+            fields=capability.fields,
+            levels="%d requested pressure levels, %d hPa to %d hPa" % (
+                len(capability.pressure_levels),
+                max(capability.pressure_levels),
+                min(capability.pressure_levels),
+            ),
+            archive_window="runs archived from %s"
+            % capability.archive_start.isoformat(),
+            transports=(openmeteo.TRANSPORT,),
+            domain_outline=capability.domain_outline,
+        )
+    if cfg.key in ECCC_POINT_KEYS:
         capability = eccc_geomet.get_capability(cfg.key)
         return ProviderCapability(
             model_key=cfg.key,
@@ -664,6 +742,28 @@ def provider_capability(model, cycle_hour=None):
             archive_window=capability.archive_window,
             transports=capability.transports,
             domain_outline=capability.domain_outline,
+        )
+    if cfg.key in DIRECT_GRIB_KEYS:
+        return ProviderCapability(
+            model_key=cfg.key,
+            provider=rrfs_nomads.PROVIDER,
+            domain=cfg.domain,
+            domain_bounds=cfg.domain_bounds,
+            cycles=cycle_hours(cfg),
+            forecast_hours=forecast_hours(cfg, cycle_hour=cycle_hour),
+            members=(),
+            # No VVEL is published and DZDT is not a usable substitute, so
+            # this is the one enabled GRIB product with no omega field.
+            fields=tuple(dict.fromkeys((
+                "HGT", "TMP", "UGRD", "VGRD", "RH", "ABSV",
+                *NOAA_SURFACE_FIELDS,
+            ))),
+            levels="45 published pressure levels, 1000 hPa to 2 hPa",
+            archive_window="recent runs only; NOMADS purges older files",
+            transports=(
+                rrfs_nomads.TRANSPORT, "verified-surface-companion",
+            ),
+            domain_outline=cfg.domain_outline,
         )
     transports = ["herbie", "indexed-ranges"]
     if nomads_supported(cfg):
@@ -705,8 +805,11 @@ def domain_label(model):
 def point_in_domain(model, lat, lon):
     """Return whether ``lat``/``lon`` is inside the model's configured domain."""
     cfg = _coerce_config(model)
-    if cfg.key in {"gdps", "rdps"}:
+    if cfg.key in ECCC_POINT_KEYS:
         return eccc_geomet.point_in_domain(cfg.key, lat, lon)
+    if cfg.key in OPENMETEO_POINT_KEYS:
+        return openmeteo.point_in_domain(
+            openmeteo.get_capability(cfg.key), lat, lon)
     lon0, lon1, lat0, lat1 = cfg.domain_bounds
     lat = float(lat)
     lon = _normalize_lon180(lon)
@@ -784,7 +887,14 @@ def domain_contains_bounds(model, bounds):
 
 def unsupported_models():
     """Return every known model that is not selectable here, with the reason."""
-    return {**UNSUPPORTED_MODELS, **withheld_models()}
+    # The Open-Meteo adapter withholds identifiers it has not audited, and
+    # duplicates of routes already built in. Merging them here is what turns
+    # "why is ICON missing?" into an answer instead of a KeyError.
+    return {
+        **UNSUPPORTED_MODELS,
+        **openmeteo.unsupported_models(),
+        **withheld_models(),
+    }
 
 
 def get_config(model):
@@ -792,9 +902,13 @@ def get_config(model):
     key = str(model).strip().lower()
     canonical = _ALIASES.get(key)
     if canonical is None:
-        if key in UNSUPPORTED_MODELS:
-            raise RetrievalError("%s is not enabled: %s" % (
-                model, UNSUPPORTED_MODELS[key]))
+        # Consult the merged map, not just this module's dict. ``--list`` prints
+        # the Open-Meteo adapter's withheld keys under "known but not enabled",
+        # so typing one back must produce that same reason rather than a bare
+        # KeyError contradicting the listing the user just read.
+        reason = unsupported_models().get(key)
+        if reason:
+            raise RetrievalError("%s is not enabled: %s" % (model, reason))
         raise KeyError("unknown forecast model %r" % model)
     return _CONFIG_BY_KEY[canonical]
 
@@ -1047,7 +1161,7 @@ def _local_grib_path(value):
 
 def spatial_cache_key(config, lat, lon):
     """Return a point identity when an enabled backend can subset spatially."""
-    if config.key in {"gdps", "rdps"}:
+    if config.key in POINT_PROVIDER_KEYS:
         lon180 = ((float(lon) + 180.0) % 360.0) - 180.0
         return f"{float(lat):.4f},{lon180:.4f}"
     if not _point_backends_enabled():
@@ -1312,17 +1426,148 @@ def _surface_height_companion(
     return local_path, int(transferred or 0), str(companion.grib), fields
 
 
+def _retrieve_rrfs_dataset(config, run_dt, fxx, *, download_dir,
+                           progress_callback, cancelled):
+    """Fetch and combine RRFS pressure and ground GRIB over NOMADS.
+
+    RRFS is the one product this project locates itself rather than through
+    Herbie, whose ``rrfs`` template still resolves to a retired AWS prefix and
+    whose product list predates the prslev/2dfld split. The native GRIB runtime
+    is still required, because the assembled file is decoded the same way as
+    every other model's.
+
+    The two products are always fetched together. The ground file is not an
+    optional enrichment but the only published source of the verified surface
+    row, so a failure there is fatal rather than something to route around --
+    unlike the invariant-height companion, which has a working fallback.
+    """
+    require_runtime_dependencies()
+    combined_path = Path(download_dir or Path.cwd()) / (
+        f"{config.key}-{run_dt:%Y%m%d%H}-f{int(fxx):03d}"
+        "-verified-surface.grib2"
+    )
+    # A warm hit must not touch the network at all. The component subsets are
+    # deleted after they are combined, so re-running the fetch to re-derive the
+    # field list would re-transfer up to 350 MB; the sidecar records it instead.
+    if combined_path.exists() and _valid_grib(combined_path):
+        recorded = rrfs_nomads.read_provenance(combined_path)
+        if recorded is not None:
+            _emit_progress(progress_callback, "cached")
+            return _LocalGribDataset(combined_path), SimpleNamespace(
+                grib=recorded["source_url"].split(";")[0],
+                _sharpmod_source_url=recorded["source_url"],
+                _sharpmod_fields=recorded["fields"],
+                _sharpmod_search=build_noaa_search(
+                    recorded["pressure_fields"]
+                ),
+                _sharpmod_transport=(
+                    f"{rrfs_nomads.TRANSPORT}+surface-companion"
+                ),
+            )
+
+    _emit_progress(progress_callback, "downloading")
+    try:
+        pressure, surface = rrfs_nomads.fetch_pair(
+            config.key,
+            config.kwargs.get("domain"),
+            run_dt,
+            int(fxx),
+            download_dir=download_dir,
+            cancelled=cancelled,
+        )
+    except DownloadCancelled:
+        raise
+    except rrfs_nomads.RrfsUnavailable as exc:
+        raise RetrievalError(
+            "no %s data for run %s F%03d: %s"
+            % (config.label, run_dt.isoformat(), int(fxx), exc)
+        ) from exc
+    except (ValueError, OSError, OptimizedTransportUnavailable) as exc:
+        raise RetrievalError(
+            "failed to retrieve %s data for %s F%03d: %s"
+            % (config.label, run_dt.isoformat(), int(fxx), exc)
+        ) from exc
+
+    fields = tuple(dict.fromkeys((*pressure.fields, *surface.fields)))
+    if not supports_noaa_surface_merge(fields):
+        raise RetrievalError(
+            "%s did not publish a complete verified-surface contract "
+            "(fetched: %s)" % (config.label, ", ".join(fields))
+        )
+    # Pressure levels lead so the combined stream matches the message order
+    # every other verified-surface product uses.
+    combined_path = _combine_grib_payloads(
+        (pressure.path, surface.path), combined_path
+    )
+    source_url = f"{pressure.source_url};{surface.source_url}"
+    rrfs_nomads.write_provenance(
+        combined_path,
+        fields=fields,
+        source_url=source_url,
+        pressure_fields=pressure.fields,
+    )
+    # The combined stream is the only payload the decoder reads. Keeping the
+    # components as well would double a 3-km forecast hour to about 700 MB and
+    # let roughly four of them fill the managed cache budget, and it would buy
+    # nothing: pruning removes a whole model-hour entry, so a surviving
+    # component could never be reused on its own.
+    for component in (pressure.path, surface.path):
+        if component != combined_path:
+            _quiet_remove(component)
+    transferred = pressure.transferred_bytes + surface.transferred_bytes
+    _emit_progress(progress_callback, "decoding", transferred)
+    source = SimpleNamespace(
+        grib=pressure.source_url,
+        _sharpmod_source_url=source_url,
+        _sharpmod_fields=fields,
+        _sharpmod_search=build_noaa_search(pressure.fields),
+        _sharpmod_transport=(
+            f"{rrfs_nomads.TRANSPORT}+surface-companion"
+        ),
+    )
+    # A companion-completed payload is always decoded from the local file, the
+    # same way the CFS and invariant-height routes are: the combined stream is
+    # the only place both halves of the ground contract exist together.
+    return _LocalGribDataset(combined_path), source
+
+
 def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                       progress_callback=None, cancelled=None, lat=None,
                       lon=None):
-    """Fetch a Herbie pressure-level subset for ``config``."""
-    if config.key in {"gdps", "rdps"}:
+    """Fetch a Herbie pressure-level subset for ``config``.
+
+    The point providers are intercepted first. ``extract`` returns early for
+    them, but the GUI's model-hour cache calls this helper directly to populate
+    a shared entry, so a provider missing from here reaches Herbie and fails
+    with ``module 'herbie.models' has no attribute ...`` -- naming a SHARPpy key
+    Herbie was never asked about.
+    """
+    if config.key in POINT_PROVIDER_KEYS:
         if lat is None or lon is None:
             raise RetrievalError(
                 "%s uses a point-only provider and requires lat/lon"
                 % config.label
             )
-        dataset = eccc_geomet.fetch_point(
+        if config.key in ECCC_POINT_KEYS:
+            dataset = eccc_geomet.fetch_point(
+                config.key,
+                float(lat),
+                float(lon),
+                run_time=run_dt,
+                fxx=int(fxx),
+                progress_callback=progress_callback,
+                cancelled=cancelled,
+            )
+            capability = eccc_geomet.get_capability(config.key)
+            source = SimpleNamespace(
+                grib=eccc_geomet.GEOMET_URL,
+                _sharpmod_source_url=eccc_geomet.GEOMET_URL,
+                _sharpmod_fields=capability.fields,
+                _sharpmod_transport="wms-getfeatureinfo-point",
+            )
+            return dataset, source
+
+        dataset = openmeteo.fetch_point(
             config.key,
             float(lat),
             float(lon),
@@ -1331,15 +1576,25 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
             progress_callback=progress_callback,
             cancelled=cancelled,
         )
-        capability = eccc_geomet.get_capability(config.key)
+        # The dataset already publishes the three ``_sharpmod_*`` attributes the
+        # hour cache duck-types on; they are mirrored onto a source object so
+        # this returns the same shape as every other branch.
         source = SimpleNamespace(
-            grib=eccc_geomet.GEOMET_URL,
-            _sharpmod_source_url=eccc_geomet.GEOMET_URL,
-            _sharpmod_fields=capability.fields,
-            _sharpmod_transport="wms-getfeatureinfo-point",
+            grib=dataset._sharpmod_source_url,
+            _sharpmod_source_url=dataset._sharpmod_source_url,
+            _sharpmod_fields=dataset._sharpmod_fields,
+            _sharpmod_transport=dataset._sharpmod_transport,
         )
         return dataset, source
+
     _emit_progress(progress_callback, "locating")
+    if config.key in DIRECT_GRIB_KEYS:
+        return _retrieve_rrfs_dataset(
+            config, run_dt, fxx,
+            download_dir=download_dir,
+            progress_callback=progress_callback,
+            cancelled=cancelled,
+        )
     if hrrr_zarr_candidate(config, fxx, lat, lon):
         mode = os.environ.get("SHARPMOD_HRRR_BACKEND", "auto").strip().lower()
         _emit_progress(progress_callback, "downloading")
@@ -1726,7 +1981,26 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
             "that domain" % (
                 config.label, config.domain, config.domain_bounds, lat, lon))
 
-    if config.key in {"gdps", "rdps"}:
+    if config.key in OPENMETEO_POINT_KEYS:
+        if member is not None:
+            raise RetrievalError(
+                "%s is deterministic and does not accept --member"
+                % config.label
+            )
+        return openmeteo.extract(
+            config.key,
+            lat,
+            lon,
+            run_time=run_time,
+            fxx=fxx,
+            out_path=out_path,
+            loc=loc,
+            dataset=dataset,
+            progress_callback=progress_callback,
+            cancelled=cancelled,
+        )
+
+    if config.key in ECCC_POINT_KEYS:
         if member is not None:
             raise RetrievalError(
                 "%s is deterministic and does not accept --member"
@@ -1825,24 +2099,6 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
             decoder_backend = "direct GRIB point decoder"
             try:
                 decoded = _decode_local_point(ds, lat, lon)
-                surface_vorticity = decoded.surface_relative_vorticity
-                surface_vorticity_source = (
-                    "direct pressure-level vorticity field"
-                )
-                if surface_vorticity is None:
-                    if _direct_grib_required():
-                        raise RetrievalError(
-                            "the direct decoder found no usable vorticity value"
-                        )
-                    surface_vorticity = ds.surface_wind_vorticity(
-                        lat, lon, run_dt
-                    )
-                    surface_vorticity_source = (
-                        "targeted horizontal wind-gradient fallback"
-                    )
-                    decoder_backend = (
-                        "direct GRIB point decoder + targeted wind stencil"
-                    )
             except Exception as exc:
                 if _direct_grib_required():
                     raise RetrievalError(
@@ -1871,6 +2127,47 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
                 finally:
                     fallback.close()
             else:
+                # Surface vorticity is an optional enrichment: only NSTP reads
+                # it, and no other parameter is affected by its absence. It is
+                # resolved here, *after* the decode has succeeded and inside its
+                # own guard, because ``surface_wind_vorticity`` raises when it
+                # cannot produce a value. Sharing the decode's ``try`` meant
+                # that raise discarded a perfectly good profile and fell through
+                # to the slower cfgrib/xarray path -- which sets no vorticity at
+                # all, so the one parameter the fallback existed to rescue was
+                # lost anyway, and every other value came from the slow path for
+                # nothing.
+                surface_vorticity = decoded.surface_relative_vorticity
+                surface_vorticity_source = (
+                    "direct pressure-level vorticity field"
+                )
+                if surface_vorticity is None:
+                    if _direct_grib_required():
+                        raise RetrievalError(
+                            "the direct decoder found no usable vorticity value"
+                        )
+                    try:
+                        surface_vorticity = ds.surface_wind_vorticity(
+                            lat, lon, run_dt
+                        )
+                    except Exception as vorticity_exc:
+                        # NSTP will report missing; everything else is intact.
+                        _LOGGER.info(
+                            "grib_decode.vorticity_unavailable model=%s "
+                            "reason=%s",
+                            config.key,
+                            vorticity_exc,
+                        )
+                        surface_vorticity = None
+                        surface_vorticity_source = ""
+                    else:
+                        surface_vorticity_source = (
+                            "targeted horizontal wind-gradient fallback"
+                        )
+                        decoder_backend = (
+                            "direct GRIB point decoder + targeted wind stencil"
+                        )
+
                 cols = decoded.as_dict()
                 surface_merged = bool(
                     getattr(decoded, "surface_merged", False)
@@ -2151,7 +2448,25 @@ def probe(
             "error": "%s cannot produce a sounding: %s"
             % (config.label, config.unavailable_reason),
         }
-    if config.key in {"gdps", "rdps"}:
+    if config.key in OPENMETEO_POINT_KEYS:
+        if member is not None:
+            return {
+                "model": config.key,
+                "label": config.label,
+                "fxx": int(fxx),
+                "available": False,
+                "subset_opened": False,
+                "error": "%s is deterministic and has no members"
+                % config.label,
+            }
+        # Manifest-only. Open-Meteo requests are metered against the user's own
+        # allowance, and the interface re-probes whenever a selection changes,
+        # so a background availability check here would spend their quota on
+        # keystrokes. Ingestion is confirmed when the sounding is fetched.
+        return openmeteo.probe(
+            config.key, run_time=run_time, fxx=fxx, cancelled=cancelled)
+
+    if config.key in ECCC_POINT_KEYS:
         if member is not None:
             return {
                 "model": config.key,

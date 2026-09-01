@@ -58,6 +58,7 @@ from qtpy.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QCalendarWidget,
     QCheckBox,
     QSizePolicy,
     QGraphicsView,
@@ -184,8 +185,7 @@ def _configure_debug_logging() -> Path:
         _DEBUG_LOG_PATH,
     )
     return _DEBUG_LOG_PATH
-PICKER_RAIL_MIN_WIDTH = 320
-PICKER_RAIL_MAX_WIDTH = 380
+
 
 #: One-line interaction hints shown in the sounding-window tip bar.
 TIP_LINE = ("Tips:  right-click = readout / edit level   \u00b7   drag points to edit"
@@ -398,6 +398,23 @@ def _install_fullscreen_action(win, menu):
     return action
 
 
+def as_utc(when: datetime | None) -> datetime | None:
+    """Return ``when`` as tz-aware UTC, treating a naive value as already UTC.
+
+    Several picker tabs build their valid time from bare ``QDateEdit`` and
+    ``QComboBox`` state and produce a naive ``datetime``; the values are UTC by
+    construction, since every cycle and forecast hour in this application is.
+    Consumers that must not guess a timezone -- resolving which SPC convective
+    outlook covers a time, for instance -- reject naive input outright, so the
+    assumption is made explicit here instead of being repeated at each caller.
+    """
+    if when is None:
+        return None
+    if when.tzinfo is None:
+        return when.replace(tzinfo=timezone.utc)
+    return when.astimezone(timezone.utc)
+
+
 def _most_recent_synoptic() -> tuple[QDate, int]:
     """Return the most recent (00Z/12Z) sounding time likely to be available.
 
@@ -454,3 +471,92 @@ def _uwyo_decoder_classes():
         )
         _uwyo_decoder_types = (StationLookupError, UWyo_Decoder, UWyoError)
     return _uwyo_decoder_types
+
+
+class MonthCalendar(QCalendarWidget):
+    """Date-picker popup that shows only the month on display.
+
+    The default popup has two problems under the application style sheet. The
+    generic ``QTableView::item`` padding rule also matches the calendar's cells,
+    because a ``QCalendarWidget`` is a ``QTableView`` internally; that leaves too
+    little room for a two-digit day, and the item delegate elides the number to
+    an ellipsis. Separately, the leading and trailing cells show the neighbouring
+    months' days, which is noise in a control whose only job is to choose a date
+    within the month on show, and invites clicking a day that silently jumps the
+    view to another month.
+
+    Painting the cells directly solves both: the number is drawn centred at the
+    cell's full width with no delegate and no elision, and days outside the
+    shown month are left blank. Weekend tinting and the disabled colour are read
+    back from the widget's own formats and palette, so the popup still follows
+    the active theme and any configured date range.
+    """
+
+    def _weekday_colour(self, date, palette) -> QColor:
+        """Return the configured tint for ``date``'s weekday.
+
+        ``weekdayTextFormat`` takes a ``Qt.DayOfWeek``, while ``QDate.dayOfWeek``
+        returns a plain int, and the bindings are not consistent about coercing
+        between them. A failure here must not be able to make the popup
+        unpaintable, so an unusable format falls back to the ordinary text
+        colour.
+        """
+        try:
+            day = Qt.DayOfWeek(date.dayOfWeek())
+            brush = self.weekdayTextFormat(day).foreground()
+            if brush.style() != Qt.NoBrush:
+                return brush.color()
+        except (TypeError, ValueError):
+            pass
+        return palette.text().color()
+
+    def paintCell(self, painter, rect, date) -> None:  # noqa: N802 (Qt override)
+        palette = self.palette()
+        in_month = (date.month() == self.monthShown()
+                    and date.year() == self.yearShown())
+        selected = in_month and date == self.selectedDate()
+
+        painter.save()
+        try:
+            if selected:
+                painter.fillRect(rect, palette.highlight())
+            else:
+                painter.fillRect(rect, palette.base())
+            if not in_month:
+                return  # adjacent month: background only, no number
+
+            in_range = self.minimumDate() <= date <= self.maximumDate()
+            if selected:
+                colour = palette.highlightedText().color()
+            elif not in_range:
+                colour = palette.color(palette.ColorGroup.Disabled,
+                                       palette.ColorRole.Text)
+            else:
+                colour = self._weekday_colour(date, palette)
+            painter.setPen(QPen(colour))
+            painter.setFont(self.font())
+            painter.drawText(rect, Qt.AlignCenter, str(date.day()))
+        finally:
+            painter.restore()
+
+
+def install_month_calendar(date_edit) -> MonthCalendar:
+    """Give ``date_edit`` a popup restricted to the month it is showing.
+
+    ``setCalendarPopup(True)`` must already have been called; Qt ignores a
+    calendar widget assigned to an edit that has no popup.
+    """
+    calendar = MonthCalendar(date_edit)
+    calendar.setGridVisible(False)
+    # The two header views are drawn by Qt, not by ``paintCell``, so they are
+    # still subject to the style sheet's section padding and elide exactly the
+    # way the day cells used to. Removing the week-number column frees that
+    # width for the day columns, and single-letter weekday names always fit
+    # whatever remains. ISO week numbers are of no use when picking a sounding
+    # date, so nothing is lost by dropping them.
+    calendar.setVerticalHeaderFormat(
+        QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader)
+    calendar.setHorizontalHeaderFormat(
+        QCalendarWidget.HorizontalHeaderFormat.SingleLetterDayNames)
+    date_edit.setCalendarWidget(calendar)
+    return calendar

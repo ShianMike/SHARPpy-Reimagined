@@ -1177,13 +1177,19 @@ def mount_products(
     # inset.  The original board-to-right-inset width share remains stable;
     # only the old STP allocation is split between these two charts.
     try:
-        from sharpmod.viz.streamwiseness import plotStreamwiseness
+        from sharpmod.viz.height_charts import SwappableHeightChart
 
         grid3 = getattr(sw, "grid3", None)
         right = getattr(sw, "right_inset_ob", None)
         if grid3 is None or right is None:
             raise RuntimeError("grid3/right_inset_ob not found")
-        stream = plotStreamwiseness(parent=getattr(sw, "text", None) or sw)
+        # The slot shows streamwiseness by default and offers the storm-relative
+        # wind, theta/theta-e, and stepwise CIN/CAPE charts from its context
+        # menu. It forwards the whole inset contract, so everything downstream --
+        # ``sw.streamwiseness``, the deviant-vector hook, the profile refresh --
+        # keeps addressing it as the single widget this column used to hold.
+        stream = SwappableHeightChart(
+            parent=getattr(sw, "text", None) or sw)
         stream.setProf(prof)
         latitude = getattr(prof, "latitude", 0.0) if prof is not None else 0.0
         stream.setDeviant("left" if latitude < 0 else "right")
@@ -1196,7 +1202,9 @@ def mount_products(
         stream.show()
         result.streamwiseness = stream
         result.mounted.append(
-            "Streamwiseness (col 3); right/STP inset narrowed (col 4)")
+            "Swappable height chart (col 3, %d charts); "
+            "right/STP inset narrowed (col 4)"
+            % len(stream.availableCharts()))
     except Exception as exc:  # noqa: BLE001 - record, never abort the mount
         result.blocked.append(f"Streamwiseness: {exc}")
 

@@ -19,6 +19,7 @@ from sharppy.sharptab import thermo as sp_thermo
 from sharppy.sharptab import utils as sp_utils
 
 from sharpmod import backends
+from sharpmod.sharptab.constants import OPTIONAL_SOURCE_SURFACE_FIELDS
 
 logger = logging.getLogger(__name__)
 
@@ -372,6 +373,40 @@ def _microburst(prof):
 
 class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
     """Convective profile using backend parcel and DCAPE workspaces."""
+
+    @classmethod
+    def copy(cls, prof, strictQC=False, **kwargs):
+        """Copy ``prof``, carrying source-supplied surface scalars across.
+
+        The vendored ``Profile.copy`` rebuilds a profile from a fixed whitelist
+        of arrays and re-attaches only the storm-motion vectors; every other
+        attribute is dropped. That silently cost NSTP its input.
+
+        A profile collection re-upgrades its profiles whenever the target type
+        changes, and selecting this class is exactly such a change. So a
+        sounding loaded with surface relative vorticity attached would have it
+        stripped the moment the accelerated path was chosen -- leaving NSTP
+        reporting missing for every rendered sounding, while the same sounding
+        computed it correctly outside the renderer.
+
+        Only :data:`OPTIONAL_SOURCE_SURFACE_FIELDS` are carried, and only when
+        the source actually has them, so this cannot invent a value.
+        """
+        new_prof = super().copy(prof, strictQC=strictQC, **kwargs)
+        for name in OPTIONAL_SOURCE_SURFACE_FIELDS:
+            if hasattr(prof, name):
+                try:
+                    setattr(new_prof, name, getattr(prof, name))
+                except Exception:  # pragma: no cover - defensive
+                    pass
+        source_meta = getattr(prof, "meta", None)
+        if isinstance(source_meta, dict) and not isinstance(
+                getattr(new_prof, "meta", None), dict):
+            try:
+                new_prof.meta = dict(source_meta)
+            except Exception:  # pragma: no cover - defensive
+                pass
+        return new_prof
 
     def get_parcels(self):
         try:

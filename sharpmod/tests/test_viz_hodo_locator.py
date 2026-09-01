@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from importlib.resources import files
 import json
+import math
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,6 +31,42 @@ def test_zoom_bounds_center_the_sounding_and_stay_local():
     assert south < lat < north
     assert east - west < 4.0
     assert north - south < 2.0
+
+
+def test_the_zoom_constant_sits_just_inside_the_locality_contract():
+    """The inset's zoom is one constant, and it is nearly at its ceiling.
+
+    ``LOCATOR_HALF_LAT_DEGREES`` was raised from 0.70 to 0.98 to give a sounding
+    more recognisable surroundings. The test above contracts the inset to stay
+    local at under two degrees of latitude, which leaves 0.02 degrees of room:
+    raising the constant any further is a decision to widen that contract, not a
+    tweak, so it is stated here rather than discovered as a failure elsewhere.
+    """
+    half = hodo_locator.LOCATOR_HALF_LAT_DEGREES
+    assert half * 2.0 < 2.0, "the zoom has outgrown the locality contract"
+    assert half > 0.70, "the zoom-out was reverted without updating this test"
+
+
+@pytest.mark.parametrize("lat", [0.0, 25.0, 41.79, 58.0, 72.0, -45.0])
+def test_the_extent_stays_local_in_kilometres_at_every_latitude(lat):
+    """Degrees of longitude are a poor proxy for how much ground is shown.
+
+    The cosine division is what keeps the inset near-square on the ground, so
+    the longitude span in *degrees* grows toward the poles by design. What must
+    stay bounded is the distance covered, including at the cosine clamp where the
+    span in degrees is at its widest.
+    """
+    west, south, east, north = hodo_locator.zoom_bounds(lat, 0.0)
+
+    tall_km = (north - south) * 111.32
+    cos_lat = max(0.35, math.cos(math.radians(lat)))
+    wide_km = (east - west) * 111.32 * cos_lat
+
+    assert 200.0 < tall_km < 240.0
+    # Landscape, matching the inset's own shape, and never a regional map.
+    assert tall_km < wide_km < 340.0
+    assert wide_km / tall_km == pytest.approx(
+        hodo_locator.LOCATOR_LON_ASPECT, rel=1e-6)
 
 
 def test_point_from_widget_uses_collection_metadata_for_longitude():

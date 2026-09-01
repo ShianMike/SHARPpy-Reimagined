@@ -23,6 +23,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # Unit and render-smoke tests must never depend on the public geocoder. Tests
 # that exercise reverse lookup replace this default with a controlled endpoint.
 os.environ.setdefault("SHARPMOD_GEOCODER_URL", "off")
+# The map-overlay cache is persistent, so leaving it enabled would let the
+# developer's real cache directory decide whether a test hits the network, and
+# would leave test payloads behind in it. Tests that exercise the on-disk cache
+# point this at a temporary directory of their own.
+os.environ.setdefault("SHARPMOD_OUTLOOK_CACHE", "off")
 
 import pytest
 from hypothesis import HealthCheck, is_hypothesis_test, settings

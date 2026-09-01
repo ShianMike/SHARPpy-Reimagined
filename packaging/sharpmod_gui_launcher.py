@@ -11,8 +11,58 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import multiprocessing
+import os
 import sys
 from pathlib import Path
+
+from packaging.version import InvalidVersion, Version
+
+
+_FROZEN_DLL_DIRECTORIES = []
+_FROZEN_DLL_HANDLES = []
+
+
+def _prepare_frozen_dll_search() -> None:
+    """Make sibling PySide6/shiboken6 DLL directories visible on Windows."""
+    if not getattr(sys, "frozen", False) or not sys.platform.startswith("win"):
+        return
+    meipass = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    for directory in (meipass, meipass / "PySide6", meipass / "shiboken6"):
+        if not directory.is_dir():
+            continue
+        os.environ["PATH"] = str(directory) + os.pathsep + os.environ.get("PATH", "")
+        try:
+            _FROZEN_DLL_DIRECTORIES.append(os.add_dll_directory(str(directory)))
+        except (AttributeError, OSError):
+            # Older Windows/Python combinations use PATH alone.
+            pass
+    # Load the ABI-bearing libraries from the bundle explicitly. This prevents
+    # Windows from satisfying QtCore.pyd's imports with an unrelated Qt copy
+    # that happens to be resident in the host process search path.
+    try:
+        import ctypes
+
+        for library in (
+            meipass / "shiboken6" / "shiboken6.abi3.dll",
+            meipass / "PySide6" / "Qt6Core.dll",
+            meipass / "PySide6" / "pyside6.abi3.dll",
+        ):
+            if library.is_file():
+                _FROZEN_DLL_HANDLES.append(ctypes.WinDLL(str(library)))
+    except (AttributeError, OSError):
+        # The extension import below records the detailed loader error.
+        pass
+
+
+_prepare_frozen_dll_search()
+
+
+def _versions_consistent(versions: dict[str, str]) -> bool:
+    """Accept PEP 440-normalized metadata for one source release version."""
+    try:
+        return len({Version(value) for value in versions.values()}) == 1
+    except InvalidVersion:
+        return False
 
 
 def _model_fetch_runtime_check(output_path: str) -> int:
@@ -23,6 +73,15 @@ def _model_fetch_runtime_check(output_path: str) -> int:
         "version_consistent": False,
     }
     try:
+        # Load the real GUI entry point first, matching normal application
+        # startup.  Importing the scientific DLL stack before Qt can make the
+        # frozen Windows process resolve an incompatible shared library before
+        # PySide6 has initialized its own runtime.
+        import PySide6
+        from PySide6 import QtCore
+
+        from sharpmod.gui_picker import main as gui_main
+
         from logging.handlers import RotatingFileHandler
 
         import cdsapi
@@ -37,7 +96,6 @@ def _model_fetch_runtime_check(output_path: str) -> int:
         import xarray
 
         from sharpmod.backends import backend_info, wind_to_components
-        from sharpmod.gui_picker import main as gui_main
         from sharpmod.tools import model_extract, wrf_extract
 
         backend = backend_info()
@@ -48,7 +106,7 @@ def _model_fetch_runtime_check(output_path: str) -> int:
             "sharpmod_rs_metadata": importlib.metadata.version("sharpmod-rs"),
             "backend_rust": str(backend["rust_version"]),
         }
-        if len(set(runtime_versions.values())) != 1:
+        if not _versions_consistent(runtime_versions):
             raise RuntimeError(
                 f"frozen runtime versions do not match: {runtime_versions}"
             )

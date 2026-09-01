@@ -448,6 +448,13 @@ def test_release_pins_satisfy_the_declared_requirements():
         "packaging.requirements", reason="packaging required to compare pins")
     packaging_version = pytest.importorskip(
         "packaging.version", reason="packaging required to compare pins")
+    packaging_utils = pytest.importorskip(
+        "packaging.utils", reason="packaging required to compare pins")
+    # PEP 503 canonicalisation, not lowercase-and-underscore: it also folds
+    # dots and runs of punctuation, so `zope.interface` and `zope-interface`
+    # agree on one key. Getting this wrong fails silently -- the pin looks
+    # absent, the pair goes unchecked, and the guard passes.
+    canonical = packaging_utils.canonicalize_name
 
     pkg_dir = Path(sharpmod.__file__).resolve().parent
     root = next(
@@ -466,7 +473,7 @@ def test_release_pins_satisfy_the_declared_requirements():
         if not line or line.startswith("#") or "==" not in line:
             continue
         name, _, version = line.partition("==")
-        pinned[name.strip().lower().replace("_", "-")] = version.strip()
+        pinned[canonical(name.strip())] = version.strip()
     assert pinned, "no pins parsed from the release constraints"
 
     with open(root / "pyproject.toml", "rb") as fh:
@@ -475,12 +482,16 @@ def test_release_pins_satisfy_the_declared_requirements():
     declared = list(project.get("dependencies", ()))
     for extra in project.get("optional-dependencies", {}).values():
         declared.extend(extra)
+    # Build-system requirements count too. The release job exports
+    # PIP_CONSTRAINT before installing the project, so an isolated build has to
+    # reconcile the setuptools and wheel pins against these floors, and a
+    # mismatch there fails the install exactly as a runtime one does.
+    declared.extend(manifest.get("build-system", {}).get("requires", ()))
 
     conflicts = []
     for raw in declared:
         requirement = packaging_requirements.Requirement(raw)
-        key = requirement.name.lower().replace("_", "-")
-        version = pinned.get(key)
+        version = pinned.get(canonical(requirement.name))
         if version is None or not requirement.specifier:
             continue
         # Pre-releases are opted into explicitly: a pin naming one is a

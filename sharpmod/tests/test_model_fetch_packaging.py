@@ -82,6 +82,17 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         "github.ref == 'refs/heads/main' }}"
     )
     assert "test-timing" in str(workflow)
+    timing_uploads = [
+        step
+        for job in jobs.values()
+        for step in job["steps"]
+        if ".test-results" in str(step.get("with", {}).get("path", ""))
+    ]
+    assert len(timing_uploads) == 6
+    assert all(
+        step["with"]["include-hidden-files"] == "true"
+        for step in timing_uploads
+    )
 
     windows_job = jobs["windows-wrf"]
     assert windows_job["runs-on"] == "windows-latest"

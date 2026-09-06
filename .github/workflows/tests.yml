@@ -112,6 +112,7 @@ jobs:
         with:
           name: test-timing-compatibility-python-${{ matrix.python-version }}
           path: .test-results/compatibility*
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
 
@@ -157,6 +158,7 @@ jobs:
           path: |
             coverage.xml
             .test-results/fast*
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
 
@@ -196,6 +198,7 @@ jobs:
         with:
           name: test-timing-property-python-3.13
           path: .test-results/property*
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
 
@@ -239,6 +242,7 @@ jobs:
         with:
           name: test-timing-serial-release-python-3.13
           path: .test-results/serial-release*
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
 
@@ -275,6 +279,7 @@ jobs:
         with:
           name: test-timing-windows-wrf-python-3.13
           path: .test-results/windows-wrf*
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
 
@@ -356,5 +361,6 @@ jobs:
         with:
           name: test-timing-live-provider-python-3.13
           path: .test-results/live-provider*
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14

@@ -438,6 +438,24 @@ def test_a_sequence_starts_from_fxx(capsys, tmp_path, fake_extractor):
     assert "F006 to F007" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("fxx", (-1, 19))
+def test_single_hour_must_be_published_for_the_selected_cycle(
+        fxx, capsys, tmp_path, monkeypatch):
+    class UnexpectedExtractor:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("invalid forecast hour reached extraction")
+
+    monkeypatch.setattr(batch_extract, "BatchExtractor", UnexpectedExtractor)
+
+    code = _run([
+        *PLAINS, "--output-dir", str(tmp_path),
+        "--run", "2026-09-04T13:00Z", "--fxx", str(fxx), "--quiet",
+    ])
+
+    assert code == 2
+    assert "does not publish" in capsys.readouterr().err
+
+
 def test_hours_of_one_stays_a_single_hour_run(
     capsys, tmp_path, fake_extractor
 ):

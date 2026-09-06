@@ -1,5 +1,6 @@
 """Derived-parameter fields, area statistics, and transects over a box."""
 
+from dataclasses import replace
 import math
 from types import SimpleNamespace
 
@@ -836,6 +837,25 @@ def test_envelope_supports_every_transect_field(fanned):
     for field in ba.TRANSECT_FIELDS:
         envelope = fanned.envelope(field=field)
         assert envelope.field == field
+
+
+def test_wind_direction_envelope_stays_narrow_across_north(analysis):
+    points = []
+    for index, point in enumerate(analysis.points):
+        columns = dict(point.columns)
+        columns["wdir"] = tuple(
+            350.0 if index % 2 else 10.0
+            for _level in ba.DEFAULT_TRANSECT_LEVELS
+        )
+        points.append(replace(point, columns=columns))
+    wrapped = replace(analysis, points=tuple(points))
+
+    envelope = wrapped.envelope(field="wdir")
+    level = envelope.levels.index(500.0)
+
+    assert envelope.maximum[level] - envelope.minimum[level] == \
+        pytest.approx(20.0)
+    assert envelope.median[level] == pytest.approx(360.0)
 
 
 @pytest.mark.parametrize(

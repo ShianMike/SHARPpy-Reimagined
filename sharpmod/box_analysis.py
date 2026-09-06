@@ -1154,6 +1154,24 @@ class BoxAnalysis:
                     series.append(None)
                 continue
             values = np.asarray(present, dtype=float)
+            if field == "wdir":
+                # Keep a cluster straddling north contiguous (350, 10 becomes
+                # 350, 370) before reducing it.  Normal scalar percentiles
+                # would instead invent a southerly median and a 340-degree
+                # spread from a narrow northerly cluster.
+                radians = np.deg2rad(np.mod(values, 360.0))
+                center = (
+                    np.degrees(np.arctan2(
+                        np.mean(np.sin(radians)),
+                        np.mean(np.cos(radians)),
+                    ))
+                    % 360.0
+                )
+                if center < 180.0 and np.any(values > 180.0):
+                    center += 360.0
+                values = center + (
+                    (values - center + 180.0) % 360.0 - 180.0
+                )
             minimum.append(float(np.min(values)))
             low.append(float(np.percentile(values, low_pct)))
             median.append(float(np.median(values)))

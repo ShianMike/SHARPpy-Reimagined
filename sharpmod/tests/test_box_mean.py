@@ -322,6 +322,17 @@ def test_the_centre_falls_back_to_the_members(tmp_path):
     assert profile.lon == pytest.approx(-96.0)
 
 
+def test_inferred_centre_longitude_stays_on_the_antimeridian():
+    lat, lon = bm._centre(
+        [{"lat": 10.0, "lon": 179.0}, {"lat": 12.0, "lon": -179.0}],
+        None,
+        None,
+    )
+
+    assert lat == pytest.approx(11.0)
+    assert abs(lon) == pytest.approx(180.0)
+
+
 def test_a_member_without_coordinates_cannot_supply_a_centre(tmp_path):
     source = _source()
     paths = []

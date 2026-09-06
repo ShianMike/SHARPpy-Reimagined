@@ -576,7 +576,14 @@ def _centre(members, lat, lon) -> tuple[float, float]:
             "these soundings carry no coordinates, so the centre of the "
             "averaged area is unknown; pass lat and lon"
         )
-    return float(np.mean(lats)), float(np.mean(lons))
+    radians = np.deg2rad(np.asarray(lons, dtype=float))
+    mean_lon = np.degrees(np.arctan2(
+        np.mean(np.sin(radians)), np.mean(np.cos(radians))))
+    # Keep the portable coordinate in the application's conventional
+    # [-180, 180) range.  Unlike an arithmetic mean, this leaves a box around
+    # the antimeridian at the antimeridian rather than moving it to Greenwich.
+    mean_lon = (float(mean_lon) + 180.0) % 360.0 - 180.0
+    return float(np.mean(lats)), mean_lon
 
 
 def _or_missing(value) -> float:

@@ -192,19 +192,27 @@ def _sequence_hours(plan, run_dt, args) -> tuple[int, ...] | None:
     from sharpmod.tools import model_extract
 
     count = max(1, int(args.hours))
-    if count == 1:
-        return (int(args.fxx),)
-    step = max(1, int(args.hour_step))
+    start = int(args.fxx)
     published = model_extract.forecast_hours(plan.model_key, run_dt.hour)
+    if start not in published:
+        print(
+            f"ERROR: {plan.model_label} does not publish F{start:03d} "
+            f"for its {run_dt.hour:02d}Z cycle",
+            file=sys.stderr,
+        )
+        return None
+    if count == 1:
+        return (start,)
+    step = max(1, int(args.hour_step))
     later = [
         hour for hour in sorted(published)
-        if hour >= int(args.fxx) and (hour - int(args.fxx)) % step == 0
+        if hour >= start and (hour - start) % step == 0
     ]
     chosen = tuple(later[:count])
     if len(chosen) < 2:
         print(
             f"ERROR: {plan.model_label} publishes no further forecast hour at "
-            f"or after F{int(args.fxx):03d} with a {step}-hour step",
+            f"or after F{start:03d} with a {step}-hour step",
             file=sys.stderr,
         )
         return None

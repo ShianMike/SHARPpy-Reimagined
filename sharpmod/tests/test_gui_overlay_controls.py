@@ -1177,6 +1177,27 @@ def test_a_pinned_hour_past_the_cycle_limit_is_normalised(field, field_calls):
     assert field_calls[-1]["fxx"] == 18
 
 
+def test_field_retries_immediately_when_the_view_reenters_coverage(
+        qt_app, field_calls):
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, EUROPE_VIEW)
+    controller = gui_overlay_controls.HrrrFieldController(
+        widget, enabled=True)
+    try:
+        _pump()
+        assert field_calls == []
+
+        _look_at(widget, CONUS_VIEW)
+        controller.on_view_settled()
+        _pump()
+
+        assert len(field_calls) == 1
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
 # --------------------------------------------------------------------------- #
 # Single-site radar: choosing the antenna
 # --------------------------------------------------------------------------- #

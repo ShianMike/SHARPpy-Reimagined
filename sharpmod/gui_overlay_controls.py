@@ -1294,6 +1294,21 @@ class HrrrFieldController(QObject):
         self._fields.clear_cache()
         self._request()
 
+    def on_view_settled(self) -> None:
+        """Recover promptly when an enabled field re-enters HRRR coverage."""
+        if not self._check.isChecked():
+            return
+        if not self._in_coverage():
+            self._request()
+            return
+        raster = self._map.overlay(self._fields.OVERLAY_KEY)
+        if raster is not None and raster.short_name == self.product() \
+                and not raster.is_stale():
+            self._map.set_overlay_visible(self._fields.OVERLAY_KEY, True)
+            self._set_status(self._describe(raster))
+            return
+        self._request()
+
     def shutdown(self) -> None:
         """Interrupt any in-flight fetch and wait briefly, for window close."""
         self._timer.stop()

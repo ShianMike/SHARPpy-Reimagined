@@ -286,6 +286,30 @@ def test_composites_request_is_confirmed_before_running(
     assert started == [(ba.FAST_TIER, ba.COMPOSITE_TIER)]
 
 
+def test_composite_estimate_counts_successes_across_every_sequence_hour(
+        picker, monkeypatch, tmp_path):
+    from qtpy.QtWidgets import QMessageBox
+
+    from sharpmod.gui_box import BoxExtractResult
+
+    plan = plan_box_samples(
+        "hrrr", BoxRegion.from_corners(36.0, -96.5, 37.4, -94.8),
+        target_points=16)
+    outputs = _write_variants(plan, tmp_path)
+    picker._box_extraction = BoxExtractResult(
+        plan=plan, outputs={}, completed=len(outputs), fxx=0,
+        hours=(0, 6), outputs_by_hour={0: {}, 6: outputs},
+    )
+    asked = []
+    monkeypatch.setattr(
+        "sharpmod.gui_picker.QMessageBox.question",
+        lambda *args, **kwargs: asked.append(args[-3]) or QMessageBox.No)
+
+    picker._on_box_composites_requested()
+
+    assert asked and f"for {len(outputs)} soundings" in asked[0]
+
+
 def test_sounding_request_opens_a_viewer(picker, monkeypatch, tmp_path):
     plan = plan_box_samples(
         "hrrr", BoxRegion.from_corners(36.0, -96.5, 37.4, -94.8),

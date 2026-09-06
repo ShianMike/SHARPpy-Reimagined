@@ -329,7 +329,9 @@ def main(argv=None) -> int:
     # Requests carry an hour-prefixed id for a sequence, so file each completed
     # artifact back under its own hour keyed by the plain lattice id.
     by_id = {item.id: item for item in requests}
-    outputs_by_hour: dict[int, dict[str, str]] = {}
+    outputs_by_hour: dict[int, dict[str, str]] = {
+        int(hour): {} for hour in hours
+    }
     for item in result.items:
         if item.status != "completed":
             continue
@@ -347,7 +349,7 @@ def main(argv=None) -> int:
         f"cancelled={result.cancelled} resumed={result.skipped}"
     )
     print(f"manifest={result.manifest_path}")
-    if not outputs_by_hour:
+    if not any(outputs_by_hour.values()):
         print("ERROR: no point in the box could be extracted", file=sys.stderr)
         return 1
 

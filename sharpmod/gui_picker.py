@@ -1899,24 +1899,24 @@ class PickerWindow(QMainWindow):
         controller.set_site(site_id)
 
     def _map_on_view_settled(self) -> None:
-        self._view_settled("_map_radar")
+        self._view_settled("_map_radar", "_map_field")
 
     def _model_on_view_settled(self) -> None:
-        self._view_settled("_model_radar")
+        self._view_settled("_model_radar", "_model_field")
 
-    def _view_settled(self, attribute: str) -> None:
+    def _view_settled(self, *attributes: str) -> None:
         """Let a tab's view-dependent overlays catch up with a moved map.
 
         Relayed through this window for the same reason the site click is: the
-        map does not know the controller exists. Only the single-site radar cares
-        so far, because it is the only overlay whose *content* is chosen from
-        where the map is looking.
+        map does not know the controllers exist. Single-site radar chooses its
+        antenna from the view, while HRRR fields use the same event to retry as
+        soon as a view crosses back into their domain.
         """
-        controller = getattr(self, attribute, None)
-        handler = getattr(controller, "on_view_settled", None)
-        if handler is None:
-            return
-        handler()
+        for attribute in attributes:
+            controller = getattr(self, attribute, None)
+            handler = getattr(controller, "on_view_settled", None)
+            if handler is not None:
+                handler()
 
     def _map_sync_overlay_times(self) -> None:
         """Point the observed tab's overlays at the selected sounding hour.
@@ -3710,7 +3710,10 @@ class PickerWindow(QMainWindow):
             return
         if self._box_analysis_worker is not None:
             return
-        count = len(self._box_extraction.outputs)
+        count = sum(
+            len(outputs)
+            for outputs in self._box_extraction.outputs_by_hour.values()
+        )
         # About 0.4 s per sounding, measured. Say so rather than letting the
         # window appear to hang.
         answer = QMessageBox.question(

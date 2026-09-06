@@ -360,6 +360,55 @@ def test_hours_option_samples_several_forecast_hours(
     assert "peak hour" in out
 
 
+def test_sequence_reports_an_hour_when_all_of_its_nodes_fail(
+        capsys, tmp_path, monkeypatch):
+    if not HRRR_NPZ.is_file():
+        pytest.skip("no HRRR .npz example sounding")
+    source = dict(np.load(HRRR_NPZ, allow_pickle=False))
+
+    class PartialHourExtractor:
+        def __init__(self, progress_callback=None):
+            self.progress_callback = progress_callback
+
+        def run(self, requests, **kwargs):
+            from pathlib import Path
+
+            root = Path(kwargs["output_dir"])
+            items = []
+            completed = failed = 0
+            for item in requests:
+                target = root / item.output
+                if item.fxx == 0:
+                    failed += 1
+                    items.append(SimpleNamespace(
+                        id=item.id, status="failed", output_path=target))
+                    continue
+                completed += 1
+                target.parent.mkdir(parents=True, exist_ok=True)
+                np.savez(target, **source)
+                items.append(SimpleNamespace(
+                    id=item.id, status="completed", output_path=target))
+            return SimpleNamespace(
+                items=tuple(items), completed=completed, failed=failed,
+                cancelled=0, skipped=0, ok=True,
+                manifest_path=root / "batch-manifest.json",
+            )
+
+    monkeypatch.setattr(
+        batch_extract, "BatchExtractor", PartialHourExtractor)
+
+    code = _run([
+        "hrrr", "36.0", "-96.5", "37.4", "-94.8",
+        "--output-dir", str(tmp_path), "--target-points", "4",
+        "--hours", "2", "--quiet",
+    ])
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "F000" in out and "no data" in out
+    assert "F001" in out
+
+
 def _hours_of(state):
     """Return ``(request_id, hour)`` pairs from the recorded request ids."""
     return [(item, int(item[1:4])) for item in state["ids"]]

@@ -103,7 +103,7 @@ dev = [
 quality = [
     "pip-audit==2.10.1",
     "pytest-cov==7.1.0",
-    "ruff==0.16.4",
+    "ruff==0.16.5",
 ]
 # Build frontend for the optional local Rust extension. This does not install
 # Rust itself or make the extension a requirement of the Python package.
@@ -123,6 +123,7 @@ observed-sounding = "sharpmod.tools.observed_sounding:main"
 era5-extract = "sharpmod.tools.era5_extract:main"
 model-extract = "sharpmod.tools.model_extract:main"
 model-batch-extract = "sharpmod.tools.batch_extract:main"
+box-extract = "sharpmod.tools.box_extract:main"
 wrf-extract = "sharpmod.tools.wrf_extract:main"
 sharpmod-rust-sync = "sharpmod.tools.rust_backend_sync:main"
 

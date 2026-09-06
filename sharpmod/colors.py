@@ -100,6 +100,8 @@ WHITE = "#ffffff"
 FG_COLOR = WHITE
 #: Chart background the palette is designed to remain legible against.
 BG_COLOR = BLACK
+#: Shared plot-box outline width, including the canonical Skew-T frame.
+PLOT_FRAME_WIDTH = 1.0
 
 
 def _rgb(color: str) -> tuple[int, int, int]:

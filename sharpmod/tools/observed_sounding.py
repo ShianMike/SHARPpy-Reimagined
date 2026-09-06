@@ -14,6 +14,7 @@ from sharpmod.observations import (
     ObservedProviderError,
     available_observed_providers,
     fetch_observed,
+    registered_provider_keys,
     write_observed_npz,
 )
 
@@ -39,7 +40,13 @@ def _parse_when(value: str) -> datetime:
 
 def _cmd_providers(_args) -> int:
     for info in available_observed_providers():
-        print(f"{info.key:8s} {info.name}\n         {info.homepage}")
+        role = (
+            "auto fallback"
+            if info.key in DEFAULT_PROVIDER_ORDER
+            else "select by name"
+        )
+        print(f"{info.key:8s} {info.name}  [{role}]")
+        print(f"         {info.homepage}")
     return 0
 
 
@@ -106,9 +113,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="observed-sounding",
         description=(
-            "Fetch one observed sounding from UWyo or the independent IEM "
-            "RAOB archive. The default auto mode tries UWyo, then IEM, and "
-            "records the selected source without merging providers."
+            "Fetch one observed sounding from UWyo, the independent IEM RAOB "
+            "archive, or NOAA's IGRA v2 radiosonde archive. The default auto "
+            "mode tries UWyo, then IEM, and records the selected source "
+            "without merging providers. IGRA holds the deep historical "
+            "record and is retrieved one station archive at a time, so it is "
+            "used only when named with --provider igra2."
         ),
     )
     commands = parser.add_subparsers(dest="command", required=True)
@@ -125,9 +135,13 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("time", type=_parse_when, help="UTC time")
     fetch.add_argument(
         "--provider",
-        choices=("auto",) + DEFAULT_PROVIDER_ORDER,
+        choices=("auto",) + registered_provider_keys(),
         default="auto",
-        help="provider or explicit UWyo -> IEM fallback (default: auto)",
+        help=(
+            "one named provider, or auto for the UWyo -> IEM fallback "
+            "(default: auto). Providers outside that chain, such as igra2, "
+            "are only used when named here."
+        ),
     )
     fetch.add_argument("--out", type=Path, default=None, help="output .npz path")
     fetch.add_argument("--loc", default=None, help="location label")

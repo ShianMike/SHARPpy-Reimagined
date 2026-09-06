@@ -203,7 +203,12 @@ def test_availability_result_handler_retains_only_current_usable_profile():
         _avail_workers=[worker],
         _avail_latest={id(indicator): 9},
         _observed_profile_cache={},
-        _observed_cache_key=gui_picker.PickerWindow._observed_cache_key,
+        # The cache key is keyed by observed source as well as station and
+        # time, so the stand-in owner has to answer for one.
+        _observed_source=lambda: "auto",
+    )
+    owner._observed_cache_key = (
+        gui_picker.PickerWindow._observed_cache_key.__get__(owner)
     )
 
     gui_picker.PickerWindow._on_availability_checked(
@@ -216,7 +221,7 @@ def test_availability_result_handler_retains_only_current_usable_profile():
         fetched,
     )
 
-    key = gui_picker.PickerWindow._observed_cache_key("72357", when)
+    key = owner._observed_cache_key("72357", when)
     assert owner._observed_profile_cache[key][0] is fetched
     assert indicator.calls == [
         (AVAIL_AVAILABLE, "Available (80 levels)", "72357 — Norman")

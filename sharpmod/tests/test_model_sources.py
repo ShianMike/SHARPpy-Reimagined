@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
@@ -18,7 +19,7 @@ from sharpmod.model_sources import (
 
 
 def test_nomads_query_contains_fields_all_levels_and_small_region():
-    config = SimpleNamespace(key="hrrr")
+    config = SimpleNamespace(key="hrrr", grid_spacing_km=3.0)
     source = (
         "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod/"
         "hrrr.20260714/conus/hrrr.t08z.wrfprsf00.grib2"
@@ -57,6 +58,82 @@ def test_nomads_directory_derivation_supports_gfs_nested_cycle():
 
     assert query["dir"] == ["/gfs.20260714/06/atmos"]
     assert query["file"] == ["gfs.t06z.pgrb2.0p25.f000"]
+
+
+@pytest.mark.parametrize(
+    ("key", "spacing_km"),
+    (
+        ("hrrr", 3.0),
+        ("rap", 13.0),
+        ("nam", 12.0),
+        ("gfs", 27.8),
+        ("cfs", 55.6),
+        ("gefs", 55.6),
+    ),
+)
+def test_a_subset_box_brackets_the_point_on_every_grid(key, spacing_km):
+    """The point must fall strictly inside the returned area on both axes.
+
+    The GRIB filter keeps only whole rows and columns that lie inside the
+    requested box, and ecCodes refuses a nearest-point request for a target
+    outside the area it decoded. A fixed 0.15-degree margin is narrower than one
+    cell of the 0.25-degree GFS, so the filter returned a strip one row tall and
+    every GFS sounding failed with "the point is out of the grid area".
+    """
+    latitude, longitude = 43.2863, -87.8957
+    query = parse_qs(urlparse(build_nomads_subset_url(
+        SimpleNamespace(key=key, grid_spacing_km=spacing_km),
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/%s/prod/"
+        "%s.20260904/06/atmos/file.grib2" % (key, key),
+        latitude,
+        longitude,
+        ("HGT", "TMP"),
+    )).query)
+
+    top = float(query["toplat"][0])
+    bottom = float(query["bottomlat"][0])
+    left = float(query["leftlon"][0])
+    right = float(query["rightlon"][0])
+    latitude_step = spacing_km / 111.32
+    longitude_step = latitude_step / math.cos(math.radians(latitude))
+
+    assert bottom < latitude < top
+    assert left < longitude < right
+    # At least one whole cell of padding survives on each side, so the decoded
+    # area cannot collapse onto the point's own row or column.
+    assert top - latitude >= latitude_step
+    assert latitude - bottom >= latitude_step
+    assert right - longitude >= longitude_step
+    assert longitude - left >= longitude_step
+
+
+def test_a_convective_scale_subset_stays_at_the_requested_margin():
+    """The grid-derived widening must not inflate the fine-grid requests."""
+    query = parse_qs(urlparse(build_nomads_subset_url(
+        SimpleNamespace(key="hrrr", grid_spacing_km=3.0),
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod/"
+        "hrrr.20260714/conus/hrrr.t08z.wrfprsf00.grib2",
+        35.0,
+        -97.0,
+        ("HGT",),
+        margin=0.15,
+    )).query)
+
+    assert float(query["toplat"][0]) == 35.15
+    assert float(query["bottomlat"][0]) == 34.85
+
+
+def test_a_product_without_a_declared_spacing_is_padded_conservatively():
+    query = parse_qs(urlparse(build_nomads_subset_url(
+        SimpleNamespace(key="gfs"),
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/"
+        "gfs.20260904/06/atmos/gfs.t06z.pgrb2.0p25.f000",
+        43.2863,
+        -87.8957,
+        ("HGT",),
+    )).query)
+
+    assert float(query["toplat"][0]) - 43.2863 >= 25.0 / 111.32
 
 
 @pytest.mark.parametrize(("key", "source", "endpoint", "directory"), (

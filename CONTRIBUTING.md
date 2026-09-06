@@ -39,6 +39,9 @@ python scripts/run_test_lane.py compatibility --workers 4
 # Exact complete non-parallel gate used by official releases.
 python scripts/run_test_lane.py serial-release
 
+# WRF-ARW extraction on Windows, which CI runs on its own runner.
+python scripts/run_test_lane.py windows-wrf --workers 4
+
 # Python 3.13 is the only coverage lane.
 python scripts/run_test_lane.py fast --workers 4 --coverage
 
@@ -80,3 +83,47 @@ surface regression.
 - Keep optional data-source dependencies behind extras and lazy imports.
 - Add regression tests for decoder, derived-parameter, and renderer behavior.
 - Keep example data small enough for GitHub.
+
+### A regression test has to fail on the old behavior
+
+A test that passes both before and after a fix documents the fix; it does not
+protect it. Before opening a PR that repairs a defect, put the original code
+back and confirm the new test actually fails, then say so in the PR. Where the
+defect was a wrong quantity rather than an exception, assert the magnitude —
+a projection bug that drew a model boundary 118 px from the truth is guarded by
+a test that fails if the error exceeds a pixel, and by a second one that
+asserts the discarded approach is off by more than fifty. Either alone would let
+someone restore the shortcut with a green suite.
+
+### Defects in dependencies
+
+When the bug is upstream, fix it upstream. Open the report and the pull request
+against the project that owns the code, and reference both from ours.
+
+Where waiting for a release would leave the symptom in front of users, a local
+repair goes in `sharpmod/upstream_patches.py`, and it has to earn its place:
+
+- **Name the upstream report and fix** as module constants, so the reason a
+  patch exists is discoverable from the patch.
+- **Stand down automatically.** Detect a marker that only the fixed version
+  carries and decline to patch when it is present, so upgrading the dependency
+  is what retires the workaround rather than somebody remembering to delete it.
+- **Apply at one chokepoint**, never at import of the patch module, so nothing
+  is altered for code that does not go through us.
+- **Degrade, do not guess.** A patch may make a failure recoverable; it must not
+  invent data or change a scientific result.
+- **Test it against the real dependency**, including that it declines when the
+  marker is present, and state in the PR which parts of the upstream defect the
+  local repair does *not* cover.
+
+Do not vendor or fork a dependency to carry a fix, and do not pin a project to
+an unreleased commit.
+
+### Documentation that states facts
+
+`installation.txt` mirrors `pyproject.toml`, and `pyproject.toml` is
+authoritative. A change to dependencies, extras, or `[project.scripts]` is not
+finished until the requirement summary, the extras section, the per-task table,
+and the console-command list in `installation.txt` agree with it. The same goes
+for anything here that names a lane, a script, or a flag: check it still exists
+before shipping the sentence that promises it.

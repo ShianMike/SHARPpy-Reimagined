@@ -99,6 +99,115 @@ def test_windows_python314_relaunches_gui_with_project_runtime(
     assert kwargs["close_fds"] is True
 
 
+def test_a_leaked_stable_runtime_flag_cannot_disable_the_guard(
+        monkeypatch, tmp_path):
+    """An environment variable must not overrule ``sys.version_info``.
+
+    The flag exists so a relaunched child does not relaunch again. A copy left
+    in the environment by an earlier run used to suppress the guard outright,
+    which let Python 3.14 reach QApplication and access-violate with no
+    catchable traceback.
+    """
+    from sharpmod import gui_picker
+
+    runtime = tmp_path / ".gribenv" / "Scripts" / "pythonw.exe"
+    calls = []
+
+    monkeypatch.setattr(gui_picker.sys, "platform", "win32")
+    monkeypatch.setattr(gui_picker.sys, "version_info", (3, 14, 0))
+    monkeypatch.setattr(
+        gui_picker.sys, "executable", str(tmp_path / "python314.exe"))
+    monkeypatch.delattr(gui_picker.sys, "frozen", raising=False)
+    monkeypatch.setenv("SHARPMOD_GUI_STABLE_RUNTIME", "1")
+    monkeypatch.setattr(
+        gui_picker, "_project_gui_runtime", lambda: (runtime, tmp_path))
+    monkeypatch.setattr(
+        gui_picker.subprocess, "Popen",
+        lambda command, **kwargs: calls.append((command, kwargs)))
+
+    assert gui_picker._relaunch_stable_windows_gui([])
+    assert calls and calls[0][0][0] == str(runtime)
+
+
+def test_a_relaunched_supported_child_does_not_relaunch_again(monkeypatch):
+    """The single-shot property comes from the child's own version."""
+    from sharpmod import gui_picker
+
+    monkeypatch.setattr(gui_picker.sys, "platform", "win32")
+    monkeypatch.setattr(gui_picker.sys, "version_info", (3, 11, 14))
+    monkeypatch.setenv("SHARPMOD_GUI_STABLE_RUNTIME", "1")
+    monkeypatch.setattr(
+        gui_picker, "_project_gui_runtime",
+        lambda: pytest.fail("a supported child must not look for a fallback"))
+
+    assert not gui_picker._relaunch_stable_windows_gui([])
+
+
+@pytest.mark.parametrize(
+    ("contents", "expected"),
+    (
+        ("home = C:\\py\nversion = 3.11.14\n", (3, 11, 14)),
+        ("version_info = 3.13.2.final.0\n", (3, 13, 2)),
+        ("version = 3.14.0\n", (3, 14, 0)),
+        ("home = C:\\py\n", None),
+        ("", None),
+    ),
+)
+def test_venv_python_version_is_read_not_executed(tmp_path, contents, expected):
+    from sharpmod import gui_picker
+
+    (tmp_path / "pyvenv.cfg").write_text(contents, encoding="utf-8")
+
+    assert gui_picker._venv_python_version(tmp_path) == expected
+
+
+def test_a_missing_pyvenv_config_reports_no_version(tmp_path):
+    from sharpmod import gui_picker
+
+    assert gui_picker._venv_python_version(tmp_path / "absent") is None
+
+
+@pytest.mark.parametrize("version", ("3.14.0", "3.15.1"))
+def test_an_equally_unsupported_venv_is_not_offered_as_a_rescue(
+        monkeypatch, tmp_path, version):
+    """Relaunching into another 3.14 would reach the same crash."""
+    from sharpmod import gui_picker
+
+    environment = tmp_path / ".gribenv"
+    scripts = environment / "Scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "pythonw.exe").write_bytes(b"")
+    (environment / "pyvenv.cfg").write_text(
+        "version = %s\n" % version, encoding="utf-8")
+    monkeypatch.setattr(
+        gui_picker, "__file__", str(tmp_path / "sharpmod" / "gui_picker.py"))
+    monkeypatch.setattr(
+        gui_picker.sys, "executable", str(tmp_path / "python314.exe"))
+
+    assert gui_picker._project_gui_runtime() is None
+
+
+def test_a_supported_venv_is_offered(monkeypatch, tmp_path):
+    from sharpmod import gui_picker
+
+    environment = tmp_path / ".gribenv"
+    scripts = environment / "Scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "pythonw.exe").write_bytes(b"")
+    (environment / "pyvenv.cfg").write_text(
+        "version = 3.11.14\n", encoding="utf-8")
+    monkeypatch.setattr(
+        gui_picker, "__file__", str(tmp_path / "sharpmod" / "gui_picker.py"))
+    monkeypatch.setattr(
+        gui_picker.sys, "executable", str(tmp_path / "python314.exe"))
+
+    runtime = gui_picker._project_gui_runtime()
+
+    assert runtime is not None
+    assert runtime[0] == scripts / "pythonw.exe"
+    assert runtime[1] == tmp_path
+
+
 def test_stable_gui_runtime_does_not_relaunch(monkeypatch):
     from sharpmod import gui_picker
 

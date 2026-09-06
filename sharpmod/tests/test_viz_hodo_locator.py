@@ -316,6 +316,46 @@ def test_locator_draws_county_outline_and_sounding_marker(monkeypatch, qt_app):
     assert marker_pixels > 5
 
 
+def test_locator_outer_frame_is_one_solid_foreground_pixel(
+        monkeypatch, qt_app):
+    monkeypatch.setattr(
+        hodo_locator, "county_features_for_point", lambda _lat, _lon: ())
+    monkeypatch.setattr(
+        hodo_locator, "county_lines_for_bounds", lambda _bounds: ())
+    monkeypatch.setattr(
+        hodo_locator,
+        "global_lines_for_bounds",
+        lambda _bounds: {
+            name: () for name in ("coastline", "countries", "states", "lakes")
+        },
+    )
+    pixmap = QPixmap(640, 480)
+    pixmap.fill(QColor("black"))
+    widget = SimpleNamespace(
+        plotBitMap=pixmap,
+        prof=SimpleNamespace(latitude=39.0319, longitude=-88.6713),
+        bg_color=QColor("#000000"),
+        fg_color=QColor("#ffffff"),
+        width=lambda: 640,
+        height=lambda: 480,
+    )
+
+    assert hodo_locator.draw_hodo_locator(widget) is True
+
+    image = pixmap.toImage()
+    rect = hodo_locator._inset_rect(widget, QtCore)
+    right_x = int(rect.right()) - 1
+    middle_y = int(rect.center().y())
+    bottom_y = int(rect.bottom()) - 1
+    middle_x = int(rect.center().x())
+    assert image.pixelColor(right_x, middle_y).name().lower() == "#ffffff"
+    assert image.pixelColor(right_x - 1, middle_y).name().lower() == \
+        hodo_locator._MAP_FILL
+    assert image.pixelColor(middle_x, bottom_y).name().lower() == "#ffffff"
+    assert image.pixelColor(middle_x, bottom_y - 1).name().lower() == \
+        hodo_locator._MAP_FILL
+
+
 def test_locator_draws_an_inverted_map_surface_and_accessible_marker(
         monkeypatch, qt_app):
     monkeypatch.setattr(

@@ -7,15 +7,17 @@
 [![Tests](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml/badge.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11--3.13-3776AB?logo=python&logoColor=white)
 ![Qt6](https://img.shields.io/badge/Qt6-PySide6-41CD52?logo=qt&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.0.0--beta1-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 
 </div>
 
-![Example SHARPpy Reimagined sounding with the Storm-Relative Wind chart selected](examples/example_sounding.png)
+![Example SHARPpy Reimagined sounding with the Storm-Relative Wind chart selected and time-matched SPC outlook and HRRR STP overlays in the locator inset](examples/example_sounding.png)
 
 <sub>HRRR forecast point 36.68N 95.66W, F018, in the default Standard (dark)
-palette with the Storm-Relative Wind chart selected — rendered from
+palette with the Storm-Relative Wind chart selected. The locator inset combines
+the SPC Day 1 categorical outlook (`SLGT` at the point) with the time-matched
+HRRR Significant Tornado Parameter model-product field — rendered from
 [`examples/soundings/hrrr_point_36.68N_95.66W_f018.npz`](examples/soundings/hrrr_point_36.68N_95.66W_f018.npz).</sub>
 
 SHARPpy Reimagined is a modernized, standalone fork of
@@ -36,13 +38,13 @@ choice persists across launches and applies to every panel and inset.
 
 **Inverted (light mode) — θ / θe Profile**
 
-![SHARPpy Reimagined sounding in the Inverted light palette with the theta and theta-e profile chart selected](docs/images/v1.0.0-beta1/sounding-theta-light-mode.png)
+![SHARPpy Reimagined sounding in the Inverted light palette with the theta and theta-e profile chart selected](docs/images/v1.1.0/sounding-theta-light-mode.png)
 
 **Protanopia (colorblind mode) — Streamwiseness**
 
-![SHARPpy Reimagined sounding in the Protanopia colorblind palette with the Streamwiseness chart selected](docs/images/v1.0.0-beta1/sounding-streamwiseness-protanopia.png)
+![SHARPpy Reimagined sounding in the Protanopia colorblind palette with the Streamwiseness chart selected](docs/images/v1.1.0/sounding-streamwiseness-protanopia.png)
 
-All three captures were regenerated from 1.0.0-beta1. Together they demonstrate
+All three captures were regenerated from 1.1.0. Together they demonstrate
 three choices in the right-clickable chart slot: Storm-Relative Wind in the
 Standard example above, θ / θe Profile in Inverted, and Streamwiseness in
 Protanopia.
@@ -53,11 +55,12 @@ Protanopia.
 
 ## Contents
 
-- [What's new in 1.0.0-beta1](#whats-new-in-100-beta1)
+- [What's new in 1.1.0](#whats-new-in-110)
 - [Highlights](#highlights)
 - [Quick start](#quick-start)
 - [Desktop GUI](#desktop-gui)
   - [Loading a sounding](#loading-a-sounding)
+  - [Box soundings: an area at once](#box-soundings-an-area-at-once)
   - [Working with a sounding](#working-with-a-sounding)
   - [Themes and palettes](#themes-and-palettes)
   - [Analysis sessions](#analysis-sessions)
@@ -66,6 +69,7 @@ Protanopia.
 - [Command line tools](#command-line-tools)
   - [Forecast-model extraction](#forecast-model-extraction-model-extract)
   - [Batch and multi-point extraction](#batch-and-multi-point-extraction)
+  - [Area extraction](#area-extraction-box-extract)
   - [Configured models](#configured-models)
 - [Backends and performance](#backends-and-performance)
 - [Standalone executable (Windows)](#standalone-executable-windows)
@@ -76,28 +80,48 @@ Protanopia.
 
 ---
 
-## What's new in 1.0.0-beta1
+## What's new in 1.1.0
 
-1.0.0-beta1 keeps the default scientific canvas from 0.9.0 while expanding the
-data and controls around it:
+Earlier releases sharpened the Skew-T. 1.1.0 builds the mesoanalysis around it,
+so you can read the environment on the map, decide where the story is, and only
+then pull a profile:
 
-- **Four charts in one slot.** Right-click the streamwiseness chart to switch
-  among Streamwiseness, Storm-Relative Wind, θ / θe Profile, and Stepwise CIN &
-  CAPE. The more expensive alternatives are computed only when opened and then
-  cached.
-- **RRFS-A on a project-owned NOMADS route.** The app pairs the published
-  pressure-level and ground products directly, enabling five domains: CONUS,
-  Alaska, Hawaii, Puerto Rico, and 13 km North America.
-- **DWD ICON Global through Open-Meteo.** The new `icon` route provides global
-  11 km point profiles without requiring a local GRIB runtime, using only the
-  pressure levels and forecast hours the model actually publishes.
-- **Live map overlays.** The Station Map and Forecast Model tabs can display a
-  NOAA MRMS radar mosaic and a time-aware SPC convective outlook, including
-  categorical risk and tornado, wind, and hail probabilities. Both remain off
-  until requested.
-- **A consistent picker control rail.** Shared layout and control patterns align
-  the source panels, and the compact forecast rail now fits a maximized window
-  without putting point and fetch controls below the fold.
+- **Mesoanalysis fields on the picker maps.** *Map overlays → Show HRRR model
+  field* paints any of 23 HRRR products across the map at the model's native
+  3 km, ordered the way a forecaster works down the scales. Open a sounding from
+  that map and the field you were reading follows it, at the same forecast hour.
+- **Area soundings: sample an airmass, not a point.** Shift-drag a rectangle on
+  the Forecast Model map and the picker samples the model's own grid inside it.
+  Those samples are averaged into one sounding that opens in the ordinary
+  analysis window. Sample spacing is rounded *up* to a whole multiple of the
+  published grid spacing, so two soundings can never come out of one grid cell,
+  and the point count and download count are resolved before anything is
+  fetched. Winds average as components rather than as speed and direction,
+  moisture averages as mixing ratio rather than as dewpoint, and the mean starts
+  at the highest ground in the box.
+- **The parameter field.** For the rarer question of *where inside* an area
+  something peaks, the box opens as a workspace instead: parameter maps,
+  ingredient screens that show where several thresholds hold at once, the same
+  area stepped through forecast time, and CSV or GeoJSON export. The new
+  `box-extract` command does the same from a terminal.
+- **Radar you can choose.** Radar defaults to the single site nearest the map
+  centre and follows it as you pan, with the CONUS mosaic available as a
+  deliberate choice rather than the only option.
+- **A flat or curved map view.** **View → Map Projection** switches every map tab
+  between the flat equirectangular view and a Lambert conformal conic that bows
+  its parallels and converges its meridians. Flat stays the default, and an extent
+  no cone can represent falls back to it. Every layer, imagery included, is
+  projected through the same transform.
+- **Lake shorelines.** Inland water bodies — the Great Lakes among them — now have
+  outlines. `ne_50m_coastline` carries only the ocean/land boundary, so lakes ship
+  as their own Natural Earth layer. Political boundaries are clipped to land, so no
+  border is ruled straight across open water.
+- **More on the sounding panels.** The freezing level and wet-bulb zero are always
+  drawn on the Skew-T. The fire panel reports a ventilation rate; the winter panel
+  reports a Kuchera snow-to-liquid ratio and gives the dendritic growth zone in
+  pressure as well as feet. Every panel is now listed by name in the menu.
+- **Observed soundings from IGRA v2.** Observed profiles can come from NOAA's
+  Integrated Global Radiosonde Archive, alongside the existing UWyo route.
 
 The full list is in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -166,8 +190,10 @@ The packaged Windows release already bundles Python 3.11.
 The **Sounding Picker** opens with five sources:
 
 - **Station Map** — a clickable map of every UWyo radiosonde station over a
-  coastline basemap. Click a dot to select, double-click to open; scroll to
-  zoom, drag to pan, and pick a region from the *Map area* menu. Observation
+  basemap of coastlines, lake shores, borders, and state lines. Click a dot to
+  select, double-click to open; scroll to zoom, drag to pan, pick a region from
+  the *Map area* menu, and choose a flat or curved view from *View → Map
+  Projection*. Observation
   times are selectable every three hours from 00Z through 21Z.
 - **Station List** — the full catalogue with live id/name filtering and the
   same three-hourly UTC observation-time choices.
@@ -178,7 +204,8 @@ The **Sounding Picker** opens with five sources:
   an uncertain check never disables manual Fetch. **Timeline…** queues a
   selected range of as many as 72 hours into one viewer with a slider, playback,
   step, and loop controls; completed hours remain available after cancellation
-  or a missing hour.
+  or a missing hour. **Box…** samples a whole area instead of one point — see
+  [Box soundings](#box-soundings-an-area-at-once).
 - **Reanalysis (ERA5)** — choose any global point and hourly UTC analysis. The
   picker previews the snapped 0.25-degree grid point, validates the optional
   packages/CDS profile, caches completed point-hours, and keeps Qt responsive
@@ -187,6 +214,177 @@ The **Sounding Picker** opens with five sources:
   (or just drag the file onto the window). Its **Raw WRF wrfout** workflow
   inspects a NetCDF domain/times in the background, validates a map point
   against the actual curvilinear grid perimeter, then extracts and opens it.
+
+### Box soundings: an area at once
+
+A point sounding answers "what does the atmosphere look like *here*". A box
+answers "what does the airmass over this *area* look like". Hold **Shift** and
+drag a rectangle on the Forecast Model map — or turn on **Box…** and drag
+normally — and the picker samples the model's own grid inside it.
+
+By default those samples are **averaged into one sounding**, which opens in the
+ordinary analysis window like any other: same Skew-T, same hodograph, same
+parcel logic, same outlook overlay, same town name. One gesture, one sounding,
+one rendered image. Choosing **Explore the box as a parameter field** in the
+confirmation dialog opens the area workspace instead, which answers the
+different and rarer question of *where inside* the box something peaks.
+
+What makes this trustworthy rather than merely fast:
+
+- **The model's resolution is respected.** The sample spacing is rounded *up* to
+  a whole multiple of the product's published grid spacing, so two soundings can
+  never come out of one grid cell and no gradient is drawn between two copies of
+  the same number. Ask HRRR for 1 km spacing and you are told, in the plan, that
+  you are getting 3 km.
+- **One download, many soundings.** Every point shares a model, run, forecast
+  hour, and member, so the whole box is a single field subset and one bulk decode
+  rather than N downloads.
+- **Every point is a real sounding.** Each one goes through the same verified
+  surface contract as a single-point fetch: true surface pressure, terrain
+  height, and 2 m / 10 m values, with below-ground levels removed. No point is a
+  pressure ladder with an invented ground row.
+- **The cost is shown before it is paid.** The confirmation dialog resolves the
+  lattice, spacing, point count, and number of downloads first, and the map draws
+  the exact points that will be sampled.
+- **Partial coverage stays honest.** Points outside the model domain are kept in
+  the lattice and left blank instead of quietly reshaping the grid.
+
+#### The box mean
+
+Averaging soundings is easy to get wrong, so four things are done deliberately:
+
+- **Winds are averaged as components, never as speed and direction.** The mean of
+  350° and 10° is 0°, not 180°. Every point is resolved to *u* and *v*, the
+  components are averaged, and the result is converted back.
+- **Moisture is averaged as mixing ratio, not as dewpoint.** Dewpoint is
+  nonlinear in vapour pressure, so averaging it directly biases the column dry.
+- **The averaged dewpoint is clamped to the averaged temperature.** Saturation
+  mixing ratio is convex in temperature, so the mean of several subsaturated
+  points can imply saturation at the mean temperature. Those levels are clamped
+  and counted rather than shipped as a supersaturated sounding.
+- **Only the layer every point shares is averaged.** Terrain varies across a box,
+  so the points do not all start at the same pressure. The mean therefore begins
+  at the highest ground in the box, and the levels dropped at each end are
+  reported.
+
+The result never pretends to be a point. The Skew-T's own title reads
+`HRRR box mean of 49`, the window title says the same, an amber **BOX MEAN**
+callout sits in the top-right of the plot itself, and the locator inset draws the
+sampled rectangle and widens its view until that whole rectangle fits — so what
+you see is the area the numbers came from, not a marker over a spot that was never
+sampled on its own.
+
+One caveat cannot be engineered away, so it is stated instead — in the dialog, in
+the file's own metadata, and on the second line of that callout: **the derived
+parameters of the mean sounding are not the mean of the individual points'
+parameters.** CAPE of the average column is not the average CAPE. Averaging
+smooths extremes, so a mean sounding describes the airmass — use the field
+workspace when the extreme is the question.
+
+#### Choosing the hour
+
+The dialog opens on whatever forecast hour the sidebar has selected, so a box
+follows the run you are already looking at. It is also a **Forecast hour** picker
+in the dialog itself, listing every hour the product publishes, because changing
+your mind should not mean cancelling, changing the sidebar, and drawing the
+rectangle again. A mean is one hour by definition. In the field workspace the
+optional hour sequence starts from whichever hour you picked here, and the offer
+withdraws itself when you pick the last published hour, since there is nothing
+after it to step through.
+
+#### Drawing the box
+
+Shift-drag always draws one. Turning **Box…** on makes a plain left-drag draw one
+instead of panning, and while it is on the map still moves on a **middle-drag or
+right-drag** — a selection mode that took the whole mouse away from you would be
+a poor trade. A click without a drag stays a click: it moves the point rather
+than committing a rectangle, and a few pixels of hand jitter will not commit one
+either. Once a box is accepted the mode releases itself, so the next drag pans
+again and you cannot accidentally start a second box on top of the one being
+extracted.
+
+#### The area workspace
+
+Choosing the field mode instead gives you:
+
+| Panel | What it answers |
+| --- | --- |
+| Field map | How a parameter varies across the area, coloured on the real basemap with per-cell values |
+| Across the box | Min, mean, median, max, spread, and *where* the significant extreme is |
+| Most significant 12 | A ranked list — jump straight to the most unstable or most sheared point |
+| Ingredient overlap | Where every ingredient of a mode holds *at once*, and how much ground that covers |
+
+Any cell opens as a complete Skew-T: double-click it on the map, or select it and
+press **Open sounding**. Roughly 60 fields are available. The instability,
+parcel-height, and kinematic fields are computed through the native backend and
+resolve in well under a second for a full 256-point box; the SPC composites
+(STP, SCP, SHIP, SHERBE, and the rest) need the full SHARPpy parcel surface at
+about 0.4 s per point, so they are opt-in behind **Add SPC composites** and the
+prompt quotes the expected wait.
+
+Because the significant end of a field is not always the large end, the ranking
+and the "extreme" readout follow the parameter: CAPE and shear rank downward,
+while CIN, LCL, and LFC rank upward.
+
+#### Ingredient screens
+
+One field at a time answers "where is CAPE largest". A forecaster usually wants
+"where are all of these true at once". The **Ingredients** picker hatches exactly
+those grid points and reports how much of the box qualifies:
+
+```text
+Ingredient overlap
+MUCAPE ≥ 500 J/kg and 0-6 km shear ≥ 35 kt and 0-3 km SRH ≥ 100 m2/s2
+34 of 90 points (38%), about 59,160 km²
+```
+
+Seven screens ship — surface-based storms, organized convection, supercell,
+tornado ingredients, large hail ingredients, damaging wind ingredients, and
+elevated convection. They are **screening heuristics for narrowing attention, not
+official products and not a forecast**; every threshold is deliberately
+permissive so a screen does not hide a marginal signal, and any of them can be
+replaced with your own thresholds through the Python API.
+
+The hatch uses the same visual grammar as the SPC outlook overlay on this map, so
+it qualifies the cells it covers without hiding the field underneath. A point
+that is missing one of the fields a screen needs is left **blank rather than
+shaded as unfavourable**, and the count of such points is reported: an absence of
+data never becomes a verdict.
+
+#### What used to be under the field map
+
+A pressure-versus-distance cross-section and a per-level spread band used to sit
+below the field map. Both were vertical plots on a plain linear axis, which read
+as broken next to this application's own Skew-T, and neither answered a question
+the field map and the averaged sounding do not answer better. They are gone, and
+the field map has the height back.
+
+The numbers behind them remain: `BoxAnalysis.vertical_transect()` and
+`BoxAnalysis.envelope()` still return the slice and the per-level band for a
+script that wants to plot them its own way.
+
+#### Boxes through time
+
+Tick **Step through forecast hours** in the confirmation dialog and the same box
+is sampled at up to twelve hours. The workspace gains a slider, step buttons, and
+looping playback, so a field can be watched building and decaying rather than
+inferred from two static hours.
+
+Each hour is its own download — the saving a box gives you applies *within* an
+hour, not across them — so the dialog states the hour count, the total sounding
+count, and the number of transfers before anything is fetched. **Jump to peak**
+goes straight to the hour whose extreme is the most significant, or, when a
+screen is active, to the hour with the largest qualifying area. The field list is
+the intersection across hours, so the selection cannot change under the slider.
+
+#### Getting a box out of the app
+
+**Export** saves the field map as a PNG exactly as drawn (legend and hatch
+included), every point's values as CSV, or the sampled cells as GeoJSON for GIS.
+The GeoJSON features are the sampled **cells**, not bare markers, because what
+the model asserts is a value over an area of one grid spacing. A missing value is
+an empty CSV field and an explicit `null` in GeoJSON — never a zero. A multi-hour
+box exports every hour into one file, with an `fxx` column.
 
 ### Working with a sounding
 
@@ -352,6 +550,7 @@ it performs no live map request and loads only tiles around the sounding.
 | `era5-extract` | Extract an ERA5 point sounding to `.npz` |
 | `model-extract` | Fetch all pressure levels for a supported forecast-model point sounding |
 | `model-batch-extract` | Run a resumable multi-point/multi-hour model job |
+| `box-extract` | Sample a lat/lon box on the model grid and report its parameter fields |
 | `wrf-extract` | Extract a WRF-ARW point sounding to `.npz` |
 | `sharpmod-rust-sync` | Check, rebuild when needed, and verify the local Rust backend |
 
@@ -481,6 +680,74 @@ The Python API is `sharpmod.batch_extract.run_batch(...)`; it accepts ordered
 NPZ paths. Call `BatchExtractor.cancel()` for cooperative cancellation.
 Pass an existing `ModelHourCache` as `model_hour_cache=` when a GUI or service
 owns a longer-lived cache; the batch runner leases it but does not clear it.
+
+### Area extraction (`box-extract`)
+
+`box-extract` is the scriptable form of the GUI's box soundings. It takes two
+opposite corners, samples the model grid between them, and prints the resulting
+parameter fields.
+
+```bash
+# What would this cost? Resolve the lattice without downloading anything.
+box-extract hrrr 34.0 -99.0 37.0 -95.0 --dry-run
+
+# Extract, then print area statistics and the MUCAPE grid
+box-extract hrrr 34.0 -99.0 37.0 -95.0 \
+    --output-dir box-output --target-points 64 --field mucape
+
+# Add the SPC composites and export every point to CSV
+box-extract hrrr 34.0 -99.0 37.0 -95.0 \
+    --output-dir box-output --composites --csv box.csv
+
+# Every available field key, with the expensive ones marked
+box-extract --list-fields
+```
+
+Sampling density is set by either `--target-points` (aim for roughly this many)
+or `--spacing-km` (request this spacing); both are rounded up to a whole multiple
+of the model's grid spacing, and both are coarsened further if the box would
+exceed the point budget. Every adjustment is reported in the plan rather than
+applied silently:
+
+```text
+Model      HRRR (hrrr)
+Box        34.00N-37.00N, 99.00W-95.00W
+Size       363 x 334 km
+Lattice    9 x 10 = 90 points (90 in domain)
+Spacing    42.0 km (native 3.0 km)
+Downloads  1
+```
+
+Longitudes may be given unwrapped to describe a box across the antimeridian:
+`box-extract gfs 50 170 56 190` is a 20-degree box through the dateline, not the
+340-degree complement.
+
+Three further options mirror the workspace:
+
+```bash
+# Where do all the supercell ingredients hold at once, and over how much ground?
+box-extract hrrr 34.0 -99.0 37.0 -95.0 \
+    --output-dir box-output --screen supercell
+box-extract --list-screens          # every screen and its thresholds
+
+# Step the same box through six forecast hours and report each one
+box-extract hrrr 34.0 -99.0 37.0 -95.0 \
+    --output-dir box-output --hours 6 --hour-step 3 --field mucape
+
+# Hand the sampled cells to GIS, tagged with the screen verdict
+box-extract hrrr 34.0 -99.0 37.0 -95.0 \
+    --output-dir box-output --screen supercell --geojson box.geojson
+```
+
+`--hours` takes its hours from the model's own published cadence, so it cannot ask
+for an hour the product does not publish. A sequence prints a per-hour table with
+the peak marked, and `--csv`/`--geojson` write every hour into one file.
+
+Exit codes are `0` success, `1` nothing extracted, `2` invalid arguments or an
+unusable box, and `130` cancelled. The Python API is
+`sharpmod.box_sounding.plan_box_samples(...)` plus
+`sharpmod.box_analysis.analyze_box(...)`; both are Qt-independent, so a script
+and the desktop workspace cannot disagree about what a box contains.
 
 ### Configured models
 
@@ -791,6 +1058,11 @@ sharpmod/
   theme.py      Qt-free design tokens and chrome style-sheet generator
   gui_theme.py  applies the chrome theme to a QApplication
   render.py     headless PNG render entry point
+  box_sounding.py  Qt-free area sampling: regions, grid-aligned lattices, budgets
+  box_analysis.py  Qt-free fields, statistics, screens, envelopes, and sequences
+  box_mean.py      Qt-free averaging of a sampled box into one sounding
+  box_export.py    Qt-free CSV and GeoJSON writers for a sampled box
+  gui_box.py    box extraction/analysis workers and the area workspace window
   backends/     optimized Python/Rust kernels and direct GRIB point decoders
   sharptab/     derived-parameter and meteorological calculations
   io/           decoders for SPC, BUFKIT, PECAN, WRF-ARW, .npz, and UWyo

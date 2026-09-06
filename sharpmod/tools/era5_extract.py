@@ -216,7 +216,14 @@ def select_nearest_grid_point(lats, lons, lat0, lon0):
         # level arrays.
         return (0, 0), float(lats), float(lons)
 
-    if lats.ndim == 1 and lons.ndim == 1:
+    if lats.ndim <= 1 and lons.ndim <= 1:
+        # A geographic subset can be one cell wide on a single axis, and cfgrib
+        # then presents that axis as a scalar coordinate while the other stays a
+        # vector. Promoting both keeps the separable search below; falling
+        # through to the 2-D branch instead broadcast to a 1-D distance array
+        # that cannot be unravelled into the two indices it returns.
+        lats = np.atleast_1d(lats)
+        lons = np.atleast_1d(lons)
         # On a Cartesian product of independent latitude/longitude axes, the
         # spherical dot product is separable.  The longitude that maximizes
         # cos(delta_lon) is optimal for every latitude because cos(latitude)

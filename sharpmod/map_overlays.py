@@ -493,13 +493,49 @@ def locator_overlays(collection: Any) -> tuple[OverlayLayer, ...]:
         layer for layer in value if isinstance(layer, OverlayLayer) and layer)
 
 
+def _locator_entries(collection: Any) -> tuple[Any, ...]:
+    """Return everything attached for the inset, whatever its type."""
+    if collection is None:
+        return ()
+    value = None
+    try:
+        value = collection.getMeta(LOCATOR_OVERLAY_META_KEY)
+    except (AttributeError, KeyError, TypeError, IndexError):
+        try:
+            value = getattr(collection, "_meta", {}).get(
+                LOCATOR_OVERLAY_META_KEY)
+        except (AttributeError, TypeError):
+            return ()
+    if not isinstance(value, (list, tuple)):
+        return ()
+    return tuple(entry for entry in value if entry is not None)
+
+
+def locator_rasters(collection: Any) -> tuple[OverlayRaster, ...]:
+    """Return the image overlays attached to ``collection``.
+
+    The sibling of :func:`locator_overlays` for the other kind of overlay. They
+    share one metadata list, keyed by product, and each accessor takes the type
+    it knows how to draw: a gridded model field is an image and a convective
+    outlook is a set of polygons, and the inset paints them with different code.
+    Filtering by type here is what lets both travel on one seam without either
+    paint path needing a type check.
+    """
+    return tuple(
+        entry for entry in _locator_entries(collection)
+        if isinstance(entry, OverlayRaster))
+
+
 def attach_locator_overlay(
         collection: Any,
-        layer: OverlayLayer | None,
+        layer: "OverlayLayer | OverlayRaster | None",
         *,
         key: str | None = None,
 ) -> tuple[OverlayLayer, ...]:
     """Attach ``layer`` to ``collection``, replacing any layer of the same key.
+
+    Accepts either an :class:`OverlayLayer` or an :class:`OverlayRaster`; the
+    inset reads each back through the accessor for its own type.
 
     Replacing by key rather than appending is what lets several products
     coexist: refetching the convective outlook must not discard a model product
@@ -514,9 +550,12 @@ def attach_locator_overlay(
     if target_key is None:
         return locator_overlays(collection)
 
+    # Every attached product is considered, not just the vector ones, so
+    # replacing an image field cannot silently leave the previous frame behind
+    # and attaching one cannot drop the outlook sitting beside it.
     kept = [
-        existing for existing in locator_overlays(collection)
-        if existing.key != target_key
+        existing for existing in _locator_entries(collection)
+        if getattr(existing, "key", None) != target_key
     ]
     if layer is not None and layer:
         kept.append(layer)

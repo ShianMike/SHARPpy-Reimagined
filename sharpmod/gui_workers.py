@@ -199,6 +199,55 @@ def _classify_availability(prof) -> tuple[str, str]:
     return AVAIL_AVAILABLE, f"Available ({n_thermo} levels)"
 
 
+#: Source key meaning "try the default chain", matching the CLI's ``auto``.
+PROVIDER_AUTO = "auto"
+
+
+def _uses_uwyo_probe(provider: str) -> bool:
+    """True when a source should be graded by the UWyo decoder directly.
+
+    ``auto`` leads with UWyo, so probing UWyo is what actually happens for it
+    today; keeping that path intact means adding other sources changes nothing
+    about the default experience.
+    """
+    return str(provider or "").strip().lower() in (PROVIDER_AUTO, "uwyo", "")
+
+
+def _availability_provider(key: str):
+    """Build one provider configured for a *cheap* availability probe.
+
+    A probe runs on every station selection. IGRA's period-of-record archive is
+    tens of megabytes for one station, so the probe is restricted to the small
+    year-to-date file; a date that needs the full record is reported as
+    unchecked rather than silently pulling it.
+    """
+    from sharpmod.observations import (
+        IGRAObservedProvider,
+        get_observed_provider,
+    )
+
+    if key == "igra2":
+        return IGRAObservedProvider(allow_full_record=False)
+    try:
+        return get_observed_provider(key)
+    except KeyError:
+        return None
+
+
+def _declined_large_download(exc) -> bool:
+    """True when a probe declined only because it refused a large download.
+
+    Without this the user would see a red "no sounding" for a date the archive
+    very likely has, which is worse than admitting the check was skipped.
+    """
+    try:
+        from sharpmod.io.igra2 import IGRAFullRecordRequiredError
+    except Exception:  # noqa: BLE001 - reader is optional at runtime
+        return False
+    return isinstance(getattr(exc, "__cause__", None),
+                      IGRAFullRecordRequiredError)
+
+
 class _ModelCachePruneWorker(QThread):
     """Prune the persistent model cache without blocking the GUI thread."""
 
@@ -233,16 +282,111 @@ class _AvailabilityWorker(QThread):
     checked = Signal(str, object, str, str, str, object)
 
     def __init__(self, station_query: str, when_utc: datetime, token: int,
-                 parent=None, station: dict | None = None):
+                 parent=None, station: dict | None = None,
+                 provider: str = PROVIDER_AUTO):
         super().__init__(parent)
         self._query = station_query
         self._when = when_utc
         self.token = token
         self._station = station
+        self._provider = str(provider or PROVIDER_AUTO).strip().lower()
 
     def run(self):  # noqa: D401 - QThread entry point
         if self.isInterruptionRequested():
             return
+        if _uses_uwyo_probe(self._provider):
+            self._probe_uwyo()
+        else:
+            self._probe_provider(self._provider)
+
+    def _station_label_from_record(self) -> str:
+        """Best label available before a provider has resolved the station."""
+        record = self._station or {}
+        return _station_label(
+            str(record.get("id", "") or self._query),
+            str(record.get("name", "")),
+        )
+
+    def _probe_provider(self, key: str) -> None:
+        """Grade one non-UWyo source through the provider layer.
+
+        UWyo keeps its own path because its decoder raises a richer set of
+        typed errors. Every other source shares the provider taxonomy, which
+        already separates "nothing archived" from "unreadable".
+        """
+        label = self._station_label_from_record()
+        try:
+            from sharpmod.observations import (
+                ObservedParseError,
+                ObservedRetrievalError,
+                ObservedStationError,
+                ObservedUnavailableError,
+            )
+        except Exception:  # noqa: BLE001 - import/freezer boundary
+            self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
+                              "Unavailable (providers)", label, None)
+            return
+
+        try:
+            provider = _availability_provider(key)
+        except Exception:  # noqa: BLE001
+            provider = None
+        if provider is None:
+            self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
+                              f"Unavailable ({key} unsupported)", label, None)
+            return
+
+        if self.isInterruptionRequested():
+            return
+        try:
+            result = provider.fetch(self._query, self._when)
+        except ObservedStationError:
+            self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
+                              "Unavailable (station lookup)", label, None)
+            return
+        except ObservedUnavailableError as exc:
+            if _declined_large_download(exc):
+                self.checked.emit(
+                    self._query, self._when, AVAIL_UNKNOWN,
+                    "Not checked (downloads on Generate)", label, None)
+            else:
+                self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
+                                  "Unavailable (no sounding)", label, None)
+            return
+        except ObservedRetrievalError:
+            self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
+                              "Unavailable (service unreachable)", label, None)
+            return
+        except ObservedParseError:
+            self.checked.emit(self._query, self._when, AVAIL_INSUFFICIENT,
+                              "Limited (data unreadable)", label, None)
+            return
+        except Exception:  # noqa: BLE001 - never crash the UI thread
+            self.checked.emit(self._query, self._when, AVAIL_UNAVAILABLE,
+                              "Unavailable (unexpected error)", label, None)
+            return
+
+        if self.isInterruptionRequested():
+            return
+        metadata = dict(getattr(result, "metadata", {}) or {})
+        label = _station_label(
+            str(result.station_id),
+            str(metadata.get("station_name", "") or ""),
+        ) or label
+        status, message = _classify_availability(result.profile)
+        fetched = None
+        if status == AVAIL_AVAILABLE:
+            fetched = SimpleNamespace(
+                profile=result.profile,
+                station_id=str(result.station_id),
+                station_name=str(metadata.get("station_name", "") or ""),
+                provider=str(result.provider),
+            )
+        self.checked.emit(
+            self._query, self._when, status, message, label, fetched
+        )
+
+    def _probe_uwyo(self) -> None:
         try:
             StationLookupError, UWyo_Decoder, UWyoError = _uwyo_decoder_classes()
         except Exception:  # noqa: BLE001
@@ -397,7 +541,11 @@ class _AvailabilityIndicator(QWidget):
 # UWyo fetch worker (keeps the picker UI responsive during the network call)
 # ===========================================================================
 class _FetchWorker(QThread):
-    """Fetch one observed sounding with explicit UWyo → IEM fallback.
+    """Fetch one observed sounding from the selected source.
+
+    ``auto`` keeps the established UWyo → IEM fallback. Any other key uses that
+    one source alone, so a deliberate choice is never quietly answered by a
+    different archive.
 
     Emits :attr:`finished_ok` with ``(npz_path, station_meta, when)`` on
     success or :attr:`failed` with a human-readable message on any error.
@@ -407,20 +555,41 @@ class _FetchWorker(QThread):
     failed = Signal(str)
 
     def __init__(self, station_query: str, when_utc: datetime, parent=None,
-                 station: dict | None = None):
+                 station: dict | None = None,
+                 provider: str = PROVIDER_AUTO):
         super().__init__(parent)
         self._query = station_query
         self._when = when_utc
         self._station = station
+        self._provider = str(provider or PROVIDER_AUTO).strip().lower()
+
+    def _resolve_providers(self):
+        """Return ``(query, providers)`` for the selected source."""
+        from sharpmod.observations import (
+            IEMObservedProvider,
+            UWyoObservedProvider,
+            get_observed_provider,
+        )
+
+        if self._provider in (PROVIDER_AUTO, "uwyo"):
+            # The UWyo catalogue carries a per-station ``src``, so its query is
+            # seeded from the live station record to reach relocated stations.
+            decoder, seeded_query = _decoder_for_station(self._station)
+            uwyo = UWyoObservedProvider(decoder=decoder)
+            query = seeded_query or self._query
+            if self._provider == "uwyo":
+                return query, (uwyo,)
+            return query, (uwyo, IEMObservedProvider())
+        # Other sources resolve the identifier themselves; IGRA, for instance,
+        # maps a WMO number onto its own station id.
+        return self._query, (get_observed_provider(self._provider),)
 
     def run(self):  # noqa: D401 - QThread entry point
         if self.isInterruptionRequested():
             return
         try:
             from sharpmod.observations import (
-                IEMObservedProvider,
                 ObservedFallbackError,
-                UWyoObservedProvider,
                 fetch_observed,
                 write_observed_npz,
             )
@@ -430,15 +599,8 @@ class _FetchWorker(QThread):
             )
             return
         try:
-            decoder, seeded_query = _decoder_for_station(self._station)
-            result = fetch_observed(
-                seeded_query or self._query,
-                self._when,
-                providers=(
-                    UWyoObservedProvider(decoder=decoder),
-                    IEMObservedProvider(),
-                ),
-            )
+            query, providers = self._resolve_providers()
+            result = fetch_observed(query, self._when, providers=providers)
         except ObservedFallbackError as exc:
             self.failed.emit(f"Observed sounding fetch failed: {exc}")
             return
@@ -1363,6 +1525,118 @@ class _RadarMosaicWorker(QThread):
             )
         except Exception as exc:  # noqa: BLE001 - never crash the UI thread
             _LOGGER.debug("radar_mosaic.worker_failed product=%s err=%s",
+                          self._product, exc)
+            self.failed.emit(self.token, str(exc))
+            return
+        if self.isInterruptionRequested() or raster is None:
+            return
+        self.loaded.emit(self.token, raster)
+
+
+# ===========================================================================
+# HRRR model field overlay worker
+# ===========================================================================
+class _HrrrFieldWorker(QThread):
+    """Fetch, derive and render one HRRR product off the GUI thread.
+
+    Time-addressed like :class:`_SpcOutlookWorker` rather than always-newest
+    like :class:`_RadarMosaicWorker`: a model field belongs to a run and a
+    forecast hour, so the requested valid time travels with the result and is
+    re-emitted for the controller to check against the selection it has by then.
+
+    This worker does more than fetch. :func:`hrrr_field.fetch_field` also
+    decodes GRIB, reprojects a 1059x1799 grid, and encodes a PNG -- hundreds of
+    milliseconds of NumPy and eccodes work that would visibly stall the window if
+    it ran on the GUI thread. The import stays inside :meth:`run` for the same
+    reason the other workers' do: it pulls in eccodes and pyproj, which are
+    optional extras, and a source checkout without them should fail this one
+    overlay rather than the whole application.
+    """
+
+    #: (token, valid_time, raster_or_None)
+    loaded = Signal(object, object, object)
+    #: (token, human-readable message)
+    failed = Signal(object, str)
+
+    def __init__(self, token: int, parent=None, product: str | None = None,
+                 valid_time=None, run=None, fxx=None, opacity: float = 1.0):
+        super().__init__(parent)
+        self._product = product
+        self._valid_time = valid_time
+        # A pinned cycle, when the caller selected one. ``run`` is what makes the
+        # field the same forecast as the sounding rather than merely the same
+        # hour; ``valid_time`` remains the fallback for the observed tab, which
+        # has a moment but no cycle to pin to.
+        self._run = run
+        self._fxx = fxx
+        self._opacity = float(opacity)
+        self.token = token
+
+    def run(self):  # noqa: D401 - QThread entry point
+        if self.isInterruptionRequested():
+            return
+        try:
+            from sharpmod import hrrr_field
+            raster = hrrr_field.fetch_field(
+                self._product,
+                valid_time=self._valid_time,
+                run=self._run,
+                fxx=self._fxx,
+                opacity=self._opacity,
+                should_cancel=self.isInterruptionRequested,
+            )
+        except Exception as exc:  # noqa: BLE001 - never crash the UI thread
+            _LOGGER.debug("hrrr_field.worker_failed product=%s err=%s",
+                          self._product, exc)
+            self.failed.emit(self.token, str(exc))
+            return
+        if self.isInterruptionRequested() or raster is None:
+            return
+        self.loaded.emit(self.token, self._valid_time, raster)
+
+
+# ===========================================================================
+# Single-site NEXRAD overlay worker
+# ===========================================================================
+class _RadarSiteWorker(QThread):
+    """Fetch one single-site radar frame off the GUI thread.
+
+    Same always-newest shape as :class:`_RadarMosaicWorker`, with one addition:
+    which radar to use is resolved from the map's view, so the worker carries the
+    view it was started with. The chosen site travels back on the signal because
+    the caller needs it for the status line, and by the time the frame lands the
+    user may have panned somewhere a different antenna would serve.
+    """
+
+    #: (token, raster_or_None)
+    loaded = Signal(object, object)
+    #: (token, human-readable message)
+    failed = Signal(object, str)
+
+    def __init__(self, token: int, parent=None, product: str | None = None,
+                 view=None, site_id: str | None = None,
+                 opacity: float = 1.0):
+        super().__init__(parent)
+        self._product = product
+        self._view = view
+        self._site_id = site_id
+        self._opacity = float(opacity)
+        self.token = token
+
+    def run(self):  # noqa: D401 - QThread entry point
+        if self.isInterruptionRequested():
+            return
+        try:
+            from sharpmod import radar_site
+            raster = radar_site.fetch_frame(
+                self._product,
+                site_id=self._site_id,
+                view=self._view,
+                opacity=self._opacity,
+                should_cancel=self.isInterruptionRequested,
+            )
+        except Exception as exc:  # noqa: BLE001 - never crash the UI thread
+            _LOGGER.debug("radar_site.worker_failed product=%s err=%s",
                           self._product, exc)
             self.failed.emit(self.token, str(exc))
             return

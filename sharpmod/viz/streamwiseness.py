@@ -185,7 +185,7 @@ class plotStreamwiseness(QtWidgets.QFrame):
     PROFILE_COLOR = "#44ddaa"
     CYCLONIC_COLOR = "#ff3333"
     ANTICYCLONIC_COLOR = "#4488ff"
-    BORDER_COLOR = "#3399cc"
+    BORDER_COLOR = colors.FG_COLOR
     GRID_COLOR = "#33506a"
 
     def __init__(self, parent=None):
@@ -233,7 +233,9 @@ class plotStreamwiseness(QtWidgets.QFrame):
         self.profile_color = QtGui.QColor(palette["profile"])
         self.cyclonic_color = QtGui.QColor(palette["cyclonic"])
         self.anticyclonic_color = QtGui.QColor(palette["anticyclonic"])
-        self.border_color = QtGui.QColor(palette["border"])
+        # Plot-box outlines follow the foreground and stroke weight used by the
+        # Skew-T. The blue semantic border remains available for grid accents.
+        self.border_color = QtGui.QColor(self.fg_color)
         self.grid_color = QtGui.QColor(palette["grid"])
         self.marker_gray = QtGui.QColor(palette["marker_gray"])
         self.marker_orange = QtGui.QColor(palette["marker_orange"])
@@ -367,7 +369,8 @@ class plotStreamwiseness(QtWidgets.QFrame):
         painter.restore()
 
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        painter.setPen(QtGui.QPen(self.border_color, 1))
+        painter.setPen(QtGui.QPen(
+            self.border_color, colors.PLOT_FRAME_WIDTH))
         self._border_lines = (
             QtCore.QLineF(0.5, 0.5, 0.5, max(0.5, self.height() - 0.5)),
         )

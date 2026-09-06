@@ -7,6 +7,859 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-06
+
+This cycle is about the step *before* the sounding. Previous releases sharpened
+the Skew-T; this one builds the mesoanalysis around it, so you can read the
+environment on the map, decide where the story is, and only then pull a profile.
+Gridded HRRR fields, single-site radar, and whole-area sampling all serve that,
+and the maps were rebuilt to carry them.
+
+### Added
+
+- **Mesoanalysis fields on the picker maps (HRRR).** *Map overlays → Show HRRR
+  model field* paints any of 23 HRRR products across the map at the model's native
+  3 km. The list is ordered the way a forecaster works down the scales:
+
+  - **Pattern** — geopotential height and wind at 200, 300, 500, 700, and 850 mb
+  - **Surface** — 2 m temperature and 2 m dewpoint
+  - **Convection** — composite reflectivity, run-maximum 0–3 km updraft helicity
+  - **Instability** — SB/ML/MU CAPE, ML CIN, 0–3 km and 700–500 mb lapse rates
+  - **Kinematics** — 0–1 and 0–6 km bulk shear, 0–1 and 0–3 km storm-relative
+    helicity
+  - **Composites** — 0–1 and 0–3 km energy helicity index, supercell composite,
+    significant tornado parameter
+
+  One field shows at a time, so a second colour ramp never stacks over the first.
+  The SPC convective outlook and the radar frame keep their own layers, so a risk
+  area, an echo, and a field can be read together — with the field drawn *beneath*
+  radar, because the field is the airmass and the echo is the storm sitting inside
+  it, and a storm is far too small to survive being washed over by a
+  continent-wide ramp. A colour bar comes with the field: a continuous quantity
+  cannot be read off a row of categorical swatches.
+
+  **Two things to know before you trust a number.** SCP and STP as SPC publishes
+  them are built from *effective inflow layer* ingredients, which gridded 2-D
+  output cannot supply — these use the fixed-layer forms HRRR's own fields
+  support, and each says so in the panel and in its tooltip rather than leaving
+  the difference unstated. And the updraft helicity is the **maximum over the
+  forecast hour**, not a snapshot, which is why a track shows as a swath.
+
+  Every product resolves to records HRRR actually publishes, checked against a
+  live inventory, and only the records a product needs are transferred —
+  composite reflectivity is 257 KiB out of a 135 MiB file. A field costs 0.3–4.8 s
+  to fetch and about 0.2 s to draw, and panning with a field and radar attached
+  runs 8.5 ms a frame.
+
+- **The field you were reading follows the sounding.** Open a profile while a
+  gridded product is on the picker map and that same field is now drawn under the
+  locator thumbnail in the sounding window, cropped to the ground around the
+  point. The inset previously showed county and state outlines only, so the
+  environment you had just been looking at on the map vanished the moment you
+  asked for the sounding it belonged to — and reading a supercell composite maximum
+  and then a profile from inside it is one act, not two.
+
+  It is   the *same* image, not a second request: the picker already fetched it to
+  draw the map, so the sounding window is handed the frame that is in memory
+  rather than spending another GRIB subset. The field is matched to the hour the
+  profile depicts and withheld otherwise, because a field an hour away is a
+  different forecast; and it is drawn beneath the risk areas and the boundary
+  lines for the same reason it is on the map — the field is the airmass, the
+  outlook is a judgement about it, and the geography has to stay readable through
+  both.
+
+  **The thumbnail says which field it is showing.** A chip in the lower-right
+  corner names the product: `STP`, `0-3 km SRH`, `500 mb Wind`, `700-500 LR`. It
+  needs one, because without it the inset is a wash of colour — a significant
+  tornado parameter and a CAPE field are the same reds in the same places, and the
+  picker's colour bar and legend are in a different window. The lower-*left* corner
+  keeps the outlook category chip, so a risk area and a field can be named at the
+  same time. Long names shorten rather than run over their neighbour, and each
+  product's chip is spelled the way a forecaster writes it rather than the way the
+  catalogue keys it — the height-and-wind products name the *wind*, since the wind
+  is what the colours are and the height is contour lines.
+
+- **You can choose which radar you are looking at.** The single-site scope grew
+  an antenna list. It still defaults to the one nearest the map centre, which
+  answers *what is happening where I am looking*, but that is not the only
+  question: interrogating a storm means watching one radar, by name, and staying
+  on it. Picking `KTLX` now gets KTLX whether or not a closer antenna exists and
+  whether or not the map has been panned away from it.
+
+  **Every antenna is on the map.** While a single site is showing, all 155
+  WSR-88Ds are drawn as markers you can click — the same way you pick a sounding
+  station — because pointing at the radar you want is a more direct answer than
+  finding its identifier in a list. They are cyan diamonds rather than the
+  stations' red circles, since on the station map both networks draw at once and
+  one shape in one colour would read as one network. Identifiers appear as the
+  view closes in, and the hovered and chosen antennas are always named. The
+  markers come and go with the overlay: they are cleared for the national mosaic
+  and whenever radar is switched off, so they never outlive the reason to show
+  them.
+
+  Where a radar shares a mast with a sounding site — Norman with KTLX, Dodge City
+  with KDDC — the two markers land within a few pixels of each other, so a click
+  resolves to whichever is *nearer* the cursor. Giving the radar an unconditional
+  claim would have made those stations unselectable for as long as the layer was
+  showing, and on the forecast-model map it would have moved the profile location
+  at the same time as retargeting the radar: two answers to one gesture.
+
+  The list itself is type-to-find, because four letters is how a radar is
+  addressed and 155 identifiers is too many to scan. Each carries its antenna's
+  coordinates, since the catalogue has no place names to sort by. A named radar is
+  also filtered to the products it actually publishes — offering velocity from a
+  site that does not carry it would fail with nothing the reader could act on —
+  and if the frame lands outside the current view the panel says so, because an
+  overlay that draws nothing off-screen otherwise looks broken rather than
+  distant. The choice is remembered between sessions.
+
+- **Area soundings: sample an airmass, not a point.** Shift-drag a rectangle on
+  the Forecast Model map (or arm **Box…** and drag) and every model grid point
+  inside it is extracted from a *single* download. By default the points are
+  averaged into one composite profile that opens in the ordinary analysis window —
+  same Skew-T, same hodograph, same parcel logic, same outlook overlay — because
+  "what does the airmass over this area look like" is a question a sounding
+  answers, not a dashboard.
+
+  Averaging soundings is easy to do wrong, so four things are deliberate. Winds
+  average as *u*/*v* components, never as speed and direction, because the mean of
+  350° and 10° is 0°, not 180°. Moisture averages as **mixing ratio** and converts
+  back, because dewpoint is nonlinear in vapour pressure and averaging it biases
+  the column dry. The averaged dewpoint is then clamped to the averaged
+  temperature and the clamps are counted, because saturation mixing ratio is
+  convex in temperature, so several subsaturated points can average to implied
+  saturation. And only the layer every point shares is averaged: terrain varies
+  across a box, so the mean starts at the **highest ground in it** rather than
+  blending a real column against nothing, with the levels dropped at each end
+  reported. A box straddling too much relief to share two levels is refused rather
+  than fudged.
+
+  **The one caveat that cannot be engineered away** is stated in the dialog, the
+  docs, and the file's own metadata: the indices of the mean sounding are *not*
+  the mean of the individual points' indices. CAPE of the average column is not
+  average CAPE. A mean describes the airmass; the field map below is what answers
+  a question about the extreme.
+
+  Every sampled point is a complete sounding — true surface pressure, terrain
+  height, 2 m and 10 m values, below-ground levels removed — so no point is a
+  pressure ladder standing on an invented ground row. Sample spacing is rounded
+  **up** to a whole multiple of the product's published grid spacing, so two
+  soundings can never come from one grid cell and no gradient is drawn between two
+  copies of the same number. Points outside the model domain stay in the lattice
+  and are left blank, so a partly-covered box shows real holes.
+
+- **The parameter field: where inside the box something peaks.** One radio button
+  away from the mean, the same sample becomes a field map over the real basemap,
+  with area statistics that say *where* the significant extreme is and a ranked
+  list of the twelve most significant grid points. Any cell opens as a full
+  Skew-T. Ranking follows the parameter rather than the arithmetic, because the
+  significant end of a field is not always the large end: CAPE and shear rank
+  downward while CIN, LCL, and LFC rank upward.
+
+  `BoxAnalysis.envelope()` reduces the area to a per-level band — minimum, 10th to
+  90th percentile, median, maximum — for temperature or any raw column. A narrow
+  ribbon is one airmass; a band that fans out at low levels is a **boundary inside
+  the box**, which a single sounding from the middle cannot tell you. Levels below
+  a point's own terrain do not contribute, so the sounding count thins toward the
+  ground instead of the band quietly widening where there is no data.
+
+  Instability, parcel-height, and kinematic fields resolve at about 2.3 ms a
+  point, so a full 256-point box lands in under a second. The SPC composites need
+  the upstream `ConvectiveProfile` at about 424 ms a point and are opt-in behind
+  **Add SPC composites**, with the prompt quoting the wait. Both read the same
+  cached parcel oracle the Skew-T does, so a field and a sounding opened from that
+  cell cannot disagree.
+
+- **Ingredient screens: where several thresholds hold at once.** One field answers
+  "where is CAPE largest". Ingredients-based forecasting asks "where are all of
+  these true together", and the **Ingredients** picker hatches exactly those grid
+  points and reports the ground they cover — `34 of 90 points (38%), about
+  59,160 km²` — in the same visual grammar as the SPC outlook, so the hatch
+  qualifies the field underneath instead of hiding it.
+
+  Seven screens ship: surface-based storms, organized convection, supercell,
+  tornado ingredients, large hail, damaging wind, and elevated convection. They
+  are **screening heuristics for narrowing attention — not official products and
+  not a forecast.** Thresholds are deliberately permissive so a screen cannot hide
+  a marginal signal, and all of them use fast-tier fields so a screen never forces
+  the expensive tier. Custom thresholds are a `Criterion` away in the Python API.
+
+  Thresholds are tri-state on purpose. A point missing one of the fields a screen
+  needs is left **blank rather than shaded unfavourable**, and those points are
+  counted, because "unread" and "ruled out" are different claims and an unread
+  point must not be drawn as a verdict. A definite failure still outranks a
+  missing field, so an incomplete ingredient cannot rescue a point that already
+  failed another. Coverage divides by the points actually evaluated, so a box on
+  the domain edge reports the fraction of the area it could read.
+
+- **The same area through forecast time.** Tick **Step through forecast hours** and
+  the box is sampled at up to twelve hours, with a slider, step buttons, looping
+  playback, and **Jump to peak** — the most significant hour, or the hour with the
+  largest qualifying area when a screen is active. A field can be watched building
+  and decaying instead of being inferred from two static hours. Each hour is its
+  own download, so the dialog states the hour count, the sounding count, and the
+  transfer count before anything is fetched. The field list is the intersection
+  across hours, so a selection cannot vanish as the slider moves.
+
+- **Exporting an area.** **Export** writes the field map as a PNG exactly as drawn
+  (legend and hatch included), every point's values as CSV, or the sampled cells
+  as GeoJSON for GIS. The GeoJSON features are the **cells as polygons**, not bare
+  markers, because what a model asserts is a value over an area of one grid
+  spacing; antimeridian cells split per RFC 7946. A missing value is an empty CSV
+  field and an explicit `null` in GeoJSON — never `0`, never `-9999`. A multi-hour
+  box exports every hour into one file with an `fxx` column.
+
+- **`box-extract` command.** The scriptable form of the same feature:
+  `--dry-run` to price a box before fetching it, `--target-points` or
+  `--spacing-km` for density, `--composites`, `--field` to print a field as a
+  grid, `--csv`, `--geojson`, and `--list-fields`. `--screen` reports ingredient
+  coverage and `--list-screens` prints every screen's thresholds; `--hours` and
+  `--hour-step` walk forecast time using the model's own published cadence, so an
+  unpublished hour is an argument error rather than a failed download. Unwrapped
+  longitudes describe an antimeridian box, so `50 170 56 190` is 20 degrees wide,
+  not 340.
+
+- **A flat or curved map view.** **View → Map Projection** switches every map tab
+  between the equirectangular view and a Lambert conformal conic whose standard
+  parallels sit a sixth of the way in from the top and bottom of the extent.
+  Parallels bow and meridians converge — the shape a regional forecast map
+  normally has. The setting is remembered between sessions.
+
+  Flat stays the default because it is the only view that stays correct at every
+  extent the picker offers. A cone cannot represent an extent taller than 75° of
+  latitude or one centred within 4° of the equator, so those views fall back to
+  flat rather than draw a distorted cone. Every layer — outlines, imagery,
+  markers, boxes, graticule labels, panning, and click-to-select — goes through
+  one transform, so no layer can disagree with another about where a place is.
+
+  **The cone follows the map.** A conic is cut along one meridian, and screen-up
+  points at true north only there. So the cone is refitted whenever the view comes
+  to rest, and the settled map always sits square to north. It has to be: the cone
+  was previously fitted once when a region was picked and then held through every
+  pan, which meant the map leaned further from north the further you travelled and
+  never straightened up — 12° of lean after panning 20° west, 17° by the time you
+  reached the west coast. A map that leans seventeen degrees is not one anybody
+  asked for. During a drag the cone is still held, which is what keeps panning
+  smooth rather than re-projecting the whole basemap on every mouse move; the
+  refit lands when you let go, so a long pan visibly straightens as it settles.
+
+- **Lake shorelines on every map.** The Great Lakes, Great Salt Lake, and other
+  inland water were missing their outlines, which matters for a lake-effect or
+  lake-breeze setup where the shore *is* the boundary you are looking for. The
+  cause was not a bad source: `ne_50m_coastline` is strictly the ocean/land
+  boundary and holds no inland shoreline at all, so lakes now ship as their own
+  Natural Earth 1:50m layer. They draw in the coastline colour, slightly finer and
+  just beneath it, because a lake shore *is* a coastline and a separate hue would
+  imply a distinction that does not exist. Rings under 0.05 square degrees are
+  dropped as specks; islands within a lake are kept.
+
+- **Model grid spacing is published.** `ModelConfig.grid_spacing_km` and
+  `model_extract.grid_spacing_km()` expose each product's nominal horizontal
+  resolution — what lets area sampling refuse to invent detail the model does not
+  have, and what now sizes every server-side subset request.
+
+- **Every sounding panel is listed by name.** **View → Sounding Panel** in the
+  sounding window offers all six swappable panels: sig-tor stats, the two
+  EF-scale probability panels, sig-hail stats, **fire weather**, and **winter
+  weather**. Each says what it is for, because the titles are abbreviations and
+  two of them describe the same hazard from different angles.
+
+  The fire and winter panels were already there, and already computed for every
+  sounding whether or not anyone looked at them — but the only way to reach them
+  was a right-click on one specific box, and not by design: the layout detaches
+  the left-hand panel to make room for the index board, so the hit test can only
+  land on the right-hand one. Nothing named the gesture, so two working panels
+  read as absent features. The right-click still works; this adds a route you can
+  find.
+
+  Choosing a panel still carries what belongs with it. Fire weather marks the
+  mixing height on the Skew-T and winter weather marks the dendritic growth zone,
+  and switching away takes the marker with it rather than accumulating both. That
+  pairing is the reason there is no separate "fire mode" or "winter mode": the
+  mode would be a second name for something the panel choice already does.
+
+- **The freezing level and wet-bulb zero are always on the Skew-T.** Both are
+  labelled with their height, alongside the dendritic growth zone marked on the
+  temperature trace — whichever panel happens to be showing.
+
+  They used to trade places with other annotations. The Skew-T had a single
+  either/or: with the winter panel selected you got the freezing level, the
+  wet-bulb zero and the growth zone but *lost* the maximum lapse-rate layer and
+  the parcel's 0, −20 and −30 °C levels; with any other panel you got those back
+  and lost the first three. So picking a panel quietly changed which
+  thermodynamic levels the Skew-T was willing to label, which is not something
+  the physics has an opinion about — the freezing level is read for hail melting,
+  precipitation type and icing no matter what else is on screen, and the wet-bulb
+  zero is a hail-size predictor in its own right.
+
+  Now all of it is drawn every time. Nothing was given up to do it: the two label
+  families sit on opposite sides of their shared tick column, so they coexist
+  without colliding. The freezing level and wet-bulb zero also now appear on
+  soundings with no growth zone at all, which the old branch skipped entirely.
+
+- **Ventilation rate on the fire panel.** Mixing height multiplied by transport
+  wind, in m²/s — the number a prescribed burn or a smoke advisory turns on. Both
+  factors were already computed and printed separately, and neither alone answers
+  the question: a deep mixed layer with no wind ventilates as badly as a windy
+  shallow one.
+
+  It is built from the same two values printed two rows above it, so the three
+  cannot disagree. No category is attached — poor, fair and good are set by
+  whichever agency issues the forecast and differ between them, so the number is
+  reported and you apply your own thresholds. It reads `M` when either factor is
+  unavailable rather than showing a product of placeholders.
+
+- **A snow-to-liquid ratio on the winter panel.** Neither SHARPpy nor this fork
+  computed one anywhere, so the panel could describe the dendritic growth zone
+  five different ways — depth, mean RH, mean precipitable water, mean mixing
+  ratio, mean omega — without ever answering the question a snow forecast turns
+  on: how much snow an inch of liquid will make. The fixed 10:1 rule of thumb
+  that gap left people with is right about a quarter of the time.
+
+  It uses **Kuchera's** method, and the row says so, because snow-ratio methods
+  disagree widely and a bare number would not tell you which one you were
+  reading. Kuchera keys the ratio to the *warmest* temperature in the column
+  rather than to the surface, since it is the warmest layer the crystals fall
+  through that decides whether they stay dendritic or rime and compact. Two
+  straight lines meet at 12:1 at −2 °C: colder columns gain ratio one-for-one,
+  warmer ones lose it twice as fast, which is why a column only a few degrees
+  above freezing collapses to no accumulation at all.
+
+  Zero and unavailable are kept distinct. A column whose warmest layer reaches
+  about +4 °C accumulates nothing, and that is an answer, so it reads `0:1`; a
+  profile the method cannot be applied to reads `M`. The warm branch runs
+  negative without a floor, which is not a ratio, so it is clamped.
+
+- **The growth zone is given in pressure as well as feet.** It was only ever
+  reported as a depth in feet with its bounds in feet MSL, but the Skew-T's own
+  axis is pressure and the band is drawn against it, so reading one off the
+  other meant converting in your head. Both are now shown; nothing was traded
+  away for the new row.
+
+- **Observed soundings can come from NOAA's IGRA v2 archive.** The picker's
+  *Sounding source* control is real now — it was a disabled label naming one
+  fixed fallback chain — and it offers four choices: the established University
+  of Wyoming → IEM fallback, either of those alone, and NOAA's **Integrated
+  Global Radiosonde Archive**. The choice is remembered between sessions.
+
+  IGRA is why this was worth doing: about 2,900 stations against the 933 in the
+  bundled Wyoming catalogue, quality assured, and a record that at some sites
+  reaches back over a century. If you want the sounding from a historic event,
+  this is the source that has it.
+
+  **It is chosen deliberately and never reached by fallback.** IGRA publishes one
+  archive per *station*, not per sounding: 2.4 MB for the current year and
+  **80 MB** for a long station's full record. Putting that in the automatic chain
+  would mean an ordinary request quietly pulling tens of megabytes because the
+  other two archives happened to be down. So the automatic setting still tries
+  only UWyo then IEM, and a named source is never answered by a different
+  archive.
+
+  Each station archive is cached, so the first sounding for a station pays the
+  download and the rest do not — a repeat fetch went from 3.6 s to 0.9 s. The
+  smallest archive that can cover your date is used, so an ordinary recent
+  request never touches the full record, and a date outside the station's
+  published years is refused before anything is downloaded at all. The
+  availability dot stays on the cheap archive too: for a date that would need the
+  full record it reads *Not checked* rather than claiming there is no sounding.
+
+  **The station map still works unchanged.** IGRA numbers the station the map
+  calls `72357` as `USM00072357` — the third character is a network code, and for
+  the WMO network the trailing five characters *are* the WMO number — so the
+  identifier you already click resolves. Requests prefer an exact nominal hour but
+  tolerate three, because IGRA carries special releases at 16–21Z and asking for
+  18Z should find a 19Z ascent.
+
+  Where the archive reports relative humidity but no dewpoint depression, common
+  in the older record, the dewpoint is recovered from temperature and humidity and
+  the number of levels that needed it is recorded with the sounding, so the
+  substitution is never silent. Levels identified only by height carry no pressure
+  and cannot be placed on a profile, so they are dropped and counted rather than
+  guessed at. Checked against Wyoming for the same ascent, the two independent
+  archives agree to **0.2 °C** at every mandatory level.
+
+  On the command line: `observed-sounding fetch 72357 "2026-09-01 12:00"
+  --provider igra2`. `observed-sounding providers` now also says which sources the
+  automatic chain uses and which are select-by-name.
+
+- **`StationMapWidget.set_extent()`** frames an arbitrary lon/lat extent,
+  complementing `set_area()`'s named regions, and unrolls a wrapped extent.
+
+### Changed
+
+- **Radar is a single site now, and it follows the map.** The radar switch grew a
+  scope — **Nearest single site** or **CONUS mosaic** — and defaults to the site.
+  The mosaic spreads 70° of longitude over 4096 pixels, about 1.9 km each: the
+  right trade for *where is the convection today*, and no use at all for *what is
+  this storm doing*, because by then the echo is a handful of pixels. One radar
+  covers ten degrees instead of seventy, so the same pixel budget lands near half
+  a kilometre and structure inside a storm survives — a hook, an inflow notch, a
+  bounded weak echo region. Base reflectivity, radial velocity, hydrometeor
+  classification, and storm-total and one-hour accumulation are available per
+  site.
+
+  Which radar is not configured, it is derived: the antenna nearest the map
+  centre, re-resolved as you pan, by **great-circle** distance rather than raw
+  coordinate difference — a degree of longitude is 111 km at the equator and 57 km
+  at 60°N, and comparing degrees picks the wrong Alaskan radar. A view with no
+  antenna within about 460 km says so instead of quietly fetching a frame centred
+  hundreds of kilometres away.
+
+  The 155-site catalogue is built by asking each WSR-88D for its own capabilities
+  (`python -m sharpmod.tools.build_radar_sites`), because NCEP's global
+  capabilities document does not list the per-site workspaces. Each antenna
+  position is read from its layer's own advertised bounding box and was checked
+  against published coordinates for nine sites from Puerto Rico to Seattle,
+  agreeing to about a kilometre.
+
+- **Radar and model fields now draw on the curved map.** They used to be withheld
+  there. The reason was sound — a conic has no rectangle to blit a flat image
+  into, and an echo drawn a hundred kilometres from the storm is worse than no
+  echo — but the conclusion was avoidable.
+
+  A conic is smooth, so over a small enough patch it is indistinguishable from a
+  scale, rotation, and shear. The window is cut into roughly two-degree cells,
+  each cell's corners are projected exactly, and each is drawn through the affine
+  transform carrying its source rectangle onto the resulting quadrilateral.
+  Against projecting every pixel, the worst residual inside a cell stays under one
+  pixel, and a test holds it there — so an echo lands on the storm. Dragging with
+  a field and a radar frame attached measures 8.5 ms a frame curved against 8.3 ms
+  flat.
+
+- **An area opens as a sounding by default.** Drawing a box previously went
+  straight to the parameter-field workspace. It now opens the averaged sounding,
+  with the field map one radio button away, because the first question a box asks
+  is about the airmass.
+
+- **A box mean says so, everywhere it is shown.** An average that looks exactly
+  like a point sounding is the one outcome worth engineering against — every
+  parcel, index, and hodograph on the page belongs to an averaged column. The
+  Skew-T title reads `HRRR box mean of 49`, the window title agrees, and the
+  locator inset draws the sampled rectangle instead of a marker over a spot that
+  was never sampled on its own. The inset widens until the whole rectangle fits,
+  the one sanctioned exception to its fixed two-degree extent. The plain product
+  name is kept alongside the decorated one so provenance stays machine-readable.
+
+- **A box's forecast hour is choosable in the dialog.** It still opens on the hour
+  selected in the sidebar, so a box follows the run already on screen, but the
+  hour is now a picker listing every hour the product publishes — changing your
+  mind no longer means cancelling, changing the sidebar, and drawing the rectangle
+  again. A mean is one hour by definition; in the field workspace the optional
+  hour sequence starts from whichever hour was picked, and the offer withdraws
+  itself on the last published hour.
+
+- **Image overlays have an explicit stacking order.** They used to paint in
+  whatever order you happened to switch them on, which is not an order at all.
+
+- **The two open Dependabot bumps are included here:** ruff 0.16.5 from
+  [#52](https://github.com/ShianMike/SHARPpy-Reimagined/pull/52) and
+  `softprops/action-gh-release` 3.0.3 from
+  [#51](https://github.com/ShianMike/SHARPpy-Reimagined/pull/51). Both of CI's
+  ruff invocations are clean on 0.16.5, including the focused
+  `E,F,I,UP,B,SIM` pass, which is the one a version bump can actually break.
+  The action stays pinned by commit SHA rather than by tag — `efb35369` —
+  because a tag can be moved and a commit cannot.
+
+### Fixed
+
+- **The effective inflow layer drew its base label through its own top label.**
+  The base label already moves *above* its line when the layer is surface based,
+  because below it the label falls off the bottom of the plot. When the layer is
+  also shallow, that flip puts it on the same line as the top label and in the
+  same −33 °C column, so a layer of zero depth printed `SFC` straight over `0m`.
+  A five-hPa-deep layer did the same over `45m`. The base label now steps
+  sideways along its own line; the top bound and the helicity keep their column,
+  since the base is the one label that already had somewhere to go.
+
+  Those three rects were also being sized to 25 and 50 pixel floors inherited
+  from upstream. The floors did nothing — the text is left-aligned with
+  `TextDontClip`, so a rect's width never affected where a glyph landed — but
+  they made every collision test up to 30 px pessimistic, which would have
+  spread the labels much further apart than the ink needs. They are sized to
+  their text now.
+
+- **The maximum lapse rate is out of the crowded side of the Skew-T.** Its value
+  was anchored five degrees warm of the temperature trace, which is where the
+  parcel levels, the freezing level and wet-bulb zero, the significant-level
+  ticks and the wind barbs all already are — measured at x 595–651 with the
+  parcel-level labels occupying 662–746, so it collided by construction rather
+  than by bad luck.
+
+  The whole annotation now sits on the cold side, the way the effective inflow
+  layer already did: a bracket in its own column with the value beside it. The
+  bracket keeps the two pressures it marks, which is the part that carries
+  meaning; only the column changed.
+
+  **It gets a column of its own, right of the inflow annotation.** Sharing the
+  left gutter with the inflow height labels does not work: those sit at whatever
+  height the inflow layer happens to be, so they can come arbitrarily close to
+  this one — near enough to read as a single smear without ever strictly
+  overlapping, which no overlap test catches. Right of them there is real room,
+  measured at 104 to 310 px across panel sizes against the 67 to 85 px the label
+  needs.
+
+  **The room is measured per sounding, not assumed.** It ends at whichever trace
+  comes first, and a dry profile puts its dewpoint far further left than a
+  saturated one, so the temperature and dewpoint are sampled across the layer's
+  whole depth — the bracket spans it, not just its top. If that column will not
+  fit, the annotation falls back to the gutter and steps sideways past the inflow
+  labels there instead. It always slides along its own line rather than up or
+  down, because the height is the pressure the number belongs to while the column
+  is arbitrary.
+
+  The inflow labels are held clear of the omega meter for the same reason, which
+  matters on a narrow plot where their fixed −33 °C column can fall inside it.
+
+  The meter's footprint is its *drawn* extent, not its nominal −49 to −41 °C
+  bounds. It scales each bar by the reported value rather than clipping at the
+  scale, so strong ascent is drawn well past the bound, and its `+10`/`−10`
+  labels overhang both ends. A warm-tier lapse rate is red and so are the ascent
+  bars, so had the nominal bounds been trusted the bracket would have landed
+  among them and read as one of them.
+
+  The height markers count as an obstacle too. The `0 km` through `15 km` labels
+  down the left edge are drawn on *every* sounding, not just when there is a
+  meter, and together they form a full-height column about 65 px wide. An
+  observed sounding carries no vertical velocity and so has no meter, and with
+  only the meter accounted for the value was placed against the left border and
+  straight through those labels — visible on any radiosonde profile. The gutter
+  now clears whichever of the two reaches further, which leaves the forecast case
+  where it was and moves the observed one from 6 px inside the border to 71.
+
+- **The winter panel drew its last rows below its own frame.** Row height came
+  from font metrics with no reference to the height available, so the slot
+  positions were byte-for-byte identical at every panel size. Measured on a real
+  profile at 200×260, three rows were drawn past the bottom edge — the
+  precipitation type itself among them, which is the one thing on that panel
+  nobody can afford to lose. This is the same fault the fire panel had; the
+  winter panel now sizes its rows by fitting them against its real frame walk
+  rather than estimating.
+
+  A second, quieter mismatch came out of adding a row to the growth-zone block:
+  the frame reserved `row height + gap` per row while the row loops advanced
+  `row height + gap + os_mod`. Three rows absorbed the difference and four did
+  not, so the block's last row landed on top of the initial-phase line below it.
+  Both now use the same figure.
+
+- **The fire weather panel was unreadable.** Its rows were drawn wider than the
+  columns holding them, and because the wind column is right-aligned the overflow
+  ran *leftwards* across the moisture column, so the two interleaved: on a real
+  sounding, up to twelve of twenty-one rows spilled, `0-1 km mean = 169/22`
+  wanting 240 pixels of a 102-pixel column. The title overflowed too.
+
+  A second fault was underneath it and had never been noticed. Row heights came
+  from the font, and the font is scaled from the panel's height — so a taller
+  panel grew its rows faster than it gained room for them, and the bottom rows
+  were drawn below the frame where they simply vanished. The Haines row was off
+  the panel at one common size and the whole derived block went under at another.
+
+  Rows are now fitted to their column and the column widths use the panel's real
+  padding, which also recovers the tenth of the width that was left empty on each
+  side while the columns between them overflowed. Row height is capped by the
+  space actually available, so all eleven rows are inside the panel at any size.
+  This is the same repair the winter panel received earlier; the fire panel never
+  got one, which is very likely why it did not read as a working feature.
+
+- **The model domain outline was drawn in the wrong place on the curved map.**
+  On the globe view the dashed boundary showing where a model has data was drawn
+  as a straight-sided trapezoid, which is not the shape any of these domains are.
+  A latitude line is only straight on the flat map; on a conic projection it bows,
+  and the outline was drawn by joining the four corners of the domain box with
+  straight lines, cutting straight across each bow. On a CONUS view that put the
+  southern edge **118 pixels** from where the model actually ends and the northern
+  edge 73 pixels, worst in the middle of the map — a fifth of the map's height, in
+  the region you are most likely to be working in.
+
+  That outline is the thing that tells you which ground you can pull a sounding
+  from, so it is now walked along each edge and follows the projection: under a
+  pixel of error at every zoom, on both views. The flat view is untouched, where
+  the boundary genuinely is a rectangle and four corners were always right.
+
+  The box-selection rectangle had the same treatment already but with a fixed
+  number of steps, which thinned out across a wide drag; both now share one walk
+  that follows the span, so a continent-wide box is as accurate as a county-wide
+  one.
+
+- **A model download no longer gives up because one mirror is having a bad day.**
+  Every model file we fetch is hosted in several places — Amazon, Google,
+  Microsoft, NOAA — and the download library tries them in turn so the others can
+  answer when one cannot. Except it didn't: an error from *any single* mirror
+  ended the whole search, and the run was reported as unavailable while the file
+  sat there on the other three. On a corporate or campus network that blocks one
+  host, that made models look permanently missing.
+
+  It bit hardest through Microsoft, whose files need a short-lived access key
+  requested before each download. When that service is busy it refuses the key,
+  and the refusal arrives dressed as a success, so the library read a field that
+  was not there and stopped. Several models list Microsoft *first*, so the mirror
+  most likely to refuse was the one that took the working mirrors down with it.
+  A third path: the key request had no time limit, so a service that accepted the
+  connection and then went quiet stalled the fetch until you cancelled it.
+
+  Each mirror is now tried on its own. One failing is logged with the reason and
+  the search moves to the next; only when all of them fail is the run reported
+  unavailable, exactly as before. Nothing changes when the mirrors are healthy.
+  This is a local repair for a defect in the download library, sent upstream as
+  [Herbie #554](https://github.com/blaylockbk/Herbie/pull/554) against the
+  standing report [#246](https://github.com/blaylockbk/Herbie/issues/246); it
+  removes itself automatically once a version carrying the real fix is installed.
+  The indefinite wait is the one part that cannot be repaired from outside and
+  needs that upstream release.
+
+- **The field under the sounding thumbnail was misplaced near the edge of the
+  model's domain.** For a profile anywhere within a degree or two of the HRRR
+  boundary — the Pacific coast, southern Texas, the Canadian border, and the whole
+  of the Gulf and Atlantic margins — the gridded field in the locator inset was
+  drawn shifted, by as much as 0.84° of longitude, some seventy kilometres. The
+  marker stayed in the middle of the inset, so the colours sitting under the point
+  were not the colours at the point: you could read a CAPE gradient or a helicity
+  maximum off the thumbnail and be looking at ground a county or two away.
+
+  The inset asks the field for the small patch of ground around the sounding. Near
+  the domain edge part of that patch is ground the model does not cover, and the
+  request was being trimmed to the part that does exist while the area it was
+  drawn into was left at full size — so the surviving strip was stretched across
+  the whole inset and everything in it slid sideways. The patch and the area it is
+  drawn into are now trimmed together, which keeps every pixel over the ground it
+  describes and leaves the part of the inset beyond the model's edge empty. Empty
+  is the honest answer there: the alternative is inventing a forecast for ground
+  the model never ran on. Interior points are unaffected and still fill the inset.
+
+- **Clicking a sounding site that shares a mast with a radar was a coin flip.**
+  Forty-eight of the WSR-88Ds sit on top of a radiosonde site closely enough that
+  at ordinary zooms the two markers are the same dot — KILX and Lincoln are six
+  *thousandths* of a pixel apart, and Dodge City, Shreveport, Great Falls,
+  Spokane, Brownsville, Nashville and Lake Charles are all inside a fiftieth of a
+  pixel. A click went to whichever target was nearer, which at those separations
+  is decided by floating-point noise. So clicking the one visible dot on the
+  Station Map re-aimed the radar instead of picking the sounding site about half
+  the time, and not the same way twice.
+
+  The antenna now has to be *clearly* nearer — three pixels — before it takes a
+  click, so the station keeps every shared mast. That is the right default on a
+  map whose purpose is choosing a sounding site, and it costs the radar nothing
+  reachable: an antenna standing on its own is still one click away, and every
+  antenna including the co-located ones can still be chosen by name from the site
+  list.
+
+- **The single-site radar went blank when you moved the map.** Left on *nearest to
+  map centre* — which is the default — the overlay kept the antenna that served
+  the previous view. Pan from Oklahoma to New England and KINX's frame stayed
+  attached: entirely off-screen, so the map showed no echoes at all, while the
+  marker and the status line both still said KINX. Nothing indicated the map had
+  outrun the data, and it stayed that way until the refresh cadence came round on
+  its own, which for base reflectivity is two and a half minutes and for the
+  accumulation products is five.
+
+  Moving the map now re-aims the automatic choice as soon as the view settles, and
+  the frame, the marker, and the status line arrive together. A pan that stays
+  inside the serving antenna's range costs nothing, because the frame is still the
+  right one. Panning somewhere no antenna reaches now says so instead of leaving
+  the old frame sitting there looking current. A radar chosen *by name* is left
+  alone — that choice is your answer to "which radar", and panning is not a
+  retraction of it — and the national mosaic is unaffected, since a composite does
+  not depend on where the map is looking.
+
+- **The map legend was drawing on top of itself.** With a model field and an SPC
+  outlook both showing, the colour bar's tick numbers, the outlook's category
+  swatches, and the attribution prose all landed in the same few rows — the
+  numbers under the bar and the `TSTM`/`MRGL`/`SLGT` boxes were painted over each
+  other, so neither could be read.
+
+  The colour bar is three stacked pieces: a caption, the bar, and a row of tick
+  numbers. The legend reserved a single hard-coded height for it that had drifted
+  five pixels short of what those three actually occupy, then advanced by the same
+  wrong number — so everything below it started too high. Each block's height is
+  now declared in one place and both the reserving and the drawing read it, with a
+  gap between blocks so the tick numbers and the swatch boxes are not touching.
+  The prose was also inset two pixels less than the bar and swatches above it, and
+  now shares their margin.
+
+  Tick labels no longer hang off the ends of the bar either, and the two end
+  labels are placed before the middle ones so they cannot be dropped to make room:
+  they are what tell you the scale's range. One scale was short of its own top —
+  2 m temperature labelled up to 110 °F on a bar running to 120 — which is now
+  checked for every product.
+
+- **The model field on the map is now the same forecast as the sounding.** The
+  gridded overlay ignored the cycle you had selected. It always drew the newest
+  run at F000, so you could set the sidebar to the 12Z HRRR at F18, pull a
+  profile valid 06Z tomorrow, and read it against a field valid *now* — a
+  forecast eighteen hours away from the one in the window beside it. The overlay
+  had the method to be told the time; nothing ever called it.
+
+  It now follows the selection exactly. Choosing HRRR pins the field to that run
+  and that forecast hour, which matters even when the valid time agrees: 12Z F18
+  and 18Z F12 depict the same moment but are two different forecasts, and the six
+  hours of extra data in the later one is the whole reason a forecaster looks at
+  both. Selecting a different model instead matches the *valid time* with the
+  freshest HRRR run that reaches it, because a GFS F120 does not name an HRRR
+  forecast at all. The run, the forecast hour, and the valid time are all on the
+  overlay's own caption either way, so the map cannot imply a currency it does
+  not have.
+
+  The observed tab follows its own sounding hour now too, and a past hour
+  resolves to that hour's own analysis. Previously anything more than two days
+  back fell through to a clamp and returned today's run — so a RAOB from last
+  week sat under a field valid days later.
+
+- **Colour scales were spending their range where the weather is not.** Measured
+  against a real CONUS run, several products were mis-ranged badly enough to read
+  as a rendering fault:
+
+  - **Convective inhibition was the worst.** The scale stopped at −25 J/kg with
+    nothing suppressed, so every point weaker than that — 83% of a summer
+    domain, most of it not capped at all — was painted in the *same* colour as a
+    genuine −25 cap, and the strong end clipped at −400 where the run reached
+    −583. CIN is plotted negative, so its significant end is the bottom of the
+    scale and the values to hide are the ones near zero; the scale had no way to
+    express that. It now runs to −800 and draws only the ground that is actually
+    capped, which on that run was 17% of the map instead of 100%.
+  - **0–1 km bulk shear shared the 0–6 km scale**, whose floor is 20 kt. The
+    shallow layer's median was 5 kt, so 98% of the field was below the floor and
+    the map was blank. Shallow-layer shear now has its own scale, and 0–6 km
+    reaches 100 kt rather than clipping at 85.
+  - **0–1 km storm-relative helicity shared the 0–3 km scale** the same way, and
+    lost 90% of itself under a 50 m²/s² floor.
+  - **One isotach scale served every level**, so a colour meant one wind speed
+    everywhere. That is a real virtue, but it cost more than it bought: on a
+    20–180 kt scale the 850 mb map left 90% of the domain unpainted and used 4 of
+    11 classes, because low-level winds do not reach jet speeds. Each level now
+    gets the range its own winds occupy.
+  - **Updraft helicity started at 15 m²/s²** — above where a rotating updraft
+    first shows — and topped out at 275, which the 0–3 km layer does not reach.
+  - **CAPE started at 250 J/kg**, hiding the weakly unstable ground where
+    elevated convection forms. It starts at 100 now.
+  - **Dewpoint clipped at 80 °F** on a run that reached 81.5, painting the
+    moistest air the same colour as merely humid air. It reaches 85 now.
+  - **2 m temperature and dewpoint are banded in 5 °F classes** rather than
+    blended, with 32 °F kept as a class edge. A surface map is read for where a
+    threshold lies, and a continuous wash makes every isotherm a judgement about
+    shade.
+
+  These are the ranges the fields actually occupy, checked by measurement rather
+  than chosen by eye. They are not a copy of any commercial site's colour tables.
+
+- **The picker could start on a Python it cannot survive.** The desktop GUI
+  refuses to run on Python 3.14, which access-violates inside a worker thread's
+  garbage collection with no catchable traceback, and it relaunches itself on the
+  project's own 3.11 instead. A single environment variable disabled that guard
+  outright — and because the guard sets that variable for the child it starts, a
+  copy left behind in a shell disabled it for every later launch from that shell.
+  The window then died mid-startup with a log that simply stopped: no exit code,
+  no traceback, indistinguishable from the user closing it.
+
+  An environment variable cannot overrule the interpreter's own version now. A
+  stale flag is logged and ignored, and the relaunch target's version is verified
+  from its `pyvenv.cfg` before it is used, so one relaunch attempt is provably the
+  last. If no supported interpreter exists the window says so instead of
+  crashing.
+
+- **Soundings over saturated ground are no longer thrown away.** A model profile
+  whose 2 m dewpoint came out a few hundredths of a degree above its 2 m
+  temperature was refused outright — *"no verified surface merge"* — so fog, a
+  marine layer, or a lake shore before sunrise could cost you the profile
+  entirely. A point on the Lake Michigan shoreline at Milwaukee failed on the 06Z
+  HRRR over an excess of 0.03 °C.
+
+  That excess is not a data fault. Models publish 2 m temperature directly, but
+  the 2 m dewpoint is derived here from specific or relative humidity, and that
+  inversion does not use the model's own saturation formulation — so at RH near
+  100% the derived dewpoint crosses the temperature by hundredths of a degree. The
+  air is saturated, which is the physical reading, so the ground row is now
+  clamped to saturation and kept. An excess large enough to mean a genuine decode
+  error — half a degree, where a unit or level mix-up would be wrong by tens — is
+  still refused, which is what the check existed for.
+
+  HRRR and the Canadian RDPS both failed at the same point. The fix is in the
+  shared surface contract, so ERA5, Open-Meteo, the ECCC models, and every GRIB
+  product are covered together; the native decoder's stricter copy of the same
+  test is now re-checked against that contract instead of ending the fetch.
+  Verified against HRRR, RAP, NAM, NAM 3 km, HiResW ARW and FV3, RRFS-A, GFS, CFS,
+  GEFS, ECMWF IFS, GDPS, RDPS, and ICON at a saturated lake shore, an inland
+  plains point, and high terrain.
+
+- **Coarse-resolution models could not return a sounding at all.** GFS, CFS, and
+  GEFS failed with *"the point is out of the grid area"*. The server-side subset
+  that keeps these downloads small asked for a fixed 0.15° box around the point —
+  about 17 km, which is **narrower than one 0.25° GFS cell** and half a 0.5°
+  CFS/GEFS cell. The filter returned a strip one grid row tall that the requested
+  point was not actually inside, so the nearest-neighbour lookup had no cell to
+  stand on. The box is now sized from each product's own grid spacing, two cells
+  to a side, so the point is always bracketed on both axes — with the meridian
+  convergence accounted for, since a degree of longitude buys less distance the
+  further north you go. The 3–13 km models are unaffected: their requests were
+  already wide enough and are unchanged.
+
+- **Political boundaries ruled straight across the lakes.** Once the lakes were
+  drawn, the borders stopped agreeing with them. Natural Earth publishes these as
+  `boundary_lines_land`, but the data still bridges shore to shore with a single
+  straight segment — the US/Canada line crossed Lake Superior as one 100 km chord,
+  and state lines cut across Michigan and Erie. Over open water those chords read
+  as a rendering fault rather than as geography.
+
+  Segment length cannot be the test: real borders run dead straight for hundreds
+  of kilometres, and this data has thousands of legitimate long runs (Australia's
+  129°E line is a single 1239 km segment). Whether the segment lies *over water*
+  is the test. The basemap build now samples each boundary segment against the
+  lake rings and drops the ones crossing them, so a straight border over a prairie
+  survives and a chord across a lake does not. 564 crossing segments went; every
+  remaining segment of 150 km or more is a real border.
+
+- **The inset panels only ever had three sides.** Storm Slinky, Theta-E v. Pres,
+  SR Wind v. Height, Psbl Haz. Type, and the wind-speed strip each draw their own
+  outline, but every one put its right-hand frame line one column past the last
+  paintable pixel, where Qt clipped it away. Measured on a 170×180 panel: 161 lit
+  pixels down the left edge, 2 down the right. Adjacent panels disguised it,
+  because each one's left edge stood in for its neighbour's missing right edge —
+  which left Psbl Haz. Type, last in the row, as the one that visibly refused to
+  close. Every box now shuts.
+
+  This was not the earlier border-thinning change: the clipped edge measures
+  identically at a 2 px and a 1 px pen, so it had been there all along.
+
+- **The skew-T was outlined twice as heavily as everything else.** The frame
+  redraw that repairs the skew-T outline where in-plot label masks punch holes in
+  it bypassed the proxy every other frame passes through, so its hardcoded 2 px
+  width escaped the thinning. Every colour involved was already the same white,
+  but a 2 px rule beside a hairline reads as a *brighter* white — which is how it
+  surfaced, as a colour mismatch rather than a weight one. The page now carries
+  one rule weight throughout, verified by pixel profile.
+
+- **Box mode took the whole mouse.** Arming **Box…** made every left drag draw a
+  rectangle, including the drag you wanted for panning — and because the mode
+  stayed armed after a box was accepted, that pan became a *second* box on top of
+  the extraction already running, which then reported "a box sounding is already
+  in progress". The map still pans on a middle-drag or right-drag while the mode
+  is on, and the mode releases itself once a box is accepted. A click without a
+  drag is still a click, and a few pixels of hand jitter no longer commits an
+  area.
+
+- **Two soundings drew their titles on top of each other.** With more than one
+  profile loaded at the same valid time, the Skew-T wrote the second title across
+  the first: secondary titles were enumerated from zero, so the first of them
+  landed on the focused title's own baseline, and both were drawn into a hardcoded
+  150 px box with clipping disabled, so the real titles spilled through each
+  other. Each sounding now gets its own line, the rects span the panel width, and
+  an over-long title is elided.
+
+- **A sounding opened from a box had no town name.** The box baked a synthetic
+  grid-point label (`HRRR r009c000`) into every extracted file, specific enough to
+  look deliberate, so the automatic town lookup treated it as a real label and
+  left it alone. The averaged sounding now carries a coordinate label for its
+  centre — the same thing a single-point fetch writes when no label is typed, and
+  what invites the lookup to resolve a place name.
+
+### Removed
+
+- **The box workspace's cross-section and spread panels.** Both were vertical
+  plots on a plain linear temperature axis, so beside this application's own
+  Skew-T they read as broken rather than as a different view — and neither
+  answered a question the field map and the averaged sounding do not answer
+  better. The field map has the height back. Only the panels went:
+  `BoxAnalysis.vertical_transect()` and `BoxAnalysis.envelope()` still return the
+  slice and the per-level band, so a script can plot them its own way.
+
 ## [1.0.0-beta1] - 2026-09-01
 
 First beta of 1.0.0. The scientific canvas is unchanged from 0.9.0; this release

@@ -1,0 +1,2023 @@
+{
+ "schema": 1,
+ "source": "https://opengeo.ncep.noaa.gov/geoserver",
+ "anchor_layer_suffix": "_sr_bref",
+ "sites": [
+  {
+   "id": "KABR",
+   "lat": 45.4563,
+   "lon": -98.4133,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KABX",
+   "lat": 35.1503,
+   "lon": -106.8243,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KAKQ",
+   "lat": 36.9843,
+   "lon": -77.0073,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KAMA",
+   "lat": 35.2333,
+   "lon": -101.7093,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KAMX",
+   "lat": 25.6113,
+   "lon": -80.4133,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KAPX",
+   "lat": 44.9063,
+   "lon": -84.7193,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KARX",
+   "lat": 43.8233,
+   "lon": -91.1913,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KATX",
+   "lat": 48.1953,
+   "lon": -122.4963,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KBBX",
+   "lat": 39.4963,
+   "lon": -121.6323,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KBGM",
+   "lat": 42.2003,
+   "lon": -75.9853,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KBHX",
+   "lat": 40.4983,
+   "lon": -124.2923,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KBIS",
+   "lat": 46.7713,
+   "lon": -100.7603,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KBLX",
+   "lat": 45.8543,
+   "lon": -108.6073,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KBMX",
+   "lat": 33.1723,
+   "lon": -86.7703,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KBOX",
+   "lat": 41.9563,
+   "lon": -71.1373,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KBRO",
+   "lat": 25.9163,
+   "lon": -97.4193,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KBUF",
+   "lat": 42.9493,
+   "lon": -78.7373,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KBYX",
+   "lat": 24.5973,
+   "lon": -81.7033,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KCAE",
+   "lat": 33.9493,
+   "lon": -81.1193,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KCBW",
+   "lat": 46.0393,
+   "lon": -67.8063,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KCBX",
+   "lat": 43.4903,
+   "lon": -116.2363,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KCCX",
+   "lat": 40.9233,
+   "lon": -78.0043,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KCLE",
+   "lat": 41.4133,
+   "lon": -81.8603,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KCLX",
+   "lat": 32.6563,
+   "lon": -81.0423,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KCRP",
+   "lat": 27.7843,
+   "lon": -97.5113,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KCXX",
+   "lat": 44.5113,
+   "lon": -73.1663,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KCYS",
+   "lat": 41.1523,
+   "lon": -104.8063,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDAX",
+   "lat": 38.5013,
+   "lon": -121.6783,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDDC",
+   "lat": 37.7613,
+   "lon": -99.9693,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDFX",
+   "lat": 29.2733,
+   "lon": -100.2803,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDGX",
+   "lat": 32.2803,
+   "lon": -89.9843,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDIX",
+   "lat": 39.9473,
+   "lon": -74.4113,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDLH",
+   "lat": 46.8373,
+   "lon": -92.2103,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDMX",
+   "lat": 41.7313,
+   "lon": -93.7233,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDOX",
+   "lat": 38.8263,
+   "lon": -75.4403,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDTX",
+   "lat": 42.7003,
+   "lon": -83.4723,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDVN",
+   "lat": 41.6123,
+   "lon": -90.5813,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KDYX",
+   "lat": 32.5383,
+   "lon": -99.2543,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KEAX",
+   "lat": 38.8103,
+   "lon": -94.2643,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KEMX",
+   "lat": 31.8943,
+   "lon": -110.6303,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KENX",
+   "lat": 42.5873,
+   "lon": -74.0643,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KEOX",
+   "lat": 31.4613,
+   "lon": -85.4593,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KEPZ",
+   "lat": 31.8733,
+   "lon": -106.6983,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KESX",
+   "lat": 35.7013,
+   "lon": -114.8913,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KEVX",
+   "lat": 30.5653,
+   "lon": -85.9223,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KEWX",
+   "lat": 29.7043,
+   "lon": -98.0293,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KEYX",
+   "lat": 35.0983,
+   "lon": -117.5613,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KFCX",
+   "lat": 37.0243,
+   "lon": -80.2743,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KFDR",
+   "lat": 34.3623,
+   "lon": -98.9773,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KFDX",
+   "lat": 34.6343,
+   "lon": -103.6193,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KFFC",
+   "lat": 33.3633,
+   "lon": -84.5663,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KFSD",
+   "lat": 43.5883,
+   "lon": -96.7293,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KFSX",
+   "lat": 34.5743,
+   "lon": -111.1983,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KFTG",
+   "lat": 39.7873,
+   "lon": -104.5463,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KFWS",
+   "lat": 32.5733,
+   "lon": -97.3033,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KGGW",
+   "lat": 48.2063,
+   "lon": -106.6253,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KGJX",
+   "lat": 39.0623,
+   "lon": -108.2143,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KGLD",
+   "lat": 39.3673,
+   "lon": -101.7003,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KGRB",
+   "lat": 44.4993,
+   "lon": -88.1113,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KGRK",
+   "lat": 30.7223,
+   "lon": -97.3833,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KGRR",
+   "lat": 42.8943,
+   "lon": -85.5453,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KGSP",
+   "lat": 34.8833,
+   "lon": -82.2203,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KGWX",
+   "lat": 33.8973,
+   "lon": -88.3293,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KGYX",
+   "lat": 43.8913,
+   "lon": -70.2563,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KHDX",
+   "lat": 33.0773,
+   "lon": -106.1203,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KHGX",
+   "lat": 29.4723,
+   "lon": -95.0793,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KHNX",
+   "lat": 36.3143,
+   "lon": -119.6323,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KHPX",
+   "lat": 36.7373,
+   "lon": -87.2853,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KHTX",
+   "lat": 34.9313,
+   "lon": -86.0843,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KICT",
+   "lat": 37.6543,
+   "lon": -97.4433,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KICX",
+   "lat": 37.5913,
+   "lon": -112.8623,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KILN",
+   "lat": 39.4203,
+   "lon": -83.8223,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KILX",
+   "lat": 40.1513,
+   "lon": -89.3373,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KIND",
+   "lat": 39.7083,
+   "lon": -86.2803,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KINX",
+   "lat": 36.1753,
+   "lon": -95.5643,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KIWA",
+   "lat": 33.2893,
+   "lon": -111.6703,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KIWX",
+   "lat": 41.3593,
+   "lon": -85.7003,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KJAX",
+   "lat": 30.4853,
+   "lon": -81.7023,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KJGX",
+   "lat": 32.6753,
+   "lon": -83.3513,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KJKL",
+   "lat": 37.5913,
+   "lon": -83.3133,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLBB",
+   "lat": 33.6543,
+   "lon": -101.8143,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLCH",
+   "lat": 30.1253,
+   "lon": -93.2163,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLGX",
+   "lat": 47.1173,
+   "lon": -124.1073,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLNX",
+   "lat": 41.9583,
+   "lon": -100.5763,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLOT",
+   "lat": 41.6043,
+   "lon": -88.0843,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLRX",
+   "lat": 40.7403,
+   "lon": -116.8033,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLSX",
+   "lat": 38.6993,
+   "lon": -90.6833,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLTX",
+   "lat": 33.9893,
+   "lon": -78.4293,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLVX",
+   "lat": 37.9753,
+   "lon": -85.9443,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLWX",
+   "lat": 38.9763,
+   "lon": -77.4873,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KLZK",
+   "lat": 34.8363,
+   "lon": -92.2623,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMAF",
+   "lat": 31.9443,
+   "lon": -102.1893,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMAX",
+   "lat": 42.0813,
+   "lon": -122.7173,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMBX",
+   "lat": 48.3923,
+   "lon": -100.8643,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMHX",
+   "lat": 34.7763,
+   "lon": -76.8763,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMKX",
+   "lat": 42.9683,
+   "lon": -88.5513,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMLB",
+   "lat": 28.1133,
+   "lon": -80.6543,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMOB",
+   "lat": 30.6793,
+   "lon": -88.2403,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMPX",
+   "lat": 44.8493,
+   "lon": -93.5663,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMQT",
+   "lat": 46.5313,
+   "lon": -87.5483,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMRX",
+   "lat": 36.1683,
+   "lon": -83.4023,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMSX",
+   "lat": 47.0413,
+   "lon": -113.9863,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMTX",
+   "lat": 41.2633,
+   "lon": -112.4483,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMUX",
+   "lat": 37.1553,
+   "lon": -121.8983,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMVX",
+   "lat": 47.5283,
+   "lon": -97.3253,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KMXX",
+   "lat": 32.5373,
+   "lon": -85.7903,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KNKX",
+   "lat": 32.9193,
+   "lon": -117.0423,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KNQA",
+   "lat": 35.3453,
+   "lon": -89.8733,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KOAX",
+   "lat": 41.3203,
+   "lon": -96.3673,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KOHX",
+   "lat": 36.2473,
+   "lon": -86.5623,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KOKX",
+   "lat": 40.8653,
+   "lon": -72.8643,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KOTX",
+   "lat": 47.6813,
+   "lon": -117.6263,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KPAH",
+   "lat": 37.0683,
+   "lon": -88.7723,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KPBZ",
+   "lat": 40.5323,
+   "lon": -80.2183,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KPDT",
+   "lat": 45.6913,
+   "lon": -118.8533,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KPOE",
+   "lat": 31.1553,
+   "lon": -92.9763,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KPUX",
+   "lat": 38.4593,
+   "lon": -104.1813,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KRAX",
+   "lat": 35.6653,
+   "lon": -78.4903,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KRGX",
+   "lat": 39.7543,
+   "lon": -119.4623,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KRIW",
+   "lat": 43.0663,
+   "lon": -108.4773,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KRLX",
+   "lat": 38.3113,
+   "lon": -81.7233,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KRTX",
+   "lat": 45.7153,
+   "lon": -122.9653,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KSFX",
+   "lat": 43.1063,
+   "lon": -112.6863,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KSGF",
+   "lat": 37.2353,
+   "lon": -93.4003,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KSHV",
+   "lat": 32.4513,
+   "lon": -93.8413,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KSJT",
+   "lat": 31.3713,
+   "lon": -100.4923,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KSOX",
+   "lat": 33.8183,
+   "lon": -117.6363,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KSRX",
+   "lat": 35.2903,
+   "lon": -94.3623,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KTBW",
+   "lat": 27.7053,
+   "lon": -82.4023,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KTFX",
+   "lat": 47.4603,
+   "lon": -111.3853,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KTLH",
+   "lat": 30.3983,
+   "lon": -84.3293,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KTLX",
+   "lat": 35.3333,
+   "lon": -97.2783,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KTWX",
+   "lat": 38.9973,
+   "lon": -96.2333,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KTYX",
+   "lat": 43.7563,
+   "lon": -75.6803,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KUDX",
+   "lat": 44.1253,
+   "lon": -102.8303,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KUEX",
+   "lat": 40.3213,
+   "lon": -98.4423,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KVAX",
+   "lat": 30.8903,
+   "lon": -83.0023,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KVBX",
+   "lat": 34.8393,
+   "lon": -120.3983,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KVNX",
+   "lat": 36.7413,
+   "lon": -98.1273,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KVTX",
+   "lat": 34.4123,
+   "lon": -119.1793,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KVWX",
+   "lat": 38.2603,
+   "lon": -87.7253,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "KYUX",
+   "lat": 32.4953,
+   "lon": -114.6573,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PABC",
+   "lat": 60.792,
+   "lon": -161.876,
+   "half_span_deg": 5.0,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PACG",
+   "lat": 56.853,
+   "lon": -135.529,
+   "half_span_deg": 5.0,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PAEC",
+   "lat": 64.511,
+   "lon": -165.295,
+   "half_span_deg": 5.0,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PAHG",
+   "lat": 60.726,
+   "lon": -151.351,
+   "half_span_deg": 5.0,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PAIH",
+   "lat": 59.461,
+   "lon": -146.303,
+   "half_span_deg": 5.0,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PAKC",
+   "lat": 58.679,
+   "lon": -156.629,
+   "half_span_deg": 5.0,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PAPD",
+   "lat": 65.035,
+   "lon": -147.502,
+   "half_span_deg": 5.0,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PGUA",
+   "lat": 13.4563,
+   "lon": 144.8107,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PHKI",
+   "lat": 21.8943,
+   "lon": -159.5523,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PHKM",
+   "lat": 20.1263,
+   "lon": -155.7783,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PHMO",
+   "lat": 21.1333,
+   "lon": -157.1803,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "PHWA",
+   "lat": 19.0953,
+   "lon": -155.5693,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  },
+  {
+   "id": "TJUA",
+   "lat": 18.1163,
+   "lon": -66.0783,
+   "half_span_deg": 4.9997,
+   "products": [
+    "bdhc",
+    "bdsa",
+    "boha",
+    "sr_bref",
+    "sr_bvel"
+   ]
+  }
+ ],
+ "unavailable": [
+  "KLIX",
+  "PABL"
+ ]
+}

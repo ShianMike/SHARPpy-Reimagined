@@ -95,6 +95,9 @@ PERSISTED_SETTING_DEFAULTS = {
     "parcel/default_skewt": "MU",
     "viewer/combine_soundings": True,
     "model/prefetch_next_hour": False,
+    # Flat is the historical view and the only one correct at every extent, so
+    # it is seeded explicitly rather than left to an in-code fallback.
+    "maps/projection": "flat",
     "hide_tips": False,
 }
 

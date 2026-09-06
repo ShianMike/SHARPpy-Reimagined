@@ -926,7 +926,7 @@ class RadarOverlayController(QObject):
         attached meant re-enabling later found a frame that looked fresh and
         showed the previous product under the new product's name.
         """
-        self._map.remove_overlay(radar_mosaic.OVERLAY_KEY)
+        self._map.remove_overlay(self._key())
         self._token += 1  # orphan any in-flight result for the old product
         self._sync_refresh_interval()
         if not self._check.isChecked():

@@ -1265,6 +1265,29 @@ def test_changing_antenna_detaches_the_previous_frame(site_pinned):
     assert widget.overlay(radar_site.OVERLAY_KEY) is not first
 
 
+def test_changing_site_product_while_off_discards_the_previous_frame(
+        radar_site_controller, radar_site_calls):
+    """Re-enable must fetch the selected product, not relabel the old raster."""
+    controller, widget = radar_site_controller
+    controller.set_enabled(True)
+    _pump(700)
+    assert widget.overlay(radar_site.OVERLAY_KEY) is not None
+
+    controller.set_enabled(False)
+    before = len(radar_site_calls)
+    controller.set_product("velocity")
+
+    assert widget.overlay(radar_site.OVERLAY_KEY) is None
+    assert len(radar_site_calls) == before, "a disabled layer must stay silent"
+
+    controller.set_enabled(True)
+    _pump(700)
+
+    assert len(radar_site_calls) == before + 1
+    assert radar_site_calls[-1]["product"] == "velocity"
+    assert "velocity" in widget.overlay(radar_site.OVERLAY_KEY).title.lower()
+
+
 def test_a_pinned_antenna_is_fetched_even_far_from_the_view(site_pinned):
     """The proximity test exists to *choose* a site, not to veto a named one."""
     controller, widget, calls = site_pinned

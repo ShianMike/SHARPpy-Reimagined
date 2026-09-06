@@ -216,7 +216,14 @@ def select_nearest_grid_point(lats, lons, lat0, lon0):
         # level arrays.
         return (0, 0), float(lats), float(lons)
 
-    if lats.ndim == 1 and lons.ndim == 1:
+    if lats.ndim <= 1 and lons.ndim <= 1:
+        # A geographic subset can be one cell wide on a single axis, and cfgrib
+        # then presents that axis as a scalar coordinate while the other stays a
+        # vector. Promoting both keeps the separable search below; falling
+        # through to the 2-D branch instead broadcast to a 1-D distance array
+        # that cannot be unravelled into the two indices it returns.
+        lats = np.atleast_1d(lats)
+        lons = np.atleast_1d(lons)
         # On a Cartesian product of independent latitude/longitude axes, the
         # spherical dot product is separable.  The longitude that maximizes
         # cos(delta_lon) is optimal for every latitude because cos(latitude)
@@ -493,9 +500,18 @@ def _horizontal_indexers(ds, index_tuple):
         return {}, (None, None)
 
     iy, ix = (int(index_tuple[0]), int(index_tuple[1]))
-    if lat_coord.ndim == 1 and lon_coord.ndim == 1:
-        ydim = lat_coord.dims[0]
-        xdim = lon_coord.dims[0]
+    if lat_coord.ndim <= 1 and lon_coord.ndim <= 1:
+        # cfgrib collapses a one-cell horizontal axis to a scalar coordinate.
+        # Keep indexing the surviving vector axis so its selected metadata and
+        # its extracted data column cannot disagree.
+        ydim = lat_coord.dims[0] if lat_coord.ndim == 1 else None
+        xdim = lon_coord.dims[0] if lon_coord.ndim == 1 else None
+        indexers = {}
+        if ydim is not None:
+            indexers[ydim] = iy
+        if xdim is not None:
+            indexers[xdim] = ix
+        return indexers, (ydim, xdim)
     elif lat_coord.ndim >= 2 and lon_coord.ndim >= 2:
         ydim, xdim = lat_coord.dims[-2:]
     else:

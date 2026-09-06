@@ -483,6 +483,23 @@ COND_PROB_LABEL_MAX_PT = int(os.environ.get("COND_PROB_LABEL_MAX_PT", "10"))
 # Maximum point size for the winter/DGZ panel. The vendored widget scales text
 # by panel height and writes long strings into tiny rects with TextDontClip.
 WINTER_LABEL_MAX_PT = int(os.environ.get("WINTER_LABEL_MAX_PT", "11"))
+
+# Floor for a winter row, so a very short panel shrinks its text rather than
+# collapsing rows onto one another.
+WINTER_MIN_ROW_PX = 8
+
+# Rows in the growth-zone block: the vendored depth, mean RH, mean PW, mean
+# mixing ratio and mean omega, plus the zone's pressure bounds and the
+# snow-to-liquid ratio.
+WINTER_DGZ_ROWS = 4
+
+# Rows the warm/cold-layer block reserves.
+WINTER_ENERGY_ROWS = 4
+# Maximum point size for the fire-weather panel, which has the same fault as the
+# winter one: the font is scaled from panel height and the moisture/wind rows are
+# written into two-fifths-width rects with TextDontClip, so a row like
+# "0-1 km mean = 169/22" is drawn well outside its own column.
+FIRE_LABEL_MAX_PT = int(os.environ.get("FIRE_LABEL_MAX_PT", "11"))
 # Extra vertical space (px) that preserves the established scientific-panel
 # proportions after the combined IndexBoard and Streamwiseness chart are
 # mounted.
@@ -1095,6 +1112,320 @@ def _install_skewt_sfc_label_mask():
         pass
 
 
+#: Clear space kept between two left-hand skew-T annotations, in pixels.
+SKEWT_ANNOTATION_CLEARANCE = 6.0
+
+#: Temperature bounds of the omega meter at 1000 mb. Taken from
+#: ``plotSkewT.draw_omega_profile``, which hard-codes -49 and -41.
+SKEWT_OMEGA_BOUNDS_C = (-49.0, -41.0)
+
+#: Widest scale label the omega meter prints beside those bounds. The meter
+#: positions ``-10`` and ``+10`` with 5 px rects, so both overhang their end.
+SKEWT_OMEGA_SCALE_LABEL = "-10"
+
+#: Pixels from ``lpad`` at which ``plotSkewT.draw_height`` starts each height
+#: label, after a tick that runs from ``lpad`` itself.
+SKEWT_HEIGHT_LABEL_OFFSET = 15.0
+
+#: The height markers ``plotData`` draws on every repaint, from its own list of
+#: 0, 1, 3, 6, 9, 12 and 15 km.
+SKEWT_HEIGHT_LABELS = ("0 km", "1 km", "3 km", "6 km", "9 km", "12 km",
+                       "15 km")
+
+#: Fallback width for the height-label column when no font is available to
+#: measure. Wide enough to clear the longest of them at any usual size.
+SKEWT_HEIGHT_LABEL_FALLBACK_PX = 40.0
+
+
+def _skewt_height_label_band(widget, qtgui=None):
+    """Return the ``(left, right)`` pixels the height markers occupy.
+
+    Unlike the omega meter this band is never absent: ``plotData`` calls
+    ``draw_height`` for seven levels on every repaint, whatever the sounding is.
+    Each marker is a tick starting at ``lpad`` with its label 15 px further in,
+    and together they form a full-height column against the left edge -- the
+    column an annotation placed at ``lpad`` lands on top of.
+    """
+    left = float(getattr(widget, "lpad", 0))
+    width = SKEWT_HEIGHT_LABEL_FALLBACK_PX
+    font = getattr(widget, "hght_font", None)
+    if qtgui is not None and font is not None:
+        try:
+            metrics = qtgui.QFontMetrics(font)
+            width = max(float(metrics.horizontalAdvance(text))
+                        for text in SKEWT_HEIGHT_LABELS)
+        except Exception:  # noqa: BLE001 - geometry is advisory
+            width = SKEWT_HEIGHT_LABEL_FALLBACK_PX
+    return left, left + SKEWT_HEIGHT_LABEL_OFFSET + width
+
+
+#: Lowest pressure the omega meter draws a bar for, from
+#: ``plotSkewT.draw_omega_profile``.
+SKEWT_OMEGA_TOP_HPA = 111.0
+
+
+def _skewt_omega_bar_extent(widget):
+    """Return the ``(left, right)`` pixels the omega *bars* actually reach.
+
+    ``draw_omega_profile`` scales each bar by the reported value, so a vertical
+    velocity beyond the meter's own +/-10 scale is drawn past the bound rather
+    than clipped to it. On a real profile the strongest ascent reaches several
+    degrees of skew-T past -41 C -- which is precisely where a neighbouring
+    annotation would otherwise be placed, and the bars and a warm-tier lapse
+    rate are both red, so the two merge into one another when they meet.
+    """
+    import numpy as np
+
+    prof = getattr(widget, "prof", None)
+    omeg = getattr(prof, "omeg", None)
+    pres = getattr(prof, "pres", None)
+    if omeg is None or pres is None:
+        return None
+    try:
+        values = np.ma.masked_invalid(np.ma.asarray(omeg, dtype=float))
+        levels = np.ma.masked_invalid(np.ma.asarray(pres, dtype=float))
+        drawn = (~np.ma.getmaskarray(values)
+                 & ~np.ma.getmaskarray(levels)
+                 & (levels.filled(-1.0) >= SKEWT_OMEGA_TOP_HPA))
+        usable = np.asarray(values.filled(0.0))[drawn]
+        if usable.size == 0:
+            return None
+        edges = [float(widget.omeg_to_pix(float(value) * 10.0))
+                 for value in (usable.min(), usable.max())]
+    except Exception:  # noqa: BLE001 - geometry is advisory
+        return None
+    edges = [edge for edge in edges if edge == edge]  # NaN guard
+    if not edges:
+        return None
+    return min(edges), max(edges)
+
+
+def _skewt_omega_band(widget, qtgui=None):
+    """Return the ``(left, right)`` pixels the omega meter occupies, or ``None``.
+
+    ``None`` means the meter is not drawn, which is the case for observed
+    soundings -- ``plotSkewT`` sets ``plot_omega`` from whether the collection is
+    observed, and an observed sounding carries no vertical velocity.
+
+    The span is deliberately wider than the meter's own -49 to -41 bounds. Its
+    ``+10``/``-10`` scale labels are drawn from 5 px rectangles and so overhang
+    both ends, and the bars themselves can reach further still.
+    """
+    if not getattr(widget, "plot_omega", False):
+        return None
+    try:
+        left = float(widget.tmpc_to_pix(SKEWT_OMEGA_BOUNDS_C[0], 1000))
+        right = float(widget.tmpc_to_pix(SKEWT_OMEGA_BOUNDS_C[1], 1000))
+    except Exception:  # noqa: BLE001 - geometry is advisory
+        return None
+    if left != left or right != right:  # NaN guard
+        return None
+    overhang = 0.0
+    font = getattr(widget, "esrh_font", None)
+    if qtgui is not None and font is not None:
+        try:
+            overhang = float(qtgui.QFontMetrics(font).horizontalAdvance(
+                SKEWT_OMEGA_SCALE_LABEL))
+        except Exception:  # noqa: BLE001
+            overhang = 0.0
+    low = min(left, right) - overhang
+    high = max(left, right) + overhang
+    bars = _skewt_omega_bar_extent(widget)
+    if bars is not None:
+        low = min(low, bars[0])
+        high = max(high, bars[1])
+    return low, high
+
+
+def _skewt_left_gutter(widget, qtgui=None):
+    """Return the leftmost x a left-hand annotation may start at.
+
+    Clear of the height-marker column, which is always drawn, and of the omega
+    meter when there is one. The meter is the wider obstacle on a forecast
+    sounding and so usually decides this, but an observed sounding has no meter
+    at all -- and it was that case which put the maximum lapse rate hard against
+    the left border and straight through the height labels.
+    """
+    left = float(getattr(widget, "lpad", 0)) + SKEWT_ANNOTATION_CLEARANCE
+    for band in (_skewt_height_label_band(widget, qtgui),
+                 _skewt_omega_band(widget, qtgui)):
+        if band is not None:
+            left = max(left, band[1] + SKEWT_ANNOTATION_CLEARANCE)
+    return left
+
+
+def _skewt_clear_of(rect, blockers, qtcore, right_limit=None,
+                    margin=SKEWT_ANNOTATION_CLEARANCE):
+    """Return ``rect`` moved right until it clears every blocker by ``margin``.
+
+    Only x moves. For these annotations the vertical position carries the
+    meaning -- it is the pressure the value belongs to -- while the column is
+    arbitrary, so a collision is resolved by sliding sideways and never by
+    sliding up or down.
+
+    Each blocker is grown by ``margin`` before being tested, because a strict
+    rect intersection is not the thing that matters visually: two labels one
+    pixel apart do not overlap and still read as a single smear.
+    """
+    result = qtcore.QRectF(rect)
+    padded = [
+        None if blocker is None
+        else qtcore.QRectF(blocker).adjusted(-margin, -margin, margin, margin)
+        for blocker in blockers
+    ]
+    for _ in range(len(padded) + 2):
+        moved = False
+        for blocker in padded:
+            if blocker is None or not result.intersects(blocker):
+                continue
+            candidate = float(blocker.right())
+            if right_limit is not None and \
+                    candidate + result.width() > right_limit:
+                continue
+            result.moveLeft(candidate)
+            moved = True
+        if not moved:
+            break
+    return result
+
+
+#: Slack required beyond the label's own width before the column to the right of
+#: the effective-inflow annotation is considered usable.
+SKEWT_LAPSE_COLUMN_SLACK = 4.0
+
+
+def _skewt_trace_left_edge(widget, tab, pbot, ptop, step=10.0):
+    """Leftmost temperature/dewpoint pixel across a pressure layer.
+
+    The cold region is only empty up to whichever trace comes first, and that
+    varies with the sounding -- a dry profile puts its dewpoint much further
+    left than a saturated one. Sampled across the layer rather than at its top
+    alone, because the bracket spans the whole depth.
+
+    Returns ``None`` when it cannot be determined, which callers treat as
+    "unknown" rather than as "no limit".
+    """
+    import numpy as np
+
+    prof = getattr(widget, "prof", None)
+    if prof is None:
+        return None
+    try:
+        low, high = float(min(pbot, ptop)), float(max(pbot, ptop))
+        levels = np.arange(low, high + 1.0, float(step))
+        if levels.size == 0:
+            return None
+        edges = []
+        for reader in (tab.interp.temp, tab.interp.dwpt):
+            values = np.ma.masked_invalid(
+                np.ma.asarray(reader(prof, levels), dtype=float))
+            pixels = np.ma.masked_invalid(np.ma.asarray(
+                widget.tmpc_to_pix(values, levels), dtype=float))
+            usable = np.asarray(pixels.compressed(), dtype=float)
+            if usable.size:
+                edges.append(float(usable.min()))
+    except Exception:  # noqa: BLE001 - geometry is advisory
+        return None
+    if not edges:
+        return None
+    return min(edges)
+
+
+def _skewt_effective_layer_labels(widget, qtcore, qtgui, tab):
+    """Return the effective-inflow-layer bracket geometry and label rects.
+
+    Shared by the effective-layer drawing and the max-lapse-rate placement, so
+    the lapse-rate label can avoid these without depending on which annotation
+    is drawn first. The order genuinely differs between panels: every panel but
+    winter draws the lapse rate from inside ``plotData``, while the winter panel
+    draws it from a later pass, so a first-come reservation would place the same
+    label differently depending on which panel happened to be open.
+
+    Returns ``None`` when there is no effective inflow layer to draw.
+    """
+    prof = getattr(widget, "prof", None)
+    if prof is None:
+        return None
+    ptop = getattr(prof, "etop", None)
+    pbot = getattr(prof, "ebottom", None)
+    if not (tab.utils.QC(ptop) and tab.utils.QC(pbot)):
+        return None
+
+    x1 = widget.tmpc_to_pix(-20, 1000)
+    x2 = widget.tmpc_to_pix(-33, 1000)
+    scale = float(getattr(widget, "scale", 1.0)) or 1.0
+    originy = float(getattr(widget, "originy", 0.0))
+    y1 = originy + widget.pres_to_pix(pbot) / scale
+    y2 = originy + widget.pres_to_pix(ptop) / scale
+
+    surface = tab.interp.hght(prof, prof.pres[prof.sfc])
+    if prof.pres[prof.sfc] == pbot:
+        text_bot = "SFC"
+    else:
+        text_bot = tab.utils.INT2STR(
+            tab.interp.hght(prof, pbot) - surface) + "m"
+    text_top = tab.utils.INT2STR(
+        tab.interp.hght(prof, ptop) - surface) + "m"
+    esrh = (prof.left_esrh[0] if getattr(widget, "use_left", False)
+            else prof.right_esrh[0])
+    text_esrh = tab.utils.INT2STR(esrh) + " m2s2"
+
+    metrics = qtgui.QFontMetrics(widget.esrh_font)
+    rect_h = max(float(getattr(widget, "esrh_height", 0)),
+                 float(metrics.height()) + 2.0)
+    gutter = _skewt_left_gutter(widget, qtgui)
+
+    def _rect(left, top, text):
+        """A rect sized to the text, not to an arbitrary floor.
+
+        The vendored 25/50/50 pixel minimums served no purpose: the text is
+        left-aligned with ``TextDontClip``, so the rect's width never affected
+        where a glyph landed. Carrying them made every collision test pessimistic
+        by up to 30 px, which would have spread these three labels much further
+        apart than the ink actually needs.
+        """
+        width = max(float(metrics.horizontalAdvance(str(text))) + 4.0, 12.0)
+        # Never start left of the gutter: on a narrow plot the fixed -33 C
+        # column can fall inside the omega meter or the height markers.
+        left = max(float(left), gutter)
+        return _fit_rect_to_skewt_plot(
+            widget, qtcore, qtcore.QRectF(left, float(top), width, rect_h))
+
+    # The bottom label sits *below* the layer's lower line, which for a
+    # surface-based layer is at or under the plot's bottom edge; flip it above
+    # the line rather than let it fall out of the box.
+    bottom_top = float(y1) + 4.0
+    bottom_limit = float(getattr(
+        widget, "bry", getattr(widget, "hgt", y1))) - 2.0
+    if bottom_top + rect_h > bottom_limit:
+        bottom_top = float(y1) - 4.0 - rect_h
+
+    # The layer's top label and its helicity keep their places; the bottom one
+    # yields. It is the label with somewhere to go -- it already moves above its
+    # own line for a surface-based layer -- and that flip is what creates the
+    # collision: a layer that is both surface-based and shallow puts the flipped
+    # bottom label on the same line as the top one, in the same column, so a
+    # degenerate layer drew "SFC" straight through "0m".
+    rect_top = _rect(x2, y2 - rect_h, text_top)
+    rect_esrh = _rect(x1 - 15.0, y2 - rect_h, text_esrh)
+    rect_bot = _skewt_clear_of(
+        _rect(x2, bottom_top, text_bot), (rect_top, rect_esrh), qtcore,
+        right_limit=float(getattr(widget, "brx", 0)))
+
+    return {
+        "x1": x1,
+        "y1": y1,
+        "y2": y2,
+        "rect_bot": rect_bot,
+        "rect_top": rect_top,
+        "rect_esrh": rect_esrh,
+        "text_bot": text_bot,
+        "text_top": text_top,
+        "text_esrh": text_esrh,
+        "rect_h": rect_h,
+    }
+
+
 def _install_skewt_effective_layer_label_fit():
     """Keep effective-layer labels, including bottom ``SFC``, in the plot box."""
     try:
@@ -1110,62 +1441,23 @@ def _install_skewt_effective_layer_label_fit():
         def draw_effective_layer(self, qp):
             try:
                 qp.setClipping(True)
-                ptop = self.prof.etop
-                pbot = self.prof.ebottom
                 line_len = 15
-                if not (_tab.utils.QC(ptop) and _tab.utils.QC(pbot)):
+                layout = _skewt_effective_layer_labels(
+                    self, _QtCore, _QtGui, _tab)
+                if layout is None:
                     return
 
-                x1 = self.tmpc_to_pix(-20, 1000)
-                x2 = self.tmpc_to_pix(-33, 1000)
-                y1 = self.originy + self.pres_to_pix(pbot) / self.scale
-                y2 = self.originy + self.pres_to_pix(ptop) / self.scale
-
-                sfc = _tab.interp.hght(
-                    self.prof, self.prof.pres[self.prof.sfc])
-                if self.prof.pres[self.prof.sfc] == pbot:
-                    text_bot = "SFC"
-                else:
-                    text_bot = _tab.interp.hght(self.prof, pbot) - sfc
-                    text_bot = _tab.utils.INT2STR(text_bot) + "m"
-                text_top = _tab.interp.hght(self.prof, ptop) - sfc
-                text_top = _tab.utils.INT2STR(text_top) + "m"
-
-                if self.use_left:
-                    esrh = self.prof.left_esrh[0]
-                else:
-                    esrh = self.prof.right_esrh[0]
-                text_esrh = _tab.utils.INT2STR(esrh) + " m2s2"
+                x1 = layout["x1"]
+                y1 = layout["y1"]
+                y2 = layout["y2"]
+                text_bot = layout["text_bot"]
+                text_top = layout["text_top"]
+                text_esrh = layout["text_esrh"]
+                rect1 = layout["rect_bot"]
+                rect2 = layout["rect_top"]
+                rect3 = layout["rect_esrh"]
 
                 qp.setFont(self.esrh_font)
-                fm = _QtGui.QFontMetrics(self.esrh_font)
-                rect_h = max(float(getattr(self, "esrh_height", 0)),
-                             float(fm.height()) + 2.0)
-
-                def _label_rect(left, top, text, min_width):
-                    rect_w = max(float(min_width),
-                                 float(fm.horizontalAdvance(str(text))) + 4.0)
-                    return _fit_rect_to_skewt_plot(
-                        self, _QtCore,
-                        _QtCore.QRectF(float(left), float(top),
-                                       rect_w, rect_h))
-
-                def _surface_rect(left, line_y, text, min_width):
-                    rect_w = max(float(min_width),
-                                 float(fm.horizontalAdvance(str(text))) + 4.0)
-                    top = float(line_y) + 4.0
-                    bottom_limit = float(getattr(
-                        self, "bry", getattr(self, "hgt", line_y))) - 2.0
-                    if top + rect_h > bottom_limit:
-                        top = float(line_y) - 4.0 - rect_h
-                    return _fit_rect_to_skewt_plot(
-                        self, _QtCore,
-                        _QtCore.QRectF(float(left), top, rect_w, rect_h))
-
-                rect1 = _surface_rect(x2, y1, text_bot, 25.0)
-                rect2 = _label_rect(x2, y2 - rect_h, text_top, 50.0)
-                rect3 = _label_rect(x1 - 15.0, y2 - rect_h,
-                                    text_esrh, 50.0)
 
                 # No background plate behind these three labels. The vendored
                 # method fills each rect with ``bg_color`` first, but that is
@@ -1224,6 +1516,135 @@ class _RectSuppressingPainter:
 
     def __getattr__(self, name):
         return getattr(self._qp, name)
+
+
+def _install_skewt_lapse_rate_label_placement():
+    """Move the max-lapse-rate annotation into the skew-T's left gutter.
+
+    Upstream anchors it five degrees warm of the temperature trace, which is the
+    busiest part of the diagram: the parcel-level labels, the freezing level and
+    wet-bulb zero, the significant-level ticks and the wind barbs all sit on that
+    side. Measured on a real sounding the value lands at x 595-651 while
+    ``draw_temp_levels`` occupies 662-746, so it is crowded by construction
+    rather than by accident.
+
+    The cold side is nearly empty, and the effective-inflow layer already
+    demonstrates the pattern -- a bracket in a fixed column with its value
+    beside it. The whole annotation moves there. The bracket keeps the two
+    heights it marks, which is the part that carries meaning; only the column
+    changes.
+
+    Placement is measured against its neighbours rather than assumed, because
+    the gutter is narrow: between the omega meter's right edge and the
+    effective-inflow column there is roughly 56 px on an 814 px wide plot, and
+    ``10.5 C/km`` alone needs 63 px. The value therefore has to be able to step
+    aside, and the bracket stays put while it does.
+    """
+    try:
+        import sharppy.viz.skew as _skew
+
+        _cls = _skew.plotSkewT
+        if getattr(_cls, "_sharpmod_lapse_rate_label_placed", False):
+            return
+        _tab = _skew.tab
+        _QtGui = _skew.QtGui
+        _QtCore = _skew.QtCore
+        _orig = _cls.draw_max_lapse_rate_layer
+
+        #: Half-length of the tick marking each end of the layer, as upstream.
+        _tick = 10.0
+
+        def draw_max_lapse_rate_layer(self, qp, bound=4.5):
+            try:
+                layer = self.prof.max_lapse_rate_2_6
+                rate, pbot, ptop = layer[0], layer[1], layer[2]
+                if not (_tab.utils.QC(ptop) and _tab.utils.QC(pbot)):
+                    return
+                if not rate >= bound:
+                    return
+
+                scale = float(getattr(self, "scale", 1.0)) or 1.0
+                originy = float(getattr(self, "originy", 0.0))
+                y1 = originy + self.pres_to_pix(pbot) / scale
+                y2 = originy + self.pres_to_pix(ptop) / scale
+
+                text = _tab.utils.FLOAT2STR(rate, 1) + " C/km"
+                metrics = _QtGui.QFontMetrics(self.esrh_font)
+                rect_h = max(float(getattr(self, "esrh_height", 0)),
+                             float(metrics.height()) + 2.0)
+                width = float(metrics.horizontalAdvance(text)) + 4.0
+
+                layout = _skewt_effective_layer_labels(
+                    self, _QtCore, _QtGui, _tab)
+                blockers = () if layout is None else (
+                    layout["rect_bot"], layout["rect_top"],
+                    layout["rect_esrh"])
+
+                # Preferred: a column of its own, right of the whole
+                # effective-inflow annotation. The gutter has to share a column
+                # with the inflow height labels, and those sit at whatever
+                # height that layer happens to be, so they can come arbitrarily
+                # close to this one -- near enough to read as one smear without
+                # ever strictly overlapping. Right of them there is real room:
+                # 104 to 310 px across panel sizes against the 67 to 85 px this
+                # label needs.
+                column = _skewt_left_gutter(self, _QtGui)
+                if blockers:
+                    candidate = max(
+                        float(blocker.right()) for blocker in blockers
+                    ) + SKEWT_ANNOTATION_CLEARANCE
+                    # That room ends at whichever trace comes first, and a dry
+                    # profile puts its dewpoint much further left than a
+                    # saturated one, so the limit is measured per sounding.
+                    limit = _skewt_trace_left_edge(self, _tab, pbot, ptop)
+                    if limit is None:
+                        limit = float(getattr(self, "brx", 0))
+                    limit -= SKEWT_ANNOTATION_CLEARANCE
+                    if candidate + width + SKEWT_LAPSE_COLUMN_SLACK <= limit:
+                        column = candidate
+
+                bracket_x = column + _tick
+                rect = _QtCore.QRectF(column, y2 - rect_h, width, rect_h)
+                # Kept as a net: when the right-hand column is refused for want
+                # of room, the label is back in the gutter beside the inflow
+                # labels and still has to clear them.
+                rect = _skewt_clear_of(
+                    rect, blockers, _QtCore,
+                    right_limit=float(getattr(self, "brx", 0)))
+                rect = _fit_rect_to_skewt_plot(self, _QtCore, rect)
+
+                if rate >= 8:
+                    color = self.alert_colors[5]
+                elif rate >= 7:
+                    color = self.alert_colors[4]
+                elif rate >= 6:
+                    color = self.alert_colors[1]
+                else:
+                    color = self.alert_colors[0]
+
+                qp.setClipping(True)
+                qp.setPen(_QtGui.QPen(color, 1.5, _QtCore.Qt.SolidLine))
+                qp.setFont(self.esrh_font)
+                qp.drawLine(bracket_x - _tick, y1, bracket_x + _tick, y1)
+                qp.drawLine(bracket_x - _tick, y2, bracket_x + _tick, y2)
+                qp.drawLine(bracket_x, y1, bracket_x, y2)
+                # No background plate, for the same reason the effective-inflow
+                # labels have none: it is filled with the colour already behind
+                # it, so it only cuts a hole in the isopleths.
+                qp.setClipping(False)
+                qp.drawText(
+                    rect,
+                    _QtCore.Qt.TextDontClip | _QtCore.Qt.AlignLeft
+                    | _QtCore.Qt.AlignVCenter,
+                    text)
+                qp.setClipping(True)
+            except Exception:  # pragma: no cover - fall back to upstream
+                _orig(self, qp, bound)
+
+        _cls.draw_max_lapse_rate_layer = draw_max_lapse_rate_layer
+        _cls._sharpmod_lapse_rate_label_placed = True
+    except Exception:  # pragma: no cover - vendored module always present
+        pass
 
 
 def _install_skewt_lapse_rate_label_transparency():
@@ -1322,7 +1743,11 @@ def _install_skewt_frame_ontop():
                 qp = _QtGui.QPainter()
                 qp.begin(self.plotBitMap)
                 qp.setClipping(False)
-                pen = _QtGui.QPen(self.fg_color, 2, _QtCore.Qt.SolidLine)
+                # Use the same shared width as every auxiliary plot box.  This
+                # redraw goes directly onto the raw painter, so it must not
+                # drift from the frame-normalisation patch installed below.
+                pen = _QtGui.QPen(
+                    self.fg_color, PANEL_FRAME_WIDTH, _QtCore.Qt.SolidLine)
                 qp.setPen(pen)
                 lpad = int(self.lpad)
                 tpad = int(self.tpad)
@@ -1338,6 +1763,192 @@ def _install_skewt_frame_ontop():
 
         _cls.plotData = plotData
         _cls._sharpmod_frame_ontop = True
+    except Exception:  # pragma: no cover - vendored module always present
+        pass
+
+
+#: Fill for the box-mean callout. Amber matches the rectangle the picker draws
+#: for the box on the map, and it is neither the plot's foreground nor its
+#: background in any bundled theme, so the chip reads as a callout about the
+#: sounding rather than as another piece of plotted data.
+BOX_MEAN_BADGE_FILL = "#FFD000"
+
+#: Smallest point size the callout will shrink to before it gives up. Below this
+#: it stops being a warning and becomes a smudge over the isotherms.
+BOX_MEAN_BADGE_MIN_PT = 6
+
+#: Most of the plot's width the callout may occupy. Past this it is covering
+#: sounding rather than annotating it.
+BOX_MEAN_BADGE_MAX_WIDTH_FRAC = 0.42
+
+
+def collection_meta(prof_coll, key):
+    """Read one metadata value off a profile collection, tolerantly.
+
+    Mirrors :func:`sharpmod.viz.hodo_locator._collection_meta`: the vendored
+    collection exposes ``getMeta``, while the lightweight stand-ins used in tests
+    carry a plain ``_meta`` dict.
+    """
+    try:
+        getter = getattr(prof_coll, "getMeta", None)
+        if callable(getter):
+            return getter(key)
+    except Exception:
+        pass
+    meta = getattr(prof_coll, "_meta", None)
+    if isinstance(meta, dict):
+        return meta.get(key)
+    return None
+
+
+def box_mean_badge_lines_for(prof_coll) -> tuple[str, ...]:
+    """Return the box-mean callout lines for a collection, or ``()``."""
+    from sharpmod.box_mean import box_mean_badge_lines
+
+    return box_mean_badge_lines(
+        collection_meta(prof_coll, "box_mean"),
+        collection_meta(prof_coll, "box_mean_members"))
+
+
+def draw_box_mean_badge(widget, lines, qtcore, qtgui, painter):
+    """Draw the box-mean callout inside the top-right of the plot.
+
+    Top-right because on a skew-T that corner is warm air at low pressure: no
+    real sounding reaches it, so the callout cannot bury a trace, a parcel path,
+    the level labels down the left edge, or the isotherm labels along the bottom.
+
+    Returns the rect used, or ``None`` when it did not fit. Not fitting is a
+    real outcome worth handling rather than forcing: the title still names the
+    average, and a chip crushed over the data would cost more than it says.
+    """
+    if not lines:
+        return None
+    left = float(widget.lpad)
+    right = float(widget.brx) + float(getattr(widget, "rpad", 0) or 0)
+    top = float(widget.tpad)
+    bottom = float(widget.bry)
+    plot_w = right - left
+    plot_h = bottom - top
+    if plot_w <= 0.0 or plot_h <= 0.0:
+        return None
+
+    base = getattr(widget, "label_font", None)
+    margin = 6.0
+    padding = 5.0
+    budget = plot_w * BOX_MEAN_BADGE_MAX_WIDTH_FRAC
+    # Scaled off the plot so the chip keeps its weight on a large export and
+    # does not swamp a small GUI pane.
+    start_pt = max(BOX_MEAN_BADGE_MIN_PT, min(13, int(round(plot_h * 0.026))))
+
+    def measure(head_pt, texts):
+        head = qtgui.QFont(base) if base is not None else qtgui.QFont()
+        head.setPointSize(head_pt)
+        head.setBold(True)
+        sub = qtgui.QFont(head)
+        sub.setPointSize(max(BOX_MEAN_BADGE_MIN_PT, head_pt - 2))
+        sub.setBold(False)
+        fonts = [head] + [sub] * (len(texts) - 1)
+        metrics = [qtgui.QFontMetricsF(font) for font in fonts]
+        width = max(m.horizontalAdvance(t) for m, t in zip(metrics, texts))
+        height = sum(m.height() for m in metrics)
+        return fonts, metrics, width, height
+
+    texts = list(lines)
+    chosen = None
+    while texts:
+        for point in range(start_pt, BOX_MEAN_BADGE_MIN_PT - 1, -1):
+            fonts, metrics, width, height = measure(point, texts)
+            if (width + padding * 2.0 <= budget
+                    and height + padding * 2.0 <= plot_h * 0.30):
+                chosen = (fonts, metrics, width, height)
+                break
+        if chosen is not None:
+            break
+        # Drop the explanatory line before giving up entirely: naming the average
+        # is the part that must survive.
+        texts = texts[:-1]
+    if chosen is None:
+        return None
+
+    fonts, metrics, width, height = chosen
+    chip_w = width + padding * 2.0
+    chip_h = height + padding * 2.0
+    chip = qtcore.QRectF(
+        right - margin - chip_w, top + margin, chip_w, chip_h)
+
+    fill = qtgui.QColor(BOX_MEAN_BADGE_FILL)
+    if not fill.isValid():
+        return None
+    painter.setBrush(qtgui.QBrush(fill))
+    edge = qtgui.QColor(getattr(widget, "bg_color", None) or "#000000")
+    painter.setPen(qtgui.QPen(edge if edge.isValid() else fill, 1.0))
+    painter.drawRect(chip)
+
+    # Chosen against the chip's own fill rather than the plot background, since
+    # the chip is opaque and amber is a light colour on a dark plot.
+    ink = (qtgui.QColor("#000000") if fill.lightnessF() >= 0.5
+           else qtgui.QColor("#FFFFFF"))
+    painter.setPen(qtgui.QPen(ink))
+    y = chip.top() + padding
+    for font, metric, text in zip(fonts, metrics, texts):
+        painter.setFont(font)
+        row = qtcore.QRectF(
+            chip.left() + padding, y, width, metric.height())
+        painter.drawText(
+            row,
+            int(qtcore.Qt.AlignHCenter | qtcore.Qt.AlignVCenter
+                | qtcore.Qt.TextDontClip),
+            text)
+        y += metric.height()
+    return chip
+
+
+def _install_skewt_box_mean_badge():
+    """Say on the plot itself that a box-mean sounding is an average.
+
+    The title already carries ``box mean of N``, and that has proved too quiet:
+    it sits in a line of run and valid times that reads as boilerplate, so the
+    page still looks like an ordinary point sounding. Every parcel, index, and
+    hodograph on it belongs to an average, which is exactly the thing
+    :func:`sharpmod.box_mean.mean_model_label` set out to make visible.
+
+    Wraps ``plotSkewT.plotData`` so the chip composites over the finished data
+    pass, the same hook the frame redraw uses. A point sounding is untouched --
+    the callout only appears when the collection says ``box_mean``. Idempotent
+    and guarded: a failure here must never cost the render.
+    """
+    try:
+        import sharppy.viz.skew as _skew
+        _cls = _skew.plotSkewT
+        if getattr(_cls, "_sharpmod_box_mean_badge", False):
+            return
+        _QtGui = _skew.QtGui
+        _QtCore = _skew.QtCore
+        _orig = _cls.plotData
+
+        def plotData(self):
+            _orig(self)
+            try:
+                collections = getattr(self, "prof_collections", None) or []
+                index = int(getattr(self, "pc_idx", 0) or 0)
+                if not 0 <= index < len(collections):
+                    return
+                lines = box_mean_badge_lines_for(collections[index])
+                if not lines:
+                    return
+                qp = _QtGui.QPainter()
+                qp.begin(self.plotBitMap)
+                try:
+                    qp.setClipping(False)
+                    qp.setRenderHint(_QtGui.QPainter.Antialiasing, True)
+                    draw_box_mean_badge(self, lines, _QtCore, _QtGui, qp)
+                finally:
+                    qp.end()
+            except Exception:
+                pass
+
+        _cls.plotData = plotData
+        _cls._sharpmod_box_mean_badge = True
     except Exception:  # pragma: no cover - vendored module always present
         pass
 
@@ -2326,9 +2937,57 @@ def _install_winter_text_fit():
             right_w = max(1, int(float(self.brx) - right_x - self.rpad - 4))
             return left_x, left_w, right_x, right_w
 
-        def _row_height(self):
+        def _natural_row_height(self):
             metrics = _QtGui.QFontMetrics(self.label_font)
             return max(int(metrics.height()), int(self.label_height) + 4)
+
+        def _frame_bottom(self, row_h):
+            """Return where the frame's last row ends for a given row height.
+
+            Mirrors the walk in :func:`draw_frame` and the two row loops, so the
+            fit below is measured against the real layout instead of an
+            estimate. An earlier estimate that left out the per-row ``os_mod``
+            and the taller bold precipitation rows still overran by 13 px.
+            """
+            gap = _row_gap(self)
+            section = _section_gap(self)
+            step = row_h + gap
+            os_mod = int(getattr(self, "os_mod", 0) or 0)
+            precip_h = _precip_row_height_for(self, row_h)
+            block = row_h + gap + os_mod
+
+            y = float(self.tpad) + step                     # header -> OPRH
+            y += step + section                             # OPRH -> growth zone
+            y += WINTER_DGZ_ROWS * block                    # growth-zone rows
+            y += _dgz_divider_gap(self) - gap                # divider
+            y += section                                    # -> initial phase
+            y += step + section - gap                       # phase -> divider
+            y += section                                    # -> warm/cold block
+            y += WINTER_ENERGY_ROWS * block                 # warm/cold rows
+            y += section - gap
+            y += section                                    # -> precip header
+            y += step + section                             # header -> type
+            y += precip_h + section                         # type -> sfc temp
+            return y + precip_h                             # bottom of last row
+
+        def _row_height(self):
+            """Row height that always fits the panel it is drawn in.
+
+            The vendored panel took this from font metrics alone. Because the
+            font is itself scaled from panel height, a taller panel grew its
+            rows faster than it gained room and a short one never shrank them at
+            all -- measured at 200x260 the last three rows, the precipitation
+            type among them, were drawn below the frame.
+            """
+            natural = _natural_row_height(self)
+            limit = float(getattr(self, "bry", 0)) - 2.0
+            if limit <= 0:
+                return natural
+            candidate = natural
+            while (candidate > WINTER_MIN_ROW_PX
+                    and _frame_bottom(self, candidate) > limit):
+                candidate -= 1
+            return candidate
 
         def _row_gap(self):
             return 2
@@ -2349,9 +3008,12 @@ def _install_winter_text_fit():
                                   max(big.pointSizeF(), WINTER_LABEL_MAX_PT)))
             return big
 
-        def _precip_row_height(self):
+        def _precip_row_height_for(self, row_h):
             metrics = _QtGui.QFontMetrics(_precip_font(self))
-            return max(_row_height(self), int(metrics.height()) + 2)
+            return max(int(row_h), int(metrics.height()) + 2)
+
+        def _precip_row_height(self):
+            return _precip_row_height_for(self, _row_height(self))
 
         def _draw_text(self, qp, rect, text, color=None, align=None,
                        base_font=None, max_pt=None, min_pt=4):
@@ -2378,6 +3040,11 @@ def _install_winter_text_fit():
             row_h = _row_height(self)
             step = _row_step(self)
             section_gap = _section_gap(self)
+            # The two row loops advance by ``row_h + gap + os_mod`` while the
+            # frame reserved only ``row_h + gap``. Three rows absorbed the
+            # difference; a fourth did not, and the growth zone's last row was
+            # drawn on top of the initial-phase line below it.
+            block = step + int(getattr(self, "os_mod", 0) or 0)
 
             header_rect = _QtCore.QRectF(0, self.tpad, self.wid, row_h)
             _draw_text(
@@ -2390,7 +3057,9 @@ def _install_winter_text_fit():
             self.oprh_y1 = self.tpad + step
             self.layers_y1 = self.oprh_y1 + step + section_gap
             begin = self.layers_y1 + step
-            y1 = (self.layers_y1 + 3 * step +
+            # Four rows: the vendored three plus the growth zone's pressure
+            # bounds and the snow-to-liquid ratio.
+            y1 = (self.layers_y1 + WINTER_DGZ_ROWS * block +
                   _dgz_divider_gap(self) - _row_gap(self))
 
             qp.setPen(_QtGui.QPen(self.fg_color, 1, _QtCore.Qt.SolidLine))
@@ -2402,7 +3071,8 @@ def _install_winter_text_fit():
             qp.drawLine(0, y1, self.brx, y1)
 
             backup = y1 + section_gap
-            y1 = backup + 4 * step + section_gap - _row_gap(self)
+            y1 = (backup + WINTER_ENERGY_ROWS * block
+                  + section_gap - _row_gap(self))
 
             self.energy_y1 = backup
             qp.drawLine(0, y1, self.brx, y1)
@@ -2440,6 +3110,34 @@ def _install_winter_text_fit():
             else:
                 omeg = _tab.utils.FLOAT2STR(self.dgz_meanomeg, 1) + ' ub/s'
 
+            # The growth zone is only ever reported in feet MSL, but the
+            # Skew-T's own axis is pressure and the band is drawn against it, so
+            # the bounds are given in both.
+            # ``QC`` is truthy for ``None``, so the presence of the attribute has
+            # to be tested separately before either value is converted.
+            pbot = getattr(self, "dgz_pbot", None)
+            ptop = getattr(self, "dgz_ptop", None)
+            bounds = 'DGZ: none'
+            if pbot is not None and ptop is not None:
+                try:
+                    if (_tab.utils.QC(pbot) and _tab.utils.QC(ptop)
+                            and float(pbot) != float(ptop)):
+                        bounds = ('DGZ: ' + _tab.utils.INT2STR(pbot) + '-' +
+                                  _tab.utils.INT2STR(ptop) + ' hPa')
+                except (TypeError, ValueError):
+                    bounds = 'DGZ: none'
+
+            # Neither upstream nor this fork computed a snow ratio anywhere, so
+            # the panel could describe the growth zone in five ways and still
+            # not say how much snow an inch of liquid would make.
+            try:
+                from sharpmod.sharptab import winter as _winter_calc
+
+                ratio = _winter_calc.format_snow_liquid_ratio(
+                    _winter_calc.profile_snow_liquid_ratio(self.prof))
+            except Exception:  # noqa: BLE001 - a panel row is not worth a crash
+                ratio = 'M'
+
             rows = [
                 ('Mean Layer RH: ' +
                  _tab.utils.FLOAT2STR(self.dgz_meanrh, 0) + ' %',
@@ -2448,6 +3146,7 @@ def _install_winter_text_fit():
                 ('Mean Layer PW: ' +
                  _tab.utils.FLOAT2STR(self.dgz_pw, 1) + ' in',
                  'Mean Layer Omega: ' + omeg),
+                (bounds, 'Kuchera SLR: ' + ratio),
             ]
             for left, right in rows:
                 _draw_text(self, qp, _QtCore.QRectF(left_x, y1, left_w, lh), left)
@@ -2562,6 +3261,342 @@ def _install_winter_text_fit():
         _plot.drawOPRH = drawOPRH
         _plot.drawPrecipType = drawPrecipType
         _plot.drawPrecipTypeTemp = drawPrecipTypeTemp
+        _plot._sharpmod_text_fit = True
+    except Exception:  # pragma: no cover - vendored module always present
+        pass
+
+
+def _install_fire_text_fit():
+    """Keep fire-weather panel text inside its columns.
+
+    The same fault the winter panel had, and it went unnoticed for longer because
+    this panel is only reachable by right-clicking one specific box. The vendored
+    widget scales its font from the panel's height, then writes the moisture and
+    low-level-wind rows into rects two fifths of the width with ``TextDontClip``.
+    Measured on a real profile at 320x340, six of twenty-one rows were drawn
+    wider than the box holding them -- "0-1 km mean = 169/22" wanted 400 px of a
+    256 px column -- so the right-aligned wind column ran back across the
+    left-aligned moisture column and the two interleaved.
+
+    Two corrections, matching :func:`_install_winter_text_fit`: the label font is
+    capped, and every row is drawn into a real column rect with the font fitted
+    to it. The columns are also widened to the panel's actual padding; the
+    vendored geometry left a tenth of the width empty on each side while
+    overflowing the columns between them, which is the worst of both.
+    """
+    try:
+        import platform as _platform
+
+        import sharppy.sharptab as _tab
+        import sharppy.viz.fire as _fire_mod
+        _QtGui = _fire_mod.QtGui
+        _QtCore = _fire_mod.QtCore
+        _bg = _fire_mod.backgroundFire
+        _plot = _fire_mod.plotFire
+        if getattr(_plot, "_sharpmod_text_fit", False):
+            return
+
+        _orig_init = _bg.initUI
+
+        def initUI(self):
+            _orig_init(self)
+            try:
+                capped = False
+                for name in ("label_font", "fosberg_font"):
+                    font = _QtGui.QFont(getattr(self, name))
+                    size = font.pointSizeF()
+                    if size <= 0:
+                        size = float(font.pixelSize() if font.pixelSize() > 0
+                                     else FIRE_LABEL_MAX_PT)
+                    # The Fosberg/Haines rows are the panel's headline numbers
+                    # and are drawn full width, so they keep the two points of
+                    # extra size the vendored widget gives them.
+                    ceiling = (FIRE_LABEL_MAX_PT if name == "label_font"
+                               else FIRE_LABEL_MAX_PT + 2)
+                    if size > ceiling:
+                        font.setPointSizeF(float(ceiling))
+                        setattr(self, name, font)
+                        capped = True
+                if not capped:
+                    return
+                self.label_metrics = _QtGui.QFontMetrics(self.label_font)
+                self.fosberg_metrics = _QtGui.QFontMetrics(self.fosberg_font)
+                self.os_mod = (self.label_metrics.descent()
+                               if _platform.system() == "Windows" else 0)
+                self.label_height = self.label_metrics.xHeight() + self.tpad
+                self.ylast = self.label_height
+                self.plotBitMap.fill(self.bg_color)
+                self.plotBackground()
+            except Exception:
+                pass
+
+        def _columns(self):
+            """Left and right column rectangles, using the real padding.
+
+            Split at the midpoint with a gutter, so the left column is
+            left-aligned moisture and the right column is right-aligned wind and
+            the two cannot meet.
+            """
+            split = float(self.brx) * 0.5
+            left_x = float(self.lpad)
+            left_w = max(1.0, split - left_x - 4.0)
+            right_x = split + 4.0
+            right_w = max(1.0, float(self.brx) - self.rpad - right_x)
+            return left_x, left_w, right_x, right_w
+
+        #: Rows the panel stacks vertically: the title, the two column captions,
+        #: four paired moisture/wind rows, the mixing-height line, the derived
+        #: heading, and the three derived indices.
+        _FIRE_ROWS = 11
+        _FIRE_ROW_GAP = 2.0
+
+        def _row_height(self):
+            """Row height that keeps all eleven rows inside the panel.
+
+            The vendored widget sized rows from font metrics alone and let the
+            bottom rows fall off the frame -- the Haines row is drawn below the
+            panel at 420x400 before this patch, and the whole derived block goes
+            under at smaller sizes. So the height available per row is the
+            ceiling, and the metrics only make rows *smaller* than that.
+            """
+            metrics = _QtGui.QFontMetrics(self.label_font)
+            wanted = max(int(metrics.height()), int(self.label_height) + 4)
+            available = float(self.bry) - self.tpad - self.bpad
+            budget = available / _FIRE_ROWS - _FIRE_ROW_GAP
+            return max(6.0, min(float(wanted), budget))
+
+        def _row_step(self):
+            return _row_height(self) + _FIRE_ROW_GAP
+
+        def _draw_text(self, qp, rect, text, color=None, align=None,
+                       base_font=None, max_pt=None, min_pt=5):
+            if align is None:
+                align = _QtCore.Qt.AlignLeft | _QtCore.Qt.AlignVCenter
+            if color is None:
+                color = self.fg_color
+            if max_pt is None:
+                max_pt = FIRE_LABEL_MAX_PT
+            fit_height = max(float(rect.height()), float(_row_height(self)))
+            font = _fit_font_to_rect(
+                _QtGui, base_font or self.label_font, str(text),
+                max(1, int(rect.width()) - 2), max(1, int(fit_height)),
+                max_pt=max_pt, min_pt=min_pt)
+            qp.setFont(font)
+            qp.setPen(_QtGui.QPen(color, 1, _QtCore.Qt.SolidLine))
+            qp.drawText(rect, align | _QtCore.Qt.TextDontClip, str(text))
+
+        def _publish_layout(self):
+            """Compute and store every row position, top to bottom.
+
+            One cursor walked down the panel, rather than the vendored mix of
+            fractional offsets and running totals. Both ``draw_frame`` and
+            ``drawPBLchar`` read these, so the captions and the rows beneath them
+            cannot drift apart.
+            """
+            row_h = _row_height(self)
+            step = _row_step(self)
+            left_x, left_w, right_x, right_w = _columns(self)
+            self.moist_x, self.moist_width = left_x, left_w
+            self.llw_x, self.llw_width = right_x, right_w
+            self.moswindsep = _FIRE_ROW_GAP
+
+            y = float(self.tpad)
+            self.title_y1 = y
+            y += step
+            self.caption_y1 = y
+            y += step
+            self.caption_rule_y = y - _FIRE_ROW_GAP / 2.0
+            self.start_data_y1 = y
+            y += 4 * step                      # four moisture/wind pairs
+            self.pbl_y1 = y
+            y += step
+            self.derived_y1 = y
+            y += step
+            self.derived_rule_y = y - _FIRE_ROW_GAP / 2.0
+            self.fosberg_y1 = y
+            self.fosberg_x = 0
+            self.fosberg_width = self.brx
+            y += step
+            self.haines_y1 = y
+            self.haines_x = 0
+            self.haines_width = self.brx
+            y += step
+            # Ventilation rate joins the derived indices rather than the mixed
+            # layer rows above, because that is what it is: a composite of the
+            # mixing height and the transport wind, both already printed.
+            self.vent_y1 = y
+            self.vent_width = self.brx
+            return row_h
+
+        def draw_frame(self, qp):
+            """Title, the two column captions, and the two dividers.
+
+            Restated rather than wrapped because this method is what publishes
+            the geometry every row below is drawn into, and both widening the
+            columns and fitting the rows to the panel height depend on owning it.
+            """
+            row_h = _publish_layout(self)
+            self.labels = 2 * self.label_height + self.tpad + self.os_mod
+
+            _draw_text(
+                self, qp,
+                _QtCore.QRectF(0, self.title_y1, self.wid, row_h),
+                "Fire Weather Parameters",
+                align=_QtCore.Qt.AlignCenter, base_font=self.fosberg_font,
+                max_pt=FIRE_LABEL_MAX_PT + 2)
+
+            _draw_text(
+                self, qp,
+                _QtCore.QRectF(self.moist_x, self.caption_y1,
+                               self.moist_width, row_h),
+                "Moisture", color=_QtGui.QColor("#00CC33"))
+            _draw_text(
+                self, qp,
+                _QtCore.QRectF(self.llw_x, self.caption_y1,
+                               self.llw_width, row_h),
+                "Low-Level Wind", color=_QtGui.QColor("#0066CC"),
+                align=_QtCore.Qt.AlignRight | _QtCore.Qt.AlignVCenter)
+
+            qp.setPen(_QtGui.QPen(self.fg_color, 1, _QtCore.Qt.SolidLine))
+            for rule in (self.caption_rule_y, self.derived_rule_y):
+                qp.drawLine(0, int(rule), int(self.brx), int(rule))
+
+            _draw_text(
+                self, qp,
+                _QtCore.QRectF(0, self.derived_y1, self.brx, row_h),
+                "Derived Indices", color=_QtGui.QColor("#FF6633"),
+                align=_QtCore.Qt.AlignCenter)
+
+        def drawPBLchar(self, qp):  # noqa: N802 - upstream Qt API
+            # ``plotData`` can reach here before ``draw_frame`` has run on a
+            # freshly resized widget, so the layout is published either way.
+            row_h = _publish_layout(self)
+            left_x, left_w = self.moist_x, self.moist_width
+            right_x, right_w = self.llw_x, self.llw_width
+            step = _row_step(self)
+            right_align = _QtCore.Qt.AlignRight | _QtCore.Qt.AlignVCenter
+
+            wind_rows = (
+                ("SFC = %s/%s" % (_tab.utils.INT2STR(self.sfc_wind[0]),
+                                  _tab.utils.INT2STR(self.sfc_wind[1])), None),
+                ("0-1 km mean = %s/%s"
+                 % (_tab.utils.INT2STR(self.meanwind01km[0]),
+                    _tab.utils.INT2STR(self.meanwind01km[1])), None),
+                ("BL mean = %s/%s"
+                 % (_tab.utils.INT2STR(self.meanwindpbl[0]),
+                    _tab.utils.INT2STR(self.meanwindpbl[1])), None),
+                ("BL max = %s/%s"
+                 % (_tab.utils.INT2STR(self.maxwindpbl[0]),
+                    _tab.utils.INT2STR(self.maxwindpbl[1])),
+                 self.getMaxWindFormat()[0]),
+            )
+            y1 = self.start_data_y1
+            for text, color in wind_rows:
+                _draw_text(self, qp,
+                           _QtCore.QRectF(right_x, y1, right_w, row_h),
+                           text, color=color, align=right_align)
+                y1 += step
+
+            moisture_rows = (
+                ("SFC RH = %s%%" % _tab.utils.INT2STR(self.sfc_rh),
+                 self.getSfcRHFormat()[0]),
+                ("0-1 km RH = %s%%" % _tab.utils.INT2STR(self.rh01km), None),
+                ("BL mean RH = %s%%" % _tab.utils.INT2STR(self.pblrh), None),
+                ("PW = %s in" % _tab.utils.FLOAT2STR(self.pwat, 2),
+                 self.getPWColor()[0]),
+            )
+            y1 = self.start_data_y1
+            for text, color in moisture_rows:
+                _draw_text(self, qp,
+                           _QtCore.QRectF(left_x, y1, left_w, row_h),
+                           text, color=color)
+                y1 += step
+
+            _draw_text(
+                self, qp, _QtCore.QRectF(0, self.pbl_y1, self.brx, row_h),
+                "PBL Height = %sft / %sm"
+                % (_tab.utils.FLOAT2STR(_tab.utils.M2FT(self.pbl_h), 0),
+                   _tab.utils.FLOAT2STR(self.pbl_h, 0)),
+                align=_QtCore.Qt.AlignCenter)
+
+        def drawFosberg(self, qp):  # noqa: N802 - upstream Qt API
+            value = ("M" if self.fosberg == self.prof.missing
+                     else _tab.utils.INT2STR(self.fosberg))
+            _draw_text(
+                self, qp,
+                _QtCore.QRectF(0, self.fosberg_y1, self.fosberg_width,
+                               _row_height(self)),
+                "Fosberg FWI = %s" % value,
+                color=self.getFosbergFormat(),
+                align=_QtCore.Qt.AlignCenter, base_font=self.fosberg_font,
+                max_pt=FIRE_LABEL_MAX_PT + 2)
+
+        def drawHainesIndex(self, qp):  # noqa: N802 - upstream Qt API
+            elevation = ("L", "M", "H")[self.haines_hght]
+            _draw_text(
+                self, qp,
+                _QtCore.QRectF(0, self.haines_y1, self.haines_width,
+                               _row_height(self)),
+                "Haines Index (%s) = %s"
+                % (elevation,
+                   _tab.utils.INT2STR(self.haines_index[self.haines_hght])),
+                color=self.getHainesFormat(),
+                align=_QtCore.Qt.AlignCenter, base_font=self.fosberg_font,
+                max_pt=FIRE_LABEL_MAX_PT + 2)
+
+        def drawVentilationRate(self, qp):  # noqa: N802 - upstream Qt API
+            """Mixing height times transport wind, the smoke-dispersion number.
+
+            Built from ``pbl_h`` and ``meanwindpbl`` -- the same two values this
+            panel already prints as "PBL Height" and "BL mean" -- so the three
+            rows cannot disagree with each other.
+
+            Left in the foreground colour on purpose. The other rows here are
+            graded, but the breakpoints between poor and good ventilation are set
+            by whichever agency issues the forecast and differ between them, so
+            colouring this one would assert a threshold that is not ours to set.
+            """
+            from sharpmod.sharptab.constants import is_missing
+            from sharpmod.sharptab.fire import ventilation_rate
+
+            # ``meanwindpbl`` was converted to (direction, speed) in setProf.
+            speed = self.meanwindpbl[1] if len(self.meanwindpbl) > 1 else None
+            rate = ventilation_rate(self.pbl_h, speed)
+            text = ("Vent Rate = M" if is_missing(rate)
+                    else "Vent Rate = %s m2/s" % _tab.utils.INT2STR(rate))
+            _draw_text(
+                self, qp,
+                _QtCore.QRectF(0, self.vent_y1, self.vent_width,
+                               _row_height(self)),
+                text, align=_QtCore.Qt.AlignCenter,
+                base_font=self.fosberg_font, max_pt=FIRE_LABEL_MAX_PT + 2)
+
+        def plotData(self):  # noqa: N802 - upstream Qt API
+            """Redraw the panel body. Mirrors the vendored order, plus the
+
+            ventilation-rate row this project adds.
+            """
+            if self.prof is None:
+                return
+            qp = _QtGui.QPainter()
+            qp.begin(self.plotBitMap)
+            try:
+                qp.setRenderHint(qp.RenderHint.Antialiasing)
+                qp.setRenderHint(qp.RenderHint.TextAntialiasing)
+                self.drawPBLchar(qp)
+                self.drawFosberg(qp)
+                self.drawHainesIndex(qp)
+                self.drawVentilationRate(qp)
+            finally:
+                qp.end()
+
+        _bg.initUI = initUI
+        _bg.draw_frame = draw_frame
+        _plot.drawPBLchar = drawPBLchar
+        _plot.drawFosberg = drawFosberg
+        _plot.drawHainesIndex = drawHainesIndex
+        _plot.drawVentilationRate = drawVentilationRate
+        _plot.plotData = plotData
         _plot._sharpmod_text_fit = True
     except Exception:  # pragma: no cover - vendored module always present
         pass
@@ -4307,7 +5342,6 @@ def _install_title_top():
 
         def drawTitles(self, qp):
             try:
-                box_width = 150
                 cur_dt = self.prof_collections[self.pc_idx].getCurrentDate()
                 idxs, titles = list(zip(*[
                     (idx, self.getPlotTitle(pc))
@@ -4317,21 +5351,42 @@ def _install_title_top():
                 main_title = titles.pop(idxs.index(self.pc_idx))
                 qp.setClipping(False)
                 qp.setFont(self.title_font)
-                qp.setPen(_QtGui.QPen(self.fg_color, 1, _QtCore.Qt.SolidLine))
-                rect0 = _QtCore.QRect(self.lpad, _top, box_width, self.title_height)
-                qp.drawText(rect0, _QtCore.Qt.TextDontClip | _QtCore.Qt.AlignLeft,
-                            main_title)
+                metrics = _QtGui.QFontMetrics(self.title_font)
+                # The whole width between the pads. The vendored layout reserved
+                # a 150 px stub and then drew with TextDontClip, so a title long
+                # enough to matter always spilled out of it.
+                right_pad = getattr(self, "rpad", self.lpad)
+                usable = max(50, self.width() - self.lpad - right_pad)
+                # The vendored title_height can be shorter than the bundled
+                # font needs, and the rect is what bounds the glyphs, so the
+                # font's own height is the floor. Without this the ascenders and
+                # the degree signs get sliced off.
+                line = max(int(self.title_height), int(metrics.height()))
+
+                def draw(row, text, align, color):
+                    qp.setPen(_QtGui.QPen(color, 1, _QtCore.Qt.SolidLine))
+                    rect = _QtCore.QRect(
+                        self.lpad, _top + row * line, usable, line)
+                    # Elided so two titles cannot overwrite each other, and
+                    # TextDontClip so the rect positions the text without ever
+                    # cropping it. Horizontal fit is the elide's job; vertical
+                    # fit is nobody's business to crop.
+                    qp.drawText(
+                        rect,
+                        align | _QtCore.Qt.AlignVCenter
+                        | _QtCore.Qt.TextDontClip,
+                        metrics.elidedText(
+                            text, _QtCore.Qt.ElideRight, usable))
+
+                draw(0, main_title, _QtCore.Qt.AlignLeft, self.fg_color)
                 bg = 0
-                for idx, title in enumerate(titles):
-                    qp.setPen(_QtGui.QPen(
-                        _QtGui.QColor(self.background_colors[bg]), 1,
-                        _QtCore.Qt.SolidLine))
-                    rect0 = _QtCore.QRect(self.width() - box_width,
-                                          _top + idx * self.title_height,
-                                          box_width, self.title_height)
-                    qp.drawText(rect0,
-                                _QtCore.Qt.TextDontClip | _QtCore.Qt.AlignRight,
-                                title)
+                for row, title in enumerate(titles, start=1):
+                    # Every additional sounding gets its own line. Starting this
+                    # enumeration at 0 put the second sounding's title on the
+                    # focused one's baseline, which is what drew them on top of
+                    # each other whenever two soundings shared a valid time.
+                    draw(row, title, _QtCore.Qt.AlignRight,
+                         _QtGui.QColor(self.background_colors[bg]))
                     bg = (bg + 1) % len(self.background_colors)
             except Exception:
                 _orig(self, qp)
@@ -4873,6 +5928,474 @@ def _install_title_override():
         pass
 
 
+#: One source of truth for the reduced plot-box stroke weight.  The Skew-T and
+#: every auxiliary plot use it together.
+PANEL_FRAME_WIDTH = colors.PLOT_FRAME_WIDTH
+
+#: The bottom products band is a container as well as a visible plot box.  Its
+#: upstream ``QWidget`` selector also matches every child plot, which paints a
+#: second one-pixel border immediately inside the container border.  Give the
+#: frame a stable object name so its rule can target the container alone.
+BOTTOM_BAND_OBJECT_NAME = "sharpmod_bottom_band"
+
+#: Vendored ``(module, class)`` pairs that outline themselves in ``draw_frame``.
+_FRAMED_INSETS = (
+    ("advection", "backgroundAdvection"),
+    ("analogues", "backgroundAnalogues"),
+    ("ensemble", "backgroundENS"),
+    ("fire", "backgroundFire"),
+    ("generic", "backgroundGeneric"),
+    ("hodo", "backgroundHodo"),
+    ("kinematics", "backgroundKinematics"),
+    ("ship", "backgroundSHIP"),
+    ("skew", "backgroundSkewT"),
+    ("slinky", "backgroundSlinky"),
+    ("speed", "backgroundSpeed"),
+    ("srwinds", "backgroundWinds"),
+    ("stp", "backgroundSTP"),
+    ("stpef", "backgroundSTPEF"),
+    ("thermo", "backgroundText"),
+    ("thetae", "backgroundThetae"),
+    ("vrot", "backgroundVROT"),
+    ("watch", "backgroundWatch"),
+    ("winter", "backgroundWinter"),
+)
+
+
+class _MatchingFramePainter:
+    """Forward painter calls while matching the first frame pen to the Skew-T.
+
+    Wrapped around a vendored ``draw_frame`` rather than restating it, so the
+    frame geometry and any title text the same method paints stay upstream and
+    cannot drift from it.  Only the first wide pen is a panel-frame candidate;
+    later wide pens belong to data such as STP curves and pass through exactly.
+
+    Three corrections are limited to that frame:
+
+    *The stroke matches the Skew-T.* The candidate pen receives the widget's
+    foreground colour and the shared reduced width. Anything that is not a pen --
+    ``Qt.NoPen``, a bare ``QColor`` -- passes straight through.
+
+    *Coordinates are pulled inside the widget* when ``bounds`` is given. Every
+    framed inset sets ``rpad`` to zero and so ``brx`` to its own ``width()``,
+    which puts the right-hand frame line one column past the last paintable pixel
+    where it is clipped away entirely -- these panels have only ever had three
+    sides. Clamping is deliberately confined to ``draw_frame``: it is the one
+    method whose whole job is an outline on the boundary, so pinning a line to
+    the edge is what it meant in the first place.
+
+    *A shared divider is painted once.* Grid neighbours touch with zero spacing,
+    so one widget's right/bottom edge and the next widget's left/top edge occupy
+    adjacent pixels. The latter owns that divider; suppressing the former keeps
+    the visually reduced outline one pixel wide.
+    """
+
+    __slots__ = (
+        "_frame_color", "_frame_pen_active", "_frame_pen_seen", "_max_x",
+        "_max_y", "_pen_type", "_qp", "_sides", "_width",
+    )
+
+    def __init__(
+        self,
+        qp,
+        pen_type,
+        frame_color,
+        width=PANEL_FRAME_WIDTH,
+        bounds=None,
+        sides=None,
+    ):
+        self._qp = qp
+        self._pen_type = pen_type
+        self._frame_color = frame_color
+        self._width = float(width)
+        self._sides = frozenset(
+            sides or ("left", "top", "right", "bottom"))
+        self._frame_pen_active = False
+        self._frame_pen_seen = False
+        if bounds is None:
+            self._max_x = None
+            self._max_y = None
+        else:
+            width, height = bounds
+            self._max_x = max(0, int(width) - 1)
+            self._max_y = max(0, int(height) - 1)
+
+    def setPen(self, pen, *args, **kwargs):  # noqa: N802 - Qt API name
+        try:
+            width = float(pen.widthF())
+        except Exception:  # noqa: BLE001 - not a pen, nothing to match
+            self._frame_pen_active = False
+            return self._qp.setPen(pen, *args, **kwargs)
+        # All geometric vendored frames begin with an upstream 2 px pen (the
+        # Skew-T first uses a zero-width background pen, which deliberately does
+        # not count).
+        # Matching only that first wide pen avoids recolouring/thinning curves
+        # drawn later by a few overloaded ``draw_frame`` implementations.
+        if not self._frame_pen_seen and width >= 2.0:
+            matched = self._pen_type(pen)
+            matched.setColor(self._frame_color)
+            matched.setWidthF(self._width)
+            pen = matched
+            self._frame_pen_seen = True
+            self._frame_pen_active = True
+        else:
+            self._frame_pen_active = False
+        return self._qp.setPen(pen, *args, **kwargs)
+
+    @staticmethod
+    def _clamp(value, limit):
+        """Pull ``value`` into ``0..limit``, keeping int coordinates ints."""
+        if value < 0:
+            result = 0
+        elif value > limit:
+            result = limit
+        else:
+            return value
+        return float(result) if isinstance(value, float) else int(result)
+
+    @staticmethod
+    def _pixel_center(value):
+        """Place a one-pixel antialiased stroke on a physical pixel center."""
+        import math
+
+        return math.floor(float(value)) + 0.5
+
+    def drawLine(self, *args, **kwargs):  # noqa: N802 - Qt API name
+        if (
+            self._max_x is None
+            or not self._frame_pen_active
+            or len(args) != 4
+            or kwargs
+        ):
+            return self._qp.drawLine(*args, **kwargs)
+        try:
+            x1, y1, x2, y2 = args
+            if abs(float(x1) - float(x2)) < 1e-9:
+                if float(x1) <= 0.0 and "left" not in self._sides:
+                    return None
+                if float(x1) >= self._max_x and "right" not in self._sides:
+                    return None
+            elif abs(float(y1) - float(y2)) < 1e-9:
+                if float(y1) <= 0.0 and "top" not in self._sides:
+                    return None
+                if float(y1) >= self._max_y and "bottom" not in self._sides:
+                    return None
+            return self._qp.drawLine(QtCore.QLineF(
+                self._pixel_center(self._clamp(x1, self._max_x)),
+                self._pixel_center(self._clamp(y1, self._max_y)),
+                self._pixel_center(self._clamp(x2, self._max_x)),
+                self._pixel_center(self._clamp(y2, self._max_y)),
+            ))
+        except (TypeError, ValueError):
+            # Points rather than four scalars; nothing to clamp.
+            return self._qp.drawLine(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._qp, name)
+
+
+def _frame_sides_for_widget(widget):
+    """Return the frame sides this widget owns in a zero-spacing layout."""
+    explicit = getattr(widget, "_sharpmod_frame_sides", None)
+    if explicit:
+        if isinstance(explicit, str):
+            return frozenset((explicit,))
+        return frozenset(explicit)
+
+    sides = {"left", "top", "right", "bottom"}
+    try:
+        parent = widget.parentWidget()
+        own = widget.geometry()
+        siblings = parent.children() if parent is not None else ()
+    except Exception:  # noqa: BLE001 - stand-ins/standalone panels own all sides
+        return frozenset(sides)
+
+    def overlaps(a1, a2, b1, b2):
+        return min(a2, b2) >= max(a1, b1)
+
+    # Prefer grid cells over pixel geometry. A resize event can fire while Qt is
+    # still assigning sibling geometries, but the layout positions are already
+    # final; using them prevents an early full-frame cache from surviving the
+    # settled zero-spacing layout.
+    try:
+        layout = parent.layout()
+        own_index = layout.indexOf(widget)
+        if own_index >= 0 and hasattr(layout, "getItemPosition"):
+            row, column, row_span, column_span = layout.getItemPosition(
+                own_index)
+            for index in range(layout.count()):
+                if index == own_index:
+                    continue
+                item = layout.itemAt(index)
+                sibling = item.widget()
+                if sibling is None or sibling.isHidden():
+                    continue
+                other_row, other_col, other_rows, other_cols = \
+                    layout.getItemPosition(index)
+                if (
+                    other_col == column + column_span
+                    and min(row + row_span, other_row + other_rows)
+                    > max(row, other_row)
+                ):
+                    sides.discard("right")
+                if (
+                    other_row == row + row_span
+                    and min(column + column_span, other_col + other_cols)
+                    > max(column, other_col)
+                ):
+                    sides.discard("bottom")
+            return frozenset(sides)
+    except Exception:
+        pass
+
+    for sibling in siblings:
+        if sibling is widget:
+            continue
+        try:
+            if not sibling.isWidgetType() or sibling.isHidden():
+                continue
+            other = sibling.geometry()
+        except Exception:
+            continue
+        if (
+            other.left() == own.right() + 1
+            and overlaps(own.top(), own.bottom(), other.top(), other.bottom())
+        ):
+            sides.discard("right")
+        if (
+            other.top() == own.bottom() + 1
+            and overlaps(own.left(), own.right(), other.left(), other.right())
+        ):
+            sides.discard("bottom")
+    return frozenset(sides)
+
+
+def _matching_panel_stylesheet(widget, sheet, frame_color=None):
+    """Return ``sheet`` with its plot border matched to the Skew-T palette."""
+    import re
+
+    lowered = sheet.lower() if sheet else ""
+    if "border-width" not in lowered or "border-color" not in lowered:
+        return sheet
+
+    try:
+        source = (
+            frame_color
+            if frame_color is not None
+            else getattr(widget, "fg_color", colors.FG_COLOR)
+        )
+        matched_color = QtGui.QColor(source)
+        if not matched_color.isValid():
+            matched_color = QtGui.QColor(colors.FG_COLOR)
+        color_name = matched_color.name()
+    except Exception:  # noqa: BLE001 - keep a valid default on odd vendored data
+        color_name = colors.FG_COLOR
+
+    width_text = f"{PANEL_FRAME_WIDTH:g}px"
+    frame_sides = getattr(widget, "_sharpmod_frame_sides", None)
+    if frame_sides == "left":
+        # A right-hand inset inside the shared bottom frame needs only the
+        # separator on its left.  Keeping its top/right/bottom QSS edges would
+        # paint directly beside the parent's outer edge and look two pixels
+        # thick even though both individual strokes are one pixel.
+        # The normalizer is called on every resize and theme apply. Remove its
+        # previous side override first so the stylesheet remains idempotent.
+        sheet = re.sub(
+            r"\s*border-left-width\s*:\s*[^;}]+;?",
+            "",
+            sheet,
+            flags=re.IGNORECASE,
+        )
+        width_declaration = (
+            f"border-width: 0px; border-left-width: {width_text}"
+        )
+    else:
+        width_declaration = f"border-width: {width_text}"
+    updated = re.sub(
+        r"border-width\s*:\s*[^;}]+",
+        width_declaration,
+        sheet,
+        flags=re.IGNORECASE,
+    )
+    updated = re.sub(
+        r"border-color\s*:\s*[^;}]+",
+        f"border-color: {color_name}",
+        updated,
+        flags=re.IGNORECASE,
+    )
+    return updated
+
+
+def _match_bottom_band_stylesheet(widget, frame_color=None):
+    """Scope and normalize the shared lower-band frame stylesheet.
+
+    Upstream assigns ``QWidget { ... border ... }`` to this container.  Qt
+    applies that selector to every QWidget below it, so the nominal one-pixel
+    parent outline becomes two adjacent rows at the top and bottom.  Restricting
+    the selector to the named QFrame leaves one true outer outline; each child
+    then draws only its intentional internal separator.
+    """
+    import re
+
+    if widget is None:
+        return
+    try:
+        widget.setObjectName(BOTTOM_BAND_OBJECT_NAME)
+        sheet = widget.styleSheet()
+    except Exception:  # noqa: BLE001 - not the expected QFrame surface
+        return
+    scoped = re.sub(
+        r"\bQWidget\s*\{",
+        f"QFrame#{BOTTOM_BAND_OBJECT_NAME} {{",
+        sheet,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    updated = _matching_panel_stylesheet(widget, scoped, frame_color)
+    if updated != sheet:
+        widget.setStyleSheet(updated)
+
+
+def _match_panel_stylesheet(widget, frame_color=None):
+    """Make an existing QSS plot border match the widget's Skew-T palette."""
+    try:
+        sheet = widget.styleSheet()
+    except Exception:  # noqa: BLE001 - not a stylesheet-backed widget
+        return
+    updated = _matching_panel_stylesheet(widget, sheet, frame_color)
+    if updated != sheet:
+        widget.setStyleSheet(updated)
+
+
+def _install_matching_panel_frames():
+    """Give every auxiliary plot the Skew-T's reduced foreground outline.
+
+    Registered last so it wraps whatever ``draw_frame`` each class ends up with,
+    including the ones other patches in this registry replace outright.
+
+    Fully guarded and idempotent per class: a module that is absent, or a class
+    without ``draw_frame``, is skipped rather than aborting the rest.
+    """
+    import importlib
+
+    frame_classes = []
+    for module_name, class_name in _FRAMED_INSETS:
+        try:
+            module = importlib.import_module(f"sharppy.viz.{module_name}")
+            cls = getattr(module, class_name)
+            frame_classes.append(cls)
+
+            if not cls.__dict__.get("_sharpmod_matching_frame", False):
+                original = cls.draw_frame
+                pen_type = module.QtGui.QPen
+                color_type = module.QtGui.QColor
+
+                def draw_frame(
+                    self,
+                    qp,
+                    _orig=original,
+                    _pen=pen_type,
+                    _color=color_type,
+                ):
+                    try:
+                        bounds = (self.width(), self.height())
+                    except Exception:  # noqa: BLE001 - no clamp without bounds
+                        bounds = None
+                    color = _color(getattr(
+                        self, "fg_color", colors.FG_COLOR))
+                    try:
+                        _orig(
+                            self,
+                            _MatchingFramePainter(
+                                qp,
+                                _pen,
+                                color,
+                                bounds=bounds,
+                                sides=_frame_sides_for_widget(self),
+                            ),
+                        )
+                    except Exception:  # noqa: BLE001 - never lose a panel
+                        _orig(self, qp)
+
+                cls.draw_frame = draw_frame
+                cls._sharpmod_matching_frame = True
+
+            # Several table-like insets use QSS rather than four painter lines.
+            # Rewrite the declaration *before* Qt applies it. Applying a second
+            # stylesheet after ``initUI`` triggers a resize, whose vendored
+            # handler calls ``initUI`` again and alternates forever between the
+            # legacy and corrected declarations.
+            if (
+                hasattr(cls, "setStyleSheet")
+                and not cls.__dict__.get("_sharpmod_matching_frame_qss", False)
+            ):
+                original_set_stylesheet = cls.setStyleSheet
+
+                def setStyleSheet(
+                    self,
+                    sheet,
+                    _orig=original_set_stylesheet,
+                ):
+                    return _orig(
+                        self, _matching_panel_stylesheet(self, sheet))
+
+                cls.setStyleSheet = setStyleSheet
+                cls._sharpmod_matching_frame_qss = True
+
+            # A colour-scheme reapply can change ``fg_color`` without calling
+            # ``initUI``. Wrap concrete plot subclasses so the QSS follows it.
+            for candidate in tuple(vars(module).values()):
+                if not isinstance(candidate, type) or not issubclass(candidate, cls):
+                    continue
+                original_prefs = getattr(candidate, "setPreferences", None)
+                if not callable(original_prefs) or candidate.__dict__.get(
+                    "_sharpmod_matching_frame_prefs", False
+                ):
+                    continue
+
+                def setPreferences(
+                    self, *args, _orig=original_prefs, **kwargs
+                ):
+                    result = _orig(self, *args, **kwargs)
+                    _match_panel_stylesheet(self)
+                    return result
+
+                candidate.setPreferences = setPreferences
+                candidate._sharpmod_matching_frame_prefs = True
+        except Exception:  # noqa: BLE001 - one inset must not end the pass
+            continue
+
+    # The combined bottom plot band is a plain QFrame owned by SPCWidget, not a
+    # vendored inset class. Its legacy cyan QSS was the most visible colour
+    # mismatch in the screenshot, so keep it synchronized on every theme apply.
+    try:
+        import sharppy.viz.SPCWindow as _spc_window
+
+        spc_cls = _spc_window.SPCWidget
+        if not spc_cls.__dict__.get("_sharpmod_matching_frame_config", False):
+            original_update = spc_cls.updateConfig
+
+            def updateConfig(self, *args, **kwargs):
+                result = original_update(self, *args, **kwargs)
+                _match_bottom_band_stylesheet(
+                    getattr(self, "text", None),
+                    getattr(self, "fg_color", colors.FG_COLOR),
+                )
+                for frame_cls in tuple(frame_classes):
+                    try:
+                        children = self.findChildren(frame_cls)
+                    except Exception:
+                        continue
+                    for child in children:
+                        _match_panel_stylesheet(child)
+                return result
+
+            spc_cls.updateConfig = updateConfig
+            spc_cls._sharpmod_matching_frame_config = True
+    except Exception:  # noqa: BLE001 - vendored window always present in app
+        pass
+
+
 def render_patch_specs():
     """Return the sole ordered registry of SHARPpy widget monkeypatches."""
     from sharpmod.render_patch_registry import PatchSpec
@@ -4902,6 +6425,7 @@ def render_patch_specs():
         PatchSpec("stp.prob-box-spacing", _install_stp_prob_box_spacing),
         PatchSpec("conditional-prob.fit", _install_conditional_prob_panel_fit),
         PatchSpec("winter-text.fit", _install_winter_text_fit),
+        PatchSpec("fire-text.fit", _install_fire_text_fit),
         PatchSpec("speed.0500", _install_speed_0500),
         PatchSpec("speed.title-cap", _install_speed_title_cap),
         PatchSpec("advection.font-cap", _install_advection_font_cap),
@@ -4910,6 +6434,12 @@ def render_patch_specs():
         PatchSpec(
             "skewt.effective-layer-label-fit",
             _install_skewt_effective_layer_label_fit),
+        # Before the transparency patch on purpose: that one captures whatever
+        # ``draw_max_lapse_rate_layer`` it finds and wraps it, so the placement
+        # has to be in place first for the pair to describe the same label.
+        PatchSpec(
+            "skewt.lapse-rate-label-placement",
+            _install_skewt_lapse_rate_label_placement),
         PatchSpec(
             "skewt.lapse-rate-label-transparency",
             _install_skewt_lapse_rate_label_transparency),
@@ -4917,9 +6447,15 @@ def render_patch_specs():
             "hodo.storm-motion-label-transparency",
             _install_hodo_storm_motion_label_transparency),
         PatchSpec("skewt.frame-on-top", _install_skewt_frame_ontop),
+        # After the frame redraw on purpose: both wrap ``plotData``, and the
+        # callout has to sit on top of the outline rather than under it.
+        PatchSpec("skewt.box-mean-badge", _install_skewt_box_mean_badge),
         PatchSpec("skewt.isotherm-label-fit", _install_skewt_isotherm_label_fit),
         PatchSpec("slinky.title-fit", _install_slinky_title_fit),
         PatchSpec("tables.spacing", _apply_table_spacing_patch),
+        # Last on purpose: it wraps whatever ``draw_frame`` each inset ends up
+        # with, including the ones patched above.
+        PatchSpec("panels.match-skewt-frames", _install_matching_panel_frames),
     )
 
 

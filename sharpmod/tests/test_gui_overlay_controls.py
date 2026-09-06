@@ -17,9 +17,12 @@ from sharpmod import (
     gui_overlay_controls,
     map_overlays as mo,
     radar_mosaic,
+    radar_site,
     spc_outlook,
 )
 from sharpmod.gui_overlay_controls import (
+    SCOPE_MOSAIC,
+    SCOPE_SITE,
     OutlookOverlayController,
     RadarOverlayController,
 )
@@ -38,6 +41,29 @@ def _pump(ms: int = 700) -> None:
         loop.exec()
     else:  # pragma: no cover - Qt5 naming
         loop.exec_()
+
+
+def _pump_until(predicate, timeout_ms: int = 5000) -> bool:
+    """Run queued worker signals until ``predicate`` holds or time expires."""
+    if predicate():
+        return True
+    loop = QEventLoop()
+    poll = QTimer()
+    poll.setInterval(10)
+
+    def check() -> None:
+        if predicate():
+            loop.quit()
+
+    poll.timeout.connect(check)
+    poll.start()
+    QTimer.singleShot(timeout_ms, loop.quit)
+    if hasattr(loop, "exec"):
+        loop.exec()
+    else:  # pragma: no cover - Qt5 naming
+        loop.exec_()
+    poll.stop()
+    return bool(predicate())
 
 
 def _layer(valid_from, valid_to):
@@ -303,7 +329,9 @@ def test_toggling_back_on_reuses_a_covering_layer(bound, monkeypatch):
     calls = _tracked_fetch(monkeypatch, valid_from, valid_to)
 
     controller.set_valid_time(datetime(2024, 5, 1, 18, tzinfo=UTC))
-    _pump()
+    assert _pump_until(
+        lambda: widget.overlay(spc_outlook.OVERLAY_KEY) is not None
+    ), "the resolved outlook must reach the map"
     assert len(calls) == 1, "the first selection resolves the outlook"
     layer = widget.overlay(spc_outlook.OVERLAY_KEY)
     assert layer is not None
@@ -708,15 +736,140 @@ def radar_calls(monkeypatch):
 
 @pytest.fixture
 def radar(qt_app):
+    """A radar controller pinned to the CONUS mosaic.
+
+    Pinned rather than left at its default, which is the nearest single site: the
+    ``radar_calls`` recorder stubs :func:`radar_mosaic.fetch_frame`, so a
+    controller on the site scope would sail straight past it to the real network.
+    The site scope has its own fixture below.
+    """
     widget = gui_maps.StationMapWidget([])
     widget.resize(640, 480)
     _look_at(widget, CONUS_VIEW)
-    controller = RadarOverlayController(widget)  # default: off
+    controller = RadarOverlayController(widget, scope=SCOPE_MOSAIC)
     try:
         yield controller, widget
     finally:
         controller.shutdown()
         widget.close()
+
+
+@pytest.fixture
+def radar_site_calls(monkeypatch):
+    """Replace the single-site fetch with a recorder returning a usable frame."""
+    seen = _RadarRecorder()
+
+    def fake_fetch(product=None, *, site_id=None, view=None, pixels=None,
+                   opacity=1.0, opener=None, should_cancel=None):
+        seen.append({"product": product, "opacity": opacity, "view": view,
+                     "site_id": site_id})
+        if seen.failing:
+            raise radar_site.RadarSiteError("stubbed outage")
+        chosen = radar_site.site_by_id(site_id)
+        if chosen is None and view is not None:
+            resolved = radar_site.site_for_view(view)
+            chosen = resolved[0] if resolved else None
+        if chosen is None:
+            raise radar_site.RadarSiteError("no site for this view")
+        spec = radar_site.get_product(product)
+        lon0, lon1, lat0, lat1 = chosen.bounds()
+        return mo.OverlayRaster(
+            key=radar_site.OVERLAY_KEY,
+            title="%s %s" % (chosen.id, spec.label),
+            image_bytes=_radar_png(),
+            bounds=(lon0, lon1, lat0, lat1),
+            short_name=chosen.id,
+            retrieved_at=datetime.now(UTC),
+            update_interval_s=spec.update_interval_s,
+            opacity=opacity,
+            attribution=radar_site.ATTRIBUTION,
+        )
+
+    monkeypatch.setattr(radar_site, "fetch_frame", fake_fetch)
+    return seen
+
+
+@pytest.fixture
+def radar_site_controller(qt_app):
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, CONUS_VIEW)
+    controller = RadarOverlayController(widget)  # default: nearest single site
+    try:
+        yield controller, widget
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+def test_radar_defaults_to_the_nearest_single_site(radar_site_controller):
+    """The maps exist to pick a point, and the point is what is being examined.
+
+    The mosaic is about 1.9 km a pixel over 70 degrees; a single site is about
+    half a kilometre over ten. Zoomed in on a storm the mosaic has nothing left
+    to show, so the site is the default and the mosaic is the deliberate choice.
+    """
+    controller, _widget = radar_site_controller
+    assert controller.scope() == SCOPE_SITE
+    assert controller._key() == radar_site.OVERLAY_KEY
+
+
+def test_the_site_scope_offers_its_own_products(radar_site_controller):
+    """The two scopes publish different products, so the list is rebuilt."""
+    controller, _widget = radar_site_controller
+    site_keys = {controller._product.itemData(index)
+                 for index in range(controller._product.count())}
+    assert {spec.key for spec in radar_site.available_products()} == site_keys
+
+    controller.set_scope(SCOPE_MOSAIC)
+    mosaic_keys = {controller._product.itemData(index)
+                   for index in range(controller._product.count())}
+    assert {spec.key for spec in radar_mosaic.available_products()} \
+        == mosaic_keys
+    assert not (site_keys & mosaic_keys), \
+        "the two scopes must not share product keys, or switching would carry " \
+        "a selection into a scope that cannot serve it"
+
+
+def test_a_site_fetch_carries_the_view_so_the_radar_follows_the_map(
+        radar_site_controller, radar_site_calls):
+    """Which antenna serves the request is resolved from where the user is."""
+    controller, widget = radar_site_controller
+    controller.set_enabled(True)
+    _pump(700)
+    assert radar_site_calls, "enabling the site scope must fetch"
+    assert radar_site_calls[-1]["view"] is not None, \
+        "the site is chosen from the map view, so the view has to travel"
+
+    raster = widget.overlay(radar_site.OVERLAY_KEY)
+    assert raster is not None
+    assert raster.short_name, "a site frame must name its antenna"
+
+
+def test_switching_scope_detaches_both_radar_slots(
+        radar_site_controller, radar_site_calls, radar_calls):
+    """Site and mosaic are separate keys, so a stale one would draw twice."""
+    controller, widget = radar_site_controller
+    controller.set_enabled(True)
+    _pump(700)
+    assert widget.overlay(radar_site.OVERLAY_KEY) is not None
+
+    controller.set_scope(SCOPE_MOSAIC)
+    _pump(700)
+    assert widget.overlay(radar_site.OVERLAY_KEY) is None, \
+        "the site frame must be detached, not merely hidden"
+    assert widget.overlay(radar_mosaic.OVERLAY_KEY) is not None
+
+
+def test_a_view_with_no_radar_in_range_spends_nothing(
+        radar_site_controller, radar_site_calls):
+    """Outside the network there is no antenna to ask, and saying so is free."""
+    controller, widget = radar_site_controller
+    _look_at(widget, (-1.0, 1.0, 50.5, 52.5))  # London
+    controller.set_enabled(True)
+    _pump(700)
+    assert not radar_site_calls, "no site in range must not reach the network"
+    assert not widget.is_overlay_visible(radar_site.OVERLAY_KEY)
 
 
 def test_a_disabled_radar_overlay_never_fetches(radar, radar_calls):
@@ -887,3 +1040,626 @@ def test_opacity_never_reaches_invisible_or_fully_opaque(radar):
     assert 0.0 < controller.opacity() < 1.0
     controller._opacity.setValue(controller._opacity.maximum())
     assert 0.0 < controller.opacity() < 1.0
+
+
+# --------------------------------------------------------------------------- #
+# HRRR model field: following the selected cycle
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def field_calls(monkeypatch):
+    """Record what the field worker asks for, without touching the network."""
+    from sharpmod import hrrr_field
+
+    seen: list[dict] = []
+
+    def fake_fetch(product_key=None, *, valid_time=None, run=None, fxx=None,
+                   size=None, opacity=1.0, now=None, opener=None,
+                   should_cancel=None):
+        seen.append({"product": product_key, "valid_time": valid_time,
+                     "run": run, "fxx": fxx})
+        return None
+
+    monkeypatch.setattr(hrrr_field, "fetch_field", fake_fetch)
+    return seen
+
+
+@pytest.fixture
+def field(qt_app):
+    """A field controller looking at CONUS, so coverage never withholds it."""
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, CONUS_VIEW)
+    controller = gui_overlay_controls.HrrrFieldController(widget, enabled=True)
+    try:
+        yield controller, widget
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+FIELD_RUN = datetime(2026, 9, 4, 12, tzinfo=UTC)
+
+
+def test_a_pinned_cycle_reaches_the_fetch(field, field_calls):
+    """The selected run and hour must survive the thread boundary.
+
+    Passing only a valid time would let the fetch pick its own run, which is how
+    a 12Z F18 sounding ended up beside a 13Z F17 field.
+    """
+    controller, _widget = field
+
+    controller.set_forecast_reference(FIELD_RUN, 18)
+    _pump()
+
+    assert field_calls, "the pinned selection had to be requested"
+    assert field_calls[-1]["run"] == FIELD_RUN
+    assert field_calls[-1]["fxx"] == 18
+
+
+def test_reselecting_the_same_cycle_does_not_refetch(field, field_calls):
+    controller, _widget = field
+
+    controller.set_forecast_reference(FIELD_RUN, 18)
+    _pump()
+    before = len(field_calls)
+    for _ in range(5):
+        controller.set_forecast_reference(FIELD_RUN, 18)
+    _pump()
+
+    assert len(field_calls) == before
+
+
+def test_changing_the_forecast_hour_refetches(field, field_calls):
+    controller, _widget = field
+
+    controller.set_forecast_reference(FIELD_RUN, 6)
+    _pump()
+    before = len(field_calls)
+    controller.set_forecast_reference(FIELD_RUN, 12)
+    _pump()
+
+    assert len(field_calls) == before + 1
+    assert field_calls[-1]["fxx"] == 12
+
+
+def test_changing_the_run_refetches_at_the_same_valid_hour(field, field_calls):
+    """Same moment, different cycle: still a different forecast."""
+    controller, _widget = field
+
+    controller.set_forecast_reference(FIELD_RUN, 12)
+    _pump()
+    before = len(field_calls)
+    # 18Z F06 is valid at the same hour as 12Z F12.
+    controller.set_forecast_reference(FIELD_RUN + timedelta(hours=6), 6)
+    _pump()
+
+    assert len(field_calls) == before + 1
+    assert field_calls[-1]["run"] == FIELD_RUN + timedelta(hours=6)
+    assert field_calls[-1]["fxx"] == 6
+
+
+def test_scrubbing_the_hour_issues_one_request(field, field_calls):
+    """The debounce must survive the new entry point too."""
+    controller, _widget = field
+
+    for hour in range(0, 18):
+        controller.set_forecast_reference(FIELD_RUN, hour)
+    _pump()
+
+    assert len(field_calls) == 1
+    assert field_calls[-1]["fxx"] == 17
+
+
+def test_releasing_the_pin_returns_to_the_valid_time(field, field_calls):
+    controller, _widget = field
+
+    controller.set_forecast_reference(FIELD_RUN, 12)
+    _pump()
+    controller.set_forecast_reference(None, None)
+    _pump()
+
+    assert field_calls[-1]["run"] is None
+    assert field_calls[-1]["fxx"] is None
+
+
+def test_a_valid_time_clears_a_pinned_cycle(field, field_calls):
+    """A tab saying "here is a moment" no longer has a cycle to honour."""
+    controller, _widget = field
+
+    controller.set_forecast_reference(FIELD_RUN, 12)
+    _pump()
+    controller.set_valid_time(datetime(2026, 9, 5, 6, tzinfo=UTC))
+    _pump()
+
+    assert field_calls[-1]["run"] is None
+    assert field_calls[-1]["valid_time"] == datetime(2026, 9, 5, 6, tzinfo=UTC)
+
+
+def test_a_disabled_field_controller_never_fetches(qt_app, field_calls):
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, CONUS_VIEW)
+    controller = gui_overlay_controls.HrrrFieldController(widget)  # off
+    try:
+        assert not controller.is_enabled()
+        for hour in range(6):
+            controller.set_forecast_reference(FIELD_RUN, hour)
+        _pump()
+        assert field_calls == []
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+def test_a_pinned_hour_past_the_cycle_limit_is_normalised(field, field_calls):
+    """A 13Z run stops at F18, so the controller must not request F030."""
+    controller, _widget = field
+
+    controller.set_forecast_reference(
+        datetime(2026, 9, 4, 13, tzinfo=UTC), 30)
+    _pump()
+
+    assert field_calls[-1]["fxx"] == 18
+
+
+def test_field_retries_immediately_when_the_view_reenters_coverage(
+        qt_app, field_calls):
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, EUROPE_VIEW)
+    controller = gui_overlay_controls.HrrrFieldController(
+        widget, enabled=True)
+    try:
+        _pump()
+        assert field_calls == []
+
+        _look_at(widget, CONUS_VIEW)
+        controller.on_view_settled()
+        _pump()
+
+        assert len(field_calls) == 1
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+# --------------------------------------------------------------------------- #
+# Single-site radar: choosing the antenna
+# --------------------------------------------------------------------------- #
+OFF_VIEW = (-125.0, -115.0, 32.0, 42.0)  # west coast, far from KTLX
+
+
+@pytest.fixture
+def site_pinned(qt_app, radar_site_calls):
+    """A single-site controller looking at CONUS, with the fetch stubbed."""
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, CONUS_VIEW)
+    controller = RadarOverlayController(widget, enabled=True, scope=SCOPE_SITE)
+    try:
+        yield controller, widget, radar_site_calls
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+def _first_site_id():
+    return radar_site.sites()[0].id
+
+
+def test_the_antenna_list_offers_every_catalogued_site(site_pinned):
+    controller, _widget, _calls = site_pinned
+
+    offered = {controller._site.itemData(index)
+               for index in range(controller._site.count())}
+
+    assert gui_overlay_controls.SITE_AUTO in offered, "must offer 'nearest'"
+    assert {entry.id for entry in radar_site.sites()} <= offered
+    assert controller._site.count() == len(radar_site.sites()) + 1
+
+
+def test_following_the_map_is_the_default(site_pinned):
+    controller, _widget, _calls = site_pinned
+
+    assert controller.site() == gui_overlay_controls.SITE_AUTO
+
+
+def test_a_pinned_antenna_reaches_the_fetch(site_pinned):
+    """Naming a radar has to send that radar, not the nearest one."""
+    controller, _widget, calls = site_pinned
+    wanted = _first_site_id()
+
+    controller.set_site(wanted)
+    _pump()
+
+    assert calls, "pinning had to issue a request"
+    assert calls[-1]["site_id"] == wanted
+
+
+def test_following_the_map_sends_no_site(site_pinned):
+    controller, _widget, calls = site_pinned
+
+    controller.set_site(_first_site_id())
+    _pump()
+    controller.set_site(None)
+    _pump()
+
+    assert calls[-1]["site_id"] is None
+
+
+def test_an_unknown_identifier_is_ignored(site_pinned):
+    controller, _widget, _calls = site_pinned
+
+    controller.set_site("KZZZ")
+
+    assert controller.site() == gui_overlay_controls.SITE_AUTO
+
+
+def test_changing_antenna_detaches_the_previous_frame(site_pinned):
+    """A frame left attached would be redrawn under the new site's name."""
+    controller, widget, _calls = site_pinned
+    sites = radar_site.sites()
+
+    controller.set_site(sites[0].id)
+    _pump()
+    assert widget.overlay(radar_site.OVERLAY_KEY) is not None
+    first = widget.overlay(radar_site.OVERLAY_KEY)
+
+    controller.set_site(sites[1].id)
+    _pump()
+
+    assert widget.overlay(radar_site.OVERLAY_KEY) is not first
+
+
+def test_changing_site_product_while_off_discards_the_previous_frame(
+        radar_site_controller, radar_site_calls):
+    """Re-enable must fetch the selected product, not relabel the old raster."""
+    controller, widget = radar_site_controller
+    controller.set_enabled(True)
+    _pump(700)
+    assert widget.overlay(radar_site.OVERLAY_KEY) is not None
+
+    controller.set_enabled(False)
+    before = len(radar_site_calls)
+    controller.set_product("velocity")
+
+    assert widget.overlay(radar_site.OVERLAY_KEY) is None
+    assert len(radar_site_calls) == before, "a disabled layer must stay silent"
+
+    controller.set_enabled(True)
+    _pump(700)
+
+    assert len(radar_site_calls) == before + 1
+    assert radar_site_calls[-1]["product"] == "velocity"
+    assert "velocity" in widget.overlay(radar_site.OVERLAY_KEY).title.lower()
+
+
+def test_a_pinned_antenna_is_fetched_even_far_from_the_view(site_pinned):
+    """The proximity test exists to *choose* a site, not to veto a named one."""
+    controller, widget, calls = site_pinned
+    inland = next(entry for entry in radar_site.sites()
+                  if entry.id == "KTLX")
+
+    controller.set_site(inland.id)
+    _pump()
+    calls.clear()
+    _look_at(widget, (-70.0, -66.0, 44.0, 47.0))  # far northeast
+    controller.refresh()
+    _pump()
+
+    assert calls, "a named radar must still be fetched"
+    assert calls[-1]["site_id"] == "KTLX"
+
+
+def test_an_offscreen_pinned_antenna_says_so(site_pinned):
+    """An overlay drawing nothing off-view looks broken unless it explains."""
+    controller, widget, _calls = site_pinned
+
+    controller.set_site("KTLX")
+    _pump()
+    _look_at(widget, OFF_VIEW)
+    controller.refresh()
+    _pump()
+
+    assert "outside the current view" in controller._status.text()
+
+
+def test_an_onscreen_pinned_antenna_stays_quiet(site_pinned):
+    controller, widget, _calls = site_pinned
+
+    controller.set_site("KTLX")
+    _look_at(widget, (-100.0, -95.0, 33.0, 38.0))  # over KTLX
+    controller.refresh()
+    _pump()
+
+    assert "outside the current view" not in controller._status.text()
+
+
+def test_the_antenna_list_is_hidden_for_the_mosaic(site_pinned):
+    """The national composite has no antenna to choose."""
+    controller, _widget, _calls = site_pinned
+
+    assert controller._site.isVisibleTo(controller.controls_widget())
+
+    controller.set_scope(SCOPE_MOSAIC)
+
+    assert not controller._site.isVisibleTo(controller.controls_widget())
+
+
+def test_the_antenna_list_is_hidden_while_the_overlay_is_off(qt_app):
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, CONUS_VIEW)
+    controller = RadarOverlayController(widget, scope=SCOPE_SITE)  # off
+    try:
+        assert not controller._site.isVisibleTo(controller.controls_widget())
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+def test_a_pinned_antenna_only_offers_products_it_publishes(site_pinned):
+    """Offering a product the site lacks fails with nothing the user can do."""
+    controller, _widget, _calls = site_pinned
+    limited = next(
+        (entry for entry in radar_site.sites()
+         if entry.products
+         and not all(entry.supports(spec)
+                     for spec in radar_site.available_products())),
+        None)
+    if limited is None:
+        pytest.skip("every catalogued site publishes every product")
+
+    controller.set_site(limited.id)
+
+    offered = {controller._product.itemData(index)
+               for index in range(controller._product.count())}
+    unsupported = {spec.key for spec in radar_site.available_products()
+                   if not limited.supports(spec)}
+    assert not (offered & unsupported)
+
+
+def test_a_disabled_controller_never_fetches_a_pinned_site(qt_app,
+                                                           radar_site_calls):
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, CONUS_VIEW)
+    controller = RadarOverlayController(widget, scope=SCOPE_SITE)  # off
+    try:
+        for entry in radar_site.sites()[:4]:
+            controller.set_site(entry.id)
+        _pump()
+        assert radar_site_calls == []
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+def test_the_antennas_are_drawn_on_the_map_while_a_site_is_showing(site_pinned):
+    """Clicking a radar on the map is the direct way to choose one."""
+    controller, widget, _calls = site_pinned
+
+    assert widget.radar_sites_visible()
+    assert len(widget._radar_sites) == len(radar_site.sites())
+
+
+def test_the_antennas_are_removed_for_the_mosaic(site_pinned):
+    controller, widget, _calls = site_pinned
+
+    controller.set_scope(SCOPE_MOSAIC)
+
+    assert not widget.radar_sites_visible()
+
+
+def test_the_antennas_are_removed_when_the_overlay_is_switched_off(site_pinned):
+    controller, widget, _calls = site_pinned
+
+    controller.set_enabled(False)
+
+    assert not widget.radar_sites_visible()
+
+
+def test_the_antennas_come_back_when_the_overlay_returns(site_pinned):
+    controller, widget, _calls = site_pinned
+
+    controller.set_enabled(False)
+    controller.set_enabled(True)
+
+    assert widget.radar_sites_visible()
+
+
+def test_no_antennas_are_drawn_before_the_overlay_is_enabled(qt_app):
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, CONUS_VIEW)
+    controller = RadarOverlayController(widget, scope=SCOPE_SITE)  # off
+    try:
+        assert not widget.radar_sites_visible()
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+def test_the_pinned_antenna_is_marked_on_the_map(site_pinned):
+    controller, widget, _calls = site_pinned
+    wanted = radar_site.sites()[0].id
+
+    controller.set_site(wanted)
+
+    assert widget._radar_site_id == wanted
+
+
+def test_a_map_without_the_marker_layer_is_tolerated(monkeypatch, qt_app,
+                                                    radar_site_calls):
+    """The layer is duck-typed, exactly as ``view_bounds`` is.
+
+    A map that does not carry the antenna markers must still be able to host the
+    radar overlay rather than raising out of the controller's constructor.
+    """
+    monkeypatch.delattr(gui_maps.StationMapWidget, "set_radar_sites")
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, CONUS_VIEW)
+    controller = RadarOverlayController(widget, enabled=True, scope=SCOPE_SITE)
+    try:
+        assert controller.scope() == SCOPE_SITE
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+# --------------------------------------------------------------------------- #
+# Catching up with a moved map
+#
+# A single-site frame covers about ten degrees, so where the map is looking
+# decides which antenna can serve it at all. Left to its own 150-second cadence
+# the overlay kept the previous antenna's frame attached after a pan -- off
+# screen, drawing nothing, with the marker and the status line both still naming
+# it -- so the layer looked broken for up to two and a half minutes.
+# --------------------------------------------------------------------------- #
+NEW_ENGLAND_VIEW = (-72.0, -68.0, 41.0, 44.0)
+
+
+def test_moving_the_map_re_aims_the_automatic_antenna(radar_site_controller,
+                                                      radar_site_calls):
+    controller, widget = radar_site_controller
+    controller.set_enabled(True)
+    _pump(700)
+    assert radar_site_calls, "sanity: the first view fetched"
+    before = len(radar_site_calls)
+
+    _look_at(widget, NEW_ENGLAND_VIEW)
+    controller.on_view_settled()
+    _pump(700)
+
+    assert len(radar_site_calls) == before + 1, \
+        "the map moved out from under the frame and nothing was refetched"
+    serving = radar_site.site_for_view(NEW_ENGLAND_VIEW)
+    assert serving, "sanity: New England is served by an antenna"
+    assert widget._radar_site_id == serving[0].id
+
+
+def test_the_refetched_frame_covers_the_new_view(radar_site_controller,
+                                                 radar_site_calls):
+    controller, widget = radar_site_controller
+    controller.set_enabled(True)
+    _pump(700)
+
+    _look_at(widget, NEW_ENGLAND_VIEW)
+    controller.on_view_settled()
+    _pump(700)
+
+    raster = widget.overlay(radar_site.OVERLAY_KEY)
+    assert raster is not None
+    lon0, lon1, lat0, lat1 = raster.bounds
+    west, east, south, north = NEW_ENGLAND_VIEW
+    assert not (lon1 <= west or lon0 >= east or lat1 <= south or lat0 >= north), \
+        "the attached frame does not reach the view it is drawn on"
+
+
+def test_staying_put_costs_nothing(radar_site_controller, radar_site_calls):
+    """The same antenna still serving means there is nothing to do."""
+    controller, _widget = radar_site_controller
+    controller.set_enabled(True)
+    _pump(700)
+    before = len(radar_site_calls)
+
+    for _ in range(5):
+        controller.on_view_settled()
+    _pump(700)
+
+    assert len(radar_site_calls) == before, \
+        "a settled view that changed nothing spent a request"
+
+
+def test_a_small_pan_within_one_antenna_costs_nothing(radar_site_controller,
+                                                      radar_site_calls):
+    controller, widget = radar_site_controller
+    _look_at(widget, (-98.0, -96.0, 34.5, 36.0))    # Norman: KTLX serves it
+    controller.set_enabled(True)
+    _pump(700)
+    before = len(radar_site_calls)
+    served = widget._radar_site_id
+
+    _look_at(widget, (-97.9, -95.9, 34.6, 36.1))    # nudged; same antenna
+    controller.on_view_settled()
+    _pump(700)
+
+    assert len(radar_site_calls) == before, \
+        "nudging the map inside one antenna's range must not refetch"
+    assert widget._radar_site_id == served
+
+
+def test_panning_does_not_retract_a_named_antenna(site_pinned):
+    """A chosen antenna is an answer, and panning is not a retraction of it."""
+    controller, widget, calls = site_pinned
+    wanted = "KTLX"
+    controller.set_site(wanted)
+    _pump(700)
+    before = len(calls)
+
+    _look_at(widget, NEW_ENGLAND_VIEW)
+    controller.on_view_settled()
+    _pump(700)
+
+    assert controller.site() == wanted
+    assert len(calls) == before, "a pinned antenna needs no refetch on a pan"
+
+
+def test_the_mosaic_ignores_a_moved_map(radar, radar_calls):
+    """The composite is national, so its content does not follow the view."""
+    controller, widget = radar
+    controller.set_enabled(True)
+    _pump(600)
+    before = len(radar_calls)
+
+    _look_at(widget, NEW_ENGLAND_VIEW)
+    controller.on_view_settled()
+    _pump(600)
+
+    assert len(radar_calls) == before, \
+        "re-fetching a national composite on every pan is pure waste"
+
+
+def test_a_switched_off_layer_ignores_a_moved_map(radar_site_controller,
+                                                 radar_site_calls):
+    controller, widget = radar_site_controller
+    assert not controller.is_enabled()
+
+    _look_at(widget, NEW_ENGLAND_VIEW)
+    controller.on_view_settled()
+    _pump(600)
+
+    assert radar_site_calls == [], "an overlay that is off must stay silent"
+
+
+def test_panning_out_of_range_says_so_instead_of_leaving_a_stale_frame(
+        radar_site_controller, radar_site_calls):
+    controller, widget = radar_site_controller
+    controller.set_enabled(True)
+    _pump(700)
+    assert widget.is_overlay_visible(radar_site.OVERLAY_KEY)
+
+    _look_at(widget, (-1.0, 1.0, 50.5, 52.5))   # London
+    controller.on_view_settled()
+    _pump(700)
+
+    assert not widget.is_overlay_visible(radar_site.OVERLAY_KEY)
+    assert "within range" in controller._status.text()
+
+
+def test_the_map_announces_a_settled_view(qt_app):
+    """The signal the picker relays has to actually fire on an extent change."""
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    seen: list[int] = []
+    widget.viewSettled.connect(lambda: seen.append(1))
+    try:
+        _look_at(widget, NEW_ENGLAND_VIEW)
+        assert seen, "an extent set outright is a settled view"
+
+        seen.clear()
+        widget._finish_map_preview()
+        assert seen, "a gesture coming to rest is a settled view"
+    finally:
+        widget.close()

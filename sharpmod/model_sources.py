@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import tempfile
@@ -63,6 +64,24 @@ def _nomads_directory(source_url: str) -> tuple[str, str]:
     return "/" + "/".join(parts[date_index:-1]), parts[-1]
 
 
+#: Kilometres per degree of latitude on the sphere the grids are defined on.
+#: Longitude degrees additionally shrink by cos(latitude).
+_KM_PER_DEGREE = 111.32
+
+#: Grid cells of padding requested on every side of the point. The GRIB filter
+#: keeps only the rows and columns that fall inside the requested box, and
+#: ecCodes rejects a nearest-point request whose target lies outside the
+#: returned area. One cell of padding can still collapse to a single row when
+#: the point sits near a cell edge, so two is the smallest margin that always
+#: brackets the point on both sides of both axes.
+_SUBREGION_CELLS = 2.0
+
+#: Assumed spacing for a product that declares none, in kilometres. Matches
+#: ``model_extract.UNKNOWN_GRID_SPACING_KM``; over-estimating only widens a
+#: small subset, while under-estimating produces a box that cannot be decoded.
+_UNKNOWN_SPACING_KM = 25.0
+
+
 def build_nomads_subset_url(
     config,
     source_url: str,
@@ -72,7 +91,16 @@ def build_nomads_subset_url(
     *,
     margin: float = 0.15,
 ) -> str:
-    """Build a throttled GRIB-filter query for a small point neighborhood."""
+    """Build a throttled GRIB-filter query for a small point neighborhood.
+
+    ``margin`` is a floor in degrees, not the final size. The box is widened to
+    :data:`_SUBREGION_CELLS` cells of the product's own grid so that the
+    requested point always falls strictly inside the returned area. A fixed
+    margin is only safe on the convective-scale grids: 0.15 degrees is about
+    17 km, which is narrower than one cell of the 0.25-degree GFS and half a
+    cell of the 0.5-degree CFS and GEFS, and the filter then returns a strip one
+    row tall that the point is not inside at all.
+    """
     key = str(getattr(config, "key", ""))
     endpoint = NOMADS_ENDPOINTS.get(key)
     if endpoint is None:
@@ -83,10 +111,21 @@ def build_nomads_subset_url(
     lat = float(lat)
     lon = ((float(lon) + 180.0) % 360.0) - 180.0
     margin = max(0.05, float(margin))
-    top = min(90.0, lat + margin)
-    bottom = max(-90.0, lat - margin)
-    left = max(-180.0, lon - margin)
-    right = min(180.0, lon + margin)
+    spacing_km = float(getattr(config, "grid_spacing_km", 0.0) or 0.0)
+    if not math.isfinite(spacing_km) or spacing_km <= 0.0:
+        spacing_km = _UNKNOWN_SPACING_KM
+    lat_margin = max(margin, _SUBREGION_CELLS * spacing_km / _KM_PER_DEGREE)
+    # Meridians converge, so a degree of longitude buys less distance the
+    # further from the equator the point is. Clamping the cosine keeps the
+    # request finite at the poles instead of asking for the whole sphere.
+    shrink = max(0.05, math.cos(math.radians(lat)))
+    lon_margin = max(
+        margin, _SUBREGION_CELLS * spacing_km / (_KM_PER_DEGREE * shrink)
+    )
+    top = min(90.0, lat + lat_margin)
+    bottom = max(-90.0, lat - lat_margin)
+    left = max(-180.0, lon - lon_margin)
+    right = min(180.0, lon + lon_margin)
     query = [
         ("file", filename),
         ("all_lev", "on"),

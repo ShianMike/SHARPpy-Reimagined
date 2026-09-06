@@ -29,7 +29,7 @@ _GLOBAL_COUNTRY_OUTLINE = "#8ca2b8"
 _GLOBAL_COASTLINE = "#b8cada"
 _COUNTY_OUTLINE = "#ffffff"
 _POINT_COLOR = "#ffda00"
-_GLOBAL_LAYER_NAMES = ("coastline", "countries", "states")
+_GLOBAL_LAYER_NAMES = ("coastline", "lakes", "countries", "states")
 _COUNTY_ARCHIVE_NAME = "conus-counties.zip"
 _COUNTY_FORMAT_VERSION = 1
 _COUNTY_TILE_DEGREES = 1
@@ -89,6 +89,41 @@ def point_from_widget(widget: Any) -> tuple[float, float] | None:
     if not -90.0 <= lat <= 90.0 or not -180.0 <= lon <= 180.0:
         return None
     return lat, lon
+
+
+def box_from_widget(widget: Any) -> tuple[float, float, float, float] | None:
+    """Return the averaged area as ``(west, south, east, north)``, if there is one.
+
+    A box mean sounding records the rectangle it averaged, and the JSON sidecar's
+    keys reach the profile collection's metadata, so the inset can show the area
+    the numbers actually came from. Without it the locator marks a single point
+    that was never sampled on its own, which is the most misleading thing it
+    could draw for an average.
+
+    The stored order is the region's own ``(lat0, lon0, lat1, lon1)``.
+    """
+    raw = _collection_meta(widget, "box_mean_bounds")
+    if raw is None or isinstance(raw, (str, bytes)):
+        return None
+    try:
+        south, west, north, east = (float(value) for value in raw)
+    except (TypeError, ValueError):
+        return None
+    for value in (south, west, north, east):
+        if not math.isfinite(value):
+            return None
+    if not -90.0 <= south <= 90.0 or not -90.0 <= north <= 90.0:
+        return None
+    if north <= south:
+        return None
+    # A box drawn across the antimeridian comes back with its east edge wrapped
+    # below its west edge. Unwrapping keeps the span positive so the inset sizes
+    # itself to the real width instead of to the 340-degree complement.
+    if east <= west:
+        east += 360.0
+    if east - west > 360.0:
+        return None
+    return west, south, east, north
 
 
 def location_name_from_widget(widget: Any) -> str:
@@ -187,6 +222,227 @@ def overlay_layers_for_widget(widget: Any) -> tuple[Any, ...]:
         return overlays_covering(layers, valid_time_from_widget(widget))
     except Exception:  # noqa: BLE001 - an overlay must never break the render
         return ()
+
+
+def overlay_rasters_for_widget(widget: Any) -> tuple[Any, ...]:
+    """Return locator image overlays attached to the focused sounding.
+
+    The gridded-field counterpart of :func:`overlay_layers_for_widget`. A raster
+    carries one valid time rather than a window, so it is matched to the hour the
+    sounding depicts: a field an hour away from the profile beside it would be a
+    different forecast presented as the same one.
+    """
+    try:
+        collection = widget.prof_collections[widget.pc_idx]
+    except (AttributeError, IndexError, TypeError):
+        return ()
+    try:
+        from sharpmod.map_overlays import locator_rasters
+        rasters = locator_rasters(collection)
+        if not rasters:
+            return ()
+        when = valid_time_from_widget(widget)
+        if when is None:
+            return rasters
+        matched = []
+        for raster in rasters:
+            valid = getattr(raster, "valid_time", None)
+            if valid is None:
+                matched.append(raster)
+                continue
+            try:
+                if abs((valid - when).total_seconds()) < 3600.0:
+                    matched.append(raster)
+            except TypeError:
+                # A naive/aware mismatch is not worth losing the field over.
+                matched.append(raster)
+        return tuple(matched)
+    except Exception:  # noqa: BLE001 - an overlay must never break the render
+        return ()
+
+
+def raster_source_rect(raster: Any, bounds, width: int, height: int):
+    """Return ``(x, y, w, h)`` of the image covering ``bounds``, or ``None``.
+
+    Both the field image and the inset are plate carree with north at the top, so
+    the crop is a straight rectangle: no resampling of our own, and Qt scales the
+    result into the inset. ``None`` means the field does not reach this sounding.
+
+    The rectangle is *not* clipped to the image. A sounding within a degree or two
+    of the field's own edge legitimately asks for ground the field does not cover,
+    and clipping here would lose the information needed to place what does
+    survive. :func:`raster_draw_rects` does that clipping in step with the
+    destination.
+    """
+    try:
+        lon0, lon1, lat0, lat1 = (float(value) for value in raster.bounds)
+    except (AttributeError, TypeError, ValueError):
+        return None
+    west, south, east, north = bounds
+    span_lon = lon1 - lon0
+    span_lat = lat1 - lat0
+    if span_lon <= 0 or span_lat <= 0:
+        return None
+    if east <= lon0 or west >= lon1 or north <= lat0 or south >= lat1:
+        return None
+    left = (west - lon0) / span_lon * width
+    right = (east - lon0) / span_lon * width
+    # Row 0 is the north edge, so latitude runs the other way.
+    top = (lat1 - north) / span_lat * height
+    bottom = (lat1 - south) / span_lat * height
+    return (left, top, max(1.0, right - left), max(1.0, bottom - top))
+
+
+def raster_draw_rects(raster: Any, bounds, width: int, height: int, target):
+    """Return ``(source, target)`` rectangles for one field, or ``None``.
+
+    Both are clipped together. A sounding near the edge of the model's domain asks
+    for ground the field does not cover, and the surviving pixels have to be drawn
+    on the ground they actually describe: shrinking only the source and letting Qt
+    stretch it across the whole inset shifted the field by up to 0.8 degrees --
+    about seventy kilometres -- while the marker stayed in the middle, so the
+    values under the point were not the values at the point. The uncovered part of
+    the inset is left unpainted instead, which is the truthful answer.
+    """
+    full = raster_source_rect(raster, bounds, width, height)
+    if full is None:
+        return None
+    x, y, w, h = full
+    if w <= 0 or h <= 0:
+        return None
+    left = max(0.0, x)
+    top = max(0.0, y)
+    right = min(float(width), x + w)
+    bottom = min(float(height), y + h)
+    if right <= left or bottom <= top:
+        return None
+    # The same fraction removed from the source comes off the destination.
+    target_left = target.left() + (left - x) / w * target.width()
+    target_top = target.top() + (top - y) / h * target.height()
+    target_width = (right - left) / w * target.width()
+    target_height = (bottom - top) / h * target.height()
+    if target_width <= 0.0 or target_height <= 0.0:
+        return None
+    return ((left, top, right - left, bottom - top),
+            (target_left, target_top, target_width, target_height))
+
+
+def raster_chip_text(raster: Any) -> str:
+    """The shortest name for an attached field that still identifies it.
+
+    A field drawn with nothing naming it is a wash of colour: the reader can see
+    that *something* is shaded around the point and cannot tell whether they are
+    looking at CAPE, helicity or a tornado parameter, which are the same reds and
+    blues in the same places. The picker map has a legend and a colour bar for
+    this; the inset has room for about ten characters.
+
+    The product's own compact name is preferred, resolved through the catalogue
+    the same way the picker's colour bar resolves its palette, so the naming
+    lives with the product definition rather than being reinvented here. Falls
+    back to the raster's identifier and then its title, because an ugly label
+    beats an unlabelled field.
+    """
+    key = str(getattr(raster, "short_name", "") or "").strip()
+    if key:
+        try:
+            # The catalogue is read directly rather than through
+            # ``get_product``, which resolves an unknown key to the default
+            # product so a stale setting still selects something. That is right
+            # for choosing a field and wrong for naming one: it would label an
+            # unrecognised raster "REFC", which is worse than not labelling it.
+            from sharpmod.hrrr_products import PRODUCTS
+            product = PRODUCTS.get(key)
+            if product is not None and product.short_label:
+                return product.short_label
+        except Exception:  # noqa: BLE001 - a label is not worth a failed render
+            pass
+        return key.upper()
+    return str(getattr(raster, "title", "") or "").strip()
+
+
+def _draw_field_chip(painter, text, rect, fill, border, qtcore, qtgui) -> None:
+    """Name the attached field in the inset's bottom-right corner.
+
+    Bottom *right* because the outlook category chip already owns bottom-left and
+    the two can be showing at once -- the field is the airmass and the outlook is
+    a judgement about it, so a reader wants both at the same time.
+
+    Styled from the locator's own frame colours rather than the field's palette:
+    the chip says which quantity is drawn, and giving it a colour from that
+    quantity's own scale would read as a value.
+    """
+    if not text:
+        return
+    font = qtgui.QFont("Helvetica", 7)
+    font.setBold(True)
+    painter.setFont(font)
+    metrics = qtgui.QFontMetrics(font)
+    padding = 3.0
+    # Half the inset at most: the chip names the field, it does not become the
+    # inset. Elided rather than overflowing, so a long name loses its tail
+    # instead of running off the frame or over the outlook chip.
+    room = max(18.0, rect.width() / 2.0 - 6.0)
+    shown = metrics.elidedText(text, qtcore.Qt.ElideRight,
+                               int(room - padding * 2.0))
+    width = metrics.horizontalAdvance(shown) + padding * 2.0
+    height = metrics.height() + 1.0
+    chip = qtcore.QRectF(
+        rect.right() - width - 4.0,
+        rect.bottom() - height - 4.0,
+        width,
+        height,
+    )
+    background = qtgui.QColor(fill)
+    if not background.isValid():
+        return
+    background.setAlpha(235)
+    painter.setBrush(qtgui.QBrush(background))
+    edge = qtgui.QColor(border)
+    painter.setPen(qtgui.QPen(edge if edge.isValid() else background, 1.0))
+    painter.drawRect(chip)
+    painter.setPen(qtgui.QPen(
+        qtgui.QColor("#000000") if background.lightnessF() >= 0.5
+        else qtgui.QColor("#FFFFFF")))
+    painter.drawText(chip, qtcore.Qt.AlignCenter, shown)
+
+
+def _draw_overlay_rasters(painter, rasters, rect, bounds, qtcore, qtgui) -> None:
+    """Blit each attached field image into the inset.
+
+    Drawn beneath every line and the marker: the field is areal context and the
+    geography locating the point has to stay readable through it.
+    """
+    for raster in rasters:
+        payload = getattr(raster, "image_bytes", None)
+        if not payload:
+            continue
+        image = qtgui.QImage()
+        if not image.loadFromData(payload):
+            continue
+        rects = raster_draw_rects(
+            raster, bounds, image.width(), image.height(), rect)
+        if rects is None:
+            continue
+        source, destination = rects
+        opacity = getattr(raster, "opacity", 1.0)
+        try:
+            opacity = min(1.0, max(0.0, float(opacity)))
+        except (TypeError, ValueError):
+            opacity = 1.0
+        painter.save()
+        try:
+            painter.setOpacity(opacity)
+            # Smooth, because the inset magnifies about two source pixels per
+            # degree into a hundred: nearest-neighbour would show the field's own
+            # grid as blocks and invite reading them as structure.
+            painter.setRenderHint(qtgui.QPainter.SmoothPixmapTransform, True)
+            painter.drawImage(
+                qtcore.QRectF(*destination),
+                image,
+                qtcore.QRectF(*source),
+            )
+        finally:
+            painter.restore()
 
 
 def overlay_label_at_point(
@@ -370,11 +626,47 @@ LOCATOR_HALF_LAT_DEGREES = 0.98
 #: extent matches the inset's landscape aspect and reads as near-square.
 LOCATOR_LON_ASPECT = 1.35
 
+#: Room left around an averaged area's outline, as a multiplier on the distance
+#: from the sounding to the furthest edge of that area. Enough that the rectangle
+#: reads as sitting inside a region rather than being cropped by the frame.
+LOCATOR_BOX_MARGIN = 1.18
 
-def zoom_bounds(lat: float, lon: float) -> tuple[float, float, float, float]:
-    """Return a local, near-square geographic extent centered on ``lat/lon``."""
+#: Ceiling on the box-driven zoom-out, in degrees of latitude. This is the one
+#: sanctioned way past :data:`LOCATOR_HALF_LAT_DEGREES`: an averaged area has to
+#: be shown whole or the inset misrepresents where the numbers came from, and
+#: that outranks the local-detail contract. Beyond this a box is pathological
+#: rather than a forecast area, and the inset would have stopped being a locator.
+LOCATOR_MAX_HALF_LAT_DEGREES = 25.0
+
+
+def zoom_bounds(
+    lat: float,
+    lon: float,
+    box: tuple[float, float, float, float] | None = None,
+) -> tuple[float, float, float, float]:
+    """Return a local, near-square geographic extent centered on ``lat/lon``.
+
+    Given ``box`` as ``(west, south, east, north)``, the extent is widened until
+    that whole rectangle fits with a margin, so an averaged area is never drawn
+    larger than the inset showing it. The aspect is preserved while widening, so
+    the inset keeps its shape at every zoom.
+    """
     half_lat = LOCATOR_HALF_LAT_DEGREES
     cos_lat = max(0.35, math.cos(math.radians(lat)))
+    if box is not None:
+        west, south, east, north = box
+        # Measured from the sounding rather than from the box centre, so the
+        # rectangle still fits when the point sits off-centre inside it.
+        reach_lat = max(abs(north - lat), abs(lat - south))
+        reach_lon = max(abs(east - lon), abs(lon - west))
+        half_lat = max(
+            half_lat,
+            reach_lat * LOCATOR_BOX_MARGIN,
+            # Convert the longitude requirement into the latitude half-height
+            # that produces it, so widening cannot distort the aspect.
+            reach_lon * LOCATOR_BOX_MARGIN * cos_lat / LOCATOR_LON_ASPECT,
+        )
+        half_lat = min(half_lat, LOCATOR_MAX_HALF_LAT_DEGREES)
     half_lon = half_lat * LOCATOR_LON_ASPECT / cos_lat
     return lon - half_lon, lat - half_lat, lon + half_lon, lat + half_lat
 
@@ -657,6 +949,33 @@ def _draw_global_lines(
         painter.drawPath(path)
 
 
+def _draw_box_outline(
+        painter: Any,
+        box: tuple[float, float, float, float],
+        rect: Any,
+        bounds: tuple[float, float, float, float],
+        color: str,
+        qtcore: Any,
+        qtgui: Any) -> None:
+    """Outline the averaged area inside the locator.
+
+    Dashed and unfilled, in the marker's own colour: it has to read as the extent
+    the sounding represents without competing with the boundary linework or
+    hiding whatever overlay is washed underneath it.
+    """
+    west, south, east, north = box
+    top_left = _map_point(rect, bounds, north, west)
+    bottom_right = _map_point(rect, bounds, south, east)
+    outline = qtcore.QRectF(
+        qtcore.QPointF(*top_left), qtcore.QPointF(*bottom_right)).normalized()
+    pen = qtgui.QPen(qtgui.QColor(color), 1.3)
+    pen.setCosmetic(True)
+    pen.setStyle(qtcore.Qt.DashLine)
+    painter.setPen(pen)
+    painter.setBrush(qtcore.Qt.NoBrush)
+    painter.drawRect(outline)
+
+
 def draw_hodo_locator(widget: Any) -> bool:
     """Draw an offline worldwide locator and the selected sounding point."""
     point = point_from_widget(widget)
@@ -674,7 +993,11 @@ def draw_hodo_locator(widget: Any) -> bool:
 
     lat, lon = point
     location_name = location_name_from_widget(widget)
-    bounds = zoom_bounds(lat, lon)
+    try:
+        box = box_from_widget(widget)
+    except Exception:  # noqa: BLE001 - never lose the locator to metadata
+        box = None
+    bounds = zoom_bounds(lat, lon, box)
     try:
         features = county_features_for_point(lat, lon)
     except Exception:
@@ -688,6 +1011,7 @@ def draw_hodo_locator(widget: Any) -> bool:
     except Exception:
         global_layers = {name: () for name in _GLOBAL_LAYER_NAMES}
     overlay_layers = overlay_layers_for_widget(widget)
+    overlay_rasters = overlay_rasters_for_widget(widget)
 
     bg_color = QtGui.QColor(getattr(widget, "bg_color", _MAP_FILL))
     fg_color = QtGui.QColor(getattr(widget, "fg_color", _MAP_BORDER))
@@ -722,9 +1046,21 @@ def draw_hodo_locator(widget: Any) -> bool:
     painter = QtGui.QPainter(widget.plotBitMap)
     try:
         painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
-        painter.setPen(QtGui.QPen(QtGui.QColor(map_border), 1.25))
-        painter.setBrush(QtGui.QBrush(QtGui.QColor(map_fill)))
-        painter.drawRect(rect)
+        # A one-pixel antialiased rectangle on integer coordinates is split
+        # between two pixels, making the nominal white outline look gray. Fill
+        # the surface independently, then put the shared plot-frame stroke on
+        # half-pixel centers so it resolves to solid foreground white.
+        painter.fillRect(rect, QtGui.QBrush(QtGui.QColor(map_fill)))
+        # The locator is intentionally anchored in the hodograph's upper-left
+        # corner. Reuse the hodograph's crisp top/left frame there, and draw only
+        # the locator's right/bottom edges; drawing all four would make that
+        # shared corner two pixels thick.
+        map_frame = QtCore.QRectF(rect).adjusted(-0.5, -0.5, -0.5, -0.5)
+        painter.setPen(QtGui.QPen(
+            QtGui.QColor(map_border), colors.PLOT_FRAME_WIDTH))
+        painter.setBrush(QtCore.Qt.NoBrush)
+        painter.drawLine(map_frame.topRight(), map_frame.bottomRight())
+        painter.drawLine(map_frame.bottomRight(), map_frame.bottomLeft())
 
         padding = 5.0
         interior = rect.adjusted(padding, padding, -padding, -padding)
@@ -732,7 +1068,14 @@ def draw_hodo_locator(widget: Any) -> bool:
         painter.setClipRect(interior)
         # Overlays go under the boundary linework and the marker: they are areal
         # context, and the point being analysed plus the geography locating it
-        # must stay readable through them.
+        # must stay readable through them. The gridded field goes under the
+        # vector overlays for the same reason it does on the picker map -- the
+        # field is the airmass and the risk area is a judgement about it.
+        try:
+            _draw_overlay_rasters(
+                painter, overlay_rasters, interior, bounds, QtCore, QtGui)
+        except Exception:  # noqa: BLE001 - never lose the locator to an overlay
+            pass
         try:
             _draw_overlay_layers(
                 painter, overlay_layers, interior, bounds, QtCore, QtGui)
@@ -744,6 +1087,12 @@ def draw_hodo_locator(widget: Any) -> bool:
         _draw_global_lines(
             painter, global_layers.get("countries", ()),
             country_outline, 1.0, interior, bounds, QtCore, QtGui)
+        # A lake shore is the same kind of boundary as a coast, so it takes the
+        # same colour. Without this layer the Great Lakes are absent entirely and
+        # a sounding beside one has nothing to locate it against.
+        _draw_global_lines(
+            painter, global_layers.get("lakes", ()),
+            coastline, 0.95, interior, bounds, QtCore, QtGui)
         _draw_global_lines(
             painter, global_layers.get("coastline", ()),
             coastline, 1.15, interior, bounds, QtCore, QtGui)
@@ -776,13 +1125,25 @@ def draw_hodo_locator(widget: Any) -> bool:
                 if started:
                     painter.drawPath(path)
 
-        point_x, point_y = _map_point(interior, bounds, lat, lon)
-        marker = QtGui.QColor(point_color)
-        painter.setPen(QtGui.QPen(marker, 1.4))
-        painter.setBrush(QtGui.QBrush(QtGui.QColor(map_fill)))
-        painter.drawEllipse(QtCore.QPointF(point_x, point_y), 4.0, 4.0)
-        painter.drawLine(point_x - 7.0, point_y, point_x + 7.0, point_y)
-        painter.drawLine(point_x, point_y - 7.0, point_x, point_y + 7.0)
+        if box is not None:
+            # An averaged sounding has no single point, so the outline replaces
+            # the marker rather than joining it. Drawing both would assert a
+            # location the numbers do not have -- the crosshair would name the
+            # box's centre as the place this sounding came from.
+            try:
+                _draw_box_outline(
+                    painter, box, interior, bounds, point_color,
+                    QtCore, QtGui)
+            except Exception:  # noqa: BLE001 - never lose the locator to this
+                pass
+        else:
+            point_x, point_y = _map_point(interior, bounds, lat, lon)
+            marker = QtGui.QColor(point_color)
+            painter.setPen(QtGui.QPen(marker, 1.4))
+            painter.setBrush(QtGui.QBrush(QtGui.QColor(map_fill)))
+            painter.drawEllipse(QtCore.QPointF(point_x, point_y), 4.0, 4.0)
+            painter.drawLine(point_x - 7.0, point_y, point_x + 7.0, point_y)
+            painter.drawLine(point_x, point_y - 7.0, point_x, point_y + 7.0)
         painter.restore()
         if overlay_layers:
             badge = overlay_label_at_point(overlay_layers, lat, lon)
@@ -791,6 +1152,15 @@ def draw_hodo_locator(widget: Any) -> bool:
                     _draw_overlay_badge(painter, badge, rect, QtCore, QtGui)
                 except Exception:  # noqa: BLE001
                     pass
+        if overlay_rasters:
+            # Whichever field is drawn last is the one on top, so that is the one
+            # the chip has to name.
+            try:
+                _draw_field_chip(
+                    painter, raster_chip_text(overlay_rasters[-1]), rect,
+                    map_fill, map_border, QtCore, QtGui)
+            except Exception:  # noqa: BLE001 - never lose the locator to a label
+                pass
         if location_name:
             font = QtGui.QFont("Helvetica", 8)
             font.setBold(True)

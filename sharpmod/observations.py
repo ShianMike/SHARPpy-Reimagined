@@ -439,15 +439,173 @@ class IEMObservedProvider:
         )
 
 
+class IGRAObservedProvider:
+    """NOAA/NCEI Integrated Global Radiosonde Archive (IGRA v2) adapter.
+
+    IGRA is the only source here with deep history: roughly 2,800 stations,
+    some reaching back to 1905, quality assured and updated daily.
+
+    It is deliberately absent from :data:`DEFAULT_PROVIDER_ORDER`. The archive
+    publishes no per-sounding endpoint -- the smallest retrievable unit is one
+    ZIP per station, a few megabytes for the current year and around eighty for
+    a long station's full record. Joining the automatic chain would mean an
+    everyday request quietly reaching for that, so this provider is only used
+    when it has been asked for by name.
+    """
+
+    info = ObservedProviderInfo(
+        key="igra2",
+        name="NOAA Integrated Global Radiosonde Archive v2",
+        homepage=(
+            "https://www.ncei.noaa.gov/products/weather-balloon/"
+            "integrated-global-radiosonde-archive"
+        ),
+    )
+
+    def __init__(self, decoder=None, *, allow_full_record: bool = True):
+        self._decoder = decoder
+        self._allow_full_record = bool(allow_full_record)
+
+    @property
+    def decoder(self):
+        """The reader, built on first use so importing costs no I/O."""
+        if self._decoder is None:
+            from sharpmod.io.igra2 import IGRA_Decoder
+
+            self._decoder = IGRA_Decoder(
+                allow_full_record=self._allow_full_record
+            )
+        return self._decoder
+
+    def fetch(self, station: str, when_utc: datetime) -> ObservedSounding:
+        from sharpmod.io import igra2
+
+        when = _utc_datetime(when_utc)
+        requested = str(station).strip()
+        decoder = self.decoder
+
+        try:
+            station_meta = decoder.resolve_station(requested)
+        except igra2.IGRAStationLookupError as exc:
+            raise ObservedStationError(str(exc)) from exc
+        except igra2.IGRAError as exc:
+            raise ObservedRetrievalError(str(exc)) from exc
+
+        try:
+            sounding = decoder.fetch(station_meta.id, when)
+        except igra2.IGRAStationLookupError as exc:
+            raise ObservedStationError(str(exc)) from exc
+        except igra2.IGRAStationTimeUnavailableError as exc:
+            raise ObservedUnavailableError(str(exc)) from exc
+        except igra2.IGRASoundingParseError as exc:
+            raise ObservedParseError(str(exc)) from exc
+        except igra2.IGRARetrievalError as exc:
+            raise ObservedRetrievalError(str(exc)) from exc
+        except igra2.IGRAError as exc:
+            raise ObservedRetrievalError(str(exc)) from exc
+
+        station_name = station_meta.name or station_meta.id
+        lat = sounding.lat if math.isfinite(sounding.lat) else station_meta.lat
+        lon = sounding.lon if math.isfinite(sounding.lon) else station_meta.lon
+        metadata: dict[str, object] = {
+            "loc": station_name,
+            "observed": True,
+            "model": "Observed",
+            "source": self.info.key,
+            "source_provider": self.info.key,
+            "source_provider_name": self.info.name,
+            "source_station": sounding.station_id,
+            "requested_station": requested,
+            "source_url": sounding.archive_url,
+            "station_name": station_name,
+            "lat": float(lat),
+            "lon": float(lon),
+            "valid": sounding.valid,
+            "run": sounding.valid,
+            "fxx": 0,
+            # IGRA-specific provenance. The requested time is retained
+            # alongside the delivered one because the archive carries special
+            # releases at non-synoptic hours, so the two can legitimately
+            # differ and the user should be able to see that they did.
+            "igra_requested_valid": when,
+            "igra_archive": sounding.archive_kind,
+            "igra_station_id": station_meta.id,
+            "igra_wmo_id": station_meta.wmo_id or "",
+            "igra_state": station_meta.state,
+            "igra_elevation_m": float(station_meta.elev_m),
+            "igra_record_years": (
+                f"{station_meta.first_year}-{station_meta.last_year}"
+            ),
+            "igra_pressure_source": sounding.pressure_source,
+            "igra_nonpressure_source": sounding.nonpressure_source,
+            "igra_dewpoint_from_rh_levels": int(
+                sounding.dewpoint_from_rh_levels
+            ),
+            "igra_dropped_nonpressure_levels": int(sounding.dropped_levels),
+        }
+        if sounding.release_time is not None:
+            metadata["igra_release_time"] = sounding.release_time
+
+        intermediate: dict[str, object] = {
+            "pres": np.asarray(sounding.pres, dtype=float),
+            "hght": np.asarray(sounding.hght, dtype=float),
+            "tmpc": np.asarray(sounding.tmpc, dtype=float),
+            "dwpc": np.asarray(sounding.dwpc, dtype=float),
+            "wdir": np.asarray(sounding.wdir, dtype=float),
+            "wspd": np.asarray(sounding.wspd, dtype=float),
+            "omeg": None,
+            "meta": metadata,
+        }
+        # Reuse the UWyo decoder's thinning policy rather than restating it:
+        # both archives can serve high-resolution ascents, and two copies of
+        # the same level budget would drift apart.
+        converter = UWyo_Decoder()
+        intermediate = converter._thin_high_res(intermediate)
+        try:
+            profile = converter.from_intermediate(intermediate)
+        except Exception as exc:
+            raise ObservedParseError(
+                f"IGRA sounding could not be converted to a profile: {exc}"
+            ) from exc
+
+        _set_profile_metadata(profile, metadata)
+        return ObservedSounding(
+            profile=profile,
+            provider=self.info.key,
+            provider_name=self.info.name,
+            station_id=sounding.station_id,
+            requested_station=requested,
+            valid=sounding.valid,
+            source_url=sounding.archive_url,
+            metadata=dict(metadata),
+        )
+
+
 _PROVIDER_FACTORIES: dict[str, Callable[[], ObservedSoundingProvider]] = {
     "uwyo": UWyoObservedProvider,
     "iem": IEMObservedProvider,
+    "igra2": IGRAObservedProvider,
 }
 
 
+def registered_provider_keys() -> tuple[str, ...]:
+    """Return every selectable provider key.
+
+    The automatic fallback chain leads, then anything registered outside it.
+    This is deliberately wider than :data:`DEFAULT_PROVIDER_ORDER`: a provider
+    can be selectable by name without being something to reach for on its own.
+    """
+    extra = sorted(
+        key for key in _PROVIDER_FACTORIES if key not in DEFAULT_PROVIDER_ORDER
+    )
+    return tuple(DEFAULT_PROVIDER_ORDER) + tuple(extra)
+
+
 def available_observed_providers() -> tuple[ObservedProviderInfo, ...]:
-    """Return provider identities in the default fallback order."""
-    return tuple(_PROVIDER_FACTORIES[key]().info for key in DEFAULT_PROVIDER_ORDER)
+    """Return every registered provider identity, fallback chain first."""
+    return tuple(
+        _PROVIDER_FACTORIES[key]().info for key in registered_provider_keys()
+    )
 
 
 def get_observed_provider(key: str) -> ObservedSoundingProvider:
@@ -602,6 +760,7 @@ def write_observed_npz(
 __all__ = [
     "DEFAULT_PROVIDER_ORDER",
     "IEMObservedProvider",
+    "IGRAObservedProvider",
     "ObservedFallbackError",
     "ObservedParseError",
     "ObservedProviderError",
@@ -615,5 +774,6 @@ __all__ = [
     "available_observed_providers",
     "fetch_observed",
     "get_observed_provider",
+    "registered_provider_keys",
     "write_observed_npz",
 ]

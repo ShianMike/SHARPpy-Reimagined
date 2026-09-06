@@ -20,6 +20,17 @@ PROFILE_COLUMN_NAMES = (
 )
 
 SURFACE_CONTRACT_VERSION = 1
+
+# Largest 2-m dewpoint excess over 2-m temperature that is read as a saturated
+# ground row rather than a decode error. Providers publish temperature directly
+# but dewpoint is usually derived here from specific or relative humidity, and
+# those inversions do not share the model's own saturation formulation. At
+# RH ~= 100% the derived dewpoint therefore crosses temperature by a few
+# hundredths of a degree. Half a degree covers that disagreement plus GRIB
+# packing precision, while a unit or level mix-up -- the failure this bound
+# exists to catch -- is wrong by many degrees.
+SURFACE_SUPERSATURATION_TOLERANCE_C = 0.5
+
 SURFACE_CONTRACT_FIELDS = (
     "surface_pressure",
     "surface_height",
@@ -66,6 +77,10 @@ def merge_surface_level(
     10-m wind components are mandatory so the inserted row is a complete
     thermodynamic/kinematic surface. Surface omega remains missing because
     there is no equivalent model field.
+
+    A dewpoint above the temperature by no more than
+    :data:`SURFACE_SUPERSATURATION_TOLERANCE_C` is clamped to the temperature
+    and treated as a saturated ground row; a larger excess is refused.
     """
     missing = float(missing)
     normalized = {}
@@ -94,9 +109,14 @@ def merge_surface_level(
         or not 100.0 <= pressure <= 1100.0
         or not -1000.0 <= height <= 10_000.0
         or not -120.0 <= temperature <= 70.0
-        or not -150.0 <= dewpoint <= temperature + 1.0e-6
+        or dewpoint < -150.0
+        or dewpoint > temperature + SURFACE_SUPERSATURATION_TOLERANCE_C
     ):
         return None
+    # A saturated ground row is clamped, not discarded. Refusing it rejected
+    # every fog, marine, and lake-shore profile outright even though the only
+    # defect was a few hundredths of a degree of derived supersaturation.
+    dewpoint = min(dewpoint, temperature)
 
     # The inserted ground row owns its exact pressure. An isobar with equal
     # pressure is replaced as well as every isobar below ground.
@@ -146,7 +166,9 @@ def merge_surface_level(
 
 __all__ = [
     "PROFILE_COLUMN_NAMES",
+    "SURFACE_CONTRACT_FIELDS",
     "SURFACE_CONTRACT_VERSION",
+    "SURFACE_SUPERSATURATION_TOLERANCE_C",
     "SurfaceMergeResult",
     "merge_surface_level",
 ]

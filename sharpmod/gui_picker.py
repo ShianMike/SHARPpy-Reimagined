@@ -51,7 +51,12 @@ from sharpmod.theme import (
     SCROLLBAR_W,
     SPACE,
 )
-from sharpmod.gui_maps import MAP_AREAS, PointMapWidget, StationMapWidget
+from sharpmod.gui_maps import (
+    MAP_AREAS,
+    MAP_PROJECTIONS,
+    PointMapWidget,
+    StationMapWidget,
+)
 from sharpmod.gui_cache import CacheManagerDialog, parse_spatial_point
 from sharpmod.gui_locations import SavedLocationsDialog
 from sharpmod.saved_locations import (
@@ -60,6 +65,7 @@ from sharpmod.saved_locations import (
     is_generated_recent_label,
 )
 from sharpmod.gui_overlay_controls import (
+    HrrrFieldController,
     OutlookOverlayController,
     RadarOverlayController,
 )
@@ -112,8 +118,8 @@ from qtpy.QtCore import (
     Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
 )
 from qtpy.QtGui import (
-    QAction, QPainter, QColor, QPen, QBrush, QPolygonF, QFont, QPixmap, QIcon,
-    QTransform, QDesktopServices,
+    QAction, QActionGroup, QPainter, QColor, QPen, QBrush, QPolygonF, QFont,
+    QPixmap, QIcon, QTransform, QDesktopServices,
 )
 from qtpy.QtWidgets import (
     QApplication,
@@ -152,6 +158,48 @@ from qtpy.QtWidgets import (
 
 _STABLE_GUI_RUNTIME_ENV = "SHARPMOD_GUI_STABLE_RUNTIME"
 
+#: The gridded map overlay is HRRR. When this product is the tab's selection the
+#: overlay can be pinned to the exact cycle on screen; for anything else it can
+#: only match the valid time, because another model's run and forecast hour do
+#: not name an HRRR forecast.
+HRRR_FIELD_MODEL_KEY = "hrrr"
+
+#: Opt-in for an intentionally windowless ``main`` (GUI smoke tests, CI).
+_HEADLESS_GUI_ENV = "SHARPMOD_GUI_HEADLESS"
+
+#: Qt platform plugins that cannot present a window at all. ``vnc``, ``xcb``,
+#: ``wayland`` and friends are excluded on purpose: they do present, just not
+#: necessarily locally, so overriding them would override a real choice.
+_NON_VISUAL_QT_PLATFORMS = frozenset({"offscreen", "minimal"})
+
+#: Selectable observed-sounding sources as ``(key, label, tooltip)``, in the
+#: order the control rail offers them.
+#:
+#: Restated here instead of read from :mod:`sharpmod.observations` because that
+#: module imports NumPy at module scope and this rail is built before first
+#: paint -- the same reason the HRRR field catalogue is imported lazily.
+#: ``test_gui_observed_source.py`` asserts these keys equal ``("auto",) +
+#: observations.registered_provider_keys()``, so the restatement cannot drift
+#: away from the registry unnoticed.
+OBSERVED_SOURCES: tuple[tuple[str, str, str], ...] = (
+    ("auto", "Automatic (UWyo, then IEM)",
+     "Try the University of Wyoming archive, then the Iowa Environmental "
+     "Mesonet. Whichever answers is recorded; levels are never combined "
+     "between archives."),
+    ("uwyo", "University of Wyoming only",
+     "Use only the University of Wyoming upper-air archive."),
+    ("iem", "Iowa Environmental Mesonet only",
+     "Use only the Iowa Environmental Mesonet RAOB archive."),
+    ("igra2", "NOAA IGRA v2 (deep archive)",
+     "NOAA's quality-assured global radiosonde archive: about 2,900 stations, "
+     "some with a record reaching back over a century. It publishes one "
+     "archive per station rather than per sounding, so the first request for "
+     "a station downloads that archive and later ones are served from disk."),
+)
+
+#: Default source: the established University of Wyoming then IEM behaviour.
+DEFAULT_OBSERVED_SOURCE = "auto"
+
 
 def compose_interactive(*args, **kwargs):
     """Import the heavy sounding-viewer stack only when a viewer is opened.
@@ -170,6 +218,14 @@ def _select_cycle(combo, hour) -> None:
     index = combo.findData(int(hour))
     if index >= 0:
         combo.setCurrentIndex(index)
+
+
+def _observed_source_label(key: str) -> str:
+    """Return the rail label for a source key, or the key itself."""
+    for candidate, label, _tooltip in OBSERVED_SOURCES:
+        if candidate == key:
+            return label
+    return str(key)
 
 
 def _fill_cycle_combo(combo, hours, selected=None) -> None:
@@ -210,6 +266,14 @@ def _newest_cycle_not_after(hours, hour: int) -> int:
 TAB_OVERLAY_CONTROLLERS = {
     "Station Map": "_map_outlook",
     "Forecast Model": "_model_outlook",
+}
+
+#: The gridded-field controller per tab, resolved the same way the outlook one
+#: is: the tab in front decides, because that is the map the user was reading
+#: when they asked for the sounding.
+TAB_FIELD_CONTROLLERS = {
+    "Station Map": "_map_field",
+    "Forecast Model": "_model_field",
 }
 
 
@@ -434,19 +498,71 @@ def _set_button_busy(button, busy: bool, busy_text: str) -> None:
         button.setText(idle)
 
 
+#: First Python feature release the Windows desktop GUI is not known to
+#: survive. ``pyproject.toml`` bounds the distribution at ``<3.14`` for the same
+#: reason: under 3.14 the picker has access-violated during a worker thread's
+#: garbage collection inside pandas, with no catchable traceback.
+_MAX_GUI_PYTHON = (3, 14)
+
+
+def _supported_gui_python(version) -> bool:
+    """Return whether ``version`` may run the visible Windows picker."""
+    return tuple(version[:2]) < _MAX_GUI_PYTHON
+
+
+def _venv_python_version(environment_root: Path) -> tuple[int, ...] | None:
+    """Return a virtual environment's Python version from ``pyvenv.cfg``.
+
+    Read rather than executed: spawning the candidate to ask for its version
+    would have to happen before the relaunch it is deciding on, on the one path
+    that is already recovering from a broken runtime. ``None`` means the version
+    could not be established, which is treated as unusable rather than assumed
+    good.
+    """
+    try:
+        text = (environment_root / "pyvenv.cfg").read_text(
+            encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        key, separator, value = line.partition("=")
+        if not separator or key.strip().lower() not in {
+            "version", "version_info",
+        }:
+            continue
+        parts: list[int] = []
+        for piece in value.strip().split("."):
+            digits = "".join(char for char in piece if char.isdigit())
+            if not digits:
+                break
+            parts.append(int(digits))
+        if len(parts) >= 2:
+            return tuple(parts)
+    return None
+
+
 def _project_gui_runtime() -> tuple[Path, Path] | None:
     """Return a project Python suitable for the Windows desktop GUI.
 
     Release executables are frozen with the supported Python runtime.  Source
     checkouts may instead be invoked by whichever ``python`` is first on PATH,
     so prefer their local environment when it exists.
+
+    The candidate's version is verified before it is offered. An environment
+    that cannot state its version, or states an equally unsupported one, is not
+    a rescue: relaunching into it would reach the same crash, and the child
+    cannot tell that it was already the fallback. Requiring a known-supported
+    version is what makes a single relaunch attempt provably terminal.
     """
     project_root = Path(__file__).resolve().parents[1]
     current = Path(sys.executable).resolve()
     for environment in (".gribenv", ".venv", "venv"):
-        scripts = project_root / environment / "Scripts"
+        root = project_root / environment
+        version = _venv_python_version(root)
+        if version is None or not _supported_gui_python(version):
+            continue
         for executable in ("pythonw.exe", "python.exe"):
-            candidate = scripts / executable
+            candidate = root / "Scripts" / executable
             if candidate.is_file() and candidate.resolve() != current:
                 return candidate, project_root
     return None
@@ -518,11 +634,27 @@ def _relaunch_stable_windows_gui(arguments: list[str]) -> bool:
     captured, so a crash that Python cannot raise as an exception still leaves
     a stack behind. See :func:`_native_crash_capture`.
     """
-    if sys.platform != "win32" or sys.version_info < (3, 14):
+    if sys.platform != "win32" or _supported_gui_python(sys.version_info):
         return False
-    if getattr(sys, "frozen", False) \
-            or os.environ.get(_STABLE_GUI_RUNTIME_ENV) == "1":
+    if getattr(sys, "frozen", False):
         return False
+    # This flag used to suppress the guard outright. That made a copy of it left
+    # behind in the environment -- by an earlier relaunch, a test run, or a
+    # shell that exported it once -- disable the only check standing between an
+    # unsupported interpreter and a native crash. It is how 3.14 reached
+    # QApplication and then access-violated during a worker thread's garbage
+    # collection inside pandas, leaving a log that simply stopped.
+    #
+    # An environment variable cannot overrule sys.version_info: if this
+    # interpreter is too new then it is not the stable runtime, whatever the
+    # variable claims. The relaunch stays single-shot because
+    # _project_gui_runtime only offers an interpreter it has verified is
+    # supported, so the child takes the supported-version branch above.
+    if os.environ.get(_STABLE_GUI_RUNTIME_ENV) == "1":
+        _LOGGER.warning(
+            "application.stale_stable_runtime_flag python=%s executable=%s",
+            ".".join(str(part) for part in sys.version_info[:3]),
+            sys.executable)
 
     runtime = _project_gui_runtime()
     if runtime is None:
@@ -610,6 +742,21 @@ class PickerWindow(QMainWindow):
         self._model_timeline_paths: list[str] = []
         self._model_timeline_failures: dict[int, str] = {}
         self._model_timeline_viewer_closed = False
+        # Box-sounding state. The extraction and analysis stages are separate
+        # workers because analysis can be re-run (to add the expensive composite
+        # tier) without re-fetching anything.
+        self._box_extract_worker = None
+        self._box_analysis_worker = None
+        self._box_mean_worker = None
+        self._box_window = None
+        self._box_window_closed = False
+        self._box_extraction = None
+        # "mean" collapses the box to one sounding; "field" opens the workspace.
+        self._box_mode = "mean"
+        # Set while box mode is released programmatically, so the toggle handler
+        # knows not to wipe the rectangle the user just committed.
+        self._box_mode_disarming = False
+        self._box_output_dir: str | None = None
         self._model_prefetch_worker: _ModelPrefetchWorker | None = None
         self._era5_worker: _ERA5FetchWorker | None = None
         self._wrf_inspect_worker: _WRFInspectWorker | None = None
@@ -902,10 +1049,42 @@ class PickerWindow(QMainWindow):
         self._manage_locations_action = manage_locations
         self._recent_locations_menu = locations_menu.addMenu("Recent Points")
 
-        # A View menu holding one item, because full screen is where users look
-        # for it, and the same key works in the sounding window.
         viewmenu = self.menuBar().addMenu("&View")
         _install_fullscreen_action(self, viewmenu)
+
+        # Map projection. One menu group rather than a control on each map tab:
+        # it is a preference about how maps look, not a per-tab setting, and
+        # four copies of it could disagree with each other.
+        viewmenu.addSeparator()
+        projection_menu = viewmenu.addMenu("Map &Projection")
+        self._projection_group = QActionGroup(self)
+        self._projection_group.setExclusive(True)
+        self._projection_actions = {}
+        for name, label, tip in (
+            ("flat", "&Flat (equirectangular)",
+             "Straight meridians and parallels. Correct at every extent, and "
+             "the only view that can show map imagery such as radar."),
+            ("curved", "&Curved (conformal conic)",
+             "Meridians converge and parallels bow, the way an operational "
+             "forecast chart is drawn.\n"
+             "Regional views only: a whole-hemisphere or equator-centred "
+             "extent falls back to flat, and map imagery is hidden because it "
+             "cannot be placed correctly on a cone."),
+        ):
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setToolTip(tip)
+            action.setData(name)
+            self._projection_group.addAction(action)
+            projection_menu.addAction(action)
+            self._projection_actions[name] = action
+        stored = str(
+            self._settings.value("maps/projection", "flat") or "flat").lower()
+        if stored not in MAP_PROJECTIONS:
+            stored = "flat"
+        self._map_projection = stored
+        self._projection_actions[stored].setChecked(True)
+        self._projection_group.triggered.connect(self._on_projection_chosen)
 
         helpmenu = self.menuBar().addMenu("&Help")
         controls_act = QAction("Sounding Window &Controls", self)
@@ -973,7 +1152,8 @@ class PickerWindow(QMainWindow):
                 win.addProfileCollection(
                     collection, focus=True, check_integrity=False)
                 _start_locator_overlay_fetch(
-                    win, collection, product=_overlay_product_for(self))
+                    win, collection, product=_overlay_product_for(self),
+                    controller=self)
             _apply_viewer_session_state(
                 win,
                 document.get("active_collection", 0),
@@ -1193,6 +1373,163 @@ class PickerWindow(QMainWindow):
         return bool(self._settings.value(
             "viewer/combine_soundings", True, bool))
 
+    # -- map projection -------------------------------------------------- #
+
+    def map_projection(self) -> str:
+        """Return the chosen map view, ``"flat"`` or ``"curved"``."""
+        return getattr(self, "_map_projection", "flat")
+
+    def _map_widgets(self):
+        """Yield every map widget that has been built so far.
+
+        Panels are created lazily, so this reaches for the attributes rather
+        than holding a registry that could fall out of step with them.
+        """
+        for name in ("_map", "_model_map", "_era5_map", "_wrf_map"):
+            widget = getattr(self, name, None)
+            if widget is not None and hasattr(widget, "set_projection"):
+                yield widget
+        window = getattr(self, "_box_window", None)
+        field_map = getattr(window, "_map", None) if window is not None else None
+        if field_map is not None and hasattr(field_map, "set_projection"):
+            yield field_map
+
+    def _on_projection_chosen(self, action) -> None:
+        name = str(action.data() or "flat")
+        if name not in MAP_PROJECTIONS:
+            name = "flat"
+        self._map_projection = name
+        self._settings.setValue("maps/projection", name)
+        self._settings.sync()
+        self._apply_map_projection()
+        _LOGGER.info("maps.projection projection=%s", name)
+
+    def _startup_observed_source(self) -> str:
+        """Return the remembered observed source, for a rail being built.
+
+        Unlike the overlays, the source *is* restored on launch: it costs no
+        network by itself, and someone who works from one archive should not
+        have to re-pick it every session. A key written by a version that
+        offered different sources degrades to the default.
+        """
+        offered = {key for key, _label, _tooltip in OBSERVED_SOURCES}
+        try:
+            stored = str(
+                self._settings.value("observed/provider", "") or ""
+            ).strip().lower()
+        except Exception:  # noqa: BLE001 - an unreadable INI is not fatal
+            return DEFAULT_OBSERVED_SOURCE
+        return stored if stored in offered else DEFAULT_OBSERVED_SOURCE
+
+    def _observed_source(self) -> str:
+        """Return the selected source key, before or after the rail exists."""
+        combo = getattr(self, "_map_source", None)
+        if combo is None:
+            # Availability probes and fetches can be requested by a test or a
+            # restored session before the map tab has been built.
+            return self._startup_observed_source()
+        key = combo.currentData()
+        return str(key) if key else DEFAULT_OBSERVED_SOURCE
+
+    def _map_on_source_changed(self) -> None:
+        """Persist the chosen source and re-grade the current selection.
+
+        The preflight cache is keyed by source, so nothing needs discarding
+        here: a switch simply misses the cache and re-probes.
+        """
+        key = self._observed_source()
+        try:
+            self._settings.setValue("observed/provider", key)
+            self._settings.sync()
+        except Exception:  # noqa: BLE001 - a preference must not break the UI
+            _LOGGER.debug("observed_source.unsaved", exc_info=True)
+        _LOGGER.info("observed_source.selected provider=%s", key)
+        self._queue_availability(
+            self._map_selected_id, self._map_when(), self._map_avail)
+
+    def _startup_field_product(self) -> str:
+        """Return the remembered HRRR field, for a controller being built.
+
+        Only the *product* is remembered, not whether the overlay was on. A
+        model field costs a GRIB subset and a reprojection, so restoring it
+        automatically would mean every launch reaches for the network before the
+        user has asked for anything -- the same reason the outlook and radar
+        overlays both default to off. Remembering the choice still means the user
+        who always looks at MLCAPE finds it already selected.
+        """
+        # Imported here, not at module scope: the catalogue pulls in NumPy, and
+        # the picker has to reach first paint without it.
+        from sharpmod import hrrr_products
+
+        try:
+            stored = self._settings.value("overlays/hrrr_field_product", "")
+        except Exception:  # noqa: BLE001 - an unreadable INI is not fatal
+            return hrrr_products.DEFAULT_PRODUCT
+        # get_product resolves anything unknown, so a key written by a different
+        # version of the catalogue degrades to the default instead of failing.
+        return hrrr_products.get_product(str(stored or "")).key
+
+    def _startup_radar_scope(self) -> str:
+        """Return the remembered radar scope, for a controller being built.
+
+        As with the field, only the *choice* is remembered and never whether the
+        overlay was on, so a launch still reaches for no network until asked.
+        """
+        from sharpmod.gui_overlay_controls import SCOPE_MOSAIC, SCOPE_SITE
+
+        try:
+            stored = str(self._settings.value("overlays/radar_scope", "")
+                         or "").strip().lower()
+        except Exception:  # noqa: BLE001 - an unreadable INI is not fatal
+            return SCOPE_SITE
+        return stored if stored in (SCOPE_SITE, SCOPE_MOSAIC) else SCOPE_SITE
+
+    def _startup_radar_site(self) -> str:
+        """Return the WSR-88D pinned last session, or follow the map.
+
+        An unknown identifier degrades to following the map rather than failing:
+        the catalogue is a bundled resource and a site can leave it between
+        versions.
+        """
+        from sharpmod.gui_overlay_controls import SITE_AUTO
+        try:
+            stored = str(self._settings.value("overlays/radar_site", "")
+                         or "").strip().upper()
+        except Exception:  # noqa: BLE001 - an unreadable INI is not fatal
+            return SITE_AUTO
+        from sharpmod.radar_site import site_by_id
+        return stored if site_by_id(stored) is not None else SITE_AUTO
+
+    def _remember_overlay_choices(self) -> None:
+        """Persist the selected HRRR field, radar scope, and pinned radar.
+
+        Never raises: this runs from ``closeEvent``, and a window must not refuse
+        to close over a preference it could not write.
+        """
+        field = getattr(self, "_map_field", None) \
+            or getattr(self, "_model_field", None)
+        radar = getattr(self, "_map_radar", None) \
+            or getattr(self, "_model_radar", None)
+        try:
+            if field is not None:
+                self._settings.setValue("overlays/hrrr_field_product",
+                                        field.product())
+            if radar is not None:
+                self._settings.setValue("overlays/radar_scope", radar.scope())
+                self._settings.setValue("overlays/radar_site", radar.site())
+            self._settings.sync()
+        except Exception:  # noqa: BLE001 - closing must not fail on a preference
+            _LOGGER.debug("overlays.choices_unsaved", exc_info=True)
+
+    def _apply_map_projection(self) -> None:
+        """Push the chosen view onto every map that exists."""
+        name = self.map_projection()
+        for widget in self._map_widgets():
+            try:
+                widget.set_projection(name)
+            except Exception:  # noqa: BLE001 - one map must not block the rest
+                _LOGGER.debug("maps.projection_failed", exc_info=True)
+
     def _save_combine_soundings(self, enabled: bool) -> None:
         self._settings.setValue("viewer/combine_soundings", bool(enabled))
         self._settings.sync()
@@ -1283,17 +1620,27 @@ class PickerWindow(QMainWindow):
         self._avail_latest[id(indicator)] = token
 
         worker = _AvailabilityWorker(sid, when, token, parent=self,
-                                     station=station)
+                                     station=station,
+                                     provider=self._observed_source())
         worker.checked.connect(self._on_availability_checked)
         worker.finished.connect(worker.deleteLater)
         self._avail_workers.append(worker)
         worker.start()
 
-    @staticmethod
-    def _observed_cache_key(sid: str, when: datetime):
+    def _observed_cache_key(self, sid: str, when: datetime):
+        """Key the preflight cache by source as well as station and time.
+
+        Without the source in the key, switching archives would be answered by
+        whichever one was probed first -- the station and time are identical, so
+        the entry would still hit.
+        """
         if when.tzinfo is not None:
             when = when.astimezone(timezone.utc).replace(tzinfo=None)
-        return str(sid).strip().casefold(), when.replace(microsecond=0)
+        return (
+            self._observed_source(),
+            str(sid).strip().casefold(),
+            when.replace(microsecond=0),
+        )
 
     def _on_availability_checked(self, _sid: str, _when, status: str,
                                  message: str, station_label: str,
@@ -1407,6 +1754,9 @@ class PickerWindow(QMainWindow):
         # binds directly to it, and the rail is sealed into a scroll area as
         # soon as it is complete. Its placement in ``outer`` is unchanged.
         self._map = StationMapWidget(self._all_stations)
+        self._map.set_projection(self.map_projection())
+        self._map.radarSiteSelected.connect(self._map_on_radar_site)
+        self._map.viewSettled.connect(self._map_on_view_settled)
         self._map.stationSelected.connect(self._map_on_select)
         self._map.stationActivated.connect(self._map_on_activate)
 
@@ -1416,11 +1766,21 @@ class PickerWindow(QMainWindow):
         left.setContentsMargins(0, 0, 0, 0)
 
         src_box, sb = _rail_card("Sounding source")
-        src_combo = QComboBox()
-        src_combo.addItem("Observed (UWyo / IEM fallback)")
-        src_combo.setEnabled(False)
-        src_combo.setMinimumHeight(CONTROL_H["md"])
-        sb.addWidget(src_combo)
+        self._map_source = QComboBox()
+        for key, label, tooltip in OBSERVED_SOURCES:
+            self._map_source.addItem(label, key)
+            self._map_source.setItemData(
+                self._map_source.count() - 1, tooltip, Qt.ToolTipRole)
+        self._map_source.setMinimumHeight(CONTROL_H["md"])
+        stored_source = self._startup_observed_source()
+        stored_index = self._map_source.findData(stored_source)
+        if stored_index >= 0:
+            self._map_source.setCurrentIndex(stored_index)
+        self._map_source.setToolTip(
+            "Which archive to fetch observed soundings from.")
+        self._map_source.currentIndexChanged.connect(
+            self._map_on_source_changed)
+        sb.addWidget(self._map_source)
         left.addWidget(src_box)
 
         cycle_box, cg = _rail_form("Run time (UTC)")
@@ -1459,8 +1819,16 @@ class PickerWindow(QMainWindow):
         overlay_box, overlay_layout = _rail_card("Map overlays")
         self._map_outlook = OutlookOverlayController(self._map, parent=self)
         overlay_layout.addWidget(self._map_outlook.controls_widget())
-        self._map_radar = RadarOverlayController(self._map, parent=self)
+        self._map_radar = RadarOverlayController(
+            self._map, parent=self, scope=self._startup_radar_scope(),
+            site=self._startup_radar_site())
         overlay_layout.addWidget(self._map_radar.controls_widget())
+        # Listed after radar but drawn beneath it: see RASTER_DRAW_ORDER. The
+        # control order follows what the user reaches for most often, the paint
+        # order follows what has to stay readable.
+        self._map_field = HrrrFieldController(
+            self._map, parent=self, product=self._startup_field_product())
+        overlay_layout.addWidget(self._map_field.controls_widget())
         left.addWidget(overlay_box)
 
         # One card for "which station, and can it be fetched". The selection
@@ -1509,8 +1877,61 @@ class PickerWindow(QMainWindow):
         outer.addWidget(self._map, stretch=1)
 
         self._map_selected_id: str | None = None
-        self._map_outlook.set_valid_time(as_utc(self._map_when()))
+        self._map_sync_overlay_times()
         return w
+
+    def _map_on_radar_site(self, site_id: str) -> None:
+        self._select_radar_site("_map_radar", site_id)
+
+    def _model_on_radar_site(self, site_id: str) -> None:
+        self._select_radar_site("_model_radar", site_id)
+
+    def _select_radar_site(self, attribute: str, site_id: str) -> None:
+        """Point a tab's radar controller at the antenna clicked on its map.
+
+        A map never reaches into a controller and a controller never listens to a
+        map; both talk to this window instead, which is the arrangement every
+        other overlay already uses.
+        """
+        controller = getattr(self, attribute, None)
+        if controller is None or not site_id:
+            return
+        controller.set_site(site_id)
+
+    def _map_on_view_settled(self) -> None:
+        self._view_settled("_map_radar", "_map_field")
+
+    def _model_on_view_settled(self) -> None:
+        self._view_settled("_model_radar", "_model_field")
+
+    def _view_settled(self, *attributes: str) -> None:
+        """Let a tab's view-dependent overlays catch up with a moved map.
+
+        Relayed through this window for the same reason the site click is: the
+        map does not know the controllers exist. Single-site radar chooses its
+        antenna from the view, while HRRR fields use the same event to retry as
+        soon as a view crosses back into their domain.
+        """
+        for attribute in attributes:
+            controller = getattr(self, attribute, None)
+            handler = getattr(controller, "on_view_settled", None)
+            if handler is not None:
+                handler()
+
+    def _map_sync_overlay_times(self) -> None:
+        """Point the observed tab's overlays at the selected sounding hour.
+
+        There is no cycle selection here, only the hour of the observation, so
+        the HRRR field follows the valid time: for a past hour that resolves to
+        that hour's own analysis, which is the model's depiction of the same
+        atmosphere the RAOB sampled.
+        """
+        when = as_utc(self._map_when())
+        if hasattr(self, "_map_outlook"):
+            self._map_outlook.set_valid_time(when)
+        field = getattr(self, "_map_field", None)
+        if field is not None:
+            field.set_valid_time(when)
 
     def _map_set_recent(self) -> None:
         d, h = _most_recent_synoptic()
@@ -1542,9 +1963,8 @@ class PickerWindow(QMainWindow):
         self._refresh_station_catalog(self._map_when())
         self._queue_availability(
             self._map_selected_id, self._map_when(), self._map_avail)
-        # The chosen cycle is also the overlay's valid time.
-        if hasattr(self, "_map_outlook"):
-            self._map_outlook.set_valid_time(as_utc(self._map_when()))
+        # The chosen cycle is also the overlays' valid time.
+        self._map_sync_overlay_times()
 
     def _map_on_activate(self, sid: str) -> None:
         self._map_on_select(sid)
@@ -1775,7 +2195,7 @@ class PickerWindow(QMainWindow):
         self._start_fetch(sid, self._selected_when())
 
     def _start_fetch(self, sid: str, when: datetime) -> None:
-        """Fetch an observation with explicit UWyo then IEM fallback."""
+        """Fetch an observation from the source selected in the rail."""
         if self._worker is not None and self._worker.isRunning():
             QMessageBox.information(self, APP_NAME,
                                     "A fetch is already in progress.")
@@ -1795,13 +2215,15 @@ class PickerWindow(QMainWindow):
             self._display_prefetched_observation(fetched, sid, when)
             return
 
+        source = self._observed_source()
         self._set_busy(True)
         self.statusBar().showMessage(
-            f"Fetching {sid} at {when:%Y-%m-%d %H}Z "
-            "(UWyo \u2192 IEM fallback)\u2026")
+            f"Fetching {sid} at {when:%Y-%m-%d %H}Z from "
+            f"{_observed_source_label(source)}\u2026")
 
         self._worker = _FetchWorker(sid, when, parent=self,
-                                    station=self._station(sid))
+                                    station=self._station(sid),
+                                    provider=source)
         self._worker.finished_ok.connect(self._on_fetch_ok)
         self._worker.failed.connect(self._on_fetch_failed)
         self._worker.finished.connect(lambda: self._set_busy(False))
@@ -1813,16 +2235,22 @@ class PickerWindow(QMainWindow):
         """Display the profile already decoded by the availability worker."""
         from sharppy.sharptab.prof_collection import ProfCollection
 
+        # IGRA can satisfy a synoptic-hour request with a nearby special
+        # release.  The cached preflight result therefore owns the display
+        # time; ``when`` remains only the cache/request key.
+        delivered_when = getattr(fetched, "valid", None)
+        if not isinstance(delivered_when, datetime):
+            delivered_when = when
         station_id = str(
             getattr(fetched, "station_id", None) or requested_sid
         )
         provider = str(getattr(fetched, "provider", "uwyo")).upper()
         prof_col = ProfCollection(
             {"": [fetched.profile]},
-            [when],
+            [delivered_when],
             observed=True,
-            base_time=when,
-            run=when,
+            base_time=delivered_when,
+            run=delivered_when,
             model=provider,
             loc=station_id,
         )
@@ -1833,22 +2261,23 @@ class PickerWindow(QMainWindow):
         QApplication.processEvents()
         try:
             title = (
-                f"{APP_NAME} — {station_id} {when:%Y-%m-%d %H}Z "
+                f"{APP_NAME} — {station_id} {delivered_when:%Y-%m-%d %H}Z "
                 f"[{provider}]"
             )
             self._show_sounding(prof_col, station_id, title=title)
             self.statusBar().showMessage(
-                f"Opened {station_id} {when:%Y-%m-%d %H}Z from {provider} "
+                f"Opened {station_id} {delivered_when:%Y-%m-%d %H}Z "
+                f"from {provider} "
                 "(reused availability download)"
             )
             _LOGGER.info(
                 "observed_fetch.displayed_from_preflight station=%s valid=%s",
-                station_id, when,
+                station_id, delivered_when,
             )
         except Exception as exc:  # noqa: BLE001 - GUI/render boundary
             _LOGGER.exception(
                 "observed_fetch.preflight_display_failed station=%s valid=%s",
-                station_id, when,
+                station_id, delivered_when,
             )
             QMessageBox.critical(
                 self, APP_NAME,
@@ -1928,9 +2357,13 @@ class PickerWindow(QMainWindow):
 
         self._model_syncing_point = False
         self._model_map = PointMapWidget()
+        self._model_map.set_projection(self.map_projection())
+        self._model_map.radarSiteSelected.connect(self._model_on_radar_site)
+        self._model_map.viewSettled.connect(self._model_on_view_settled)
         self._model_map.pointSelected.connect(self._model_on_map_point)
         self._model_map.pointActivated.connect(
             lambda _lat, _lon: self._model_fetch())
+        self._model_map.boxSelected.connect(self._model_on_box_selected)
 
         left = QVBoxLayout()
         left.setSpacing(SPACE["md"])
@@ -1952,8 +2385,13 @@ class PickerWindow(QMainWindow):
             self._model_map, parent=self)
         overlay_layout.addWidget(self._model_outlook.controls_widget())
         self._model_radar = RadarOverlayController(
-            self._model_map, parent=self)
+            self._model_map, parent=self, scope=self._startup_radar_scope(),
+            site=self._startup_radar_site())
         overlay_layout.addWidget(self._model_radar.controls_widget())
+        self._model_field = HrrrFieldController(
+            self._model_map, parent=self,
+            product=self._startup_field_product())
+        overlay_layout.addWidget(self._model_field.controls_widget())
         left.addWidget(overlay_box)
 
         model_box, model_layout = _rail_card("Model")
@@ -2052,26 +2490,52 @@ class PickerWindow(QMainWindow):
         self._model_member_box.hide()
         left.addWidget(self._model_member_box)
 
+        # The primary action keeps the full rail width to itself. Sitting the
+        # secondary actions beside it needed 418 px of the rail's 400 px
+        # viewport -- and 490 px once Cancel appeared -- so "Box…" was pushed
+        # past the right edge, unreachable because the rail deliberately offers
+        # no horizontal scrolling.
         fetch_row = QHBoxLayout()
         self._model_fetch_btn = QPushButton("Fetch && Display Forecast Sounding")
         self._model_fetch_btn.setObjectName(OBJ_PRIMARY)
         self._model_fetch_btn.setMinimumHeight(CONTROL_H["lg"])
         self._model_fetch_btn.clicked.connect(self._model_fetch)
         fetch_row.addWidget(self._model_fetch_btn, 1)
+        left.addLayout(fetch_row)
+
+        # The secondary actions share the row below, each stretching to an equal
+        # share of it. A box layout rather than a grid: a hidden widget claims no
+        # space here, so Cancel can come and go without leaving a hole where a
+        # grid column would have kept its stretch.
+        action_row = QHBoxLayout()
         self._model_timeline_btn = QPushButton("Timeline…")
         self._model_timeline_btn.setMinimumHeight(CONTROL_H["lg"])
         self._model_timeline_btn.setToolTip(
             "Fetch several forecast hours into an animated timeline"
         )
         self._model_timeline_btn.clicked.connect(self._model_fetch_timeline)
-        fetch_row.addWidget(self._model_timeline_btn)
+        action_row.addWidget(self._model_timeline_btn, 1)
+        self._model_box_btn = QPushButton("Box…")
+        self._model_box_btn.setCheckable(True)
+        self._model_box_btn.setMinimumHeight(CONTROL_H["lg"])
+        self._model_box_btn.setToolTip(
+            "Sample a whole area at once: drag a rectangle on the map to "
+            "extract every model grid point inside it from a single download.\n"
+            "By default those points are averaged into one sounding that opens "
+            "like any other; the area workspace is offered as an alternative.\n"
+            "The map still pans on a middle-drag or right-drag while this is "
+            "on, and the mode releases itself once a box is accepted.\n"
+            "Shift-drag works whether or not this is on."
+        )
+        self._model_box_btn.toggled.connect(self._model_box_mode_toggled)
+        action_row.addWidget(self._model_box_btn, 1)
         self._model_cancel_btn = QPushButton("Cancel")
         self._model_cancel_btn.setObjectName(OBJ_GHOST)
         self._model_cancel_btn.setMinimumHeight(CONTROL_H["lg"])
         self._model_cancel_btn.clicked.connect(self._cancel_model_fetch)
         self._model_cancel_btn.hide()
-        fetch_row.addWidget(self._model_cancel_btn)
-        left.addLayout(fetch_row)
+        action_row.addWidget(self._model_cancel_btn, 1)
+        left.addLayout(action_row)
 
         self._model_progress = QProgressBar()
         self._model_progress.setMinimumHeight(PROGRESS_H)
@@ -2257,8 +2721,34 @@ class PickerWindow(QMainWindow):
         # sounding is compared against the outlook covering the hour it depicts.
         if hasattr(self, "_model_outlook"):
             self._model_outlook.set_valid_time(as_utc(valid))
+        self._model_sync_field_reference(run, fxx, valid)
         if hasattr(self, "_model_availability"):
             self._queue_model_availability()
+
+    def _model_sync_field_reference(self, run: datetime, fxx: int,
+                                    valid: datetime) -> None:
+        """Point the HRRR field overlay at the selected cycle.
+
+        The gridded overlay is HRRR, so it can be pinned to the very run and
+        forecast hour on screen whenever HRRR is the selected product -- the map
+        then shows the field the sounding will be cut from rather than a
+        different run that happens to be valid at the same hour.
+
+        For any other model the run has no meaning to HRRR (a 0.25-degree GFS
+        F120 has no HRRR counterpart), so the overlay falls back to matching the
+        valid time with the freshest HRRR run that reaches it. Both cases are
+        stated in the overlay's own subtitle, so the map never implies the field
+        and the sounding share a cycle when they do not.
+        """
+        field = getattr(self, "_model_field", None)
+        if field is None:
+            return
+        cfg = self._model_config()
+        if cfg is not None and cfg.key == HRRR_FIELD_MODEL_KEY:
+            field.set_forecast_reference(as_utc(run), int(fxx))
+        else:
+            field.set_forecast_reference(None, None)
+            field.set_valid_time(as_utc(valid))
 
     def _model_member_value(self) -> str | None:
         if not hasattr(self, "_model_member") \
@@ -2428,7 +2918,10 @@ class PickerWindow(QMainWindow):
             return
         cfg = self._model_config()
         busy = self._model_worker is not None \
-            or getattr(self, "_model_timeline_worker", None) is not None
+            or getattr(self, "_model_timeline_worker", None) is not None \
+            or getattr(self, "_box_extract_worker", None) is not None \
+            or getattr(self, "_box_analysis_worker", None) is not None \
+            or getattr(self, "_box_mean_worker", None) is not None
         if cfg is None:
             self._model_point_status.setText("")
             self._model_fetch_btn.setEnabled(False)
@@ -2795,6 +3288,471 @@ class PickerWindow(QMainWindow):
             shutil.rmtree(worker.output_dir, ignore_errors=True)
         worker.deleteLater()
 
+    # -- box soundings ------------------------------------------------------ #
+    def _model_box_mode_toggled(self, checked: bool) -> None:
+        """Turn sticky box drawing on the map on or off."""
+        self._model_map.set_box_mode(bool(checked))
+        if not checked and not self._box_mode_disarming:
+            # Turning the mode off by hand clears the rectangle; disarming it
+            # automatically after a box was accepted must keep the preview.
+            self._model_map.set_box(None)
+        self.statusBar().showMessage(
+            "Drag a rectangle to average an area into one sounding. "
+            "Middle-drag or right-drag still moves the map."
+            if checked else "", 6000)
+
+    def _disarm_box_mode(self) -> None:
+        """Release box mode after a box is accepted, keeping the drawn preview.
+
+        A box is one gesture with one result, and the next thing wanted is almost
+        always to look somewhere else. Leaving the mode armed made every
+        subsequent drag draw another rectangle instead of moving the map.
+        """
+        if not self._model_box_btn.isChecked():
+            return
+        self._box_mode_disarming = True
+        try:
+            self._model_box_btn.setChecked(False)
+        finally:
+            self._box_mode_disarming = False
+
+    def _model_on_box_selected(self, lat0, lon0, lat1, lon1) -> None:
+        """Plan, confirm, and start extraction for a rectangle from the map."""
+        from sharpmod.box_sounding import BoxRegion, BoxSoundingError
+        from sharpmod.gui_box import BoxPlanDialog
+
+        config = self._model_config()
+        if config is None:
+            return
+        if self._box_extract_worker is not None \
+                or self._box_analysis_worker is not None \
+                or self._box_mean_worker is not None:
+            QMessageBox.information(
+                self, APP_NAME, "A box sounding is already in progress.")
+            return
+        if self._model_worker is not None \
+                or self._model_timeline_worker is not None:
+            QMessageBox.information(
+                self, APP_NAME, "A model fetch is already in progress.")
+            return
+        try:
+            region = BoxRegion.from_corners(lat0, lon0, lat1, lon1)
+        except BoxSoundingError as exc:
+            self.statusBar().showMessage(str(exc), 6000)
+            self._model_map.set_box(None)
+            return
+
+        available_hours = [
+            self._model_fxx_combo.itemData(index)
+            for index in range(self._model_fxx_combo.count())
+        ]
+        dialog = BoxPlanDialog(
+            config.key, region, parent=self,
+            available_hours=[
+                int(hour) for hour in available_hours if hour is not None
+            ],
+            start_hour=self._model_selected_fxx(),
+        )
+        if dialog.exec() != QDialog.Accepted:
+            self._model_map.set_box(None)
+            return
+        plan = dialog.plan()
+        if plan is None:
+            return
+        # Show exactly which points will be sampled before anything downloads.
+        self._model_map.set_box_nodes(
+            plan.points,
+            f"{plan.rows} x {plan.cols} at {plan.spacing_km:.0f} km",
+        )
+        self._box_mode = dialog.mode()
+        # The gesture is finished, so give the map back: another drag should pan,
+        # not start a second box on top of the one now being extracted.
+        self._disarm_box_mode()
+        self._start_box_extraction(
+            plan, hours=dialog.hours(), mode=self._box_mode, fxx=dialog.fxx())
+
+    def _start_box_extraction(
+        self, plan, *, hours=None, mode=None, fxx=None,
+    ) -> None:
+        from sharpmod.gui_box import BoxExtractWorker
+
+        if mode is not None:
+            self._box_mode = str(mode)
+        run_time = self._model_run_time()
+        # The dialog's hour wins when it supplied one; it starts on the sidebar's
+        # selection, so the sidebar is still the default rather than being
+        # overridden by it.
+        fxx = self._model_selected_fxx() if fxx is None else int(fxx)
+        output_dir = tempfile.mkdtemp(prefix="sharpmod-box-")
+        self._box_window_closed = False
+        self._box_output_dir = output_dir
+        disk_cache, _hour_cache = self._ensure_model_cache()
+        worker = BoxExtractWorker(
+            plan, run_time, fxx, output_dir,
+            member=self._model_member_value(),
+            loc=self._model_loc.text().strip() or None,
+            disk_cache=disk_cache,
+            hours=hours,
+            parent=self,
+        )
+        self._box_extract_worker = worker
+        worker.point_failed.connect(self._on_box_point_failed)
+        worker.progress.connect(self._on_box_progress)
+        worker.result_ready.connect(self._on_box_extract_result)
+        worker.failed.connect(self._on_box_extract_failed)
+        worker.finished.connect(self._on_box_extract_finished)
+        self._set_model_busy(True)
+        points = len(plan.requestable_points)
+        total = points * (len(hours) if hours else 1)
+        self._model_progress.show()
+        # Indeterminate until the first sounding lands: the download that comes
+        # first has no per-point milestones to count.
+        self._model_progress.setRange(0, 0)
+        self._model_progress_detail.setText(
+            f"downloading one {plan.model_label} model hour "
+            f"for {total} soundings\u2026")
+        self._model_progress_detail.show()
+        if hours:
+            self.statusBar().showMessage(
+                f"Extracting {total} soundings across {len(hours)} "
+                f"{plan.model_label} forecast hours "
+                f"(F{hours[0]:03d}\u2013F{hours[-1]:03d})…")
+        elif self._box_mode == "mean":
+            self.statusBar().showMessage(
+                f"Averaging {points} {plan.model_label} F{fxx:03d} soundings "
+                f"from one model hour into one sounding…")
+        else:
+            self.statusBar().showMessage(
+                f"Extracting {points} soundings from one "
+                f"{plan.model_label} F{fxx:03d} model hour…")
+        worker.start()
+
+    def _on_box_point_failed(self, row, col, message) -> None:
+        if self.sender() is not self._box_extract_worker:
+            return
+        _LOGGER.info(
+            "box.point_failed row=%d col=%d error=%s", row, col, message)
+
+    def _on_box_progress(self, stage, done, total) -> None:
+        if self.sender() is not self._box_extract_worker:
+            return
+        total = max(1, int(total))
+        done = max(0, int(done))
+        label = str(stage or "working").replace("_", " ")
+        if done <= 0:
+            # The transfer is a single bulk download with no per-point
+            # milestones, so a 0-of-N bar sits perfectly still and reads as
+            # nothing happening at all. An indeterminate bar says "working"
+            # without claiming progress it cannot measure.
+            self._model_progress.setRange(0, 0)
+            self._model_progress_detail.setText(
+                f"{label} one model hour for {total} soundings\u2026")
+        else:
+            self._model_progress.setRange(0, total)
+            self._model_progress.setValue(done)
+            self._model_progress_detail.setText(
+                f"{label} \u2014 {done}/{total} soundings")
+        self._model_progress.show()
+        self._model_progress_detail.show()
+
+    def _on_box_extract_failed(self, message) -> None:
+        if self.sender() is not self._box_extract_worker:
+            return
+        QMessageBox.critical(self, APP_NAME, str(message))
+
+    def _on_box_extract_result(self, extraction) -> None:
+        if self.sender() is not self._box_extract_worker:
+            return
+        if not extraction.ok:
+            QMessageBox.warning(
+                self, APP_NAME,
+                "No sounding in that box could be extracted. The run may not "
+                "be published yet, or the area may fall outside the model's "
+                "usable grid.")
+            return
+        self._box_extraction = extraction
+        if self._box_mode == "mean" and not extraction.sequence:
+            self._start_box_mean(extraction)
+            return
+        window = self._ensure_box_window()
+        window.set_extraction(extraction)
+        if extraction.sequence:
+            window.set_status(
+                f"{extraction.completed} soundings across "
+                f"{len(extraction.hours)} {extraction.plan.model_label} "
+                f"forecast hours "
+                f"(F{extraction.hours[0]:03d}\u2013"
+                f"F{extraction.hours[-1]:03d})")
+        else:
+            skipped = extraction.plan.count - extraction.completed
+            window.set_status(
+                f"{extraction.completed} soundings from one "
+                f"{extraction.plan.model_label} download"
+                + (f", {skipped} unavailable" if skipped > 0 else ""))
+        window.show()
+        window.raise_()
+        from sharpmod.box_analysis import FAST_TIER
+
+        self._start_box_analysis(extraction, (FAST_TIER,))
+
+    def _on_box_extract_finished(self) -> None:
+        worker = self.sender()
+        if self._box_extract_worker is worker:
+            self._box_extract_worker = None
+            if self._box_analysis_worker is None \
+                    and self._box_mean_worker is None:
+                self._set_model_busy(False)
+            self._cleanup_closed_box_output()
+        worker.deleteLater()
+
+    # -- box mean: the whole area as one sounding -------------------------- #
+
+    def _start_box_mean(self, extraction) -> None:
+        """Average an extracted box and open the result as one sounding."""
+        from sharpmod.gui_box import BoxMeanWorker
+
+        worker = BoxMeanWorker(
+            extraction,
+            loc=self._model_loc.text().strip() or None,
+            parent=self,
+        )
+        self._box_mean_worker = worker
+        worker.ready.connect(self._on_box_mean_ready)
+        worker.failed.connect(self._on_box_mean_failed)
+        worker.finished.connect(self._on_box_mean_finished)
+        # Averaging and then building the parcel surface is one opaque stretch of
+        # work, so the bar stays indeterminate rather than parking at 100% and
+        # looking finished while the window has not opened yet.
+        self._model_progress.show()
+        self._model_progress.setRange(0, 0)
+        self._model_progress_detail.setText(
+            f"averaging {extraction.completed} soundings into one\u2026")
+        self._model_progress_detail.show()
+        self.statusBar().showMessage(
+            f"Averaging {extraction.completed} soundings into one sounding…")
+        worker.start()
+
+    def _on_box_mean_ready(self, npz_path, profile) -> None:
+        if self.sender() is not self._box_mean_worker:
+            return
+        extraction = self._box_extraction
+        plan = extraction.plan if extraction is not None else None
+        label = plan.model_label if plan is not None else "Model"
+        try:
+            # The ordinary decode path, so the averaged sounding arrives with the
+            # same overlay, town lookup, and parcel logic as a single point.
+            prof_col, stn_id = _render().decode(npz_path)
+        except Exception as exc:  # noqa: BLE001 - report, do not crash
+            _LOGGER.exception("box.mean_display_failed path=%s", npz_path)
+            QMessageBox.critical(
+                self, APP_NAME,
+                f"The box was averaged, but the result could not be "
+                f"displayed:\n{exc}")
+            return
+        run_time = extraction.run_time if extraction is not None else None
+        fxx = int(extraction.fxx) if extraction is not None else 0
+        # Through mean_model_label so the window title, the Skew-T title, and the
+        # on-plot callout all make the claim in the same words. Phrasing it here
+        # too gave two producers of one fact, free to drift apart.
+        from sharpmod.box_mean import mean_model_label
+
+        title = f"{APP_NAME} \u2014 {mean_model_label(label, profile.members)}"
+        if run_time is not None:
+            title += f" {run_time:%Y-%m-%d %H}Z F{fxx:03d}"
+        win = self._show_sounding(prof_col, stn_id, title=title)
+        # The averaged file is this window's only copy, so it is removed when the
+        # window closes rather than left in the temporary directory.
+        _retain_model_data_until_close(
+            win, npz_path, os.path.dirname(npz_path))
+        self._box_output_dir = None
+        self.statusBar().showMessage(
+            f"Opened the {label} box mean: {profile.describe()}")
+        _LOGGER.info(
+            "box.mean_displayed members=%d levels=%d clamped=%d viewer=%s",
+            profile.members, profile.levels, profile.clamped_dewpoints, id(win))
+        if profile.clamped_dewpoints or profile.requested > profile.members:
+            # Both are honest caveats about the average rather than errors, so
+            # they belong in the status line, not a modal.
+            self._model_progress_detail.setText(profile.describe())
+            self._model_progress_detail.show()
+
+    def _on_box_mean_failed(self, message) -> None:
+        if self.sender() is not self._box_mean_worker:
+            return
+        _LOGGER.error("box.mean_failed message=%s", message)
+        self.statusBar().showMessage("Box mean failed")
+        QMessageBox.critical(self, APP_NAME, str(message))
+
+    def _on_box_mean_finished(self) -> None:
+        worker = self.sender()
+        if self._box_mean_worker is worker:
+            self._box_mean_worker = None
+            if self._box_extract_worker is None \
+                    and self._box_analysis_worker is None:
+                self._set_model_busy(False)
+                # Back to a determinate bar so the next fetch does not inherit
+                # this one's indeterminate sweep.
+                self._model_progress.setRange(0, 1)
+                self._model_progress.reset()
+                self._model_progress.hide()
+                self._model_progress_detail.hide()
+            self._cleanup_closed_box_output()
+        worker.deleteLater()
+
+    def _ensure_box_window(self):
+        from sharpmod.gui_box import BoxAnalysisWindow
+
+        window = self._box_window
+        if window is not None:
+            try:
+                window.objectName()
+                return window
+            except RuntimeError:
+                self._box_window = None
+        window = BoxAnalysisWindow()
+        window.setAttribute(Qt.WA_DeleteOnClose, True)
+        window.soundingRequested.connect(self._on_box_sounding_requested)
+        window.compositesRequested.connect(self._on_box_composites_requested)
+        window.destroyed.connect(self._on_box_window_destroyed)
+        self._box_window = window
+        self._box_window_closed = False
+        # The workspace builds its field map with the window, so it adopts the
+        # chosen view here the way every other lazily created map does. Routed
+        # through the shared applier rather than the map directly, so the box
+        # workspace cannot drift from the rest of the picker.
+        self._apply_map_projection()
+        return window
+
+    def _on_box_window_destroyed(self, *_args) -> None:
+        self._box_window = None
+        self._box_window_closed = True
+        # The extracted soundings only exist for this window, so they go with
+        # it rather than accumulating in the temporary directory. An active
+        # worker may still be reading them, so retain the directory until its
+        # finished handler can remove it.
+        self._box_extraction = None
+        worker = self._box_analysis_worker
+        if worker is not None:
+            worker.requestInterruption()
+        self._cleanup_closed_box_output()
+
+    def _cleanup_closed_box_output(self) -> None:
+        """Remove deferred box scratch data after a dismissed run is idle."""
+        if self._box_window is not None \
+                or self._box_extract_worker is not None \
+                or self._box_analysis_worker is not None \
+                or self._box_mean_worker is not None:
+            return
+        output_dir = self._box_output_dir
+        self._box_output_dir = None
+        self._box_extraction = None
+        if output_dir:
+            shutil.rmtree(output_dir, ignore_errors=True)
+
+    def _start_box_analysis(self, extraction, tiers) -> None:
+        from sharpmod.gui_box import BoxAnalysisWorker
+
+        if self._box_analysis_worker is not None:
+            return
+        worker = BoxAnalysisWorker(extraction, tiers=tiers, parent=self)
+        self._box_analysis_worker = worker
+        worker.progress.connect(self._on_box_analysis_progress)
+        worker.ready.connect(self._on_box_analysis_ready)
+        worker.failed.connect(self._on_box_analysis_failed)
+        worker.finished.connect(self._on_box_analysis_finished)
+        worker.start()
+
+    def _on_box_analysis_progress(self, done, total) -> None:
+        if self.sender() is not self._box_analysis_worker \
+                or self._box_window is None:
+            return
+        self._box_window.set_progress(int(done), int(total))
+
+    def _on_box_analysis_ready(self, analysis) -> None:
+        if self.sender() is not self._box_analysis_worker:
+            return
+        if self._box_window_closed:
+            # The user dismissed this run while analysis was active. Do not
+            # resurrect its workspace when a pending worker result arrives.
+            return
+        window = self._ensure_box_window()
+        # A multi-hour run yields a BoxSequence; the window owns the hour
+        # controls, so it only needs to be handed the right kind of object.
+        if hasattr(analysis, "analyses"):
+            window.set_sequence(analysis)
+        else:
+            window.set_analysis(analysis)
+        window.clear_progress()
+        window.show()
+        window.raise_()
+
+    def _on_box_analysis_failed(self, message) -> None:
+        if self.sender() is not self._box_analysis_worker:
+            return
+        if self._box_window is not None:
+            self._box_window.clear_progress()
+            self._box_window.set_status(str(message))
+        elif not self._box_window_closed:
+            QMessageBox.critical(self, APP_NAME, str(message))
+
+    def _on_box_analysis_finished(self) -> None:
+        worker = self.sender()
+        if self._box_analysis_worker is worker:
+            self._box_analysis_worker = None
+            if self._box_extract_worker is None \
+                    and self._box_mean_worker is None:
+                self._set_model_busy(False)
+            self._cleanup_closed_box_output()
+        worker.deleteLater()
+
+    def _on_box_composites_requested(self) -> None:
+        if self._box_extraction is None:
+            return
+        if self._box_analysis_worker is not None:
+            return
+        count = sum(
+            len(outputs)
+            for outputs in self._box_extraction.outputs_by_hour.values()
+        )
+        # About 0.4 s per sounding, measured. Say so rather than letting the
+        # window appear to hang.
+        answer = QMessageBox.question(
+            self, APP_NAME,
+            f"Computing the SPC composite indices for {count} soundings takes "
+            f"roughly {max(1, round(count * 0.42))} seconds. Continue?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if answer != QMessageBox.Yes:
+            return
+        if self._box_window is not None:
+            self._box_window.set_status("Computing SPC composites…")
+        from sharpmod.box_analysis import COMPOSITE_TIER, FAST_TIER
+
+        self._start_box_analysis(
+            self._box_extraction, (FAST_TIER, COMPOSITE_TIER))
+
+    def _on_box_sounding_requested(self, npz_path: str, label: str) -> None:
+        """Open one box grid point in the ordinary sounding workspace."""
+        try:
+            # The same decode path every other sounding in the application
+            # takes, so a box cell opens into an identical workspace.
+            prof_col, stn_id = _render().decode(npz_path)
+        except Exception as exc:  # noqa: BLE001 - report, do not crash
+            QMessageBox.warning(
+                self, APP_NAME,
+                f"That grid point could not be opened: {exc}")
+            return
+        self._show_sounding(
+            prof_col, stn_id or label, title=f"{APP_NAME} — {label}")
+
+    def _cancel_box_operation(self) -> None:
+        for worker in (
+            self._box_extract_worker,
+            self._box_analysis_worker,
+            self._box_mean_worker,
+        ):
+            if worker is not None:
+                worker.requestInterruption()
+
     def _ensure_model_cache(self):
         """Create model caches on demand and prune them off the UI thread."""
         if self._model_disk_cache is not None:
@@ -2865,6 +3823,9 @@ class PickerWindow(QMainWindow):
             getattr(self, "_worker", None),
             getattr(self, "_model_worker", None),
             getattr(self, "_model_timeline_worker", None),
+            getattr(self, "_box_extract_worker", None),
+            getattr(self, "_box_analysis_worker", None),
+            getattr(self, "_box_mean_worker", None),
             getattr(self, "_model_prefetch_worker", None),
             getattr(self, "_era5_worker", None),
             getattr(self, "_wrf_inspect_worker", None),
@@ -2940,11 +3901,21 @@ class PickerWindow(QMainWindow):
         self._worker = None
         self._model_worker = None
         self._model_timeline_worker = None
+        self._box_extract_worker = None
+        self._box_analysis_worker = None
+        self._box_mean_worker = None
         self._model_prefetch_worker = None
         self._era5_worker = None
         self._wrf_inspect_worker = None
         self._wrf_extract_worker = None
         self._model_cache_prune_worker = None
+
+        # Box soundings live in a temporary directory for the life of their
+        # window; at shutdown that window is going away too.
+        box_output_dir = getattr(self, "_box_output_dir", None)
+        if box_output_dir:
+            self._box_output_dir = None
+            shutil.rmtree(box_output_dir, ignore_errors=True)
 
         hour_cache = getattr(self, "_model_hour_cache", None)
         if hour_cache is not None:
@@ -2958,10 +3929,12 @@ class PickerWindow(QMainWindow):
         # looking at" for the sounding locator, and a radar product key is not an
         # answer to that question.
         for attr in ("_map_outlook", "_model_outlook",
-                     "_map_radar", "_model_radar"):
+                     "_map_radar", "_model_radar",
+                     "_map_field", "_model_field"):
             controller = getattr(self, attr, None)
             if controller is not None:
                 controller.shutdown()
+        self._remember_overlay_choices()
         super().closeEvent(event)
 
     def _on_model_fetch_finished(self) -> None:
@@ -3189,6 +4162,18 @@ class PickerWindow(QMainWindow):
             self.statusBar().showMessage(
                 "Cancelling remaining timeline hours; completed hours are kept…"
             )
+            return
+        box = (
+            self._box_extract_worker
+            or self._box_analysis_worker
+            or self._box_mean_worker
+        )
+        if box is not None:
+            self._cancel_box_operation()
+            self._model_cancel_btn.setEnabled(False)
+            _set_button_busy(self._model_cancel_btn, True, "Cancelling…")
+            self.statusBar().showMessage(
+                "Cancelling the box sounding; completed points are kept…")
             return
         worker = self._model_worker
         if worker is None:
@@ -3517,6 +4502,7 @@ class PickerWindow(QMainWindow):
 
         self._era5_syncing_point = False
         self._era5_map = PointMapWidget()
+        self._era5_map.set_projection(self.map_projection())
         self._era5_map.pointSelected.connect(self._era5_on_map_point)
         self._era5_map.pointActivated.connect(
             lambda _lat, _lon: self._era5_fetch())
@@ -3894,6 +4880,7 @@ class PickerWindow(QMainWindow):
 
         self._wrf_syncing_point = False
         self._wrf_map = PointMapWidget()
+        self._wrf_map.set_projection(self.map_projection())
         self._wrf_map.set_area("World")
         self._wrf_map.pointSelected.connect(self._wrf_on_map_point)
         self._wrf_map.pointActivated.connect(
@@ -4435,6 +5422,49 @@ class PickerWindow(QMainWindow):
                 continue
         return None
 
+    def selected_model_field(self):
+        """Return the gridded field image the user is looking at, or ``None``.
+
+        Read by the sounding viewer, so a profile pulled while the supercell
+        composite is on the map arrives with that same field on its locator inset
+        instead of a bare outline. Resolved tab-first for the reason
+        :meth:`selected_overlay_product` is: the map in front is the one the
+        reader was working from.
+        """
+        active = self._active_field_controller()
+        if active is not None:
+            try:
+                raster = active.attached_raster()
+            except (AttributeError, RuntimeError):
+                raster = None
+            if raster is not None:
+                return raster
+        for name in TAB_FIELD_CONTROLLERS.values():
+            controller = getattr(self, name, None)
+            if controller is None:
+                continue
+            try:
+                raster = controller.attached_raster()
+            except (AttributeError, RuntimeError):
+                continue
+            if raster is not None:
+                return raster
+        return None
+
+    def _active_field_controller(self):
+        """Return the field controller owned by the tab currently in front."""
+        tabs = getattr(self, "_tabs", None)
+        if tabs is None:
+            return None
+        try:
+            title = tabs.tabText(tabs.currentIndex())
+        except (AttributeError, RuntimeError):
+            return None
+        attribute = TAB_FIELD_CONTROLLERS.get(title)
+        if attribute is None:
+            return None
+        return getattr(self, attribute, None)
+
     def _show_sounding(self, prof_col, stn_id, title=None):
         self._prune_closed_viewers()
         if self._combine_soundings_enabled() and self._viewers:
@@ -4446,7 +5476,8 @@ class PickerWindow(QMainWindow):
                 check_integrity=False,
             )
             _start_locator_overlay_fetch(
-                win, prof_col, product=_overlay_product_for(self))
+                win, prof_col, product=_overlay_product_for(self),
+                controller=self)
             count = len(getattr(win.spc_widget, "prof_collections", []))
             win.setWindowTitle(
                 f"{APP_NAME} — {count} Sounding{'s' if count != 1 else ''}")
@@ -4617,6 +5648,63 @@ def _enable_native_fault_reports() -> None:
         _LOGGER.debug("startup.faulthandler_unavailable", exc_info=True)
 
 
+def _native_qt_platform() -> str:
+    """Return the Qt platform plugin that presents windows on this OS."""
+    if sys.platform.startswith("win"):
+        return "windows"
+    if sys.platform == "darwin":
+        return "cocoa"
+    return "xcb"
+
+
+def _requested_qt_platform() -> str:
+    """Return the plugin name from ``QT_QPA_PLATFORM``, without its options.
+
+    Qt accepts ``plugin:option=value`` and a ``;``-separated fallback list, so
+    the raw value cannot be compared to a plugin name directly.
+    """
+    raw = os.environ.get("QT_QPA_PLATFORM", "").strip()
+    return raw.split(";", 1)[0].split(":", 1)[0].strip().lower()
+
+
+def _restore_visual_qt_platform() -> None:
+    """Refuse an inherited headless Qt platform for the desktop entry point.
+
+    ``sharpmod.gui`` only *defaults* ``QT_QPA_PLATFORM``, so a value already in
+    the environment wins. That is correct for the renderer and the test suite,
+    which both want ``offscreen``, and wrong here: this is the launcher whose
+    only job is to put a window on screen.
+
+    Inheriting a non-presenting plugin is silent and looks exactly like a hang.
+    Qt creates no native window, ``PickerWindow`` builds and "shows" happily,
+    the event loop runs, and nothing is logged after the theme is applied. The
+    process then sits there with no window and no error until it is killed --
+    and because the relaunch helper detaches the child, each attempt leaves
+    another invisible process behind. A shell that exported ``offscreen`` for a
+    headless render or a test run is enough to cause it.
+
+    Set ``SHARPMOD_GUI_HEADLESS=1`` to keep the inherited platform for a
+    deliberately windowless run.
+    """
+    requested = _requested_qt_platform()
+    if requested not in _NON_VISUAL_QT_PLATFORMS:
+        return
+    if os.environ.get(_HEADLESS_GUI_ENV, "").strip() == "1":
+        _LOGGER.info("startup.headless_platform_kept platform=%s", requested)
+        return
+    if QApplication.instance() is not None:
+        # Qt resolved the plugin when that application was constructed. Editing
+        # the variable now would change the log and nothing else.
+        _LOGGER.warning(
+            "startup.headless_platform_locked platform=%s", requested)
+        return
+    native = _native_qt_platform()
+    os.environ["QT_QPA_PLATFORM"] = native
+    _LOGGER.warning(
+        "startup.headless_platform_overridden inherited=%s using=%s "
+        "override_with=%s=1", requested, native, _HEADLESS_GUI_ENV)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Launch the interactive picker. Entry point for ``sharpmod-gui``."""
     _configure_debug_logging()
@@ -4627,6 +5715,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     _LOGGER.info("application.start argv=%r", sys.argv if argv is None else argv)
 
+    # Before QApplication: Qt resolves the platform plugin at construction.
+    _restore_visual_qt_platform()
     _configure_high_dpi()
 
     app = QApplication.instance() or QApplication(sys.argv if argv is None

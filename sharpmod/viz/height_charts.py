@@ -483,7 +483,9 @@ class HeightChartInset(QtWidgets.QFrame):
             self.bg_color.name(), self.fg_color.name())
         self._palette = palette
         self.text_color = QtGui.QColor(palette["neutral"])
-        self.border_color = QtGui.QColor(palette["border"])
+        # Match the canonical Skew-T plot frame; reserve the semantic blue for
+        # grid accents rather than the outside edge of a plot box.
+        self.border_color = QtGui.QColor(self.fg_color)
         self.grid_color = QtGui.QColor(palette["grid"])
         self.setStyleSheet(
             "QFrame { background-color: %s; border: 0px; margin: 0px; }"
@@ -640,7 +642,8 @@ class HeightChartInset(QtWidgets.QFrame):
         painter.restore()
 
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        painter.setPen(QtGui.QPen(self.border_color, 1))
+        painter.setPen(QtGui.QPen(
+            self.border_color, colors.PLOT_FRAME_WIDTH))
         painter.drawLine(QtCore.QLineF(
             0.5, 0.5, 0.5, max(0.5, self.height() - 0.5)))
         painter.end()
@@ -1017,7 +1020,7 @@ class SwappableHeightChart(QtWidgets.QFrame):
         palette = colors.semantic_palette(
             self.bg_color.name(), self.fg_color.name())
         self.text_color = QtGui.QColor(palette["neutral"])
-        self.border_color = QtGui.QColor(palette["border"])
+        self.border_color = QtGui.QColor(self.fg_color)
         self.grid_color = QtGui.QColor(palette["grid"])
         self.setStyleSheet(
             "QFrame#sharpmod_swappable_height_chart { background-color: %s; "

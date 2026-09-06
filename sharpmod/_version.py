@@ -1,11 +1,21 @@
 """Single source of truth for SHARPpy Reimagined's package version."""
 
-#: "1.0.0 Beta", spelled so one literal string is legal in both ecosystems this
-#: project ships into. Semver needs the hyphen (Cargo rejects ``1.0.0b1``);
-#: PEP 440 accepts this form and normalizes the *distribution* version to
-#: ``1.0.0b1``, which sorts before ``1.0.0`` as a pre-release must. Keeping the
-#: literal identical to the crate's version is what lets the backend-equivalence
+#: One literal string has to satisfy two grammars, because the Python
+#: distribution and the Rust crate are versioned together. Cargo reads it as
+#: semver and PEP 440 reads it as a distribution version, so a plain
+#: ``MAJOR.MINOR.PATCH`` needs no translation in either direction. Keeping it
+#: identical to the crate's version is also what lets the backend-equivalence
 #: check stay a plain string comparison -- ``sharpmod_rs.__version__`` is
-#: ``CARGO_PKG_VERSION`` verbatim, so any spelling that differed between the two
-#: would break it.
-__version__ = "1.0.0-beta1"
+#: ``CARGO_PKG_VERSION`` verbatim, and a test asserts the two are equal.
+#:
+#: A pre-release has to be spelled with a hyphen (``1.2.0-beta1``) to stay legal
+#: in both, since Cargo rejects PEP 440's ``1.2.0b1`` while the built wheel
+#: normalizes the hyphenated form back to it -- which is why the metadata check
+#: compares parsed versions rather than strings.
+#:
+#: Bumping this requires bumping ``rust/sharpmod-rs/Cargo.toml``,
+#: ``rust/sharpmod-rs/Cargo.lock``, ``rust/sharpmod-rs/pyproject.toml``, and the
+#: default tag in ``.github/workflows/release.yml`` in lockstep; the release
+#: workflow refuses to publish when the four disagree or when the tag is not
+#: ``v`` + this value.
+__version__ = "1.1.0"

@@ -191,6 +191,67 @@ def test_availability_worker_emits_the_decoded_profile(qt_app, monkeypatch):
     assert fetched.station_id == "72357"
 
 
+def test_provider_availability_cache_preserves_delivered_valid_time(
+        qt_app, monkeypatch):
+    requested = datetime(2026, 8, 10, 18)
+    delivered = datetime(2026, 8, 10, 19)
+    profile = SimpleNamespace(
+        pres=[1000.0 - 50.0 * index for index in range(18)],
+        tmpc=[20.0 - index for index in range(18)],
+        dwpc=[15.0 - index for index in range(18)],
+        wspd=[10.0 + index for index in range(18)],
+    )
+    result = SimpleNamespace(
+        profile=profile,
+        station_id="USM00072357",
+        provider="igra2",
+        valid=delivered,
+        metadata={"station_name": "Norman"},
+    )
+    provider = SimpleNamespace(fetch=lambda _sid, _when: result)
+    monkeypatch.setattr(gui_workers, "_availability_provider",
+                        lambda _key: provider)
+    worker = gui_workers._AvailabilityWorker(
+        "72357", requested, 1, provider="igra2"
+    )
+    results = []
+    worker.checked.connect(lambda *args: results.append(args))
+
+    worker.run()
+
+    fetched = results[0][-1]
+    assert fetched.valid == delivered
+
+
+def test_prefetched_observation_uses_delivered_time_for_collection_and_title(
+        qt_app, tmp_path, monkeypatch):
+    monkeypatch.setenv("SHARPMOD_SETTINGS_PATH", str(tmp_path / "settings.ini"))
+    picker = gui_picker.PickerWindow()
+    requested = datetime(2026, 8, 10, 18)
+    delivered = datetime(2026, 8, 10, 19)
+    fetched = SimpleNamespace(
+        profile=object(), station_id="USM00072357", provider="igra2",
+        valid=delivered,
+    )
+    shown = []
+    monkeypatch.setattr(
+        picker, "_show_sounding",
+        lambda collection, station_id, title: shown.append(
+            (collection, station_id, title)
+        ),
+    )
+    try:
+        picker._display_prefetched_observation(fetched, "72357", requested)
+
+        collection, station_id, title = shown[0]
+        assert collection.getCurrentDate() == delivered
+        assert station_id == "USM00072357"
+        assert "2026-08-10 19Z" in title
+        assert "2026-08-10 19Z" in picker.statusBar().currentMessage()
+    finally:
+        _close_picker(picker, qt_app)
+
+
 def test_availability_result_handler_retains_only_current_usable_profile():
     when = datetime(2026, 8, 10, 0)
     indicator = SimpleNamespace(calls=[])
@@ -203,7 +264,12 @@ def test_availability_result_handler_retains_only_current_usable_profile():
         _avail_workers=[worker],
         _avail_latest={id(indicator): 9},
         _observed_profile_cache={},
-        _observed_cache_key=gui_picker.PickerWindow._observed_cache_key,
+        # The cache key is keyed by observed source as well as station and
+        # time, so the stand-in owner has to answer for one.
+        _observed_source=lambda: "auto",
+    )
+    owner._observed_cache_key = (
+        gui_picker.PickerWindow._observed_cache_key.__get__(owner)
     )
 
     gui_picker.PickerWindow._on_availability_checked(
@@ -216,7 +282,7 @@ def test_availability_result_handler_retains_only_current_usable_profile():
         fetched,
     )
 
-    key = gui_picker.PickerWindow._observed_cache_key("72357", when)
+    key = owner._observed_cache_key("72357", when)
     assert owner._observed_profile_cache[key][0] is fetched
     assert indicator.calls == [
         (AVAIL_AVAILABLE, "Available (80 levels)", "72357 — Norman")

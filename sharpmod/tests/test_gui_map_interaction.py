@@ -30,6 +30,10 @@ class _MouseEvent:
     def buttons(self):
         return Qt.LeftButton
 
+    def modifiers(self):
+        # A plain drag, so the map pans instead of starting a box gesture.
+        return Qt.NoModifier
+
     def position(self):
         return self._position
 

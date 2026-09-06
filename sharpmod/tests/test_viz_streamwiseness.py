@@ -153,6 +153,11 @@ def test_plot_streamwiseness_draws_reference_labels_and_both_sign_fills(qt_app):
 
     image = widget.plotBitMap.toImage().convertToFormat(
         widget.plotBitMap.toImage().Format.Format_RGB32)
+    edge_y = image.height() // 2
+    assert widget.border_color.name() == widget.fg_color.name()
+    assert image.pixelColor(0, edge_y).name() == widget.fg_color.name()
+    # The reduced 1 px stroke leaves the next column at the plot background.
+    assert image.pixelColor(1, edge_y).name() == widget.bg_color.name()
     pixels = [
         image.pixelColor(x, y)
         for y in range(image.height())
@@ -216,6 +221,7 @@ def test_streamwiseness_is_mounted_immediately_left_of_narrowed_stp(
     if not example.exists():
         pytest.skip("HRRR .npz example unavailable")
 
+    render_mod.install_render_patches()
     render_mod.install_font(qt_app)
     prof_col, _stn_id = render_mod.decode(str(example))
     config = render_mod.build_config(str(tmp_path))
@@ -238,9 +244,26 @@ def test_streamwiseness_is_mounted_immediately_left_of_narrowed_stp(
         assert stp_pos[1] == 4
         assert stream.width() < stp.width() < sw.index_board.width()
         assert sw.insets["SHARPMOD STREAMWISENESS"] is stream
-        assert sw.text.objectName() != "sharpmod_bottom_band"
-        assert "border-width: 2px" in sw.text.styleSheet()
+        assert sw.text.objectName() == "sharpmod_bottom_band"
+        assert "QFrame#sharpmod_bottom_band" in sw.text.styleSheet()
+        assert "QWidget {" not in sw.text.styleSheet()
+        assert "border-width: 1px" in sw.text.styleSheet()
+        assert "border-color: #ffffff" in sw.text.styleSheet().lower()
+        assert "border-width: 0px" in stp.styleSheet()
+        assert "border-left-width: 1px" in stp.styleSheet()
         assert sw.index_board._outer_border_lines == ()
+        # Regression for the visibly thick lower box: the container selector
+        # must not add a second border row to any of its child plots.
+        band_image = sw.text.grab().toImage().convertToFormat(
+            sw.text.grab().toImage().Format.Format_RGB32)
+        for edge_x in (10, stp.geometry().center().x()):
+            assert band_image.pixelColor(edge_x, 0).name() == "#ffffff"
+            assert band_image.pixelColor(edge_x, 1).name() != "#ffffff"
+        divider_x = stp.geometry().left()
+        divider_y = stp.geometry().center().y()
+        assert band_image.pixelColor(divider_x, divider_y).name() == "#ffffff"
+        assert band_image.pixelColor(divider_x + 1, divider_y).name() != \
+            "#ffffff"
         # The column now holds a swappable slot showing streamwiseness by
         # default, so the chart's own geometry is read through the slot.
         assert stream.currentChart() == "streamwiseness"
@@ -265,6 +288,9 @@ def test_streamwiseness_is_mounted_immediately_left_of_narrowed_stp(
             sw.grid3.indexOf(sw.right_inset_ob))
         assert swapped_pos[1] == 4
         assert sw.grid3.getItemPosition(sw.grid3.indexOf(stream))[1] == 3
+        swapped_sheet = sw.right_inset_ob.styleSheet()
+        assert "border-width: 0px" in swapped_sheet
+        assert "border-left-width: 1px" in swapped_sheet
     finally:
         win.close()
         controller.close()

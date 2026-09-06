@@ -266,7 +266,6 @@ def test_live_controller_signal_applies_inverted_palette_to_every_surface(
         "profile_color": "profile",
         "cyclonic_color": "cyclonic",
         "anticyclonic_color": "anticyclonic",
-        "border_color": "border",
         "grid_color": "grid",
         "marker_gray": "marker_gray",
         "marker_orange": "marker_orange",
@@ -276,6 +275,16 @@ def test_live_controller_signal_applies_inverted_palette_to_every_surface(
             getattr(sw.streamwiseness.chart, attr).name().lower()
             == semantic[role].lower()
         )
+    # Plot-box edges deliberately follow the Skew-T foreground rather than the
+    # blue semantic accent used by chart grids.
+    assert sw.streamwiseness.chart.border_color.name().lower() == "#000000"
+    assert sw.text.objectName() == "sharpmod_bottom_band"
+    assert "qframe#sharpmod_bottom_band" in sw.text.styleSheet().lower()
+    assert "border-width: 1px" in sw.text.styleSheet().lower()
+    assert "border-color: #000000" in sw.text.styleSheet().lower()
+    assert "border-width: 0px" in sw.right_inset_ob.styleSheet().lower()
+    assert "border-left-width: 1px" in sw.right_inset_ob.styleSheet().lower()
+    assert "border-color: #000000" in sw.right_inset_ob.styleSheet().lower()
 
 
 def test_live_controller_signal_round_trips_standard_and_inverted(

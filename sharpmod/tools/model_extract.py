@@ -57,6 +57,7 @@ from sharpmod.model_surface import (
     SURFACE_CONTRACT_FIELDS,
     SURFACE_CONTRACT_VERSION,
 )
+from sharpmod.upstream_patches import apply_herbie_source_fallback
 from sharpmod.upstream_warnings import (
     known_herbie_deprecations,
     xarray_new_combine_defaults,
@@ -344,6 +345,16 @@ class ModelConfig:
     # Set when a product is still described here but cannot currently produce a
     # sounding, so it is withheld from every selectable model list.
     unavailable_reason: str = ""
+    # Nominal horizontal spacing of the published grid, in kilometres. Area
+    # sampling (see sharpmod.box_sounding) snaps its request spacing to a
+    # multiple of this so a box never asks for two soundings out of one grid
+    # cell -- that would download and decode the same column twice and then
+    # draw a false gradient between the duplicates. Global products are quoted
+    # at their mid-latitude spacing because that is where the sampler is used;
+    # a degree-based grid narrows toward the poles, so this is the conservative
+    # (largest) value. Zero means "unknown", and the sampler then falls back to
+    # UNKNOWN_GRID_SPACING_KM rather than guessing per product.
+    grid_spacing_km: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -415,29 +426,35 @@ _CONFIGS = (
     ModelConfig(
         "hrrr", "HRRR", "hrrr", "prs", cycles=tuple(range(24)),
         fxx_values=_hours(48), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        grid_spacing_km=3.0,
         notes="3-km CONUS pressure-level forecast grids"),
     ModelConfig(
         "rap", "RAP", "rap", "awp130pgrb", cycles=tuple(range(24)),
         fxx_values=_hours(51), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        grid_spacing_km=13.0,
         notes="13-km RAP AWIPS pressure-level forecast grids"),
     ModelConfig(
         "nam", "NAM", "nam", "awphys",
         fxx_values=_hours(84, 3), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        grid_spacing_km=12.0,
         notes="12-km NAM CONUS pressure-level forecast grids"),
     ModelConfig(
         "nam-3km-conus", "NAM 3km CONUS", "nam", "conusnest.hiresf",
         fxx_values=_hours(60), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        grid_spacing_km=3.0,
         notes="NAM CONUS nest pressure-level forecast grids"),
     # HiResW CONUS nests run twice a day; 06Z and 18Z are never published.
     ModelConfig(
         "hrw-wrf-arw", "HRW WRF-ARW", "hiresw", "arw_5km",
         cycles=(0, 12),
         fxx_values=_hours(48), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        grid_spacing_km=5.0,
         notes="NOAA HiResW ARW 5-km pressure-level grids, 00Z/12Z"),
     ModelConfig(
         "hrw-fv3", "HRW FV3", "hiresw", "fv3_5km",
         cycles=(0, 12),
         fxx_values=_hours(48), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        grid_spacing_km=5.0,
         notes="NOAA HiResW FV3 5-km pressure-level grids, 00Z/12Z"),
     # RRFS bypasses Herbie entirely; see rrfs_nomads and DIRECT_GRIB_KEYS.
     # ``herbie_model`` and ``product`` stay truthful because they still name
@@ -448,24 +465,28 @@ _CONFIGS = (
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="CONUS", domain_bounds=CONUS_DOMAIN,
         kwargs={"domain": "conus"},
+        grid_spacing_km=3.0,
         notes="RRFS-A 3-km pressure-level grids; no VVEL published"),
     ModelConfig(
         "rrfs-a-alaska", "RRFS A Alaska", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="Alaska", domain_bounds=ALASKA_DOMAIN,
         kwargs={"domain": "alaska"},
+        grid_spacing_km=3.0,
         notes="RRFS-A 3-km Alaska pressure-level grids; no VVEL published"),
     ModelConfig(
         "rrfs-a-hawaii", "RRFS A Hawaii", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="Hawaii", domain_bounds=HAWAII_DOMAIN,
         kwargs={"domain": "hawaii"},
+        grid_spacing_km=2.5,
         notes="RRFS-A 2.5-km Hawaii pressure-level grids; no VVEL published"),
     ModelConfig(
         "rrfs-a-puerto-rico", "RRFS A Puerto Rico", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="Puerto Rico", domain_bounds=PUERTO_RICO_DOMAIN,
         kwargs={"domain": "puerto rico"},
+        grid_spacing_km=2.5,
         notes="RRFS-A 2.5-km Puerto Rico pressure-level grids; "
               "no VVEL published"),
     ModelConfig(
@@ -473,30 +494,36 @@ _CONFIGS = (
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
         domain="North America", domain_bounds=NORTH_AMERICA_DOMAIN,
         kwargs={"domain": "north america"},
+        grid_spacing_km=13.0,
         notes="RRFS-A 13-km North America pressure-level grids; "
               "covers CONUS for roughly half the transfer of the 3-km "
               "domain; no VVEL published"),
     ModelConfig(
         "gfs", "GFS", "gfs", "pgrb2.0p25",
         fxx_values=_gfs_hours(),
+        grid_spacing_km=27.8,
         notes="0.25-degree GFS pressure-level forecast grids"),
     ModelConfig(
         "aigfs", "AIGFS", "aigfs", "pres",
         fxx_values=_hours(384, 6),
+        grid_spacing_km=27.8,
         notes="AI-GFS pressure-level grids; humidity from SPFH",
         unavailable_reason=AIGFS_NO_SURFACE_REASON),
     ModelConfig(
         "cfs", "CFS", "cfs", "6_hourly",
         fxx_values=_hours(384, 6),
         kwargs={"member": 1, "kind": "pgbf"},
+        grid_spacing_km=55.6,
         notes="CFS 6-hourly pressure-level grids, member 1 by default"),
     ModelConfig(
         "ecmwf-ifs", "ECMWF IFS Open Data", "ifs", "oper",
         search=IFS_PRESSURE_SEARCH, fxx_values=_ifs_hours(),
+        grid_spacing_km=27.8,
         notes="ECMWF open-data deterministic IFS pressure levels"),
     ModelConfig(
         "ecmwf-aifs", "ECMWF-AIFS", "aifs", "oper",
         search=IFS_PRESSURE_SEARCH, fxx_values=_aifs_hours(),
+        grid_spacing_km=27.8,
         notes="ECMWF open-data AIFS pressure levels, 6-hourly steps"),
     # Open-Meteo point provider. ``herbie_model`` and ``product`` are sentinels
     # here, as they are for the ECCC entries: this route never reaches Herbie.
@@ -509,16 +536,22 @@ _CONFIGS = (
         cycles=openmeteo.CAPABILITIES["openmeteo-icon-global"].cycles,
         fxx_values=openmeteo.CAPABILITIES[
             "openmeteo-icon-global"].forecast_hours,
+        # Matches the adapter's own declared resolution ("11 km, 0.125 degree
+        # grid"), so area sampling cannot advertise a spacing that contradicts
+        # the label shown beside it.
+        grid_spacing_km=11.0,
         notes=openmeteo.CAPABILITIES["openmeteo-icon-global"].notes),
     ModelConfig(
         "gefs", "GEFS", "gefs", "atmos.5",
         fxx_values=_hours(384, 3),
         kwargs={"member": "c00"},
+        grid_spacing_km=55.6,
         notes="GEFS 0.5-degree control member by default"),
     ModelConfig(
         "gdps", "Canadian GDPS 15 km", "gdps", "geomet-point",
         cycles=(0, 12),
         fxx_values=eccc_geomet.get_capability("gdps").forecast_hours,
+        grid_spacing_km=15.0,
         notes="Global ECCC GeoMet pressure-level point values"),
     ModelConfig(
         "rdps", "Canadian RDPS 10 km", "rdps", "geomet-point",
@@ -526,6 +559,7 @@ _CONFIGS = (
         fxx_values=eccc_geomet.get_capability("rdps").forecast_hours,
         domain="North America and Arctic",
         domain_bounds=eccc_geomet.get_capability("rdps").domain_bounds,
+        grid_spacing_km=10.0,
         notes="Regional ECCC GeoMet pressure-level point values",
         domain_outline=eccc_geomet.get_capability("rdps").domain_outline),
 )
@@ -802,6 +836,25 @@ def domain_label(model):
     return cfg.domain
 
 
+#: Spacing assumed when a product does not declare one. Chosen coarse on
+#: purpose: over-estimating spacing asks for fewer soundings than the grid can
+#: actually resolve, which wastes nothing and cannot fabricate a gradient.
+#: Under-estimating would do the opposite.
+UNKNOWN_GRID_SPACING_KM = 25.0
+
+
+def grid_spacing_km(model):
+    """Return the nominal horizontal grid spacing for ``model``, in km.
+
+    Falls back to :data:`UNKNOWN_GRID_SPACING_KM` for a product that does not
+    declare one, so callers can always divide by this without a guard.
+    """
+    spacing = float(_coerce_config(model).grid_spacing_km or 0.0)
+    if not np.isfinite(spacing) or spacing <= 0.0:
+        return UNKNOWN_GRID_SPACING_KM
+    return float(spacing)
+
+
 def point_in_domain(model, lat, lon):
     """Return whether ``lat``/``lon`` is inside the model's configured domain."""
     cfg = _coerce_config(model)
@@ -1031,6 +1084,7 @@ def _load_herbie_class():
             "forecast model support requires the optional [era5] extra "
             "(herbie-data, cfgrib, xarray): %s" % exc
         ) from exc
+    apply_herbie_source_fallback(Herbie)
     return Herbie
 
 
@@ -1919,7 +1973,7 @@ def _merge_point_datasets(datasets, lat, lon, run_dt):
 def _decode_local_point(source, lat, lon):
     """Decode through the selected backend, with Python fallback in auto mode."""
     try:
-        return _backends.decode_grib_point(source.path, lat, lon)
+        decoded = _backends.decode_grib_point(source.path, lat, lon)
     except Exception as rust_error:
         info = _backends.backend_info()
         if not (
@@ -1934,6 +1988,37 @@ def _decode_local_point(source, lat, lon):
         )
         from sharpmod.backends.python_backend import PythonBackend
         return PythonBackend().decode_grib_point(source.path, lat, lon)
+    if decoded.surface_merged:
+        return decoded
+    # The verified-surface merge is mandatory: without it ``extract`` refuses
+    # the profile outright. The native decoder carries its own port of the
+    # ground-row predicates, so a row that the shared Python contract accepts
+    # -- the saturated-ground clamp in particular -- can still be rejected
+    # there. Ask the contract owner for a second opinion before giving up a
+    # sounding. This costs one extra point decode only on rows the native
+    # decoder already refused, and it is a decode the caller would otherwise
+    # never get any value from.
+    info = _backends.backend_info()
+    if info["active_backend"] != "rust":
+        return decoded
+    try:
+        from sharpmod.backends.python_backend import PythonBackend
+        repaired = PythonBackend().decode_grib_point(source.path, lat, lon)
+    except Exception as python_error:
+        _LOGGER.info(
+            "grib_decode.surface_repair_failed path=%s reason=%s",
+            source.path,
+            python_error,
+        )
+        return decoded
+    if not repaired.surface_merged:
+        return decoded
+    _LOGGER.info(
+        "grib_decode.surface_repaired path=%s removed=%d",
+        source.path,
+        repaired.below_ground_levels_removed,
+    )
+    return repaired
 
 
 def _xarray_point_columns(ds, lat, lon, run_dt, fxx, label):

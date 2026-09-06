@@ -16,7 +16,11 @@ import pytest
 
 from sharpmod import rrfs_nomads
 from sharpmod.io import decoder as decoder_mod
-from sharpmod.model_surface import PROFILE_COLUMN_NAMES, merge_surface_level
+from sharpmod.model_surface import (
+    PROFILE_COLUMN_NAMES,
+    SURFACE_SUPERSATURATION_TOLERANCE_C,
+    merge_surface_level,
+)
 from sharpmod.tools import model_extract
 from sharpmod.tests.era5_synth import make_era5_dataset
 
@@ -91,6 +95,181 @@ def test_verified_surface_merge_matches_terrain_level_counts(
     assert result.columns["hght"][0] == 1655.0
     assert result.columns["tmpc"][0] == 25.0
     assert result.columns["dwpc"][0] == 15.0
+
+
+def _saturated_surface(dewpoint):
+    levels = np.asarray([1000.0, 975.0, 950.0, 925.0, 900.0])
+    columns = {
+        name: (
+            levels.copy()
+            if name == "pres"
+            else np.arange(levels.size, dtype=float)
+        )
+        for name in PROFILE_COLUMN_NAMES
+    }
+    return merge_surface_level(
+        columns,
+        {
+            "pres": 992.5,
+            "hght": 175.0,
+            "tmpc": 16.507836914062523,
+            "dwpc": dewpoint,
+            "u": 0.4883222579956055,
+            "v": 1.7138423919677734,
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "excess",
+    (0.0, 1.0e-9, 0.029449, SURFACE_SUPERSATURATION_TOLERANCE_C),
+)
+def test_a_saturated_ground_row_is_clamped_not_discarded(excess):
+    """A derived 2 m dewpoint just above 2 m temperature must not be fatal.
+
+    Providers publish 2 m temperature directly while the decoders derive 2 m
+    dewpoint from specific or relative humidity, so at saturation the derived
+    value crosses temperature by hundredths of a degree. HRRR did exactly that
+    over Lake Michigan and the whole sounding was refused.
+    """
+    temperature = 16.507836914062523
+    result = _saturated_surface(temperature + excess)
+
+    assert result is not None
+    assert result.surface_pressure == pytest.approx(992.5)
+    assert result.columns["tmpc"][0] == pytest.approx(temperature)
+    assert result.columns["dwpc"][0] == pytest.approx(temperature)
+    assert result.columns["dwpc"][0] <= result.columns["tmpc"][0]
+
+
+def test_an_impossible_dewpoint_excess_is_still_refused():
+    """Beyond the tolerance the excess is a decode error, not saturation."""
+    temperature = 16.507836914062523
+    excess = SURFACE_SUPERSATURATION_TOLERANCE_C + 0.05
+
+    assert _saturated_surface(temperature + excess) is None
+
+
+def _decoded_point(*, surface_merged, removed=0):
+    from sharpmod.backends.grib import DecodedPoint
+
+    matrix = np.vstack([
+        np.asarray([992.5, 975.0, 950.0]),
+        np.asarray([175.0, 500.0, 750.0]),
+        np.full(3, 16.5),
+        np.full(3, 12.0),
+        np.full(3, 270.0),
+        np.full(3, 10.0),
+        np.full(3, -9999.0),
+        np.full(3, 5.0),
+        np.full(3, 0.0),
+    ])
+    return DecodedPoint(
+        matrix, 43.2863, -87.8957, None, surface_merged, removed
+    )
+
+
+def test_a_native_surface_rejection_is_retried_against_the_python_contract(
+        monkeypatch):
+    """The Rust decoder carries its own port of the ground-row predicates.
+
+    ``extract`` refuses any profile without a verified merge, so a row that the
+    shared Python contract accepts must not be lost to a stricter native copy.
+    """
+    from sharpmod.backends.python_backend import PythonBackend
+
+    native = _decoded_point(surface_merged=False)
+    repaired = _decoded_point(surface_merged=True, removed=2)
+    calls = {"native": 0, "python": 0}
+
+    def decode_native(*_args, **_kwargs):
+        calls["native"] += 1
+        return native
+
+    def decode_python(_self, *_args, **_kwargs):
+        calls["python"] += 1
+        return repaired
+
+    monkeypatch.setattr(
+        model_extract._backends, "decode_grib_point", decode_native
+    )
+    monkeypatch.setattr(
+        model_extract._backends,
+        "backend_info",
+        lambda: {"requested_backend": "auto", "active_backend": "rust"},
+    )
+    monkeypatch.setattr(PythonBackend, "decode_grib_point", decode_python)
+
+    result = model_extract._decode_local_point(
+        SimpleNamespace(path="sounding.grib2"), 43.2863, -87.8957
+    )
+
+    assert result is repaired
+    assert calls == {"native": 1, "python": 1}
+
+
+def test_a_merged_native_row_is_not_decoded_twice(monkeypatch):
+    from sharpmod.backends.python_backend import PythonBackend
+
+    native = _decoded_point(surface_merged=True, removed=1)
+    calls = {"python": 0}
+
+    monkeypatch.setattr(
+        model_extract._backends,
+        "decode_grib_point",
+        lambda *_args, **_kwargs: native,
+    )
+    monkeypatch.setattr(
+        PythonBackend,
+        "decode_grib_point",
+        lambda *_args, **_kwargs: calls.__setitem__(
+            "python", calls["python"] + 1
+        ),
+    )
+
+    result = model_extract._decode_local_point(
+        SimpleNamespace(path="sounding.grib2"), 43.2863, -87.8957
+    )
+
+    assert result is native
+    assert calls == {"python": 0}
+
+
+def test_a_python_repair_that_also_rejects_returns_the_native_result(
+        monkeypatch):
+    """A genuinely incomplete ground contract still reaches the guard."""
+    from sharpmod.backends.python_backend import PythonBackend
+
+    native = _decoded_point(surface_merged=False)
+
+    monkeypatch.setattr(
+        model_extract._backends,
+        "decode_grib_point",
+        lambda *_args, **_kwargs: native,
+    )
+    monkeypatch.setattr(
+        model_extract._backends,
+        "backend_info",
+        lambda: {"requested_backend": "auto", "active_backend": "rust"},
+    )
+    monkeypatch.setattr(
+        PythonBackend,
+        "decode_grib_point",
+        lambda *_args, **_kwargs: _decoded_point(surface_merged=False),
+    )
+
+    result = model_extract._decode_local_point(
+        SimpleNamespace(path="sounding.grib2"), 43.2863, -87.8957
+    )
+
+    assert result.surface_merged is False
+
+
+def test_a_subsaturated_ground_row_keeps_its_own_dewpoint():
+    result = _saturated_surface(4.25)
+
+    assert result is not None
+    assert result.columns["dwpc"][0] == pytest.approx(4.25)
 
 
 def test_model_aliases_resolve_to_supported_configs():

@@ -57,7 +57,8 @@ from qtpy.QtCore import (
     QSize, QUrl,
 )
 from qtpy.QtGui import (
-    QAction, QPainter, QColor, QPen, QBrush, QPolygonF, QFont, QPixmap, QIcon,
+    QAction, QActionGroup,
+    QPainter, QColor, QPen, QBrush, QPolygonF, QFont, QPixmap, QIcon,
     QTransform, QDesktopServices, QWheelEvent,
 )
 from qtpy.QtWidgets import (
@@ -309,6 +310,44 @@ def _controller_overlay_product(controller):
         return None
 
 
+def _controller_model_field(controller):
+    """Return the gridded field image the picker is currently drawing.
+
+    Duck-typed for the same reason :func:`_controller_overlay_product` is.
+    ``None`` means there is no field on the map, which is also what a caller that
+    is not the picker will answer.
+    """
+    getter = getattr(controller, "selected_model_field", None)
+    if not callable(getter):
+        return None
+    try:
+        return getter()
+    except Exception:  # noqa: BLE001 - a preference is not worth an exception
+        return None
+
+
+def attach_locator_model_field(win, prof_col, controller) -> bool:
+    """Carry the picker's gridded field onto this sounding's locator inset.
+
+    Attached directly rather than through a worker, because unlike the convective
+    outlook the image is already in memory -- the picker fetched it to draw the
+    map the user was reading. Refetching it here would spend a GRIB subset to
+    reproduce a frame we are holding.
+
+    Returns whether anything was attached, and is silent otherwise: the field is
+    context on a thumbnail, so its absence is not worth reporting.
+    """
+    raster = _controller_model_field(controller)
+    if raster is None:
+        return False
+    try:
+        from sharpmod.map_overlays import attach_locator_overlay
+        attach_locator_overlay(prof_col, raster, key=raster.key)
+    except Exception:  # noqa: BLE001 - the field is optional
+        return False
+    return True
+
+
 def _repaint_locator_insets(win) -> None:
     """Force the hodographs to re-run their render pass.
 
@@ -330,7 +369,8 @@ def _repaint_locator_insets(win) -> None:
             continue
 
 
-def start_locator_overlay_fetch(win, prof_col, *, product=None) -> None:
+def start_locator_overlay_fetch(win, prof_col, *, product=None,
+                                controller=None) -> None:
     """Fetch this sounding's map overlay and attach it for the locator inset.
 
     Runs on a worker thread and attaches the result to the profile collection,
@@ -342,6 +382,12 @@ def start_locator_overlay_fetch(win, prof_col, *, product=None) -> None:
     missing outlook, a sounding outside the forecast area, or a failed request
     all simply leave the inset as it was rather than reporting anything.
     """
+    # The gridded field first and unconditionally: it needs no network, and it
+    # must reach the inset even for a sounding the convective outlook does not
+    # cover -- the outlook is CONUS-and-issued, a model field is neither.
+    if attach_locator_model_field(win, prof_col, controller):
+        _repaint_locator_insets(win)
+
     try:
         from sharpmod import spc_outlook
         from sharpmod.gui_workers import _SpcOutlookWorker
@@ -522,7 +568,8 @@ def compose_interactive(config, prof_col, controller, *, stn_id=None,
     # so opening a sounding from a tornado-probability map does not silently
     # switch the inset to the categorical outlook.
     start_locator_overlay_fetch(
-        win, prof_col, product=_controller_overlay_product(controller))
+        win, prof_col, product=_controller_overlay_product(controller),
+        controller=controller)
 
     # The vendored SPCWindow.__initUI calls self.show() as soon as it is
     # constructed, so an empty white window flashes on screen while we still
@@ -593,6 +640,9 @@ def compose_interactive(config, prof_col, controller, *, stn_id=None,
     # included in the window chrome that the fit measures; the actions are
     # connected afterwards, once the sounding host exists.
     _install_view_controls(win)
+    # After the View menu exists, and before the sidebar adds its own entry, so
+    # the panel list sits with the other view choices rather than below a toggle.
+    _install_panel_menu(win)
 
     # The context sidebar, also before the fit so its width is part of the
     # chrome. It goes after _install_data_inspector because its Source &
@@ -1234,6 +1284,143 @@ def _install_view_controls(win) -> None:
         win._sharpmod_view_toolbar = bar
     except Exception:
         _LOGGER.exception("view_controls.install_failed")
+
+
+#: What each swappable panel is for, keyed by the vendored inset name.
+#:
+#: Worth stating in the menu because the panel titles are abbreviations and two
+#: of them ("Sig-Tor Stats", "EF-Scale Probs") describe the same hazard from
+#: different angles. Every one of these is computed for every sounding already,
+#: so the only question the menu has to answer is which one to look at.
+_PANEL_TOOLTIPS = {
+    "STP STATS": (
+        "Significant-tornado parameter against its climatology, with the "
+        "probability of a significant tornado given a supercell."),
+    "COND STP": (
+        "Conditional EF-scale probabilities derived from the significant-tornado "
+        "parameter."),
+    "VROT": (
+        "Conditional EF-scale probabilities derived from radar rotational "
+        "velocity."),
+    "SHIP": (
+        "Significant-hail parameter against its climatology."),
+    "FIRE": (
+        "Fire weather: Fosberg index, Haines index, mixed-layer depth, transport "
+        "wind, ventilation rate, and low-level moisture.\nAlso marks the mixing "
+        "height on the Skew-T."),
+    "WINTER": (
+        "Winter weather: dendritic growth zone, its moisture and omega, and the "
+        "best-guess precipitation type.\nAlso marks the dendritic growth zone on "
+        "the Skew-T."),
+    "SARS": (
+        "Sounding analogues: the closest historical soundings and what they "
+        "produced."),
+}
+
+
+def show_sounding_panel(win, key: str) -> bool:
+    """Show the swappable panel named ``key``. Returns whether it changed.
+
+    Drives the vendored swap rather than reaching into the layout, because that
+    path does more than move a widget: it re-creates the outgoing panel, persists
+    the choice, and turns the matching Skew-T annotation on or off -- the mixing
+    height for the fire panel, the dendritic growth zone band for the winter one.
+    Those pairings are the reason a separate "mode" concept is unnecessary, and
+    bypassing ``swapInset`` would lose them.
+    """
+    sw = getattr(win, "spc_widget", None)
+    if sw is None or not key:
+        return False
+    if getattr(sw, "right_inset", None) == key:
+        return False        # already showing; nothing to do
+    try:
+        # Rebuilt exactly as a right-click would: the vendored swap reads its
+        # target from ``menu_ag``'s checked action and ``inset_to_swap``.
+        sw.makeInsetMenu(sw.left_inset, sw.right_inset)
+        action = next((item for item in sw.menu_ag.actions()
+                       if item.data() == key), None)
+        if action is None:
+            return False
+        action.setChecked(True)
+        sw.inset_to_swap = "RIGHT"
+        sw.swapInset()
+        return True
+    except Exception:
+        _LOGGER.exception("panel_menu.swap_failed key=%s", key)
+        return False
+
+
+def _install_panel_menu(win) -> None:
+    """List the swappable sounding panels in the View menu.
+
+    These panels were reachable only by right-clicking one particular box, and
+    not by design: the composed layout detaches the left inset to make room for
+    the index board, so the vendored hit test can only ever land on the right one.
+    Nothing named the gesture, so the fire and winter panels -- both computed for
+    every sounding whether or not anyone looks at them -- reader as absent.
+
+    The right-click still works. This adds a named route to the same swap.
+    """
+    try:
+        menu = getattr(win, "_sharpmod_view_menu", None)
+        sw = getattr(win, "spc_widget", None)
+        if menu is None or sw is None:
+            return
+        names = dict(getattr(type(sw), "inset_names", None) or {})
+        if not names:
+            return
+
+        # The left inset is detached by the layout, so offering it would be a
+        # menu entry that cannot do anything.
+        detached = {getattr(sw, "left_inset", None)}
+        offered = [(key, label)
+                   for key, label in sorted(names.items(), key=lambda kv: kv[1])
+                   if key not in detached]
+        if not offered:
+            return
+
+        submenu = menu.addMenu("Sounding &Panel")
+        submenu.setToolTipsVisible(True)
+        group = QActionGroup(submenu)
+        group.setExclusive(True)
+        actions = {}
+        for key, label in offered:
+            action = QAction(label, win)
+            action.setCheckable(True)
+            action.setData(key)
+            if key in _PANEL_TOOLTIPS:
+                action.setToolTip(_PANEL_TOOLTIPS[key])
+            # See _install_export_menu: the window owns the action, so the
+            # handler must not close over the window itself.
+            win_ref = weakref.ref(win)
+
+            def chosen(_checked=False, panel=key, ref=win_ref):
+                live = ref()
+                if live is not None:
+                    show_sounding_panel(live, panel)
+
+            action.triggered.connect(chosen)
+            group.addAction(action)
+            submenu.addAction(action)
+            actions[key] = action
+
+        def sync():
+            """Tick whichever panel is actually mounted.
+
+            Recomputed on open rather than tracked, because the right-click menu
+            and the vendored startup config can both change it without going
+            through here.
+            """
+            current = getattr(sw, "right_inset", None)
+            for key, action in actions.items():
+                action.setChecked(key == current)
+
+        submenu.aboutToShow.connect(sync)
+        sync()
+        win._sharpmod_panel_menu = submenu
+        win._sharpmod_panel_actions = actions
+    except Exception:
+        _LOGGER.exception("panel_menu.install_failed")
 
 
 def _bind_view_controls(win) -> None:

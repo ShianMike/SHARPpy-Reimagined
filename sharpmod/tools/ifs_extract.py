@@ -36,6 +36,7 @@ import os
 from datetime import datetime, timezone
 
 from sharpmod.tools import era5_extract as _e5
+from sharpmod.upstream_patches import apply_herbie_source_fallback
 from sharpmod.upstream_warnings import known_herbie_deprecations
 from sharpmod.tools.era5_extract import (
     ERA5ExtractionError as IFSExtractionError,  # re-export under IFS names
@@ -119,6 +120,8 @@ def _retrieve_dataset(valid_time):
         raise RetrievalError(
             "ECMWF IFS support requires the optional [era5] extra "
             "(herbie-data, cfgrib, xarray): %s" % exc) from exc
+
+    apply_herbie_source_fallback(Herbie)
 
     from datetime import timedelta
 

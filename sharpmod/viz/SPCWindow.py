@@ -94,6 +94,7 @@ __all__ = [
     "MountResult",
     "attach_hgz_overlay",
     "attach_cape_fill",
+    "attach_thermal_levels",
     "attach_family_rows",
     "mount_products",
     "apply_preferences_to_window",
@@ -127,6 +128,12 @@ def _place_right_inset_after_streamwiseness(sw):
     if grid3 is None or right is None or stream is None:
         return False
     try:
+        # ``text`` owns the lower band's outer rectangle.  The inset therefore
+        # contributes only the internal divider on its left; otherwise its
+        # top/right/bottom QSS border sits immediately inside the container's
+        # border and makes the box look two pixels thick.
+        right._sharpmod_frame_sides = "left"
+        right.setStyleSheet(right.styleSheet())
         grid3.removeWidget(right)
         grid3.addWidget(right, 0, 4)
         _apply_streamwiseness_column_stretches(grid3)
@@ -807,6 +814,133 @@ def attach_hgz_overlay(
     return True
 
 
+#: Colour of the dendritic-growth-zone segment and its bounding ticks, matching
+#: the vendored ``skew_dgz_color`` default so the band reads the same whichever
+#: route drew it.
+_DGZ_TICK_COLOR = "#F5D800"
+
+#: Colour of the freezing-level label. The wet-bulb-zero label borrows the
+#: widget's dewpoint colour, as the vendored code does, because the wet bulb is a
+#: moisture quantity and the two levels then read as a matched pair.
+_FRZ_LABEL_COLOR = "#FFA500"
+
+
+def attach_thermal_levels(skewt):
+    """Draw the freezing level, wet-bulb zero, and growth zone at all times.
+
+    The vendored skew-T makes these mutually exclusive with the maximum
+    lapse-rate layer and the parcel's 0/-20/-30 degree levels, through a single
+    ``if self.plotdgz ... else ...`` in ``plotData``. Because ``plotdgz`` is
+    turned on only while the winter panel is the one on display, the effect is
+    that choosing a panel silently changes *which thermodynamic levels the
+    Skew-T is willing to label* -- pick the winter panel and the freezing level
+    and wet-bulb zero appear while the lapse-rate layer vanishes; pick any other
+    and the reverse happens.
+
+    None of that follows from the physics. The freezing level and the wet-bulb
+    zero are read for hail size, precipitation type, and icing whatever else is
+    being looked at, and the growth zone is where it is regardless of which
+    numbers are in the corner. So this draws whichever set the vendored branch
+    skipped, leaving the sounding annotated the same way every time.
+
+    Safe to overlay because the two label families are placed on opposite sides
+    of their shared tick column -- ``draw_sig_levels`` right-aligns its text to
+    the left of the tick and ``draw_temp_levels`` left-aligns to the right -- so
+    drawing both cannot make them collide.
+
+    Returns whether the pass was installed.
+    """
+    if skewt is None:
+        return False
+    if getattr(skewt, "_sharpmod_thermal_levels_attached", False):
+        return True
+    original_plot_data = getattr(skewt, "plotData", None)
+    if not callable(original_plot_data):
+        return False
+
+    def _dgz_drawn_by_vendor(prof):
+        """Did the vendored branch already draw the growth zone and the levels?"""
+        if getattr(skewt, "plotdgz", False) is not True:
+            return False
+        bot = getattr(prof, "dgz_pbot", None)
+        top = getattr(prof, "dgz_ptop", None)
+        return bot is not None and top is not None and bot != top
+
+    def _draw_growth_zone_and_levels(qp, prof):
+        """The vendored ``if`` branch's annotations, minus its panel condition."""
+        import numpy as np
+
+        import sharppy.sharptab as tab
+
+        with suppress(Exception):
+            qp.setFont(skewt.hght_font)
+
+        bot = getattr(prof, "dgz_pbot", None)
+        top = getattr(prof, "dgz_ptop", None)
+        if bot is not None and top is not None and bot != top:
+            # Redrawn through the widget's own trace and tick helpers so the
+            # band lands on the same isotherms the vendored route puts it on.
+            with suppress(Exception):
+                pres = np.ma.masked_invalid(
+                    np.arange(top, bot, 5)[::-1])
+                tmpc = np.ma.masked_invalid(tab.interp.temp(prof, pres))
+                skewt.drawTrace(tmpc, skewt.dgz_color, qp, p=pres, label=False)
+            for level in (bot, top):
+                with suppress(Exception):
+                    skewt.draw_sig_levels(
+                        qp, plevel=level,
+                        color=QtGui.QColor(_DGZ_TICK_COLOR))
+
+        # Drawn even when there is no growth zone, which is the other half of the
+        # repair: the vendored code skipped the whole block in that case, so a
+        # sounding with no -12 to -17 layer lost its freezing level as well.
+        with suppress(Exception):
+            skewt.draw_sig_levels(
+                qp, plevel=tab.params.temp_lvl(prof, 0, wetbulb=True),
+                color=QtGui.QColor(skewt.dewp_color), var_id="WBZ=")
+        with suppress(Exception):
+            skewt.draw_sig_levels(
+                qp, plevel=tab.params.temp_lvl(prof, 0),
+                color=QtGui.QColor(_FRZ_LABEL_COLOR), var_id="FRZ=")
+
+    def _draw_lapse_rate_and_parcel_levels(qp):
+        """The vendored ``else`` branch's annotations."""
+        with suppress(Exception):
+            skewt.draw_max_lapse_rate_layer(qp)
+        with suppress(Exception):
+            skewt.draw_temp_levels(qp)
+
+    def _wrapped_plot_data(*args, **kwargs):
+        result = original_plot_data(*args, **kwargs)
+        try:
+            prof = getattr(skewt, "prof", None)
+            bitmap = getattr(skewt, "plotBitMap", None)
+            if prof is None or bitmap is None:
+                return result
+            qp = QtGui.QPainter()
+            qp.begin(bitmap)
+            try:
+                clip = getattr(skewt, "clip", None)
+                if clip is not None:
+                    qp.setClipRect(clip)
+                qp.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+                qp.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing)
+                if _dgz_drawn_by_vendor(prof):
+                    _draw_lapse_rate_and_parcel_levels(qp)
+                else:
+                    _draw_growth_zone_and_levels(qp, prof)
+            finally:
+                qp.end()
+        except Exception:
+            # An annotation pass must never break the base skew-T rendering.
+            pass
+        return result
+
+    skewt.plotData = _wrapped_plot_data
+    skewt._sharpmod_thermal_levels_attached = True
+    return True
+
+
 def attach_cape_fill(skewt, *, pos_color=None, neg_color=None):
     """Install the CAPE/CIN buoyancy-area fill pass on a vendored skew-T widget.
 
@@ -1234,5 +1368,19 @@ def mount_products(
             )
     except Exception as exc:  # noqa: BLE001
         result.blocked.append(f"HGZ overlay: {exc}")
+
+    # Last of the skew-T passes, so it draws over the fills rather than under
+    # them: these are single-pixel ticks and short labels, and a translucent
+    # buoyancy wash across them would cost more legibility than it gains.
+    try:
+        if attach_thermal_levels(skewt):
+            result.mounted.append(
+                "Freezing level / wet-bulb zero / growth zone (skew-T)")
+        else:
+            result.blocked.append(
+                "Thermal levels: skew-T widget did not expose plotData"
+            )
+    except Exception as exc:  # noqa: BLE001
+        result.blocked.append(f"Thermal levels: {exc}")
 
     return result

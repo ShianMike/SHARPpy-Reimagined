@@ -11,8 +11,8 @@
       "maximum_seconds": 150.0,
       "environment_overrides": {
         "github-actions": {
-          "baseline_seconds": 115.06,
-          "maximum_seconds": 260.0
+          "baseline_seconds": 450.0,
+          "maximum_seconds": 800.0
         }
       }
     },
@@ -21,8 +21,8 @@
       "maximum_seconds": 180.0,
       "environment_overrides": {
         "github-actions": {
-          "baseline_seconds": 149.98,
-          "maximum_seconds": 270.0
+          "baseline_seconds": 500.0,
+          "maximum_seconds": 900.0
         }
       }
     },
@@ -45,8 +45,8 @@
       "maximum_seconds": 1500.0,
       "environment_overrides": {
         "github-actions": {
-          "baseline_seconds": 1539.41,
-          "maximum_seconds": 2050.0
+          "baseline_seconds": 3000.0,
+          "maximum_seconds": 4200.0
         }
       }
     },

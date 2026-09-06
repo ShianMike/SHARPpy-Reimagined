@@ -1,34 +1,46 @@
-numpy<3.0,>=1.24
-PySide6<7.0,>=6.5
-qtpy<3.0,>=2.3
-python-dateutil<3.0,>=2.8
+---------------------------------------------------------------------------
+ REQUIREMENT SUMMARY (mirrors pyproject.toml; that file is authoritative)
+ Kept in this form for offline mirrors and air-gapped installs.
+---------------------------------------------------------------------------
+numpy>=1.24,<3.0
+PySide6>=6.5,<7.0
+qtpy>=2.3,<3.0
+python-dateutil>=2.8,<3.0
 certifi>=2023.7.22
-requests<3.0,>=2.28
-metpy<2.0,>=1.5
-ecape<1.0,>=0.1
-
-[dev]
-pytest>=7.0
-hypothesis>=6.0
-
-[rust-build]
-maturin>=1.9,<2
+requests>=2.28,<3.0
+metpy>=1.5,<2.0
+ecape>=0.1,<1.0
 
 [era5]
 cdsapi>=0.7.7,<0.8
 herbie-data>=2026.3,<2027.0
 cfgrib>=0.9.15,<0.10
-eccodes>=2.47,<3.0
+eccodes>=2.48,<3.0
 xarray>=2026.4,<2027.0
 numcodecs>=0.11,<1.0
 pyproj>=3.5,<4.0
 
-[render]
-requests<3.0,>=2.28
-
 [wrf]
 xarray>=2024.7,<2027.0
 netCDF4>=1.7,<2.0
+
+[render]
+requests>=2.28,<3.0
+
+[dev]
+pytest>=7.0,<10.0
+hypothesis>=6.0,<7.0
+pytest-xdist>=3.6,<4.0
+pytest-timeout>=2.4,<3.0
+PyYAML>=6.0,<7.0
+
+[quality]
+pip-audit==2.10.1
+pytest-cov==7.1.0
+ruff==0.16.5
+
+[rust-build]
+maturin>=1.15,<2
 
 ===========================================================================
  SHARPpy Reimagined — INSTALLATION REFERENCE
@@ -66,10 +78,14 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   python scripts/install_sharppy_compat.py
 
   # Optional, only if you need them
-  pip install -e ".[era5]"     # ERA5 point-sounding extraction
+  pip install -e ".[era5]"     # forecast-model, area, and ERA5 extraction
   pip install -e ".[wrf]"      # WRF-ARW (wrfout NetCDF) extraction
   pip install -e ".[dev]"      # run the test suite
+  pip install -e ".[quality]"  # ruff, pip-audit, coverage
   pip install -e ".[rust-build]"  # maturin frontend for a local Rust build
+  pip install -e ".[render]"   # accepted, but installs nothing new: its one
+                               # requirement (requests) is a core dependency.
+                               # Kept so older instructions keep working.
 
   On Windows, create/activate a venv first:
       py -3.11 -m venv .venv
@@ -129,14 +145,25 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
 5. OPTIONAL EXTRAS
 ---------------------------------------------------------------------------
-  [era5]  ERA5 reanalysis and public forecast-model point extraction
+  [era5]  ERA5 reanalysis AND every public forecast-model extraction, which
+          means the forecast-model tab, area/box soundings, and the gridded
+          HRRR map fields all need this extra -- the model download library
+          (herbie-data) and the GRIB readers live here, not in the core.
               cdsapi, herbie-data, cfgrib, ecCodes, xarray, numcodecs, pyproj
   [wrf]   WRF-ARW (wrfout NetCDF) point-sounding extraction
               xarray, netCDF4
+  [render]  HTTP for the render path
+              requests>=2.28,<3.0
   [dev]   test tooling
-              pytest>=7.0, hypothesis>=6.0, PyYAML>=6.0,<7.0
+              pytest>=7.0,<10.0, hypothesis>=6.0,<7.0,
+              pytest-xdist>=3.6,<4.0 (the -n/--workers parallel lanes),
+              pytest-timeout>=2.4,<3.0 (the per-test safety timeout),
+              PyYAML>=6.0,<7.0
+  [quality]  lint, audit, and coverage, pinned exactly so a report is
+             reproducible across machines
+              ruff==0.16.5, pip-audit==2.10.1, pytest-cov==7.1.0
   [rust-build]  local native-extension build frontend
-              maturin>=1.9,<2 (install the stable Rust toolchain separately)
+              maturin>=1.15,<2 (install the stable Rust toolchain separately)
 
 
 ---------------------------------------------------------------------------
@@ -197,29 +224,43 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
 7. WHAT YOU NEED FOR EACH TASK
 ---------------------------------------------------------------------------
-  Task                                   Core   +SHARPpy   +extra
-  -------------------------------------  -----  ---------  ----------
-  Run the interactive GUI (sharpmod-gui)  yes      YES        -
-  List / search / fetch UWyo soundings    yes      no         -
-  Render a sounding to PNG                yes      YES        -
-  Extract an ERA5 point sounding          yes      no       [era5]
-  Extract a WRF-ARW point sounding        yes      no       [wrf]
-  Run the test suite                      yes      YES      [dev]
-  Build the Rust backend locally          yes      no       [rust-build] + Rust
+  Task                                    Core   +SHARPpy   +extra
+  --------------------------------------  -----  ---------  ----------
+  Run the interactive GUI (sharpmod-gui)   yes      YES        -
+  List / search / fetch UWyo soundings     yes      no         -
+  Render a sounding to PNG                 yes      YES        -
+  Extract a forecast-model point sounding  yes      no       [era5]
+  Extract an area/box sounding             yes      no       [era5]
+  Draw gridded model fields on the map     yes      no       [era5]
+  Show radar or the SPC outlook on the map  yes     no         -
+  Extract an ERA5 point sounding           yes      no       [era5]
+  Extract a WRF-ARW point sounding         yes      no       [wrf]
+  Run the test suite                       yes      YES      [dev]
+  Lint / audit / coverage                  yes      no       [quality]
+  Build the Rust backend locally           yes      no       [rust-build] + Rust
+
+  Note that [era5] is named for its first use but now carries every gridded
+  model path: HRRR, RAP, NAM, GFS, RRFS, RDPS, the area/box sampler, and the
+  map field overlays all go through the same download and GRIB stack.
 
 
 ---------------------------------------------------------------------------
 8. CONSOLE COMMANDS INSTALLED
 ---------------------------------------------------------------------------
-  sharpmod-gui      interactive desktop app (station map / list / open file)
-  sharpmod-render   render a sounding file to PNG
-  uwyo-sounding     list / search / fetch University of Wyoming soundings
-  era5-extract      ERA5 point sounding  -> .npz
-  wrf-extract       WRF-ARW point sounding -> .npz
-  sharpmod-rust-sync check / repair / verify the local Rust extension
+  sharpmod-gui        interactive desktop app (station map / list / open file)
+  sharpmod-render     render a sounding file to PNG
+  uwyo-sounding       list / search / fetch University of Wyoming soundings
+  observed-sounding   fetch an observed sounding -> .npz
+  model-extract       forecast-model point sounding -> .npz          [era5]
+  model-batch-extract many model point soundings in one run -> .npz  [era5]
+  box-extract         area/box sample over a model grid -> .npz      [era5]
+  era5-extract        ERA5 point sounding -> .npz                    [era5]
+  wrf-extract         WRF-ARW point sounding -> .npz                 [wrf]
+  sharpmod-rust-sync  check / repair / verify the local Rust extension
 
   (sharpmod-gui is a windowed/no-console entry point; it needs a display and
-   the SHARPpy render stack from section 4.)
+   the SHARPpy render stack from section 4. The commands marked [era5] need
+   that extra, for the reason given in section 5.)
 
 
 ---------------------------------------------------------------------------
@@ -259,3 +300,13 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
         SHARPMOD_BACKEND=auto/python when a native build is not wanted.
   - An invalid SHARPMOD_BACKEND value raises ValueError:
         use exactly auto, python, or rust.
+  - A model fetch logs "herbie.source_failed source=... trying the next source":
+        informational, not an error. Each model file is mirrored on several
+        archives and one of them was unreachable, so the next was used. Only
+        "herbie.all_sources_failed" means nothing could be reached, which points
+        at local networking (proxy, DNS, or TLS interception) rather than at the
+        run being absent.
+  - A model fetch appears to hang with no progress:
+        the mirror signing service can accept a connection and then not answer,
+        and the pinned download library sets no timeout on that request. Cancel
+        and retry; a fix is in flight upstream as Herbie PR #554.

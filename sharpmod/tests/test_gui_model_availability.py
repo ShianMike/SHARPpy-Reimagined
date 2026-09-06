@@ -331,3 +331,79 @@ def test_picker_rechecks_inventory_inputs_but_not_point_coordinates(qt_app):
         picker._avail_timer.stop()
         picker._model_availability_timer.stop()
         picker.close()
+
+
+# --------------------------------------------------------------------------- #
+# The gridded overlay follows the selected cycle
+# --------------------------------------------------------------------------- #
+class _RecordingField:
+    """Stands in for HrrrFieldController, recording what the tab tells it."""
+
+    def __init__(self):
+        self.references = []
+        self.valid_times = []
+
+    def set_forecast_reference(self, run, fxx):
+        self.references.append((run, fxx))
+
+    def set_valid_time(self, when):
+        self.valid_times.append(when)
+
+
+def _sync_owner(field, model_key):
+    return SimpleNamespace(
+        _model_field=field,
+        _model_config=lambda: SimpleNamespace(key=model_key),
+    )
+
+
+def test_selecting_hrrr_pins_the_overlay_to_that_run_and_hour():
+    """The overlay is HRRR, so an HRRR selection names it exactly.
+
+    Without this the map would show whichever run happened to be freshest for
+    the same hour -- a different forecast from the one the sounding comes from.
+    """
+    field = _RecordingField()
+    run = datetime(2026, 9, 4, 12, tzinfo=timezone.utc)
+    valid = datetime(2026, 9, 5, 6, tzinfo=timezone.utc)
+
+    gui_picker.PickerWindow._model_sync_field_reference(
+        _sync_owner(field, "hrrr"), run, 18, valid)
+
+    assert field.references == [(run, 18)]
+    assert field.valid_times == [], "a pinned cycle needs no fallback moment"
+
+
+@pytest.mark.parametrize("model_key", ("gfs", "nam", "rap", "ecmwf-ifs"))
+def test_another_model_falls_back_to_matching_the_valid_time(model_key):
+    """A GFS F120 does not name an HRRR forecast, so only the hour transfers."""
+    field = _RecordingField()
+    run = datetime(2026, 9, 4, 6, tzinfo=timezone.utc)
+    valid = datetime(2026, 9, 9, 6, tzinfo=timezone.utc)
+
+    gui_picker.PickerWindow._model_sync_field_reference(
+        _sync_owner(field, model_key), run, 120, valid)
+
+    assert field.references == [(None, None)], "the pin must be released"
+    assert field.valid_times == [valid]
+
+
+def test_no_model_selected_releases_the_pin():
+    field = _RecordingField()
+    owner = SimpleNamespace(_model_field=field, _model_config=lambda: None)
+    valid = datetime(2026, 9, 5, 6, tzinfo=timezone.utc)
+
+    gui_picker.PickerWindow._model_sync_field_reference(
+        owner, datetime(2026, 9, 4, 12, tzinfo=timezone.utc), 18, valid)
+
+    assert field.references == [(None, None)]
+    assert field.valid_times == [valid]
+
+
+def test_the_sync_is_silent_before_the_overlay_exists():
+    """The tab builder updates the label before it builds the overlay card."""
+    owner = SimpleNamespace(_model_config=lambda: SimpleNamespace(key="hrrr"))
+
+    gui_picker.PickerWindow._model_sync_field_reference(
+        owner, datetime(2026, 9, 4, 12, tzinfo=timezone.utc), 18,
+        datetime(2026, 9, 5, 6, tzinfo=timezone.utc))

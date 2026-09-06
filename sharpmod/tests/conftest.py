@@ -61,10 +61,10 @@ if _requested_profile not in {"fast", "full"}:
 settings.load_profile(f"sharpmod-{_requested_profile}")
 
 
-# GUI tests share one QApplication singleton per worker.  The fixture itself is
-# function-scoped so process-global cursor state cannot leak from one GUI test
-# into the next when a deliberately interrupted workflow leaves a busy cursor.
-@pytest.fixture
+# GUI tests share one QApplication singleton per worker. Module-local fixtures
+# may themselves be module-scoped, so this owner fixture must remain at least
+# as broad while the function-scoped guard below isolates mutable global state.
+@pytest.fixture(scope="session")
 def qt_app():
     """Return the worker's single headless QApplication."""
 
@@ -72,11 +72,7 @@ def qt_app():
 
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    while app.overrideCursor() is not None:
-        app.restoreOverrideCursor()
-    yield app
-    while app.overrideCursor() is not None:
-        app.restoreOverrideCursor()
+    return app
 
 
 _QT_TEST_PREFIXES = (
@@ -91,6 +87,27 @@ _QT_TEST_PREFIXES = (
     "test_skewt_",
     "test_viz_",
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_qt_override_cursor(request):
+    """Prevent one GUI test's process-global busy cursor leaking to another."""
+
+    if not request.node.path.stem.startswith(_QT_TEST_PREFIXES):
+        yield
+        return
+
+    from qtpy import QtWidgets
+
+    def clear_override_cursor():
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            while app.overrideCursor() is not None:
+                app.restoreOverrideCursor()
+
+    clear_override_cursor()
+    yield
+    clear_override_cursor()
 
 
 def pytest_collection_modifyitems(items):

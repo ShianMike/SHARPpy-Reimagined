@@ -984,9 +984,9 @@ def test_a_failing_export_is_reported_not_raised(window, monkeypatch):
 # -- mean worker ----------------------------------------------------------- #
 
 
-def test_mean_worker_writes_one_sounding_into_the_extraction_directory(
-    extraction, tmp_path
-):
+def test_mean_worker_writes_one_sounding_into_the_extraction_directory(extraction):
+    from pathlib import Path
+
     from sharpmod.gui_box import BoxMeanWorker
 
     seen = {}
@@ -996,8 +996,9 @@ def test_mean_worker_writes_one_sounding_into_the_extraction_directory(
     worker.run()
 
     assert "error" not in seen, seen.get("error")
-    assert seen["path"] == str(tmp_path / "box-mean-sounding.npz")
-    assert (tmp_path / "box-mean-sounding.json").is_file()
+    output_dir = Path(extraction.output_dir)
+    assert seen["path"] == str(output_dir / "box-mean-sounding.npz")
+    assert (output_dir / "box-mean-sounding.json").is_file()
     assert seen["prof"].members == len(extraction.outputs)
 
 

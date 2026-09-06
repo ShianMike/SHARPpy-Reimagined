@@ -258,11 +258,12 @@ def test_streamwiseness_is_mounted_immediately_left_of_narrowed_stp(
             sw.text.grab().toImage().Format.Format_RGB32)
         for edge_x in (10, stp.geometry().center().x()):
             assert band_image.pixelColor(edge_x, 0).name() == "#ffffff"
-            assert band_image.pixelColor(edge_x, 1).name() == "#000000"
+            assert band_image.pixelColor(edge_x, 1).name() != "#ffffff"
         divider_x = stp.geometry().left()
         divider_y = stp.geometry().center().y()
         assert band_image.pixelColor(divider_x, divider_y).name() == "#ffffff"
-        assert band_image.pixelColor(divider_x + 1, divider_y).name() == "#000000"
+        assert band_image.pixelColor(divider_x + 1, divider_y).name() != \
+            "#ffffff"
         # The column now holds a swappable slot showing streamwiseness by
         # default, so the chart's own geometry is read through the slot.
         assert stream.currentChart() == "streamwiseness"

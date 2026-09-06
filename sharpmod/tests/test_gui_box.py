@@ -34,10 +34,11 @@ def _plan(target=16):
     return plan_box_samples("hrrr", _region(), target_points=target)
 
 
-@pytest.fixture
-def extraction(tmp_path):
+@pytest.fixture(scope="module")
+def extraction(tmp_path_factory):
     from sharpmod.gui_box import BoxExtractResult
 
+    tmp_path = tmp_path_factory.mktemp("gui-box-extraction")
     plan = _plan()
     outputs = _write_variants(plan, tmp_path)
     return BoxExtractResult(
@@ -47,7 +48,7 @@ def extraction(tmp_path):
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def analysis(extraction):
     return ba.analyze_box(
         extraction.plan, extraction.outputs, tiers=(ba.FAST_TIER,),
@@ -581,9 +582,10 @@ def test_the_analysis_still_computes_the_numbers_behind_them(analysis):
 # -- forecast-hour sequences ------------------------------------------------ #
 
 
-@pytest.fixture
-def hour_sequence(tmp_path):
+@pytest.fixture(scope="module")
+def hour_sequence(tmp_path_factory):
     """A three-hour sequence whose MUCAPE peaks at the middle hour."""
+    tmp_path = tmp_path_factory.mktemp("gui-box-sequence")
     plan = _plan()
     source = dict(np.load(HRRR_NPZ, allow_pickle=False))
     outputs_by_hour = {}

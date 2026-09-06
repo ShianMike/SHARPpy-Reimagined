@@ -59,8 +59,9 @@ def _write_variants(plan, directory):
     return outputs
 
 
-@pytest.fixture
-def analysis(tmp_path):
+@pytest.fixture(scope="module")
+def analysis(tmp_path_factory):
+    tmp_path = tmp_path_factory.mktemp("box-analysis")
     plan = _plan()
     outputs = _write_variants(plan, tmp_path)
     return ba.analyze_box(
@@ -717,9 +718,10 @@ def test_matched_nodes_actually_satisfy_the_criteria(analysis):
 # -- cross-box envelope ---------------------------------------------------- #
 
 
-@pytest.fixture
-def fanned(tmp_path):
+@pytest.fixture(scope="module")
+def fanned(tmp_path_factory):
     """A box whose low levels fan out west-to-east, so spread is non-zero."""
+    tmp_path = tmp_path_factory.mktemp("box-envelope")
     plan = _plan()
     source = dict(np.load(HRRR_NPZ, allow_pickle=False))
     outputs = {}
@@ -892,9 +894,10 @@ def test_envelope_and_vertical_transect_agree_at_a_shared_node(fanned):
 # -- forecast-hour sequences ----------------------------------------------- #
 
 
-@pytest.fixture
-def sequence(tmp_path):
+@pytest.fixture(scope="module")
+def sequence(tmp_path_factory):
     """A three-hour sequence whose MUCAPE peaks at the middle hour."""
+    tmp_path = tmp_path_factory.mktemp("box-sequence")
     plan = _plan()
     source = dict(np.load(HRRR_NPZ, allow_pickle=False))
     outputs_by_hour = {}

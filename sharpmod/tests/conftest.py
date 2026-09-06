@@ -61,10 +61,10 @@ if _requested_profile not in {"fast", "full"}:
 settings.load_profile(f"sharpmod-{_requested_profile}")
 
 
-# GUI tests share one application per worker. Module-local fixtures used to
-# create the same singleton repeatedly; centralizing it makes the lifetime
-# explicit and avoids setup churn while remaining process-isolated under xdist.
-@pytest.fixture(scope="session")
+# GUI tests share one QApplication singleton per worker.  The fixture itself is
+# function-scoped so process-global cursor state cannot leak from one GUI test
+# into the next when a deliberately interrupted workflow leaves a busy cursor.
+@pytest.fixture
 def qt_app():
     """Return the worker's single headless QApplication."""
 
@@ -72,7 +72,11 @@ def qt_app():
 
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    return app
+    while app.overrideCursor() is not None:
+        app.restoreOverrideCursor()
+    yield app
+    while app.overrideCursor() is not None:
+        app.restoreOverrideCursor()
 
 
 _QT_TEST_PREFIXES = (

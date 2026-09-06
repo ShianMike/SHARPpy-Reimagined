@@ -43,6 +43,29 @@ def _pump(ms: int = 700) -> None:
         loop.exec_()
 
 
+def _pump_until(predicate, timeout_ms: int = 5000) -> bool:
+    """Run queued worker signals until ``predicate`` holds or time expires."""
+    if predicate():
+        return True
+    loop = QEventLoop()
+    poll = QTimer()
+    poll.setInterval(10)
+
+    def check() -> None:
+        if predicate():
+            loop.quit()
+
+    poll.timeout.connect(check)
+    poll.start()
+    QTimer.singleShot(timeout_ms, loop.quit)
+    if hasattr(loop, "exec"):
+        loop.exec()
+    else:  # pragma: no cover - Qt5 naming
+        loop.exec_()
+    poll.stop()
+    return bool(predicate())
+
+
 def _layer(valid_from, valid_to):
     rings = mo.rings_from_geometry(
         {"type": "Polygon", "coordinates": [RING]})[0]
@@ -306,7 +329,9 @@ def test_toggling_back_on_reuses_a_covering_layer(bound, monkeypatch):
     calls = _tracked_fetch(monkeypatch, valid_from, valid_to)
 
     controller.set_valid_time(datetime(2024, 5, 1, 18, tzinfo=UTC))
-    _pump()
+    assert _pump_until(
+        lambda: widget.overlay(spc_outlook.OVERLAY_KEY) is not None
+    ), "the resolved outlook must reach the map"
     assert len(calls) == 1, "the first selection resolves the outlook"
     layer = widget.overlay(spc_outlook.OVERLAY_KEY)
     assert layer is not None

@@ -329,14 +329,17 @@ def _lattice_shape(region: BoxRegion, spacing_km: float) -> tuple[int, int]:
     """Return ``(rows, cols)`` for a spacing, at least 1x1."""
     lat_step = spacing_km / KM_PER_DEG_LAT
     lon_step = spacing_km / km_per_deg_lon(region.center_lat)
-    rows = max(1, int(round(region.lat_span / lat_step)) + 1)
-    cols = max(1, int(round(region.lon_span / lon_step)) + 1)
+    # Edge-inclusive nodes create one fewer interval than nodes. Flooring the
+    # span-to-step ratio keeps every resulting interval at least as wide as the
+    # planned spacing; rounding can add an interval and oversample the model.
+    rows = max(1, int(math.floor(region.lat_span / lat_step)) + 1)
+    cols = max(1, int(math.floor(region.lon_span / lon_step)) + 1)
     return rows, cols
 
 
 def _snap_to_native(spacing_km: float, native_km: float) -> float:
     """Round a spacing up to a whole multiple of the model's grid spacing."""
-    multiple = max(1, int(round(spacing_km / native_km)))
+    multiple = max(1, int(math.ceil(spacing_km / native_km)))
     return multiple * native_km
 
 

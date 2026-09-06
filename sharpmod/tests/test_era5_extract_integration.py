@@ -281,6 +281,44 @@ def test_extract_accepts_scalar_coordinates_from_single_point_cds_subset(tmp_pat
         assert np.asarray(npz["pres"]).size == len(_LEVELS)
 
 
+def test_mixed_scalar_longitude_indexes_the_selected_latitude_column():
+    """A one-cell longitude subset must still index its latitude vector."""
+    _, _, ds = _dataset()
+    strip = ds.isel(time=1, longitude=2)
+    index, selected_lat, selected_lon = era5.select_nearest_grid_point(
+        strip.latitude.values,
+        strip.longitude.values,
+        39.8,
+        260.1,
+    )
+
+    assert index == (3, 0)
+    assert selected_lat == 40.0
+    assert selected_lon == 260.0
+    get = era5._column(strip, *index, index_is_regular=True)
+    np.testing.assert_allclose(
+        get(("t",)), strip["t"].isel(latitude=index[0]).values)
+
+
+def test_mixed_scalar_latitude_indexes_the_selected_longitude_column():
+    """A one-cell latitude subset must still index its longitude vector."""
+    _, _, ds = _dataset()
+    strip = ds.isel(time=1, latitude=2)
+    index, selected_lat, selected_lon = era5.select_nearest_grid_point(
+        strip.latitude.values,
+        strip.longitude.values,
+        35.1,
+        269.8,
+    )
+
+    assert index == (0, 4)
+    assert selected_lat == 35.0
+    assert selected_lon == 270.0
+    get = era5._column(strip, *index, index_is_regular=True)
+    np.testing.assert_allclose(
+        get(("t",)), strip["t"].isel(longitude=index[1]).values)
+
+
 # --------------------------------------------------------------------------- #
 # Retrieval-failure cleanup (Requirement 8.6)
 # --------------------------------------------------------------------------- #

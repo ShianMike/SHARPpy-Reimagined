@@ -339,6 +339,40 @@ def test_temporary_soundings_survive_while_a_worker_still_runs(
     assert scratch.exists()
 
 
+def test_closing_during_analysis_suppresses_result_and_defers_cleanup(
+    picker, monkeypatch, tmp_path
+):
+    scratch = tmp_path / "box-analysis-live"
+    scratch.mkdir()
+    interrupted = []
+
+    class FakeWorker:
+        def requestInterruption(self):  # noqa: N802 - mirrors QThread
+            interrupted.append(True)
+
+        def deleteLater(self):  # noqa: N802 - mirrors QObject
+            pass
+
+    worker = FakeWorker()
+    picker._box_output_dir = str(scratch)
+    picker._box_extraction = object()
+    picker._box_analysis_worker = worker
+    picker._ensure_box_window()
+    picker._on_box_window_destroyed()
+
+    assert interrupted == [True]
+    assert scratch.exists()
+    assert picker._box_output_dir == str(scratch)
+
+    monkeypatch.setattr(type(picker), "sender", lambda self: worker)
+    picker._on_box_analysis_ready(object())
+    assert picker._box_window is None
+
+    picker._on_box_analysis_finished()
+    assert not scratch.exists()
+    assert picker._box_output_dir is None
+
+
 def test_shutdown_clears_box_state_and_scratch(picker, tmp_path):
     scratch = tmp_path / "box-shutdown"
     scratch.mkdir()

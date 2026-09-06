@@ -701,6 +701,10 @@ class IGRACache:
                 return stale
             raise
         self.write(name, payload)
+        # A successful archive fetch is the operation that grows the cache, so
+        # enforce the configured budget immediately instead of relying on a
+        # caller to remember a separate maintenance pass.
+        self.prune()
         return payload
 
     def entries(self) -> list[Path]:

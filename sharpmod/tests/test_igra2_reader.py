@@ -618,6 +618,20 @@ def test_a_stale_entry_is_refreshed(tmp_path):
     assert cache.read("thing") == b"new"
 
 
+def test_a_successful_load_enforces_the_cache_budget(tmp_path):
+    import os
+
+    cache = igra2.IGRACache(root=tmp_path, max_bytes=150)
+    cache.load("old", lambda: b"a" * 100, max_age_seconds=3600)
+    os.utime(cache.path_for("old"), (1, 1))
+
+    payload = cache.load("new", lambda: b"b" * 100, max_age_seconds=3600)
+
+    assert payload == b"b" * 100
+    assert cache.read("old") is None
+    assert cache.read("new") == b"b" * 100
+
+
 def test_a_stale_entry_is_served_when_the_refresh_fails(tmp_path):
     """A daily-updated public mirror should degrade to yesterday's copy."""
     cache = igra2.IGRACache(root=tmp_path)

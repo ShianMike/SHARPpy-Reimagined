@@ -500,9 +500,18 @@ def _horizontal_indexers(ds, index_tuple):
         return {}, (None, None)
 
     iy, ix = (int(index_tuple[0]), int(index_tuple[1]))
-    if lat_coord.ndim == 1 and lon_coord.ndim == 1:
-        ydim = lat_coord.dims[0]
-        xdim = lon_coord.dims[0]
+    if lat_coord.ndim <= 1 and lon_coord.ndim <= 1:
+        # cfgrib collapses a one-cell horizontal axis to a scalar coordinate.
+        # Keep indexing the surviving vector axis so its selected metadata and
+        # its extracted data column cannot disagree.
+        ydim = lat_coord.dims[0] if lat_coord.ndim == 1 else None
+        xdim = lon_coord.dims[0] if lon_coord.ndim == 1 else None
+        indexers = {}
+        if ydim is not None:
+            indexers[ydim] = iy
+        if xdim is not None:
+            indexers[xdim] = ix
+        return indexers, (ydim, xdim)
     elif lat_coord.ndim >= 2 and lon_coord.ndim >= 2:
         ydim, xdim = lat_coord.dims[-2:]
     else:

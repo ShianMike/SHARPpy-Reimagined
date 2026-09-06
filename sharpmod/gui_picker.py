@@ -749,6 +749,7 @@ class PickerWindow(QMainWindow):
         self._box_analysis_worker = None
         self._box_mean_worker = None
         self._box_window = None
+        self._box_window_closed = False
         self._box_extraction = None
         # "mean" collapses the box to one sounding; "field" opens the workspace.
         self._box_mode = "mean"
@@ -3376,6 +3377,7 @@ class PickerWindow(QMainWindow):
         # overridden by it.
         fxx = self._model_selected_fxx() if fxx is None else int(fxx)
         output_dir = tempfile.mkdtemp(prefix="sharpmod-box-")
+        self._box_window_closed = False
         self._box_output_dir = output_dir
         disk_cache, _hour_cache = self._ensure_model_cache()
         worker = BoxExtractWorker(
@@ -3493,6 +3495,7 @@ class PickerWindow(QMainWindow):
             if self._box_analysis_worker is None \
                     and self._box_mean_worker is None:
                 self._set_model_busy(False)
+            self._cleanup_closed_box_output()
         worker.deleteLater()
 
     # -- box mean: the whole area as one sounding -------------------------- #
@@ -3586,6 +3589,7 @@ class PickerWindow(QMainWindow):
                 self._model_progress.reset()
                 self._model_progress.hide()
                 self._model_progress_detail.hide()
+            self._cleanup_closed_box_output()
         worker.deleteLater()
 
     def _ensure_box_window(self):
@@ -3604,6 +3608,7 @@ class PickerWindow(QMainWindow):
         window.compositesRequested.connect(self._on_box_composites_requested)
         window.destroyed.connect(self._on_box_window_destroyed)
         self._box_window = window
+        self._box_window_closed = False
         # The workspace builds its field map with the window, so it adopts the
         # chosen view here the way every other lazily created map does. Routed
         # through the shared applier rather than the map directly, so the box
@@ -3613,14 +3618,28 @@ class PickerWindow(QMainWindow):
 
     def _on_box_window_destroyed(self, *_args) -> None:
         self._box_window = None
+        self._box_window_closed = True
         # The extracted soundings only exist for this window, so they go with
-        # it rather than accumulating in the temporary directory.
+        # it rather than accumulating in the temporary directory. An active
+        # worker may still be reading them, so retain the directory until its
+        # finished handler can remove it.
+        self._box_extraction = None
+        worker = self._box_analysis_worker
+        if worker is not None:
+            worker.requestInterruption()
+        self._cleanup_closed_box_output()
+
+    def _cleanup_closed_box_output(self) -> None:
+        """Remove deferred box scratch data after a dismissed run is idle."""
+        if self._box_window is not None \
+                or self._box_extract_worker is not None \
+                or self._box_analysis_worker is not None \
+                or self._box_mean_worker is not None:
+            return
         output_dir = self._box_output_dir
         self._box_output_dir = None
         self._box_extraction = None
-        if output_dir and self._box_extract_worker is None \
-                and self._box_analysis_worker is None \
-                and self._box_mean_worker is None:
+        if output_dir:
             shutil.rmtree(output_dir, ignore_errors=True)
 
     def _start_box_analysis(self, extraction, tiers) -> None:
@@ -3645,6 +3664,10 @@ class PickerWindow(QMainWindow):
     def _on_box_analysis_ready(self, analysis) -> None:
         if self.sender() is not self._box_analysis_worker:
             return
+        if self._box_window_closed:
+            # The user dismissed this run while analysis was active. Do not
+            # resurrect its workspace when a pending worker result arrives.
+            return
         window = self._ensure_box_window()
         # A multi-hour run yields a BoxSequence; the window owns the hour
         # controls, so it only needs to be handed the right kind of object.
@@ -3662,7 +3685,7 @@ class PickerWindow(QMainWindow):
         if self._box_window is not None:
             self._box_window.clear_progress()
             self._box_window.set_status(str(message))
-        else:
+        elif not self._box_window_closed:
             QMessageBox.critical(self, APP_NAME, str(message))
 
     def _on_box_analysis_finished(self) -> None:
@@ -3672,6 +3695,7 @@ class PickerWindow(QMainWindow):
             if self._box_extract_worker is None \
                     and self._box_mean_worker is None:
                 self._set_model_busy(False)
+            self._cleanup_closed_box_output()
         worker.deleteLater()
 
     def _on_box_composites_requested(self) -> None:

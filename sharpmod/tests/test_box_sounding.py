@@ -161,7 +161,24 @@ def test_spacing_snaps_to_a_whole_multiple_of_the_native_grid():
     # 13 km RAP: an 20 km request must land on 26 km, not stay at 20.
     plan = plan_box_samples("rap", _plains(), spacing_km=20.0)
     native = model_extract.grid_spacing_km("rap")
-    assert plan.spacing_km % native == pytest.approx(0.0)
+    assert plan.spacing_km == pytest.approx(2.0 * native)
+
+
+def test_requested_spacing_is_never_rounded_down_to_a_native_multiple():
+    plan = plan_box_samples("hrrr", _plains(), spacing_km=4.0)
+    native = model_extract.grid_spacing_km("hrrr")
+
+    assert plan.spacing_km == pytest.approx(2.0 * native)
+
+
+def test_edge_inclusive_lattice_intervals_are_not_finer_than_the_plan():
+    height_km = 10.8
+    region = BoxRegion.from_corners(
+        35.0, -97.0, 35.0 + height_km / 111.32, -96.0)
+    plan = plan_box_samples("hrrr", region, spacing_km=3.0)
+
+    assert plan.rows == 4
+    assert region.height_km / (plan.rows - 1) >= plan.spacing_km
 
 
 def test_default_plan_lands_near_the_default_target():

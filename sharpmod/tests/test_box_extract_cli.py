@@ -474,7 +474,8 @@ def test_a_sequence_past_the_forecast_horizon_is_refused(capsys, tmp_path):
     # HRRR does not publish beyond F048, so nothing follows F048.
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--fxx", "48", "--hours", "4",
+        "--output-dir", str(tmp_path),
+        "--run", "2026-09-04T12:00Z", "--fxx", "48", "--hours", "4",
         "--hour-step", "6", "--quiet",
     ])
     assert code == 2

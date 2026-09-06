@@ -1,5 +1,8 @@
 """Derived-parameter fields, area statistics, and transects over a box."""
 
+import math
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -413,6 +416,22 @@ def test_vertical_transect_reflects_the_wind_perturbation(analysis):
     row = [value for value in by_level[500.0] if value is not None]
     assert len(row) == analysis.cols
     assert row == sorted(row)
+
+
+def test_wind_direction_column_interpolates_across_north():
+    midpoint = math.sqrt(1000.0 * 900.0)
+    prof = SimpleNamespace(
+        pres=np.asarray([1000.0, 900.0]),
+        wdir=np.asarray([350.0, 10.0]),
+        wspd=np.asarray([20.0, 20.0]),
+    )
+
+    value = ba._column_from_profile(
+        prof, "wdir", np.log10(np.asarray([midpoint]))
+    )[0]
+
+    assert value is not None
+    assert min(abs(value), abs(value - 360.0)) < 1.0
 
 
 def test_vertical_transect_handles_nodes_without_data(tmp_path):

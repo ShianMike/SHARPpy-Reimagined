@@ -31,7 +31,7 @@ from dataclasses import dataclass
 import math
 
 from qtpy.QtCore import QRectF, Qt
-from qtpy.QtGui import QBrush, QColor, QPainter, QPen
+from qtpy.QtGui import QBrush, QColor, QPainter, QPen, QPolygonF
 
 from sharpmod.box_analysis import BoxAnalysis, BoxFieldStats, parameter
 
@@ -186,6 +186,25 @@ def _cell_steps(analysis: BoxAnalysis) -> tuple[float, float]:
     return dlat, dlon
 
 
+def _cell_polygon(to_px, lon, lat, half_lon, half_lat, *, segments=4):
+    """Project one geographic cell, sampling each curved geographic edge."""
+    corners = (
+        (lon - half_lon, lat + half_lat),
+        (lon + half_lon, lat + half_lat),
+        (lon + half_lon, lat - half_lat),
+        (lon - half_lon, lat - half_lat),
+    )
+    points = []
+    for start, end in zip(corners, corners[1:] + corners[:1]):
+        for step in range(max(1, int(segments))):
+            fraction = step / float(max(1, int(segments)))
+            points.append(to_px(
+                start[0] + (end[0] - start[0]) * fraction,
+                start[1] + (end[1] - start[1]) * fraction,
+            ))
+    return QPolygonF(points)
+
+
 def draw_field_cells(
     qp: QPainter,
     to_px,
@@ -213,15 +232,10 @@ def draw_field_cells(
         color = scale.color(value, alpha=alpha)
         if color is None:
             continue
-        top_left = to_px(point.lon - half_lon, point.lat + half_lat)
-        bottom_right = to_px(point.lon + half_lon, point.lat - half_lat)
-        rect = QRectF(top_left, bottom_right).normalized()
-        # Grow hairline cells by half a pixel so a coarse box does not leave
-        # seams between neighbouring fills.
-        if rect.width() < 1.0 or rect.height() < 1.0:
-            rect = rect.adjusted(-0.5, -0.5, 0.5, 0.5)
+        polygon = _cell_polygon(
+            to_px, point.lon, point.lat, half_lon, half_lat)
         qp.setBrush(QBrush(color))
-        qp.drawRect(rect)
+        qp.drawPolygon(polygon)
         drawn += 1
     if outline and drawn:
         qp.setBrush(Qt.NoBrush)
@@ -229,9 +243,8 @@ def draw_field_cells(
         for point in analysis.points:
             if scale.normalize(point.value(item.key)) is None:
                 continue
-            top_left = to_px(point.lon - half_lon, point.lat + half_lat)
-            bottom_right = to_px(point.lon + half_lon, point.lat - half_lat)
-            qp.drawRect(QRectF(top_left, bottom_right).normalized())
+            qp.drawPolygon(_cell_polygon(
+                to_px, point.lon, point.lat, half_lon, half_lat))
     return drawn
 
 
@@ -279,12 +292,10 @@ def draw_mask_overlay(
             continue
         if verdict is not True:
             continue
-        top_left = to_px(point.lon - half_lon, point.lat + half_lat)
-        bottom_right = to_px(point.lon + half_lon, point.lat - half_lat)
-        rect = QRectF(top_left, bottom_right).normalized()
         qp.setPen(Qt.NoPen)
         qp.setBrush(brush)
-        qp.drawRect(rect)
+        qp.drawPolygon(_cell_polygon(
+            to_px, point.lon, point.lat, half_lon, half_lat))
         drawn += 1
     if drawn:
         # A thin dark keyline under the hatch keeps the qualifying region's
@@ -298,9 +309,8 @@ def draw_mask_overlay(
                 continue
             if verdict is not True:
                 continue
-            top_left = to_px(point.lon - half_lon, point.lat + half_lat)
-            bottom_right = to_px(point.lon + half_lon, point.lat - half_lat)
-            qp.drawRect(QRectF(top_left, bottom_right).normalized())
+            qp.drawPolygon(_cell_polygon(
+                to_px, point.lon, point.lat, half_lon, half_lat))
     return drawn
 
 

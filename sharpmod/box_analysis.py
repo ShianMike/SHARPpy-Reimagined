@@ -1475,8 +1475,25 @@ def _column_from_profile(prof, field, log_ladder) -> list[float | None]:
         usable = (pres > 0.0) & (raw > _MISSING_LIMIT)
         if int(np.count_nonzero(usable)) < 2:
             return blank
-        interpolated = backends.interpolate_1d(
-            log_ladder, np.log10(pres[usable]), raw[usable])
+        coordinate = np.log10(pres[usable])
+        if field == "wdir":
+            # Direction is circular: scalar interpolation between 350 and 10
+            # degrees points south.  Interpolate the matching wind components
+            # and reconstruct the angle so the path crosses north instead.
+            speed = np.ma.filled(
+                np.ma.asarray(getattr(prof, "wspd"), dtype=float), -9999.0)
+            usable &= speed > _MISSING_LIMIT
+            if int(np.count_nonzero(usable)) < 2:
+                return blank
+            coordinate = np.log10(pres[usable])
+            u, v = backends.wind_to_components(raw[usable], speed[usable])
+            interp_u = backends.interpolate_1d(log_ladder, coordinate, u)
+            interp_v = backends.interpolate_1d(log_ladder, coordinate, v)
+            interpolated, _speed = backends.components_to_wind(
+                interp_u, interp_v)
+        else:
+            interpolated = backends.interpolate_1d(
+                log_ladder, coordinate, raw[usable])
     except Exception:
         return blank
     return [

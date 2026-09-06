@@ -178,6 +178,18 @@ def test_draw_field_cells_can_outline_cells(analysis):
     assert drawn > 0 and not pixmap.isNull()
 
 
+def test_a_cell_projects_all_four_corners_and_samples_curved_edges():
+    polygon = bf._cell_polygon(
+        lambda lon, lat: QPointF(lon + lat * lat, lat),
+        0.0, 0.0, 1.0, 1.0,
+    )
+    points = [(point.x(), point.y()) for point in polygon]
+
+    assert len(points) == 16
+    for corner in ((0.0, 1.0), (2.0, 1.0), (2.0, -1.0), (0.0, -1.0)):
+        assert corner in points
+
+
 def test_cell_values_are_suppressed_when_cells_are_too_small(analysis):
     pixmap, qp = _painter()
     tiny = bf.draw_cell_values(

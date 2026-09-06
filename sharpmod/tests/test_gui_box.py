@@ -689,6 +689,53 @@ def test_extract_worker_covers_several_hours(tmp_path, monkeypatch):
     assert len(result.outputs) == points
 
 
+def test_extract_worker_preserves_an_hour_when_all_of_its_nodes_fail(
+        tmp_path, monkeypatch):
+    from sharpmod.gui_box import BoxExtractWorker
+
+    plan = _plan()
+
+    class PartialHourExtractor:
+        def __init__(self, progress_callback=None):
+            self.progress_callback = progress_callback
+
+        def cancel(self):
+            pass
+
+        def run(self, requests, **kwargs):
+            completed = 0
+            failed = 0
+            for item in requests:
+                if item.fxx == 6:
+                    completed += 1
+                    self.progress_callback({
+                        "event": "completed", "request_id": item.id})
+                else:
+                    failed += 1
+                    self.progress_callback({
+                        "event": "failed", "request_id": item.id,
+                        "error": {"message": "hour unavailable"},
+                    })
+            return SimpleNamespace(
+                completed=completed, failed=failed, cancelled=0)
+
+    monkeypatch.setattr(
+        batch_extract, "BatchExtractor", PartialHourExtractor)
+    results = []
+    worker = BoxExtractWorker(plan, RUN, 0, tmp_path, hours=(0, 6))
+    worker.result_ready.connect(results.append)
+
+    worker.run()
+
+    result = results[0]
+    assert result.sequence is True
+    assert result.hours == (0, 6)
+    assert result.outputs_for(0) == {}
+    assert set(result.outputs_for(6)) == {
+        node.request_id for node in plan.requestable_points
+    }
+
+
 def test_analysis_worker_emits_a_sequence_for_a_multi_hour_run(tmp_path):
     from sharpmod.gui_box import BoxAnalysisWorker, BoxExtractResult
 

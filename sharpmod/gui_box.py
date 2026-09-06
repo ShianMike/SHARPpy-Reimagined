@@ -203,6 +203,11 @@ class BoxExtractWorker(QThread):
 
         total = len(requests)
         primary = int(self.fxx) if self.fxx in hours else hours[0]
+        # Preserve every requested forecast hour even when all of its nodes
+        # fail.  Downstream sequence analysis needs that empty slot to report
+        # "no data" at the requested hour instead of silently shortening the
+        # sequence (or mistaking it for a single-hour run).
+        self._outputs_by_hour = {int(hour): {} for hour in hours}
         # Map each request back to the hour and lattice cell it came from, so a
         # completed point can be filed under the right hour whichever id scheme
         # produced it.
@@ -296,7 +301,7 @@ class BoxExtractWorker(QThread):
             failed=int(getattr(result, "failed", 0)),
             cancelled=int(getattr(result, "cancelled", 0)),
             output_dir=self.output_dir,
-            hours=tuple(sorted(self._outputs_by_hour)) or tuple(hours),
+            hours=tuple(hours),
             outputs_by_hour={
                 hour: dict(values)
                 for hour, values in self._outputs_by_hour.items()

@@ -381,6 +381,7 @@ class _AvailabilityWorker(QThread):
                 station_id=str(result.station_id),
                 station_name=str(metadata.get("station_name", "") or ""),
                 provider=str(result.provider),
+                valid=result.valid,
             )
         self.checked.emit(
             self._query, self._when, status, message, label, fetched
@@ -641,7 +642,7 @@ class _FetchWorker(QThread):
         if self.isInterruptionRequested():
             _cleanup_point_data(npz_path, None)
             return
-        self.finished_ok.emit(npz_path, meta, self._when)
+        self.finished_ok.emit(npz_path, meta, result.valid)
 
 
 def _cleanup_model_data(npz_path: str, download_dir: str) -> None:

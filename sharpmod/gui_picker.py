@@ -2235,16 +2235,22 @@ class PickerWindow(QMainWindow):
         """Display the profile already decoded by the availability worker."""
         from sharppy.sharptab.prof_collection import ProfCollection
 
+        # IGRA can satisfy a synoptic-hour request with a nearby special
+        # release.  The cached preflight result therefore owns the display
+        # time; ``when`` remains only the cache/request key.
+        delivered_when = getattr(fetched, "valid", None)
+        if not isinstance(delivered_when, datetime):
+            delivered_when = when
         station_id = str(
             getattr(fetched, "station_id", None) or requested_sid
         )
         provider = str(getattr(fetched, "provider", "uwyo")).upper()
         prof_col = ProfCollection(
             {"": [fetched.profile]},
-            [when],
+            [delivered_when],
             observed=True,
-            base_time=when,
-            run=when,
+            base_time=delivered_when,
+            run=delivered_when,
             model=provider,
             loc=station_id,
         )
@@ -2255,22 +2261,23 @@ class PickerWindow(QMainWindow):
         QApplication.processEvents()
         try:
             title = (
-                f"{APP_NAME} — {station_id} {when:%Y-%m-%d %H}Z "
+                f"{APP_NAME} — {station_id} {delivered_when:%Y-%m-%d %H}Z "
                 f"[{provider}]"
             )
             self._show_sounding(prof_col, station_id, title=title)
             self.statusBar().showMessage(
-                f"Opened {station_id} {when:%Y-%m-%d %H}Z from {provider} "
+                f"Opened {station_id} {delivered_when:%Y-%m-%d %H}Z "
+                f"from {provider} "
                 "(reused availability download)"
             )
             _LOGGER.info(
                 "observed_fetch.displayed_from_preflight station=%s valid=%s",
-                station_id, when,
+                station_id, delivered_when,
             )
         except Exception as exc:  # noqa: BLE001 - GUI/render boundary
             _LOGGER.exception(
                 "observed_fetch.preflight_display_failed station=%s valid=%s",
-                station_id, when,
+                station_id, delivered_when,
             )
             QMessageBox.critical(
                 self, APP_NAME,

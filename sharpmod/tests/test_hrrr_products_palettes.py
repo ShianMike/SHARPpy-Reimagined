@@ -117,6 +117,40 @@ def test_non_finite_values_are_always_transparent():
     assert list(_alpha([np.nan, np.inf, -np.inf], palette)) == [0, 0, 0]
 
 
+def test_height_interpolation_does_not_depend_on_a_nan_missing_sentinel(
+        monkeypatch):
+    """A finite interchange sentinel must not make every cell look filled."""
+    monkeypatch.setattr(hrrr_products, "MISSING", -9999.0)
+    heights = np.asarray([
+        [[0.0, 0.0]],
+        [[1000.0, 1000.0]],
+        [[2000.0, 2000.0]],
+    ])
+    values = np.asarray([
+        [[20.0, 20.0]],
+        [[10.0, 10.0]],
+        [[0.0, 0.0]],
+    ])
+
+    actual = hrrr_products._interpolate_to_height(
+        heights, values, np.asarray([[500.0, 1500.0]])
+    )
+
+    np.testing.assert_allclose(actual, [[15.0, 5.0]])
+
+
+def test_supercell_composite_shear_term_saturates_at_twenty_metres_per_second():
+    product = hrrr_products.get_product("scp")
+    fields = {
+        "mucape": np.asarray([1000.0, 1000.0]),
+        "srh03": np.asarray([50.0, 50.0]),
+        "ushr06": np.asarray([20.0, 30.0]),
+        "vshr06": np.asarray([0.0, 0.0]),
+    }
+
+    np.testing.assert_allclose(product.derive(fields), [1.0, 1.0])
+
+
 # --------------------------------------------------------------------------- #
 # Convective inhibition, the field the ceiling exists for
 # --------------------------------------------------------------------------- #

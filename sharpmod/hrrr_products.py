@@ -551,6 +551,10 @@ def _interpolate_to_height(heights: np.ndarray, values: np.ndarray,
     lapse rate computed over the wrong depth.
     """
     result = np.full(target.shape, MISSING, dtype=np.float32)
+    # Track assignment independently of the missing-value representation.  At
+    # present MISSING is NaN, but interpolation must remain correct if a GRIB
+    # boundary supplies (or a future writer adopts) a finite sentinel.
+    filled = np.zeros(target.shape, dtype=bool)
     for index in range(heights.shape[0] - 1):
         lower_h = heights[index]
         upper_h = heights[index + 1]
@@ -561,7 +565,9 @@ def _interpolate_to_height(heights: np.ndarray, values: np.ndarray,
         np.divide(target - lower_h, upper_h - lower_h,
                   out=weight, where=inside)
         candidate = values[index] + (values[index + 1] - values[index]) * weight
-        result = np.where(inside & ~np.isfinite(result), candidate, result)
+        assign = inside & ~filled & np.isfinite(candidate)
+        result = np.where(assign, candidate, result)
+        filled |= assign
     return result
 
 
@@ -576,7 +582,7 @@ def _supercell_composite(fields: dict[str, np.ndarray]) -> np.ndarray:
     mucape = np.maximum(fields["mucape"], 0.0)
     srh = fields["srh03"]
     shear = np.hypot(fields["ushr06"], fields["vshr06"])
-    shear_term = np.clip(shear / 20.0, 0.0, 1.5)
+    shear_term = np.clip(shear / 20.0, 0.0, 1.0)
     shear_term = np.where(shear < 10.0, 0.0, shear_term)
     return (mucape / 1000.0) * (srh / 50.0) * shear_term
 

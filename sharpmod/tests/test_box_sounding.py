@@ -165,7 +165,10 @@ def test_spacing_snaps_to_a_whole_multiple_of_the_native_grid():
 
 
 def test_requested_spacing_is_never_rounded_down_to_a_native_multiple():
-    plan = plan_box_samples("hrrr", _plains(), spacing_km=4.0)
+    # Keep the box small enough that the point budget does not coarsen the
+    # snapped spacing a second time.
+    region = BoxRegion.from_corners(35.0, -97.0, 35.2, -96.8)
+    plan = plan_box_samples("hrrr", region, spacing_km=4.0)
     native = model_extract.grid_spacing_km("hrrr")
 
     assert plan.spacing_km == pytest.approx(2.0 * native)

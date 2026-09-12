@@ -104,7 +104,10 @@ jobs:
           python -m pip check
 
       - name: Run bounded all-offline compatibility smoke
-        run: python scripts/run_test_lane.py compatibility --workers 4
+        # A standard hosted runner has two cores. Four CPU-heavy workers made
+        # the same render smoke vary from 7.65s to 14.36s and occasionally trip
+        # its unchanged 14s regression cap despite every assertion passing.
+        run: python scripts/run_test_lane.py compatibility --workers 2
 
       - name: Upload compatibility timing artifacts
         if: always()

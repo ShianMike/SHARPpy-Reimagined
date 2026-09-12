@@ -8,20 +8,42 @@ before starting the timer and reports raw elapsed-time summaries only.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
+from functools import wraps
 import gc
 import importlib
+import json
 import os
+from pathlib import Path
 import platform
 import shutil
 import statistics
 import subprocess
 import sys
 import time
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 import numpy as np
+
+
+def _without_reference_mask_warning(function):
+    """Keep one known SHARPpy/NumPy warning outside every timed region."""
+
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"Warning: converting a masked element to nan\.",
+                category=UserWarning,
+                module=r"numpy\.lib\._function_base_impl",
+            )
+            return function(*args, **kwargs)
+
+    return wrapped
 
 
 @dataclass(frozen=True)
@@ -117,6 +139,7 @@ def _load_backends() -> tuple[Any, Any, Any]:
             "profile_convective_parcels",
             "lift_parcel",
             "profile_dcape",
+            "profile_thermodynamics",
         ):
             if not callable(getattr(backend, operation, None)):
                 raise RuntimeError(
@@ -325,6 +348,7 @@ def _validate_equivalence(python_backend: Any, rust_backend: Any) -> None:
         convective_workspace_to_raw,
         downdraft_to_raw,
         parcel_workspace_to_raw,
+        profile_thermodynamics_to_raw,
     )
 
     sounding = _sounding_inputs(128)
@@ -399,6 +423,45 @@ def _validate_equivalence(python_backend: Any, rust_backend: Any) -> None:
         rust_backend.profile_dcape(*parcel_arguments),
     )
     for python_value, rust_value in zip(python_dcape, rust_dcape):
+        np.testing.assert_allclose(
+            rust_value,
+            python_value,
+            rtol=1e-9,
+            atol=1e-8,
+            equal_nan=True,
+        )
+
+    python_thermodynamics = profile_thermodynamics_to_raw(
+        python_backend.profile_thermodynamics(*parcel_arguments),
+    )
+    rust_thermodynamics = profile_thermodynamics_to_raw(
+        rust_backend.profile_thermodynamics(*parcel_arguments),
+    )
+    np.testing.assert_allclose(
+        rust_thermodynamics[0],
+        python_thermodynamics[0],
+        rtol=3e-2,
+        atol=5.1,
+        equal_nan=True,
+    )
+    for index, (relative_tolerance, absolute_tolerance) in {
+        0: (3e-2, 5.1),
+        1: (0.0, 5.1),
+        2: (0.0, 0.6),
+        3: (0.0, 0.05),
+        4: (0.0, 0.0),
+    }.items():
+        np.testing.assert_allclose(
+            rust_thermodynamics[1][index],
+            python_thermodynamics[1][index],
+            rtol=relative_tolerance,
+            atol=absolute_tolerance,
+            equal_nan=True,
+        )
+    for python_value, rust_value in zip(
+        python_thermodynamics[2],
+        rust_thermodynamics[2],
+    ):
         np.testing.assert_allclose(
             rust_value,
             python_value,
@@ -547,31 +610,34 @@ def _record_profile_kinematics(
     repeat: int,
     warmup: int,
 ) -> list[Timing]:
-    """Measure one ordinary five-layer profile workspace."""
+    """Measure the ordinary five-layer workspace at 32 and 128 levels."""
 
-    sounding = _sounding_inputs(128)
-    radians = np.deg2rad(sounding.wdir)
-    u = -sounding.wspd * np.sin(radians)
-    v = -sounding.wspd * np.cos(radians)
-    arguments = (
-        sounding.pres,
-        sounding.hght,
-        u,
-        v,
-        np.array([500.0, 1000.0, 3000.0, 4000.0, 6000.0]),
-    )
-    return _record_callable_scenario(
-        (
-            ("python", python_backend.profile_kinematics),
-            ("rust", rust_backend.profile_kinematics),
-        ),
-        arguments,
-        scenario="profile-kinematics-128",
-        operation="profile_kinematics",
-        calls=calls,
-        repeat=repeat,
-        warmup=warmup,
-    )
+    records = []
+    for levels in (32, 128):
+        sounding = _sounding_inputs(levels)
+        radians = np.deg2rad(sounding.wdir)
+        u = -sounding.wspd * np.sin(radians)
+        v = -sounding.wspd * np.cos(radians)
+        arguments = (
+            sounding.pres,
+            sounding.hght,
+            u,
+            v,
+            np.array([500.0, 1000.0, 3000.0, 4000.0, 6000.0]),
+        )
+        records.extend(_record_callable_scenario(
+            (
+                ("python", python_backend.profile_kinematics),
+                ("rust", rust_backend.profile_kinematics),
+            ),
+            arguments,
+            scenario=f"profile-kinematics-{levels}",
+            operation="profile_kinematics",
+            calls=calls,
+            repeat=repeat,
+            warmup=warmup,
+        ))
+    return records
 
 
 def _record_profile_parcels(
@@ -582,27 +648,30 @@ def _record_profile_parcels(
     repeat: int,
     warmup: int,
 ) -> list[Timing]:
-    """Measure one SB/MU/ML parcel workspace over an ordinary sounding."""
+    """Measure SB/MU/ML parcel workspaces at 32 and 128 levels."""
 
-    sounding = _sounding_inputs(128)
-    arguments = (
-        sounding.pres,
-        sounding.hght,
-        sounding.tmpc,
-        sounding.dwpc,
-    )
-    return _record_callable_scenario(
-        (
-            ("python", python_backend.profile_parcels),
-            ("rust", rust_backend.profile_parcels),
-        ),
-        arguments,
-        scenario="profile-parcels-128",
-        operation="profile_parcels",
-        calls=calls,
-        repeat=repeat,
-        warmup=warmup,
-    )
+    records = []
+    for levels in (32, 128):
+        sounding = _sounding_inputs(levels)
+        arguments = (
+            sounding.pres,
+            sounding.hght,
+            sounding.tmpc,
+            sounding.dwpc,
+        )
+        records.extend(_record_callable_scenario(
+            (
+                ("python", python_backend.profile_parcels),
+                ("rust", rust_backend.profile_parcels),
+            ),
+            arguments,
+            scenario=f"profile-parcels-{levels}",
+            operation="profile_parcels",
+            calls=calls,
+            repeat=repeat,
+            warmup=warmup,
+        ))
+    return records
 
 
 def _record_profile_convective_parcels(
@@ -613,26 +682,29 @@ def _record_profile_convective_parcels(
     repeat: int,
     warmup: int,
 ) -> list[Timing]:
-    """Measure five standard parcel ascents, traces, and effective bounds."""
-    sounding = _sounding_inputs(128)
-    arguments = (
-        sounding.pres,
-        sounding.hght,
-        sounding.tmpc,
-        sounding.dwpc,
-    )
-    return _record_callable_scenario(
-        (
-            ("python", python_backend.profile_convective_parcels),
-            ("rust", rust_backend.profile_convective_parcels),
-        ),
-        arguments,
-        scenario="profile-convective-parcels-128",
-        operation="profile_convective_parcels",
-        calls=calls,
-        repeat=repeat,
-        warmup=warmup,
-    )
+    """Measure traced/effective workspaces at 32 and 128 levels."""
+    records = []
+    for levels in (32, 128):
+        sounding = _sounding_inputs(levels)
+        arguments = (
+            sounding.pres,
+            sounding.hght,
+            sounding.tmpc,
+            sounding.dwpc,
+        )
+        records.extend(_record_callable_scenario(
+            (
+                ("python", python_backend.profile_convective_parcels),
+                ("rust", rust_backend.profile_convective_parcels),
+            ),
+            arguments,
+            scenario=f"profile-convective-parcels-{levels}",
+            operation="profile_convective_parcels",
+            calls=calls,
+            repeat=repeat,
+            warmup=warmup,
+        ))
+    return records
 
 
 def _record_profile_dcape(
@@ -643,26 +715,177 @@ def _record_profile_dcape(
     repeat: int,
     warmup: int,
 ) -> list[Timing]:
-    """Measure one profile DCAPE summary and descending trace."""
-    sounding = _sounding_inputs(128)
-    arguments = (
-        sounding.pres,
-        sounding.hght,
-        sounding.tmpc,
-        sounding.dwpc,
-    )
-    return _record_callable_scenario(
-        (
-            ("python", python_backend.profile_dcape),
-            ("rust", rust_backend.profile_dcape),
-        ),
-        arguments,
-        scenario="profile-dcape-128",
-        operation="profile_dcape",
-        calls=calls,
-        repeat=repeat,
-        warmup=warmup,
-    )
+    """Measure DCAPE summaries/traces at 32 and 128 levels."""
+    records = []
+    for levels in (32, 128):
+        sounding = _sounding_inputs(levels)
+        arguments = (
+            sounding.pres,
+            sounding.hght,
+            sounding.tmpc,
+            sounding.dwpc,
+        )
+        records.extend(_record_callable_scenario(
+            (
+                ("python", python_backend.profile_dcape),
+                ("rust", rust_backend.profile_dcape),
+            ),
+            arguments,
+            scenario=f"profile-dcape-{levels}",
+            operation="profile_dcape",
+            calls=calls,
+            repeat=repeat,
+            warmup=warmup,
+        ))
+    return records
+
+
+def _record_profile_thermodynamics(
+    python_backend: Any,
+    rust_backend: Any,
+    native_module: Any,
+    *,
+    calls: int,
+    repeat: int,
+    warmup: int,
+) -> list[Timing]:
+    """Measure shared prep and native/adapter trace-transfer overhead."""
+    records = []
+    for levels in (32, 128):
+        sounding = _sounding_inputs(levels)
+        arguments = (
+            sounding.pres,
+            sounding.hght,
+            sounding.tmpc,
+            sounding.dwpc,
+        )
+
+        def native(*columns):
+            return native_module.profile_thermodynamics(
+                *columns,
+                0,
+                None,
+            )
+
+        records.extend(_record_callable_scenario(
+            (
+                ("python-public", python_backend.profile_thermodynamics),
+                ("rust-public", rust_backend.profile_thermodynamics),
+                (
+                    "rust-buffered",
+                    rust_backend.profile_thermodynamics_buffers,
+                ),
+                ("rust-native", native),
+            ),
+            arguments,
+            scenario=f"profile-thermodynamics-{levels}",
+            operation="profile_thermodynamics",
+            calls=calls,
+            repeat=repeat,
+            warmup=warmup,
+        ))
+    return records
+
+
+def _record_profile_batch_analysis(
+    python_backend: Any,
+    rust_backend: Any,
+    native_module: Any,
+    *,
+    calls: int,
+    repeat: int,
+    warmup: int,
+) -> list[Timing]:
+    """Measure serial/parallel complete-sounding batches and adapter cost."""
+    records = []
+    layer_tops = np.array([1000.0, 3000.0, 6000.0, 8000.0])
+    for profile_count, levels in ((8, 32), (32, 128)):
+        sounding = _sounding_inputs(levels)
+        profiles = tuple(
+            (
+                sounding.pres,
+                sounding.hght,
+                sounding.tmpc,
+                sounding.dwpc,
+                sounding.wdir,
+                sounding.wspd,
+                0,
+            )
+            for _index in range(profile_count)
+        )
+        flattened = tuple(
+            np.concatenate([profile[column] for profile in profiles])
+            for column in range(6)
+        )
+        offsets = np.arange(
+            0,
+            (profile_count + 1) * levels,
+            levels,
+            dtype=np.uintp,
+        )
+        surfaces = np.zeros(profile_count, dtype=np.uintp)
+
+        def python_public():
+            return python_backend.profile_batch_analysis(
+                profiles,
+                layer_tops,
+                max_threads=1,
+                parallel_threshold=2,
+            )
+
+        def rust_serial():
+            return rust_backend.profile_batch_analysis(
+                profiles,
+                layer_tops,
+                max_threads=1,
+                parallel_threshold=2,
+            )
+
+        def rust_parallel():
+            return rust_backend.profile_batch_analysis(
+                profiles,
+                layer_tops,
+                max_threads=4,
+                parallel_threshold=2,
+            )
+
+        def native(worker_count):
+            return native_module.profile_batch_analysis(
+                *flattened,
+                offsets,
+                surfaces,
+                layer_tops,
+                None,
+                worker_count,
+                2,
+            )
+
+        # The Python reference legitimately carries masked values through
+        # NumPy interpolation. Suppress only that known warning outside the
+        # timed call so console I/O does not dominate its baseline.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"Warning: converting a masked element to nan\.",
+                category=UserWarning,
+                module=r"numpy\.lib\._function_base_impl",
+            )
+            records.extend(_record_callable_scenario(
+                (
+                    ("python-public", python_public),
+                    ("rust-serial", rust_serial),
+                    ("rust-parallel-4", rust_parallel),
+                    ("rust-native-serial", lambda: native(1)),
+                    ("rust-native-parallel-4", lambda: native(4)),
+                ),
+                (),
+                scenario=f"profile-batch-{profile_count}x{levels}",
+                operation="profile_batch_analysis",
+                calls=calls,
+                repeat=repeat,
+                warmup=warmup,
+            ))
+    return records
 
 
 def _record_scenario(
@@ -1011,6 +1234,87 @@ def _print_concurrency_records(records: Sequence[ConcurrencyTiming]) -> None:
         )
 
 
+def _write_json_results(
+    path: Path,
+    native_module: Any,
+    arguments: argparse.Namespace,
+    records: Sequence[Timing],
+    concurrency_records: Sequence[ConcurrencyTiming],
+) -> None:
+    """Persist raw samples plus the environment needed to reproduce them."""
+    payload = {
+        "schema_version": 1,
+        "benchmark": "SHARPpy Reimagined Python and Rust backends",
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "command": [sys.executable, *sys.argv],
+        "equivalence": "passed",
+        "environment": {
+            "platform": platform.platform(),
+            "machine": platform.machine(),
+            "cpu": arguments.cpu_model or platform.processor() or None,
+            "power_mode": arguments.power_mode,
+            "python": platform.python_version(),
+            "python_executable": sys.executable,
+            "numpy": np.__version__,
+            "sharpmod_rs": getattr(native_module, "__version__", None),
+            "backend_api_version": getattr(
+                native_module,
+                "__backend_api_version__",
+                None,
+            ),
+            "rustc": _rustc_version(),
+        },
+        "settings": {
+            "repeat": arguments.repeat,
+            "warmup": arguments.warmup,
+            "large_size": arguments.large_size,
+            "repeated_calls": arguments.repeated_calls,
+            "batch_profiles": arguments.batch_profiles,
+            "batch_levels": arguments.batch_levels,
+            "profile_constructions": arguments.profile_constructions,
+            "concurrency_size": arguments.concurrency_size,
+            "concurrency_calls_per_worker": (
+                arguments.concurrency_calls_per_worker
+            ),
+        },
+        "timings": [
+            {
+                "backend": record.backend,
+                "scenario": record.scenario,
+                "operation": record.operation,
+                "calls": record.calls,
+                "samples_seconds": list(record.samples),
+                "median_total_ms": (
+                    statistics.median(record.samples) * 1_000.0
+                ),
+                "median_per_call_ms": (
+                    statistics.median(record.samples) * 1_000.0
+                    / record.calls
+                ),
+            }
+            for record in records
+        ],
+        "concurrency": [
+            {
+                "backend": record.backend,
+                "operation": record.operation,
+                "calls_per_worker": record.calls_per_worker,
+                "sequential_samples_seconds": list(
+                    record.sequential_samples,
+                ),
+                "threaded_samples_seconds": list(record.threaded_samples),
+            }
+            for record in concurrency_records
+        ],
+    }
+    path = path.expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repeat", type=int, default=10)
@@ -1024,9 +1328,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--concurrency-calls-per-worker", type=int, default=10)
     parser.add_argument("--cpu-model")
     parser.add_argument("--power-mode")
+    parser.add_argument(
+        "--output-json",
+        type=Path,
+        help="write raw samples and reproducibility metadata to this path",
+    )
     return parser
 
 
+@_without_reference_mask_warning
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     if arguments.repeat < 1:
@@ -1165,6 +1475,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             warmup=arguments.warmup,
         )
     )
+    records.extend(
+        _record_profile_thermodynamics(
+            python_backend,
+            rust_backend,
+            native_module,
+            calls=max(1, arguments.repeated_calls // 100),
+            repeat=arguments.repeat,
+            warmup=arguments.warmup,
+        )
+    )
+    records.extend(
+        _record_profile_batch_analysis(
+            python_backend,
+            rust_backend,
+            native_module,
+            calls=max(1, arguments.repeated_calls // 1_000),
+            repeat=arguments.repeat,
+            warmup=arguments.warmup,
+        )
+    )
     _print_records(records)
     concurrency_records = _record_concurrency_diagnostic(
         python_backend,
@@ -1175,6 +1505,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         warmup=arguments.warmup,
     )
     _print_concurrency_records(concurrency_records)
+    if arguments.output_json is not None:
+        _write_json_results(
+            arguments.output_json,
+            native_module,
+            arguments,
+            records,
+            concurrency_records,
+        )
+        print(f"\nJSON: {arguments.output_json.expanduser().resolve()}")
     return 0
 
 

@@ -18,4 +18,4 @@
 #: default tag in ``.github/workflows/release.yml`` in lockstep; the release
 #: workflow refuses to publish when the four disagree or when the tag is not
 #: ``v`` + this value.
-__version__ = "1.1.0"
+__version__ = "1.2.0"

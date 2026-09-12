@@ -114,6 +114,10 @@ if not getattr(Config, "_sharpmod_safe_writer", False):
     Config._sharpmod_safe_writer = True
 
 from sharpmod import colors  # noqa: E402
+from sharpmod.export_paths import (  # noqa: E402
+    ExportDirectoryError,
+    export_file_path,
+)
 from sharpmod.io import decoder as decoder_mod  # noqa: E402
 from sharpmod.resources import font_resolver  # noqa: E402
 # Window composition (real minimal controller; no fake parent window). Importing
@@ -640,8 +644,8 @@ def _apply_table_spacing_patch():
         _thermo_mod.platform = _NonWinPlatform
         _kinematics_mod.platform = _NonWinPlatform
         _table_spacing_patched = True
-    except Exception:  # pragma: no cover - vendored modules always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 # --- Five layout-compensation passes (applied after compose + updateConfig) --
@@ -897,8 +901,8 @@ def _install_skewt_mixratio_mask():
 
         _cls.draw_mixing_ratios = draw_mixing_ratios
         _cls._sharpmod_mixr_mask = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_skewt_sfc_label_mask():
@@ -1108,8 +1112,8 @@ def _install_skewt_sfc_label_mask():
         _cls.drawTrace = drawTrace
         _cls.plotData = plotData
         _cls._sharpmod_sfc_mask = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 #: Clear space kept between two left-hand skew-T annotations, in pixels.
@@ -1491,8 +1495,8 @@ def _install_skewt_effective_layer_label_fit():
 
         _cls.draw_effective_layer = draw_effective_layer
         _cls._sharpmod_effective_layer_fit = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 class _RectSuppressingPainter:
@@ -1643,8 +1647,8 @@ def _install_skewt_lapse_rate_label_placement():
 
         _cls.draw_max_lapse_rate_layer = draw_max_lapse_rate_layer
         _cls._sharpmod_lapse_rate_label_placed = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_skewt_lapse_rate_label_transparency():
@@ -1671,8 +1675,8 @@ def _install_skewt_lapse_rate_label_transparency():
 
         _cls.draw_max_lapse_rate_layer = draw_max_lapse_rate_layer
         _cls._sharpmod_lapse_rate_label_transparent = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_hodo_storm_motion_label_transparency():
@@ -1713,8 +1717,8 @@ def _install_hodo_storm_motion_label_transparency():
 
         _cls.drawSMV = drawSMV
         _cls._sharpmod_smv_label_transparent = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_skewt_frame_ontop():
@@ -1763,8 +1767,8 @@ def _install_skewt_frame_ontop():
 
         _cls.plotData = plotData
         _cls._sharpmod_frame_ontop = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 #: Fill for the box-mean callout. Amber matches the rectangle the picker draws
@@ -1949,8 +1953,8 @@ def _install_skewt_box_mean_badge():
 
         _cls.plotData = plotData
         _cls._sharpmod_box_mean_badge = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_skewt_isotherm_label_fit():
@@ -1998,8 +2002,8 @@ def _install_skewt_isotherm_label_fit():
 
         _cls.draw_isotherm_labels = draw_isotherm_labels
         _cls._sharpmod_isotherm_fit = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_slinky_title_fit():
@@ -2051,8 +2055,8 @@ def _install_slinky_title_fit():
 
         _cls.draw_frame = draw_frame
         _cls._sharpmod_title_fit = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 # --- Chart enlargement (skew-T + hodograph) --------------------------------
@@ -2517,8 +2521,8 @@ def _install_advection_font_cap():
         _cls.initUI = initUI
         _cls._sharpmod_font_cap = True
         _adv_font_cap_installed = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_speed_title_cap():
@@ -2619,8 +2623,8 @@ def _install_speed_title_cap():
         _cls.draw_speed = draw_speed
         _cls._sharpmod_title_cap = True
         _speed_title_cap_installed = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_speed_0500():
@@ -2695,8 +2699,8 @@ def _install_speed_0500():
         _cls.draw_profile = draw_profile
         _cls._sharpmod_0500 = True
         _speed_0500_installed = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_conditional_prob_panel_fit():
@@ -2882,724 +2886,31 @@ def _install_conditional_prob_panel_fit():
 
             _vrot_cls.draw_frame = vrot_draw_frame
             _vrot_cls._sharpmod_text_fit = True
-    except Exception:  # pragma: no cover - vendored modules always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_winter_text_fit():
-    """Keep winter/DGZ panel text inside its columns.
+    """Install the winter/DGZ panel patch from its focused owner module."""
+    from sharpmod.render_patches.text_panels import install_winter_text_fit
 
-    The vendored winter panel uses a height-scaled font and then draws long
-    strings into one-tenth-width rectangles with ``TextDontClip``. The result is
-    column bleed and right-edge clipping. This caps the panel font and redraws
-    dynamic rows into actual full-width/column-width rects with elision only as
-    a last resort.
-    """
-    try:
-        import platform as _platform
-        import sharppy.sharptab as _tab
-        import sharppy.viz.winter as _winter_mod
-        _QtGui = _winter_mod.QtGui
-        _QtCore = _winter_mod.QtCore
-        _bg = _winter_mod.backgroundWinter
-        _plot = _winter_mod.plotWinter
-        if getattr(_plot, "_sharpmod_text_fit", False):
-            return
-
-        _orig_init = _bg.initUI
-
-        def initUI(self):
-            _orig_init(self)
-            try:
-                f = _QtGui.QFont(self.label_font)
-                ps = f.pointSizeF()
-                if ps <= 0:
-                    ps = float(f.pixelSize() if f.pixelSize() > 0
-                               else WINTER_LABEL_MAX_PT)
-                if ps > WINTER_LABEL_MAX_PT:
-                    f.setPointSizeF(float(WINTER_LABEL_MAX_PT))
-                    self.label_font = f
-                    self.label_metrics = _QtGui.QFontMetrics(f)
-                    self.os_mod = (self.label_metrics.descent()
-                                   if _platform.system() == "Windows" else 0)
-                    self.label_height = self.label_metrics.xHeight() + self.tpad
-                    self.ylast = self.label_height
-                    self.plotBitMap.fill(self.bg_color)
-                    self.plotBackground()
-            except Exception:
-                pass
-
-        def _columns(self):
-            split = float(self.brx) * 0.48
-            left_x = int(self.lpad)
-            left_w = max(1, int(split - left_x - 6))
-            right_x = int(split + 8)
-            right_w = max(1, int(float(self.brx) - right_x - self.rpad - 4))
-            return left_x, left_w, right_x, right_w
-
-        def _natural_row_height(self):
-            metrics = _QtGui.QFontMetrics(self.label_font)
-            return max(int(metrics.height()), int(self.label_height) + 4)
-
-        def _frame_bottom(self, row_h):
-            """Return where the frame's last row ends for a given row height.
-
-            Mirrors the walk in :func:`draw_frame` and the two row loops, so the
-            fit below is measured against the real layout instead of an
-            estimate. An earlier estimate that left out the per-row ``os_mod``
-            and the taller bold precipitation rows still overran by 13 px.
-            """
-            gap = _row_gap(self)
-            section = _section_gap(self)
-            step = row_h + gap
-            os_mod = int(getattr(self, "os_mod", 0) or 0)
-            precip_h = _precip_row_height_for(self, row_h)
-            block = row_h + gap + os_mod
-
-            y = float(self.tpad) + step                     # header -> OPRH
-            y += step + section                             # OPRH -> growth zone
-            y += WINTER_DGZ_ROWS * block                    # growth-zone rows
-            y += _dgz_divider_gap(self) - gap                # divider
-            y += section                                    # -> initial phase
-            y += step + section - gap                       # phase -> divider
-            y += section                                    # -> warm/cold block
-            y += WINTER_ENERGY_ROWS * block                 # warm/cold rows
-            y += section - gap
-            y += section                                    # -> precip header
-            y += step + section                             # header -> type
-            y += precip_h + section                         # type -> sfc temp
-            return y + precip_h                             # bottom of last row
-
-        def _row_height(self):
-            """Row height that always fits the panel it is drawn in.
-
-            The vendored panel took this from font metrics alone. Because the
-            font is itself scaled from panel height, a taller panel grew its
-            rows faster than it gained room and a short one never shrank them at
-            all -- measured at 200x260 the last three rows, the precipitation
-            type among them, were drawn below the frame.
-            """
-            natural = _natural_row_height(self)
-            limit = float(getattr(self, "bry", 0)) - 2.0
-            if limit <= 0:
-                return natural
-            candidate = natural
-            while (candidate > WINTER_MIN_ROW_PX
-                    and _frame_bottom(self, candidate) > limit):
-                candidate -= 1
-            return candidate
-
-        def _row_gap(self):
-            return 2
-
-        def _section_gap(self):
-            return 4
-
-        def _dgz_divider_gap(self):
-            return 8
-
-        def _row_step(self):
-            return _row_height(self) + _row_gap(self)
-
-        def _precip_font(self):
-            big = _QtGui.QFont(self.label_font)
-            big.setBold(True)
-            big.setPointSizeF(min(WINTER_LABEL_MAX_PT + 3,
-                                  max(big.pointSizeF(), WINTER_LABEL_MAX_PT)))
-            return big
-
-        def _precip_row_height_for(self, row_h):
-            metrics = _QtGui.QFontMetrics(_precip_font(self))
-            return max(int(row_h), int(metrics.height()) + 2)
-
-        def _precip_row_height(self):
-            return _precip_row_height_for(self, _row_height(self))
-
-        def _draw_text(self, qp, rect, text, color=None, align=None,
-                       base_font=None, max_pt=None, min_pt=4):
-            if align is None:
-                align = _QtCore.Qt.AlignLeft | _QtCore.Qt.AlignVCenter
-            if color is None:
-                color = self.fg_color
-            if max_pt is None:
-                max_pt = WINTER_LABEL_MAX_PT
-            fit_height = max(float(rect.height()), float(_row_height(self)))
-            font = _fit_font_to_rect(
-                _QtGui, base_font or self.label_font, str(text),
-                max(1, int(rect.width()) - 2),
-                max(1, int(fit_height)),
-                max_pt=max_pt, min_pt=min_pt)
-            qp.setFont(font)
-            qp.setPen(_QtGui.QPen(color, 1, _QtCore.Qt.SolidLine))
-            qp.drawText(rect, align | _QtCore.Qt.TextDontClip, str(text))
-
-        def draw_frame(self, qp):
-            qp.setPen(_QtGui.QPen(self.dgz_color, 1, _QtCore.Qt.SolidLine))
-            qp.setFont(self.label_font)
-
-            row_h = _row_height(self)
-            step = _row_step(self)
-            section_gap = _section_gap(self)
-            # The two row loops advance by ``row_h + gap + os_mod`` while the
-            # frame reserved only ``row_h + gap``. Three rows absorbed the
-            # difference; a fourth did not, and the growth zone's last row was
-            # drawn on top of the initial-phase line below it.
-            block = step + int(getattr(self, "os_mod", 0) or 0)
-
-            header_rect = _QtCore.QRectF(0, self.tpad, self.wid, row_h)
-            _draw_text(
-                self, qp, header_rect,
-                '*** DENDRITIC GROWTH ZONE (-12 TO -17 C) ***',
-                color=self.dgz_color,
-                align=_QtCore.Qt.AlignCenter,
-                min_pt=4)
-
-            self.oprh_y1 = self.tpad + step
-            self.layers_y1 = self.oprh_y1 + step + section_gap
-            begin = self.layers_y1 + step
-            # Four rows: the vendored three plus the growth zone's pressure
-            # bounds and the snow-to-liquid ratio.
-            y1 = (self.layers_y1 + WINTER_DGZ_ROWS * block +
-                  _dgz_divider_gap(self) - _row_gap(self))
-
-            qp.setPen(_QtGui.QPen(self.fg_color, 1, _QtCore.Qt.SolidLine))
-            qp.drawLine(0, y1, self.brx, y1)
-            qp.drawLine(self.brx * .48, y1, self.brx * .48, begin)
-
-            self.init_phase_y1 = y1 + section_gap
-            y1 = self.init_phase_y1 + step + section_gap - _row_gap(self)
-            qp.drawLine(0, y1, self.brx, y1)
-
-            backup = y1 + section_gap
-            y1 = (backup + WINTER_ENERGY_ROWS * block
-                  + section_gap - _row_gap(self))
-
-            self.energy_y1 = backup
-            qp.drawLine(0, y1, self.brx, y1)
-            qp.drawLine(self.brx * .48, y1, self.brx * .48, backup)
-            y1 += section_gap
-
-            best_guess_rect = _QtCore.QRectF(0, y1, self.wid, row_h)
-            _draw_text(
-                self, qp, best_guess_rect,
-                '*** BEST GUESS PRECIP TYPE ***',
-                align=_QtCore.Qt.AlignCenter,
-                min_pt=4)
-            self.precip_type_y1 = y1 + step + section_gap
-            self.ptype_tmpf_y1 = (
-                self.precip_type_y1 + _precip_row_height(self) + section_gap)
-
-        def drawDGZLayer(self, qp):
-            pen = _QtGui.QPen(self.fg_color, 1, _QtCore.Qt.SolidLine)
-            qp.setPen(pen)
-            qp.setFont(self.label_font)
-            y1 = self.layers_y1
-            sep = _row_gap(self)
-            lh = _row_height(self)
-            left_x, left_w, right_x, right_w = _columns(self)
-
-            depth = ('Layer Depth: ' + _tab.utils.INT2STR(self.dgz_depth) +
-                     " ft (" + _tab.utils.INT2STR(self.dgz_zbot) + '-' +
-                     _tab.utils.INT2STR(self.dgz_ztop) + ' ft msl)')
-            _draw_text(self, qp, _QtCore.QRectF(
-                left_x, y1, self.brx - left_x - self.rpad - 4, lh), depth)
-            y1 += lh + sep + self.os_mod
-
-            if self.dgz_meanomeg == 10 * self.prof.missing:
-                omeg = 'N/A'
-            else:
-                omeg = _tab.utils.FLOAT2STR(self.dgz_meanomeg, 1) + ' ub/s'
-
-            # The growth zone is only ever reported in feet MSL, but the
-            # Skew-T's own axis is pressure and the band is drawn against it, so
-            # the bounds are given in both.
-            # ``QC`` is truthy for ``None``, so the presence of the attribute has
-            # to be tested separately before either value is converted.
-            pbot = getattr(self, "dgz_pbot", None)
-            ptop = getattr(self, "dgz_ptop", None)
-            bounds = 'DGZ: none'
-            if pbot is not None and ptop is not None:
-                try:
-                    if (_tab.utils.QC(pbot) and _tab.utils.QC(ptop)
-                            and float(pbot) != float(ptop)):
-                        bounds = ('DGZ: ' + _tab.utils.INT2STR(pbot) + '-' +
-                                  _tab.utils.INT2STR(ptop) + ' hPa')
-                except (TypeError, ValueError):
-                    bounds = 'DGZ: none'
-
-            # Neither upstream nor this fork computed a snow ratio anywhere, so
-            # the panel could describe the growth zone in five ways and still
-            # not say how much snow an inch of liquid would make.
-            try:
-                from sharpmod.sharptab import winter as _winter_calc
-
-                ratio = _winter_calc.format_snow_liquid_ratio(
-                    _winter_calc.profile_snow_liquid_ratio(self.prof))
-            except Exception:  # noqa: BLE001 - a panel row is not worth a crash
-                ratio = 'M'
-
-            rows = [
-                ('Mean Layer RH: ' +
-                 _tab.utils.FLOAT2STR(self.dgz_meanrh, 0) + ' %',
-                 'Mean Layer MixRat: ' +
-                 _tab.utils.FLOAT2STR(self.dgz_meanq, 1) + ' g/kg'),
-                ('Mean Layer PW: ' +
-                 _tab.utils.FLOAT2STR(self.dgz_pw, 1) + ' in',
-                 'Mean Layer Omega: ' + omeg),
-                (bounds, 'Kuchera SLR: ' + ratio),
-            ]
-            for left, right in rows:
-                _draw_text(self, qp, _QtCore.QRectF(left_x, y1, left_w, lh), left)
-                _draw_text(self, qp, _QtCore.QRectF(right_x, y1, right_w, lh),
-                           right)
-                y1 += lh + sep + self.os_mod
-
-        def drawInitial(self, qp):
-            qp.setPen(_QtGui.QPen(self.fg_color, 1, _QtCore.Qt.SolidLine))
-            qp.setFont(self.label_font)
-            rect = _QtCore.QRectF(
-                self.lpad, self.init_phase_y1,
-                self.brx - self.lpad - self.rpad - 4, _row_height(self))
-            if self.plevel > 100:
-                hght = _tab.utils.M2FT(_tab.interp.hght(self.prof, self.plevel))
-                text = ("Inital Phase: " + self.init_st + ' from: ' +
-                        _tab.utils.INT2STR(self.plevel) + ' mb (' +
-                        _tab.utils.INT2STR(hght) + ' ft msl; ' +
-                        _tab.utils.FLOAT2STR(self.init_tmp, 1) + ' C)')
-            else:
-                text = "Initial Phase:  No Precipitation layers found."
-            _draw_text(self, qp, rect, text)
-
-        def drawWCLayer(self, qp):
-            sep = _row_gap(self)
-            lh = _row_height(self)
-            left_x, left_w, right_x, right_w = _columns(self)
-
-            if self.tpos > 0 and self.tneg < 0:
-                string = ('P/N: ' + str(round(self.tpos, 0)) + ' / ' +
-                          str(round(self.tneg, 0)) + ' J/kg')
-                left_labels = [
-                    'TEMPERATURE PROFILE',
-                    string,
-                    'Melt Lyr: ' + str(int(self.ttop)) + '-' +
-                    str(int(self.tbot)) + ' mb',
-                    'Frz Lyr: ' + str(int(self.tbot)) + '-' +
-                    str(int(self.prof.pres[self.prof.sfc])) + ' mb',
-                ]
-            else:
-                left_labels = [
-                    'TEMPERATURE PROFILE', '',
-                    'Warm/Cold layers not found.', ''
-                ]
-
-            if self.wpos > 0 and self.wneg < 0:
-                string = ('P/N: ' + str(round(self.wpos, 0)) + ' / ' +
-                          str(round(self.wneg, 0)) + ' J/kg')
-                right_labels = [
-                    'WETBULB PROFILE',
-                    string,
-                    'Melt Lyr: ' + str(int(self.wtop)) + '-' +
-                    str(int(self.wbot)) + ' mb',
-                    'Frz Lyr: ' + str(int(self.wbot)) + '-' +
-                    str(int(self.prof.pres[self.prof.sfc])) + ' mb',
-                ]
-            else:
-                right_labels = [
-                    'WETBULB PROFILE', '',
-                    'Warm/Cold layers not found.', ''
-                ]
-
-            for x, width, labels in ((left_x, left_w, left_labels),
-                                     (right_x, right_w, right_labels)):
-                y1 = self.energy_y1
-                for text in labels:
-                    _draw_text(self, qp, _QtCore.QRectF(x, y1, width, lh), text)
-                    y1 += lh + sep + self.os_mod
-
-        def drawOPRH(self, qp):
-            if (self.oprh < -.1 and _tab.utils.QC(self.oprh) and
-                    self.dgz_meanomeg != -99990.0):
-                color = _QtCore.Qt.red
-            else:
-                color = self.fg_color
-
-            if self.dgz_meanomeg == -99990.0:
-                text = 'OPRH (Omega*PW*RH): N/A'
-            else:
-                text = ('OPRH (Omega*PW*RH): ' +
-                        _tab.utils.FLOAT2STR(self.oprh, 2))
-            rect = _QtCore.QRectF(0, self.oprh_y1, self.wid,
-                                  _row_height(self))
-            _draw_text(self, qp, rect, text, color=color,
-                       align=_QtCore.Qt.AlignCenter)
-
-        def drawPrecipType(self, qp):
-            big = _precip_font(self)
-            metrics = _QtGui.QFontMetrics(big)
-            height = max(_precip_row_height(self), metrics.height() + 2)
-            rect = _QtCore.QRectF(0, self.precip_type_y1, self.wid, height)
-            _draw_text(self, qp, rect, self.precip_type,
-                       align=_QtCore.Qt.AlignCenter, base_font=big,
-                       max_pt=WINTER_LABEL_MAX_PT + 3, min_pt=5)
-
-        def drawPrecipTypeTemp(self, qp):
-            small = _QtGui.QFont(self.label_font)
-            small.setPointSizeF(max(6.0, min(
-                WINTER_LABEL_MAX_PT, small.pointSizeF())))
-            metrics = _QtGui.QFontMetrics(small)
-            height = max(_row_height(self), metrics.height() + 2)
-            rect = _QtCore.QRectF(0, self.ptype_tmpf_y1, self.wid, height)
-            _draw_text(self, qp, rect, self.ptype_tmpf_string,
-                       align=_QtCore.Qt.AlignCenter, base_font=small,
-                       min_pt=5)
-
-        _bg.initUI = initUI
-        _bg.draw_frame = draw_frame
-        _plot.drawDGZLayer = drawDGZLayer
-        _plot.drawInitial = drawInitial
-        _plot.drawWCLayer = drawWCLayer
-        _plot.drawOPRH = drawOPRH
-        _plot.drawPrecipType = drawPrecipType
-        _plot.drawPrecipTypeTemp = drawPrecipTypeTemp
-        _plot._sharpmod_text_fit = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    return install_winter_text_fit(
+        _fit_font_to_rect=_fit_font_to_rect,
+        WINTER_LABEL_MAX_PT=WINTER_LABEL_MAX_PT,
+        WINTER_MIN_ROW_PX=WINTER_MIN_ROW_PX,
+        WINTER_DGZ_ROWS=WINTER_DGZ_ROWS,
+        WINTER_ENERGY_ROWS=WINTER_ENERGY_ROWS,
+    )
 
 
 def _install_fire_text_fit():
-    """Keep fire-weather panel text inside its columns.
+    """Install the fire-weather panel patch from its focused owner module."""
+    from sharpmod.render_patches.text_panels import install_fire_text_fit
 
-    The same fault the winter panel had, and it went unnoticed for longer because
-    this panel is only reachable by right-clicking one specific box. The vendored
-    widget scales its font from the panel's height, then writes the moisture and
-    low-level-wind rows into rects two fifths of the width with ``TextDontClip``.
-    Measured on a real profile at 320x340, six of twenty-one rows were drawn
-    wider than the box holding them -- "0-1 km mean = 169/22" wanted 400 px of a
-    256 px column -- so the right-aligned wind column ran back across the
-    left-aligned moisture column and the two interleaved.
-
-    Two corrections, matching :func:`_install_winter_text_fit`: the label font is
-    capped, and every row is drawn into a real column rect with the font fitted
-    to it. The columns are also widened to the panel's actual padding; the
-    vendored geometry left a tenth of the width empty on each side while
-    overflowing the columns between them, which is the worst of both.
-    """
-    try:
-        import platform as _platform
-
-        import sharppy.sharptab as _tab
-        import sharppy.viz.fire as _fire_mod
-        _QtGui = _fire_mod.QtGui
-        _QtCore = _fire_mod.QtCore
-        _bg = _fire_mod.backgroundFire
-        _plot = _fire_mod.plotFire
-        if getattr(_plot, "_sharpmod_text_fit", False):
-            return
-
-        _orig_init = _bg.initUI
-
-        def initUI(self):
-            _orig_init(self)
-            try:
-                capped = False
-                for name in ("label_font", "fosberg_font"):
-                    font = _QtGui.QFont(getattr(self, name))
-                    size = font.pointSizeF()
-                    if size <= 0:
-                        size = float(font.pixelSize() if font.pixelSize() > 0
-                                     else FIRE_LABEL_MAX_PT)
-                    # The Fosberg/Haines rows are the panel's headline numbers
-                    # and are drawn full width, so they keep the two points of
-                    # extra size the vendored widget gives them.
-                    ceiling = (FIRE_LABEL_MAX_PT if name == "label_font"
-                               else FIRE_LABEL_MAX_PT + 2)
-                    if size > ceiling:
-                        font.setPointSizeF(float(ceiling))
-                        setattr(self, name, font)
-                        capped = True
-                if not capped:
-                    return
-                self.label_metrics = _QtGui.QFontMetrics(self.label_font)
-                self.fosberg_metrics = _QtGui.QFontMetrics(self.fosberg_font)
-                self.os_mod = (self.label_metrics.descent()
-                               if _platform.system() == "Windows" else 0)
-                self.label_height = self.label_metrics.xHeight() + self.tpad
-                self.ylast = self.label_height
-                self.plotBitMap.fill(self.bg_color)
-                self.plotBackground()
-            except Exception:
-                pass
-
-        def _columns(self):
-            """Left and right column rectangles, using the real padding.
-
-            Split at the midpoint with a gutter, so the left column is
-            left-aligned moisture and the right column is right-aligned wind and
-            the two cannot meet.
-            """
-            split = float(self.brx) * 0.5
-            left_x = float(self.lpad)
-            left_w = max(1.0, split - left_x - 4.0)
-            right_x = split + 4.0
-            right_w = max(1.0, float(self.brx) - self.rpad - right_x)
-            return left_x, left_w, right_x, right_w
-
-        #: Rows the panel stacks vertically: the title, the two column captions,
-        #: four paired moisture/wind rows, the mixing-height line, the derived
-        #: heading, and the three derived indices.
-        _FIRE_ROWS = 11
-        _FIRE_ROW_GAP = 2.0
-
-        def _row_height(self):
-            """Row height that keeps all eleven rows inside the panel.
-
-            The vendored widget sized rows from font metrics alone and let the
-            bottom rows fall off the frame -- the Haines row is drawn below the
-            panel at 420x400 before this patch, and the whole derived block goes
-            under at smaller sizes. So the height available per row is the
-            ceiling, and the metrics only make rows *smaller* than that.
-            """
-            metrics = _QtGui.QFontMetrics(self.label_font)
-            wanted = max(int(metrics.height()), int(self.label_height) + 4)
-            available = float(self.bry) - self.tpad - self.bpad
-            budget = available / _FIRE_ROWS - _FIRE_ROW_GAP
-            return max(6.0, min(float(wanted), budget))
-
-        def _row_step(self):
-            return _row_height(self) + _FIRE_ROW_GAP
-
-        def _draw_text(self, qp, rect, text, color=None, align=None,
-                       base_font=None, max_pt=None, min_pt=5):
-            if align is None:
-                align = _QtCore.Qt.AlignLeft | _QtCore.Qt.AlignVCenter
-            if color is None:
-                color = self.fg_color
-            if max_pt is None:
-                max_pt = FIRE_LABEL_MAX_PT
-            fit_height = max(float(rect.height()), float(_row_height(self)))
-            font = _fit_font_to_rect(
-                _QtGui, base_font or self.label_font, str(text),
-                max(1, int(rect.width()) - 2), max(1, int(fit_height)),
-                max_pt=max_pt, min_pt=min_pt)
-            qp.setFont(font)
-            qp.setPen(_QtGui.QPen(color, 1, _QtCore.Qt.SolidLine))
-            qp.drawText(rect, align | _QtCore.Qt.TextDontClip, str(text))
-
-        def _publish_layout(self):
-            """Compute and store every row position, top to bottom.
-
-            One cursor walked down the panel, rather than the vendored mix of
-            fractional offsets and running totals. Both ``draw_frame`` and
-            ``drawPBLchar`` read these, so the captions and the rows beneath them
-            cannot drift apart.
-            """
-            row_h = _row_height(self)
-            step = _row_step(self)
-            left_x, left_w, right_x, right_w = _columns(self)
-            self.moist_x, self.moist_width = left_x, left_w
-            self.llw_x, self.llw_width = right_x, right_w
-            self.moswindsep = _FIRE_ROW_GAP
-
-            y = float(self.tpad)
-            self.title_y1 = y
-            y += step
-            self.caption_y1 = y
-            y += step
-            self.caption_rule_y = y - _FIRE_ROW_GAP / 2.0
-            self.start_data_y1 = y
-            y += 4 * step                      # four moisture/wind pairs
-            self.pbl_y1 = y
-            y += step
-            self.derived_y1 = y
-            y += step
-            self.derived_rule_y = y - _FIRE_ROW_GAP / 2.0
-            self.fosberg_y1 = y
-            self.fosberg_x = 0
-            self.fosberg_width = self.brx
-            y += step
-            self.haines_y1 = y
-            self.haines_x = 0
-            self.haines_width = self.brx
-            y += step
-            # Ventilation rate joins the derived indices rather than the mixed
-            # layer rows above, because that is what it is: a composite of the
-            # mixing height and the transport wind, both already printed.
-            self.vent_y1 = y
-            self.vent_width = self.brx
-            return row_h
-
-        def draw_frame(self, qp):
-            """Title, the two column captions, and the two dividers.
-
-            Restated rather than wrapped because this method is what publishes
-            the geometry every row below is drawn into, and both widening the
-            columns and fitting the rows to the panel height depend on owning it.
-            """
-            row_h = _publish_layout(self)
-            self.labels = 2 * self.label_height + self.tpad + self.os_mod
-
-            _draw_text(
-                self, qp,
-                _QtCore.QRectF(0, self.title_y1, self.wid, row_h),
-                "Fire Weather Parameters",
-                align=_QtCore.Qt.AlignCenter, base_font=self.fosberg_font,
-                max_pt=FIRE_LABEL_MAX_PT + 2)
-
-            _draw_text(
-                self, qp,
-                _QtCore.QRectF(self.moist_x, self.caption_y1,
-                               self.moist_width, row_h),
-                "Moisture", color=_QtGui.QColor("#00CC33"))
-            _draw_text(
-                self, qp,
-                _QtCore.QRectF(self.llw_x, self.caption_y1,
-                               self.llw_width, row_h),
-                "Low-Level Wind", color=_QtGui.QColor("#0066CC"),
-                align=_QtCore.Qt.AlignRight | _QtCore.Qt.AlignVCenter)
-
-            qp.setPen(_QtGui.QPen(self.fg_color, 1, _QtCore.Qt.SolidLine))
-            for rule in (self.caption_rule_y, self.derived_rule_y):
-                qp.drawLine(0, int(rule), int(self.brx), int(rule))
-
-            _draw_text(
-                self, qp,
-                _QtCore.QRectF(0, self.derived_y1, self.brx, row_h),
-                "Derived Indices", color=_QtGui.QColor("#FF6633"),
-                align=_QtCore.Qt.AlignCenter)
-
-        def drawPBLchar(self, qp):  # noqa: N802 - upstream Qt API
-            # ``plotData`` can reach here before ``draw_frame`` has run on a
-            # freshly resized widget, so the layout is published either way.
-            row_h = _publish_layout(self)
-            left_x, left_w = self.moist_x, self.moist_width
-            right_x, right_w = self.llw_x, self.llw_width
-            step = _row_step(self)
-            right_align = _QtCore.Qt.AlignRight | _QtCore.Qt.AlignVCenter
-
-            wind_rows = (
-                ("SFC = %s/%s" % (_tab.utils.INT2STR(self.sfc_wind[0]),
-                                  _tab.utils.INT2STR(self.sfc_wind[1])), None),
-                ("0-1 km mean = %s/%s"
-                 % (_tab.utils.INT2STR(self.meanwind01km[0]),
-                    _tab.utils.INT2STR(self.meanwind01km[1])), None),
-                ("BL mean = %s/%s"
-                 % (_tab.utils.INT2STR(self.meanwindpbl[0]),
-                    _tab.utils.INT2STR(self.meanwindpbl[1])), None),
-                ("BL max = %s/%s"
-                 % (_tab.utils.INT2STR(self.maxwindpbl[0]),
-                    _tab.utils.INT2STR(self.maxwindpbl[1])),
-                 self.getMaxWindFormat()[0]),
-            )
-            y1 = self.start_data_y1
-            for text, color in wind_rows:
-                _draw_text(self, qp,
-                           _QtCore.QRectF(right_x, y1, right_w, row_h),
-                           text, color=color, align=right_align)
-                y1 += step
-
-            moisture_rows = (
-                ("SFC RH = %s%%" % _tab.utils.INT2STR(self.sfc_rh),
-                 self.getSfcRHFormat()[0]),
-                ("0-1 km RH = %s%%" % _tab.utils.INT2STR(self.rh01km), None),
-                ("BL mean RH = %s%%" % _tab.utils.INT2STR(self.pblrh), None),
-                ("PW = %s in" % _tab.utils.FLOAT2STR(self.pwat, 2),
-                 self.getPWColor()[0]),
-            )
-            y1 = self.start_data_y1
-            for text, color in moisture_rows:
-                _draw_text(self, qp,
-                           _QtCore.QRectF(left_x, y1, left_w, row_h),
-                           text, color=color)
-                y1 += step
-
-            _draw_text(
-                self, qp, _QtCore.QRectF(0, self.pbl_y1, self.brx, row_h),
-                "PBL Height = %sft / %sm"
-                % (_tab.utils.FLOAT2STR(_tab.utils.M2FT(self.pbl_h), 0),
-                   _tab.utils.FLOAT2STR(self.pbl_h, 0)),
-                align=_QtCore.Qt.AlignCenter)
-
-        def drawFosberg(self, qp):  # noqa: N802 - upstream Qt API
-            value = ("M" if self.fosberg == self.prof.missing
-                     else _tab.utils.INT2STR(self.fosberg))
-            _draw_text(
-                self, qp,
-                _QtCore.QRectF(0, self.fosberg_y1, self.fosberg_width,
-                               _row_height(self)),
-                "Fosberg FWI = %s" % value,
-                color=self.getFosbergFormat(),
-                align=_QtCore.Qt.AlignCenter, base_font=self.fosberg_font,
-                max_pt=FIRE_LABEL_MAX_PT + 2)
-
-        def drawHainesIndex(self, qp):  # noqa: N802 - upstream Qt API
-            elevation = ("L", "M", "H")[self.haines_hght]
-            _draw_text(
-                self, qp,
-                _QtCore.QRectF(0, self.haines_y1, self.haines_width,
-                               _row_height(self)),
-                "Haines Index (%s) = %s"
-                % (elevation,
-                   _tab.utils.INT2STR(self.haines_index[self.haines_hght])),
-                color=self.getHainesFormat(),
-                align=_QtCore.Qt.AlignCenter, base_font=self.fosberg_font,
-                max_pt=FIRE_LABEL_MAX_PT + 2)
-
-        def drawVentilationRate(self, qp):  # noqa: N802 - upstream Qt API
-            """Mixing height times transport wind, the smoke-dispersion number.
-
-            Built from ``pbl_h`` and ``meanwindpbl`` -- the same two values this
-            panel already prints as "PBL Height" and "BL mean" -- so the three
-            rows cannot disagree with each other.
-
-            Left in the foreground colour on purpose. The other rows here are
-            graded, but the breakpoints between poor and good ventilation are set
-            by whichever agency issues the forecast and differ between them, so
-            colouring this one would assert a threshold that is not ours to set.
-            """
-            from sharpmod.sharptab.constants import is_missing
-            from sharpmod.sharptab.fire import ventilation_rate
-
-            # ``meanwindpbl`` was converted to (direction, speed) in setProf.
-            speed = self.meanwindpbl[1] if len(self.meanwindpbl) > 1 else None
-            rate = ventilation_rate(self.pbl_h, speed)
-            text = ("Vent Rate = M" if is_missing(rate)
-                    else "Vent Rate = %s m2/s" % _tab.utils.INT2STR(rate))
-            _draw_text(
-                self, qp,
-                _QtCore.QRectF(0, self.vent_y1, self.vent_width,
-                               _row_height(self)),
-                text, align=_QtCore.Qt.AlignCenter,
-                base_font=self.fosberg_font, max_pt=FIRE_LABEL_MAX_PT + 2)
-
-        def plotData(self):  # noqa: N802 - upstream Qt API
-            """Redraw the panel body. Mirrors the vendored order, plus the
-
-            ventilation-rate row this project adds.
-            """
-            if self.prof is None:
-                return
-            qp = _QtGui.QPainter()
-            qp.begin(self.plotBitMap)
-            try:
-                qp.setRenderHint(qp.RenderHint.Antialiasing)
-                qp.setRenderHint(qp.RenderHint.TextAntialiasing)
-                self.drawPBLchar(qp)
-                self.drawFosberg(qp)
-                self.drawHainesIndex(qp)
-                self.drawVentilationRate(qp)
-            finally:
-                qp.end()
-
-        _bg.initUI = initUI
-        _bg.draw_frame = draw_frame
-        _plot.drawPBLchar = drawPBLchar
-        _plot.drawFosberg = drawFosberg
-        _plot.drawHainesIndex = drawHainesIndex
-        _plot.drawVentilationRate = drawVentilationRate
-        _plot.plotData = plotData
-        _plot._sharpmod_text_fit = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    return install_fire_text_fit(
+        _fit_font_to_rect=_fit_font_to_rect,
+        FIRE_LABEL_MAX_PT=FIRE_LABEL_MAX_PT,
+    )
 
 
 def enlarge_canvas(win):
@@ -4069,8 +3380,8 @@ def _install_skewt_title_shrink():
 
         _cls.initUI = initUI
         _cls._sharpmod_title = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 HODO_0_500_COLOR = os.environ.get("HODO_0_500_COLOR", "#FF00FF")
@@ -4158,8 +3469,8 @@ def _install_hodo_0500():
 
         _cls.draw_hodo = draw_hodo
         _cls._sharpmod_0500 = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_hodo_zoom():
@@ -4244,8 +3555,8 @@ def _install_hodo_zoom():
         _bg.__init__ = __init__
         _plot.setPreferences = setPreferences
         _bg._sharpmod_zoom = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_hodo_mean_wind_center():
@@ -4371,8 +3682,8 @@ def _install_hodo_mean_wind_center():
         _plot.setPreferences = setPreferences
         _plot.wheelEvent = wheelEvent
         _plot._sharpmod_mean_wind_default = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_hodo_interpolation_menu():
@@ -4479,8 +3790,8 @@ def _install_hodo_interpolation_menu():
         _plot.__init__ = __init__
         _plot.showCursorMenu = showCursorMenu
         _plot._sharpmod_interp_menu = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 # Maximum point size for the hodograph label font (RM/LM storm motion labels).
@@ -4586,518 +3897,18 @@ def _place_hodo_annotation_rect(widget, qtcore, marker_rect, width, height,
 
 
 def _install_hodo_label_fit():
-    """Cap hodo fonts and place vector labels from their measured bounds.
-
-    The vendored ``backgroundHodo.initUI`` sizes ``label_font`` and
-    ``readout_font`` with a height-proportional term (``self.hgt * 0.0045``)
-    that grows too large on bigger displays. Meanwhile the ``drawSMV`` and
-    ``paintEvent`` readout rects are a fixed 55x12 / 55x16 px regardless of
-    actual font size, so the text clips or overflows.
-
-    This patch:
-    1. Caps ``label_font`` to :data:`HODO_LABEL_MAX_PT` and ``readout_font``
-       to :data:`HODO_READOUT_MAX_PT` after ``initUI`` runs.
-    2. Overrides ring labels so three-digit rings (``100``) use font-metrics
-       width and clamp inside the hodograph frame.
-    3. Overrides ``drawSMV`` to size the RM/LM label rects from font metrics.
-    4. Overrides ``paintEvent`` readout to size the cursor rect from metrics.
-    5. Sizes the Corfidi labels from their text.
-    6. Centers the LCL-EL mean-wind square and places its measured value label
-       on a free side with a visible marker gap.
-
-    Idempotent + fully guarded.
-    """
-    try:
-        import sharppy.viz.hodo as _hodo_mod
-        import sharppy.sharptab as _tab
-        import numpy as _np
-
-        _bg = _hodo_mod.backgroundHodo
-        _plot = _hodo_mod.plotHodo
-        if getattr(_plot, "_sharpmod_label_fit", False):
-            return
-        _QtGui = _hodo_mod.QtGui
-        _QtCore = _hodo_mod.QtCore
-        try:
-            from qtpy.QtCore import QPointF as _QPointF
-            from qtpy.QtCore import QPoint as _QPoint
-        except Exception:
-            _QPointF = _QtCore.QPointF
-            _QPoint = _QtCore.QPoint
-
-        label_cap = int(HODO_LABEL_MAX_PT)
-        readout_cap = int(HODO_READOUT_MAX_PT)
-
-        # --- 1. Cap fonts after initUI (called at construction AND on resize) ---
-        _orig_initUI = _bg.initUI
-
-        def initUI(self):
-            _orig_initUI(self)
-            try:
-                if label_cap > 0:
-                    pt = self.label_font.pointSize()
-                    if pt < 0:
-                        pt = self.label_font.pixelSize()
-                    if pt > label_cap:
-                        self.label_font = _QtGui.QFont(
-                            self.label_font.family(), label_cap)
-                        self.label_font.setBold(True)
-                        self.label_metrics = _QtGui.QFontMetrics(self.label_font)
-                        self.label_height = (self.label_metrics.xHeight() + 5)
-                if readout_cap > 0:
-                    pt = self.readout_font.pointSize()
-                    if pt < 0:
-                        pt = self.readout_font.pixelSize()
-                    if pt > readout_cap:
-                        self.readout_font = _QtGui.QFont(
-                            self.readout_font.family(), readout_cap)
-                        self.readout_font.setBold(True)
-            except Exception:
-                pass
-
-        _bg.initUI = initUI
-
-        # Reset annotation occupancy once per data pass.  The dynamic label
-        # placers below append their final text/marker rectangles so later
-        # annotations can choose a free side instead of painting on top.
-        _orig_plot_data = _plot.plotData
-
-        def plotData(self):
-            self._sharpmod_hodo_annotation_rects = []
-            return _orig_plot_data(self)
-
-        _plot.plotData = plotData
-
-        # --- 2. Override ring labels to use font-metrics-sized rects ---
-        _orig_ring = _bg.draw_ring
-
-        def draw_ring(self, spd, qp):
-            try:
-                color = self.isotach_color
-                _uu, vv = _tab.utils.vec2comp(0, spd)
-                radius = abs(float(vv) * float(self.scale))
-                center = _QtCore.QPointF(self.centerx, self.centery)
-
-                pen = _QtGui.QPen(_QtGui.QColor(color), 1)
-                pen.setStyle(_QtCore.Qt.DashLine)
-                qp.setPen(pen)
-                qp.drawEllipse(center, radius, radius)
-
-                text = _tab.utils.INT2STR(spd)
-                avail_w = max(1, int(float(self.brx) - float(self.tlx) - 4))
-                avail_h = max(1, int(float(self.bry) - float(self.tly) - 4))
-                font = _fit_font_to_rect(
-                    _QtGui, self.label_font, text, avail_w, 18,
-                    max_pt=label_cap, min_pt=5)
-                qp.setFont(font)
-                fm = _QtGui.QFontMetrics(font)
-                width = min(avail_w, max(15, fm.horizontalAdvance(text) + 6))
-                height = min(avail_h, max(15, fm.height() + 2))
-
-                offset = 5
-                pad = 2.0
-                left_limit = float(getattr(self, "tlx", 0)) + pad
-                right_limit = float(getattr(self, "brx", self.wid)) - pad
-                top_limit = float(getattr(self, "tly", 0)) + pad
-                bottom_limit = float(getattr(self, "bry", self.hgt)) - pad
-
-                # Emit each of the four axis labels ONLY when its natural
-                # position lies fully inside the frame. Clamping an out-of-range
-                # label back onto the frame edge (the previous behavior) piled
-                # every too-large ring's number onto the same spot, so the
-                # numbers merged -- worst on the shorter vertical axis after the
-                # zoom-out. Skipping them instead keeps the labels clean.
-                rects = []
-                top_y = self.centery - radius - offset
-                if top_y >= top_limit:  # above origin
-                    rects.append(_QtCore.QRectF(
-                        self.centerx + offset, top_y, width, height))
-                bot_y = self.centery + radius - offset
-                if bot_y + height <= bottom_limit:  # below origin
-                    rects.append(_QtCore.QRectF(
-                        self.centerx + offset, bot_y, width, height))
-                right_x = self.centerx + radius - offset
-                if right_x + width <= right_limit:  # right of origin
-                    rects.append(_QtCore.QRectF(
-                        right_x, self.centery + offset, width, height))
-                left_x = self.centerx - radius - offset
-                if left_x >= left_limit:  # left of origin
-                    rects.append(_QtCore.QRectF(
-                        left_x, self.centery + offset, width, height))
-
-                for rect in rects:
-                    try:
-                        qp.fillRect(rect, self.bg_color)
-                    except Exception:
-                        pass
-                qp.setPen(_QtGui.QPen(self.fg_color))
-                for rect in rects:
-                    qp.drawText(rect, _QtCore.Qt.AlignCenter, text)
-            except Exception:
-                _orig_ring(self, spd, qp)
-
-        _bg.draw_ring = draw_ring
-
-        # --- 3. Override drawSMV to use font-metrics-sized rects ---
-        _orig_smv = _plot.drawSMV
-
-        def drawSMV(self, qp):
-            try:
-                # Duplicates vendored logic but with dynamic rect sizing.
-                penwidth = 1
-                pen = _QtGui.QPen(self.fg_color, penwidth)
-                pen.setStyle(_QtCore.Qt.SolidLine)
-                qp.setPen(pen)
-
-                rstu, rstv, lstu, lstv = self.srwind
-                bkru, bkrv, bklu, bklv = self.prof.bunkers
-                if not _tab.utils.QC(rstu) or not _tab.utils.QC(lstu):
-                    return
-
-                # Bunkers location markers (+)
-                ruu_b, rvv_b = self.uv_to_pix(bkru, bkrv)
-                luu_b, lvv_b = self.uv_to_pix(bklu, bklv)
-                center_rm_b = _QPointF(ruu_b, rvv_b)
-                center_lm_b = _QPointF(luu_b, lvv_b)
-                qp.drawLine(center_rm_b - _QPoint(2, 0),
-                            center_rm_b + _QPoint(2, 0))
-                qp.drawLine(center_rm_b - _QPoint(0, 2),
-                            center_rm_b + _QPoint(0, 2))
-                qp.drawLine(center_lm_b - _QPoint(2, 0),
-                            center_lm_b + _QPoint(2, 0))
-                qp.drawLine(center_lm_b - _QPoint(0, 2),
-                            center_lm_b + _QPoint(0, 2))
-
-                # User storm motion vectors (circles)
-                ruu, rvv = self.uv_to_pix(rstu, rstv)
-                luu, lvv = self.uv_to_pix(lstu, lstv)
-                center_rm = _QPointF(ruu, rvv)
-                center_lm = _QPointF(luu, lvv)
-                qp.drawEllipse(center_rm, 5, 5)
-                qp.drawEllipse(center_lm, 5, 5)
-
-                # Effective inflow layer lines
-                ptop, pbottom = self.ptop, self.pbottom
-                if _tab.utils.QC(ptop) and _tab.utils.QC(pbottom):
-                    utop, vtop = _tab.interp.components(self.prof, ptop)
-                    ubot, vbot = _tab.interp.components(self.prof, pbottom)
-                    uutop, vvtop = self.uv_to_pix(utop, vtop)
-                    uubot, vvbot = self.uv_to_pix(ubot, vbot)
-                    pen = _QtGui.QPen(self.eff_inflow_color, penwidth)
-                    pen.setStyle(_QtCore.Qt.SolidLine)
-                    qp.setPen(pen)
-                    if self.use_left:
-                        qp.drawLine(center_lm.x(), center_lm.y(),
-                                    uubot, vvbot)
-                        qp.drawLine(center_lm.x(), center_lm.y(),
-                                    uutop, vvtop)
-                    else:
-                        qp.drawLine(center_rm.x(), center_rm.y(),
-                                    uubot, vvbot)
-                        qp.drawLine(center_rm.x(), center_rm.y(),
-                                    uutop, vvtop)
-
-                # RM / LM text labels -- sized to font metrics
-                qp.setFont(self.label_font)
-                fm = _QtGui.QFontMetrics(self.label_font)
-
-                rm_spd = self.bunkers_right_vec[1]
-                lm_spd = self.bunkers_left_vec[1]
-                if self.wind_units == 'm/s':
-                    rm_spd = _tab.utils.KTS2MS(rm_spd)
-                    lm_spd = _tab.utils.KTS2MS(lm_spd)
-
-                rm_text = (_tab.utils.INT2STR(
-                    _np.float64(self.bunkers_right_vec[0]))
-                    + '/' + _tab.utils.INT2STR(rm_spd) + " RM")
-                lm_text = (_tab.utils.INT2STR(
-                    _np.float64(self.bunkers_left_vec[0]))
-                    + '/' + _tab.utils.INT2STR(lm_spd) + " LM")
-
-                h_offset = 2
-                v_offset = 5
-                pad = 2
-                rm_tw = fm.horizontalAdvance(rm_text) + pad * 2
-                lm_tw = fm.horizontalAdvance(lm_text) + pad * 2
-                th = fm.height() + pad
-
-                rm_rect = _QtCore.QRectF(
-                    ruu + h_offset, rvv + v_offset, rm_tw, th)
-                lm_rect = _QtCore.QRectF(
-                    luu + h_offset, lvv + v_offset, lm_tw, th)
-
-                # A range-ring speed label sits at each marker's on-axis
-                # position, so when a storm-motion vector lands on (or near) an
-                # axis its label crowds that ring number. Mask a region that
-                # extends up-and-left of the label -- toward the marker/axis --
-                # so the colliding ring number is painted over, not just the
-                # text's own footprint.
-                mask_pad_x = 14
-                mask_pad_y = 12
-
-                def _mask_rect(rect):
-                    return _QtCore.QRectF(
-                        rect.x() - mask_pad_x, rect.y() - mask_pad_y,
-                        rect.width() + mask_pad_x, rect.height() + mask_pad_y)
-
-                # Background fill so labels are readable over the hodo traces
-                # and any range-ring number beneath / beside them.
-                qp.fillRect(_mask_rect(rm_rect), self.bg_color)
-                qp.fillRect(_mask_rect(lm_rect), self.bg_color)
-
-                pen = _QtGui.QPen(self.fg_color)
-                qp.setPen(pen)
-                qp.drawText(rm_rect, _QtCore.Qt.AlignCenter, rm_text)
-                qp.drawText(lm_rect, _QtCore.Qt.AlignCenter, lm_text)
-
-                # The widened mask can paint over the storm-motion marker
-                # circles (drawn earlier); redraw them on top so they survive.
-                qp.drawEllipse(center_rm, 5, 5)
-                qp.drawEllipse(center_lm, 5, 5)
-                occupied = getattr(
-                    self, "_sharpmod_hodo_annotation_rects", None)
-                if isinstance(occupied, list):
-                    occupied.extend((
-                        _QtCore.QRectF(rm_rect),
-                        _QtCore.QRectF(lm_rect),
-                        _QtCore.QRectF(ruu - 5, rvv - 5, 10, 10),
-                        _QtCore.QRectF(luu - 5, lvv - 5, 10, 10),
-                    ))
-            except Exception:
-                _orig_smv(self, qp)
-
-        _plot.drawSMV = drawSMV
-
-        # --- 4. Override paintEvent readout to use font-metrics-sized rect ---
-        _orig_paint = _plot.paintEvent
-
-        def paintEvent(self, e):
-            # The vendored paintEvent draws the cursor readout with a fixed
-            # 55x16 rect. We override it to use font metrics for sizing and
-            # the capped readout_font.
-            try:
-                draw_readout = False
-                u_interp = 0
-                xx, yy = 0, 0
-                readout = ""
-
-                if self.prof:
-                    vis = getattr(self, 'readout_visible', False)
-                    rh = getattr(self, 'readout_hght', -999.)
-                    draw_readout = vis and rh >= 0 and rh <= 12000.
-                else:
-                    draw_readout = False
-
-                if draw_readout:
-                    hght_agl = _tab.interp.to_agl(self.prof, self.hght)
-                    u_interp = _tab.interp.generic_interp_hght(
-                        self.readout_hght, hght_agl, self.u)
-                    v_interp = _tab.interp.generic_interp_hght(
-                        self.readout_hght, hght_agl, self.v)
-                    if _tab.utils.QC(u_interp):
-                        wd_interp, ws_interp = _tab.utils.comp2vec(
-                            u_interp, v_interp)
-                        if self.wind_units == 'm/s':
-                            ws_interp = _tab.utils.KTS2MS(ws_interp)
-                            units = 'm/s'
-                        else:
-                            units = 'kts'
-                        xx, yy = self.uv_to_pix(u_interp, v_interp)
-                        readout = "%03d/%02d %s" % (
-                            wd_interp, ws_interp, units)
-                    else:
-                        readout = "--/-- %s" % self.wind_units
-                        draw_readout = False
-
-                # Blit the background pixmap (same as vendored)
-                _bg.paintEvent(self, e)
-                qp = _QtGui.QPainter()
-                qp.begin(self)
-                qp.drawPixmap(0, 0, self.plotBitMap)
-
-                # Scale-aware overlays are painted with this live widget
-                # painter so HD/UHD capture rasterizes their small text at
-                # the final target density. Keep them below the transient
-                # cursor readout, which must remain the topmost annotation.
-                for overlay in tuple(getattr(
-                        type(self), "_sharpmod_live_overlays", ())):
-                    try:
-                        overlay(self, qp)
-                    except Exception:
-                        _LOGGER.exception(
-                            "hodo_live_overlay.draw_failed",
-                            extra={"overlay": getattr(
-                                overlay, "__name__", repr(overlay))},
-                        )
-
-                if draw_readout and _tab.utils.QC(u_interp):
-                    # Use a fixed small font for the readout, bypassing
-                    # self.readout_font which may be rebuilt by other code.
-                    _readout_f = _QtGui.QFont('Helvetica', readout_cap)
-                    _readout_f.setBold(True)
-                    qp.setFont(_readout_f)
-                    fm = _QtGui.QFontMetrics(_readout_f)
-                    pad = 3
-                    tw = fm.horizontalAdvance(readout) + pad * 2
-                    th = fm.height() + pad
-                    text_rect = _fit_rect_to_hodo(
-                        self, _QtCore, _QtCore.QRectF(
-                            xx + 2, yy + 5, tw, th))
-                    qp.fillRect(text_rect, self.bg_color)
-                    qp.setPen(_QtGui.QPen(self.fg_color, 1))
-                    qp.drawEllipse(_QPointF(xx, yy), 4, 4)
-                    qp.drawText(text_rect, _QtCore.Qt.AlignCenter, readout)
-
-                qp.end()
-            except Exception:
-                _orig_paint(self, e)
-
-        _plot.paintEvent = paintEvent
-        _plot._sharpmod_live_overlay_host = True
-
-        # --- 5. Override drawCorfidi to use font-metrics-sized rects ---
-        _orig_corfidi = _plot.drawCorfidi
-
-        def drawCorfidi(self, qp):
-            try:
-                penwidth = 1
-                corfidi_color = _semantic_qcolor(self, "corfidi")
-                pen = _QtGui.QPen(corfidi_color, penwidth)
-                pen.setStyle(_QtCore.Qt.SolidLine)
-                qp.setPen(pen)
-
-                if not _np.isfinite(self.corfidi_up_u) or \
-                   not _np.isfinite(self.corfidi_up_v) or \
-                   not _np.isfinite(self.corfidi_dn_u) or \
-                   not _np.isfinite(self.corfidi_dn_v):
-                    return
-
-                up_u, up_v = self.uv_to_pix(
-                    self.corfidi_up_u, self.corfidi_up_v)
-                dn_u, dn_v = self.uv_to_pix(
-                    self.corfidi_dn_u, self.corfidi_dn_v)
-                center_up = _QPointF(up_u, up_v)
-                center_dn = _QPointF(dn_u, dn_v)
-                qp.drawEllipse(center_up, 3, 3)
-                qp.drawEllipse(center_dn, 3, 3)
-
-                # Labels sized to font metrics
-                qp.setFont(self.label_font)
-                fm = _QtGui.QFontMetrics(self.label_font)
-
-                up_spd = self.upshear[1]
-                dn_spd = self.downshear[1]
-                if self.wind_units == 'm/s':
-                    up_spd = _tab.utils.KTS2MS(up_spd)
-                    dn_spd = _tab.utils.KTS2MS(dn_spd)
-
-                up_text = ("UP="
-                           + _tab.utils.INT2STR(
-                               _np.float64(self.upshear[0]))
-                           + '/' + _tab.utils.INT2STR(up_spd))
-                dn_text = ("DN="
-                           + _tab.utils.INT2STR(
-                               _np.float64(self.downshear[0]))
-                           + '/' + _tab.utils.INT2STR(dn_spd))
-
-                h_offset = 1
-                v_offset = 3
-                pad = 2
-                up_tw = fm.horizontalAdvance(up_text) + pad * 2
-                dn_tw = fm.horizontalAdvance(dn_text) + pad * 2
-                th = fm.height() + pad
-
-                up_rect = _QtCore.QRectF(
-                    up_u + h_offset, up_v + v_offset, up_tw, th)
-                dn_rect = _QtCore.QRectF(
-                    dn_u + h_offset, dn_v + v_offset, dn_tw, th)
-
-                qp.fillRect(up_rect, self.bg_color)
-                qp.fillRect(dn_rect, self.bg_color)
-
-                pen = _QtGui.QPen(corfidi_color)
-                qp.setPen(pen)
-                qp.drawText(up_rect, _QtCore.Qt.AlignCenter, up_text)
-                qp.drawText(dn_rect, _QtCore.Qt.AlignCenter, dn_text)
-                occupied = getattr(
-                    self, "_sharpmod_hodo_annotation_rects", None)
-                if isinstance(occupied, list):
-                    occupied.extend((
-                        _QtCore.QRectF(up_rect),
-                        _QtCore.QRectF(dn_rect),
-                        _QtCore.QRectF(up_u - 3, up_v - 3, 6, 6),
-                        _QtCore.QRectF(dn_u - 3, dn_v - 3, 6, 6),
-                    ))
-            except Exception:
-                _orig_corfidi(self, qp)
-
-        _plot.drawCorfidi = drawCorfidi
-
-        # --- 6. Keep the LCL-EL mean-wind value clear of its square marker ---
-        _orig_mean_wind = _plot.drawLCLtoEL_MW
-
-        def drawLCLtoEL_MW(self, qp):
-            try:
-                if not _tab.utils.QC(self.mean_lcl_el[0]):
-                    return
-                mean_u, mean_v = self.uv_to_pix(
-                    self.mean_lcl_el[0], self.mean_lcl_el[1])
-                marker_size = 8.0
-                marker_rect = _QtCore.QRectF(
-                    mean_u - marker_size / 2.0,
-                    mean_v - marker_size / 2.0,
-                    marker_size,
-                    marker_size,
-                )
-
-                speed = self.mean_lcl_el_vec[1]
-                if self.wind_units == 'm/s':
-                    speed = _tab.utils.KTS2MS(speed)
-                text = (
-                    _tab.utils.INT2STR(
-                        _np.float64(self.mean_lcl_el_vec[0]))
-                    + '/' + _tab.utils.INT2STR(speed)
-                )
-
-                qp.setFont(self.label_font)
-                fm = _QtGui.QFontMetrics(self.label_font)
-                text_rect = _place_hodo_annotation_rect(
-                    self,
-                    _QtCore,
-                    marker_rect,
-                    fm.horizontalAdvance(text) + 6,
-                    fm.height() + 2,
-                    occupied=getattr(
-                        self, "_sharpmod_hodo_annotation_rects", ()),
-                    gap=5,
-                )
-                mean_color = _semantic_qcolor(
-                    self, "orange", override="#B8860B")
-
-                qp.fillRect(text_rect, self.bg_color)
-                qp.setBrush(_QtGui.QBrush(_QtCore.Qt.NoBrush))
-                qp.setPen(_QtGui.QPen(mean_color, 2,
-                                      _QtCore.Qt.SolidLine))
-                qp.drawRect(marker_rect)
-                qp.setPen(_QtGui.QPen(mean_color, 1,
-                                      _QtCore.Qt.SolidLine))
-                qp.drawText(text_rect, _QtCore.Qt.AlignCenter, text)
-
-                occupied = getattr(
-                    self, "_sharpmod_hodo_annotation_rects", None)
-                if isinstance(occupied, list):
-                    occupied.extend((
-                        _QtCore.QRectF(marker_rect),
-                        _QtCore.QRectF(text_rect),
-                    ))
-            except Exception:
-                _orig_mean_wind(self, qp)
-
-        _plot.drawLCLtoEL_MW = drawLCLtoEL_MW
-
-        _plot._sharpmod_label_fit = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    """Install the hodograph label patch from its focused owner module."""
+    from sharpmod.render_patches.hodograph import install_hodo_label_fit
+
+    return install_hodo_label_fit(
+        HODO_LABEL_MAX_PT=HODO_LABEL_MAX_PT,
+        HODO_READOUT_MAX_PT=HODO_READOUT_MAX_PT,
+        _LOGGER=_LOGGER,
+        _fit_font_to_rect=_fit_font_to_rect,
+        _fit_rect_to_hodo=_fit_rect_to_hodo,
+        _place_hodo_annotation_rect=_place_hodo_annotation_rect,
+        _semantic_qcolor=_semantic_qcolor,
+    )
 
 
 def _install_hodo_locator():
@@ -5296,8 +4107,8 @@ def _install_skewt_level_labels_fit():
         _cls.draw_parcel_levels = draw_parcel_levels
         _cls.draw_temp_levels = draw_temp_levels
         _cls._sharpmod_level_fit = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_custom_barbs():
@@ -5317,8 +4128,8 @@ def _install_custom_barbs():
             _barbs_mod.drawBarb = _cb.drawBarb
         except Exception:
             pass
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_title_top():
@@ -5393,8 +4204,8 @@ def _install_title_top():
 
         _cls.drawTitles = drawTitles
         _cls._sharpmod_title_top = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_stp_condense():
@@ -5437,8 +4248,8 @@ def _install_stp_condense():
 
         _stp_mod.QtGui = _QtGuiProxy()
         _stp_condense_installed = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_stp_bottom_margin():
@@ -5481,8 +4292,8 @@ def _install_stp_bottom_margin():
 
         _cls.initUI = initUI
         _cls._sharpmod_margin = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 # Scale factor for the Effective Layer STP "Prob EF2+ torn with supercell"
@@ -5531,8 +4342,8 @@ def _install_stp_box_shrink():
 
         _cls.initUI = initUI
         _cls._sharpmod_box_shrink = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_stp_label_rename():
@@ -5563,8 +4374,8 @@ def _install_stp_label_rename():
 
         stpData._sharpmod_wrapped = True
         _ins.stpData = stpData
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 # Per-EF-category colors for the Effective Layer STP graphic's x-axis labels.
@@ -5692,8 +4503,8 @@ def _install_stp_xlabel_colors():
 
         _cls.draw_frame = draw_frame
         _cls._sharpmod_xcolors = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 def _install_stp_prob_box_spacing():
@@ -5853,8 +4664,8 @@ def _install_stp_prob_box_spacing():
 
         _cls.draw_box = draw_box
         _cls._sharpmod_box_spacing = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 _title_override_installed = False
@@ -5924,8 +4735,8 @@ def _install_title_override():
         import sharppy.viz.skew as _skew_mod
         _skew_mod.plotSkewT.getPlotTitle = getPlotTitle
         _title_override_installed = True
-    except Exception:  # pragma: no cover - vendored module always present
-        pass
+    except Exception:  # pragma: no cover - registry reports install failure
+        raise
 
 
 #: One source of truth for the reduced plot-box stroke weight.  The Skew-T and
@@ -6392,71 +5203,15 @@ def _install_matching_panel_frames():
 
             spc_cls.updateConfig = updateConfig
             spc_cls._sharpmod_matching_frame_config = True
-    except Exception:  # noqa: BLE001 - vendored window always present in app
-        pass
+    except Exception:  # noqa: BLE001 - registry reports install failure
+        raise
 
 
 def render_patch_specs():
-    """Return the sole ordered registry of SHARPpy widget monkeypatches."""
-    from sharpmod.render_patch_registry import PatchSpec
+    """Return the sole ordered registry of panel-owned monkeypatches."""
+    from sharpmod.render_patch_groups import build_patch_specs
 
-    return (
-        PatchSpec(
-            "skewt.user-parcel-backend",
-            _install_user_parcel_acceleration,
-        ),
-        PatchSpec("title.override", _install_title_override),
-        PatchSpec("skewt.title-shrink", _install_skewt_title_shrink),
-        PatchSpec("title.top", _install_title_top),
-        PatchSpec("barbs.custom", _install_custom_barbs),
-        PatchSpec("hodo.0500", _install_hodo_0500),
-        PatchSpec("hodo.zoom", _install_hodo_zoom),
-        PatchSpec("hodo.mean-wind-default", _install_hodo_mean_wind_center),
-        PatchSpec("hodo.interpolation-menu", _install_hodo_interpolation_menu),
-        PatchSpec("hodo.label-fit", _install_hodo_label_fit),
-        PatchSpec("hodo.locator", _install_hodo_locator),
-        PatchSpec("hodo.height-levels", _install_hodo_height_levels),
-        PatchSpec("skewt.level-labels", _install_skewt_level_labels_fit),
-        PatchSpec("stp.condense", _install_stp_condense),
-        PatchSpec("stp.label-rename", _install_stp_label_rename),
-        PatchSpec("stp.xlabel-colors", _install_stp_xlabel_colors),
-        PatchSpec("stp.bottom-margin", _install_stp_bottom_margin),
-        PatchSpec("stp.box-shrink", _install_stp_box_shrink),
-        PatchSpec("stp.prob-box-spacing", _install_stp_prob_box_spacing),
-        PatchSpec("conditional-prob.fit", _install_conditional_prob_panel_fit),
-        PatchSpec("winter-text.fit", _install_winter_text_fit),
-        PatchSpec("fire-text.fit", _install_fire_text_fit),
-        PatchSpec("speed.0500", _install_speed_0500),
-        PatchSpec("speed.title-cap", _install_speed_title_cap),
-        PatchSpec("advection.font-cap", _install_advection_font_cap),
-        PatchSpec("skewt.mixratio-mask", _install_skewt_mixratio_mask),
-        PatchSpec("skewt.surface-label-mask", _install_skewt_sfc_label_mask),
-        PatchSpec(
-            "skewt.effective-layer-label-fit",
-            _install_skewt_effective_layer_label_fit),
-        # Before the transparency patch on purpose: that one captures whatever
-        # ``draw_max_lapse_rate_layer`` it finds and wraps it, so the placement
-        # has to be in place first for the pair to describe the same label.
-        PatchSpec(
-            "skewt.lapse-rate-label-placement",
-            _install_skewt_lapse_rate_label_placement),
-        PatchSpec(
-            "skewt.lapse-rate-label-transparency",
-            _install_skewt_lapse_rate_label_transparency),
-        PatchSpec(
-            "hodo.storm-motion-label-transparency",
-            _install_hodo_storm_motion_label_transparency),
-        PatchSpec("skewt.frame-on-top", _install_skewt_frame_ontop),
-        # After the frame redraw on purpose: both wrap ``plotData``, and the
-        # callout has to sit on top of the outline rather than under it.
-        PatchSpec("skewt.box-mean-badge", _install_skewt_box_mean_badge),
-        PatchSpec("skewt.isotherm-label-fit", _install_skewt_isotherm_label_fit),
-        PatchSpec("slinky.title-fit", _install_slinky_title_fit),
-        PatchSpec("tables.spacing", _apply_table_spacing_patch),
-        # Last on purpose: it wraps whatever ``draw_frame`` each inset ends up
-        # with, including the ones patched above.
-        PatchSpec("panels.match-skewt-frames", _install_matching_panel_frames),
-    )
+    return build_patch_specs(globals())
 
 
 def _install_user_parcel_acceleration():
@@ -6591,11 +5346,40 @@ def _resolve_location_title(prof_col, explicit_loc: str | None = None) -> str:
     return current
 
 
-def render(infile: str, outfile: str = "sharpmod_sounding.png",
+def _attach_render_locator_overlay(prof_col, spec: str | None) -> tuple[str, ...]:
+    """Attach the requested locator overlays to ``prof_col`` before composing.
+
+    A bad specification is worth failing on -- the user asked for something the
+    renderer cannot provide, and silently producing a bare inset would hide
+    that. A provider that is merely unreachable is not: :func:`locator_overlay
+    .apply` already treats one failed overlay as nothing to draw, because an
+    inset is an aid to reading a sounding rather than a precondition for one.
+    """
+    if not spec:
+        return ()
+    from sharpmod import locator_overlay
+
+    selections = locator_overlay.parse(spec)
+    if not selections:
+        return ()
+    latitude = prof_col.getMeta("lat") if "lat" in prof_col._meta else None
+    longitude = prof_col.getMeta("lon") if "lon" in prof_col._meta else None
+    if latitude is None or longitude is None:
+        _LOGGER.info("render.locator_overlay_skipped_no_point")
+        return ()
+    return locator_overlay.apply(
+        prof_col, selections,
+        lat=float(latitude), lon=float(longitude),
+        valid_time=prof_col.getCurrentDate(),
+    )
+
+
+def render(infile: str, outfile: str | None = None,
            model: str | None = None, run: datetime | None = None,
            loc: str | None = None,
            image_mode: str = PNG_IMAGE_HD,
-           parcel: str = DEFAULT_RENDER_PARCEL) -> str:
+           parcel: str = DEFAULT_RENDER_PARCEL,
+           locator_overlay: str | None = None) -> str:
     """Render ``infile`` to ``outfile`` and return the output path.
 
     Composes :class:`~sharppy.viz.SPCWindow.SPCWindow` with a real
@@ -6607,9 +5391,21 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
     :class:`RenderError` naming ``infile`` is raised and no partial PNG is left
     behind (Requirements 11.4, 11.7, 15.5).
     """
+    if outfile is None:
+        try:
+            outfile = str(export_file_path("sharpmod_sounding.png"))
+        except ExportDirectoryError as exc:
+            raise RenderError(infile, str(exc)) from exc
     parcel = _normalise_parcel_type(parcel)
     out_dir = os.path.dirname(os.path.abspath(outfile))
-    os.makedirs(out_dir, exist_ok=True)
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+    except OSError as exc:
+        raise RenderError(
+            infile,
+            f"output directory could not be created: {out_dir} ({exc})",
+            cause=exc,
+        ) from exc
     density_context = None
     density_context_entered = False
 
@@ -6645,6 +5441,13 @@ def render(infile: str, outfile: str = "sharpmod_sounding.png",
             prof_col.setMeta("run", base)
         if not has("model"):
             prof_col.setMeta("model", "Archive" if observed else "Model")
+
+        # Fetch any requested locator overlay now, while there is still a plain
+        # function call to do it in. The inset's paint path is deliberately
+        # offline -- a slow map service must never stall a hodograph repaint --
+        # so everything it draws has to be attached to the collection before
+        # composing, never fetched from inside the paint.
+        _attach_render_locator_overlay(prof_col, locator_overlay)
 
         # Construct every scientific panel's persistent bitmap cache at the
         # requested output density.  This context must begin before
@@ -6723,8 +5526,15 @@ def _build_cli_parser() -> argparse.ArgumentParser:
         prog="sharpmod-render",
         description="Render a sounding file to a PNG image.")
     parser.add_argument("infile", help="input sounding file")
-    parser.add_argument("outfile", nargs="?", default="sharpmod_sounding.png",
-                        help="output PNG path")
+    parser.add_argument(
+        "outfile",
+        nargs="?",
+        default=None,
+        help=(
+            "output PNG path (default: rendered_soundings/"
+            "sharpmod_sounding.png beside the application)"
+        ),
+    )
     parser.add_argument(
         "--image-mode", "--image", choices=PNG_IMAGE_MODES,
         default=PNG_IMAGE_HD, help="PNG image mode (default: hd)")
@@ -6744,6 +5554,13 @@ def _build_cli_parser() -> argparse.ArgumentParser:
         "--parcel", type=str.upper, choices=PARCEL_TYPES,
         default=DEFAULT_RENDER_PARCEL,
         help="parcel visualized on the Skew-T (default: MU)")
+    parser.add_argument(
+        "--locator-overlay", metavar="SPEC", default=None,
+        help="overlays drawn on the hodograph's locator inset, as a "
+             "comma-separated list of 'risk[:hazard]', 'hrrr[:product]', "
+             "'radar-site' or 'radar-mosaic'. Risk and a model field combine; "
+             "radar replaces them and is only available for a sounding valid "
+             "near the present. Default: none, which reaches for no network.")
     return parser
 
 
@@ -6756,13 +5573,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     ns = parser.parse_args(args)
     try:
+        outfile = (
+            ns.outfile
+            if ns.outfile is not None
+            else str(export_file_path("sharpmod_sounding.png"))
+        )
         out = render(
             ns.infile,
-            ns.outfile,
+            outfile,
             image_mode=ns.image_mode,
             parcel=ns.parcel,
+            locator_overlay=ns.locator_overlay,
         )
-    except RenderError as exc:
+    except (ExportDirectoryError, RenderError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
     print("wrote", os.path.abspath(out))

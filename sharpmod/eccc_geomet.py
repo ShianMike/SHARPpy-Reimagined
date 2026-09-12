@@ -26,6 +26,8 @@ from xml.etree import ElementTree
 import numpy as np
 
 from sharpmod import backends as _backends
+from sharpmod.export_paths import export_file_path
+from sharpmod.portable_sounding import fatal_issues
 from sharpmod.model_surface import (
     SURFACE_CONTRACT_FIELDS,
     SURFACE_CONTRACT_VERSION,
@@ -990,10 +992,13 @@ def write_point_dataset(dataset, out_path, *, loc=None, progress_callback=None):
         cols["wspd"],
         missing=-9999.0,
     )
-    if not qc.valid:
+    # Only genuinely unusable data is refused; a dewpoint above the temperature
+    # is contaminated rather than unusable and travels on in ``qc_issues``.
+    fatal = fatal_issues(qc.issues)
+    if fatal:
         raise RetrievalError(
             "%s sounding failed physical quality control: %s"
-            % (capability.label, ", ".join(qc.issues))
+            % (capability.label, ", ".join(fatal))
         )
     arrays = {
         "pres": cols["pres"],
@@ -1108,12 +1113,17 @@ def extract(
         ):
             raise RetrievalError("cached GeoMet dataset belongs to another point")
     if out_path is None:
-        out_path = "%s_point_%.2fN_%.2fE_%s_f%03d.npz" % (
-            capability.model_key,
-            float(lat),
-            float(lon),
-            dataset.run_time.strftime("%Y%m%d%H"),
-            int(fxx),
+        out_path = str(
+            export_file_path(
+                "%s_point_%.2fN_%.2fE_%s_f%03d.npz"
+                % (
+                    capability.model_key,
+                    float(lat),
+                    float(lon),
+                    dataset.run_time.strftime("%Y%m%d%H"),
+                    int(fxx),
+                )
+            )
         )
     if cancelled is not None and cancelled():
         raise DownloadCancelled("ECCC GeoMet extraction cancelled")

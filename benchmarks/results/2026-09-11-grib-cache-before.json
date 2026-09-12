@@ -1,0 +1,211 @@
+{
+  "benchmark": "SHARPpy Reimagined local GRIB point decoding",
+  "environment": {
+    "cfgrib": "0.9.15.1",
+    "eccodes_library": "2.48.0",
+    "eccodes_python": "2.48.0",
+    "generated_at": "2026-09-11T04:38:56.465425+00:00",
+    "git": {
+      "branch": "main",
+      "dirty": true,
+      "revision": "d19e3434e4f7f8baa980f478d7f4bdd2e35b9169",
+      "status_sha256": "ed01c11f9375155df66c1740e87b4be7c46ace4acc6a30e421db4540c79fdf82",
+      "tracked_diff_sha256": "9bde85d2fdbbf68c830a556f6ca92f7bc3b0cdccee3d9b19f0018d68225daa70"
+    },
+    "machine": "AMD64",
+    "numpy": "2.4.6",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "python": "3.11.14",
+    "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+    "sharpmod": "1.1.0",
+    "sharpmod_rs": "1.1.0",
+    "source_fingerprints": {
+      "benchmark_decoding": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+        "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
+      },
+      "legacy_decoding": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+        "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
+      },
+      "sharpmod.backends.grib": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+        "sha256": "f0ecf7a3da938048c8b460d4b9babaec6bcd42067c0ef84a3033138348e3e89e"
+      },
+      "sharpmod.backends.python_backend": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+        "sha256": "726572e3a0b3340366757738fdadba7c24d5781d06404d79635e2528b98bcd4a"
+      },
+      "sharpmod.backends.rust_backend": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+        "sha256": "e049e0917f28248410f8b934efab0f6e37f0fc8d7530ded05de426408df26f02"
+      },
+      "sharpmod_rs": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+        "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
+      },
+      "sharpmod_rs.sharpmod_rs": {
+        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+        "sha256": "e09bd72862ad07a8c2530e99bd3f34dbdaa1fd3b6f18bc2430b4f569da5d11b8"
+      }
+    },
+    "xarray": "2026.4.0"
+  },
+  "equivalence": {
+    "cross_generation": null,
+    "generation_levels": {
+      "optimized": 40
+    },
+    "implementations": [
+      "optimized-python",
+      "optimized-rust"
+    ],
+    "levels": 40,
+    "reference": "optimized-python",
+    "selected_lat": 35.18069065447114,
+    "selected_lon": -97.4398067119418,
+    "status": "passed",
+    "surface_relative_vorticity": {
+      "optimized": {
+        "status": "matched",
+        "value": 4.597194274327316e-05
+      }
+    }
+  },
+  "fixture": {
+    "mtime_ns": 1784181241618072800,
+    "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrrr.grib2",
+    "sha256": "b6e291f5e4b2628f44bc9f2050ec1fb846d196b12adf6d57fdd1d206d3aa69e6",
+    "size_bytes": 161875836
+  },
+  "records": [
+    {
+      "calls_per_sample": 1,
+      "description": "inventory/index warm, different point key",
+      "details": {
+        "cache_after_setup": {
+          "inventory": {
+            "hits": 0,
+            "max_size": 8,
+            "misses": 1,
+            "size": 1
+          },
+          "nearest": {
+            "hits": 0,
+            "max_size": 256,
+            "misses": 1,
+            "size": 1
+          },
+          "points": {
+            "hits": 0,
+            "max_size": 128,
+            "misses": 1,
+            "size": 1
+          }
+        },
+        "cache_state": "inventory retained; nearest and point work cleared",
+        "point": [
+          35.23,
+          -97.39
+        ]
+      },
+      "implementation": "optimized-python",
+      "maximum_seconds": 17.0510208,
+      "median_seconds": 16.9205678,
+      "minimum_seconds": 15.6545449,
+      "samples_seconds": [
+        16.9205678,
+        17.0510208,
+        15.6545449
+      ],
+      "stage": "warm-inventory-point-miss"
+    },
+    {
+      "calls_per_sample": 1,
+      "description": "same point served from the decoded-point cache",
+      "details": {
+        "cache_after_setup": {
+          "inventory": {
+            "hits": 0,
+            "max_size": 8,
+            "misses": 1,
+            "size": 1
+          },
+          "nearest": {
+            "hits": 0,
+            "max_size": 256,
+            "misses": 1,
+            "size": 1
+          },
+          "points": {
+            "hits": 0,
+            "max_size": 128,
+            "misses": 1,
+            "size": 1
+          }
+        },
+        "cache_state": "same decoded-point key retained"
+      },
+      "implementation": "optimized-python",
+      "maximum_seconds": 0.0022376,
+      "median_seconds": 0.0011746,
+      "minimum_seconds": 0.0010243,
+      "samples_seconds": [
+        0.0022376,
+        0.0011746,
+        0.0010243
+      ],
+      "stage": "point-cache-hit"
+    },
+    {
+      "calls_per_sample": 1,
+      "description": "same point served from the decoded-point cache",
+      "details": {
+        "cache_after_setup": {
+          "hits": 0,
+          "max_size": 128,
+          "misses": 1,
+          "size": 1
+        },
+        "cache_state": "same decoded-point key retained"
+      },
+      "implementation": "optimized-rust",
+      "maximum_seconds": 0.0012415,
+      "median_seconds": 0.0010223,
+      "minimum_seconds": 0.0007162,
+      "samples_seconds": [
+        0.0012415,
+        0.0010223,
+        0.0007162
+      ],
+      "stage": "point-cache-hit"
+    }
+  ],
+  "schema_version": 1,
+  "settings": {
+    "application_cold_definition": "application caches/indexes cleared; operating-system file cache is not flushed",
+    "implementations": [
+      "optimized-python",
+      "optimized-rust"
+    ],
+    "lat": 35.18,
+    "lon": -97.44,
+    "repeat": 3,
+    "second_lat": 35.23,
+    "second_lon": -97.39,
+    "stages": [
+      "warm-inventory-point-miss",
+      "point-cache-hit"
+    ],
+    "valid_time": null,
+    "warmup": 0
+  },
+  "unavailable": [
+    {
+      "implementation": "optimized-rust",
+      "reason": "StageUnavailable: optimized Rust intentionally performs a direct message scan and does not retain an inventory cache",
+      "stage": "warm-inventory-point-miss"
+    }
+  ]
+}

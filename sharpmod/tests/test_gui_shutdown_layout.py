@@ -65,7 +65,7 @@ class _DiskCache:
         self.calls += 1
 
 
-def test_shutdown_stops_every_owned_gui_worker():
+def test_shutdown_stops_every_owned_gui_worker(monkeypatch):
     timers = [_Timer() for _ in range(4)]
     catalog = _Worker(cooperative=False)
     availability = _Worker()
@@ -74,6 +74,12 @@ def test_shutdown_stops_every_owned_gui_worker():
     model = _Worker()
     cache = _Cache()
     disk_cache = _DiskCache()
+    retained = []
+    monkeypatch.setattr(
+        gui_picker,
+        "retain_worker_until_finished",
+        lambda worker: retained.append(worker) or True,
+    )
     owner = SimpleNamespace(
         _shutdown_started=False,
         _avail_timer=timers[0],
@@ -106,16 +112,20 @@ def test_shutdown_stops_every_owned_gui_worker():
     assert owner._avail_request is None
     assert owner._catalog_request is None
     assert owner._model_availability_request is None
-    assert (owner._avail_token, owner._catalog_token,
-            owner._model_availability_token) == (2, 3, 4)
+    assert (
+        owner._avail_token,
+        owner._catalog_token,
+        owner._model_availability_token,
+    ) == (2, 3, 4)
     assert all(
         worker.interrupted == 1
         for worker in (catalog, availability, model_availability, observed, model)
     )
-    assert catalog.terminated == 1
+    assert catalog.terminated == 0
+    assert retained == [catalog]
+    assert catalog.running
     assert not any(
-        worker.running
-        for worker in (catalog, availability, model_availability, observed, model)
+        worker.running for worker in (availability, model_availability, observed, model)
     )
     assert owner._avail_workers == []
     assert owner._model_availability_workers == []
@@ -133,7 +143,8 @@ def test_shutdown_stops_every_owned_gui_worker():
 
 
 def test_minimum_picker_size_scrolls_instead_of_collapsing_controls(
-        monkeypatch, tmp_path):
+    monkeypatch, tmp_path
+):
     app = QApplication.instance() or QApplication([])
     settings_path = tmp_path / "settings.ini"
     monkeypatch.setattr(
@@ -188,8 +199,7 @@ def test_native_sounding_fit_removes_transient_scroll_ranges():
     window.menuBar().addMenu("File")
     sounding = QWidget()
     natural = QSize(600, 400)
-    host = gui_viewer._FixedSoundingScrollArea(
-        sounding, natural, window)
+    host = gui_viewer._FixedSoundingScrollArea(sounding, natural, window)
     window.setCentralWidget(host)
 
     estimated_menu = window.menuBar().sizeHint().height()

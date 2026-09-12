@@ -322,6 +322,29 @@ def resolve_product(product: str | None) -> OutlookProduct:
     return PRODUCTS.get(product or DEFAULT_PRODUCT, PRODUCTS[DEFAULT_PRODUCT])
 
 
+def product_publishes(
+        valid_time: datetime | None,
+        product: str | None,
+        *,
+        now: datetime | None = None,
+) -> bool:
+    """Report whether ``product`` publishes any outlook covering ``valid_time``.
+
+    Pure and network-free: it only asks whether :func:`candidates_for` can name a
+    URL. Lets a caller choose a different product *before* fetching, rather than
+    discovering the gap as an empty result -- the hazard probabilities cover only
+    Days 1-2 and the total-severe probability only Day 3, so a caller carrying a
+    user's hazard preference onto an arbitrary valid time needs to know when that
+    preference cannot be honoured.
+    """
+    if not isinstance(valid_time, datetime):
+        return False
+    try:
+        return bool(candidates_for(valid_time, now, product or DEFAULT_PRODUCT))
+    except (TypeError, ValueError):
+        return False
+
+
 def format_product_days(spec: OutlookProduct) -> str:
     """Return a phrase naming the outlook days ``spec`` publishes.
 

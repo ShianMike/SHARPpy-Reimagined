@@ -9,6 +9,7 @@ import sys
 
 import numpy as np
 
+from sharpmod.export_paths import export_file_path
 from sharpmod.observations import (
     DEFAULT_PROVIDER_ORDER,
     ObservedProviderError,
@@ -86,13 +87,13 @@ def _cmd_fetch(args) -> int:
         f"Selected {result.provider} ({result.provider_name}); "
         f"source station {result.station_id}"
     )
-    out = args.out
-    if out is None:
-        out = (
-            f"observed_{_safe_token(result.provider)}_"
-            f"{_safe_token(result.station_id)}_{result.valid:%Y%m%d%H}.npz"
-        )
     try:
+        out = args.out
+        if out is None:
+            out = export_file_path(
+                f"observed_{_safe_token(result.provider)}_"
+                f"{_safe_token(result.station_id)}_{result.valid:%Y%m%d%H}.npz"
+            )
         write_observed_npz(result, out, loc=args.loc)
     except (OSError, ValueError, TypeError) as exc:
         print(f"ERROR: could not write observed sounding: {exc}", file=sys.stderr)

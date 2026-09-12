@@ -40,12 +40,29 @@ IMPLEMENTATIONS = (
 STAGES = (
     "application-cold",
     "warm-inventory-point-miss",
+    "multipoint-inventory-reuse",
+    "repeated-scalar-inventory-reuse",
     "warm-dataset-point",
     "point-cache-hit",
     "profile-construction",
     "end-to-end",
 )
 MISSING = -9999.0
+
+
+def _multipoint_requests(
+    lat: float,
+    lon: float,
+    second_lat: float,
+    second_lon: float,
+) -> tuple[tuple[float, float], ...]:
+    """Return a stable mix of duplicate and distinct point requests."""
+    return (
+        (lat, lon),
+        (lat, lon),
+        (second_lat, second_lon),
+        (second_lat + 0.05, second_lon + 0.05),
+    )
 
 
 class ImplementationUnavailable(RuntimeError):
@@ -81,7 +98,7 @@ class TimingRecord:
             "implementation": self.implementation,
             "stage": self.stage,
             "description": self.description,
-            "calls_per_sample": 1,
+            "calls_per_sample": int(self.details.get("point_requests", 1)),
             "samples_seconds": list(samples),
             "median_seconds": statistics.median(samples),
             "minimum_seconds": min(samples),
@@ -349,6 +366,8 @@ def _build_profile(point: Any) -> Any:
 
 
 def _consume_result(result: Any) -> tuple[Any, ...]:
+    if isinstance(result, (tuple, list)) and len(result) > 2:
+        return tuple(_consume_result(item) for item in result)
     if isinstance(result, tuple) and len(result) == 2:
         point, profile = result
         matrix = _point_matrix(point)
@@ -813,6 +832,7 @@ class OptimizedAdapter(BaseAdapter):
             )
             self.backend_instance = backend_class()
             self.decode = self.backend_instance.decode_grib_point
+            self.decode_many = self.backend_instance.decode_grib_points
         except Exception as exc:
             raise ImplementationUnavailable(
                 f"{class_name}.decode_grib_point is unavailable"
@@ -822,6 +842,10 @@ class OptimizedAdapter(BaseAdapter):
         if not callable(self.decode):
             raise ImplementationUnavailable(
                 "sharpmod.backends.decode_grib_point is unavailable"
+            )
+        if not callable(self.decode_many):
+            raise ImplementationUnavailable(
+                "sharpmod.backends.decode_grib_points is unavailable"
             )
         if not callable(self.clear):
             raise ImplementationUnavailable(
@@ -839,6 +863,13 @@ class OptimizedAdapter(BaseAdapter):
             missing=MISSING,
         )
 
+    def _decode_many(
+        self, points: Sequence[tuple[float, float]],
+    ) -> tuple[Any, ...]:
+        return tuple(
+            self.decode_many(str(self.fixture), points, missing=MISSING)
+        )
+
     def _clear_all(self) -> None:
         if self.backend == "python":
             self.clear()
@@ -847,6 +878,25 @@ class OptimizedAdapter(BaseAdapter):
             clear_native()
 
     def _clear_point_work(self) -> None:
+        if self.backend == "rust":
+            clear_native = getattr(
+                self.backend_instance, "clear_grib_cache", None
+            )
+            if not callable(clear_native):
+                raise StageUnavailable(
+                    "optimized Rust cache API cannot preserve its inventory"
+                )
+            try:
+                clear_native(
+                    inventory=False,
+                    points=True,
+                    reset_stats=False,
+                )
+            except TypeError as exc:
+                raise StageUnavailable(
+                    "optimized Rust cache API cannot preserve its inventory"
+                ) from exc
+            return
         try:
             self.clear(
                 inventory=False,
@@ -897,11 +947,6 @@ class OptimizedAdapter(BaseAdapter):
             )
 
         if stage == "warm-inventory-point-miss":
-            if self.backend == "rust":
-                raise StageUnavailable(
-                    "optimized Rust intentionally performs a direct message scan "
-                    "and does not retain an inventory cache"
-                )
             self.activate()
             self._clear_all()
             self._decode(lat, lon)
@@ -918,6 +963,41 @@ class OptimizedAdapter(BaseAdapter):
                         "inventory retained; nearest and point work cleared"
                     ),
                     "point": [second_lat, second_lon],
+                    "cache_after_setup": self._cache_snapshot(),
+                },
+            )
+
+        if stage in {
+            "multipoint-inventory-reuse",
+            "repeated-scalar-inventory-reuse",
+        }:
+            points = _multipoint_requests(
+                lat, lon, second_lat, second_lon,
+            )
+            self.activate()
+            self._clear_all()
+            self._decode(lat, lon)
+
+            def before() -> None:
+                self.activate()
+                self._clear_point_work()
+
+            call = (
+                (lambda: self._decode_many(points))
+                if stage == "multipoint-inventory-reuse"
+                else (lambda: tuple(self._decode(*point) for point in points))
+            )
+            return StageSession(
+                call,
+                before_sample=before,
+                details={
+                    "cache_state": (
+                        "inventory retained; point work cleared before each sample"
+                    ),
+                    "point_requests": len(points),
+                    "unique_request_keys": len(set(points)),
+                    "duplicate_request_indices": [0, 1],
+                    "points": [list(point) for point in points],
                     "cache_after_setup": self._cache_snapshot(),
                 },
             )
@@ -1060,6 +1140,53 @@ def _validate_equivalence(
         generation: int(_point_matrix(by_label[label]).shape[1])
         for generation, label in generation_references.items()
     }
+    multipoint = None
+    optimized = [
+        adapter for adapter in adapters
+        if isinstance(adapter, OptimizedAdapter)
+    ]
+    if optimized:
+        requests = _multipoint_requests(lat, lon, lat + 0.05, lon + 0.05)
+        vectorized = {}
+        for adapter in optimized:
+            adapter.activate()
+            adapter._clear_all()
+            many = adapter._decode_many(requests)
+            adapter._clear_point_work()
+            scalar = tuple(adapter._decode(*point) for point in requests)
+            if len(many) != len(requests):
+                raise AssertionError(
+                    f"{adapter.label}: multi-point result length "
+                    f"{len(many)} != {len(requests)}"
+                )
+            for index, (bulk_point, scalar_point) in enumerate(
+                zip(many, scalar)
+            ):
+                _compare_points(
+                    scalar_point,
+                    bulk_point,
+                    f"{adapter.label} multi-point request {index}",
+                )
+            vectorized[adapter.label] = many
+        if {
+            "optimized-python", "optimized-rust",
+        }.issubset(vectorized):
+            for index, (python_point, rust_point) in enumerate(zip(
+                vectorized["optimized-python"],
+                vectorized["optimized-rust"],
+            )):
+                _compare_points(
+                    python_point,
+                    rust_point,
+                    f"optimized-rust vs optimized-python request {index}",
+                )
+        multipoint = {
+            "status": "passed",
+            "implementations": list(vectorized),
+            "point_requests": len(requests),
+            "unique_request_keys": len(set(requests)),
+        }
+
     return {
         "status": "passed",
         "reference": reference_label,
@@ -1070,6 +1197,7 @@ def _validate_equivalence(
         "selected_lat": selected_lat,
         "selected_lon": selected_lon,
         "surface_relative_vorticity": vorticity,
+        "multipoint": multipoint,
     }
 
 
@@ -1088,6 +1216,12 @@ def _measure(
     descriptions = {
         "application-cold": "full local decode with application caches cleared",
         "warm-inventory-point-miss": "inventory/index warm, different point key",
+        "multipoint-inventory-reuse": (
+            "four-point vectorized/native batch with warm inventory"
+        ),
+        "repeated-scalar-inventory-reuse": (
+            "same four requests through repeated scalar calls"
+        ),
         "warm-dataset-point": "point extraction from one retained loaded dataset",
         "point-cache-hit": "same point served from the decoded-point cache",
         "profile-construction": "Profile construction from decoded arrays only",

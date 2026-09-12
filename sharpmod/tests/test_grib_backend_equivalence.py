@@ -666,6 +666,63 @@ def test_file_identity_invalidates_all_cached_decode_state(compact_grib):
     assert info["points"]["misses"] == 2
 
 
+def test_atomic_same_size_replacement_invalidates_python_and_native_caches(
+        compact_grib, tmp_path):
+    native = pytest.importorskip("sharpmod_rs")
+    source_path, _eccodes = compact_grib
+    path = tmp_path / "atomic-replacement.grib2"
+    replacement = tmp_path / "replacement.grib2"
+    payload = source_path.read_bytes()
+    path.write_bytes(payload)
+    original_stat = path.stat()
+
+    native.clear_grib_inventory_cache(True)
+    python_first = PythonBackend().decode_grib_point(path, 10.9, 101.1)
+    rust_backend = RustBackend(native)
+    rust_first = rust_backend.decode_grib_point(path, 10.9, 101.1)
+
+    replacement.write_bytes(payload)
+    os.utime(
+        replacement,
+        ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+    )
+    os.replace(replacement, path)
+    replacement_stat = path.stat()
+    old_identity = (
+        original_stat.st_size,
+        original_stat.st_mtime_ns,
+        original_stat.st_ctime_ns,
+        original_stat.st_dev,
+        original_stat.st_ino,
+    )
+    new_identity = (
+        replacement_stat.st_size,
+        replacement_stat.st_mtime_ns,
+        replacement_stat.st_ctime_ns,
+        replacement_stat.st_dev,
+        replacement_stat.st_ino,
+    )
+    assert new_identity != old_identity
+    assert replacement_stat.st_size == original_stat.st_size
+    assert replacement_stat.st_mtime_ns == original_stat.st_mtime_ns
+
+    python_second = PythonBackend().decode_grib_point(path, 10.9, 101.1)
+    rust_second = rust_backend.decode_grib_point(path, 10.9, 101.1)
+
+    assert python_second is not python_first
+    assert rust_second is not rust_first
+    np.testing.assert_array_equal(python_second.matrix, python_first.matrix)
+    np.testing.assert_array_equal(rust_second.matrix, rust_first.matrix)
+    python_info = grib_cache_info()
+    assert python_info["inventory"]["misses"] == 2
+    assert python_info["nearest"]["misses"] == 2
+    assert python_info["points"]["misses"] == 2
+    native_info = rust_backend.grib_cache_info()["inventory"]
+    assert native_info["size"] == 1
+    assert native_info["misses"] == 2
+    assert native_info["invalidations"] == 1
+
+
 def test_direct_decoder_matches_existing_xarray_column_science(compact_grib):
     path, _eccodes = compact_grib
     cfgrib = pytest.importorskip("cfgrib")
@@ -723,6 +780,69 @@ def test_rust_direct_decoder_matches_python_matrix(compact_grib):
     assert actual.surface_relative_vorticity == pytest.approx(
         expected.surface_relative_vorticity, rel=1e-12, abs=1e-12
     )
+
+
+@pytest.mark.parametrize(
+    "fixture_name", ["compact_grib", "terrain_surface_grib"]
+)
+def test_rust_native_multipoint_matches_python_vector_and_scalar_semantics(
+        fixture_name, request):
+    native = pytest.importorskip("sharpmod_rs")
+    path, _eccodes = request.getfixturevalue(fixture_name)
+    points = [
+        (10.1, 100.1),
+        (10.9, 101.1),
+        (10.95, 101.05),
+        (10.9, 461.1),
+    ]
+
+    python_backend = PythonBackend()
+    expected = python_backend.decode_grib_points(
+        path, points, missing=-7777.0,
+    )
+    scalar_expected = tuple(
+        python_backend.decode_grib_point(
+            path, latitude, longitude, missing=-7777.0,
+        )
+        for latitude, longitude in points
+    )
+    actual = RustBackend(native).decode_grib_points(
+        path, points, missing=-7777.0,
+    )
+
+    assert len(actual) == len(expected) == len(scalar_expected)
+    for rust_point, python_point, scalar_point in zip(
+            actual, expected, scalar_expected):
+        np.testing.assert_allclose(
+            rust_point.matrix, python_point.matrix, rtol=1e-12, atol=1e-12,
+        )
+        np.testing.assert_array_equal(python_point.matrix, scalar_point.matrix)
+        assert rust_point.matrix.flags.c_contiguous
+        assert not rust_point.matrix.flags.writeable
+        assert rust_point.selected_lat == pytest.approx(
+            python_point.selected_lat,
+        )
+        assert rust_point.selected_lon == pytest.approx(
+            python_point.selected_lon,
+        )
+        if python_point.surface_relative_vorticity is None:
+            assert rust_point.surface_relative_vorticity is None
+        else:
+            assert rust_point.surface_relative_vorticity == pytest.approx(
+                python_point.surface_relative_vorticity,
+                rel=1e-12,
+                abs=1e-12,
+            )
+        assert rust_point.surface_merged == python_point.surface_merged
+        assert (
+            rust_point.below_ground_levels_removed
+            == python_point.below_ground_levels_removed
+        )
+
+    # Wrapped duplicate requests and distinct requests in one grid cell share
+    # one immutable adapter result without disturbing stable output order.
+    assert actual[1] is actual[2]
+    assert actual[1] is actual[3]
 
 
 def test_xarray_fallback_reuses_cfgrib_persistent_index(compact_grib):
@@ -801,11 +921,21 @@ def test_rust_adapter_caches_one_native_matrix_by_file_identity(
     calls = []
 
     class FakeNative:
+        inventory_clears = []
+
         @staticmethod
         def decode_grib_point(*args):
             calls.append(args)
             matrix = np.arange(18.0, dtype=np.float64).reshape(9, 2)
             return matrix, 11.0, 101.0, None, False, 0
+
+        @staticmethod
+        def grib_inventory_cache_info():
+            return True, 1, 8, 4, 1, 0, 0
+
+        @classmethod
+        def clear_grib_inventory_cache(cls, reset_stats):
+            cls.inventory_clears.append(bool(reset_stats))
 
     monkeypatch.setattr(
         rust_backend, "_eccodes_library_path", lambda: "eccodes-library"
@@ -818,13 +948,42 @@ def test_rust_adapter_caches_one_native_matrix_by_file_identity(
     assert wrapped_request is first
     assert len(calls) == 1
     assert backend.grib_cache_info() == {
-        "size": 1, "max_size": 128, "hits": 1, "misses": 1,
+        "size": 1,
+        "max_size": 128,
+        "hits": 1,
+        "misses": 1,
+        "selected_size": 1,
+        "inventory": {
+            "enabled": True,
+            "size": 1,
+            "max_size": 8,
+            "hits": 4,
+            "misses": 1,
+            "evictions": 0,
+            "invalidations": 0,
+        },
     }
 
-    backend.clear_grib_cache(points=False, reset_stats=False)
+    backend.clear_grib_cache(
+        inventory=False, points=False, reset_stats=False,
+    )
     assert backend.grib_cache_info() == {
-        "size": 1, "max_size": 128, "hits": 1, "misses": 1,
+        "size": 1,
+        "max_size": 128,
+        "hits": 1,
+        "misses": 1,
+        "selected_size": 1,
+        "inventory": {
+            "enabled": True,
+            "size": 1,
+            "max_size": 8,
+            "hits": 4,
+            "misses": 1,
+            "evictions": 0,
+            "invalidations": 0,
+        },
     }
+    assert FakeNative.inventory_clears == []
 
     stat = path.stat()
     os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
@@ -832,6 +991,82 @@ def test_rust_adapter_caches_one_native_matrix_by_file_identity(
     assert changed is not first
     assert len(calls) == 2
     assert backend.grib_cache_info()["misses"] == 2
+
+
+def test_rust_adapter_batches_unique_requests_without_conflating_mixed_grids(
+        tmp_path, monkeypatch):
+    """Equal pressure coordinates do not imply equal surface-grid results."""
+    from sharpmod.backends import rust_backend
+
+    path = tmp_path / "native-multipoint.grib2"
+    path.write_bytes(b"GRIB-native-multipoint-7777")
+    calls = []
+
+    class FakeNative:
+        @staticmethod
+        def grib_inventory_cache_info():
+            return True, 0, 8, 0, 1, 0, 0
+
+        @staticmethod
+        def decode_grib_points(
+                native_path, library, latitudes, longitudes, missing):
+            calls.append((
+                native_path,
+                library,
+                np.array(latitudes, copy=True),
+                np.array(longitudes, copy=True),
+                missing,
+            ))
+            # Both requests select the same pressure grid cell.  Their
+            # distinct matrices model independently selected surface grids.
+            return tuple(
+                (
+                    np.full((9, 2), latitude, dtype=np.float64),
+                    11.0,
+                    101.0,
+                    None,
+                    True,
+                    index,
+                )
+                for index, latitude in enumerate(latitudes)
+            )
+
+    monkeypatch.setattr(
+        rust_backend, "_eccodes_library_path", lambda: "eccodes-library"
+    )
+    backend = RustBackend(FakeNative())
+    requests = [
+        (10.1, 100.1),
+        (10.1, 460.1),
+        (10.2, 100.2),
+    ]
+
+    decoded = backend.decode_grib_points(path, requests)
+
+    assert len(calls) == 1
+    _, library, latitudes, longitudes, missing = calls[0]
+    assert library == "eccodes-library"
+    np.testing.assert_array_equal(latitudes, [10.1, 10.2])
+    np.testing.assert_allclose(longitudes, [100.1, 100.2], rtol=0.0, atol=1e-12)
+    assert latitudes.flags.c_contiguous
+    assert longitudes.flags.c_contiguous
+    assert missing == -9999.0
+    assert decoded[0] is decoded[1]
+    assert decoded[2] is not decoded[0]
+    assert np.all(decoded[0].matrix == 10.1)
+    assert np.all(decoded[2].matrix == 10.2)
+    assert decoded[0].below_ground_levels_removed == 0
+    assert decoded[2].below_ground_levels_removed == 1
+
+    repeated = backend.decode_grib_points(path, [requests[2], requests[0]])
+    assert len(calls) == 1
+    assert repeated[0] is decoded[2]
+    assert repeated[1] is decoded[0]
+    info = backend.grib_cache_info()
+    assert info["hits"] == 2
+    assert info["misses"] == 2
+    assert info["size"] == 2
+    assert info["selected_size"] == 1
 
 
 def test_retrieval_returns_local_grib_without_constructing_xarray(

@@ -28,12 +28,51 @@ from sharpmod.gui_overlay_controls import (
 )
 
 UTC = timezone.utc
-RING = [[-100.0, 35.0], [-90.0, 35.0], [-90.0, 45.0], [-100.0, 45.0],
-        [-100.0, 35.0]]
+RING = [[-100.0, 35.0], [-90.0, 35.0], [-90.0, 45.0], [-100.0, 45.0], [-100.0, 35.0]]
 START = datetime(2024, 5, 1, 18, tzinfo=UTC)
 
+#: Debounce window the controllers use while this module runs.
+#:
+#: The shipped intervals are a few hundred milliseconds because they exist to
+#: settle a *human* dragging a spinner. A test drives the controller directly,
+#: so every wait here was spent idling: the fixed sleeps below accounted for
+#: 67 of this module's 73 seconds, making it the slowest file in the suite by
+#: some margin.
+#:
+#: Shortening the window preserves what these tests actually assert. Coalescing
+#: is proven by making several changes with no event loop running between them
+#: -- the single-shot timer restarts each time and fires once afterwards --
+#: which holds for any interval. No test asserts a debounce length; the two
+#: interval assertions in the suite cover the radar *refresh* floor and the
+#: basemap timer, neither of which is touched here.
+TEST_DEBOUNCE_MS = 25
 
-def _pump(ms: int = 700) -> None:
+#: How long :func:`_pump` runs the event loop.
+#:
+#: Comfortably past ``TEST_DEBOUNCE_MS`` so a debounced request is dispatched,
+#: with the remainder left as slack for a worker thread to start, run its
+#: patched fetch and post the result back. Assertions that depend on a real
+#: fetch completing use :func:`_pump_until` instead of leaning on this slack.
+PUMP_MS = 150
+
+
+@pytest.fixture(autouse=True)
+def _short_debounce(monkeypatch):
+    """Point the controllers at :data:`TEST_DEBOUNCE_MS`.
+
+    Each controller reads its module constant in ``__init__`` and hands it to
+    ``QTimer.setInterval``, so patching here covers controllers built by a
+    fixture and controllers built inline by a test.
+    """
+    for constant in (
+        "_REFRESH_DEBOUNCE_MS",
+        "_RADAR_DEBOUNCE_MS",
+        "_FIELD_DEBOUNCE_MS",
+    ):
+        monkeypatch.setattr(gui_overlay_controls, constant, TEST_DEBOUNCE_MS)
+
+
+def _pump(ms: int = PUMP_MS) -> None:
     """Run the event loop for ``ms`` so debounced timers can fire."""
     loop = QEventLoop()
     QTimer.singleShot(ms, loop.quit)
@@ -67,13 +106,21 @@ def _pump_until(predicate, timeout_ms: int = 5000) -> bool:
 
 
 def _layer(valid_from, valid_to):
-    rings = mo.rings_from_geometry(
-        {"type": "Polygon", "coordinates": [RING]})[0]
-    shape = mo.OverlayShape(rings=rings, bounds=mo.bounds_of(rings),
-                            stroke="#005500", fill="#66A366", label="MRGL")
+    rings = mo.rings_from_geometry({"type": "Polygon", "coordinates": [RING]})[0]
+    shape = mo.OverlayShape(
+        rings=rings,
+        bounds=mo.bounds_of(rings),
+        stroke="#005500",
+        fill="#66A366",
+        label="MRGL",
+    )
     return mo.build_layer(
-        spc_outlook.OVERLAY_KEY, "SPC convective outlook \u2014 Day 1",
-        [shape], valid_from=valid_from, valid_to=valid_to)
+        spc_outlook.OVERLAY_KEY,
+        "SPC convective outlook \u2014 Day 1",
+        [shape],
+        valid_from=valid_from,
+        valid_to=valid_to,
+    )
 
 
 @pytest.fixture
@@ -107,7 +154,7 @@ def test_disabled_controller_never_fetches(qt_app, recorded):
         assert not controller.is_enabled()
         for day in range(10):
             controller.set_valid_time(START + timedelta(days=day))
-        _pump(700)
+        _pump()
         assert recorded == [], "an overlay that is off must issue no requests"
         assert widget.overlay_keys() == ()
         # The map still learns the time, so its legend can reason about it.
@@ -124,17 +171,18 @@ def test_rapid_scrubbing_collapses_to_one_request(bound, recorded):
         controller.set_valid_time(START + timedelta(days=day))
     assert recorded == [], "nothing may be sent while the value is still moving"
 
-    _pump(700)
+    _pump()
     assert len(recorded) == 1, "40 selections must collapse into one request"
-    assert recorded[0] == START + timedelta(days=39), \
+    assert recorded[0] == START + timedelta(days=39), (
         "the request must use the value the user landed on"
+    )
 
 
 def test_deliberate_steps_each_resolve(bound, recorded):
     controller, _widget = bound
     for day in range(4):
         controller.set_valid_time(START + timedelta(days=100 + day))
-        _pump(450)
+        _pump()
     assert len(recorded) == 4
 
 
@@ -142,7 +190,7 @@ def test_switching_off_cancels_a_pending_request(bound, recorded):
     controller, widget = bound
     controller.set_valid_time(START)
     controller.set_enabled(False)
-    _pump(700)
+    _pump()
     assert recorded == []
     assert widget.overlay_keys() == ()
 
@@ -210,8 +258,9 @@ def test_the_fleet_drains_every_outstanding_worker():
 
     assert (first.interrupted, second.interrupted) == (1, 1)
     assert first.waited and second.waited, "both had to be waited on"
-    assert all(ms <= 2000 for ms in first.waited + second.waited), \
+    assert all(ms <= 2000 for ms in first.waited + second.waited), (
         "the grace period is shared, not granted afresh to each worker"
+    )
 
 
 def test_a_finished_worker_leaves_the_fleet():
@@ -227,8 +276,30 @@ def test_a_finished_worker_leaves_the_fleet():
     assert worker.waited == []
 
 
-def test_an_interrupted_worker_stays_tracked_across_a_new_request(
-        bound, monkeypatch):
+def test_a_stuck_worker_is_retained_instead_of_destroyed(monkeypatch):
+    class _StuckWorker(_FakeWorker):
+        def wait(self, ms: int) -> bool:
+            self.waited.append(ms)
+            return False
+
+    retained = []
+    monkeypatch.setattr(
+        gui_overlay_controls,
+        "retain_worker_until_finished",
+        lambda worker: retained.append(worker) or True,
+    )
+    fleet = gui_overlay_controls._WorkerFleet()
+    worker = _StuckWorker()
+    fleet.track(worker)
+
+    fleet.drain(1)
+
+    assert worker.interrupted == 1
+    assert retained == [worker]
+    assert fleet._live == []
+
+
+def test_an_interrupted_worker_stays_tracked_across_a_new_request(bound, monkeypatch):
     """A replaced worker must remain drainable, not be dropped on the floor."""
     controller, _widget = bound
     valid_from = datetime(2024, 5, 1, 13, tzinfo=UTC)
@@ -292,8 +363,7 @@ def test_crossing_an_issuance_boundary_does_refetch(bound, monkeypatch):
     # the 2000Z issuance now applies.
     controller.set_valid_time(datetime(2026, 4, 16, 0, tzinfo=UTC))
     _pump()
-    assert len(calls) == 2, \
-        "moving past the 2000Z issuance must resolve again"
+    assert len(calls) == 2, "moving past the 2000Z issuance must resolve again"
 
 
 def test_leaving_the_window_does_request(bound, recorded):
@@ -303,7 +373,7 @@ def test_leaving_the_window_does_request(bound, recorded):
     widget.set_overlay(spc_outlook.OVERLAY_KEY, _layer(valid_from, valid_to))
 
     controller.set_valid_time(valid_to + timedelta(hours=6))
-    _pump(700)
+    _pump()
     assert len(recorded) == 1
 
 
@@ -311,7 +381,7 @@ def test_repeating_the_same_time_is_idempotent(bound, recorded):
     controller, _widget = bound
     for _ in range(10):
         controller.set_valid_time(START)
-    _pump(700)
+    _pump()
     assert len(recorded) == 1
 
 
@@ -329,9 +399,9 @@ def test_toggling_back_on_reuses_a_covering_layer(bound, monkeypatch):
     calls = _tracked_fetch(monkeypatch, valid_from, valid_to)
 
     controller.set_valid_time(datetime(2024, 5, 1, 18, tzinfo=UTC))
-    assert _pump_until(
-        lambda: widget.overlay(spc_outlook.OVERLAY_KEY) is not None
-    ), "the resolved outlook must reach the map"
+    assert _pump_until(lambda: widget.overlay(spc_outlook.OVERLAY_KEY) is not None), (
+        "the resolved outlook must reach the map"
+    )
     assert len(calls) == 1, "the first selection resolves the outlook"
     layer = widget.overlay(spc_outlook.OVERLAY_KEY)
     assert layer is not None
@@ -373,13 +443,12 @@ def test_toggling_back_on_revalidates_a_superseded_outlook(bound, monkeypatch):
     _pump()
     assert len(calls) == 1, "switched off, so nothing may reach the network"
     assert widget.overlay(spc_outlook.OVERLAY_KEY).covers(
-        datetime(2026, 4, 16, 0, tzinfo=UTC)), \
-        "sanity: coverage alone would have accepted this layer"
+        datetime(2026, 4, 16, 0, tzinfo=UTC)
+    ), "sanity: coverage alone would have accepted this layer"
 
     controller.set_enabled(True)
     _pump()
-    assert len(calls) == 2, \
-        "re-enabling past the 2000Z issuance must resolve again"
+    assert len(calls) == 2, "re-enabling past the 2000Z issuance must resolve again"
 
 
 def test_a_resolved_layer_is_attached_and_described(qt_app, monkeypatch):
@@ -387,12 +456,11 @@ def test_a_resolved_layer_is_attached_and_described(qt_app, monkeypatch):
     valid_from = datetime(2024, 5, 1, 13, tzinfo=UTC)
     valid_to = datetime(2024, 5, 2, 12, tzinfo=UTC)
     layer = _layer(valid_from, valid_to)
-    monkeypatch.setattr(spc_outlook, "fetch_layer",
-                        lambda valid_time, **kwargs: layer)
+    monkeypatch.setattr(spc_outlook, "fetch_layer", lambda valid_time, **kwargs: layer)
     controller = OutlookOverlayController(widget, enabled=True)
     try:
         controller.set_valid_time(valid_from.replace(hour=18))
-        _pump(700)
+        _pump()
         assert widget.overlay(spc_outlook.OVERLAY_KEY) is layer
         assert "SPC convective outlook" in controller._status.text()
     finally:
@@ -405,13 +473,12 @@ def test_no_outlook_reports_plainly_without_an_error(qt_app, recorded):
     controller = OutlookOverlayController(widget, enabled=True)
     try:
         controller.set_valid_time(datetime(1998, 6, 1, 18, tzinfo=UTC))
-        _pump(700)
+        _pump()
         assert widget.overlay_keys() == ()
         text = controller._status.text()
         assert text.startswith("No ")
         assert "2020 onward" in text, "the reason should be stated"
-        assert "unavailable" not in text.lower(), \
-            "an absent product is not a failure"
+        assert "unavailable" not in text.lower(), "an absent product is not a failure"
     finally:
         controller.shutdown()
         widget.close()
@@ -421,7 +488,7 @@ def test_shutdown_stops_a_pending_request(bound, recorded):
     controller, _widget = bound
     controller.set_valid_time(START)
     controller.shutdown()
-    _pump(700)
+    _pump()
     assert recorded == []
 
 
@@ -430,8 +497,9 @@ def test_shutdown_stops_a_pending_request(bound, recorded):
 # --------------------------------------------------------------------------- #
 def test_every_product_is_offered(bound):
     controller, _widget = bound
-    offered = {controller._product.itemData(i)
-               for i in range(controller._product.count())}
+    offered = {
+        controller._product.itemData(i) for i in range(controller._product.count())
+    }
     assert offered == set(spc_outlook.PRODUCTS)
     assert controller.product() == spc_outlook.DEFAULT_PRODUCT
 
@@ -439,12 +507,12 @@ def test_every_product_is_offered(bound):
 def test_changing_product_refetches(bound, recorded):
     controller, _widget = bound
     controller.set_valid_time(START)
-    _pump(450)
+    _pump()
     recorded.clear()
 
     controller.set_product("torn")
     assert controller.product() == "torn"
-    _pump(700)
+    _pump()
     assert len(recorded) == 1, "a different hazard needs its own request"
 
 
@@ -457,8 +525,9 @@ def test_changing_product_detaches_the_previous_hazard(bound, recorded):
     widget.set_overlay(spc_outlook.OVERLAY_KEY, _layer(valid_from, valid_to))
 
     controller.set_product("hail")
-    assert widget.overlay(spc_outlook.OVERLAY_KEY) is None, \
+    assert widget.overlay(spc_outlook.OVERLAY_KEY) is None, (
         "the categorical layer must be dropped when switching to hail"
+    )
 
 
 def test_changing_product_while_off_still_detaches(bound, recorded):
@@ -475,9 +544,10 @@ def test_changing_product_while_off_still_detaches(bound, recorded):
 
     recorded.clear()
     controller.set_enabled(True)
-    _pump(700)
-    assert len(recorded) == 1, \
+    _pump()
+    assert len(recorded) == 1, (
         "re-enabling after a product change must fetch the new hazard"
+    )
 
 
 def test_the_worker_is_given_the_selected_product(qt_app, monkeypatch):
@@ -493,7 +563,7 @@ def test_the_worker_is_given_the_selected_product(qt_app, monkeypatch):
     try:
         controller.set_product("torn")
         controller.set_valid_time(START)
-        _pump(700)
+        _pump()
         assert seen == ["torn"]
     finally:
         controller.shutdown()
@@ -523,17 +593,21 @@ def fake_clock(monkeypatch):
 
     def fetch(valid_time, **kwargs):
         candidates = spc_outlook.candidates_for(
-            valid_time, clock["now"], kwargs.get("product", "cat"))
+            valid_time, clock["now"], kwargs.get("product", "cat")
+        )
         if not candidates:
             served.append(None)
             return None
         day = candidates[0].day
         served.append(day)
         return mo.build_layer(
-            spc_outlook.OVERLAY_KEY, f"SPC convective outlook \u2014 Day {day}",
-            [_shape()], subtitle=f"Day {day}",
+            spc_outlook.OVERLAY_KEY,
+            f"SPC convective outlook \u2014 Day {day}",
+            [_shape()],
+            subtitle=f"Day {day}",
             valid_from=datetime(2026, 5, 20, 12, tzinfo=UTC),
-            valid_to=datetime(2026, 5, 21, 12, tzinfo=UTC))
+            valid_to=datetime(2026, 5, 21, 12, tzinfo=UTC),
+        )
 
     monkeypatch.setattr(spc_outlook, "resolution_signature", signature)
     monkeypatch.setattr(spc_outlook, "fetch_layer", fetch)
@@ -541,10 +615,14 @@ def fake_clock(monkeypatch):
 
 
 def _shape():
-    rings = mo.rings_from_geometry(
-        {"type": "Polygon", "coordinates": [RING]})[0]
-    return mo.OverlayShape(rings=rings, bounds=mo.bounds_of(rings),
-                           stroke="#005500", fill="#66A366", label="MRGL")
+    rings = mo.rings_from_geometry({"type": "Polygon", "coordinates": [RING]})[0]
+    return mo.OverlayShape(
+        rings=rings,
+        bounds=mo.bounds_of(rings),
+        stroke="#005500",
+        fill="#66A366",
+        label="MRGL",
+    )
 
 
 def test_a_newer_outlook_day_replaces_the_one_on_screen(bound, fake_clock):
@@ -625,8 +703,9 @@ def test_a_hazard_absent_on_day_three_is_retried_on_day_two(bound, fake_clock):
     clock["now"] = AT_DAY2
     controller._check_superseded()
     _pump()
-    assert served == [None, 2], \
+    assert served == [None, 2], (
         "an absent hazard must be retried once its outlook day is reachable"
+    )
     assert widget.overlay(spc_outlook.OVERLAY_KEY) is not None
 
 
@@ -673,8 +752,9 @@ def test_a_failure_does_not_settle_the_basis(bound, monkeypatch):
     controller.set_valid_time(SUPERSEDE_TARGET)
     _pump()
     assert calls, "sanity: it tried"
-    assert controller._signature is None, \
+    assert controller._signature is None, (
         "a failure must not be recorded as a resolved basis"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -713,8 +793,15 @@ def radar_calls(monkeypatch):
     """Replace the radar fetch with a recorder returning a usable frame."""
     seen = _RadarRecorder()
 
-    def fake_fetch(product=None, *, size=None, opacity=1.0, now=None,
-                   opener=None, should_cancel=None):
+    def fake_fetch(
+        product=None,
+        *,
+        size=None,
+        opacity=1.0,
+        now=None,
+        opener=None,
+        should_cancel=None,
+    ):
         seen.append({"product": product, "opacity": opacity})
         if seen.failing:
             raise radar_mosaic.RadarError("stubbed outage")
@@ -759,10 +846,19 @@ def radar_site_calls(monkeypatch):
     """Replace the single-site fetch with a recorder returning a usable frame."""
     seen = _RadarRecorder()
 
-    def fake_fetch(product=None, *, site_id=None, view=None, pixels=None,
-                   opacity=1.0, opener=None, should_cancel=None):
-        seen.append({"product": product, "opacity": opacity, "view": view,
-                     "site_id": site_id})
+    def fake_fetch(
+        product=None,
+        *,
+        site_id=None,
+        view=None,
+        pixels=None,
+        opacity=1.0,
+        opener=None,
+        should_cancel=None,
+    ):
+        seen.append(
+            {"product": product, "opacity": opacity, "view": view, "site_id": site_id}
+        )
         if seen.failing:
             raise radar_site.RadarSiteError("stubbed outage")
         chosen = radar_site.site_by_id(site_id)
@@ -817,29 +913,35 @@ def test_radar_defaults_to_the_nearest_single_site(radar_site_controller):
 def test_the_site_scope_offers_its_own_products(radar_site_controller):
     """The two scopes publish different products, so the list is rebuilt."""
     controller, _widget = radar_site_controller
-    site_keys = {controller._product.itemData(index)
-                 for index in range(controller._product.count())}
+    site_keys = {
+        controller._product.itemData(index)
+        for index in range(controller._product.count())
+    }
     assert {spec.key for spec in radar_site.available_products()} == site_keys
 
     controller.set_scope(SCOPE_MOSAIC)
-    mosaic_keys = {controller._product.itemData(index)
-                   for index in range(controller._product.count())}
-    assert {spec.key for spec in radar_mosaic.available_products()} \
-        == mosaic_keys
-    assert not (site_keys & mosaic_keys), \
-        "the two scopes must not share product keys, or switching would carry " \
+    mosaic_keys = {
+        controller._product.itemData(index)
+        for index in range(controller._product.count())
+    }
+    assert {spec.key for spec in radar_mosaic.available_products()} == mosaic_keys
+    assert not (site_keys & mosaic_keys), (
+        "the two scopes must not share product keys, or switching would carry "
         "a selection into a scope that cannot serve it"
+    )
 
 
 def test_a_site_fetch_carries_the_view_so_the_radar_follows_the_map(
-        radar_site_controller, radar_site_calls):
+    radar_site_controller, radar_site_calls
+):
     """Which antenna serves the request is resolved from where the user is."""
     controller, widget = radar_site_controller
     controller.set_enabled(True)
-    _pump(700)
+    _pump()
     assert radar_site_calls, "enabling the site scope must fetch"
-    assert radar_site_calls[-1]["view"] is not None, \
+    assert radar_site_calls[-1]["view"] is not None, (
         "the site is chosen from the map view, so the view has to travel"
+    )
 
     raster = widget.overlay(radar_site.OVERLAY_KEY)
     assert raster is not None
@@ -847,27 +949,30 @@ def test_a_site_fetch_carries_the_view_so_the_radar_follows_the_map(
 
 
 def test_switching_scope_detaches_both_radar_slots(
-        radar_site_controller, radar_site_calls, radar_calls):
+    radar_site_controller, radar_site_calls, radar_calls
+):
     """Site and mosaic are separate keys, so a stale one would draw twice."""
     controller, widget = radar_site_controller
     controller.set_enabled(True)
-    _pump(700)
+    _pump()
     assert widget.overlay(radar_site.OVERLAY_KEY) is not None
 
     controller.set_scope(SCOPE_MOSAIC)
-    _pump(700)
-    assert widget.overlay(radar_site.OVERLAY_KEY) is None, \
+    _pump()
+    assert widget.overlay(radar_site.OVERLAY_KEY) is None, (
         "the site frame must be detached, not merely hidden"
+    )
     assert widget.overlay(radar_mosaic.OVERLAY_KEY) is not None
 
 
 def test_a_view_with_no_radar_in_range_spends_nothing(
-        radar_site_controller, radar_site_calls):
+    radar_site_controller, radar_site_calls
+):
     """Outside the network there is no antenna to ask, and saying so is free."""
     controller, widget = radar_site_controller
     _look_at(widget, (-1.0, 1.0, 50.5, 52.5))  # London
     controller.set_enabled(True)
-    _pump(700)
+    _pump()
     assert not radar_site_calls, "no site in range must not reach the network"
     assert not widget.is_overlay_visible(radar_site.OVERLAY_KEY)
 
@@ -876,7 +981,7 @@ def test_a_disabled_radar_overlay_never_fetches(radar, radar_calls):
     """It is an embellishment on a picker; it must not poll before asked."""
     controller, widget = radar
     assert not controller.is_enabled()
-    _pump(400)
+    _pump()
     assert radar_calls == []
     assert widget.overlay(radar_mosaic.OVERLAY_KEY) is None
     assert not controller._refresh_timer.isActive()
@@ -885,7 +990,7 @@ def test_a_disabled_radar_overlay_never_fetches(radar, radar_calls):
 def test_enabling_fetches_exactly_one_frame(radar, radar_calls):
     controller, widget = radar
     controller.set_enabled(True)
-    _pump(600)
+    _pump()
     assert len(radar_calls) == 1
     raster = widget.overlay(radar_mosaic.OVERLAY_KEY)
     assert raster is not None
@@ -897,7 +1002,7 @@ def test_the_refresh_cadence_is_not_a_tight_poll(radar, radar_calls):
     """This timer really does reach the network each time it fires."""
     controller, _widget = radar
     controller.set_enabled(True)
-    _pump(400)
+    _pump()
     assert controller._refresh_timer.interval() >= 60_000
 
 
@@ -905,13 +1010,13 @@ def test_an_opacity_change_costs_no_request(radar, radar_calls):
     """Dragging a slider must not re-download a full-extent frame."""
     controller, widget = radar
     controller.set_enabled(True)
-    _pump(600)
+    _pump()
     before = len(radar_calls)
     payload = widget.overlay(radar_mosaic.OVERLAY_KEY).image_bytes
 
     for value in (30, 45, 60, 75, 90):
         controller._opacity.setValue(value)
-    _pump(400)
+    _pump()
 
     assert len(radar_calls) == before, "an opacity drag issued a request"
     raster = widget.overlay(radar_mosaic.OVERLAY_KEY)
@@ -923,26 +1028,25 @@ def test_switching_product_detaches_the_previous_frame(radar, radar_calls):
     """Otherwise the old product shows under the new product's name."""
     controller, widget = radar
     controller.set_enabled(True)
-    _pump(600)
+    _pump()
     before = len(radar_calls)
 
     controller.set_product("echo-tops")
-    _pump(600)
+    _pump()
 
     assert len(radar_calls) == before + 1
     assert radar_calls[-1]["product"] == "echo-tops"
-    assert "echo tops" in widget.overlay(
-        radar_mosaic.OVERLAY_KEY).title.lower()
+    assert "echo tops" in widget.overlay(radar_mosaic.OVERLAY_KEY).title.lower()
 
 
 def test_switching_off_keeps_the_frame_but_stops_the_timer(radar, radar_calls):
     controller, widget = radar
     controller.set_enabled(True)
-    _pump(600)
+    _pump()
     before = len(radar_calls)
 
     controller.set_enabled(False)
-    _pump(400)
+    _pump()
 
     assert len(radar_calls) == before, "no request on the way out"
     assert not controller._refresh_timer.isActive()
@@ -954,13 +1058,13 @@ def test_switching_off_keeps_the_frame_but_stops_the_timer(radar, radar_calls):
 def test_switching_back_on_reuses_a_fresh_frame(radar, radar_calls):
     controller, widget = radar
     controller.set_enabled(True)
-    _pump(600)
+    _pump()
     controller.set_enabled(False)
-    _pump(200)
+    _pump()
     before = len(radar_calls)
 
     controller.set_enabled(True)
-    _pump(600)
+    _pump()
 
     assert len(radar_calls) == before, "a fresh frame must be reused"
     assert widget.is_overlay_visible(radar_mosaic.OVERLAY_KEY)
@@ -972,25 +1076,24 @@ def test_a_map_outside_coverage_spends_nothing(radar, radar_calls):
     _look_at(widget, EUROPE_VIEW)
 
     controller.set_enabled(True)
-    _pump(600)
+    _pump()
 
     assert radar_calls == [], "a request was spent on an invisible frame"
     assert not widget.is_overlay_visible(radar_mosaic.OVERLAY_KEY)
     assert "outside" in controller._status.text().lower()
 
 
-def test_panning_back_into_coverage_recovers_on_the_next_tick(radar,
-                                                             radar_calls):
+def test_panning_back_into_coverage_recovers_on_the_next_tick(radar, radar_calls):
     """The map emits no view-changed signal, so the timer is the recovery path."""
     controller, widget = radar
     _look_at(widget, EUROPE_VIEW)
     controller.set_enabled(True)
-    _pump(400)
+    _pump()
     assert radar_calls == []
 
     _look_at(widget, CONUS_VIEW)
     controller._on_refresh_tick()
-    _pump(600)
+    _pump()
 
     assert len(radar_calls) == 1
     assert widget.overlay(radar_mosaic.OVERLAY_KEY) is not None
@@ -1000,13 +1103,13 @@ def test_a_failure_leaves_the_previous_frame_on_screen(radar, radar_calls):
     """An ageing image plus a stated failure beats a blank map."""
     controller, widget = radar
     controller.set_enabled(True)
-    _pump(600)
+    _pump()
     kept = widget.overlay(radar_mosaic.OVERLAY_KEY)
     assert kept is not None
 
     radar_calls.failing = True
     controller.refresh()
-    _pump(600)
+    _pump()
 
     assert widget.overlay(radar_mosaic.OVERLAY_KEY) is kept
     assert "unavailable" in controller._status.text().lower()
@@ -1015,7 +1118,7 @@ def test_a_failure_leaves_the_previous_frame_on_screen(radar, radar_calls):
 def test_shutdown_is_bounded_and_repeatable(radar, radar_calls):
     controller, _widget = radar
     controller.set_enabled(True)
-    _pump(600)
+    _pump()
 
     controller.shutdown()
     assert not controller._refresh_timer.isActive()
@@ -1025,8 +1128,10 @@ def test_shutdown_is_bounded_and_repeatable(radar, radar_calls):
 
 def test_the_radar_controller_offers_every_audited_product(radar):
     controller, _widget = radar
-    offered = {controller._product.itemData(index)
-               for index in range(controller._product.count())}
+    offered = {
+        controller._product.itemData(index)
+        for index in range(controller._product.count())
+    }
     assert offered == set(radar_mosaic.PRODUCTS)
     assert controller.product() == radar_mosaic.DEFAULT_PRODUCT
 
@@ -1052,11 +1157,21 @@ def field_calls(monkeypatch):
 
     seen: list[dict] = []
 
-    def fake_fetch(product_key=None, *, valid_time=None, run=None, fxx=None,
-                   size=None, opacity=1.0, now=None, opener=None,
-                   should_cancel=None):
-        seen.append({"product": product_key, "valid_time": valid_time,
-                     "run": run, "fxx": fxx})
+    def fake_fetch(
+        product_key=None,
+        *,
+        valid_time=None,
+        run=None,
+        fxx=None,
+        size=None,
+        opacity=1.0,
+        now=None,
+        opener=None,
+        should_cancel=None,
+    ):
+        seen.append(
+            {"product": product_key, "valid_time": valid_time, "run": run, "fxx": fxx}
+        )
         return None
 
     monkeypatch.setattr(hrrr_field, "fetch_field", fake_fetch)
@@ -1195,20 +1310,17 @@ def test_a_pinned_hour_past_the_cycle_limit_is_normalised(field, field_calls):
     """A 13Z run stops at F18, so the controller must not request F030."""
     controller, _widget = field
 
-    controller.set_forecast_reference(
-        datetime(2026, 9, 4, 13, tzinfo=UTC), 30)
+    controller.set_forecast_reference(datetime(2026, 9, 4, 13, tzinfo=UTC), 30)
     _pump()
 
     assert field_calls[-1]["fxx"] == 18
 
 
-def test_field_retries_immediately_when_the_view_reenters_coverage(
-        qt_app, field_calls):
+def test_field_retries_immediately_when_the_view_reenters_coverage(qt_app, field_calls):
     widget = gui_maps.StationMapWidget([])
     widget.resize(640, 480)
     _look_at(widget, EUROPE_VIEW)
-    controller = gui_overlay_controls.HrrrFieldController(
-        widget, enabled=True)
+    controller = gui_overlay_controls.HrrrFieldController(widget, enabled=True)
     try:
         _pump()
         assert field_calls == []
@@ -1250,8 +1362,9 @@ def _first_site_id():
 def test_the_antenna_list_offers_every_catalogued_site(site_pinned):
     controller, _widget, _calls = site_pinned
 
-    offered = {controller._site.itemData(index)
-               for index in range(controller._site.count())}
+    offered = {
+        controller._site.itemData(index) for index in range(controller._site.count())
+    }
 
     assert gui_overlay_controls.SITE_AUTO in offered, "must offer 'nearest'"
     assert {entry.id for entry in radar_site.sites()} <= offered
@@ -1312,11 +1425,12 @@ def test_changing_antenna_detaches_the_previous_frame(site_pinned):
 
 
 def test_changing_site_product_while_off_discards_the_previous_frame(
-        radar_site_controller, radar_site_calls):
+    radar_site_controller, radar_site_calls
+):
     """Re-enable must fetch the selected product, not relabel the old raster."""
     controller, widget = radar_site_controller
     controller.set_enabled(True)
-    _pump(700)
+    _pump()
     assert widget.overlay(radar_site.OVERLAY_KEY) is not None
 
     controller.set_enabled(False)
@@ -1327,7 +1441,7 @@ def test_changing_site_product_while_off_discards_the_previous_frame(
     assert len(radar_site_calls) == before, "a disabled layer must stay silent"
 
     controller.set_enabled(True)
-    _pump(700)
+    _pump()
 
     assert len(radar_site_calls) == before + 1
     assert radar_site_calls[-1]["product"] == "velocity"
@@ -1337,8 +1451,7 @@ def test_changing_site_product_while_off_discards_the_previous_frame(
 def test_a_pinned_antenna_is_fetched_even_far_from_the_view(site_pinned):
     """The proximity test exists to *choose* a site, not to veto a named one."""
     controller, widget, calls = site_pinned
-    inland = next(entry for entry in radar_site.sites()
-                  if entry.id == "KTLX")
+    inland = next(entry for entry in radar_site.sites() if entry.id == "KTLX")
 
     controller.set_site(inland.id)
     _pump()
@@ -1402,25 +1515,34 @@ def test_a_pinned_antenna_only_offers_products_it_publishes(site_pinned):
     """Offering a product the site lacks fails with nothing the user can do."""
     controller, _widget, _calls = site_pinned
     limited = next(
-        (entry for entry in radar_site.sites()
-         if entry.products
-         and not all(entry.supports(spec)
-                     for spec in radar_site.available_products())),
-        None)
+        (
+            entry
+            for entry in radar_site.sites()
+            if entry.products
+            and not all(
+                entry.supports(spec) for spec in radar_site.available_products()
+            )
+        ),
+        None,
+    )
     if limited is None:
         pytest.skip("every catalogued site publishes every product")
 
     controller.set_site(limited.id)
 
-    offered = {controller._product.itemData(index)
-               for index in range(controller._product.count())}
-    unsupported = {spec.key for spec in radar_site.available_products()
-                   if not limited.supports(spec)}
+    offered = {
+        controller._product.itemData(index)
+        for index in range(controller._product.count())
+    }
+    unsupported = {
+        spec.key
+        for spec in radar_site.available_products()
+        if not limited.supports(spec)
+    }
     assert not (offered & unsupported)
 
 
-def test_a_disabled_controller_never_fetches_a_pinned_site(qt_app,
-                                                           radar_site_calls):
+def test_a_disabled_controller_never_fetches_a_pinned_site(qt_app, radar_site_calls):
     widget = gui_maps.StationMapWidget([])
     widget.resize(640, 480)
     _look_at(widget, CONUS_VIEW)
@@ -1489,8 +1611,9 @@ def test_the_pinned_antenna_is_marked_on_the_map(site_pinned):
     assert widget._radar_site_id == wanted
 
 
-def test_a_map_without_the_marker_layer_is_tolerated(monkeypatch, qt_app,
-                                                    radar_site_calls):
+def test_a_map_without_the_marker_layer_is_tolerated(
+    monkeypatch, qt_app, radar_site_calls
+):
     """The layer is duck-typed, exactly as ``view_bounds`` is.
 
     A map that does not carry the antenna markers must still be able to host the
@@ -1520,73 +1643,80 @@ def test_a_map_without_the_marker_layer_is_tolerated(monkeypatch, qt_app,
 NEW_ENGLAND_VIEW = (-72.0, -68.0, 41.0, 44.0)
 
 
-def test_moving_the_map_re_aims_the_automatic_antenna(radar_site_controller,
-                                                      radar_site_calls):
+def test_moving_the_map_re_aims_the_automatic_antenna(
+    radar_site_controller, radar_site_calls
+):
     controller, widget = radar_site_controller
     controller.set_enabled(True)
-    _pump(700)
+    _pump()
     assert radar_site_calls, "sanity: the first view fetched"
     before = len(radar_site_calls)
 
     _look_at(widget, NEW_ENGLAND_VIEW)
     controller.on_view_settled()
-    _pump(700)
+    _pump()
 
-    assert len(radar_site_calls) == before + 1, \
+    assert len(radar_site_calls) == before + 1, (
         "the map moved out from under the frame and nothing was refetched"
+    )
     serving = radar_site.site_for_view(NEW_ENGLAND_VIEW)
     assert serving, "sanity: New England is served by an antenna"
     assert widget._radar_site_id == serving[0].id
 
 
-def test_the_refetched_frame_covers_the_new_view(radar_site_controller,
-                                                 radar_site_calls):
+def test_the_refetched_frame_covers_the_new_view(
+    radar_site_controller, radar_site_calls
+):
     controller, widget = radar_site_controller
     controller.set_enabled(True)
-    _pump(700)
+    _pump()
 
     _look_at(widget, NEW_ENGLAND_VIEW)
     controller.on_view_settled()
-    _pump(700)
+    _pump()
 
     raster = widget.overlay(radar_site.OVERLAY_KEY)
     assert raster is not None
     lon0, lon1, lat0, lat1 = raster.bounds
     west, east, south, north = NEW_ENGLAND_VIEW
-    assert not (lon1 <= west or lon0 >= east or lat1 <= south or lat0 >= north), \
+    assert not (lon1 <= west or lon0 >= east or lat1 <= south or lat0 >= north), (
         "the attached frame does not reach the view it is drawn on"
+    )
 
 
 def test_staying_put_costs_nothing(radar_site_controller, radar_site_calls):
     """The same antenna still serving means there is nothing to do."""
     controller, _widget = radar_site_controller
     controller.set_enabled(True)
-    _pump(700)
+    _pump()
     before = len(radar_site_calls)
 
     for _ in range(5):
         controller.on_view_settled()
-    _pump(700)
+    _pump()
 
-    assert len(radar_site_calls) == before, \
+    assert len(radar_site_calls) == before, (
         "a settled view that changed nothing spent a request"
+    )
 
 
-def test_a_small_pan_within_one_antenna_costs_nothing(radar_site_controller,
-                                                      radar_site_calls):
+def test_a_small_pan_within_one_antenna_costs_nothing(
+    radar_site_controller, radar_site_calls
+):
     controller, widget = radar_site_controller
-    _look_at(widget, (-98.0, -96.0, 34.5, 36.0))    # Norman: KTLX serves it
+    _look_at(widget, (-98.0, -96.0, 34.5, 36.0))  # Norman: KTLX serves it
     controller.set_enabled(True)
-    _pump(700)
+    _pump()
     before = len(radar_site_calls)
     served = widget._radar_site_id
 
-    _look_at(widget, (-97.9, -95.9, 34.6, 36.1))    # nudged; same antenna
+    _look_at(widget, (-97.9, -95.9, 34.6, 36.1))  # nudged; same antenna
     controller.on_view_settled()
-    _pump(700)
+    _pump()
 
-    assert len(radar_site_calls) == before, \
+    assert len(radar_site_calls) == before, (
         "nudging the map inside one antenna's range must not refetch"
+    )
     assert widget._radar_site_id == served
 
 
@@ -1595,12 +1725,12 @@ def test_panning_does_not_retract_a_named_antenna(site_pinned):
     controller, widget, calls = site_pinned
     wanted = "KTLX"
     controller.set_site(wanted)
-    _pump(700)
+    _pump()
     before = len(calls)
 
     _look_at(widget, NEW_ENGLAND_VIEW)
     controller.on_view_settled()
-    _pump(700)
+    _pump()
 
     assert controller.site() == wanted
     assert len(calls) == before, "a pinned antenna needs no refetch on a pan"
@@ -1610,39 +1740,42 @@ def test_the_mosaic_ignores_a_moved_map(radar, radar_calls):
     """The composite is national, so its content does not follow the view."""
     controller, widget = radar
     controller.set_enabled(True)
-    _pump(600)
+    _pump()
     before = len(radar_calls)
 
     _look_at(widget, NEW_ENGLAND_VIEW)
     controller.on_view_settled()
-    _pump(600)
+    _pump()
 
-    assert len(radar_calls) == before, \
+    assert len(radar_calls) == before, (
         "re-fetching a national composite on every pan is pure waste"
+    )
 
 
-def test_a_switched_off_layer_ignores_a_moved_map(radar_site_controller,
-                                                 radar_site_calls):
+def test_a_switched_off_layer_ignores_a_moved_map(
+    radar_site_controller, radar_site_calls
+):
     controller, widget = radar_site_controller
     assert not controller.is_enabled()
 
     _look_at(widget, NEW_ENGLAND_VIEW)
     controller.on_view_settled()
-    _pump(600)
+    _pump()
 
     assert radar_site_calls == [], "an overlay that is off must stay silent"
 
 
 def test_panning_out_of_range_says_so_instead_of_leaving_a_stale_frame(
-        radar_site_controller, radar_site_calls):
+    radar_site_controller, radar_site_calls
+):
     controller, widget = radar_site_controller
     controller.set_enabled(True)
-    _pump(700)
+    _pump()
     assert widget.is_overlay_visible(radar_site.OVERLAY_KEY)
 
-    _look_at(widget, (-1.0, 1.0, 50.5, 52.5))   # London
+    _look_at(widget, (-1.0, 1.0, 50.5, 52.5))  # London
     controller.on_view_settled()
-    _pump(700)
+    _pump()
 
     assert not widget.is_overlay_visible(radar_site.OVERLAY_KEY)
     assert "within range" in controller._status.text()

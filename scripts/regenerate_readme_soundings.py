@@ -31,7 +31,7 @@ HRRR_SOURCE = (
 )
 OAX_SOURCE = ROOT / "examples" / "soundings" / "14061619.OAX"
 MAIN_OUTPUT = ROOT / "examples" / "example_sounding.png"
-VERSIONED_OUTPUT = ROOT / "docs" / "images" / "v1.1.0"
+VERSIONED_OUTPUT = ROOT / "docs" / "images" / "v1.2.0"
 
 HRRR_RUN = datetime(2026, 6, 25, 6, tzinfo=timezone.utc)
 HRRR_VALID = datetime(2026, 6, 26, 0, tzinfo=timezone.utc)

@@ -276,18 +276,44 @@ The parcel table and Skew-T labels include the **maximum parcel level (MPL)**
 alongside LCL, LFC, and EL. MPL is derived from the edited profile; it is not a
 directly editable observation.
 
+### Use the analysis workspace
+
+Choose **View → Analysis Workspace** or press `Ctrl+Shift+A` in a sounding
+window:
+
+- **Trends** plots one selected parameter over a forecast timeline, leaves a
+  visible gap for every missing hour, activates a valid time when its point is
+  clicked, and exports the displayed series to CSV.
+- **Compare** uses the reference sounding's exact valid time. It shows MLCAPE,
+  MLCIN, 0–6 km shear, 0–1 km SRH, and effective-layer STP plus deltas for each
+  loaded model/run; a nonmatching time is reported as unavailable rather than
+  silently paired with a nearby hour.
+- **Ensemble** shows the number of available members, p10/median/p90 parameter
+  distributions, and pressure-level p10–p90 temperature/dewpoint envelopes.
+  The envelope's temperature axis is fixed at **-50 to +50 °C** with a zero
+  guide so every ensemble uses the same geometry.
+- **Notes** stores free-form decisions and uncertainty with the session.
+
+From the forecast picker, **Workspace…** acquires different models, successive
+runs, or ensemble members for one point and exact valid time, then opens the
+appropriate tab. The batch is bounded, cached, cancellable, and keeps successful
+soundings available when another requested member fails.
+
 ### Save and reopen an analysis session
 
 Choose **File → Save Analysis Session…** (`Ctrl+Shift+E`) in a sounding window
-to preserve all loaded soundings in that viewer, the active sounding/time/
-member, current profile and interpolation state, storm motion, parcel
-selection, and supported viewer state. Choose **Open Analysis Session…**
-(`Ctrl+Shift+O`) from the picker or a sounding window to restore everything in
-one multi-sounding viewer, independent of the normal combine-soundings setting.
+to preserve all loaded soundings and times, the active sounding/member, current
+profile and interpolation state, storm motion, parcel selection, visible panel,
+fit/exact zoom, picker map extent, analysis tab/controls/notes, and overlay
+descriptors. Choose **Open Analysis Session…** (`Ctrl+Shift+O`) from the picker
+or a sounding window to restore everything in one multi-sounding viewer,
+independent of the normal combine-soundings setting.
 
 The `.sharpmod-session` file is versioned JSON, not pickle, and is validated
-before a viewer is created. It contains decoded profile state only—never source
-GRIB downloads—so the existing delete-on-viewer-close cleanup remains intact.
+before a viewer is created. It contains decoded profile state and lightweight
+overlay provenance only—never source GRIB downloads or raster/vector payloads—
+so the existing delete-on-viewer-close cleanup remains intact and overlays can
+be refetched from their descriptors.
 
 ### Save from the GUI
 
@@ -295,13 +321,29 @@ The sounding window's **Export** menu writes the current view:
 
 - **Export Image (HD PNG)** (`Ctrl+E`) — a 2x high-density image of the whole
   window including the mounted derived-parameter panels, defaulting to
-  `STATION_YYYYMMDDHHZ_hd.png` on your Desktop.
+  `STATION_YYYYMMDDHHZ_hd.png`.
 - **Export Image (UHD PNG)** — a larger 2.8x ultra-high-density image,
   defaulting to `STATION_YYYYMMDDHHZ_uhd.png`.
 - **Export Image (Lossless PNG)** — the original-size compact/lossless image,
   defaulting to `STATION_YYYYMMDDHHZ_lossless.png`.
 - **Export Text (SHARPpy)** — the focused profile as a text file that loads
   straight back into the app (or into `sharpmod-render`).
+
+All export/save dialogs begin in `rendered_soundings` beside the source project
+or installed application. The same rule covers analysis sessions, trend and
+comparison CSV, box PNG/CSV/GeoJSON, saved-location JSON, and the upstream
+**File → Save Image** / **Save Text** actions. **Open Export Folder** opens that
+exact directory. SHARPpy Reimagined creates it when needed and reports a clear
+path-specific error if it cannot create or write it; it never silently falls
+back to Desktop, Documents, Downloads, or the user home directory. Choosing a
+different destination is a one-export override and is not used to seed the next
+dialog or a later application run.
+
+From the command line, `sharpmod-render INPUT` defaults to
+`rendered_soundings/sharpmod_sounding.png` beside the application. Supplying
+`sharpmod-render INPUT OUTPUT` keeps the explicit output path.
+Point-sounding extractors likewise put default `.npz`/`.json` pairs and unnamed
+`--render` PNGs there, while preserving every explicit output path.
 
 ### Standalone build (no Python required)
 
@@ -351,7 +393,7 @@ uwyo-sounding fetch "Norman" "2024-05-20 00" --out oun.npz
 
 # Fetch AND open it in the app (render to PNG) in one step
 uwyo-sounding fetch 72357 "2024-05-20 00" --out oun.npz --render oun.png
-uwyo-sounding fetch 72357 "2024-05-20 00" --render        # PNG next to the .npz
+uwyo-sounding fetch 72357 "2024-05-20 00" --render        # PNG in rendered_soundings
 ```
 
 Time accepts `YYYY-MM-DD HH` (UTC), `YYYY-MM-DD HH:MM`, or ISO-8601. Radiosondes
@@ -936,7 +978,7 @@ render("oun.npz", "oun_sfc.png", parcel="SFC")
 
 # Or the thin helper used by the extractor CLIs:
 from sharpmod.tools import render_npz
-render_npz("oun.npz")                 # -> oun.png (PNG next to the .npz)
+render_npz("oun.npz")                 # -> rendered_soundings/oun.png
 ```
 
 ### Useful environment variables

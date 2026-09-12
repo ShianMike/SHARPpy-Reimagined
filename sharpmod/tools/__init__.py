@@ -23,17 +23,20 @@ def render_npz(npz_path: str, png_path: str | None = None, **kwargs) -> str:
     npz_path : str
         Path to the ``.npz`` point sounding to render.
     png_path : str, optional
-        Output PNG path. Defaults to the ``.npz`` stem with a ``.png`` suffix.
+        Output PNG path. Defaults to the ``.npz`` filename stem inside the
+        application's dedicated ``rendered_soundings`` export directory.
 
     Returns
     -------
     str
         The written PNG path.
     """
-    import os
+    from pathlib import Path
 
+    from sharpmod.export_paths import export_file_path
     from sharpmod.render import render
 
     if png_path is None:
-        png_path = os.path.splitext(npz_path)[0] + ".png"
+        default_name = Path(npz_path).with_suffix(".png").name
+        png_path = str(export_file_path(default_name))
     return render(npz_path, png_path, **kwargs)

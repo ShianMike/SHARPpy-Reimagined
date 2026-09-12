@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -17,6 +18,7 @@ from sharpmod.render_patch_registry import (
     detected_sharppy_version,
     validate_sharppy_version,
 )
+from sharpmod.render_patch_groups import PANEL_PATCHES, patch_names_for_panel
 
 
 def test_installed_sharppy_version_is_explicitly_supported():
@@ -65,6 +67,28 @@ def test_registry_preserves_order_and_reports_installed_names():
     assert installed == ("first", "second")
 
 
+def test_real_patch_installer_failure_is_named_and_not_silenced(monkeypatch):
+    """A missing vendored module must stop startup with the patch name."""
+    original_import = builtins.__import__
+
+    def fail_skew_import(name, *args, **kwargs):
+        if name == "sharppy.viz.skew":
+            raise ImportError("simulated missing skew module")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(render, "_title_override_installed", False)
+    monkeypatch.setattr(builtins, "__import__", fail_skew_import)
+
+    with pytest.raises(
+        RenderPatchError,
+        match=r"title\.override.*simulated missing skew module",
+    ):
+        apply_patch_registry(
+            [PatchSpec("title.override", render._install_title_override)],
+            sharppy_version="1.4.0a5",
+        )
+
+
 def test_renderer_declares_one_named_spec_per_patch_installer():
     patches = render.render_patch_specs()
     names = [patch.name for patch in patches]
@@ -106,6 +130,22 @@ def test_renderer_declares_one_named_spec_per_patch_installer():
             names.index(panel_fit)
             < names.index("panels.match-skewt-frames")
         ), panel_fit
+
+
+def test_patch_declarations_have_explicit_panel_ownership():
+    assert len(PANEL_PATCHES) == 37
+    assert patch_names_for_panel("hodo") == (
+        "hodo.0500",
+        "hodo.zoom",
+        "hodo.mean-wind-default",
+        "hodo.interpolation-menu",
+        "hodo.label-fit",
+        "hodo.locator",
+        "hodo.height-levels",
+        "hodo.storm-motion-label-transparency",
+    )
+    assert "skewt.surface-label-mask" in patch_names_for_panel("skewt")
+    assert PANEL_PATCHES[-1].panel == "panels"
 
 
 def test_the_lapse_rate_label_patch_installs_on_the_vendored_skewt():

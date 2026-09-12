@@ -240,7 +240,17 @@ def test_release_workflow_gates_tag_and_source_versions():
         "${{ needs.resolve-release.outputs.source_sha }}"
     )
     build = jobs["build-windows-exe"]
-    assert set(build["needs"]) == {"resolve-release", "test-release"}
+    # The build overlaps the test matrix rather than queueing behind the serial
+    # gate it does not depend on. Publishing is the job that must not proceed
+    # until every lane has passed, so that is asserted here too: without it,
+    # dropping test-release from the build would weaken the release gate.
+    assert set(build["needs"]) == {"resolve-release"}
+    assert set(jobs["publish"]["needs"]) == {
+        "resolve-release",
+        "test-release",
+        "build-windows-exe",
+        "attest-windows-release",
+    }
     checkout = next(
         step for step in build["steps"]
         if step.get("name") == "Check out tested release source"

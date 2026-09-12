@@ -25,25 +25,30 @@ from sharpmod.gui_common import (
     _render,
     _show_controls_dialog,
 )
+from sharpmod.export_paths import (
+    ExportDirectoryError,
+    export_directory,
+    export_file_path,
+)
 from sharpmod.gui_sessions import _install_analysis_actions
 from sharpmod.gui_settings import (
     _ParcelDialog,
     _apply_default_parcel_to_window,
     _apply_unit_preferences_to_window,
 )
+from sharpmod.gui_shell import dock_title_bar
 from sharpmod.theme import (
     CONTROL_H,
     FIELD_W,
     OBJ_CANVAS_HOST,
-    OBJ_DOCK_TITLE,
     OBJ_GHOST,
-    OBJ_HEADER_BAR,
     OBJ_HINT,
     OBJ_NAV_RAIL,
     OBJ_NUMERIC,
     OBJ_REPORT,
     OBJ_SECTION_LABEL,
     OBJ_SIDEBAR,
+    OBJ_STATUS,
     PROP_COMPACT,
     SPACE,
     VIEWER_SIDEBAR_W,
@@ -53,13 +58,32 @@ from sharpmod.theme import (
 _setup_done = False
 
 from qtpy.QtCore import (
-    Qt, QThread, QTimer, Signal, QDate, QSettings, QPoint, QPointF, QRectF,
-    QSize, QUrl,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+    QDate,
+    QSettings,
+    QPoint,
+    QPointF,
+    QRectF,
+    QSize,
+    QUrl,
 )
 from qtpy.QtGui import (
-    QAction, QActionGroup,
-    QPainter, QColor, QPen, QBrush, QPolygonF, QFont, QPixmap, QIcon,
-    QTransform, QDesktopServices, QWheelEvent,
+    QAction,
+    QActionGroup,
+    QPainter,
+    QColor,
+    QPen,
+    QBrush,
+    QPolygonF,
+    QFont,
+    QPixmap,
+    QIcon,
+    QTransform,
+    QDesktopServices,
+    QWheelEvent,
 )
 from qtpy.QtWidgets import (
     QApplication,
@@ -179,7 +203,8 @@ class _SoundingLevelEditorDialog(QDialog):
 
         self._apply_level_order_bounds()
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self
+        )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)
@@ -187,20 +212,16 @@ class _SoundingLevelEditorDialog(QDialog):
     def _apply_level_order_bounds(self) -> None:
         """Constrain pressure and height so the vertical order stays valid."""
         pres = self._inputs["pres"]
-        below_pres = _nearest_valid_neighbor(
-            self._prof, "pres", self._idx, -1)
-        above_pres = _nearest_valid_neighbor(
-            self._prof, "pres", self._idx, 1)
+        below_pres = _nearest_valid_neighbor(self._prof, "pres", self._idx, -1)
+        above_pres = _nearest_valid_neighbor(self._prof, "pres", self._idx, 1)
         if above_pres is not None:
             pres.setMinimum(above_pres + 0.1)
         if below_pres is not None:
             pres.setMaximum(below_pres - 0.1)
 
         hght = self._inputs["hght"]
-        below_hght = _nearest_valid_neighbor(
-            self._prof, "hght", self._idx, -1)
-        above_hght = _nearest_valid_neighbor(
-            self._prof, "hght", self._idx, 1)
+        below_hght = _nearest_valid_neighbor(self._prof, "hght", self._idx, -1)
+        above_hght = _nearest_valid_neighbor(self._prof, "hght", self._idx, 1)
         if below_hght is not None:
             hght.setMinimum(below_hght + 0.1)
         if above_hght is not None:
@@ -214,14 +235,17 @@ class _SoundingLevelEditorDialog(QDialog):
             if spin.isEnabled() and field in self._original
         }
         if not any(
-                not np.isclose(value, self._original[field], atol=0.049)
-                for field, value in values.items()):
+            not np.isclose(value, self._original[field], atol=0.049)
+            for field, value in values.items()
+        ):
             return {}
         if values.get("dwpc", -np.inf) > values.get("tmpc", np.inf):
             raise ValueError("Dewpoint cannot exceed temperature.")
         # Send the whole editable level. ProfileCollection can then retain one
         # coherent original snapshot and Reset Skew-T can restore every field.
         return values
+
+
 def _ensure_setup(app) -> None:
     """Install fonts + the renderer's vendored-widget monkeypatches once.
 
@@ -242,6 +266,43 @@ def _ensure_setup(app) -> None:
     _setup_done = True
 
 
+def _record_install_failure(win, feature: str, error: BaseException) -> None:
+    """Expose an optional viewer-tool failure without blocking the sounding.
+
+    Optional chrome should not make a usable sounding fail to open, but logging
+    alone made a missing menu or workspace indistinguishable from a feature the
+    application never shipped. Keep the detailed exception on the window and
+    add one persistent status-bar indicator whose tooltip lists every failure.
+    """
+    detail = f"{str(feature).strip()}: {type(error).__name__}: {error}"
+    failures = getattr(win, "_sharpmod_install_failures", None)
+    if not isinstance(failures, list):
+        failures = []
+        win._sharpmod_install_failures = failures
+    if detail not in failures:
+        failures.append(detail)
+
+    try:
+        status = win.statusBar()
+        label = getattr(win, "_sharpmod_install_failure_label", None)
+        if label is None:
+            label = QLabel("Setup issue", win)
+            label.setObjectName(OBJ_STATUS)
+            status.addPermanentWidget(label)
+            win._sharpmod_install_failure_label = label
+        label.setText(
+            "Setup issue" if len(failures) == 1 else f"Setup issues ({len(failures)})"
+        )
+        label.setToolTip("\n".join(failures))
+        status.showMessage(
+            f"{feature} is unavailable; hover over Setup issue for details."
+        )
+    except (AttributeError, RuntimeError):
+        # The exception is still retained on the window and already logged by
+        # the caller; a partially destroyed status bar cannot be made visible.
+        return
+
+
 def _fill_metadata(prof_col, stn_id, model=None, run=None, loc=None) -> None:
     """Fill the metadata the title/header rendering dereferences.
 
@@ -257,8 +318,9 @@ def _fill_metadata(prof_col, stn_id, model=None, run=None, loc=None) -> None:
         prof_col.setMeta("loc", loc)
 
     has = lambda k: k in prof_col._meta  # noqa: E731
-    base = prof_col.getMeta("base_time") if has("base_time") \
-        else prof_col.getCurrentDate()
+    base = (
+        prof_col.getMeta("base_time") if has("base_time") else prof_col.getCurrentDate()
+    )
     observed = prof_col.getMeta("observed") if has("observed") else True
     if not has("loc"):
         prof_col.setMeta("loc", stn_id)
@@ -326,6 +388,28 @@ def _controller_model_field(controller):
         return None
 
 
+def _controller_locator_spec(controller):
+    """Return the picker's explicit locator-overlay selection, if any."""
+    getter = getattr(controller, "selected_locator_spec", None)
+    if not callable(getter):
+        return None
+    try:
+        return getter()
+    except Exception:  # noqa: BLE001 - a preference is not worth an exception
+        return None
+
+
+def _collection_locator_spec(collection):
+    """Return a selection persisted with a collection, if one exists."""
+    from sharpmod.locator_overlay import SELECTION_META_KEY
+
+    try:
+        value = collection.getMeta(SELECTION_META_KEY)
+    except Exception:
+        value = None
+    return value if isinstance(value, str) else None
+
+
 def attach_locator_model_field(win, prof_col, controller) -> bool:
     """Carry the picker's gridded field onto this sounding's locator inset.
 
@@ -342,6 +426,7 @@ def attach_locator_model_field(win, prof_col, controller) -> bool:
         return False
     try:
         from sharpmod.map_overlays import attach_locator_overlay
+
         attach_locator_overlay(prof_col, raster, key=raster.key)
     except Exception:  # noqa: BLE001 - the field is optional
         return False
@@ -369,8 +454,183 @@ def _repaint_locator_insets(win) -> None:
             continue
 
 
-def start_locator_overlay_fetch(win, prof_col, *, product=None,
-                                controller=None) -> None:
+def _locator_selection(spec):
+    """Return the families the user asked for, or ``None`` for "not stated".
+
+    ``None`` is distinct from an empty selection: a caller that says nothing gets
+    the historical behaviour of showing whatever the picker had, while a caller
+    that explicitly selects nothing gets a bare inset.
+    """
+    if spec is None:
+        return None
+    try:
+        from sharpmod import locator_overlay
+
+        return {item.family: item for item in locator_overlay.parse(spec)}
+    except Exception:  # noqa: BLE001 - a stored selection is not trusted
+        return {}
+
+
+def _track_locator_worker(win, worker) -> None:
+    """Retain one application-owned worker and cancel it with its viewer."""
+    window = weakref.ref(win)
+    tracked = getattr(win, "_sharpmod_overlay_workers", None)
+    if tracked is None:
+        tracked = []
+        win._sharpmod_overlay_workers = tracked
+    tracked.append(worker)
+
+    def _finished() -> None:
+        host = window()
+        if host is not None:
+            remaining = getattr(host, "_sharpmod_overlay_workers", None)
+            if isinstance(remaining, list):
+                remaining[:] = [item for item in remaining if item is not worker]
+        worker.deleteLater()
+
+    worker.finished.connect(_finished)
+    try:
+        win.destroyed.connect(worker.requestInterruption)
+    except (AttributeError, RuntimeError):
+        pass
+    worker.start()
+
+
+def _collection_meta(collection, key, default=None):
+    try:
+        value = collection.getMeta(key)
+    except Exception:
+        value = default
+    return default if value is None else value
+
+
+def _risk_selection_for_product(selection, product, valid_time=None):
+    """Point a bare ``risk`` selection at the hazard the picker has selected.
+
+    The locator control only offers families, so it can never say ``risk:torn``
+    -- it produces a bare ``risk``, which :func:`sharpmod.locator_overlay.fetch`
+    resolves to the categorical outlook. Opening a sounding while looking at the
+    tornado, wind, or hail probability therefore silently switched the inset back
+    to categorical.
+
+    The substitution applies to every outlook day, and to every hazard the map
+    can be showing. Two cases deliberately keep the categorical fallback:
+
+    * a product named in the spec wins, because that is an explicit request from
+      the command line or a restored session and must outrank the live map; and
+    * a product SPC publishes nothing for at this valid time is left alone.
+      Asked in general -- rather than by hardcoding which product covers which
+      day -- because the answer is not a fixed rule: the hazard probabilities go
+      unpublished from Day 3 out, and nothing at all is published beyond Day 3 or
+      before the archive begins. Substituting regardless would trade a usable
+      categorical outlook for an empty inset.
+    """
+    from sharpmod import locator_overlay
+
+    risk = selection.get(locator_overlay.FAMILY_RISK)
+    if risk is None or risk.product is not None or not product:
+        return selection
+    from sharpmod import spc_outlook
+
+    if not spc_outlook.product_publishes(valid_time, product):
+        return selection
+    resolved = dict(selection)
+    resolved[locator_overlay.FAMILY_RISK] = locator_overlay.Selection(
+        locator_overlay.FAMILY_RISK, str(product)
+    )
+    return resolved
+
+
+def _start_explicit_locator_fetch(
+    win, prof_col, selection, controller, product=None
+) -> None:
+    """Fetch every explicitly selected family on one cooperative worker."""
+    from sharpmod import locator_overlay
+    from sharpmod.gui_locator_fetch import LocatorOverlayWorker
+    from sharpmod.map_overlays import attach_locator_overlay
+
+    valid = None
+    try:
+        valid = prof_col.getCurrentDate()
+    except (AttributeError, KeyError, TypeError, IndexError):
+        pass
+    if isinstance(valid, datetime):
+        valid = (
+            valid.replace(tzinfo=timezone.utc)
+            if valid.tzinfo is None
+            else valid.astimezone(timezone.utc)
+        )
+    # After ``valid`` is normalized: whether a hazard can be honoured depends on
+    # which outlook day this sounding falls in.
+    selection = _risk_selection_for_product(selection, product, valid)
+    lat, lon = _locator_overlay_point(prof_col)
+
+    # An explicit selection replaces prior context. This also makes "none"
+    # deterministic when a collection is reused in an existing viewer.
+    for key in locator_overlay.OVERLAY_KEYS.values():
+        attach_locator_overlay(prof_col, None, key=key)
+
+    pending = list(selection.values())
+    field = selection.get(locator_overlay.FAMILY_HRRR)
+    raster = _controller_model_field(controller) if field is not None else None
+    if raster is not None:
+        raster_product = str(getattr(raster, "short_name", "") or "")
+        raster_valid = getattr(raster, "valid_time", None)
+        product_matches = field.product is None or raster_product == field.product
+        time_matches = valid is None or raster_valid is None or raster_valid == valid
+        if product_matches and time_matches:
+            attach_locator_overlay(prof_col, raster, key=field.key)
+            pending = [item for item in pending if item.family != field.family]
+            _repaint_locator_insets(win)
+
+    if not pending:
+        return
+    run = _collection_meta(prof_col, "run")
+    if isinstance(run, datetime):
+        run = (
+            run.replace(tzinfo=timezone.utc)
+            if run.tzinfo is None
+            else run.astimezone(timezone.utc)
+        )
+    fxx = _collection_meta(prof_col, "fxx")
+    if fxx is None and isinstance(run, datetime) and isinstance(valid, datetime):
+        fxx = int(round((valid - run).total_seconds() / 3600.0))
+    try:
+        fxx = None if fxx is None else int(fxx)
+    except (TypeError, ValueError):
+        fxx = None
+
+    collection = weakref.ref(prof_col)
+    window = weakref.ref(win)
+
+    def _on_loaded(key, layer) -> None:
+        target = collection()
+        host = window()
+        if target is None or host is None:
+            return
+        try:
+            attach_locator_overlay(target, layer, key=str(key))
+        except Exception:  # noqa: BLE001 - optional visual context
+            return
+        if layer is not None:
+            _repaint_locator_insets(host)
+
+    worker = LocatorOverlayWorker(
+        pending,
+        lat=lat,
+        lon=lon,
+        valid_time=valid,
+        run=run,
+        fxx=fxx,
+        parent=QApplication.instance(),
+    )
+    worker.loaded.connect(_on_loaded)
+    _track_locator_worker(win, worker)
+
+
+def start_locator_overlay_fetch(
+    win, prof_col, *, product=None, controller=None, spec=None
+) -> None:
     """Fetch this sounding's map overlay and attach it for the locator inset.
 
     Runs on a worker thread and attaches the result to the profile collection,
@@ -378,15 +638,50 @@ def start_locator_overlay_fetch(win, prof_col, *, product=None,
     never touch the network -- an unreachable service would otherwise stall a
     hodograph repaint.
 
+    ``spec`` is a :mod:`sharpmod.locator_overlay` selection string. Omitting it
+    keeps the previous behaviour of carrying whatever the picker was drawing,
+    which is what a caller with no control of its own wants.
+
     Silent by design. The overlay is context on a locator thumbnail, so a
     missing outlook, a sounding outside the forecast area, or a failed request
     all simply leave the inset as it was rather than reporting anything.
     """
-    # The gridded field first and unconditionally: it needs no network, and it
-    # must reach the inset even for a sounding the convective outlook does not
-    # cover -- the outlook is CONUS-and-issued, a model field is neither.
-    if attach_locator_model_field(win, prof_col, controller):
-        _repaint_locator_insets(win)
+    if product is None:
+        # Resolved here rather than trusted from the caller so every entry point
+        # -- viewer, reopened session, CLI -- lands on the same hazard.
+        product = _controller_overlay_product(controller)
+
+    selection = _locator_selection(spec)
+    if spec is not None:
+        try:
+            from sharpmod.locator_overlay import SELECTION_META_KEY
+
+            # Deliberately the spec as selected, before the live hazard is folded
+            # in: persisting the resolved hazard would pin a reopened collection
+            # to whatever was on the map the first time it was opened.
+            normalized = ",".join(item.spec() for item in selection.values())
+            prof_col.setMeta(SELECTION_META_KEY, normalized or "none")
+        except Exception:  # noqa: BLE001 - optional provenance only
+            pass
+
+    if selection is not None:
+        try:
+            # ``product`` has to travel with the selection: this is the branch the
+            # GUI always takes, because a picker with a locator control returns a
+            # spec string ("risk", "none", ...) rather than None.
+            _start_explicit_locator_fetch(
+                win, prof_col, selection, controller, product
+            )
+        except Exception:  # noqa: BLE001 - overlays cannot block a sounding
+            _LOGGER.debug("locator_overlay.selection_failed", exc_info=True)
+        return
+
+    # The gridded field first: it needs no network, and it must reach the inset
+    # even for a sounding the convective outlook does not cover -- the outlook is
+    # CONUS-and-issued, a model field is neither.
+    if selection is None or "hrrr" in selection:
+        if attach_locator_model_field(win, prof_col, controller):
+            _repaint_locator_insets(win)
 
     try:
         from sharpmod import spc_outlook
@@ -395,6 +690,9 @@ def start_locator_overlay_fetch(win, prof_col, *, product=None,
     except Exception:  # noqa: BLE001 - the overlay is optional
         return
 
+    # No spec-vs-product merge here: this branch only runs when ``spec`` was
+    # None, so ``selection`` is None too and there is nothing to merge. The
+    # explicit branch above owns that reconciliation.
     valid = None
     try:
         valid = prof_col.getCurrentDate()
@@ -420,8 +718,7 @@ def start_locator_overlay_fetch(win, prof_col, *, product=None,
         if target is None or host is None:
             return
         try:
-            attach_locator_overlay(
-                target, layer, key=spc_outlook.OVERLAY_KEY)
+            attach_locator_overlay(target, layer, key=spc_outlook.OVERLAY_KEY)
         except Exception:  # noqa: BLE001
             return
         if layer:
@@ -435,29 +732,11 @@ def start_locator_overlay_fetch(win, prof_col, *, product=None,
     # viewer closed is simply dropped.
     app_parent = QApplication.instance()
     worker = _SpcOutlookWorker(
-        valid, 0, parent=app_parent,
-        product=product or spc_outlook.DEFAULT_PRODUCT)
+        valid, 0, parent=app_parent, product=product or spc_outlook.DEFAULT_PRODUCT
+    )
     worker.loaded.connect(_on_loaded)
 
-    # Tracked on the window purely so it is observable, and pruned on completion
-    # so opening many soundings does not accumulate finished threads.
-    tracked = getattr(win, "_sharpmod_overlay_workers", None)
-    if tracked is None:
-        tracked = []
-        win._sharpmod_overlay_workers = tracked
-    tracked.append(worker)
-
-    def _finished() -> None:
-        host = window()
-        if host is not None:
-            remaining = getattr(host, "_sharpmod_overlay_workers", None)
-            if isinstance(remaining, list):
-                remaining[:] = [
-                    item for item in remaining if item is not worker]
-        worker.deleteLater()
-
-    worker.finished.connect(_finished)
-    worker.start()
+    _track_locator_worker(win, worker)
 
 
 def _settle_layout_events(app, passes: int = 2) -> None:
@@ -522,8 +801,7 @@ def _install_viewer_lifecycle(win, controller) -> None:
             return
         viewers = getattr(owner, "_viewers", None)
         if isinstance(viewers, list):
-            viewers[:] = [viewer for viewer in viewers
-                          if id(viewer) != viewer_id]
+            viewers[:] = [viewer for viewer in viewers if id(viewer) != viewer_id]
         # SPCWindow's interconnected widgets/signals form Python cycles. Qt has
         # deleted the native tree at this point, but waiting for an arbitrary
         # later cyclic-GC pass retains roughly one viewer's heap per close.
@@ -534,8 +812,9 @@ def _install_viewer_lifecycle(win, controller) -> None:
     win.destroyed.connect(_release_reference)
 
 
-def compose_interactive(config, prof_col, controller, *, stn_id=None,
-                        model=None, run=None, loc=None):
+def compose_interactive(
+    config, prof_col, controller, *, stn_id=None, model=None, run=None, loc=None
+):
     """Compose and show a fully interactive SPC-style sounding window.
 
     Builds the *real* upstream :class:`sharppy.viz.SPCWindow.SPCWindow` (a
@@ -567,9 +846,16 @@ def compose_interactive(config, prof_col, controller, *, stn_id=None,
     # can land during them. The hazard follows whatever the picker has selected,
     # so opening a sounding from a tornado-probability map does not silently
     # switch the inset to the categorical outlook.
+    locator_spec = _collection_locator_spec(prof_col)
+    if locator_spec is None:
+        locator_spec = _controller_locator_spec(controller)
     start_locator_overlay_fetch(
-        win, prof_col, product=_controller_overlay_product(controller),
-        controller=controller)
+        win,
+        prof_col,
+        product=_controller_overlay_product(controller),
+        controller=controller,
+        spec=locator_spec,
+    )
 
     # The vendored SPCWindow.__initUI calls self.show() as soon as it is
     # constructed, so an empty white window flashes on screen while we still
@@ -619,8 +905,9 @@ def compose_interactive(config, prof_col, controller, *, stn_id=None,
         from sharpmod.gui_timeline import install_timeline_controls
 
         install_timeline_controls(win, prof_col)
-    except Exception:
+    except Exception as exc:
         _LOGGER.exception("forecast_timeline.install_failed")
+        _record_install_failure(win, "Forecast timeline", exc)
     try:
         _apply_unit_preferences_to_window(win, controller._config())
     except Exception:
@@ -649,6 +936,16 @@ def compose_interactive(config, prof_col, controller, *, stn_id=None,
     # Quality button triggers that action, and after _install_view_controls
     # because its show/hide toggle is added to the View menu.
     _install_sounding_sidebar(win)
+    # Cross-sounding analysis stays in its own lazy dock.  Installing it after
+    # the context sidebar lets Qt tabify the two right-hand tools; the analysis
+    # dock starts hidden and performs no metric work until opened.
+    try:
+        from sharpmod.gui_analysis_workspace import install_analysis_workspace
+
+        install_analysis_workspace(win)
+    except Exception as exc:
+        _LOGGER.exception("analysis_workspace.install_failed")
+        _record_install_failure(win, "Analysis workspace", exc)
 
     # Fill the top strip with a compact interaction tip bar (also the on-screen
     # how-to). Done last so it wraps the fully composed spc_widget.
@@ -685,8 +982,9 @@ class _FixedSoundingScrollArea(QScrollArea):
     def __init__(self, widget, natural_size, parent=None):
         super().__init__(parent)
         self._widget = widget
-        self._natural_size = QSize(max(1, natural_size.width()),
-                                   max(1, natural_size.height()))
+        self._natural_size = QSize(
+            max(1, natural_size.width()), max(1, natural_size.height())
+        )
         self.setFrameShape(QFrame.NoFrame)
         self.setWidgetResizable(False)
         self.setAlignment(Qt.AlignCenter)
@@ -770,8 +1068,9 @@ class _ScaledSoundingView(QGraphicsView):
 
     def __init__(self, widget, natural_size, parent=None):
         super().__init__(parent)
-        self._natural = QSize(max(1, natural_size.width()),
-                              max(1, natural_size.height()))
+        self._natural = QSize(
+            max(1, natural_size.width()), max(1, natural_size.height())
+        )
         self._widget = widget
         self._fit_mode = True
         self._scale = 1.0
@@ -787,8 +1086,10 @@ class _ScaledSoundingView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setRenderHints(
-            QPainter.Antialiasing | QPainter.TextAntialiasing
-            | QPainter.SmoothPixmapTransform)
+            QPainter.Antialiasing
+            | QPainter.TextAntialiasing
+            | QPainter.SmoothPixmapTransform
+        )
         # Pin the sounding to the top of the view so any spare vertical space
         # (e.g. when the window is maximized or taller than the scaled canvas)
         # collects at the bottom instead of leaving a gap above the Skew-T.
@@ -807,8 +1108,7 @@ class _ScaledSoundingView(QGraphicsView):
         # sounding outside the fitted area -- and fit mode turns the scrollbars
         # off, so the lower index rows were silently unreachable.
         proxy.setPos(0, 0)
-        scene.setSceneRect(0, 0, self._natural.width(),
-                           self._natural.height())
+        scene.setSceneRect(0, 0, self._natural.width(), self._natural.height())
         self.setScene(scene)
 
     # -- scale state -------------------------------------------------------- #
@@ -825,8 +1125,11 @@ class _ScaledSoundingView(QGraphicsView):
         vp = self.viewport().size()
         if vp.width() <= 1 or vp.height() <= 1:
             return 1.0
-        return min(vp.width() / self._natural.width(),
-                   vp.height() / self._natural.height(), 1.0)
+        return min(
+            vp.width() / self._natural.width(),
+            vp.height() / self._natural.height(),
+            1.0,
+        )
 
     def _apply_scale(self, scale: float) -> None:
         scale = max(self.MIN_SCALE, min(float(scale), self.MAX_SCALE))
@@ -835,8 +1138,7 @@ class _ScaledSoundingView(QGraphicsView):
         self.scaleChanged.emit(scale)
 
     def _set_scrollbars_for_mode(self) -> None:
-        policy = (Qt.ScrollBarAlwaysOff if self._fit_mode
-                  else Qt.ScrollBarAsNeeded)
+        policy = Qt.ScrollBarAlwaysOff if self._fit_mode else Qt.ScrollBarAsNeeded
         self.setHorizontalScrollBarPolicy(policy)
         self.setVerticalScrollBarPolicy(policy)
 
@@ -926,8 +1228,9 @@ class _ScaledSoundingView(QGraphicsView):
         puts the zoom anchor exactly under the cursor, because the position is
         computed here rather than taken on trust.
         """
-        position = (event.position().toPoint()
-                    if hasattr(event, "position") else event.pos())
+        position = (
+            event.position().toPoint() if hasattr(event, "position") else event.pos()
+        )
         target, local = self._panel_under(position)
         if target is None:
             return False
@@ -937,9 +1240,15 @@ class _ScaledSoundingView(QGraphicsView):
             return False
 
         synthetic = QWheelEvent(
-            QPointF(local), QPointF(target.mapToGlobal(local)),
-            QPoint(0, 0), QPoint(0, delta),
-            Qt.NoButton, Qt.NoModifier, Qt.NoScrollPhase, False)
+            QPointF(local),
+            QPointF(target.mapToGlobal(local)),
+            QPoint(0, 0),
+            QPoint(0, delta),
+            Qt.NoButton,
+            Qt.NoModifier,
+            Qt.NoScrollPhase,
+            False,
+        )
         QApplication.sendEvent(target, synthetic)
         return True
 
@@ -987,10 +1296,15 @@ class _ScaledSoundingView(QGraphicsView):
     def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt override
         """Begin a middle-button pan, or hand the event to the canvas."""
         if event.button() == Qt.MiddleButton:
-            self._pan_origin = event.position().toPoint() \
-                if hasattr(event, "position") else event.pos()
-            self._pan_scroll = (self.horizontalScrollBar().value(),
-                                self.verticalScrollBar().value())
+            self._pan_origin = (
+                event.position().toPoint()
+                if hasattr(event, "position")
+                else event.pos()
+            )
+            self._pan_scroll = (
+                self.horizontalScrollBar().value(),
+                self.verticalScrollBar().value(),
+            )
             self.viewport().setCursor(Qt.ClosedHandCursor)
             event.accept()
             return
@@ -998,8 +1312,11 @@ class _ScaledSoundingView(QGraphicsView):
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802 - Qt override
         if self._pan_origin is not None and self._pan_scroll is not None:
-            position = (event.position().toPoint()
-                        if hasattr(event, "position") else event.pos())
+            position = (
+                event.position().toPoint()
+                if hasattr(event, "position")
+                else event.pos()
+            )
             delta = position - self._pan_origin
             h_start, v_start = self._pan_scroll
             self.horizontalScrollBar().setValue(h_start - delta.x())
@@ -1133,8 +1450,7 @@ def _finalize_scaled_fit(app, win) -> None:
             nat = view._natural_size
             new_w = nat.width() + chrome_w
             new_h = nat.height() + chrome_h
-            if new_w + frame_w <= scr.width() \
-                    and new_h + frame_h <= scr.height():
+            if new_w + frame_w <= scr.width() and new_h + frame_h <= scr.height():
                 win.resize(new_w, new_h)
         elif isinstance(view, _ScaledSoundingView):
             nat = view._natural
@@ -1153,8 +1469,7 @@ def _finalize_scaled_fit(app, win) -> None:
             new_w = vp_w + chrome_w
             new_h = vp_h + chrome_h
 
-            if abs(new_w - win.width()) > 2 \
-                    or abs(new_h - win.height()) > 2:
+            if abs(new_w - win.width()) > 2 or abs(new_h - win.height()) > 2:
                 win.resize(new_w, new_h)
             view._refit()
         else:
@@ -1202,7 +1517,8 @@ def _install_view_controls(win) -> None:
         act_fit.setToolTip(
             "Scale the whole sounding to fit the window, and stay fitted as it "
             "resizes.\nShows everything, but small type is slightly softened by "
-            "the scaling.")
+            "the scaling."
+        )
         actions["fit"] = act_fit
 
         act_actual = QAction("Actual Size", win)
@@ -1211,7 +1527,8 @@ def _install_view_controls(win) -> None:
         act_actual.setToolTip(
             "Show the sounding at 1:1 (100%).\nThe sharpest view -- the canvas "
             "is drawn at this size, so nothing is resampled. Middle-drag to "
-            "reach the lower panels.")
+            "reach the lower panels."
+        )
         actions["actual"] = act_actual
 
         act_in = QAction("Zoom In", win)
@@ -1256,8 +1573,10 @@ def _install_view_controls(win) -> None:
         # its own bounds, so these are the authoritative range.
         slider = QSlider(Qt.Horizontal)
         slider.setObjectName("zoomSlider")
-        slider.setRange(int(_ScaledSoundingView.MIN_SCALE * 100),
-                        int(_ScaledSoundingView.MAX_SCALE * 100))
+        slider.setRange(
+            int(_ScaledSoundingView.MIN_SCALE * 100),
+            int(_ScaledSoundingView.MAX_SCALE * 100),
+        )
         slider.setValue(100)
         slider.setFixedWidth(ZOOM_SLIDER_W)
         slider.setToolTip("Drag to zoom")
@@ -1282,8 +1601,9 @@ def _install_view_controls(win) -> None:
         win._sharpmod_zoom_readout = readout
         win._sharpmod_zoom_slider = slider
         win._sharpmod_view_toolbar = bar
-    except Exception:
+    except Exception as exc:
         _LOGGER.exception("view_controls.install_failed")
+        _record_install_failure(win, "View controls", exc)
 
 
 #: What each swappable panel is for, keyed by the vendored inset name.
@@ -1295,26 +1615,29 @@ def _install_view_controls(win) -> None:
 _PANEL_TOOLTIPS = {
     "STP STATS": (
         "Significant-tornado parameter against its climatology, with the "
-        "probability of a significant tornado given a supercell."),
+        "probability of a significant tornado given a supercell."
+    ),
     "COND STP": (
         "Conditional EF-scale probabilities derived from the significant-tornado "
-        "parameter."),
+        "parameter."
+    ),
     "VROT": (
-        "Conditional EF-scale probabilities derived from radar rotational "
-        "velocity."),
-    "SHIP": (
-        "Significant-hail parameter against its climatology."),
+        "Conditional EF-scale probabilities derived from radar rotational velocity."
+    ),
+    "SHIP": ("Significant-hail parameter against its climatology."),
     "FIRE": (
         "Fire weather: Fosberg index, Haines index, mixed-layer depth, transport "
         "wind, ventilation rate, and low-level moisture.\nAlso marks the mixing "
-        "height on the Skew-T."),
+        "height on the Skew-T."
+    ),
     "WINTER": (
         "Winter weather: dendritic growth zone, its moisture and omega, and the "
         "best-guess precipitation type.\nAlso marks the dendritic growth zone on "
-        "the Skew-T."),
+        "the Skew-T."
+    ),
     "SARS": (
-        "Sounding analogues: the closest historical soundings and what they "
-        "produced."),
+        "Sounding analogues: the closest historical soundings and what they produced."
+    ),
 }
 
 
@@ -1332,13 +1655,14 @@ def show_sounding_panel(win, key: str) -> bool:
     if sw is None or not key:
         return False
     if getattr(sw, "right_inset", None) == key:
-        return False        # already showing; nothing to do
+        return False  # already showing; nothing to do
     try:
         # Rebuilt exactly as a right-click would: the vendored swap reads its
         # target from ``menu_ag``'s checked action and ``inset_to_swap``.
         sw.makeInsetMenu(sw.left_inset, sw.right_inset)
-        action = next((item for item in sw.menu_ag.actions()
-                       if item.data() == key), None)
+        action = next(
+            (item for item in sw.menu_ag.actions() if item.data() == key), None
+        )
         if action is None:
             return False
         action.setChecked(True)
@@ -1373,9 +1697,11 @@ def _install_panel_menu(win) -> None:
         # The left inset is detached by the layout, so offering it would be a
         # menu entry that cannot do anything.
         detached = {getattr(sw, "left_inset", None)}
-        offered = [(key, label)
-                   for key, label in sorted(names.items(), key=lambda kv: kv[1])
-                   if key not in detached]
+        offered = [
+            (key, label)
+            for key, label in sorted(names.items(), key=lambda kv: kv[1])
+            if key not in detached
+        ]
         if not offered:
             return
 
@@ -1419,8 +1745,9 @@ def _install_panel_menu(win) -> None:
         sync()
         win._sharpmod_panel_menu = submenu
         win._sharpmod_panel_actions = actions
-    except Exception:
+    except Exception as exc:
         _LOGGER.exception("panel_menu.install_failed")
+        _record_install_failure(win, "Panel menu", exc)
 
 
 def _bind_view_controls(win) -> None:
@@ -1442,14 +1769,12 @@ def _bind_view_controls(win) -> None:
     if not isinstance(view, _ScaledSoundingView):
         for action in actions.values():
             action.setEnabled(False)
-            action.setToolTip(
-                "The sounding already fits this screen at actual size")
+            action.setToolTip("The sounding already fits this screen at actual size")
         if readout is not None:
             readout.setText("100%")
         if slider is not None:
             slider.setEnabled(False)
-            slider.setToolTip(
-                "The sounding already fits this screen at actual size")
+            slider.setToolTip("The sounding already fits this screen at actual size")
         return
 
     def _show_scale(scale: float) -> None:
@@ -1462,11 +1787,13 @@ def _bind_view_controls(win) -> None:
         fitted = view.is_fit_mode()
         if readout is not None:
             readout.setText(
-                f"Fit \u00b7 {scale * 100:.0f}%" if fitted
-                else f"{scale * 100:.0f}%")
+                f"Fit \u00b7 {scale * 100:.0f}%" if fitted else f"{scale * 100:.0f}%"
+            )
         # Reflect the mode without re-entering the triggered handlers.
-        for key, checked in (("fit", fitted),
-                             ("actual", not fitted and abs(scale - 1.0) < 1e-6)):
+        for key, checked in (
+            ("fit", fitted),
+            ("actual", not fitted and abs(scale - 1.0) < 1e-6),
+        ):
             action = actions.get(key)
             if action is None:
                 continue
@@ -1496,16 +1823,12 @@ def _bind_view_controls(win) -> None:
         # ``triggered`` on a checkable action passes the new checked state. Fit
         # must stay latched: clicking it while already fitted would otherwise
         # untick it and leave the mode label lying about the actual state.
-        actions["fit"].triggered.connect(
-            lambda _checked=False: view.fit_to_window())
-        actions["actual"].triggered.connect(
-            lambda _checked=False: view.zoom_to(1.0))
-        actions["in"].triggered.connect(
-            lambda _checked=False: view.zoom_in())
-        actions["out"].triggered.connect(
-            lambda _checked=False: view.zoom_out())
+        actions["fit"].triggered.connect(lambda _checked=False: view.fit_to_window())
+        actions["actual"].triggered.connect(lambda _checked=False: view.zoom_to(1.0))
+        actions["in"].triggered.connect(lambda _checked=False: view.zoom_in())
+        actions["out"].triggered.connect(lambda _checked=False: view.zoom_out())
         _show_scale(view.current_scale())
-    except Exception:
+    except Exception as exc:
         _LOGGER.exception("view_controls.bind_failed")
 
 
@@ -1602,13 +1925,14 @@ def _install_tip_bar(win, controller) -> None:
         # closing it left the window with no way to look anything up.
         win._sharpmod_tips = tips
         win._sharpmod_tips_settings = settings
-    except Exception:
+    except Exception as exc:
         # A tip hiccup must never block the interactive window -- but it must
         # not vanish either. _install_help_menu keys the "Show Interaction Tips"
         # item off ``_sharpmod_tips``, which is set on the last lines above, so
         # a failure anywhere before them silently drops that menu item while
         # leaving the window looking intact.
         _LOGGER.exception("tip_bar.install_failed")
+        _record_install_failure(win, "Interaction tips", exc)
 
 
 def _install_help_menu(win) -> None:
@@ -1660,7 +1984,8 @@ def _install_help_menu(win) -> None:
             # first click a visual no-op and hiding the strip take two clicks.
             show_tips.setChecked(tips.isVisibleTo(win))
             show_tips.setToolTip(
-                "The one-line reminder strip along the top of this window")
+                "The one-line reminder strip along the top of this window"
+            )
 
             def _toggle_tips(checked: bool) -> None:
                 tips.setVisible(checked)
@@ -1672,8 +1997,11 @@ def _install_help_menu(win) -> None:
             win._sharpmod_tips_action = show_tips
 
         win._sharpmod_help_menu = menu
-    except Exception:
+    except Exception as exc:
         _LOGGER.exception("help_menu.install_failed")
+        _record_install_failure(win, "Help menu", exc)
+
+
 def _install_parcel_selector(win) -> None:
     """Restore the legacy "Show Parcels" double-click on the parcel inset.
 
@@ -1723,8 +2051,7 @@ def _install_parcel_selector(win) -> None:
             win = win_ref()
             if win is None:
                 return
-            cur = list(getattr(conv, "pcl_types", None)
-                       or ["SFC", "ML", "FCST", "MU"])
+            cur = list(getattr(conv, "pcl_types", None) or ["SFC", "ML", "FCST", "MU"])
             dlg = _ParcelDialog(cur, _apply, parent=win)
             dlg.show()
             dlg.raise_()
@@ -1743,10 +2070,11 @@ def _install_parcel_selector(win) -> None:
 
         board.parcelDialogRequested.connect(_open_dialog)
         board.parcelClicked.connect(_select_parcel)
-    except Exception:
+    except Exception as exc:
         # Parcel-selector wiring must never block the interactive window, but a
         # silent failure here removes the parcel selector with no trace of why.
         _LOGGER.exception("parcel_selector.install_failed")
+        _record_install_failure(win, "Parcel selector", exc)
 
 
 def _install_level_editor(win) -> None:
@@ -1754,8 +2082,11 @@ def _install_level_editor(win) -> None:
     sw = getattr(win, "spc_widget", None)
     skewt = getattr(sw, "sound", None)
     popup = getattr(skewt, "popupmenu", None)
-    if skewt is None or popup is None or getattr(
-            skewt, "_sharpmod_level_editor_installed", False):
+    if (
+        skewt is None
+        or popup is None
+        or getattr(skewt, "_sharpmod_level_editor_installed", False)
+    ):
         return
 
     reset_action = None
@@ -1806,8 +2137,10 @@ def _install_level_editor(win) -> None:
         idx = _nearest_profile_level(prof, pressure)
         if idx is None:
             QMessageBox.warning(
-                win, "Edit Sounding Level",
-                "No valid pressure levels are available in this sounding.")
+                win,
+                "Edit Sounding Level",
+                "No valid pressure levels are available in this sounding.",
+            )
             return
 
         dialog = _SoundingLevelEditorDialog(prof, idx, parent=win)
@@ -1824,12 +2157,14 @@ def _install_level_editor(win) -> None:
             skewt.modified.emit(idx, changes)
             logging.info(
                 "Edited sounding level index=%d pressure=%.1f fields=%s",
-                idx, pressure, ",".join(changes),
+                idx,
+                pressure,
+                ",".join(changes),
             )
         except (AttributeError, TypeError, ValueError) as exc:
             QMessageBox.warning(
-                win, "Edit Sounding Level",
-                f"The sounding could not be updated:\n{exc}")
+                win, "Edit Sounding Level", f"The sounding could not be updated:\n{exc}"
+            )
 
     edit_action.triggered.connect(_edit_nearest_level)
     if reset_action is not None:
@@ -1839,8 +2174,8 @@ def _install_level_editor(win) -> None:
         except (RuntimeError, TypeError):
             pass
         reset_action.triggered.connect(
-            lambda: skewt.reset.emit(
-                ["pres", "hght", "tmpc", "dwpc", "wdir", "wspd"]))
+            lambda: skewt.reset.emit(["pres", "hght", "tmpc", "dwpc", "wdir", "wspd"])
+        )
     else:
         popup.addAction(edit_action)
 
@@ -1873,8 +2208,8 @@ def _install_export_menu(win, prof_col, controller) -> None:
     """Add an ``Export`` menu (image / text) to a composed sounding window.
 
     Improves on the vendored Save Image / Save Text by pre-filling a sensible
-    filename (station + cycle) and defaulting to the user's Desktop (or last
-    used export folder), so exports land somewhere findable. The image grab
+    filename (station + cycle) in the application-local export folder. The
+    image grab
     captures the whole window -- including the mounted derived-parameter panels
     -- and the text export writes the focused profile as a SHARPpy text file
     that loads back into the app.
@@ -1892,17 +2227,15 @@ def _install_export_menu(win, prof_col, controller) -> None:
     # after. See _install_fullscreen_action for the original of this pattern.
     win_ref = weakref.ref(win)
 
-    def _start_dir() -> str:
-        if settings is not None:
-            d = settings.value("export_dir", "", str)
-            if d and os.path.isdir(d):
-                return d
-        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-        return desktop if os.path.isdir(desktop) else os.path.expanduser("~")
-
-    def _remember(path: str) -> None:
-        if settings is not None:
-            settings.setValue("export_dir", os.path.dirname(path))
+    def _start_path(default_name: str) -> str | None:
+        win = win_ref()
+        if win is None:
+            return None
+        try:
+            return str(export_file_path(default_name, settings=settings))
+        except ExportDirectoryError as exc:
+            QMessageBox.critical(win, APP_NAME, str(exc))
+            return None
 
     def _notify(message: str) -> None:
         win = win_ref()
@@ -1920,25 +2253,24 @@ def _install_export_menu(win, prof_col, controller) -> None:
         labels = {
             getattr(R, "PNG_IMAGE_HD", "hd"): ("HD", "_hd"),
             getattr(R, "PNG_IMAGE_UHD", "uhd"): ("UHD", "_uhd"),
-            getattr(R, "PNG_IMAGE_LOSSLESS", "lossless"):
-                ("Lossless", "_lossless"),
+            getattr(R, "PNG_IMAGE_LOSSLESS", "lossless"): ("Lossless", "_lossless"),
         }
         label, suffix = labels.get(image_mode, ("HD", "_hd"))
         focused = _focused_profile_collection(win, prof_col)
         base = _default_export_basename(focused)
-        start = os.path.join(_start_dir(), base + suffix + ".png")
+        start = _start_path(base + suffix + ".png")
+        if start is None:
+            return
         fn, _ok = QFileDialog.getSaveFileName(
-            win, f"Export Sounding {label} Image", start,
-            "PNG image (*.png)")
+            win, f"Export Sounding {label} Image", start, "PNG image (*.png)"
+        )
         if fn:
             if not fn.lower().endswith(".png"):
                 fn += ".png"
             if R.save_widget_png(win.spc_widget, fn, image_mode=image_mode):
-                _remember(fn)
                 _notify(f"Exported {label.lower()} image to {fn}")
             else:
-                QMessageBox.warning(win, APP_NAME,
-                                    f"Could not export image:\n{fn}")
+                QMessageBox.warning(win, APP_NAME, f"Could not export image:\n{fn}")
 
     def copy_image() -> None:
         win = win_ref()
@@ -1949,8 +2281,7 @@ def _install_export_menu(win, prof_col, controller) -> None:
             QApplication.clipboard().setPixmap(pixmap)
             _notify("Sounding image copied to clipboard")
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.warning(win, APP_NAME,
-                                f"Could not copy image:\n{exc}")
+            QMessageBox.warning(win, APP_NAME, f"Could not copy image:\n{exc}")
 
     def export_text() -> None:
         win = win_ref()
@@ -1958,10 +2289,12 @@ def _install_export_menu(win, prof_col, controller) -> None:
             return
         focused = _focused_profile_collection(win, prof_col)
         base = _default_export_basename(focused)
-        start = os.path.join(_start_dir(), base + ".txt")
+        start = _start_path(base + ".txt")
+        if start is None:
+            return
         fn, _ok = QFileDialog.getSaveFileName(
-            win, "Export Sounding Text (SHARPpy)", start,
-            "SHARPpy text (*.txt)")
+            win, "Export Sounding Text (SHARPpy)", start, "SHARPpy text (*.txt)"
+        )
         if fn:
             if not fn.lower().endswith(".txt"):
                 fn += ".txt"
@@ -1969,26 +2302,39 @@ def _install_export_menu(win, prof_col, controller) -> None:
                 from sharpmod.io.sharppy_export import export_profile_to_sharppy
 
                 export_profile_to_sharppy(win.spc_widget.default_prof, fn)
-                _remember(fn)
                 _notify(f"Exported SHARPpy text to {fn}")
             except Exception as exc:  # noqa: BLE001
-                QMessageBox.warning(win, APP_NAME,
-                                    f"Could not export text:\n{exc}")
+                QMessageBox.warning(win, APP_NAME, f"Could not export text:\n{exc}")
+
+    def open_export_folder() -> None:
+        win = win_ref()
+        if win is None:
+            return
+        try:
+            directory = export_directory(settings=settings)
+        except ExportDirectoryError as exc:
+            QMessageBox.critical(win, APP_NAME, str(exc))
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory))):
+            QMessageBox.warning(
+                win,
+                APP_NAME,
+                f"The export folder could not be opened:\n{directory}",
+            )
 
     try:
         menu = win.menuBar().addMenu("Export")
         act_img = QAction("Export Image (HD PNG)\u2026", win)
         act_img.setShortcut("Ctrl+E")
-        act_img.triggered.connect(
-            lambda _checked=False: export_image(R.PNG_IMAGE_HD))
+        act_img.triggered.connect(lambda _checked=False: export_image(R.PNG_IMAGE_HD))
         menu.addAction(act_img)
         act_uhd = QAction("Export Image (UHD PNG)\u2026", win)
-        act_uhd.triggered.connect(
-            lambda _checked=False: export_image(R.PNG_IMAGE_UHD))
+        act_uhd.triggered.connect(lambda _checked=False: export_image(R.PNG_IMAGE_UHD))
         menu.addAction(act_uhd)
         act_lossless = QAction("Export Image (Lossless PNG)\u2026", win)
         act_lossless.triggered.connect(
-            lambda _checked=False: export_image(R.PNG_IMAGE_LOSSLESS))
+            lambda _checked=False: export_image(R.PNG_IMAGE_LOSSLESS)
+        )
         menu.addAction(act_lossless)
         act_copy = QAction("Copy Image to Clipboard", win)
         act_copy.setShortcut("Ctrl+Shift+C")
@@ -1997,9 +2343,14 @@ def _install_export_menu(win, prof_col, controller) -> None:
         act_txt = QAction("Export Text (SHARPpy)\u2026", win)
         act_txt.triggered.connect(export_text)
         menu.addAction(act_txt)
-    except Exception:
+        menu.addSeparator()
+        act_open = QAction("Open Export Folder", win)
+        act_open.triggered.connect(open_export_folder)
+        menu.addAction(act_open)
+    except Exception as exc:
         # Never let an export-menu hiccup block the interactive window.
         _LOGGER.exception("export_menu.install_failed")
+        _record_install_failure(win, "Export menu", exc)
 
 
 class _SoundingSidebar(QFrame):
@@ -2046,8 +2397,7 @@ class _SoundingSidebar(QFrame):
         self.setFixedWidth(VIEWER_SIDEBAR_W)
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(SPACE["md"], SPACE["md"],
-                                 SPACE["md"], SPACE["md"])
+        outer.setContentsMargins(SPACE["md"], SPACE["md"], SPACE["md"], SPACE["md"])
         outer.setSpacing(SPACE["md"])
 
         # --- Loaded soundings ---
@@ -2060,12 +2410,14 @@ class _SoundingSidebar(QFrame):
         self._list.setTextElideMode(Qt.ElideRight)
         self._list.setWordWrap(False)
         self._list.setToolTip(
-            "Click a sounding to bring it into focus (Space also cycles)")
+            "Click a sounding to bring it into focus (Space also cycles)"
+        )
         self._list.currentItemChanged.connect(self._on_pick)
         outer.addWidget(self._list)
 
         self._empty = QLabel(
-            "Open another sounding from the picker to compare it here.")
+            "Open another sounding from the picker to compare it here."
+        )
         self._empty.setObjectName(OBJ_HINT)
         self._empty.setWordWrap(True)
         outer.addWidget(self._empty)
@@ -2074,8 +2426,7 @@ class _SoundingSidebar(QFrame):
         # tertiary actions, and a borderless label floating under the list does
         # not read as clickable.
         self._remove = QPushButton("Remove Focused")
-        self._remove.setToolTip(
-            "Close the focused sounding and keep the others open")
+        self._remove.setToolTip("Close the focused sounding and keep the others open")
         self._remove.clicked.connect(self._on_remove)
         outer.addWidget(self._remove)
 
@@ -2089,7 +2440,8 @@ class _SoundingSidebar(QFrame):
         # reads as unfinished rather than spacious.
         self._members.setProperty(PROP_COMPACT, True)
         self._members.setToolTip(
-            "Highlight a member (the Up/Down arrows also step through these)")
+            "Highlight a member (the Up/Down arrows also step through these)"
+        )
         self._members.currentItemChanged.connect(self._on_member)
         outer.addWidget(self._members)
 
@@ -2098,8 +2450,8 @@ class _SoundingSidebar(QFrame):
         # --- Provenance ---
         self._inspect = QPushButton("Source && Quality\u2026")
         self._inspect.setToolTip(
-            "Extractor provenance and structural checks for the focused "
-            "sounding")
+            "Extractor provenance and structural checks for the focused sounding"
+        )
         self._inspect.clicked.connect(self._on_inspect)
         outer.addWidget(self._inspect)
 
@@ -2171,8 +2523,10 @@ class _SoundingSidebar(QFrame):
         # loaded: removing the last one would leave an empty window.
         self._remove.setEnabled(multiple)
         self._remove.setToolTip(
-            "Close the focused sounding and keep the others open" if multiple
-            else "The only loaded sounding cannot be removed")
+            "Close the focused sounding and keep the others open"
+            if multiple
+            else "The only loaded sounding cannot be removed"
+        )
         # Height-to-content, so a single sounding does not leave a tall empty
         # well above the member list.
         self._list.setFixedHeight(self._list_height(self._list, len(ids)))
@@ -2210,8 +2564,7 @@ class _SoundingSidebar(QFrame):
             self._members.addItem(item)
         if current in members:
             self._members.setCurrentRow(members.index(current))
-        self._members.setFixedHeight(
-            self._list_height(self._members, len(members)))
+        self._members.setFixedHeight(self._list_height(self._members, len(members)))
 
     @staticmethod
     def _list_height(widget: QListWidget, rows: int) -> int:
@@ -2296,44 +2649,19 @@ class _SoundingSidebar(QFrame):
             _LOGGER.exception("sounding_sidebar.member_failed")
 
     def _on_inspect(self) -> None:
-        action = getattr(self._window(), "_sharpmod_data_inspector_action",
-                         None)
+        action = getattr(self._window(), "_sharpmod_data_inspector_action", None)
         if action is not None:
             action.trigger()
 
 
 def _dock_title_bar(dock: QDockWidget, title: str) -> QFrame:
-    """Build a themed title bar with a properly sized close button.
+    """Themed sidebar title bar, carrying this dock's own toggle shortcut.
 
-    Replaces Qt's built-in dock title bar. The built-in one cannot be themed
-    usefully here: the Fusion style computes the close button's rectangle from
-    title-bar metrics and ignores a QSS ``width``/``height``, leaving a roughly
-    16x9px target -- and that button is the panel's only visible affordance for
-    dismissing it.
+    The shared implementation lives in :func:`sharpmod.gui_shell.dock_title_bar`
+    because the analysis workspace dock needs the same treatment; only the
+    advertised shortcut differs.
     """
-    bar = QFrame(dock)
-    bar.setObjectName(OBJ_HEADER_BAR)
-    row = QHBoxLayout(bar)
-    row.setContentsMargins(SPACE["md"], SPACE["xs"], SPACE["xs"], SPACE["xs"])
-    row.setSpacing(SPACE["sm"])
-
-    label = QLabel(title, bar)
-    label.setObjectName(OBJ_DOCK_TITLE)
-    row.addWidget(label)
-    row.addStretch(1)
-
-    close = QToolButton(bar)
-    close.setObjectName(OBJ_GHOST)
-    # Opts out of the shared button min-height, which would otherwise beat
-    # setFixedSize and inflate this header to 50px.
-    # Size comes from the style sheet, not setFixedSize: QStyleSheetStyle
-    # recomputes size constraints from QSS and would override it anyway.
-    close.setProperty(PROP_COMPACT, True)
-    close.setText("\u2715")
-    close.setToolTip(f"Hide the {title.lower()} (Ctrl+B)")
-    close.clicked.connect(dock.close)
-    row.addWidget(close)
-    return bar
+    return dock_title_bar(dock, title, shortcut_hint="Ctrl+B")
 
 
 def _reserved_toolbar_height(win) -> int:
@@ -2418,8 +2746,7 @@ def _install_sounding_sidebar(win) -> None:
 
         toggle = dock.toggleViewAction()
         toggle.setShortcut("Ctrl+B")
-        toggle.setToolTip(
-            "Show or hide the sounding list and ensemble members")
+        toggle.setToolTip("Show or hide the sounding list and ensemble members")
         menu = getattr(win, "_sharpmod_view_menu", None)
         if menu is not None:
             menu.addSeparator()
@@ -2433,8 +2760,7 @@ def _install_sounding_sidebar(win) -> None:
         # so wrapping it is what keeps the panel truthful without polling.
         sw = getattr(win, "spc_widget", None)
         original = getattr(sw, "updateProfs", None)
-        if original is not None \
-                and not getattr(sw, "_sharpmod_profs_wrapped", False):
+        if original is not None and not getattr(sw, "_sharpmod_profs_wrapped", False):
             # Weak, for the same reason the panel holds the window weakly: the
             # widget is a child of the window, so a strong capture here would
             # close a reference cycle Qt keeps alive outside Python's GC.
@@ -2448,12 +2774,21 @@ def _install_sounding_sidebar(win) -> None:
                         live.refresh()
                     except Exception:
                         _LOGGER.exception("sounding_sidebar.sync_failed")
+                    workspace = getattr(
+                        live._window(), "_sharpmod_analysis_workspace", None
+                    )
+                    if workspace is not None:
+                        try:
+                            workspace.refresh()
+                        except Exception:
+                            _LOGGER.exception("analysis_workspace.sync_failed")
                 return result
 
             sw.updateProfs = updateProfs
             sw._sharpmod_profs_wrapped = True
-    except Exception:
+    except Exception as exc:
         _LOGGER.exception("sounding_sidebar.install_failed")
+        _record_install_failure(win, "Sounding sidebar", exc)
 
 
 def _install_data_inspector(win, prof_col) -> None:
@@ -2529,8 +2864,9 @@ def _install_data_inspector(win, prof_col) -> None:
         action.triggered.connect(show_report)
         menu.addAction(action)
         win._sharpmod_data_inspector_action = action
-    except Exception:
+    except Exception as exc:
         _LOGGER.exception("data_inspector.install_failed")
+        _record_install_failure(win, "Data inspector", exc)
 
 
 def _install_units_menu(win, controller) -> None:
@@ -2556,5 +2892,6 @@ def _install_units_menu(win, controller) -> None:
 
         act_units.triggered.connect(_open_units)
         menu.addAction(act_units)
-    except Exception:
+    except Exception as exc:
         _LOGGER.exception("units_menu.install_failed")
+        _record_install_failure(win, "Units menu", exc)

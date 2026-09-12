@@ -40,9 +40,9 @@ SMALL_VIEWPORT = (1600, 900)
 
 
 @pytest.fixture
-def scaled_view(qt_app):
+def scaled_view(standard_qt_app):
     """A scaled sounding view over a fixed-size stand-in canvas."""
-    gui_theme.apply_theme(qt_app, color_style="standard")
+    qt_app = standard_qt_app
 
     window = QMainWindow()
     canvas = QWidget()
@@ -55,6 +55,7 @@ def scaled_view(qt_app):
         qt_app.processEvents()
     yield view, canvas, window
     window.close()
+    window.deleteLater()
 
 
 # ---------------------------------------------------------------------------
@@ -504,9 +505,9 @@ def test_ctrl_wheel_zooms_the_view(scaled_view, qt_app):
 
 
 @pytest.fixture
-def viewer_with_controls(qt_app):
+def viewer_with_controls(standard_qt_app):
     """A window carrying the View controls over a scalable host."""
-    gui_theme.apply_theme(qt_app, color_style="standard")
+    qt_app = standard_qt_app
 
     window = QMainWindow()
     gui_viewer._install_view_controls(window)
@@ -521,6 +522,7 @@ def viewer_with_controls(qt_app):
     gui_viewer._bind_view_controls(window)
     yield window, view
     window.close()
+    window.deleteLater()
 
 
 def test_view_controls_install_a_toolbar_and_menu(viewer_with_controls):

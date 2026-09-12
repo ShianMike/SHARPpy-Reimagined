@@ -79,8 +79,29 @@ def test_inspector_flags_order_supersaturation_and_negative_wind():
 
     codes = {item.code for item in inspect_profile(_Collection(profile))}
 
-    assert {"pressure-order", "dewpoint-above-temperature",
-            "negative-wind-speed", "shallow-profile"} <= codes
+    assert {
+        "pressure-order",
+        "dewpoint-above-temperature",
+        "negative-wind-speed",
+        "shallow-profile",
+    } <= codes
+
+
+def test_inspector_prefers_highlighted_ensemble_member():
+    first_member = _profile(wspd=np.array([-1, 5, 10, 15, 20, 25, 30, 35]))
+    highlighted_member = _profile()
+    collection = SimpleNamespace(
+        getHighlightedProf=lambda: highlighted_member,
+        getCurrentProfs=lambda: {
+            "first": first_member,
+            "highlighted": highlighted_member,
+        },
+        getMeta=lambda _key: None,
+    )
+
+    codes = {item.code for item in inspect_profile(collection)}
+
+    assert "negative-wind-speed" not in codes
 
 
 def test_npz_decoder_attaches_json_sidecar_provenance(tmp_path):
@@ -95,8 +116,12 @@ def test_npz_decoder_attaches_json_sidecar_provenance(tmp_path):
         wdir=np.linspace(180, 250, 8),
         wspd=np.linspace(5, 60, 8),
         omeg=np.zeros(8),
-        loc="TEST", lat=35.0, lon=-97.0, model="GFS",
-        run="2026-07-22 00:00", valid=valid,
+        loc="TEST",
+        lat=35.0,
+        lon=-97.0,
+        model="GFS",
+        run="2026-07-22 00:00",
+        valid=valid,
     )
     sidecar = {
         "model": "GFS",

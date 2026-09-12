@@ -1489,6 +1489,65 @@ class _SpcOutlookWorker(QThread):
 
 
 # ===========================================================================
+# Local storm report overlay worker
+# ===========================================================================
+class _StormReportsWorker(QThread):
+    """Fetch the storm reports around one valid time, off the GUI thread.
+
+    Shaped like :class:`_SpcOutlookWorker`, because it answers the same kind of
+    question -- what applies at this moment -- and is read against that outlook.
+    Two differences follow from what reports are:
+
+    * A window rather than an instant. Reports are discrete events, so a moment
+      alone would almost always be empty; the provider is asked for a span
+      centred on the selection.
+    * A view, when one is offered. Reports are points and the feed is national,
+      so passing the map's extent asks the service to send back only what can
+      actually be drawn instead of the continent.
+
+    "No reports in that window" is reported through :attr:`loaded` with a
+    ``None`` layer, not :attr:`failed`: a quiet day is the correct answer, not an
+    error worth alarming anyone about.
+    """
+
+    #: (token, valid_time, layer_or_None)
+    loaded = Signal(object, object, object)
+    #: (token, valid_time, human-readable message)
+    failed = Signal(object, object, str)
+
+    def __init__(self, valid_time, token: int, parent=None, view=None,
+                 window=None, span_deg=None):
+        super().__init__(parent)
+        self._valid_time = valid_time
+        self._view = view
+        self._window = window
+        self._span_deg = span_deg
+        self.token = token
+
+    def run(self):  # noqa: D401 - QThread entry point
+        if self.isInterruptionRequested():
+            return
+        try:
+            from sharpmod import storm_reports
+            window = self._window or storm_reports.DEFAULT_WINDOW
+            layer = storm_reports.fetch_layer(
+                window=window,
+                view=self._view,
+                around=self._valid_time,
+                span_deg=self._span_deg,
+                should_cancel=self.isInterruptionRequested,
+            )
+        except Exception as exc:  # noqa: BLE001 - never crash the UI thread
+            _LOGGER.debug("storm_reports.worker_failed valid=%s err=%s",
+                          self._valid_time, exc)
+            self.failed.emit(self.token, self._valid_time, str(exc))
+            return
+        if self.isInterruptionRequested():
+            return
+        self.loaded.emit(self.token, self._valid_time, layer)
+
+
+# ===========================================================================
 # Live radar mosaic overlay worker
 # ===========================================================================
 class _RadarMosaicWorker(QThread):

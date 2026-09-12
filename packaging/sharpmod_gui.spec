@@ -28,6 +28,7 @@ import importlib.machinery
 import importlib.util
 import os
 import runpy
+import sys
 
 from PyInstaller.utils.hooks import (
     collect_all,
@@ -48,6 +49,18 @@ RELEASE_BUILD = os.environ.get("SHARPMOD_RELEASE_BUILD", "0") == "1"
 # wheel that the official workflow installs.
 _REPO = os.path.dirname(SPECPATH)  # SPECPATH is this spec's dir (packaging/)
 _CONTRACT = runpy.run_path(os.path.join(SPECPATH, "release_contract.py"))
+if RELEASE_BUILD and sys.platform.startswith("win"):
+    _SYSTEM_ROOT = os.environ.get("SystemRoot")
+    if not _SYSTEM_ROOT:
+        raise RuntimeError("official Windows releases require SystemRoot")
+    os.environ["PATH"] = _CONTRACT["build_windows_release_dll_path"](
+        os.environ.get("PATH", ""),
+        python_prefix=sys.prefix,
+        base_prefix=sys.base_prefix,
+        python_executable=sys.executable,
+        system_root=_SYSTEM_ROOT,
+    )
+    print("Using hermetic Windows release DLL search path: " + os.environ["PATH"])
 _SOURCE_VERSION = _CONTRACT["read_source_version"](_REPO)
 _METADATA_REPORT = _CONTRACT["validate_installed_sharpmod"](
     _REPO,

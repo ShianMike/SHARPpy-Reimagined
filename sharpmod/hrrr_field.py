@@ -60,6 +60,7 @@ from sharpmod.hrrr_products import (
     Palette,
     get_product,
 )
+from sharpmod.lambert_grid import HRRR_GRID, HRRR_PROJ4
 from sharpmod.map_overlays import MAX_RASTER_BYTES, OverlayRaster
 
 _LOGGER = logging.getLogger("sharpmod.hrrr_field")
@@ -81,19 +82,28 @@ BUCKET = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com"
 #: ``longitudes`` arrays encoded in a live GRIB message: agreement is exact at
 #: all 1,905,141 grid points, so these constants are not an approximation of the
 #: grid, they are the grid.
-HRRR_SHAPE = (1059, 1799)
-HRRR_SPACING = 3000.0
-HRRR_X0 = -2697520.1425219304
-HRRR_Y0 = -1587306.1525566636
-HRRR_PROJ4 = ("+proj=lcc +lat_0=38.5 +lon_0=262.5 +lat_1=38.5 "
-              "+lat_2=38.5 +R=6371229 +units=m +no_defs")
+#:
+#: Held in :mod:`sharpmod.lambert_grid` rather than here, because the picker needs
+#: the same grid to draw the domain's real boundary and cannot import this module
+#: -- it would pull NumPy into the interface's startup path. These names stay as
+#: aliases so the reprojection below still reads as arithmetic on plain numbers.
+HRRR_SHAPE = HRRR_GRID.shape
+HRRR_SPACING = HRRR_GRID.spacing
+HRRR_X0 = HRRR_GRID.x0
+HRRR_Y0 = HRRR_GRID.y0
 
 #: Plate-carree frame the fields are rendered into.
 #:
-#: Fixed rather than derived from the viewport, for the same reasons the radar
-#: mosaic is: one render serves every picker map however each is panned, panning
-#: and zooming cost nothing because only the frame corners are re-projected, and
-#: the image stays glued to the basemap during the wheel-zoom preview.
+#: Fixed rather than derived from the viewport: one render serves every picker
+#: map however each is panned, panning and zooming cost nothing because only the
+#: frame corners are re-projected, and the image stays glued to the basemap
+#: during the wheel-zoom preview.
+#:
+#: Unlike the radar mosaic, there is also nothing to gain by narrowing it. That
+#: frame is about 1.5 km per pixel against MRMS's native 1 km, so it genuinely
+#: discards detail and a single-site request recovers it. This frame is already
+#: finer than its source -- see the oversampling note below -- so a smaller,
+#: denser window would interpolate rather than reveal.
 #:
 #: The bounds are the lon/lat envelope of the HRRR domain. Its Lambert edges bow,
 #: so an axis-aligned box necessarily includes corners outside the model -- those

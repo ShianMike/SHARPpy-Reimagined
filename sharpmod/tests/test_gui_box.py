@@ -1,6 +1,7 @@
 """Box sounding Qt layer: plan dialog, workers, and the analysis window."""
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -8,7 +9,7 @@ import pytest
 
 from qtpy.QtWidgets import QDialogButtonBox
 
-from sharpmod import batch_extract
+from sharpmod import gui_batch_process
 from sharpmod import box_analysis as ba
 from sharpmod.box_sounding import BoxRegion, plan_box_samples
 from sharpmod.tests._examples import examples_dir
@@ -153,9 +154,9 @@ def test_extract_worker_streams_cells_and_reports_a_result(
     plan = _plan()
     seen = {}
 
-    class FakeExtractor:
-        def __init__(self, progress_callback=None):
-            self.progress_callback = progress_callback
+    class FakeRunner:
+        def __init__(self):
+            pass
 
         def cancel(self):
             seen["cancelled"] = True
@@ -163,18 +164,18 @@ def test_extract_worker_streams_cells_and_reports_a_result(
         def run(self, requests, **kwargs):
             seen["ids"] = [item.id for item in requests]
             seen["workers"] = kwargs["max_workers"]
-            seen["resume"] = kwargs["resume"]
+            progress_callback = kwargs["progress_callback"]
             for item in requests[:-1]:
-                self.progress_callback({
+                progress_callback({
                     "event": "completed", "request_id": item.id})
-            self.progress_callback({
+            progress_callback({
                 "event": "failed", "request_id": requests[-1].id,
                 "error": {"message": "no surface contract"},
             })
             return SimpleNamespace(
                 completed=len(requests) - 1, failed=1, cancelled=0)
 
-    monkeypatch.setattr(batch_extract, "BatchExtractor", FakeExtractor)
+    monkeypatch.setattr(gui_batch_process, "IsolatedBatchRunner", FakeRunner)
     ready, failed, results, stages = [], [], [], []
     worker = BoxExtractWorker(plan, RUN, 18, tmp_path)
     worker.point_ready.connect(
@@ -190,7 +191,6 @@ def test_extract_worker_streams_cells_and_reports_a_result(
     assert seen["ids"] == [node.request_id for node in nodes]
     # A box is one model hour, so extra workers would only contend for it.
     assert seen["workers"] == 1
-    assert seen["resume"] is True
     assert len(ready) == len(nodes) - 1
     # Every streamed cell carries its lattice position.
     assert ready[0][1:] == (nodes[0].row, nodes[0].col)
@@ -219,7 +219,7 @@ def test_extract_worker_reports_an_extraction_failure(tmp_path, monkeypatch):
     from sharpmod.gui_box import BoxExtractWorker
 
     class Boom:
-        def __init__(self, progress_callback=None):
+        def __init__(self):
             pass
 
         def cancel(self):
@@ -228,7 +228,7 @@ def test_extract_worker_reports_an_extraction_failure(tmp_path, monkeypatch):
         def run(self, requests, **kwargs):
             raise RuntimeError("mirror unavailable")
 
-    monkeypatch.setattr(batch_extract, "BatchExtractor", Boom)
+    monkeypatch.setattr(gui_batch_process, "IsolatedBatchRunner", Boom)
     messages = []
     worker = BoxExtractWorker(_plan(), RUN, 0, tmp_path)
     worker.failed.connect(messages.append)
@@ -244,8 +244,8 @@ def test_extract_worker_forwards_cancellation_to_the_extractor(
     state = {}
 
     class Slow:
-        def __init__(self, progress_callback=None):
-            state["extractor"] = self
+        def __init__(self):
+            state["runner"] = self
             self.cancelled = False
 
         def cancel(self):
@@ -255,10 +255,10 @@ def test_extract_worker_forwards_cancellation_to_the_extractor(
             worker.requestInterruption()
             return SimpleNamespace(completed=0, failed=0, cancelled=1)
 
-    monkeypatch.setattr(batch_extract, "BatchExtractor", Slow)
+    monkeypatch.setattr(gui_batch_process, "IsolatedBatchRunner", Slow)
     worker = BoxExtractWorker(_plan(), RUN, 0, tmp_path)
     worker.run()
-    assert state["extractor"].cancelled is True
+    assert state["runner"].cancelled is True
 
 
 # -- analysis worker ------------------------------------------------------- #
@@ -300,7 +300,9 @@ def window(extraction, analysis):
     view.resize(1000, 700)
     view.set_extraction(extraction)
     view.set_analysis(analysis)
-    return view
+    yield view
+    view.close()
+    view.deleteLater()
 
 
 def test_window_frames_the_box_and_shows_the_model_domain(window, extraction):
@@ -617,7 +619,9 @@ def sequence_window(hour_sequence):
     view = BoxAnalysisWindow()
     view.resize(1000, 760)
     view.set_sequence(hour_sequence)
-    return view
+    yield view
+    view.close()
+    view.deleteLater()
 
 
 # -- extraction result shape ----------------------------------------------- #
@@ -651,9 +655,9 @@ def test_extract_worker_covers_several_hours(tmp_path, monkeypatch):
     plan = _plan()
     seen = {}
 
-    class FakeExtractor:
-        def __init__(self, progress_callback=None):
-            self.progress_callback = progress_callback
+    class FakeRunner:
+        def __init__(self):
+            pass
 
         def cancel(self):
             pass
@@ -662,13 +666,14 @@ def test_extract_worker_covers_several_hours(tmp_path, monkeypatch):
             seen["ids"] = [item.id for item in requests]
             seen["hours"] = sorted({item.fxx for item in requests})
             seen["workers"] = kwargs["max_workers"]
+            progress_callback = kwargs["progress_callback"]
             for item in requests:
-                self.progress_callback({
+                progress_callback({
                     "event": "completed", "request_id": item.id})
             return SimpleNamespace(
                 completed=len(requests), failed=0, cancelled=0)
 
-    monkeypatch.setattr(batch_extract, "BatchExtractor", FakeExtractor)
+    monkeypatch.setattr(gui_batch_process, "IsolatedBatchRunner", FakeRunner)
     results = []
     worker = BoxExtractWorker(plan, RUN, 0, tmp_path, hours=(0, 6, 12))
     worker.result_ready.connect(results.append)
@@ -697,9 +702,9 @@ def test_extract_worker_preserves_an_hour_when_all_of_its_nodes_fail(
 
     plan = _plan()
 
-    class PartialHourExtractor:
-        def __init__(self, progress_callback=None):
-            self.progress_callback = progress_callback
+    class PartialHourRunner:
+        def __init__(self):
+            pass
 
         def cancel(self):
             pass
@@ -707,14 +712,15 @@ def test_extract_worker_preserves_an_hour_when_all_of_its_nodes_fail(
         def run(self, requests, **kwargs):
             completed = 0
             failed = 0
+            progress_callback = kwargs["progress_callback"]
             for item in requests:
                 if item.fxx == 6:
                     completed += 1
-                    self.progress_callback({
+                    progress_callback({
                         "event": "completed", "request_id": item.id})
                 else:
                     failed += 1
-                    self.progress_callback({
+                    progress_callback({
                         "event": "failed", "request_id": item.id,
                         "error": {"message": "hour unavailable"},
                     })
@@ -722,7 +728,7 @@ def test_extract_worker_preserves_an_hour_when_all_of_its_nodes_fail(
                 completed=completed, failed=failed, cancelled=0)
 
     monkeypatch.setattr(
-        batch_extract, "BatchExtractor", PartialHourExtractor)
+        gui_batch_process, "IsolatedBatchRunner", PartialHourRunner)
     results = []
     worker = BoxExtractWorker(plan, RUN, 0, tmp_path, hours=(0, 6))
     worker.result_ready.connect(results.append)
@@ -872,7 +878,12 @@ def test_window_renders_a_sequence(sequence_window):
 @pytest.fixture
 def save_to(monkeypatch, tmp_path):
     """Answer every save dialog with a path under tmp_path."""
-    chosen = {}
+    from sharpmod import export_paths
+
+    application = tmp_path / "application"
+    application.mkdir()
+    monkeypatch.setattr(export_paths, "application_root", lambda: application)
+    chosen = {"application": application}
 
     def pick(_parent, caption, default_name, _filter):
         from pathlib import Path
@@ -901,6 +912,30 @@ def test_default_export_name_identifies_the_box(window):
     stem = window._export_stem()
     assert stem.startswith("hrrr_box_")
     assert stem.endswith("f018")
+
+
+def test_export_dialog_starts_in_the_dedicated_folder(window, save_to):
+    window.export_csv()
+
+    assert Path(save_to["default"]).parent == (
+        save_to["application"] / "rendered_soundings"
+    )
+
+
+def test_open_export_folder_matches_every_box_dialog_default(
+        window, save_to, monkeypatch):
+    from sharpmod import gui_box
+
+    opened = []
+    monkeypatch.setattr(
+        gui_box.QDesktopServices,
+        "openUrl",
+        lambda url: opened.append(Path(url.toLocalFile())) or True,
+    )
+
+    window.open_export_folder()
+
+    assert opened == [save_to["application"] / "rendered_soundings"]
 
 
 def test_export_field_png_writes_an_image(window, save_to):

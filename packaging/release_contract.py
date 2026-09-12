@@ -12,6 +12,7 @@ import argparse
 import ast
 import importlib.metadata as importlib_metadata
 import json
+import os
 from pathlib import Path
 import re
 from typing import Any
@@ -145,6 +146,67 @@ def validate_installed_sharpmod(
             else "egg-info"
         ),
     }
+
+
+def build_windows_release_dll_path(
+    current_path: str,
+    *,
+    python_prefix: str | Path,
+    base_prefix: str | Path,
+    python_executable: str | Path,
+    system_root: str | Path,
+) -> str:
+    """Return a hermetic DLL search path for an official Windows freeze.
+
+    PyInstaller resolves transitive PE imports through ``PATH``.  An unrelated
+    developer tool can therefore contribute a same-named DLL to the bundle;
+    notably, a full ICU ``icuuc.dll`` exports version-suffixed symbols while
+    Qt 6 expects Windows' unsuffixed ICU forwarding API.  Keep only the active
+    Python installations and Windows itself, while explicitly retaining the
+    interpreter directories needed by ``_ssl`` and the bootloader.
+    """
+
+    prefix = Path(python_prefix).resolve()
+    base = Path(base_prefix).resolve()
+    windows = Path(system_root).resolve()
+    trusted_roots = (prefix, base, windows)
+    required = (
+        Path(python_executable).resolve().parent,
+        prefix,
+        prefix / "DLLs",
+        base,
+        base / "DLLs",
+        windows / "System32",
+        windows,
+    )
+    inherited = (
+        Path(part.strip().strip('"'))
+        for part in current_path.split(os.pathsep)
+        if part.strip().strip('"')
+    )
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for candidate in (*required, *inherited):
+        resolved = candidate.resolve()
+        if not resolved.is_dir():
+            continue
+        if not any(
+            resolved == root or root in resolved.parents
+            for root in trusted_roots
+        ):
+            continue
+        key = os.path.normcase(str(resolved))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(str(resolved))
+
+    if not result:
+        raise ReleaseContractError(
+            "official Windows release has no trusted DLL search directories"
+        )
+    return os.pathsep.join(result)
 
 
 def build_windows_version_info(repo_root: str | Path):

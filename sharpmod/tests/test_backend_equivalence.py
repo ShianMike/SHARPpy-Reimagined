@@ -16,8 +16,12 @@ from sharpmod.backends.parcels import (
     downdraft_to_raw,
     parcel_ascent_to_raw,
     parcel_workspace_to_raw,
+    profile_thermodynamics_to_raw,
 )
-from sharpmod.backends.protocol import BACKEND_API_VERSION
+from sharpmod.backends.protocol import (
+    BACKEND_API_VERSION,
+    DEFAULT_BATCH_THREADS,
+)
 from sharpmod.backends.python_backend import PythonBackend
 from sharpmod.backends.rust_backend import RustBackend
 
@@ -78,10 +82,65 @@ def _assert_equivalent(python_value, rust_value, *, atol=1e-12):
     )
 
 
+def _split_trace_buffer(raw, buffer_index):
+    buffer = np.asarray(raw[buffer_index], dtype=np.float64)
+    offsets = np.asarray(raw[4], dtype=np.intp)
+    return tuple(
+        buffer[start:stop]
+        for start, stop in zip(offsets[:-1], offsets[1:])
+    )
+
+
+def _assert_convective_raw_equivalent(python_raw, rust_raw):
+    np.testing.assert_allclose(
+        rust_raw[0],
+        python_raw[0],
+        rtol=3e-2,
+        atol=5.1,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        rust_raw[1],
+        python_raw[1],
+        rtol=0.0,
+        atol=5.1,
+        equal_nan=True,
+    )
+    for python_pressure, rust_pressure in zip(
+        _split_trace_buffer(python_raw, 2),
+        _split_trace_buffer(rust_raw, 2),
+    ):
+        np.testing.assert_allclose(
+            rust_pressure,
+            python_pressure,
+            rtol=0.0,
+            atol=0.6,
+        )
+    for python_temperature, rust_temperature in zip(
+        _split_trace_buffer(python_raw, 3),
+        _split_trace_buffer(rust_raw, 3),
+    ):
+        np.testing.assert_allclose(
+            rust_temperature,
+            python_temperature,
+            rtol=0.0,
+            atol=0.05,
+        )
 def _assert_pair_equivalent(python_pair, rust_pair, *, atol=1e-12):
     assert len(python_pair) == len(rust_pair) == 2
     _assert_equivalent(python_pair[0], rust_pair[0], atol=atol)
     _assert_equivalent(python_pair[1], rust_pair[1], atol=atol)
+
+
+def _batch_profile(levels, marker=0.0):
+    pres = np.geomspace(1000.0, 100.0, levels)
+    hght = 44330.0 * (1.0 - (pres / 1013.25) ** 0.1903)
+    tmpc = 31.0 + marker - (7.2 * np.minimum(hght, 12000.0) / 1000.0)
+    tmpc += 1.4 * np.maximum(hght - 12000.0, 0.0) / 1000.0
+    dwpc = tmpc - (4.0 + hght / 2800.0)
+    wdir = np.linspace(155.0 + marker, 285.0 + marker, levels)
+    wspd = np.linspace(8.0, 72.0, levels)
+    return pres, hght, tmpc, dwpc, wdir, wspd, 0
 
 
 @pytest.mark.parametrize(
@@ -220,40 +279,7 @@ def test_extended_parcel_and_dcape_equivalence(backends):
     rust_raw = convective_workspace_to_raw(
         rust.profile_convective_parcels(pres, hght, tmpc, dwpc),
     )
-    np.testing.assert_allclose(
-        rust_raw[0],
-        python_raw[0],
-        rtol=3e-2,
-        atol=5.1,
-        equal_nan=True,
-    )
-    np.testing.assert_allclose(
-        rust_raw[1],
-        python_raw[1],
-        rtol=0.0,
-        atol=5.1,
-        equal_nan=True,
-    )
-    for python_pressure, rust_pressure in zip(
-        python_raw[2],
-        rust_raw[2],
-    ):
-        np.testing.assert_allclose(
-            rust_pressure,
-            python_pressure,
-            rtol=0.0,
-            atol=0.6,
-        )
-    for python_temperature, rust_temperature in zip(
-        python_raw[3],
-        rust_raw[3],
-    ):
-        np.testing.assert_allclose(
-            rust_temperature,
-            python_temperature,
-            rtol=0.0,
-            atol=0.05,
-        )
+    _assert_convective_raw_equivalent(python_raw, rust_raw)
 
     parcel_pressure = 850.0
     parcel_temperature = float(np.interp(
@@ -308,6 +334,174 @@ def test_extended_parcel_and_dcape_equivalence(backends):
             atol=1e-8,
             equal_nan=True,
         )
+
+
+def test_shared_thermodynamic_workspace_equivalence(backends):
+    python, rust = backends
+    pres = np.geomspace(1000.0, 100.0, 128)
+    hght = 44330.0 * (1.0 - (pres / 1013.25) ** 0.1903)
+    tmpc = 31.0 - (7.2 * np.minimum(hght, 12000.0) / 1000.0)
+    tmpc += 1.4 * np.maximum(hght - 12000.0, 0.0) / 1000.0
+    dwpc = tmpc - (4.0 + hght / 2800.0)
+
+    python_result = python.profile_thermodynamics(pres, hght, tmpc, dwpc)
+    rust_result = rust.profile_thermodynamics(pres, hght, tmpc, dwpc)
+    python_raw = profile_thermodynamics_to_raw(python_result)
+    rust_raw = profile_thermodynamics_to_raw(rust_result)
+
+    np.testing.assert_allclose(
+        rust_raw[0],
+        python_raw[0],
+        rtol=3e-2,
+        atol=5.1,
+        equal_nan=True,
+    )
+    _assert_convective_raw_equivalent(python_raw[1], rust_raw[1])
+    for python_value, rust_value in zip(python_raw[2], rust_raw[2]):
+        np.testing.assert_allclose(
+            rust_value,
+            python_value,
+            rtol=1e-9,
+            atol=1e-8,
+            equal_nan=True,
+        )
+
+
+def test_fractional_effective_layer_trace_matches_reference(backends):
+    """Keep SHARPpy's final 1-hPa mean-layer sample below a fractional top."""
+
+    python, rust = backends
+    pres = np.linspace(1020.0, 100.0, 128, dtype=np.float64)
+    hght = np.linspace(120.0, 16_000.0, 128, dtype=np.float64)
+    tmpc = 29.0 - (6.4 * (hght - hght[0]) / 1_000.0)
+    dwpc = tmpc - np.linspace(3.0, 24.0, 128, dtype=np.float64)
+
+    python_raw = profile_thermodynamics_to_raw(
+        python.profile_thermodynamics(pres, hght, tmpc, dwpc)
+    )
+    rust_raw = profile_thermodynamics_to_raw(
+        rust.profile_thermodynamics(pres, hght, tmpc, dwpc)
+    )
+
+    _assert_convective_raw_equivalent(python_raw[1], rust_raw[1])
+
+
+@pytest.mark.parametrize("levels", [32, 128])
+def test_profile_batch_analysis_matches_reference(backends, levels):
+    python, rust = backends
+    profiles = tuple(_batch_profile(levels, index * 0.05) for index in range(4))
+    tops = np.array([1000.0, 3000.0, 6000.0, 8000.0])
+
+    expected = python.profile_batch_analysis(
+        profiles, tops, max_threads=1, parallel_threshold=2,
+    )
+    actual = rust.profile_batch_analysis(
+        profiles, tops, max_threads=1, parallel_threshold=2,
+    )
+
+    np.testing.assert_allclose(
+        actual.parcels,
+        expected.parcels,
+        rtol=3e-2,
+        atol=5.1,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        actual.convective_parcels,
+        expected.convective_parcels,
+        rtol=3e-2,
+        atol=5.1,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        actual.effective_bounds,
+        expected.effective_bounds,
+        rtol=0.0,
+        atol=5.1,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        actual.downdraft,
+        expected.downdraft,
+        rtol=1e-9,
+        atol=1e-8,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        actual.storm_motion,
+        expected.storm_motion,
+        rtol=1e-12,
+        atol=5e-12,
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        actual.kinematic_layers,
+        expected.kinematic_layers,
+        rtol=1e-12,
+        atol=5e-12,
+        equal_nan=True,
+    )
+    assert actual.execution_mode == "serial_single_thread"
+    assert actual.worker_count == 1
+    assert all(not value.flags.writeable for value in (
+        actual.parcels,
+        actual.convective_parcels,
+        actual.effective_bounds,
+        actual.downdraft,
+        actual.storm_motion,
+        actual.kinematic_layers,
+    ))
+
+
+def test_profile_batch_parallel_is_bit_exact_and_ordered(backends):
+    _python, rust = backends
+    profiles = tuple(_batch_profile(64, index * 0.05) for index in range(12))
+    tops = np.array([1000.0, 3000.0, 6000.0, 8000.0])
+    serial = rust.profile_batch_analysis(
+        profiles, tops, max_threads=1, parallel_threshold=2,
+    )
+    parallel = rust.profile_batch_analysis(
+        profiles, tops, max_threads=2, parallel_threshold=2,
+    )
+
+    for name in (
+        "parcels",
+        "convective_parcels",
+        "effective_bounds",
+        "downdraft",
+        "storm_motion",
+        "kinematic_layers",
+    ):
+        np.testing.assert_array_equal(
+            getattr(parallel, name), getattr(serial, name),
+        )
+    assert parallel.execution_mode == "bounded_parallel"
+    assert parallel.worker_count == 2
+    np.testing.assert_allclose(
+        parallel.parcels[:, 0, 2],
+        [profile[2][0] for profile in profiles],
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+def test_profile_batch_default_uses_measured_cutoff_and_bounded_workers(backends):
+    _python, rust = backends
+    tops = np.array([1000.0, 3000.0, 6000.0, 8000.0])
+    small = tuple(_batch_profile(32, index * 0.05) for index in range(7))
+    threshold = tuple(_batch_profile(32, index * 0.05) for index in range(8))
+
+    small_result = rust.profile_batch_analysis(small, tops)
+    threshold_result = rust.profile_batch_analysis(threshold, tops)
+
+    assert small_result.execution_mode == "serial_below_threshold"
+    assert small_result.worker_count == 1
+    if DEFAULT_BATCH_THREADS == 1:
+        assert threshold_result.execution_mode == "serial_single_thread"
+        assert threshold_result.worker_count == 1
+    else:
+        assert threshold_result.execution_mode == "bounded_parallel"
+        assert threshold_result.worker_count == DEFAULT_BATCH_THREADS
 
 
 @pytest.mark.parametrize(
@@ -702,7 +896,7 @@ def test_raw_extension_extended_parcel_shapes():
     tmpc = 30.0 - (7.0 * hght / 1000.0)
     dwpc = tmpc - (4.0 + hght / 3000.0)
 
-    parcels, bounds, pressure_traces, temperature_traces = (
+    parcels, bounds, pressure_buffer, temperature_buffer, offsets = (
         sharpmod_rs.profile_convective_parcels(
             pres,
             hght,
@@ -714,14 +908,12 @@ def test_raw_extension_extended_parcel_shapes():
     )
     assert parcels.shape == (5, 14)
     assert bounds.shape == (2,)
-    assert len(pressure_traces) == len(temperature_traces) == 5
-    assert all(
-        len(pressure) == len(temperature)
-        for pressure, temperature in zip(
-            pressure_traces,
-            temperature_traces,
-        )
-    )
+    assert pressure_buffer.ndim == temperature_buffer.ndim == 1
+    assert pressure_buffer.shape == temperature_buffer.shape
+    assert offsets.shape == (6,)
+    assert offsets[0] == 0
+    assert offsets[-1] == pressure_buffer.size
+    assert np.all(offsets[1:] >= offsets[:-1])
 
     ascent = sharpmod_rs.lift_parcel(
         pres,
@@ -747,3 +939,52 @@ def test_raw_extension_extended_parcel_shapes():
     )
     assert np.asarray(downdraft[0]).shape == (3,)
     assert len(downdraft[1]) == len(downdraft[2])
+
+    combined_parcels, combined_convective, combined_downdraft = (
+        sharpmod_rs.profile_thermodynamics(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            0,
+            None,
+        )
+    )
+    assert combined_parcels.shape == (3, 14)
+    assert combined_convective[0].shape == (5, 14)
+    assert combined_convective[2].shape == combined_convective[3].shape
+    assert combined_convective[4].shape == (6,)
+    assert combined_downdraft[0].shape == (3,)
+
+
+def test_raw_extension_batch_shapes_and_offset_validation():
+    profiles = tuple(_batch_profile(32, index * 0.1) for index in range(3))
+    flattened = tuple(
+        np.concatenate([profile[column] for profile in profiles])
+        for column in range(6)
+    )
+    offsets = np.array([0, 32, 64, 96], dtype=np.uintp)
+    surfaces = np.zeros(3, dtype=np.uintp)
+    tops = np.array([1000.0, 3000.0, 6000.0, 8000.0])
+
+    raw = sharpmod_rs.profile_batch_analysis(
+        *flattened, offsets, surfaces, tops, None, 1, 2,
+    )
+    assert raw[0].shape == (3, 42)
+    assert raw[1].shape == (3, 70)
+    assert raw[2].shape == (3, 2)
+    assert raw[3].shape == (3, 3)
+    assert raw[4].shape == (3, 4)
+    assert raw[5].shape == (3, 60)
+    assert raw[6:] == (1, 1)
+
+    with pytest.raises(ValueError, match="monotonically nondecreasing"):
+        sharpmod_rs.profile_batch_analysis(
+            *flattened,
+            np.array([0, 64, 32, 96], dtype=np.uintp),
+            surfaces,
+            tops,
+            None,
+            1,
+            2,
+        )

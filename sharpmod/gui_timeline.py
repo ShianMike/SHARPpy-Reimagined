@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
 import weakref
 
-from qtpy.QtCore import Qt, QThread, QTimer, Signal
+from qtpy.QtCore import QObject, Qt, QThread, QTimer, Signal
 from qtpy.QtGui import QAction
 from qtpy.QtWidgets import (
     QComboBox,
@@ -13,17 +15,26 @@ from qtpy.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QLabel,
+    QMessageBox,
     QSlider,
     QSpinBox,
     QToolBar,
     QVBoxLayout,
 )
 
+from sharpmod.gui_common import APP_NAME, _LOGGER, _render
 from sharpmod.profile_timeline import forecast_hour_range
 from sharpmod.theme import OBJ_ERROR_TEXT, OBJ_STATUS
 
 
 MAX_TIMELINE_HOURS = 72
+
+
+def compose_interactive(*args, **kwargs):
+    """Load the viewer stack only after the first timeline item arrives."""
+    from sharpmod.gui_viewer import compose_interactive as compose
+
+    return compose(*args, **kwargs)
 
 
 def _collection_dates(collection):
@@ -131,7 +142,7 @@ class ForecastTimelineDialog(QDialog):
 
 
 class ModelTimelineWorker(QThread):
-    """Run a bounded batch and stream each completed hour back to Qt."""
+    """Run a killable child batch and stream each completed hour back to Qt."""
 
     item_ready = Signal(str, int)
     item_failed = Signal(int, str)
@@ -153,17 +164,20 @@ class ModelTimelineWorker(QThread):
         self.resolve_place = bool(resolve_place) and not loc
         self.member = str(member) if member else None
         self.disk_cache = disk_cache
-        self._extractor = None
+        self._runner = None
         self._completed = 0
 
     def requestInterruption(self):  # noqa: N802 - Qt API override
         super().requestInterruption()
-        if self._extractor is not None:
-            self._extractor.cancel()
+        if self._runner is not None:
+            self._runner.cancel()
 
     def run(self):
-        from sharpmod.batch_extract import BatchExtractor, BatchRequest
-        from sharpmod.model_hour_cache import ModelHourCache
+        from sharpmod.batch_extract import BatchRequest
+        from sharpmod.gui_batch_process import (
+            IsolatedBatchCancelled,
+            IsolatedBatchRunner,
+        )
 
         if self.resolve_place and not self.loc:
             self.progress.emit(-1, "town", 0, len(self.hours))
@@ -185,8 +199,6 @@ class ModelTimelineWorker(QThread):
             for request in requests
         }
         hour_by_id = {request.id: request.fxx for request in requests}
-        cache = None
-
         def on_progress(event):
             request_id = event.get("request_id")
             if request_id in hour_by_id:
@@ -210,31 +222,276 @@ class ModelTimelineWorker(QThread):
             )
 
         try:
-            if self.disk_cache is not None:
-                cache = ModelHourCache(
-                    max_entries=min(2, max(1, len(self.hours))),
-                    directory_factory=self.disk_cache.directory_for,
-                    directory_protector=self.disk_cache.protect,
-                    metadata_writer=self.disk_cache.annotate,
-                    delete_download_dirs=False,
-                )
-            self._extractor = BatchExtractor(progress_callback=on_progress)
-            result = self._extractor.run(
+            self._runner = IsolatedBatchRunner()
+            result = self._runner.run(
                 requests,
                 output_dir=self.output_dir,
                 max_workers=min(2, max(1, len(self.hours))),
-                resume=True,
-                cancelled=self.isInterruptionRequested,
-                model_hour_cache=cache,
+                progress_callback=on_progress,
+                disk_cache=self.disk_cache,
             )
+        except IsolatedBatchCancelled:
+            return
         except Exception as exc:  # noqa: BLE001 - worker boundary
             self.failed.emit(f"Forecast timeline failed: {exc}")
             return
         finally:
-            self._extractor = None
-            if cache is not None:
-                cache.clear()
+            self._runner = None
         self.result_ready.emit(result)
+
+
+class ForecastTimelineCoordinator(QObject):
+    """Own forecast timeline selection, worker, streaming, and cleanup."""
+
+    def __init__(self, picker):
+        super().__init__(picker)
+        self.picker = picker
+
+    def open(self) -> None:
+        """Fetch a bounded forecast-hour range and stream it into one viewer."""
+        cfg = self.picker._model_config()
+        if cfg is None:
+            QMessageBox.warning(
+                self.picker, APP_NAME, "Choose a forecast model first."
+            )
+            return
+        if (
+            self.picker._model_worker is not None
+            or self.picker._model_timeline_worker is not None
+            or getattr(self.picker, "_model_compare_worker", None) is not None
+        ):
+            QMessageBox.information(
+                self.picker, APP_NAME, "A model fetch is already in progress."
+            )
+            return
+        self.picker._ensure_model_cache()
+        lat = float(self.picker._model_lat.value())
+        lon = float(self.picker._model_lon.value())
+        if not self.picker._model_point_ok():
+            QMessageBox.warning(
+                self.picker,
+                APP_NAME,
+                f"{cfg.label} does not cover {lat:.4f}, {lon:.4f}.",
+            )
+            return
+
+        from sharpmod.tools import model_extract
+
+        if model_extract.requires_grib_runtime(cfg):
+            try:
+                model_extract.require_runtime_dependencies()
+            except model_extract.RetrievalError as exc:
+                QMessageBox.critical(
+                    self.picker,
+                    APP_NAME,
+                    f"Forecast model support is unavailable:\n{exc}",
+                )
+                return
+        available = model_extract.forecast_hours(
+            cfg, cycle_hour=self.picker._model_run_time().hour
+        )
+        try:
+            dialog = ForecastTimelineDialog(
+                available,
+                current=self.picker._model_selected_fxx(),
+                parent=self.picker,
+            )
+        except ValueError as exc:
+            QMessageBox.warning(self.picker, APP_NAME, str(exc))
+            return
+        if dialog.exec() != QDialog.Accepted:
+            return
+        hours = dialog.hours()
+        if len(hours) < 2:
+            QMessageBox.information(
+                self.picker,
+                APP_NAME,
+                "Choose at least two forecast hours for a timeline.",
+            )
+            return
+
+        self.picker._cancel_model_prefetch(wait=True)
+        run_time = self.picker._model_run_time()
+        member = self.picker._model_member_value()
+        loc = self.picker._model_loc.text().strip() or None
+        output_dir = tempfile.mkdtemp(
+            prefix=(f"timeline_{cfg.key.replace('-', '_')}_{run_time:%Y%m%d%H}_")
+        )
+        worker = ModelTimelineWorker(
+            cfg.key,
+            lat,
+            lon,
+            run_time,
+            hours,
+            output_dir,
+            loc=loc,
+            resolve_place=not bool(loc),
+            member=member,
+            disk_cache=self.picker._model_disk_cache,
+            parent=self.picker,
+        )
+        worker._sharpmod_viewer = None
+        worker._sharpmod_collection = None
+        worker._sharpmod_paths = []
+        worker._sharpmod_failures = {}
+        worker._sharpmod_viewer_closed = False
+        self.picker._model_timeline_worker = worker
+        self.picker._remember_point(lat, lon, loc)
+        worker.item_ready.connect(self._on_timeline_item_ready)
+        worker.item_failed.connect(self._on_timeline_item_failed)
+        worker.progress.connect(self._on_timeline_progress)
+        worker.result_ready.connect(self._on_timeline_result)
+        worker.failed.connect(self._on_timeline_failed)
+        worker.finished.connect(self._on_timeline_finished)
+        self.picker._set_model_busy(True)
+        self.picker._model_progress_timer.stop()
+        self.picker._model_fetch_btn.setText("Timeline queued…")
+        self.picker._model_timeline_btn.setText("Timeline running…")
+        self.picker._model_progress.setRange(0, len(hours))
+        self.picker._model_progress.setValue(0)
+        self.picker._model_progress.setFormat(f"0 / {len(hours)} hours")
+        self.picker._model_progress_detail.setText(
+            f"Queued {len(hours)} forecast hours; completed hours will open "
+            "as they arrive."
+        )
+        self.picker.statusBar().showMessage(
+            f"Fetching {cfg.label} timeline F{hours[0]:03d}–F{hours[-1]:03d}…"
+        )
+        worker.start()
+
+    def _on_timeline_item_ready(self, npz_path: str, fxx: int) -> None:
+        worker = self.sender()
+        if worker is not self.picker._model_timeline_worker or getattr(
+            worker, "_sharpmod_viewer_closed", False
+        ):
+            return
+        try:
+            prof_col, stn_id = _render().decode(npz_path)
+            collection = getattr(worker, "_sharpmod_collection", None)
+            if collection is None:
+                source_meta = dict(getattr(prof_col, "_meta", {}))
+                prof_col.setMeta("timeline", True)
+                prof_col.setMeta("timeline_count", 1)
+                prof_col.setMeta("timeline_hours", [int(fxx)])
+                prof_col.setMeta("timeline_sources", [str(npz_path)])
+                prof_col.setMeta("timeline_provenance", [source_meta])
+                self.picker._prune_closed_viewers()
+                win = compose_interactive(
+                    self.picker._config(),
+                    prof_col,
+                    self.picker,
+                    stn_id=stn_id,
+                )
+                win.setWindowTitle(f"{APP_NAME} — Forecast Timeline (1 hour loaded)")
+                self.picker._viewers.append(win)
+                worker._sharpmod_viewer = win
+                worker._sharpmod_collection = prof_col
+                output_dir = worker.output_dir
+                win.destroyed.connect(
+                    lambda *_args, worker=worker, output_dir=output_dir: (
+                        self._on_timeline_viewer_destroyed(worker, output_dir)
+                    )
+                )
+            else:
+                from sharpmod.profile_timeline import append_collection
+
+                append_collection(collection, prof_col)
+                win = worker._sharpmod_viewer
+                win.spc_widget.updateProfs()
+                refresh_timeline_controls(win)
+                count = int(collection.getMeta("timeline_count"))
+                win.setWindowTitle(
+                    f"{APP_NAME} — Forecast Timeline ({count} hours loaded)"
+                )
+            worker._sharpmod_paths.append(str(npz_path))
+        except Exception as exc:  # noqa: BLE001 - decode/render boundary
+            _LOGGER.exception(
+                "forecast_timeline.display_failed path=%s fxx=%s", npz_path, fxx
+            )
+            worker._sharpmod_failures[int(fxx)] = str(exc)
+            self.picker.statusBar().showMessage(
+                f"F{int(fxx):03d} downloaded but could not be displayed"
+            )
+
+    def _on_timeline_item_failed(self, fxx: int, message: str) -> None:
+        worker = self.sender()
+        if worker is self.picker._model_timeline_worker:
+            worker._sharpmod_failures[int(fxx)] = str(message)
+            self.picker.statusBar().showMessage(
+                f"Timeline F{int(fxx):03d} unavailable: {message}", 7000
+            )
+
+    def _on_timeline_progress(
+        self, fxx: int, stage: str, completed: int, total: int
+    ) -> None:
+        if self.sender() is not self.picker._model_timeline_worker:
+            return
+        completed = max(0, int(completed))
+        total = max(1, int(total))
+        self.picker._model_progress.setRange(0, total)
+        self.picker._model_progress.setValue(completed)
+        self.picker._model_progress.setFormat(f"{completed} / {total} hours")
+        prefix = f"F{int(fxx):03d}" if int(fxx) >= 0 else "Timeline"
+        self.picker._model_progress_detail.setText(
+            f"{prefix}: {str(stage).replace('_', ' ')} — "
+            f"{completed} of {total} complete"
+        )
+
+    def _on_timeline_result(self, result) -> None:
+        worker = self.sender()
+        if worker is not self.picker._model_timeline_worker:
+            return
+        missing = [item for item in result.items if item.status != "completed"]
+        if missing:
+            summary = ", ".join(
+                f"{item.id.upper()} ({item.status})" for item in missing
+            )
+            self.picker.statusBar().showMessage(
+                f"Timeline kept {result.completed} completed hour(s); "
+                f"missing: {summary}",
+                12000,
+            )
+            QMessageBox.information(
+                self.picker,
+                "Forecast Timeline — Partial Result",
+                f"Kept {result.completed} completed forecast hour(s).\n\n"
+                f"Unavailable or cancelled hours:\n{summary}",
+            )
+        else:
+            self.picker.statusBar().showMessage(
+                f"Forecast timeline complete: {result.completed} hours", 7000
+            )
+
+    def _on_timeline_failed(self, message: str) -> None:
+        worker = self.sender()
+        if worker is not self.picker._model_timeline_worker:
+            return
+        if getattr(worker, "_sharpmod_paths", []):
+            QMessageBox.warning(
+                self.picker,
+                APP_NAME,
+                f"The remaining timeline queue stopped, but completed hours "
+                f"were kept:\n{message}",
+            )
+        else:
+            QMessageBox.critical(self.picker, APP_NAME, str(message))
+
+    def _on_timeline_viewer_destroyed(self, worker, output_dir: str) -> None:
+        if self.picker._model_timeline_worker is worker:
+            worker._sharpmod_viewer_closed = True
+            worker.requestInterruption()
+            return
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+    def _on_timeline_finished(self) -> None:
+        worker = self.sender()
+        if self.picker._model_timeline_worker is worker:
+            self.picker._model_timeline_worker = None
+            self.picker._set_model_busy(False)
+        viewer = getattr(worker, "_sharpmod_viewer", None)
+        if viewer is None or getattr(worker, "_sharpmod_viewer_closed", False):
+            shutil.rmtree(worker.output_dir, ignore_errors=True)
+        worker.deleteLater()
 
 
 def install_timeline_controls(win, collection) -> QToolBar | None:
@@ -407,7 +664,8 @@ def refresh_timeline_controls(win) -> QToolBar | None:
 
 
 __all__ = [
-    "ForecastTimelineDialog", "ModelTimelineWorker",
+    "ForecastTimelineCoordinator", "ForecastTimelineDialog",
+    "ModelTimelineWorker",
     "MAX_TIMELINE_HOURS",
     "install_timeline_controls", "refresh_timeline_controls",
 ]

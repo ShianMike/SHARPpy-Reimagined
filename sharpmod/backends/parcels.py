@@ -8,7 +8,7 @@ thermodynamic formulas and parcel-selection conventions.
 
 from __future__ import annotations
 
-from dataclasses import astuple
+from dataclasses import astuple, dataclass
 
 import numpy as np
 import numpy.ma as ma
@@ -20,6 +20,7 @@ from .protocol import (
     ParcelDiagnostics,
     ParcelTrace,
     ParcelWorkspace,
+    ProfileThermodynamics,
 )
 from sharpmod.upstream_warnings import known_sharppy_numerical_warnings
 
@@ -35,6 +36,54 @@ CONVECTIVE_PARCEL_KINDS = (
     "mixed_layer",
     "effective",
 )
+
+
+@dataclass(frozen=True)
+class BufferedParcelTrace:
+    """Internal zero-copy view over native pressure/temperature buffers."""
+
+    pressure: np.ndarray
+    temperature: np.ndarray
+
+
+@dataclass(frozen=True)
+class BufferedParcelAscent:
+    """Internal parcel result retaining NumPy trace views."""
+
+    diagnostics: ParcelDiagnostics
+    trace: BufferedParcelTrace
+
+
+@dataclass(frozen=True)
+class BufferedConvectiveParcelWorkspace:
+    """Internal convective workspace backed by contiguous native buffers."""
+
+    surface: BufferedParcelAscent
+    forecast: BufferedParcelAscent
+    most_unstable: BufferedParcelAscent
+    mixed_layer: BufferedParcelAscent
+    effective: BufferedParcelAscent
+    effective_bottom_pressure: float
+    effective_top_pressure: float
+
+
+@dataclass(frozen=True)
+class BufferedDowndraftDiagnostics:
+    """Internal downdraft result retaining NumPy trace views."""
+
+    cape: float
+    source_pressure: float
+    downrush_temperature: float
+    trace: BufferedParcelTrace
+
+
+@dataclass(frozen=True)
+class BufferedProfileThermodynamics:
+    """Internal shared result used by array-oriented application hot paths."""
+
+    parcels: ParcelWorkspace
+    convective: BufferedConvectiveParcelWorkspace
+    downdraft: BufferedDowndraftDiagnostics
 
 
 def _number(value):
@@ -150,28 +199,12 @@ def compute_profile_parcels(pres, hght, tmpc, dwpc, *, sfc=0):
     return ParcelWorkspace(*results)
 
 
-@known_sharppy_numerical_warnings()
-def compute_profile_convective_parcels(
-    pres, hght, tmpc, dwpc, *, sfc=0,
-):
-    """Compute full standard parcel ascents through the Python oracle."""
-    if pres.size < 3:
-        missing = _missing_ascent()
-        return ConvectiveParcelWorkspace(
-            missing,
-            missing,
-            missing,
-            missing,
-            missing,
-            np.nan,
-            np.nan,
-        )
-
+def _compute_profile_convective_prepared(profile):
+    """Compute the convective workspace from one existing oracle profile."""
     from sharppy.sharptab import interp as sp_interp
     from sharppy.sharptab import params as sp_params
     from sharppy.sharptab import thermo as sp_thermo
 
-    profile = _profile(pres, hght, tmpc, dwpc, sfc)
     mu_parcel = sp_params.parcelx(profile, flag=3)
     if _number(mu_parcel.pres) == _number(profile.pres[profile.sfc]):
         surface_parcel = mu_parcel
@@ -221,6 +254,28 @@ def compute_profile_convective_parcels(
 
 
 @known_sharppy_numerical_warnings()
+def compute_profile_convective_parcels(
+    pres, hght, tmpc, dwpc, *, sfc=0,
+):
+    """Compute full standard parcel ascents through the Python oracle."""
+    if pres.size < 3:
+        missing = _missing_ascent()
+        return ConvectiveParcelWorkspace(
+            missing,
+            missing,
+            missing,
+            missing,
+            missing,
+            np.nan,
+            np.nan,
+        )
+
+    return _compute_profile_convective_prepared(
+        _profile(pres, hght, tmpc, dwpc, sfc),
+    )
+
+
+@known_sharppy_numerical_warnings()
 def compute_lift_parcel(
     pres,
     hght,
@@ -250,6 +305,21 @@ def compute_lift_parcel(
     return _ascent(profile, parcel, sp_interp)
 
 
+def _compute_profile_dcape_prepared(profile):
+    """Compute DCAPE from one existing oracle profile."""
+    from sharppy.sharptab import params as sp_params
+
+    cape, temperature_trace, pressure_trace = sp_params.dcape(profile)
+    trace = _trace(type(
+        "_Trace",
+        (),
+        {"ptrace": pressure_trace, "ttrace": temperature_trace},
+    )())
+    source = trace.pressure[0] if trace.pressure else np.nan
+    downrush = trace.temperature[-1] if trace.temperature else np.nan
+    return DowndraftDiagnostics(_number(cape), source, downrush, trace)
+
+
 @known_sharppy_numerical_warnings()
 def compute_profile_dcape(pres, hght, tmpc, dwpc, *, sfc=0):
     """Compute DCAPE and its trace through the Python oracle."""
@@ -261,18 +331,52 @@ def compute_profile_dcape(pres, hght, tmpc, dwpc, *, sfc=0):
             ParcelTrace((), ()),
         )
 
-    from sharppy.sharptab import params as sp_params
+    return _compute_profile_dcape_prepared(
+        _profile(pres, hght, tmpc, dwpc, sfc),
+    )
+
+
+@known_sharppy_numerical_warnings()
+def compute_profile_thermodynamics(pres, hght, tmpc, dwpc, *, sfc=0):
+    """Compute parcel and downdraft workspaces from one oracle profile."""
+    if pres.size < 3:
+        missing_diagnostics = ParcelDiagnostics(*([np.nan] * PARCEL_WIDTH))
+        missing_ascent = _missing_ascent()
+        return ProfileThermodynamics(
+            ParcelWorkspace(
+                missing_diagnostics,
+                missing_diagnostics,
+                missing_diagnostics,
+            ),
+            ConvectiveParcelWorkspace(
+                missing_ascent,
+                missing_ascent,
+                missing_ascent,
+                missing_ascent,
+                missing_ascent,
+                np.nan,
+                np.nan,
+            ),
+            DowndraftDiagnostics(
+                np.nan,
+                np.nan,
+                np.nan,
+                ParcelTrace((), ()),
+            ),
+        )
 
     profile = _profile(pres, hght, tmpc, dwpc, sfc)
-    cape, temperature_trace, pressure_trace = sp_params.dcape(profile)
-    trace = _trace(type(
-        "_Trace",
-        (),
-        {"ptrace": pressure_trace, "ttrace": temperature_trace},
-    )())
-    source = trace.pressure[0] if trace.pressure else np.nan
-    downrush = trace.temperature[-1] if trace.temperature else np.nan
-    return DowndraftDiagnostics(_number(cape), source, downrush, trace)
+    convective = _compute_profile_convective_prepared(profile)
+    parcels = ParcelWorkspace(
+        convective.surface.diagnostics,
+        convective.most_unstable.diagnostics,
+        convective.mixed_layer.diagnostics,
+    )
+    return ProfileThermodynamics(
+        parcels,
+        convective,
+        _compute_profile_dcape_prepared(profile),
+    )
 
 
 def parcel_workspace_from_raw(matrix):
@@ -290,13 +394,17 @@ def parcel_workspace_from_raw(matrix):
     ))
 
 
-def _ascent_from_raw(row, pressure_trace, temperature_trace):
+def _diagnostics_from_raw(row):
     row = np.asarray(row, dtype=np.float64)
     if row.shape != (PARCEL_WIDTH,):
         raise RuntimeError(
             "native parcel diagnostics returned invalid shape "
             f"{row.shape}; expected {(PARCEL_WIDTH,)}"
         )
+    return ParcelDiagnostics(*(float(value) for value in row))
+
+
+def _trace_arrays_from_raw(pressure_trace, temperature_trace):
     pressure = np.asarray(pressure_trace, dtype=np.float64)
     temperature = np.asarray(temperature_trace, dtype=np.float64)
     if pressure.ndim != 1 or pressure.shape != temperature.shape:
@@ -304,12 +412,37 @@ def _ascent_from_raw(row, pressure_trace, temperature_trace):
             "native parcel trace returned mismatched shapes "
             f"{pressure.shape} and {temperature.shape}"
         )
+    pressure = pressure.view()
+    temperature = temperature.view()
+    pressure.setflags(write=False)
+    temperature.setflags(write=False)
+    return BufferedParcelTrace(pressure, temperature)
+
+
+def _buffered_ascent_from_raw(row, pressure_trace, temperature_trace):
+    return BufferedParcelAscent(
+        _diagnostics_from_raw(row),
+        _trace_arrays_from_raw(pressure_trace, temperature_trace),
+    )
+
+
+def _public_trace(trace):
+    return ParcelTrace(
+        tuple(float(value) for value in trace.pressure),
+        tuple(float(value) for value in trace.temperature),
+    )
+
+
+def _public_ascent(ascent):
     return ParcelAscent(
-        ParcelDiagnostics(*(float(value) for value in row)),
-        ParcelTrace(
-            tuple(float(value) for value in pressure),
-            tuple(float(value) for value in temperature),
-        ),
+        ascent.diagnostics,
+        _public_trace(ascent.trace),
+    )
+
+
+def _ascent_from_raw(row, pressure_trace, temperature_trace):
+    return _public_ascent(
+        _buffered_ascent_from_raw(row, pressure_trace, temperature_trace),
     )
 
 
@@ -324,10 +457,10 @@ def parcel_ascent_from_raw(raw):
     return _ascent_from_raw(row, pressure_trace, temperature_trace)
 
 
-def convective_workspace_from_raw(raw):
-    """Validate and restore a native full convective parcel workspace."""
+def buffered_convective_workspace_from_raw(raw):
+    """Validate native contiguous traces without creating Python floats."""
     try:
-        matrix, bounds, pressure_traces, temperature_traces = raw
+        matrix, bounds, pressure_buffer, temperature_buffer, offsets = raw
     except (TypeError, ValueError) as exc:
         raise RuntimeError(
             "sharpmod_rs.profile_convective_parcels returned an invalid result",
@@ -345,29 +478,63 @@ def convective_workspace_from_raw(raw):
             "native effective-layer bounds returned invalid shape "
             f"{bounds.shape}; expected {(2,)}"
         )
-    if not (
-        len(pressure_traces)
-        == len(temperature_traces)
-        == len(CONVECTIVE_PARCEL_KINDS)
+    pressure_buffer = np.asarray(pressure_buffer, dtype=np.float64)
+    temperature_buffer = np.asarray(temperature_buffer, dtype=np.float64)
+    if (
+        pressure_buffer.ndim != 1
+        or pressure_buffer.shape != temperature_buffer.shape
     ):
-        raise RuntimeError("native convective parcel trace count is invalid")
-    ascents = tuple(
-        _ascent_from_raw(row, pressure_trace, temperature_trace)
-        for row, pressure_trace, temperature_trace in zip(
-            matrix,
-            pressure_traces,
-            temperature_traces,
+        raise RuntimeError(
+            "native convective parcel trace buffers have mismatched shapes "
+            f"{pressure_buffer.shape} and {temperature_buffer.shape}"
         )
+    offsets = np.asarray(offsets)
+    expected_offsets = (len(CONVECTIVE_PARCEL_KINDS) + 1,)
+    if offsets.shape != expected_offsets or not np.issubdtype(
+        offsets.dtype, np.integer,
+    ):
+        raise RuntimeError(
+            "native convective parcel trace offsets are invalid; expected "
+            f"an integer array with shape {expected_offsets}"
+        )
+    if (
+        int(offsets[0]) != 0
+        or int(offsets[-1]) != pressure_buffer.size
+        or np.any(offsets[1:] < offsets[:-1])
+    ):
+        raise RuntimeError(
+            "native convective parcel trace offsets do not span the buffers"
+        )
+    ascents = tuple(
+        _buffered_ascent_from_raw(
+            row,
+            pressure_buffer[int(start):int(stop)],
+            temperature_buffer[int(start):int(stop)],
+        )
+        for row, start, stop in zip(matrix, offsets[:-1], offsets[1:])
     )
-    return ConvectiveParcelWorkspace(
+    return BufferedConvectiveParcelWorkspace(
         *ascents,
         float(bounds[0]),
         float(bounds[1]),
     )
 
 
-def downdraft_from_raw(raw):
-    """Validate and restore native DCAPE diagnostics."""
+def convective_workspace_from_raw(raw):
+    """Validate and restore the public convective parcel workspace."""
+    buffered = buffered_convective_workspace_from_raw(raw)
+    return ConvectiveParcelWorkspace(
+        *(
+            _public_ascent(getattr(buffered, kind))
+            for kind in CONVECTIVE_PARCEL_KINDS
+        ),
+        buffered.effective_bottom_pressure,
+        buffered.effective_top_pressure,
+    )
+
+
+def buffered_downdraft_from_raw(raw):
+    """Validate native DCAPE data while retaining array trace buffers."""
     try:
         summary, pressure_trace, temperature_trace = raw
     except (TypeError, ValueError) as exc:
@@ -380,16 +547,71 @@ def downdraft_from_raw(raw):
             "native DCAPE summary returned invalid shape "
             f"{summary.shape}; expected {(3,)}"
         )
-    trace = _ascent_from_raw(
-        np.full(PARCEL_WIDTH, np.nan),
+    trace = _trace_arrays_from_raw(
         pressure_trace,
         temperature_trace,
-    ).trace
-    return DowndraftDiagnostics(
+    )
+    return BufferedDowndraftDiagnostics(
         cape=float(summary[0]),
         source_pressure=float(summary[1]),
         downrush_temperature=float(summary[2]),
         trace=trace,
+    )
+
+
+def downdraft_from_raw(raw):
+    """Validate and restore public native DCAPE diagnostics."""
+    buffered = buffered_downdraft_from_raw(raw)
+    return DowndraftDiagnostics(
+        buffered.cape,
+        buffered.source_pressure,
+        buffered.downrush_temperature,
+        _public_trace(buffered.trace),
+    )
+
+
+def profile_thermodynamics_buffers_from_raw(raw):
+    """Restore one shared native result while retaining all trace buffers."""
+    try:
+        parcel_matrix, convective_raw, downdraft_raw = raw
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "sharpmod_rs.profile_thermodynamics returned an invalid result",
+        ) from exc
+    return BufferedProfileThermodynamics(
+        parcel_workspace_from_raw(parcel_matrix),
+        buffered_convective_workspace_from_raw(convective_raw),
+        buffered_downdraft_from_raw(downdraft_raw),
+    )
+
+
+def profile_thermodynamics_from_buffers(buffered):
+    """Convert internal array views to the stable public tuple contract."""
+    convective = buffered.convective
+    downdraft = buffered.downdraft
+    return ProfileThermodynamics(
+        buffered.parcels,
+        ConvectiveParcelWorkspace(
+            *(
+                _public_ascent(getattr(convective, kind))
+                for kind in CONVECTIVE_PARCEL_KINDS
+            ),
+            convective.effective_bottom_pressure,
+            convective.effective_top_pressure,
+        ),
+        DowndraftDiagnostics(
+            downdraft.cape,
+            downdraft.source_pressure,
+            downdraft.downrush_temperature,
+            _public_trace(downdraft.trace),
+        ),
+    )
+
+
+def profile_thermodynamics_from_raw(raw):
+    """Validate and restore the public shared thermodynamic workspace."""
+    return profile_thermodynamics_from_buffers(
+        profile_thermodynamics_buffers_from_raw(raw),
     )
 
 
@@ -415,9 +637,31 @@ def parcel_ascent_to_raw(result):
 
 
 def convective_workspace_to_raw(result):
-    """Return the matrix-and-traces representation used by tests."""
+    """Return the contiguous native-compatible representation."""
     ascents = tuple(
-        result.parcel(kind) for kind in CONVECTIVE_PARCEL_KINDS
+        getattr(result, kind) for kind in CONVECTIVE_PARCEL_KINDS
+    )
+    pressure_traces = tuple(
+        np.asarray(ascent.trace.pressure, dtype=np.float64)
+        for ascent in ascents
+    )
+    temperature_traces = tuple(
+        np.asarray(ascent.trace.temperature, dtype=np.float64)
+        for ascent in ascents
+    )
+    offsets = np.empty(len(ascents) + 1, dtype=np.uintp)
+    offsets[0] = 0
+    for index, trace in enumerate(pressure_traces, start=1):
+        offsets[index] = offsets[index - 1] + trace.size
+    pressure_buffer = (
+        np.concatenate(pressure_traces)
+        if int(offsets[-1])
+        else np.empty(0, dtype=np.float64)
+    )
+    temperature_buffer = (
+        np.concatenate(temperature_traces)
+        if int(offsets[-1])
+        else np.empty(0, dtype=np.float64)
     )
     return (
         np.asarray(
@@ -431,14 +675,9 @@ def convective_workspace_to_raw(result):
             ],
             dtype=np.float64,
         ),
-        tuple(
-            np.asarray(ascent.trace.pressure, dtype=np.float64)
-            for ascent in ascents
-        ),
-        tuple(
-            np.asarray(ascent.trace.temperature, dtype=np.float64)
-            for ascent in ascents
-        ),
+        pressure_buffer,
+        temperature_buffer,
+        offsets,
     )
 
 
@@ -458,15 +697,28 @@ def downdraft_to_raw(result):
     )
 
 
+def profile_thermodynamics_to_raw(result):
+    """Return the nested native-compatible shared-workspace representation."""
+    return (
+        parcel_workspace_to_raw(result.parcels),
+        convective_workspace_to_raw(result.convective),
+        downdraft_to_raw(result.downdraft),
+    )
+
+
 __all__ = [
     "CONVECTIVE_PARCEL_KINDS",
     "PARCEL_FIELDS",
     "PARCEL_KINDS",
     "PARCEL_WIDTH",
+    "BufferedProfileThermodynamics",
+    "buffered_convective_workspace_from_raw",
+    "buffered_downdraft_from_raw",
     "compute_lift_parcel",
     "compute_profile_convective_parcels",
     "compute_profile_dcape",
     "compute_profile_parcels",
+    "compute_profile_thermodynamics",
     "convective_workspace_from_raw",
     "convective_workspace_to_raw",
     "downdraft_from_raw",
@@ -475,4 +727,8 @@ __all__ = [
     "parcel_ascent_to_raw",
     "parcel_workspace_from_raw",
     "parcel_workspace_to_raw",
+    "profile_thermodynamics_buffers_from_raw",
+    "profile_thermodynamics_from_buffers",
+    "profile_thermodynamics_from_raw",
+    "profile_thermodynamics_to_raw",
 ]

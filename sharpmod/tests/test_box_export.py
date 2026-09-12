@@ -24,15 +24,17 @@ def _plan(target=9):
         target_points=target)
 
 
-@pytest.fixture
-def analysis(tmp_path):
+@pytest.fixture(scope="module")
+def analysis(tmp_path_factory):
+    tmp_path = tmp_path_factory.mktemp("box-export")
     plan = _plan()
     outputs = _write_variants(plan, tmp_path)
     return ba.analyze_box(plan, outputs, tiers=(ba.FAST_TIER,), fxx=18)
 
 
-@pytest.fixture
-def sequence(tmp_path):
+@pytest.fixture(scope="module")
+def sequence(tmp_path_factory):
+    tmp_path = tmp_path_factory.mktemp("box-export-sequence")
     plan = _plan()
     source = dict(np.load(HRRR_NPZ, allow_pickle=False))
     outputs_by_hour = {}

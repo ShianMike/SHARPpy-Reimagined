@@ -1,0 +1,1213 @@
+{
+  "benchmark": "SHARPpy Reimagined Python and Rust backends",
+  "captured_at": "2026-09-12T07:12:43.130807+00:00",
+  "command": [
+    "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+    "benchmarks\\benchmark_backends.py",
+    "--repeat",
+    "5",
+    "--warmup",
+    "2",
+    "--repeated-calls",
+    "100",
+    "--cpu-model",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "--power-mode",
+    "Balanced",
+    "--output-json",
+    "benchmarks\\results\\2026-09-12-backend-after.json"
+  ],
+  "concurrency": [
+    {
+      "backend": "python",
+      "calls_per_worker": 10,
+      "operation": "wind_to_components",
+      "sequential_samples_seconds": [
+        0.03970369999296963,
+        0.047653000001446344,
+        0.04500199999893084,
+        0.036721600001328625,
+        0.04194309999002144
+      ],
+      "threaded_samples_seconds": [
+        0.03493290000187699,
+        0.03425280000374187,
+        0.027843900010338984,
+        0.03209500000230037,
+        0.02850909999688156
+      ]
+    },
+    {
+      "backend": "python",
+      "calls_per_worker": 10,
+      "operation": "components_to_wind",
+      "sequential_samples_seconds": [
+        0.05602430000726599,
+        0.05681279998680111,
+        0.05560189999232534,
+        0.05928479999420233,
+        0.058427099997061305
+      ],
+      "threaded_samples_seconds": [
+        0.03447810000216123,
+        0.033567399994353764,
+        0.03338009999424685,
+        0.03443699999479577,
+        0.03541440000117291
+      ]
+    },
+    {
+      "backend": "python",
+      "calls_per_worker": 10,
+      "operation": "interpolate_1d",
+      "sequential_samples_seconds": [
+        0.03441139998903964,
+        0.03342169999086764,
+        0.030293499992694706,
+        0.03511760001129005,
+        0.029614700004458427
+      ],
+      "threaded_samples_seconds": [
+        0.027831700004753657,
+        0.024786000009044074,
+        0.022734200014383532,
+        0.02409099999931641,
+        0.027009400000679307
+      ]
+    },
+    {
+      "backend": "rust",
+      "calls_per_worker": 10,
+      "operation": "wind_to_components",
+      "sequential_samples_seconds": [
+        0.02843990000837948,
+        0.02729249998810701,
+        0.02657020000333432,
+        0.026368899998487905,
+        0.02836220001336187
+      ],
+      "threaded_samples_seconds": [
+        0.0303767000004882,
+        0.03191489999881014,
+        0.03018990000418853,
+        0.02942110000003595,
+        0.02916380000533536
+      ]
+    },
+    {
+      "backend": "rust",
+      "calls_per_worker": 10,
+      "operation": "components_to_wind",
+      "sequential_samples_seconds": [
+        0.03865850000875071,
+        0.037488300004042685,
+        0.039861700002802536,
+        0.03790339999250136,
+        0.03761559999838937
+      ],
+      "threaded_samples_seconds": [
+        0.0391477999946801,
+        0.03839519999746699,
+        0.03922160000365693,
+        0.04045699999551289,
+        0.04103949999262113
+      ]
+    },
+    {
+      "backend": "rust",
+      "calls_per_worker": 10,
+      "operation": "interpolate_1d",
+      "sequential_samples_seconds": [
+        0.05860660001053475,
+        0.058608399995137006,
+        0.05789080000249669,
+        0.058365500008221716,
+        0.0582525999925565
+      ],
+      "threaded_samples_seconds": [
+        0.06043599999975413,
+        0.061976899989531375,
+        0.06126610000501387,
+        0.06059370000730269,
+        0.06316700000024866
+      ]
+    }
+  ],
+  "environment": {
+    "backend_api_version": 7,
+    "cpu": "12th Gen Intel(R) Core(TM) i5-1235U",
+    "machine": "AMD64",
+    "numpy": "2.4.6",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "power_mode": "Balanced",
+    "python": "3.11.14",
+    "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+    "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)",
+    "sharpmod_rs": "1.1.0"
+  },
+  "equivalence": "passed",
+  "schema_version": 1,
+  "settings": {
+    "batch_levels": 128,
+    "batch_profiles": 2048,
+    "concurrency_calls_per_worker": 10,
+    "concurrency_size": 100000,
+    "large_size": 100000,
+    "profile_constructions": 500,
+    "repeat": 5,
+    "repeated_calls": 100,
+    "warmup": 2
+  },
+  "timings": [
+    {
+      "backend": "python",
+      "calls": 1000,
+      "median_per_call_ms": 0.04806990000361111,
+      "median_total_ms": 48.06990000361111,
+      "operation": "wind_to_components",
+      "samples_seconds": [
+        0.045182799993199296,
+        0.04959640000015497,
+        0.0479751000093529,
+        0.048567799996817484,
+        0.04806990000361111
+      ],
+      "scenario": "small-32"
+    },
+    {
+      "backend": "rust",
+      "calls": 1000,
+      "median_per_call_ms": 0.04759560000093188,
+      "median_total_ms": 47.59560000093188,
+      "operation": "wind_to_components",
+      "samples_seconds": [
+        0.046755000003031455,
+        0.04759560000093188,
+        0.04743150000285823,
+        0.0491148000000976,
+        0.04951409999921452
+      ],
+      "scenario": "small-32"
+    },
+    {
+      "backend": "python",
+      "calls": 1000,
+      "median_per_call_ms": 0.04676500000641681,
+      "median_total_ms": 46.76500000641681,
+      "operation": "components_to_wind",
+      "samples_seconds": [
+        0.04767060000449419,
+        0.046280700000352226,
+        0.04648619999352377,
+        0.04862750000029337,
+        0.04676500000641681
+      ],
+      "scenario": "small-32"
+    },
+    {
+      "backend": "rust",
+      "calls": 1000,
+      "median_per_call_ms": 0.04647459999250714,
+      "median_total_ms": 46.47459999250714,
+      "operation": "components_to_wind",
+      "samples_seconds": [
+        0.04691159998765215,
+        0.04851269999926444,
+        0.04647459999250714,
+        0.04354980000061914,
+        0.045163100003264844
+      ],
+      "scenario": "small-32"
+    },
+    {
+      "backend": "python",
+      "calls": 1000,
+      "median_per_call_ms": 0.034327399989706464,
+      "median_total_ms": 34.327399989706464,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.03320989999338053,
+        0.03482500000973232,
+        0.03383330001088325,
+        0.034548000010545366,
+        0.034327399989706464
+      ],
+      "scenario": "small-32"
+    },
+    {
+      "backend": "rust",
+      "calls": 1000,
+      "median_per_call_ms": 0.030214900005375966,
+      "median_total_ms": 30.214900005375966,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.031360499997390434,
+        0.028028000000631437,
+        0.02965260000200942,
+        0.03071089999866672,
+        0.030214900005375966
+      ],
+      "scenario": "small-32"
+    },
+    {
+      "backend": "python",
+      "calls": 500,
+      "median_per_call_ms": 0.051482000009855255,
+      "median_total_ms": 25.741000004927628,
+      "operation": "wind_to_components",
+      "samples_seconds": [
+        0.027418300000135787,
+        0.02585049999470357,
+        0.025741000004927628,
+        0.02542209999228362,
+        0.023938600003020838
+      ],
+      "scenario": "ordinary-128"
+    },
+    {
+      "backend": "rust",
+      "calls": 500,
+      "median_per_call_ms": 0.04656419999082573,
+      "median_total_ms": 23.282099995412864,
+      "operation": "wind_to_components",
+      "samples_seconds": [
+        0.022838200005935505,
+        0.02400119999947492,
+        0.02327210000657942,
+        0.023282099995412864,
+        0.024195100006181747
+      ],
+      "scenario": "ordinary-128"
+    },
+    {
+      "backend": "python",
+      "calls": 500,
+      "median_per_call_ms": 0.050935200008098036,
+      "median_total_ms": 25.467600004049018,
+      "operation": "components_to_wind",
+      "samples_seconds": [
+        0.023752799999783747,
+        0.028517099999589846,
+        0.02515329999732785,
+        0.027689299997291528,
+        0.025467600004049018
+      ],
+      "scenario": "ordinary-128"
+    },
+    {
+      "backend": "rust",
+      "calls": 500,
+      "median_per_call_ms": 0.04853559998446144,
+      "median_total_ms": 24.26779999223072,
+      "operation": "components_to_wind",
+      "samples_seconds": [
+        0.02402549999533221,
+        0.02363599999807775,
+        0.025255999993532896,
+        0.02426779999223072,
+        0.02627319999737665
+      ],
+      "scenario": "ordinary-128"
+    },
+    {
+      "backend": "python",
+      "calls": 500,
+      "median_per_call_ms": 0.035652600025059655,
+      "median_total_ms": 17.826300012529828,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.01807919998827856,
+        0.01808100000198465,
+        0.017353100003674626,
+        0.017598200007341802,
+        0.017826300012529828
+      ],
+      "scenario": "ordinary-128"
+    },
+    {
+      "backend": "rust",
+      "calls": 500,
+      "median_per_call_ms": 0.032785599993076175,
+      "median_total_ms": 16.392799996538088,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.017231299992999993,
+        0.016392799996538088,
+        0.016407600007369183,
+        0.016384700007620268,
+        0.015669200001866557
+      ],
+      "scenario": "ordinary-128"
+    },
+    {
+      "backend": "python",
+      "calls": 10,
+      "median_per_call_ms": 3.2978200004436076,
+      "median_total_ms": 32.978200004436076,
+      "operation": "wind_to_components",
+      "samples_seconds": [
+        0.03311350000149105,
+        0.033464799998910166,
+        0.0325516000011703,
+        0.032978200004436076,
+        0.030066599996644072
+      ],
+      "scenario": "large-100000"
+    },
+    {
+      "backend": "rust",
+      "calls": 10,
+      "median_per_call_ms": 1.8550200009485707,
+      "median_total_ms": 18.550200009485707,
+      "operation": "wind_to_components",
+      "samples_seconds": [
+        0.02003590000094846,
+        0.0189340000069933,
+        0.01726799999596551,
+        0.01760880000074394,
+        0.018550200009485707
+      ],
+      "scenario": "large-100000"
+    },
+    {
+      "backend": "python",
+      "calls": 10,
+      "median_per_call_ms": 3.3523699996294454,
+      "median_total_ms": 33.523699996294454,
+      "operation": "components_to_wind",
+      "samples_seconds": [
+        0.034651099995244294,
+        0.03474899999855552,
+        0.032576600002357736,
+        0.033523699996294454,
+        0.03277459999662824
+      ],
+      "scenario": "large-100000"
+    },
+    {
+      "backend": "rust",
+      "calls": 10,
+      "median_per_call_ms": 2.446380000037607,
+      "median_total_ms": 24.463800000376068,
+      "operation": "components_to_wind",
+      "samples_seconds": [
+        0.024950300008640625,
+        0.022624700010055676,
+        0.024790700001176447,
+        0.02328430001216475,
+        0.024463800000376068
+      ],
+      "scenario": "large-100000"
+    },
+    {
+      "backend": "python",
+      "calls": 10,
+      "median_per_call_ms": 3.022120000969153,
+      "median_total_ms": 30.22120000969153,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.03135559998918325,
+        0.029233299996121787,
+        0.029632400008267723,
+        0.030808299998170696,
+        0.03022120000969153
+      ],
+      "scenario": "large-100000"
+    },
+    {
+      "backend": "rust",
+      "calls": 10,
+      "median_per_call_ms": 2.9593700004625134,
+      "median_total_ms": 29.593700004625134,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.029593700004625134,
+        0.02873419999377802,
+        0.0300246000115294,
+        0.028853800002252683,
+        0.029905899995355867
+      ],
+      "scenario": "large-100000"
+    },
+    {
+      "backend": "python",
+      "calls": 5,
+      "median_per_call_ms": 7.793639998999424,
+      "median_total_ms": 38.96819999499712,
+      "operation": "wind_to_components",
+      "samples_seconds": [
+        0.03821850000531413,
+        0.03896819999499712,
+        0.03877310000825673,
+        0.03981180000118911,
+        0.04303369999979623
+      ],
+      "scenario": "batch-2048x128"
+    },
+    {
+      "backend": "rust",
+      "calls": 5,
+      "median_per_call_ms": 4.408920000423677,
+      "median_total_ms": 22.044600002118386,
+      "operation": "wind_to_components",
+      "samples_seconds": [
+        0.0210951000044588,
+        0.022016899994923733,
+        0.022705200011841953,
+        0.023533100000349805,
+        0.022044600002118386
+      ],
+      "scenario": "batch-2048x128"
+    },
+    {
+      "backend": "python",
+      "calls": 5,
+      "median_per_call_ms": 9.672359999967739,
+      "median_total_ms": 48.361799999838695,
+      "operation": "components_to_wind",
+      "samples_seconds": [
+        0.04708500001288485,
+        0.04863919998751953,
+        0.048361799999838695,
+        0.04884909999964293,
+        0.04607850000320468
+      ],
+      "scenario": "batch-2048x128"
+    },
+    {
+      "backend": "rust",
+      "calls": 5,
+      "median_per_call_ms": 6.083460000809282,
+      "median_total_ms": 30.41730000404641,
+      "operation": "components_to_wind",
+      "samples_seconds": [
+        0.03057269999408163,
+        0.029173100003390573,
+        0.03041730000404641,
+        0.031208399988827296,
+        0.02750170000945218
+      ],
+      "scenario": "batch-2048x128"
+    },
+    {
+      "backend": "python",
+      "calls": 100,
+      "median_per_call_ms": 0.0503749999916181,
+      "median_total_ms": 5.03749999916181,
+      "operation": "wind_to_components",
+      "samples_seconds": [
+        0.00503749999916181,
+        0.005492100011906587,
+        0.004285799994249828,
+        0.0062458999891532585,
+        0.004231300001265481
+      ],
+      "scenario": "repeated-128x100"
+    },
+    {
+      "backend": "rust",
+      "calls": 100,
+      "median_per_call_ms": 0.04231600003549829,
+      "median_total_ms": 4.231600003549829,
+      "operation": "wind_to_components",
+      "samples_seconds": [
+        0.004231600003549829,
+        0.0041446999966865405,
+        0.004105799991521053,
+        0.005324499987182207,
+        0.005456099999719299
+      ],
+      "scenario": "repeated-128x100"
+    },
+    {
+      "backend": "python",
+      "calls": 100,
+      "median_per_call_ms": 0.04956499993568286,
+      "median_total_ms": 4.956499993568286,
+      "operation": "components_to_wind",
+      "samples_seconds": [
+        0.006929600000148639,
+        0.006175500006065704,
+        0.004956499993568286,
+        0.004692500006058253,
+        0.004787500001839362
+      ],
+      "scenario": "repeated-128x100"
+    },
+    {
+      "backend": "rust",
+      "calls": 100,
+      "median_per_call_ms": 0.04707400003098883,
+      "median_total_ms": 4.707400003098883,
+      "operation": "components_to_wind",
+      "samples_seconds": [
+        0.004587500006891787,
+        0.004478299990296364,
+        0.004707400003098883,
+        0.005483900007675402,
+        0.005121599999256432
+      ],
+      "scenario": "repeated-128x100"
+    },
+    {
+      "backend": "python",
+      "calls": 100,
+      "median_per_call_ms": 0.030507000046782196,
+      "median_total_ms": 3.0507000046782196,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.003209000002243556,
+        0.0029704000044148415,
+        0.003402199989068322,
+        0.0030171000107657164,
+        0.0030507000046782196
+      ],
+      "scenario": "repeated-128x100"
+    },
+    {
+      "backend": "rust",
+      "calls": 100,
+      "median_per_call_ms": 0.02776799999992363,
+      "median_total_ms": 2.776799999992363,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.0028614999901037663,
+        0.002732699998887256,
+        0.0033104000031016767,
+        0.0027750000008381903,
+        0.002776799999992363
+      ],
+      "scenario": "repeated-128x100"
+    },
+    {
+      "backend": "python",
+      "calls": 100,
+      "median_per_call_ms": 0.027110000082757324,
+      "median_total_ms": 2.7110000082757324,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.003173099990817718,
+        0.002315599995199591,
+        0.0022914000001037493,
+        0.003579700001864694,
+        0.0027110000082757324
+      ],
+      "scenario": "scalar-700hpa-32"
+    },
+    {
+      "backend": "rust",
+      "calls": 100,
+      "median_per_call_ms": 0.02014700003201142,
+      "median_total_ms": 2.014700003201142,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.002089400004479103,
+        0.002014700003201142,
+        0.0019897000020137057,
+        0.001977800013264641,
+        0.0021816000080434605
+      ],
+      "scenario": "scalar-700hpa-32"
+    },
+    {
+      "backend": "python",
+      "calls": 100,
+      "median_per_call_ms": 0.026282999897375703,
+      "median_total_ms": 2.6282999897375703,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.0026282999897375703,
+        0.003308100000140257,
+        0.002984699996886775,
+        0.002353799995034933,
+        0.002347000001464039
+      ],
+      "scenario": "scalar-700hpa-128"
+    },
+    {
+      "backend": "rust",
+      "calls": 100,
+      "median_per_call_ms": 0.02069499998469837,
+      "median_total_ms": 2.069499998469837,
+      "operation": "interpolate_1d",
+      "samples_seconds": [
+        0.002236500004073605,
+        0.002216299995779991,
+        0.002069499998469837,
+        0.002040299994405359,
+        0.0020379999914439395
+      ],
+      "scenario": "scalar-700hpa-128"
+    },
+    {
+      "backend": "python",
+      "calls": 16,
+      "median_per_call_ms": 0.15743125004519243,
+      "median_total_ms": 2.518900000723079,
+      "operation": "interpolate_1d_x6",
+      "samples_seconds": [
+        0.0037892999971518293,
+        0.002518900000723079,
+        0.0024886000028345734,
+        0.0035419000050751492,
+        0.002315599995199591
+      ],
+      "scenario": "six-fields-700hpa-128"
+    },
+    {
+      "backend": "rust",
+      "calls": 16,
+      "median_per_call_ms": 0.1322562502537039,
+      "median_total_ms": 2.1161000040592626,
+      "operation": "interpolate_1d_x6",
+      "samples_seconds": [
+        0.002826999989338219,
+        0.0021617000020341948,
+        0.001980500004719943,
+        0.0021161000040592626,
+        0.0019897000020137057
+      ],
+      "scenario": "six-fields-700hpa-128"
+    },
+    {
+      "backend": "python",
+      "calls": 500,
+      "median_per_call_ms": 0.2459182000020519,
+      "median_total_ms": 122.95910000102594,
+      "operation": "Profile.__init__",
+      "samples_seconds": [
+        0.127105899999151,
+        0.1220173000037903,
+        0.12840549999964423,
+        0.11848370000370778,
+        0.12295910000102594
+      ],
+      "scenario": "profile-128-cached-selector"
+    },
+    {
+      "backend": "rust",
+      "calls": 500,
+      "median_per_call_ms": 0.2505403999821283,
+      "median_total_ms": 125.27019999106415,
+      "operation": "Profile.__init__",
+      "samples_seconds": [
+        0.12940780000644736,
+        0.13124119999702089,
+        0.1201913999975659,
+        0.12386019999394193,
+        0.12527019999106415
+      ],
+      "scenario": "profile-128-cached-selector"
+    },
+    {
+      "backend": "python",
+      "calls": 10,
+      "median_per_call_ms": 1.129439999931492,
+      "median_total_ms": 11.29439999931492,
+      "operation": "profile_kinematics",
+      "samples_seconds": [
+        0.009682099989731796,
+        0.011294399999314919,
+        0.011670400010189041,
+        0.011991799998213537,
+        0.009872599999653175
+      ],
+      "scenario": "profile-kinematics-32"
+    },
+    {
+      "backend": "rust",
+      "calls": 10,
+      "median_per_call_ms": 0.10130000009667128,
+      "median_total_ms": 1.0130000009667128,
+      "operation": "profile_kinematics",
+      "samples_seconds": [
+        0.0010301000002073124,
+        0.0009865000029094517,
+        0.0010278999980073422,
+        0.0009885000035865232,
+        0.0010130000009667128
+      ],
+      "scenario": "profile-kinematics-32"
+    },
+    {
+      "backend": "python",
+      "calls": 10,
+      "median_per_call_ms": 1.1827499998616986,
+      "median_total_ms": 11.827499998616986,
+      "operation": "profile_kinematics",
+      "samples_seconds": [
+        0.013090799999190494,
+        0.011498199994093738,
+        0.01264630000514444,
+        0.011827499998616986,
+        0.010566600001766346
+      ],
+      "scenario": "profile-kinematics-128"
+    },
+    {
+      "backend": "rust",
+      "calls": 10,
+      "median_per_call_ms": 0.10437000019010156,
+      "median_total_ms": 1.0437000019010156,
+      "operation": "profile_kinematics",
+      "samples_seconds": [
+        0.0010437000019010156,
+        0.0009356999944429845,
+        0.001093699989723973,
+        0.0010371000098530203,
+        0.0010780000011436641
+      ],
+      "scenario": "profile-kinematics-128"
+    },
+    {
+      "backend": "python",
+      "calls": 1,
+      "median_per_call_ms": 48.049899996840395,
+      "median_total_ms": 48.049899996840395,
+      "operation": "profile_parcels",
+      "samples_seconds": [
+        0.051782700000330806,
+        0.05093189999752212,
+        0.04718350000621285,
+        0.04729820000648033,
+        0.048049899996840395
+      ],
+      "scenario": "profile-parcels-32"
+    },
+    {
+      "backend": "rust",
+      "calls": 1,
+      "median_per_call_ms": 0.19180000526830554,
+      "median_total_ms": 0.19180000526830554,
+      "operation": "profile_parcels",
+      "samples_seconds": [
+        0.0002521999995224178,
+        0.00018029999046120793,
+        0.00019180000526830554,
+        0.00015890000213403255,
+        0.00019449999672360718
+      ],
+      "scenario": "profile-parcels-32"
+    },
+    {
+      "backend": "python",
+      "calls": 1,
+      "median_per_call_ms": 60.56769999850076,
+      "median_total_ms": 60.56769999850076,
+      "operation": "profile_parcels",
+      "samples_seconds": [
+        0.058891399996355176,
+        0.06056769999850076,
+        0.05971770000178367,
+        0.06380050000734627,
+        0.06595509999897331
+      ],
+      "scenario": "profile-parcels-128"
+    },
+    {
+      "backend": "rust",
+      "calls": 1,
+      "median_per_call_ms": 0.23360000341199338,
+      "median_total_ms": 0.23360000341199338,
+      "operation": "profile_parcels",
+      "samples_seconds": [
+        0.00023360000341199338,
+        0.0001959000073838979,
+        0.00023540000256616622,
+        0.0002052000054391101,
+        0.0002587999915704131
+      ],
+      "scenario": "profile-parcels-128"
+    },
+    {
+      "backend": "python",
+      "calls": 1,
+      "median_per_call_ms": 109.38460000033956,
+      "median_total_ms": 109.38460000033956,
+      "operation": "profile_convective_parcels",
+      "samples_seconds": [
+        0.10938460000033956,
+        0.1096759999927599,
+        0.10725530001218431,
+        0.11239059999934398,
+        0.10748289999901317
+      ],
+      "scenario": "profile-convective-parcels-32"
+    },
+    {
+      "backend": "rust",
+      "calls": 1,
+      "median_per_call_ms": 0.5807999987155199,
+      "median_total_ms": 0.5807999987155199,
+      "operation": "profile_convective_parcels",
+      "samples_seconds": [
+        0.0005916000081924722,
+        0.0005364000098779798,
+        0.0005807999987155199,
+        0.0005661000031977892,
+        0.0005963000003248453
+      ],
+      "scenario": "profile-convective-parcels-32"
+    },
+    {
+      "backend": "python",
+      "calls": 1,
+      "median_per_call_ms": 343.54349999921396,
+      "median_total_ms": 343.54349999921396,
+      "operation": "profile_convective_parcels",
+      "samples_seconds": [
+        0.328871399993659,
+        0.34580139999161474,
+        0.34483829999226145,
+        0.34354349999921396,
+        0.32994070000131615
+      ],
+      "scenario": "profile-convective-parcels-128"
+    },
+    {
+      "backend": "rust",
+      "calls": 1,
+      "median_per_call_ms": 1.9652999908430502,
+      "median_total_ms": 1.9652999908430502,
+      "operation": "profile_convective_parcels",
+      "samples_seconds": [
+        0.00196529999084305,
+        0.0029463999962899834,
+        0.0020819999917875975,
+        0.0019515000021783635,
+        0.001808300003176555
+      ],
+      "scenario": "profile-convective-parcels-128"
+    },
+    {
+      "backend": "python",
+      "calls": 1,
+      "median_per_call_ms": 15.87029999063816,
+      "median_total_ms": 15.87029999063816,
+      "operation": "profile_dcape",
+      "samples_seconds": [
+        0.016672900004778057,
+        0.01587029999063816,
+        0.013895000010961667,
+        0.014177000004565343,
+        0.016298000002279878
+      ],
+      "scenario": "profile-dcape-32"
+    },
+    {
+      "backend": "rust",
+      "calls": 1,
+      "median_per_call_ms": 0.12370001059025526,
+      "median_total_ms": 0.12370001059025526,
+      "operation": "profile_dcape",
+      "samples_seconds": [
+        0.00011439999798312783,
+        7.79999973019585e-05,
+        0.00026089999300893396,
+        0.00019060001068282872,
+        0.00012370001059025526
+      ],
+      "scenario": "profile-dcape-32"
+    },
+    {
+      "backend": "python",
+      "calls": 1,
+      "median_per_call_ms": 54.021599993575364,
+      "median_total_ms": 54.021599993575364,
+      "operation": "profile_dcape",
+      "samples_seconds": [
+        0.053148299994063564,
+        0.054310400009853765,
+        0.05252959999779705,
+        0.054021599993575364,
+        0.055361699996865354
+      ],
+      "scenario": "profile-dcape-128"
+    },
+    {
+      "backend": "rust",
+      "calls": 1,
+      "median_per_call_ms": 0.23239999427460134,
+      "median_total_ms": 0.23239999427460134,
+      "operation": "profile_dcape",
+      "samples_seconds": [
+        0.00023239999427460134,
+        0.00019449999672360718,
+        0.0002440999960526824,
+        0.00019549998978618532,
+        0.0002432000037515536
+      ],
+      "scenario": "profile-dcape-128"
+    },
+    {
+      "backend": "python-public",
+      "calls": 1,
+      "median_per_call_ms": 121.76920000638347,
+      "median_total_ms": 121.76920000638347,
+      "operation": "profile_thermodynamics",
+      "samples_seconds": [
+        0.12225669999315869,
+        0.11843230000522453,
+        0.12192869999853428,
+        0.11603309999918565,
+        0.12176920000638347
+      ],
+      "scenario": "profile-thermodynamics-32"
+    },
+    {
+      "backend": "rust-public",
+      "calls": 1,
+      "median_per_call_ms": 0.6586999952560291,
+      "median_total_ms": 0.6586999952560291,
+      "operation": "profile_thermodynamics",
+      "samples_seconds": [
+        0.0006597000028705224,
+        0.0006586999952560291,
+        0.0006521000032080337,
+        0.0005747999966843054,
+        0.0008531000057701021
+      ],
+      "scenario": "profile-thermodynamics-32"
+    },
+    {
+      "backend": "rust-buffered",
+      "calls": 1,
+      "median_per_call_ms": 0.6349000032059848,
+      "median_total_ms": 0.6349000032059848,
+      "operation": "profile_thermodynamics",
+      "samples_seconds": [
+        0.0009080000018002465,
+        0.0006349000032059848,
+        0.0005551999929593876,
+        0.0005643000040436164,
+        0.000818300002720207
+      ],
+      "scenario": "profile-thermodynamics-32"
+    },
+    {
+      "backend": "rust-native",
+      "calls": 1,
+      "median_per_call_ms": 0.4606000002240762,
+      "median_total_ms": 0.4606000002240762,
+      "operation": "profile_thermodynamics",
+      "samples_seconds": [
+        0.0008823999960441142,
+        0.00045259999751579016,
+        0.0004606000002240762,
+        0.0004523999959928915,
+        0.0005100999987917021
+      ],
+      "scenario": "profile-thermodynamics-32"
+    },
+    {
+      "backend": "python-public",
+      "calls": 1,
+      "median_per_call_ms": 382.50629999674857,
+      "median_total_ms": 382.50629999674857,
+      "operation": "profile_thermodynamics",
+      "samples_seconds": [
+        0.38250629999674857,
+        0.38290979999874253,
+        0.38920569999027066,
+        0.3822753999993438,
+        0.3742335999995703
+      ],
+      "scenario": "profile-thermodynamics-128"
+    },
+    {
+      "backend": "rust-public",
+      "calls": 1,
+      "median_per_call_ms": 1.9573000026866794,
+      "median_total_ms": 1.9573000026866794,
+      "operation": "profile_thermodynamics",
+      "samples_seconds": [
+        0.0019573000026866794,
+        0.0018897000118158758,
+        0.001963999995496124,
+        0.001894100001663901,
+        0.0020001000084448606
+      ],
+      "scenario": "profile-thermodynamics-128"
+    },
+    {
+      "backend": "rust-buffered",
+      "calls": 1,
+      "median_per_call_ms": 1.8278999923495576,
+      "median_total_ms": 1.8278999923495576,
+      "operation": "profile_thermodynamics",
+      "samples_seconds": [
+        0.0018101000023307279,
+        0.0018823999998858199,
+        0.0018278999923495576,
+        0.0018493999959900975,
+        0.0018176999874413013
+      ],
+      "scenario": "profile-thermodynamics-128"
+    },
+    {
+      "backend": "rust-native",
+      "calls": 1,
+      "median_per_call_ms": 1.7186999903060496,
+      "median_total_ms": 1.7186999903060496,
+      "operation": "profile_thermodynamics",
+      "samples_seconds": [
+        0.001742499996908009,
+        0.0017179999995278195,
+        0.0017742000054568052,
+        0.0017186999903060496,
+        0.001707100003841333
+      ],
+      "scenario": "profile-thermodynamics-128"
+    },
+    {
+      "backend": "python-public",
+      "calls": 1,
+      "median_per_call_ms": 988.9311000006273,
+      "median_total_ms": 988.9311000006273,
+      "operation": "profile_batch_analysis",
+      "samples_seconds": [
+        0.9819528999942122,
+        0.9937399000045843,
+        0.9889311000006273,
+        0.9777700999984518,
+        1.0635727000044426
+      ],
+      "scenario": "profile-batch-8x32"
+    },
+    {
+      "backend": "rust-serial",
+      "calls": 1,
+      "median_per_call_ms": 4.539700006716885,
+      "median_total_ms": 4.539700006716885,
+      "operation": "profile_batch_analysis",
+      "samples_seconds": [
+        0.004539700006716885,
+        0.005697800006601028,
+        0.00447810000332538,
+        0.004250300000421703,
+        0.0045449000026565045
+      ],
+      "scenario": "profile-batch-8x32"
+    },
+    {
+      "backend": "rust-parallel-4",
+      "calls": 1,
+      "median_per_call_ms": 2.3581999994348735,
+      "median_total_ms": 2.3581999994348735,
+      "operation": "profile_batch_analysis",
+      "samples_seconds": [
+        0.0029070999880786985,
+        0.002756700007012114,
+        0.0023053000040818006,
+        0.0023581999994348735,
+        0.0023159999982453883
+      ],
+      "scenario": "profile-batch-8x32"
+    },
+    {
+      "backend": "rust-native-serial",
+      "calls": 1,
+      "median_per_call_ms": 4.024400011985563,
+      "median_total_ms": 4.024400011985563,
+      "operation": "profile_batch_analysis",
+      "samples_seconds": [
+        0.00477530001080595,
+        0.004103699990082532,
+        0.00371140000061132,
+        0.0036629000096581876,
+        0.004024400011985563
+      ],
+      "scenario": "profile-batch-8x32"
+    },
+    {
+      "backend": "rust-native-parallel-4",
+      "calls": 1,
+      "median_per_call_ms": 2.2232000046642497,
+      "median_total_ms": 2.2232000046642497,
+      "operation": "profile_batch_analysis",
+      "samples_seconds": [
+        0.0022232000046642497,
+        0.0019782000017585233,
+        0.0028692000050796196,
+        0.0020084999996470287,
+        0.0026553999923635274
+      ],
+      "scenario": "profile-batch-8x32"
+    },
+    {
+      "backend": "python-public",
+      "calls": 1,
+      "median_per_call_ms": 12777.063400004408,
+      "median_total_ms": 12777.063400004408,
+      "operation": "profile_batch_analysis",
+      "samples_seconds": [
+        13.593806199991377,
+        13.166206499998225,
+        12.777063400004408,
+        12.378752500007977,
+        12.44315920000372
+      ],
+      "scenario": "profile-batch-32x128"
+    },
+    {
+      "backend": "rust-serial",
+      "calls": 1,
+      "median_per_call_ms": 65.47190000128467,
+      "median_total_ms": 65.47190000128467,
+      "operation": "profile_batch_analysis",
+      "samples_seconds": [
+        0.06814449999365024,
+        0.07446079999499489,
+        0.06477660000382457,
+        0.06547190000128467,
+        0.06320589999086224
+      ],
+      "scenario": "profile-batch-32x128"
+    },
+    {
+      "backend": "rust-parallel-4",
+      "calls": 1,
+      "median_per_call_ms": 25.44070000294596,
+      "median_total_ms": 25.44070000294596,
+      "operation": "profile_batch_analysis",
+      "samples_seconds": [
+        0.028236899990588427,
+        0.02649240000755526,
+        0.02544070000294596,
+        0.024166800008970313,
+        0.024555800002417527
+      ],
+      "scenario": "profile-batch-32x128"
+    },
+    {
+      "backend": "rust-native-serial",
+      "calls": 1,
+      "median_per_call_ms": 63.446600004681386,
+      "median_total_ms": 63.446600004681386,
+      "operation": "profile_batch_analysis",
+      "samples_seconds": [
+        0.06401469999400433,
+        0.06511749999481253,
+        0.06344660000468139,
+        0.06212270000833087,
+        0.060423499991884455
+      ],
+      "scenario": "profile-batch-32x128"
+    },
+    {
+      "backend": "rust-native-parallel-4",
+      "calls": 1,
+      "median_per_call_ms": 22.74129999568686,
+      "median_total_ms": 22.74129999568686,
+      "operation": "profile_batch_analysis",
+      "samples_seconds": [
+        0.02578209999774117,
+        0.026403199997730553,
+        0.02176550000149291,
+        0.02110040000115987,
+        0.02274129999568686
+      ],
+      "scenario": "profile-batch-32x128"
+    }
+  ]
+}

@@ -104,9 +104,10 @@ COVERAGE_BOUNDS = (-130.0, -60.0, 20.0, 55.0)
 #: every map.
 #:
 #: Going further is the wrong lever: reaching the native 1 km would need roughly
-#: 7800 pixels of width. Sharpness beyond this comes from
-#: :func:`viewport_frame_size`, which spends the pixel budget on the area being
-#: looked at instead of on the whole continent.
+#: 7800 pixels of width. Sharpness beyond this comes from asking for a smaller
+#: area rather than a bigger image -- :func:`sharpmod.radar_site.fetch_frame`
+#: spends a comparable pixel budget on one antenna's box, which works out around
+#: 0.38 km per pixel against this frame's 1.5 km.
 DEFAULT_FRAME_SIZE = (4096, 2048)
 
 #: Bounds on a caller-supplied frame size. The upper bound is what keeps a

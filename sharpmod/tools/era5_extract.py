@@ -44,7 +44,9 @@ from datetime import datetime, timezone
 import numpy as np
 
 from sharpmod import backends as _backends
+from sharpmod.export_paths import export_file_path
 from sharpmod.model_surface import SURFACE_CONTRACT_VERSION, merge_surface_level
+from sharpmod.portable_sounding import fatal_issues
 from sharpmod.upstream_warnings import xarray_new_combine_defaults
 
 __all__ = [
@@ -900,10 +902,13 @@ def _require_profile_qc(columns, label):
         columns["wspd"],
         missing=MISSING,
     )
-    if not result.valid:
+    # Only genuinely unusable data is refused; a dewpoint above the temperature
+    # is contaminated rather than unusable and travels on in ``qc_issues``.
+    fatal = fatal_issues(result.issues)
+    if fatal:
         raise RetrievalError(
             "%s sounding failed physical quality control: %s"
-            % (label, ", ".join(result.issues))
+            % (label, ", ".join(fatal))
         )
     return result
 
@@ -1351,11 +1356,13 @@ def main(argv=None):  # pragma: no cover - thin CLI wrapper
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     valid_time = _parse_cli_time(args.time)
-    out = args.out or "era5_point_%.2fN_%.2fE_%s.npz" % (
-        args.lat, args.lon, valid_time.strftime("%Y%m%d%H"))
     try:
+        default_name = "era5_point_%.2fN_%.2fE_%s.npz" % (
+            args.lat, args.lon, valid_time.strftime("%Y%m%d%H")
+        )
+        out = args.out or str(export_file_path(default_name))
         path = extract(args.lat, args.lon, valid_time, out, loc=args.loc)
-    except ERA5ExtractionError as exc:
+    except (ERA5ExtractionError, OSError) as exc:
         print("ERROR: %s" % exc)
         return 1
     print("wrote %s" % path)

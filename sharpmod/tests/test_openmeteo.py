@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -485,6 +486,29 @@ def test_extract_writes_a_valid_portable_sounding_pair(tmp_path):
         assert str(data["run"]) == "2026-08-29 00:00"
         assert str(data["valid"]) == "2026-08-29 12:00"
         assert not bool(data["observed"])
+
+
+def test_default_output_uses_application_export_folder(tmp_path, monkeypatch):
+    from sharpmod import export_paths
+
+    application = tmp_path / "installed-app"
+    application.mkdir()
+    monkeypatch.setattr(export_paths, "application_root", lambda: application)
+    dataset, _seen = _fetch()
+
+    path = Path(
+        om.extract(
+            MODEL,
+            38.77,
+            -90.87,
+            run_time=RUN,
+            fxx=FXX,
+            dataset=dataset,
+        )
+    )
+
+    assert path.parent == application / "rendered_soundings"
+    assert path.is_file()
 
 
 def test_the_sidecar_records_provenance_and_no_credential(tmp_path):

@@ -284,8 +284,11 @@ def test_thin_box_collapses_to_a_single_row_at_its_center():
 
 
 def test_points_outside_the_domain_are_kept_but_flagged():
-    # Straddles the southern edge of the configured CONUS domain.
-    region = BoxRegion.from_corners(18.0, -105.0, 24.0, -99.0)
+    # Straddles HRRR's real southern edge, which its Lambert grid puts at
+    # 24.09N over 105W rising to 24.35N over 99W. This box used to stop at 24.0
+    # and still straddled, but only because the domain was then a rounded box
+    # with a flat 20N floor -- against the grid it fell entirely outside.
+    region = BoxRegion.from_corners(18.0, -105.0, 27.0, -99.0)
     plan = plan_box_samples("hrrr", region)
     assert plan.skipped_points
     assert plan.requestable_points

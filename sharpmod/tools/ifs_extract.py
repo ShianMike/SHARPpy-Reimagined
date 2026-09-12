@@ -35,6 +35,7 @@ The ECMWF tooling (``herbie-data``, ``cfgrib``, ``xarray``) is the same optional
 import os
 from datetime import datetime, timezone
 
+from sharpmod.export_paths import export_file_path
 from sharpmod.tools import era5_extract as _e5
 from sharpmod.upstream_patches import apply_herbie_source_fallback
 from sharpmod.upstream_warnings import known_herbie_deprecations
@@ -331,11 +332,13 @@ def main(argv=None):  # pragma: no cover - thin CLI wrapper
 
     valid_time = _parse_cli_time(args.time) if args.time else None
     stamp = (valid_time or datetime.now(timezone.utc)).strftime("%Y%m%d%H")
-    out = args.out or "ifs_point_%.2fN_%.2fE_%s.npz" % (
-        args.lat, args.lon, stamp)
     try:
+        default_name = "ifs_point_%.2fN_%.2fE_%s.npz" % (
+            args.lat, args.lon, stamp
+        )
+        out = args.out or str(export_file_path(default_name))
         path = extract(args.lat, args.lon, valid_time, out, loc=args.loc)
-    except IFSExtractionError as exc:
+    except (IFSExtractionError, OSError) as exc:
         print("ERROR: %s" % exc)
         return 1
     print("wrote %s" % path)

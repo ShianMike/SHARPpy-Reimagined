@@ -7,6 +7,7 @@ stay in Python and remain outside this boundary.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -18,7 +19,13 @@ if TYPE_CHECKING:
 # incompatible way.  It is deliberately separate from the package version:
 # package versions keep wheels in lockstep, while this value describes the
 # shape of the extension API itself.
-BACKEND_API_VERSION = 6
+BACKEND_API_VERSION = 7
+
+# Release-build adapter measurements support a bounded four-worker pool once
+# a call contains at least eight complete profiles. Keep Python defaults in
+# one place so facade and adapters cannot silently drift.
+DEFAULT_BATCH_THREADS = min(4, max(1, os.cpu_count() or 1))
+DEFAULT_BATCH_PARALLEL_THRESHOLD = 8
 
 REQUIRED_RUST_CAPABILITIES = (
     "wind_to_components",
@@ -32,7 +39,13 @@ REQUIRED_RUST_CAPABILITIES = (
     "profile_convective_parcels",
     "lift_parcel",
     "profile_dcape",
+    "profile_thermodynamics",
     "decode_grib_point",
+    "decode_grib_points",
+    "set_grib_inventory_cache_enabled",
+    "clear_grib_inventory_cache",
+    "grib_inventory_cache_info",
+    "profile_batch_analysis",
 )
 
 
@@ -195,6 +208,29 @@ class DowndraftDiagnostics:
     trace: ParcelTrace
 
 
+@dataclass(frozen=True)
+class ProfileThermodynamics:
+    """Parcel, convective, and downdraft results from one preparation."""
+
+    parcels: ParcelWorkspace
+    convective: ConvectiveParcelWorkspace
+    downdraft: DowndraftDiagnostics
+
+
+@dataclass(frozen=True)
+class BatchProfileAnalysis:
+    """Dense fixed-width diagnostics for an ordered profile batch."""
+
+    parcels: object
+    convective_parcels: object
+    effective_bounds: object
+    downdraft: object
+    storm_motion: object
+    kinematic_layers: object
+    execution_mode: str
+    worker_count: int
+
+
 @runtime_checkable
 class Backend(Protocol):
     """Operations implemented by both the Python and Rust backends."""
@@ -295,7 +331,35 @@ class Backend(Protocol):
     ) -> DowndraftDiagnostics:
         """Compute DCAPE and its descending parcel trace."""
 
+    def profile_thermodynamics(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ) -> ProfileThermodynamics:
+        """Compute all parcel and downdraft workspaces in one preparation."""
+
+    def profile_batch_analysis(
+        self,
+        profiles,
+        layer_tops_agl,
+        *,
+        missing=-9999.0,
+        max_threads=DEFAULT_BATCH_THREADS,
+        parallel_threshold=DEFAULT_BATCH_PARALLEL_THRESHOLD,
+    ) -> BatchProfileAnalysis:
+        """Compute ordered fixed-width diagnostics for complete profiles."""
+
     def decode_grib_point(
         self, path, lat, lon, *, missing=-9999.0,
     ) -> "DecodedPoint":
         """Decode one pressure-level GRIB column at the nearest grid point."""
+
+    def decode_grib_points(
+        self, path, points, *, missing=-9999.0,
+    ) -> tuple["DecodedPoint", ...]:
+        """Decode several nearest-grid-point columns in request order."""

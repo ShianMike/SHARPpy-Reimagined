@@ -34,6 +34,7 @@ from datetime import datetime
 
 import numpy as np
 
+from sharpmod.export_paths import export_file_path
 from sharpmod.io import uwyo_catalog
 from sharpmod.io.uwyo_decoder import (
     MS_TO_KT,  # noqa: F401  (re-exported for callers/tests)
@@ -143,9 +144,14 @@ def _cmd_fetch(args):
         prof_meta["lon"] = meta.lon
     prof_meta.setdefault("valid", when)
 
-    out = args.out or "uwyo_%s_%s.npz" % (meta.id, when.strftime("%Y%m%d%H"))
+    default_name = "uwyo_%s_%s.npz" % (meta.id, when.strftime("%Y%m%d%H"))
     loc = args.loc or meta.name.split(",")[0].split()[0]
-    _write_npz(prof, out, prof_meta, loc)
+    try:
+        out = args.out or str(export_file_path(default_name))
+        _write_npz(prof, out, prof_meta, loc)
+    except OSError as exc:
+        print("ERROR: could not write sounding: %s" % exc, file=sys.stderr)
+        return 2
     n = int(np.ma.asarray(prof.pres).size)
     print("wrote %s (%d levels, station %s)" % (out, n, meta.id))
 

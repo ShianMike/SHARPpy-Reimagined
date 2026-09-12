@@ -72,15 +72,57 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     property_scripts = "\n".join(
         step.get("run", "") for step in jobs["property"]["steps"]
     )
-    assert "run_test_lane.py property --workers 4" in property_scripts
+    assert (
+        "run_test_lane.py property --workers ${{ matrix.workers }}"
+        in property_scripts
+    )
     serial_scripts = "\n".join(
         step.get("run", "") for step in jobs["serial-release"]["steps"]
     )
     assert "run_test_lane.py serial-release" in serial_scripts
-    assert jobs["serial-release"]["if"] == (
-        "${{ inputs.run_serial_release == true || "
-        "github.ref == 'refs/heads/main' }}"
+
+    # The deterministic and serial lanes run the accelerated backend that ships
+    # to users, because the pure-Python fallback costs roughly 6.7x on the
+    # parcel and kinematics kernels and made the serial gate the whole
+    # release's critical path.
+    for lane in ("fast", "serial-release"):
+        steps = jobs[lane]["steps"]
+        assert any(
+            "maturin build" in step.get("run", "") for step in steps
+        ), f"the {lane} lane must build the Rust backend"
+        assert any(
+            step.get("env", {}).get("SHARPMOD_BACKEND") == "rust"
+            for step in steps
+        ), f"the {lane} lane must fail loudly instead of falling back silently"
+
+    # Neither shipped compute path may lose its deep property coverage, so the
+    # 100-example lane runs once per backend. Dropping either leg would let a
+    # backend-specific disagreement reach a release: the compatibility matrix
+    # covers the fallback at only ten examples.
+    property_job = jobs["property"]
+    assert property_job["strategy"]["matrix"]["include"] == [
+        {"backend": "python", "workers": "2"},
+        {"backend": "rust", "workers": "4"},
+    ]
+    property_steps = property_job["steps"]
+    assert any(
+        step.get("env", {}).get("SHARPMOD_BACKEND") == "${{ matrix.backend }}"
+        for step in property_steps
+    ), "the property lane must run each backend explicitly"
+    rust_build = next(
+        step for step in property_steps if "maturin build" in step.get("run", "")
     )
+    assert rust_build["if"] == "${{ matrix.backend == 'rust' }}"
+
+    # The fallback keeps whole-suite coverage on both older interpreters.
+    assert not any(
+        "maturin build" in step.get("run", "")
+        for step in jobs["compatibility"]["steps"]
+    ), "the compatibility matrix must keep covering the Python fallback"
+    assert jobs["serial-release"]["if"] == (
+        "${{ inputs.run_serial_release == true }}"
+    )
+    assert jobs["serial-release"]["timeout-minutes"] == "45"
     assert "test-timing" in str(workflow)
     timing_uploads = [
         step
@@ -147,7 +189,14 @@ def test_release_installs_model_fetch_dependencies():
     assert workflow.count("version_consistent") >= 2
     assert "uses: ./.github/workflows/tests.yml" in workflow
     assert "run_serial_release: true" in workflow
-    assert "needs: [resolve-release, test-release]" in workflow
+    # Publishing waits for every lane, so a failing test run cannot ship. The
+    # Windows build deliberately overlaps the serial gate rather than queueing
+    # behind it, which is what kept the release on its former critical path.
+    assert (
+        "needs: [resolve-release, test-release, build-windows-exe, "
+        "attest-windows-release]"
+    ) in workflow
+    assert "needs: [resolve-release, test-release]" not in workflow
     assert workflow.count("contents: write") == 1
 
 

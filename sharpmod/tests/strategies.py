@@ -99,8 +99,27 @@ class SoundingData:
     * ``u`` / ``v`` -- wind components (kt) derived from ``wdir`` / ``wspd``.
     """
 
-    __slots__ = ("pres", "hght", "tmpc", "dwpc", "wdir", "wspd", "omeg",
-                 "u", "v", "logp", "sfc", "meta")
+    __slots__ = (
+        "pres",
+        "hght",
+        "tmpc",
+        "dwpc",
+        "wdir",
+        "wspd",
+        "omeg",
+        "u",
+        "v",
+        "logp",
+        "sfc",
+        "meta",
+        # Real Profile instances retain these immutable analysis workspaces.
+        # Exposing the same cache surface keeps property tests representative
+        # while preserving a slotted object with no arbitrary attributes.
+        "_sharpmod_profile_parcels",
+        "_sharpmod_profile_kinematics",
+        "_sharpmod_default_oracle",
+        "_sharpmod_convective_oracle",
+    )
 
     def __init__(self, pres, hght, tmpc, dwpc, wdir, wspd, omeg=None,
                  meta=None):

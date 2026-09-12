@@ -147,8 +147,14 @@ def test_top_level_package_and_subpackages_importable():
     import importlib
 
     assert sharpmod.__name__ == "sharpmod"
-    for sub in ("sharpmod.io", "sharpmod.sharptab", "sharpmod.viz",
-                "sharpmod.tools", "sharpmod.resources"):
+    for sub in (
+        "sharpmod.io",
+        "sharpmod.sharptab",
+        "sharpmod.viz",
+        "sharpmod.render_patches",
+        "sharpmod.tools",
+        "sharpmod.resources",
+    ):
         module = importlib.import_module(sub)
         assert module is not None
 
@@ -351,6 +357,47 @@ def test_render_cli_defaults_to_hd_and_accepts_lossless(monkeypatch, tmp_path):
     assert calls[-1] == (
         "input.npz", str(tmp_path / "lossless.png"),
         render_mod.PNG_IMAGE_LOSSLESS, "MU")
+
+
+def test_render_cli_default_is_app_local_but_explicit_output_is_unchanged(
+        monkeypatch, tmp_path):
+    from sharpmod import export_paths, render as render_mod
+
+    application = tmp_path / "installed-app"
+    application.mkdir()
+    outside_cwd = tmp_path / "launch-directory"
+    outside_cwd.mkdir()
+    monkeypatch.chdir(outside_cwd)
+    monkeypatch.setattr(export_paths, "application_root", lambda: application)
+    outputs = []
+
+    def fake_render(_infile, outfile, **_kwargs):
+        outputs.append(outfile)
+        return outfile
+
+    monkeypatch.setattr(render_mod, "render", fake_render)
+
+    assert render_mod.main(["input.npz"]) == 0
+    assert outputs[-1] == str(
+        application / "rendered_soundings" / "sharpmod_sounding.png"
+    )
+
+    explicit = outside_cwd / "chosen-name.png"
+    assert render_mod.main(["input.npz", str(explicit)]) == 0
+    assert outputs[-1] == str(explicit)
+
+
+def test_render_reports_an_uncreatable_explicit_output_directory(tmp_path):
+    from sharpmod import render as render_mod
+
+    blocked = tmp_path / "blocked-parent"
+    blocked.write_text("not a directory", encoding="utf-8")
+    output = blocked / "chosen.png"
+
+    with pytest.raises(render_mod.RenderError, match="could not be created") as error:
+        render_mod.render("input.npz", str(output))
+
+    assert str(blocked) in str(error.value)
 
 
 def test_apply_render_parcel_uses_sharppy_update_path():

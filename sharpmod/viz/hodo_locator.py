@@ -40,6 +40,11 @@ _COUNTY_ARCHIVE_LOCK = threading.RLock()
 #: inset is small, so a wash faint enough to read well at full size disappears.
 _OVERLAY_FILL_ALPHA = 90
 _OVERLAY_HATCH_ALPHA = 200
+#: A shape standing in for a point is a symbol, not a wash: it covers a few
+#: pixels, so it hides nothing and has no reason to be translucent. Matches
+#: ``gui_maps.OVERLAY_MARKER_FILL_ALPHA`` so a storm report looks the same on
+#: the inset as it did on the map it was chosen from.
+_OVERLAY_MARKER_FILL_ALPHA = 255
 _OVERLAY_STROKE_WIDTH = 1.2
 _COORDINATE_LABEL_RE = re.compile(
     r"(?ix)"
@@ -593,7 +598,10 @@ def _draw_overlay_layers(
                             qtcore, qtgui, colour,
                             getattr(shape, "hatch_level", 0)))
                     else:
-                        colour.setAlpha(_OVERLAY_FILL_ALPHA)
+                        colour.setAlpha(
+                            _OVERLAY_MARKER_FILL_ALPHA
+                            if getattr(shape, "marker", False)
+                            else _OVERLAY_FILL_ALPHA)
                         painter.fillPath(path, qtgui.QBrush(colour))
             stroke = getattr(shape, "stroke", None)
             if stroke:

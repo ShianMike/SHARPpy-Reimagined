@@ -110,6 +110,26 @@ def test_render_decode_uses_native_profile_without_python_integrators(
     assert len(prof.dpcl_ptrace) > 2
 
 
+def test_accelerated_profile_uses_one_shared_thermodynamic_call(monkeypatch):
+    collection, _ = decoder.load_npz(str(SAMPLE))
+    raw = next(iter(collection._profs.values()))[0]
+    original = backends._profile_thermodynamics_buffers
+    calls = 0
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(backends, "_profile_thermodynamics_buffers", counted)
+
+    prof = AcceleratedConvectiveProfile.copy(raw)
+
+    assert calls == 1
+    assert np.isfinite(prof.mupcl.bplus)
+    assert np.isfinite(prof.dcape)
+
+
 def test_accelerated_profile_falls_back_to_sharppy(monkeypatch):
     collection, _ = decoder.load_npz(str(SAMPLE))
     raw = next(iter(collection._profs.values()))[0]
@@ -130,7 +150,11 @@ def test_accelerated_profile_falls_back_to_sharppy(monkeypatch):
         calls["dcape"] += 1
         return original_dcape(*args, **kwargs)
 
-    monkeypatch.setattr(backends, "profile_convective_parcels", unavailable)
+    monkeypatch.setattr(
+        backends,
+        "_profile_thermodynamics_buffers",
+        unavailable,
+    )
     monkeypatch.setattr(backends, "profile_dcape", unavailable)
     monkeypatch.setattr(sp_params, "parcelx", parcelx)
     monkeypatch.setattr(sp_params, "dcape", dcape)

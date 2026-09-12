@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import builtins
+import json
 import os
 import re
 import sys
@@ -627,6 +628,38 @@ def test_model_extract_writes_loadable_npz(tmp_path, monkeypatch):
         8.0e-5)
 
 
+def test_model_extract_default_output_uses_application_export_folder(
+    tmp_path, monkeypatch
+):
+    from sharpmod import export_paths
+
+    application = tmp_path / "installed-app"
+    application.mkdir()
+    monkeypatch.setattr(export_paths, "application_root", lambda: application)
+    monkeypatch.setattr(
+        model_extract,
+        "_retrieve_dataset",
+        lambda *_args, **_kwargs: (
+            _dataset_with_surface(),
+            SimpleNamespace(grib="memory://gfs"),
+        ),
+    )
+
+    result = Path(
+        model_extract.extract(
+            "gfs",
+            35.0,
+            -99.0,
+            run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+            fxx=6,
+        )
+    )
+
+    assert result.parent == application / "rendered_soundings"
+    assert result.name == "gfs_point_35.00N_-99.00E_2026070800_f006.npz"
+    assert result.is_file()
+
+
 def test_hrrr_extract_requires_and_records_verified_surface_merge(tmp_path):
     output = tmp_path / "hrrr_surface.npz"
 
@@ -666,26 +699,36 @@ def test_hrrr_extract_fails_closed_without_verified_surface(tmp_path):
         )
 
 
-def test_extract_rejects_dewpoint_above_temperature_before_write(tmp_path):
+def test_extract_records_dewpoint_above_temperature_without_refusing(tmp_path):
+    """A supersaturated level is contaminated data, not unusable data.
+
+    This used to raise. Refusing the extraction meant a sounding a forecaster
+    wanted to look at could not be produced at all, which hides the
+    contamination rather than reporting it -- and a dewpoint above the
+    temperature is a real reading, most often near the top of the troposphere
+    where the humidity sensor is least reliable. It is written, and the issue
+    travels with it in the sidecar for the inspector to warn about.
+    """
     dataset = _dataset_with_surface().copy()
     dataset["r"] = dataset["r"] * 0.0 + 150.0
-    output = tmp_path / "unphysical.npz"
+    output = tmp_path / "contaminated.npz"
 
-    with pytest.raises(
-        model_extract.RetrievalError,
-        match="dewpoint_above_temperature",
-    ):
-        model_extract.extract(
-            "gfs",
-            35.0,
-            -99.0,
-            run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
-            out_path=output,
-            dataset=dataset,
-        )
+    model_extract.extract(
+        "gfs",
+        35.0,
+        -99.0,
+        run_time=datetime(2026, 7, 8, 0, tzinfo=timezone.utc),
+        out_path=output,
+        dataset=dataset,
+    )
 
-    assert not output.exists()
-    assert not output.with_suffix(".json").exists()
+    assert output.is_file()
+    sidecar = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
+    assert "dewpoint_above_temperature" in sidecar["qc_issues"]
+    assert sidecar["qc_valid"] is False, (
+        "the backends still agree it is out of specification; only the refusal "
+        "was wrong"
+    )
 
 
 def test_owned_dataset_closes_when_cancelled_after_retrieval(

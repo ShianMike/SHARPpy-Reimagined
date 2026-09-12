@@ -27,8 +27,10 @@ import numpy as np
 
 from sharpmod import backends as _backends
 from sharpmod import eccc_geomet
+from sharpmod import lambert_grid
 from sharpmod import openmeteo
 from sharpmod import rrfs_nomads
+from sharpmod.export_paths import export_file_path
 from sharpmod.model_fields import (
     CFS_SURFACE_SEARCH,
     IFS_INVARIANT_FIELDS,
@@ -376,7 +378,25 @@ class ProviderCapability:
 
 
 GLOBAL_DOMAIN = (-180.0, 180.0, -90.0, 90.0)
+
+#: Coarse longitude/latitude envelope shared by the CONUS models.
+#:
+#: Deliberately generous, and only a fallback. Every one of these models runs on
+#: a Lambert conformal grid whose boundary is curved, so no box describes one:
+#: HRRR's southern edge reaches 24.36N over Kansas and 21.14N at its own corners.
+#: A model that supplies a ``domain_outline`` is tested and drawn against that
+#: instead -- see :data:`HRRR_OUTLINE`. The others still fall back to this, which
+#: accepts a margin of points they do not actually carry.
 CONUS_DOMAIN = (-130.0, -60.0, 20.0, 55.0)
+
+#: HRRR's real grid perimeter, and the envelope measured off it.
+#:
+#: The envelope is computed rather than rounded, so it cannot drift from the grid.
+#: It also differs from :data:`CONUS_DOMAIN` in every direction, which is the
+#: measure of how wrong the box was: 4.1 degrees of longitude at the west edge,
+#: 2.4 degrees of latitude at the north.
+HRRR_OUTLINE = lambert_grid.HRRR_GRID.outline()
+HRRR_DOMAIN = lambert_grid.HRRR_GRID.bounds()
 ALASKA_DOMAIN = (160.0, -120.0, 40.0, 80.0)
 HAWAII_DOMAIN = (-162.5, -152.5, 16.0, 24.0)
 PUERTO_RICO_DOMAIN = (-70.0, -62.0, 15.0, 22.0)
@@ -425,8 +445,9 @@ IFS_SHORT_CUTOFF_MAX_FXX = 144
 _CONFIGS = (
     ModelConfig(
         "hrrr", "HRRR", "hrrr", "prs", cycles=tuple(range(24)),
-        fxx_values=_hours(48), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        fxx_values=_hours(48), domain="CONUS", domain_bounds=HRRR_DOMAIN,
         grid_spacing_km=3.0,
+        domain_outline=HRRR_OUTLINE,
         notes="3-km CONUS pressure-level forecast grids"),
     ModelConfig(
         "rap", "RAP", "rap", "awp130pgrb", cycles=tuple(range(24)),
@@ -855,6 +876,19 @@ def grid_spacing_km(model):
     return float(spacing)
 
 
+#: Models whose acceptance is decided on their native grid, not on a box.
+#:
+#: A Lambert grid's boundary is curved, so a box does two wrong things at once
+#: near the corners: it accepts points the model does not carry and, if tightened
+#: to stop that, refuses points it does. Testing in the grid's own plane is the
+#: only way to get both right, and it is also what makes the drawn outline and
+#: the accept/refuse answer agree -- a map that outlines one region while
+#: accepting a different one is worse than a coarse map.
+_NATIVE_GRID_DOMAINS = {
+    "hrrr": lambert_grid.HRRR_GRID,
+}
+
+
 def point_in_domain(model, lat, lon):
     """Return whether ``lat``/``lon`` is inside the model's configured domain."""
     cfg = _coerce_config(model)
@@ -863,6 +897,9 @@ def point_in_domain(model, lat, lon):
     if cfg.key in OPENMETEO_POINT_KEYS:
         return openmeteo.point_in_domain(
             openmeteo.get_capability(cfg.key), lat, lon)
+    grid = _NATIVE_GRID_DOMAINS.get(cfg.key)
+    if grid is not None:
+        return grid.contains(lat, lon)
     lon0, lon1, lat0, lat1 = cfg.domain_bounds
     lat = float(lat)
     lon = _normalize_lon180(lon)
@@ -2106,12 +2143,17 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
 
     run_dt = _run_datetime(run_time, config)
     if out_path is None:
-        out_path = "%s_point_%.2fN_%.2fE_%s_f%03d.npz" % (
-            config.key.replace("-", "_"),
-            lat,
-            lon,
-            run_dt.strftime("%Y%m%d%H"),
-            fxx,
+        out_path = str(
+            export_file_path(
+                "%s_point_%.2fN_%.2fE_%s_f%03d.npz"
+                % (
+                    config.key.replace("-", "_"),
+                    lat,
+                    lon,
+                    run_dt.strftime("%Y%m%d%H"),
+                    fxx,
+                )
+            )
         )
 
     owns_dataset = dataset is None
@@ -2822,7 +2864,7 @@ def main(argv=None):  # pragma: no cover - CLI wrapper
                 out_path=args.out, loc=args.loc, member=args.member,
                 download_dir=download_dir,
             )
-        except (ModelExtractionError, KeyError) as exc:
+        except (ModelExtractionError, KeyError, OSError) as exc:
             print("ERROR: %s" % exc)
             return 1
         print("wrote %s" % path)

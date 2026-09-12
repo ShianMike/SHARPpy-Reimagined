@@ -14,8 +14,10 @@ from sharpmod.batch_extract import (
     MANIFEST_SCHEMA,
     MANIFEST_VERSION,
     BatchExtractor,
+    BatchManifestError,
     BatchRequest,
     BatchSpecError,
+    load_batch_result,
     load_batch_spec,
     run_batch,
 )
@@ -392,3 +394,92 @@ def test_load_batch_spec_requires_versioned_nonempty_requests(tmp_path):
     assert len(requests) == 1
     assert requests[0].run_time == RUN
     assert requests[0].fxx == 6
+
+
+def test_load_batch_result_rebuilds_ordered_safe_paths(tmp_path):
+    manifest = tmp_path / "batch-manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": MANIFEST_SCHEMA,
+                "version": MANIFEST_VERSION,
+                "job_id": "job-1",
+                "requests": [
+                    {
+                        "id": "done",
+                        "output": "nested/done.npz",
+                        "status": "completed",
+                        "resumed": True,
+                    },
+                    {
+                        "id": "missing",
+                        "output": "missing.npz",
+                        "status": "failed",
+                        "error": {"type": "LookupError", "message": "missing"},
+                    },
+                ],
+                "summary": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = load_batch_result(manifest, output_dir=tmp_path)
+
+    assert result.job_id == "job-1"
+    assert result.completed == 1
+    assert result.failed == 1
+    assert result.skipped == 1
+    assert result.items[0].output_path == tmp_path / "nested" / "done.npz"
+    assert result.items[1].error == {
+        "type": "LookupError",
+        "message": "missing",
+    }
+
+
+def test_load_batch_result_requires_explicit_incomplete_recovery(tmp_path):
+    manifest = tmp_path / "batch-manifest.json"
+    payload = {
+        "schema": MANIFEST_SCHEMA,
+        "version": MANIFEST_VERSION,
+        "job_id": "interrupted",
+        "requests": [
+            {"id": "one", "output": "one.npz", "status": "running"},
+        ],
+    }
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BatchManifestError, match="non-final status"):
+        load_batch_result(manifest, output_dir=tmp_path)
+
+    recovered = load_batch_result(
+        manifest,
+        output_dir=tmp_path,
+        incomplete_as_cancelled=True,
+    )
+    assert recovered.cancelled == 1
+    assert recovered.items[0].status == "cancelled"
+
+
+def test_load_batch_result_rejects_child_path_escape(tmp_path):
+    manifest = tmp_path / "batch-manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": MANIFEST_SCHEMA,
+                "version": MANIFEST_VERSION,
+                "job_id": "unsafe",
+                "requests": [
+                    {
+                        "id": "escape",
+                        "output": "../escape.npz",
+                        "status": "completed",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BatchManifestError, match="escapes output_dir"):
+        load_batch_result(manifest, output_dir=tmp_path)

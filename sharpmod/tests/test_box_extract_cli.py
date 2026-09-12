@@ -198,7 +198,7 @@ def test_a_full_run_extracts_and_summarizes(capsys, tmp_path, fake_extractor):
 def test_a_full_run_can_print_a_field_grid(capsys, tmp_path, fake_extractor):
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--target-points", "16",
+        "--output-dir", str(tmp_path), "--target-points", "4",
         "--field", "mucape", "--quiet",
     ])
     out = capsys.readouterr().out
@@ -210,7 +210,7 @@ def test_a_full_run_can_print_a_field_grid(capsys, tmp_path, fake_extractor):
 def test_an_unknown_field_key_is_reported(capsys, tmp_path, fake_extractor):
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--target-points", "16",
+        "--output-dir", str(tmp_path), "--target-points", "4",
         "--field", "not-a-field", "--quiet",
     ])
     assert code == 2
@@ -240,7 +240,7 @@ def test_a_full_run_can_export_csv(capsys, tmp_path, fake_extractor):
 def test_progress_is_printed_unless_quiet(capsys, tmp_path, fake_extractor):
     _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--target-points", "16",
+        "--output-dir", str(tmp_path), "--target-points", "4",
     ])
     assert "completed r000c000" in capsys.readouterr().out
 
@@ -343,7 +343,7 @@ def test_hours_option_samples_several_forecast_hours(
 ):
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--target-points", "9",
+        "--output-dir", str(tmp_path), "--target-points", "4",
         "--hours", "3", "--quiet",
     ])
     out = capsys.readouterr().out
@@ -419,7 +419,7 @@ def test_hour_step_skips_intermediate_hours(
 ):
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--target-points", "9",
+        "--output-dir", str(tmp_path), "--target-points", "4",
         "--hours", "3", "--hour-step", "6", "--quiet",
     ])
     assert code == 0
@@ -431,7 +431,7 @@ def test_hour_step_skips_intermediate_hours(
 def test_a_sequence_starts_from_fxx(capsys, tmp_path, fake_extractor):
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--target-points", "9",
+        "--output-dir", str(tmp_path), "--target-points", "4",
         "--fxx", "6", "--hours", "2", "--quiet",
     ])
     assert code == 0
@@ -461,7 +461,7 @@ def test_hours_of_one_stays_a_single_hour_run(
 ):
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--target-points", "9",
+        "--output-dir", str(tmp_path), "--target-points", "4",
         "--hours", "1", "--quiet",
     ])
     out = capsys.readouterr().out
@@ -488,7 +488,7 @@ def test_a_sequence_can_export_csv_for_its_peak_hour(
     destination = tmp_path / "seq.csv"
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path / "npz"), "--target-points", "9",
+        "--output-dir", str(tmp_path / "npz"), "--target-points", "4",
         "--hours", "2", "--csv", str(destination), "--quiet",
     ])
     assert code == 0
@@ -522,7 +522,7 @@ def test_screen_reports_coverage_for_a_single_hour(
 ):
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--target-points", "9",
+        "--output-dir", str(tmp_path), "--target-points", "4",
         "--screen", "organized convection", "--quiet",
     ])
     out = capsys.readouterr().out
@@ -537,7 +537,7 @@ def test_screen_reports_coverage_per_hour_for_a_sequence(
 ):
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--target-points", "9",
+        "--output-dir", str(tmp_path), "--target-points", "4",
         "--hours", "2", "--screen", "organized convection", "--quiet",
     ])
     out = capsys.readouterr().out
@@ -549,7 +549,7 @@ def test_screen_reports_coverage_per_hour_for_a_sequence(
 def test_an_unknown_screen_is_reported(capsys, tmp_path, fake_extractor):
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path), "--target-points", "9",
+        "--output-dir", str(tmp_path), "--target-points", "4",
         "--screen", "not-a-screen", "--quiet",
     ])
     assert code == 2
@@ -564,7 +564,7 @@ def test_geojson_export_writes_a_feature_collection(
     destination = tmp_path / "gis" / "box.geojson"
     code = _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path / "npz"), "--target-points", "9",
+        "--output-dir", str(tmp_path / "npz"), "--target-points", "4",
         "--geojson", str(destination), "--quiet",
     ])
     assert code == 0
@@ -583,7 +583,7 @@ def test_geojson_export_tags_features_with_the_screen(
     destination = tmp_path / "box.geojson"
     assert _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path / "npz"), "--target-points", "9",
+        "--output-dir", str(tmp_path / "npz"), "--target-points", "4",
         "--geojson", str(destination), "--screen", "organized convection",
         "--quiet",
     ]) == 0
@@ -602,7 +602,7 @@ def test_csv_and_geojson_can_be_written_together(
     geo_path = tmp_path / "box.geojson"
     assert _run([
         "hrrr", "36.0", "-96.5", "37.4", "-94.8",
-        "--output-dir", str(tmp_path / "npz"), "--target-points", "9",
+        "--output-dir", str(tmp_path / "npz"), "--target-points", "4",
         "--csv", str(csv_path), "--geojson", str(geo_path), "--quiet",
     ]) == 0
     assert csv_path.is_file() and geo_path.is_file()

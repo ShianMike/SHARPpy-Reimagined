@@ -7,6 +7,307 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-12
+
+This release turns the sounding viewer into a broader analysis workspace while
+making the release path faster and more exact. Forecast trends, aligned model
+comparisons, ensemble distributions, locator overlays, storm reports, and
+portable session state now work together; exports share one predictable home,
+and the Python and Rust compute paths reuse substantially more work.
+
+### Added
+
+- **One analysis workspace for trends, exact-time comparisons, ensembles, and
+  notes.** Open it from *View → Analysis Workspace* (`Ctrl+Shift+A`). Forecast
+  timelines plot one parameter for every loaded sounding on shared axes, with
+  explicit missing-hour gaps, and let a point activate that valid time in the
+  sounding it belongs to; the plotted series export to CSV.
+  Multi-sounding views compare MLCAPE, MLCIN, 0–6 km shear, 0–1 km SRH, and
+  effective-layer STP against a selectable reference only when valid times
+  align exactly, including value deltas and CSV export. Ensemble views report
+  the number of available members, p10/median/p90 parameter distributions, and
+  pressure-level temperature/dewpoint p10–p90 envelopes. The thermodynamic
+  envelope uses a fixed -50 to +50 °C axis with a visible zero guide so one
+  warm or cold member cannot tilt the visual scale.
+
+- **Aligned model, run, and ensemble acquisition from the forecast picker.**
+  *Workspace…* plans several models, successive runs, or all published members
+  at one point and valid time, fetches them through the bounded persistent
+  cache, and opens the corresponding Compare or Ensemble tab. Partial failures
+  remain visible instead of discarding successful soundings.
+
+- **Complete workspace state in portable analysis sessions.** Version 2 adds
+  analysis notes and selected tab/metric/reference, visible panel, fit or exact
+  zoom, picker map extent, all loaded times and overlays, and lightweight
+  locator-overlay provenance that can be refetched without embedding raster or
+  polygon payloads. Version 1 sessions still migrate on read.
+
+- **Choose what the sounding's locator inset shows.** `sharpmod-render
+  --locator-overlay` takes `risk[:hazard]`, `hrrr[:product]`, `radar-site`,
+  `radar-mosaic`, or a comma-separated combination, and the picker offers the
+  same choice in *Map overlays* on both map tabs. The rules live in one module,
+  `sharpmod.locator_overlay`, so the command line and the interface cannot
+  disagree about them:
+
+  - A risk area and a model field coexist; radar replaces both, because two
+    reflectivity ramps are not twice the information and radar over a risk area
+    buries it.
+  - Radar is offered only within an hour of the sounding's valid time. There is
+    no archive behind those frames.
+  - The nearest WSR-88D is preferred at 0.38 km/px against the mosaic's 1.51,
+    but an extent wider than one antenna's box falls back to the mosaic.
+
+  The risk area also carries its own hazard choice, beside the switch that turns
+  it on. It defaults to *Match the map*, which follows whichever outlook the
+  picker map is showing, so the inset stays context for the map the sounding came
+  from without being told twice. Naming a hazard there instead pins the inset to
+  it, and outranks the map — the same precedence `--locator-overlay risk:torn`
+  already had, which the control previously had no way to express.
+
+  Selecting nothing is the default and reaches for no network. The selection now
+  gates what the sounding window fetches; the gridded field and the outlook were
+  previously requested unconditionally. Only the *choice* persists between
+  sessions, never whether it was switched on.
+
+- **Storm reports overlay.** Tornado, wind and hail reports draw as ranked
+  markers on the picker map (*Map overlays → Show storm reports*, both tabs) and
+  on the sounding's inset. Clicking one gives the location, time, magnitude,
+  source, remark and issuing office; where markers overlap the tornado stays on
+  top and is what a click reports. The switch requires the convective outlook on
+  the same map and turns itself off if the outlook does — reports with no risk
+  areas behind them cannot answer whether the forecast verified.
+
+  The map request is narrowed to the visible extent and re-asked once panning
+  settles, debounced so scrubbing a date is one fetch, with late results
+  discarded. An empty result and a failed feed each say so, since a blank map
+  otherwise reads as a day on which nothing happened.
+
+  Source is NWS Local Storm Reports via the Iowa Environmental Mesonet query
+  service, not SPC's own file — that concatenates three CSV tables with the
+  hazard implied by the header block, carries bare `HHMM` times over a 12Z day,
+  reports hail in hundredths of an inch, and cannot be filtered. Reports reach
+  back to at least 2015, so archived soundings get them; the outlook beside them
+  only archives to 2020.
+
+  Two service quirks are pinned by measurement. `type=` answers 200 OK with zero
+  rows for every code, including ones present in the response's own `TYPECODE`
+  column, so hazards are selected from the response instead; the bounding box
+  does work, narrowing 190 reports to the 115 genuinely inside. And `sts` is
+  accepted only with a trailing `Z`, so past windows use the numeric date
+  fields. Responses are cached in memory and on disk like model fields, and live
+  windows are never stored.
+
+- **Click a coloured area on the picker map to identify it.** A wash of colour
+  is not self-describing: a probability band reads `5%` without naming its
+  hazard, and two products put the same red in the same place. A click now names
+  the product, the category at that point, and the category's own description.
+  The graded band is reported before the hatched qualifier drawn over it, so
+  answering with the hatch alone cannot discard the probability underneath.
+  Describing runs after station and radar-site hit-testing, so it never costs a
+  selection, and a hidden overlay is never described.
+
+### Fixed
+
+- Official Windows freezes now resolve native dependencies from a hermetic
+  Python/Windows DLL search path. Unrelated tools on the build host can no
+  longer inject a same-named ICU or C-runtime library that lets PyInstaller
+  finish but makes the packaged GUI fail while importing `PySide6.QtCore`.
+
+- **Exports now have one predictable application-local home.** Every image,
+  sounding-text, CSV, GeoJSON, saved-location, and analysis-session save dialog
+  starts in the existing `rendered_soundings` directory beside the source
+  project or installed application; the upstream save actions and **Open Export
+  Folder** use the same path. Stale Desktop or other user-folder settings are
+  ignored and removed, one-off destinations are not remembered, and launches
+  from another working directory still resolve the application location. The
+  directory is created when needed, while creation or write failures report the
+  actual path instead of silently falling back to a user folder. The
+  `sharpmod-render`, extractor sounding pairs, and extractor `--render`
+  defaults follow the same rule and still honor an explicit output path.
+
+- **The sounding's locator inset drew the categorical outlook whichever hazard
+  was selected.** Opening a sounding while looking at the tornado, wind, or hail
+  probability — for Day 1 or Day 2, where SPC issues them — silently reverted the
+  inset to the categorical risk. The selected hazard was resolved and then
+  dropped: it was only read on a code path the interface never takes, because a
+  picker offering a locator selection always states one, and the reconciliation
+  meant to merge the two was unreachable. The hazard now travels with the
+  selection from every entry point — sounding window, model comparison, reopened
+  session, and `sharpmod-render`.
+
+  A hazard SPC does not publish for the sounding's own outlook day still falls
+  back to the categorical outlook rather than leaving the inset empty. That is
+  asked as a general question of the outlook archive rather than encoded as a
+  rule here, since which product covers which day is not fixed: the hazard
+  probabilities stop after Day 2, the combined total-severe probability is Day 3
+  only, and nothing is published beyond Day 3 or before 2020.
+
+- **A forecast hour streamed after an edit no longer disappears on undo.**
+  Timeline insertion now preserves modification and interpolation state by
+  valid time, while history snapshots merge later additive hours before
+  undo/redo. The live collection object and selected valid time are retained,
+  so toolbar callbacks do not point at an obsolete pre-undo collection.
+
+- **Closing the picker no longer force-terminates Qt workers.** Cooperative
+  workers receive bounded cancellation and can finish under a retained owner;
+  long multi-hour/model/box batches run behind a killable child-process
+  boundary. Cancellation reaps that child promptly, while validated manifests
+  and cache hits remain resumable.
+
+- **The HRRR domain was outlined as a box, so the outline and the data were
+  never the same shape.** On the flat map the model field drew as a curved fan
+  inside a straight dashed rectangle; switch to the curved map and the field
+  straightened while the rectangle bowed. The two swapping places between
+  projections reads as though the projections themselves were swapped.
+
+  They were not. Both renders were correct, and measurement says so: the field
+  raster tracks the vector path that draws the coastlines and graticule to
+  within 0.4 px in either projection. HRRR runs on a Lambert conformal grid,
+  which is a rectangle in *its own* projection plane, so its geographic boundary
+  genuinely is a fan on a flat map and genuinely does straighten on a conic one.
+  The outline was the part that was wrong: it traced `(-130, -60, 20, 55)`, a
+  hand-rounded longitude/latitude box that is not the grid and did not even
+  agree with the field's own coverage bounds.
+
+  HRRR now publishes its real perimeter, walked around the grid edge in Lambert
+  metres and converted back, so the dashed line follows the data to within 2 px
+  in both projections. The envelope is measured off that same perimeter rather
+  than rounded — `(-134.10, -60.92, 21.14, 52.62)`, which differs from the old
+  box by 4.1 degrees of longitude at the west edge and 2.4 of latitude at the
+  north — and a point is now accepted or refused on the grid itself. That
+  matters beyond drawing: the southern boundary reaches 24.36N over Kansas and
+  only 21.14N at its own corners, so a box either claims ground the model does
+  not carry or, tightened to stop that, refuses ground it does.
+
+  The transform is a new pure-Python module rather than a call into pyproj,
+  because the picker's import path is kept free of NumPy so the interface opens
+  promptly. It is checked against pyproj at the grid corners to 1e-13 degrees,
+  and its south-west corner reproduces the `21.138123N 237.280472E` that HRRR's
+  own GRIB header publishes as its first grid point. The other CONUS models
+  still fall back to the shared box; each runs on a different grid and needs its
+  own.
+
+- **The scrollbar handle sat on the content it was scrolling.** It filled the
+  whole 12 px column a control rail reserves, butting against the card border
+  beside it. The handle is now inset inside that reservation, so it gains a
+  gutter without the content losing a pixel. Padding on the bar is the only
+  spelling Qt applies — a margin or a transparent border on the handle both
+  leave it at full width — so the regression test measures the rect the style
+  paints rather than checking the declaration is present. The bar's width also
+  interpolates `SCROLLBAR_W` directly instead of a token that happened to match
+  it, and the handle's minimum length is declared per orientation rather than
+  putting a 24 px floor across each bar's short axis.
+
+- **Map overlays and coastlines were soft on any scaled display.** The gridded
+  field, radar frame and basemap linework were rasterised in *logical* pixels
+  and then stretched onto a backing store larger by the device pixel ratio; on a
+  1.5x display a 1200x800 map drew its overlays at 1200x800 and enlarged them to
+  1800x1200. Buffers now match the screen's real pixels and rebuild on a move to
+  a different density.
+
+  The same arithmetic inverted the rule that keeps published data cells crisp.
+  It compared a logical destination against a source measured in image pixels,
+  understating the destination by exactly the device pixel ratio, so it smoothed
+  imagery it was in fact enlarging — inventing intermediate categories along
+  every class boundary of a banded scale.
+
+- **A dewpoint above the temperature no longer refuses the sounding.** The
+  portable `.npz` loader and the Open-Meteo, ECCC GeoMet, ERA5 and model
+  extraction paths all raised on it. It is a real reading, usually meaning
+  contamination and turning up most often near the tropopause, so refusing the
+  profile hid the problem instead of showing it. It now travels in the
+  quality-control issue list and the sounding renders. Physically impossible
+  data is still refused: a pressure column that does not decrease, or a negative
+  wind speed, is unusable rather than contaminated.
+
+- **The property lane ignored the grouping its own tests asked for.** Files
+  sharing process-global Qt state are marked to stay on one worker, and three
+  carry property tests, but the lane distributed individual tests — honouring
+  neither the marker nor file cohesion. It now groups as intended, ungrouped
+  tests still spread, and a contract test refuses any parallel lane that would
+  scatter tests marked to stay together.
+
+- **The release gate's timing budget could never fail.** The serial pass was
+  allowed 4200 s in a job destroyed at 45 minutes, and its stated baseline of
+  3000 s already exceeded that. Because the runner tears the step down no timing
+  report is written either, so an overrun was indistinguishable from an
+  infrastructure failure. The budget now fits inside the job with room for
+  setup, and a contract test asserts every lane's budget can still fail before
+  its job is killed.
+
+### Changed
+
+- **Sounding calculations, repeated GRIB points, and complete-profile analysis
+  now reuse the work they actually share.** Parcel integration has distinct
+  CAPE/CIN-only, diagnostics-only, and traced modes; kinematics prepares each
+  interpolation series once; and the API-7 native boundary returns contiguous
+  trace buffers with offsets while preserving the public tuple contract. One
+  owned profile snapshot now feeds parcel and DCAPE preparation instead of
+  being copied repeatedly.
+
+  Direct GRIB decoding keeps an eight-entry, file-identity-invalidated message
+  inventory and opens each selected message once for a native multipoint read.
+  Atomic same-size replacements invalidate the cache, duplicate requests and
+  mixed grids retain their order and semantics, model-cache leases are
+  unchanged, and ecCodes remains serialized.
+
+  Box fast-tier and built-in ensemble analysis now use a stable-order complete
+  sounding batch. It stays serial below eight profiles, otherwise defaults to a
+  process-wide Rayon pool capped at four available CPUs, and stays serial when
+  nested in Rayon. Simultaneous default GUI callers share the same pool instead
+  of multiplying its thread bound. Release measurements support that cutoff;
+  the dated backend
+  optimization report records the raw improvements, regressions, environment,
+  and reproducible commands. Thin LTO and the release profile are unchanged.
+
+- **The workspace's parameter trends plot every loaded sounding at once, on one
+  graph.** The tab used to carry a sounding picker and draw one model at a time,
+  so comparing runs meant switching between them and remembering the previous
+  shape. It now draws one line per sounding on shared axes, with a colour per
+  sounding named in a legend, so the disagreement between runs over the same
+  hours is a single read. The sounding picker is gone, since the chart no longer
+  shows a subset.
+
+  Points carry the sounding they came from: hovering names it, and activating one
+  opens that valid time in *its* sounding rather than in whichever was selected.
+  A missing hour is marked in the colour of the series that is missing it. CSV
+  export gains a leading `sounding` column when more than one is plotted, and
+  keeps the previous columns when there is only one. The session records which
+  sounding was last opened from the chart instead of which one was being filtered
+  to.
+
+- Renderer monkeypatches now have explicit panel ownership and a checked,
+  ordered registry; the largest hodograph, winter, and fire implementations
+  live in focused modules. Forecast timeline, comparison, locator, shutdown,
+  and isolated-batch orchestration likewise live outside the picker window.
+  Installer failures name the patch that failed instead of being swallowed.
+
+- Analysis work uses a bounded shared worker pool and tiered metric cache, NPZ
+  decoding leaves unrequested arrays lazy, and test lanes retain file/group
+  cache locality. On the verified Windows environment the deterministic lane
+  finishes in 66.4 s and full 100-example property coverage in 99.8 s; timing
+  budgets remain enforced in CI.
+
+- **The heavy test lanes now build the accelerated backend that ships.** Hosted
+  runners tested only the pure-Python fallback, roughly 6.7x slower on the
+  parcel and kinematics kernels, which made the complete serial pass 35 minutes
+  of a 45-minute run. The deterministic, property and serial lanes install the
+  Rust extension; the compatibility matrix stays on the fallback so that path
+  keeps whole-suite coverage on Python 3.11 and 3.12, and the property contract
+  runs once per backend. Worth noting: the backend-equivalence checks skip
+  themselves when the extension is absent, so until now they had never run on a
+  hosted runner at all.
+
+- **The Windows release build no longer queues behind the test matrix.** It took
+  8m34s while waiting on a 35-minute gate it does not depend on. Publishing
+  still requires every lane to pass, so nothing unverified ships; the only cost
+  is a discarded build when a test run fails.
+
+- **The overlay-control tests spent 67 of their 73 seconds asleep.** They waited
+  out the real debounce windows 102 times over. The controllers are driven
+  directly under test, so the window is shortened there and the waits are
+  expressed against it: 18 s, with the coalescing behaviour still proven.
+
 ## [1.1.0] - 2026-09-06
 
 This cycle is about the step *before* the sounding. Previous releases sharpened

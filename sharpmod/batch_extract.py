@@ -165,6 +165,110 @@ class BatchRunResult:
         )
 
 
+def load_batch_result(
+    manifest_path,
+    *,
+    output_dir=None,
+    incomplete_as_cancelled: bool = False,
+) -> BatchRunResult:
+    """Rebuild a safe result object from an on-disk batch manifest.
+
+    This is also the process boundary for GUI batch workers: the child writes
+    only relative artifact names and the parent resolves them under the known
+    output directory. A child stopped during shutdown may leave ``pending`` or
+    ``running`` entries; callers can explicitly surface those as cancelled
+    while preserving every artifact that completed atomically.
+    """
+    manifest_path = Path(manifest_path).expanduser().resolve()
+    output_root = (
+        Path(output_dir).expanduser().resolve()
+        if output_dir is not None
+        else manifest_path.parent
+    )
+    try:
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            manifest = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BatchManifestError(
+            f"could not read batch manifest {manifest_path}: {exc}"
+        ) from exc
+    if not isinstance(manifest, Mapping):
+        raise BatchManifestError("batch manifest must be a JSON object")
+    if (
+        manifest.get("schema") != MANIFEST_SCHEMA
+        or manifest.get("version") != MANIFEST_VERSION
+    ):
+        raise BatchManifestError(
+            f"manifest {manifest_path} has an unsupported schema/version"
+        )
+    job_id = manifest.get("job_id")
+    records = manifest.get("requests")
+    if not isinstance(job_id, str) or not job_id:
+        raise BatchManifestError("batch manifest has no valid job id")
+    if not isinstance(records, list) or not records:
+        raise BatchManifestError("batch manifest has no request records")
+
+    items = []
+    seen_ids: set[str] = set()
+    allowed = {"completed", "failed", "cancelled"}
+    incomplete = {"pending", "running"}
+    for record in records:
+        if not isinstance(record, Mapping):
+            raise BatchManifestError("batch manifest request must be an object")
+        request_id = record.get("id")
+        output = record.get("output")
+        status = str(record.get("status") or "")
+        if not isinstance(request_id, str) or not request_id:
+            raise BatchManifestError("batch manifest request has no valid id")
+        if request_id in seen_ids:
+            raise BatchManifestError(
+                f"batch manifest has duplicate request id {request_id!r}"
+            )
+        seen_ids.add(request_id)
+        if not isinstance(output, str):
+            raise BatchManifestError(
+                f"batch manifest request {request_id!r} has no output"
+            )
+        try:
+            output_path = _contained_path(output_root, output)
+        except BatchSpecError as exc:
+            raise BatchManifestError(str(exc)) from exc
+        if status in incomplete and incomplete_as_cancelled:
+            status = "cancelled"
+        elif status not in allowed:
+            raise BatchManifestError(
+                f"batch manifest request {request_id!r} has "
+                f"non-final status {status!r}"
+            )
+        error = record.get("error")
+        items.append(
+            BatchItemResult(
+                id=request_id,
+                status=status,
+                output_path=output_path,
+                sidecar_path=output_path.with_suffix(".json"),
+                resumed=bool(record.get("resumed", False)),
+                error=(
+                    {str(key): str(value) for key, value in error.items()}
+                    if isinstance(error, Mapping)
+                    else None
+                ),
+            )
+        )
+
+    statuses = [item.status for item in items]
+    return BatchRunResult(
+        manifest_path=manifest_path,
+        job_id=job_id,
+        completed=statuses.count("completed"),
+        failed=statuses.count("failed"),
+        cancelled=statuses.count("cancelled"),
+        skipped=sum(item.resumed for item in items),
+        items=tuple(items),
+        manifest=copy.deepcopy(manifest),
+    )
+
+
 @dataclass(frozen=True)
 class _PreparedRequest:
     request: BatchRequest
@@ -875,6 +979,7 @@ __all__ = [
     "BatchRequest",
     "BatchRunResult",
     "BatchSpecError",
+    "load_batch_result",
     "load_batch_spec",
     "run_batch",
 ]

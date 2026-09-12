@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timezone
 import json
+from pathlib import Path
 import re
 import threading
 import time
@@ -307,6 +308,32 @@ def test_extract_writes_portable_npz_and_provenance(tmp_path, small_gdps):
     assert [stage for stage, _total in stages] == [
         "locating", "downloading", "extracting", "writing", "complete"
     ]
+
+
+def test_default_output_uses_application_export_folder(
+    tmp_path, monkeypatch, small_gdps
+):
+    from sharpmod import export_paths
+
+    application = tmp_path / "installed-app"
+    application.mkdir()
+    monkeypatch.setattr(export_paths, "application_root", lambda: application)
+    get, _state = _fake_get_factory()
+
+    path = Path(
+        eccc_geomet.extract(
+            "gdps",
+            45.5,
+            -73.6,
+            run_time=RUN,
+            fxx=3,
+            max_workers=3,
+            request_get=get,
+        )
+    )
+
+    assert path.parent == application / "rendered_soundings"
+    assert path.is_file()
 
 
 def test_required_layer_failure_is_not_silently_dropped(small_gdps):

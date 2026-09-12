@@ -179,6 +179,13 @@ class OverlayShape:
     #: pattern, since every level publishes the same grey; ``0`` means an
     #: ungraded qualifier and keeps the single pattern used before they existed.
     hatch_level: int = 0
+    #: This shape stands in for a *point*, not an area, so paint it as a symbol:
+    #: opaque, at the size it was built. Regions are washed translucent so the
+    #: coastline and station dots stay readable underneath, which is right for a
+    #: risk polygon and wrong for a storm report -- a translucent dot reads as a
+    #: soft blob, and where an outbreak clusters reports the blobs pile into one
+    #: bruise instead of the crisp marks SPC plots.
+    marker: bool = False
 
     @property
     def point_count(self) -> int:
@@ -211,6 +218,15 @@ class OverlayLayer:
     source_url: str = ""
     attribution: str = ""
     bounds: tuple[float, float, float, float] | None = field(default=None)
+    #: List this layer's categories as swatches in the map legend.
+    #:
+    #: True for a product with a small fixed set of categories, where the legend
+    #: is how you read the map. False for one whose shapes are individual
+    #: observations: storm reports carry a label per report, so the row becomes
+    #: "Hail 1.00 in  Hail 1.75 in  Wind 61 mph  Wind 57 mph ..." across the
+    #: bottom of the map -- a list of the data rather than a key to it. The
+    #: title and the attribution are still drawn; only the swatches are dropped.
+    legend: bool = True
 
     def __post_init__(self) -> None:
         if self.bounds is None and self.shapes:
@@ -611,6 +627,64 @@ def shape_contains(shape: OverlayShape, lon: float, lat: float) -> bool:
             if lon < lon_at:
                 crossings += 1
     return crossings % 2 == 1
+
+
+def describe_at(
+        layers: tuple[OverlayLayer, ...] | list[OverlayLayer],
+        lon: float,
+        lat: float,
+) -> str | None:
+    """Return prose naming whatever overlay covers ``(lon, lat)``, or ``None``.
+
+    A wash of colour is not self-describing. The categorical products are the
+    worst of it: a probability band reads "5%" without saying which hazard, and
+    two products can put the same red in the same place. This answers the
+    question a click on the map is asking -- what am I looking at here -- by
+    naming the product, the category at that exact point, and whatever the
+    category itself explains.
+
+    The graded band is reported before the hatched qualifier over it, for the
+    reason :func:`shape_at` documents: the qualifier outranks every band so that
+    it paints on top, so answering with it alone would discard the probability
+    the point actually sits in. The qualifier is appended instead.
+
+    Returns ``None`` rather than an empty string when nothing covers the point,
+    so a caller can tell "no overlay here" from "an overlay that has nothing to
+    say".
+    """
+    band = shape_at(layers, lon, lat, hatch=False)
+    qualifier = shape_at(layers, lon, lat, hatch=True)
+    if band is None and qualifier is None:
+        return None
+
+    subject = band if band is not None else qualifier
+    owner = None
+    for layer in layers:
+        if subject in layer.shapes:
+            owner = layer
+            break
+
+    lines: list[str] = []
+    heading = ""
+    if owner is not None and owner.title:
+        heading = owner.title
+    if subject.label:
+        heading = f"{heading} \u2014 {subject.label}" if heading \
+            else subject.label
+    if heading:
+        lines.append(heading)
+    if subject.description:
+        lines.append(subject.description)
+
+    if qualifier is not None and qualifier is not subject:
+        # Graded qualifiers say how strong the hazard could become if it occurs,
+        # so the level is named; the pre-2026 ungraded area has no level.
+        level = getattr(qualifier, "hatch_level", 0)
+        note = qualifier.label or ("Significant severe" if not level else "")
+        graded = f"conditional intensity group {level}" if level else "significant"
+        lines.append(f"Also {graded}{': ' + note if note else ''}")
+
+    return "\n".join(lines) if lines else None
 
 
 def shape_at(

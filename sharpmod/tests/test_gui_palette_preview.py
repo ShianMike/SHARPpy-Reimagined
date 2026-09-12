@@ -18,7 +18,6 @@ import pytest
 from qtpy.QtGui import QImage
 from qtpy.QtWidgets import QComboBox
 
-from sharpmod import gui_theme
 from sharpmod.gui_settings import _color_style_preferences
 from sharpmod.gui_shell import PalettePreview
 
@@ -49,9 +48,8 @@ def _distinct_colours(image):
 
 
 @pytest.mark.parametrize("style", PALETTES)
-def test_preview_accepts_every_configured_palette(qt_app, style):
+def test_preview_accepts_every_configured_palette(standard_qt_app, style):
     """Protanopia omits keys the others define, so lookups must tolerate gaps."""
-    gui_theme.apply_theme(qt_app, color_style="standard")
     widget = PalettePreview(_color_style_preferences(style))
     try:
         _render(widget)  # must not raise on a missing key
@@ -59,9 +57,8 @@ def test_preview_accepts_every_configured_palette(qt_app, style):
         widget.deleteLater()
 
 
-def test_preview_survives_an_empty_palette(qt_app):
+def test_preview_survives_an_empty_palette(standard_qt_app):
     """A failed palette resolve must not crash the Preferences dialog."""
-    gui_theme.apply_theme(qt_app, color_style="standard")
     widget = PalettePreview({})
     try:
         _render(widget)
@@ -90,9 +87,8 @@ def test_missing_key_falls_back_rather_than_raising(qt_app):
 
 
 @pytest.mark.parametrize("style", PALETTES)
-def test_preview_paints_the_palette_background(qt_app, style):
+def test_preview_paints_the_palette_background(standard_qt_app, style):
     """The canvas background is the palette's most defining colour."""
-    gui_theme.apply_theme(qt_app, color_style="standard")
     palette = _color_style_preferences(style)
     widget = PalettePreview(palette)
     try:
@@ -106,9 +102,8 @@ def test_preview_paints_the_palette_background(qt_app, style):
 
 
 @pytest.mark.parametrize("style", PALETTES)
-def test_preview_paints_the_trace_colours(qt_app, style):
+def test_preview_paints_the_trace_colours(standard_qt_app, style):
     """Temperature and dewpoint are what a user checks a palette against."""
-    gui_theme.apply_theme(qt_app, color_style="standard")
     palette = _color_style_preferences(style)
     widget = PalettePreview(palette)
     try:
@@ -121,10 +116,8 @@ def test_preview_paints_the_trace_colours(qt_app, style):
         widget.deleteLater()
 
 
-def test_light_and_dark_palettes_render_differently(qt_app):
+def test_light_and_dark_palettes_render_differently(standard_qt_app):
     """The preview exists to make the choice visible before accepting."""
-    gui_theme.apply_theme(qt_app, color_style="standard")
-
     images = {}
     for style in ("standard", "inverted"):
         widget = PalettePreview(_color_style_preferences(style))
@@ -137,8 +130,7 @@ def test_light_and_dark_palettes_render_differently(qt_app):
         "the dark and light palettes render identically")
 
 
-def test_switching_palette_repaints(qt_app):
-    gui_theme.apply_theme(qt_app, color_style="standard")
+def test_switching_palette_repaints(standard_qt_app):
     widget = PalettePreview(_color_style_preferences("standard"))
     try:
         before = _render(widget).copy()
@@ -155,17 +147,16 @@ def test_switching_palette_repaints(qt_app):
 
 
 @pytest.fixture
-def prefs_dialog(qt_app, tmp_path):
+def prefs_dialog(standard_qt_app, tmp_path):
     from sharpmod import render as R
     from sharpmod.gui_settings import _build_preferences_dialog
 
-    gui_theme.apply_theme(qt_app, color_style="standard")
     config = R.build_config(str(tmp_path))
     dialog = _build_preferences_dialog(config, parent=None)
     dialog.resize(600, 500)
     dialog.show()
     for _ in range(6):
-        qt_app.processEvents()
+        standard_qt_app.processEvents()
     yield dialog
     dialog.close()
 

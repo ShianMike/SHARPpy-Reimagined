@@ -16,14 +16,31 @@ from ._common import (
     restore_array,
     restore_pair,
 )
-from .protocol import QualityControlResult
-from .grib import decode_grib_point as _decode_grib_point
+from .kinematics import profile_kinematics_to_raw
+from .parcels import (
+    convective_workspace_to_raw,
+    downdraft_to_raw,
+    parcel_workspace_to_raw,
+)
+from .protocol import (
+    DEFAULT_BATCH_PARALLEL_THRESHOLD,
+    DEFAULT_BATCH_THREADS,
+    BatchProfileAnalysis,
+    QualityControlResult,
+)
+from .grib import (
+    decode_grib_point as _decode_grib_point,
+    decode_grib_points as _decode_grib_points,
+)
 from .kinematics import compute_profile_kinematics
 from .parcels import (
     compute_lift_parcel,
     compute_profile_convective_parcels,
     compute_profile_dcape,
     compute_profile_parcels,
+    compute_profile_thermodynamics,
+    profile_thermodynamics_buffers_from_raw,
+    profile_thermodynamics_to_raw,
 )
 
 
@@ -38,6 +55,9 @@ class PythonBackend:
 
     def decode_grib_point(self, path, lat, lon, *, missing=-9999.0):
         return _decode_grib_point(path, lat, lon, missing=missing)
+
+    def decode_grib_points(self, path, points, *, missing=-9999.0):
+        return _decode_grib_points(path, points, missing=missing)
 
     def wind_to_components(self, direction, speed, *, missing=None):
         direction_data, speed_data, shape = prepare_broadcast_pair(
@@ -207,6 +227,169 @@ class PythonBackend:
         )
         index = prepare_sfc_index(sfc, columns[0].size)
         return compute_profile_dcape(*columns, sfc=index)
+
+    def _profile_thermodynamics_result(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        columns = prepare_profile_parcels(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            missing=missing,
+        )
+        index = prepare_sfc_index(sfc, columns[0].size)
+        return compute_profile_thermodynamics(*columns, sfc=index)
+
+    def profile_thermodynamics(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        return self._profile_thermodynamics_result(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            sfc=sfc,
+            missing=missing,
+        )
+
+    def profile_thermodynamics_buffers(
+        self,
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        *,
+        sfc=0,
+        missing=-9999.0,
+    ):
+        result = self._profile_thermodynamics_result(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+            sfc=sfc,
+            missing=missing,
+        )
+        return profile_thermodynamics_buffers_from_raw(
+            profile_thermodynamics_to_raw(result),
+        )
+
+    def profile_batch_analysis(
+        self,
+        profiles,
+        layer_tops_agl,
+        *,
+        missing=-9999.0,
+        max_threads=DEFAULT_BATCH_THREADS,
+        parallel_threshold=DEFAULT_BATCH_PARALLEL_THRESHOLD,
+    ) -> BatchProfileAnalysis:
+        """Reference serial implementation of the native batch contract."""
+        profiles = tuple(profiles)
+        if isinstance(max_threads, (bool, np.bool_)) or int(max_threads) < 1:
+            raise ValueError("max_threads must be at least 1")
+        if (
+            isinstance(parallel_threshold, (bool, np.bool_))
+            or int(parallel_threshold) < 2
+        ):
+            raise ValueError("parallel_threshold must be at least 2")
+        layer_tops = prepare_1d(layer_tops_agl, name="layer_tops_agl")
+        if np.any(~np.isfinite(layer_tops)) or np.any(layer_tops < 0.0):
+            raise ValueError(
+                "layer_tops_agl must contain finite, non-negative heights"
+            )
+
+        parcel_rows = []
+        convective_rows = []
+        bounds_rows = []
+        downdraft_rows = []
+        storm_rows = []
+        layer_rows = []
+        for profile_index, value in enumerate(profiles):
+            try:
+                columns = tuple(value)
+            except TypeError as exc:
+                raise TypeError(
+                    f"profile {profile_index} must be a column sequence"
+                ) from exc
+            if len(columns) not in (6, 7):
+                raise ValueError(
+                    f"profile {profile_index} must contain six columns and "
+                    "an optional surface index"
+                )
+            sfc = columns[6] if len(columns) == 7 else 0
+            thermodynamics = self.profile_thermodynamics(
+                *columns[:4], sfc=sfc, missing=missing,
+            )
+            u, v = self.wind_to_components(
+                columns[4], columns[5], missing=missing,
+            )
+            kinematics = self.profile_kinematics(
+                columns[0],
+                columns[1],
+                u,
+                v,
+                layer_tops,
+                sfc=sfc,
+                missing=missing,
+            )
+            convective_raw = convective_workspace_to_raw(
+                thermodynamics.convective,
+            )
+            downdraft_raw = downdraft_to_raw(thermodynamics.downdraft)
+            storm_raw, layers_raw = profile_kinematics_to_raw(kinematics)
+            parcel_rows.append(parcel_workspace_to_raw(thermodynamics.parcels))
+            convective_rows.append(convective_raw[0])
+            bounds_rows.append(convective_raw[1])
+            downdraft_rows.append(downdraft_raw[0])
+            storm_rows.append(storm_raw)
+            layer_rows.append(layers_raw)
+
+        profile_count = len(profiles)
+        layer_count = layer_tops.size
+
+        def stack(rows, shape):
+            array = (
+                np.ascontiguousarray(np.asarray(rows, dtype=np.float64))
+                if rows
+                else np.empty(shape, dtype=np.float64)
+            )
+            array = array.reshape(shape)
+            array.setflags(write=False)
+            return array
+
+        return BatchProfileAnalysis(
+            parcels=stack(parcel_rows, (profile_count, 3, 14)),
+            convective_parcels=stack(
+                convective_rows, (profile_count, 5, 14),
+            ),
+            effective_bounds=stack(bounds_rows, (profile_count, 2)),
+            downdraft=stack(downdraft_rows, (profile_count, 3)),
+            storm_motion=stack(storm_rows, (profile_count, 4)),
+            kinematic_layers=stack(
+                layer_rows, (profile_count, layer_count, 15),
+            ),
+            execution_mode=(
+                "serial_below_threshold"
+                if profile_count < int(parallel_threshold)
+                else "serial_single_thread"
+            ),
+            worker_count=1,
+        )
 
     def basic_sounding_qc(
         self,

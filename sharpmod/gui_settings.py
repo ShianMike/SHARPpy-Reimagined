@@ -13,6 +13,7 @@ from pathlib import Path
 """Durable GUI preferences, units, parcels, and settings dialogs."""
 
 from sharpmod.gui_common import APP_NAME, _LOGGER
+from sharpmod.export_paths import discard_stale_export_settings
 
 from qtpy.QtCore import (
     Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
@@ -133,6 +134,10 @@ def _build_settings(path=None, legacy_settings=None) -> QSettings:
                 settings.setValue(key, legacy.value(key))
         settings.setValue("meta/native_settings_migrated", True)
         settings.sync()
+    # Older releases remembered arbitrary export locations (often Desktop or
+    # Pictures).  Exports are now per-operation and always begin in the
+    # application-local rendered_soundings directory, including after restart.
+    discard_stale_export_settings(settings)
     seeded = False
     for key, value in PERSISTED_SETTING_DEFAULTS.items():
         if not settings.contains(key):

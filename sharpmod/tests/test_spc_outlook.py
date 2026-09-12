@@ -573,6 +573,65 @@ def test_unknown_product_falls_back_to_categorical():
     assert spc.resolve_product(None).key == "cat"
 
 
+# --------------------------------------------------------------------------- #
+# product availability
+#
+# Read by callers that carry a user's hazard preference onto an arbitrary valid
+# time -- the sounding locator inset -- so they can tell a preference that cannot
+# be honoured from one that simply found nothing.
+# --------------------------------------------------------------------------- #
+_AVAILABILITY = {
+    # (days from NOW's convective day): {product: publishes?}
+    0: {"cat": True, "torn": True, "wind": True, "hail": True, "prob": True},
+    1: {"cat": True, "torn": True, "wind": True, "hail": True, "prob": True},
+    # The hazard probabilities stop at Day 2; the categorical and the combined
+    # total-severe probability continue.
+    2: {"cat": True, "torn": False, "wind": False, "hail": False, "prob": True},
+    # Nothing is published beyond Day 3, for any product.
+    3: {"cat": False, "torn": False, "wind": False, "hail": False, "prob": False},
+}
+
+
+@pytest.mark.parametrize("offset", sorted(_AVAILABILITY))
+@pytest.mark.parametrize("product", sorted(spc.PRODUCTS))
+def test_product_availability_by_outlook_day(product, offset):
+    valid = spc.convective_day_start(NOW) + timedelta(days=offset, hours=9)
+
+    assert spc.product_publishes(valid, product, now=NOW) is (
+        _AVAILABILITY[offset][product]
+    )
+
+
+def test_every_product_is_covered_by_the_availability_matrix():
+    """So adding a product cannot silently skip the check above."""
+    for row in _AVAILABILITY.values():
+        assert set(row) == set(spc.PRODUCTS)
+
+
+def test_an_archived_time_publishes_every_product():
+    """A past convective day has every issuance on file, hazards included."""
+    valid = datetime(2025, 4, 2, 21, tzinfo=UTC)
+
+    for product in spc.PRODUCTS:
+        assert spc.product_publishes(valid, product, now=NOW) is True
+
+
+def test_nothing_publishes_before_the_archive_begins():
+    valid = datetime(spc.ARCHIVE_FIRST_YEAR - 1, 6, 10, 21, tzinfo=UTC)
+
+    for product in spc.PRODUCTS:
+        assert spc.product_publishes(valid, product, now=NOW) is False
+
+
+def test_availability_of_a_missing_or_naive_time_is_false_not_an_error():
+    assert spc.product_publishes(None, "torn", now=NOW) is False
+    assert spc.product_publishes("nonsense", "torn", now=NOW) is False
+    # candidates_for rejects a naive time; that must not escape as an exception.
+    assert spc.product_publishes(
+        datetime(2025, 5, 14, 21), "torn", now=NOW
+    ) is False
+
+
 def test_tornado_dn_collision_is_split_by_label():
     """``DN=10`` is both the 10% band and the significant-severe area."""
     layer = spc.parse_outlook(_prob_payload(TORNADO_BANDS), product="torn")

@@ -12,14 +12,17 @@ from .grib import (
     DecodedPoint,
     GribDecodeError,
     clear_grib_caches as _clear_python_grib_caches,
-    decode_grib_points,
+    decode_grib_points as _decode_python_grib_points,
     decode_grib_wind_vorticities,
     decode_grib_wind_vorticity,
     grib_cache_info as _python_grib_cache_info,
 )
 from .protocol import (
     Backend,
+    BatchProfileAnalysis,
     ConvectiveParcelWorkspace,
+    DEFAULT_BATCH_PARALLEL_THRESHOLD,
+    DEFAULT_BATCH_THREADS,
     DowndraftDiagnostics,
     KinematicLayer,
     ParcelAscent,
@@ -27,6 +30,7 @@ from .protocol import (
     ParcelTrace,
     ParcelWorkspace,
     ProfileKinematics,
+    ProfileThermodynamics,
     QualityControlResult,
 )
 from .selector import (
@@ -174,11 +178,82 @@ def profile_dcape(
     )
 
 
+def profile_thermodynamics(
+    pres,
+    hght,
+    tmpc,
+    dwpc,
+    *,
+    sfc=0,
+    missing=-9999.0,
+) -> ProfileThermodynamics:
+    """Compute all thermodynamic workspaces from one prepared profile."""
+    return get_backend().profile_thermodynamics(
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        sfc=sfc,
+        missing=missing,
+    )
+
+
+def _profile_thermodynamics_buffers(
+    pres,
+    hght,
+    tmpc,
+    dwpc,
+    *,
+    sfc=0,
+    missing=-9999.0,
+):
+    """Return internal array-backed traces without public tuple conversion."""
+    return get_backend().profile_thermodynamics_buffers(
+        pres,
+        hght,
+        tmpc,
+        dwpc,
+        sfc=sfc,
+        missing=missing,
+    )
+
+
+def profile_batch_analysis(
+    profiles,
+    layer_tops_agl,
+    *,
+    missing=-9999.0,
+    max_threads=DEFAULT_BATCH_THREADS,
+    parallel_threshold=DEFAULT_BATCH_PARALLEL_THRESHOLD,
+) -> BatchProfileAnalysis:
+    """Compute ordered fixed-width diagnostics for complete profiles."""
+    return get_backend().profile_batch_analysis(
+        profiles,
+        layer_tops_agl,
+        missing=missing,
+        max_threads=max_threads,
+        parallel_threshold=parallel_threshold,
+    )
+
+
 def decode_grib_point(path, lat, lon, *, missing=-9999.0) -> DecodedPoint:
     """Decode one nearest-grid-point pressure sounding with the active backend."""
     return get_backend().decode_grib_point(
         path, lat, lon, missing=missing,
     )
+
+
+def decode_grib_points(
+    path, points, *, missing=-9999.0,
+) -> tuple[DecodedPoint, ...]:
+    """Decode several nearest-grid-point soundings with the active backend."""
+    backend = get_backend()
+    decode_many = getattr(backend, "decode_grib_points", None)
+    if callable(decode_many):
+        return decode_many(path, points, missing=missing)
+    # Compatibility for third-party backend objects implementing the older
+    # scalar-only protocol. Supported native modules are capability-checked.
+    return _decode_python_grib_points(path, points, missing=missing)
 
 
 def clear_grib_caches(
@@ -194,7 +269,11 @@ def clear_grib_caches(
     backend = get_backend()
     clear = getattr(backend, "clear_grib_cache", None)
     if callable(clear):
-        clear(points=points, reset_stats=reset_stats)
+        clear(
+            inventory=inventory,
+            points=points,
+            reset_stats=reset_stats,
+        )
 
 
 def grib_cache_info():
@@ -210,6 +289,7 @@ def grib_cache_info():
 __all__ = [
     "Backend",
     "BackendUnavailableError",
+    "BatchProfileAnalysis",
     "ConvectiveParcelWorkspace",
     "DecodedPoint",
     "DowndraftDiagnostics",
@@ -220,6 +300,7 @@ __all__ = [
     "ParcelTrace",
     "ParcelWorkspace",
     "ProfileKinematics",
+    "ProfileThermodynamics",
     "QualityControlResult",
     "backend_info",
     "basic_sounding_qc",
@@ -237,7 +318,9 @@ __all__ = [
     "profile_convective_parcels",
     "profile_dcape",
     "profile_kinematics",
+    "profile_batch_analysis",
     "profile_parcels",
+    "profile_thermodynamics",
     "pressure_sort_dedup_indices",
     "reset_backend_cache",
     "wind_to_components",

@@ -195,6 +195,7 @@ packages = [
     "sharpmod.sharptab",
     "sharpmod.io",
     "sharpmod.viz",
+    "sharpmod.render_patches",
     "sharpmod.tools",
     "sharpmod.resources",
     "sharpmod.resources.fonts",

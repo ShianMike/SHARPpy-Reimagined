@@ -13,18 +13,30 @@ should not issue network requests to SPC before the user asks for it.
 
 from __future__ import annotations
 
+from contextlib import suppress
 from datetime import datetime, timedelta
 from time import monotonic
 
 from qtpy.QtCore import QObject, Qt, QTimer, Signal
 from qtpy.QtWidgets import (
-    QCheckBox, QComboBox, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget,
+    QCheckBox,
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QSlider,
+    QVBoxLayout,
+    QWidget,
 )
 
 from sharpmod import radar_mosaic, radar_site, spc_outlook
 from sharpmod.gui_workers import (
-    _HrrrFieldWorker, _RadarMosaicWorker, _RadarSiteWorker, _SpcOutlookWorker,
+    _HrrrFieldWorker,
+    _RadarMosaicWorker,
+    _RadarSiteWorker,
+    _SpcOutlookWorker,
+    _StormReportsWorker,
 )
+from sharpmod.gui_threading import retain_worker_until_finished
 from sharpmod.map_overlays import format_age
 from sharpmod.theme import OBJ_HINT, OBJ_PLAIN
 
@@ -104,6 +116,18 @@ class _WorkerFleet:
             except RuntimeError:
                 self.retire(worker)
 
+        # Anything still blocked has outlived this controller's grace period.
+        # Detach it before the controller is destroyed; the process-level
+        # retainer releases it when the operation returns naturally.
+        for worker in tuple(self._live):
+            try:
+                running = worker.isRunning()
+            except RuntimeError:
+                self.retire(worker)
+                continue
+            if running and retain_worker_until_finished(worker):
+                self.retire(worker)
+
 
 def _resolved_day(valid_time: datetime | None, product: str) -> int | None:
     """Return the outlook day ``product`` would resolve to for ``valid_time``.
@@ -149,12 +173,12 @@ class OutlookOverlayController(QObject):
     statusChanged = Signal(str)
 
     def __init__(
-            self,
-            map_widget,
-            *,
-            parent=None,
-            label: str = "SPC convective outlook",
-            enabled: bool = False,
+        self,
+        map_widget,
+        *,
+        parent=None,
+        label: str = "SPC convective outlook",
+        enabled: bool = False,
     ) -> None:
         super().__init__(parent)
         self._map = map_widget
@@ -186,7 +210,8 @@ class OutlookOverlayController(QObject):
         self._check = QCheckBox(label)
         self._check.setToolTip(
             "Draw the SPC convective outlook covering the selected valid time "
-            "(2020 onward)")
+            "(2020 onward)"
+        )
         self._check.setChecked(bool(enabled))
         self._check.toggled.connect(self._on_toggled)
         layout.addWidget(self._check)
@@ -199,10 +224,12 @@ class OutlookOverlayController(QObject):
         for spec in spc_outlook.PRODUCTS.values():
             self._product.addItem(_product_item_text(spec, None), spec.key)
         self._product.setCurrentIndex(
-            max(0, self._product.findData(spc_outlook.DEFAULT_PRODUCT)))
+            max(0, self._product.findData(spc_outlook.DEFAULT_PRODUCT))
+        )
         self._product.setToolTip(
             "Hazard probabilities are only issued for Days 1 and 2; the "
-            "categorical outlook covers Days 1 to 3")
+            "categorical outlook covers Days 1 to 3"
+        )
         self._product.currentIndexChanged.connect(self._on_product_changed)
         layout.addWidget(self._product)
 
@@ -238,8 +265,7 @@ class OutlookOverlayController(QObject):
         self._check.setChecked(bool(enabled))
 
     def product(self) -> str:
-        return str(self._product.currentData()
-                   or spc_outlook.DEFAULT_PRODUCT)
+        return str(self._product.currentData() or spc_outlook.DEFAULT_PRODUCT)
 
     def set_product(self, product: str) -> None:
         index = self._product.findData(product)
@@ -261,8 +287,11 @@ class OutlookOverlayController(QObject):
         if not self._check.isChecked():
             return
         layer = self._map.overlay(spc_outlook.OVERLAY_KEY)
-        if layer is not None and layer.covers(when) \
-                and self._current_signature() == self._signature:
+        if (
+            layer is not None
+            and layer.covers(when)
+            and self._current_signature() == self._signature
+        ):
             # The outlook on screen covers the new time and is still the one
             # that would be resolved for it, so stepping between forecast hours
             # inside a single issuance costs nothing. Coverage alone is not
@@ -287,15 +316,18 @@ class OutlookOverlayController(QObject):
         """
         for index in range(self._product.count()):
             spec = spc_outlook.resolve_product(self._product.itemData(index))
-            self._product.setItemText(index, _product_item_text(
-                spec, _resolved_day(self._valid_time, spec.key)))
+            self._product.setItemText(
+                index,
+                _product_item_text(spec, _resolved_day(self._valid_time, spec.key)),
+            )
 
     def _current_signature(self) -> tuple[str, ...] | None:
         """Return what could answer the current selection, or ``None``."""
         if self._valid_time is None:
             return None
         return spc_outlook.resolution_signature(
-            self._valid_time, product=self.product())
+            self._valid_time, product=self.product()
+        )
 
     def _check_superseded(self) -> None:
         """Refetch when SPC has issued something better since we last resolved.
@@ -360,8 +392,11 @@ class OutlookOverlayController(QObject):
             return
         self._supersede_timer.start()
         layer = self._map.overlay(spc_outlook.OVERLAY_KEY)
-        if layer is not None and layer.covers(self._valid_time) \
-                and self._current_signature() == self._signature:
+        if (
+            layer is not None
+            and layer.covers(self._valid_time)
+            and self._current_signature() == self._signature
+        ):
             # Same test as set_valid_time, and for the same reason. The valid
             # time can move while the overlay is off -- set_valid_time records
             # it and returns without resolving anything -- so coverage alone
@@ -396,8 +431,9 @@ class OutlookOverlayController(QObject):
         # to be waited on at close whether or not we still want the answer.
         self._workers.interrupt()
 
-        worker = _SpcOutlookWorker(self._valid_time, token, parent=self,
-                                   product=self.product())
+        worker = _SpcOutlookWorker(
+            self._valid_time, token, parent=self, product=self.product()
+        )
         worker.loaded.connect(self._on_loaded)
         worker.failed.connect(self._on_failed)
         self._workers.track(worker)
@@ -416,7 +452,8 @@ class OutlookOverlayController(QObject):
             spec = spc_outlook.resolve_product(self.product())
             self._set_status(
                 f"No {spec.label.lower()} covers {valid_time:%Y-%m-%d %H}Z "
-                f"({spc_outlook.format_product_days(spec)}, 2020 onward)")
+                f"({spc_outlook.format_product_days(spec)}, 2020 onward)"
+            )
             return
         self._map.set_overlay(spc_outlook.OVERLAY_KEY, layer, visible=True)
         self._set_status(self._describe(layer))
@@ -502,15 +539,15 @@ class RadarOverlayController(QObject):
     statusChanged = Signal(str)
 
     def __init__(
-            self,
-            map_widget,
-            *,
-            parent=None,
-            label: str = "Show radar",
-            enabled: bool = False,
-            opacity: float = 0.85,
-            scope: str = SCOPE_SITE,
-            site: str = SITE_AUTO,
+        self,
+        map_widget,
+        *,
+        parent=None,
+        label: str = "Show radar",
+        enabled: bool = False,
+        opacity: float = 0.85,
+        scope: str = SCOPE_SITE,
+        site: str = SITE_AUTO,
     ) -> None:
         super().__init__(parent)
         self._map = map_widget
@@ -536,7 +573,8 @@ class RadarOverlayController(QObject):
 
         self._check = QCheckBox(label)
         self._check.setToolTip(
-            "Draw live radar over the map. Refreshes while it is switched on.")
+            "Draw live radar over the map. Refreshes while it is switched on."
+        )
         self._check.setChecked(bool(enabled))
         self._check.toggled.connect(self._on_toggled)
         layout.addWidget(self._check)
@@ -549,11 +587,18 @@ class RadarOverlayController(QObject):
         self._scope = QComboBox()
         self._scope.addItem("Nearest single site", SCOPE_SITE)
         self._scope.addItem("CONUS mosaic", SCOPE_MOSAIC)
-        self._scope.setCurrentIndex(max(0, self._scope.findData(
-            scope if scope in (SCOPE_SITE, SCOPE_MOSAIC) else SCOPE_SITE)))
+        self._scope.setCurrentIndex(
+            max(
+                0,
+                self._scope.findData(
+                    scope if scope in (SCOPE_SITE, SCOPE_MOSAIC) else SCOPE_SITE
+                ),
+            )
+        )
         self._scope.setToolTip(
             "A single radar near the map centre, at its own resolution, or the "
-            "national mosaic")
+            "national mosaic"
+        )
         self._scope.currentIndexChanged.connect(self._on_scope_changed)
         layout.addWidget(self._scope)
 
@@ -568,7 +613,8 @@ class RadarOverlayController(QObject):
         self._site.setEditable(True)
         self._site.setInsertPolicy(QComboBox.NoInsert)
         self._site.setToolTip(
-            "Which WSR-88D to draw. Type an identifier to jump to it.")
+            "Which WSR-88D to draw. Type an identifier to jump to it."
+        )
         self._site.setMaxVisibleItems(16)
         self._reload_sites(prefer=site)
         completer = self._site.completer()
@@ -598,8 +644,7 @@ class RadarOverlayController(QObject):
         # the user has turned on and cannot see, and 100 hides the coastlines
         # and state borders that make the image locatable at all.
         self._opacity.setRange(20, 95)
-        self._opacity.setValue(
-            int(round(min(0.95, max(0.20, float(opacity))) * 100.0)))
+        self._opacity.setValue(int(round(min(0.95, max(0.20, float(opacity))) * 100.0)))
         self._opacity.setToolTip("How strongly the radar image covers the map")
         self._opacity.valueChanged.connect(self._on_opacity_changed)
         opacity_row.addWidget(self._opacity, 1)
@@ -631,8 +676,7 @@ class RadarOverlayController(QObject):
         self._check.setChecked(bool(enabled))
 
     def product(self) -> str:
-        return str(self._product.currentData()
-                   or self._source().DEFAULT_PRODUCT)
+        return str(self._product.currentData() or self._source().DEFAULT_PRODUCT)
 
     def set_product(self, product: str) -> None:
         index = self._product.findData(product)
@@ -698,6 +742,26 @@ class RadarOverlayController(QObject):
         # open.
         self._workers.drain(_SHUTDOWN_WAIT_MS)
 
+    def attached_raster(self):
+        """Return the radar frame currently drawn on the map, or ``None``.
+
+        The sibling of :meth:`HrrrFieldController.attached_raster`, and read for
+        the same reason: a profile opened while radar is showing can carry that
+        frame onto its locator inset without fetching a second one. ``None``
+        while switched off, because a frame the user cannot see on the map should
+        not appear beside the sounding either.
+
+        Only the scope in force is offered. The two scopes own separate map
+        slots, so reading both could hand back a frame from the scope the user
+        switched away from.
+        """
+        if not self._check.isChecked():
+            return None
+        try:
+            return self._map.overlay(self._key())
+        except AttributeError:
+            return None
+
     # -- internals ----------------------------------------------------------- #
     def scope(self) -> str:
         """Return ``"site"`` or ``"mosaic"``."""
@@ -717,7 +781,8 @@ class RadarOverlayController(QObject):
     def set_site(self, site_id: str | None) -> None:
         """Pin a radar by identifier, or pass ``None`` to follow the map."""
         index = self._site.findData(
-            SITE_AUTO if not site_id else str(site_id).strip().upper())
+            SITE_AUTO if not site_id else str(site_id).strip().upper()
+        )
         if index >= 0:
             self._site.setCurrentIndex(index)
 
@@ -739,10 +804,15 @@ class RadarOverlayController(QObject):
                 self._site.setItemData(
                     self._site.count() - 1,
                     "%s at %.2f%s %.2f%s"
-                    % (entry.id, abs(entry.lat),
-                       "N" if entry.lat >= 0 else "S",
-                       abs(entry.lon), "E" if entry.lon >= 0 else "W"),
-                    Qt.ToolTipRole)
+                    % (
+                        entry.id,
+                        abs(entry.lat),
+                        "N" if entry.lat >= 0 else "S",
+                        abs(entry.lon),
+                        "E" if entry.lon >= 0 else "W",
+                    ),
+                    Qt.ToolTipRole,
+                )
             self._site.setCurrentIndex(max(0, self._site.findData(wanted)))
         finally:
             self._site.blockSignals(blocked)
@@ -787,8 +857,11 @@ class RadarOverlayController(QObject):
 
     def _other_key(self) -> str:
         """The key belonging to the scope that is *not* selected."""
-        return (radar_mosaic.OVERLAY_KEY if self.scope() == SCOPE_SITE
-                else radar_site.OVERLAY_KEY)
+        return (
+            radar_mosaic.OVERLAY_KEY
+            if self.scope() == SCOPE_SITE
+            else radar_site.OVERLAY_KEY
+        )
 
     def _spec(self):
         return self._source().get_product(self.product())
@@ -808,7 +881,8 @@ class RadarOverlayController(QObject):
         # user cannot act on, when the list could simply not have offered it.
         pinned = self._pinned_site()
         offered = [
-            spec for spec in source.available_products()
+            spec
+            for spec in source.available_products()
             if pinned is None or pinned.supports(spec)
         ] or list(source.available_products())
         blocked = self._product.blockSignals(True)
@@ -817,8 +891,9 @@ class RadarOverlayController(QObject):
             for spec in offered:
                 self._product.addItem(spec.label, spec.key)
                 if spec.description:
-                    self._product.setItemData(self._product.count() - 1,
-                                              spec.description, Qt.ToolTipRole)
+                    self._product.setItemData(
+                        self._product.count() - 1, spec.description, Qt.ToolTipRole
+                    )
             index = self._product.findData(prefer or source.DEFAULT_PRODUCT)
             self._product.setCurrentIndex(max(0, index))
         finally:
@@ -827,8 +902,7 @@ class RadarOverlayController(QObject):
     def _sync_refresh_interval(self) -> None:
         """Point the refresh timer at the selected product's cadence."""
         cadence_ms = int(self._spec().update_interval_s * 1000.0)
-        self._refresh_timer.setInterval(
-            max(_RADAR_REFRESH_FLOOR_MS, cadence_ms))
+        self._refresh_timer.setInterval(max(_RADAR_REFRESH_FLOOR_MS, cadence_ms))
 
     def _view_bounds(self):
         """Return the map's lon/lat view, or ``None`` if it cannot report one."""
@@ -911,11 +985,10 @@ class RadarOverlayController(QObject):
         Duck-typed against the map for the same reason ``view_bounds`` is: not
         every map this controller can be attached to has to carry the layer.
         """
-        wanted = (self._check.isChecked() and self.scope() == SCOPE_SITE)
+        wanted = self._check.isChecked() and self.scope() == SCOPE_SITE
         try:
             self._map.set_radar_sites(radar_site.sites() if wanted else ())
-            self._map.set_radar_site_selected(
-                self._site_id or self.site() or None)
+            self._map.set_radar_site_selected(self._site_id or self.site() or None)
         except AttributeError:
             return
 
@@ -942,8 +1015,7 @@ class RadarOverlayController(QObject):
         raster = self._map.overlay(self._key())
         if raster is None:
             return
-        self._map.set_overlay(
-            self._key(), raster.at_opacity(self.opacity()))
+        self._map.set_overlay(self._key(), raster.at_opacity(self.opacity()))
 
     def _on_refresh_tick(self) -> None:
         """Fetch the next frame, or explain why one is not being fetched."""
@@ -963,9 +1035,10 @@ class RadarOverlayController(QObject):
             # view outside the national composite entirely.
             self._set_status(
                 "No NEXRAD site is within range of this view"
-                if self.scope() == SCOPE_SITE else
-                "The mosaic covers the contiguous United States; the map is "
-                "currently outside it")
+                if self.scope() == SCOPE_SITE
+                else "The mosaic covers the contiguous United States; the map is "
+                "currently outside it"
+            )
             return
         self._map.set_overlay_visible(self._key(), True)
         self._set_status("Loading radar\u2026")
@@ -985,15 +1058,18 @@ class RadarOverlayController(QObject):
             # The view travels with the request: which antenna serves it is
             # resolved from the map centre, and the user may pan before the
             # frame lands.
-            worker = _RadarSiteWorker(token, parent=self,
-                                      product=self.product(),
-                                      view=self._view_bounds(),
-                                      site_id=self.site() or None,
-                                      opacity=self.opacity())
+            worker = _RadarSiteWorker(
+                token,
+                parent=self,
+                product=self.product(),
+                view=self._view_bounds(),
+                site_id=self.site() or None,
+                opacity=self.opacity(),
+            )
         else:
-            worker = _RadarMosaicWorker(token, parent=self,
-                                        product=self.product(),
-                                        opacity=self.opacity())
+            worker = _RadarMosaicWorker(
+                token, parent=self, product=self.product(), opacity=self.opacity()
+            )
         worker.loaded.connect(self._on_loaded)
         worker.failed.connect(self._on_failed)
         self._workers.track(worker)
@@ -1094,14 +1170,14 @@ class HrrrFieldController(QObject):
     statusChanged = Signal(str)
 
     def __init__(
-            self,
-            map_widget,
-            *,
-            parent=None,
-            label: str = "Show HRRR model field",
-            enabled: bool = False,
-            product: str | None = None,
-            opacity: float = 0.75,
+        self,
+        map_widget,
+        *,
+        parent=None,
+        label: str = "Show HRRR model field",
+        enabled: bool = False,
+        product: str | None = None,
+        opacity: float = 0.75,
     ) -> None:
         super().__init__(parent)
         # Imported here rather than at module scope, and held as attributes so
@@ -1111,6 +1187,7 @@ class HrrrFieldController(QObject):
         # that, because importing NumPy on the startup path is measurable delay
         # for a window whose first job is to draw a map and a station list.
         from sharpmod import hrrr_field, hrrr_products
+
         self._fields = hrrr_field
         self._catalogue = hrrr_products
 
@@ -1141,7 +1218,8 @@ class HrrrFieldController(QObject):
         self._check = QCheckBox(label)
         self._check.setToolTip(
             "Draw an HRRR forecast field over the contiguous United States, "
-            "beneath the SPC outlook and any radar. One field at a time.")
+            "beneath the SPC outlook and any radar. One field at a time."
+        )
         self._check.setChecked(bool(enabled))
         self._check.toggled.connect(self._on_toggled)
         layout.addWidget(self._check)
@@ -1160,8 +1238,7 @@ class HrrrFieldController(QObject):
 
         # Populate before connecting, so building the initial list cannot look
         # like a user selection and fire a fetch for the wrong product.
-        self._category.setCurrentIndex(
-            max(0, self._category.findData(wanted.category)))
+        self._category.setCurrentIndex(max(0, self._category.findData(wanted.category)))
         self._reload_products(wanted.key)
         self._category.currentIndexChanged.connect(self._on_category_changed)
         self._product.currentIndexChanged.connect(self._on_product_changed)
@@ -1175,8 +1252,7 @@ class HrrrFieldController(QObject):
         # covers the whole country, so the floor matters more here -- the
         # coastline and state borders underneath are what locate it.
         self._opacity.setRange(20, 95)
-        self._opacity.setValue(
-            int(round(min(0.95, max(0.20, float(opacity))) * 100.0)))
+        self._opacity.setValue(int(round(min(0.95, max(0.20, float(opacity))) * 100.0)))
         self._opacity.setToolTip("How strongly the field covers the map")
         self._opacity.valueChanged.connect(self._on_opacity_changed)
         opacity_row.addWidget(self._opacity, 1)
@@ -1204,8 +1280,7 @@ class HrrrFieldController(QObject):
         self._check.setChecked(bool(enabled))
 
     def product(self) -> str:
-        return str(self._product.currentData()
-                   or self._catalogue.DEFAULT_PRODUCT)
+        return str(self._product.currentData() or self._catalogue.DEFAULT_PRODUCT)
 
     def set_product(self, product: str) -> None:
         """Select a product, moving the category box to match if needed."""
@@ -1253,13 +1328,15 @@ class HrrrFieldController(QObject):
         self._fxx = None
         if not self._check.isChecked():
             return
-        if previous_run is None and previous_fxx is None \
-                and _same_forecast_hour(previous, when):
+        if (
+            previous_run is None
+            and previous_fxx is None
+            and _same_forecast_hour(previous, when)
+        ):
             return
         self._request()
 
-    def set_forecast_reference(self, run: datetime | None,
-                               fxx: int | None) -> None:
+    def set_forecast_reference(self, run: datetime | None, fxx: int | None) -> None:
         """Pin the overlay to an exact model cycle run and forecast hour.
 
         This is the difference between "a field valid at the same hour" and "the
@@ -1302,8 +1379,11 @@ class HrrrFieldController(QObject):
             self._request()
             return
         raster = self._map.overlay(self._fields.OVERLAY_KEY)
-        if raster is not None and raster.short_name == self.product() \
-                and not raster.is_stale():
+        if (
+            raster is not None
+            and raster.short_name == self.product()
+            and not raster.is_stale()
+        ):
             self._map.set_overlay_visible(self._fields.OVERLAY_KEY, True)
             self._set_status(self._describe(raster))
             return
@@ -1324,16 +1404,19 @@ class HrrrFieldController(QObject):
         otherwise look like the user picking a product.
         """
         category = str(self._category.currentData() or "")
-        members = [product for product in self._catalogue.available_products()
-                   if product.category == category]
+        members = [
+            product
+            for product in self._catalogue.available_products()
+            if product.category == category
+        ]
         blocked = self._product.blockSignals(True)
         try:
             self._product.clear()
             for spec in members:
                 self._product.addItem(spec.label, spec.key)
                 self._product.setItemData(
-                    self._product.count() - 1,
-                    _product_tooltip(spec), Qt.ToolTipRole)
+                    self._product.count() - 1, _product_tooltip(spec), Qt.ToolTipRole
+                )
             index = self._product.findData(prefer) if prefer else -1
             self._product.setCurrentIndex(max(0, index))
         finally:
@@ -1347,8 +1430,12 @@ class HrrrFieldController(QObject):
         return self._fields.covers(view)
 
     def _set_detail_visible(self, visible: bool) -> None:
-        for widget in (self._category, self._product, self._opacity_label,
-                       self._opacity):
+        for widget in (
+            self._category,
+            self._product,
+            self._opacity_label,
+            self._opacity,
+        ):
             widget.setVisible(bool(visible))
 
     def _on_toggled(self, checked: bool) -> None:
@@ -1363,8 +1450,11 @@ class HrrrFieldController(QObject):
             return
         self._refresh_timer.start()
         raster = self._map.overlay(self._fields.OVERLAY_KEY)
-        if raster is not None and raster.short_name == self.product() \
-                and not raster.is_stale():
+        if (
+            raster is not None
+            and raster.short_name == self.product()
+            and not raster.is_stale()
+        ):
             self._map.set_overlay_visible(self._fields.OVERLAY_KEY, True)
             self._set_status(self._describe(raster))
             return
@@ -1395,7 +1485,8 @@ class HrrrFieldController(QObject):
         if raster is None:
             return
         self._map.set_overlay(
-            self._fields.OVERLAY_KEY, raster.at_opacity(self.opacity()))
+            self._fields.OVERLAY_KEY, raster.at_opacity(self.opacity())
+        )
 
     def _on_refresh_tick(self) -> None:
         if not self._check.isChecked():
@@ -1409,11 +1500,13 @@ class HrrrFieldController(QObject):
             self._map.set_overlay_visible(self._fields.OVERLAY_KEY, False)
             self._set_status(
                 "HRRR covers the contiguous United States; the map is "
-                "currently outside it")
+                "currently outside it"
+            )
             return
         self._map.set_overlay_visible(self._fields.OVERLAY_KEY, True)
-        self._set_status("Loading %s\u2026"
-                         % self._catalogue.get_product(self.product()).label)
+        self._set_status(
+            "Loading %s\u2026" % self._catalogue.get_product(self.product()).label
+        )
         self._timer.start()
 
     def _start_fetch(self) -> None:
@@ -1423,10 +1516,15 @@ class HrrrFieldController(QObject):
         token = self._token
         self._workers.interrupt()
 
-        worker = _HrrrFieldWorker(token, parent=self, product=self.product(),
-                                  valid_time=self._valid_time,
-                                  run=self._run, fxx=self._fxx,
-                                  opacity=self.opacity())
+        worker = _HrrrFieldWorker(
+            token,
+            parent=self,
+            product=self.product(),
+            valid_time=self._valid_time,
+            run=self._run,
+            fxx=self._fxx,
+            opacity=self.opacity(),
+        )
         worker.loaded.connect(self._on_loaded)
         worker.failed.connect(self._on_failed)
         self._workers.track(worker)
@@ -1475,10 +1573,414 @@ def _product_tooltip(spec) -> str:
     return "\n\n".join(parts)
 
 
-def _same_forecast_hour(first: datetime | None,
-                        second: datetime | None) -> bool:
+def _same_forecast_hour(first: datetime | None, second: datetime | None) -> bool:
     """Whether two times resolve to the same HRRR forecast hour."""
     if first is None or second is None:
         return first is None and second is None
-    return (first.replace(minute=0, second=0, microsecond=0)
-            == second.replace(minute=0, second=0, microsecond=0))
+    return first.replace(minute=0, second=0, microsecond=0) == second.replace(
+        minute=0, second=0, microsecond=0
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Choosing what the sounding's locator inset carries
+# --------------------------------------------------------------------------- #
+
+#: Where the locator selection is remembered, beside the other overlay choices.
+LOCATOR_SETTINGS_KEY = "overlays/locator_selection"
+
+
+class LocatorOverlaySelector(QObject):
+    """Pick which overlays travel onto a sounding's locator inset.
+
+    A thin control over :mod:`sharpmod.locator_overlay`, which owns the rules.
+    Nothing here decides what may coexist; it presents the families, asks that
+    module to reduce the selection, and then makes the boxes agree with the
+    answer. Keeping the judgement in one place is what stops this control and
+    the ``--locator-overlay`` command line drifting apart.
+
+    Two behaviours are worth stating, because both are the control telling the
+    truth rather than quietly disagreeing with what will be drawn:
+
+    * Choosing radar clears the outlook and the field, since radar displaces
+      them. The boxes move, so the control never claims to be showing something
+      that has been displaced.
+    * Storm reports stay disabled, with a tooltip saying why, until the outlook
+      is selected. They are read against it -- the question is whether what was
+      forecast happened -- and a scatter of markers with nothing behind them
+      cannot answer that.
+    """
+
+    #: Emitted whenever the effective selection changes.
+    selectionChanged = Signal()
+
+    #: Human labels, in the order :data:`locator_overlay.FAMILIES` gives.
+    LABELS = {
+        "risk": "SPC risk areas",
+        "reports": "Storm reports",
+        "hrrr": "HRRR model field",
+        "radar-site": "Radar (nearest site)",
+        "radar-mosaic": "Radar (national mosaic)",
+    }
+
+    #: Combo entry meaning "whatever hazard the map is showing". Kept as the
+    #: default because the inset is context for the map the sounding came from,
+    #: so following it is the answer that needs no decision.
+    FOLLOW_MAP_LABEL = "Match the map"
+
+    def __init__(self, *, parent=None, settings=None):
+        super().__init__(parent)
+        from sharpmod import locator_overlay
+
+        self._rules = locator_overlay
+        self._settings = settings
+        self._applying = False
+        self._boxes: dict = {}
+
+        self._widget = QWidget()
+        layout = QVBoxLayout(self._widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        caption = QLabel("Show on the sounding's locator")
+        caption.setToolTip(
+            "Overlays drawn on the small map beside the hodograph. The risk "
+            "areas and a model field can be shown together; radar replaces "
+            "them."
+        )
+        layout.addWidget(caption)
+
+        # Built before the loop so ``_sync`` and :meth:`hazard` never depend on
+        # the risk family's position in FAMILIES; the loop only places it.
+        hazard_combo = self._build_hazard_combo()
+        for family in self._rules.FAMILIES:
+            box = QCheckBox(self.LABELS.get(family, family))
+            box.setProperty("locator_family", family)
+            box.toggled.connect(self._on_toggled)
+            layout.addWidget(box)
+            self._boxes[family] = box
+            if family == self._rules.FAMILY_RISK:
+                layout.addWidget(hazard_combo)
+
+        self._restore()
+        self._sync()
+
+    def _build_hazard_combo(self):
+        """Choose which outlook the inset draws, independently of the map.
+
+        The inset had no hazard control at all: the selection it produced named
+        only the family, so it could only ever draw whichever outlook something
+        else had chosen. Naming a hazard here makes it an explicit request, which
+        outranks the map for exactly that reason.
+        """
+        self._hazard = QComboBox()
+        self._hazard.addItem(self.FOLLOW_MAP_LABEL, None)
+        for spec in spc_outlook.PRODUCTS.values():
+            self._hazard.addItem(_product_item_text(spec, None), spec.key)
+        self._hazard.setCurrentIndex(0)
+        self._hazard.setToolTip(
+            "Which outlook the locator inset draws. \u201c"
+            f"{self.FOLLOW_MAP_LABEL}\u201d follows the hazard selected for the "
+            "map; naming one here pins the inset to it instead. Hazard "
+            "probabilities are issued for Days 1 and 2, so a sounding outside "
+            "those days falls back to the categorical outlook."
+        )
+        self._hazard.currentIndexChanged.connect(self._on_hazard_changed)
+        return self._hazard
+
+    def hazard(self):
+        """Return the pinned outlook product, or ``None`` to follow the map."""
+        return self._hazard.currentData()
+
+    # -- public API ---------------------------------------------------------- #
+    def controls_widget(self):
+        """Return the widget a tab should mount."""
+        return self._widget
+
+    def selection(self):
+        """Return the reduced selection, as the rules module resolves it."""
+        hazard = self.hazard()
+        chosen = [
+            self._rules.Selection(
+                family,
+                hazard if family == self._rules.FAMILY_RISK else None,
+            )
+            for family in self._rules.FAMILIES
+            if self._boxes[family].isChecked()
+        ]
+        return self._rules.enforce_exclusivity(tuple(chosen))
+
+    def spec(self) -> str:
+        """Return the selection in the form the command line accepts."""
+        return ",".join(item.spec() for item in self.selection()) or "none"
+
+    def set_spec(self, text: str | None) -> None:
+        """Adopt a specification string, ignoring anything unrecognised."""
+        try:
+            selections = self._rules.parse(text)
+        except Exception:  # noqa: BLE001 - a stored string is not trusted
+            selections = ()
+        wanted = {item.family for item in selections}
+        hazard = next(
+            (
+                item.product
+                for item in selections
+                if item.family == self._rules.FAMILY_RISK
+            ),
+            None,
+        )
+        self._applying = True
+        try:
+            for family, box in self._boxes.items():
+                box.setChecked(family in wanted)
+            # An unknown product falls back to following the map rather than
+            # silently pinning the inset to something that cannot be drawn.
+            index = self._hazard.findData(hazard)
+            self._hazard.setCurrentIndex(max(0, index))
+        finally:
+            self._applying = False
+        self._sync()
+
+    def remember(self) -> None:
+        """Persist the *choice*, never whether it was switched on.
+
+        The same policy the field and radar choices follow: a launch should still
+        reach for no network until asked, while a user who always wants the risk
+        areas finds them already selected.
+        """
+        if self._settings is None:
+            return
+        with suppress(Exception):
+            self._settings.setValue(LOCATOR_SETTINGS_KEY, self.spec())
+
+    # -- internals ----------------------------------------------------------- #
+    def _restore(self) -> None:
+        if self._settings is None:
+            return
+        try:
+            stored = self._settings.value(LOCATOR_SETTINGS_KEY, "")
+        except Exception:  # noqa: BLE001 - an unreadable INI is not fatal
+            return
+        self.set_spec(str(stored or "") or None)
+
+    def _on_toggled(self, _checked) -> None:
+        if self._applying:
+            return
+        self._sync()
+        self.selectionChanged.emit()
+
+    def _on_hazard_changed(self, _index) -> None:
+        if self._applying:
+            return
+        self._sync()
+        self.selectionChanged.emit()
+
+    def _sync(self) -> None:
+        """Make the boxes agree with what the rules will actually draw."""
+        effective = {item.family for item in self.selection()}
+        # Which outlook to draw only means something once one is being drawn, the
+        # same collapse the map's own outlook card uses.
+        self._hazard.setVisible(self._rules.FAMILY_RISK in effective)
+        self._applying = True
+        try:
+            for family, box in self._boxes.items():
+                if box.isChecked() and family not in effective:
+                    # Displaced by an exclusive choice, or its prerequisite is
+                    # not selected. Either way it will not be drawn, so the box
+                    # must not go on claiming otherwise.
+                    box.setChecked(False)
+                missing = self._rules.missing_prerequisite(family, self.selection())
+                box.setEnabled(missing is None)
+                box.setToolTip(
+                    ""
+                    if missing is None
+                    else f"Select {self.LABELS.get(missing, missing)} first; "
+                    "storm reports are read against the outlook that "
+                    "anticipated them."
+                )
+        finally:
+            self._applying = False
+
+
+class StormReportsOverlayController(QObject):
+    """Draw local storm reports on one picker map, beneath the outlook.
+
+    Reports are read *against* the outlook that anticipated them -- the question
+    is whether what was forecast is what happened -- so the switch stays disabled
+    until the outlook on the same map is showing, and it turns itself off if the
+    outlook is switched off underneath it. That mirrors the rule
+    :mod:`sharpmod.locator_overlay` applies to the sounding's inset, so the map
+    and the inset cannot disagree about what may be shown alone.
+
+    Otherwise shaped like :class:`OutlookOverlayController`: a debounced request
+    so scrubbing a date does not become one fetch per intermediate value, a token
+    to discard a result the user has moved past, and a bounded drain on close.
+    """
+
+    def __init__(
+        self, map_widget, *, parent=None, label="Show storm reports", enabled=False
+    ):
+        super().__init__(parent)
+        from sharpmod import storm_reports
+
+        self._map = map_widget
+        self._reports = storm_reports
+        self._valid_time = None
+        self._token = 0
+        self._workers = _WorkerFleet()
+        self._outlook = None
+
+        self._content = QWidget()
+        layout = QVBoxLayout(self._content)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self._check = QCheckBox(label)
+        self._check.setChecked(bool(enabled))
+        self._check.toggled.connect(self._on_toggled)
+        layout.addWidget(self._check)
+
+        self._status = QLabel("")
+        self._status.setWordWrap(True)
+        self._status.setObjectName(OBJ_HINT)
+        layout.addWidget(self._status)
+
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(_REFRESH_DEBOUNCE_MS)
+        self._timer.timeout.connect(self._start_fetch)
+
+        self._sync_available()
+
+    # -- public API ---------------------------------------------------------- #
+    def controls_widget(self) -> QWidget:
+        return self._content
+
+    def is_enabled(self) -> bool:
+        return self._check.isChecked()
+
+    def set_enabled(self, enabled: bool) -> None:
+        self._check.setChecked(bool(enabled))
+
+    def bind_outlook(self, outlook) -> None:
+        """Follow ``outlook``'s switch, since reports are read against it.
+
+        Bound rather than constructed together so the owning tab keeps deciding
+        the order its cards appear in.
+        """
+        self._outlook = outlook
+        try:
+            outlook._check.toggled.connect(lambda _on: self._sync_available())
+        except AttributeError:  # pragma: no cover - a stand-in outlook
+            pass
+        self._sync_available()
+
+    def set_valid_time(self, when) -> None:
+        """Point the overlay at ``when``, refetching once the value settles."""
+        if when == self._valid_time:
+            return
+        self._valid_time = when
+        if self._check.isChecked():
+            self._timer.start()
+
+    def refresh(self) -> None:
+        if self._check.isChecked():
+            self._timer.start()
+
+    def on_view_settled(self) -> None:
+        """Re-ask once panning stops, so the box matches what is on screen."""
+        if self._check.isChecked():
+            self._timer.start()
+
+    def attached_layer(self):
+        """Return the reports drawn on the map, or ``None`` while switched off."""
+        if not self._check.isChecked():
+            return None
+        try:
+            return self._map.overlay(self._reports.OVERLAY_KEY)
+        except AttributeError:
+            return None
+
+    def shutdown(self) -> None:
+        self._timer.stop()
+        self._workers.drain(_SHUTDOWN_WAIT_MS)
+
+    # -- internals ----------------------------------------------------------- #
+    def _outlook_showing(self) -> bool:
+        if self._outlook is None:
+            return True  # unbound: nothing to depend on, so nothing to block
+        try:
+            return bool(self._outlook.is_enabled())
+        except Exception:  # noqa: BLE001 - a stand-in outlook is not fatal
+            return True
+
+    def _sync_available(self) -> None:
+        """Enable the switch only while the outlook it is read against is on."""
+        available = self._outlook_showing()
+        self._check.setEnabled(available)
+        self._check.setToolTip(
+            ""
+            if available
+            else "Switch on the SPC convective outlook first; storm reports are "
+            "read against the outlook that anticipated them."
+        )
+        if not available and self._check.isChecked():
+            # Turning itself off rather than drawing on regardless: reports with
+            # no risk areas behind them cannot answer the question they exist
+            # for, and leaving the box ticked would misreport what is on screen.
+            self._check.setChecked(False)
+        self._status.setVisible(self._check.isChecked())
+
+    def _on_toggled(self, checked: bool) -> None:
+        self._status.setVisible(bool(checked))
+        if not checked:
+            self._timer.stop()
+            self._token += 1
+            self._workers.interrupt()
+            self._map.remove_overlay(self._reports.OVERLAY_KEY)
+            self._status.setText("")
+            return
+        self._timer.start()
+
+    def _view_bounds(self):
+        try:
+            return self._map.view_bounds()
+        except AttributeError:
+            return None
+
+    def _start_fetch(self) -> None:
+        if not self._check.isChecked():
+            return
+        self._token += 1
+        token = self._token
+        view = self._view_bounds()
+        span = None
+        if view is not None:
+            span = abs(float(view[1]) - float(view[0]))
+        worker = _StormReportsWorker(
+            self._valid_time, token, parent=self, view=view, span_deg=span
+        )
+        worker.loaded.connect(self._on_loaded)
+        worker.failed.connect(self._on_failed)
+        self._workers.track(worker)
+        worker.finished.connect(worker.deleteLater)
+        self._status.setText("Loading storm reports\u2026")
+        worker.start()
+
+    def _on_loaded(self, token, _valid_time, layer) -> None:
+        if token != self._token or not self._check.isChecked():
+            return
+        if not layer:
+            self._map.remove_overlay(self._reports.OVERLAY_KEY)
+            self._status.setText("No storm reports in this window")
+            return
+        self._map.set_overlay(self._reports.OVERLAY_KEY, layer, visible=True)
+        count = len(getattr(layer, "shapes", ()))
+        self._status.setText(
+            f"{count} storm report{'s' if count != 1 else ''} \u00b7 "
+            f"{layer.subtitle or 'click one for detail'}"
+        )
+
+    def _on_failed(self, token, _valid_time, message) -> None:
+        if token != self._token:
+            return
+        self._map.remove_overlay(self._reports.OVERLAY_KEY)
+        self._status.setText(f"Storm reports unavailable: {message}")

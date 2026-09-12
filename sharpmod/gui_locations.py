@@ -21,6 +21,7 @@ from qtpy.QtWidgets import (
 )
 
 from sharpmod.saved_locations import LocationFormatError, SavedLocation
+from sharpmod.export_paths import ExportDirectoryError, export_file_path
 
 
 class _LocationEditor(QDialog):
@@ -235,8 +236,13 @@ class SavedLocationsDialog(QDialog):
         self.refresh()
 
     def _export(self):
+        try:
+            suggested = export_file_path("sharpmod-locations.json")
+        except ExportDirectoryError as exc:
+            QMessageBox.critical(self, "Saved Locations", str(exc))
+            return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Saved Locations", "sharpmod-locations.json",
+            self, "Export Saved Locations", str(suggested),
             "SHARPpy Locations (*.json)"
         )
         if not path:

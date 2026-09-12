@@ -8,7 +8,7 @@ import pytest
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QDialog
 
-from sharpmod import batch_extract
+from sharpmod import gui_batch_process
 from sharpmod import box_analysis as ba
 from sharpmod.box_sounding import BoxRegion, plan_box_samples
 from sharpmod.tests._examples import examples_dir
@@ -441,9 +441,9 @@ def test_full_box_flow_with_a_faked_batch_extractor(
     _select_hrrr(picker)
     source = dict(np.load(HRRR_NPZ, allow_pickle=False))
 
-    class FakeExtractor:
-        def __init__(self, progress_callback=None):
-            self.progress_callback = progress_callback
+    class FakeRunner:
+        def __init__(self):
+            pass
 
         def cancel(self):
             pass
@@ -455,21 +455,29 @@ def test_full_box_flow_with_a_faked_batch_extractor(
             from pathlib import Path
 
             root = Path(kwargs["output_dir"])
+            progress_callback = kwargs["progress_callback"]
             for item in requests:
                 target = root / item.output
                 target.parent.mkdir(parents=True, exist_ok=True)
                 np.savez(target, **source)
-                self.progress_callback({
+                progress_callback({
                     "event": "completed", "request_id": item.id})
             return SimpleNamespace(
                 completed=len(requests), failed=0, cancelled=0)
 
-    monkeypatch.setattr(batch_extract, "BatchExtractor", FakeExtractor)
+    monkeypatch.setattr(gui_batch_process, "IsolatedBatchRunner", FakeRunner)
     # This exercises the field workspace, so the dialog is answered with that
     # mode rather than the averaging default.
+    def accept_minimal_field_plan(dialog):
+        # This test covers picker orchestration, not lattice resolution. Four
+        # real soundings exercise the same plan -> extract -> analyze path while
+        # the dialog/planner modules separately cover larger grids.
+        dialog._points.setValue(4)
+        dialog._replan()
+        return QDialog.Accepted
+
     monkeypatch.setattr(
-        "sharpmod.gui_box.BoxPlanDialog.exec",
-        lambda self: QDialog.Accepted)
+        "sharpmod.gui_box.BoxPlanDialog.exec", accept_minimal_field_plan)
     monkeypatch.setattr(
         "sharpmod.gui_box.BoxPlanDialog.mode", lambda self: "field")
 

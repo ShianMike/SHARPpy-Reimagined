@@ -43,6 +43,145 @@ fn value_from_upper(pairs: &[(f64, f64)], target: f64, upper: usize) -> f64 {
     y0 + ((target - x0) / (x1 - x0)) * (y1 - y0)
 }
 
+/// Coordinate/value pairs prepared once for repeated scalar or vector lookup.
+///
+/// This is crate-visible so coarse profile kernels can reuse field-specific
+/// filtering and stable ordering without repeatedly allocating and sorting the
+/// same pairs. Public callers continue to use [`interpolate_1d`].
+pub(crate) struct PreparedInterpolation {
+    pairs: Vec<(f64, f64)>,
+    missing: Option<f64>,
+}
+
+impl PreparedInterpolation {
+    pub(crate) fn new(
+        coordinates: &[f64],
+        values: &[f64],
+        missing: Option<f64>,
+    ) -> Result<Self, String> {
+        if coordinates.len() != values.len() {
+            return Err(format!(
+                "coordinate and value lengths differ: {} != {}",
+                coordinates.len(),
+                values.len()
+            ));
+        }
+
+        let mut pairs: Vec<(f64, f64)> = coordinates
+            .iter()
+            .copied()
+            .zip(values.iter().copied())
+            .filter(|(coordinate, value)| {
+                !is_missing(*coordinate, missing) && !is_missing(*value, missing)
+            })
+            .collect();
+
+        // Avoid an O(n log n) sort for the two common profile layouts.
+        // Reversing a strictly decreasing sequence is equivalent to a stable
+        // ascending sort; equality is excluded because reversing duplicates
+        // would change NumPy's stable tie order.
+        let ascending = pairs.windows(2).all(|pair| pair[0].0 <= pair[1].0);
+        if !ascending {
+            let strictly_descending = pairs.windows(2).all(|pair| pair[0].0 > pair[1].0);
+            if strictly_descending {
+                pairs.reverse();
+            } else {
+                // `sort_by` is stable. Treat positive and negative zero as
+                // equal so their original order matches NumPy's stable sort.
+                pairs
+                    .sort_by(|left, right| left.0.partial_cmp(&right.0).unwrap_or(Ordering::Equal));
+            }
+        }
+
+        Ok(Self { pairs, missing })
+    }
+
+    pub(crate) fn scalar(&self, target: f64, log_output: bool) -> f64 {
+        if self.pairs.len() < 2 || is_missing(target, self.missing) {
+            return f64::NAN;
+        }
+        let first_coordinate = self.pairs[0].0;
+        let last_coordinate = self.pairs[self.pairs.len() - 1].0;
+        if target < first_coordinate || target > last_coordinate {
+            return f64::NAN;
+        }
+        let upper = upper_bound(&self.pairs, target);
+        finish_value(value_from_upper(&self.pairs, target, upper), log_output)
+    }
+
+    pub(crate) fn interpolate(&self, targets: &[f64], log_output: bool) -> Vec<f64> {
+        if self.pairs.len() < 2 {
+            return vec![f64::NAN; targets.len()];
+        }
+
+        let first_coordinate = self.pairs[0].0;
+        let last_coordinate = self.pairs[self.pairs.len() - 1].0;
+        let mut output = vec![f64::NAN; targets.len()];
+
+        // Ordered targets can be merged with ordered coordinates in O(n + m),
+        // as atmospheric pressure/height grids usually are. Missing targets
+        // do not affect the monotonicity decision.
+        let mut previous = None;
+        let mut nondecreasing = true;
+        let mut nonincreasing = true;
+        for &target in targets {
+            if is_missing(target, self.missing) {
+                continue;
+            }
+            if let Some(previous_target) = previous {
+                if target < previous_target {
+                    nondecreasing = false;
+                }
+                if target > previous_target {
+                    nonincreasing = false;
+                }
+            }
+            previous = Some(target);
+        }
+
+        if nondecreasing || nonincreasing {
+            let mut upper = 0;
+            let mut visit = |index: usize| {
+                let target = targets[index];
+                if is_missing(target, self.missing)
+                    || target < first_coordinate
+                    || target > last_coordinate
+                {
+                    return;
+                }
+                while upper < self.pairs.len() && self.pairs[upper].0 <= target {
+                    upper += 1;
+                }
+                output[index] =
+                    finish_value(value_from_upper(&self.pairs, target, upper), log_output);
+            };
+            if nondecreasing {
+                for index in 0..targets.len() {
+                    visit(index);
+                }
+            } else {
+                for index in (0..targets.len()).rev() {
+                    visit(index);
+                }
+            }
+        } else {
+            for (index, &target) in targets.iter().enumerate() {
+                if is_missing(target, self.missing)
+                    || target < first_coordinate
+                    || target > last_coordinate
+                {
+                    continue;
+                }
+                output[index] = finish_value(
+                    value_from_upper(&self.pairs, target, upper_bound(&self.pairs, target)),
+                    log_output,
+                );
+            }
+        }
+        output
+    }
+}
+
 /// Linearly interpolate profile values at one or more target coordinates.
 ///
 /// Coordinate/value pairs containing a non-finite value or an exact `missing`
@@ -63,107 +202,13 @@ pub fn interpolate_1d(
     missing: Option<f64>,
     log_output: bool,
 ) -> Result<Vec<f64>, String> {
-    if coordinates.len() != values.len() {
-        return Err(format!(
-            "coordinate and value lengths differ: {} != {}",
-            coordinates.len(),
-            values.len()
-        ));
-    }
-
-    let mut pairs: Vec<(f64, f64)> = coordinates
-        .iter()
-        .copied()
-        .zip(values.iter().copied())
-        .filter(|(coordinate, value)| {
-            !is_missing(*coordinate, missing) && !is_missing(*value, missing)
-        })
-        .collect();
-
-    // Avoid an O(n log n) sort for the two common profile layouts. Reversing a
-    // strictly decreasing sequence is equivalent to a stable ascending sort;
-    // equality is intentionally excluded because reversing duplicates would
-    // change NumPy's stable tie order.
-    let ascending = pairs.windows(2).all(|pair| pair[0].0 <= pair[1].0);
-    if !ascending {
-        let strictly_descending = pairs.windows(2).all(|pair| pair[0].0 > pair[1].0);
-        if strictly_descending {
-            pairs.reverse();
-        } else {
-            // `sort_by` is stable. Treat positive and negative zero as equal so
-            // their original order matches NumPy's stable argsort.
-            pairs.sort_by(|left, right| left.0.partial_cmp(&right.0).unwrap_or(Ordering::Equal));
-        }
-    }
-
-    if pairs.len() < 2 {
-        return Ok(vec![f64::NAN; targets.len()]);
-    }
-
-    let first_coordinate = pairs[0].0;
-    let last_coordinate = pairs[pairs.len() - 1].0;
-    let mut output = vec![f64::NAN; targets.len()];
-
-    // Ordered targets can be merged with ordered coordinates in O(n + m), as
-    // atmospheric pressure/height grids usually are. Missing targets do not
-    // affect the monotonicity decision.
-    let mut previous = None;
-    let mut nondecreasing = true;
-    let mut nonincreasing = true;
-    for &target in targets {
-        if is_missing(target, missing) {
-            continue;
-        }
-        if let Some(previous_target) = previous {
-            if target < previous_target {
-                nondecreasing = false;
-            }
-            if target > previous_target {
-                nonincreasing = false;
-            }
-        }
-        previous = Some(target);
-    }
-
-    if nondecreasing || nonincreasing {
-        let mut upper = 0;
-        let mut visit = |index: usize| {
-            let target = targets[index];
-            if is_missing(target, missing) || target < first_coordinate || target > last_coordinate
-            {
-                return;
-            }
-            while upper < pairs.len() && pairs[upper].0 <= target {
-                upper += 1;
-            }
-            output[index] = finish_value(value_from_upper(&pairs, target, upper), log_output);
-        };
-        if nondecreasing {
-            for index in 0..targets.len() {
-                visit(index);
-            }
-        } else {
-            for index in (0..targets.len()).rev() {
-                visit(index);
-            }
-        }
-    } else {
-        for (index, &target) in targets.iter().enumerate() {
-            if is_missing(target, missing) || target < first_coordinate || target > last_coordinate
-            {
-                continue;
-            }
-            let upper = upper_bound(&pairs, target);
-            output[index] = finish_value(value_from_upper(&pairs, target, upper), log_output);
-        }
-    }
-
-    Ok(output)
+    PreparedInterpolation::new(coordinates, values, missing)
+        .map(|prepared| prepared.interpolate(targets, log_output))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::interpolate_1d;
+    use super::{interpolate_1d, PreparedInterpolation};
 
     const EPSILON: f64 = 1.0e-12;
 
@@ -292,5 +337,23 @@ mod tests {
 
         let output = interpolate_1d(&[], &[0.0, 1.0], &[0.0, 1.0], None, false).unwrap();
         assert!(output.is_empty());
+    }
+
+    #[test]
+    fn prepared_scalar_matches_vector_contract_for_duplicates_and_boundaries() {
+        let coordinates = [100.0, 50.0, 50.0, 0.0, f64::NAN, -9999.0];
+        let values = [30.0, 20.0, 10.0, 0.0, 40.0, 50.0];
+        let targets = [-1.0, 0.0, 49.0, 50.0, 51.0, 100.0, 101.0, f64::NAN];
+        let prepared = PreparedInterpolation::new(&coordinates, &values, Some(-9999.0)).unwrap();
+        let expected =
+            interpolate_1d(&targets, &coordinates, &values, Some(-9999.0), false).unwrap();
+        for (&target, &value) in targets.iter().zip(&expected) {
+            let actual = prepared.scalar(target, false);
+            if value.is_nan() {
+                assert!(actual.is_nan());
+            } else {
+                assert_close(actual, value);
+            }
+        }
     }
 }

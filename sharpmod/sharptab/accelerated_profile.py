@@ -410,7 +410,7 @@ class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
 
     def get_parcels(self):
         try:
-            workspace = backends.profile_convective_parcels(
+            thermodynamics = backends._profile_thermodynamics_buffers(
                 self.pres,
                 self.hght,
                 self.tmpc,
@@ -418,6 +418,8 @@ class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
                 sfc=self.sfc,
                 missing=self.missing,
             )
+            workspace = thermodynamics.convective
+            self._sharpmod_downdraft = thermodynamics.downdraft
             most_unstable = parcel_from_ascent(
                 self,
                 workspace.most_unstable,
@@ -474,6 +476,7 @@ class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
                     kind="effective",
                 )
         except Exception:
+            self._sharpmod_downdraft = None
             logger.debug(
                 "Falling back to SHARPpy parcel construction",
                 exc_info=True,
@@ -487,14 +490,16 @@ class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
         self.wndg = sp_params.wndg(self)
         self.sig_severe = sp_params.sig_severe(self)
         try:
-            downdraft = backends.profile_dcape(
-                self.pres,
-                self.hght,
-                self.tmpc,
-                self.dwpc,
-                sfc=self.sfc,
-                missing=self.missing,
-            )
+            downdraft = getattr(self, "_sharpmod_downdraft", None)
+            if downdraft is None:
+                downdraft = backends.profile_dcape(
+                    self.pres,
+                    self.hght,
+                    self.tmpc,
+                    self.dwpc,
+                    sfc=self.sfc,
+                    missing=self.missing,
+                )
             if (
                 not np.isfinite(downdraft.cape)
                 or len(downdraft.trace.pressure) < 2

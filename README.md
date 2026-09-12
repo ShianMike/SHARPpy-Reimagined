@@ -7,7 +7,7 @@
 [![Tests](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml/badge.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11--3.13-3776AB?logo=python&logoColor=white)
 ![Qt6](https://img.shields.io/badge/Qt6-PySide6-41CD52?logo=qt&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 
 </div>
@@ -38,13 +38,13 @@ choice persists across launches and applies to every panel and inset.
 
 **Inverted (light mode) — θ / θe Profile**
 
-![SHARPpy Reimagined sounding in the Inverted light palette with the theta and theta-e profile chart selected](docs/images/v1.1.0/sounding-theta-light-mode.png)
+![SHARPpy Reimagined sounding in the Inverted light palette with the theta and theta-e profile chart selected](docs/images/v1.2.0/sounding-theta-light-mode.png)
 
 **Protanopia (colorblind mode) — Streamwiseness**
 
-![SHARPpy Reimagined sounding in the Protanopia colorblind palette with the Streamwiseness chart selected](docs/images/v1.1.0/sounding-streamwiseness-protanopia.png)
+![SHARPpy Reimagined sounding in the Protanopia colorblind palette with the Streamwiseness chart selected](docs/images/v1.2.0/sounding-streamwiseness-protanopia.png)
 
-All three captures were regenerated from 1.1.0. Together they demonstrate
+All three captures were regenerated from 1.2.0. Together they demonstrate
 three choices in the right-clickable chart slot: Storm-Relative Wind in the
 Standard example above, θ / θe Profile in Inverted, and Streamwiseness in
 Protanopia.
@@ -55,7 +55,7 @@ Protanopia.
 
 ## Contents
 
-- [What's new in 1.1.0](#whats-new-in-110)
+- [What's new in 1.2.0](#whats-new-in-120)
 - [Highlights](#highlights)
 - [Quick start](#quick-start)
 - [Desktop GUI](#desktop-gui)
@@ -80,48 +80,36 @@ Protanopia.
 
 ---
 
-## What's new in 1.1.0
+## What's new in 1.2.0
 
-Earlier releases sharpened the Skew-T. 1.1.0 builds the mesoanalysis around it,
-so you can read the environment on the map, decide where the story is, and only
-then pull a profile:
+Version 1.2.0 connects the map, sounding, and multi-profile workflow so a full
+forecast question can stay in one application:
 
-- **Mesoanalysis fields on the picker maps.** *Map overlays → Show HRRR model
-  field* paints any of 23 HRRR products across the map at the model's native
-  3 km, ordered the way a forecaster works down the scales. Open a sounding from
-  that map and the field you were reading follows it, at the same forecast hour.
-- **Area soundings: sample an airmass, not a point.** Shift-drag a rectangle on
-  the Forecast Model map and the picker samples the model's own grid inside it.
-  Those samples are averaged into one sounding that opens in the ordinary
-  analysis window. Sample spacing is rounded *up* to a whole multiple of the
-  published grid spacing, so two soundings can never come out of one grid cell,
-  and the point count and download count are resolved before anything is
-  fetched. Winds average as components rather than as speed and direction,
-  moisture averages as mixing ratio rather than as dewpoint, and the mean starts
-  at the highest ground in the box.
-- **The parameter field.** For the rarer question of *where inside* an area
-  something peaks, the box opens as a workspace instead: parameter maps,
-  ingredient screens that show where several thresholds hold at once, the same
-  area stepped through forecast time, and CSV or GeoJSON export. The new
-  `box-extract` command does the same from a terminal.
-- **Radar you can choose.** Radar defaults to the single site nearest the map
-  centre and follows it as you pan, with the CONUS mosaic available as a
-  deliberate choice rather than the only option.
-- **A flat or curved map view.** **View → Map Projection** switches every map tab
-  between the flat equirectangular view and a Lambert conformal conic that bows
-  its parallels and converges its meridians. Flat stays the default, and an extent
-  no cone can represent falls back to it. Every layer, imagery included, is
-  projected through the same transform.
-- **Lake shorelines.** Inland water bodies — the Great Lakes among them — now have
-  outlines. `ne_50m_coastline` carries only the ocean/land boundary, so lakes ship
-  as their own Natural Earth layer. Political boundaries are clipped to land, so no
-  border is ruled straight across open water.
-- **More on the sounding panels.** The freezing level and wet-bulb zero are always
-  drawn on the Skew-T. The fire panel reports a ventilation rate; the winter panel
-  reports a Kuchera snow-to-liquid ratio and gives the dendritic growth zone in
-  pressure as well as feet. Every panel is now listed by name in the menu.
-- **Observed soundings from IGRA v2.** Observed profiles can come from NOAA's
-  Integrated Global Radiosonde Archive, alongside the existing UWyo route.
+- **One analysis workspace.** Trends plot every loaded sounding on shared axes;
+  exact-time comparisons show values and deltas; ensemble views add
+  p10/median/p90 parameter distributions and thermodynamic envelopes; and notes
+  travel with the session.
+- **Aligned acquisition.** The forecast picker can fetch several models,
+  successive runs, or every published ensemble member at one point and valid
+  time, retaining successful soundings when another request fails.
+- **Locator overlays that match the question.** Risk areas, HRRR fields, radar,
+  and storm reports can follow a sounding into its locator inset. Hazard choices
+  are explicit, overlapping reports remain inspectable, and clicking an outlook
+  area identifies the product and category beneath the pointer.
+- **Complete portable sessions.** Viewer state, loaded times and overlays,
+  analysis controls, notes, picker extent, and exact zoom now restore together;
+  older session files continue to migrate on read.
+- **Predictable exports.** Every image, sounding, CSV, GeoJSON, saved location,
+  and session starts in the same application-local `rendered_soundings` folder,
+  including command-line defaults.
+- **Faster analysis without changing the public results.** Parcel and kinematic
+  preparation, repeated GRIB point reads, complete-profile batch analysis, lazy
+  NPZ decoding, and test scheduling reuse shared work. Both the accelerated Rust
+  path and the Python fallback remain covered by the scientific contracts.
+- **Sharper and safer UI behavior.** The real curved HRRR grid perimeter replaces
+  a rectangular approximation, high-density displays render maps at device
+  resolution, contaminated dewpoints remain visible as quality issues, and
+  cancellable workers no longer require force-terminating Qt threads.
 
 The full list is in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -448,6 +436,31 @@ For what every displayed index means — its formula, the clamps applied in code
 its colour thresholds, and its literature reference — see the
 [sounding parameter guide](sounding_parameter_guide.md).
 
+### Analysis workspace
+
+Open **View → Analysis Workspace** (`Ctrl+Shift+A`) from a sounding window. Its
+four tabs share the soundings already loaded in that window:
+
+- **Trends** plots a selected parameter across a forecast timeline. Missing
+  hours remain visible as gaps, clicking a point activates that valid time, and
+  **Export CSV…** writes the displayed series.
+- **Compare** aligns every loaded model or run to the reference sounding's
+  exact valid time and shows MLCAPE, MLCIN, 0–6 km shear, 0–1 km SRH, and STP
+  values plus deltas. A mismatch is labelled unavailable, never compared to a
+  nearby hour.
+- **Ensemble** reports available-member counts and p10/median/p90 parameter
+  distributions, then draws pressure-level temperature and dewpoint p10–p90
+  bands. That chart always spans **-50 to +50 °C** with a zero guide, so its
+  geometry is comparable between ensembles instead of rescaling into a slant.
+- **Notes** keeps operational reasoning with the saved analysis session.
+
+The forecast picker's **Workspace…** action can fetch several models,
+successive runs, or the selected model's ensemble members at one point and
+valid time, then opens the relevant tab automatically. Downloads use the same
+bounded persistent cache as an ordinary sounding; successful members remain
+usable when another member is unavailable. Timeline controls synchronize other
+forecast overlays in the viewer to the selected valid time.
+
 ### Themes and palettes
 
 The **Inverted** palette is a complete light theme. Applying it updates the
@@ -461,10 +474,14 @@ colours remain unchanged. Headless rendering uses the same selected palette.
 ### Analysis sessions
 
 Use **File → Save Analysis Session…** (`Ctrl+Shift+E`) in a sounding window to
-save every loaded sounding, the active profile, current profile/interpolation/
-storm-motion edits, parcel selection, and viewer state. **Open Analysis
-Session…** (`Ctrl+Shift+O`) is available from both the picker and sounding
-window and restores the saved soundings together in one viewer.
+save every loaded sounding and valid time, the active profile/member, current
+profile/interpolation/storm-motion edits, parcel selection, visible panel,
+fit/exact zoom, picker map extent, analysis-workspace controls and notes, and
+lightweight overlay provenance. **Open Analysis Session…** (`Ctrl+Shift+O`) is
+available from both the picker and sounding window and restores the saved
+soundings together in one viewer. Archived overlays are restored from their
+descriptors; live data can be refetched without embedding a large raster or
+polygon payload in the session.
 
 Session files use the `.sharpmod-session` extension and a versioned, portable
 JSON format; they do not execute code or embed source GRIB downloads. Forecast
@@ -477,7 +494,7 @@ The sounding window's **Export** menu saves the current view:
 
 - **Export Image (HD PNG)** (`Ctrl+E`) — a 2x high-density image of the full
   window, including the mounted derived-parameter panels, with a sensible
-  default filename (`STATION_YYYYMMDDHHZ_hd.png`) in your Desktop folder.
+  default filename (`STATION_YYYYMMDDHHZ_hd.png`).
 - **Export Image (UHD PNG)** — a larger 2.8x ultra-high-density image
   (`STATION_YYYYMMDDHHZ_uhd.png`).
 - **Export Image (Lossless PNG)** — the original-size compact/lossless image
@@ -487,7 +504,21 @@ The sounding window's **Export** menu saves the current view:
 - **Export Text (SHARPpy)** — the focused profile as a text file that loads
   back into the app.
 
-The upstream `File → Save Image` / `Save Text` actions remain available too.
+Every export/save dialog starts in the existing `rendered_soundings` directory
+beside the source project or installed application. This includes sounding
+images and text, analysis sessions, workspace CSV files, box CSV/GeoJSON/PNG
+files, saved-location JSON, and the upstream `File → Save Image` / `Save Text`
+actions. **Open Export Folder** opens that same directory. It is created when
+needed; if it cannot be created or written, the application reports the path
+and does not redirect the export to Desktop, Documents, Downloads, or the user
+home directory. A destination chosen in a dialog applies to that export only,
+so the next dialog returns to `rendered_soundings`, including after restart.
+
+`sharpmod-render INPUT` uses
+`rendered_soundings/sharpmod_sounding.png` beside the application by default.
+An explicit `sharpmod-render INPUT OUTPUT` path is honored unchanged.
+Extractor-created `.npz`/`.json` sounding pairs and unnamed `--render` PNGs
+also default there; an explicit extractor output or PNG path is unchanged.
 
 External Windows automation can use
 `pwsh -NoProfile -File scripts/copy-image-to-clipboard.ps1 IMAGE.png` instead
@@ -620,7 +651,7 @@ model-extract gfs 35.18 -97.44 gfs_oun_f006.npz --run "2026-07-14 00:00" --fxx 6
 # Render to a named PNG; fetched GRIB/.npz/.json data is removed afterward
 model-extract hrrr 35.18 -97.44 --fxx 0 --render hrrr_oun.png
 
-# Omit the PNG name to use the generated point-sounding filename stem
+# Omit the PNG name to use its filename stem under rendered_soundings
 model-extract hrrr 35.18 -97.44 --fxx 0 --render
 
 # Select an ensemble member (GEFS defaults to c00)

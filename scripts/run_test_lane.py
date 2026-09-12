@@ -40,6 +40,10 @@ LANES = {
         hypothesis_profile="fast",
         parallel=True,
         timeout_seconds=300,
+        # Keep each file on one worker so module-scoped scientific fixtures
+        # and warm decoder caches are not rebuilt independently by every
+        # worker. Parallelism is retained across files.
+        distribution="loadfile",
     ),
     # Cheap all-offline smoke, including ten Hypothesis examples, on 3.11/3.12.
     "compatibility": Lane(
@@ -47,6 +51,7 @@ LANES = {
         hypothesis_profile="fast",
         parallel=True,
         timeout_seconds=300,
+        distribution="loadfile",
     ),
     # The complete >=100-example scientific/property contract on Python 3.13.
     "property": Lane(
@@ -54,12 +59,22 @@ LANES = {
         hypothesis_profile="full",
         parallel=True,
         timeout_seconds=900,
-        distribution="load",
+        # ``loadgroup`` rather than ``load`` so ``xdist_group`` is actually
+        # honored. Three Qt-heavy files carry property tests and are grouped by
+        # conftest for sharing process-global state; plain ``load`` scatters
+        # individual tests and silently ignores that, leaving a marker in place
+        # that looks like a guarantee and is not one. Ungrouped tests still
+        # distribute exactly as before, so the heavy derived-parameter
+        # properties keep their parallelism.
+        distribution="loadgroup",
     ),
-    # Exact non-parallel release gate; no correctness work is hidden by xdist.
+    # Exact non-parallel release gate; no ordering/state issue is hidden by
+    # xdist. Full 100-example property depth is already enforced by the
+    # dedicated property lane, so repeating it here would add cost without
+    # another correctness dimension.
     "serial-release": Lane(
         marker="not live_provider",
-        hypothesis_profile="full",
+        hypothesis_profile="fast",
         parallel=False,
         timeout_seconds=900,
     ),

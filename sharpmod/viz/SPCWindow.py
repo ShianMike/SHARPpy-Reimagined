@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import os
 from contextlib import suppress
+from functools import wraps
 
 # --- Qt platform / binding setup (must precede the first Qt import) --------
 # Render without a physical display. ``setdefault`` lets a caller override
@@ -63,12 +64,13 @@ from typing import List, Optional  # noqa: E402
 
 from qtpy import QtGui  # noqa: E402
 from qtpy.QtCore import QObject, QRect, Qt, Signal  # noqa: E402
-from qtpy.QtWidgets import QWidget  # noqa: E402
+from qtpy.QtWidgets import QMessageBox, QWidget  # noqa: E402
 
 # Restore Qt5-style unscoped enum access (e.g. ``qp.Antialiasing``) that the
 # vendored ``sharppy.viz`` widgets rely on, so they paint under Qt6/PySide6.
 # Must run before the first vendored-widget import/paint (Requirement 11.3).
 from sharpmod.viz import _qt6_compat  # noqa: E402
+from sharpmod.export_paths import ExportDirectoryError, export_directory  # noqa: E402
 
 _qt6_compat.apply()
 
@@ -180,6 +182,40 @@ def _install_streamwiseness_hooks():
     cls._sharpmod_streamwiseness_hooks = True
 
 
+def _install_export_directory_hooks():
+    """Keep the vendored File-save actions on ``rendered_soundings``.
+
+    Upstream remembers each selected parent in its render config and starts at
+    the user home directory.  Resetting before and after each invocation keeps
+    a one-off destination explicit without allowing it to become the next
+    default.
+    """
+
+    cls = _VendoredSPCWidget
+    if getattr(cls, "_sharpmod_export_directory_hooks", False):
+        return
+
+    def wrap(original, config_key):
+        @wraps(original)
+        def save(self):
+            try:
+                directory = export_directory()
+            except ExportDirectoryError as exc:
+                QMessageBox.critical(self, "SHARPpy Reimagined", str(exc))
+                return None
+            self.config["paths", config_key] = str(directory)
+            try:
+                return original(self)
+            finally:
+                self.config["paths", config_key] = str(directory)
+
+        return save
+
+    cls.saveimage = wrap(cls.saveimage, "save_img")
+    cls.savetext = wrap(cls.savetext, "save_txt")
+    cls._sharpmod_export_directory_hooks = True
+
+
 class RenderController(QWidget):
     """Minimal real controller that :class:`SPCWindow` is composed with.
 
@@ -259,6 +295,7 @@ def compose_window(config, prof_col=None, *, check_integrity=False,
         returned reference for the window's duration.
     """
     _install_streamwiseness_hooks()
+    _install_export_directory_hooks()
     # Install before ``SPCWidget`` is constructed so its existing Qt signal
     # connections bind the history-aware mutation methods. Headless renderers
     # never attach an ``AnalysisHistory``, so these wrappers are no-ops there.

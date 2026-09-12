@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from qtpy.QtWidgets import QApplication
 
-from sharpmod import batch_extract
+from sharpmod import gui_batch_process
 from sharpmod.gui_timeline import ModelTimelineWorker
 
 
@@ -15,9 +15,8 @@ def test_timeline_worker_streams_completed_and_missing_hours(
     app = QApplication.instance() or QApplication([])
     calls = {}
 
-    class FakeExtractor:
-        def __init__(self, progress_callback=None):
-            self.progress_callback = progress_callback
+    class FakeRunner:
+        def __init__(self):
             self.cancelled = False
 
         def cancel(self):
@@ -26,11 +25,12 @@ def test_timeline_worker_streams_completed_and_missing_hours(
         def run(self, requests, **kwargs):
             calls["hours"] = [request.fxx for request in requests]
             calls["workers"] = kwargs["max_workers"]
+            progress_callback = kwargs["progress_callback"]
             for request in requests[:2]:
-                self.progress_callback({
+                progress_callback({
                     "event": "completed", "request_id": request.id,
                 })
-            self.progress_callback({
+            progress_callback({
                 "event": "failed", "request_id": requests[2].id,
                 "error": {"message": "not published"},
             })
@@ -43,7 +43,7 @@ def test_timeline_worker_streams_completed_and_missing_hours(
                 ),
             )
 
-    monkeypatch.setattr(batch_extract, "BatchExtractor", FakeExtractor)
+    monkeypatch.setattr(gui_batch_process, "IsolatedBatchRunner", FakeRunner)
     ready = []
     failed = []
     results = []
@@ -63,3 +63,30 @@ def test_timeline_worker_streams_completed_and_missing_hours(
     assert failed == [(6, "not published")]
     assert results[0].completed == 2
     assert app is not None
+
+
+def test_picker_delegates_timeline_lifecycle_to_one_coordinator(monkeypatch):
+    from sharpmod import gui_picker, gui_timeline
+
+    opened = []
+
+    class FakeCoordinator:
+        def __init__(self, picker):
+            self.picker = picker
+
+        def open(self):
+            opened.append(self.picker)
+
+    monkeypatch.setattr(
+        gui_timeline,
+        "ForecastTimelineCoordinator",
+        FakeCoordinator,
+    )
+    picker = SimpleNamespace(_model_timeline_coordinator=None)
+
+    gui_picker.PickerWindow._model_fetch_timeline(picker)
+    first = picker._model_timeline_coordinator
+    gui_picker.PickerWindow._model_fetch_timeline(picker)
+
+    assert picker._model_timeline_coordinator is first
+    assert opened == [picker, picker]

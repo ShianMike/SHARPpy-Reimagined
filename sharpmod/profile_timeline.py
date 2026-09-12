@@ -20,7 +20,8 @@ def forecast_hour_range(available, start, end, step=1) -> tuple[int, ...]:
     if start > end:
         raise ValueError("timeline start must not be after its end")
     selected = tuple(
-        value for value in values
+        value
+        for value in values
         if start <= value <= end and (value - start) % step == 0
     )
     if not selected:
@@ -48,9 +49,7 @@ def combine_collections(collections) -> ProfCollection:
     for collection in collections:
         member_names = tuple(getattr(collection, "_profs", {}))
         if len(member_names) != 1:
-            raise ValueError(
-                "timeline inputs must contain one deterministic member"
-            )
+            raise ValueError("timeline inputs must contain one deterministic member")
         member_profiles = collection._profs[member_names[0]]
         member_dates = list(getattr(collection, "_dates", ()))
         if len(member_profiles) != len(member_dates) or not member_profiles:
@@ -84,9 +83,7 @@ def combine_collections(collections) -> ProfCollection:
     if source_paths:
         metadata["timeline_sources"] = source_paths
     if len(source_metadata) == len(dates):
-        metadata["timeline_provenance"] = [
-            source_metadata[index] for index in order
-        ]
+        metadata["timeline_provenance"] = [source_metadata[index] for index in order]
     result = ProfCollection(
         {"": sorted_profiles},
         sorted_dates,
@@ -97,6 +94,96 @@ def combine_collections(collections) -> ProfCollection:
     # omitted the private target metadata.
     if result._target_type is None:
         result._target_type = first._target_type
+    return result
+
+
+def combine_ensemble_collections(
+    collections,
+    member_names=None,
+) -> ProfCollection:
+    """Combine single-time collections into one multi-member collection.
+
+    The source collections and their profile lists are not changed.  Member
+    names default to each collection's ``member`` metadata when present and
+    otherwise to its sole profile-dictionary key.
+    """
+    collections = tuple(collections)
+    if not collections:
+        raise ValueError("at least one profile collection is required")
+
+    source_members = []
+    source_profiles = []
+    source_dates = []
+    for collection in collections:
+        members = tuple(getattr(collection, "_profs", {}))
+        if len(members) != 1:
+            raise ValueError("ensemble inputs must each contain exactly one member")
+        profiles = tuple(collection._profs[members[0]])
+        dates = tuple(getattr(collection, "_dates", ()))
+        if len(profiles) != 1 or len(dates) != 1:
+            raise ValueError("ensemble inputs must each contain exactly one valid time")
+        if not isinstance(dates[0], datetime):
+            raise ValueError("ensemble input valid time must be a datetime")
+        source_members.append(members[0])
+        source_profiles.append(profiles[0])
+        source_dates.append(dates[0])
+
+    valid = source_dates[0]
+    if any(date != valid for date in source_dates[1:]):
+        raise ValueError("ensemble inputs must share the same valid time")
+
+    if member_names is None:
+        labels = []
+        for collection, source_member in zip(collections, source_members):
+            try:
+                label = collection.getMeta("member")
+            except (KeyError, TypeError, ValueError):
+                label = source_member
+            labels.append(label)
+        labels = tuple(labels)
+    else:
+        labels = tuple(member_names)
+        if len(labels) != len(collections):
+            raise ValueError("member_names must contain one label for each collection")
+
+    if any(not isinstance(label, str) or not label for label in labels):
+        raise ValueError("ensemble member labels must be non-empty strings")
+    if len(set(labels)) != len(labels):
+        raise ValueError("ensemble member labels must be unique")
+
+    first = collections[0]
+    profiles_by_member = {
+        label: [profile] for label, profile in zip(labels, source_profiles)
+    }
+    provenance = []
+    for label, collection in zip(labels, collections):
+        source = dict(getattr(collection, "_meta", {}))
+        source["member_label"] = label
+        provenance.append(source)
+
+    metadata = dict(getattr(first, "_meta", {}))
+    metadata.update(
+        {
+            "ensemble": True,
+            "ensemble_count": len(labels),
+            "ensemble_member_count": len(labels),
+            "ensemble_members": list(labels),
+            "ensemble_provenance": provenance,
+        }
+    )
+    if metadata.get("highlight") not in profiles_by_member:
+        metadata["highlight"] = labels[0]
+
+    target_type = getattr(first, "_target_type", None)
+    if target_type is None:
+        result = ProfCollection(profiles_by_member, [valid], **metadata)
+    else:
+        result = ProfCollection(
+            profiles_by_member,
+            [valid],
+            target_type=target_type,
+            **metadata,
+        )
     return result
 
 
@@ -118,6 +205,27 @@ def append_collection(timeline, incoming) -> int:
     valid = source_dates[0]
     if valid in timeline._dates:
         raise ValueError(f"timeline already contains {valid!s}")
+
+    existing_dates = tuple(timeline._dates)
+    edit_state_by_valid = {
+        date: (
+            timeline._mod_therm[index],
+            timeline._mod_wind[index],
+            timeline._interp[index],
+        )
+        for index, date in enumerate(existing_dates)
+    }
+    originals_by_valid = {
+        existing_dates[index]: profile
+        for index, profile in timeline._orig_profs.items()
+        if 0 <= index < len(existing_dates)
+    }
+    interpolated_by_valid = {
+        existing_dates[index]: profile
+        for index, profile in timeline._interp_profs.items()
+        if 0 <= index < len(existing_dates)
+    }
+
     current = timeline.getCurrentDate()
     target_profiles = timeline._profs[target_members[0]]
     target_profiles.append(source_profiles[0])
@@ -144,27 +252,39 @@ def append_collection(timeline, incoming) -> int:
     except (KeyError, TypeError, ValueError):
         pass
     if len(sources) == len(timeline._dates):
-        timeline._meta["timeline_sources"] = [
-            sources[index] for index in order
-        ]
+        timeline._meta["timeline_sources"] = [sources[index] for index in order]
     elif sources:
         timeline._meta["timeline_sources"] = sources
     source_metadata = list(timeline._meta.get("timeline_provenance", ()))
     if len(source_metadata) != len(timeline._dates) - 1:
         source_metadata = [dict(timeline._meta)] * (len(timeline._dates) - 1)
     source_metadata.append(dict(getattr(incoming, "_meta", {})))
-    timeline._meta["timeline_provenance"] = [
-        source_metadata[index] for index in order
-    ]
+    timeline._meta["timeline_provenance"] = [source_metadata[index] for index in order]
 
-    # These private lists are the state tracked by the vendored collection for
-    # edits/interpolation. Streaming adds untouched raw profiles only.
-    count = len(timeline._dates)
-    timeline._mod_therm = [False] * count
-    timeline._mod_wind = [False] * count
-    timeline._interp = [False] * count
+    # The vendored collection keys edit/interpolation state by time index.
+    # Re-key existing state after sorting; the streamed profile starts clean.
+    sorted_edit_state = [
+        edit_state_by_valid.get(date, (False, False, False)) for date in timeline._dates
+    ]
+    timeline._mod_therm[:] = [state[0] for state in sorted_edit_state]
+    timeline._mod_wind[:] = [state[1] for state in sorted_edit_state]
+    timeline._interp[:] = [state[2] for state in sorted_edit_state]
     timeline._orig_profs.clear()
+    timeline._orig_profs.update(
+        {
+            index: originals_by_valid[date]
+            for index, date in enumerate(timeline._dates)
+            if date in originals_by_valid
+        }
+    )
     timeline._interp_profs.clear()
+    timeline._interp_profs.update(
+        {
+            index: interpolated_by_valid[date]
+            for index, date in enumerate(timeline._dates)
+            if date in interpolated_by_valid
+        }
+    )
     if current in timeline._dates:
         timeline.setCurrentDate(current)
     return timeline._dates.index(valid)
@@ -176,6 +296,9 @@ def timeline_dates(collection) -> tuple[datetime, ...]:
 
 
 __all__ = [
-    "append_collection", "combine_collections", "forecast_hour_range",
+    "append_collection",
+    "combine_collections",
+    "combine_ensemble_collections",
+    "forecast_hour_range",
     "timeline_dates",
 ]

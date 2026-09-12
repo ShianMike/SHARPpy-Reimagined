@@ -42,7 +42,9 @@ def widget():
     # A deterministic size keeps the projection reproducible without showing
     # the widget.
     view.resize(600, 400)
-    return view
+    yield view
+    view.close()
+    view.deleteLater()
 
 
 def _drag(view, start, end, *, modifiers=Qt.NoModifier):

@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.ma as ma
+import pytest
 
 from sharpmod import backends
-from sharpmod.backends.protocol import ParcelDiagnostics, ParcelWorkspace
+from sharpmod.backends import parcels as backend_parcels
+from sharpmod.backends.protocol import (
+    ParcelDiagnostics,
+    ParcelWorkspace,
+    ProfileThermodynamics,
+)
 from sharpmod.backends.python_backend import PythonBackend
 from sharpmod.sharptab import derived, parcels, params, profile
 from sharpmod.sharptab.constants import is_missing
@@ -73,6 +79,74 @@ def test_shallow_workspace_preserves_typed_shape_with_missing_results():
     assert np.isnan(result.surface.cape)
     assert np.isnan(result.most_unstable.lcl_pressure)
     assert np.isnan(result.mixed_layer.start_pressure)
+
+
+def test_shared_python_thermodynamics_prepares_profile_once(monkeypatch):
+    original = backend_parcels._profile
+    calls = 0
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(backend_parcels, "_profile", counted)
+
+    result = PythonBackend().profile_thermodynamics(*_columns())
+
+    assert isinstance(result, ProfileThermodynamics)
+    assert calls == 1
+    assert result.parcels.surface is result.convective.surface.diagnostics
+    assert np.isfinite(result.downdraft.cape)
+
+
+def _native_thermodynamic_raw():
+    pressure_buffer = np.arange(10, dtype=np.float64) + 800.0
+    temperature_buffer = np.arange(10, dtype=np.float64) - 20.0
+    convective = (
+        np.arange(5 * 14, dtype=np.float64).reshape(5, 14),
+        np.array([900.0, 700.0], dtype=np.float64),
+        pressure_buffer,
+        temperature_buffer,
+        np.array([0, 2, 4, 6, 8, 10], dtype=np.uintp),
+    )
+    downdraft = (
+        np.array([500.0, 650.0, 12.0], dtype=np.float64),
+        pressure_buffer[:3],
+        temperature_buffer[:3],
+    )
+    return (
+        np.arange(3 * 14, dtype=np.float64).reshape(3, 14),
+        convective,
+        downdraft,
+    )
+
+
+def test_native_trace_buffers_remain_zero_copy_until_public_conversion():
+    raw = _native_thermodynamic_raw()
+
+    buffered = backend_parcels.profile_thermodynamics_buffers_from_raw(raw)
+
+    assert isinstance(buffered.convective.surface.trace.pressure, np.ndarray)
+    assert np.shares_memory(
+        buffered.convective.surface.trace.pressure,
+        raw[1][2],
+    )
+    assert not buffered.convective.surface.trace.pressure.flags.writeable
+
+    public = backend_parcels.profile_thermodynamics_from_buffers(buffered)
+    assert isinstance(public.convective.surface.trace.pressure, tuple)
+    assert public.convective.surface.trace.pressure == (800.0, 801.0)
+
+
+def test_native_trace_buffer_offsets_are_validated():
+    parcel_matrix, convective, downdraft = _native_thermodynamic_raw()
+    invalid_convective = (*convective[:4], np.array([0, 2, 5, 4, 8, 10]))
+
+    with pytest.raises(RuntimeError, match="offsets do not span"):
+        backend_parcels.profile_thermodynamics_buffers_from_raw(
+            (parcel_matrix, invalid_convective, downdraft),
+        )
 
 
 def test_sharptab_consumers_reuse_one_cached_workspace(monkeypatch):

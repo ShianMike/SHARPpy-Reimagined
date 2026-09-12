@@ -50,6 +50,7 @@ from sharpmod.openmeteo_access import (
     fetch_json,
     resolve_access,
 )
+from sharpmod.export_paths import export_file_path
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1172,10 +1173,22 @@ def write_point_dataset(
         cols["dwpc"], cols["wdir"], cols["wspd"],
         missing=MISSING,
     )
-    if not qc.valid:
+    # ``qc.valid`` is false for a contaminated sounding as well as an unusable
+    # one, and both backends must keep computing it the same way, so the
+    # distinction is drawn here instead: a dewpoint above the temperature is
+    # real recorded data and is carried through to ``qc_issues`` for the
+    # inspector to warn about.
+    #
+    # Imported here rather than at module scope because this module is reached
+    # while the picker starts up and is deliberately free of NumPy until a
+    # retrieval actually runs; ``portable_sounding`` would pull it in.
+    from sharpmod.portable_sounding import fatal_issues
+
+    fatal = fatal_issues(qc.issues)
+    if fatal:
         raise RetrievalError(
             "%s sounding failed physical quality control: %s"
-            % (capability.label, ", ".join(qc.issues)))
+            % (capability.label, ", ".join(fatal)))
     if not dataset.surface_merged:
         raise RetrievalError(
             "%s sounding has no verified surface row; refusing a pressure "
@@ -1252,9 +1265,17 @@ def extract(
             request_get=request_get, progress_callback=progress_callback,
             cancelled=cancelled, now=now)
 
-    target = out_path or default_out_path(
-        capability, point.selected_lat, point.selected_lon,
-        point.run_time, point.fxx)
+    target = out_path or str(
+        export_file_path(
+            default_out_path(
+                capability,
+                point.selected_lat,
+                point.selected_lon,
+                point.run_time,
+                point.fxx,
+            )
+        )
+    )
     return write_point_dataset(
         point, target, loc=loc, progress_callback=progress_callback)
 

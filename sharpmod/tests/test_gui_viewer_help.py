@@ -51,6 +51,28 @@ def test_the_sounding_window_has_a_help_menu(viewer_window):
     assert any("Help" in title for title in titles), titles
 
 
+def test_optional_installer_failure_is_visible_and_retains_details(qt_app):
+    win = QMainWindow()
+    try:
+        gui_viewer._record_install_failure(
+            win, "Analysis workspace", RuntimeError("missing panel dependency")
+        )
+        gui_viewer._record_install_failure(
+            win, "Forecast timeline", ValueError("invalid timeline state")
+        )
+
+        assert win._sharpmod_install_failure_label.text() == "Setup issues (2)"
+        assert "Analysis workspace: RuntimeError" in (
+            win._sharpmod_install_failure_label.toolTip()
+        )
+        assert "Forecast timeline: ValueError" in (
+            win._sharpmod_install_failure_label.toolTip()
+        )
+        assert "Forecast timeline is unavailable" in win.statusBar().currentMessage()
+    finally:
+        win.close()
+
+
 def test_the_guide_is_on_f1(viewer_window):
     win, _controller = viewer_window
     guide = win._sharpmod_help_menu.actions()[0]

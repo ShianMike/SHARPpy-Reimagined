@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 
+from sharpmod.export_paths import export_file_path
 # Reuse the ERA5 extractor's tested geometry / IO primitives so both point
 # extractors share one implementation and one output format.
 from sharpmod.tools.era5_extract import (
@@ -661,11 +662,12 @@ def main(argv=None):  # pragma: no cover - thin CLI wrapper
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     vt = _parse_cli_time(args.time) if args.time else None
-    out = args.out or "wrf_%.2fN_%.2fE.npz" % (args.lat, args.lon)
     try:
+        default_name = "wrf_%.2fN_%.2fE.npz" % (args.lat, args.lon)
+        out = args.out or str(export_file_path(default_name))
         path = extract(args.wrfout, args.lat, args.lon, out,
                        valid_time=vt, loc=args.loc)
-    except ERA5ExtractionError as exc:
+    except (ERA5ExtractionError, OSError) as exc:
         print("ERROR: %s" % exc)
         return 1
     print("wrote %s" % path)

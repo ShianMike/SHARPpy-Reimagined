@@ -85,9 +85,29 @@ class _AltProfile:
     ``omeg`` column) that a decoder-agnostic parameter must ignore.
     """
 
-    __slots__ = ("pres", "hght", "tmpc", "dwpc", "wdir", "wspd",
-                 "u", "v", "logp", "sfc", "omeg",
-                 "source_format", "decoder_name", "model", "meta")
+    __slots__ = (
+        "pres",
+        "hght",
+        "tmpc",
+        "dwpc",
+        "wdir",
+        "wspd",
+        "u",
+        "v",
+        "logp",
+        "sfc",
+        "omeg",
+        "source_format",
+        "decoder_name",
+        "model",
+        "meta",
+        # Match the cache surface exposed by a real Profile. The two decoder
+        # paths still construct independent objects and independent caches.
+        "_sharpmod_profile_parcels",
+        "_sharpmod_profile_kinematics",
+        "_sharpmod_default_oracle",
+        "_sharpmod_convective_oracle",
+    )
 
     def __init__(self, snd: SoundingData):
         # Rebuild each core array from Python lists (independent of how the

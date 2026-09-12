@@ -27,8 +27,8 @@ from dataclasses import dataclass, field
 import os
 from typing import Mapping
 
-from qtpy.QtCore import Qt, QThread, QTimer, Signal
-from qtpy.QtGui import QPixmap
+from qtpy.QtCore import Qt, QThread, QTimer, QUrl, Signal
+from qtpy.QtGui import QDesktopServices, QPixmap
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -69,6 +69,11 @@ from sharpmod.box_sounding import (
     sequence_request_id,
 )
 from sharpmod.gui_theme import mono_font, ui_font
+from sharpmod.export_paths import (
+    ExportDirectoryError,
+    export_directory,
+    export_file_path,
+)
 
 
 __all__ = [
@@ -144,7 +149,7 @@ class BoxExtractResult:
 
 
 class BoxExtractWorker(QThread):
-    """Extract every in-domain node of a plan, streaming results back."""
+    """Extract plan nodes in a killable child process, streaming results back."""
 
     point_ready = Signal(str, int, int)     # npz path, row, col
     point_failed = Signal(int, int, str)    # row, col, message
@@ -164,19 +169,21 @@ class BoxExtractWorker(QThread):
         self.disk_cache = disk_cache
         #: Forecast hours to cover. ``None`` means the single ``fxx`` above.
         self.hours = None if hours is None else tuple(hours)
-        self._extractor = None
+        self._runner = None
         self._outputs: dict[str, str] = {}
         self._outputs_by_hour: dict[int, dict[str, str]] = {}
         self._completed = 0
 
     def requestInterruption(self):  # noqa: N802 - Qt API override
         super().requestInterruption()
-        if self._extractor is not None:
-            self._extractor.cancel()
+        if self._runner is not None:
+            self._runner.cancel()
 
     def run(self):
-        from sharpmod.batch_extract import BatchExtractor
-        from sharpmod.model_hour_cache import ModelHourCache
+        from sharpmod.gui_batch_process import (
+            IsolatedBatchCancelled,
+            IsolatedBatchRunner,
+        )
 
         try:
             if self.hours is None:
@@ -229,8 +236,6 @@ class BoxExtractWorker(QThread):
             item.id: os.path.join(self.output_dir, item.output)
             for item in requests
         }
-        cache = None
-
         def on_progress(event):
             request_id = event.get("request_id")
             kind = str(event.get("event", "working"))
@@ -253,18 +258,8 @@ class BoxExtractWorker(QThread):
             self.progress.emit(stage, self._completed, total)
 
         try:
-            if self.disk_cache is not None:
-                # One entry is enough: every node in a box shares a single
-                # model hour, which is the whole point of grouping them.
-                cache = ModelHourCache(
-                    max_entries=1,
-                    directory_factory=self.disk_cache.directory_for,
-                    directory_protector=self.disk_cache.protect,
-                    metadata_writer=self.disk_cache.annotate,
-                    delete_download_dirs=False,
-                )
-            self._extractor = BatchExtractor(progress_callback=on_progress)
-            result = self._extractor.run(
+            self._runner = IsolatedBatchRunner()
+            result = self._runner.run(
                 requests,
                 output_dir=self.output_dir,
                 # One worker per concurrently held model hour. A single-hour box
@@ -272,17 +267,16 @@ class BoxExtractWorker(QThread):
                 # to two so it cannot hold several hundred-megabyte subsets at
                 # once.
                 max_workers=1 if len(hours) == 1 else 2,
-                resume=True,
-                cancelled=self.isInterruptionRequested,
-                model_hour_cache=cache,
+                progress_callback=on_progress,
+                disk_cache=self.disk_cache,
             )
+        except IsolatedBatchCancelled:
+            return
         except Exception as exc:  # noqa: BLE001 - worker boundary
             self.failed.emit(f"Box extraction failed: {exc}")
             return
         finally:
-            self._extractor = None
-            if cache is not None:
-                cache.clear()
+            self._runner = None
 
         valid_time = None
         try:
@@ -777,6 +771,8 @@ class BoxAnalysisWindow(QWidget):
         export_menu.addAction("Values as CSV\u2026", self.export_csv)
         export_menu.addAction(
             "Sampled cells as GeoJSON\u2026", self.export_geojson)
+        export_menu.addSeparator()
+        export_menu.addAction("Open Export Folder", self.open_export_folder)
         self._export_button.setMenu(export_menu)
         self._export_button.setToolTip(
             "Save the field map, the per-point values, or the sampled cells "
@@ -1315,9 +1311,24 @@ class BoxAnalysisWindow(QWidget):
         )
 
     def _ask_path(self, caption, default_name, filter_text) -> str | None:
+        try:
+            suggested = export_file_path(default_name)
+        except ExportDirectoryError as exc:
+            self.set_status(str(exc))
+            return None
         path, _selected = QFileDialog.getSaveFileName(
-            self, caption, default_name, filter_text)
+            self, caption, str(suggested), filter_text)
         return path or None
+
+    def open_export_folder(self) -> None:
+        """Open the same directory used to seed every box export dialog."""
+        try:
+            directory = export_directory()
+        except ExportDirectoryError as exc:
+            self.set_status(str(exc))
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory))):
+            self.set_status(f"Could not open the export folder: {directory}")
 
     def export_field_png(self) -> None:
         """Save the field map exactly as it appears, legend included."""

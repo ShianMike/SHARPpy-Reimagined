@@ -44,8 +44,9 @@ def _write_variants(plan, directory):
     return outputs
 
 
-@pytest.fixture
-def analysis(tmp_path):
+@pytest.fixture(scope="module")
+def analysis(tmp_path_factory):
+    tmp_path = tmp_path_factory.mktemp("box-field-viz")
     plan = plan_box_samples("hrrr", _region(), target_points=16)
     return ba.analyze_box(
         plan, _write_variants(plan, tmp_path), tiers=(ba.FAST_TIER,))
@@ -226,7 +227,9 @@ def field_map(analysis):
     view = BoxFieldMapWidget()
     view.resize(600, 420)
     view.set_analysis(analysis, "mucape")
-    return view
+    yield view
+    view.close()
+    view.deleteLater()
 
 
 def test_field_map_scales_to_the_selected_field(field_map, analysis):

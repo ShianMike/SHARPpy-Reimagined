@@ -87,6 +87,29 @@ def _datetime_matches(value: str, pattern: str) -> bool:
     return True
 
 
+#: Physical issues that describe a *contaminated* sounding rather than an
+#: unusable one, and so must not stop it being loaded.
+#:
+#: A dewpoint above the temperature is real observed data. It usually means the
+#: sounding is contaminated, and it commonly appears near the top of the
+#: troposphere -- around 10 km -- where the humidity sensor is least reliable.
+#: Refusing the whole archive over it meant a sounding a forecaster wanted to
+#: look at could not be opened at all, which hides the contamination instead of
+#: showing it. The code is still reported, and
+#: :mod:`sharpmod.profile_inspector` already raises it as a warning finding, so
+#: the reader is told what is wrong with what they are looking at.
+#:
+#: Everything else in :func:`_physical_profile_issues` stays fatal: a
+#: non-decreasing pressure column or a negative wind speed is not contaminated
+#: data, it is data no parcel or shear calculation can consume.
+ADVISORY_ISSUES = frozenset({"dewpoint_above_temperature"})
+
+
+def fatal_issues(issues) -> tuple[str, ...]:
+    """Return only those ``issues`` that make a sounding unusable."""
+    return tuple(issue for issue in issues if issue not in ADVISORY_ISSUES)
+
+
 def _physical_profile_issues(columns) -> tuple[str, ...]:
     """Return stable physical issue codes for a structurally safe profile."""
     values = {
@@ -164,11 +187,11 @@ def validate_portable_sounding_pair(npz_path) -> Path:
             for field in _PROFILE_FIELDS:
                 level_count = _profile_array(data, field, level_count)
                 profile_columns[field] = np.asarray(data[field], dtype=float)
-            issues = _physical_profile_issues(profile_columns)
-            if issues:
+            fatal = fatal_issues(_physical_profile_issues(profile_columns))
+            if fatal:
                 raise ValueError(
                     "portable sounding failed physical quality control: "
-                    + ", ".join(issues)
+                    + ", ".join(fatal)
                 )
             values = {field: _scalar(data, field) for field in _SCALAR_FIELDS}
             _validate_datetime(values["valid"], "valid")

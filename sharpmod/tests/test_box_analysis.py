@@ -161,6 +161,123 @@ def test_fast_tier_values_are_physically_ordered():
     assert 0.0 < values["ml_lcl"] < values["mu_el"]
 
 
+def test_fast_values_many_maps_dense_rows_in_stable_profile_order(monkeypatch):
+    from sharpmod import backends
+
+    profiles = tuple(
+        SimpleNamespace(
+            marker=marker,
+            pres=np.asarray([1000.0, 900.0]),
+            hght=np.asarray([100.0, 1000.0]),
+            tmpc=np.asarray([20.0, 10.0]),
+            dwpc=np.asarray([15.0, 5.0]),
+            wdir=np.asarray([180.0, 190.0]),
+            wspd=np.asarray([10.0, 20.0]),
+            sfc=index,
+        )
+        for index, marker in enumerate((100.0, 200.0))
+    )
+    parcels = np.full((2, 3, 14), np.nan)
+    convective = np.full((2, 5, 14), np.nan)
+    bounds = np.full((2, 2), np.nan)
+    downdraft = np.full((2, 3), np.nan)
+    storm_motion = np.full((2, 4), np.nan)
+    layers = np.full((2, 4, 15), np.nan)
+    for index, marker in enumerate((100.0, 200.0)):
+        parcels[index, 0, (5, 10, 11)] = (marker + 5.0, marker, -marker)
+        parcels[index, 1, (9, 10, 11, 12, 13)] = (
+            marker + 9.0,
+            marker + 10.0,
+            -marker - 10.0,
+            marker + 12.0,
+            marker + 13.0,
+        )
+        parcels[index, 2, (5, 7, 10, 11)] = (
+            marker + 25.0,
+            marker + 27.0,
+            marker + 20.0,
+            -marker - 20.0,
+        )
+        convective[index, 4, (10, 11)] = (marker + 40.0, -marker - 40.0)
+        bounds[index] = (marker + 50.0, marker + 51.0)
+        downdraft[index, (0, 2)] = (marker + 60.0, marker + 62.0)
+        storm_motion[index, :2] = (3.0 + index, 4.0)
+        for layer_index in range(4):
+            layers[index, layer_index, (4, 5, 10)] = (
+                3.0 + layer_index,
+                4.0,
+                marker + 70.0 + layer_index,
+            )
+        layers[index, 2, (6, 7)] = (5.0, 12.0 + index)
+
+    captured = {}
+
+    def batch(columns, tops):
+        captured["columns"] = tuple(columns)
+        captured["tops"] = tuple(tops)
+        return SimpleNamespace(
+            parcels=parcels,
+            convective_parcels=convective,
+            effective_bounds=bounds,
+            downdraft=downdraft,
+            storm_motion=storm_motion,
+            kinematic_layers=layers,
+        )
+
+    monkeypatch.setattr(backends, "profile_batch_analysis", batch)
+    rows = ba.fast_values_many(profiles)
+
+    assert [row["sbcape"] for row in rows] == [100.0, 200.0]
+    assert rows[0] == {
+        "sbcape": 100.0,
+        "sbcin": -100.0,
+        "sb_lcl": 105.0,
+        "mlcape": 120.0,
+        "mlcin": -120.0,
+        "ml_lcl": 125.0,
+        "ml_lfc": 127.0,
+        "mucape": 110.0,
+        "mucin": -110.0,
+        "mucape_3km": 112.0,
+        "mucape_6km": 113.0,
+        "mu_el": 109.0,
+        "eff_cape": 140.0,
+        "eff_cin": -140.0,
+        "eff_inflow_base": 150.0,
+        "eff_inflow_top": 151.0,
+        "dcape": 160.0,
+        "downrush_t": 162.0,
+        "shear_1km": 5.0,
+        "srh_1km": 170.0,
+        "shear_3km": pytest.approx(math.hypot(4.0, 4.0)),
+        "srh_3km": 171.0,
+        "shear_6km": pytest.approx(math.hypot(5.0, 4.0)),
+        "mean_wind_6km": 13.0,
+        "shear_8km": pytest.approx(math.hypot(6.0, 4.0)),
+        "storm_motion_r": 5.0,
+    }
+    assert [item[6] for item in captured["columns"]] == [0, 1]
+    assert captured["tops"] == ba.KINEMATIC_LAYER_TOPS
+
+
+def test_fast_values_many_falls_back_to_serial_without_reordering(monkeypatch):
+    from sharpmod import backends
+
+    profiles = tuple(SimpleNamespace(marker=value) for value in (3.0, 1.0, 2.0))
+
+    def unavailable(*_args, **_kwargs):
+        raise RuntimeError("batch unavailable")
+
+    monkeypatch.setattr(backends, "profile_batch_analysis", unavailable)
+    monkeypatch.setattr(
+        ba,
+        "_fast_values",
+        lambda prof, **_kwargs: {"sbcape": prof.marker},
+    )
+
+    assert [row["sbcape"] for row in ba.fast_values_many(profiles)] == [3.0, 1.0, 2.0]
+
+
 def test_analyze_profile_rejects_an_unknown_tier():
     prof, _collection = ba.load_profile(HRRR_NPZ)
     with pytest.raises(ba.BoxAnalysisError, match="unknown analysis tier"):
@@ -232,6 +349,133 @@ def test_progress_is_reported_once_per_extracted_node(tmp_path):
         range(1, len(outputs) + 1))
 
 
+def test_fast_box_submits_one_stable_batch_and_maps_results(monkeypatch):
+    plan = _plan()
+    outputs = {
+        node.request_id: node.request_id for node in plan.requestable_points
+    }
+    profiles = {
+        node.request_id: SimpleNamespace(marker=float(index))
+        for index, node in enumerate(plan.requestable_points)
+    }
+    captured = []
+    progress = []
+
+    monkeypatch.setattr(
+        ba,
+        "load_profile",
+        lambda path: (profiles[path], object()),
+    )
+    monkeypatch.setattr(
+        ba,
+        "transect_columns",
+        lambda prof: {"tmpc": (prof.marker,)},
+    )
+
+    def analyze_many(ordered_profiles):
+        ordered_profiles = tuple(ordered_profiles)
+        captured.append(tuple(profile.marker for profile in ordered_profiles))
+        return tuple(
+            {"sbcape": profile.marker} for profile in ordered_profiles
+        )
+
+    monkeypatch.setattr(ba, "fast_values_many", analyze_many)
+    result = ba.analyze_box(
+        plan,
+        outputs,
+        tiers=(ba.FAST_TIER,),
+        progress=lambda done, total, point: progress.append(
+            (done, total, point.request_id)
+        ),
+    )
+
+    expected_ids = tuple(node.request_id for node in plan.requestable_points)
+    assert captured == [tuple(float(index) for index in range(len(expected_ids)))]
+    assert tuple(point.request_id for point in result.analyzed) == expected_ids
+    assert tuple(point.values["sbcape"] for point in result.analyzed) == tuple(
+        float(index) for index in range(len(expected_ids))
+    )
+    assert tuple(item[2] for item in progress) == expected_ids
+    assert progress[-1][:2] == (len(expected_ids), len(expected_ids))
+
+
+def test_fast_box_batch_failure_isolated_by_serial_fallback(monkeypatch):
+    plan = _plan()
+    nodes = plan.requestable_points[:3]
+    outputs = {node.request_id: node.request_id for node in nodes}
+    profiles = {
+        node.request_id: SimpleNamespace(marker=index)
+        for index, node in enumerate(nodes)
+    }
+
+    monkeypatch.setattr(
+        ba,
+        "load_profile",
+        lambda path: (profiles[path], object()),
+    )
+    monkeypatch.setattr(ba, "transect_columns", lambda _prof: {})
+    monkeypatch.setattr(
+        ba,
+        "fast_values_many",
+        lambda _profiles: (_ for _ in ()).throw(RuntimeError("batch failed")),
+    )
+
+    def serial(prof):
+        if prof.marker == 1:
+            raise ValueError("bad profile")
+        return {"sbcape": float(prof.marker)}
+
+    monkeypatch.setattr(ba, "fast_values", serial)
+    result = ba.analyze_box(plan, outputs, tiers=(ba.FAST_TIER,))
+
+    assert [point.request_id for point in result.analyzed] == [
+        nodes[0].request_id,
+        nodes[2].request_id,
+    ]
+    assert len(result.failures) == 1
+    assert result.failures[0].request_id == nodes[1].request_id
+    assert result.failures[0].error == "ValueError: bad profile"
+
+
+def test_fast_box_honors_cancellation_triggered_by_progress(monkeypatch):
+    plan = _plan()
+    nodes = plan.requestable_points[:3]
+    outputs = {node.request_id: node.request_id for node in nodes}
+    profiles = {
+        node.request_id: SimpleNamespace(marker=index)
+        for index, node in enumerate(nodes)
+    }
+    state = {"cancelled": False}
+
+    monkeypatch.setattr(
+        ba,
+        "load_profile",
+        lambda path: (profiles[path], object()),
+    )
+    monkeypatch.setattr(ba, "transect_columns", lambda _prof: {})
+    monkeypatch.setattr(
+        ba,
+        "fast_values_many",
+        lambda ordered: tuple(
+            {"sbcape": float(profile.marker)} for profile in ordered
+        ),
+    )
+
+    def progress(*_args):
+        state["cancelled"] = True
+
+    result = ba.analyze_box(
+        plan,
+        outputs,
+        tiers=(ba.FAST_TIER,),
+        progress=progress,
+        cancelled=lambda: state["cancelled"],
+    )
+
+    assert [point.request_id for point in result.analyzed] == [nodes[0].request_id]
+    assert all(point.error == "cancelled" for point in result.points[1:3])
+
+
 def test_cancellation_stops_analyzing_further_nodes(tmp_path):
     plan = _plan()
     outputs = _write_variants(plan, tmp_path)
@@ -247,7 +491,9 @@ def test_analyze_box_requires_a_plan():
 
 
 def test_out_of_domain_nodes_explain_themselves():
-    region = BoxRegion.from_corners(18.0, -105.0, 24.0, -99.0)
+    # Straddles HRRR's real southern edge, at 24.09N over 105W. See the matching
+    # note in test_box_sounding: a box stopping at 24.0 is wholly off the grid.
+    region = BoxRegion.from_corners(18.0, -105.0, 27.0, -99.0)
     plan = plan_box_samples("hrrr", region)
     result = ba.analyze_box(plan, {}, tiers=(ba.FAST_TIER,))
     reasons = {point.error for point in result.points if point.error}

@@ -4,7 +4,7 @@
 //! Bunkers storm motion. Missing values are represented as NaN in the returned
 //! matrix so the Python adapter can restore SharpTab's masked-value contract.
 
-use crate::interpolation::interpolate_1d;
+use crate::interpolation::PreparedInterpolation;
 
 pub const LAYER_WIDTH: usize = 15;
 const KTS_PER_MS: f64 = 1.943_844_492_440_604_6;
@@ -37,14 +37,48 @@ fn is_missing(value: f64, missing: Option<f64>) -> bool {
     !value.is_finite() || missing.is_some_and(|sentinel| value == sentinel)
 }
 
-fn interp_scalar(
-    target: f64,
-    coordinate: &[f64],
-    values: &[f64],
-    missing: Option<f64>,
-    log_output: bool,
-) -> Result<f64, String> {
-    interpolate_1d(&[target], coordinate, values, missing, log_output).map(|output| output[0])
+struct PreparedKinematics {
+    height_to_logp: PreparedInterpolation,
+    logp_to_u: PreparedInterpolation,
+    logp_to_v: PreparedInterpolation,
+    height_to_u: PreparedInterpolation,
+    height_to_v: PreparedInterpolation,
+    surface_pressure_from_height: f64,
+    surface_u_pressure: f64,
+    surface_v_pressure: f64,
+    surface_u_height: f64,
+    surface_v_height: f64,
+}
+
+impl PreparedKinematics {
+    fn new(
+        hght: &[f64],
+        logp: &[f64],
+        u: &[f64],
+        v: &[f64],
+        sfc: usize,
+        missing: Option<f64>,
+    ) -> Result<Self, String> {
+        let height_to_logp = PreparedInterpolation::new(hght, logp, missing)?;
+        let logp_to_u = PreparedInterpolation::new(logp, u, missing)?;
+        let logp_to_v = PreparedInterpolation::new(logp, v, missing)?;
+        let height_to_u = PreparedInterpolation::new(hght, u, missing)?;
+        let height_to_v = PreparedInterpolation::new(hght, v, missing)?;
+        let surface_height = hght[sfc];
+        let surface_logp = logp[sfc];
+        Ok(Self {
+            surface_pressure_from_height: height_to_logp.scalar(surface_height, true),
+            surface_u_pressure: logp_to_u.scalar(surface_logp, false),
+            surface_v_pressure: logp_to_v.scalar(surface_logp, false),
+            surface_u_height: height_to_u.scalar(surface_height, false),
+            surface_v_height: height_to_v.scalar(surface_height, false),
+            height_to_logp,
+            logp_to_u,
+            logp_to_v,
+            height_to_u,
+            height_to_v,
+        })
+    }
 }
 
 /// Layer sample pressures for the 1 hPa layer means, ending exactly at `ptop`.
@@ -120,9 +154,7 @@ fn difference(top: f64, bottom: f64) -> f64 {
 fn layer_basics(
     pres: &[f64],
     hght: &[f64],
-    logp: &[f64],
-    u: &[f64],
-    v: &[f64],
+    prepared: &PreparedKinematics,
     sfc: usize,
     top_agl: f64,
     missing: Option<f64>,
@@ -130,40 +162,30 @@ fn layer_basics(
     let surface_hght = hght[sfc];
     let surface_pres = pres[sfc];
     let target_hght = surface_hght + top_agl;
-    let top_pressure = interp_scalar(target_hght, hght, logp, missing, true)?;
-
-    let surface_logp = if surface_pres > 0.0 {
-        surface_pres.log10()
-    } else {
-        f64::NAN
-    };
-    let surface_u_pressure = interp_scalar(surface_logp, logp, u, missing, false)?;
-    let surface_v_pressure = interp_scalar(surface_logp, logp, v, missing, false)?;
-    let surface_u_height = interp_scalar(surface_hght, hght, u, missing, false)?;
-    let surface_v_height = interp_scalar(surface_hght, hght, v, missing, false)?;
+    let top_pressure = prepared.height_to_logp.scalar(target_hght, true);
 
     let top_logp = if top_pressure > 0.0 {
         top_pressure.log10()
     } else {
         f64::NAN
     };
-    let top_u_pressure = interp_scalar(top_logp, logp, u, missing, false)?;
-    let top_v_pressure = interp_scalar(top_logp, logp, v, missing, false)?;
-    let top_u_height = interp_scalar(target_hght, hght, u, missing, false)?;
-    let top_v_height = interp_scalar(target_hght, hght, v, missing, false)?;
+    let top_u_pressure = prepared.logp_to_u.scalar(top_logp, false);
+    let top_v_pressure = prepared.logp_to_v.scalar(top_logp, false);
+    let top_u_height = prepared.height_to_u.scalar(target_hght, false);
+    let top_v_height = prepared.height_to_v.scalar(target_hght, false);
 
     let samples = pressure_samples(surface_pres, top_pressure)?;
     let sample_logp: Vec<f64> = samples.iter().map(|value| value.log10()).collect();
-    let sample_u = interpolate_1d(&sample_logp, logp, u, missing, false)?;
-    let sample_v = interpolate_1d(&sample_logp, logp, v, missing, false)?;
+    let sample_u = prepared.logp_to_u.interpolate(&sample_logp, false);
+    let sample_v = prepared.logp_to_v.interpolate(&sample_logp, false);
 
     Ok(BasicLayer {
         top_agl,
         top_pressure,
-        pressure_shear_u: difference(top_u_pressure, surface_u_pressure),
-        pressure_shear_v: difference(top_v_pressure, surface_v_pressure),
-        height_shear_u: difference(top_u_height, surface_u_height),
-        height_shear_v: difference(top_v_height, surface_v_height),
+        pressure_shear_u: difference(top_u_pressure, prepared.surface_u_pressure),
+        pressure_shear_v: difference(top_v_pressure, prepared.surface_v_pressure),
+        height_shear_u: difference(top_u_height, prepared.surface_u_height),
+        height_shear_v: difference(top_v_height, prepared.surface_v_height),
         mean_u: mean(&sample_u, Some(&samples), missing),
         mean_v: mean(&sample_v, Some(&samples), missing),
         mean_npw_u: mean(&sample_u, None, missing),
@@ -199,9 +221,9 @@ fn bunkers_motion(layer: BasicLayer) -> [f64; 4] {
 fn helicity(
     pres: &[f64],
     hght: &[f64],
-    logp: &[f64],
     u: &[f64],
     v: &[f64],
+    prepared: &PreparedKinematics,
     sfc: usize,
     top_agl: f64,
     stu: f64,
@@ -215,10 +237,9 @@ fn helicity(
         return Ok([0.0; 3]);
     }
 
-    let lower_msl = hght[sfc];
-    let upper_msl = lower_msl + top_agl;
-    let plower = interp_scalar(lower_msl, hght, logp, missing, true)?;
-    let pupper = interp_scalar(upper_msl, hght, logp, missing, true)?;
+    let upper_msl = hght[sfc] + top_agl;
+    let plower = prepared.surface_pressure_from_height;
+    let pupper = prepared.height_to_logp.scalar(upper_msl, true);
     if !plower.is_finite() || !pupper.is_finite() {
         return Ok([f64::NAN; 3]);
     }
@@ -244,10 +265,10 @@ fn helicity(
 
     let lower_logp = plower.log10();
     let upper_logp = pupper.log10();
-    let u1 = interp_scalar(lower_logp, logp, u, missing, false)?;
-    let v1 = interp_scalar(lower_logp, logp, v, missing, false)?;
-    let u2 = interp_scalar(upper_logp, logp, u, missing, false)?;
-    let v2 = interp_scalar(upper_logp, logp, v, missing, false)?;
+    let u1 = prepared.logp_to_u.scalar(lower_logp, false);
+    let v1 = prepared.logp_to_v.scalar(lower_logp, false);
+    let u2 = prepared.logp_to_u.scalar(upper_logp, false);
+    let v2 = prepared.logp_to_v.scalar(upper_logp, false);
     if [u1, v1, u2, v2].iter().any(|value| !value.is_finite()) {
         return Ok([f64::NAN; 3]);
     }
@@ -337,7 +358,8 @@ pub fn profile_kinematics(
             }
         })
         .collect();
-    let six_km = layer_basics(pres, hght, &logp, u, v, sfc, 6_000.0, missing)?;
+    let prepared = PreparedKinematics::new(hght, &logp, u, v, sfc, missing)?;
+    let six_km = layer_basics(pres, hght, &prepared, sfc, 6_000.0, missing)?;
     let storm_motion = bunkers_motion(six_km);
     let [rstu, rstv, _, _] = storm_motion;
 
@@ -346,10 +368,10 @@ pub fn profile_kinematics(
         let basics = if *top == 6_000.0 {
             six_km
         } else {
-            layer_basics(pres, hght, &logp, u, v, sfc, *top, missing)?
+            layer_basics(pres, hght, &prepared, sfc, *top, missing)?
         };
         let [srh_total, srh_positive, srh_negative] =
-            helicity(pres, hght, &logp, u, v, sfc, *top, rstu, rstv, missing)?;
+            helicity(pres, hght, u, v, &prepared, sfc, *top, rstu, rstv, missing)?;
         let storm_relative_mean_u = if basics.mean_u.is_finite() && rstu.is_finite() {
             basics.mean_u - rstu
         } else {

@@ -21,7 +21,7 @@ from __future__ import annotations
 import pytest
 
 from qtpy.QtGui import QFont
-from qtpy.QtWidgets import QLabel, QPushButton
+from qtpy.QtWidgets import QLabel, QPushButton, QStyle, QStyleOptionSlider
 
 from sharpmod import gui_picker, gui_theme
 from sharpmod import theme as T
@@ -38,16 +38,15 @@ PANEL_TITLES = (
 
 
 @pytest.fixture
-def picker(qt_app, monkeypatch, tmp_path):
+def picker(standard_qt_app, monkeypatch, tmp_path):
     """A fully materialized picker under an isolated settings file."""
+    qt_app = standard_qt_app
     monkeypatch.setattr(
         gui_picker, "_build_settings",
         lambda: _build_settings(path=tmp_path / "settings.ini"))
     monkeypatch.setattr(
         gui_picker.PickerWindow, "_refresh_station_catalog",
         lambda *_args: None)
-
-    gui_theme.apply_theme(qt_app, color_style="standard")
 
     window = gui_picker.PickerWindow()
     # Background probes would otherwise fire network work during the test.
@@ -56,6 +55,7 @@ def picker(qt_app, monkeypatch, tmp_path):
     window._model_availability_timer.stop()
     yield window
     window.close()
+    window.deleteLater()
 
 
 # ---------------------------------------------------------------------------
@@ -396,6 +396,24 @@ def _built_rails(picker):
     return rails
 
 
+def _scrollbar_handle_rect(bar):
+    """Return where the style really paints ``bar``'s handle.
+
+    Asked of the style rather than the style sheet text, because a declaration
+    being present says nothing about Qt honouring it: margin on the handle and a
+    transparent border on the handle are both accepted and both leave the rect
+    at the full bar width.
+    """
+    option = QStyleOptionSlider()
+    option.rect = bar.rect()
+    option.minimum, option.maximum = bar.minimum(), bar.maximum()
+    option.sliderPosition = option.sliderValue = bar.value()
+    option.pageStep = bar.pageStep()
+    option.orientation = bar.orientation()
+    return bar.style().subControlRect(
+        QStyle.CC_ScrollBar, option, QStyle.SC_ScrollBarSlider, bar)
+
+
 def test_no_control_rail_clips_its_widest_card(picker, qt_app):
     """Horizontal scrolling is disabled, so content must fit the viewport.
 
@@ -427,6 +445,54 @@ def test_every_control_rail_reserves_room_for_its_scrollbar(picker, qt_app):
         assert rail.width() >= T.RAIL_W["max"] + T.SCROLLBAR_W, (
             f"{attr} does not reserve the scrollbar width on top of the "
             f"{T.RAIL_W['max']}px content area")
+
+
+def test_the_scrollbar_handle_is_inset_inside_its_reserved_column(picker,
+                                                                  qt_app):
+    """The handle needs a gutter, or it reads as sitting on the rail content.
+
+    The bar reserves ``SCROLLBAR_W`` and the handle used to fill every pixel of
+    it, so a solid slab of handle butted straight against the card border beside
+    it -- which is what "the scrollbar overlaps the space" describes. The style
+    sheet pads the bar so the handle floats inside the reservation instead.
+
+    Both halves matter. Only checking the inset would pass if the reservation
+    shrank to match, which would clip the widest card; only checking the
+    reservation is what let the flush handle ship.
+    """
+    picker.resize(1440, 900)
+    picker.show()
+    qt_app.processEvents()
+
+    rails = _built_rails(picker)
+    assert rails, "no control rail was built, so nothing was checked"
+
+    inset_checked = []
+    for attr, rail in rails:
+        bar = rail.verticalScrollBar()
+        # The size hint, not width(): a rail that does not currently overflow
+        # keeps its bar hidden, and a hidden widget's width is meaningless. The
+        # hint is what QAbstractScrollArea reserves either way.
+        assert bar.sizeHint().width() == T.SCROLLBAR_W, (
+            f"{attr}: the bar asks for {bar.sizeHint().width()}px but the "
+            f"layout reserves {T.SCROLLBAR_W}px; the two must agree")
+
+        if not bar.isVisible():
+            continue
+        handle = _scrollbar_handle_rect(bar)
+        assert handle.width() < bar.width(), (
+            f"{attr}: the handle fills the whole {bar.width()}px bar, so it "
+            "touches the content beside it")
+        left = handle.x()
+        right = bar.width() - (handle.x() + handle.width())
+        assert left == right == T.SPACE["xxs"], (
+            f"{attr}: handle gutters are {left}px/{right}px, expected "
+            f"{T.SPACE['xxs']}px on each side")
+        inset_checked.append(attr)
+
+    assert inset_checked, (
+        "no rail was scrolling, so the handle inset went unchecked; the rails "
+        "are meant to overflow at 1440x900")
 
 
 def test_control_rails_share_one_width(picker, qt_app):

@@ -47,18 +47,23 @@ cannot contaminate the measurement:
 python benchmarks\benchmark_decoding.py `
   --grib C:\path\to\fixture.grib2 --lat 35.18 --lon -97.44 `
   --repeat 3 --warmup 0 `
-  --stages application-cold warm-inventory-point-miss point-cache-hit `
+  --stages application-cold warm-inventory-point-miss `
+    multipoint-inventory-reuse repeated-scalar-inventory-reuse `
+    point-cache-hit `
   --output benchmarks\results\decoding.json
 ```
 
 `application-cold` explicitly disables the legacy cfgrib index and clears the
 optimized decoder's application caches before every sample. It does not flush
-the operating-system file cache. `warm-inventory-point-miss` retains the
-legacy persistent cfgrib index or the Python message inventory but requests a
-different point. The Rust direct decoder has no separate inventory cache, so
-that stage is reported as unavailable rather than silently measuring a
-different condition. `point-cache-hit` measures the bounded exact-point caches;
-the frozen decoders correctly report that stage as unavailable.
+the operating-system file cache. `warm-inventory-point-miss` retains either a
+legacy persistent cfgrib index or an optimized bounded message inventory while
+requesting a different point. Current optimized Python and Rust builds both
+retain file-identity-invalidated inventory state, so both are measured.
+`multipoint-inventory-reuse` compares each optimized backend's
+vectorized/native four-point path, including a duplicate request, while
+`repeated-scalar-inventory-reuse` sends the identical ordered requests through
+the scalar API. `point-cache-hit` measures the bounded exact-point caches; the
+frozen decoders correctly report those optimized-only stages as unavailable.
 
 Before timing, the default run requires exact Python/Rust agreement within the
 legacy and optimized generations for values, missing masks, pressure ordering,
@@ -146,15 +151,18 @@ duplicate fixture bytes assigned to different model names.
 | Scalar pressure interpolation | 32 and 128 levels, one 700 hPa target | Mirrors the scalar lookup shape used by SharpTab pressure helpers instead of using a target vector as large as the profile. |
 | Repeated profile fields | Six fields at 700 hPa on 128 levels | Measures the common pattern of resolving height, temperature, dewpoint, `u`, `v`, and omega against one pressure grid. One reported call is one six-field bundle. |
 | Cached-selector `Profile` construction | 128 levels | Constructs the real `Profile` type after resolving a forced backend outside the timer, so the public facade and cached selector remain in the measured path. |
-| Profile kinematics workspace | 128 levels and five standard layers | Measures one coarse call returning Bunkers motion, shear, mean wind, storm-relative wind, and SRH for SFC-to-0.5/1/3/4/6 km. |
-| Profile parcel workspace | 128 levels and three standard parcels | Measures one coarse call returning SB/MU/100-hPa-ML CAPE/CIN, LCL/LFC/EL, and 3/6-km CAPE summaries. |
-| Convective parcel workspace | 128 levels and five standard parcels | Measures one coarse call returning surface/forecast/MU/ML/effective summaries, plotting traces, and effective-layer bounds. |
-| DCAPE workspace | 128 levels | Measures one coarse call returning DCAPE, source/downrush values, and the descending temperature trace. |
+| Profile kinematics workspace | 32 and 128 levels, five standard layers | Measures one coarse call returning Bunkers motion, shear, mean wind, storm-relative wind, and SRH. |
+| Profile parcel workspace | 32 and 128 levels, three standard parcels | Measures SB/MU/100-hPa-ML CAPE/CIN and diagnostics without plotting traces. |
+| Convective parcel workspace | 32 and 128 levels, five standard parcels | Measures the public traced surface/forecast/MU/ML/effective result and effective bounds. |
+| Shared thermodynamic workspace | 32 and 128 levels | Separates Python-public, Rust-public, zero-copy Rust-buffered, and native timings for one preparation shared by parcels and DCAPE. |
+| DCAPE workspace | 32 and 128 levels | Measures the public DCAPE summary and descending temperature trace. |
+| Complete-profile batch | 8 x 32 and 32 x 128 levels | Compares Python reference, Rust serial, bounded four-worker Rust, and direct native calls, including adapter packing and result conversion. |
 | Two-thread diagnostic | Configurable, default 100,000 values and 10 calls per worker | Compares the same total work sequentially and in two persistent Python threads. It is diagnostic output, not a scaling assertion or gate. |
 
 The harness times the shared array kernels `wind_to_components`,
 `components_to_wind`, `interpolate_1d`, `profile_kinematics`,
-`profile_parcels`, `profile_convective_parcels`, and `profile_dcape`. It
+`profile_parcels`, `profile_convective_parcels`, `profile_dcape`,
+`profile_thermodynamics`, and `profile_batch_analysis`. It
 validates Python/Rust numerical agreement before timing,
 including both scalar profile sizes, every repeated field, two-dimensional wind
 inputs, the complete kinematics and parcel results, and threaded return values
@@ -169,14 +177,12 @@ would produce a misleading benchmark.
 The concurrency table compares two sequential workers with two persistent
 `ThreadPoolExecutor` workers performing the same number of calls. A ratio below
 one indicates overlap in that run; it does not establish general parallel
-scaling. The small Rust array bindings retain the Python GIL while a kernel is
-running. They borrow NumPy storage through `PyReadonlyArray1` and use the
-resulting slices directly; releasing the GIL without first owning the data or
-otherwise excluding mutation could let another Python thread alter that
-storage while Rust reads it. Profile kinematics, profile parcels, and DCAPE
-first own their small input columns and then release the GIL. The diagnostic exists to
-quantify whether a future safe ownership or copying design is worth its
-overhead before changing the remaining borrowed-array contracts.
+scaling. Small array kernels retain the Python GIL while borrowing NumPy
+storage. Complete-profile calls instead copy each Python-owned column once,
+then release the GIL; internal parcel structures borrow those owned snapshots,
+and batch workers only see Rust-owned vectors. The four-worker default applies
+only at eight or more complete profiles, is capped at available CPUs, stays
+serial when nested in Rayon, and remains explicitly overridable by callers.
 
 ## Run
 
@@ -195,6 +201,18 @@ python benchmarks\benchmark_backends.py --batch-profiles 4096 --batch-levels 128
 python benchmarks\benchmark_backends.py --profile-constructions 1000
 python benchmarks\benchmark_backends.py --concurrency-size 250000 --concurrency-calls-per-worker 20
 python benchmarks\benchmark_backends.py --cpu-model "CPU model" --power-mode "Balanced"
+python benchmarks\benchmark_backends.py --output-json benchmarks\results\backend-after.json
+```
+
+For native Criterion kernels and the fixed GRIB fixture on Windows:
+
+```powershell
+$env:SHARPMOD_GRIB_BENCH_FIXTURE = 'C:\path\to\fixture.grib2'
+$env:SHARPMOD_ECCODES_LIBRARY = python -c "import eccodes; print(eccodes.codes_get_library_path())"
+$env:PATH = (Split-Path $env:SHARPMOD_ECCODES_LIBRARY) + ';' + $env:PATH
+cargo bench --manifest-path rust\sharpmod-rs\Cargo.toml --bench kernels -- --save-baseline after
+cargo bench --manifest-path rust\sharpmod-rs\Cargo.toml --bench batch_analysis -- --save-baseline after
+cargo bench --manifest-path rust\sharpmod-rs\Cargo.toml --bench grib -- --save-baseline after
 ```
 
 The script reports median, minimum, and maximum elapsed time for each backend
@@ -240,3 +258,8 @@ confirmation is retained in
 The 2026-07-22 generalized model transport, direct wind-stencil, and
 multi-point decode measurements are retained in
 [`results/2026-07-22-all-model-fetch-decode-optimization.md`](results/2026-07-22-all-model-fetch-decode-optimization.md).
+
+The API-7 parcel/interpolation/trace, inventory/multipoint, shared-preparation,
+and complete-profile batch evaluation is retained in
+[`results/2026-09-12-rust-backend-optimization.md`](results/2026-09-12-rust-backend-optimization.md),
+with raw adapter and fixed-fixture GRIB JSON beside it.

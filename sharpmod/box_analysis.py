@@ -25,10 +25,12 @@ when asked for. They are *not* recomputed through a second, faster parcel path:
 the composites come from the same cached oracle the rest of the application
 reads, so a box field and a Skew-T opened from that same cell cannot disagree.
 
-Threading is deliberately absent. The composite tier is GIL-bound pure Python;
-measured on 16 nodes it got *slower* with more threads (0.370 s/node at one
-thread, 0.460 s/node at eight). Progress is therefore streamed per node instead
-of parallelized, which is also what lets the field map fill in as it computes.
+The complete fast tier is submitted through the backend's bounded batch path;
+small boxes stay serial and larger boxes use its measured worker cap. The
+composite tier remains serial because it is GIL-bound pure Python: measured on
+16 nodes it got *slower* with more threads (0.370 s/node at one thread,
+0.460 s/node at eight). Composite progress is therefore still streamed per
+node.
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 import os
+from types import SimpleNamespace
 from typing import Callable, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -58,9 +61,7 @@ _MISSING_LIMIT = -9998.0
 #: Default pressure ladder for vertical transects, in hPa. Coarse on purpose: a
 #: cross-section is read as a shape, and every extra level costs an
 #: interpolation per node.
-DEFAULT_TRANSECT_LEVELS = tuple(
-    float(value) for value in range(1000, 99, -25)
-)
+DEFAULT_TRANSECT_LEVELS = tuple(float(value) for value in range(1000, 99, -25))
 
 #: Raw profile columns a vertical transect can slice.
 TRANSECT_FIELDS = ("tmpc", "dwpc", "wspd", "wdir", "omeg")
@@ -69,9 +70,7 @@ TRANSECT_FIELDS = ("tmpc", "dwpc", "wspd", "wdir", "omeg")
 #: linear in log-pressure -- the way a sounding is read -- and this is also the
 #: key that decides whether a caller can use the columns cached during analysis
 #: or has to re-read the file for a ladder of its own.
-_DEFAULT_LOG_LADDER = np.log10(
-    np.asarray(DEFAULT_TRANSECT_LEVELS, dtype=float)
-)
+_DEFAULT_LOG_LADDER = np.log10(np.asarray(DEFAULT_TRANSECT_LEVELS, dtype=float))
 
 
 class BoxAnalysisError(Exception):
@@ -108,8 +107,13 @@ class BoxParameter:
 
 def _p(key, label, units, tier, group, notable="high", decimals=0):
     return BoxParameter(
-        key=key, label=label, units=units, tier=tier, group=group,
-        notable=notable, decimals=decimals,
+        key=key,
+        label=label,
+        units=units,
+        tier=tier,
+        group=group,
+        notable=notable,
+        decimals=decimals,
     )
 
 
@@ -126,23 +130,23 @@ PARAMETERS: tuple[BoxParameter, ...] = (
     _p("mucape_3km", "MUCAPE 0-3 km", "J/kg", FAST_TIER, "Instability"),
     _p("mucape_6km", "MUCAPE 0-6 km", "J/kg", FAST_TIER, "Instability"),
     _p("eff_cape", "Effective CAPE", "J/kg", FAST_TIER, "Instability"),
-    _p("eff_cin", "Effective CIN", "J/kg", FAST_TIER, "Instability",
-       notable="low"),
+    _p("eff_cin", "Effective CIN", "J/kg", FAST_TIER, "Instability", notable="low"),
     _p("dcape", "DCAPE", "J/kg", FAST_TIER, "Instability"),
-    _p("downrush_t", "Downrush T", "C", FAST_TIER, "Instability",
-       decimals=1),
+    _p("downrush_t", "Downrush T", "C", FAST_TIER, "Instability", decimals=1),
     # -- Parcel heights (fast tier) -------------------------------------- #
-    _p("ml_lcl", "ML LCL", "m AGL", FAST_TIER, "Parcel heights",
-       notable="low"),
-    _p("ml_lfc", "ML LFC", "m AGL", FAST_TIER, "Parcel heights",
-       notable="low"),
+    _p("ml_lcl", "ML LCL", "m AGL", FAST_TIER, "Parcel heights", notable="low"),
+    _p("ml_lfc", "ML LFC", "m AGL", FAST_TIER, "Parcel heights", notable="low"),
     _p("mu_el", "MU EL", "m AGL", FAST_TIER, "Parcel heights"),
-    _p("sb_lcl", "SB LCL", "m AGL", FAST_TIER, "Parcel heights",
-       notable="low"),
-    _p("eff_inflow_base", "Eff inflow base", "hPa", FAST_TIER,
-       "Parcel heights"),
-    _p("eff_inflow_top", "Eff inflow top", "hPa", FAST_TIER,
-       "Parcel heights", notable="low"),
+    _p("sb_lcl", "SB LCL", "m AGL", FAST_TIER, "Parcel heights", notable="low"),
+    _p("eff_inflow_base", "Eff inflow base", "hPa", FAST_TIER, "Parcel heights"),
+    _p(
+        "eff_inflow_top",
+        "Eff inflow top",
+        "hPa",
+        FAST_TIER,
+        "Parcel heights",
+        notable="low",
+    ),
     # -- Kinematics (fast tier) ------------------------------------------ #
     _p("shear_1km", "0-1 km shear", "kt", FAST_TIER, "Kinematics"),
     _p("shear_3km", "0-3 km shear", "kt", FAST_TIER, "Kinematics"),
@@ -151,61 +155,62 @@ PARAMETERS: tuple[BoxParameter, ...] = (
     _p("srh_1km", "0-1 km SRH", "m2/s2", FAST_TIER, "Kinematics"),
     _p("srh_3km", "0-3 km SRH", "m2/s2", FAST_TIER, "Kinematics"),
     _p("mean_wind_6km", "0-6 km mean wind", "kt", FAST_TIER, "Kinematics"),
-    _p("storm_motion_r", "Bunkers right", "kt", FAST_TIER, "Kinematics",
-       decimals=1),
+    _p("storm_motion_r", "Bunkers right", "kt", FAST_TIER, "Kinematics", decimals=1),
     # -- SPC composites (composite tier) --------------------------------- #
-    _p("stp_cin", "STP (CIN)", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
-    _p("stp_fixed", "STP (fixed)", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
-    _p("scp", "Supercell composite", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
+    _p("stp_cin", "STP (CIN)", "", COMPOSITE_TIER, "Composites", decimals=2),
+    _p("stp_fixed", "STP (fixed)", "", COMPOSITE_TIER, "Composites", decimals=2),
+    _p("scp", "Supercell composite", "", COMPOSITE_TIER, "Composites", decimals=2),
     _p("ship", "SHIP", "", COMPOSITE_TIER, "Composites", decimals=2),
     _p("sig_severe", "Sig severe", "m3/s3", COMPOSITE_TIER, "Composites"),
-    _p("mmp", "MCS maintenance", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
+    _p("mmp", "MCS maintenance", "", COMPOSITE_TIER, "Composites", decimals=2),
     _p("wndg", "Wind damage", "", COMPOSITE_TIER, "Composites", decimals=2),
-    _p("esp", "Enhanced stretching", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
+    _p("esp", "Enhanced stretching", "", COMPOSITE_TIER, "Composites", decimals=2),
     _p("sherbe", "SHERBE", "", COMPOSITE_TIER, "Composites", decimals=2),
     _p("esrh", "Effective SRH", "m2/s2", COMPOSITE_TIER, "Composites"),
     _p("ebwd", "Effective shear", "kt", COMPOSITE_TIER, "Composites"),
-    _p("critical_angle", "Critical angle", "deg", COMPOSITE_TIER,
-       "Composites"),
-    _p("lhp", "Large hail parameter", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
-    _p("hpi", "Hail possibility index", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
-    _p("peskov", "Peskov index", "", COMPOSITE_TIER, "Composites",
-       decimals=1),
-    _p("mcs_index", "MCS index", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
-    _p("left_scp", "Left-moving SCP", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
-    _p("dcp", "Derecho composite", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
-    _p("ehi_1km", "0-1 km EHI", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
-    _p("ehi_3km", "0-3 km EHI", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
-    _p("vgp", "Vorticity generation", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
-    _p("nst", "Non-supercell tornado", "", COMPOSITE_TIER, "Composites",
-       decimals=2),
+    _p("critical_angle", "Critical angle", "deg", COMPOSITE_TIER, "Composites"),
+    _p("lhp", "Large hail parameter", "", COMPOSITE_TIER, "Composites", decimals=2),
+    _p("hpi", "Hail possibility index", "", COMPOSITE_TIER, "Composites", decimals=2),
+    _p("peskov", "Peskov index", "", COMPOSITE_TIER, "Composites", decimals=1),
+    _p("mcs_index", "MCS index", "", COMPOSITE_TIER, "Composites", decimals=2),
+    _p("left_scp", "Left-moving SCP", "", COMPOSITE_TIER, "Composites", decimals=2),
+    _p("dcp", "Derecho composite", "", COMPOSITE_TIER, "Composites", decimals=2),
+    _p("ehi_1km", "0-1 km EHI", "", COMPOSITE_TIER, "Composites", decimals=2),
+    _p("ehi_3km", "0-3 km EHI", "", COMPOSITE_TIER, "Composites", decimals=2),
+    _p("vgp", "Vorticity generation", "", COMPOSITE_TIER, "Composites", decimals=2),
+    _p("nst", "Non-supercell tornado", "", COMPOSITE_TIER, "Composites", decimals=2),
     # -- Thermodynamics / moisture (composite tier) ---------------------- #
-    _p("pwat", "Precipitable water", "in", COMPOSITE_TIER,
-       "Thermodynamics", decimals=2),
-    _p("mean_mixr", "Mean mixing ratio", "g/kg", COMPOSITE_TIER,
-       "Thermodynamics", decimals=1),
+    _p(
+        "pwat", "Precipitable water", "in", COMPOSITE_TIER, "Thermodynamics", decimals=2
+    ),
+    _p(
+        "mean_mixr",
+        "Mean mixing ratio",
+        "g/kg",
+        COMPOSITE_TIER,
+        "Thermodynamics",
+        decimals=1,
+    ),
     _p("low_rh", "Low-level RH", "%", COMPOSITE_TIER, "Thermodynamics"),
     _p("mid_rh", "Mid-level RH", "%", COMPOSITE_TIER, "Thermodynamics"),
-    _p("lapse_3km", "0-3 km lapse rate", "C/km", COMPOSITE_TIER,
-       "Thermodynamics", decimals=1),
-    _p("lapse_700_500", "700-500 mb lapse rate", "C/km", COMPOSITE_TIER,
-       "Thermodynamics", decimals=1),
+    _p(
+        "lapse_3km",
+        "0-3 km lapse rate",
+        "C/km",
+        COMPOSITE_TIER,
+        "Thermodynamics",
+        decimals=1,
+    ),
+    _p(
+        "lapse_700_500",
+        "700-500 mb lapse rate",
+        "C/km",
+        COMPOSITE_TIER,
+        "Thermodynamics",
+        decimals=1,
+    ),
     _p("k_index", "K index", "", COMPOSITE_TIER, "Thermodynamics"),
-    _p("totals_totals", "Total totals", "", COMPOSITE_TIER,
-       "Thermodynamics"),
+    _p("totals_totals", "Total totals", "", COMPOSITE_TIER, "Thermodynamics"),
     _p("wbz", "Wet-bulb zero", "m", COMPOSITE_TIER, "Thermodynamics"),
     _p("conv_t", "Convective temp", "F", COMPOSITE_TIER, "Thermodynamics"),
     _p("max_t", "Max temp", "F", COMPOSITE_TIER, "Thermodynamics"),
@@ -427,9 +432,7 @@ class CoverageResult:
     def describe(self) -> str:
         """Return a reader-facing one-line summary."""
         if self.evaluated <= 0:
-            return (
-                f"{describe_criteria(self.criteria)}: no point could be judged"
-            )
+            return f"{describe_criteria(self.criteria)}: no point could be judged"
         text = (
             f"{self.count} of {self.evaluated} points "
             f"({self.fraction * 100.0:.0f}%), about "
@@ -474,6 +477,7 @@ def _magnitude(u, v):
 
 def _profile_columns(prof):
     """Return filled ``pres/hght/tmpc/dwpc/wdir/wspd`` arrays for a profile."""
+
     def column(name):
         raw = getattr(prof, name, None)
         if raw is None:
@@ -481,12 +485,11 @@ def _profile_columns(prof):
         return np.ma.filled(np.ma.asarray(raw, dtype=float), -9999.0)
 
     return tuple(
-        column(name)
-        for name in ("pres", "hght", "tmpc", "dwpc", "wdir", "wspd")
+        column(name) for name in ("pres", "hght", "tmpc", "dwpc", "wdir", "wspd")
     )
 
 
-def fast_values(prof) -> dict[str, float]:
+def _fast_values(prof, *, include_effective_stp=False) -> dict[str, float]:
     """Return the native-backend tier for one profile.
 
     Every quantity here comes from the shared :mod:`sharpmod.backends`
@@ -499,7 +502,30 @@ def fast_values(prof) -> dict[str, float]:
     u, v = backends.wind_to_components(wdir, wspd)
     values: dict[str, float] = {}
 
-    parcels = backends.profile_parcels(pres, hght, tmpc, dwpc)
+    try:
+        thermodynamics = backends._profile_thermodynamics_buffers(
+            pres,
+            hght,
+            tmpc,
+            dwpc,
+        )
+        parcels = thermodynamics.parcels
+        convective = thermodynamics.convective
+        downdraft = thermodynamics.downdraft
+    except Exception:
+        # Preserve the prior partial-result behavior for an older or failing
+        # backend while keeping the supported path to one profile preparation.
+        parcels = backends.profile_parcels(pres, hght, tmpc, dwpc)
+        try:
+            convective = backends.profile_convective_parcels(
+                pres, hght, tmpc, dwpc,
+            )
+        except Exception:
+            convective = None
+        try:
+            downdraft = backends.profile_dcape(pres, hght, tmpc, dwpc)
+        except Exception:
+            downdraft = None
     surface = parcels.surface
     mixed = parcels.mixed_layer
     unstable = parcels.most_unstable
@@ -524,11 +550,6 @@ def fast_values(prof) -> dict[str, float]:
     # The effective inflow layer needs the convective workspace rather than the
     # three-parcel one, and it is what makes an effective-layer field possible
     # without the pure-Python oracle.
-    try:
-        convective = backends.profile_convective_parcels(
-            pres, hght, tmpc, dwpc)
-    except Exception:
-        convective = None
     if convective is not None:
         effective = convective.effective.diagnostics
         for key, raw in (
@@ -541,8 +562,7 @@ def fast_values(prof) -> dict[str, float]:
             if number is not None:
                 values[key] = number
 
-    kinematics = backends.profile_kinematics(
-        pres, hght, u, v, KINEMATIC_LAYER_TOPS)
+    kinematics = backends.profile_kinematics(pres, hght, u, v, KINEMATIC_LAYER_TOPS)
     for top, shear_key, srh_key in (
         (1000.0, "shear_1km", "srh_1km"),
         (3000.0, "shear_3km", "srh_3km"),
@@ -569,10 +589,6 @@ def fast_values(prof) -> dict[str, float]:
         if right is not None:
             values["storm_motion_r"] = right
 
-    try:
-        downdraft = backends.profile_dcape(pres, hght, tmpc, dwpc)
-    except Exception:
-        downdraft = None
     if downdraft is not None:
         for key, raw in (
             ("dcape", downdraft.cape),
@@ -581,7 +597,240 @@ def fast_values(prof) -> dict[str, float]:
             number = _finite(raw)
             if number is not None:
                 values[key] = number
+    if include_effective_stp and convective is not None:
+        stp = _fast_effective_stp_cin(prof, convective)
+        if stp is not None:
+            values["stp_cin"] = stp
     return values
+
+
+def _fast_values_from_batch(
+    batch,
+    index: int,
+    prof,
+    *,
+    include_effective_stp: bool = False,
+) -> dict[str, float]:
+    """Map one fixed-width backend batch row to the ordinary fast-tier keys."""
+    parcels = batch.parcels[index]
+    convective = batch.convective_parcels[index]
+    bounds = batch.effective_bounds[index]
+    downdraft = batch.downdraft[index]
+    storm_motion = batch.storm_motion[index]
+    layers = batch.kinematic_layers[index]
+    values: dict[str, float] = {}
+
+    def put(key, raw):
+        number = _finite(raw)
+        if number is not None:
+            values[key] = number
+
+    surface = parcels[0]
+    unstable = parcels[1]
+    mixed = parcels[2]
+    for key, raw in (
+        ("sbcape", surface[10]),
+        ("sbcin", surface[11]),
+        ("sb_lcl", surface[5]),
+        ("mlcape", mixed[10]),
+        ("mlcin", mixed[11]),
+        ("ml_lcl", mixed[5]),
+        ("ml_lfc", mixed[7]),
+        ("mucape", unstable[10]),
+        ("mucin", unstable[11]),
+        ("mucape_3km", unstable[12]),
+        ("mucape_6km", unstable[13]),
+        ("mu_el", unstable[9]),
+        ("eff_cape", convective[4][10]),
+        ("eff_cin", convective[4][11]),
+        ("eff_inflow_base", bounds[0]),
+        ("eff_inflow_top", bounds[1]),
+        ("dcape", downdraft[0]),
+        ("downrush_t", downdraft[2]),
+    ):
+        put(key, raw)
+
+    for layer_index, (top, shear_key, srh_key) in enumerate(
+        (
+            (1000.0, "shear_1km", "srh_1km"),
+            (3000.0, "shear_3km", "srh_3km"),
+            (6000.0, "shear_6km", None),
+            (8000.0, "shear_8km", None),
+        )
+    ):
+        layer = layers[layer_index]
+        shear = _magnitude(layer[4], layer[5])
+        if shear is not None:
+            values[shear_key] = shear
+        if srh_key is not None:
+            put(srh_key, layer[10])
+        if top == 6000.0:
+            mean = _magnitude(layer[6], layer[7])
+            if mean is not None:
+                values["mean_wind_6km"] = mean
+    right = _magnitude(storm_motion[0], storm_motion[1])
+    if right is not None:
+        values["storm_motion_r"] = right
+
+    if include_effective_stp:
+        most_unstable = convective[2]
+        mixed_layer = convective[3]
+        convective_view = SimpleNamespace(
+            effective_bottom_pressure=bounds[0],
+            effective_top_pressure=bounds[1],
+            most_unstable=SimpleNamespace(
+                diagnostics=SimpleNamespace(
+                    cape=most_unstable[10],
+                    cin=most_unstable[11],
+                    el_height=most_unstable[9],
+                )
+            ),
+            mixed_layer=SimpleNamespace(
+                diagnostics=SimpleNamespace(
+                    cape=mixed_layer[10],
+                    cin=mixed_layer[11],
+                    lcl_height=mixed_layer[5],
+                )
+            ),
+        )
+        stp = _fast_effective_stp_cin(prof, convective_view)
+        if stp is not None:
+            values["stp_cin"] = stp
+    return values
+
+
+def _fast_effective_stp_cin(prof, convective) -> float | None:
+    """Compute the table's one composite without building the full oracle.
+
+    The complete ``ConvectiveProfile`` eagerly evaluates every severe, winter,
+    fire, and analogue product. STP needs only the parcel workspace already
+    produced by the fast tier plus a few effective-layer wind integrations.
+    This follows SHARPpy's own ``get_kinematics``/``get_severe`` equations and
+    therefore retains numerical parity while avoiding unrelated work.
+    """
+    existing = _finite(getattr(prof, "stp_cin", None))
+    if existing is not None:
+        return existing
+    try:
+        from sharppy.sharptab import interp as sp_interp
+        from sharppy.sharptab import params as sp_params
+        from sharppy.sharptab import profile as sp_profile
+        from sharppy.sharptab import utils as sp_utils
+        from sharppy.sharptab import winds as sp_winds
+
+        source = prof
+        if not hasattr(source, "sfc"):
+            source = sp_profile.BasicProfile.copy(source)
+        effective_bottom = float(convective.effective_bottom_pressure)
+        effective_top = float(convective.effective_top_pressure)
+        if not math.isfinite(effective_bottom) or not math.isfinite(effective_top):
+            return 0.0
+
+        mu = convective.most_unstable.diagnostics
+        mixed = convective.mixed_layer.diagnostics
+        required = (
+            mu.cape,
+            mu.cin,
+            mu.el_height,
+            mixed.cape,
+            mixed.cin,
+            mixed.lcl_height,
+        )
+        if not all(math.isfinite(float(value)) for value in required):
+            return None
+        mu_parcel = SimpleNamespace(
+            bplus=float(mu.cape),
+            bminus=float(mu.cin),
+            elhght=float(mu.el_height),
+        )
+        motion = sp_params.bunkers_storm_motion(
+            source, mupcl=mu_parcel, pbot=effective_bottom
+        )
+        bottom_agl = sp_interp.to_agl(source, sp_interp.hght(source, effective_bottom))
+        top_agl = sp_interp.to_agl(source, sp_interp.hght(source, effective_top))
+        depth = (float(mu.el_height) - float(bottom_agl)) / 2.0
+        shear_top = sp_interp.pres(
+            source, sp_interp.to_msl(source, float(bottom_agl) + depth)
+        )
+        shear = sp_winds.wind_shear(source, pbot=effective_bottom, ptop=shear_top)
+        bulk_shear = sp_utils.mag(*shear)
+
+        latitude = _finite(getattr(source, "latitude", None)) or 0.0
+        motion_offset = 2 if latitude < 0.0 else 0
+        helicity = sp_winds.helicity(
+            source,
+            float(bottom_agl),
+            float(top_agl),
+            stu=motion[motion_offset],
+            stv=motion[motion_offset + 1],
+        )[0]
+        if latitude < 0.0:
+            helicity = -helicity
+        value = sp_params.stp_cin(
+            float(mixed.cape),
+            helicity,
+            sp_utils.KTS2MS(bulk_shear),
+            float(mixed.lcl_height),
+            float(mixed.cin),
+        )
+        if latitude < 0.0:
+            value = -value
+        return _finite(value)
+    except Exception:  # noqa: BLE001 - a missing summary value is non-fatal
+        return None
+
+
+def fast_values(prof) -> dict[str, float]:
+    """Return the ordinary native-backend tier without optional composites."""
+    return _fast_values(prof)
+
+
+def fast_values_many(
+    profiles,
+    *,
+    include_effective_stp: bool = False,
+) -> tuple[dict[str, float], ...]:
+    """Return fast-tier values for a complete ordered profile workload.
+
+    The backend owns the measured serial/parallel threshold and worker cap.
+    Packing, native analysis, and dense-result mapping are all-or-nothing; an
+    unavailable or failing batch path falls back to the established per-profile
+    implementation without changing order or public field semantics.
+    """
+    profiles = tuple(profiles)
+    if not profiles:
+        return ()
+
+    from sharpmod import backends
+
+    try:
+        columns = tuple(
+            (*_profile_columns(prof), getattr(prof, "sfc", 0))
+            for prof in profiles
+        )
+        batch = backends.profile_batch_analysis(columns, KINEMATIC_LAYER_TOPS)
+        mapped = tuple(
+            _fast_values_from_batch(
+                batch,
+                index,
+                prof,
+                include_effective_stp=include_effective_stp,
+            )
+            for index, prof in enumerate(profiles)
+        )
+        if len(mapped) != len(profiles):
+            raise BoxAnalysisError("backend batch returned the wrong profile count")
+        return mapped
+    except Exception:
+        return tuple(
+            _fast_values(prof, include_effective_stp=include_effective_stp)
+            for prof in profiles
+        )
+
+
+def summary_values(prof) -> dict[str, float]:
+    """Return fast comparison metrics plus an optimized effective STP."""
+    return _fast_values(prof, include_effective_stp=True)
 
 
 def composite_values(prof) -> dict[str, float]:
@@ -868,23 +1117,19 @@ class BoxAnalysis:
         """Return every present value for one field, unordered."""
         item = parameter(key)
         return tuple(
-            point.values[item.key]
-            for point in self.points
-            if item.key in point.values
+            point.values[item.key] for point in self.points if item.key in point.values
         )
 
     def statistics(self, key) -> BoxFieldStats | None:
         """Return area statistics for one field, or ``None`` when it is empty."""
         item = parameter(key)
-        present = [
-            point for point in self.points if item.key in point.values
-        ]
+        present = [point for point in self.points if item.key in point.values]
         if not present:
             return None
-        numbers = np.asarray(
-            [point.values[item.key] for point in present], dtype=float)
+        numbers = np.asarray([point.values[item.key] for point in present], dtype=float)
         extreme_index = (
-            int(np.argmax(numbers)) if item.notable == "high"
+            int(np.argmax(numbers))
+            if item.notable == "high"
             else int(np.argmin(numbers))
         )
         return BoxFieldStats(
@@ -902,9 +1147,7 @@ class BoxAnalysis:
     def ranked(self, key, *, limit=None) -> tuple[BoxPointAnalysis, ...]:
         """Return nodes ordered with the most notable value first."""
         item = parameter(key)
-        present = [
-            point for point in self.points if item.key in point.values
-        ]
+        present = [point for point in self.points if item.key in point.values]
         present.sort(
             key=lambda point: point.values[item.key],
             reverse=item.notable == "high",
@@ -993,9 +1236,7 @@ class BoxAnalysis:
         # pressure. The coordinate is therefore transformed explicitly and the
         # flag left off.
         log_ladder = np.log10(ladder)
-        columns = [
-            _interpolated_column(node, field, log_ladder) for node in nodes
-        ]
+        columns = [_interpolated_column(node, field, log_ladder) for node in nodes]
 
         count = len(nodes)
         step = 0.0 if count < 2 else total / float(count - 1)
@@ -1016,17 +1257,12 @@ class BoxAnalysis:
 
         region = self.plan.region
         dlat = (
-            region.lat_span / float(self.rows - 1)
-            if self.rows > 1 else region.lat_span
+            region.lat_span / float(self.rows - 1) if self.rows > 1 else region.lat_span
         )
         dlon = (
-            region.lon_span / float(self.cols - 1)
-            if self.cols > 1 else region.lon_span
+            region.lon_span / float(self.cols - 1) if self.cols > 1 else region.lon_span
         )
-        return (
-            dlat * KM_PER_DEG_LAT
-            * dlon * km_per_deg_lon(region.center_lat)
-        )
+        return dlat * KM_PER_DEG_LAT * dlon * km_per_deg_lon(region.center_lat)
 
     def _resolve_criteria(self, criteria) -> tuple[Criterion, ...]:
         """Accept a screen name, one Criterion, or an iterable of them."""
@@ -1040,7 +1276,8 @@ class BoxAnalysis:
         for item in resolved:
             if not isinstance(item, Criterion):
                 raise BoxAnalysisError(
-                    "criteria must be Criterion values or a screen name")
+                    "criteria must be Criterion values or a screen name"
+                )
         return resolved
 
     def mask(self, criteria) -> tuple[tuple[bool | None, ...], ...]:
@@ -1100,7 +1337,8 @@ class BoxAnalysis:
         for point in self.points:
             present.update(point.values)
         return tuple(
-            name for name, criteria in INGREDIENT_SCREENS.items()
+            name
+            for name, criteria in INGREDIENT_SCREENS.items()
             if all(item.parameter in present for item in criteria)
         )
 
@@ -1126,11 +1364,9 @@ class BoxAnalysis:
         try:
             low_pct, high_pct = (float(value) for value in percentiles)
         except (TypeError, ValueError) as exc:
-            raise BoxAnalysisError(
-                "percentiles must be two numbers") from exc
+            raise BoxAnalysisError("percentiles must be two numbers") from exc
         if not 0.0 <= low_pct < high_pct <= 100.0:
-            raise BoxAnalysisError(
-                "percentiles must be ascending and within [0, 100]")
+            raise BoxAnalysisError("percentiles must be ascending and within [0, 100]")
         ladder = np.asarray([float(value) for value in levels], dtype=float)
         if ladder.size == 0 or not np.all(ladder > 0.0):
             raise BoxAnalysisError("envelope levels must all be positive hPa")
@@ -1144,10 +1380,7 @@ class BoxAnalysis:
 
         minimum, low, median, high, maximum, counts = [], [], [], [], [], []
         for index in range(ladder.size):
-            present = [
-                column[index] for column in columns
-                if column[index] is not None
-            ]
+            present = [column[index] for column in columns if column[index] is not None]
             counts.append(len(present))
             if not present:
                 for series in (minimum, low, median, high, maximum):
@@ -1161,17 +1394,17 @@ class BoxAnalysis:
                 # spread from a narrow northerly cluster.
                 radians = np.deg2rad(np.mod(values, 360.0))
                 center = (
-                    np.degrees(np.arctan2(
-                        np.mean(np.sin(radians)),
-                        np.mean(np.cos(radians)),
-                    ))
+                    np.degrees(
+                        np.arctan2(
+                            np.mean(np.sin(radians)),
+                            np.mean(np.cos(radians)),
+                        )
+                    )
                     % 360.0
                 )
                 if center < 180.0 and np.any(values > 180.0):
                     center += 360.0
-                values = center + (
-                    (values - center + 180.0) % 360.0 - 180.0
-                )
+                values = center + ((values - center + 180.0) % 360.0 - 180.0)
             minimum.append(float(np.min(values)))
             low.append(float(np.percentile(values, low_pct)))
             median.append(float(np.median(values)))
@@ -1194,7 +1427,8 @@ class BoxAnalysis:
     def summary(self, keys=None) -> str:
         """Return a reader-facing table of area statistics."""
         items = (
-            self.available_parameters() if keys is None
+            self.available_parameters()
+            if keys is None
             else tuple(parameter(key) for key in keys)
         )
         lines = [
@@ -1254,7 +1488,8 @@ class BoxSequence:
         for hour in self.hours:
             analysis = self.at(hour)
             keys = (
-                set() if analysis is None
+                set()
+                if analysis is None
                 else {item.key for item in analysis.available_parameters()}
             )
             shared = keys if shared is None else (shared & keys)
@@ -1267,10 +1502,12 @@ class BoxSequence:
         series = []
         for hour in self.hours:
             analysis = self.at(hour)
-            series.append((
-                hour,
-                None if analysis is None else analysis.statistics(item.key),
-            ))
+            series.append(
+                (
+                    hour,
+                    None if analysis is None else analysis.statistics(item.key),
+                )
+            )
         return tuple(series)
 
     def coverage_series(self, criteria):
@@ -1295,12 +1532,9 @@ class BoxSequence:
         for hour, stats in self.statistics_series(item.key):
             if stats is None:
                 continue
-            value = (
-                stats.maximum if item.notable == "high" else stats.minimum
-            )
+            value = stats.maximum if item.notable == "high" else stats.minimum
             if best_value is None or (
-                value > best_value if item.notable == "high"
-                else value < best_value
+                value > best_value if item.notable == "high" else value < best_value
             ):
                 best_hour, best_value = hour, value
         return best_hour
@@ -1374,9 +1608,9 @@ def analyze_box_sequence(
             run_time=run_time,
             fxx=hour,
             progress=(
-                None if progress is None
-                else lambda done, total, _point, hour=hour: progress(
-                    hour, done, total)
+                None
+                if progress is None
+                else lambda done, total, _point, hour=hour: progress(hour, done, total)
             ),
             cancelled=cancelled,
         )
@@ -1385,6 +1619,110 @@ def analyze_box_sequence(
         analyses=analyses,
         run_time=run_time,
     )
+
+
+def _analyze_fast_box_points(
+    plan: BoxSamplePlan,
+    paths: Mapping[str, str],
+    *,
+    progress: Callable[[int, int, BoxPointAnalysis], None] | None,
+    cancelled: Callable[[], bool] | None,
+) -> tuple[BoxPointAnalysis, ...]:
+    """Analyze a complete fast-tier box through one ordered backend batch."""
+    prepared: list[BoxPointAnalysis | None] = [None] * len(plan.points)
+    pending = []
+
+    # Loading and transect interpolation stay per node. They can fail or be
+    # cancelled independently and do not belong in the native batch contract.
+    for position, node in enumerate(plan.points):
+        path = paths.get(node.request_id)
+        if path is None:
+            prepared[position] = _empty_point(node)
+            continue
+        if cancelled is not None and cancelled():
+            prepared[position] = _empty_point(node, error="cancelled")
+            continue
+        try:
+            prof, _collection = load_profile(path)
+            columns = transect_columns(prof)
+        except Exception as exc:  # noqa: BLE001 - one bad node must not end
+            prepared[position] = BoxPointAnalysis(
+                row=node.row,
+                col=node.col,
+                lat=node.lat,
+                lon=node.lon,
+                request_id=node.request_id,
+                npz_path=path,
+                values={},
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            continue
+        pending.append((position, node, path, prof, columns))
+
+    if pending:
+        try:
+            rows = fast_values_many(item[3] for item in pending)
+            if len(rows) != len(pending):
+                raise BoxAnalysisError(
+                    "backend batch returned the wrong profile count"
+                )
+            outcomes = tuple(rows)
+        except Exception:
+            # Preserve the old one-bad-node isolation if packing, native work,
+            # or dense-result mapping rejects the complete workload.
+            isolated = []
+            for _position, _node, _path, prof, _columns in pending:
+                try:
+                    isolated.append(fast_values(prof))
+                except Exception as exc:  # noqa: BLE001 - per-node fallback
+                    isolated.append(exc)
+            outcomes = tuple(isolated)
+
+        for item, outcome in zip(pending, outcomes):
+            position, node, path, _prof, columns = item
+            if isinstance(outcome, Exception):
+                prepared[position] = BoxPointAnalysis(
+                    row=node.row,
+                    col=node.col,
+                    lat=node.lat,
+                    lon=node.lon,
+                    request_id=node.request_id,
+                    npz_path=path,
+                    values={},
+                    error=f"{type(outcome).__name__}: {outcome}",
+                )
+            else:
+                prepared[position] = BoxPointAnalysis(
+                    row=node.row,
+                    col=node.col,
+                    lat=node.lat,
+                    lon=node.lon,
+                    request_id=node.request_id,
+                    npz_path=path,
+                    values=outcome,
+                    columns=columns,
+                )
+
+    total = len(paths)
+    done = 0
+    stop_after_progress = False
+    results = []
+    for position, node in enumerate(plan.points):
+        path = paths.get(node.request_id)
+        result = prepared[position]
+        if result is None:
+            # Defensive only: every slot is assigned by loading or batch work.
+            result = _empty_point(node, error="analysis produced no result")
+        if path is not None:
+            if stop_after_progress:
+                result = _empty_point(node, error="cancelled")
+            done += 1
+            if progress is not None:
+                progress(done, total, result)
+            if cancelled is not None and cancelled():
+                stop_after_progress = True
+        results.append(result)
+    return tuple(results)
 
 
 def analyze_box(
@@ -1416,49 +1754,57 @@ def analyze_box(
             f"unknown analysis tier(s): {', '.join(sorted(unknown))}"
         )
     paths = {str(key): str(value) for key, value in dict(outputs).items()}
-    total = len(paths)
-    done = 0
-    results: list[BoxPointAnalysis] = []
-    for node in plan.points:
-        path = paths.get(node.request_id)
-        if path is None:
-            results.append(_empty_point(node))
-            continue
-        if cancelled is not None and cancelled():
-            results.append(_empty_point(node, error="cancelled"))
-            continue
-        try:
-            prof, _collection = load_profile(path)
-            values = analyze_profile(prof, tiers=wanted)
-            # The profile is open here, on a worker thread, having already been
-            # decoded for the tier values. Taking the transect columns now costs
-            # five interpolations and saves the GUI thread a re-read of every
-            # file in the box each time a slice or an envelope is drawn.
-            result = BoxPointAnalysis(
-                row=node.row,
-                col=node.col,
-                lat=node.lat,
-                lon=node.lon,
-                request_id=node.request_id,
-                npz_path=path,
-                values=values,
-                columns=transect_columns(prof),
-            )
-        except Exception as exc:  # noqa: BLE001 - one bad node must not end
-            result = BoxPointAnalysis(
-                row=node.row,
-                col=node.col,
-                lat=node.lat,
-                lon=node.lon,
-                request_id=node.request_id,
-                npz_path=path,
-                values={},
-                error=f"{type(exc).__name__}: {exc}",
-            )
-        results.append(result)
-        done += 1
-        if progress is not None:
-            progress(done, total, result)
+    if set(wanted) == {FAST_TIER}:
+        results = _analyze_fast_box_points(
+            plan,
+            paths,
+            progress=progress,
+            cancelled=cancelled,
+        )
+    else:
+        total = len(paths)
+        done = 0
+        serial_results: list[BoxPointAnalysis] = []
+        for node in plan.points:
+            path = paths.get(node.request_id)
+            if path is None:
+                serial_results.append(_empty_point(node))
+                continue
+            if cancelled is not None and cancelled():
+                serial_results.append(_empty_point(node, error="cancelled"))
+                continue
+            try:
+                prof, _collection = load_profile(path)
+                values = analyze_profile(prof, tiers=wanted)
+                # The profile is open here, on a worker thread, having already
+                # been decoded for the tier values. Taking the transect columns
+                # now saves a later GUI-thread re-read for each slice/envelope.
+                result = BoxPointAnalysis(
+                    row=node.row,
+                    col=node.col,
+                    lat=node.lat,
+                    lon=node.lon,
+                    request_id=node.request_id,
+                    npz_path=path,
+                    values=values,
+                    columns=transect_columns(prof),
+                )
+            except Exception as exc:  # noqa: BLE001 - one bad node must not end
+                result = BoxPointAnalysis(
+                    row=node.row,
+                    col=node.col,
+                    lat=node.lat,
+                    lon=node.lon,
+                    request_id=node.request_id,
+                    npz_path=path,
+                    values={},
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+            serial_results.append(result)
+            done += 1
+            if progress is not None:
+                progress(done, total, result)
+        results = tuple(serial_results)
     return BoxAnalysis(
         plan=plan,
         points=tuple(results),
@@ -1485,8 +1831,7 @@ def _column_from_profile(prof, field, log_ladder) -> list[float | None]:
     blank = [None] * int(log_ladder.size)
     try:
         pres = np.ma.filled(np.ma.asarray(prof.pres, dtype=float), -9999.0)
-        raw = np.ma.filled(
-            np.ma.asarray(getattr(prof, field), dtype=float), -9999.0)
+        raw = np.ma.filled(np.ma.asarray(getattr(prof, field), dtype=float), -9999.0)
         # Drop sentinel rows before the logarithm: log10 of a negative sentinel
         # would both warn and poison the interpolation, and this suite runs with
         # warnings as errors.
@@ -1499,7 +1844,8 @@ def _column_from_profile(prof, field, log_ladder) -> list[float | None]:
             # degrees points south.  Interpolate the matching wind components
             # and reconstruct the angle so the path crosses north instead.
             speed = np.ma.filled(
-                np.ma.asarray(getattr(prof, "wspd"), dtype=float), -9999.0)
+                np.ma.asarray(getattr(prof, "wspd"), dtype=float), -9999.0
+            )
             usable &= speed > _MISSING_LIMIT
             if int(np.count_nonzero(usable)) < 2:
                 return blank
@@ -1507,16 +1853,13 @@ def _column_from_profile(prof, field, log_ladder) -> list[float | None]:
             u, v = backends.wind_to_components(raw[usable], speed[usable])
             interp_u = backends.interpolate_1d(log_ladder, coordinate, u)
             interp_v = backends.interpolate_1d(log_ladder, coordinate, v)
-            interpolated, _speed = backends.components_to_wind(
-                interp_u, interp_v)
+            interpolated, _speed = backends.components_to_wind(interp_u, interp_v)
         else:
-            interpolated = backends.interpolate_1d(
-                log_ladder, coordinate, raw[usable])
+            interpolated = backends.interpolate_1d(log_ladder, coordinate, raw[usable])
     except Exception:
         return blank
     return [
-        _finite(value)
-        for value in np.atleast_1d(np.asarray(interpolated, dtype=float))
+        _finite(value) for value in np.atleast_1d(np.asarray(interpolated, dtype=float))
     ]
 
 
@@ -1548,8 +1891,9 @@ def _interpolated_column(point, field, log_ladder) -> list[float | None]:
     blank = [None] * int(log_ladder.size)
     if point is None:
         return blank
-    if log_ladder.shape == _DEFAULT_LOG_LADDER.shape \
-            and np.array_equal(log_ladder, _DEFAULT_LOG_LADDER):
+    if log_ladder.shape == _DEFAULT_LOG_LADDER.shape and np.array_equal(
+        log_ladder, _DEFAULT_LOG_LADDER
+    ):
         cached = point.columns.get(str(field))
         if cached is not None:
             return list(cached)
@@ -1563,7 +1907,8 @@ def _interpolated_column(point, field, log_ladder) -> list[float | None]:
 
 
 def _evaluate(
-    criteria: Iterable[Criterion], values: Mapping[str, float],
+    criteria: Iterable[Criterion],
+    values: Mapping[str, float],
 ) -> bool | None:
     """Combine criteria with AND, propagating "unknown" rather than failing.
 
@@ -1590,9 +1935,9 @@ def _empty_point(node: BoxSamplePoint, *, error=None) -> BoxPointAnalysis:
         request_id=node.request_id,
         npz_path=None,
         values={},
-        error=error if error is not None else (
-            None if node.in_domain else "outside model domain"
-        ),
+        error=error
+        if error is not None
+        else (None if node.in_domain else "outside model domain"),
     )
 
 
@@ -1623,6 +1968,8 @@ __all__ = [
     "analyze_profile",
     "composite_values",
     "fast_values",
+    "fast_values_many",
+    "summary_values",
     "load_profile",
     "parameter",
     "parameter_groups",

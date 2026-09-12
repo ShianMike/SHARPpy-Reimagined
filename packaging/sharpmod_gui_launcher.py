@@ -152,6 +152,13 @@ def _model_fetch_runtime_check(output_path: str) -> int:
 def _run() -> int:
     if len(sys.argv) == 3 and sys.argv[1] == "--model-fetch-runtime-check":
         return _model_fetch_runtime_check(sys.argv[2])
+    if len(sys.argv) >= 2 and sys.argv[1] == "--model-batch-worker":
+        # The frozen executable is its own Python child-process host. Route the
+        # private worker command before importing Qt so a cancellable model
+        # batch remains isolated from the GUI and pays no widget startup cost.
+        from sharpmod.tools.batch_extract import main as batch_main
+
+        return batch_main(sys.argv[2:])
     # Import the picker directly so the frozen startup path does not load the
     # compatibility facade (and its viewer stack) before the first window.
     from sharpmod.gui_picker import main

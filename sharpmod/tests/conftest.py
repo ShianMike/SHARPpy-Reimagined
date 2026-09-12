@@ -75,6 +75,27 @@ def qt_app():
     return app
 
 
+@pytest.fixture
+def standard_qt_app(qt_app):
+    """Return the Qt application in the standard theme without restyling it.
+
+    Applying an application style sheet re-polishes every live widget. Many
+    inexpensive GUI tests only need a known starting theme, so doing that work
+    for every fixture made a long single-process run progressively slower.
+    """
+
+    from sharpmod import gui_theme
+
+    standard = gui_theme.theme_for_color_style("standard")
+    if (
+        not gui_theme.theme_is_applied()
+        or gui_theme.current_theme().name != standard.name
+        or not qt_app.styleSheet()
+    ):
+        gui_theme.apply_theme(qt_app, theme=standard)
+    return qt_app
+
+
 _QT_TEST_PREFIXES = (
     "test_analysis_sessions",
     "test_custom_panel",
@@ -91,13 +112,17 @@ _QT_TEST_PREFIXES = (
 
 @pytest.fixture(autouse=True)
 def _isolate_qt_override_cursor(request):
-    """Prevent one GUI test's process-global busy cursor leaking to another."""
+    """Reset process-global Qt state and realize deferred widget deletion."""
 
-    if not request.node.path.stem.startswith(_QT_TEST_PREFIXES):
+    uses_qt = (
+        "qt_app" in request.fixturenames
+        or request.node.path.stem.startswith(_QT_TEST_PREFIXES)
+    )
+    if not uses_qt:
         yield
         return
 
-    from qtpy import QtWidgets
+    from qtpy import QtCore, QtWidgets
 
     def clear_override_cursor():
         app = QtWidgets.QApplication.instance()
@@ -108,6 +133,16 @@ def _isolate_qt_override_cursor(request):
     clear_override_cursor()
     yield
     clear_override_cursor()
+    app = QtWidgets.QApplication.instance()
+    if app is not None:
+        # close()/deleteLater() is intentionally used by GUI fixtures, but a
+        # headless test run has no continuously running event loop to realize
+        # those deletions. Leaving them queued makes every later application
+        # style change re-polish an ever-growing hidden widget tree.
+        QtCore.QCoreApplication.sendPostedEvents(
+            None, QtCore.QEvent.Type.DeferredDelete
+        )
+        app.processEvents()
 
 
 def pytest_collection_modifyitems(items):

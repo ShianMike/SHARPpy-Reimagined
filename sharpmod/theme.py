@@ -136,9 +136,14 @@ MOTION_MS: dict[str, int] = {
     "slow": 240,
 }
 
-#: Vertical scrollbar width. Must track the ``QScrollBar`` rule in the generated
-#: style sheet, because a scroll area has to reserve this much or its content is
-#: clipped once the bar appears.
+#: Vertical scrollbar width -- the column a scroll area reserves in its layout,
+#: which is why every width budget has to include it or content is clipped once
+#: the bar appears.
+#:
+#: The generated ``QScrollBar`` rule interpolates this constant directly, so the
+#: reservation and the painted bar cannot drift. Note that the *handle* is
+#: narrower than this: the rule pads the bar by ``SPACE["xxs"]`` on each side so
+#: the handle does not butt against the content beside it.
 SCROLLBAR_W: int = SPACE["md"]
 
 #: Usable content width for the picker's left control rail -- i.e. excluding the
@@ -678,6 +683,7 @@ OBJ_HINT = "hint"                    # de-emphasised helper text
 OBJ_EMPHASIS = "emphasis"            # the resolved value a panel is acting on
 OBJ_ATTRIBUTION = "attribution"      # third-party data credit, smallest text
 OBJ_STATUS = "statusText"            # secondary prose: readiness, validation
+OBJ_WARNING_TEXT = "warningText"     # the same prose when it reports a caveat
 OBJ_ERROR_TEXT = "errorText"         # the same prose when it reports a problem
 OBJ_PROGRESS_DETAIL = "progressDetail"   # byte counts / phase under a bar
 OBJ_SECTION_LABEL = "sectionLabel"   # small caps-ish group heading
@@ -830,6 +836,14 @@ QLabel#{OBJ_EMPHASIS} {{
  * to the dark palette and rendered pale grey on white on paper-light. */
 QLabel#{OBJ_ERROR_TEXT} {{
     color: {t.danger};
+    font-size: {FONT_PT['small']}pt;
+}}
+
+/* The middle rung between OBJ_STATUS and OBJ_ERROR_TEXT: the result stands, but
+ * it rests on less than it should -- a partial ensemble, a substituted run. Red
+ * overstates that and plain secondary text hides it entirely. */
+QLabel#{OBJ_WARNING_TEXT} {{
+    color: {t.warning};
     font-size: {FONT_PT['small']}pt;
 }}
 
@@ -1311,6 +1325,35 @@ QTabBar::tab:disabled {{
     color: {t.text_disabled};
 }}
 
+/* --- Analysis workspace ------------------------------------------- */
+
+/* The workspace is tabbed *into* the sounding sidebar, so Qt's dock tab bar and
+ * the workspace's own tab bar stack directly on top of each other. Left
+ * identical they read as one confusing double row; a smaller, tighter inner bar
+ * reads as a level below the panel switcher above it. */
+QTabWidget#analysisWorkspaceTabs > QTabBar::tab {{
+    padding: {s['xs']}px {s['md']}px;
+    font-size: {FONT_PT['small']}pt;
+}}
+
+/* Widened from the app's 1px hairline: the pane headings already separate the
+ * table from the chart, so this handle only has to be grabbable. Transparent at
+ * rest, tinted on hover, which is what advertises it as draggable. */
+QSplitter#analysisEnsembleSplitter::handle:vertical {{
+    height: {s['sm']}px;
+    background: transparent;
+}}
+
+QSplitter#analysisEnsembleSplitter::handle:vertical:hover {{
+    background: {t.accent_subtle};
+}}
+
+/* Notes are prose, not figures, and are usually read as a paragraph rather than
+ * scanned -- so this one input gets breathing room the shared rule does not. */
+QPlainTextEdit#analysisWorkspaceNotes {{
+    padding: {s['sm']}px;
+}}
+
 /* --- Lists and tables --------------------------------------------- */
 
 QListWidget, QListView, QTreeView, QTableWidget, QTableView {{
@@ -1496,22 +1539,44 @@ QStatusBar::item {{
 
 /* --- Scrollbars --------------------------------------------------- */
 
+/* The width is SCROLLBAR_W itself, not a spacing token that happens to equal
+ * it: a scroll area reserves this much in its layout, so the two drifting
+ * apart clips content or leaves a dead strip.
+ *
+ * The padding insets the handle *inside* that reservation instead of
+ * shrinking it, which is what gives the bar a gutter. Without it the handle
+ * filled all 12 px and butted straight against the card border beside it,
+ * reading as though the bar sat on top of the rail rather than beside it.
+ * Padding on the bar is the only one of the three obvious ways to inset a
+ * handle that Qt actually applies -- margin on the handle and a transparent
+ * border on the handle both leave the rect at the full bar width. */
 QScrollBar:vertical {{
     background: transparent;
-    width: {s['md']}px;
+    width: {SCROLLBAR_W}px;
+    padding: 0 {s['xxs']}px;
     margin: 0;
 }}
 
 QScrollBar:horizontal {{
     background: transparent;
-    height: {s['md']}px;
+    height: {SCROLLBAR_W}px;
+    padding: {s['xxs']}px 0;
     margin: 0;
 }}
 
-QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
+/* Split by orientation. A shared rule also puts a min-width on the vertical
+ * handle and a min-height on the horizontal one -- each bar's short axis,
+ * where a 24 px floor can only fight the width declared above it. Only the
+ * long axis wants a minimum, so the handle stays grabbable on a long rail. */
+QScrollBar::handle:vertical {{
     background: {t.scrollbar};
     border-radius: {r['sm']}px;
     min-height: {s['xxl']}px;
+}}
+
+QScrollBar::handle:horizontal {{
+    background: {t.scrollbar};
+    border-radius: {r['sm']}px;
     min-width: {s['xxl']}px;
 }}
 

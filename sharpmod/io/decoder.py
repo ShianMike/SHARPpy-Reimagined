@@ -71,12 +71,14 @@ def _positive_env_number(name, default, converter):
 
 def _remote_timeout() -> float:
     return _positive_env_number(
-        "SHARPMOD_REMOTE_TIMEOUT", DEFAULT_REMOTE_TIMEOUT_S, float)
+        "SHARPMOD_REMOTE_TIMEOUT", DEFAULT_REMOTE_TIMEOUT_S, float
+    )
 
 
 def _max_remote_bytes() -> int:
     return _positive_env_number(
-        "SHARPMOD_MAX_REMOTE_BYTES", DEFAULT_MAX_REMOTE_BYTES, int)
+        "SHARPMOD_MAX_REMOTE_BYTES", DEFAULT_MAX_REMOTE_BYTES, int
+    )
 
 
 def _is_http_url(value) -> bool:
@@ -96,8 +98,7 @@ def _local_source_path(value) -> str:
     if parsed.netloc and parsed.netloc.casefold() not in {"", "localhost"}:
         path = f"//{parsed.netloc}{path}"
     # ``urlparse('file:///C:/...').path`` starts with a slash on Windows.
-    if os.name == "nt" and len(path) >= 3 and path[0] == "/" \
-            and path[2] == ":":
+    if os.name == "nt" and len(path) >= 3 and path[0] == "/" and path[2] == ":":
         path = path[1:]
     return path
 
@@ -106,8 +107,7 @@ def _read_bounded(stream, limit: int) -> bytes:
     """Read at most ``limit`` bytes and reject a larger response."""
     payload = stream.read(limit + 1)
     if len(payload) > limit:
-        raise IOError(
-            f"input exceeds the configured {limit:,}-byte safety limit")
+        raise IOError(f"input exceeds the configured {limit:,}-byte safety limit")
     return payload
 
 
@@ -124,7 +124,8 @@ class abstract(object):
     def __call__(self, *args, **kwargs):
         raise NotImplementedError(
             "Function or method '%s' is abstract. Override it in a subclass!"
-            % self._func.__name__)
+            % self._func.__name__
+        )
 
 
 class Decoder(object):
@@ -159,8 +160,7 @@ class Decoder(object):
                     timeout=_remote_timeout(),
                     context=context,
                 ) as response:
-                    file_data = _read_bounded(
-                        response, _max_remote_bytes())
+                    file_data = _read_bounded(response, _max_remote_bytes())
             except (ValueError, URLError, OSError) as exc:
                 raise IOError(
                     "Remote file '%s' could not be downloaded: %s"
@@ -170,12 +170,9 @@ class Decoder(object):
             fname = _local_source_path(self._file_name)
             try:
                 with open(fname, "rb") as handle:
-                    file_data = _read_bounded(
-                        handle, _max_remote_bytes())
+                    file_data = _read_bounded(handle, _max_remote_bytes())
             except OSError as exc:
-                raise IOError(
-                    "File '%s' cannot be found" % self._file_name
-                ) from exc
+                raise IOError("File '%s' cannot be found" % self._file_name) from exc
         return file_data.decode("utf-8-sig")
 
     def getProfiles(self, indexes=None):
@@ -187,7 +184,7 @@ class Decoder(object):
 
     def getStnId(self):
         """Return the station identifier / location metadata."""
-        return self._prof_collection.getMeta('loc')
+        return self._prof_collection.getMeta("loc")
 
 
 def _load_source(module_name, path):
@@ -198,8 +195,7 @@ def _load_source(module_name, path):
     ``sys.modules`` under ``module_name``.
     """
     loader = importlib.machinery.SourceFileLoader(module_name, path)
-    spec = importlib.util.spec_from_file_location(module_name, path,
-                                                  loader=loader)
+    spec = importlib.util.spec_from_file_location(module_name, path, loader=loader)
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     loader.exec_module(module)
@@ -222,8 +218,8 @@ def _bridge_legacy_decoder_base():
     modernized ``Decoder`` base and prevents the legacy, ``imp``-importing
     module from ever being imported.
     """
-    if 'sharppy.io.decoder' not in sys.modules:
-        sys.modules['sharppy.io.decoder'] = sys.modules[__name__]
+    if "sharppy.io.decoder" not in sys.modules:
+        sys.modules["sharppy.io.decoder"] = sys.modules[__name__]
 
 
 def _sanitize_profile_rows(prof):
@@ -252,8 +248,17 @@ def _sanitize_profile_rows(prof):
         return
 
     for name in (
-        "pres", "hght", "tmpc", "dwpc", "wdir", "wspd", "u", "v",
-        "omeg", "tmp_stdev", "dew_stdev",
+        "pres",
+        "hght",
+        "tmpc",
+        "dwpc",
+        "wdir",
+        "wspd",
+        "u",
+        "v",
+        "omeg",
+        "tmp_stdev",
+        "dew_stdev",
     ):
         arr = getattr(prof, name, None)
         if arr is None:
@@ -288,13 +293,20 @@ def _thin_profile_rows(prof):
     if count <= max_levels:
         return
 
-    indexes = np.unique(np.rint(
-        np.linspace(0, count - 1, max_levels)
-    ).astype(int))
+    indexes = np.unique(np.rint(np.linspace(0, count - 1, max_levels)).astype(int))
 
     for name in (
-        "pres", "hght", "tmpc", "dwpc", "wdir", "wspd", "u", "v",
-        "omeg", "tmp_stdev", "dew_stdev",
+        "pres",
+        "hght",
+        "tmpc",
+        "dwpc",
+        "wdir",
+        "wspd",
+        "u",
+        "v",
+        "omeg",
+        "tmp_stdev",
+        "dew_stdev",
     ):
         arr = getattr(prof, name, None)
         if arr is None:
@@ -343,15 +355,20 @@ def findDecoders():
 
     _bridge_legacy_decoder_base()
 
-    built_ins = ['buf_decoder', 'spc_decoder', 'pecan_decoder', 'arw_decoder',
-                 'uwyo_decoder']
-    io = __import__('sharppy.io', globals(), locals(), built_ins, 0)
+    built_ins = [
+        "buf_decoder",
+        "spc_decoder",
+        "pecan_decoder",
+        "arw_decoder",
+        "uwyo_decoder",
+    ]
+    io = __import__("sharppy.io", globals(), locals(), built_ins, 0)
 
     for dec in built_ins:
         logger.debug("Loading built-in decoder '%s'.", dec)
         _register(getattr(io, dec))
 
-    custom = glob.glob(os.path.join(HOME_DIR, '*.py'))
+    custom = glob.glob(os.path.join(HOME_DIR, "*.py"))
     for dec in custom:
         dec_mod_name = os.path.basename(dec)[:-3]
         logger.debug("Found custom decoder '%s'.", dec_mod_name)
@@ -376,11 +393,11 @@ def _validate_npz_container(filename) -> None:
     """Reject oversized or malformed point-sounding archives before NumPy."""
     path = os.path.abspath(os.fspath(filename))
     size_limit = _positive_env_number(
-        "SHARPMOD_MAX_NPZ_BYTES", DEFAULT_MAX_NPZ_BYTES, int)
+        "SHARPMOD_MAX_NPZ_BYTES", DEFAULT_MAX_NPZ_BYTES, int
+    )
     try:
         if os.path.getsize(path) > size_limit:
-            raise ValueError(
-                f"portable sounding exceeds {size_limit:,} bytes")
+            raise ValueError(f"portable sounding exceeds {size_limit:,} bytes")
         with zipfile.ZipFile(path) as archive:
             members = archive.infolist()
             if len(members) > 64:
@@ -389,14 +406,13 @@ def _validate_npz_container(filename) -> None:
             if expanded > size_limit:
                 raise ValueError(
                     "portable sounding expands beyond the configured "
-                    f"{size_limit:,}-byte safety limit")
+                    f"{size_limit:,}-byte safety limit"
+                )
             if any(
-                member.file_size > size_limit
-                or not member.filename.endswith(".npy")
+                member.file_size > size_limit or not member.filename.endswith(".npy")
                 for member in members
             ):
-                raise ValueError(
-                    "portable sounding contains an invalid array member")
+                raise ValueError("portable sounding contains an invalid array member")
     except (OSError, zipfile.BadZipFile) as exc:
         raise ValueError(f"invalid portable sounding archive: {exc}") from exc
 
@@ -409,11 +425,9 @@ def _npz_scalar(data, key, *, default=None):
         raise ValueError(f"portable sounding is missing required field {key!r}")
     value = np.asarray(data[key])
     if value.dtype.hasobject:
-        raise ValueError(
-            f"portable sounding field {key!r} uses unsafe object data")
+        raise ValueError(f"portable sounding field {key!r} uses unsafe object data")
     if value.size != 1:
-        raise ValueError(
-            f"portable sounding field {key!r} must contain one value")
+        raise ValueError(f"portable sounding field {key!r} must contain one value")
     return value.reshape(-1)[0].item()
 
 
@@ -423,23 +437,21 @@ def _npz_profile_array(data, key, expected_levels=None) -> np.ndarray:
         raise ValueError(f"portable sounding is missing required field {key!r}")
     value = np.asarray(data[key])
     if value.dtype.hasobject or value.dtype.kind not in "fiu":
-        raise ValueError(
-            f"portable sounding field {key!r} must be a numeric array")
+        raise ValueError(f"portable sounding field {key!r} must be a numeric array")
     if value.ndim != 1:
-        raise ValueError(
-            f"portable sounding field {key!r} must be one-dimensional")
+        raise ValueError(f"portable sounding field {key!r} must be one-dimensional")
     max_levels = _positive_env_number(
         "SHARPMOD_MAX_PROFILE_LEVELS",
         DEFAULT_MAX_PROFILE_LEVELS,
         int,
     )
     if not 2 <= value.size <= max_levels:
-        raise ValueError(
-            f"portable sounding field {key!r} has an invalid level count")
+        raise ValueError(f"portable sounding field {key!r} has an invalid level count")
     if expected_levels is not None and value.size != expected_levels:
         raise ValueError(
             f"portable sounding field {key!r} has {value.size} levels; "
-            f"expected {expected_levels}")
+            f"expected {expected_levels}"
+        )
     return np.asarray(value, dtype=float)
 
 
@@ -450,8 +462,7 @@ def _parse_portable_datetime(value, key: str) -> datetime:
             return datetime.strptime(text, pattern)
         except ValueError:
             continue
-    raise ValueError(
-        f"portable sounding field {key!r} is not a supported date/time")
+    raise ValueError(f"portable sounding field {key!r} is not a supported date/time")
 
 
 def _read_json_sidecar(filename) -> tuple[dict[str, Any] | None, str]:
@@ -498,8 +509,14 @@ def attach_json_sidecar(prof_col, filename) -> dict[str, Any] | None:
                 value = _parse_portable_datetime(value, key)
             except ValueError:
                 continue
-        elif key in {"lat", "lon", "requested_lat", "requested_lon",
-                     "selected_lat", "selected_lon"}:
+        elif key in {
+            "lat",
+            "lon",
+            "requested_lat",
+            "requested_lon",
+            "selected_lat",
+            "selected_lon",
+        }:
             try:
                 value = float(value)
             except (TypeError, ValueError, OverflowError):
@@ -555,25 +572,20 @@ def load_npz(filename):
         wdir = _npz_profile_array(d, "wdir", level_count)
         wspd = _npz_profile_array(d, "wspd", level_count)
         omeg = _npz_profile_array(d, "omeg", level_count)
-        valid = _parse_portable_datetime(
-            _npz_scalar(d, "valid"), "valid")
+        valid = _parse_portable_datetime(_npz_scalar(d, "valid"), "valid")
         run = _parse_portable_datetime(_npz_scalar(d, "run"), "run")
         loc = str(_npz_scalar(d, "loc")).strip()
         lat = float(_npz_scalar(d, "lat"))
         lon = float(_npz_scalar(d, "lon")) if "lon" in d else None
         if not math.isfinite(lat) or not -90.0 <= lat <= 90.0:
             raise ValueError("portable sounding latitude is out of range")
-        if lon is not None and (
-            not math.isfinite(lon) or not -180.0 <= lon <= 180.0
-        ):
+        if lon is not None and (not math.isfinite(lon) or not -180.0 <= lon <= 180.0):
             raise ValueError("portable sounding longitude is out of range")
         model_name = str(_npz_scalar(d, "model", default="HRRR")).strip()
         if "observed" in d:
             observed_value = _npz_scalar(d, "observed")
             if not isinstance(observed_value, bool):
-                raise ValueError(
-                    "portable sounding field 'observed' must be a Boolean"
-                )
+                raise ValueError("portable sounding field 'observed' must be a Boolean")
         else:
             observed_value = model_name.casefold().startswith("observed")
 
@@ -590,8 +602,12 @@ def load_npz(filename):
 
         provenance = {}
         for key in (
-            "source", "source_provider", "source_provider_name",
-            "source_station", "source_url", "requested_station",
+            "source",
+            "source_provider",
+            "source_provider_name",
+            "source_station",
+            "source_url",
+            "requested_station",
         ):
             if key in d:
                 provenance[key] = str(_npz_scalar(d, key))
@@ -599,19 +615,40 @@ def load_npz(filename):
             fallback = np.asarray(d["fallback_from"])
             if fallback.dtype.hasobject:
                 raise ValueError(
-                    "portable sounding field 'fallback_from' uses unsafe "
-                    "object data")
+                    "portable sounding field 'fallback_from' uses unsafe object data"
+                )
             provenance["fallback_from"] = tuple(
-                str(value) for value in fallback.reshape(-1))
+                str(value) for value in fallback.reshape(-1)
+            )
 
     prof = profile.create_profile(
-        profile="raw", pres=pres, hght=hght, tmpc=tmpc,
-        dwpc=dwpc, wdir=wdir, wspd=wspd, omeg=omeg,
-        location=loc, date=valid, latitude=lat, missing=-9999.0)
+        profile="raw",
+        pres=pres,
+        hght=hght,
+        tmpc=tmpc,
+        dwpc=dwpc,
+        wdir=wdir,
+        wspd=wspd,
+        omeg=omeg,
+        location=loc,
+        date=valid,
+        latitude=lat,
+        missing=-9999.0,
+    )
     for key, value in optional_surface_fields.items():
         setattr(prof, key, value)
 
-    pc = prof_collection.ProfCollection({"": [prof]}, [valid])
+    # Portable model soundings can carry source-supplied surface scalars that
+    # upstream ``ConvectiveProfile.copy`` does not preserve.  Select the fork's
+    # preserving target now, but keep the stored profile raw: conversion still
+    # happens lazily on first viewer access instead of during every decode.
+    from sharpmod.sharptab.accelerated_profile import (
+        AcceleratedConvectiveProfile,
+    )
+
+    pc = prof_collection.ProfCollection(
+        {"": [prof]}, [valid], target_type=AcceleratedConvectiveProfile
+    )
     pc.setMeta("loc", loc)
     pc.setMeta("observed", observed_value)
     pc.setMeta("base_time", run)
@@ -638,23 +675,19 @@ def load_npz(filename):
         # else is JSON-safe provenance produced by the extractor and can be
         # surfaced by the viewer's data-quality inspector or analysis sessions.
         reserved = {
-            "loc", "observed", "base_time", "run", "model", "lat", "lon",
+            "loc",
+            "observed",
+            "base_time",
+            "run",
+            "model",
+            "lat",
+            "lon",
             *optional_surface_fields,
         }
         for key, value in sidecar.items():
             if str(key) not in reserved:
                 pc.setMeta(str(key), value)
         pc.setMeta("metadata_sidecar", sidecar_path)
-    if optional_surface_fields:
-        profiles = []
-        try:
-            profiles.extend((pc.getCurrentProfs() or {}).values())
-        except Exception:
-            pass
-        profiles.extend(p for plist in getattr(pc, "_profs", {}).values() for p in plist)
-        for cur_prof in profiles:
-            for key, value in optional_surface_fields.items():
-                setattr(cur_prof, key, value)
     return pc, loc
 
 

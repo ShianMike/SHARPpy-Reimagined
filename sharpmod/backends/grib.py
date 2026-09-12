@@ -138,6 +138,9 @@ class _FileIdentity:
     path: str
     size: int
     mtime_ns: int
+    ctime_ns: int
+    device: int
+    inode: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,6 +308,9 @@ def _file_identity(path) -> _FileIdentity:
         os.path.normcase(os.fspath(resolved)),
         int(stat.st_size),
         int(stat.st_mtime_ns),
+        int(stat.st_ctime_ns),
+        int(stat.st_dev),
+        int(stat.st_ino),
     )
 
 

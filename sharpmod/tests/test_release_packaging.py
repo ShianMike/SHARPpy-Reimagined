@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import sys
 
@@ -165,6 +166,38 @@ def test_official_contract_requires_external_wheel_metadata(tmp_path, monkeypatc
     assert report["metadata_path"] == str(external_dist.resolve())
 
 
+def test_official_windows_dll_path_excludes_unrelated_host_tools(tmp_path):
+    prefix = tmp_path / "venv"
+    base = tmp_path / "python"
+    windows = tmp_path / "Windows"
+    rogue_icu = tmp_path / "host-tools" / "poppler" / "bin"
+    for directory in (
+        prefix / "Scripts",
+        prefix / "DLLs",
+        base / "DLLs",
+        windows / "System32",
+        rogue_icu,
+    ):
+        directory.mkdir(parents=True)
+
+    result = CONTRACT.build_windows_release_dll_path(
+        os.pathsep.join((str(rogue_icu), str(prefix / "Scripts"))),
+        python_prefix=prefix,
+        base_prefix=base,
+        python_executable=prefix / "Scripts" / "python.exe",
+        system_root=windows,
+    )
+    entries = tuple(Path(value) for value in result.split(os.pathsep))
+
+    assert rogue_icu.resolve() not in entries
+    assert prefix.resolve() in entries
+    assert (prefix / "DLLs").resolve() in entries
+    assert base.resolve() in entries
+    assert (base / "DLLs").resolve() in entries
+    assert (windows / "System32").resolve() in entries
+    assert len(entries) == len(set(entries))
+
+
 def test_pyinstaller_uses_validated_metadata_and_source_pe_version():
     spec = (ROOT / "packaging" / "sharpmod_gui.spec").read_text(encoding="utf-8")
 
@@ -173,6 +206,8 @@ def test_pyinstaller_uses_validated_metadata_and_source_pe_version():
     assert "validate_installed_sharpmod" in spec
     assert "require_dist_info=RELEASE_BUILD" in spec
     assert "require_external_metadata=RELEASE_BUILD" in spec
+    assert "build_windows_release_dll_path" in spec
+    assert spec.index("build_windows_release_dll_path") < spec.index("a = Analysis")
     assert 'copy_metadata("sharpmod")' in spec
     assert "is_sharpmod_metadata_destination" in spec
     assert "datas += _SHARPMOD_METADATA" in spec

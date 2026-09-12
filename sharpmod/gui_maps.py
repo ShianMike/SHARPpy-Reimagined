@@ -18,7 +18,7 @@ from types import MappingProxyType
 # Importing common first applies the native Qt platform policy.
 from sharpmod import gui_common as _gui_common
 from sharpmod.gui_theme import current_theme, mono_font, ui_font
-from sharpmod.map_overlays import OverlayRaster, format_age
+from sharpmod.map_overlays import OverlayRaster, describe_at, format_age
 from sharpmod.overlay_hatch import hatch_brush as _overlay_hatch_brush
 from sharpmod.theme import MapPalette, map_palette
 
@@ -32,17 +32,39 @@ def _map() -> MapPalette:
     """
     return map_palette(current_theme())
 
+
 from qtpy import QtCore, QtGui
 from qtpy.QtCore import (
-    Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+    QDate,
+    QSettings,
+    QPointF,
+    QRectF,
+    QSize,
+    QUrl,
 )
 from qtpy.QtGui import (
-    QAction, QPainter, QColor, QPen, QBrush, QPolygonF, QPainterPath, QFont,
-    QPixmap, QImage, QIcon, QTransform, QDesktopServices,
+    QAction,
+    QPainter,
+    QColor,
+    QPen,
+    QBrush,
+    QPolygonF,
+    QPainterPath,
+    QFont,
+    QPixmap,
+    QImage,
+    QIcon,
+    QTransform,
+    QDesktopServices,
 )
 from qtpy.QtWidgets import (
     QApplication,
     QMainWindow,
+    QToolTip,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -139,7 +161,7 @@ def _conic_constants(lat0: float, lat1: float, lon_ref: float = 0.0):
             n = math.log(math.cos(phi1) / math.cos(phi2)) / math.log(t2 / t1)
         if not math.isfinite(n) or abs(n) < 1e-6:
             return None
-        f = math.cos(phi1) * (t1 ** n) / n
+        f = math.cos(phi1) * (t1**n) / n
         if not math.isfinite(f):
             return None
         rho0 = f / (math.tan(math.pi / 4.0 + math.radians(mid) / 2.0) ** n)
@@ -168,11 +190,23 @@ class _Projection:
     degrees-to-plane step differs, and that is what the cone pins down.
     """
 
-    __slots__ = ("kind", "affine", "cone", "scale", "offx", "offy",
-                 "k", "x0", "y1", "_n", "_f", "_rho0", "_lon_ref")
+    __slots__ = (
+        "kind",
+        "affine",
+        "cone",
+        "scale",
+        "offx",
+        "offy",
+        "k",
+        "x0",
+        "y1",
+        "_n",
+        "_f",
+        "_rho0",
+        "_lon_ref",
+    )
 
-    def __init__(self, kind, *, scale, offx, offy,
-                 k=1.0, x0=0.0, y1=0.0, conic=None):
+    def __init__(self, kind, *, scale, offx, offy, k=1.0, x0=0.0, y1=0.0, conic=None):
         self.kind = kind
         self.affine = conic is None
         self.cone = None if conic is None else tuple(conic)
@@ -189,8 +223,10 @@ class _Projection:
 
     # -- flat ------------------------------------------------------------- #
     def _flat_forward(self, lon, lat):
-        return (self.offx + (lon * self.k - self.x0) * self.scale,
-                self.offy + (self.y1 - lat) * self.scale)
+        return (
+            self.offx + (lon * self.k - self.x0) * self.scale,
+            self.offy + (self.y1 - lat) * self.scale,
+        )
 
     def _flat_inverse(self, x, y):
         lon = ((x - self.offx) / self.scale + self.x0) / self.k
@@ -200,8 +236,7 @@ class _Projection:
     # -- conic ------------------------------------------------------------ #
     def _conic_plane(self, lon, lat):
         n, f = self._n, self._f
-        phi = math.radians(
-            max(-_CONIC_LAT_LIMIT, min(_CONIC_LAT_LIMIT, lat)))
+        phi = math.radians(max(-_CONIC_LAT_LIMIT, min(_CONIC_LAT_LIMIT, lat)))
         # Longitudes are unwrapped onto the shortest way round from the
         # reference meridian, so a view crossing the antimeridian does not fling
         # its geometry the long way about the cone.
@@ -209,14 +244,16 @@ class _Projection:
         t = math.tan(math.pi / 4.0 + phi / 2.0)
         if t <= 0.0:
             return 0.0, 0.0
-        rho = f / (t ** n)
+        rho = f / (t**n)
         theta = n * delta
         return rho * math.sin(theta), self._rho0 - rho * math.cos(theta)
 
     def _conic_forward(self, lon, lat):
         px, py = self._conic_plane(lon, lat)
-        return (self.offx + (px - self.x0) * self.scale,
-                self.offy + (self.y1 - py) * self.scale)
+        return (
+            self.offx + (px - self.x0) * self.scale,
+            self.offy + (self.y1 - py) * self.scale,
+        )
 
     def _conic_inverse(self, x, y):
         n, f = self._n, self._f
@@ -258,8 +295,10 @@ def _load_basemap() -> dict:
     ``coastlines.json`` (or empty layers) so the map always renders.
     """
     import json
+
     try:
         from importlib.resources import files
+
         pkg = files("sharpmod.resources")
         res = pkg.joinpath("basemap.json")
         data = json.loads(res.read_text(encoding="utf-8"))
@@ -275,10 +314,15 @@ def _load_basemap() -> dict:
         pass
     try:
         from importlib.resources import files
+
         res = files("sharpmod.resources").joinpath("coastlines.json")
         data = json.loads(res.read_text(encoding="utf-8"))
-        return {"coastline": data.get("polylines", []),
-                "lakes": [], "countries": [], "states": []}
+        return {
+            "coastline": data.get("polylines", []),
+            "lakes": [],
+            "countries": [],
+            "states": [],
+        }
     except Exception:
         return {"coastline": [], "lakes": [], "countries": [], "states": []}
 
@@ -308,10 +352,12 @@ def _prepare_basemap_layers(basemap: dict) -> MappingProxyType:
                 min_lat = min(min_lat, lat)
                 max_lat = max(max_lat, lat)
 
-            lines.append((
-                (min_lon, max_lon, min_lat, max_lat),
-                tuple(frozen_points),
-            ))
+            lines.append(
+                (
+                    (min_lon, max_lon, min_lat, max_lat),
+                    tuple(frozen_points),
+                )
+            )
         prepared[name] = tuple(lines)
     return MappingProxyType(prepared)
 
@@ -329,6 +375,10 @@ OVERLAY_FILL_ALPHA = 68
 #: The legend swatch is small, so it needs more opacity than the map area to
 #: read as the same colour.
 OVERLAY_LEGEND_FILL_ALPHA = 150
+
+#: A point marker is opaque. It covers a handful of pixels, so it has nothing to
+#: hide, and a translucent dot reads as a smudge rather than a mark.
+OVERLAY_MARKER_FILL_ALPHA = 255
 #: Hatched areas annotate the band beneath them, so the strokes stay legible.
 OVERLAY_HATCH_ALPHA = 190
 OVERLAY_STROKE_WIDTH = 1.8
@@ -377,6 +427,7 @@ COLOUR_BAR_TICK_H = 12.0
 #: What a colour bar costs in total. This is the number the legend reserves.
 COLOUR_BAR_BLOCK_H = COLOUR_BAR_HEADER_H + COLOUR_BAR_H + COLOUR_BAR_TICK_H
 
+
 def _interpolate_stops(stops, value: float) -> str:
     """Return the blended ``#rrggbb`` for ``value`` on a continuous scale."""
     if value <= stops[0][0]:
@@ -390,8 +441,8 @@ def _interpolate_stops(stops, value: float) -> str:
             fraction = (value - low) / ((high - low) or 1.0)
             channels = []
             for offset in (1, 3, 5):
-                start = int(low_colour[offset:offset + 2], 16)
-                end = int(high_colour[offset:offset + 2], 16)
+                start = int(low_colour[offset : offset + 2], 16)
+                end = int(high_colour[offset : offset + 2], 16)
                 channels.append(int(round(start + (end - start) * fraction)))
             return "#%02x%02x%02x" % tuple(channels)
     return stops[-1][1]
@@ -459,6 +510,7 @@ RASTER_DRAW_ORDER = {
 }
 RASTER_ORDER_DEFAULT = 30
 
+
 def hatch_brush(colour: QColor, level: int) -> QBrush:
     """Return the brush for an overlay hatch qualifier at ``level``.
 
@@ -468,6 +520,7 @@ def hatch_brush(colour: QColor, level: int) -> QBrush:
     once per hatched shape inside a repaint.
     """
     return _overlay_hatch_brush(QtCore, QtGui, colour, level)
+
 
 #: Named map extents for the "Map Area" selector: (lon0, lon1, lat0, lat1).
 MAP_AREAS: dict[str, tuple[float, float, float, float]] = {
@@ -511,7 +564,7 @@ class StationMapWidget(QWidget):
     per extent/size into a cached pixmap so hover and selection stay smooth.
     """
 
-    stationSelected = Signal(str)   # station id (single click / hover-pick)
+    stationSelected = Signal(str)  # station id (single click / hover-pick)
     stationActivated = Signal(str)  # station id (double click -> generate)
     #: WSR-88D identifier, when the user clicks one of the radar site markers.
     #: Emitted by the map and consumed by the owning tab, which is the only thing
@@ -550,8 +603,7 @@ class StationMapWidget(QWidget):
         #: chosen and cleared by :meth:`_invalidate`. See
         #: :meth:`_queue_map_preview`.
         self._conic_freeze: tuple | None = None
-        self._lon0, self._lon1, self._lat0, self._lat1 = MAP_AREAS[
-            self._area_name]
+        self._lon0, self._lon1, self._lat0, self._lat1 = MAP_AREAS[self._area_name]
         self._selected_id: str | None = None
         self._hover_id: str | None = None
         self._hover_lonlat: tuple[float, float] | None = None
@@ -638,6 +690,27 @@ class StationMapWidget(QWidget):
         self._lat1 = min(89.99, lat1 + lat_pad)
         self._invalidate()
 
+    def restore_view_bounds(self, bounds) -> None:
+        """Restore a previously captured viewport without adding padding.
+
+        ``set_extent`` intentionally frames new data with a minimum border.
+        Reusing it for session restoration compounds that border on every
+        save/open cycle, so persisted view bounds have a distinct exact path.
+        """
+        if not isinstance(bounds, (list, tuple)) or len(bounds) != 4:
+            raise ValueError("view bounds must contain four values")
+        lon0, lon1, lat0, lat1 = (float(value) for value in bounds)
+        if not all(math.isfinite(value) for value in (lon0, lon1, lat0, lat1)):
+            raise ValueError("view bounds must be finite")
+        if lon1 <= lon0 or lat1 <= lat0:
+            raise ValueError("view bounds must be increasing")
+        if lat0 < -89.99 or lat1 > 89.99:
+            raise ValueError("view latitude bounds are out of range")
+        self._area_name = ""
+        self._lon0, self._lon1 = lon0, lon1
+        self._lat0, self._lat1 = lat0, lat1
+        self._invalidate()
+
     def reset_view(self) -> None:
         """Snap back to the current named region's default extent."""
         self.set_area(self._area_name)
@@ -693,8 +766,7 @@ class StationMapWidget(QWidget):
         return (self._lon0, self._lon1, self._lat0, self._lat1)
 
     # -- overlays ------------------------------------------------------------ #
-    def set_overlay(self, key: str, layer, *, visible: bool | None = None
-                    ) -> None:
+    def set_overlay(self, key: str, layer, *, visible: bool | None = None) -> None:
         """Attach or replace the overlay stored under ``key``.
 
         Passing ``None`` for ``layer`` removes it. Visibility is remembered
@@ -771,14 +843,18 @@ class StationMapWidget(QWidget):
         return self._valid_time
 
     def _visible_overlays(self) -> list:
-        return [layer for key, layer in self._overlays.items()
-                if self._overlay_visible.get(key, True) and layer]
+        return [
+            layer
+            for key, layer in self._overlays.items()
+            if self._overlay_visible.get(key, True) and layer
+        ]
 
     def _raster_decode_failed(self, key: str, raster: OverlayRaster) -> bool:
         """Report whether this exact payload has already failed to decode."""
         cached = self._raster_pixmaps.get(key)
-        return (cached is not None and cached[1] is None
-                and cached[0] is raster.image_bytes)
+        return (
+            cached is not None and cached[1] is None and cached[0] is raster.image_bytes
+        )
 
     def _visible_rasters(self) -> list[tuple[str, OverlayRaster]]:
         """Return visible raster overlays that overlap the current view.
@@ -793,17 +869,22 @@ class StationMapWidget(QWidget):
         arrives, because the decode cache is keyed on the payload object.
         """
         view = (self._lon0, self._lon1, self._lat0, self._lat1)
-        visible = [(key, raster) for key, raster in self._rasters.items()
-                   if self._overlay_visible.get(key, True) and raster
-                   and raster.intersects(view)
-                   and not self._raster_decode_failed(key, raster)]
+        visible = [
+            (key, raster)
+            for key, raster in self._rasters.items()
+            if self._overlay_visible.get(key, True)
+            and raster
+            and raster.intersects(view)
+            and not self._raster_decode_failed(key, raster)
+        ]
         # Sorted, because these images stack and dict insertion order is not a
         # z-order: it depends on which overlay the user happened to switch on
         # first, and a remove/set cycle silently reshuffles it. A model field and
         # a radar frame are routinely shown together, and which one ends up on
         # top has to be a decision rather than an accident.
-        visible.sort(key=lambda entry: RASTER_DRAW_ORDER.get(entry[0],
-                                                             RASTER_ORDER_DEFAULT))
+        visible.sort(
+            key=lambda entry: RASTER_DRAW_ORDER.get(entry[0], RASTER_ORDER_DEFAULT)
+        )
         return visible
 
     def _invalidate(self) -> None:
@@ -949,8 +1030,16 @@ class StationMapWidget(QWidget):
         """
         w = max(1, self.width())
         h = max(1, self.height())
-        key = (self._projection, self._lon0, self._lon1,
-               self._lat0, self._lat1, w, h, self._conic_freeze)
+        key = (
+            self._projection,
+            self._lon0,
+            self._lon1,
+            self._lat0,
+            self._lat1,
+            w,
+            h,
+            self._conic_freeze,
+        )
         cached = self._proj_cache
         if cached is not None and cached[0] == key:
             return cached[1]
@@ -963,8 +1052,8 @@ class StationMapWidget(QWidget):
         conic = None
         if self._projection == "curved":
             conic = _conic_constants(
-                self._lat0, self._lat1,
-                (self._lon0 + self._lon1) / 2.0)
+                self._lat0, self._lat1, (self._lon0 + self._lon1) / 2.0
+            )
             # Across pans and zooms the cone is the one pinned to the chosen
             # view, so the transform stays re-blittable and the map does not
             # re-bow under the cursor. The fresh fit above is still what decides
@@ -974,8 +1063,7 @@ class StationMapWidget(QWidget):
             if conic is not None and self._conic_freeze is not None:
                 conic = self._conic_freeze
         if conic is not None:
-            probe = _Projection(
-                "curved", scale=1.0, offx=0.0, offy=0.0, conic=conic)
+            probe = _Projection("curved", scale=1.0, offx=0.0, offy=0.0, conic=conic)
             # The edges of a conic view bow, so the projected bounds come from
             # sampling the boundary rather than from the four corners alone --
             # corners alone would clip the bulge off the top and bottom edges.
@@ -1073,8 +1161,7 @@ class StationMapWidget(QWidget):
                 continue
             if not (-90.0 <= lat <= 90.0):
                 continue
-            resolved.append(
-                (site_id.upper(), ((lon + 180.0) % 360.0) - 180.0, lat))
+            resolved.append((site_id.upper(), ((lon + 180.0) % 360.0) - 180.0, lat))
         markers = tuple(resolved)
         if markers == self._radar_sites:
             return
@@ -1150,6 +1237,57 @@ class StationMapWidget(QWidget):
         self.radarSiteSelected.emit(marker[0])
         return True
 
+    # -- offscreen buffers at real screen resolution ------------------------- #
+    def _device_pixmap(self):
+        """Return an offscreen pixmap matching the widget's *physical* pixels.
+
+        ``QPixmap(self.size())`` allocates a **logical**-size buffer. On a 1.5x
+        display the widget's backing store is 1.5x larger, so blitting such a
+        buffer 1:1 makes Qt bilinearly upscale it, and every raster routed
+        through an offscreen cache -- the vector basemap and the warped imagery
+        composite -- arrived on screen softened. Nothing downstream needs to
+        change: a painter opened on a pixmap that carries a device pixel ratio
+        applies that ratio to its transform, so the drawing code keeps working in
+        the same logical coordinates and simply resolves finer.
+
+        The ratio is deliberately not rounded. The picker asks for
+        ``PassThrough`` scale-factor rounding, so 1.25 and 1.75 are ordinary.
+        """
+        ratio = self.devicePixelRatioF()
+        pm = QPixmap(
+            max(1, round(self.width() * ratio)), max(1, round(self.height() * ratio))
+        )
+        pm.setDevicePixelRatio(ratio)
+        return pm
+
+    @staticmethod
+    def _independent_size(pixmap) -> tuple[float, float]:
+        """Return ``pixmap``'s size in the logical units a painter addresses.
+
+        Spelled out rather than using ``deviceIndependentSize`` so the call still
+        works under the Qt5 bindings qtpy may supply.
+        """
+        ratio = pixmap.devicePixelRatio() or 1.0
+        return pixmap.width() / ratio, pixmap.height() / ratio
+
+    @staticmethod
+    def _device_source(pixmap, source):
+        """Convert a logical source rectangle into the device pixels Qt expects.
+
+        ``drawPixmap``'s destination is in logical coordinates but its *source*
+        rectangle is measured in the pixmap's own device pixels, so a
+        high-resolution cache needs the two expressed in different units.
+        """
+        ratio = pixmap.devicePixelRatio() or 1.0
+        if ratio == 1.0:
+            return source
+        return QRectF(
+            source.x() * ratio,
+            source.y() * ratio,
+            source.width() * ratio,
+            source.height() * ratio,
+        )
+
     # -- basemap raster (cached per extent + size) --------------------------- #
     def _basemap_key(self) -> tuple:
         """Everything the baked basemap raster depends on.
@@ -1164,36 +1302,46 @@ class StationMapWidget(QWidget):
         with like. Two keys built to different recipes never compare equal, which
         silently turns "has the view moved?" into a constant.
         """
-        return (self.width(), self.height(),
-                round(self._lon0, 4), round(self._lon1, 4),
-                round(self._lat0, 4), round(self._lat1, 4),
-                self._projection, _map())
+        return (
+            self.width(),
+            self.height(),
+            # Dragging the window to a monitor of a different density has to
+            # rebuild the raster, or a cache baked for the old ratio is
+            # rescaled onto the new backing store.
+            round(self.devicePixelRatioF(), 4),
+            round(self._lon0, 4),
+            round(self._lon1, 4),
+            round(self._lat0, 4),
+            round(self._lat1, 4),
+            self._projection,
+            _map(),
+        )
 
     def _basemap_pixmap(self):
         key = self._basemap_key()
         if self._basemap_cache is not None and self._cache_key == key:
             return self._basemap_cache
 
-        pm = QPixmap(self.size())
+        pm = self._device_pixmap()
         pm.fill(QColor(_map().background))
         qp = QPainter(pm)
         qp.setRenderHint(QPainter.Antialiasing, True)
         p = self._proj()
         self._draw_graticule(qp, p)
         # Draw borders first (dim), coastline last (bright) so it reads on top.
-        self._draw_layer(qp, self._layers.get("states", []),
-                         _map().states, 1.0, p)
-        self._draw_layer(qp, self._layers.get("countries", []),
-                         _map().countries, 1.0, p)
+        self._draw_layer(qp, self._layers.get("states", []), _map().states, 1.0, p)
+        self._draw_layer(
+            qp, self._layers.get("countries", []), _map().countries, 1.0, p
+        )
         # Lake shores share the coastline colour and sit just under it: they are
         # the same kind of boundary, so giving them their own hue would imply a
         # distinction that does not exist. Slightly finer, because a lake outline
         # enclosing a small area reads heavier than an open coast of the same
         # weight.
-        self._draw_layer(qp, self._layers.get("lakes", []),
-                         _map().coastline, 1.1, p)
-        self._draw_layer(qp, self._layers.get("coastline", []),
-                         _map().coastline, 1.4, p)
+        self._draw_layer(qp, self._layers.get("lakes", []), _map().coastline, 1.1, p)
+        self._draw_layer(
+            qp, self._layers.get("coastline", []), _map().coastline, 1.4, p
+        )
         qp.end()
 
         self._basemap_cache = pm
@@ -1224,13 +1372,17 @@ class StationMapWidget(QWidget):
             qp.drawPixmap(0, 0, self._basemap_pixmap())
             return
 
+        source_w, source_h = self._independent_size(self._basemap_cache)
         destination, source = self._reblit_geometry(
-            self._cache_proj, new_projection,
-            float(self._basemap_cache.width()),
-            float(self._basemap_cache.height()))
+            self._cache_proj, new_projection, source_w, source_h
+        )
         qp.save()
         qp.setRenderHint(QPainter.SmoothPixmapTransform, True)
-        qp.drawPixmap(destination, self._basemap_cache, source)
+        qp.drawPixmap(
+            destination,
+            self._basemap_cache,
+            self._device_source(self._basemap_cache, source),
+        )
         qp.restore()
 
     @staticmethod
@@ -1247,24 +1399,35 @@ class StationMapWidget(QWidget):
         cannot drift apart on arithmetic they both depend on.
         """
         old_k, old_scale, old_offx, old_offy, old_x0, old_y1 = (
-            old.k, old.scale, old.offx, old.offy, old.x0, old.y1)
+            old.k,
+            old.scale,
+            old.offx,
+            old.offy,
+            old.x0,
+            old.y1,
+        )
         new_k, new_scale, new_offx, new_offy, new_x0, new_y1 = (
-            new.k, new.scale, new.offx, new.offy, new.x0, new.y1)
+            new.k,
+            new.scale,
+            new.offx,
+            new.offy,
+            new.x0,
+            new.y1,
+        )
         scale_x = new_k * new_scale / (old_k * old_scale)
-        dest_x = new_offx + (
-            (old_x0 - old_offx / old_scale) * (new_k / old_k) - new_x0
-        ) * new_scale
+        dest_x = (
+            new_offx
+            + ((old_x0 - old_offx / old_scale) * (new_k / old_k) - new_x0) * new_scale
+        )
         scale_y = new_scale / old_scale
         dest_y = new_offy + (new_y1 - old_y1) * new_scale - old_offy * scale_y
         source = QRectF(0.0, 0.0, source_w, source_h)
-        destination = QRectF(dest_x, dest_y,
-                             source_w * scale_x, source_h * scale_y)
+        destination = QRectF(dest_x, dest_y, source_w * scale_x, source_h * scale_y)
         return destination, source
 
     def _draw_graticule(self, qp, p) -> None:
         span = self._lon1 - self._lon0
-        step = 5 if span <= 40 else (10 if span <= 90 else
-                                     (20 if span <= 200 else 30))
+        step = 5 if span <= 40 else (10 if span <= 90 else (20 if span <= 200 else 30))
         grid = QPen(QColor(_map().graticule), 1)
         label = QColor(_map().graticule_label)
         # Graticule labels are figures, so the tabular family keeps the degree
@@ -1278,15 +1441,18 @@ class StationMapWidget(QWidget):
 
         def graticule_line(lon_a, lat_a, lon_b, lat_b):
             if samples == 1:
-                qp.drawLine(self._to_px(lon_a, lat_a, p),
-                            self._to_px(lon_b, lat_b, p))
+                qp.drawLine(self._to_px(lon_a, lat_a, p), self._to_px(lon_b, lat_b, p))
                 return
             poly = QPolygonF()
             for index in range(samples + 1):
                 frac = index / samples
-                poly.append(self._to_px(
-                    lon_a + (lon_b - lon_a) * frac,
-                    lat_a + (lat_b - lat_a) * frac, p))
+                poly.append(
+                    self._to_px(
+                        lon_a + (lon_b - lon_a) * frac,
+                        lat_a + (lat_b - lat_a) * frac,
+                        p,
+                    )
+                )
             qp.drawPolyline(poly)
 
         lon = int(self._lon0 // step * step)
@@ -1295,8 +1461,9 @@ class StationMapWidget(QWidget):
             graticule_line(lon, self._lat0, lon, self._lat1)
             qp.setPen(QPen(label))
             top = self._to_px(lon, self._lat1, p)
-            qp.drawText(QRectF(top.x() - 24, 2, 48, 12),
-                        Qt.AlignCenter, self._fmt_lon(lon))
+            qp.drawText(
+                QRectF(top.x() - 24, 2, 48, 12), Qt.AlignCenter, self._fmt_lon(lon)
+            )
             lon += step
         lat = int(self._lat0 // step * step)
         while lat <= self._lat1:
@@ -1304,8 +1471,11 @@ class StationMapWidget(QWidget):
             graticule_line(self._lon0, lat, self._lon1, lat)
             qp.setPen(QPen(label))
             left = self._to_px(self._lon0, lat, p)
-            qp.drawText(QRectF(3, left.y() - 7, 34, 12),
-                        Qt.AlignLeft | Qt.AlignVCenter, self._fmt_lat(lat))
+            qp.drawText(
+                QRectF(3, left.y() - 7, 34, 12),
+                Qt.AlignLeft | Qt.AlignVCenter,
+                self._fmt_lat(lat),
+            )
             lat += step
 
     @staticmethod
@@ -1388,8 +1558,7 @@ class StationMapWidget(QWidget):
         for index in range(steps + 1):
             fx = width * index / steps
             fy = height * index / steps
-            for x, y in ((fx, 0.0), (fx, float(height)),
-                         (0.0, fy), (float(width), fy)):
+            for x, y in ((fx, 0.0), (fx, float(height)), (0.0, fy), (float(width), fy)):
                 try:
                     lon, lat = inverse(x, y)
                 except Exception:  # noqa: BLE001 - a limit point is not fatal
@@ -1400,8 +1569,12 @@ class StationMapWidget(QWidget):
         if not lons:
             # Nothing invertible: fall back to the requested extent, which is at
             # worst the behaviour this replaced.
-            return (min(self._lon0, self._lon1), max(self._lon0, self._lon1),
-                    min(self._lat0, self._lat1), max(self._lat0, self._lat1))
+            return (
+                min(self._lon0, self._lon1),
+                max(self._lon0, self._lon1),
+                min(self._lat0, self._lat1),
+                max(self._lat0, self._lat1),
+            )
         return (min(lons), max(lons), min(lats), max(lats))
 
     def _draw_raster_overlays(self, qp, p) -> None:
@@ -1472,8 +1645,16 @@ class StationMapWidget(QWidget):
             # published, the way dedicated radar displays present them. When
             # minifying, smoothing is still wanted -- it stops isolated cells
             # aliasing in and out as the view moves.
-            magnifying = (destination.width() > source.width()
-                          or destination.height() > source.height())
+            # The destination is logical and the source is in image pixels, so
+            # the comparison has to be brought into one unit first. Left in
+            # logical terms it understates the destination by exactly the device
+            # pixel ratio, concluding "minifying" while genuinely enlarging, and
+            # smoothing the cells it meant to preserve.
+            ratio = self.devicePixelRatioF()
+            magnifying = (
+                destination.width() * ratio > source.width()
+                or destination.height() * ratio > source.height()
+            )
             qp.save()
             qp.setRenderHint(QPainter.SmoothPixmapTransform, not magnifying)
             qp.setOpacity(raster.opacity)
@@ -1515,15 +1696,21 @@ class StationMapWidget(QWidget):
             qp.drawPixmap(0, 0, cached[1])
             return
 
-        if (cached is not None and self._warp_proj is not None
-                and self._basemap_refresh_timer.isActive()
-                and self._warp_proj.cone == p.cone):
+        if (
+            cached is not None
+            and self._warp_proj is not None
+            and self._basemap_refresh_timer.isActive()
+            and self._warp_proj.cone == p.cone
+        ):
+            source_w, source_h = self._independent_size(cached[1])
             destination, source = self._reblit_geometry(
-                self._warp_proj, p,
-                float(cached[1].width()), float(cached[1].height()))
+                self._warp_proj, p, source_w, source_h
+            )
             qp.save()
             qp.setRenderHint(QPainter.SmoothPixmapTransform, True)
-            qp.drawPixmap(destination, cached[1], source)
+            qp.drawPixmap(
+                destination, cached[1], self._device_source(cached[1], source)
+            )
             qp.restore()
             return
 
@@ -1542,12 +1729,18 @@ class StationMapWidget(QWidget):
         repaint would cost more than the warp it is meant to avoid.
         """
         return (
-            self.width(), self.height(),
-            round(self._lon0, 4), round(self._lon1, 4),
-            round(self._lat0, 4), round(self._lat1, 4),
+            self.width(),
+            self.height(),
+            round(self.devicePixelRatioF(), 4),
+            round(self._lon0, 4),
+            round(self._lon1, 4),
+            round(self._lat0, 4),
+            round(self._lat1, 4),
             p.cone,
-            tuple((key, id(raster.image_bytes), round(raster.opacity, 3))
-                  for key, raster in rasters),
+            tuple(
+                (key, id(raster.image_bytes), round(raster.opacity, 3))
+                for key, raster in rasters
+            ),
         )
 
     def _compose_warped(self, rasters, p):
@@ -1560,7 +1753,7 @@ class StationMapWidget(QWidget):
         """
         if self.width() <= 0 or self.height() <= 0:
             return None
-        layer = QPixmap(self.size())
+        layer = self._device_pixmap()
         layer.fill(Qt.transparent)
         painter = QPainter(layer)
         try:
@@ -1595,12 +1788,20 @@ class StationMapWidget(QWidget):
             if vlon1 <= vlon0 or vlat1 <= vlat0:
                 continue
 
-            cols = max(_WARP_MIN_CELLS, min(
-                _WARP_MAX_CELLS,
-                int(math.ceil((vlon1 - vlon0) / _WARP_TARGET_CELL_DEG))))
-            rows = max(_WARP_MIN_CELLS, min(
-                _WARP_MAX_CELLS,
-                int(math.ceil((vlat1 - vlat0) / _WARP_TARGET_CELL_DEG))))
+            cols = max(
+                _WARP_MIN_CELLS,
+                min(
+                    _WARP_MAX_CELLS,
+                    int(math.ceil((vlon1 - vlon0) / _WARP_TARGET_CELL_DEG)),
+                ),
+            )
+            rows = max(
+                _WARP_MIN_CELLS,
+                min(
+                    _WARP_MAX_CELLS,
+                    int(math.ceil((vlat1 - vlat0) / _WARP_TARGET_CELL_DEG)),
+                ),
+            )
 
             img_w = float(pixmap.width())
             img_h = float(pixmap.height())
@@ -1609,10 +1810,8 @@ class StationMapWidget(QWidget):
             # Corner lattice, projected once and shared by the four cells that
             # meet at it: projecting per cell would trace every interior corner
             # four times and let rounding open seams between neighbours.
-            lons = [vlon0 + (vlon1 - vlon0) * index / cols
-                    for index in range(cols + 1)]
-            lats = [vlat1 + (vlat0 - vlat1) * index / rows
-                    for index in range(rows + 1)]
+            lons = [vlon0 + (vlon1 - vlon0) * index / cols for index in range(cols + 1)]
+            lats = [vlat1 + (vlat0 - vlat1) * index / rows for index in range(rows + 1)]
             projected = [[forward(lon, lat) for lon in lons] for lat in lats]
 
             qp.save()
@@ -1620,14 +1819,39 @@ class StationMapWidget(QWidget):
             qp.setRenderHint(QPainter.SmoothPixmapTransform, True)
             for row in range(rows):
                 for col in range(cols):
-                    self._warp_cell(qp, pixmap, projected, lons, lats,
-                                    row, col, min_lon, max_lat,
-                                    lon_span, lat_span, img_w, img_h)
+                    self._warp_cell(
+                        qp,
+                        pixmap,
+                        projected,
+                        lons,
+                        lats,
+                        row,
+                        col,
+                        min_lon,
+                        max_lat,
+                        lon_span,
+                        lat_span,
+                        img_w,
+                        img_h,
+                    )
             qp.restore()
 
     @staticmethod
-    def _warp_cell(qp, pixmap, projected, lons, lats, row, col,
-                   min_lon, max_lat, lon_span, lat_span, img_w, img_h) -> None:
+    def _warp_cell(
+        qp,
+        pixmap,
+        projected,
+        lons,
+        lats,
+        row,
+        col,
+        min_lon,
+        max_lat,
+        lon_span,
+        lat_span,
+        img_w,
+        img_h,
+    ) -> None:
         """Draw one cell of a warped raster. See :meth:`_draw_raster_warped`."""
         # Two rectangles, and the distinction matters. ``base`` is the cell's
         # true source extent, and it is what the projected corners correspond to,
@@ -1645,8 +1869,7 @@ class StationMapWidget(QWidget):
         if sx1 <= sx0 or sy1 <= sy0:
             return
         base = QRectF(sx0, sy0, sx1 - sx0, sy1 - sy0)
-        bleed = QRectF(sx0 - 0.5, sy0 - 0.5,
-                       (sx1 - sx0) + 1.0, (sy1 - sy0) + 1.0)
+        bleed = QRectF(sx0 - 0.5, sy0 - 0.5, (sx1 - sx0) + 1.0, (sy1 - sy0) + 1.0)
 
         top_left = projected[row][col]
         top_right = projected[row][col + 1]
@@ -1679,18 +1902,20 @@ class StationMapWidget(QWidget):
         height = base.height()
         if width <= 0.0 or height <= 0.0:
             return
-        m11 = ((top_right[0] - top_left[0])
-               + (bottom_right[0] - bottom_left[0])) / (2.0 * width)
-        m12 = ((top_right[1] - top_left[1])
-               + (bottom_right[1] - bottom_left[1])) / (2.0 * width)
-        m21 = ((bottom_left[0] - top_left[0])
-               + (bottom_right[0] - top_right[0])) / (2.0 * height)
-        m22 = ((bottom_left[1] - top_left[1])
-               + (bottom_right[1] - top_right[1])) / (2.0 * height)
-        centre_x = (top_left[0] + top_right[0]
-                    + bottom_right[0] + bottom_left[0]) / 4.0
-        centre_y = (top_left[1] + top_right[1]
-                    + bottom_right[1] + bottom_left[1]) / 4.0
+        m11 = ((top_right[0] - top_left[0]) + (bottom_right[0] - bottom_left[0])) / (
+            2.0 * width
+        )
+        m12 = ((top_right[1] - top_left[1]) + (bottom_right[1] - bottom_left[1])) / (
+            2.0 * width
+        )
+        m21 = ((bottom_left[0] - top_left[0]) + (bottom_right[0] - top_right[0])) / (
+            2.0 * height
+        )
+        m22 = ((bottom_left[1] - top_left[1]) + (bottom_right[1] - top_right[1])) / (
+            2.0 * height
+        )
+        centre_x = (top_left[0] + top_right[0] + bottom_right[0] + bottom_left[0]) / 4.0
+        centre_y = (top_left[1] + top_right[1] + bottom_right[1] + bottom_left[1]) / 4.0
         source_cx = base.left() + width / 2.0
         source_cy = base.top() + height / 2.0
         dx = centre_x - m11 * source_cx - m21 * source_cy
@@ -1722,8 +1947,7 @@ class StationMapWidget(QWidget):
         for layer in layers:
             for shape in layer.shapes:
                 blo0, blo1, bla0, bla1 = shape.bounds
-                if blo1 < vlon0 or blo0 > vlon1 \
-                        or bla1 < vlat0 or bla0 > vlat1:
+                if blo1 < vlon0 or blo0 > vlon1 or bla1 < vlat0 or bla0 > vlat1:
                     continue
                 path = QPainterPath()
                 # Odd-even filling makes an interior ring a hole regardless of
@@ -1744,14 +1968,26 @@ class StationMapWidget(QWidget):
                         # more opacity than a wash and lets the colour beneath
                         # show through the gaps rather than replacing it.
                         fill.setAlpha(OVERLAY_HATCH_ALPHA)
-                        qp.fillPath(path, hatch_brush(
-                            fill, getattr(shape, "hatch_level", 0)))
+                        qp.fillPath(
+                            path, hatch_brush(fill, getattr(shape, "hatch_level", 0))
+                        )
                     else:
-                        fill.setAlpha(OVERLAY_FILL_ALPHA)
+                        # A marker stands in for a point, so it is drawn as a
+                        # symbol at full strength. The wash exists to keep the
+                        # coastline and station dots readable under a
+                        # continent-sized polygon; a five-pixel dot hides
+                        # nothing, and washing it turns a cluster of storm
+                        # reports into one soft bruise.
+                        fill.setAlpha(
+                            OVERLAY_MARKER_FILL_ALPHA
+                            if getattr(shape, "marker", False)
+                            else OVERLAY_FILL_ALPHA
+                        )
                         qp.fillPath(path, QBrush(fill))
                 if shape.stroke:
-                    qp.strokePath(path, QPen(
-                        QColor(shape.stroke), OVERLAY_STROKE_WIDTH))
+                    qp.strokePath(
+                        path, QPen(QColor(shape.stroke), OVERLAY_STROKE_WIDTH)
+                    )
         qp.restore()
 
     def _overlay_legend_rows(self) -> list[tuple[str, str, str, int]]:
@@ -1767,6 +2003,12 @@ class StationMapWidget(QWidget):
         rows: list[tuple[str, str, str, int]] = []
         seen: set[tuple[str, str, str, int]] = set()
         for layer in self._visible_overlays():
+            # A layer whose shapes are individual observations rather than a
+            # fixed set of categories has no key to offer: storm reports would
+            # spread one swatch per report across the bottom of the map. Its
+            # title and attribution are still captioned below.
+            if not getattr(layer, "legend", True):
+                continue
             # Prefix the hazard on the first swatch of a probability product.
             # "5% 15% 30%" alone does not say what is being measured, and
             # repeating the hazard on every swatch would not fit the row.
@@ -1778,8 +2020,12 @@ class StationMapWidget(QWidget):
                 if prefix:
                     label = f"{prefix} {label}"
                     prefix = ""
-                row = (label, shape.stroke, shape.fill or "",
-                       getattr(shape, "hatch_level", 0) if shape.hatch else 0)
+                row = (
+                    label,
+                    shape.stroke,
+                    shape.fill or "",
+                    getattr(shape, "hatch_level", 0) if shape.hatch else 0,
+                )
                 if row in seen:
                     continue
                 seen.add(row)
@@ -1800,6 +2046,7 @@ class StationMapWidget(QWidget):
                 continue
             try:
                 from sharpmod.hrrr_products import get_product
+
                 return get_product(raster.short_name).palette
             except Exception:  # noqa: BLE001 - a legend is not worth a failure
                 return None
@@ -1809,8 +2056,9 @@ class StationMapWidget(QWidget):
         """Return the bar's drawn width for this widget."""
         return min(240.0, max(120.0, self.width() * 0.28))
 
-    def _colour_bar_tick_layout(self, metrics, palette, x: float,
-                                width: float) -> list[tuple[float, str]]:
+    def _colour_bar_tick_layout(
+        self, metrics, palette, x: float, width: float
+    ) -> list[tuple[float, str]]:
         """Return ``(left, label)`` for every tick that fits under the bar.
 
         Two rules, both about not lying to the reader. A label stays centred on
@@ -1834,8 +2082,7 @@ class StationMapWidget(QWidget):
             label = _format_tick(value)
             label_w = metrics.horizontalAdvance(label) + 6.0
             centre = x + width * (value - low) / span
-            left = min(max(centre - label_w / 2.0, left_limit),
-                       right_limit - label_w)
+            left = min(max(centre - label_w / 2.0, left_limit), right_limit - label_w)
             return left, label, label_w
 
         placed: list[tuple[float, str]] = []
@@ -1869,12 +2116,16 @@ class StationMapWidget(QWidget):
         qp.setFont(mono_font("caption"))
         units = palette.units
         header = f"Scale ({units})" if units else "Scale"
-        for pen, offset in ((QPen(QColor(_map().readout_shadow)), 1.0),
-                            (QPen(QColor(_map().readout_text)), 0.0)):
+        for pen, offset in (
+            (QPen(QColor(_map().readout_shadow)), 1.0),
+            (QPen(QColor(_map().readout_text)), 0.0),
+        ):
             qp.setPen(pen)
-            qp.drawText(QRectF(x + offset, y + offset, width,
-                               COLOUR_BAR_HEADER_H),
-                        Qt.AlignLeft | Qt.AlignVCenter, header)
+            qp.drawText(
+                QRectF(x + offset, y + offset, width, COLOUR_BAR_HEADER_H),
+                Qt.AlignLeft | Qt.AlignVCenter,
+                header,
+            )
 
         qp.setPen(Qt.NoPen)
         for step in range(steps):
@@ -1889,8 +2140,11 @@ class StationMapWidget(QWidget):
             else:
                 colour = _interpolate_stops(stops, value)
             qp.setBrush(QColor(colour))
-            qp.drawRect(QRectF(x + width * step / steps, bar_y,
-                               width / steps + 1.0, COLOUR_BAR_H))
+            qp.drawRect(
+                QRectF(
+                    x + width * step / steps, bar_y, width / steps + 1.0, COLOUR_BAR_H
+                )
+            )
         qp.setBrush(Qt.NoBrush)
         qp.setPen(QPen(QColor(_map().graticule), 1))
         qp.drawRect(QRectF(x, bar_y, width, COLOUR_BAR_H))
@@ -1900,10 +2154,14 @@ class StationMapWidget(QWidget):
         # overlap into unreadability, so the palette nominates its own.
         tick_y = bar_y + COLOUR_BAR_H
         for left, label in self._colour_bar_tick_layout(
-                qp.fontMetrics(), palette, x, width):
-            rect = QRectF(left, tick_y,
-                          qp.fontMetrics().horizontalAdvance(label) + 6.0,
-                          COLOUR_BAR_TICK_H)
+            qp.fontMetrics(), palette, x, width
+        ):
+            rect = QRectF(
+                left,
+                tick_y,
+                qp.fontMetrics().horizontalAdvance(label) + 6.0,
+                COLOUR_BAR_TICK_H,
+            )
             qp.setPen(QPen(QColor(_map().readout_shadow)))
             qp.drawText(rect.translated(1, 1), Qt.AlignCenter, label)
             qp.setPen(QPen(QColor(_map().readout_text)))
@@ -1937,11 +2195,13 @@ class StationMapWidget(QWidget):
                 if layer.covers(self._valid_time):
                     captions.append(
                         f"Selected {self._valid_time:%d %b %H%M}Z is within "
-                        "this outlook")
+                        "this outlook"
+                    )
                 else:
                     captions.append(
                         f"\u26a0 Selected {self._valid_time:%d %b %H%M}Z is "
-                        "outside this outlook")
+                        "outside this outlook"
+                    )
             credit = getattr(layer, "attribution", "")
             if credit and credit not in credits:
                 credits.append(credit)
@@ -2001,20 +2261,28 @@ class StationMapWidget(QWidget):
                     # Hatched categories show their pattern here too, since it
                     # is the only thing separating one intensity group from the
                     # next on the map.
-                    qp.setBrush(hatch_brush(patch, hatch_level)
-                                if hatch_level else QBrush(patch))
+                    qp.setBrush(
+                        hatch_brush(patch, hatch_level)
+                        if hatch_level
+                        else QBrush(patch)
+                    )
                 else:
                     qp.setBrush(Qt.NoBrush)
                 qp.setPen(QPen(QColor(stroke), 1.4))
                 qp.drawRect(box)
                 text_w = qp.fontMetrics().horizontalAdvance(label) + 6.0
                 qp.setPen(QPen(QColor(_map().readout_shadow)))
-                qp.drawText(QRectF(x + 14.0, swatch_y - 1.0, text_w, 13.0)
-                            .translated(1, 1),
-                            Qt.AlignLeft | Qt.AlignVCenter, label)
+                qp.drawText(
+                    QRectF(x + 14.0, swatch_y - 1.0, text_w, 13.0).translated(1, 1),
+                    Qt.AlignLeft | Qt.AlignVCenter,
+                    label,
+                )
                 qp.setPen(QPen(QColor(_map().readout_text)))
-                qp.drawText(QRectF(x + 14.0, swatch_y - 1.0, text_w, 13.0),
-                            Qt.AlignLeft | Qt.AlignVCenter, label)
+                qp.drawText(
+                    QRectF(x + 14.0, swatch_y - 1.0, text_w, 13.0),
+                    Qt.AlignLeft | Qt.AlignVCenter,
+                    label,
+                )
                 x += 14.0 + text_w + 6.0
             y += LEGEND_SWATCH_H + LEGEND_BLOCK_GAP
 
@@ -2023,11 +2291,9 @@ class StationMapWidget(QWidget):
         # which were inset by two more pixels than this text was.
         qp.setFont(ui_font("caption"))
         for text in captions:
-            rect = QRectF(LEGEND_MARGIN, y,
-                          self.width() - LEGEND_MARGIN * 2.0, line_h)
+            rect = QRectF(LEGEND_MARGIN, y, self.width() - LEGEND_MARGIN * 2.0, line_h)
             qp.setPen(QPen(QColor(_map().readout_shadow)))
-            qp.drawText(rect.translated(1, 1),
-                        Qt.AlignLeft | Qt.AlignVCenter, text)
+            qp.drawText(rect.translated(1, 1), Qt.AlignLeft | Qt.AlignVCenter, text)
             qp.setPen(QPen(QColor(_map().readout_text)))
             qp.drawText(rect, Qt.AlignLeft | Qt.AlignVCenter, text)
             y += line_h
@@ -2114,19 +2380,27 @@ class StationMapWidget(QWidget):
                 fill, edge = theme.saved, theme.saved_edge
             qp.setBrush(QBrush(QColor(fill)))
             qp.setPen(QPen(QColor(edge), 1.5 if chosen else 1.0))
-            qp.drawPolygon(QPolygonF([
-                QPointF(pt.x(), pt.y() - size),
-                QPointF(pt.x() + size, pt.y()),
-                QPointF(pt.x(), pt.y() + size),
-                QPointF(pt.x() - size, pt.y()),
-            ]))
+            qp.drawPolygon(
+                QPolygonF(
+                    [
+                        QPointF(pt.x(), pt.y() - size),
+                        QPointF(pt.x() + size, pt.y()),
+                        QPointF(pt.x(), pt.y() + size),
+                        QPointF(pt.x() - size, pt.y()),
+                    ]
+                )
+            )
             if not (label_all or chosen or hovered):
                 continue
-            for pen, offset in ((QPen(QColor(theme.readout_shadow)), 1.0),
-                                (QPen(QColor(theme.readout_text)), 0.0)):
+            for pen, offset in (
+                (QPen(QColor(theme.readout_shadow)), 1.0),
+                (QPen(QColor(theme.readout_text)), 0.0),
+            ):
                 qp.setPen(pen)
-                qp.drawText(QPointF(pt.x() + size + 3.0 + offset,
-                                    pt.y() - size + 1.0 + offset), site_id)
+                qp.drawText(
+                    QPointF(pt.x() + size + 3.0 + offset, pt.y() - size + 1.0 + offset),
+                    site_id,
+                )
         qp.restore()
 
     def _draw_readout(self, qp) -> None:
@@ -2147,8 +2421,7 @@ class StationMapWidget(QWidget):
         for text in lines:
             rect = QRectF(8, y - 14, self.width() - 16, 18)
             qp.setPen(QPen(QColor(_map().readout_shadow)))
-            qp.drawText(rect.translated(1, 1),
-                        Qt.AlignLeft | Qt.AlignVCenter, text)
+            qp.drawText(rect.translated(1, 1), Qt.AlignLeft | Qt.AlignVCenter, text)
             qp.setPen(QPen(QColor(_map().readout_text)))
             qp.drawText(rect, Qt.AlignLeft | Qt.AlignVCenter, text)
             y += 18
@@ -2156,8 +2429,11 @@ class StationMapWidget(QWidget):
     # -- interaction --------------------------------------------------------- #
     @staticmethod
     def _pos(event) -> QPointF:
-        return event.position() if hasattr(event, "position") \
+        return (
+            event.position()
+            if hasattr(event, "position")
             else QPointF(event.x(), event.y())
+        )
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
         pos = self._pos(event)
@@ -2170,8 +2446,7 @@ class StationMapWidget(QWidget):
             dx = pos.x() - self._drag_last.x()
             dy = pos.y() - self._drag_last.y()
             self._dragged = self._dragged or abs(dx) + abs(dy) > 3
-            was_lon, was_lat = p.inverse(
-                self._drag_last.x(), self._drag_last.y())
+            was_lon, was_lat = p.inverse(self._drag_last.x(), self._drag_last.y())
             now_lon, now_lat = p.inverse(pos.x(), pos.y())
             dlon = was_lon - now_lon
             dlat = was_lat - now_lat
@@ -2227,6 +2502,37 @@ class StationMapWidget(QWidget):
             self._selected_id = near["id"]
             self.stationSelected.emit(near["id"])
             self.update()
+            return
+        # Nothing else wanted this click, so answer the other question a click
+        # on a coloured area is asking: what is this? Placed last on purpose --
+        # describing an overlay must never cost a station or radar selection,
+        # and the areas are wide enough that there is always bare ground nearby
+        # to ask from.
+        self._describe_overlay_at(pos, event)
+
+    @staticmethod
+    def _global_point(event):
+        """Screen position of ``event``, across the two Qt bindings' spellings."""
+        if hasattr(event, "globalPosition"):
+            return event.globalPosition().toPoint()
+        return event.globalPos()  # pragma: no cover - Qt5 naming
+
+    def _describe_overlay_at(self, pos, event) -> bool:
+        """Show what the overlay under ``pos`` is, if anything is there."""
+        layers = self._visible_overlays()
+        if not layers:
+            return False
+        try:
+            lon, lat = self._proj().inverse(pos.x(), pos.y())
+        except Exception:  # noqa: BLE001 - a limit point is not worth a crash
+            return False
+        if not (math.isfinite(lon) and math.isfinite(lat)):
+            return False
+        text = describe_at(layers, lon, lat)
+        if not text:
+            return False
+        QToolTip.showText(self._global_point(event), text, self)
+        return True
 
     def _station_rival(self, pos, near) -> float | None:
         """Squared distance to the station competing for a click, if any."""
@@ -2278,7 +2584,7 @@ class PointMapWidget(StationMapWidget):
     click-to-select and drag-to-pan gestures keep working unchanged.
     """
 
-    pointSelected = Signal(float, float)   # lat, lon
+    pointSelected = Signal(float, float)  # lat, lon
     pointActivated = Signal(float, float)  # lat, lon
     #: lat0, lon0, lat1, lon1. Longitudes are deliberately **not** wrapped into
     #: [-180, 180): the raw projected values carry the span the user actually
@@ -2341,8 +2647,10 @@ class PointMapWidget(StationMapWidget):
         else:
             lat0, lon0, lat1, lon1 = (float(value) for value in corners)
             self._box_corners = (
-                min(lat0, lat1), min(lon0, lon1),
-                max(lat0, lat1), max(lon0, lon1),
+                min(lat0, lat1),
+                min(lon0, lon1),
+                max(lat0, lat1),
+                max(lon0, lon1),
             )
         self._cancel_box_drag()
         self.update()
@@ -2384,8 +2692,7 @@ class PointMapWidget(StationMapWidget):
 
     def _box_gesture(self, event) -> bool:
         """Whether this press should start a box rather than a pan."""
-        return self._box_mode or bool(
-            event.modifiers() & Qt.ShiftModifier)
+        return self._box_mode or bool(event.modifiers() & Qt.ShiftModifier)
 
     def set_saved_points(self, locations) -> None:
         """Show user-named locations as passive map markers."""
@@ -2504,12 +2811,16 @@ class PointMapWidget(StationMapWidget):
         same rectangle as before. One path that is always right beats two that
         have to agree.
         """
+
         def steps(span):
             if p.affine:
-                return 1        # collinear anyway; do not pay for the samples
-            return max(_DOMAIN_MIN_STEPS, min(
-                _DOMAIN_MAX_STEPS,
-                int(math.ceil(abs(span) / _DOMAIN_EDGE_STEP_DEG))))
+                return 1  # collinear anyway; do not pay for the samples
+            return max(
+                _DOMAIN_MIN_STEPS,
+                min(
+                    _DOMAIN_MAX_STEPS, int(math.ceil(abs(span) / _DOMAIN_EDGE_STEP_DEG))
+                ),
+            )
 
         across = steps(lon1 - lon0)
         upward = steps(lat1 - lat0)
@@ -2518,29 +2829,33 @@ class PointMapWidget(StationMapWidget):
         # opening point, so no vertex is emitted twice and ``drawPolygon`` closes
         # the ring itself.
         for lon_a, lat_a, lon_b, lat_b, count in (
-            (lon0, lat1, lon1, lat1, across),   # north, along a parallel
-            (lon1, lat1, lon1, lat0, upward),   # east, along a meridian
-            (lon1, lat0, lon0, lat0, across),   # south, along a parallel
-            (lon0, lat0, lon0, lat1, upward),   # west, along a meridian
+            (lon0, lat1, lon1, lat1, across),  # north, along a parallel
+            (lon1, lat1, lon1, lat0, upward),  # east, along a meridian
+            (lon1, lat0, lon0, lat0, across),  # south, along a parallel
+            (lon0, lat0, lon0, lat1, upward),  # west, along a meridian
         ):
             for index in range(count):
                 frac = index / count
-                poly.append(self._to_px(
-                    lon_a + (lon_b - lon_a) * frac,
-                    lat_a + (lat_b - lat_a) * frac, p))
+                poly.append(
+                    self._to_px(
+                        lon_a + (lon_b - lon_a) * frac,
+                        lat_a + (lat_b - lat_a) * frac,
+                        p,
+                    )
+                )
         return poly
 
     def _draw_box(self, qp, p) -> None:
         """Draw the committed box, the live rubber band, and the lattice."""
-        live = (
-            self._box_anchor is not None and self._box_drag is not None
-        )
+        live = self._box_anchor is not None and self._box_drag is not None
         if live:
             anchor_lon, anchor_lat = self._box_anchor
             drag_lon, drag_lat = self._box_drag
             corners = (
-                min(anchor_lat, drag_lat), min(anchor_lon, drag_lon),
-                max(anchor_lat, drag_lat), max(anchor_lon, drag_lon),
+                min(anchor_lat, drag_lat),
+                min(anchor_lon, drag_lon),
+                max(anchor_lat, drag_lat),
+                max(anchor_lon, drag_lon),
             )
         elif self._box_corners is not None:
             corners = self._box_corners
@@ -2567,20 +2882,17 @@ class PointMapWidget(StationMapWidget):
             # handle-like read without implying it can be dragged.
             qp.setPen(QPen(QColor(_map().selected_edge), 2.4))
             arm = 9.0
-            north_west, north_east, south_west, south_east = \
-                self._box_corner_points(p, corners)
+            north_west, north_east, south_west, south_east = self._box_corner_points(
+                p, corners
+            )
             for corner, dx, dy in (
                 (north_west, 1.0, 1.0),
                 (north_east, -1.0, 1.0),
                 (south_west, 1.0, -1.0),
                 (south_east, -1.0, -1.0),
             ):
-                qp.drawLine(
-                    corner,
-                    QPointF(corner.x() + dx * arm, corner.y()))
-                qp.drawLine(
-                    corner,
-                    QPointF(corner.x(), corner.y() + dy * arm))
+                qp.drawLine(corner, QPointF(corner.x() + dx * arm, corner.y()))
+                qp.drawLine(corner, QPointF(corner.x(), corner.y() + dy * arm))
 
         if self._box_nodes and not live:
             qp.setBrush(QBrush(edge))
@@ -2589,8 +2901,12 @@ class PointMapWidget(StationMapWidget):
             height = self.height()
             for lon, lat in self._box_nodes:
                 point = self._to_px(lon, lat, p)
-                if point.x() < -6 or point.y() < -6 \
-                        or point.x() > width + 6 or point.y() > height + 6:
+                if (
+                    point.x() < -6
+                    or point.y() < -6
+                    or point.x() > width + 6
+                    or point.y() > height + 6
+                ):
                     continue
                 qp.drawEllipse(point, 1.9, 1.9)
 
@@ -2624,23 +2940,18 @@ class PointMapWidget(StationMapWidget):
             for lon, lat in self._domain_outline:
                 lon = float(lon)
                 if previous_lon is not None:
-                    lon = previous_lon + (
-                        (lon - previous_lon + 180.0) % 360.0
-                    ) - 180.0
+                    lon = previous_lon + ((lon - previous_lon + 180.0) % 360.0) - 180.0
                 unwrapped.append((lon, float(lat)))
                 previous_lon = lon
             # Draw adjacent longitude copies so an antimeridian-crossing
             # rotated grid remains visible in both world and regional views.
             for shift in (-360.0, 0.0, 360.0):
-                poly = QPolygonF([
-                    self._to_px(lon + shift, lat, p)
-                    for lon, lat in unwrapped
-                ])
+                poly = QPolygonF(
+                    [self._to_px(lon + shift, lat, p) for lon, lat in unwrapped]
+                )
                 qp.drawPolygon(poly)
             return
-        spans = ((lon0, lon1),) if lon0 <= lon1 else (
-            (lon0, 180.0), (-180.0, lon1)
-        )
+        spans = ((lon0, lon1),) if lon0 <= lon1 else ((lon0, 180.0), (-180.0, lon1))
         for start, end in spans:
             qp.drawPolygon(self._lonlat_box_polygon(p, start, end, lat0, lat1))
 
@@ -2649,9 +2960,12 @@ class PointMapWidget(StationMapWidget):
         qp.setFont(ui_font("caption"))
         for name, lon, lat in self._saved_points:
             pt = self._to_px(lon, lat, p)
-            if pt.x() < -20 or pt.y() < -20 \
-                    or pt.x() > self.width() + 20 \
-                    or pt.y() > self.height() + 20:
+            if (
+                pt.x() < -20
+                or pt.y() < -20
+                or pt.x() > self.width() + 20
+                or pt.y() > self.height() + 20
+            ):
                 continue
             qp.setBrush(QBrush(QColor(_map().saved)))
             qp.setPen(QPen(QColor(_map().saved_edge), 1.3))
@@ -2662,8 +2976,12 @@ class PointMapWidget(StationMapWidget):
     def _draw_point(self, qp, p) -> None:
         lon, lat = self._point_lonlat
         pt = self._to_px(lon, lat, p)
-        if pt.x() < -20 or pt.y() < -20 \
-                or pt.x() > self.width() + 20 or pt.y() > self.height() + 20:
+        if (
+            pt.x() < -20
+            or pt.y() < -20
+            or pt.x() > self.width() + 20
+            or pt.y() > self.height() + 20
+        ):
             return
         qp.setBrush(QBrush(QColor(_map().selected)))
         qp.setPen(QPen(QColor(_map().selected_edge), 2.0))
@@ -2686,10 +3004,17 @@ class PointMapWidget(StationMapWidget):
         if self._box_anchor is not None and self._box_drag is not None:
             anchor_lon, anchor_lat = self._box_anchor
             drag_lon, drag_lat = self._box_drag
-            lines.append("Box     " + self._box_size_text((
-                min(anchor_lat, drag_lat), min(anchor_lon, drag_lon),
-                max(anchor_lat, drag_lat), max(anchor_lon, drag_lon),
-            )))
+            lines.append(
+                "Box     "
+                + self._box_size_text(
+                    (
+                        min(anchor_lat, drag_lat),
+                        min(anchor_lon, drag_lon),
+                        max(anchor_lat, drag_lat),
+                        max(anchor_lon, drag_lon),
+                    )
+                )
+            )
         elif self._box_corners is not None:
             lines.append("Box     " + self._box_size_text(self._box_corners))
             if self._box_note:
@@ -2705,8 +3030,7 @@ class PointMapWidget(StationMapWidget):
         for text in lines:
             rect = QRectF(8, y - 14, self.width() - 16, 18)
             qp.setPen(QPen(QColor(_map().readout_shadow)))
-            qp.drawText(rect.translated(1, 1),
-                        Qt.AlignLeft | Qt.AlignVCenter, text)
+            qp.drawText(rect.translated(1, 1), Qt.AlignLeft | Qt.AlignVCenter, text)
             qp.setPen(QPen(QColor(_map().readout_text)))
             qp.drawText(rect, Qt.AlignLeft | Qt.AlignVCenter, text)
             y += 18
@@ -2744,14 +3068,17 @@ class PointMapWidget(StationMapWidget):
             self._box_drag_px = pos
             # Keep the cursor readout live without letting the base class pan.
             lon, lat = self._box_drag
-            self._hover_lonlat = (
-                ((lon + 180.0) % 360.0) - 180.0, lat)
-            self.setToolTip(self._box_size_text((
-                min(self._box_anchor[1], lat),
-                min(self._box_anchor[0], lon),
-                max(self._box_anchor[1], lat),
-                max(self._box_anchor[0], lon),
-            )))
+            self._hover_lonlat = (((lon + 180.0) % 360.0) - 180.0, lat)
+            self.setToolTip(
+                self._box_size_text(
+                    (
+                        min(self._box_anchor[1], lat),
+                        min(self._box_anchor[0], lon),
+                        max(self._box_anchor[1], lat),
+                        max(self._box_anchor[0], lon),
+                    )
+                )
+            )
             self.update()
             return
         super().mouseMoveEvent(event)
@@ -2786,8 +3113,10 @@ class PointMapWidget(StationMapWidget):
                 self._select_from_pos(pos)
                 return
             corners = (
-                min(anchor[1], drag[1]), min(anchor[0], drag[0]),
-                max(anchor[1], drag[1]), max(anchor[0], drag[0]),
+                min(anchor[1], drag[1]),
+                min(anchor[0], drag[0]),
+                max(anchor[1], drag[1]),
+                max(anchor[0], drag[0]),
             )
             self._box_corners = corners
             self._box_nodes = ()
@@ -2839,7 +3168,7 @@ class BoxFieldMapWidget(PointMapWidget):
     growing a second map implementation.
     """
 
-    cellSelected = Signal(int, int)   # row, col
+    cellSelected = Signal(int, int)  # row, col
     cellActivated = Signal(int, int)  # row, col (double click)
 
     def __init__(self, parent=None):
@@ -2935,8 +3264,11 @@ class BoxFieldMapWidget(PointMapWidget):
     def set_view(self, region, *, pad=0.2) -> None:
         """Frame a :class:`~sharpmod.box_sounding.BoxRegion`."""
         self.set_extent(
-            region.lon0, region.lon0 + region.lon_span,
-            region.lat0, region.lat1, pad=pad,
+            region.lon0,
+            region.lon0 + region.lon_span,
+            region.lat0,
+            region.lat1,
+            pad=pad,
         )
 
     def _rescale(self) -> None:
@@ -3003,20 +3335,18 @@ class BoxFieldMapWidget(PointMapWidget):
         )
 
     def _draw_field(self, qp, p) -> None:
-        if self._analysis is None or not self._field_key \
-                or self._field_scale is None:
+        if self._analysis is None or not self._field_key or self._field_scale is None:
             return
         from sharpmod.viz.box_field import draw_cell_values, draw_field_cells
 
         def to_px(lon, lat):
             return self._to_px(lon, lat, p)
 
-        draw_field_cells(
-            qp, to_px, self._analysis, self._field_key, self._field_scale)
+        draw_field_cells(qp, to_px, self._analysis, self._field_key, self._field_scale)
         if self._show_values:
             draw_cell_values(
-                qp, to_px, self._analysis, self._field_key,
-                font=mono_font("caption"))
+                qp, to_px, self._analysis, self._field_key, font=mono_font("caption")
+            )
 
     def _draw_selected_cell(self, qp, p) -> None:
         if self._selected_cell is None or self._analysis is None:
@@ -3037,10 +3367,12 @@ class BoxFieldMapWidget(PointMapWidget):
         from sharpmod.viz.box_field import draw_color_bar
 
         width = min(260.0, max(140.0, self.width() * 0.45))
-        rect = QRectF(
-            self.width() - width - 12.0, self.height() - 48.0, width, 40.0)
+        rect = QRectF(self.width() - width - 12.0, self.height() - 48.0, width, 40.0)
         draw_color_bar(
-            qp, rect, self._field_scale, self._field_key,
+            qp,
+            rect,
+            self._field_scale,
+            self._field_key,
             text_color=_map().readout_text,
             shadow_color=_map().readout_shadow,
             font=mono_font("caption"),

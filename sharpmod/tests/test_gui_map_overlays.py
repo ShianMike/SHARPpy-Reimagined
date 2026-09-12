@@ -6,7 +6,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from qtpy.QtCore import QBuffer
+from qtpy.QtCore import QBuffer, QRectF
 from qtpy.QtGui import QColor, QImage, QPainter, QPixmap
 
 from sharpmod import gui_maps, map_overlays as mo
@@ -174,6 +174,72 @@ def test_legend_is_empty_without_overlays(widget):
     widget.set_overlay("spc_outlook", _layer())
     widget.set_overlay_visible("spc_outlook", False)
     assert widget._overlay_legend_rows() == []
+
+
+def test_a_layer_of_observations_keeps_out_of_the_legend(widget):
+    """A shape per observation makes the row a listing, not a key.
+
+    Storm reports label every shape with its own magnitude, so the swatch row
+    became "Hail 1.00 in  Wind 61 mph  Wind 57 mph ..." across the bottom of the
+    map. The layer says so itself rather than the map naming the key, so a
+    future point overlay does not have to be added here too.
+    """
+    widget.set_overlay("storm_reports", _layer(shapes=[
+        _shape([INNER], label="Hail 1.00 in"),
+        _shape([OUTER], label="Wind 61 mph"),
+    ], legend=False))
+
+    assert widget._overlay_legend_rows() == []
+
+
+def test_suppressing_the_swatches_still_credits_the_source(widget, qt_app):
+    """The credit is a licence condition, not decoration; only rows go."""
+    layer = _layer(shapes=[_shape([INNER], label="Hail 1.00 in")],
+                   legend=False, attribution="NWS via IEM")
+    widget.set_overlay("storm_reports", layer)
+
+    surface = QPixmap(widget.size())
+    painter = QPainter(surface)
+    try:
+        widget._draw_overlay_legend(painter)
+    finally:
+        painter.end()
+
+    assert widget._overlay_legend_rows() == []
+    assert layer.attribution == "NWS via IEM"
+
+
+def test_a_point_marker_is_painted_opaque_while_an_area_is_washed(widget):
+    """A five-pixel dot hides nothing, so it has no reason to be translucent.
+
+    The wash exists to keep the coastline and station dots readable under a
+    continent-sized polygon. Applied to a marker it makes a smudge, and a
+    cluster of reports merges into one bruise with nothing countable in it.
+    """
+    assert gui_maps.OVERLAY_MARKER_FILL_ALPHA == 255
+    assert gui_maps.OVERLAY_FILL_ALPHA < gui_maps.OVERLAY_MARKER_FILL_ALPHA
+
+    _conus(widget)
+    base = _shape([INNER])
+    white = "#FFFFFF"
+
+    def painted_whites(marker):
+        # A dark outline, so only the *fill* can put white on the frame: a
+        # stroke is drawn at full strength either way and would answer for both.
+        widget.set_overlay("storm_reports", _layer(shapes=[mo.OverlayShape(
+            rings=base.rings, bounds=base.bounds, stroke="#101010", fill=white,
+            label="Sig Wind 80 mph", marker=marker)], legend=False))
+        image = _paint(widget).toImage()
+        return sum(
+            1 for y in range(0, image.height(), 3)
+            for x in range(0, image.width(), 3)
+            if image.pixelColor(x, y).rgb() == QColor(white).rgb())
+
+    assert painted_whites(True) > 0, \
+        "an opaque marker was still blended into the basemap"
+    assert painted_whites(False) == 0, (
+        "the same shape as an area must stay washed, or the wash that keeps a "
+        "risk polygon readable has been lost")
 
 
 # --------------------------------------------------------------------------- #
@@ -552,3 +618,207 @@ def test_minifying_a_raster_still_smooths(widget):
     bare = _paint(widget).toImage()
     widget.set_overlay_visible(RADAR_KEY, False)
     assert _paint(widget).toImage() != bare
+
+# --------------------------------------------------------------------------- #
+# display density
+#
+# Every raster routed through an offscreen cache used to be rasterized at the
+# widget's *logical* size and then blitted 1:1 onto a backing store that is
+# larger by the device pixel ratio, so Qt bilinearly upscaled it. That softened
+# the HRRR field overlay and the coastlines on any fractional-scaling display,
+# which the picker opts into via ``PassThrough`` rounding.
+# --------------------------------------------------------------------------- #
+def _at_density(widget, monkeypatch, ratio):
+    """Report ``ratio`` as the widget's density without needing such a screen."""
+    monkeypatch.setattr(widget, "devicePixelRatioF", lambda: ratio)
+
+
+def test_the_basemap_is_rasterized_at_the_screens_real_resolution(
+        widget, monkeypatch):
+    _at_density(widget, monkeypatch, 2.0)
+
+    pixmap = widget._basemap_pixmap()
+
+    assert pixmap.devicePixelRatio() == 2.0, "the ratio has to travel with it"
+    assert (pixmap.width(), pixmap.height()) == (
+        widget.width() * 2, widget.height() * 2
+    ), "a logical-size buffer is what Qt then has to upscale"
+
+
+def test_the_warped_overlay_composite_matches_the_basemap_resolution(
+        widget, monkeypatch):
+    """This is the path the HRRR field takes on the curved CONUS view."""
+    _conus(widget)
+    widget.set_overlay(RADAR_KEY, _raster())
+    _at_density(widget, monkeypatch, 2.0)
+
+    composed = widget._compose_warped(widget._visible_rasters(), widget._proj())
+
+    assert composed is not None
+    assert composed.devicePixelRatio() == 2.0
+    assert (composed.width(), composed.height()) == (
+        widget.width() * 2, widget.height() * 2
+    )
+
+
+def test_a_fractional_density_is_not_rounded_away(widget, monkeypatch):
+    """1.25 and 1.75 are ordinary once scale-factor rounding is PassThrough."""
+    _at_density(widget, monkeypatch, 1.5)
+
+    pixmap = widget._basemap_pixmap()
+
+    assert pixmap.devicePixelRatio() == 1.5
+    assert pixmap.width() == round(widget.width() * 1.5)
+
+
+def test_moving_to_a_denser_monitor_rebuilds_both_caches(widget, monkeypatch):
+    """A cache baked for the old ratio would be rescaled onto the new store."""
+    _conus(widget)
+    widget.set_overlay(RADAR_KEY, _raster())
+    projection = widget._proj()
+    rasters = widget._visible_rasters()
+    basemap_before = widget._basemap_key()
+    warp_before = widget._warp_cache_key(rasters, projection)
+
+    _at_density(widget, monkeypatch, 2.0)
+
+    assert widget._basemap_key() != basemap_before
+    assert widget._warp_cache_key(rasters, projection) != warp_before
+
+
+def test_a_dense_cache_is_reblitted_from_its_own_device_pixels(
+        widget, monkeypatch):
+    """``drawPixmap`` measures its destination and source in different units.
+
+    The destination is logical; the source is in the pixmap's device pixels. A
+    preview re-blit that passes one where the other belongs samples a quarter of
+    the cache at double density and stretches it over the whole window.
+    """
+    _at_density(widget, monkeypatch, 2.0)
+    pixmap = widget._device_pixmap()
+
+    assert widget._independent_size(pixmap) == (
+        float(widget.width()), float(widget.height())
+    )
+    logical = QRectF(0.0, 0.0, *widget._independent_size(pixmap))
+    device = widget._device_source(pixmap, logical)
+    assert (device.width(), device.height()) == (
+        float(pixmap.width()), float(pixmap.height())
+    )
+
+
+def test_magnification_is_judged_in_device_pixels(widget, monkeypatch):
+    """Nearest-neighbour must survive a high-density screen.
+
+    The guard against inventing colours between data cells compared a logical
+    destination with a source measured in image pixels, so at ratio 2 a
+    destination that genuinely covers twice the source still looked like a
+    reduction and got smoothed.
+    """
+    # The interesting band is a destination narrower than the source in logical
+    # terms but wider once the density is applied: 640 logical pixels is a
+    # reduction of a 1024 px frame, while the 1280 physical pixels it really
+    # occupies are an enlargement. A frame small enough to be magnified either
+    # way would pass whether or not the density is taken into account.
+    _conus(widget)
+    widget.set_overlay(RADAR_KEY, _raster(image_bytes=_png_bytes(size=1024)))
+    _at_density(widget, monkeypatch, 2.0)
+
+    smoothing: list[bool] = []
+    original = QPainter.setRenderHint
+
+    def record(self, hint, on=True):
+        if hint == QPainter.SmoothPixmapTransform:
+            smoothing.append(bool(on))
+        return original(self, hint, on)
+
+    monkeypatch.setattr(QPainter, "setRenderHint", record)
+    _paint(widget)
+
+    assert smoothing, "the raster path has to make the decision explicitly"
+    assert not smoothing[-1], (
+        "1024 source pixels drawn across 1280 physical pixels is magnification, "
+        "so the published cells must not be interpolated"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# click to find out what an area is
+#
+# A wash of colour is not self-describing: a probability band reads "5%" without
+# saying which hazard, and two products put the same red in the same place.
+# --------------------------------------------------------------------------- #
+INSIDE = (-95.0, 40.0)  # within OUTER
+OUTSIDE = (-60.0, 10.0)
+
+
+def test_nothing_is_described_where_no_overlay_covers_the_point():
+    """``None`` rather than empty text, so 'no overlay' is distinguishable."""
+    layers = [_layer()]
+
+    assert mo.describe_at(layers, *OUTSIDE) is None
+
+
+def test_the_product_and_the_category_at_the_point_are_both_named():
+    layers = [_layer(shapes=[_shape([OUTER], label="MRGL")])]
+
+    text = mo.describe_at(layers, *INSIDE)
+
+    assert "MRGL" in text
+    assert layers[0].title.split()[0] in text, "the product has to be named too"
+
+
+def test_a_category_description_is_included_when_it_has_one():
+    """This is the first reader ``OverlayShape.description`` has ever had."""
+    shape = _shape([OUTER], label="5%")
+    shape = mo.OverlayShape(
+        rings=shape.rings, bounds=shape.bounds, stroke=shape.stroke,
+        fill=shape.fill, label="5%",
+        description="5% chance of a tornado within 25 miles.")
+    layers = [_layer(shapes=[shape])]
+
+    text = mo.describe_at(layers, *INSIDE)
+
+    assert "5%" in text
+    assert "within 25 miles" in text
+
+
+def test_the_graded_band_is_reported_before_the_hatched_qualifier():
+    """A qualifier outranks every band so it paints on top.
+
+    Answering with it alone would report the qualifier and discard the
+    probability the point actually sits in.
+    """
+    band = mo.OverlayShape(
+        rings=_shape([OUTER]).rings, bounds=_shape([OUTER]).bounds,
+        stroke="#005500", fill="#66A366", label="10%", rank=1)
+    qualifier = mo.OverlayShape(
+        rings=_shape([OUTER]).rings, bounds=_shape([OUTER]).bounds,
+        stroke="#000000", fill=None, label="", rank=99,
+        hatch=True, hatch_level=2)
+    layers = [_layer(shapes=[band, qualifier])]
+
+    text = mo.describe_at(layers, *INSIDE)
+
+    assert text.splitlines()[0].endswith("10%"), \
+        "the band the point sits in has to lead"
+    assert "conditional intensity group 2" in text
+
+
+def test_clicking_bare_ground_describes_the_overlay_under_it(widget):
+    _conus(widget)
+    widget.set_overlay("spc_outlook", _layer(shapes=[
+        _shape([OUTER], label="ENH")]))
+
+    # A point inside the shape, expressed the way the widget will read it back.
+    assert mo.describe_at(widget._visible_overlays(), *INSIDE) is not None
+
+
+def test_a_hidden_overlay_is_not_described(widget):
+    """What is not on screen must not be reported as though it were."""
+    _conus(widget)
+    widget.set_overlay("spc_outlook", _layer(shapes=[
+        _shape([OUTER], label="ENH")]))
+    widget.set_overlay_visible("spc_outlook", False)
+
+    assert mo.describe_at(widget._visible_overlays(), *INSIDE) is None

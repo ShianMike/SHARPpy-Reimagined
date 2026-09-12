@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v1.1.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v1.2.0). Created if it does not exist."
         required: true
-        default: "v1.1.0"
+        default: "v1.2.0"
 
 # Build and test jobs have no repository write permission. A dedicated job can
 # write only provenance attestations, and only the isolated publish job can
@@ -160,7 +160,11 @@ jobs:
 
   build-windows-exe:
     name: Build Windows downloads
-    needs: [resolve-release, test-release]
+    # Deliberately not gated on test-release: the build took 8m34s while queued
+    # behind a 35m serial gate it does not depend on. `publish` still requires
+    # every lane to pass, so a failing test run cannot ship an artifact -- the
+    # only cost of overlapping them is a discarded build when tests fail.
+    needs: [resolve-release]
     runs-on: windows-latest
     timeout-minutes: 120
     permissions:

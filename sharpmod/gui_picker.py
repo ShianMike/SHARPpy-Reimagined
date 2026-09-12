@@ -34,6 +34,19 @@ from sharpmod.gui_common import (
     _uwyo_catalog,
 )
 from sharpmod.gui_shell import SourceSelector
+from sharpmod.gui_picker_layout import (
+    TOWN_LOOKUP_TOOLTIP as _TOWN_LOOKUP_TOOLTIP,
+    UTC_CLOCK_SAMPLE as _UTC_CLOCK_SAMPLE,
+    rail_card as _rail_card,
+    rail_form as _rail_form,
+    rail_row as _rail_row,
+    rail_zoom_row as _rail_zoom_row,
+    scrolling_control_rail as _scrolling_control_rail,
+    set_button_busy as _set_button_busy,
+    town_lookup_attribution_label as _town_lookup_attribution_label,
+)
+from sharpmod.gui_picker_era5 import Era5PickerMixin
+from sharpmod.gui_picker_wrf import WrfPickerMixin
 from sharpmod.gui_theme import apply_theme, ensure_theme_applied, mono_font
 from sharpmod.theme import (
     CONTROL_H,
@@ -68,8 +81,13 @@ from sharpmod.gui_overlay_controls import (
     HrrrFieldController,
     OutlookOverlayController,
     RadarOverlayController,
+    StormReportsOverlayController,
 )
 from sharpmod.gui_sessions import _apply_viewer_session_state
+from sharpmod.gui_threading import (
+    retain_worker_until_finished,
+    shutdown_picker_workers,
+)
 from sharpmod.gui_settings import (
     UNIT_DEFAULTS,
     UNIT_OPTIONS,
@@ -115,11 +133,30 @@ from sharpmod.gui_workers import (
 )
 
 from qtpy.QtCore import (
-    Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+    QDate,
+    QSettings,
+    QPointF,
+    QRectF,
+    QSize,
+    QUrl,
 )
 from qtpy.QtGui import (
-    QAction, QActionGroup, QPainter, QColor, QPen, QBrush, QPolygonF, QFont,
-    QPixmap, QIcon, QTransform, QDesktopServices,
+    QAction,
+    QActionGroup,
+    QPainter,
+    QColor,
+    QPen,
+    QBrush,
+    QPolygonF,
+    QFont,
+    QPixmap,
+    QIcon,
+    QTransform,
+    QDesktopServices,
 )
 from qtpy.QtWidgets import (
     QApplication,
@@ -146,7 +183,6 @@ from qtpy.QtWidgets import (
     QFrame,
     QDialog,
     QDialogButtonBox,
-
     QCheckBox,
     QSizePolicy,
     QGraphicsView,
@@ -182,19 +218,31 @@ _NON_VISUAL_QT_PLATFORMS = frozenset({"offscreen", "minimal"})
 #: observations.registered_provider_keys()``, so the restatement cannot drift
 #: away from the registry unnoticed.
 OBSERVED_SOURCES: tuple[tuple[str, str, str], ...] = (
-    ("auto", "Automatic (UWyo, then IEM)",
-     "Try the University of Wyoming archive, then the Iowa Environmental "
-     "Mesonet. Whichever answers is recorded; levels are never combined "
-     "between archives."),
-    ("uwyo", "University of Wyoming only",
-     "Use only the University of Wyoming upper-air archive."),
-    ("iem", "Iowa Environmental Mesonet only",
-     "Use only the Iowa Environmental Mesonet RAOB archive."),
-    ("igra2", "NOAA IGRA v2 (deep archive)",
-     "NOAA's quality-assured global radiosonde archive: about 2,900 stations, "
-     "some with a record reaching back over a century. It publishes one "
-     "archive per station rather than per sounding, so the first request for "
-     "a station downloads that archive and later ones are served from disk."),
+    (
+        "auto",
+        "Automatic (UWyo, then IEM)",
+        "Try the University of Wyoming archive, then the Iowa Environmental "
+        "Mesonet. Whichever answers is recorded; levels are never combined "
+        "between archives.",
+    ),
+    (
+        "uwyo",
+        "University of Wyoming only",
+        "Use only the University of Wyoming upper-air archive.",
+    ),
+    (
+        "iem",
+        "Iowa Environmental Mesonet only",
+        "Use only the Iowa Environmental Mesonet RAOB archive.",
+    ),
+    (
+        "igra2",
+        "NOAA IGRA v2 (deep archive)",
+        "NOAA's quality-assured global radiosonde archive: about 2,900 stations, "
+        "some with a record reaching back over a century. It publishes one "
+        "archive per station rather than per sounding, so the first request for "
+        "a station downloads that archive and later ones are served from disk.",
+    ),
 )
 
 #: Default source: the established University of Wyoming then IEM behaviour.
@@ -276,6 +324,12 @@ TAB_FIELD_CONTROLLERS = {
     "Forecast Model": "_model_field",
 }
 
+#: Which tab's locator selector answers for a sounding opened from it.
+TAB_LOCATOR_SELECTORS = {
+    "Station Map": "_map_locator",
+    "Forecast Model": "_model_locator",
+}
+
 
 def _overlay_product_for(owner):
     """Return ``owner``'s selected overlay hazard, tolerating a minimal owner.
@@ -288,6 +342,33 @@ def _overlay_product_for(owner):
     from sharpmod.gui_viewer import _controller_overlay_product
 
     return _controller_overlay_product(owner)
+
+
+def _locator_spec_for(owner, collection=None):
+    """Return ``owner``'s locator selection, tolerating a minimal owner.
+
+    Duck-typed for the same reason :func:`_overlay_product_for` is: several entry
+    points are driven with a stand-in that implements only what they touch, and
+    demanding the full picker surface here would break them. ``None`` means "not
+    stated", which leaves the sounding window's previous behaviour in place
+    rather than silently reducing it to a bare inset.
+    """
+    if collection is not None:
+        try:
+            from sharpmod.locator_overlay import SELECTION_META_KEY
+
+            stored = collection.getMeta(SELECTION_META_KEY)
+        except Exception:
+            stored = None
+        if isinstance(stored, str):
+            return stored
+    getter = getattr(owner, "selected_locator_spec", None)
+    if not callable(getter):
+        return None
+    try:
+        return getter()
+    except Exception:  # noqa: BLE001 - a preference is not worth an exception
+        return None
 
 
 def _start_locator_overlay_fetch(*args, **kwargs):
@@ -308,194 +389,6 @@ def _fill_profile_metadata(*args, **kwargs):
     from sharpmod.gui_viewer import _fill_metadata
 
     return _fill_metadata(*args, **kwargs)
-
-
-#: Explains the two-stage town lookup. Shared by the attribution line and the
-#: town fields themselves, so the visible text can stay short.
-_TOWN_LOOKUP_TOOLTIP = (
-    "When the location label is blank, CONUS locations are resolved "
-    "locally from the bundled U.S. Census state and place index. Only "
-    "when the offline index has no result is the configured Nominatim "
-    "service tried, and the result is cached. Enter a label to skip "
-    "automatic lookup."
-)
-
-
-def _town_lookup_attribution_label(parent=None) -> QLabel:
-    """Return the one-line Census/OpenStreetMap credit for town lookups.
-
-    Kept visible rather than folded into a tooltip: OpenStreetMap's licence
-    asks for attribution where the data is shown. It is worded tightly so it
-    fits one line at the rail width -- the longer sentence it replaced wrapped
-    to three lines in both panels that carry it.
-    """
-    label = QLabel(
-        "Town names: "
-        '<a href="https://www.census.gov/geographies/reference-files/'
-        'time-series/geo/gazetteer-files.html">Census</a> / '
-        '<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        parent,
-    )
-    label.setOpenExternalLinks(True)
-    label.setObjectName(OBJ_ATTRIBUTION)
-    label.setWordWrap(True)
-    label.setToolTip(_TOWN_LOOKUP_TOOLTIP)
-    return label
-
-
-def _scrolling_control_rail(
-        layout: QLayout, *, content_width: int = RAIL_W["max"]) -> QScrollArea:
-    """Return a vertically scrollable control rail of a fixed usable width.
-
-    ``content_width`` is the width available to the cards. The vertical
-    scrollbar is added on top, because horizontal scrolling is disabled: if the
-    bar were allowed to eat into the content width, the widest card would be
-    clipped the moment the rail became tall enough to scroll. That is exactly
-    what happened in the forecast panel, whose "Point" card is 4 px wider than
-    the viewport the old 380 px cap left behind.
-
-    Minimum and maximum are set to the same value so the rail keeps one width
-    across every panel. Content-sized rails looked inconsistent and moved the
-    map divider whenever the user switched source.
-    """
-    content = QWidget()
-    content.setLayout(layout)
-    content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
-    content.setMinimumWidth(0)
-
-    total_width = int(content_width) + SCROLLBAR_W
-
-    scroll = QScrollArea()
-    scroll.setFrameShape(QFrame.NoFrame)
-    scroll.setWidgetResizable(True)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    scroll.setMinimumWidth(total_width)
-    scroll.setMaximumWidth(total_width)
-    scroll.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-    scroll.setWidget(content)
-    return scroll
-
-
-def _rail_card(title: str) -> tuple[QGroupBox, QVBoxLayout]:
-    """Return one rail card and its stacked layout.
-
-    Every rail card goes through here or :func:`_rail_form` so the three source
-    panels cannot drift apart again. They previously each hand-rolled their own
-    group box and grid, which is how the same conceptual control ended up with
-    different titles, field widths, and column stretch depending on which tab
-    you were looking at.
-    """
-    box = QGroupBox(title)
-    layout = QVBoxLayout(box)
-    # The card's padding already comes from the style sheet, so the inner
-    # layout must not add its own default margin on top of it. Only the two
-    # availability cards used to do this, which is why they alone looked tight
-    # while every other card carried a double inset.
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(SPACE["sm"])
-    return box, layout
-
-
-def _rail_form(title: str) -> tuple[QGroupBox, QGridLayout]:
-    """Return one rail card whose body is a label / field / action grid.
-
-    Column 0 holds the labels, column 1 the field that should absorb slack, and
-    column 2 an optional inline action. Fixing that here is what makes the
-    "Date:" fields line up at the same x across all three panels.
-    """
-    box = QGroupBox(title)
-    grid = QGridLayout(box)
-    grid.setContentsMargins(0, 0, 0, 0)
-    grid.setVerticalSpacing(SPACE["sm"])
-    grid.setHorizontalSpacing(SPACE["sm"])
-    # One label column width for every card, so fields line up down the whole
-    # rail instead of stepping in and out as the label text changes length.
-    grid.setColumnMinimumWidth(0, FIELD_W["label"])
-    grid.setColumnStretch(1, 1)
-    return box, grid
-
-
-def _rail_row(grid: QGridLayout, row: int, label: str, field, *,
-              trailing=None, width: str = "wide"):
-    """Place one ``label: field [action]`` row in a rail form grid.
-
-    The field spans into the action column when there is no action, so a row
-    without a button still reaches the card's right edge instead of stopping
-    short and leaving a ragged gap the other rows do not have.
-    """
-    grid.addWidget(QLabel(label), row, 0)
-    field.setMinimumWidth(FIELD_W[width])
-    field.setMinimumHeight(CONTROL_H["md"])
-    if trailing is None:
-        grid.addWidget(field, row, 1, 1, 2)
-    else:
-        grid.addWidget(field, row, 1)
-        trailing.setMinimumWidth(FIELD_W["action"])
-        trailing.setMinimumHeight(CONTROL_H["md"])
-        grid.addWidget(trailing, row, 2)
-    return field
-
-
-def _rail_zoom_row(map_widget) -> QHBoxLayout:
-    """Return the shared zoom-out / zoom-in / reset row for a map card.
-
-    All three panels show the same three buttons, but one of them used to label
-    the third "Reset view" while the others said "Reset", and only two gave the
-    buttons tooltips.
-    """
-    row = QHBoxLayout()
-    row.setSpacing(SPACE["sm"])
-    zoom_out = QToolButton()
-    zoom_out.setText("\u2212")
-    zoom_out.setToolTip("Zoom out")
-    zoom_out.clicked.connect(lambda: map_widget.zoom(1.25))
-    zoom_in = QToolButton()
-    zoom_in.setText("+")
-    zoom_in.setToolTip("Zoom in")
-    zoom_in.clicked.connect(lambda: map_widget.zoom(0.8))
-    reset = QToolButton()
-    reset.setText("Reset")
-    reset.setToolTip("Reset the view to the selected region")
-    reset.clicked.connect(lambda: map_widget.reset_view())
-    for button in (zoom_out, zoom_in, reset):
-        button.setMinimumHeight(CONTROL_H["md"])
-        row.addWidget(button)
-    row.addStretch(1)
-    return row
-
-
-#: A widest-case instant for measuring the UTC clock label. Every field in the
-#: clock's format is fixed width, so one sample sizes them all.
-_UTC_CLOCK_SAMPLE = datetime(2026, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
-
-#: Qt property holding a button's idle label while it shows a busy one.
-_IDLE_TEXT_PROPERTY = "sharpmodIdleText"
-
-
-def _set_button_busy(button, busy: bool, busy_text: str) -> None:
-    """Show or clear a busy label on ``button`` without duplicating its text.
-
-    The idle label is stashed on the widget the first time it goes busy and
-    restored from there afterwards. Each busy handler previously re-typed the
-    label as a literal -- ``"Fetch && Display Sounding"`` and friends appeared
-    once in the panel builder and again in the restore path -- so renaming a
-    button in one place silently reverted it in the other after the first fetch.
-
-    Enabled state is left to the caller: each panel re-enables on a different
-    condition (a selected station, a validated point, a chosen file).
-    """
-    if button is None:
-        return
-    if busy:
-        if not button.property(_IDLE_TEXT_PROPERTY):
-            button.setProperty(_IDLE_TEXT_PROPERTY, button.text())
-        button.setEnabled(False)
-        button.setText(busy_text)
-        return
-    idle = button.property(_IDLE_TEXT_PROPERTY)
-    if idle:
-        button.setText(idle)
 
 
 #: First Python feature release the Windows desktop GUI is not known to
@@ -521,13 +414,15 @@ def _venv_python_version(environment_root: Path) -> tuple[int, ...] | None:
     """
     try:
         text = (environment_root / "pyvenv.cfg").read_text(
-            encoding="utf-8", errors="replace")
+            encoding="utf-8", errors="replace"
+        )
     except OSError:
         return None
     for line in text.splitlines():
         key, separator, value = line.partition("=")
         if not separator or key.strip().lower() not in {
-            "version", "version_info",
+            "version",
+            "version_info",
         }:
             continue
         parts: list[int] = []
@@ -577,6 +472,7 @@ def _show_stable_gui_runtime_required() -> None:
     )
     try:
         import ctypes
+
         ctypes.windll.user32.MessageBoxW(None, message, APP_NAME, 0x10)
     except Exception:  # noqa: BLE001 - stderr is the non-GUI fallback
         print(message, file=sys.stderr)
@@ -602,8 +498,7 @@ def _native_crash_capture():
     opened, because losing diagnostics is far better than refusing to start.
     """
     try:
-        path = Path(_configure_debug_logging()).with_name(
-            "sharpmod-gui-native.log")
+        path = Path(_configure_debug_logging()).with_name("sharpmod-gui-native.log")
         path.parent.mkdir(parents=True, exist_ok=True)
         # Trim before handing the handle over rather than mid-write, since the
         # child holds it open for its whole life and cannot roll it over.
@@ -612,8 +507,7 @@ def _native_crash_capture():
         stream = open(path, "a", encoding="utf-8", errors="replace")
         stream.write(
             "\n=== relaunch %s pid=%d ===\n"
-            % (datetime.now(timezone.utc).isoformat(timespec="seconds"),
-               os.getpid())
+            % (datetime.now(timezone.utc).isoformat(timespec="seconds"), os.getpid())
         )
         stream.flush()
         return stream
@@ -654,12 +548,12 @@ def _relaunch_stable_windows_gui(arguments: list[str]) -> bool:
         _LOGGER.warning(
             "application.stale_stable_runtime_flag python=%s executable=%s",
             ".".join(str(part) for part in sys.version_info[:3]),
-            sys.executable)
+            sys.executable,
+        )
 
     runtime = _project_gui_runtime()
     if runtime is None:
-        _LOGGER.error(
-            "application.stable_runtime_missing python=%s", sys.executable)
+        _LOGGER.error("application.stable_runtime_missing python=%s", sys.executable)
         _show_stable_gui_runtime_required()
         return True
 
@@ -682,7 +576,8 @@ def _relaunch_stable_windows_gui(arguments: list[str]) -> bool:
         )
     except OSError:
         _LOGGER.exception(
-            "application.stable_runtime_relaunch_failed runtime=%s", python)
+            "application.stable_runtime_relaunch_failed runtime=%s", python
+        )
         return False
     finally:
         # The child received its own duplicated handle, so this copy is done.
@@ -692,11 +587,13 @@ def _relaunch_stable_windows_gui(arguments: list[str]) -> bool:
 
     _LOGGER.info(
         "application.stable_runtime_relaunch source=%s target=%s",
-        sys.executable, python)
+        sys.executable,
+        python,
+    )
     return True
 
 
-class PickerWindow(QMainWindow):
+class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
     """The launcher: fetch an observed sounding or open a local sounding file.
 
     Designed to be immediately usable: the full UWyo station catalogue is loaded
@@ -778,8 +675,7 @@ class PickerWindow(QMainWindow):
         self._model_availability_waiting_for_worker = False
         self._model_progress_timer = QTimer(self)
         self._model_progress_timer.setInterval(500)
-        self._model_progress_timer.timeout.connect(
-            self._poll_model_fetch_progress)
+        self._model_progress_timer.timeout.connect(self._poll_model_fetch_progress)
         self._settings = _build_settings()
         self._multi_sounding_checkboxes: list[QCheckBox] = []
         self._saved_location_store = SavedLocationStore(self._settings)
@@ -815,8 +711,7 @@ class PickerWindow(QMainWindow):
         self._model_availability_timer = QTimer(self)
         self._model_availability_timer.setSingleShot(True)
         self._model_availability_timer.setInterval(450)
-        self._model_availability_timer.timeout.connect(
-            self._run_model_availability)
+        self._model_availability_timer.timeout.connect(self._run_model_availability)
 
         # -- datetime-aware station catalogue state -------------------------- #
         # The station set shown in the map + list is refreshed from UWyo for the
@@ -926,16 +821,18 @@ class PickerWindow(QMainWindow):
         tab = self._tabs.tabText(self._tabs.currentIndex())
         if tab == "Forecast Model":
             self.statusBar().showMessage(
-                "Ready \u2014 pick a point, model, run, and forecast hour")
+                "Ready \u2014 pick a point, model, run, and forecast hour"
+            )
         elif tab == "Reanalysis (ERA5)":
             self.statusBar().showMessage(
-                "Ready \u2014 pick a global point and ERA5 analysis hour")
+                "Ready \u2014 pick a global point and ERA5 analysis hour"
+            )
         elif tab == "Open File":
             self.statusBar().showMessage(
-                "Ready \u2014 open a sounding or extract raw WRF output")
+                "Ready \u2014 open a sounding or extract raw WRF output"
+            )
         else:
-            self.statusBar().showMessage(
-                "Ready \u2014 pick a station and press Fetch")
+            self.statusBar().showMessage("Ready \u2014 pick a station and press Fetch")
 
     # -- UTC clock ----------------------------------------------------------- #
     def _install_utc_clock(self) -> None:
@@ -963,12 +860,12 @@ class PickerWindow(QMainWindow):
         self._utc_clock.setObjectName(OBJ_NUMERIC)
         self._utc_clock.setFont(mono_font("caption"))
         self._utc_clock.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._utc_clock.setContentsMargins(
-            SPACE["sm"], 0, SPACE["md"], 0)
+        self._utc_clock.setContentsMargins(SPACE["sm"], 0, SPACE["md"], 0)
         # Pin the width the sample needs. The format is fixed and the font is
         # monospaced, so this measurement holds for every future value.
         self._utc_clock.setMinimumWidth(
-            self._utc_clock.sizeHint().width() + SPACE["xs"])
+            self._utc_clock.sizeHint().width() + SPACE["xs"]
+        )
         self.menuBar().setCornerWidget(self._utc_clock, Qt.TopRightCorner)
 
         self._utc_timer = QTimer(self)
@@ -991,7 +888,8 @@ class PickerWindow(QMainWindow):
         clock.setToolTip(
             f"Current UTC time: {now:%Y-%m-%d %H:%M:%S}Z\n"
             f"Zulu is the same instant, written {now:%H%M}Z.\n"
-            "Model runs, cycles, and valid times here are all UTC.")
+            "Model runs, cycles, and valid times here are all UTC."
+        )
 
     # -- menu ---------------------------------------------------------------- #
     def _build_menu(self) -> None:
@@ -1061,15 +959,21 @@ class PickerWindow(QMainWindow):
         self._projection_group.setExclusive(True)
         self._projection_actions = {}
         for name, label, tip in (
-            ("flat", "&Flat (equirectangular)",
-             "Straight meridians and parallels. Correct at every extent, and "
-             "the only view that can show map imagery such as radar."),
-            ("curved", "&Curved (conformal conic)",
-             "Meridians converge and parallels bow, the way an operational "
-             "forecast chart is drawn.\n"
-             "Regional views only: a whole-hemisphere or equator-centred "
-             "extent falls back to flat, and map imagery is hidden because it "
-             "cannot be placed correctly on a cone."),
+            (
+                "flat",
+                "&Flat (equirectangular)",
+                "Straight meridians and parallels. Correct at every extent, and "
+                "the only view that can show map imagery such as radar.",
+            ),
+            (
+                "curved",
+                "&Curved (conformal conic)",
+                "Meridians converge and parallels bow, the way an operational "
+                "forecast chart is drawn.\n"
+                "Regional views only: a whole-hemisphere or equator-centred "
+                "extent falls back to flat, and map imagery is hidden because it "
+                "cannot be placed correctly on a cone.",
+            ),
         ):
             action = QAction(label, self)
             action.setCheckable(True)
@@ -1078,8 +982,7 @@ class PickerWindow(QMainWindow):
             self._projection_group.addAction(action)
             projection_menu.addAction(action)
             self._projection_actions[name] = action
-        stored = str(
-            self._settings.value("maps/projection", "flat") or "flat").lower()
+        stored = str(self._settings.value("maps/projection", "flat") or "flat").lower()
         if stored not in MAP_PROJECTIONS:
             stored = "flat"
         self._map_projection = stored
@@ -1100,12 +1003,14 @@ class PickerWindow(QMainWindow):
 
     def _about(self) -> None:
         QMessageBox.about(
-            self, f"About {APP_NAME}",
+            self,
+            f"About {APP_NAME}",
             f"<b>{APP_NAME}</b> v{APP_VERSION}<br><br>"
             "A modernized, standalone fork of SHARPpy.<br>"
             "SPC-style skew-T / hodograph sounding analysis (Qt6/PySide6).<br><br>"
             "<b>Tips:</b> type to filter stations, double-click one to open it, "
-            "or drag a sounding file onto the window.")
+            "or drag a sounding file onto the window.",
+        )
 
     def _open_analysis_session(self, path=None) -> None:
         """Open a validated session as one new multi-sounding viewer."""
@@ -1126,18 +1031,19 @@ class PickerWindow(QMainWindow):
             read_session,
             restore_collection,
         )
+
         try:
             # Validate and reconstruct every sounding before composing a window;
             # a malformed file therefore cannot partially mutate the UI.
             document = read_session(path)
             collections = [
-                restore_collection(payload)
-                for payload in document["collections"]
+                restore_collection(payload) for payload in document["collections"]
             ]
         except (OSError, SessionFormatError, ValueError) as exc:
             _LOGGER.exception("analysis_session.open_failed path=%s", path)
             QMessageBox.critical(
-                self, APP_NAME, f"The analysis session could not be opened:\n{exc}")
+                self, APP_NAME, f"The analysis session could not be opened:\n{exc}"
+            )
             return
 
         first = collections[0]
@@ -1146,14 +1052,16 @@ class PickerWindow(QMainWindow):
         except Exception:
             stn_id = "Session"
         try:
-            win = compose_interactive(
-                self._config(), first, self, stn_id=stn_id)
+            win = compose_interactive(self._config(), first, self, stn_id=stn_id)
             for collection in collections[1:]:
-                win.addProfileCollection(
-                    collection, focus=True, check_integrity=False)
+                win.addProfileCollection(collection, focus=True, check_integrity=False)
                 _start_locator_overlay_fetch(
-                    win, collection, product=_overlay_product_for(self),
-                    controller=self)
+                    win,
+                    collection,
+                    product=_overlay_product_for(self),
+                    controller=self,
+                    spec=_locator_spec_for(self, collection),
+                )
             _apply_viewer_session_state(
                 win,
                 document.get("active_collection", 0),
@@ -1166,8 +1074,10 @@ class PickerWindow(QMainWindow):
             except Exception:
                 pass
             QMessageBox.critical(
-                self, APP_NAME,
-                f"The session was valid, but its viewer could not be opened:\n{exc}")
+                self,
+                APP_NAME,
+                f"The session was valid, but its viewer could not be opened:\n{exc}",
+            )
             return
 
         win._sharpmod_session_path = path
@@ -1178,7 +1088,9 @@ class PickerWindow(QMainWindow):
         viewer_id = id(win)
         win.destroyed.connect(
             lambda *_args, viewer_id=viewer_id, path=path: _LOGGER.info(
-                "viewer.closed viewer=%s session=%s", viewer_id, path))
+                "viewer.closed viewer=%s session=%s", viewer_id, path
+            )
+        )
         self.statusBar().showMessage(
             f"Opened analysis session with {len(collections)} sounding"
             f"{'s' if len(collections) != 1 else ''}",
@@ -1186,7 +1098,10 @@ class PickerWindow(QMainWindow):
         )
         _LOGGER.info(
             "analysis_session.opened path=%s viewer=%s soundings=%d",
-            path, viewer_id, len(collections))
+            path,
+            viewer_id,
+            len(collections),
+        )
 
     def _show_controls_help(self) -> None:
         _show_controls_dialog(self)
@@ -1194,7 +1109,8 @@ class PickerWindow(QMainWindow):
     def _open_debug_log_folder(self) -> None:
         log_path = _configure_debug_logging()
         opened = QDesktopServices.openUrl(
-            QUrl.fromLocalFile(str(log_path.parent.resolve())))
+            QUrl.fromLocalFile(str(log_path.parent.resolve()))
+        )
         if opened:
             self.statusBar().showMessage(f"Debug log: {log_path}")
             _LOGGER.info("diagnostics.folder_opened path=%s", log_path.parent)
@@ -1218,8 +1134,7 @@ class PickerWindow(QMainWindow):
             config = self._config()
             dialog = _build_preferences_dialog(config, parent=self)
         except Exception as exc:  # pragma: no cover - vendored dep always present
-            QMessageBox.warning(self, APP_NAME,
-                                f"Preferences are unavailable:\n{exc}")
+            QMessageBox.warning(self, APP_NAME, f"Preferences are unavailable:\n{exc}")
             return
         parcel_box = _add_default_parcel_tab(dialog, self._default_parcel())
         accepted = dialog.exec()
@@ -1275,8 +1190,9 @@ class PickerWindow(QMainWindow):
         if config is not None:
             style = _read_config_preferences(config).get("color_style")
         if style is None:
-            style = _read_settings_preferences(
-                getattr(self, "_settings", None)).get("color_style")
+            style = _read_settings_preferences(getattr(self, "_settings", None)).get(
+                "color_style"
+            )
         try:
             apply_theme(QApplication.instance(), color_style=style)
         except Exception:
@@ -1292,7 +1208,8 @@ class PickerWindow(QMainWindow):
         """Build and cache the shared render config on first real use."""
         if self.config is None:
             saved_preferences = _read_settings_preferences(
-                getattr(self, "_settings", None))
+                getattr(self, "_settings", None)
+            )
             try:
                 self.statusBar().showMessage("Loading analysis engine\u2026")
                 QApplication.processEvents()
@@ -1340,7 +1257,8 @@ class PickerWindow(QMainWindow):
         if settings is None:
             return _DEFAULT_SKEWT_PARCEL
         return _normalize_default_parcel(
-            settings.value("parcel/default_skewt", _DEFAULT_SKEWT_PARCEL, str))
+            settings.value("parcel/default_skewt", _DEFAULT_SKEWT_PARCEL, str)
+        )
 
     def _save_default_parcel(self, parcel_key) -> None:
         settings = getattr(self, "_settings", None)
@@ -1353,8 +1271,10 @@ class PickerWindow(QMainWindow):
 
     def _model_prefetch_enabled(self) -> bool:
         settings = getattr(self, "_settings", None)
-        return False if settings is None else settings.value(
-            "model/prefetch_next_hour", False, bool
+        return (
+            False
+            if settings is None
+            else settings.value("model/prefetch_next_hour", False, bool)
         )
 
     def _save_model_prefetch(self, enabled) -> None:
@@ -1370,8 +1290,7 @@ class PickerWindow(QMainWindow):
         action = getattr(self, "_combine_soundings_action", None)
         if action is not None:
             return action.isChecked()
-        return bool(self._settings.value(
-            "viewer/combine_soundings", True, bool))
+        return bool(self._settings.value("viewer/combine_soundings", True, bool))
 
     # -- map projection -------------------------------------------------- #
 
@@ -1414,9 +1333,9 @@ class PickerWindow(QMainWindow):
         """
         offered = {key for key, _label, _tooltip in OBSERVED_SOURCES}
         try:
-            stored = str(
-                self._settings.value("observed/provider", "") or ""
-            ).strip().lower()
+            stored = (
+                str(self._settings.value("observed/provider", "") or "").strip().lower()
+            )
         except Exception:  # noqa: BLE001 - an unreadable INI is not fatal
             return DEFAULT_OBSERVED_SOURCE
         return stored if stored in offered else DEFAULT_OBSERVED_SOURCE
@@ -1445,7 +1364,8 @@ class PickerWindow(QMainWindow):
             _LOGGER.debug("observed_source.unsaved", exc_info=True)
         _LOGGER.info("observed_source.selected provider=%s", key)
         self._queue_availability(
-            self._map_selected_id, self._map_when(), self._map_avail)
+            self._map_selected_id, self._map_when(), self._map_avail
+        )
 
     def _startup_field_product(self) -> str:
         """Return the remembered HRRR field, for a controller being built.
@@ -1478,8 +1398,11 @@ class PickerWindow(QMainWindow):
         from sharpmod.gui_overlay_controls import SCOPE_MOSAIC, SCOPE_SITE
 
         try:
-            stored = str(self._settings.value("overlays/radar_scope", "")
-                         or "").strip().lower()
+            stored = (
+                str(self._settings.value("overlays/radar_scope", "") or "")
+                .strip()
+                .lower()
+            )
         except Exception:  # noqa: BLE001 - an unreadable INI is not fatal
             return SCOPE_SITE
         return stored if stored in (SCOPE_SITE, SCOPE_MOSAIC) else SCOPE_SITE
@@ -1492,13 +1415,81 @@ class PickerWindow(QMainWindow):
         versions.
         """
         from sharpmod.gui_overlay_controls import SITE_AUTO
+
         try:
-            stored = str(self._settings.value("overlays/radar_site", "")
-                         or "").strip().upper()
+            stored = (
+                str(self._settings.value("overlays/radar_site", "") or "")
+                .strip()
+                .upper()
+            )
         except Exception:  # noqa: BLE001 - an unreadable INI is not fatal
             return SITE_AUTO
         from sharpmod.radar_site import site_by_id
+
         return stored if site_by_id(stored) is not None else SITE_AUTO
+
+    def _add_locator_selector(self, layout):
+        """Build the locator-overlay selector and add it under ``layout``.
+
+        Both map tabs get one, and both read the same stored choice, so the
+        selection follows the user rather than the tab they happened to start in.
+        A separator keeps it from reading as a fourth map overlay: these boxes
+        decide what the *sounding's* inset carries, not what this map shows.
+        """
+        from qtpy.QtWidgets import QFrame
+
+        from sharpmod.gui_overlay_controls import LocatorOverlaySelector
+
+        rule = QFrame()
+        rule.setFrameShape(QFrame.Shape.HLine)
+        rule.setObjectName(OBJ_HINT)
+        layout.addWidget(rule)
+        selector = LocatorOverlaySelector(parent=self, settings=self._settings)
+        layout.addWidget(selector.controls_widget())
+        return selector
+
+    def selected_locator_spec(self):
+        """Return the locator selection, for the sounding window to honour.
+
+        Read duck-typed by :func:`sharpmod.gui_viewer.start_locator_overlay_fetch`.
+        The tab in front decides, for the reason
+        :meth:`selected_overlay_product` documents: ranking the tabs in a fixed
+        order instead would answer with whichever came first regardless of which
+        map the user was actually reading. ``None`` means "not stated", which
+        leaves the previous behaviour in place.
+        """
+        selectors = []
+        tabs = getattr(self, "_tabs", None)
+        if tabs is not None:
+            try:
+                title = tabs.tabText(tabs.currentIndex())
+            except (AttributeError, RuntimeError):
+                title = ""
+            front = TAB_LOCATOR_SELECTORS.get(title)
+            if front is not None:
+                selectors.append(front)
+        selectors.extend(
+            name for name in TAB_LOCATOR_SELECTORS.values() if name not in selectors
+        )
+        for attribute in selectors:
+            selector = getattr(self, attribute, None)
+            if selector is None:
+                continue
+            try:
+                return selector.spec()
+            except Exception:  # noqa: BLE001 - a preference is not worth raising
+                return None
+        return None
+
+    def _remember_locator_choice(self) -> None:
+        """Persist the locator selection alongside the other overlay choices."""
+        for attribute in ("_map_locator", "_model_locator"):
+            selector = getattr(self, attribute, None)
+            if selector is None:
+                continue
+            with suppress(Exception):
+                selector.remember()
+                return
 
     def _remember_overlay_choices(self) -> None:
         """Persist the selected HRRR field, radar scope, and pinned radar.
@@ -1506,14 +1497,11 @@ class PickerWindow(QMainWindow):
         Never raises: this runs from ``closeEvent``, and a window must not refuse
         to close over a preference it could not write.
         """
-        field = getattr(self, "_map_field", None) \
-            or getattr(self, "_model_field", None)
-        radar = getattr(self, "_map_radar", None) \
-            or getattr(self, "_model_radar", None)
+        field = getattr(self, "_map_field", None) or getattr(self, "_model_field", None)
+        radar = getattr(self, "_map_radar", None) or getattr(self, "_model_radar", None)
         try:
             if field is not None:
-                self._settings.setValue("overlays/hrrr_field_product",
-                                        field.product())
+                self._settings.setValue("overlays/hrrr_field_product", field.product())
             if radar is not None:
                 self._settings.setValue("overlays/radar_scope", radar.scope())
                 self._settings.setValue("overlays/radar_site", radar.site())
@@ -1589,23 +1577,21 @@ class PickerWindow(QMainWindow):
         st = next((s for s in self._all_stations if s["id"] == sid), None)
         return _station_label(sid, st["name"] if st else "")
 
-    def _queue_availability(self, sid: str | None, when: datetime,
-                            indicator: "_AvailabilityIndicator") -> None:
+    def _queue_availability(
+        self, sid: str | None, when: datetime, indicator: "_AvailabilityIndicator"
+    ) -> None:
         """Debounce, then probe ``sid`` at ``when`` and update ``indicator``."""
         if not sid:
             indicator.set_status(AVAIL_UNKNOWN)
             return
-        cached = self._observed_profile_cache.get(
-            self._observed_cache_key(sid, when)
-        )
+        cached = self._observed_profile_cache.get(self._observed_cache_key(sid, when))
         if cached is not None:
             _fetched, message, station_label = cached
             indicator.set_status(AVAIL_AVAILABLE, message, station_label)
             return
         indicator.set_status(
-            AVAIL_CHECKING,
-            _AVAIL_LABELS[AVAIL_CHECKING],
-            self._station_label_for(sid))
+            AVAIL_CHECKING, _AVAIL_LABELS[AVAIL_CHECKING], self._station_label_for(sid)
+        )
         self._avail_request = (sid, when, indicator, self._station(sid))
         self._avail_timer.start()
 
@@ -1619,9 +1605,14 @@ class PickerWindow(QMainWindow):
         self._avail_pending[token] = indicator
         self._avail_latest[id(indicator)] = token
 
-        worker = _AvailabilityWorker(sid, when, token, parent=self,
-                                     station=station,
-                                     provider=self._observed_source())
+        worker = _AvailabilityWorker(
+            sid,
+            when,
+            token,
+            parent=self,
+            station=station,
+            provider=self._observed_source(),
+        )
         worker.checked.connect(self._on_availability_checked)
         worker.finished.connect(worker.deleteLater)
         self._avail_workers.append(worker)
@@ -1642,9 +1633,15 @@ class PickerWindow(QMainWindow):
             when.replace(microsecond=0),
         )
 
-    def _on_availability_checked(self, _sid: str, _when, status: str,
-                                 message: str, station_label: str,
-                                 fetched=None) -> None:
+    def _on_availability_checked(
+        self,
+        _sid: str,
+        _when,
+        status: str,
+        message: str,
+        station_label: str,
+        fetched=None,
+    ) -> None:
         worker = self.sender()
         token = getattr(worker, "token", None)
         indicator = self._avail_pending.pop(token, None)
@@ -1658,9 +1655,7 @@ class PickerWindow(QMainWindow):
         indicator.set_status(status, message, station_label)
         key = self._observed_cache_key(_sid, _when)
         if status == AVAIL_AVAILABLE and fetched is not None:
-            self._observed_profile_cache[key] = (
-                fetched, message, station_label
-            )
+            self._observed_profile_cache[key] = (fetched, message, station_label)
             while len(self._observed_profile_cache) > 4:
                 self._observed_profile_cache.pop(
                     next(iter(self._observed_profile_cache))
@@ -1691,7 +1686,8 @@ class PickerWindow(QMainWindow):
         token = self._catalog_token
         try:
             self.statusBar().showMessage(
-                f"Loading stations for {when:%Y-%m-%d %H}Z from UWyo\u2026")
+                f"Loading stations for {when:%Y-%m-%d %H}Z from UWyo\u2026"
+            )
         except Exception:
             pass
         worker = _StationListWorker(when, token, parent=self)
@@ -1711,8 +1707,7 @@ class PickerWindow(QMainWindow):
         # Repaint the map and re-run the live filter against the new set.
         if hasattr(self, "_map"):
             self._map.set_stations(self._all_stations)
-            if self._map_selected_id and \
-                    self._station(self._map_selected_id) is None:
+            if self._map_selected_id and self._station(self._map_selected_id) is None:
                 # The previously selected station isn't reported at this time.
                 self._map_selected_id = None
                 self._map_sel_lbl.setText("No station selected")
@@ -1723,8 +1718,8 @@ class PickerWindow(QMainWindow):
 
         try:
             self.statusBar().showMessage(
-                f"{len(self._all_stations)} stations available for "
-                f"{when:%Y-%m-%d %H}Z")
+                f"{len(self._all_stations)} stations available for {when:%Y-%m-%d %H}Z"
+            )
         except Exception:
             pass
 
@@ -1736,7 +1731,8 @@ class PickerWindow(QMainWindow):
         try:
             self.statusBar().showMessage(
                 f"Using offline station list \u2014 could not load "
-                f"{when:%Y-%m-%d %H}Z ({message})")
+                f"{when:%Y-%m-%d %H}Z ({message})"
+            )
         except Exception:
             pass
 
@@ -1746,8 +1742,7 @@ class PickerWindow(QMainWindow):
     def _build_map_tab(self) -> QWidget:
         w = QWidget()
         outer = QHBoxLayout(w)
-        outer.setContentsMargins(SPACE["md"], SPACE["sm"],
-                                 SPACE["md"], SPACE["sm"])
+        outer.setContentsMargins(SPACE["md"], SPACE["sm"], SPACE["md"], SPACE["sm"])
         outer.setSpacing(SPACE["md"])
 
         # The map is built before the control rail because the overlay toggle
@@ -1770,16 +1765,15 @@ class PickerWindow(QMainWindow):
         for key, label, tooltip in OBSERVED_SOURCES:
             self._map_source.addItem(label, key)
             self._map_source.setItemData(
-                self._map_source.count() - 1, tooltip, Qt.ToolTipRole)
+                self._map_source.count() - 1, tooltip, Qt.ToolTipRole
+            )
         self._map_source.setMinimumHeight(CONTROL_H["md"])
         stored_source = self._startup_observed_source()
         stored_index = self._map_source.findData(stored_source)
         if stored_index >= 0:
             self._map_source.setCurrentIndex(stored_index)
-        self._map_source.setToolTip(
-            "Which archive to fetch observed soundings from.")
-        self._map_source.currentIndexChanged.connect(
-            self._map_on_source_changed)
+        self._map_source.setToolTip("Which archive to fetch observed soundings from.")
+        self._map_source.currentIndexChanged.connect(self._map_on_source_changed)
         sb.addWidget(self._map_source)
         left.addWidget(src_box)
 
@@ -1807,7 +1801,8 @@ class PickerWindow(QMainWindow):
             self._area_combo.addItem(name)
         self._area_combo.setMinimumHeight(CONTROL_H["md"])
         self._area_combo.currentTextChanged.connect(
-            lambda name: self._map.set_area(name))
+            lambda name: self._map.set_area(name)
+        )
         ab.addWidget(self._area_combo)
         ab.addLayout(_rail_zoom_row(self._map))
         left.addWidget(area_box)
@@ -1819,16 +1814,31 @@ class PickerWindow(QMainWindow):
         overlay_box, overlay_layout = _rail_card("Map overlays")
         self._map_outlook = OutlookOverlayController(self._map, parent=self)
         overlay_layout.addWidget(self._map_outlook.controls_widget())
+
+        # Directly under the outlook, because it is read against it: the switch
+        # stays disabled until that outlook is showing.
+        self._map_reports = StormReportsOverlayController(self._map, parent=self)
+        self._map_reports.bind_outlook(self._map_outlook)
+        overlay_layout.addWidget(self._map_reports.controls_widget())
         self._map_radar = RadarOverlayController(
-            self._map, parent=self, scope=self._startup_radar_scope(),
-            site=self._startup_radar_site())
+            self._map,
+            parent=self,
+            scope=self._startup_radar_scope(),
+            site=self._startup_radar_site(),
+        )
         overlay_layout.addWidget(self._map_radar.controls_widget())
         # Listed after radar but drawn beneath it: see RASTER_DRAW_ORDER. The
         # control order follows what the user reaches for most often, the paint
         # order follows what has to stay readable.
         self._map_field = HrrrFieldController(
-            self._map, parent=self, product=self._startup_field_product())
+            self._map, parent=self, product=self._startup_field_product()
+        )
         overlay_layout.addWidget(self._map_field.controls_widget())
+        # What travels onto the sounding's own locator inset. It belongs in this
+        # card because it is the same subject -- what to draw over a map -- and is
+        # separated by a rule so it still reads as being about the sounding
+        # rather than about the map on screen.
+        self._map_locator = self._add_locator_selector(overlay_layout)
         left.addWidget(overlay_box)
 
         # One card for "which station, and can it be fetched". The selection
@@ -1848,8 +1858,7 @@ class PickerWindow(QMainWindow):
 
         # Re-probe when the requested cycle changes for the current selection.
         self._map_date.dateChanged.connect(self._map_recheck_availability)
-        self._map_cycle.currentIndexChanged.connect(
-            self._map_recheck_availability)
+        self._map_cycle.currentIndexChanged.connect(self._map_recheck_availability)
 
         self._map_gen_btn = QPushButton("Generate Sounding")
         self._map_gen_btn.setObjectName(OBJ_PRIMARY)
@@ -1858,8 +1867,10 @@ class PickerWindow(QMainWindow):
         self._map_gen_btn.clicked.connect(self._map_generate)
         left.addWidget(self._map_gen_btn)
 
-        hint = QLabel("Click a station dot to select \u2014 double-click to "
-                      "open. Scroll to zoom, drag to pan.")
+        hint = QLabel(
+            "Click a station dot to select \u2014 double-click to "
+            "open. Scroll to zoom, drag to pan."
+        )
         hint.setWordWrap(True)
         hint.setObjectName(OBJ_HINT)
         left.addWidget(hint)
@@ -1899,10 +1910,10 @@ class PickerWindow(QMainWindow):
         controller.set_site(site_id)
 
     def _map_on_view_settled(self) -> None:
-        self._view_settled("_map_radar", "_map_field")
+        self._view_settled("_map_radar", "_map_field", "_map_reports")
 
     def _model_on_view_settled(self) -> None:
-        self._view_settled("_model_radar", "_model_field")
+        self._view_settled("_model_radar", "_model_field", "_model_reports")
 
     def _view_settled(self, *attributes: str) -> None:
         """Let a tab's view-dependent overlays catch up with a moved map.
@@ -1932,6 +1943,9 @@ class PickerWindow(QMainWindow):
         field = getattr(self, "_map_field", None)
         if field is not None:
             field.set_valid_time(when)
+        reports = getattr(self, "_map_reports", None)
+        if reports is not None:
+            reports.set_valid_time(when)
 
     def _map_set_recent(self) -> None:
         d, h = _most_recent_synoptic()
@@ -1948,12 +1962,13 @@ class PickerWindow(QMainWindow):
         st = next((s for s in self._all_stations if s["id"] == sid), None)
         if st is not None:
             self._map_sel_lbl.setText(
-                f"{st['id']} \u2014 {st['name']}\n"
-                f"({st['lat']:.2f}, {st['lon']:.2f})")
+                f"{st['id']} \u2014 {st['name']}\n({st['lat']:.2f}, {st['lon']:.2f})"
+            )
         else:
             self._map_sel_lbl.setText(sid)
         self._map_gen_btn.setEnabled(
-            not (self._worker is not None and self._worker.isRunning()))
+            not (self._worker is not None and self._worker.isRunning())
+        )
         if check_availability:
             self._queue_availability(sid, self._map_when(), self._map_avail)
 
@@ -1962,7 +1977,8 @@ class PickerWindow(QMainWindow):
         # then re-probe availability for the current selection.
         self._refresh_station_catalog(self._map_when())
         self._queue_availability(
-            self._map_selected_id, self._map_when(), self._map_avail)
+            self._map_selected_id, self._map_when(), self._map_avail
+        )
         # The chosen cycle is also the overlays' valid time.
         self._map_sync_overlay_times()
 
@@ -1972,8 +1988,7 @@ class PickerWindow(QMainWindow):
 
     def _map_generate(self) -> None:
         if not self._map_selected_id:
-            QMessageBox.warning(self, APP_NAME,
-                                "Click a station on the map first.")
+            QMessageBox.warning(self, APP_NAME, "Click a station on the map first.")
             return
         self._start_fetch(self._map_selected_id, self._map_when())
 
@@ -1988,8 +2003,7 @@ class PickerWindow(QMainWindow):
         # horizontal space.
         w = QWidget()
         outer = QHBoxLayout(w)
-        outer.setContentsMargins(SPACE["md"], SPACE["sm"],
-                                 SPACE["md"], SPACE["sm"])
+        outer.setContentsMargins(SPACE["md"], SPACE["sm"], SPACE["md"], SPACE["sm"])
         outer.setSpacing(SPACE["md"])
 
         # --- left: cycle, availability, primary action ---
@@ -2002,15 +2016,18 @@ class PickerWindow(QMainWindow):
         content.setSpacing(SPACE["sm"])
         content.setContentsMargins(0, 0, 0, 0)
 
-        help_lbl = QLabel("Fetch an observed radiosonde sounding from the "
-                          "University of Wyoming archive.")
+        help_lbl = QLabel(
+            "Fetch an observed radiosonde sounding from the "
+            "University of Wyoming archive."
+        )
         help_lbl.setWordWrap(True)
         content.addWidget(help_lbl)
 
         self._uwyo_search = QLineEdit()
         self._uwyo_search.setClearButtonEnabled(True)
         self._uwyo_search.setPlaceholderText(
-            "Type to filter \u2014 station id or name (e.g. 72357, Norman, OUN)")
+            "Type to filter \u2014 station id or name (e.g. 72357, Norman, OUN)"
+        )
         # Live filtering: no button to press.
         self._uwyo_search.textChanged.connect(self._filter_stations)
         self._uwyo_search.returnPressed.connect(self._focus_first_station)
@@ -2025,7 +2042,8 @@ class PickerWindow(QMainWindow):
         self._station_list.setTextElideMode(Qt.ElideRight)
         self._station_list.itemSelectionChanged.connect(self._sync_fetch_enabled)
         self._station_list.itemDoubleClicked.connect(
-            lambda _item: self._fetch_selected())
+            lambda _item: self._fetch_selected()
+        )
         content.addWidget(self._station_list, stretch=1)
 
         self._count_lbl = QLabel("")
@@ -2084,8 +2102,10 @@ class PickerWindow(QMainWindow):
         self._fetch_btn.clicked.connect(self._fetch_selected)
         left.addWidget(self._fetch_btn)
 
-        hint = QLabel("Filter the catalogue, pick a station, then fetch \u2014 "
-                      "or double-click a row to open it directly.")
+        hint = QLabel(
+            "Filter the catalogue, pick a station, then fetch \u2014 "
+            "or double-click a row to open it directly."
+        )
         hint.setWordWrap(True)
         hint.setObjectName(OBJ_HINT)
         left.addWidget(hint)
@@ -2097,15 +2117,12 @@ class PickerWindow(QMainWindow):
         outer.addLayout(content, 1)
 
         # Re-probe availability when the selection or requested cycle changes.
-        self._station_list.itemSelectionChanged.connect(
-            self._uwyo_recheck_availability)
+        self._station_list.itemSelectionChanged.connect(self._uwyo_recheck_availability)
         self._date_edit.dateChanged.connect(self._uwyo_recheck_availability)
-        self._cycle_combo.currentIndexChanged.connect(
-            self._uwyo_recheck_availability)
+        self._cycle_combo.currentIndexChanged.connect(self._uwyo_recheck_availability)
         # Reload the datetime-aware station set when the cycle changes.
         self._date_edit.dateChanged.connect(self._uwyo_refresh_catalog)
-        self._cycle_combo.currentIndexChanged.connect(
-            self._uwyo_refresh_catalog)
+        self._cycle_combo.currentIndexChanged.connect(self._uwyo_refresh_catalog)
 
         # Populate the full catalogue now; live-filter narrows it.
         self._filter_stations("")
@@ -2115,8 +2132,8 @@ class PickerWindow(QMainWindow):
 
     def _uwyo_recheck_availability(self) -> None:
         self._queue_availability(
-            self._selected_station_id(), self._selected_when(),
-            self._uwyo_avail)
+            self._selected_station_id(), self._selected_when(), self._uwyo_avail
+        )
 
     def _uwyo_refresh_catalog(self) -> None:
         """Refresh the station set when the list tab's cycle changes."""
@@ -2126,16 +2143,17 @@ class PickerWindow(QMainWindow):
     def _filter_stations(self, text: str) -> None:
         query = (text or "").strip().casefold()
         if query:
-            rows = [r for r in self._all_stations
-                    if query in r["id"].casefold()
-                    or query in r["name"].casefold()]
+            rows = [
+                r
+                for r in self._all_stations
+                if query in r["id"].casefold() or query in r["name"].casefold()
+            ]
         else:
             rows = self._all_stations
 
         self._station_list.clear()
         for r in rows:
-            label = (f"{r['id']}   {r['name']}   "
-                     f"({r['lat']:.2f}, {r['lon']:.2f})")
+            label = f"{r['id']}   {r['name']}   ({r['lat']:.2f}, {r['lon']:.2f})"
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, r["id"])
             self._station_list.addItem(item)
@@ -2150,8 +2168,7 @@ class PickerWindow(QMainWindow):
 
     def _focus_first_station(self) -> None:
         """Enter in the filter box selects the first match (then Fetch works)."""
-        if self._station_list.count() > 0 and \
-                self._station_list.currentRow() < 0:
+        if self._station_list.count() > 0 and self._station_list.currentRow() < 0:
             self._station_list.setCurrentRow(0)
         self._station_list.setFocus()
 
@@ -2166,8 +2183,7 @@ class PickerWindow(QMainWindow):
         if not hasattr(self, "_fetch_btn"):
             return
         busy = self._worker is not None and self._worker.isRunning()
-        self._fetch_btn.setEnabled(
-            not busy and self._selected_station_id() is not None)
+        self._fetch_btn.setEnabled(not busy and self._selected_station_id() is not None)
 
     # -- time ---------------------------------------------------------------- #
     def _set_most_recent(self) -> None:
@@ -2189,28 +2205,25 @@ class PickerWindow(QMainWindow):
     def _fetch_selected(self) -> None:
         sid = self._selected_station_id()
         if not sid:
-            QMessageBox.warning(self, APP_NAME,
-                                "Select a station from the list first.")
+            QMessageBox.warning(self, APP_NAME, "Select a station from the list first.")
             return
         self._start_fetch(sid, self._selected_when())
 
     def _start_fetch(self, sid: str, when: datetime) -> None:
         """Fetch an observation from the source selected in the rail."""
         if self._worker is not None and self._worker.isRunning():
-            QMessageBox.information(self, APP_NAME,
-                                    "A fetch is already in progress.")
+            QMessageBox.information(self, APP_NAME, "A fetch is already in progress.")
             return
         _LOGGER.info("observed_fetch.start station=%s valid=%s", sid, when)
         self._settings.setValue("last_station", sid)
 
-        cached = self._observed_profile_cache.get(
-            self._observed_cache_key(sid, when)
-        )
+        cached = self._observed_profile_cache.get(self._observed_cache_key(sid, when))
         if cached is not None:
             fetched, _message, _station_label = cached
             _LOGGER.info(
                 "observed_fetch.preflight_cache_hit station=%s valid=%s",
-                sid, when,
+                sid,
+                when,
             )
             self._display_prefetched_observation(fetched, sid, when)
             return
@@ -2219,11 +2232,12 @@ class PickerWindow(QMainWindow):
         self._set_busy(True)
         self.statusBar().showMessage(
             f"Fetching {sid} at {when:%Y-%m-%d %H}Z from "
-            f"{_observed_source_label(source)}\u2026")
+            f"{_observed_source_label(source)}\u2026"
+        )
 
-        self._worker = _FetchWorker(sid, when, parent=self,
-                                    station=self._station(sid),
-                                    provider=source)
+        self._worker = _FetchWorker(
+            sid, when, parent=self, station=self._station(sid), provider=source
+        )
         self._worker.finished_ok.connect(self._on_fetch_ok)
         self._worker.failed.connect(self._on_fetch_failed)
         self._worker.finished.connect(lambda: self._set_busy(False))
@@ -2241,9 +2255,7 @@ class PickerWindow(QMainWindow):
         delivered_when = getattr(fetched, "valid", None)
         if not isinstance(delivered_when, datetime):
             delivered_when = when
-        station_id = str(
-            getattr(fetched, "station_id", None) or requested_sid
-        )
+        station_id = str(getattr(fetched, "station_id", None) or requested_sid)
         provider = str(getattr(fetched, "provider", "uwyo")).upper()
         prof_col = ProfCollection(
             {"": [fetched.profile]},
@@ -2261,8 +2273,7 @@ class PickerWindow(QMainWindow):
         QApplication.processEvents()
         try:
             title = (
-                f"{APP_NAME} — {station_id} {delivered_when:%Y-%m-%d %H}Z "
-                f"[{provider}]"
+                f"{APP_NAME} — {station_id} {delivered_when:%Y-%m-%d %H}Z [{provider}]"
             )
             self._show_sounding(prof_col, station_id, title=title)
             self.statusBar().showMessage(
@@ -2272,15 +2283,18 @@ class PickerWindow(QMainWindow):
             )
             _LOGGER.info(
                 "observed_fetch.displayed_from_preflight station=%s valid=%s",
-                station_id, delivered_when,
+                station_id,
+                delivered_when,
             )
         except Exception as exc:  # noqa: BLE001 - GUI/render boundary
             _LOGGER.exception(
                 "observed_fetch.preflight_display_failed station=%s valid=%s",
-                station_id, delivered_when,
+                station_id,
+                delivered_when,
             )
             QMessageBox.critical(
-                self, APP_NAME,
+                self,
+                APP_NAME,
                 f"Fetched, but could not display:\n{exc}",
             )
         finally:
@@ -2289,13 +2303,15 @@ class PickerWindow(QMainWindow):
     def _set_busy(self, busy: bool) -> None:
         _LOGGER.debug(
             "uwyo_fetch.ui_busy busy=%s worker=%s",
-            busy, id(self._worker) if self._worker else None)
+            busy,
+            id(self._worker) if self._worker else None,
+        )
         if busy:
             QApplication.setOverrideCursor(Qt.WaitCursor)
-            _set_button_busy(getattr(self, "_fetch_btn", None), True,
-                             "Fetching\u2026")
-            _set_button_busy(getattr(self, "_map_gen_btn", None), True,
-                             "Fetching\u2026")
+            _set_button_busy(getattr(self, "_fetch_btn", None), True, "Fetching\u2026")
+            _set_button_busy(
+                getattr(self, "_map_gen_btn", None), True, "Fetching\u2026"
+            )
         else:
             QApplication.restoreOverrideCursor()
             _set_button_busy(getattr(self, "_fetch_btn", None), False, "")
@@ -2307,7 +2323,8 @@ class PickerWindow(QMainWindow):
 
     def _on_fetch_ok(self, npz_path, meta, when) -> None:
         self.statusBar().showMessage(
-            f"Rendering {meta.id} sounding\u2026 (this takes a moment)")
+            f"Rendering {meta.id} sounding\u2026 (this takes a moment)"
+        )
         # Force the status message to paint before the synchronous compose
         # (which briefly blocks the UI thread while the SPC window is built).
         QApplication.processEvents()
@@ -2315,21 +2332,19 @@ class PickerWindow(QMainWindow):
             R = _render()
             prof_col, stn_id = R.decode(npz_path)
             provider = str(getattr(meta, "provider", "observed")).upper()
-            title = (
-                f"{APP_NAME} \u2014 {meta.id} {when:%Y-%m-%d %H}Z "
-                f"[{provider}]"
-            )
+            title = f"{APP_NAME} \u2014 {meta.id} {when:%Y-%m-%d %H}Z [{provider}]"
             self._show_sounding(prof_col, stn_id, title=title)
             self.statusBar().showMessage(
                 f"Opened {meta.id} {when:%Y-%m-%d %H}Z from {provider}"
             )
-            _LOGGER.info(
-                "uwyo_fetch.displayed station=%s valid=%s", meta.id, when)
+            _LOGGER.info("uwyo_fetch.displayed station=%s valid=%s", meta.id, when)
         except Exception as exc:  # noqa: BLE001
             _LOGGER.exception(
-                "uwyo_fetch.display_failed station=%s valid=%s", meta.id, when)
-            QMessageBox.critical(self, APP_NAME,
-                                 f"Fetched, but could not display:\n{exc}")
+                "uwyo_fetch.display_failed station=%s valid=%s", meta.id, when
+            )
+            QMessageBox.critical(
+                self, APP_NAME, f"Fetched, but could not display:\n{exc}"
+            )
         finally:
             try:
                 os.remove(npz_path)
@@ -2351,8 +2366,7 @@ class PickerWindow(QMainWindow):
     def _build_model_tab(self) -> QWidget:
         w = QWidget()
         outer = QHBoxLayout(w)
-        outer.setContentsMargins(SPACE["md"], SPACE["sm"],
-                                 SPACE["md"], SPACE["sm"])
+        outer.setContentsMargins(SPACE["md"], SPACE["sm"], SPACE["md"], SPACE["sm"])
         outer.setSpacing(SPACE["md"])
 
         self._model_syncing_point = False
@@ -2361,8 +2375,7 @@ class PickerWindow(QMainWindow):
         self._model_map.radarSiteSelected.connect(self._model_on_radar_site)
         self._model_map.viewSettled.connect(self._model_on_view_settled)
         self._model_map.pointSelected.connect(self._model_on_map_point)
-        self._model_map.pointActivated.connect(
-            lambda _lat, _lon: self._model_fetch())
+        self._model_map.pointActivated.connect(lambda _lat, _lon: self._model_fetch())
         self._model_map.boxSelected.connect(self._model_on_box_selected)
 
         left = QVBoxLayout()
@@ -2374,24 +2387,32 @@ class PickerWindow(QMainWindow):
         for name in MAP_AREAS:
             self._model_area_combo.addItem(name)
         self._model_area_combo.setMinimumHeight(CONTROL_H["md"])
-        self._model_area_combo.currentTextChanged.connect(
-            self._model_area_changed)
+        self._model_area_combo.currentTextChanged.connect(self._model_area_changed)
         area_layout.addWidget(self._model_area_combo)
         area_layout.addLayout(_rail_zoom_row(self._model_map))
         left.addWidget(area_box)
 
         overlay_box, overlay_layout = _rail_card("Map overlays")
-        self._model_outlook = OutlookOverlayController(
-            self._model_map, parent=self)
+        self._model_outlook = OutlookOverlayController(self._model_map, parent=self)
         overlay_layout.addWidget(self._model_outlook.controls_widget())
+
+        self._model_reports = StormReportsOverlayController(
+            self._model_map, parent=self
+        )
+        self._model_reports.bind_outlook(self._model_outlook)
+        overlay_layout.addWidget(self._model_reports.controls_widget())
         self._model_radar = RadarOverlayController(
-            self._model_map, parent=self, scope=self._startup_radar_scope(),
-            site=self._startup_radar_site())
+            self._model_map,
+            parent=self,
+            scope=self._startup_radar_scope(),
+            site=self._startup_radar_site(),
+        )
         overlay_layout.addWidget(self._model_radar.controls_widget())
         self._model_field = HrrrFieldController(
-            self._model_map, parent=self,
-            product=self._startup_field_product())
+            self._model_map, parent=self, product=self._startup_field_product()
+        )
         overlay_layout.addWidget(self._model_field.controls_widget())
+        self._model_locator = self._add_locator_selector(overlay_layout)
         left.addWidget(overlay_box)
 
         model_box, model_layout = _rail_card("Model")
@@ -2427,18 +2448,19 @@ class PickerWindow(QMainWindow):
         self._model_fxx_combo = QComboBox()
         self._model_fxx_combo.setMaxVisibleItems(24)
         self._model_fxx_combo.currentIndexChanged.connect(
-            self._model_update_valid_label)
+            self._model_update_valid_label
+        )
         _rail_row(time_grid, 2, "Forecast:", self._model_fxx_combo)
         self._model_valid_lbl = QLabel("")
         self._model_valid_lbl.setObjectName(OBJ_EMPHASIS)
         time_grid.addWidget(self._model_valid_lbl, 3, 0, 1, 3)
         self._model_availability = _AvailabilityIndicator()
         self._model_availability.setToolTip(
-            "Catalog check only; Fetch remains available if this is uncertain")
+            "Catalog check only; Fetch remains available if this is uncertain"
+        )
         time_grid.addWidget(self._model_availability, 4, 0, 1, 3)
         self._model_use_available_btn = QPushButton("Use available cycle")
-        self._model_use_available_btn.clicked.connect(
-            self._use_model_available_run)
+        self._model_use_available_btn.clicked.connect(self._use_model_available_run)
         self._model_use_available_btn.hide()
         time_grid.addWidget(self._model_use_available_btn, 5, 0, 1, 3)
         left.addWidget(time_box)
@@ -2450,21 +2472,25 @@ class PickerWindow(QMainWindow):
         self._model_lat.setSingleStep(0.25)
         self._model_lat.setValue(35.6300)
         self._model_lat.valueChanged.connect(
-            lambda _value: self._model_point_from_spins())
+            lambda _value: self._model_point_from_spins()
+        )
         center = QToolButton()
         center.setText("Center")
         center.setToolTip("Center the map on this point")
-        center.clicked.connect(lambda: self._model_map.set_point(
-            self._model_lat.value(), self._model_lon.value(), center=True))
-        _rail_row(point_grid, 0, "Latitude:", self._model_lat,
-                  trailing=center)
+        center.clicked.connect(
+            lambda: self._model_map.set_point(
+                self._model_lat.value(), self._model_lon.value(), center=True
+            )
+        )
+        _rail_row(point_grid, 0, "Latitude:", self._model_lat, trailing=center)
         self._model_lon = QDoubleSpinBox()
         self._model_lon.setRange(-180.0, 180.0)
         self._model_lon.setDecimals(4)
         self._model_lon.setSingleStep(0.25)
         self._model_lon.setValue(-97.4400)
         self._model_lon.valueChanged.connect(
-            lambda _value: self._model_point_from_spins())
+            lambda _value: self._model_point_from_spins()
+        )
         _rail_row(point_grid, 1, "Longitude:", self._model_lon)
         self._model_loc = QLineEdit()
         self._model_loc.setPlaceholderText("automatic town name")
@@ -2484,8 +2510,7 @@ class PickerWindow(QMainWindow):
         self._model_member_box, member_layout = _rail_card("Ensemble member")
         self._model_member = QLineEdit()
         self._model_member.setMinimumHeight(CONTROL_H["md"])
-        self._model_member.textChanged.connect(
-            self._queue_model_availability)
+        self._model_member.textChanged.connect(self._queue_model_availability)
         member_layout.addWidget(self._model_member)
         self._model_member_box.hide()
         left.addWidget(self._model_member_box)
@@ -2535,6 +2560,12 @@ class PickerWindow(QMainWindow):
         self._model_cancel_btn.clicked.connect(self._cancel_model_fetch)
         self._model_cancel_btn.hide()
         action_row.addWidget(self._model_cancel_btn, 1)
+        # Lazy import keeps the request planner and comparison dialog out of
+        # first-paint startup.  The coordinator owns the bounded batch worker;
+        # this file only contributes its slot in the existing action row.
+        from sharpmod.gui_model_compare import install_model_compare_control
+
+        install_model_compare_control(self, action_row)
         left.addLayout(action_row)
 
         self._model_progress = QProgressBar()
@@ -2568,6 +2599,7 @@ class PickerWindow(QMainWindow):
     def _model_unsupported_text(self) -> str:
         try:
             from sharpmod.tools import model_extract
+
             unsupported = model_extract.unsupported_models()
         except Exception:
             return ""
@@ -2587,13 +2619,16 @@ class PickerWindow(QMainWindow):
         self._model_combo.clear()
         try:
             from sharpmod.tools import model_extract
-            area = self._model_area_combo.currentText() \
-                if hasattr(self, "_model_area_combo") else "United States (CONUS)"
+
+            area = (
+                self._model_area_combo.currentText()
+                if hasattr(self, "_model_area_combo")
+                else "United States (CONUS)"
+            )
             area_bounds = MAP_AREAS.get(area, MAP_AREAS["United States (CONUS)"])
             configs = []
             for cfg in model_extract.available_models():
-                allowed = model_extract.domain_intersects_bounds(
-                    cfg, area_bounds)
+                allowed = model_extract.domain_intersects_bounds(cfg, area_bounds)
                 if allowed:
                     configs.append(cfg)
             for cfg in configs:
@@ -2617,6 +2652,7 @@ class PickerWindow(QMainWindow):
         if not key:
             return None
         from sharpmod.tools import model_extract
+
         return model_extract.get_config(key)
 
     def _model_update_cycles(self) -> None:
@@ -2636,12 +2672,11 @@ class PickerWindow(QMainWindow):
         # position now that position no longer tracks the clock.
         now = datetime.now(timezone.utc)
         _fill_cycle_combo(
-            self._model_cycle, cfg.cycles,
-            _newest_cycle_not_after(cfg.cycles, now.hour))
+            self._model_cycle, cfg.cycles, _newest_cycle_not_after(cfg.cycles, now.hour)
+        )
         self._model_cycle.blockSignals(False)
 
-        self._model_notes.setText(
-            f"{cfg.notes}\nDomain: {cfg.domain}")
+        self._model_notes.setText(f"{cfg.notes}\nDomain: {cfg.domain}")
         if hasattr(self, "_model_map"):
             self._model_map.set_domain(
                 cfg.domain_bounds,
@@ -2674,6 +2709,7 @@ class PickerWindow(QMainWindow):
         self._model_fxx_combo.clear()
         if cfg is not None:
             from sharpmod.tools import model_extract
+
             cycle = int(self._model_cycle.currentData() or 0)
             for hour in model_extract.forecast_hours(cfg, cycle_hour=cycle):
                 self._model_fxx_combo.addItem(f"F{int(hour):03d}", int(hour))
@@ -2716,17 +2752,22 @@ class PickerWindow(QMainWindow):
         fxx = self._model_selected_fxx()
         valid = run + timedelta(hours=fxx)
         self._model_valid_lbl.setText(
-            f"Run {run:%Y-%m-%d %H}Z  \u2192  Valid {valid:%Y-%m-%d %H}Z")
+            f"Run {run:%Y-%m-%d %H}Z  \u2192  Valid {valid:%Y-%m-%d %H}Z"
+        )
         # The overlay tracks the forecast *valid* time, not the run time: a
         # sounding is compared against the outlook covering the hour it depicts.
         if hasattr(self, "_model_outlook"):
             self._model_outlook.set_valid_time(as_utc(valid))
+        reports = getattr(self, "_model_reports", None)
+        if reports is not None:
+            reports.set_valid_time(as_utc(valid))
         self._model_sync_field_reference(run, fxx, valid)
         if hasattr(self, "_model_availability"):
             self._queue_model_availability()
 
-    def _model_sync_field_reference(self, run: datetime, fxx: int,
-                                    valid: datetime) -> None:
+    def _model_sync_field_reference(
+        self, run: datetime, fxx: int, valid: datetime
+    ) -> None:
         """Point the HRRR field overlay at the selected cycle.
 
         The gridded overlay is HRRR, so it can be pinned to the very run and
@@ -2751,15 +2792,15 @@ class PickerWindow(QMainWindow):
             field.set_valid_time(as_utc(valid))
 
     def _model_member_value(self) -> str | None:
-        if not hasattr(self, "_model_member") \
-                or not self._model_member.isEnabled():
+        if not hasattr(self, "_model_member") or not self._model_member.isEnabled():
             return None
         return self._model_member.text().strip() or None
 
     def _queue_model_availability(self, *_args) -> None:
         """Debounce a catalog probe for the exact current picker selection."""
-        if not hasattr(self, "_model_availability_timer") \
-                or not hasattr(self, "_model_availability"):
+        if not hasattr(self, "_model_availability_timer") or not hasattr(
+            self, "_model_availability"
+        ):
             return
         self._model_availability_token += 1
         self._model_availability_timer.stop()
@@ -2785,7 +2826,8 @@ class PickerWindow(QMainWindow):
         )
         self._model_availability_request = request
         self._model_availability.set_status(
-            AVAIL_CHECKING, "Checking selected and recent cycles\u2026")
+            AVAIL_CHECKING, "Checking selected and recent cycles\u2026"
+        )
         self._model_availability_timer.start()
 
     def _run_model_availability(self) -> None:
@@ -2819,6 +2861,7 @@ class PickerWindow(QMainWindow):
         # incompatible native library from QThread can terminate the process
         # instead of raising an ordinary Python exception.
         from sharpmod.tools import model_extract
+
         model, run_time, fxx, member = request
         if model_extract.requires_grib_runtime(model):
             try:
@@ -2833,28 +2876,42 @@ class PickerWindow(QMainWindow):
 
         token = self._model_availability_token
         worker = _ModelAvailabilityWorker(
-            model, run_time, fxx, member, token, parent=self)
+            model, run_time, fxx, member, token, parent=self
+        )
         self._model_availability_workers.append(worker)
         worker.checked.connect(self._on_model_availability_checked)
         worker.finished.connect(self._on_model_availability_finished)
         worker.start()
 
     def _on_model_availability_checked(
-            self, token: int, model: str, run_time: datetime, fxx: int,
-            member: str | None, status: str, message: str,
-            available_run: datetime | None) -> None:
+        self,
+        token: int,
+        model: str,
+        run_time: datetime,
+        fxx: int,
+        member: str | None,
+        status: str,
+        message: str,
+        available_run: datetime | None,
+    ) -> None:
         request = (model, run_time, int(fxx), member or None)
-        if token != self._model_availability_token \
-                or request != self._model_availability_request:
+        if (
+            token != self._model_availability_token
+            or request != self._model_availability_request
+        ):
             _LOGGER.debug(
                 "model_availability.stale token=%s current=%s request=%s",
-                token, self._model_availability_token, request)
+                token,
+                self._model_availability_token,
+                request,
+            )
             return
         self._model_availability.set_status(status, message)
         if status == AVAIL_FALLBACK and available_run is not None:
             self._model_available_run = available_run
             self._model_use_available_btn.setText(
-                f"Use available cycle ({available_run:%Y-%m-%d %H}Z)")
+                f"Use available cycle ({available_run:%Y-%m-%d %H}Z)"
+            )
             self._model_use_available_btn.show()
         else:
             self._model_available_run = None
@@ -2880,8 +2937,7 @@ class PickerWindow(QMainWindow):
         run_time = self._model_available_run
         if run_time is None:
             return
-        self._model_date.setDate(QDate(
-            run_time.year, run_time.month, run_time.day))
+        self._model_date.setDate(QDate(run_time.year, run_time.month, run_time.day))
         index = self._model_cycle.findData(run_time.hour)
         if index >= 0:
             self._model_cycle.setCurrentIndex(index)
@@ -2891,8 +2947,10 @@ class PickerWindow(QMainWindow):
             return
         if hasattr(self, "_model_map"):
             self._model_map.set_point(
-                float(self._model_lat.value()), float(self._model_lon.value()),
-                center=center)
+                float(self._model_lat.value()),
+                float(self._model_lon.value()),
+                center=center,
+            )
         self._model_update_fetch_state()
 
     def _model_on_map_point(self, lat: float, lon: float) -> None:
@@ -2909,19 +2967,25 @@ class PickerWindow(QMainWindow):
         if cfg is None:
             return False
         from sharpmod.tools import model_extract
+
         return model_extract.point_in_domain(
-            cfg, self._model_lat.value(), self._model_lon.value())
+            cfg, self._model_lat.value(), self._model_lon.value()
+        )
 
     def _model_update_fetch_state(self) -> None:
-        if not hasattr(self, "_model_fetch_btn") \
-                or not hasattr(self, "_model_point_status"):
+        if not hasattr(self, "_model_fetch_btn") or not hasattr(
+            self, "_model_point_status"
+        ):
             return
         cfg = self._model_config()
-        busy = self._model_worker is not None \
-            or getattr(self, "_model_timeline_worker", None) is not None \
-            or getattr(self, "_box_extract_worker", None) is not None \
-            or getattr(self, "_box_analysis_worker", None) is not None \
+        busy = (
+            self._model_worker is not None
+            or getattr(self, "_model_timeline_worker", None) is not None
+            or getattr(self, "_model_compare_worker", None) is not None
+            or getattr(self, "_box_extract_worker", None) is not None
+            or getattr(self, "_box_analysis_worker", None) is not None
             or getattr(self, "_box_mean_worker", None) is not None
+        )
         if cfg is None:
             self._model_point_status.setText("")
             self._model_fetch_btn.setEnabled(False)
@@ -2930,39 +2994,52 @@ class PickerWindow(QMainWindow):
         lon = float(self._model_lon.value())
         ok = self._model_point_ok()
         _LOGGER.debug(
-            "model_fetch.ui_state model=%s point_ok=%s busy=%s lat=%.4f "
-            "lon=%.4f",
-            cfg.key, ok, busy, lat, lon)
+            "model_fetch.ui_state model=%s point_ok=%s busy=%s lat=%.4f lon=%.4f",
+            cfg.key,
+            ok,
+            busy,
+            lat,
+            lon,
+        )
         if ok:
             self._model_point_status.setText(
-                f"Selected {lat:.4f}, {lon:.4f} inside {cfg.domain}")
+                f"Selected {lat:.4f}, {lon:.4f} inside {cfg.domain}"
+            )
         else:
             self._model_point_status.setText(
                 f"Selected {lat:.4f}, {lon:.4f} is outside {cfg.label} "
-                f"{cfg.domain} coverage")
+                f"{cfg.domain} coverage"
+            )
         self._model_fetch_btn.setEnabled(ok and not busy)
         if hasattr(self, "_model_timeline_btn"):
             self._model_timeline_btn.setEnabled(ok and not busy)
+        if hasattr(self, "_model_compare_btn"):
+            self._model_compare_btn.setEnabled(ok and not busy)
 
     def _model_fetch(self, *_signal_args, cache_entry=None) -> None:
         cfg = self._model_config()
         if cfg is None:
             QMessageBox.warning(self, APP_NAME, "Choose a forecast model first.")
             return
-        if self._model_worker is not None \
-                or getattr(self, "_model_timeline_worker", None) is not None:
-            QMessageBox.information(self, APP_NAME,
-                                    "A model fetch is already in progress.")
+        if (
+            self._model_worker is not None
+            or getattr(self, "_model_timeline_worker", None) is not None
+            or getattr(self, "_model_compare_worker", None) is not None
+        ):
+            QMessageBox.information(
+                self, APP_NAME, "A model fetch is already in progress."
+            )
             return
         lat = float(self._model_lat.value())
         lon = float(self._model_lon.value())
         if not self._model_point_ok():
             QMessageBox.warning(
-                self, APP_NAME,
-                f"{cfg.label} does not cover {lat:.4f}, {lon:.4f}.")
+                self, APP_NAME, f"{cfg.label} does not cover {lat:.4f}, {lon:.4f}."
+            )
             return
 
         from sharpmod.tools import model_extract
+
         # Keep native GRIB imports on the main Qt thread. The HRRR Zarr path
         # itself does not need ecCodes, but its automatic fallback does, and a
         # first native import from a Windows QThread can terminate the process.
@@ -2971,31 +3048,29 @@ class PickerWindow(QMainWindow):
                 model_extract.require_runtime_dependencies()
             except model_extract.RetrievalError as exc:
                 _LOGGER.exception("model_fetch.runtime_unavailable")
-                self.statusBar().showMessage(
-                    "Forecast model support unavailable")
+                self.statusBar().showMessage("Forecast model support unavailable")
                 QMessageBox.critical(
-                    self, APP_NAME,
-                    f"Forecast model support is unavailable:\n{exc}")
+                    self, APP_NAME, f"Forecast model support is unavailable:\n{exc}"
+                )
                 return
 
         self._ensure_model_cache()
         cached_grib = None
         if cache_entry is not None:
             try:
-                candidates = self._model_disk_cache.valid_grib_paths(
-                    cache_entry.path
-                )
+                candidates = self._model_disk_cache.valid_grib_paths(cache_entry.path)
             except (OSError, ValueError) as exc:
                 QMessageBox.warning(
-                    self, APP_NAME,
+                    self,
+                    APP_NAME,
                     f"The cached GRIB entry is no longer usable:\n{exc}",
                 )
                 return
             if not candidates:
                 QMessageBox.warning(
-                    self, APP_NAME,
-                    "This cache entry no longer contains a complete GRIB "
-                    "payload.",
+                    self,
+                    APP_NAME,
+                    "This cache entry no longer contains a complete GRIB payload.",
                 )
                 return
             cached_grib = max(
@@ -3013,38 +3088,48 @@ class PickerWindow(QMainWindow):
         self._remember_point(lat, lon, loc)
 
         download_dir = tempfile.mkdtemp(
-            prefix=f"model_{cfg.key.replace('-', '_')}_{run_time:%Y%m%d%H}_"
-                   f"f{fxx:03d}_")
+            prefix=f"model_{cfg.key.replace('-', '_')}_{run_time:%Y%m%d%H}_f{fxx:03d}_"
+        )
         npz_path = os.path.join(download_dir, "sounding.npz")
 
         _LOGGER.info(
             "model_fetch.start model=%s run=%s fxx=%03d lat=%.4f lon=%.4f "
             "download_dir=%s",
-            cfg.key, run_time, fxx, lat, lon, download_dir)
+            cfg.key,
+            run_time,
+            fxx,
+            lat,
+            lon,
+            download_dir,
+        )
 
         self._set_model_busy(True)
         self.statusBar().showMessage(
-            f"Fetching {cfg.label} F{fxx:03d} at {lat:.2f}, {lon:.2f}\u2026")
+            f"Fetching {cfg.label} F{fxx:03d} at {lat:.2f}, {lon:.2f}\u2026"
+        )
         worker = _ModelFetchWorker(
-            cfg.key, lat, lon, run_time, fxx, npz_path, loc=loc,
+            cfg.key,
+            lat,
+            lon,
+            run_time,
+            fxx,
+            npz_path,
+            loc=loc,
             resolve_place=not bool(loc),
-            member=member, download_dir=download_dir,
+            member=member,
+            download_dir=download_dir,
             model_hour_cache=self._model_hour_cache,
             cached_grib=cached_grib,
             cached_source_fields=(
                 cache_entry.source_fields if cache_entry is not None else ()
             ),
-            cached_cache=(
-                self._model_disk_cache if cache_entry is not None else None
-            ),
-            cached_directory=(
-                cache_entry.path if cache_entry is not None else None
-            ),
+            cached_cache=(self._model_disk_cache if cache_entry is not None else None),
+            cached_directory=(cache_entry.path if cache_entry is not None else None),
             cached_contract_version=(
-                cache_entry.contract_version
-                if cache_entry is not None else None
+                cache_entry.contract_version if cache_entry is not None else None
             ),
-            parent=self)
+            parent=self,
+        )
         self._model_worker = worker
         worker.finished_ok.connect(self._on_model_fetch_ok)
         worker.failed.connect(self._on_model_fetch_failed)
@@ -3054,239 +3139,14 @@ class PickerWindow(QMainWindow):
         worker.start()
 
     def _model_fetch_timeline(self) -> None:
-        """Fetch a bounded forecast-hour range and stream it into one viewer."""
-        from sharpmod.gui_timeline import (
-            ForecastTimelineDialog,
-            ModelTimelineWorker,
-        )
+        """Open the forecast timeline workflow owned by gui_timeline."""
+        from sharpmod.gui_timeline import ForecastTimelineCoordinator
 
-        cfg = self._model_config()
-        if cfg is None:
-            QMessageBox.warning(self, APP_NAME, "Choose a forecast model first.")
-            return
-        if self._model_worker is not None \
-                or self._model_timeline_worker is not None:
-            QMessageBox.information(
-                self, APP_NAME, "A model fetch is already in progress."
-            )
-            return
-        self._ensure_model_cache()
-        lat = float(self._model_lat.value())
-        lon = float(self._model_lon.value())
-        if not self._model_point_ok():
-            QMessageBox.warning(
-                self, APP_NAME,
-                f"{cfg.label} does not cover {lat:.4f}, {lon:.4f}."
-            )
-            return
-
-        from sharpmod.tools import model_extract
-        if model_extract.requires_grib_runtime(cfg):
-            try:
-                model_extract.require_runtime_dependencies()
-            except model_extract.RetrievalError as exc:
-                QMessageBox.critical(
-                    self, APP_NAME,
-                    f"Forecast model support is unavailable:\n{exc}"
-                )
-                return
-        available = model_extract.forecast_hours(
-            cfg, cycle_hour=self._model_run_time().hour
-        )
-        try:
-            dialog = ForecastTimelineDialog(
-                available,
-                current=self._model_selected_fxx(),
-                parent=self,
-            )
-        except ValueError as exc:
-            QMessageBox.warning(self, APP_NAME, str(exc))
-            return
-        if dialog.exec() != QDialog.Accepted:
-            return
-        hours = dialog.hours()
-        if len(hours) < 2:
-            QMessageBox.information(
-                self, APP_NAME,
-                "Choose at least two forecast hours for a timeline."
-            )
-            return
-
-        self._cancel_model_prefetch(wait=True)
-        run_time = self._model_run_time()
-        member = self._model_member_value()
-        loc = self._model_loc.text().strip() or None
-        output_dir = tempfile.mkdtemp(
-            prefix=(
-                f"timeline_{cfg.key.replace('-', '_')}_"
-                f"{run_time:%Y%m%d%H}_"
-            )
-        )
-        worker = ModelTimelineWorker(
-            cfg.key, lat, lon, run_time, hours, output_dir,
-            loc=loc, resolve_place=not bool(loc), member=member,
-            disk_cache=self._model_disk_cache,
-            parent=self,
-        )
-        worker._sharpmod_viewer = None
-        worker._sharpmod_collection = None
-        worker._sharpmod_paths = []
-        worker._sharpmod_failures = {}
-        worker._sharpmod_viewer_closed = False
-        self._model_timeline_worker = worker
-        self._remember_point(lat, lon, loc)
-        worker.item_ready.connect(self._on_timeline_item_ready)
-        worker.item_failed.connect(self._on_timeline_item_failed)
-        worker.progress.connect(self._on_timeline_progress)
-        worker.result_ready.connect(self._on_timeline_result)
-        worker.failed.connect(self._on_timeline_failed)
-        worker.finished.connect(self._on_timeline_finished)
-        self._set_model_busy(True)
-        self._model_progress_timer.stop()
-        self._model_fetch_btn.setText("Timeline queued…")
-        self._model_timeline_btn.setText("Timeline running…")
-        self._model_progress.setRange(0, len(hours))
-        self._model_progress.setValue(0)
-        self._model_progress.setFormat(f"0 / {len(hours)} hours")
-        self._model_progress_detail.setText(
-            f"Queued {len(hours)} forecast hours; completed hours will open "
-            "as they arrive."
-        )
-        self.statusBar().showMessage(
-            f"Fetching {cfg.label} timeline F{hours[0]:03d}–F{hours[-1]:03d}…"
-        )
-        worker.start()
-
-    def _on_timeline_item_ready(self, npz_path: str, fxx: int) -> None:
-        worker = self.sender()
-        if worker is not self._model_timeline_worker \
-                or getattr(worker, "_sharpmod_viewer_closed", False):
-            return
-        try:
-            prof_col, stn_id = _render().decode(npz_path)
-            collection = getattr(worker, "_sharpmod_collection", None)
-            if collection is None:
-                source_meta = dict(getattr(prof_col, "_meta", {}))
-                prof_col.setMeta("timeline", True)
-                prof_col.setMeta("timeline_count", 1)
-                prof_col.setMeta("timeline_hours", [int(fxx)])
-                prof_col.setMeta("timeline_sources", [str(npz_path)])
-                prof_col.setMeta("timeline_provenance", [source_meta])
-                self._prune_closed_viewers()
-                win = compose_interactive(
-                    self._config(), prof_col, self, stn_id=stn_id
-                )
-                win.setWindowTitle(
-                    f"{APP_NAME} — Forecast Timeline (1 hour loaded)"
-                )
-                self._viewers.append(win)
-                worker._sharpmod_viewer = win
-                worker._sharpmod_collection = prof_col
-                output_dir = worker.output_dir
-                win.destroyed.connect(
-                    lambda *_args, worker=worker, output_dir=output_dir:
-                    self._on_timeline_viewer_destroyed(worker, output_dir)
-                )
-            else:
-                from sharpmod.profile_timeline import append_collection
-                from sharpmod.gui_timeline import refresh_timeline_controls
-
-                append_collection(collection, prof_col)
-                win = worker._sharpmod_viewer
-                win.spc_widget.updateProfs()
-                refresh_timeline_controls(win)
-                count = int(collection.getMeta("timeline_count"))
-                win.setWindowTitle(
-                    f"{APP_NAME} — Forecast Timeline ({count} hours loaded)"
-                )
-            worker._sharpmod_paths.append(str(npz_path))
-        except Exception as exc:  # noqa: BLE001 - decode/render boundary
-            _LOGGER.exception(
-                "forecast_timeline.display_failed path=%s fxx=%s", npz_path, fxx
-            )
-            worker._sharpmod_failures[int(fxx)] = str(exc)
-            self.statusBar().showMessage(
-                f"F{int(fxx):03d} downloaded but could not be displayed"
-            )
-
-    def _on_timeline_item_failed(self, fxx: int, message: str) -> None:
-        worker = self.sender()
-        if worker is self._model_timeline_worker:
-            worker._sharpmod_failures[int(fxx)] = str(message)
-            self.statusBar().showMessage(
-                f"Timeline F{int(fxx):03d} unavailable: {message}", 7000
-            )
-
-    def _on_timeline_progress(
-            self, fxx: int, stage: str, completed: int, total: int) -> None:
-        if self.sender() is not self._model_timeline_worker:
-            return
-        completed = max(0, int(completed))
-        total = max(1, int(total))
-        self._model_progress.setRange(0, total)
-        self._model_progress.setValue(completed)
-        self._model_progress.setFormat(f"{completed} / {total} hours")
-        prefix = f"F{int(fxx):03d}" if int(fxx) >= 0 else "Timeline"
-        self._model_progress_detail.setText(
-            f"{prefix}: {str(stage).replace('_', ' ')} — "
-            f"{completed} of {total} complete"
-        )
-
-    def _on_timeline_result(self, result) -> None:
-        worker = self.sender()
-        if worker is not self._model_timeline_worker:
-            return
-        missing = [
-            item for item in result.items if item.status != "completed"
-        ]
-        if missing:
-            summary = ", ".join(
-                f"{item.id.upper()} ({item.status})" for item in missing
-            )
-            self.statusBar().showMessage(
-                f"Timeline kept {result.completed} completed hour(s); "
-                f"missing: {summary}", 12000
-            )
-            QMessageBox.information(
-                self,
-                "Forecast Timeline — Partial Result",
-                f"Kept {result.completed} completed forecast hour(s).\n\n"
-                f"Unavailable or cancelled hours:\n{summary}",
-            )
-        else:
-            self.statusBar().showMessage(
-                f"Forecast timeline complete: {result.completed} hours", 7000
-            )
-
-    def _on_timeline_failed(self, message: str) -> None:
-        worker = self.sender()
-        if worker is not self._model_timeline_worker:
-            return
-        if getattr(worker, "_sharpmod_paths", []):
-            QMessageBox.warning(
-                self, APP_NAME,
-                f"The remaining timeline queue stopped, but completed hours "
-                f"were kept:\n{message}"
-            )
-        else:
-            QMessageBox.critical(self, APP_NAME, str(message))
-
-    def _on_timeline_viewer_destroyed(self, worker, output_dir: str) -> None:
-        if self._model_timeline_worker is worker:
-            worker._sharpmod_viewer_closed = True
-            worker.requestInterruption()
-            return
-        shutil.rmtree(output_dir, ignore_errors=True)
-
-    def _on_timeline_finished(self) -> None:
-        worker = self.sender()
-        if self._model_timeline_worker is worker:
-            self._model_timeline_worker = None
-            self._set_model_busy(False)
-        viewer = getattr(worker, "_sharpmod_viewer", None)
-        if viewer is None or getattr(worker, "_sharpmod_viewer_closed", False):
-            shutil.rmtree(worker.output_dir, ignore_errors=True)
-        worker.deleteLater()
+        coordinator = getattr(self, "_model_timeline_coordinator", None)
+        if coordinator is None:
+            coordinator = ForecastTimelineCoordinator(self)
+            self._model_timeline_coordinator = coordinator
+        coordinator.open()
 
     # -- box soundings ------------------------------------------------------ #
     def _model_box_mode_toggled(self, checked: bool) -> None:
@@ -3299,7 +3159,10 @@ class PickerWindow(QMainWindow):
         self.statusBar().showMessage(
             "Drag a rectangle to average an area into one sounding. "
             "Middle-drag or right-drag still moves the map."
-            if checked else "", 6000)
+            if checked
+            else "",
+            6000,
+        )
 
     def _disarm_box_mode(self) -> None:
         """Release box mode after a box is accepted, keeping the drawn preview.
@@ -3324,16 +3187,19 @@ class PickerWindow(QMainWindow):
         config = self._model_config()
         if config is None:
             return
-        if self._box_extract_worker is not None \
-                or self._box_analysis_worker is not None \
-                or self._box_mean_worker is not None:
+        if (
+            self._box_extract_worker is not None
+            or self._box_analysis_worker is not None
+            or self._box_mean_worker is not None
+        ):
             QMessageBox.information(
-                self, APP_NAME, "A box sounding is already in progress.")
+                self, APP_NAME, "A box sounding is already in progress."
+            )
             return
-        if self._model_worker is not None \
-                or self._model_timeline_worker is not None:
+        if self._model_worker is not None or self._model_timeline_worker is not None:
             QMessageBox.information(
-                self, APP_NAME, "A model fetch is already in progress.")
+                self, APP_NAME, "A model fetch is already in progress."
+            )
             return
         try:
             region = BoxRegion.from_corners(lat0, lon0, lat1, lon1)
@@ -3347,10 +3213,10 @@ class PickerWindow(QMainWindow):
             for index in range(self._model_fxx_combo.count())
         ]
         dialog = BoxPlanDialog(
-            config.key, region, parent=self,
-            available_hours=[
-                int(hour) for hour in available_hours if hour is not None
-            ],
+            config.key,
+            region,
+            parent=self,
+            available_hours=[int(hour) for hour in available_hours if hour is not None],
             start_hour=self._model_selected_fxx(),
         )
         if dialog.exec() != QDialog.Accepted:
@@ -3369,10 +3235,16 @@ class PickerWindow(QMainWindow):
         # not start a second box on top of the one now being extracted.
         self._disarm_box_mode()
         self._start_box_extraction(
-            plan, hours=dialog.hours(), mode=self._box_mode, fxx=dialog.fxx())
+            plan, hours=dialog.hours(), mode=self._box_mode, fxx=dialog.fxx()
+        )
 
     def _start_box_extraction(
-        self, plan, *, hours=None, mode=None, fxx=None,
+        self,
+        plan,
+        *,
+        hours=None,
+        mode=None,
+        fxx=None,
     ) -> None:
         from sharpmod.gui_box import BoxExtractWorker
 
@@ -3388,7 +3260,10 @@ class PickerWindow(QMainWindow):
         self._box_output_dir = output_dir
         disk_cache, _hour_cache = self._ensure_model_cache()
         worker = BoxExtractWorker(
-            plan, run_time, fxx, output_dir,
+            plan,
+            run_time,
+            fxx,
+            output_dir,
             member=self._model_member_value(),
             loc=self._model_loc.text().strip() or None,
             disk_cache=disk_cache,
@@ -3409,29 +3284,31 @@ class PickerWindow(QMainWindow):
         # first has no per-point milestones to count.
         self._model_progress.setRange(0, 0)
         self._model_progress_detail.setText(
-            f"downloading one {plan.model_label} model hour "
-            f"for {total} soundings\u2026")
+            f"downloading one {plan.model_label} model hour for {total} soundings\u2026"
+        )
         self._model_progress_detail.show()
         if hours:
             self.statusBar().showMessage(
                 f"Extracting {total} soundings across {len(hours)} "
                 f"{plan.model_label} forecast hours "
-                f"(F{hours[0]:03d}\u2013F{hours[-1]:03d})…")
+                f"(F{hours[0]:03d}\u2013F{hours[-1]:03d})…"
+            )
         elif self._box_mode == "mean":
             self.statusBar().showMessage(
                 f"Averaging {points} {plan.model_label} F{fxx:03d} soundings "
-                f"from one model hour into one sounding…")
+                f"from one model hour into one sounding…"
+            )
         else:
             self.statusBar().showMessage(
                 f"Extracting {points} soundings from one "
-                f"{plan.model_label} F{fxx:03d} model hour…")
+                f"{plan.model_label} F{fxx:03d} model hour…"
+            )
         worker.start()
 
     def _on_box_point_failed(self, row, col, message) -> None:
         if self.sender() is not self._box_extract_worker:
             return
-        _LOGGER.info(
-            "box.point_failed row=%d col=%d error=%s", row, col, message)
+        _LOGGER.info("box.point_failed row=%d col=%d error=%s", row, col, message)
 
     def _on_box_progress(self, stage, done, total) -> None:
         if self.sender() is not self._box_extract_worker:
@@ -3446,12 +3323,14 @@ class PickerWindow(QMainWindow):
             # without claiming progress it cannot measure.
             self._model_progress.setRange(0, 0)
             self._model_progress_detail.setText(
-                f"{label} one model hour for {total} soundings\u2026")
+                f"{label} one model hour for {total} soundings\u2026"
+            )
         else:
             self._model_progress.setRange(0, total)
             self._model_progress.setValue(done)
             self._model_progress_detail.setText(
-                f"{label} \u2014 {done}/{total} soundings")
+                f"{label} \u2014 {done}/{total} soundings"
+            )
         self._model_progress.show()
         self._model_progress_detail.show()
 
@@ -3465,10 +3344,12 @@ class PickerWindow(QMainWindow):
             return
         if not extraction.ok:
             QMessageBox.warning(
-                self, APP_NAME,
+                self,
+                APP_NAME,
                 "No sounding in that box could be extracted. The run may not "
                 "be published yet, or the area may fall outside the model's "
-                "usable grid.")
+                "usable grid.",
+            )
             return
         self._box_extraction = extraction
         if self._box_mode == "mean" and not extraction.sequence:
@@ -3482,13 +3363,15 @@ class PickerWindow(QMainWindow):
                 f"{len(extraction.hours)} {extraction.plan.model_label} "
                 f"forecast hours "
                 f"(F{extraction.hours[0]:03d}\u2013"
-                f"F{extraction.hours[-1]:03d})")
+                f"F{extraction.hours[-1]:03d})"
+            )
         else:
             skipped = extraction.plan.count - extraction.completed
             window.set_status(
                 f"{extraction.completed} soundings from one "
                 f"{extraction.plan.model_label} download"
-                + (f", {skipped} unavailable" if skipped > 0 else ""))
+                + (f", {skipped} unavailable" if skipped > 0 else "")
+            )
         window.show()
         window.raise_()
         from sharpmod.box_analysis import FAST_TIER
@@ -3499,8 +3382,7 @@ class PickerWindow(QMainWindow):
         worker = self.sender()
         if self._box_extract_worker is worker:
             self._box_extract_worker = None
-            if self._box_analysis_worker is None \
-                    and self._box_mean_worker is None:
+            if self._box_analysis_worker is None and self._box_mean_worker is None:
                 self._set_model_busy(False)
             self._cleanup_closed_box_output()
         worker.deleteLater()
@@ -3526,10 +3408,12 @@ class PickerWindow(QMainWindow):
         self._model_progress.show()
         self._model_progress.setRange(0, 0)
         self._model_progress_detail.setText(
-            f"averaging {extraction.completed} soundings into one\u2026")
+            f"averaging {extraction.completed} soundings into one\u2026"
+        )
         self._model_progress_detail.show()
         self.statusBar().showMessage(
-            f"Averaging {extraction.completed} soundings into one sounding…")
+            f"Averaging {extraction.completed} soundings into one sounding…"
+        )
         worker.start()
 
     def _on_box_mean_ready(self, npz_path, profile) -> None:
@@ -3545,9 +3429,10 @@ class PickerWindow(QMainWindow):
         except Exception as exc:  # noqa: BLE001 - report, do not crash
             _LOGGER.exception("box.mean_display_failed path=%s", npz_path)
             QMessageBox.critical(
-                self, APP_NAME,
-                f"The box was averaged, but the result could not be "
-                f"displayed:\n{exc}")
+                self,
+                APP_NAME,
+                f"The box was averaged, but the result could not be displayed:\n{exc}",
+            )
             return
         run_time = extraction.run_time if extraction is not None else None
         fxx = int(extraction.fxx) if extraction is not None else 0
@@ -3562,14 +3447,18 @@ class PickerWindow(QMainWindow):
         win = self._show_sounding(prof_col, stn_id, title=title)
         # The averaged file is this window's only copy, so it is removed when the
         # window closes rather than left in the temporary directory.
-        _retain_model_data_until_close(
-            win, npz_path, os.path.dirname(npz_path))
+        _retain_model_data_until_close(win, npz_path, os.path.dirname(npz_path))
         self._box_output_dir = None
         self.statusBar().showMessage(
-            f"Opened the {label} box mean: {profile.describe()}")
+            f"Opened the {label} box mean: {profile.describe()}"
+        )
         _LOGGER.info(
             "box.mean_displayed members=%d levels=%d clamped=%d viewer=%s",
-            profile.members, profile.levels, profile.clamped_dewpoints, id(win))
+            profile.members,
+            profile.levels,
+            profile.clamped_dewpoints,
+            id(win),
+        )
         if profile.clamped_dewpoints or profile.requested > profile.members:
             # Both are honest caveats about the average rather than errors, so
             # they belong in the status line, not a modal.
@@ -3587,8 +3476,7 @@ class PickerWindow(QMainWindow):
         worker = self.sender()
         if self._box_mean_worker is worker:
             self._box_mean_worker = None
-            if self._box_extract_worker is None \
-                    and self._box_analysis_worker is None:
+            if self._box_extract_worker is None and self._box_analysis_worker is None:
                 self._set_model_busy(False)
                 # Back to a determinate bar so the next fetch does not inherit
                 # this one's indeterminate sweep.
@@ -3638,10 +3526,12 @@ class PickerWindow(QMainWindow):
 
     def _cleanup_closed_box_output(self) -> None:
         """Remove deferred box scratch data after a dismissed run is idle."""
-        if self._box_window is not None \
-                or self._box_extract_worker is not None \
-                or self._box_analysis_worker is not None \
-                or self._box_mean_worker is not None:
+        if (
+            self._box_window is not None
+            or self._box_extract_worker is not None
+            or self._box_analysis_worker is not None
+            or self._box_mean_worker is not None
+        ):
             return
         output_dir = self._box_output_dir
         self._box_output_dir = None
@@ -3663,8 +3553,7 @@ class PickerWindow(QMainWindow):
         worker.start()
 
     def _on_box_analysis_progress(self, done, total) -> None:
-        if self.sender() is not self._box_analysis_worker \
-                or self._box_window is None:
+        if self.sender() is not self._box_analysis_worker or self._box_window is None:
             return
         self._box_window.set_progress(int(done), int(total))
 
@@ -3699,8 +3588,7 @@ class PickerWindow(QMainWindow):
         worker = self.sender()
         if self._box_analysis_worker is worker:
             self._box_analysis_worker = None
-            if self._box_extract_worker is None \
-                    and self._box_mean_worker is None:
+            if self._box_extract_worker is None and self._box_mean_worker is None:
                 self._set_model_busy(False)
             self._cleanup_closed_box_output()
         worker.deleteLater()
@@ -3711,24 +3599,25 @@ class PickerWindow(QMainWindow):
         if self._box_analysis_worker is not None:
             return
         count = sum(
-            len(outputs)
-            for outputs in self._box_extraction.outputs_by_hour.values()
+            len(outputs) for outputs in self._box_extraction.outputs_by_hour.values()
         )
         # About 0.4 s per sounding, measured. Say so rather than letting the
         # window appear to hang.
         answer = QMessageBox.question(
-            self, APP_NAME,
+            self,
+            APP_NAME,
             f"Computing the SPC composite indices for {count} soundings takes "
             f"roughly {max(1, round(count * 0.42))} seconds. Continue?",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
         if answer != QMessageBox.Yes:
             return
         if self._box_window is not None:
             self._box_window.set_status("Computing SPC composites…")
         from sharpmod.box_analysis import COMPOSITE_TIER, FAST_TIER
 
-        self._start_box_analysis(
-            self._box_extraction, (FAST_TIER, COMPOSITE_TIER))
+        self._start_box_analysis(self._box_extraction, (FAST_TIER, COMPOSITE_TIER))
 
     def _on_box_sounding_requested(self, npz_path: str, label: str) -> None:
         """Open one box grid point in the ordinary sounding workspace."""
@@ -3738,11 +3627,10 @@ class PickerWindow(QMainWindow):
             prof_col, stn_id = _render().decode(npz_path)
         except Exception as exc:  # noqa: BLE001 - report, do not crash
             QMessageBox.warning(
-                self, APP_NAME,
-                f"That grid point could not be opened: {exc}")
+                self, APP_NAME, f"That grid point could not be opened: {exc}"
+            )
             return
-        self._show_sounding(
-            prof_col, stn_id or label, title=f"{APP_NAME} — {label}")
+        self._show_sounding(prof_col, stn_id or label, title=f"{APP_NAME} — {label}")
 
     def _cancel_box_operation(self) -> None:
         for worker in (
@@ -3796,130 +3684,11 @@ class PickerWindow(QMainWindow):
 
     def _shutdown_model_cache(self) -> None:
         """Stop every owned worker before Qt destroys its native thread."""
-        if getattr(self, "_shutdown_started", False):
-            return
-        self._shutdown_started = True
-
-        for name in (
-                "_avail_timer", "_catalog_timer", "_utc_timer",
-                "_model_availability_timer", "_model_progress_timer"):
-            timer = getattr(self, name, None)
-            if timer is not None:
-                timer.stop()
-        self._avail_request = None
-        self._catalog_request = None
-        self._model_availability_request = None
-        self._model_availability_waiting_for_worker = False
-        self._avail_token += 1
-        self._catalog_token += 1
-        self._model_availability_token += 1
-
-        advisory_workers = [
-            getattr(self, "_catalog_worker", None),
-            *list(getattr(self, "_avail_workers", ())),
-            *list(getattr(self, "_model_availability_workers", ())),
-        ]
-        active_workers = [
-            getattr(self, "_worker", None),
-            getattr(self, "_model_worker", None),
-            getattr(self, "_model_timeline_worker", None),
-            getattr(self, "_box_extract_worker", None),
-            getattr(self, "_box_analysis_worker", None),
-            getattr(self, "_box_mean_worker", None),
-            getattr(self, "_model_prefetch_worker", None),
-            getattr(self, "_era5_worker", None),
-            getattr(self, "_wrf_inspect_worker", None),
-            getattr(self, "_wrf_extract_worker", None),
-            getattr(self, "_model_cache_prune_worker", None),
-        ]
-        workers = []
-        advisory_ids = {
-            id(worker) for worker in advisory_workers if worker is not None
-        }
-        seen = set()
-        for worker in (*advisory_workers, *active_workers):
-            if worker is None or id(worker) in seen:
-                continue
-            seen.add(id(worker))
-            workers.append(worker)
-
-        # Ask every worker to stop before waiting on any one of them. This lets
-        # cooperative downloads and extractors wind down concurrently.
-        for worker in workers:
-            try:
-                worker.requestInterruption()
-            except (AttributeError, RuntimeError):
-                continue
-
-        started = time.monotonic()
-        advisory_deadline = started + 1.0
-        model_availability_deadline = started + 5.0
-        active_deadline = started + 5.0
-        model_availability_ids = {
-            id(worker)
-            for worker in getattr(self, "_model_availability_workers", ())
-            if worker is not None
-        }
-        for worker in workers:
-            try:
-                if not worker.isRunning():
-                    continue
-                if id(worker) in model_availability_ids:
-                    # Probe HTTP calls are bounded to two seconds. Give that
-                    # cooperative cancellation path time to return before the
-                    # emergency QThread termination reserved for stuck native
-                    # code at application exit.
-                    deadline = model_availability_deadline
-                elif id(worker) in advisory_ids:
-                    deadline = advisory_deadline
-                else:
-                    deadline = active_deadline
-                remaining = max(0, int(
-                    (deadline - time.monotonic()) * 1000))
-                if remaining > 0 and worker.wait(remaining):
-                    continue
-                # Network libraries can be blocked below Python and therefore
-                # cannot observe QThread interruption. At application exit,
-                # terminating that final native thread is safer than allowing
-                # Qt to destroy a running QThread and abort the process.
-                _LOGGER.warning(
-                    "application.worker_force_stop worker=%s",
-                    type(worker).__name__,
-                )
-                worker.terminate()
-                if not worker.wait(1000):
-                    _LOGGER.error(
-                        "application.worker_stop_failed worker=%s",
-                        type(worker).__name__,
-                    )
-            except RuntimeError:
-                continue
-
-        self._avail_workers.clear()
-        self._model_availability_workers.clear()
-        self._catalog_worker = None
-        self._worker = None
-        self._model_worker = None
-        self._model_timeline_worker = None
-        self._box_extract_worker = None
-        self._box_analysis_worker = None
-        self._box_mean_worker = None
-        self._model_prefetch_worker = None
-        self._era5_worker = None
-        self._wrf_inspect_worker = None
-        self._wrf_extract_worker = None
-        self._model_cache_prune_worker = None
-
-        # Box soundings live in a temporary directory for the life of their
-        # window; at shutdown that window is going away too.
-        box_output_dir = getattr(self, "_box_output_dir", None)
-        if box_output_dir:
-            self._box_output_dir = None
-            shutil.rmtree(box_output_dir, ignore_errors=True)
-
-        hour_cache = getattr(self, "_model_hour_cache", None)
-        if hour_cache is not None:
-            hour_cache.clear()
+        shutdown_picker_workers(
+            self,
+            retain=retain_worker_until_finished,
+            logger=_LOGGER,
+        )
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt override
         """Stop owned QThreads when the picker window itself is closed."""
@@ -3928,13 +3697,21 @@ class PickerWindow(QMainWindow):
         # TAB_OVERLAY_CONTROLLERS: that map answers "which SPC hazard is the user
         # looking at" for the sounding locator, and a radar product key is not an
         # answer to that question.
-        for attr in ("_map_outlook", "_model_outlook",
-                     "_map_radar", "_model_radar",
-                     "_map_field", "_model_field"):
+        for attr in (
+            "_map_outlook",
+            "_model_outlook",
+            "_map_radar",
+            "_model_radar",
+            "_map_field",
+            "_model_field",
+            "_map_reports",
+            "_model_reports",
+        ):
             controller = getattr(self, attr, None)
             if controller is not None:
                 controller.shutdown()
         self._remember_overlay_choices()
+        self._remember_locator_choice()
         super().closeEvent(event)
 
     def _on_model_fetch_finished(self) -> None:
@@ -3943,7 +3720,9 @@ class PickerWindow(QMainWindow):
         if self._model_worker is not worker:
             _LOGGER.warning(
                 "model_fetch.finished_stale worker=%s current=%s",
-                id(worker), id(self._model_worker))
+                id(worker),
+                id(self._model_worker),
+            )
             worker.deleteLater()
             return
         _LOGGER.info("model_fetch.finished worker=%s", id(worker))
@@ -3956,11 +3735,16 @@ class PickerWindow(QMainWindow):
     def _set_model_busy(self, busy: bool) -> None:
         _LOGGER.debug(
             "model_fetch.ui_busy busy=%s worker=%s",
-            busy, id(self._model_worker) if self._model_worker else None)
+            busy,
+            id(self._model_worker) if self._model_worker else None,
+        )
         if busy:
             QApplication.setOverrideCursor(Qt.WaitCursor)
             self._model_fetch_btn.setEnabled(False)
             self._model_timeline_btn.setEnabled(False)
+            compare_button = getattr(self, "_model_compare_btn", None)
+            if compare_button is not None:
+                compare_button.setEnabled(False)
             self._model_cancel_btn.setEnabled(True)
             _set_button_busy(self._model_cancel_btn, False, "")
             self._model_cancel_btn.show()
@@ -3986,6 +3770,9 @@ class PickerWindow(QMainWindow):
             self._model_cancel_btn.hide()
             _set_button_busy(self._model_fetch_btn, False, "")
             _set_button_busy(self._model_timeline_btn, False, "")
+            compare_button = getattr(self, "_model_compare_btn", None)
+            if compare_button is not None:
+                compare_button.setEnabled(True)
             self._model_update_fetch_state()
 
     def _on_model_fetch_progress(
@@ -4005,7 +3792,9 @@ class PickerWindow(QMainWindow):
         self._model_progress_detail.show()
         _LOGGER.info(
             "model_fetch.progress stage=%s total_bytes=%d",
-            stage, self._model_progress_total)
+            stage,
+            self._model_progress_total,
+        )
 
         if stage == "downloading":
             worker = self._model_worker
@@ -4014,8 +3803,7 @@ class PickerWindow(QMainWindow):
                 int(
                     download_baseline
                     if download_baseline is not None
-                    else getattr(worker, "_progress_download_baseline", 0)
-                    or 0
+                    else getattr(worker, "_progress_download_baseline", 0) or 0
                 ),
             )
             self._model_progress_started = float(
@@ -4039,13 +3827,17 @@ class PickerWindow(QMainWindow):
             "locating": ("Locating model run\u2026", "Locating\u2026"),
             "decoding": ("Decoding downloaded GRIB fields\u2026", "Decoding\u2026"),
             "cached": ("Using cached model hour\u2026", "Extracting\u2026"),
-            "extracting": ("Extracting the nearest grid point\u2026", "Extracting\u2026"),
+            "extracting": (
+                "Extracting the nearest grid point\u2026",
+                "Extracting\u2026",
+            ),
             "writing": ("Writing the point sounding\u2026", "Writing\u2026"),
             "complete": ("Preparing the sounding display\u2026", "Preparing\u2026"),
             "rendering": ("Rendering the sounding window\u2026", "Rendering\u2026"),
         }
         detail, button = messages.get(
-            stage, ("Processing forecast data\u2026", "Processing\u2026"))
+            stage, ("Processing forecast data\u2026", "Processing\u2026")
+        )
         self._model_progress.setRange(0, 0)
         self._model_progress.setFormat("")
         self._model_progress_detail.setText(detail)
@@ -4064,10 +3856,10 @@ class PickerWindow(QMainWindow):
             for root, _dirs, files in os.walk(worker._download_dir):
                 for filename in files:
                     if filename.lower().endswith(
-                            (".grib2", ".grib", ".grb2", ".grb", ".part")):
+                        (".grib2", ".grib", ".grb2", ".grb", ".part")
+                    ):
                         try:
-                            downloaded += os.path.getsize(
-                                os.path.join(root, filename))
+                            downloaded += os.path.getsize(os.path.join(root, filename))
                         except OSError:
                             pass
         except OSError:
@@ -4089,12 +3881,14 @@ class PickerWindow(QMainWindow):
             self._model_progress.setFormat(f"{percent}%")
             detail = (
                 f"{_format_progress_bytes(downloaded)} / "
-                f"{_format_progress_bytes(total)}")
+                f"{_format_progress_bytes(total)}"
+            )
             if rate > 0 and downloaded < total:
                 remaining = (total - downloaded) / rate
                 detail += (
                     f" \u2022 {_format_progress_bytes(rate)}/s"
-                    f" \u2022 ~{_format_progress_duration(remaining)} left")
+                    f" \u2022 ~{_format_progress_duration(remaining)} left"
+                )
             self._model_fetch_btn.setText(f"Downloading\u2026 {percent}%")
             operation = f"Downloading {model_label}"
             status = f"{operation}: {percent}% \u2014 {detail}"
@@ -4118,34 +3912,42 @@ class PickerWindow(QMainWindow):
         try:
             R = _render()
             prof_col, stn_id = R.decode(npz_path)
-            title = (
-                f"{APP_NAME} \u2014 {label} "
-                f"{run_time:%Y-%m-%d %H}Z F{int(fxx):03d}")
+            title = f"{APP_NAME} \u2014 {label} {run_time:%Y-%m-%d %H}Z F{int(fxx):03d}"
             win = self._show_sounding(prof_col, stn_id, title=title)
-            _retain_model_data_until_close(
-                win, npz_path, os.path.dirname(npz_path))
+            _retain_model_data_until_close(win, npz_path, os.path.dirname(npz_path))
             self.statusBar().showMessage(
-                f"Opened {label} {run_time:%Y-%m-%d %H}Z F{int(fxx):03d}")
+                f"Opened {label} {run_time:%Y-%m-%d %H}Z F{int(fxx):03d}"
+            )
             _LOGGER.info(
                 "model_fetch.displayed label=%s run=%s fxx=%03d viewer=%s",
-                label, run_time, int(fxx), id(win))
+                label,
+                run_time,
+                int(fxx),
+                id(win),
+            )
             if isinstance(worker, _ModelFetchWorker):
                 request = (
-                    worker._model, worker._lat, worker._lon, run_time,
-                    int(fxx), worker._member,
+                    worker._model,
+                    worker._lat,
+                    worker._lon,
+                    run_time,
+                    int(fxx),
+                    worker._member,
                 )
                 QTimer.singleShot(
-                    0, lambda request=request: self._start_model_prefetch(
-                        *request
-                    )
+                    0, lambda request=request: self._start_model_prefetch(*request)
                 )
         except Exception as exc:  # noqa: BLE001
             _LOGGER.exception(
                 "model_fetch.display_failed label=%s run=%s fxx=%03d",
-                label, run_time, int(fxx))
+                label,
+                run_time,
+                int(fxx),
+            )
             _cleanup_model_data(npz_path, os.path.dirname(npz_path))
-            QMessageBox.critical(self, APP_NAME,
-                                 f"Fetched, but could not display:\n{exc}")
+            QMessageBox.critical(
+                self, APP_NAME, f"Fetched, but could not display:\n{exc}"
+            )
 
     def _on_model_fetch_failed(self, message: str) -> None:
         _LOGGER.error("model_fetch.failed message=%s", message)
@@ -4153,12 +3955,19 @@ class PickerWindow(QMainWindow):
         QMessageBox.critical(self, APP_NAME, message)
 
     def _cancel_model_fetch(self) -> None:
+        comparison = getattr(self, "_model_compare_worker", None)
+        if comparison is not None:
+            coordinator = getattr(self, "_model_compare_coordinator", None)
+            if coordinator is not None:
+                coordinator.cancel()
+            self._model_cancel_btn.setEnabled(False)
+            _set_button_busy(self._model_cancel_btn, True, "Cancelling…")
+            return
         timeline = self._model_timeline_worker
         if timeline is not None:
             timeline.requestInterruption()
             self._model_cancel_btn.setEnabled(False)
-            _set_button_busy(self._model_cancel_btn, True,
-                             "Cancelling queue…")
+            _set_button_busy(self._model_cancel_btn, True, "Cancelling queue…")
             self.statusBar().showMessage(
                 "Cancelling remaining timeline hours; completed hours are kept…"
             )
@@ -4173,7 +3982,8 @@ class PickerWindow(QMainWindow):
             self._model_cancel_btn.setEnabled(False)
             _set_button_busy(self._model_cancel_btn, True, "Cancelling…")
             self.statusBar().showMessage(
-                "Cancelling the box sounding; completed points are kept…")
+                "Cancelling the box sounding; completed points are kept…"
+            )
             return
         worker = self._model_worker
         if worker is None:
@@ -4188,20 +3998,27 @@ class PickerWindow(QMainWindow):
         self.statusBar().showMessage("Forecast-model fetch cancelled", 5000)
 
     def _start_model_prefetch(
-        self, model, lat, lon, run_time, current_fxx, member,
+        self,
+        model,
+        lat,
+        lon,
+        run_time,
+        current_fxx,
+        member,
     ) -> None:
-        if not self._model_prefetch_enabled() \
-                or self._model_worker is not None \
-                or getattr(self, "_model_timeline_worker", None) is not None:
+        if (
+            not self._model_prefetch_enabled()
+            or self._model_worker is not None
+            or getattr(self, "_model_timeline_worker", None) is not None
+        ):
             return
         if self._model_prefetch_worker is not None:
             return
         self._ensure_model_cache()
         from sharpmod.tools import model_extract
+
         cfg = model_extract.get_config(model)
-        hours = model_extract.forecast_hours(
-            cfg.key, cycle_hour=run_time.hour
-        )
+        hours = model_extract.forecast_hours(cfg.key, cycle_hour=run_time.hour)
         next_fxx = next(
             (int(value) for value in hours if int(value) > int(current_fxx)),
             None,
@@ -4209,8 +4026,14 @@ class PickerWindow(QMainWindow):
         if next_fxx is None:
             return
         worker = _ModelPrefetchWorker(
-            cfg.key, lat, lon, run_time, next_fxx, member,
-            self._model_hour_cache, parent=self,
+            cfg.key,
+            lat,
+            lon,
+            run_time,
+            next_fxx,
+            member,
+            self._model_hour_cache,
+            parent=self,
         )
         self._model_prefetch_worker = worker
         worker.ready.connect(self._on_model_prefetch_ready)
@@ -4219,7 +4042,9 @@ class PickerWindow(QMainWindow):
         worker.start()
         _LOGGER.info(
             "model_prefetch.start model=%s run=%s fxx=%03d",
-            cfg.key, run_time, next_fxx,
+            cfg.key,
+            run_time,
+            next_fxx,
         )
 
     def _cancel_model_prefetch(self, *, wait: bool) -> bool:
@@ -4251,13 +4076,15 @@ class PickerWindow(QMainWindow):
         worker.deleteLater()
 
     def _clear_model_cache(self) -> None:
-        if self._model_worker is not None \
-                or self._model_timeline_worker is not None \
-                or self._era5_worker is not None:
+        if (
+            self._model_worker is not None
+            or self._model_timeline_worker is not None
+            or self._era5_worker is not None
+        ):
             QMessageBox.information(
-                self, APP_NAME,
-                "Wait for the active model/ERA5 fetch to finish or cancel it "
-                "first.",
+                self,
+                APP_NAME,
+                "Wait for the active model/ERA5 fetch to finish or cancel it first.",
             )
             return
         self._ensure_model_cache()
@@ -4291,7 +4118,8 @@ class PickerWindow(QMainWindow):
                 try:
                     prof_col, stn_id = _render().decode(str(sounding))
                     self._show_sounding(
-                        prof_col, stn_id,
+                        prof_col,
+                        stn_id,
                         title=f"{APP_NAME} — Cached {entry.model.upper()} sounding",
                     )
                     self.statusBar().showMessage(
@@ -4300,7 +4128,8 @@ class PickerWindow(QMainWindow):
                     )
                 except Exception as exc:  # noqa: BLE001 - cache/render boundary
                     QMessageBox.critical(
-                        self, APP_NAME,
+                        self,
+                        APP_NAME,
                         f"The cached sounding could not be opened:\n{exc}",
                     )
                 return
@@ -4319,9 +4148,7 @@ class PickerWindow(QMainWindow):
         point = parse_spatial_point(entry.spatial)
         if entry.model.casefold() == "era5":
             self._select_tab("Reanalysis (ERA5)")
-            self._era5_date.setDate(QDate(
-                run_time.year, run_time.month, run_time.day
-            ))
+            self._era5_date.setDate(QDate(run_time.year, run_time.month, run_time.day))
             hour_index = self._era5_hour.findData(run_time.hour)
             if hour_index >= 0:
                 self._era5_hour.setCurrentIndex(hour_index)
@@ -4333,11 +4160,13 @@ class PickerWindow(QMainWindow):
 
         self._select_tab("Forecast Model")
         from sharpmod.tools import model_extract
+
         try:
             cfg = model_extract.get_config(entry.model)
         except Exception as exc:  # noqa: BLE001 - stale provider entry
             QMessageBox.warning(
-                self, APP_NAME,
+                self,
+                APP_NAME,
                 f"The cached model adapter is no longer available:\n{exc}",
             )
             return
@@ -4358,14 +4187,13 @@ class PickerWindow(QMainWindow):
             model_index = self._model_combo.findData(cfg.key)
         if model_index < 0:
             QMessageBox.warning(
-                self, APP_NAME,
+                self,
+                APP_NAME,
                 f"{cfg.label} is not selectable in the current provider catalog.",
             )
             return
         self._model_combo.setCurrentIndex(model_index)
-        self._model_date.setDate(QDate(
-            run_time.year, run_time.month, run_time.day
-        ))
+        self._model_date.setDate(QDate(run_time.year, run_time.month, run_time.day))
         cycle_index = self._model_cycle.findData(run_time.hour)
         if cycle_index >= 0:
             self._model_cycle.setCurrentIndex(cycle_index)
@@ -4390,8 +4218,11 @@ class PickerWindow(QMainWindow):
         tab = self._tabs.tabText(self._tabs.currentIndex())
         if tab == "Reanalysis (ERA5)" and hasattr(self, "_era5_lat"):
             return self._era5_lat.value(), self._era5_lon.value()
-        if tab == "Open File" and hasattr(self, "_file_modes") \
-                and self._file_modes.currentIndex() == 1:
+        if (
+            tab == "Open File"
+            and hasattr(self, "_file_modes")
+            and self._file_modes.currentIndex() == 1
+        ):
             return self._wrf_lat.value(), self._wrf_lon.value()
         if hasattr(self, "_model_lat"):
             return self._model_lat.value(), self._model_lon.value()
@@ -4434,8 +4265,11 @@ class PickerWindow(QMainWindow):
             self._era5_lon.setValue(location.lon)
             self._era5_loc.setText(label)
             self._era5_map.set_point(location.lat, location.lon, center=True)
-        elif tab == "Open File" and hasattr(self, "_file_modes") \
-                and self._file_modes.currentIndex() == 1:
+        elif (
+            tab == "Open File"
+            and hasattr(self, "_file_modes")
+            and self._file_modes.currentIndex() == 1
+        ):
             self._wrf_lat.setValue(location.lat)
             self._wrf_lon.setValue(location.lon)
             self._wrf_loc.setText(label)
@@ -4481,345 +4315,15 @@ class PickerWindow(QMainWindow):
                 menu,
             )
             action.triggered.connect(
-                lambda _checked=False, location=location:
-                self._apply_recent_location(location)
+                lambda _checked=False, location=location: self._apply_recent_location(
+                    location
+                )
             )
             menu.addAction(action)
         if not locations:
             empty = QAction("(no recent points yet)", menu)
             empty.setEnabled(False)
             menu.addAction(empty)
-
-    # ====================================================================== #
-    # ERA5 reanalysis tab
-    # ====================================================================== #
-    def _build_era5_tab(self) -> QWidget:
-        w = QWidget()
-        outer = QHBoxLayout(w)
-        outer.setContentsMargins(SPACE["md"], SPACE["sm"],
-                                 SPACE["md"], SPACE["sm"])
-        outer.setSpacing(SPACE["md"])
-
-        self._era5_syncing_point = False
-        self._era5_map = PointMapWidget()
-        self._era5_map.set_projection(self.map_projection())
-        self._era5_map.pointSelected.connect(self._era5_on_map_point)
-        self._era5_map.pointActivated.connect(
-            lambda _lat, _lon: self._era5_fetch())
-        self._era5_map.set_domain(
-            (-180.0, 180.0, -90.0, 90.0), "ERA5 global 0.25° grid")
-
-        left = QVBoxLayout()
-        left.setSpacing(SPACE["md"])
-        left.setContentsMargins(0, 0, 0, 0)
-
-        area_box, area_layout = _rail_card("Region")
-        self._era5_area_combo = QComboBox()
-        for name in MAP_AREAS:
-            self._era5_area_combo.addItem(name)
-        self._era5_area_combo.setMinimumHeight(CONTROL_H["md"])
-        self._era5_area_combo.currentTextChanged.connect(
-            self._era5_map.set_area)
-        area_layout.addWidget(self._era5_area_combo)
-        area_layout.addLayout(_rail_zoom_row(self._era5_map))
-        left.addWidget(area_box)
-
-        time_box, time_grid = _rail_form("Analysis time (UTC)")
-        self._era5_date = QDateEdit()
-        self._era5_date.setDisplayFormat("yyyy-MM-dd")
-        self._era5_date.setCalendarPopup(True)
-        install_month_calendar(self._era5_date)
-        self._era5_date.setMinimumDate(QDate(1940, 1, 1))
-        self._era5_date.setMaximumDate(QDate.currentDate())
-        self._era5_date.dateChanged.connect(self._era5_update_state)
-        _rail_row(time_grid, 0, "Date:", self._era5_date)
-        self._era5_hour = QComboBox()
-        for hour in range(24):
-            self._era5_hour.addItem(f"{hour:02d}Z", hour)
-        self._era5_hour.currentIndexChanged.connect(self._era5_update_state)
-        recent = QToolButton()
-        # Same label and place in the grid as the other two panels; the ERA5
-        # caveat lives in the tooltip rather than in a wider button that pushed
-        # this row out of line with everything else.
-        recent.setText("Most recent")
-        recent.setToolTip(
-            "Latest analysis likely to be published. ERA5 normally appears "
-            "several days after real time.")
-        recent.clicked.connect(self._era5_set_recent)
-        _rail_row(time_grid, 1, "Hour:", self._era5_hour, trailing=recent)
-        left.addWidget(time_box)
-
-        point_box, point_grid = _rail_form("Point")
-        self._era5_lat = QDoubleSpinBox()
-        self._era5_lat.setRange(-90.0, 90.0)
-        self._era5_lat.setDecimals(4)
-        self._era5_lat.setSingleStep(0.25)
-        self._era5_lat.setValue(35.18)
-        self._era5_lat.valueChanged.connect(self._era5_point_from_spins)
-        center = QToolButton()
-        center.setText("Center")
-        center.setToolTip("Center the map on this point")
-        center.clicked.connect(lambda: self._era5_map.set_point(
-            self._era5_lat.value(), self._era5_lon.value(), center=True))
-        _rail_row(point_grid, 0, "Latitude:", self._era5_lat, trailing=center)
-        self._era5_lon = QDoubleSpinBox()
-        self._era5_lon.setRange(-180.0, 180.0)
-        self._era5_lon.setDecimals(4)
-        self._era5_lon.setSingleStep(0.25)
-        self._era5_lon.setValue(-97.44)
-        self._era5_lon.valueChanged.connect(self._era5_point_from_spins)
-        _rail_row(point_grid, 1, "Longitude:", self._era5_lon)
-        self._era5_loc = QLineEdit()
-        self._era5_loc.setPlaceholderText("automatic town name")
-        self._era5_loc.setToolTip(_TOWN_LOOKUP_TOOLTIP)
-        _rail_row(point_grid, 2, "Town:", self._era5_loc)
-        self._era5_snapped = QLabel("")
-        self._era5_snapped.setWordWrap(True)
-        self._era5_snapped.setObjectName(OBJ_HINT)
-        point_grid.addWidget(self._era5_snapped, 3, 0, 1, 3)
-        point_grid.addWidget(_town_lookup_attribution_label(), 4, 0, 1, 3)
-        left.addWidget(point_box)
-
-        self._era5_readiness = QLabel("")
-        self._era5_readiness.setWordWrap(True)
-        self._era5_readiness.setObjectName(OBJ_STATUS)
-        left.addWidget(self._era5_readiness)
-
-        fetch_row = QHBoxLayout()
-        self._era5_fetch_btn = QPushButton("Fetch && Display ERA5 Sounding")
-        self._era5_fetch_btn.setObjectName(OBJ_PRIMARY)
-        self._era5_fetch_btn.setMinimumHeight(CONTROL_H["lg"])
-        self._era5_fetch_btn.clicked.connect(self._era5_fetch)
-        fetch_row.addWidget(self._era5_fetch_btn, 1)
-        self._era5_cancel_btn = QPushButton("Cancel")
-        self._era5_cancel_btn.setObjectName(OBJ_GHOST)
-        self._era5_cancel_btn.setMinimumHeight(CONTROL_H["lg"])
-        self._era5_cancel_btn.clicked.connect(self._cancel_era5_fetch)
-        self._era5_cancel_btn.hide()
-        fetch_row.addWidget(self._era5_cancel_btn)
-        left.addLayout(fetch_row)
-        self._era5_multi_sounding = self._make_multi_sounding_checkbox("ERA5")
-        left.addWidget(self._era5_multi_sounding)
-
-        self._era5_progress = QProgressBar()
-        self._era5_progress.setRange(0, 0)
-        self._era5_progress.hide()
-        left.addWidget(self._era5_progress)
-        self._era5_progress_detail = QLabel("")
-        self._era5_progress_detail.setWordWrap(True)
-        self._era5_progress_detail.setObjectName(OBJ_PROGRESS_DETAIL)
-        self._era5_progress_detail.hide()
-        left.addWidget(self._era5_progress_detail)
-        left.addStretch(1)
-
-        self._era5_controls_scroll = _scrolling_control_rail(left)
-        outer.addWidget(self._era5_controls_scroll)
-        outer.addWidget(self._era5_map, 1)
-
-        self._era5_set_recent()
-        self._era5_point_from_spins(center=True)
-        self._era5_update_readiness()
-        return w
-
-    def _era5_update_readiness(self) -> None:
-        try:
-            from importlib.util import find_spec
-            missing = [
-                name for name in ("cdsapi", "cfgrib", "xarray")
-                if find_spec(name) is None
-            ]
-        except (ImportError, ValueError):
-            missing = []
-        if missing:
-            self._era5_readiness.setText(
-                "Missing ERA5 packages: " + ", ".join(missing)
-                + '. Install with pip install -e ".[era5]".')
-            return
-        rc_path = Path(os.environ.get(
-            "CDSAPI_RC", str(Path.home() / ".cdsapirc"))).expanduser()
-        env_profile = bool(
-            os.environ.get("CDSAPI_URL") and os.environ.get("CDSAPI_KEY"))
-        if not env_profile and not rc_path.is_file():
-            self._era5_readiness.setText(
-                "CDS credentials are not configured. Accept the ERA5 "
-                "pressure-level and single-level terms, then save the API "
-                "profile as $HOME/.cdsapirc.")
-        else:
-            self._era5_readiness.setText(
-                "CDS profile detected. Dataset terms are verified when the "
-                "request is submitted; secret values are never displayed.")
-
-    def _era5_set_recent(self) -> None:
-        # ERA5 is not real-time; six days is a conservative one-click default.
-        recent = datetime.now(timezone.utc) - timedelta(days=6)
-        self._era5_date.setDate(QDate(
-            recent.year, recent.month, recent.day))
-        index = self._era5_hour.findData(recent.hour)
-        if index >= 0:
-            self._era5_hour.setCurrentIndex(index)
-        self._era5_update_state()
-
-    def _era5_valid_time(self) -> datetime:
-        day = self._era5_date.date()
-        hour = int(self._era5_hour.currentData() or 0)
-        return datetime(
-            day.year(), day.month(), day.day(), hour, tzinfo=timezone.utc)
-
-    def _era5_point_from_spins(self, *_args, center=False) -> None:
-        if getattr(self, "_era5_syncing_point", False):
-            return
-        self._era5_map.set_point(
-            self._era5_lat.value(), self._era5_lon.value(), center=center)
-        self._era5_update_state()
-
-    def _era5_on_map_point(self, lat, lon) -> None:
-        self._era5_syncing_point = True
-        try:
-            self._era5_lat.setValue(float(lat))
-            self._era5_lon.setValue(float(lon))
-        finally:
-            self._era5_syncing_point = False
-        self._era5_update_state()
-
-    def _era5_update_state(self, *_args) -> None:
-        if not hasattr(self, "_era5_snapped"):
-            return
-        from sharpmod.tools import era5_extract
-        lat = float(self._era5_lat.value())
-        lon = float(self._era5_lon.value())
-        snapped_lat, snapped_lon = era5_extract._nearest_era5_grid_point(
-            lat, lon)
-        self._era5_snapped.setText(
-            f"Requested {lat:.4f}, {lon:.4f} → ERA5 grid "
-            f"{snapped_lat:.2f}, {snapped_lon:.2f}")
-        valid = self._era5_valid_time()
-        self._era5_fetch_btn.setEnabled(
-            valid <= datetime.now(timezone.utc) and self._era5_worker is None)
-
-    def _era5_fetch(self) -> None:
-        if self._era5_worker is not None:
-            QMessageBox.information(
-                self, APP_NAME, "An ERA5 fetch is already in progress.")
-            return
-        self._ensure_model_cache()
-        from sharpmod.tools import era5_extract
-        try:
-            # Resolve cfgrib/ecCodes on the GUI thread before QThread work on
-            # Windows, and report credentials before any output directory.
-            era5_extract.require_runtime_dependencies()
-        except era5_extract.RetrievalError as exc:
-            self._era5_update_readiness()
-            self.statusBar().showMessage("ERA5 setup is incomplete")
-            QMessageBox.critical(self, APP_NAME, str(exc))
-            return
-
-        valid = self._era5_valid_time()
-        lat = float(self._era5_lat.value())
-        lon = float(self._era5_lon.value())
-        loc = self._era5_loc.text().strip() or None
-        self._remember_point(lat, lon, loc)
-        output_dir = tempfile.mkdtemp(
-            prefix=f"era5_{valid:%Y%m%d%H}_{lat:+07.2f}_{lon:+08.2f}_")
-        out_path = os.path.join(output_dir, "sounding.npz")
-        worker = _ERA5FetchWorker(
-            lat, lon, valid, out_path, loc=loc,
-            resolve_place=not bool(loc),
-            disk_cache=self._model_disk_cache, parent=self)
-        self._era5_worker = worker
-        worker.finished_ok.connect(self._on_era5_fetch_ok)
-        worker.failed.connect(self._on_era5_fetch_failed)
-        worker.cancelled.connect(self._on_era5_fetch_cancelled)
-        worker.progress.connect(self._on_era5_progress)
-        worker.finished.connect(self._on_era5_fetch_finished)
-        self._set_era5_busy(True)
-        worker.start()
-
-    def _set_era5_busy(self, busy) -> None:
-        if busy:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            self._era5_fetch_btn.setEnabled(False)
-            _set_button_busy(self._era5_fetch_btn, True, "Fetching ERA5…")
-            self._era5_cancel_btn.setEnabled(True)
-            _set_button_busy(self._era5_cancel_btn, False, "")
-            self._era5_cancel_btn.show()
-            self._era5_progress.show()
-            self._era5_progress_detail.setText(
-                "Validating the ERA5 request…")
-            self._era5_progress_detail.show()
-        else:
-            QApplication.restoreOverrideCursor()
-            _set_button_busy(self._era5_fetch_btn, False, "")
-            self._era5_cancel_btn.hide()
-            self._era5_progress.hide()
-            self._era5_progress_detail.hide()
-            self._era5_update_state()
-
-    def _on_era5_progress(self, stage) -> None:
-        messages = {
-            "town": "Resolving the selected town name…",
-            "validating": "Validating the ERA5 request…",
-            "queued": "Submitting the request to the Copernicus CDS queue…",
-            "retrieving": "Waiting for and downloading the CDS result…",
-            "decoding": "Decoding all 37 ERA5 pressure levels…",
-            "extracting": "Extracting the nearest ERA5 grid column…",
-            "cached": "Using the cached ERA5 point/hour…",
-            "writing": "Writing the viewer-owned sounding…",
-            "complete": "Preparing the ERA5 sounding display…",
-            "rendering": "Rendering the ERA5 sounding window…",
-        }
-        message = messages.get(str(stage), "Processing ERA5 data…")
-        self._era5_progress_detail.setText(message)
-        self.statusBar().showMessage(message)
-
-    def _cancel_era5_fetch(self) -> None:
-        worker = self._era5_worker
-        if worker is None:
-            return
-        worker.requestInterruption()
-        self._era5_cancel_btn.setEnabled(False)
-        _set_button_busy(self._era5_cancel_btn, True,
-                         "Cancellation requested")
-        self._era5_progress_detail.setText(
-            "Cancellation requested. A synchronous CDS request already in "
-            "flight must return before local cleanup can finish.")
-
-    def _on_era5_fetch_cancelled(self) -> None:
-        self.statusBar().showMessage("ERA5 fetch cancelled", 5000)
-
-    def _on_era5_fetch_failed(self, message) -> None:
-        self.statusBar().showMessage("ERA5 fetch failed")
-        QMessageBox.critical(self, APP_NAME, str(message))
-
-    def _on_era5_fetch_finished(self) -> None:
-        worker = self.sender()
-        if self._era5_worker is worker:
-            self._era5_worker = None
-            self._set_era5_busy(False)
-        worker.deleteLater()
-
-    def _on_era5_fetch_ok(
-            self, npz_path, valid_time, snapped_lat, snapped_lon,
-            cache_hit) -> None:
-        self._on_era5_progress("rendering")
-        QApplication.processEvents()
-        try:
-            R = _render()
-            prof_col, stn_id = R.decode(npz_path)
-            title = (
-                f"{APP_NAME} — ERA5 {valid_time:%Y-%m-%d %H}Z "
-                f"({snapped_lat:.2f}, {snapped_lon:.2f})")
-            win = self._show_sounding(prof_col, stn_id, title=title)
-            _retain_point_data_until_close(
-                win, npz_path, os.path.dirname(npz_path))
-        except Exception as exc:  # noqa: BLE001 - GUI/render boundary
-            _LOGGER.exception("era5_fetch.display_failed")
-            _cleanup_point_data(npz_path, os.path.dirname(npz_path))
-            QMessageBox.critical(
-                self, APP_NAME, f"Fetched, but could not display:\n{exc}")
-            return
-        suffix = " (cache hit)" if cache_hit else ""
-        self.statusBar().showMessage(
-            f"Opened ERA5 {valid_time:%Y-%m-%d %H}Z{suffix}", 5000)
 
     # ====================================================================== #
     # Open File tab
@@ -4837,7 +4341,8 @@ class PickerWindow(QMainWindow):
         intro = QLabel(
             "Open a local sounding file \u2014 or drag one onto this window.\n"
             "Supported: .npz point soundings, SPC tabular, BUFKIT, PECAN, "
-            "and WRF-ARW text.")
+            "and WRF-ARW text."
+        )
         intro.setWordWrap(True)
         decoded_layout.addWidget(intro)
 
@@ -4862,7 +4367,8 @@ class PickerWindow(QMainWindow):
         rv = QVBoxLayout(recent_box)
         self._recent_list = QListWidget()
         self._recent_list.itemDoubleClicked.connect(
-            lambda item: self._open_file(item.data(Qt.UserRole)))
+            lambda item: self._open_file(item.data(Qt.UserRole))
+        )
         rv.addWidget(self._recent_list)
         decoded_layout.addWidget(recent_box, stretch=1)
         modes.addTab(decoded, "Decoded Sounding")
@@ -4871,392 +4377,15 @@ class PickerWindow(QMainWindow):
         self._file_modes = modes
         return w
 
-    def _build_wrf_file_panel(self) -> QWidget:
-        panel = QWidget()
-        outer = QHBoxLayout(panel)
-        outer.setContentsMargins(SPACE["md"], SPACE["sm"],
-                                 SPACE["md"], SPACE["sm"])
-        outer.setSpacing(SPACE["md"])
-
-        self._wrf_syncing_point = False
-        self._wrf_map = PointMapWidget()
-        self._wrf_map.set_projection(self.map_projection())
-        self._wrf_map.set_area("World")
-        self._wrf_map.pointSelected.connect(self._wrf_on_map_point)
-        self._wrf_map.pointActivated.connect(
-            lambda _lat, _lon: self._wrf_extract())
-
-        left = QVBoxLayout()
-        left.setSpacing(SPACE["md"])
-
-        file_box = QGroupBox("Raw WRF-ARW output")
-        file_layout = QVBoxLayout(file_box)
-        explanation = QLabel(
-            "Choose a native wrfout* NetCDF file. Domain and time inspection "
-            "runs in the background before extraction is enabled.")
-        explanation.setWordWrap(True)
-        file_layout.addWidget(explanation)
-        file_row = QHBoxLayout()
-        self._wrf_path_edit = QLineEdit()
-        self._wrf_path_edit.setClearButtonEnabled(True)
-        self._wrf_path_edit.setPlaceholderText("Path to wrfout_d01_…")
-        self._wrf_path_edit.textChanged.connect(self._wrf_path_changed)
-        self._wrf_path_edit.returnPressed.connect(self._wrf_start_inspection)
-        browse = QPushButton("Browse…")
-        browse.clicked.connect(self._browse_wrf_file)
-        file_row.addWidget(self._wrf_path_edit, 1)
-        file_row.addWidget(browse)
-        file_layout.addLayout(file_row)
-        self._wrf_inspect_btn = QPushButton("Inspect Domain && Times")
-        self._wrf_inspect_btn.clicked.connect(self._wrf_start_inspection)
-        file_layout.addWidget(self._wrf_inspect_btn)
-        self._wrf_domain_status = QLabel("Choose a file to inspect.")
-        self._wrf_domain_status.setWordWrap(True)
-        self._wrf_domain_status.setObjectName(OBJ_STATUS)
-        file_layout.addWidget(self._wrf_domain_status)
-        left.addWidget(file_box)
-
-        time_box = QGroupBox("Available time")
-        time_layout = QVBoxLayout(time_box)
-        self._wrf_time_combo = QComboBox()
-        self._wrf_time_combo.setEnabled(False)
-        time_layout.addWidget(self._wrf_time_combo)
-        left.addWidget(time_box)
-
-        point_box = QGroupBox("Point inside WRF domain")
-        point_grid = QGridLayout(point_box)
-        point_grid.addWidget(QLabel("Latitude:"), 0, 0)
-        self._wrf_lat = QDoubleSpinBox()
-        self._wrf_lat.setRange(-90.0, 90.0)
-        self._wrf_lat.setDecimals(4)
-        self._wrf_lat.setValue(35.18)
-        self._wrf_lat.valueChanged.connect(self._wrf_point_from_spins)
-        point_grid.addWidget(self._wrf_lat, 0, 1)
-        point_grid.addWidget(QLabel("Longitude:"), 1, 0)
-        self._wrf_lon = QDoubleSpinBox()
-        self._wrf_lon.setRange(-180.0, 180.0)
-        self._wrf_lon.setDecimals(4)
-        self._wrf_lon.setValue(-97.44)
-        self._wrf_lon.valueChanged.connect(self._wrf_point_from_spins)
-        point_grid.addWidget(self._wrf_lon, 1, 1)
-        center = QToolButton()
-        center.setText("Center")
-        center.clicked.connect(lambda: self._wrf_map.set_point(
-            self._wrf_lat.value(), self._wrf_lon.value(), center=True))
-        point_grid.addWidget(center, 0, 2, 2, 1)
-        self._wrf_point_status = QLabel("Inspect a WRF domain first.")
-        self._wrf_point_status.setWordWrap(True)
-        self._wrf_point_status.setObjectName(OBJ_HINT)
-        point_grid.addWidget(self._wrf_point_status, 2, 0, 1, 3)
-        point_grid.addWidget(QLabel("Label:"), 3, 0)
-        self._wrf_loc = QLineEdit()
-        self._wrf_loc.setPlaceholderText("automatic town name")
-        point_grid.addWidget(self._wrf_loc, 3, 1, 1, 2)
-        point_grid.addWidget(_town_lookup_attribution_label(), 4, 0, 1, 3)
-        left.addWidget(point_box)
-
-        action_row = QHBoxLayout()
-        self._wrf_extract_btn = QPushButton("Extract && Display WRF Sounding")
-        self._wrf_extract_btn.setObjectName(OBJ_PRIMARY)
-        self._wrf_extract_btn.setMinimumHeight(CONTROL_H["lg"])
-        self._wrf_extract_btn.setEnabled(False)
-        self._wrf_extract_btn.clicked.connect(self._wrf_extract)
-        action_row.addWidget(self._wrf_extract_btn, 1)
-        self._wrf_cancel_btn = QPushButton("Cancel")
-        self._wrf_cancel_btn.setObjectName(OBJ_GHOST)
-        self._wrf_cancel_btn.setMinimumHeight(CONTROL_H["lg"])
-        self._wrf_cancel_btn.clicked.connect(self._cancel_wrf_operation)
-        self._wrf_cancel_btn.hide()
-        action_row.addWidget(self._wrf_cancel_btn)
-        left.addLayout(action_row)
-        self._wrf_multi_sounding = self._make_multi_sounding_checkbox("WRF")
-        left.addWidget(self._wrf_multi_sounding)
-        self._wrf_progress = QProgressBar()
-        self._wrf_progress.setRange(0, 0)
-        self._wrf_progress.hide()
-        left.addWidget(self._wrf_progress)
-        self._wrf_progress_detail = QLabel("")
-        self._wrf_progress_detail.setWordWrap(True)
-        self._wrf_progress_detail.setObjectName(OBJ_PROGRESS_DETAIL)
-        self._wrf_progress_detail.hide()
-        left.addWidget(self._wrf_progress_detail)
-        left.addStretch(1)
-
-        self._wrf_controls_scroll = _scrolling_control_rail(left)
-        outer.addWidget(self._wrf_controls_scroll)
-        outer.addWidget(self._wrf_map, 1)
-        self._wrf_point_from_spins(center=True)
-        return panel
-
-    def _browse_wrf_file(self) -> None:
-        start = self._settings.value(
-            "wrf/last_dir", self._settings.value("last_dir", "", str), str)
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Open Raw WRF Output", start,
-            "WRF output (wrfout* *.nc *.nc4);;All files (*.*)")
-        if path:
-            self._wrf_path_edit.setText(path)
-            self._wrf_start_inspection()
-
-    def _wrf_path(self) -> str:
-        return self._wrf_path_edit.text().strip().strip('"')
-
-    def _wrf_path_changed(self, *_args) -> None:
-        path = self._wrf_path()
-        inspected = (self._wrf_domain or {}).get("source_file")
-        if inspected and os.path.abspath(path) == os.path.abspath(inspected):
-            return
-        self._wrf_domain = None
-        self._wrf_time_combo.clear()
-        self._wrf_time_combo.setEnabled(False)
-        self._wrf_map.set_domain(None)
-        self._wrf_domain_status.setText("Inspect this file before extraction.")
-        self._wrf_update_fetch_state()
-
-    def _wrf_start_inspection(self) -> None:
-        if self._wrf_inspect_worker is not None:
-            QMessageBox.information(
-                self, APP_NAME, "WRF inspection is already in progress.")
-            return
-        if self._wrf_extract_worker is not None:
-            QMessageBox.information(
-                self, APP_NAME, "Wait for the active WRF extraction first.")
-            return
-        path = self._wrf_path()
-        if not path or not os.path.isfile(path):
-            QMessageBox.warning(
-                self, APP_NAME, f"WRF output file not found:\n{path}")
-            return
-        from sharpmod.tools import wrf_extract
-        try:
-            wrf_extract.require_runtime_dependencies()
-        except wrf_extract.RetrievalError as exc:
-            QMessageBox.critical(self, APP_NAME, str(exc))
-            return
-        worker = _WRFInspectWorker(path, parent=self)
-        self._wrf_inspect_worker = worker
-        worker.inspected.connect(self._on_wrf_inspected)
-        worker.failed.connect(self._on_wrf_inspect_failed)
-        worker.cancelled.connect(self._on_wrf_cancelled)
-        worker.finished.connect(self._on_wrf_inspect_finished)
-        self._set_wrf_busy(True, "Inspecting WRF coordinates and times…")
-        worker.start()
-
-    @staticmethod
-    def _wrf_map_area(bounds) -> str:
-        lon0, lon1, lat0, lat1 = bounds
-        candidates = []
-        for name, (area_lon0, area_lon1, area_lat0, area_lat1) in \
-                MAP_AREAS.items():
-            if area_lon0 <= lon0 and lon1 <= area_lon1 \
-                    and area_lat0 <= lat0 and lat1 <= area_lat1:
-                size = (area_lon1 - area_lon0) * (area_lat1 - area_lat0)
-                candidates.append((size, name))
-        return min(candidates)[1] if candidates else "World"
-
-    def _on_wrf_inspected(self, domain) -> None:
-        worker = self.sender()
-        if os.path.abspath(self._wrf_path()) != os.path.abspath(worker._path):
-            _LOGGER.info("wrf_inspect.stale path=%s", worker._path)
-            return
-        self._wrf_domain = dict(domain)
-        self._wrf_time_combo.clear()
-        times = tuple(domain.get("times") or (None,))
-        for index, value in enumerate(times):
-            label = value.strftime("%Y-%m-%d %H:%MZ") \
-                if isinstance(value, datetime) else f"File time {index + 1}"
-            self._wrf_time_combo.addItem(label, value)
-        self._wrf_time_combo.setEnabled(bool(times))
-        ny, nx = domain["shape"]
-        lon0, lon1, lat0, lat1 = domain["bounds"]
-        self._wrf_domain_status.setText(
-            f"Grid {ny} × {nx}; {lat0:.3f}–{lat1:.3f}° latitude, "
-            f"{lon0:.3f}–{lon1:.3f}° longitude; {len(times)} time(s).")
-        self._wrf_map.set_area(self._wrf_map_area(domain["bounds"]))
-        self._wrf_map.set_domain(domain["bounds"], f"WRF grid {ny} × {nx}")
-        center_lat, center_lon = domain["center"]
-        self._wrf_syncing_point = True
-        try:
-            self._wrf_lat.setValue(float(center_lat))
-            self._wrf_lon.setValue(float(center_lon))
-        finally:
-            self._wrf_syncing_point = False
-        self._wrf_map.set_point(center_lat, center_lon, center=True)
-        self._settings.setValue("wrf/last_dir", os.path.dirname(worker._path))
-        self._wrf_update_fetch_state()
-
-    def _on_wrf_inspect_failed(self, message) -> None:
-        self._wrf_domain = None
-        self._wrf_domain_status.setText("WRF inspection failed.")
-        self.statusBar().showMessage("WRF inspection failed")
-        QMessageBox.critical(self, APP_NAME, str(message))
-
-    def _on_wrf_inspect_finished(self) -> None:
-        worker = self.sender()
-        if self._wrf_inspect_worker is worker:
-            self._wrf_inspect_worker = None
-            self._set_wrf_busy(False)
-        worker.deleteLater()
-
-    def _wrf_point_from_spins(self, *_args, center=False) -> None:
-        if getattr(self, "_wrf_syncing_point", False):
-            return
-        self._wrf_map.set_point(
-            self._wrf_lat.value(), self._wrf_lon.value(), center=center)
-        self._wrf_update_fetch_state()
-
-    def _wrf_on_map_point(self, lat, lon) -> None:
-        self._wrf_syncing_point = True
-        try:
-            self._wrf_lat.setValue(float(lat))
-            self._wrf_lon.setValue(float(lon))
-        finally:
-            self._wrf_syncing_point = False
-        self._wrf_update_fetch_state()
-
-    def _wrf_update_fetch_state(self) -> None:
-        if not hasattr(self, "_wrf_extract_btn"):
-            return
-        from sharpmod.tools import wrf_extract
-        lat = float(self._wrf_lat.value())
-        lon = float(self._wrf_lon.value())
-        ok = wrf_extract.point_in_domain(self._wrf_domain, lat, lon)
-        if self._wrf_domain is None:
-            self._wrf_point_status.setText("Inspect a WRF domain first.")
-        elif ok:
-            self._wrf_point_status.setText(
-                f"Selected {lat:.4f}, {lon:.4f} inside the WRF grid.")
-        else:
-            self._wrf_point_status.setText(
-                f"Selected {lat:.4f}, {lon:.4f} is outside the WRF grid.")
-        busy = self._wrf_inspect_worker is not None \
-            or self._wrf_extract_worker is not None
-        self._wrf_extract_btn.setEnabled(ok and not busy)
-
-    def _wrf_selected_time(self):
-        if self._wrf_time_combo.count() == 0:
-            return None
-        return self._wrf_time_combo.currentData()
-
-    def _wrf_extract(self) -> None:
-        if self._wrf_extract_worker is not None:
-            QMessageBox.information(
-                self, APP_NAME, "A WRF extraction is already in progress.")
-            return
-        if self._wrf_inspect_worker is not None:
-            QMessageBox.information(
-                self, APP_NAME, "Wait for WRF inspection to finish first.")
-            return
-        from sharpmod.tools import wrf_extract
-        lat = float(self._wrf_lat.value())
-        lon = float(self._wrf_lon.value())
-        if not wrf_extract.point_in_domain(self._wrf_domain, lat, lon):
-            QMessageBox.warning(
-                self, APP_NAME, "Choose a point inside the inspected WRF grid.")
-            return
-        path = self._wrf_path()
-        if not os.path.isfile(path):
-            QMessageBox.warning(self, APP_NAME, f"File not found:\n{path}")
-            return
-        valid = self._wrf_selected_time()
-        loc = self._wrf_loc.text().strip() or None
-        output_dir = tempfile.mkdtemp(prefix="wrf_gui_")
-        out_path = os.path.join(output_dir, "sounding.npz")
-        worker = _WRFExtractWorker(
-            path, lat, lon, out_path, valid_time=valid, loc=loc,
-            resolve_place=not bool(loc), parent=self)
-        self._wrf_extract_worker = worker
-        worker.finished_ok.connect(self._on_wrf_extract_ok)
-        worker.failed.connect(self._on_wrf_extract_failed)
-        worker.cancelled.connect(self._on_wrf_cancelled)
-        worker.progress.connect(self._on_wrf_progress)
-        worker.finished.connect(self._on_wrf_extract_finished)
-        self._set_wrf_busy(True, "Opening raw WRF output…")
-        worker.start()
-
-    def _set_wrf_busy(self, busy, message="") -> None:
-        if busy:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            self._wrf_inspect_btn.setEnabled(False)
-            self._wrf_extract_btn.setEnabled(False)
-            self._wrf_cancel_btn.setEnabled(True)
-            _set_button_busy(self._wrf_cancel_btn, False, "")
-            self._wrf_cancel_btn.show()
-            self._wrf_progress.show()
-            self._wrf_progress_detail.setText(message or "Processing WRF data…")
-            self._wrf_progress_detail.show()
-        else:
-            QApplication.restoreOverrideCursor()
-            self._wrf_inspect_btn.setEnabled(True)
-            self._wrf_cancel_btn.hide()
-            self._wrf_progress.hide()
-            self._wrf_progress_detail.hide()
-            _set_button_busy(self._wrf_extract_btn, False, "")
-            self._wrf_update_fetch_state()
-
-    def _on_wrf_progress(self, stage) -> None:
-        messages = {
-            "town": "Resolving the selected town name…",
-            "validating": "Validating the WRF request…",
-            "opening": "Opening raw WRF NetCDF output…",
-            "extracting": "Destaggering and extracting the WRF column…",
-            "writing": "Writing the viewer-owned sounding…",
-            "complete": "Preparing the WRF sounding display…",
-            "rendering": "Rendering the WRF sounding window…",
-        }
-        message = messages.get(str(stage), "Processing WRF output…")
-        self._wrf_progress_detail.setText(message)
-        self.statusBar().showMessage(message)
-
-    def _cancel_wrf_operation(self) -> None:
-        worker = self._wrf_extract_worker or self._wrf_inspect_worker
-        if worker is None:
-            return
-        worker.requestInterruption()
-        self._wrf_cancel_btn.setEnabled(False)
-        _set_button_busy(self._wrf_cancel_btn, True, "Cancelling…")
-        self.statusBar().showMessage("Cancelling WRF operation…")
-
-    def _on_wrf_cancelled(self) -> None:
-        self.statusBar().showMessage("WRF operation cancelled", 5000)
-
-    def _on_wrf_extract_failed(self, message) -> None:
-        self.statusBar().showMessage("WRF extraction failed")
-        QMessageBox.critical(self, APP_NAME, str(message))
-
-    def _on_wrf_extract_finished(self) -> None:
-        worker = self.sender()
-        if self._wrf_extract_worker is worker:
-            self._wrf_extract_worker = None
-            self._set_wrf_busy(False)
-        worker.deleteLater()
-
-    def _on_wrf_extract_ok(self, npz_path, valid_time) -> None:
-        self._on_wrf_progress("rendering")
-        QApplication.processEvents()
-        try:
-            R = _render()
-            prof_col, stn_id = R.decode(npz_path)
-            suffix = valid_time.strftime(" %Y-%m-%d %H:%MZ") \
-                if isinstance(valid_time, datetime) else ""
-            title = f"{APP_NAME} — WRF-ARW{suffix}"
-            win = self._show_sounding(prof_col, stn_id, title=title)
-            _retain_point_data_until_close(
-                win, npz_path, os.path.dirname(npz_path))
-        except Exception as exc:  # noqa: BLE001 - GUI/render boundary
-            _LOGGER.exception("wrf_extract.display_failed")
-            _cleanup_point_data(npz_path, os.path.dirname(npz_path))
-            QMessageBox.critical(
-                self, APP_NAME, f"Extracted, but could not display:\n{exc}")
-            return
-        self.statusBar().showMessage("Opened raw WRF point sounding", 5000)
-
     def _browse_file(self) -> None:
         start = self._settings.value("last_dir", "", str)
         path, _ = QFileDialog.getOpenFileName(
-            self, "Open Sounding File", start,
+            self,
+            "Open Sounding File",
+            start,
             "Soundings (*.npz *.spc *.SPC *.oax *.OAX *.buf *.pecan *.txt);;"
-            "All files (*.*)")
+            "All files (*.*)",
+        )
         if path:
             self._file_edit.setText(path)
             self._open_file(path)
@@ -5286,14 +4415,14 @@ class PickerWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
             self.statusBar().showMessage("Decode failed")
             QMessageBox.critical(
-                self, APP_NAME,
-                f"Could not decode this file:\n{path}\n\n{exc}")
+                self, APP_NAME, f"Could not decode this file:\n{path}\n\n{exc}"
+            )
             return
         display_error = None
         try:
             self._show_sounding(
-                prof_col, stn_id,
-                title=f"{APP_NAME} \u2014 {os.path.basename(path)}")
+                prof_col, stn_id, title=f"{APP_NAME} \u2014 {os.path.basename(path)}"
+            )
         except Exception as exc:  # noqa: BLE001 - GUI/render boundary
             _LOGGER.exception("local_file.display_failed path=%s", path)
             self.statusBar().showMessage("Display failed")
@@ -5304,9 +4433,10 @@ class PickerWindow(QMainWindow):
             # Restore the normal cursor before entering the blocking modal;
             # otherwise the failure dialog itself misleadingly shows busy.
             QMessageBox.critical(
-                self, APP_NAME,
-                "Decoded, but could not display this file:\n"
-                f"{path}\n\n{display_error}")
+                self,
+                APP_NAME,
+                f"Decoded, but could not display this file:\n{path}\n\n{display_error}",
+            )
             return
         self._settings.setValue("last_dir", os.path.dirname(path))
         self._remember_recent_file(path)
@@ -5354,8 +4484,7 @@ class PickerWindow(QMainWindow):
             if path:
                 self._select_tab("Open File")
                 filename = os.path.basename(path).lower()
-                if filename.startswith("wrfout") \
-                        or filename.endswith((".nc", ".nc4")):
+                if filename.startswith("wrfout") or filename.endswith((".nc", ".nc4")):
                     self._file_modes.setCurrentIndex(1)
                     self._wrf_path_edit.setText(path)
                     self._wrf_start_inspection()
@@ -5405,8 +4534,7 @@ class PickerWindow(QMainWindow):
                 pass
 
         controllers = [
-            getattr(self, name, None)
-            for name in TAB_OVERLAY_CONTROLLERS.values()
+            getattr(self, name, None) for name in TAB_OVERLAY_CONTROLLERS.values()
         ]
         controllers = [c for c in controllers if c is not None]
         for controller in controllers:
@@ -5476,17 +4604,25 @@ class PickerWindow(QMainWindow):
                 check_integrity=False,
             )
             _start_locator_overlay_fetch(
-                win, prof_col, product=_overlay_product_for(self),
-                controller=self)
+                win,
+                prof_col,
+                product=_overlay_product_for(self),
+                controller=self,
+                spec=_locator_spec_for(self),
+            )
             count = len(getattr(win.spc_widget, "prof_collections", []))
             win.setWindowTitle(
-                f"{APP_NAME} — {count} Sounding{'s' if count != 1 else ''}")
+                f"{APP_NAME} — {count} Sounding{'s' if count != 1 else ''}"
+            )
             win.showNormal()
             win.raise_()
             win.activateWindow()
             _LOGGER.info(
                 "viewer.profile_added viewer=%s title=%s soundings=%d",
-                id(win), title or stn_id or "Sounding", count)
+                id(win),
+                title or stn_id or "Sounding",
+                count,
+            )
             return win
 
         # Compose the real, interactive SPCWindow with this picker as its Qt
@@ -5499,12 +4635,16 @@ class PickerWindow(QMainWindow):
         viewer_id = id(win)
         viewer_title = title or stn_id or "Sounding"
         win.destroyed.connect(
-            lambda *_args, viewer_id=viewer_id, viewer_title=viewer_title:
-            _LOGGER.info(
-                "viewer.closed viewer=%s title=%s", viewer_id, viewer_title))
+            lambda *_args, viewer_id=viewer_id, viewer_title=viewer_title: _LOGGER.info(
+                "viewer.closed viewer=%s title=%s", viewer_id, viewer_title
+            )
+        )
         _LOGGER.info(
             "viewer.opened viewer=%s title=%s active_viewers=%d",
-            viewer_id, viewer_title, len(self._viewers))
+            viewer_id,
+            viewer_title,
+            len(self._viewers),
+        )
         return win
 
     def _prune_closed_viewers(self) -> None:
@@ -5518,8 +4658,7 @@ class PickerWindow(QMainWindow):
             except RuntimeError:
                 continue  # already deleted by Qt
         self._viewers = alive
-        _LOGGER.debug(
-            "viewer.prune before=%d after=%d", before, len(self._viewers))
+        _LOGGER.debug("viewer.prune before=%d after=%d", before, len(self._viewers))
 
     def _restore_state(self) -> None:
         last = self._settings.value("last_station", "", str)
@@ -5556,6 +4695,7 @@ def _app_icon() -> QIcon:
     """
     try:
         from importlib.resources import files
+
         icons = files("sharpmod.resources").joinpath("icons")
         for name in ("app.ico", "app.png"):
             res = icons.joinpath(name)
@@ -5608,7 +4748,8 @@ def _configure_high_dpi() -> None:
             # policy is locked in and setting it now would be a no-op warning.
             return
         QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
-            _Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+            _Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
     except Exception:
         # Older bindings lack the enum; default rounding is still usable.
         _LOGGER.debug("startup.high_dpi_policy_unavailable", exc_info=True)
@@ -5630,14 +4771,16 @@ def _enable_native_fault_reports() -> None:
     try:
         import faulthandler
 
-        path = Path(_configure_debug_logging()).with_name(
-            "sharpmod-gui-native.log")
+        path = Path(_configure_debug_logging()).with_name("sharpmod-gui-native.log")
         path.parent.mkdir(parents=True, exist_ok=True)
         stream = open(path, "a", encoding="utf-8", errors="replace")
         stream.write(
             "\n=== faulthandler armed %s pid=%d python=%s ===\n"
-            % (datetime.now(timezone.utc).isoformat(timespec="seconds"),
-               os.getpid(), sys.version.split()[0])
+            % (
+                datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                os.getpid(),
+                sys.version.split()[0],
+            )
         )
         stream.flush()
         # Held for the process lifetime: faulthandler writes to the file
@@ -5695,22 +4838,23 @@ def _restore_visual_qt_platform() -> None:
     if QApplication.instance() is not None:
         # Qt resolved the plugin when that application was constructed. Editing
         # the variable now would change the log and nothing else.
-        _LOGGER.warning(
-            "startup.headless_platform_locked platform=%s", requested)
+        _LOGGER.warning("startup.headless_platform_locked platform=%s", requested)
         return
     native = _native_qt_platform()
     os.environ["QT_QPA_PLATFORM"] = native
     _LOGGER.warning(
-        "startup.headless_platform_overridden inherited=%s using=%s "
-        "override_with=%s=1", requested, native, _HEADLESS_GUI_ENV)
+        "startup.headless_platform_overridden inherited=%s using=%s override_with=%s=1",
+        requested,
+        native,
+        _HEADLESS_GUI_ENV,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     """Launch the interactive picker. Entry point for ``sharpmod-gui``."""
     _configure_debug_logging()
     _enable_native_fault_reports()
-    relaunch_arguments = (
-        list(sys.argv[1:]) if argv is None else list(argv[1:]))
+    relaunch_arguments = list(sys.argv[1:]) if argv is None else list(argv[1:])
     if _relaunch_stable_windows_gui(relaunch_arguments):
         return 0
     _LOGGER.info("application.start argv=%r", sys.argv if argv is None else argv)
@@ -5719,8 +4863,7 @@ def main(argv: list[str] | None = None) -> int:
     _restore_visual_qt_platform()
     _configure_high_dpi()
 
-    app = QApplication.instance() or QApplication(sys.argv if argv is None
-                                                  else argv)
+    app = QApplication.instance() or QApplication(sys.argv if argv is None else argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
 

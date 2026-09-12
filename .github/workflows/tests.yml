@@ -22,7 +22,7 @@ on:
         default: false
         type: boolean
       run_serial_release:
-        description: Run the complete non-parallel release gate
+        description: Run the complete single-process release gate
         required: false
         default: false
         type: boolean
@@ -39,7 +39,7 @@ on:
         default: false
         type: boolean
       run_serial_release:
-        description: Run the complete non-parallel release gate
+        description: Run the complete single-process release gate
         required: false
         default: false
         type: boolean
@@ -143,7 +143,27 @@ jobs:
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip check
 
+      - &install_rust_backend
+        name: Build and install the Rust backend
+        # Hosted runners used to test only the pure-Python fallback, which costs
+        # roughly 6.7x on the parcel/kinematics kernels and made the serial gate
+        # the whole release's critical path. The three heavy lanes now exercise
+        # the accelerated backend that actually ships; the compatibility matrix
+        # deliberately stays on the fallback, so that path keeps full-suite
+        # coverage on 3.11 and 3.12.
+        #
+        # SHARPMOD_BACKEND is set per lane step rather than on the job, because
+        # forcing it here would make the dependency install above fail while the
+        # extension is still absent.
+        run: |
+          python -m pip install "maturin>=1.15,<2"
+          (cd rust/sharpmod-rs && python -m maturin build --release --locked --interpreter python --out dist)
+          python -m pip install --force-reinstall --no-deps rust/sharpmod-rs/dist/*.whl
+          python -c "from sharpmod.backends import backend_info; info = backend_info(); assert info['active_backend'] == 'rust', info; assert info['rust_installed'] is True, info; print('backend:', info)"
+
       - name: Run grouped deterministic lane with coverage
+        env:
+          SHARPMOD_BACKEND: rust
         run: >-
           python scripts/run_test_lane.py fast
           --workers 4
@@ -163,9 +183,30 @@ jobs:
           retention-days: 14
 
   property:
-    name: Full properties (Python 3.13)
+    name: Full properties (${{ matrix.backend }}, Python 3.13)
     runs-on: ubuntu-latest
     timeout-minutes: 25
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # The >=100-example scientific contract has to hold on both compute
+        # paths that ship: the Rust extension the installer delivers, and the
+        # pure-Python fallback used wherever that wheel is unavailable.
+        #
+        # Running only one of them would leave a real hole. The compatibility
+        # matrix covers the fallback across the whole suite but at ten
+        # examples, so a fallback-only disagreement that needs deeper search to
+        # surface would otherwise reach a release unseen. Both legs finish well
+        # inside the serial gate, so this costs no critical path.
+        include:
+          # Two CPU-heavy fallback workers completed the full local lane in
+          # 214s with every tracked test under budget. Four workers inflated
+          # individual fallback timings through contention (312s overall).
+          - backend: python
+            workers: 2
+          - backend: rust
+            workers: 4
 
     steps:
       - name: Check out tested source
@@ -189,14 +230,27 @@ jobs:
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip check
 
+      # Written out rather than reusing the anchor above: this is the one lane
+      # that must also run without the extension, and a plain matrix condition
+      # is clearer than relying on how GitHub coerces an undefined context.
+      - name: Build and install the Rust backend
+        if: ${{ matrix.backend == 'rust' }}
+        run: |
+          python -m pip install "maturin>=1.15,<2"
+          (cd rust/sharpmod-rs && python -m maturin build --release --locked --interpreter python --out dist)
+          python -m pip install --force-reinstall --no-deps rust/sharpmod-rs/dist/*.whl
+          python -c "from sharpmod.backends import backend_info; info = backend_info(); assert info['active_backend'] == 'rust', info; assert info['rust_installed'] is True, info; print('backend:', info)"
+
       - name: Run full property lane
-        run: python scripts/run_test_lane.py property --workers 4
+        env:
+          SHARPMOD_BACKEND: ${{ matrix.backend }}
+        run: python scripts/run_test_lane.py property --workers ${{ matrix.workers }}
 
       - name: Upload property timing artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: test-timing-property-python-3.13
+          name: test-timing-property-${{ matrix.backend }}-python-3.13
           path: .test-results/property*
           include-hidden-files: true
           if-no-files-found: warn
@@ -204,12 +258,15 @@ jobs:
 
   serial-release:
     name: Complete serial release gate (Python 3.13)
-    if: ${{ inputs.run_serial_release == true || github.ref == 'refs/heads/main' }}
+    # This is an exact-source release check, requested by release.yml. The
+    # deterministic/property/version lanes already run on main, so also running
+    # this 3,000+ test single-process pass there duplicated it on release day.
+    if: ${{ inputs.run_serial_release == true }}
     runs-on: ubuntu-latest
-    # The v1.1.0 offline suite is substantially larger. Keep the job cap above
-    # the lane's own 4200s budget so a slow run reports a measured overrun and
-    # still uploads its timing artifact instead of being killed first.
-    timeout-minutes: 75
+    # The pre-optimization v1.1.0 lane completed in 34.6 minutes. Keep bounded
+    # headroom while preventing a regression from consuming the former 75-minute
+    # allowance before GitHub can stop it.
+    timeout-minutes: 45
 
     steps:
       - name: Check out tested source
@@ -233,7 +290,11 @@ jobs:
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip check
 
-      - name: Run every offline test without xdist
+      - *install_rust_backend
+
+      - name: Run every offline test in one process
+        env:
+          SHARPMOD_BACKEND: rust
         run: python scripts/run_test_lane.py serial-release
 
       - name: Upload serial timing artifacts

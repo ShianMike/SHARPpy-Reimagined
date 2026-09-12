@@ -41,6 +41,7 @@ from qtpy.QtWidgets import (
     QListWidgetItem,
     QSizePolicy,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -48,14 +49,57 @@ from qtpy.QtWidgets import (
 from sharpmod.theme import (
     NAV_RAIL_W,
     OBJ_CARD_TITLE,
+    OBJ_DOCK_TITLE,
+    OBJ_GHOST,
+    OBJ_HEADER_BAR,
     OBJ_NAV_RAIL,
     OBJ_NAV_RAIL_HEADER,
+    PROP_COMPACT,
     SPACE,
 )
 
 _LOGGER = logging.getLogger("sharpmod.gui")
 
-__all__ = ["SourceSelector", "PalettePreview"]
+__all__ = ["SourceSelector", "PalettePreview", "dock_title_bar"]
+
+
+def dock_title_bar(dock, title: str, *, shortcut_hint: str | None = None) -> QFrame:
+    """Build a themed dock title bar with a properly sized close button.
+
+    Replaces Qt's built-in dock title bar, which cannot be themed usefully:
+    the Fusion style computes the close button's rectangle from title-bar
+    metrics and ignores a QSS ``width``/``height``, leaving a roughly 16x9px
+    target -- and that button is the panel's only visible affordance for
+    dismissing it.
+
+    Lives here rather than in a single dock's module because every dock needs
+    the same fix. ``shortcut_hint`` is appended to the close tooltip so each
+    panel can advertise its own toggle shortcut.
+    """
+    bar = QFrame(dock)
+    bar.setObjectName(OBJ_HEADER_BAR)
+    row = QHBoxLayout(bar)
+    row.setContentsMargins(SPACE["md"], SPACE["xs"], SPACE["xs"], SPACE["xs"])
+    row.setSpacing(SPACE["sm"])
+
+    label = QLabel(title, bar)
+    label.setObjectName(OBJ_DOCK_TITLE)
+    row.addWidget(label)
+    row.addStretch(1)
+
+    close = QToolButton(bar)
+    close.setObjectName(OBJ_GHOST)
+    # Opts out of the shared button min-height, which would otherwise beat
+    # setFixedSize and inflate this header to 50px.
+    # Size comes from the style sheet, not setFixedSize: QStyleSheetStyle
+    # recomputes size constraints from QSS and would override it anyway.
+    close.setProperty(PROP_COMPACT, True)
+    close.setText("\u2715")
+    hint = f" ({shortcut_hint})" if shortcut_hint else ""
+    close.setToolTip(f"Hide the {title.lower()}{hint}")
+    close.clicked.connect(dock.close)
+    row.addWidget(close)
+    return bar
 
 
 class SourceSelector(QWidget):

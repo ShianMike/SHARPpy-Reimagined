@@ -61,7 +61,7 @@ development and benchmark verification.
 An importable native module is not accepted on import success alone. Before
 activation, the selector requires its package version to match `sharpmod`
 exactly, its integer backend API version to equal the Python contract (currently
-`6`), and all twelve operations listed below to be callable. In `auto` mode an old
+`7`), and all 18 required operations listed below to be callable. In `auto` mode an old
 or incomplete extension falls back to Python and records the compatibility
 failure in `fallback_reason`; in forced `rust` mode the same mismatch raises
 `BackendUnavailableError` instead of reaching an operation with stale native
@@ -103,11 +103,27 @@ Both backends expose the same named operations:
   trace.
 - `profile_dcape` computes DCAPE, its source pressure/downrush temperature, and
   the descending parcel-temperature trace.
-- `decode_grib_point` scans a local GRIB inventory, selects the nearest point
-  once per distinct grid definition, verifies a consistent selected point, and
-  returns all sounding columns as one C-contiguous NumPy matrix. When verified
-  surface messages are present, it removes below-ground isobars and prepends
-  surface pressure/height, 2-m thermodynamics, and 10-m wind.
+- `profile_thermodynamics` prepares one owned profile snapshot and shares it
+  across the three-parcel, traced convective, and DCAPE workspaces. Native
+  traces cross the extension boundary as contiguous NumPy buffers plus offsets;
+  the public Python API still exposes the existing immutable tuples.
+- `profile_batch_analysis` evaluates complete independent soundings in stable
+  input order. Calls below eight profiles are serial; larger calls default to a
+  process-wide Rayon pool bounded by the available CPUs and four workers,
+  remain serial when already inside Rayon, and accept explicit worker/cutoff
+  overrides. Sharing the default pool keeps simultaneous GUI callers under the
+  same native thread ceiling.
+- `decode_grib_point` and `decode_grib_points` reuse a bounded immutable message
+  inventory, select the nearest point once per distinct grid definition, and
+  return each sounding as one C-contiguous NumPy matrix. The multipoint form
+  opens each selected message once and asks ecCodes for every requested grid
+  index together while retaining request order and duplicate grid cells. When
+  verified surface messages are present, both forms remove below-ground
+  isobars and prepend surface pressure/height, 2-m thermodynamics, and 10-m
+  wind.
+- The remaining required callables enable, clear, and report the native GRIB
+  inventory cache so tests and benchmarks can distinguish cold scans from
+  inventory reuse.
 
 The shared behavior includes missing values, masks, NaNs, stable ordering,
 boundary results, error conditions, units, and output types. Python/Rust
@@ -141,9 +157,10 @@ parcel summary contract
 (for example cap strength and exact upstream MPL bookkeeping) remain
 Python-side compatibility concerns. ECAPE also retains a Python MUCAPE check
 for its exact pinned-oracle upper-bound contract. The Rust decoder receives a
-cache-owned local file from the Python retrieval layer. Rayon is not a
-dependency: profiling did not justify parallel decoding for ordinary point
-soundings, and calls made by the Rust decoder remain serialized.
+cache-owned local file from the Python retrieval layer. Rayon is used only for
+complete-profile analysis, where the measured 8-profile and 32-profile
+workloads benefit. GRIB/ecCodes calls remain behind a process-wide native
+mutex; batch analysis never enters ecCodes.
 
 Repository-owned application call sites delegate wind-component creation,
 generic profile interpolation, ERA5/WRF wind conversion, pressure sorting and
@@ -152,6 +169,11 @@ user parcel ascents, DCAPE, and
 forecast-model GRIB point extraction through the facade. A real `Profile`
 caches its immutable kinematics and three-parcel summary workspaces; full
 convective profiles consume the extended workspace once during construction.
+Box fast-tier analysis and built-in ensemble summaries submit complete ordered
+profile groups through `profile_batch_analysis`; load failures retain their
+original positions and fall back per profile without discarding successful
+members. The bounded metric cache fingerprints all source columns and rebuilds
+prepared results after either profile replacement or an in-place array edit.
 Nonstandard layers and any unavailable workspace continue through the existing
 Python routines. Basic QC and simple-row parsing remain
 equivalence-tested APIs without changing the SPC, UWyo, BUFKIT, WRF, or other
@@ -164,13 +186,23 @@ routes. The selected inventory is reused for transfer planning, and a complete
 local subset is handed to the active decoder without constructing xarray data.
 
 The Python decoder scans message headers once per file identity, performs one
-ecCodes nearest-point lookup, reads one scalar per selected field/level message,
-and keeps bounded inventory, nearest-point, and decoded-point LRUs. The Rust
-decoder memory-maps the file, locates message boundaries without copying, uses
-ecCodes handles that borrow each mapped message, and returns all nine columns in
-one NumPy-compatible matrix through one Python call. Its adapter keeps a bounded
-exact-point cache. Both caches include file size and modification time in their
-keys and invalidate when the downloaded file changes.
+ecCodes nearest-point lookup per distinct grid definition, vector-reads all
+uncached requested indexes from each selected field/level message, and keeps
+bounded inventory, nearest-point, and decoded-point LRUs. The Rust decoder
+memory-maps the file, locates message boundaries without copying, uses ecCodes
+handles that borrow each mapped message, and returns all nine columns in one
+NumPy-compatible matrix per point. Its adapter batches unique uncached requests
+and keeps a bounded exact-result cache without conflating different surface
+grids.
+
+Inventory identity includes the canonical path and size plus replacement-safe
+filesystem metadata: volume/file index and creation/write timestamps on
+Windows, or device/inode plus modification/change timestamps on Unix. An atomic
+same-size replacement therefore invalidates both Python and native state. The
+inventory stores immutable offsets and metadata only--never ecCodes handles--so
+model-cache leases and mapped-file lifetimes remain unchanged. Python ecCodes
+access uses its own re-entrant lock and all native ecCodes access uses one native
+mutex.
 
 For HRRR, retrieval includes `PRES` and `HGT` at the surface, `TMP` and `DPT`
 at 2 m, and `UGRD` and `VGRD` at 10 m. Both direct decoders and the cfgrib/Zarr
@@ -266,8 +298,8 @@ Rust required:
 ```powershell
 Set-Location rust\sharpmod-rs
 cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
 maturin develop --release --locked
 Set-Location ..\..
 
@@ -284,13 +316,14 @@ extension.
 
 The cross-backend harness requires a built extension and compares the Python
 and Rust backend methods on small profiles, ordinary profiles, a 100,000-value
-vector, a 2,048-by-128 batch of profiles, repeated calls, scalar 700 hPa
-lookups on 32/128 levels, six repeated fields, and real cached-selector
-`Profile` construction. It also measures the five-layer 128-level profile
-kinematics workspace, the three-parcel 128-level thermodynamic workspace, and
-the five-parcel traced convective workspace plus the DCAPE traced workspace, and
-prints an equal-work sequential-versus-two-thread diagnostic for the original
-array kernels:
+vector, a 2,048-by-128 array batch, repeated calls, scalar 700 hPa lookups on
+32/128 levels, six repeated fields, and real cached-selector `Profile`
+construction. It also measures 32/128-level kinematics, diagnostics-only
+parcels, traced convective parcels, DCAPE, shared thermodynamic preparation,
+and complete 8-by-32 and 32-by-128 profile batches. Shared thermodynamics are
+split into public-adapter, buffered-adapter, and direct-native rows; complete
+batches split serial and bounded four-worker rows. An equal-work
+sequential-versus-two-thread diagnostic remains observational:
 
 ```powershell
 $env:SHARPMOD_BACKEND = "rust"
@@ -307,13 +340,13 @@ The two-thread table is observational, not a pass/fail result or a promise of
 parallel scaling. Small array kernels retain the Python GIL while borrowing
 NumPy input slices; releasing it could allow another Python thread to mutate
 storage that Rust is reading. The profile-kinematics and profile-parcel
-bindings instead copy their small input columns before releasing the GIL, so
-native computation never races with caller mutation. GRIB decoding likewise
-releases the GIL and returns one capsule-backed NumPy matrix. Calls made by the
-Rust decoder are serialized because the local point workload did not show a
-reason to add speculative parallel decoding. Python ecCodes/cfgrib calls use a
-separate lock, so callers should not mix the two decoder implementations
-concurrently in one process.
+bindings instead create one Rust-owned snapshot before releasing the GIL; their
+internal prepared structures borrow that snapshot instead of copying the same
+columns again. Complete-batch workers likewise receive only owned vectors.
+GRIB decoding releases the GIL and returns capsule-backed NumPy matrices, but
+native ecCodes calls remain serialized. Python ecCodes/cfgrib calls use a
+separate lock, so callers should not mix decoder implementations concurrently
+in one process.
 
 ### Recorded local result
 
@@ -363,6 +396,11 @@ Python and 0.110250 ms in Rust. See the dated raw result in
 `benchmarks/results` for minima, maxima, environment details, and the exact
 command.
 
+The current API-7 optimization measurements, including the release baselines,
+Criterion confidence intervals, complete-adapter JSON, fixed-fixture GRIB cache
+states, batch worker evaluation, regressions, and validation commands, are in
+[`2026-09-12-rust-backend-optimization.md`](../benchmarks/results/2026-09-12-rust-backend-optimization.md).
+
 ## Platform status
 
 The crate is portable Rust stable code. The dedicated
@@ -407,16 +445,19 @@ a compatible extension.
   Rust-decoder ecCodes access is serialized; concurrent point decodes are not
   currently expected to scale. Python ecCodes/cfgrib calls are protected
   separately rather than by a shared cross-language lock.
-- The kinematics and parcel caches assume a `Profile`'s core reported-level
-  arrays remain unchanged after construction, matching the existing
-  derived-attribute cache contract. Build a new `Profile` after changing those
-  arrays.
+- A `Profile`'s original internal SharpTab caches still follow its normal
+  derived-attribute lifecycle. The cross-profile metric cache separately
+  fingerprints pressure, height, thermodynamic, and wind columns, so its
+  prepared result is discarded if those arrays are edited in place.
 - Native parcel results intentionally exclude several advanced `Parcel` fields
   outside the traced parcel summary contract, including cap-strength bookkeeping and
   the pinned ECAPE upper-bound check. The Python compatibility layer derives or
   masks those fields and retains the pinned SHARPpy fallback.
-- Direct GRIB caches are process-local and bounded. A cold request still scans
-  message headers and ecCodes must unpack one selected element per field/level.
+- Direct GRIB caches are process-local and bounded. A truly cold request still
+  scans message headers; inventory reuse removes that scan but ecCodes must
+  still unpack every selected field/level message. Multipoint calls amortize
+  that unpack across all requested indexes rather than making repeated scalar
+  passes.
 - When a downloaded inventory has no usable relative/absolute-vorticity field,
   model extraction keeps the xarray compatibility path so the existing
   neighbor-wind vorticity estimate is preserved.

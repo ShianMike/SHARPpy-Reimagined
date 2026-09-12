@@ -200,13 +200,15 @@ jobs:
         # surface would otherwise reach a release unseen. Both legs finish well
         # inside the serial gate, so this costs no critical path.
         include:
-          # Two CPU-heavy fallback workers completed the full local lane in
-          # 214s with every tracked test under budget. Four workers inflated
-          # individual fallback timings through contention (312s overall).
+          # Match both CPU-heavy backends to the two cores on a standard hosted
+          # runner. Four Rust workers passed correctness but inflated the
+          # physical-range property to 101-129s in two hosted runs, past its
+          # 100s regression budget; two workers avoid measuring scheduler
+          # contention as backend performance.
           - backend: python
             workers: 2
           - backend: rust
-            workers: 4
+            workers: 2
 
     steps:
       - name: Check out tested source

@@ -158,25 +158,35 @@ def test_one_click_hides_a_showing_strip(viewer_window, qt_app):
     assert controller._settings.value("hide_tips", False, bool) is True
 
 
-def _open_guide(qt_app, win):
-    """Open the modal guide, capture its geometry, and close it."""
+def _open_guide(qt_app, win, *, body_height=None):
+    """Open the modal guide, optionally constrain its body, and close it."""
     captured = {}
+
+    def capture(widget):
+        captured["size"] = (widget.width(), widget.height())
+        bodies = widget.findChildren(QTextBrowser)
+        # Scalars only, deliberately: the dialog is deleteLater'd once exec
+        # unwinds, so a widget reference kept past close() would outlive its C++
+        # object and raise on touch.
+        captured["body_count"] = len(bodies)
+        if bodies:
+            captured["scrollable"] = bodies[0].verticalScrollBarPolicy()
+            captured["overflow"] = bodies[0].verticalScrollBar().maximum()
+        widget.close()
 
     def inspect():
         for widget in qt_app.topLevelWidgets():
             if isinstance(widget, QDialog) and widget.isVisible():
-                captured["size"] = (widget.width(), widget.height())
                 bodies = widget.findChildren(QTextBrowser)
-                # Scalars only, deliberately: the dialog is deleteLater'd once
-                # exec unwinds, so any widget reference kept past the close()
-                # below would outlive its C++ object and raise on touch.
-                captured["body_count"] = len(bodies)
-                if bodies:
-                    captured["scrollable"] = (
-                        bodies[0].verticalScrollBarPolicy())
-                    captured["overflow"] = (
-                        bodies[0].verticalScrollBar().maximum())
-                widget.close()
+                if bodies and body_height is not None:
+                    # Whether the 760x620 dialog naturally overflows varies with
+                    # the runner's installed fonts. Constrain the viewport, then
+                    # capture on the next event-loop turn after Qt relayouts it.
+                    bodies[0].setFixedHeight(body_height)
+                    QTimer.singleShot(
+                        0, lambda dialog=widget: capture(dialog))
+                else:
+                    capture(widget)
                 return
 
     QTimer.singleShot(0, inspect)
@@ -205,23 +215,23 @@ def test_guide_fits_a_1080p_screen(viewer_window, qt_app):
 def test_guide_body_scrolls(viewer_window, qt_app):
     """Long content must be reachable, which a message box could not manage.
 
-    Two facts, both needed. The content genuinely overflows 760x620 -- so if the
-    body could not scroll, the overflow would be unreachable, which is the
-    original bug -- and the scrollbar policy permits scrolling. Asserting only
-    that a ``QTextBrowser`` exists, as this once did, would hold just as well
-    with scrolling switched off.
+    Font metrics differ across hosted runners, so the guide may naturally fit
+    in 760x620 on one image and overflow on another. Constrain the body to make
+    overflow deterministic, then verify both that overflow exists and that the
+    scrollbar policy permits reaching it. Asserting only that a
+    ``QTextBrowser`` exists would hold just as well with scrolling switched off.
     """
     from qtpy.QtCore import Qt
 
     win, _controller = viewer_window
-    captured = _open_guide(qt_app, win)
+    captured = _open_guide(qt_app, win, body_height=120)
 
     assert captured.get("body_count"), "the guide has no scrollable body"
     assert captured["scrollable"] != Qt.ScrollBarAlwaysOff, (
         "the guide body cannot scroll, so content past the fold is unreachable")
     assert captured.get("overflow", 0) > 0, (
-        "the guide fits without scrolling, so this test is no longer measuring "
-        "anything -- either the content shrank or the dialog grew")
+        "the constrained guide body has no scroll range, so content past the "
+        "fold would be unreachable")
 
 
 def test_the_guide_does_not_accumulate_on_the_window(viewer_window, qt_app):

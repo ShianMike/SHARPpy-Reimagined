@@ -102,7 +102,7 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     property_job = jobs["property"]
     assert property_job["strategy"]["matrix"]["include"] == [
         {"backend": "python", "workers": "2"},
-        {"backend": "rust", "workers": "4"},
+        {"backend": "rust", "workers": "2"},
     ]
     property_steps = property_job["steps"]
     assert any(

@@ -65,7 +65,7 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     compatibility_scripts = "\n".join(
         step.get("run", "") for step in jobs["compatibility"]["steps"]
     )
-    assert "run_test_lane.py compatibility --workers 4" in compatibility_scripts
+    assert "run_test_lane.py compatibility --workers 2" in compatibility_scripts
     fast_scripts = "\n".join(step.get("run", "") for step in jobs["fast"]["steps"])
     assert "run_test_lane.py fast" in fast_scripts
     assert "--coverage" in fast_scripts

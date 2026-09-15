@@ -7,6 +7,126 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-15
+
+### Added
+
+- **Saved sounding-sensitivity scenarios.** The Analysis Workspace can now
+  create, rename, duplicate, reset, save, reopen, and export named hypothetical
+  scenarios from an immutable baseline. Perturbations cover surface temperature
+  and dewpoint, moisture-layer depth, localized cap-temperature changes, and
+  explicit storm motion. Baseline deltas and bounded, cancellable temperature /
+  dewpoint grids reuse the existing calculation backend and retain completed
+  cells when cancelled.
+
+- **Self-contained briefing and animation exports.** The new *Share* workspace
+  writes HTML and PDF briefings with selected soundings, map context,
+  comparison/trend values, notes, timestamps, attribution, scenario labels, and
+  ensemble coverage. Forecast-timeline and exact-valid-time run-to-run GIFs
+  provide frame selection, fixed scales, playback speed, progress, cancellation,
+  visible timestamps, and explicit missing-frame cards.
+
+- **Forecast verification and observed-wind workflows.** *Verify* strictly pairs
+  forecasts and observations by station/location, valid time, initialization,
+  lead, terrain, coverage, and as-of availability; it reports conservative
+  vertical temperature, dewpoint, and wind errors plus supported aggregate bias
+  and error summaries. *Observed Winds* imports or retrieves wind-only NEXRAD
+  product-48 VAD/VWP profiles, steps through observation times, overlays model
+  hodographs, exposes quality and vertical coverage, and computes only
+  coverage-supported shear or explicitly sourced storm-relative diagnostics.
+
+- **Ensemble threshold exploration and synchronized visual comparison.** Single
+  and joint ingredient conditions are evaluated member by member over their
+  common valid subset, with qualifying/nonqualifying soundings and separate
+  numerator, usable-member denominator, and requested-member coverage. Compare
+  now offers synchronized two- and four-panel soundings, shared cursor heights
+  and axes, visible T/Td/U/V gaps, selectable references, and session-restored
+  layouts.
+
+- **Historical replay and portable case packages.** The *Replay* workspace groups
+  soundings, analyses, notes, observed winds, and archived context under an exact
+  replay clock with pause, step, playback, and optional availability-time
+  training mode. Data-only `.sharpmod-case` packages carry a versioned manifest,
+  provenance, SHA-256 integrity metadata, explicit missing assets, bounded
+  cancellable downloads, and no extracted or executable payloads.
+
+- **Optional time-matched environmental map context.** Station and forecast maps
+  can display georeferenced NOAA GOES visible or infrared imagery and nearby NWS
+  surface dewpoint/wind observations. The overlays disclose actual selected
+  timestamps, resolution, coverage, freshness, units, source attribution, and
+  decluttering, remain optional when providers fail, and can travel into
+  briefings and portable cases.
+
+- **Synchronized HRRR field panels.** A new *Field Panels* source shows two or
+  four maps side by side, each choosing a field by group and name, sharing one
+  view: panning or zooming any panel moves them all. Its own date, cycle, and
+  forecast-hour controls set the run every panel draws, clicking any panel places
+  the sounding point on all of them, and *Get sounding here* extracts that point
+  through the existing model path. The outlook, storm-report, radar, satellite,
+  and surface-observation overlays are available here too, drawn on every panel
+  from one request so the panels differ only by field. The panel count and every
+  panel's field are remembered between sessions, including fields chosen for
+  panels a two-panel layout hides.
+
+### Changed
+
+- **The picker gives the map more room.** *Load From* is now a compact dropdown
+  in the top menu bar beside File, Locations, View, and Help. Source-specific
+  controls use consistently styled, icon-bearing collapsible rail sections in
+  place of the permanent source navigation and traditional stacked dropdowns.
+
+- **Redesigned the picker's top bar and control sidebar.** *Load From* matches
+  the menus beside it, the bar is shorter, and sidebar cards group their controls
+  under clearer headings with consistent spacing.
+
+- **Every control sidebar presents its cards in the same order.** What is being
+  looked at comes first, then its run, then the map overlays, then region and
+  point — which arrive collapsed, since both are set once and the point is usually
+  chosen by clicking the map. The three sidebars previously carried overlapping
+  cards in three different orders.
+
+- **Run and forecast times explain themselves.** Dates show the weekday, the
+  cycle list marks the freshest run, and each forecast hour carries its valid time.
+
+- **The mouse wheel no longer changes a control's value.** Scrolling over a model,
+  region, cycle, forecast hour, or coordinate scrolls the panel instead.
+
+- **Every dropdown now opens like the menus in the top bar.** Popups drop from the
+  bottom of their field instead of covering it, and carry the menus' rows and
+  corners. Their height is bounded at both ends, so a long list — the 209-entry
+  forecast hours among them — scrolls rather than running past the bottom of the
+  screen, and a one-entry list is still a comfortable target.
+
+- **Surface observation plots read like a station model.** Each plot now shows
+  temperature over dewpoint in the conventional warm/cool colours, and the
+  reported gust reaches the hover description.
+
+- **Ensemble and comparison provenance is explicit.** Ensemble acquisition now
+  retains requested, loaded, failed, cancelled, and per-diagnostic usable-member
+  counts through retry, session restore, and CSV export; retry fetches only
+  unavailable members and useful single-member results remain inspectable.
+  Comparisons now disclose requested/selected coordinates, grid spacing,
+  terrain, run/lead, parcel and storm-motion conventions, profile edits, and
+  intentional spatial differences without substituting a nearby valid time.
+
+- **All new persistence and export actions follow the existing application-local
+  folder contract.** Scenario, verification, observed-wind, ensemble,
+  comparison, briefing, animation, and case dialogs default to
+  `rendered_soundings`; temporary files remain managed separately, explicit
+  one-off destinations do not change the next default, and write failures name
+  the actual destination.
+
+### Fixed
+
+- **Storm-report markers on the forecast-point map can be inspected without
+  moving the sounding point.** Marker hit-testing now takes priority over point
+  selection and shows the report description, while clicks outside a marker
+  retain the normal sounding-location behavior.
+
+- **Box sounding mode no longer needs a second toggle cycle to exit.** Completing,
+  cancelling, or failing a box request—and pressing Escape before or after a
+  rectangle is drawn—now disarms both the map gesture and its toolbar toggle.
+
 ## [1.2.0] - 2026-09-12
 
 This release turns the sounding viewer into a broader analysis workspace while

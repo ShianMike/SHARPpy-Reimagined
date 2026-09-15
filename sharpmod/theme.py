@@ -42,6 +42,7 @@ __all__ = [
     "MOTION_MS",
     "RAIL_W",
     "FIELD_W",
+    "DEPENDENT_INDENT",
     "PROGRESS_H",
     "NAV_RAIL_W",
     "VIEWER_SIDEBAR_W",
@@ -108,10 +109,32 @@ CONTROL_H: dict[str, int] = {
     "xl": 40,
 }
 
+#: Bounds on a dropdown popup, counted in rows rather than pixels so they stay in
+#: step with the row height whatever ``CONTROL_H['md']`` becomes.
+#:
+#: ``max`` is what makes menu-height rows safe to apply to every combo box in the
+#: application. Without it the rule could only go on the top bar's own dropdown:
+#: the forecast-hour list runs to 209 entries, which at a menu row's height is a
+#: popup some 7000 px tall -- taller than any screen, so the entries past the
+#: bottom were simply unreachable. Bounded, Qt gives the list a scrollbar instead,
+#: and a long list behaves like a long menu.
+#:
+#: ``min`` keeps a one- or two-entry popup a comfortable pointer target rather
+#: than a sliver appearing under the cursor.
+POPUP_ROWS: dict[str, int] = {
+    "min": 2,
+    "max": 14,
+}
+
 #: Type ramp in **points**. Points (not pixels) so the ramp honours the OS text
 #: scaling setting; the previous code mixed ``8pt`` and ``11px`` declarations.
+#:
+#: ``caption`` is 8.5 rather than 8.0. It carries the UTC clock, the top bar's
+#: eyebrow label, and every data attribution -- text that is meant to recede but
+#: still be read. At 8.0 those rendered a full 2pt below body copy and read as
+#: debug output rather than as chrome.
 FONT_PT: dict[str, float] = {
-    "caption": 8.0,
+    "caption": 8.5,
     "small": 9.0,
     "body": 10.0,
     "subhead": 11.0,
@@ -135,6 +158,20 @@ MOTION_MS: dict[str, int] = {
     "base": 180,
     "slow": 240,
 }
+
+#: Left indent for a control that belongs to the check box above it.
+#:
+#: Exactly the indicator column: the indicator's own width plus the gap to its
+#: label, both taken from the check-box rule in the generated style sheet. That
+#: makes a dependent control's left edge line up with its switch's *label* rather
+#: than with the indicator, so the ownership is legible without a box or a rule
+#: around the group.
+#:
+#: Derived rather than eyeballed, because it was eyeballed before: the
+#: environmental-context controller hardcoded ``18`` and the outlook, radar, and
+#: field controllers indented by nothing at all, so switching one overlay on
+#: produced a stack of combo boxes with no visible owner.
+DEPENDENT_INDENT: int = SPACE["lg"] + SPACE["sm"]
 
 #: Vertical scrollbar width -- the column a scroll area reserves in its layout,
 #: which is why every width budget has to include it or content is clipped once
@@ -169,6 +206,10 @@ FIELD_W: dict[str, int] = {
     "action": 96,    # an inline button such as "Most recent"
     "date": 118,     # an ISO date edit
     "wide": 132,     # a date/cycle/forecast control in the model panel
+    #: A control whose value is a timestamp: a date carrying its weekday, or a
+    #: forecast hour carrying the time it is valid at. Both outgrew ``wide`` when
+    #: they stopped making the reader compose the value themselves.
+    "timestamp": 168,
     #: Label column in a rail form card. Sized for the longest label any panel
     #: uses ("Longitude:") so that every field in every card starts at the same
     #: x -- per-card label columns made the rows step in and out down the rail.
@@ -523,6 +564,17 @@ class MapPalette:
     saved_edge: str
     domain_edge: str        # WRF domain perimeter
 
+    # Surface station plots. These are *values*, not geography and not markers:
+    # the numbers beside a wind barb in the live-observation overlay.
+    #
+    # They live here rather than in sharpmod.colors because they are drawn on the
+    # picker's basemap and have to clear it in every theme, which is a different
+    # constraint from the same quantities plotted on the Skew-T's black canvas.
+    # The convention they follow is the same one: warm for temperature, cool for
+    # dewpoint, so a forecaster reads the pair without a legend.
+    obs_temperature: str
+    obs_dewpoint: str
+
 
 #: Map colours for the dark themes.
 #:
@@ -566,6 +618,11 @@ DARK_MAP = MapPalette(
     # Deliberately still cool: the model domain is a data overlay, not
     # geography, and against neutral terrain that now reads unambiguously.
     domain_edge="#79B8FF",
+    # Lighter than the station dot's #E03030 on purpose. Both are red on the same
+    # map, so the temperature reading is tinted to read as text rather than as
+    # another available-station marker.
+    obs_temperature="#FF8A72",
+    obs_dewpoint="#5FD98A",
 )
 
 #: Map colours for the light theme. The line hierarchy is inverted -- lines get
@@ -600,6 +657,10 @@ LIGHT_MAP = MapPalette(
     saved="#0C7C99",
     saved_edge="#FFFFFF",
     domain_edge="#2C6BA8",
+    # Deepened rather than merely re-hued: the pale basemap gives small text far
+    # less to work with than the dark one, so both readings darken to stay legible.
+    obs_temperature="#B3261E",
+    obs_dewpoint="#136B3A",
 )
 
 #: Protanopia map colours. The station/selected pair is the one that matters:
@@ -624,6 +685,13 @@ PROTANOPIA_MAP = MapPalette(
     saved="#1E93B2",
     saved_edge="#07131B",
     domain_edge="#9FC9FF",
+    # The conventional station plot is red temperature against green dewpoint,
+    # which is the single worst pairing for a protanope -- the two readings sit
+    # side by side and mean opposite things. So this palette moves the pair onto
+    # the blue/yellow axis protanopia retains, keeping "warm is temperature, cool
+    # is dewpoint" intact while making the hues separable.
+    obs_temperature="#FFD08A",
+    obs_dewpoint="#9BDCF5",
 )
 
 
@@ -701,8 +769,24 @@ OBJ_GUIDE_BODY = "guideBody"         # its scrollable rich-text body
 OBJ_PRIMARY = "primaryAction"        # the one accent button per panel
 OBJ_DANGER = "dangerAction"          # destructive action
 OBJ_GHOST = "ghostAction"            # borderless tertiary action
-OBJ_NUMERIC = "numeric"              # monospace tabular value
+OBJ_NUMERIC = "numeric"              # monospace tabular value, label or combo
 OBJ_CANVAS_HOST = "canvasHost"       # frame hosting the scientific canvas
+
+# Top bar. The picker's menu bar doubles as the application's top bar: the
+# source dropdown is a left corner widget and the UTC clock a right one. Left
+# unstyled the three groups -- source, menus, clock -- ran together into one
+# undifferentiated strip at a single visual weight, so none of them read as
+# more or less important than the others. These names exist to rank them.
+OBJ_TOP_BAR = "topBar"               # frame holding the source cluster
+OBJ_TOP_BAR_END = "topBarEnd"        # frame holding the trailing readout
+OBJ_TOP_BAR_LABEL = "topBarLabel"    # eyebrow naming that cluster
+OBJ_TOP_BAR_SOURCE = "topBarSource"  # the source dropdown itself
+OBJ_TOP_BAR_MENU = "topBarMenu"      # that dropdown's popup, styled as a menu
+OBJ_UTC_CLOCK = "utcClock"           # right-corner UTC readout
+
+# Card internals.
+OBJ_CARD_TOGGLE = "cardToggle"       # a card's collapsible header button
+OBJ_CARD_RULE = "cardRule"           # hairline dividing one card's contents
 
 # Availability chip. Styled by Qt property selector rather than by rewriting a
 # style sheet per update, so it follows a theme change like everything else.
@@ -870,6 +954,23 @@ QLabel#{OBJ_NUMERIC}, QLabel[role="numeric"] {{
     font-family: {mono};
 }}
 
+/* A combo box whose entries are figures rather than names -- cycle hours and
+ * forecast hours, both of which now carry a timestamp. Monospaced so the columns
+ * line up down the list and it reads as a table instead of ragged prose; the
+ * proportional face put every ``F012 . Sep 14 12Z`` at a different offset.
+ *
+ * The popup needs the rule too, and needs it scoped. A popup is a separate
+ * top-level window, so the field's family does not reach it, and the shared
+ * ``QComboBox QAbstractItemView`` rule is the wrong place to fix that -- it would
+ * put model names and region names in mono as well. */
+QComboBox#{OBJ_NUMERIC} {{
+    font-family: {mono};
+}}
+
+QComboBox#{OBJ_NUMERIC} QAbstractItemView {{
+    font-family: {mono};
+}}
+
 /* --- Shell: header bar and navigation rail ------------------------- */
 
 QFrame#{OBJ_HEADER_BAR} {{
@@ -1009,6 +1110,59 @@ QLabel#{OBJ_CARD_TITLE} {{
     color: {t.text_secondary};
     font-size: {FONT_PT['small']}pt;
     font-weight: {WEIGHT['semibold']};
+}}
+
+/* A collapsible card's header (see ``CollapsibleRailSection``).
+ *
+ * This is a QToolButton because it has to be clickable and carry a chevron, but
+ * it is a *heading* -- so it takes OBJ_CARD_TITLE's treatment rather than a
+ * button's. It previously wore OBJ_GHOST, which is the borderless *action*
+ * style: regular weight at body size, identical to a tertiary link. Five of
+ * those stacked down the rail meant no card had a title that read as a title,
+ * which is most of why the rail looked like a column of flat grey boxes.
+ *
+ * The border stays transparent rather than dropping to `border: 0`. Fusion
+ * derives the arrow's rectangle from the button's frame, and a style sheet that
+ * removes the frame outright takes the chevron with it -- so the disclosure
+ * affordance would vanish. Only the bottom edge is painted, which turns the
+ * header into a banded row and separates it from the controls below.
+ *
+ * Hover brightens the text instead of washing the row with `accent_subtle` as
+ * OBJ_GHOST does: a full-width tint under a header rule reads as a selected
+ * list item, not as a heading you can fold. */
+QToolButton#{OBJ_CARD_TOGGLE} {{
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: 1px solid {t.border};
+    border-radius: 0;
+    color: {t.text_secondary};
+    font-size: {FONT_PT['small']}pt;
+    font-weight: {WEIGHT['semibold']};
+    padding: 0 0 {s['xs']}px 0;
+    text-align: left;
+}}
+
+QToolButton#{OBJ_CARD_TOGGLE}:hover {{
+    color: {t.text_primary};
+}}
+
+QToolButton#{OBJ_CARD_TOGGLE}:focus {{
+    color: {t.text_primary};
+    border-bottom-color: {t.accent};
+}}
+
+/* A hairline separating two ideas inside one card -- currently the map overlays
+ * from the sounding-locator overlays below them.
+ *
+ * Painted as a 1px block rather than declared as a border, because Qt draws a
+ * QFrame's HLine shape from the palette through the style and ignores a style
+ * sheet border on it. The owning code therefore sets ``NoFrame`` and lets this
+ * rule do the drawing, which is also what puts the line on a token colour. */
+QFrame#{OBJ_CARD_RULE} {{
+    background: {t.border};
+    border: 0;
+    min-height: 1px;
+    max-height: 1px;
 }}
 
 /* A bare container used only to group widgets. The base `QWidget` rule paints
@@ -1201,6 +1355,7 @@ QPushButton#{OBJ_PRIMARY} {{
     background: {t.accent};
     color: {t.accent_text};
     border: 1px solid {t.accent};
+    font-size: {FONT_PT['subhead']}pt;
     font-weight: {WEIGHT['semibold']};
     min-height: {h['lg']}px;
 }}
@@ -1240,13 +1395,52 @@ QPushButton#{OBJ_GHOST}:hover, QToolButton#{OBJ_GHOST}:hover {{
     color: {t.text_primary};
 }}
 
+/* A square glyph tool button -- currently the rail's zoom steppers.
+ *
+ * The shared button rule pads every button by `md` on each side, which is right
+ * for a worded action and wrong for a single "+" or minus sign: the two
+ * steppers rendered as wide pills flanking "Reset", so a row that should read
+ * as [-][+] Reset read as three mismatched slabs. Squaring them to the control
+ * height puts the glyph in the middle of its own target.
+ *
+ * Pinned here rather than with ``setFixedWidth`` for the reason the OBJ_GHOST
+ * variant below documents: QStyleSheetStyle recomputes a widget's size
+ * constraints from the style sheet and overrides the programmatic size, so the
+ * style sheet has to be the single source of truth. The ghost rule carries an id
+ * selector and therefore still wins for dock close buttons. */
+QToolButton[{PROP_COMPACT}="true"] {{
+    min-width: {h['md']}px;
+    max-width: {h['md']}px;
+    padding: 0;
+}}
+
 /* --- Check boxes and radio buttons --------------------------------- */
 
+/* Unchecked is secondary, checked is primary.
+ *
+ * The overlay card stacks ten of these, and with every label at `text_primary`
+ * the card was a paragraph-shaped wall in which the two or three overlays
+ * actually switched on were indistinguishable from the seven that were not.
+ * Weight is deliberately *not* changed with state: the label would re-measure
+ * on every toggle, and a row that shifts width as you click it reads as a
+ * glitch. Colour alone is enough here because the indicator carries the state
+ * too -- this is emphasis, not the only signal.
+ *
+ * The row padding is `xs` rather than `xxs`: at 2px the rows ran together into
+ * continuous text, so the card read as prose rather than as a list of controls. */
 QCheckBox, QRadioButton {{
     background: transparent;
-    color: {t.text_primary};
+    color: {t.text_secondary};
     spacing: {s['sm']}px;
-    padding: {s['xxs']}px 0;
+    padding: {s['xs']}px 0;
+}}
+
+QCheckBox:checked, QRadioButton:checked {{
+    color: {t.text_primary};
+}}
+
+QCheckBox:hover, QRadioButton:hover {{
+    color: {t.text_primary};
 }}
 
 QCheckBox:disabled, QRadioButton:disabled {{
@@ -1406,24 +1600,222 @@ QTableCornerButton::section {{
     border: 0;
 }}
 
-/* --- Menus -------------------------------------------------------- */
+/* --- Top bar and menus -------------------------------------------- */
 
+/* The menu bar doubles as the application's top bar: the picker installs the
+ * source dropdown as its top-left corner widget and the UTC clock as its
+ * top-right one. So this rule sets the height and rhythm of the whole strip,
+ * not just of the four menu titles.
+ *
+ * The vertical padding must stay at `xxs`. ``gui_viewer._enlarge_canvas``
+ * derives the sounding canvas height from ``menuBar().sizeHint().height()``, and
+ * that composed geometry is a contract: ``sharpmod-render``'s PNG output shares
+ * this code path and is required to stay byte-identical
+ * (``test_composed_canvas_matches_the_documented_geometry`` pins it at
+ * 1630x1091). Raising this to `xs` made every menu bar 4px taller and moved the
+ * rendered PNG. The picker's top bar gets its breathing room from the vertical
+ * margins on its own corner widget instead, which only affects the window that
+ * actually has one. Horizontal padding is free -- the canvas budget reads the
+ * height alone. */
 QMenuBar {{
     background: {t.surface_raised};
     color: {t.text_primary};
     border-bottom: 1px solid {t.border};
-    padding: {s['xxs']}px {s['xs']}px;
+    padding: {s['xxs']}px {s['sm']}px;
+    spacing: {s['xxs']}px;
 }}
 
+/* Secondary, not primary. The menus are the least-used group in the bar -- the
+ * source dropdown beside them is the control that actually drives the window --
+ * but they inherited `text_primary` from the rule above and so carried exactly
+ * as much weight as it did. */
 QMenuBar::item {{
     background: transparent;
+    color: {t.text_secondary};
     padding: {s['xs']}px {s['md']}px;
-    border-radius: {r['sm']}px;
+    border-radius: {r['md']}px;
+    font-weight: {WEIGHT['medium']};
 }}
 
 QMenuBar::item:selected {{
     background: {t.accent_subtle};
     color: {t.text_primary};
+}}
+
+QMenuBar::item:pressed {{
+    background: {t.accent_subtle};
+    color: {t.text_primary};
+}}
+
+/* The source cluster. Transparent, so it reads as part of the bar rather than
+ * as a panel floating in it, with a hairline on its right edge separating it
+ * from the menus. Without that divider the eyebrow, the dropdown, and "File"
+ * ran together as one row of same-sized text.
+ *
+ * The shared height floor is what makes this divider and the one on
+ * QFrame#topBarEnd the same length. Each frame sits above different content -- a
+ * 25px dropdown at one end, a line of caption text at the other -- so without a
+ * common floor the two rules came out 33px and 18px. `sm` clears the taller of
+ * the two, so both frames resolve to exactly it. Their children are added centred
+ * rather than filled, or the layout would grow them to meet it. */
+QFrame#{OBJ_TOP_BAR} {{
+    background: transparent;
+    border: 0;
+    border-right: 1px solid {t.border};
+    min-height: {h['sm']}px;
+}}
+
+/* An eyebrow, not a heading: it names the control beside it. Previously this
+ * wore OBJ_EMPHASIS -- semibold `text_primary` at body size -- which is the
+ * treatment for a resolved *value*, so it competed with both the dropdown it
+ * labels and the menu titles next to it. */
+QLabel#{OBJ_TOP_BAR_LABEL} {{
+    color: {t.text_tertiary};
+    font-size: {FONT_PT['small']}pt;
+    font-weight: {WEIGHT['semibold']};
+}}
+
+/* Same material as the menu items beside it and as the sounding window's View
+ * toolbar: transparent and borderless at rest, accent-tinted on hover, matching
+ * radius, padding, height, and weight.
+ *
+ * It previously took the shared input treatment -- a `surface_sunken` fill inside
+ * a `border_strong` outline, 32px tall -- so the one control in the top bar was
+ * the only boxed thing in a strip of borderless text, and read as a form field
+ * dropped into a menu rather than as part of the bar.
+ *
+ * `min-height: 0` is load-bearing, and is why the strip is short. Omitting it does
+ * not mean "no floor": the cascade falls back to the shared QComboBox rule, which
+ * declares the 32px control height, and padding then stacks on top of that -- so
+ * the control rendered 42px tall and forced the bar to 50px, which is twice what
+ * the four menu titles beside it need. The floor has to be actively cancelled.
+ *
+ * The vertical padding is `xxs` where QMenuBar::item uses `xs`, because the two
+ * are measured differently and this rule matches the *result* rather than the
+ * declaration: Fusion adds its own metrics to a menu-bar item on top of the style
+ * sheet's padding, while for a combo box the style sheet is the whole story. At
+ * `xs` this came out 29px against the menu titles' 25px; at `xxs` the two sit on
+ * one line. Everything else here is QMenuBar::item's own value.
+ *
+ * The result is under the 28px pointer target CONTROL_H documents. Accepted
+ * knowingly: this is a menu-bar entry, and holding that floor is exactly what
+ * made it the one item in the strip that did not sit with the others.
+ *
+ * No `min-width`. The width has to be stable or the menus slide sideways when the
+ * source changes, but ``SourceSelector`` already guarantees that with
+ * ``setMinimumContentsLength(18)`` -- one more than the longest entry
+ * ("Reanalysis (ERA5)"), so every entry clamps to the same floor. */
+QComboBox#{OBJ_TOP_BAR_SOURCE} {{
+    min-height: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: {r['md']}px;
+    padding: {s['xxs']}px {s['md']}px;
+    color: {t.text_secondary};
+    font-weight: {WEIGHT['medium']};
+}}
+
+/* Drop the arrow. This is the one place ::drop-down *should* be styled, and it is
+ * the exact inverse of the warning on the shared QComboBox rule above: touching
+ * this sub-control moves it from the style to the style sheet, and a style sheet
+ * cannot draw an arrow without an image asset -- so the arrow disappears. There
+ * that was the bug; here it is the entire point.
+ *
+ * A permanent arrow is what still marked this out as a form control among the
+ * menu titles: File, Locations, View and Help all open menus and none of them
+ * advertises it. The list appears on click, exactly as theirs do. Collapsing the
+ * sub-control to zero width also returns its column to the text. */
+QComboBox#{OBJ_TOP_BAR_SOURCE}::drop-down {{
+    width: 0;
+    border: 0;
+    background: transparent;
+}}
+
+/* QMenuBar::item:selected, again matched declaration for declaration -- a menu
+ * title lifts to `text_primary` on a tinted ground, and so does this. */
+QComboBox#{OBJ_TOP_BAR_SOURCE}:hover {{
+    background: {t.accent_subtle};
+    border-color: {t.accent_subtle};
+    color: {t.text_primary};
+}}
+
+/* Latched while its popup is open, mirroring the View toolbar's :checked state
+ * so "this menu is showing" reads identically in both windows. Without it the
+ * control looks untouched while its list is down, because the transparent rest
+ * state gives Fusion nothing to press. */
+QComboBox#{OBJ_TOP_BAR_SOURCE}:on {{
+    background: {t.accent_subtle};
+    border-color: {t.accent};
+    color: {t.text_primary};
+}}
+
+/* Keyboard focus has to stay visible now that the resting border is invisible:
+ * this is the window's primary navigation control, and it is first in the tab
+ * order. */
+QComboBox#{OBJ_TOP_BAR_SOURCE}:focus {{
+    border-color: {t.focus_ring};
+}}
+
+/* ...and so is its popup.
+ *
+ * Matching the field to the menu items beside it only got halfway: clicking it
+ * still opened a form-field list, on a tighter radius with compact rows, so the
+ * control read as a menu right up until it was used. These are QMenu's own
+ * values, duplicated for the same reason QMenuBar::item's are on the field -- a
+ * sub-control and a widget cannot share one rule.
+ *
+ * Selected by an object name on the *view*, not as ``QComboBox#topBarSource
+ * QAbstractItemView``. That descendant form is accepted and silently matches
+ * nothing: a combo's popup lives in its own top-level window, so the view is not
+ * a style-sheet descendant of the combo even though it is a child of it in Qt's
+ * object tree. The measured row height stayed at the shared list value.
+ *
+ * The name is now set on *every* combo popup in the application, by
+ * ``sharpmod.gui_common.install_popup_placement``, so a dropdown anywhere opens
+ * with the same metrics and the same relationship to its field as the menus in
+ * the top bar. It was restricted to this one view while the height was unbounded,
+ * because the forecast-hour list runs to 209 entries and menu-height rows made a
+ * popup taller than the screen. :data:`POPUP_ROWS` caps it, so a long list now
+ * scrolls the way a long menu does. */
+QAbstractItemView#{OBJ_TOP_BAR_MENU} {{
+    border-radius: {r['lg']}px;
+    padding: {s['xs']}px;
+}}
+
+/* Row *height* is not set here. It comes from the view's item delegate, which does
+ * not consult the style sheet -- both ``padding`` and ``min-height`` were measured
+ * leaving these rows at the compact list height -- so ``_MenuRowDelegate`` in
+ * sharpmod.gui_shell supplies it instead. These are the declarations that do paint. */
+QAbstractItemView#{OBJ_TOP_BAR_MENU}::item {{
+    padding: 0 {s['xl']}px 0 {s['md']}px;
+    border-radius: {r['sm']}px;
+}}
+
+/* The trailing group, mirroring QFrame#topBar at the other end of the bar.
+ *
+ * The divider lives on this frame rather than on the clock label so that both
+ * rules are the height of a frame with the same vertical margins, and therefore
+ * the same length by construction. Carrying it on the label instead meant tuning
+ * a `min-height` token until the two happened to agree -- which then silently
+ * became the tallest thing in the bar and set its height. */
+QFrame#{OBJ_TOP_BAR_END} {{
+    background: transparent;
+    border: 0;
+    border-left: 1px solid {t.border};
+    min-height: {h['sm']}px;
+}}
+
+/* A readout, not a value the user acts on, so it recedes to secondary.
+ *
+ * No padding and no height here. ``_install_utc_clock`` pins this label's width
+ * from a measured widest-case sample, and because the text is right-aligned any
+ * width the style sheet adds after that measurement is clipped off the *left*
+ * edge -- which is what once rendered "UTC" as "JTC". Spacing and the divider
+ * both belong to the frame above, which cannot affect the measurement. */
+QLabel#{OBJ_UTC_CLOCK} {{
+    color: {t.text_secondary};
+    font-family: {mono};
+    font-size: {FONT_PT['caption']}pt;
 }}
 
 QMenu {{
@@ -1527,10 +1919,15 @@ QToolBar::separator {{
 
 /* --- Status bar --------------------------------------------------- */
 
+/* Matches the top bar's treatment, so the window is framed by two strips of the
+ * same material rather than by one styled bar and one default one. The padding
+ * is what stops the readiness line sitting flush against the window edge. */
 QStatusBar {{
     background: {t.surface_raised};
     color: {t.text_secondary};
     border-top: 1px solid {t.border};
+    padding: {s['xxs']}px {s['sm']}px;
+    font-size: {FONT_PT['small']}pt;
 }}
 
 QStatusBar::item {{

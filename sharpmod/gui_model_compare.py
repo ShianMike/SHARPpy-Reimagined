@@ -59,6 +59,32 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _spec_from_metadata(value) -> ComparisonRequestSpec:
+    """Restore a portable retry request without broadening its scope."""
+    if not isinstance(value, dict):
+        value = dict(value)
+    run_time = value.get("run_time")
+    if not isinstance(run_time, datetime):
+        run_time = datetime.fromisoformat(str(run_time).replace("Z", "+00:00"))
+    member = str(value.get("member", "")).strip()
+    return ComparisonRequestSpec(
+        str(value["request_id"]),
+        str(value["model"]),
+        str(value.get("label") or value["model"]),
+        _as_utc(run_time),
+        int(value["fxx"]),
+        member or None,
+    )
+
+
+def _collection_meta(collection, key, default=None):
+    try:
+        value = collection.getMeta(key)
+    except Exception:
+        value = getattr(collection, "_meta", {}).get(key, default)
+    return default if value is None else value
+
+
 def _request_id(
     model: str,
     run_time: datetime,
@@ -492,6 +518,7 @@ class _ModelComparisonCoordinator(QObject):
         self.worker = None
         self.output_dir = None
         self.kind = "compare"
+        self._retry_target = None
 
     def open(self) -> None:
         picker = self.picker
@@ -541,6 +568,7 @@ class _ModelComparisonCoordinator(QObject):
             return
         specs = dialog.specs()
         self.kind = dialog.workspace_kind()
+        self._retry_target = None
         from sharpmod.tools import model_extract
 
         if any(model_extract.requires_grib_runtime(spec.model) for spec in specs):
@@ -585,6 +613,71 @@ class _ModelComparisonCoordinator(QObject):
         )
         self.worker.start()
 
+    def retry_ensemble(self, win, collection) -> bool:
+        """Retry only unavailable members recorded on an ensemble collection."""
+        from sharpmod.ensemble_members import EnsembleAcquisition
+
+        if self.worker is not None:
+            QMessageBox.information(
+                self.picker,
+                "Ensemble retry",
+                "A model-data operation is already running.",
+            )
+            return False
+        ledger = EnsembleAcquisition.from_collection(collection)
+        raw_specs = ledger.specs_for_retry()
+        if not raw_specs:
+            self.picker.statusBar().showMessage(
+                "No unavailable ensemble members have portable retry details",
+                7000,
+            )
+            return False
+        specs = tuple(_spec_from_metadata(item) for item in raw_specs)
+        lat = _collection_meta(collection, "requested_lat")
+        lon = _collection_meta(collection, "requested_lon")
+        if lat is None:
+            lat = _collection_meta(collection, "lat")
+        if lon is None:
+            lon = _collection_meta(collection, "lon")
+        try:
+            lat, lon = float(lat), float(lon)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "the saved ensemble has no usable requested coordinates"
+            ) from exc
+        self.picker._ensure_model_cache()
+        self.picker._cancel_model_prefetch(wait=True)
+        self.output_dir = tempfile.mkdtemp(prefix="ensemble_retry_")
+        self.kind = "ensemble-retry"
+        self._retry_target = (win, collection, ledger)
+        self.worker = ModelComparisonWorker(
+            specs,
+            lat,
+            lon,
+            self.output_dir,
+            loc=_collection_meta(collection, "loc"),
+            disk_cache=self.picker._model_disk_cache,
+            parent=self.picker,
+        )
+        self.picker._model_compare_worker = self.worker
+        self.worker.progress.connect(self._progress)
+        self.worker.result_ready.connect(self._result)
+        self.worker.failed.connect(self._failed)
+        self.worker.finished.connect(self._finished)
+        self.picker._set_model_busy(True)
+        self.picker._model_progress_timer.stop()
+        self.picker._model_progress.setRange(0, len(specs))
+        self.picker._model_progress.setValue(0)
+        self.picker._model_progress.setFormat(f"0 / {len(specs)} members")
+        self.picker._model_progress_detail.setText(
+            "Retrying unavailable members only…"
+        )
+        self.picker.statusBar().showMessage(
+            f"Retrying {len(specs)} unavailable ensemble member(s)…"
+        )
+        self.worker.start()
+        return True
+
     def cancel(self) -> None:
         if self.worker is None:
             return
@@ -603,11 +696,20 @@ class _ModelComparisonCoordinator(QObject):
             )
 
     def _result(self, result) -> None:
+        if self.kind == "ensemble-retry":
+            self._merge_retry_result(result)
+            return
         completed = [item for item in result.items if item.status == "completed"]
-        if len(completed) < 2:
+        minimum = 1 if self.kind == "ensemble" else 2
+        if len(completed) < minimum:
             self._failed(
-                "Fewer than two aligned soundings were available; "
-                "no comparison workspace was opened."
+                (
+                    "No ensemble member was available; no ensemble workspace "
+                    "was opened."
+                    if self.kind == "ensemble"
+                    else "Fewer than two aligned soundings were available; "
+                    "no comparison workspace was opened."
+                )
             )
             return
         try:
@@ -623,15 +725,21 @@ class _ModelComparisonCoordinator(QObject):
 
             decoded = [_render().decode(str(item.output_path)) for item in completed]
             if self.kind == "ensemble":
+                from sharpmod.ensemble_members import EnsembleAcquisition
+
                 member_by_id = {
                     spec.request_id: spec.member for spec in self.worker.specs
                 }
                 from sharpmod.profile_timeline import combine_ensemble_collections
 
                 member_names = [str(member_by_id[item.id]) for item in completed]
+                acquisition = EnsembleAcquisition.from_batch(
+                    self.worker.specs, result
+                )
                 ensemble = combine_ensemble_collections(
                     [collection for collection, _station_id in decoded],
                     member_names=member_names,
+                    acquisition=acquisition,
                 )
                 first_id = decoded[0][1]
                 decoded = [(ensemble, first_id)]
@@ -687,6 +795,88 @@ class _ModelComparisonCoordinator(QObject):
         except Exception as exc:  # noqa: BLE001 - decode/viewer boundary
             self._failed(f"Comparison fetched, but could not be displayed: {exc}")
 
+    def _merge_retry_result(self, result) -> None:
+        """Merge successful retry members without replacing prior successes."""
+        from sharpmod.ensemble_members import EnsembleAcquisition, MemberFailure
+        from sharpmod.gui_picker import _render, _retain_model_data_until_close
+
+        target = self._retry_target
+        if target is None or self.worker is None:
+            return
+        win, collection, previous = target
+        specs = tuple(self.worker.specs)
+        spec_by_id = {str(spec.request_id): spec for spec in specs}
+        item_by_id = {str(item.id): item for item in result.items}
+        completed = [item for item in result.items if item.status == "completed"]
+        try:
+            provenance = list(
+                _collection_meta(collection, "ensemble_provenance", ()) or ()
+            )
+            for item in completed:
+                spec = spec_by_id[str(item.id)]
+                decoded, _station_id = _render().decode(str(item.output_path))
+                members = tuple(decoded._profs)
+                dates = tuple(decoded._dates)
+                if len(members) != 1 or len(dates) != 1:
+                    raise ValueError("retried member did not decode as one sounding")
+                if dates[0] not in tuple(collection._dates):
+                    raise ValueError("retried member valid time does not match ensemble")
+                member = str(spec.member)
+                if member in collection._profs:
+                    continue
+                collection._profs[member] = list(decoded._profs[members[0]])
+                source = dict(getattr(decoded, "_meta", {}) or {})
+                source["member_label"] = member
+                provenance.append(source)
+
+            actual = set(str(member) for member in collection._profs)
+            loaded = tuple(
+                member for member in previous.requested_members if member in actual
+            )
+            retry_members = {str(spec.member): spec for spec in specs}
+            old_failures = {item.member: item for item in previous.failures}
+            failures = []
+            for member in previous.requested_members:
+                if member in actual:
+                    continue
+                spec = retry_members.get(member)
+                item = item_by_id.get(str(spec.request_id)) if spec else None
+                if item is None and member in old_failures:
+                    failures.append(old_failures[member])
+                    continue
+                status = str(getattr(item, "status", "unknown")).lower()
+                if status not in {"failed", "cancelled"}:
+                    status = "unknown"
+                error = getattr(item, "error", None)
+                reason = None
+                if isinstance(error, dict):
+                    reason = str(error.get("message") or error.get("type") or "") or None
+                failures.append(MemberFailure(member, status, reason))
+            updated = EnsembleAcquisition(
+                previous.requested_members,
+                loaded,
+                tuple(failures),
+                previous.request_specs,
+            )
+            updated.attach(collection)
+            collection._meta["ensemble_provenance"] = provenance
+            win.spc_widget.updateProfs()
+            workspace = getattr(win, "_sharpmod_analysis_workspace", None)
+            if workspace is not None:
+                workspace.show_ensemble()
+            if completed:
+                _retain_model_data_until_close(
+                    win, str(completed[0].output_path), self.output_dir
+                )
+                self.output_dir = None
+            self.picker.statusBar().showMessage(
+                f"Ensemble now has {updated.loaded_count}/{updated.requested_count} "
+                "members loaded",
+                7000,
+            )
+        except Exception as exc:  # noqa: BLE001 - decode/viewer boundary
+            self._failed(f"Members fetched, but could not be merged: {exc}")
+
     def _failed(self, message: str) -> None:
         self.picker.statusBar().showMessage("Model comparison failed")
         QMessageBox.critical(self.picker, "Model comparison", str(message))
@@ -694,6 +884,7 @@ class _ModelComparisonCoordinator(QObject):
     def _finished(self) -> None:
         worker = self.worker
         self.worker = None
+        self._retry_target = None
         if getattr(self.picker, "_model_compare_worker", None) is worker:
             self.picker._model_compare_worker = None
         self.picker._set_model_busy(False)

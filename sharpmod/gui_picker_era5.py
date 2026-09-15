@@ -27,6 +27,7 @@ from qtpy.QtWidgets import (
 from sharpmod.gui_common import APP_NAME, _LOGGER, _render, install_month_calendar
 from sharpmod.gui_maps import MAP_AREAS, PointMapWidget
 from sharpmod.gui_picker_layout import (
+    DATE_DISPLAY_FORMAT,
     TOWN_LOOKUP_TOOLTIP,
     rail_card,
     rail_form,
@@ -45,6 +46,7 @@ from sharpmod.theme import (
     CONTROL_H,
     OBJ_GHOST,
     OBJ_HINT,
+    OBJ_NUMERIC,
     OBJ_PRIMARY,
     OBJ_PROGRESS_DETAIL,
     OBJ_STATUS,
@@ -86,14 +88,15 @@ class Era5PickerMixin:
 
         time_box, time_grid = rail_form("Analysis time (UTC)")
         self._era5_date = QDateEdit()
-        self._era5_date.setDisplayFormat("yyyy-MM-dd")
+        self._era5_date.setDisplayFormat(DATE_DISPLAY_FORMAT)
         self._era5_date.setCalendarPopup(True)
         install_month_calendar(self._era5_date)
         self._era5_date.setMinimumDate(QDate(1940, 1, 1))
         self._era5_date.setMaximumDate(QDate.currentDate())
         self._era5_date.dateChanged.connect(self._era5_update_state)
-        rail_row(time_grid, 0, "Date:", self._era5_date)
+        rail_row(time_grid, 0, "Date:", self._era5_date, width="timestamp")
         self._era5_hour = QComboBox()
+        self._era5_hour.setObjectName(OBJ_NUMERIC)
         for hour in range(24):
             self._era5_hour.addItem(f"{hour:02d}Z", hour)
         self._era5_hour.currentIndexChanged.connect(self._era5_update_state)

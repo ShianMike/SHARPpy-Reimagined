@@ -18,10 +18,13 @@ from __future__ import annotations
 
 from collections import OrderedDict
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
+import json
 import math
+import os
 from pathlib import Path
+import tempfile
 import threading
 from types import MappingProxyType
 from typing import Callable, Iterable, Mapping, Sequence
@@ -30,6 +33,13 @@ import weakref
 import numpy as np
 
 from sharpmod import box_analysis
+from sharpmod.comparison import (
+    ComparisonBasis,
+    ComparisonContext,
+    assess_compatibility,
+    context_for_collection,
+)
+from sharpmod.ensemble_members import EnsembleAcquisition
 
 
 DEFAULT_METRIC_KEYS = (
@@ -81,6 +91,8 @@ class ComparisonSample:
     available: bool
     aligned: bool
     reason: str | None = None
+    context: ComparisonContext | None = None
+    basis: ComparisonBasis | None = None
 
 
 @dataclass(frozen=True)
@@ -117,6 +129,14 @@ class EnsembleSummary:
     bands: tuple[ThermodynamicBand, ...]
     available: bool
     reason: str | None = None
+    requested_member_count: int | None = None
+    loaded_member_count: int | None = None
+    requested_members: tuple[str, ...] = ()
+    loaded_members: tuple[str, ...] = ()
+    failed_members: tuple[str, ...] = ()
+    cancelled_members: tuple[str, ...] = ()
+    unusable_members: tuple[str, ...] = ()
+    distribution_available: bool = True
 
 
 @dataclass
@@ -574,6 +594,27 @@ class ProfileMetricsEngine:
                 for entry in entries
             )
 
+    def values_many(
+        self,
+        profiles: Iterable[object],
+        keys: Iterable[str] | str = DEFAULT_METRIC_KEYS,
+    ) -> tuple[Mapping[str, float | None], ...]:
+        """Return ordered metrics for several profiles, batching when supported.
+
+        A caller can optimistically use this method without giving up the
+        established analyzer contract: custom analyzers and unsupported tiers
+        keep the serial path, while the built-in fast/summary tiers share one
+        native batch operation and populate the same per-profile cache.
+        """
+
+        items = tuple(profiles)
+        wanted = _normalize_keys(keys)
+        if not items:
+            return ()
+        if self._can_batch(wanted) and all(profile is not None for profile in items):
+            return self._batch_values(items, wanted)
+        return tuple(self.values(profile, wanted) for profile in items)
+
     def timeline(
         self,
         collection,
@@ -635,8 +676,15 @@ class ProfileMetricsEngine:
         collections: Iterable[object],
         keys: Iterable[str] | str = DEFAULT_METRIC_KEYS,
         valid_time: datetime | None = None,
+        reference_index: int = 0,
     ) -> tuple[ComparisonSample, ...]:
-        """Compare collections only at an exact shared valid datetime."""
+        """Compare collections only at an exact shared valid datetime.
+
+        Values remain available for an intentional spatial comparison.  The
+        attached basis says which scalar deltas are incompatible because the
+        calculation conventions differ, and preserves unknown provenance as
+        unknown instead of assuming equivalence.
+        """
         wanted = _normalize_keys(keys)
         collections = tuple(collections)
         requested = valid_time
@@ -712,7 +760,35 @@ class ProfileMetricsEngine:
                         True,
                     )
                 )
-        return tuple(rows)
+        if not rows:
+            return ()
+        try:
+            reference_index = int(reference_index)
+        except (TypeError, ValueError):
+            reference_index = 0
+        if not 0 <= reference_index < len(collections):
+            reference_index = 0
+        contexts = tuple(
+            context_for_collection(
+                collection,
+                collection_index,
+                requested_time=requested,
+                selected_time=row.valid_time,
+                label=row.label,
+            )
+            for collection_index, (collection, row) in enumerate(
+                zip(collections, rows)
+            )
+        )
+        reference_context = contexts[reference_index]
+        return tuple(
+            replace(
+                row,
+                context=context,
+                basis=assess_compatibility(reference_context, context, wanted),
+            )
+            for row, context in zip(rows, contexts)
+        )
 
     def ensemble(
         self,
@@ -726,19 +802,39 @@ class ProfileMetricsEngine:
         dates = _collection_dates(collection)
         profiles = _profiles_by_member(collection)
         member_names = tuple(str(member) for member in profiles)
+        acquisition = EnsembleAcquisition.from_collection(collection)
+        requested_names = acquisition.requested_members or member_names
+        loaded_names = tuple(
+            member for member in acquisition.loaded_members if member in profiles
+        )
+        # Old or hand-built collections may not carry the new ledger.  The
+        # in-memory profile map remains authoritative for what is actually
+        # loaded; never turn an omitted metadata field into a missing member.
+        for member in member_names:
+            if member not in loaded_names:
+                loaded_names += (member,)
+        requested_count = len(requested_names)
+        loaded_count = len(loaded_names)
         requested = valid_time if valid_time is not None else _current_date(collection)
         index = _date_index(dates, requested)
         if index is None:
             return EnsembleSummary(
                 requested,
-                len(member_names),
+                requested_count,
                 0,
                 (),
-                member_names,
+                requested_names,
                 _readonly({key: _distribution(()) for key in wanted}),
                 (),
                 False,
                 "requested valid time is unavailable",
+                requested_member_count=requested_count,
+                loaded_member_count=loaded_count,
+                requested_members=requested_names,
+                loaded_members=loaded_names,
+                failed_members=acquisition.failed_members,
+                cancelled_members=acquisition.cancelled_members,
+                distribution_available=False,
             )
 
         if pressure_levels is None:
@@ -755,7 +851,7 @@ class ProfileMetricsEngine:
                 raise ValueError("pressure_levels must contain a positive value")
 
         candidates = []
-        for member_name in member_names:
+        for member_name in loaded_names:
             profile = _profile_at(profiles, member_name, index)
             if profile is None:
                 continue
@@ -776,9 +872,10 @@ class ProfileMetricsEngine:
                 batched = None
 
         available_names = []
-        missing_names = [
+        missing_names = list(acquisition.unavailable_members)
+        unusable_names = [
             member_name
-            for member_name in member_names
+            for member_name in loaded_names
             if _profile_at(profiles, member_name, index) is None
         ]
         metric_rows = []
@@ -792,7 +889,7 @@ class ProfileMetricsEngine:
                     else self.values(profile, wanted)
                 )
             except ProfileMetricsError:
-                missing_names.append(member_name)
+                unusable_names.append(member_name)
                 continue
             available_names.append(member_name)
             metric_rows.append(metrics)
@@ -811,16 +908,34 @@ class ProfileMetricsEngine:
             for level_index, level in enumerate(levels)
         )
         available = bool(available_names)
+        distribution_available = len(available_names) >= 2
+        if not available:
+            reason = "no ensemble members are usable for the requested diagnostics"
+        elif not distribution_available:
+            reason = (
+                "one member is usable; values are retained but at least two "
+                "usable members are required for an ensemble distribution"
+            )
+        else:
+            reason = None
         return EnsembleSummary(
             valid_time=dates[index],
-            member_count=len(member_names),
+            member_count=requested_count,
             available_member_count=len(available_names),
             members=tuple(available_names),
-            missing_members=tuple(missing_names),
+            missing_members=tuple(dict.fromkeys(missing_names + unusable_names)),
             scalar=scalar,
             bands=bands,
             available=available,
-            reason=None if available else "no ensemble members are available",
+            reason=reason,
+            requested_member_count=requested_count,
+            loaded_member_count=loaded_count,
+            requested_members=requested_names,
+            loaded_members=loaded_names,
+            failed_members=acquisition.failed_members,
+            cancelled_members=acquisition.cancelled_members,
+            unusable_members=tuple(dict.fromkeys(unusable_names)),
+            distribution_available=distribution_available,
         )
 
 
@@ -937,11 +1052,27 @@ def export_comparison_csv(
         "available",
         "aligned",
         "reason",
+        "requested_lat",
+        "requested_lon",
+        "selected_lat",
+        "selected_lon",
+        "grid_spacing_km",
+        "terrain_elevation_m",
+        "run_time",
+        "lead_hours",
+        "parcel_convention",
+        "storm_motion_convention",
+        "profile_edited",
+        "location_relation",
+        "compatibility_issues",
+        "incompatible_metrics",
     ) + metric_keys
     with destination.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         for sample in samples:
+            context = sample.context
+            basis = sample.basis
             row = {
                 "collection_index": sample.collection_index,
                 "label": sample.label,
@@ -951,6 +1082,42 @@ def export_comparison_csv(
                 "available": sample.available,
                 "aligned": sample.aligned,
                 "reason": sample.reason or "",
+                "requested_lat": getattr(context, "requested_lat", None),
+                "requested_lon": getattr(context, "requested_lon", None),
+                "selected_lat": getattr(context, "selected_lat", None),
+                "selected_lon": getattr(context, "selected_lon", None),
+                "grid_spacing_km": getattr(context, "grid_spacing_km", None),
+                "terrain_elevation_m": getattr(
+                    context, "terrain_elevation_m", None
+                ),
+                "run_time": _csv_time(getattr(context, "run_time", None)),
+                "lead_hours": getattr(context, "lead_hours", None),
+                "parcel_convention": getattr(
+                    context, "parcel_convention", None
+                ),
+                "storm_motion_convention": getattr(
+                    context, "storm_motion_convention", None
+                ),
+                "profile_edited": getattr(context, "profile_edited", None),
+                "location_relation": getattr(
+                    basis, "location_relation", "unknown"
+                ),
+                "compatibility_issues": json.dumps(
+                    [
+                        {
+                            "field": issue.field,
+                            "severity": issue.severity,
+                            "message": issue.message,
+                        }
+                        for issue in getattr(basis, "issues", ())
+                    ],
+                    separators=(",", ":"),
+                ),
+                "incompatible_metrics": json.dumps(
+                    dict(getattr(basis, "incompatible_metrics", {})),
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ),
             }
             row.update(
                 {
@@ -959,4 +1126,123 @@ def export_comparison_csv(
                 }
             )
             writer.writerow(row)
+    return destination
+
+
+def export_ensemble_csv(
+    path,
+    summary: EnsembleSummary,
+    acquisition: EnsembleAcquisition | None = None,
+) -> Path:
+    """Atomically export ensemble distributions and acquisition membership.
+
+    Diagnostic rows carry their own usable denominator. Member rows distinguish
+    an unavailable download from a loaded-but-unusable profile; neither state is
+    serialized as a zero or a negative threshold outcome.
+    """
+
+    if not isinstance(summary, EnsembleSummary):
+        raise TypeError("summary must be an EnsembleSummary")
+    summary_loaded = tuple(summary.loaded_members or summary.members)
+    summary_requested = tuple(
+        summary.requested_members
+        or dict.fromkeys((*summary_loaded, *summary.missing_members))
+    )
+    acquisition = acquisition or EnsembleAcquisition(
+        summary_requested,
+        summary_loaded,
+    )
+    requested = acquisition.requested_members or tuple(summary.requested_members)
+    loaded = set(acquisition.loaded_members or summary.loaded_members)
+    unusable = set(summary.unusable_members)
+    fields = (
+        "record_type",
+        "valid_time",
+        "metric",
+        "member",
+        "status",
+        "reason",
+        "requested_count",
+        "loaded_count",
+        "summary_usable_count",
+        "diagnostic_usable_count",
+        "minimum",
+        "p10",
+        "median",
+        "p90",
+        "maximum",
+        "distribution_available",
+    )
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    temporary = Path(name)
+    common = {
+        "valid_time": _csv_time(summary.valid_time),
+        "requested_count": summary.requested_member_count
+        if summary.requested_member_count is not None
+        else len(requested),
+        "loaded_count": summary.loaded_member_count
+        if summary.loaded_member_count is not None
+        else len(loaded),
+        "summary_usable_count": summary.available_member_count,
+        "distribution_available": summary.distribution_available,
+    }
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fields)
+            writer.writeheader()
+            for metric, distribution in summary.scalar.items():
+                writer.writerow(
+                    {
+                        **common,
+                        "record_type": "diagnostic",
+                        "metric": metric,
+                        "diagnostic_usable_count": distribution.count,
+                        "minimum": ""
+                        if distribution.minimum is None
+                        else distribution.minimum,
+                        "p10": "" if distribution.p10 is None else distribution.p10,
+                        "median": ""
+                        if distribution.median is None
+                        else distribution.median,
+                        "p90": "" if distribution.p90 is None else distribution.p90,
+                        "maximum": ""
+                        if distribution.maximum is None
+                        else distribution.maximum,
+                    }
+                )
+            for member in requested:
+                failure = acquisition.failure_for(member)
+                if member in loaded:
+                    status = "loaded-unusable" if member in unusable else "loaded"
+                    reason = (
+                        "profile was not usable for the requested summary"
+                        if member in unusable
+                        else ""
+                    )
+                else:
+                    status = failure.status if failure is not None else "unavailable"
+                    reason = failure.reason if failure is not None else ""
+                writer.writerow(
+                    {
+                        **common,
+                        "record_type": "member",
+                        "member": member,
+                        "status": status,
+                        "reason": reason or "",
+                    }
+                )
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, destination)
+    except BaseException:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        temporary.unlink(missing_ok=True)
+        raise
     return destination

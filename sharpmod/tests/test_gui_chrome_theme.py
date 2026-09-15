@@ -5,7 +5,7 @@ sheet in isolation. This module checks the parts that only break once real
 widgets exist:
 
 * The theme is applied on the ``QApplication``, not per window. That matters
-  because four of the picker's five source panels are materialized lazily and
+  because five of the picker's six source panels are materialized lazily and
   every dialog is built on demand -- a window-level style sheet would miss
   everything created after construction.
 * Every source panel and dialog can be constructed under the themed
@@ -20,18 +20,20 @@ from __future__ import annotations
 
 import pytest
 
+from qtpy.QtCore import Qt
 from qtpy.QtGui import QFont
-from qtpy.QtWidgets import QLabel, QPushButton, QStyle, QStyleOptionSlider
+from qtpy.QtWidgets import QComboBox, QLabel, QPushButton, QStyle, QStyleOptionSlider
 
 from sharpmod import gui_picker, gui_theme
 from sharpmod import theme as T
 from sharpmod.gui_settings import _build_settings
 
-#: The picker's five source panels, by tab label.
+#: The picker's six source panels, by tab label.
 PANEL_TITLES = (
     "Station Map",
     "Station List",
     "Forecast Model",
+    "Field Panels",
     "Reanalysis (ERA5)",
     "Open File",
 )
@@ -42,11 +44,13 @@ def picker(standard_qt_app, monkeypatch, tmp_path):
     """A fully materialized picker under an isolated settings file."""
     qt_app = standard_qt_app
     monkeypatch.setattr(
-        gui_picker, "_build_settings",
-        lambda: _build_settings(path=tmp_path / "settings.ini"))
+        gui_picker,
+        "_build_settings",
+        lambda: _build_settings(path=tmp_path / "settings.ini"),
+    )
     monkeypatch.setattr(
-        gui_picker.PickerWindow, "_refresh_station_catalog",
-        lambda *_args: None)
+        gui_picker.PickerWindow, "_refresh_station_catalog", lambda *_args: None
+    )
 
     window = gui_picker.PickerWindow()
     # Background probes would otherwise fire network work during the test.
@@ -68,11 +72,13 @@ def test_theme_lives_on_the_application_not_the_window(picker, qt_app):
     assert qt_app.styleSheet(), "no application-level chrome style sheet"
     assert not picker.styleSheet(), (
         "picker sets its own style sheet; lazily built panels and dialogs would "
-        "not inherit it")
+        "not inherit it"
+    )
 
 
 def test_constructing_the_picker_applies_the_theme_by_itself(
-        qt_app, monkeypatch, tmp_path):
+    qt_app, monkeypatch, tmp_path
+):
     """Entry points that bypass ``main`` must still get themed chrome.
 
     The test suite and any embedder construct ``PickerWindow`` directly. Before
@@ -80,18 +86,21 @@ def test_constructing_the_picker_applies_the_theme_by_itself(
     itself in ``__init__``.
     """
     monkeypatch.setattr(
-        gui_picker, "_build_settings",
-        lambda: _build_settings(path=tmp_path / "settings.ini"))
+        gui_picker,
+        "_build_settings",
+        lambda: _build_settings(path=tmp_path / "settings.ini"),
+    )
     monkeypatch.setattr(
-        gui_picker.PickerWindow, "_refresh_station_catalog",
-        lambda *_args: None)
+        gui_picker.PickerWindow, "_refresh_station_catalog", lambda *_args: None
+    )
     monkeypatch.setattr(gui_theme, "_theme_applied", False)
     qt_app.setStyleSheet("")
 
     window = gui_picker.PickerWindow()
     try:
         assert qt_app.styleSheet(), (
-            "constructing the picker did not install the chrome theme")
+            "constructing the picker did not install the chrome theme"
+        )
         assert gui_theme.theme_is_applied()
     finally:
         window.close()
@@ -103,7 +112,8 @@ def test_ensure_theme_applied_is_idempotent(qt_app):
     first = qt_app.styleSheet()
     gui_theme.ensure_theme_applied(qt_app, color_style="inverted")
     assert qt_app.styleSheet() == first, (
-        "ensure_theme_applied overwrote an already-applied theme")
+        "ensure_theme_applied overwrote an already-applied theme"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +141,8 @@ def test_every_source_panel_materializes_under_the_theme(picker):
         assert panel is not None
         labels = [w.text() for w in panel.findChildren(QLabel)]
         assert not any(text.startswith("Preparing") for text in labels), (
-            f"{titles[index]!r} is still showing its lazy placeholder")
+            f"{titles[index]!r} is still showing its lazy placeholder"
+        )
 
 
 def test_saved_locations_dialog_inherits_the_theme(picker, qt_app):
@@ -145,8 +156,7 @@ def test_saved_locations_dialog_inherits_the_theme(picker, qt_app):
         parent=picker,
     )
     try:
-        assert not dialog.styleSheet(), (
-            "dialog overrides the inherited chrome theme")
+        assert not dialog.styleSheet(), "dialog overrides the inherited chrome theme"
         assert qt_app.styleSheet()
     finally:
         dialog.close()
@@ -168,7 +178,8 @@ def test_no_inline_stylesheets_remain_in_the_picker():
     source = Path(gui_picker.__file__).read_text(encoding="utf-8")
     assert "setStyleSheet" not in source, (
         "gui_picker.py reintroduced an inline style sheet; assign a semantic "
-        "object name and style it in sharpmod.theme instead")
+        "object name and style it in sharpmod.theme instead"
+    )
 
 
 def test_each_source_panel_has_an_accent_primary(picker):
@@ -177,8 +188,11 @@ def test_each_source_panel_has_an_accent_primary(picker):
 
     for index in range(picker._tabs.count()):
         panel = picker._tabs.widget(index)
-        primaries = [b for b in panel.findChildren(QPushButton)
-                     if b.objectName() == T.OBJ_PRIMARY]
+        primaries = [
+            b
+            for b in panel.findChildren(QPushButton)
+            if b.objectName() == T.OBJ_PRIMARY
+        ]
         title = picker._tabs.tabText(index)
         assert primaries, f"{title!r} has no accent primary action"
 
@@ -200,17 +214,19 @@ def test_readiness_prose_is_not_given_the_numeric_role(picker):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("style,expected", [
-    ("standard", T.GRAPHITE_DARK.name),
-    ("inverted", T.PAPER_LIGHT.name),
-    ("protanopia", T.PROTANOPIA_DARK.name),
-])
+@pytest.mark.parametrize(
+    "style,expected",
+    [
+        ("standard", T.GRAPHITE_DARK.name),
+        ("inverted", T.PAPER_LIGHT.name),
+        ("protanopia", T.PROTANOPIA_DARK.name),
+    ],
+)
 def test_switching_palette_retheme_the_application(qt_app, style, expected):
     """Chrome follows the canvas palette, live, without a restart."""
     applied = gui_theme.apply_theme(qt_app, color_style=style)
     assert applied.name == expected
-    window_bg = qt_app.palette().color(
-        qt_app.palette().ColorRole.Window).name().lower()
+    window_bg = qt_app.palette().color(qt_app.palette().ColorRole.Window).name().lower()
     assert window_bg == applied.surface.lower()
     assert applied.surface in qt_app.styleSheet()
 
@@ -242,6 +258,7 @@ def test_ui_font_survives_a_forced_qfont_family(qt_app, monkeypatch):
     ``ui_font``/``mono_font`` must therefore set the family *after*
     construction, since only the constructor is intercepted.
     """
+
     class _ForcedFont(QFont):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -286,8 +303,7 @@ def _rendered_dot_colour(chip):
 
 
 @pytest.mark.parametrize("style", ["standard", "inverted", "protanopia"])
-def test_availability_chip_paints_the_token_colour_for_every_state(
-        qt_app, style):
+def test_availability_chip_paints_the_token_colour_for_every_state(qt_app, style):
     """The chip must resolve its colours through the style-sheet cascade.
 
     It used to rewrite its own style sheet on every update, which overrode the
@@ -305,7 +321,8 @@ def test_availability_chip_paints_the_token_colour_for_every_state(
             qt_app.processEvents()
             expected = getattr(theme, T.AVAIL_STATUS_ROLES[state]).lower()
             assert _rendered_dot_colour(chip) == expected, (
-                f"{theme.name}: {state!r} dot did not paint {expected}")
+                f"{theme.name}: {state!r} dot did not paint {expected}"
+            )
     finally:
         chip.deleteLater()
 
@@ -336,13 +353,13 @@ def test_availability_chip_always_carries_a_text_label(qt_app):
         for state in AVAIL_STATES:
             chip.set_status(state)
             assert chip._text.text().strip(), (
-                f"state {state!r} conveys itself by colour alone")
+                f"state {state!r} conveys itself by colour alone"
+            )
     finally:
         chip.deleteLater()
 
 
-def test_unknown_availability_state_falls_back_instead_of_going_unstyled(
-        qt_app):
+def test_unknown_availability_state_falls_back_instead_of_going_unstyled(qt_app):
     """An unrecognised state must not leave the chip in a default colour."""
     from sharpmod.gui_workers import _AvailabilityIndicator
 
@@ -362,20 +379,21 @@ def test_unknown_availability_state_falls_back_instead_of_going_unstyled(
 # Control-rail geometry
 # ---------------------------------------------------------------------------
 
-#: Attribute names of the scrollable control rails. All five source panels now
+#: Attribute names of the scrollable control rails. All six source panels now
 #: use the same [rail | content] structure; Station List was previously a single
 #: full-width column, which stretched its controls across the whole window.
 RAIL_ATTRS = (
     "_map_controls_scroll",
     "_uwyo_controls_scroll",
     "_model_controls_scroll",
+    "_panels_controls_scroll",
     "_era5_controls_scroll",
     "_wrf_controls_scroll",
 )
 
 
 def test_every_source_panel_uses_the_shared_rail_structure(picker):
-    """All five panels share one [control rail | content] layout."""
+    """All six panels share one [control rail | content] layout."""
     _materialize_all(picker)
     if hasattr(picker, "_file_modes"):
         picker._file_modes.setCurrentIndex(1)
@@ -411,7 +429,8 @@ def _scrollbar_handle_rect(bar):
     option.pageStep = bar.pageStep()
     option.orientation = bar.orientation()
     return bar.style().subControlRect(
-        QStyle.CC_ScrollBar, option, QStyle.SC_ScrollBarSlider, bar)
+        QStyle.CC_ScrollBar, option, QStyle.SC_ScrollBarSlider, bar
+    )
 
 
 def test_no_control_rail_clips_its_widest_card(picker, qt_app):
@@ -444,11 +463,11 @@ def test_every_control_rail_reserves_room_for_its_scrollbar(picker, qt_app):
     for attr, rail in _built_rails(picker):
         assert rail.width() >= T.RAIL_W["max"] + T.SCROLLBAR_W, (
             f"{attr} does not reserve the scrollbar width on top of the "
-            f"{T.RAIL_W['max']}px content area")
+            f"{T.RAIL_W['max']}px content area"
+        )
 
 
-def test_the_scrollbar_handle_is_inset_inside_its_reserved_column(picker,
-                                                                  qt_app):
+def test_the_scrollbar_handle_is_inset_inside_its_reserved_column(picker, qt_app):
     """The handle needs a gutter, or it reads as sitting on the rail content.
 
     The bar reserves ``SCROLLBAR_W`` and the handle used to fill every pixel of
@@ -475,24 +494,28 @@ def test_the_scrollbar_handle_is_inset_inside_its_reserved_column(picker,
         # hint is what QAbstractScrollArea reserves either way.
         assert bar.sizeHint().width() == T.SCROLLBAR_W, (
             f"{attr}: the bar asks for {bar.sizeHint().width()}px but the "
-            f"layout reserves {T.SCROLLBAR_W}px; the two must agree")
+            f"layout reserves {T.SCROLLBAR_W}px; the two must agree"
+        )
 
         if not bar.isVisible():
             continue
         handle = _scrollbar_handle_rect(bar)
         assert handle.width() < bar.width(), (
             f"{attr}: the handle fills the whole {bar.width()}px bar, so it "
-            "touches the content beside it")
+            "touches the content beside it"
+        )
         left = handle.x()
         right = bar.width() - (handle.x() + handle.width())
         assert left == right == T.SPACE["xxs"], (
             f"{attr}: handle gutters are {left}px/{right}px, expected "
-            f"{T.SPACE['xxs']}px on each side")
+            f"{T.SPACE['xxs']}px on each side"
+        )
         inset_checked.append(attr)
 
     assert inset_checked, (
         "no rail was scrolling, so the handle inset went unchecked; the rails "
-        "are meant to overflow at 1440x900")
+        "are meant to overflow at 1440x900"
+    )
 
 
 def test_control_rails_share_one_width(picker, qt_app):
@@ -505,17 +528,16 @@ def test_control_rails_share_one_width(picker, qt_app):
     qt_app.processEvents()
 
     widths = {attr: rail.width() for attr, rail in _built_rails(picker)}
-    assert len(set(widths.values())) == 1, (
-        f"control rails disagree on width: {widths}")
+    assert len(set(widths.values())) == 1, f"control rails disagree on width: {widths}"
 
 
 # ---------------------------------------------------------------------------
-# Navigation rail
+# Source dropdown
 # ---------------------------------------------------------------------------
 
 
 def test_source_selector_replaces_the_tab_bar(picker):
-    """The picker navigates by rail, not by a top tab bar."""
+    """The picker uses one mutually-exclusive source control, not tabs."""
     from qtpy.QtWidgets import QTabWidget
 
     from sharpmod.gui_shell import SourceSelector
@@ -527,16 +549,37 @@ def test_source_selector_replaces_the_tab_bar(picker):
 def test_source_selector_keeps_the_tab_widget_surface(picker):
     """Roughly forty title-keyed call sites depend on this API."""
     selector = picker._tabs
-    for method in ("addTab", "insertTab", "removeTab", "count", "tabText",
-                   "widget", "currentIndex", "setCurrentIndex",
-                   "currentWidget", "indexOf"):
+    for method in (
+        "addTab",
+        "insertTab",
+        "removeTab",
+        "count",
+        "tabText",
+        "widget",
+        "currentIndex",
+        "setCurrentIndex",
+        "currentWidget",
+        "indexOf",
+    ):
         assert callable(getattr(selector, method, None)), (
-            f"SourceSelector is missing {method}()")
+            f"SourceSelector is missing {method}()"
+        )
     assert hasattr(selector, "currentChanged")
 
 
-def test_nav_rail_selection_and_panel_stay_in_step(picker, qt_app):
-    """Clicking a rail entry must show the matching panel, and vice versa."""
+def test_source_dropdown_lives_in_the_menu_bar(picker):
+    """Load From must reclaim the former navigation rail for the maps."""
+    selector = picker._tabs
+    dropdown = selector.navigation_widget()
+
+    assert isinstance(dropdown, QComboBox)
+    assert picker.menuBar().cornerWidget(Qt.TopLeftCorner) is picker._source_picker
+    assert dropdown.parent() is picker._source_picker
+    assert picker._source_picker_label.text() == "Load From"
+
+
+def test_source_dropdown_selection_and_panel_stay_in_step(picker, qt_app):
+    """Choosing a source must show the matching panel, and vice versa."""
     _materialize_all(picker)
     selector = picker._tabs
 
@@ -544,14 +587,15 @@ def test_nav_rail_selection_and_panel_stay_in_step(picker, qt_app):
         selector.setCurrentIndex(index)
         qt_app.processEvents()
         assert selector.currentIndex() == index
-        assert selector._nav.currentRow() == index, (
-            "rail highlight drifted from the visible panel")
+        assert selector._nav.currentIndex() == index, (
+            "dropdown choice drifted from the visible panel"
+        )
 
-    # And in the other direction: a rail click drives the stack.
-    for row in reversed(range(selector.count())):
-        selector._nav.setCurrentRow(row)
+    # And in the other direction: a dropdown choice drives the stack.
+    for index in reversed(range(selector.count())):
+        selector._nav.setCurrentIndex(index)
         qt_app.processEvents()
-        assert selector.currentIndex() == row
+        assert selector.currentIndex() == index
 
 
 def test_tab_text_survives_an_out_of_range_index(picker):
@@ -562,10 +606,10 @@ def test_tab_text_survives_an_out_of_range_index(picker):
 
 
 def test_lazy_placeholder_swap_preserves_order(picker, qt_app):
-    """Materializing a panel must not reorder the rail.
+    """Materializing a panel must not reorder the dropdown.
 
     ``_ensure_tab`` removes the placeholder and inserts the real panel at the
-    same index, so the rail entry has to follow.
+    same index, so the dropdown entry has to follow.
     """
     selector = picker._tabs
     before = [selector.tabText(i) for i in range(selector.count())]
@@ -573,8 +617,30 @@ def test_lazy_placeholder_swap_preserves_order(picker, qt_app):
     qt_app.processEvents()
     after = [selector.tabText(i) for i in range(selector.count())]
     assert before == after == list(PANEL_TITLES)
-    assert [selector._nav.item(i).text() for i in range(selector.count())] \
-        == list(PANEL_TITLES), "rail labels drifted from the panel order"
+    assert [selector._nav.itemText(i) for i in range(selector.count())] == list(
+        PANEL_TITLES
+    ), "dropdown labels drifted from the panel order"
+
+
+def test_control_rail_sections_use_accessible_chevron_disclosure(picker, qt_app):
+    """Dense map controls can collapse while preserving their field state."""
+    from sharpmod.gui_picker_layout import CollapsibleRailSection
+
+    panel = picker._ensure_tab("Forecast Model")
+    picker.show()
+    qt_app.processEvents()
+    sections = panel.findChildren(CollapsibleRailSection)
+    assert sections, "forecast controls did not use collapsible sections"
+
+    section = sections[0]
+    assert section.toggle.accessibleName().endswith(" controls")
+    assert section.toggle.arrowType() == Qt.DownArrow
+    assert not section.content.isHidden()
+
+    section.toggle.setChecked(False)
+    qt_app.processEvents()
+    assert section.toggle.arrowType() == Qt.RightArrow
+    assert section.content.isHidden()
 
 
 # ---------------------------------------------------------------------------
@@ -619,7 +685,8 @@ def test_busy_label_is_restored_from_the_widget_not_a_literal(picker, qt_app):
 
         _set_button_busy(button, False, "")
         assert button.text() == renamed, (
-            f"{attr} was restored to a hardcoded label instead of its own text")
+            f"{attr} was restored to a hardcoded label instead of its own text"
+        )
 
 
 def test_repeated_busy_cycles_do_not_lose_the_idle_label(picker):

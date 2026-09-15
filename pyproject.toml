@@ -51,6 +51,12 @@ dependencies = [
     "certifi>=2023.7.22",
     # SHARPpy's declared runtime need (used by its datasources import chain).
     "requests>=2.28,<3.0",
+    # Animated briefing exports use Pillow's deterministic GIF encoder.
+    "Pillow>=10,<13",
+    # Optional picker-map GOES context reads CF/netCDF fixed-grid files and
+    # performs the documented geostationary projection before display.
+    "netCDF4>=1.7,<2.0",
+    "pyproj>=3.5,<4.0",
     # Reference-consistent ECAPE (Peters et al. 2023) building blocks are
     # computed via MetPy to agree with the authors' ECAPE_FUNCTIONS oracle
     # (Requirement 5.7); the ECAPE parameter degrades to MISSING without it.
@@ -75,12 +81,10 @@ era5 = [
     "eccodes>=2.48,<3.0",
     "xarray>=2026.4,<2027.0",
     "numcodecs>=0.11,<1.0",
-    "pyproj>=3.5,<4.0",
 ]
 # WRF-ARW (wrfout NetCDF) point-sounding extraction tooling (optional extra).
 wrf = [
     "xarray>=2024.7,<2027.0",
-    "netCDF4>=1.7,<2.0",
 ]
 # Transitive packages the upstream SHARPpy render stack needs. The compatibility
 # installer installs this extra by default and then installs the verified,
@@ -103,7 +107,7 @@ dev = [
 quality = [
     "pip-audit==2.10.1",
     "pytest-cov==7.1.0",
-    "ruff==0.16.5",
+    "ruff==0.16.6",
 ]
 # Build frontend for the optional local Rust extension. This does not install
 # Rust itself or make the extension a requirement of the Python package.

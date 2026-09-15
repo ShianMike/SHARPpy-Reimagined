@@ -169,18 +169,22 @@ def test_minimum_picker_size_scrolls_instead_of_collapsing_controls(
     picker._select_tab("Forecast Model")
     picker._select_tab("Reanalysis (ERA5)")
 
+    # Selected by title rather than by index. Positions were hard-coded here and
+    # every one of them moved when a source tab was inserted, so the test failed
+    # for a reason that had nothing to do with the rails it is about.
     rails = (
-        (0, picker._map_controls_scroll),
-        (2, picker._model_controls_scroll),
-        (3, picker._era5_controls_scroll),
+        ("Station Map", "_map_controls_scroll"),
+        ("Forecast Model", "_model_controls_scroll"),
+        ("Reanalysis (ERA5)", "_era5_controls_scroll"),
     )
-    for tab, rail in rails:
-        picker._tabs.setCurrentIndex(tab)
+    for title, attribute in rails:
+        picker._select_tab(title)
         app.processEvents()
-        assert rail.verticalScrollBar().maximum() > 0
+        rail = getattr(picker, attribute)
+        assert rail.verticalScrollBar().maximum() > 0, title
         assert rail.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
 
-    picker._tabs.setCurrentIndex(4)
+    picker._select_tab("Open File")
     picker._file_modes.setCurrentIndex(1)
     app.processEvents()
     assert picker._wrf_controls_scroll.verticalScrollBar().maximum() > 0

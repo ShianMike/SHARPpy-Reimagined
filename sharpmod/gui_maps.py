@@ -18,7 +18,12 @@ from types import MappingProxyType
 # Importing common first applies the native Qt platform policy.
 from sharpmod import gui_common as _gui_common
 from sharpmod.gui_theme import current_theme, mono_font, ui_font
-from sharpmod.map_overlays import OverlayRaster, describe_at, format_age
+from sharpmod.map_overlays import (
+    OverlayRaster,
+    describe_at,
+    describe_markers_at,
+    format_age,
+)
 from sharpmod.overlay_hatch import hatch_brush as _overlay_hatch_brush
 from sharpmod.theme import MapPalette, map_palette
 
@@ -504,6 +509,7 @@ _DOMAIN_MAX_STEPS = 180
 #: Keys not listed here take :data:`RASTER_ORDER_DEFAULT`, so an overlay added
 #: later draws above the model field and below nothing, rather than disappearing.
 RASTER_DRAW_ORDER = {
+    "goes_context": 5,
     "hrrr_field": 10,
     "radar_mosaic": 40,
     "radar_site": 50,
@@ -764,6 +770,19 @@ class StationMapWidget(QWidget):
         widget's private viewport fields.
         """
         return (self._lon0, self._lon1, self._lat0, self._lat1)
+
+    def context_point(self) -> tuple[float, float]:
+        """Return ``(latitude, longitude)`` for nearby environmental data.
+
+        A selected radiosonde station is the most relevant anchor. With no
+        selection, use the map centre so optional context remains usable while
+        the user is navigating.
+        """
+
+        station = self._station(self._selected_id) if self._selected_id else None
+        if station is not None:
+            return float(station["lat"]), float(station["lon"])
+        return (self._lat0 + self._lat1) / 2.0, (self._lon0 + self._lon1) / 2.0
 
     # -- overlays ------------------------------------------------------------ #
     def set_overlay(self, key: str, layer, *, visible: bool | None = None) -> None:
@@ -1931,6 +1950,118 @@ class StationMapWidget(QWidget):
         qp.restore()
 
     # -- overlay painting ---------------------------------------------------- #
+    def _draw_surface_station_plot(self, qp, shape, p) -> None:
+        """Draw one fixed-size station model: barb, temperature, dewpoint, id.
+
+        The containing :class:`OverlayShape` supplies a geographic dot and hit
+        target.  This adornment deliberately lives in screen pixels: zooming a
+        map should separate station models, not enlarge their typography or
+        turn a 25 kt staff into a county-wide line.
+        """
+
+        station_id = str(getattr(shape, "station_id", "") or "")
+        lon = getattr(shape, "station_longitude", None)
+        lat = getattr(shape, "station_latitude", None)
+        if not station_id or lon is None or lat is None:
+            return
+        try:
+            centre = self._to_px(float(lon), float(lat), p)
+        except (TypeError, ValueError):
+            return
+        theme = current_theme()
+        ink = QColor(theme.warning if getattr(shape, "stale", False) else theme.text_primary)
+        qp.save()
+        qp.setPen(QPen(ink, 1.35))
+        qp.setBrush(QBrush(ink))
+        qp.setFont(mono_font("small"))
+
+        u = getattr(shape, "wind_u_kt", None)
+        v = getattr(shape, "wind_v_kt", None)
+        try:
+            speed = math.hypot(float(u), float(v))
+        except (TypeError, ValueError):
+            speed = 0.0
+        if speed >= 2.5:
+            # Meteorological barbs point toward the direction the wind comes
+            # from. Stored u/v components point toward motion, hence -u/-v;
+            # screen y grows south, turning the north component into +v here.
+            dx = -float(u) / speed * 24.0
+            dy = float(v) / speed * 24.0
+            end = QPointF(centre.x() + dx, centre.y() + dy)
+            qp.drawLine(centre, end)
+            along_x, along_y = dx / 24.0, dy / 24.0
+            side_x, side_y = -along_y, along_x
+            remaining = int(round(speed / 5.0) * 5)
+            offset = 0.0
+            while remaining >= 50:
+                base = QPointF(end.x() - along_x * offset, end.y() - along_y * offset)
+                next_base = QPointF(
+                    base.x() - along_x * 5.0, base.y() - along_y * 5.0
+                )
+                flag = QPainterPath(base)
+                flag.lineTo(base.x() + side_x * 10.0, base.y() + side_y * 10.0)
+                flag.lineTo(next_base)
+                flag.closeSubpath()
+                qp.fillPath(flag, QBrush(ink))
+                remaining -= 50
+                offset += 6.0
+            while remaining >= 10:
+                base = QPointF(end.x() - along_x * offset, end.y() - along_y * offset)
+                qp.drawLine(
+                    base,
+                    QPointF(base.x() + side_x * 9.0, base.y() + side_y * 9.0),
+                )
+                remaining -= 10
+                offset += 4.5
+            if remaining >= 5:
+                base = QPointF(end.x() - along_x * offset, end.y() - along_y * offset)
+                qp.drawLine(
+                    base,
+                    QPointF(base.x() + side_x * 5.0, base.y() + side_y * 5.0),
+                )
+        else:
+            qp.setBrush(Qt.NoBrush)
+            qp.drawEllipse(centre, 4.0, 4.0)
+
+        # The station model: temperature above dewpoint, left of the staff, with
+        # the identifier lower right. That is the arrangement a surface chart has
+        # always used, and it is what makes the colours a reinforcement rather
+        # than the only thing telling the two readings apart -- position alone
+        # still distinguishes them for a reader who cannot separate the hues.
+        #
+        # Only the dewpoint was drawn before, so the plot showed half of the pair
+        # that matters: dewpoint alone gives moisture but not the spread, and the
+        # temperature was already in hand.
+        palette = _map()
+        stale = bool(getattr(shape, "stale", False))
+        # Both readings sit inside the 24px the wind staff already claims around
+        # the centre, so the station model's footprint is unchanged and the
+        # declutter spacings in ``_DENSITIES`` stay valid. A row above that -- a
+        # gust, say -- would push the model past its own spacing and collide with
+        # its neighbour at the dense setting, which is why the gust stays in the
+        # hover description instead.
+        readings = (
+            (getattr(shape, "temperature_c", None), palette.obs_temperature, -4.0),
+            (getattr(shape, "dewpoint_c", None), palette.obs_dewpoint, 15.0),
+        )
+        for value, colour, dy in readings:
+            text = "\u2014"
+            try:
+                if value is not None and math.isfinite(float(value)):
+                    text = f"{float(value):.0f}"
+            except (TypeError, ValueError):
+                pass
+            # A stale plot keeps one warning colour throughout. Colouring its
+            # readings semantically would dress a reading the overlay is telling
+            # you not to trust as though it were current.
+            qp.setPen(QPen(ink if stale else QColor(colour), 1.35))
+            qp.drawText(QPointF(centre.x() - 23.0, centre.y() + dy), text)
+
+        # Dimmer than the readings: it names the plot, it is not a measurement.
+        qp.setPen(QPen(ink if stale else QColor(theme.text_secondary), 1.35))
+        qp.drawText(QPointF(centre.x() + 7.0, centre.y() + 15.0), station_id)
+        qp.restore()
+
     def _draw_overlays(self, qp, p) -> None:
         """Fill and outline every visible overlay shape inside the view."""
         layers = self._visible_overlays()
@@ -1988,6 +2119,7 @@ class StationMapWidget(QWidget):
                     qp.strokePath(
                         path, QPen(QColor(shape.stroke), OVERLAY_STROKE_WIDTH)
                     )
+                self._draw_surface_station_plot(qp, shape, p)
         qp.restore()
 
     def _overlay_legend_rows(self) -> list[tuple[str, str, str, int]]:
@@ -2534,6 +2666,23 @@ class StationMapWidget(QWidget):
         QToolTip.showText(self._global_point(event), text, self)
         return True
 
+    def _describe_marker_overlay_at(self, pos, event) -> bool:
+        """Show a marker description while leaving broad area clicks free."""
+        layers = self._visible_overlays()
+        if not layers:
+            return False
+        try:
+            lon, lat = self._proj().inverse(pos.x(), pos.y())
+        except Exception:  # noqa: BLE001 - a limit point is not worth a crash
+            return False
+        if not (math.isfinite(lon) and math.isfinite(lat)):
+            return False
+        text = describe_markers_at(layers, lon, lat)
+        if not text:
+            return False
+        QToolTip.showText(self._global_point(event), text, self)
+        return True
+
     def _station_rival(self, pos, near) -> float | None:
         """Squared distance to the station competing for a click, if any."""
         if near is None:
@@ -2728,6 +2877,12 @@ class PointMapWidget(StationMapWidget):
             self._invalidate()
         else:
             self.update()
+
+    def context_point(self) -> tuple[float, float]:
+        """Use the explicitly selected forecast point for nearby observations."""
+
+        lon, lat = self._point_lonlat
+        return float(lat), float(lon)
 
     def set_domain(self, bounds, label: str = "", outline=None) -> None:
         self._domain_bounds = tuple(bounds) if bounds is not None else None
@@ -3110,6 +3265,10 @@ class PointMapWidget(StationMapWidget):
                 # stray Shift-click still does something useful instead of
                 # silently doing nothing.
                 self.update()
+                if self._pick_radar_site(pos):
+                    return
+                if self._describe_marker_overlay_at(pos, event):
+                    return
                 self._select_from_pos(pos)
                 return
             corners = (
@@ -3134,6 +3293,8 @@ class PointMapWidget(StationMapWidget):
         # radar and move the profile location -- two answers to one gesture.
         if self._pick_radar_site(pos):
             return
+        if self._describe_marker_overlay_at(pos, event):
+            return
         self._select_from_pos(pos)
 
     def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802
@@ -3144,6 +3305,8 @@ class PointMapWidget(StationMapWidget):
         pos = self._pos(event)
         if self._pick_radar_site(pos):
             return
+        if self._describe_marker_overlay_at(pos, event):
+            return
         self._select_from_pos(pos, activate=True)
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
@@ -3151,10 +3314,17 @@ class PointMapWidget(StationMapWidget):
         if event.key() == Qt.Key_Escape:
             if self._box_anchor is not None:
                 self._cancel_box_drag()
+                self.set_box_mode(False)
                 self.update()
+                self.boxCleared.emit()
                 return
             if self._box_corners is not None:
+                self.set_box_mode(False)
                 self.clear_box()
+                return
+            if self._box_mode:
+                self.set_box_mode(False)
+                self.boxCleared.emit()
                 return
         super().keyPressEvent(event)
 

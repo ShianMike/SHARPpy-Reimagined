@@ -14,8 +14,14 @@ pytestmark = pytest.mark.usefixtures("qt_app")
 class _MouseEvent:
     """Minimal stand-in for QMouseEvent covering the accessors used here."""
 
-    def __init__(self, pos, *, button=Qt.LeftButton, buttons=Qt.LeftButton,
-                 modifiers=Qt.NoModifier):
+    def __init__(
+        self,
+        pos,
+        *,
+        button=Qt.LeftButton,
+        buttons=Qt.LeftButton,
+        modifiers=Qt.NoModifier,
+    ):
         self._pos = QPointF(*pos) if isinstance(pos, tuple) else pos
         self._button = button
         self._buttons = buttons
@@ -57,7 +63,8 @@ def _drag(view, start, end, *, modifiers=Qt.NoModifier):
 def _record(view):
     boxes, cleared, points = [], [], []
     view.boxSelected.connect(
-        lambda *args: boxes.append(tuple(round(v, 6) for v in args)))
+        lambda *args: boxes.append(tuple(round(v, 6) for v in args))
+    )
     view.boxCleared.connect(lambda: cleared.append(True))
     view.pointSelected.connect(lambda lat, lon: points.append((lat, lon)))
     return boxes, cleared, points
@@ -136,8 +143,7 @@ def test_drag_direction_does_not_change_the_result(widget):
 
 def test_right_button_release_is_ignored(widget):
     boxes, _cleared, points = _record(widget)
-    widget.mouseReleaseEvent(
-        _MouseEvent((200, 200), button=Qt.RightButton))
+    widget.mouseReleaseEvent(_MouseEvent((200, 200), button=Qt.RightButton))
     assert boxes == [] and points == []
 
 
@@ -209,8 +215,8 @@ def test_clear_box_announces_only_when_a_box_existed(widget):
 def test_set_box_none_clears_the_lattice_preview(widget):
     widget.set_box((34.0, -99.0, 37.0, -95.0))
     plan = plan_box_samples(
-        "hrrr", BoxRegion.from_corners(34.0, -99.0, 37.0, -95.0),
-        target_points=16)
+        "hrrr", BoxRegion.from_corners(34.0, -99.0, 37.0, -95.0), target_points=16
+    )
     widget.set_box_nodes(plan.points, note="5 x 5")
     assert widget._box_nodes
     widget.set_box(None)
@@ -220,8 +226,8 @@ def test_set_box_none_clears_the_lattice_preview(widget):
 
 def test_set_box_nodes_accepts_sample_points_and_plain_pairs(widget):
     plan = plan_box_samples(
-        "hrrr", BoxRegion.from_corners(34.0, -99.0, 37.0, -95.0),
-        target_points=16)
+        "hrrr", BoxRegion.from_corners(34.0, -99.0, 37.0, -95.0), target_points=16
+    )
     widget.set_box_nodes(plan.points)
     assert len(widget._box_nodes) == plan.count
     widget.set_box_nodes([(35.0, -97.0), (36.0, -96.0)])
@@ -241,19 +247,27 @@ def test_escape_abandons_an_in_progress_rectangle(widget):
     widget.set_box_mode(True)
     widget.mousePressEvent(_MouseEvent((150, 120)))
     widget.mouseMoveEvent(_MouseEvent((300, 250)))
-    widget.keyPressEvent(
-        QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))
+    widget.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))
     assert widget._box_anchor is None
     assert widget.box() is None
-    assert cleared == []
+    assert not widget.box_mode()
+    assert cleared == [True]
 
 
 def test_escape_clears_a_committed_rectangle(widget):
     _boxes, cleared, _points = _record(widget)
     widget.set_box((34.0, -99.0, 37.0, -95.0))
-    widget.keyPressEvent(
-        QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))
+    widget.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))
     assert widget.box() is None
+    assert not widget.box_mode()
+    assert cleared == [True]
+
+
+def test_escape_exits_sticky_box_mode_before_any_rectangle(widget):
+    _boxes, cleared, _points = _record(widget)
+    widget.set_box_mode(True)
+    widget.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))
+    assert not widget.box_mode()
     assert cleared == [True]
 
 
@@ -262,8 +276,7 @@ def test_escape_clears_a_committed_rectangle(widget):
 
 def test_double_click_is_suppressed_in_box_mode(widget):
     activated = []
-    widget.pointActivated.connect(
-        lambda lat, lon: activated.append((lat, lon)))
+    widget.pointActivated.connect(lambda lat, lon: activated.append((lat, lon)))
     widget.set_box_mode(True)
     widget.mouseDoubleClickEvent(_MouseEvent((200, 200)))
     assert activated == []
@@ -309,12 +322,15 @@ def _view(widget):
 
 
 def _button_drag(widget, button, start, end, *, modifiers=Qt.NoModifier):
-    widget.mousePressEvent(_MouseEvent(
-        start, button=button, buttons=button, modifiers=modifiers))
-    widget.mouseMoveEvent(_MouseEvent(
-        end, button=button, buttons=button, modifiers=modifiers))
-    widget.mouseReleaseEvent(_MouseEvent(
-        end, button=button, buttons=button, modifiers=modifiers))
+    widget.mousePressEvent(
+        _MouseEvent(start, button=button, buttons=button, modifiers=modifiers)
+    )
+    widget.mouseMoveEvent(
+        _MouseEvent(end, button=button, buttons=button, modifiers=modifiers)
+    )
+    widget.mouseReleaseEvent(
+        _MouseEvent(end, button=button, buttons=button, modifiers=modifiers)
+    )
 
 
 @pytest.mark.parametrize("button", [Qt.MiddleButton, Qt.RightButton])

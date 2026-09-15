@@ -10,6 +10,7 @@ from sharpmod.profile_timeline import (
     combine_ensemble_collections,
     forecast_hour_range,
 )
+from sharpmod.ensemble_members import EnsembleAcquisition, MemberFailure
 
 
 RUN = datetime(2026, 7, 22, 0)
@@ -109,6 +110,27 @@ def test_combine_ensemble_collections_honors_requested_member_names():
 
     assert tuple(combined._profs) == ("control", "perturbed")
     assert combined._highlight == "control"
+
+
+def test_combine_ensemble_retains_requested_loaded_and_unavailable_members():
+    acquisition = EnsembleAcquisition(
+        ("c00", "p01", "p02"),
+        ("c00", "p01"),
+        (MemberFailure("p02", "cancelled", "user cancelled"),),
+    )
+    combined = combine_ensemble_collections(
+        (_collection(0), _collection(0)),
+        member_names=("c00", "p01"),
+        acquisition=acquisition,
+    )
+
+    assert combined.getMeta("ensemble_requested_count") == 3
+    assert combined.getMeta("ensemble_loaded_count") == 2
+    assert combined.getMeta("ensemble_member_count") == 2
+    assert combined.getMeta("ensemble_count") == 3
+    assert combined.getMeta("ensemble_member_failures") == [
+        {"member": "p02", "status": "cancelled", "reason": "user cancelled"}
+    ]
 
 
 @pytest.mark.parametrize(

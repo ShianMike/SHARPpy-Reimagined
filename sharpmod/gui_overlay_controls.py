@@ -36,9 +36,10 @@ from sharpmod.gui_workers import (
     _SpcOutlookWorker,
     _StormReportsWorker,
 )
+from sharpmod.gui_picker_layout import dependent_panel
 from sharpmod.gui_threading import retain_worker_until_finished
 from sharpmod.map_overlays import format_age
-from sharpmod.theme import OBJ_HINT, OBJ_PLAIN
+from sharpmod.theme import OBJ_HINT, OBJ_PLAIN, OBJ_SECTION_LABEL, SPACE
 
 #: Matches the station-catalogue probe, so dragging a date spinner settles once
 #: instead of firing a request per intermediate value.
@@ -207,6 +208,7 @@ class OutlookOverlayController(QObject):
         self._content.setObjectName(OBJ_PLAIN)
         layout = QVBoxLayout(self._content)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACE["xs"])
         self._check = QCheckBox(label)
         self._check.setToolTip(
             "Draw the SPC convective outlook covering the selected valid time "
@@ -215,6 +217,11 @@ class OutlookOverlayController(QObject):
         self._check.setChecked(bool(enabled))
         self._check.toggled.connect(self._on_toggled)
         layout.addWidget(self._check)
+
+        # Which hazard and how it went are this switch's settings, not further
+        # overlays, so they are indented under its label. See ``dependent_panel``.
+        self._detail, detail = dependent_panel(self._content)
+        layout.addWidget(self._detail)
 
         # One product at a time rather than several checkboxes: the
         # probabilistic areas nest the same way the categorical ones do, so
@@ -231,19 +238,29 @@ class OutlookOverlayController(QObject):
             "categorical outlook covers Days 1 to 3"
         )
         self._product.currentIndexChanged.connect(self._on_product_changed)
-        layout.addWidget(self._product)
+        detail.addWidget(self._product)
 
         self._status = QLabel("")
         self._status.setWordWrap(True)
         self._status.setObjectName(OBJ_HINT)
-        layout.addWidget(self._status)
+        # Empty text means hidden -- the rule ``_set_status`` applies on every
+        # later update. It was not applied to the initial state, so a blank label
+        # held a 15px row open under a switch that was showing nothing.
+        self._status.setVisible(False)
+        detail.addWidget(self._status)
 
         # Which product to draw only means something once something is being
         # drawn, so the card collapses to its switch while the overlay is off.
         # It also keeps this card from spending rail height on a control that
         # cannot affect anything, which is what pushed the forecast panel past
         # a maximized window.
-        self._product.setVisible(self._check.isChecked())
+        #
+        # The *panel* is what hides, not the combo inside it. Hiding the combo
+        # individually here while ``_on_toggled`` reveals only the panel left the
+        # product permanently hidden: switching the outlook on showed its status
+        # line but no way to choose the day or hazard, so the categorical outlook
+        # was the only one reachable.
+        self._detail.setVisible(self._check.isChecked())
 
         # Deliberately no initial fetch: there is no valid time yet, and
         # scheduling one here left a timer pending that later fired against
@@ -378,7 +395,7 @@ class OutlookOverlayController(QObject):
         self._request()
 
     def _on_toggled(self, checked: bool) -> None:
-        self._product.setVisible(checked)
+        self._detail.setVisible(checked)
         if not checked:
             # Hide rather than detach. The geometry and its legend both go away,
             # but keeping the layer means re-enabling costs no request and no
@@ -543,7 +560,7 @@ class RadarOverlayController(QObject):
         map_widget,
         *,
         parent=None,
-        label: str = "Show radar",
+        label: str = "Radar",
         enabled: bool = False,
         opacity: float = 0.85,
         scope: str = SCOPE_SITE,
@@ -570,6 +587,7 @@ class RadarOverlayController(QObject):
         self._content.setObjectName(OBJ_PLAIN)
         layout = QVBoxLayout(self._content)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACE["xs"])
 
         self._check = QCheckBox(label)
         self._check.setToolTip(
@@ -578,6 +596,12 @@ class RadarOverlayController(QObject):
         self._check.setChecked(bool(enabled))
         self._check.toggled.connect(self._on_toggled)
         layout.addWidget(self._check)
+
+        # Scope, antenna, product, and opacity are all settings of this one
+        # switch, so they are indented under its label rather than sitting flush
+        # as four more peers in the card. See ``dependent_panel``.
+        self._detail, detail = dependent_panel(self._content)
+        layout.addWidget(self._detail)
 
         # Which radar, before which product. A single site follows the map and
         # resolves a storm; the mosaic covers the country at about 1.9 km a
@@ -600,7 +624,7 @@ class RadarOverlayController(QObject):
             "national mosaic"
         )
         self._scope.currentIndexChanged.connect(self._on_scope_changed)
-        layout.addWidget(self._scope)
+        detail.addWidget(self._scope)
 
         # Which antenna, when the scope is a single site. "Nearest to the map"
         # answers the common question -- what is happening where I am looking --
@@ -615,7 +639,7 @@ class RadarOverlayController(QObject):
         self._site.setToolTip(
             "Which WSR-88D to draw. Type an identifier to jump to it."
         )
-        self._site.setMaxVisibleItems(16)
+
         self._reload_sites(prefer=site)
         completer = self._site.completer()
         if completer is not None:
@@ -625,14 +649,14 @@ class RadarOverlayController(QObject):
         if line_edit is not None:
             line_edit.setPlaceholderText("Nearest to map centre")
         self._site.currentIndexChanged.connect(self._on_site_changed)
-        layout.addWidget(self._site)
+        detail.addWidget(self._site)
 
         # One product at a time, for the same reason the outlook controller
         # offers one hazard: these are opaque colour ramps over the same pixels,
         # so two of them stacked is unreadable rather than twice as informative.
         self._product = QComboBox()
         self._product.currentIndexChanged.connect(self._on_product_changed)
-        layout.addWidget(self._product)
+        detail.addWidget(self._product)
         self._reload_products()
 
         opacity_row = QHBoxLayout()
@@ -648,12 +672,16 @@ class RadarOverlayController(QObject):
         self._opacity.setToolTip("How strongly the radar image covers the map")
         self._opacity.valueChanged.connect(self._on_opacity_changed)
         opacity_row.addWidget(self._opacity, 1)
-        layout.addLayout(opacity_row)
+        detail.addLayout(opacity_row)
 
         self._status = QLabel("")
         self._status.setWordWrap(True)
         self._status.setObjectName(OBJ_HINT)
-        layout.addWidget(self._status)
+        # Empty text means hidden -- the rule ``_set_status`` applies on every
+        # later update. It was not applied to the initial state, so a blank label
+        # held a 15px row open under a switch that was showing nothing.
+        self._status.setVisible(False)
+        detail.addWidget(self._status)
 
         # Collapse to the switch while the overlay is off, matching the outlook
         # controller: neither the product nor the opacity of an image that is
@@ -965,8 +993,25 @@ class RadarOverlayController(QObject):
         self._request()
 
     def _set_detail_visible(self, visible: bool) -> None:
-        """Show or hide the controls that only apply to a drawn overlay."""
-        for widget in (self._product, self._opacity_label, self._opacity):
+        """Show or hide the controls that only apply to a drawn overlay.
+
+        The scope belongs in this set for the same reason the product and opacity
+        do: which radar to composite is not a meaningful thing to choose for an
+        image that is not being drawn. It was the one detail left permanently
+        visible, so an unchecked "Radar" still carried a full-width "Nearest
+        single site" combo underneath it -- the one control in the card that
+        looked like it belonged to nothing.
+
+        The panel is hidden with them: a visible container of hidden children is
+        zero-height but still takes the layout's spacing above it.
+        """
+        self._detail.setVisible(bool(visible))
+        for widget in (
+            self._scope,
+            self._product,
+            self._opacity_label,
+            self._opacity,
+        ):
             widget.setVisible(bool(visible))
         # The antenna list belongs to the single-site scope alone: the mosaic is
         # one national composite and has no site to choose.
@@ -1174,7 +1219,7 @@ class HrrrFieldController(QObject):
         map_widget,
         *,
         parent=None,
-        label: str = "Show HRRR model field",
+        label: str = "HRRR model field",
         enabled: bool = False,
         product: str | None = None,
         opacity: float = 0.75,
@@ -1214,6 +1259,7 @@ class HrrrFieldController(QObject):
         self._content.setObjectName(OBJ_PLAIN)
         layout = QVBoxLayout(self._content)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACE["xs"])
 
         self._check = QCheckBox(label)
         self._check.setToolTip(
@@ -1224,17 +1270,22 @@ class HrrrFieldController(QObject):
         self._check.toggled.connect(self._on_toggled)
         layout.addWidget(self._check)
 
+        # Category, field, and opacity are this switch's settings. See
+        # ``dependent_panel``.
+        self._detail, detail = dependent_panel(self._content)
+        layout.addWidget(self._detail)
+
         wanted = self._catalogue.get_product(product)
 
         self._category = QComboBox()
         for name, _members in self._catalogue.products_by_category():
             self._category.addItem(name, name)
         self._category.setToolTip("Which group of fields to choose from")
-        layout.addWidget(self._category)
+        detail.addWidget(self._category)
 
         self._product = QComboBox()
         self._product.setToolTip("The field to draw")
-        layout.addWidget(self._product)
+        detail.addWidget(self._product)
 
         # Populate before connecting, so building the initial list cannot look
         # like a user selection and fire a fetch for the wrong product.
@@ -1256,12 +1307,16 @@ class HrrrFieldController(QObject):
         self._opacity.setToolTip("How strongly the field covers the map")
         self._opacity.valueChanged.connect(self._on_opacity_changed)
         opacity_row.addWidget(self._opacity, 1)
-        layout.addLayout(opacity_row)
+        detail.addLayout(opacity_row)
 
         self._status = QLabel("")
         self._status.setWordWrap(True)
         self._status.setObjectName(OBJ_HINT)
-        layout.addWidget(self._status)
+        # Empty text means hidden -- the rule ``_set_status`` applies on every
+        # later update. It was not applied to the initial state, so a blank label
+        # held a 15px row open under a switch that was showing nothing.
+        self._status.setVisible(False)
+        detail.addWidget(self._status)
 
         self._set_detail_visible(self._check.isChecked())
         if self._check.isChecked():
@@ -1430,6 +1485,11 @@ class HrrrFieldController(QObject):
         return self._fields.covers(view)
 
     def _set_detail_visible(self, visible: bool) -> None:
+        # The panel goes too, not just its contents. A visible container holding
+        # only hidden children is zero-height but still takes the layout's spacing
+        # above it, so an off switch left a gap the size of a control it was not
+        # showing -- which is what made the card's row rhythm uneven.
+        self._detail.setVisible(bool(visible))
         for widget in (
             self._category,
             self._product,
@@ -1637,17 +1697,30 @@ class LocatorOverlaySelector(QObject):
         self._applying = False
         self._boxes: dict = {}
 
+        # OBJ_PLAIN for the same reason as the overlay controllers above: an
+        # unnamed container repaints the window surface over the card holding it.
         self._widget = QWidget()
+        self._widget.setObjectName(OBJ_PLAIN)
         layout = QVBoxLayout(self._widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
+        # One switch-to-switch gap for the whole card: the overlay controllers
+        # above use `xs` internally and the card's own layout uses it between
+        # them, so this group matching it makes every row in the card sit on the
+        # same rhythm. At `xxs` these five were visibly tighter than the six above.
+        layout.setSpacing(SPACE["xs"])
         caption = QLabel("Show on the sounding's locator")
+        # A sub-heading inside the overlay card, so it takes the section-label
+        # treatment. As plain body text it sat at the same weight as the ten
+        # checkbox labels around it and so failed to divide the map's overlays
+        # from the sounding inset's -- the one distinction this card has to make.
+        caption.setObjectName(OBJ_SECTION_LABEL)
         caption.setToolTip(
             "Overlays drawn on the small map beside the hodograph. The risk "
             "areas and a model field can be shown together; radar replaces "
             "them."
         )
         layout.addWidget(caption)
+        layout.addSpacing(SPACE["xxs"])
 
         # Built before the loop so ``_sync`` and :meth:`hazard` never depend on
         # the risk family's position in FAMILIES; the loop only places it.
@@ -1817,7 +1890,7 @@ class StormReportsOverlayController(QObject):
     """
 
     def __init__(
-        self, map_widget, *, parent=None, label="Show storm reports", enabled=False
+        self, map_widget, *, parent=None, label="Storm reports", enabled=False
     ):
         super().__init__(parent)
         from sharpmod import storm_reports
@@ -1829,19 +1902,40 @@ class StormReportsOverlayController(QObject):
         self._workers = _WorkerFleet()
         self._outlook = None
 
+        # A plain widget for the same reason as the outlook controller.
         self._content = QWidget()
+        self._content.setObjectName(OBJ_PLAIN)
         layout = QVBoxLayout(self._content)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACE["xs"])
 
         self._check = QCheckBox(label)
         self._check.setChecked(bool(enabled))
         self._check.toggled.connect(self._on_toggled)
         layout.addWidget(self._check)
 
+        self._detail, detail = dependent_panel(self._content)
+        layout.addWidget(self._detail)
+
+        # The reason this switch is unavailable, stated where it is needed rather
+        # than only in a tooltip. This is the one disabled control in the card, and
+        # a greyed row with no visible explanation reads as broken -- a tooltip
+        # cannot be discovered by someone who has not already decided to hover the
+        # thing that looks broken. The tooltip stays as well, for the pointer.
+        self._reason = QLabel("")
+        self._reason.setWordWrap(True)
+        self._reason.setObjectName(OBJ_HINT)
+        self._reason.setVisible(False)
+        detail.addWidget(self._reason)
+
         self._status = QLabel("")
         self._status.setWordWrap(True)
         self._status.setObjectName(OBJ_HINT)
-        layout.addWidget(self._status)
+        # Empty text means hidden -- the rule ``_set_status`` applies on every
+        # later update. It was not applied to the initial state, so a blank label
+        # held a 15px row open under a switch that was showing nothing.
+        self._status.setVisible(False)
+        detail.addWidget(self._status)
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -1922,6 +2016,10 @@ class StormReportsOverlayController(QObject):
             else "Switch on the SPC convective outlook first; storm reports are "
             "read against the outlook that anticipated them."
         )
+        # Shorter than the tooltip on purpose: this sits permanently under the
+        # greyed row, so it has to say what unblocks it and stop.
+        self._reason.setText("" if available else "Needs the outlook switched on")
+        self._reason.setVisible(not available)
         if not available and self._check.isChecked():
             # Turning itself off rather than drawing on regardless: reports with
             # no risk areas behind them cannot answer the question they exist

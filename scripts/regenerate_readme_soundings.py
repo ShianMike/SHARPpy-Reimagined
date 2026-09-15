@@ -1,4 +1,4 @@
-"""Regenerate the three sounding captures embedded in the README.
+"""Regenerate the canvas-only sounding reference captures.
 
 The primary capture intentionally uses archived, time-matched data: the
 bundled HRRR point sounding, the SPC categorical outlook valid at that hour,
@@ -31,7 +31,7 @@ HRRR_SOURCE = (
 )
 OAX_SOURCE = ROOT / "examples" / "soundings" / "14061619.OAX"
 MAIN_OUTPUT = ROOT / "examples" / "example_sounding.png"
-VERSIONED_OUTPUT = ROOT / "docs" / "images" / "v1.2.0"
+VERSIONED_OUTPUT = ROOT / "docs" / "images" / "v1.3.0"
 
 HRRR_RUN = datetime(2026, 6, 25, 6, tzinfo=timezone.utc)
 HRRR_VALID = datetime(2026, 6, 26, 0, tzinfo=timezone.utc)

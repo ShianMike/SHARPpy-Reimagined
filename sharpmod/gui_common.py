@@ -21,7 +21,8 @@ if "QT_QPA_PLATFORM" not in os.environ:
 os.environ.setdefault("QT_API", "pyside6")
 
 from qtpy.QtCore import (
-    Qt, QThread, QTimer, Signal, QDate, QSettings, QPointF, QRectF, QSize, QUrl,
+    Qt, QThread, QTimer, Signal, QDate, QEvent, QObject, QSettings, QPointF,
+    QRectF, QSize, QUrl,
 )
 from qtpy.QtGui import (
     QAction, QPainter, QColor, QPen, QBrush, QPolygonF, QFont, QPixmap, QIcon,
@@ -30,10 +31,19 @@ from qtpy.QtGui import (
 
 # theme is deliberately Qt-free and imports nothing from sharpmod, so this
 # cannot close an import cycle.
-from sharpmod.theme import OBJ_GUIDE_BODY, OBJ_GUIDE_DIALOG
+from sharpmod.theme import (
+    CONTROL_H,
+    OBJ_GUIDE_BODY,
+    OBJ_GUIDE_DIALOG,
+    OBJ_TOP_BAR_MENU,
+    POPUP_ROWS,
+)
 from qtpy.QtWidgets import (
+    QAbstractScrollArea,
+    QAbstractSpinBox,
     QApplication,
     QMainWindow,
+    QSlider,
     QWidget,
     QTextBrowser,
     QVBoxLayout,
@@ -65,6 +75,7 @@ from qtpy.QtWidgets import (
     QGraphicsScene,
     QProgressBar,
     QMenu,
+    QStyledItemDelegate,
 )
 
 _render_mod = None
@@ -471,6 +482,305 @@ def _uwyo_decoder_classes():
         )
         _uwyo_decoder_types = (StationLookupError, UWyo_Decoder, UWyoError)
     return _uwyo_decoder_types
+
+
+# ---------------------------------------------------------------------------
+# Wheel guard
+# ---------------------------------------------------------------------------
+
+#: Value pickers whose selection the wheel must never change.
+#:
+#: Every one of these sits in a control rail that scrolls, and Qt's default is to
+#: treat a wheel over them as a value change. So a scroll aimed at the rail
+#: silently switched the model, the region, the cycle, or the forecast hour on the
+#: way past -- and because the rail did not move, the only feedback was a value
+#: the user did not choose. A spin box is the same hazard with a coordinate in it.
+_WHEEL_BLOCKED = (QComboBox, QAbstractSpinBox)
+
+#: Controls that keep their wheel unless a scrolling ancestor has a better claim.
+#:
+#: A slider is a drag control and wheeling one is a reasonable gesture, so this is
+#: not blanket-blocked: the hazard is only that a scroll meant for the rail lands
+#: on it. Inside a scroll area the rail wins; anywhere else -- the sounding
+#: window's zoom slider sits in a toolbar -- the slider keeps its wheel.
+_WHEEL_YIELDS = (QSlider,)
+
+
+def _scrollable_ancestor(widget):
+    """Return the nearest scrolling ancestor of ``widget``, or ``None``."""
+    parent = widget.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QAbstractScrollArea):
+            return parent
+        parent = parent.parentWidget()
+    return None
+
+
+class _WheelValueGuard(QObject):
+    """Stops the mouse wheel from changing a control's value.
+
+    Installed on the ``QApplication`` rather than per widget, for the reason the
+    chrome style sheet is: the picker builds four of its five source panels
+    lazily and every dialog on demand, so anything attached per widget at
+    construction reaches only what exists at the time.
+
+    The event is re-sent to the scrolling ancestor rather than merely swallowed.
+    Consuming it would fix the wrong half of the problem: the value would stop
+    changing, but the rail still would not move, so the gesture would do nothing
+    at all and read as a dead scroll area. Forwarding makes the wheel mean
+    "scroll the rail" everywhere inside it, which is what the user was aiming at.
+
+    Combo *popups* are unaffected. A popup's list view is a ``QListView`` inside
+    its own window, not a ``QComboBox``, so it never matches here and keeps the
+    wheel it needs to scroll a long list of radar sites or forecast hours.
+    """
+
+    def eventFilter(self, obj, event):  # noqa: N802 - Qt override
+        if event.type() != QEvent.Type.Wheel:
+            return False
+        if not isinstance(obj, QWidget):
+            return False
+
+        blocked = isinstance(obj, _WHEEL_BLOCKED)
+        if not blocked and not isinstance(obj, _WHEEL_YIELDS):
+            return False
+
+        area = _scrollable_ancestor(obj)
+        if area is None:
+            # Nothing to hand it to: swallow it for a value picker, leave it for
+            # anything that only yields out of politeness.
+            return blocked
+
+        QApplication.sendEvent(area.viewport(), event)
+        return True
+
+
+#: Module-level so the filter outlives the call that installed it. An event
+#: filter is not owned by the object it is installed on, so a local would be
+#: collected and the guard would silently stop working.
+_wheel_guard: _WheelValueGuard | None = None
+
+
+def install_wheel_guard(app=None) -> bool:
+    """Stop the wheel changing values app-wide. Returns whether it installed.
+
+    Idempotent, and safe to call before or after widgets exist. Called from
+    ``main`` and again from ``PickerWindow.__init__``, so an embedder or a test
+    that constructs the window directly gets the same behaviour as the shipped
+    application -- the same arrangement ``ensure_theme_applied`` uses.
+    """
+    global _wheel_guard
+    if _wheel_guard is not None:
+        return False
+    app = app or QApplication.instance()
+    if app is None:
+        return False
+    _wheel_guard = _WheelValueGuard(app)
+    app.installEventFilter(_wheel_guard)
+    _LOGGER.info("wheel_guard.installed")
+    return True
+
+
+class MenuRowDelegate(QStyledItemDelegate):
+    """Gives popup rows a menu's height.
+
+    Has to be a delegate. A view's row height comes from its item delegate, which
+    does not consult the style sheet, so neither ``::item { padding }`` nor
+    ``::item { min-height }`` moved it -- both were measured leaving the rows at
+    the compact list height of 25px against the menu's 33px.
+
+    Separators keep the height they ask for. A separator is not a row anyone
+    points at, and stretching it to a full row turns a divider into a gap.
+    """
+
+    def sizeHint(self, option, index):  # noqa: N802 - Qt override
+        size = super().sizeHint(option, index)
+        if _is_separator(index):
+            return size
+        size.setHeight(max(size.height(), CONTROL_H["md"]))
+        return size
+
+
+def _is_separator(index) -> bool:
+    """Whether a model index is one of ``QComboBox.insertSeparator``'s dividers."""
+    try:
+        return str(index.data(Qt.AccessibleDescriptionRole) or "") == "separator"
+    except (AttributeError, TypeError):
+        return False
+
+
+#: Marks a combo box whose popup has already been given the menu treatment, so
+#: the filter configures each one once rather than on every show.
+_POPUP_READY = "sharpmodPopupReady"
+
+
+def configure_combo_popup(combo) -> None:
+    """Give one combo box's popup a menu's metrics and a bounded height.
+
+    Idempotent. Three things have to be true for a dropdown to read like the
+    menus in the top bar, and none of them can be reached from the style sheet
+    alone:
+
+    * the popup's view carries :data:`~sharpmod.theme.OBJ_TOP_BAR_MENU`, because a
+      popup is its own top-level window and so is not a style-sheet descendant of
+      the combo -- the descendant selector is accepted and matches nothing;
+    * its rows come from :class:`MenuRowDelegate`, because row height is the item
+      delegate's answer and the delegate does not read the style sheet;
+    * the row count is bounded, because menu-height rows on an unbounded popup put
+      a 209-entry list past the bottom of the screen.
+    """
+    if combo is None or combo.property(_POPUP_READY):
+        return
+    view = combo.view()
+    if view is None:
+        return
+    view.setObjectName(OBJ_TOP_BAR_MENU)
+    combo.setItemDelegate(MenuRowDelegate(combo))
+    # A call site that asked for *fewer* rows than the cap wanted a shorter popup
+    # and still gets one; Qt's own default of ten is not such a request, so it is
+    # the cap that applies. Anything above the cap is what the cap is for.
+    wanted = POPUP_ROWS["max"]
+    existing = int(combo.maxVisibleItems())
+    if existing != _QT_DEFAULT_MAX_VISIBLE and existing < wanted:
+        wanted = existing
+    combo.setMaxVisibleItems(wanted)
+    combo.setProperty(_POPUP_READY, True)
+
+
+#: Qt's own default for ``QComboBox.maxVisibleItems``. Treated as "nobody asked",
+#: so the cap applies rather than shrinking every popup in the application to ten.
+_QT_DEFAULT_MAX_VISIBLE = 10
+
+
+def place_combo_popup(combo) -> None:
+    """Drop ``combo``'s open popup below the field, the way a menu does.
+
+    Qt places a combo popup to sit *over* its field. For the source dropdown in
+    the menu bar that put the popup's top edge 24px above the field's bottom edge,
+    covering the bar it belongs to; a menu drops from the bottom of its title.
+    Same gesture, same row of controls, two different relationships -- and the
+    difference shows on every use.
+
+    Called after Qt has shown the popup, so it has already been sized and clamped
+    to the screen and the only thing left to correct is the origin and the height.
+
+    The height has to be bounded here rather than through
+    ``QComboBox.maxVisibleItems``, which was measured having no effect at all: a
+    19-entry list still opened 19 rows tall against a cap of 14. Qt documents that
+    property as ignored for styles whose ``SH_ComboBox_Popup`` is true, and an
+    application style sheet turns it true -- which is also why these popups were
+    covering their fields in the first place, since that is where a menu-style
+    popup puts itself. So the same style sheet that gives the dropdowns a menu's
+    look takes away the property that would have bounded them, and the bound has
+    to be applied to the container directly.
+    """
+    view = combo.view() if combo is not None else None
+    popup = view.window() if view is not None else None
+    if popup is None:
+        return
+    _bound_popup_height(combo, view, popup)
+    geometry = popup.geometry()
+    geometry.moveTopLeft(combo.mapToGlobal(combo.rect().bottomLeft()))
+    # If it will not fit below, hang it above the field instead -- which is what
+    # Qt itself does for a menu with no room under its title.
+    screen = getattr(combo, "screen", lambda: None)()
+    available = screen.availableGeometry() if screen is not None else None
+    if available is not None and geometry.bottom() > available.bottom():
+        geometry.moveBottomLeft(combo.mapToGlobal(combo.rect().topLeft()))
+    popup.setGeometry(geometry)
+
+
+def _bound_popup_height(combo, view, popup) -> None:
+    """Hold the popup between :data:`~sharpmod.theme.POPUP_ROWS`' two bounds.
+
+    Measured in rows of the popup's own first row rather than in pixels, so a
+    bound follows the row height instead of having to be retuned beside it. The
+    container's chrome -- its frame, and the view's padding -- is measured the same
+    way, as the part of the container the rows do not occupy, because both come
+    from the style sheet and neither is knowable from here.
+
+    The bounds are left on the container as minimum and maximum rather than as a
+    fixed height. Qt reuses one container per combo across opens and resizes it to
+    the item count each time, so a fixed height would be right once and then leave
+    a shrinking list padded with blank space.
+    """
+    rows = combo.count()
+    row = view.sizeHintForRow(0) if rows else CONTROL_H["md"]
+    row = max(int(row), CONTROL_H["md"])
+    viewport = view.viewport()
+    chrome = max(0, popup.height() - (viewport.height() if viewport else 0))
+    ceiling = POPUP_ROWS["max"] * row + chrome
+    floor = min(POPUP_ROWS["min"] * row + chrome, ceiling)
+    popup.setMinimumHeight(floor)
+    popup.setMaximumHeight(ceiling)
+    # The scrollbar is what "bounded" has to mean for the reader: a wheel over a
+    # capped list has to move it. Menu-style popups otherwise offer only the hover
+    # arrows at top and bottom, which are easy to miss on a list this long.
+    view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    wanted = max(floor, min(ceiling, popup.height()))
+    if wanted != popup.height():
+        popup.resize(popup.width(), wanted)
+
+
+class _ComboPopupPlacer(QObject):
+    """Applies the top bar's dropdown behaviour to every combo box.
+
+    Installed on the ``QApplication`` for the reason the wheel guard and the
+    chrome style sheet are: the picker builds five of its six source panels
+    lazily and every dialog on demand, so anything attached per widget at
+    construction reaches only what exists at the time. There are around forty
+    combo boxes across the picker, its dialogs, and the analysis workspace, and
+    they are built by a dozen different modules.
+
+    Two events, because the two halves have different deadlines. Configuration has
+    to land before Qt sizes a popup, so it happens when the *combo* is polished or
+    shown -- both of which precede any click on it. Placement can only happen once
+    the popup exists, so it happens when the popup window is shown.
+    """
+
+    def eventFilter(self, obj, event):  # noqa: N802 - Qt override
+        kind = event.type()
+        if kind not in (QEvent.Type.Show, QEvent.Type.Polish):
+            return False
+        if isinstance(obj, QComboBox):
+            configure_combo_popup(obj)
+            return False
+        if kind != QEvent.Type.Show or not isinstance(obj, QWidget):
+            return False
+        # Qt parents a combo's popup container to the combo itself, so this is
+        # what a popup being opened looks like from the application's side.
+        if not obj.isWindow():
+            return False
+        owner = obj.parentWidget()
+        if isinstance(owner, QComboBox):
+            place_combo_popup(owner)
+        return False
+
+
+#: Module-level for the reason ``_wheel_guard`` is: an event filter is not owned
+#: by the object it is installed on, so a local would be collected and the
+#: behaviour would silently stop working.
+_popup_placer: _ComboPopupPlacer | None = None
+
+
+def install_popup_placement(app=None) -> bool:
+    """Make every dropdown behave like the top bar's. Returns whether it installed.
+
+    Idempotent, and safe to call before or after widgets exist. Called from
+    ``main`` and again from ``PickerWindow.__init__``, so an embedder or a test
+    that constructs the window directly gets the same behaviour as the shipped
+    application -- the same arrangement ``install_wheel_guard`` uses.
+    """
+    global _popup_placer
+    if _popup_placer is not None:
+        return False
+    app = app or QApplication.instance()
+    if app is None:
+        return False
+    _popup_placer = _ComboPopupPlacer(app)
+    app.installEventFilter(_popup_placer)
+    _LOGGER.info("popup_placement.installed")
+    return True
 
 
 class MonthCalendar(QCalendarWidget):

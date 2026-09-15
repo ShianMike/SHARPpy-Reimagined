@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -49,7 +50,17 @@ def _goes_netcdf(tmp_path: Path) -> bytes:
             np.linspace(0.0, 1.0, 81),
             indexing="ij",
         )
-        cmi[:] = 0.15 + 0.75 * (rows + columns) / 2.0
+        values = np.asarray(0.15 + 0.75 * (rows + columns) / 2.0, dtype=np.float32)
+        # netCDF4 1.7.4 assigns ndarray.shape internally for multidimensional
+        # writes. NumPy 2.5 deprecates that implementation detail; the fixture
+        # itself remains valid and production only reads these files.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Setting the shape on a NumPy array has been deprecated.*",
+                category=DeprecationWarning,
+            )
+            cmi[:] = values
         dqf = dataset.createVariable("DQF", "u1", ("y", "x"))
         dqf[:] = 0
     return path.read_bytes()

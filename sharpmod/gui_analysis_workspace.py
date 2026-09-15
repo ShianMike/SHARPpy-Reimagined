@@ -50,12 +50,21 @@ from qtpy.QtWidgets import (
 from sharpmod.box_analysis import PARAMETERS, parameter
 from sharpmod.colors import semantic_palette
 from sharpmod.export_paths import ExportDirectoryError, export_file_path
+from sharpmod.ensemble_members import EnsembleAcquisition
 from sharpmod.gui_shell import dock_title_bar
 from sharpmod.gui_theme import current_theme, mono_font, ui_font
+from sharpmod.gui_briefing import BriefingWorkspace
+from sharpmod.gui_case_replay import CaseReplayWorkspace
+from sharpmod.gui_ensemble_thresholds import EnsembleThresholdExplorer
+from sharpmod.gui_scenarios import ScenarioWorkspace
+from sharpmod.gui_verification import VerificationWorkspace
+from sharpmod.gui_visual_comparison import VisualComparisonWidget
+from sharpmod.gui_wind_profiles import WindProfileWorkspace
 from sharpmod.profile_metrics import (
     DEFAULT_METRIC_KEYS,
     ProfileMetricsEngine,
     export_comparison_csv,
+    export_ensemble_csv,
     export_timeline_csv,
     export_timeline_series_csv,
 )
@@ -168,6 +177,46 @@ def _format_time(value):
     if isinstance(value, datetime):
         return value.strftime("%Y-%m-%d %H:%MZ")
     return str(value) if value is not None else _MISSING
+
+
+def _comparison_basis_text(sample) -> tuple[str, str]:
+    """Return a compact label and full provenance tooltip for one row."""
+    context = _get(sample, "context")
+    basis = _get(sample, "basis")
+    relation = str(_get(basis, "location_relation", "unknown"))
+    relation_label = {
+        "same-location": "same location",
+        "intentional-spatial": "spatial",
+        "unknown": "location unknown",
+    }.get(relation, relation.replace("-", " "))
+
+    def shown(name, suffix=""):
+        value = _get(context, name)
+        return _MISSING if value is None else f"{value}{suffix}"
+
+    lines = [
+        f"Comparison basis: {relation_label}",
+        (
+            "Requested point: "
+            f"{shown('requested_lat')}, {shown('requested_lon')}"
+        ),
+        f"Selected source point: {shown('selected_lat')}, {shown('selected_lon')}",
+        f"Grid spacing: {shown('grid_spacing_km', ' km')}",
+        f"Terrain: {shown('terrain_elevation_m', ' m MSL')}",
+        f"Run / lead: {_format_time(_get(context, 'run_time'))} / {shown('lead_hours', ' h')}",
+        f"Parcel convention: {shown('parcel_convention')}",
+        f"Storm motion: {shown('storm_motion_convention')}",
+        f"Modified profile: {shown('profile_edited')}",
+    ]
+    issues = tuple(_get(basis, "issues", ()) or ())
+    if issues:
+        lines.append("Compatibility:")
+        lines.extend(
+            f"• {str(_get(issue, 'severity', 'info')).upper()}: "
+            f"{_get(issue, 'message', '')}"
+            for issue in issues
+        )
+    return relation_label, "\n".join(lines)
 
 
 def _meta(collection, name, default=None):
@@ -1190,6 +1239,11 @@ class AnalysisWorkspace(QWidget):
     TAB_COMPARE = 1
     TAB_ENSEMBLE = 2
     TAB_NOTES = 3
+    TAB_SCENARIOS = 4
+    TAB_VERIFICATION = 5
+    TAB_WINDS = 6
+    TAB_SHARE = 7
+    TAB_REPLAY = 8
 
     def __init__(self, win, *, engine=None, async_compute=True, parent=None):
         super().__init__(parent or win)
@@ -1201,6 +1255,7 @@ class AnalysisWorkspace(QWidget):
         self._trend_samples = ()
         self._trend_series = ()
         self._comparison_samples = ()
+        self._ensemble_summary = None
         self._trend_collection_index = 0
         self._pool = _analysis_pool()
         self._tasks = {}
@@ -1261,6 +1316,11 @@ class AnalysisWorkspace(QWidget):
         self._build_compare_tab()
         self._build_ensemble_tab()
         self._build_notes_tab()
+        self._build_scenarios_tab()
+        self._build_verification_tab()
+        self._build_winds_tab()
+        self._build_briefing_tab()
+        self._build_case_replay_tab()
         self._connect()
 
     def _build_trends_tab(self):
@@ -1330,7 +1390,16 @@ class AnalysisWorkspace(QWidget):
         layout.addLayout(actions)
 
         self.compare_table = self._new_table("analysisComparisonTable")
-        layout.addWidget(self.compare_table, 1)
+        self.visual_compare = VisualComparisonWidget(self.compare_tab)
+        self.compare_split = QSplitter(Qt.Vertical, self.compare_tab)
+        self.compare_split.setObjectName("analysisComparisonSplitter")
+        self.compare_split.setChildrenCollapsible(False)
+        self.compare_split.setHandleWidth(SPACE["sm"])
+        self.compare_split.addWidget(self.visual_compare)
+        self.compare_split.addWidget(self.compare_table)
+        self.compare_split.setStretchFactor(0, 3)
+        self.compare_split.setStretchFactor(1, 2)
+        layout.addWidget(self.compare_split, 1)
         self.tabs.addTab(self.compare_tab, "Compare")
 
     def _build_ensemble_tab(self):
@@ -1342,6 +1411,20 @@ class AnalysisWorkspace(QWidget):
             "Refresh", "Resummarize the ensemble members", self.ensemble_tab
         )
         header.addWidget(self.ensemble_refresh)
+        self.ensemble_retry = self._new_action(
+            "Retry unavailable",
+            "Fetch only members that are not already loaded",
+            self.ensemble_tab,
+        )
+        self.ensemble_retry.setEnabled(False)
+        header.addWidget(self.ensemble_retry)
+        self.ensemble_export = self._new_action(
+            "Export CSV…",
+            "Save distributions, denominators, and member acquisition status",
+            self.ensemble_tab,
+        )
+        self.ensemble_export.setEnabled(False)
+        header.addWidget(self.ensemble_export)
         layout.addLayout(header)
 
         self.ensemble_table = self._new_table("analysisEnsembleTable")
@@ -1375,7 +1458,21 @@ class AnalysisWorkspace(QWidget):
             self.ensemble_split.addWidget(pane)
         self.ensemble_split.setStretchFactor(0, 3)
         self.ensemble_split.setStretchFactor(1, 4)
-        layout.addWidget(self.ensemble_split, 1)
+        self.ensemble_modes = QTabWidget(self.ensemble_tab)
+        self.ensemble_modes.setObjectName("analysisEnsembleModes")
+        spread_page = QWidget(self.ensemble_modes)
+        spread_layout = QVBoxLayout(spread_page)
+        spread_layout.setContentsMargins(0, 0, 0, 0)
+        spread_layout.addWidget(self.ensemble_split)
+        self.ensemble_modes.addTab(spread_page, "Spread")
+        self.threshold_explorer = EnsembleThresholdExplorer(
+            self.engine, self.ensemble_modes
+        )
+        self.threshold_explorer.memberActivated.connect(
+            self._activate_threshold_member
+        )
+        self.ensemble_modes.addTab(self.threshold_explorer, "Thresholds")
+        layout.addWidget(self.ensemble_modes, 1)
         self.tabs.addTab(self.ensemble_tab, "Ensemble")
 
     def _build_notes_tab(self):
@@ -1396,6 +1493,39 @@ class AnalysisWorkspace(QWidget):
         layout.addWidget(self.notes, 1)
         self.tabs.addTab(self.notes_tab, "Notes")
 
+    def _build_scenarios_tab(self):
+        self.scenario_workspace = ScenarioWorkspace(
+            self.engine,
+            collection_provider=self._focused_collection,
+            open_collection=self._open_scenario_collection,
+            parent=self.tabs,
+        )
+        self.tabs.addTab(self.scenario_workspace, "Scenarios")
+
+    def _build_verification_tab(self):
+        self.verification_workspace = VerificationWorkspace(
+            self.engine,
+            collections_provider=self._collections,
+            request_observation=self._request_observed_sounding,
+            parent=self.tabs,
+        )
+        self.tabs.addTab(self.verification_workspace, "Verify")
+
+    def _build_winds_tab(self):
+        self.wind_workspace = WindProfileWorkspace(
+            collections_provider=self._collections,
+            parent=self.tabs,
+        )
+        self.tabs.addTab(self.wind_workspace, "Observed Winds")
+
+    def _build_briefing_tab(self):
+        self.briefing_workspace = BriefingWorkspace(self, parent=self.tabs)
+        self.tabs.addTab(self.briefing_workspace, "Share")
+
+    def _build_case_replay_tab(self):
+        self.case_replay_workspace = CaseReplayWorkspace(self, parent=self.tabs)
+        self.tabs.addTab(self.case_replay_workspace, "Replay")
+
     def _connect(self):
         self.tabs.currentChanged.connect(self._refresh_active_tab)
         self.trend_metric.currentIndexChanged.connect(self._refresh_trends)
@@ -1406,6 +1536,8 @@ class AnalysisWorkspace(QWidget):
         self.compare_refresh.clicked.connect(self._refresh_compare)
         self.compare_export.clicked.connect(self._choose_comparison_export)
         self.ensemble_refresh.clicked.connect(self._refresh_ensemble)
+        self.ensemble_retry.clicked.connect(self._retry_unavailable_ensemble)
+        self.ensemble_export.clicked.connect(self._choose_ensemble_export)
 
     @staticmethod
     def _new_table(name):
@@ -1527,6 +1659,36 @@ class AnalysisWorkspace(QWidget):
         widget = getattr(win, "spc_widget", None) if win is not None else None
         return tuple(getattr(widget, "prof_collections", ()) or ())
 
+    def _focused_collection(self):
+        collections = self._collections()
+        if not collections:
+            return None
+        return collections[min(self._focused_index(), len(collections) - 1)]
+
+    def _open_scenario_collection(self, collection):
+        """Add a hypothetical collection through the viewer's ordinary path."""
+        win = self._window()
+        add = getattr(win, "addProfileCollection", None)
+        if not callable(add):
+            raise RuntimeError("this sounding viewer cannot add another collection")
+        add(collection, focus=True, check_integrity=False)
+        self._populate_controls()
+        self.show_compare()
+
+    def _request_observed_sounding(self):
+        """Return to the existing provider UI; verification owns no scraper."""
+        win = self._window()
+        try:
+            controller = getattr(win, "_sharpmod_controller", None) or win.parent()
+        except (AttributeError, RuntimeError):
+            controller = None
+        select = getattr(controller, "_select_tab", None)
+        if callable(select):
+            select("Station Map")
+        focus = getattr(controller, "focusPicker", None)
+        if callable(focus):
+            focus()
+
     def _focused_index(self):
         win = self._window()
         widget = getattr(win, "spc_widget", None) if win is not None else None
@@ -1605,6 +1767,32 @@ class AnalysisWorkspace(QWidget):
     def shutdown(self):
         """Make outstanding results inert; closing a window remains instant."""
         self.cancel_pending()
+        self.threshold_explorer.shutdown()
+        self.scenario_workspace.shutdown()
+        self.verification_workspace.shutdown()
+        self.wind_workspace.shutdown()
+        self.briefing_workspace.shutdown()
+        self.case_replay_workspace.shutdown()
+
+    def _activate_threshold_member(self, member, valid_time):
+        collections = self._collections()
+        if not collections:
+            return
+        collection = collections[min(self._focused_index(), len(collections) - 1)]
+        try:
+            collection.setHighlightedMember(str(member))
+            if valid_time is not None:
+                collection.setCurrentDate(valid_time)
+            win = self._window()
+            widget = getattr(win, "spc_widget", None) if win is not None else None
+            if widget is not None:
+                widget.updateProfs()
+        except Exception as exc:  # noqa: BLE001 - upstream collection boundary
+            self._set_status(
+                self.ensemble_status,
+                f"Could not open ensemble member {member}: {exc}",
+                level="error",
+            )
 
     def _refresh_active_tab(self, index=None):
         index = self.tabs.currentIndex() if index is None else int(index)
@@ -1614,6 +1802,16 @@ class AnalysisWorkspace(QWidget):
             self._refresh_compare()
         elif index == self.TAB_ENSEMBLE:
             self._refresh_ensemble()
+        elif index == self.TAB_SCENARIOS:
+            self.scenario_workspace.refresh()
+        elif index == self.TAB_VERIFICATION:
+            self.verification_workspace.refresh()
+        elif index == self.TAB_WINDS:
+            self.wind_workspace.refresh()
+        elif index == self.TAB_SHARE:
+            self.briefing_workspace.refresh()
+        elif index == self.TAB_REPLAY:
+            self.case_replay_workspace.refresh()
 
     def _request(self, kind, function):
         self._generation[kind] += 1
@@ -1837,6 +2035,7 @@ class AnalysisWorkspace(QWidget):
             self.compare_table.setRowCount(0)
             self.compare_table.setColumnCount(0)
             self.compare_export.setEnabled(False)
+            self.visual_compare.set_collections(collections, 0)
             self._set_status(
                 self.compare_status,
                 "Load 2 or more soundings into the same viewer to compare "
@@ -1850,6 +2049,7 @@ class AnalysisWorkspace(QWidget):
         except (IndexError, TypeError, ValueError):
             reference = 0
             valid_time = _current_date(collections[0])
+        self.visual_compare.set_collections(collections, reference, valid_time)
         keys = tuple(DEFAULT_METRIC_KEYS)
         self._set_status(
             self.compare_status,
@@ -1857,8 +2057,13 @@ class AnalysisWorkspace(QWidget):
         )
         self._request(
             "compare",
-            lambda collections=collections, keys=keys, valid_time=valid_time: (
-                self.engine.compare(collections, keys, valid_time=valid_time)
+            lambda collections=collections, keys=keys, valid_time=valid_time, reference=reference: (
+                self.engine.compare(
+                    collections,
+                    keys,
+                    valid_time=valid_time,
+                    reference_index=reference,
+                )
             ),
         )
 
@@ -1889,14 +2094,20 @@ class AnalysisWorkspace(QWidget):
             None,
         )
         reference_label = str(_get(reference, "label", "the reference")) if reference else ""
+        self.visual_compare.set_collections(
+            self._collections(), reference_index, _get(reference, "valid_time")
+        )
         for row, sample in enumerate(samples):
             available = bool(_get(sample, "available", False))
             aligned = bool(_get(sample, "aligned", False))
             reason = _get(sample, "reason")
             is_reference = sample is reference
+            relation_label, basis_tooltip = _comparison_basis_text(sample)
             alignment = (
                 "Exact" if available and aligned else str(reason or "Unavailable")
             )
+            if available and aligned and relation_label != "same location":
+                alignment += f" · {relation_label}"
             if is_reference:
                 # Name the row the deltas are measured from; otherwise the one
                 # column of zeroes is the only hint, and it looks like a result.
@@ -1925,22 +2136,31 @@ class AnalysisWorkspace(QWidget):
                     # Always tooltipped: this column is width-capped, so the
                     # reason a row is unusable is often elided in the cell.
                     tooltip=(
-                        alignment
+                        f"{alignment}\n{basis_tooltip}"
                         if available and aligned
                         else f"{alignment}\nNo value is shown because the sounding "
-                        "could not be aligned to the requested valid time."
+                        "could not be aligned to the requested valid time.\n"
+                        f"{basis_tooltip}"
                     ),
                 ),
             )
             column = 3
+            incompatible = dict(
+                _get(_get(sample, "basis"), "incompatible_metrics", {}) or {}
+            )
             for key in keys:
                 metric_label, units, _decimals = _metric_title(key)
                 unit_suffix = f" {units}" if units else ""
                 value = _metric_value(sample, key) if available and aligned else None
                 reference_value = _metric_value(reference, key) if reference else None
+                incompatible_reason = incompatible.get(key)
                 delta = (
                     value - reference_value
-                    if value is not None and reference_value is not None
+                    if (
+                        value is not None
+                        and reference_value is not None
+                        and not incompatible_reason
+                    )
                     else None
                 )
                 self.compare_table.setItem(
@@ -1962,7 +2182,12 @@ class AnalysisWorkspace(QWidget):
                         ),
                     )
                 else:
-                    if delta is None:
+                    if incompatible_reason:
+                        delta_tip = (
+                            f"No {metric_label} delta: {incompatible_reason}. "
+                            "Absolute values remain inspectable."
+                        )
+                    elif delta is None:
                         delta_tip = f"No {metric_label} delta available"
                     else:
                         direction = (
@@ -2037,6 +2262,9 @@ class AnalysisWorkspace(QWidget):
             return
         collections = self._collections()
         if not collections:
+            self._ensemble_summary = None
+            self.ensemble_export.setEnabled(False)
+            self.threshold_explorer.refresh(None)
             self._set_status(
                 self.ensemble_status, "Load an ensemble sounding to summarize it."
             )
@@ -2046,12 +2274,18 @@ class AnalysisWorkspace(QWidget):
             return
         index = min(self._focused_index(), len(collections) - 1)
         collection = collections[index]
+        self.threshold_explorer.refresh(collection)
+        ledger = EnsembleAcquisition.from_collection(collection)
+        self.ensemble_retry.setEnabled(
+            bool(ledger.unavailable_members and ledger.specs_for_retry())
+        )
         valid_time = _current_date(collection)
         keys = tuple(DEFAULT_METRIC_KEYS)
         self._set_status(
             self.ensemble_status,
             f"Summarizing members at {_format_time(valid_time)}\u2026",
         )
+        self.ensemble_export.setEnabled(False)
         self._request(
             "ensemble",
             lambda collection=collection, keys=keys, valid_time=valid_time: (
@@ -2059,7 +2293,46 @@ class AnalysisWorkspace(QWidget):
             ),
         )
 
+    def _retry_unavailable_ensemble(self):
+        collections = self._collections()
+        if not collections:
+            return
+        collection = collections[min(self._focused_index(), len(collections) - 1)]
+        win = self._window()
+        try:
+            controller = getattr(win, "_sharpmod_controller", None) or win.parent()
+        except (AttributeError, RuntimeError):
+            controller = None
+        coordinator = getattr(controller, "_model_compare_coordinator", None)
+        retry = getattr(coordinator, "retry_ensemble", None)
+        if not callable(retry):
+            self._set_status(
+                self.ensemble_status,
+                "Retry is unavailable because this viewer has no forecast-model "
+                "controller; the saved member ledger is still intact.",
+                level="warn",
+            )
+            return
+        try:
+            started = bool(retry(win, collection))
+        except Exception as exc:  # noqa: BLE001 - GUI boundary
+            self._set_status(
+                self.ensemble_status,
+                f"Could not start member retry: {exc}",
+                level="error",
+            )
+            return
+        if started:
+            self.ensemble_retry.setEnabled(False)
+            self._set_status(
+                self.ensemble_status,
+                "Retrying unavailable members; already loaded members are not "
+                "downloaded again…",
+            )
+
     def _render_ensemble(self, summary):
+        self._ensemble_summary = summary
+        self.ensemble_export.setEnabled(summary is not None)
         available = bool(_get(summary, "available", False)) if summary else False
         scalar = (_get(summary, "scalar", {}) or {}) if summary else {}
         keys = tuple(DEFAULT_METRIC_KEYS)
@@ -2082,7 +2355,12 @@ class AnalysisWorkspace(QWidget):
                 row,
                 1,
                 self._figure_cell(
-                    str(count), tooltip=f"{count} member(s) reported this parameter"
+                    str(count),
+                    tooltip=(
+                        f"{count} member(s) reported this parameter; the "
+                        "diagnostic denominator can be smaller than both the "
+                        "loaded and requested ensemble"
+                    ),
                 ),
             )
             figures = (
@@ -2095,15 +2373,27 @@ class AnalysisWorkspace(QWidget):
                 self.ensemble_table.setItem(
                     row, 2 + offset, self._figure_cell(text, tooltip=tip)
                 )
-        band = _get(summary, "bands") if summary else None
+        distribution_available = bool(
+            _get(summary, "distribution_available", True)
+        ) if summary else False
+        band = _get(summary, "bands") if summary and distribution_available else None
         self.ensemble_chart.set_band(band)
         member_count = int(_get(summary, "member_count", 0) or 0) if summary else 0
         used = int(_get(summary, "available_member_count", 0) or 0) if summary else 0
+        loaded_value = _get(summary, "loaded_member_count", None) if summary else None
+        loaded = int(loaded_value) if loaded_value is not None else used
         missing = tuple(_get(summary, "missing_members", ()) or ()) if summary else ()
         if available:
-            text = f"{used} of {member_count} members available"
+            text = (
+                f"{used} of {member_count} members available for the summary; "
+                f"{loaded}/{member_count} loaded"
+            )
             if missing:
-                text += "; missing: " + ", ".join(str(item) for item in missing)
+                text += "; unavailable or unusable: " + ", ".join(
+                    str(item) for item in missing
+                )
+            if not distribution_available:
+                text += "; an ensemble distribution needs at least two usable members"
             text += f" at {_format_time(_get(summary, 'valid_time'))}."
         else:
             text = str(
@@ -2116,9 +2406,47 @@ class AnalysisWorkspace(QWidget):
         self._set_status(
             self.ensemble_status,
             text,
-            level="warn" if available and missing else "info",
+            level=(
+                "warn"
+                if available and (missing or not distribution_available)
+                else "info"
+            ),
         )
         self._finish_table(self.ensemble_table, 1)
+
+    def _choose_ensemble_export(self):
+        if self._ensemble_summary is None:
+            return
+        try:
+            suggested = export_file_path("ensemble-summary.csv")
+        except ExportDirectoryError as exc:
+            self._set_status(self.ensemble_status, str(exc), level="error")
+            return
+        path, _selected = QFileDialog.getSaveFileName(
+            self,
+            "Export ensemble summary",
+            str(suggested),
+            "CSV files (*.csv);;All files (*)",
+        )
+        if not path:
+            return
+        collections = self._collections()
+        acquisition = None
+        if collections:
+            collection = collections[
+                min(self._focused_index(), len(collections) - 1)
+            ]
+            acquisition = EnsembleAcquisition.from_collection(collection)
+        try:
+            saved = export_ensemble_csv(path, self._ensemble_summary, acquisition)
+        except Exception as exc:  # noqa: BLE001 - GUI export boundary
+            self._set_status(
+                self.ensemble_status,
+                f"Ensemble CSV export failed: {exc}",
+                level="error",
+            )
+        else:
+            self._set_status(self.ensemble_status, f"Saved {saved}")
 
     def session_state(self):
         """Return JSON-safe workspace controls and notes."""
@@ -2133,9 +2461,18 @@ class AnalysisWorkspace(QWidget):
             "trend_collection": int(self._trend_collection_index),
             "trend_metric": self.trend_metric.currentData(),
             "comparison_reference": self.compare_reference.currentData(),
+            "comparison_layout": self.visual_compare.layout_count(),
+            "comparison_split": [int(size) for size in self.compare_split.sizes()],
             # How the reader chose to divide table against chart is part of how
             # they were reading the ensemble, so it travels with the session.
             "ensemble_split": [int(size) for size in self.ensemble_split.sizes()],
+            "ensemble_mode": int(self.ensemble_modes.currentIndex()),
+            "ensemble_threshold": self.threshold_explorer.session_state(),
+            "scenarios": self.scenario_workspace.session_state(),
+            "verification": self.verification_workspace.session_state(),
+            "observed_winds": self.wind_workspace.session_state(),
+            "briefing": self.briefing_workspace.session_state(),
+            "case_replay": self.case_replay_workspace.session_state(),
             "notes": self.notes.toPlainText(),
         }
 
@@ -2174,6 +2511,35 @@ class AnalysisWorkspace(QWidget):
             except (TypeError, ValueError):
                 # A hand-edited or future session file must not stop a restore.
                 _LOGGER.debug("analysis_workspace.split_restore_skipped")
+        try:
+            ensemble_mode = max(
+                0,
+                min(
+                    self.ensemble_modes.count() - 1,
+                    int(state.get("ensemble_mode", 0)),
+                ),
+            )
+        except (TypeError, ValueError):
+            ensemble_mode = 0
+        self.ensemble_modes.setCurrentIndex(ensemble_mode)
+        self.threshold_explorer.restore_session_state(
+            state.get("ensemble_threshold")
+        )
+        self.scenario_workspace.restore_session_state(state.get("scenarios"))
+        self.verification_workspace.restore_session_state(state.get("verification"))
+        self.wind_workspace.restore_session_state(state.get("observed_winds"))
+        self.briefing_workspace.restore_session_state(state.get("briefing"))
+        self.case_replay_workspace.restore_session_state(state.get("case_replay"))
+        compare_sizes = state.get("comparison_split")
+        if isinstance(compare_sizes, (list, tuple)) and len(compare_sizes) == 2:
+            try:
+                self.compare_split.setSizes([int(size) for size in compare_sizes])
+            except (TypeError, ValueError):
+                _LOGGER.debug("analysis_workspace.compare_split_restore_skipped")
+        try:
+            self.visual_compare.set_layout_count(int(state.get("comparison_layout", 2)))
+        except (TypeError, ValueError):
+            self.visual_compare.set_layout_count(2)
         self.notes.setPlainText(str(state.get("notes") or ""))
         dock = getattr(self, "dock", None)
         if dock is not None and "visible" in state:

@@ -7,18 +7,20 @@
 [![Tests](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml/badge.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11--3.13-3776AB?logo=python&logoColor=white)
 ![Qt6](https://img.shields.io/badge/Qt6-PySide6-41CD52?logo=qt&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.2.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.0-blue)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 
 </div>
 
-![Example SHARPpy Reimagined sounding with the Storm-Relative Wind chart selected and time-matched SPC outlook and HRRR STP overlays in the locator inset](examples/example_sounding.png)
+<p align="center">
+  <a href="docs/images/v1.3.0/main-app-standard.png">
+    <img src="docs/images/v1.3.0/main-app-standard.png" width="1000" alt="SHARPpy Reimagined 1.3.0 main sounding window with menus, zoom controls, interaction guide, sounding canvas, and Sounding Panel">
+  </a>
+</p>
 
-<sub>HRRR forecast point 36.68N 95.66W, F018, in the default Standard (dark)
-palette with the Storm-Relative Wind chart selected. The locator inset combines
-the SPC Day 1 categorical outlook (`SLGT` at the point) with the time-matched
-HRRR Significant Tornado Parameter model-product field — rendered from
-[`examples/soundings/hrrr_point_36.68N_95.66W_f018.npz`](examples/soundings/hrrr_point_36.68N_95.66W_f018.npz).</sub>
+<p align="center"><sub><strong>Main sounding window.</strong> Click the thumbnail
+for the full-resolution 1.3.0 view. This is a direct capture of the desktop
+application—not a canvas-only export or mock-up.</sub></p>
 
 SHARPpy Reimagined is a modernized, standalone fork of
 [SHARPpy](https://github.com/sharppy/SHARPpy), focused on packageable Python
@@ -29,33 +31,37 @@ command-line entry points, bundled resources, and a test-backed
 decoder/extractor layer.
 
 <details>
-<summary><b>Canvas palettes</b> — light and colorblind modes (OAX 2014-06-16 19Z observed sounding)</summary>
+<summary><b>Show the Sounding Picker and alternate GUI modes</b></summary>
 
-Both palettes below render the same *different* sounding — the bundled OAX
-observed profile — so the palette change is visible independently of the data.
-Switch with **File → Preferences** (Standard / Inverted / Protanopia); the
-choice persists across launches and applies to every panel and inset.
+**Main Sounding Picker**
 
-**Inverted (light mode) — θ / θe Profile**
+![SHARPpy Reimagined 1.3.0 Sounding Picker showing the Station Map source and its controls](docs/images/v1.3.0/main-app-picker.png)
 
-![SHARPpy Reimagined sounding in the Inverted light palette with the theta and theta-e profile chart selected](docs/images/v1.2.0/sounding-theta-light-mode.png)
+<sub>The main launcher keeps its data-source selector, station map, collapsible
+controls, overlay choices, UTC clock, and status feedback in one window.</sub>
 
-**Protanopia (colorblind mode) — Streamwiseness**
+The two views below use the same full sounding window and bundled OAX profile,
+making the chrome and canvas changes easy to compare. Switch modes with
+**Settings → Preferences**; the selection persists across launches.
 
-![SHARPpy Reimagined sounding in the Protanopia colorblind palette with the Streamwiseness chart selected](docs/images/v1.2.0/sounding-streamwiseness-protanopia.png)
+**Inverted (light) mode**
 
-All three captures were regenerated from 1.2.0. Together they demonstrate
-three choices in the right-clickable chart slot: Storm-Relative Wind in the
-Standard example above, θ / θe Profile in Inverted, and Streamwiseness in
-Protanopia.
+![SHARPpy Reimagined 1.3.0 main sounding window in the Inverted light mode](docs/images/v1.3.0/main-app-inverted.png)
+
+**Protanopia (color-vision-friendly) mode**
+
+![SHARPpy Reimagined 1.3.0 main sounding window in the Protanopia mode](docs/images/v1.3.0/main-app-protanopia.png)
 
 </details>
+
+The four current-window captures can be regenerated from bundled data with
+[`scripts/regenerate_readme_main_gui.py`](scripts/regenerate_readme_main_gui.py).
 
 ---
 
 ## Contents
 
-- [What's new in 1.2.0](#whats-new-in-120)
+- [What's new in 1.3.0](#whats-new-in-130)
 - [Highlights](#highlights)
 - [Quick start](#quick-start)
 - [Desktop GUI](#desktop-gui)
@@ -80,36 +86,29 @@ Protanopia.
 
 ---
 
-## What's new in 1.2.0
+## What's new in 1.3.0
 
-Version 1.2.0 connects the map, sounding, and multi-profile workflow so a full
-forecast question can stay in one application:
+Version 1.3.0 turns the broader sounding workspace into an operational
+decision-and-review environment while keeping the familiar analysis canvas:
 
-- **One analysis workspace.** Trends plot every loaded sounding on shared axes;
-  exact-time comparisons show values and deltas; ensemble views add
-  p10/median/p90 parameter distributions and thermodynamic envelopes; and notes
-  travel with the session.
-- **Aligned acquisition.** The forecast picker can fetch several models,
-  successive runs, or every published ensemble member at one point and valid
-  time, retaining successful soundings when another request fails.
-- **Locator overlays that match the question.** Risk areas, HRRR fields, radar,
-  and storm reports can follow a sounding into its locator inset. Hazard choices
-  are explicit, overlapping reports remain inspectable, and clicking an outlook
-  area identifies the product and category beneath the pointer.
-- **Complete portable sessions.** Viewer state, loaded times and overlays,
-  analysis controls, notes, picker extent, and exact zoom now restore together;
-  older session files continue to migrate on read.
-- **Predictable exports.** Every image, sounding, CSV, GeoJSON, saved location,
-  and session starts in the same application-local `rendered_soundings` folder,
-  including command-line defaults.
-- **Faster analysis without changing the public results.** Parcel and kinematic
-  preparation, repeated GRIB point reads, complete-profile batch analysis, lazy
-  NPZ decoding, and test scheduling reuse shared work. Both the accelerated Rust
-  path and the Python fallback remain covered by the scientific contracts.
-- **Sharper and safer UI behavior.** The real curved HRRR grid perimeter replaces
-  a rectangular approximation, high-density displays render maps at device
-  resolution, contaminated dewpoints remain visible as quality issues, and
-  cancellable workers no longer require force-terminating Qt threads.
+- **A clearer main picker.** The compact **Load From** selector, consistent
+  collapsible control rail, safer wheel behavior, and bounded dropdowns give the
+  map more room without hiding the selected source, run, or valid time.
+- **Visual comparison and sensitivity testing.** Exact-time soundings share
+  axes and cursor heights, while named scenarios apply explicit thermodynamic
+  and storm-motion changes against an immutable baseline.
+- **Honest ensemble thresholds.** Joint ingredients are evaluated member by
+  member, with qualifying, usable, loaded, requested, failed, and cancelled
+  counts kept distinct rather than presented as calibrated probability.
+- **Verification against observations.** Forecast profiles can be matched to
+  observed soundings or NEXRAD VAD wind profiles with explicit time, distance,
+  vertical-coverage, quality, and extrapolation rules.
+- **Portable review and briefing.** Self-contained HTML/PDF briefings, fixed-scale
+  GIFs, and integrity-checked replay packages preserve notes, context,
+  provenance, timestamps, and visibly missing data.
+- **More environmental context.** Synchronized HRRR field panels, GOES imagery,
+  surface observations, radar, storm reports, and outlooks can share the same
+  map extent and sounding point without making provider failure block analysis.
 
 The full list is in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -175,7 +174,10 @@ The packaged Windows release already bundles Python 3.11.
 
 ### Loading a sounding
 
-The **Sounding Picker** opens with five sources:
+The **Sounding Picker** opens with five sources. Choose one from the compact
+**Load From** dropdown in the menu bar; the selected source gets the full central
+area. Each source's control groups have chevrons so they can be collapsed without
+losing their values:
 
 - **Station Map** — a clickable map of every UWyo radiosonde station over a
   basemap of coastlines, lake shores, borders, and state lines. Click a dot to
@@ -439,20 +441,34 @@ its colour thresholds, and its literature reference — see the
 ### Analysis workspace
 
 Open **View → Analysis Workspace** (`Ctrl+Shift+A`) from a sounding window. Its
-four tabs share the soundings already loaded in that window:
+nine tabs share the soundings already loaded in that window:
 
 - **Trends** plots a selected parameter across a forecast timeline. Missing
   hours remain visible as gaps, clicking a point activates that valid time, and
   **Export CSV…** writes the displayed series.
 - **Compare** aligns every loaded model or run to the reference sounding's
-  exact valid time and shows MLCAPE, MLCIN, 0–6 km shear, 0–1 km SRH, and STP
-  values plus deltas. A mismatch is labelled unavailable, never compared to a
-  nearby hour.
-- **Ensemble** reports available-member counts and p10/median/p90 parameter
-  distributions, then draws pressure-level temperature and dewpoint p10–p90
-  bands. That chart always spans **-50 to +50 °C** with a zero guide, so its
-  geometry is comparable between ensembles instead of rescaling into a slant.
+  exact valid time, exposes coordinate/terrain/run/convention/edit compatibility,
+  and shows both tabular deltas and synchronized two/four-panel profiles with
+  conservative vertical temperature, dewpoint, and wind-component differences.
+- **Ensemble** keeps requested, loaded, failed/cancelled, and diagnostic-usable
+  counts separate, supports retrying only unavailable members, and includes a
+  member-wise single/joint threshold explorer with an exact-time timeline. Every
+  percentage states its numerator, usable denominator, and requested coverage;
+  it is ingredient agreement, not calibrated probability.
 - **Notes** keeps operational reasoning with the saved analysis session.
+- **Scenarios** creates named hypothetical changes from an immutable baseline,
+  shows baseline-versus-scenario diagnostics, and runs a cancellable bounded
+  temperature/dewpoint sensitivity grid.
+- **Verify** strictly pairs forecasts with observed soundings using declared
+  station, time, distance, vertical-gap, initialization, and as-of rules, then
+  reports vertical errors and selected-case bias/MAE/RMSE aggregates.
+- **Observed Winds** imports or retrieves NEXRAD product-48 VAD/VWP data as
+  wind-only profiles, overlays them on a model hodograph, and gates layer and
+  storm-relative diagnostics on actual coverage and an explicit motion source.
+- **Share** exports self-contained HTML/PDF briefings and fixed-scale,
+  timestamped forecast-timeline or run-to-run GIFs with explicit missing frames.
+- **Replay** builds integrity-checked data-only case packages and replays exact
+  archived times, with an optional availability-time training mode.
 
 The forecast picker's **Workspace…** action can fetch several models,
 successive runs, or the selected model's ensemble members at one point and
@@ -460,6 +476,13 @@ valid time, then opens the relevant tab automatically. Downloads use the same
 bounded persistent cache as an ordinary sounding; successful members remain
 usable when another member is unavailable. Timeline controls synchronize other
 forecast overlays in the viewer to the selected valid time.
+
+The Station Map and Forecast Model map also offer optional time-matched GOES
+visible/IR imagery and nearby NWS surface dewpoint/wind plots. Actual timestamps,
+coverage, freshness, units, and attribution stay visible, and provider failure
+does not block sounding analysis. See
+[`docs/ADVANCED_ANALYSIS.md`](docs/ADVANCED_ANALYSIS.md) for the full workflows,
+supported providers, file formats, and scientific limitations.
 
 ### Themes and palettes
 
@@ -506,13 +529,15 @@ The sounding window's **Export** menu saves the current view:
 
 Every export/save dialog starts in the existing `rendered_soundings` directory
 beside the source project or installed application. This includes sounding
-images and text, analysis sessions, workspace CSV files, box CSV/GeoJSON/PNG
-files, saved-location JSON, and the upstream `File → Save Image` / `Save Text`
-actions. **Open Export Folder** opens that same directory. It is created when
-needed; if it cannot be created or written, the application reports the path
-and does not redirect the export to Desktop, Documents, Downloads, or the user
-home directory. A destination chosen in a dialog applies to that export only,
-so the next dialog returns to `rendered_soundings`, including after restart.
+images and text, analysis sessions, workspace CSV files, scenarios, verification,
+observed-wind profiles, threshold definitions/results, HTML/PDF briefings, GIFs,
+portable cases, box CSV/GeoJSON/PNG files, saved-location JSON, and the upstream
+`File → Save Image` / `Save Text` actions. **Open Export Folder** opens that same
+directory. It is created when needed; if it cannot be created or written, the
+application reports the path and does not redirect the export to Desktop,
+Documents, Downloads, or the user home directory. A destination chosen in a
+dialog applies to that export only, so the next dialog returns to
+`rendered_soundings`, including after restart.
 
 `sharpmod-render INPUT` uses
 `rendered_soundings/sharpmod_sounding.png` beside the application by default.
@@ -1031,8 +1056,8 @@ checked:
 | Extra | Installs | Use it for |
 | --- | --- | --- |
 | `[render]` | SHARPpy runtime companions | PNG rendering |
-| `[era5]` | CDS API, Herbie, cfgrib, ecCodes, xarray, numcodecs, pyproj | ERA5 and public forecast-model point extraction |
-| `[wrf]` | xarray, netCDF4 | WRF-ARW NetCDF extraction |
+| `[era5]` | CDS API, Herbie, cfgrib, ecCodes, xarray, numcodecs | ERA5 and public forecast-model point extraction |
+| `[wrf]` | xarray (netCDF4 is in core) | WRF-ARW NetCDF extraction |
 | `[dev]` | pytest, Hypothesis, pytest-xdist, pytest-timeout, PyYAML | Test and workflow-validation work |
 | `[quality]` | Ruff, pip-audit, pytest-cov | Static checks, dependency audit, and coverage |
 | `[rust-build]` | maturin | Build the supported Rust backend locally (Rust toolchain installed separately) |

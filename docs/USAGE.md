@@ -71,7 +71,10 @@ sharpmod-gui             # or: python -m sharpmod.gui
 
 ### Pick a sounding
 
-The app opens on the **Sounding Picker** with five tabs:
+The app opens on the **Sounding Picker** with five sources selected from the
+**Load From** dropdown in the menu bar. The active source uses the full central
+area, and chevrons collapse or expand its control sections without resetting
+their values:
 
 - **Station Map** — a clickable map of UWyo radiosonde stations over a basemap of
   coastlines, lake shores, national borders, and state lines. Borders are clipped
@@ -286,18 +289,39 @@ window:
   clicked, and exports the displayed series to CSV.
 - **Compare** uses the reference sounding's exact valid time. It shows MLCAPE,
   MLCIN, 0–6 km shear, 0–1 km SRH, and effective-layer STP plus deltas for each
-  loaded model/run; a nonmatching time is reported as unavailable rather than
-  silently paired with a nearby hour.
-- **Ensemble** shows the number of available members, p10/median/p90 parameter
-  distributions, and pressure-level p10–p90 temperature/dewpoint envelopes.
-  The envelope's temperature axis is fixed at **-50 to +50 °C** with a zero
-  guide so every ensemble uses the same geometry.
+  loaded model/run, exposes the coordinate/terrain/run/convention/edit basis,
+  and adds synchronized two/four-panel profiles and conservative vertical
+  temperature/dewpoint/wind differences. A nonmatching time is unavailable.
+- **Ensemble** separates requested, loaded, failed/cancelled, and
+  diagnostic-usable members, retries only unavailable members, and shows
+  p10/median/p90 distributions and vertical envelopes. Its **Thresholds** page
+  evaluates single or joint conditions member by member, with qualifying,
+  usable, loaded, and requested denominators. Agreement is not calibrated
+  probability.
 - **Notes** stores free-form decisions and uncertainty with the session.
+- **Scenarios** manages named hypothetical changes from an immutable baseline,
+  baseline/scenario deltas, and a cancellable 121-cell maximum T/Td grid.
+- **Verify** matches forecasts to observations under explicit station, time,
+  distance, vertical-gap, initialization, and as-of rules, then reports vertical
+  errors and selected-case bias/MAE/RMSE.
+- **Observed Winds** imports or retrieves NEXRAD product-48 VAD/VWP winds,
+  compares them with a model hodograph, and computes only coverage-supported
+  wind diagnostics.
+- **Share** exports self-contained HTML/PDF briefings and timestamped fixed-scale
+  forecast-timeline or run-to-run GIFs with explicit missing frames.
+- **Replay** builds integrity-checked data-only case packages, replays exact
+  archived times, and optionally reveals products by known availability time.
 
 From the forecast picker, **Workspace…** acquires different models, successive
 runs, or ensemble members for one point and exact valid time, then opens the
 appropriate tab. The batch is bounded, cached, cancellable, and keeps successful
 soundings available when another requested member fails.
+
+The picker maps also provide optional time-matched GOES visible/IR imagery and
+nearby NWS surface dewpoint/wind observations. See
+[Advanced analysis, verification, replay, and sharing](ADVANCED_ANALYSIS.md) for
+complete controls, provider boundaries, persistence/export formats, and
+scientific limitations.
 
 ### Save and reopen an analysis session
 
@@ -331,13 +355,15 @@ The sounding window's **Export** menu writes the current view:
 
 All export/save dialogs begin in `rendered_soundings` beside the source project
 or installed application. The same rule covers analysis sessions, trend and
-comparison CSV, box PNG/CSV/GeoJSON, saved-location JSON, and the upstream
-**File → Save Image** / **Save Text** actions. **Open Export Folder** opens that
-exact directory. SHARPpy Reimagined creates it when needed and reports a clear
-path-specific error if it cannot create or write it; it never silently falls
-back to Desktop, Documents, Downloads, or the user home directory. Choosing a
-different destination is a one-export override and is not used to seed the next
-dialog or a later application run.
+comparison CSV, scenario JSON, verification JSON/CSV, observed-wind JSON/CSV,
+ensemble-threshold JSON/CSV, HTML/PDF briefing, GIF, portable case,
+box PNG/CSV/GeoJSON, saved-location JSON, and the upstream **File → Save Image** /
+**Save Text** actions. **Open Export Folder** opens that exact directory. SHARPpy
+Reimagined creates it when needed and reports a clear path-specific error if it
+cannot create or write it; it never silently falls back to Desktop, Documents,
+Downloads, or the user home directory. Choosing a different destination is a
+one-export override and is not used to seed the next dialog or a later
+application run.
 
 From the command line, `sharpmod-render INPUT` defaults to
 `rendered_soundings/sharpmod_sounding.png` beside the application. Supplying

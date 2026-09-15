@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_supported_python_and_wrf_dependencies_are_bounded():
+def test_supported_python_and_map_wrf_dependencies_are_bounded():
     with (ROOT / "pyproject.toml").open("rb") as stream:
         project = tomllib.load(stream)["project"]
 
@@ -18,9 +18,13 @@ def test_supported_python_and_wrf_dependencies_are_bounded():
     classifiers = set(project["classifiers"])
     for minor in ("3.11", "3.12", "3.13"):
         assert f"Programming Language :: Python :: {minor}" in classifiers
+    assert {
+        "Pillow>=10,<13",
+        "netCDF4>=1.7,<2.0",
+        "pyproj>=3.5,<4.0",
+    } <= set(project["dependencies"])
     assert project["optional-dependencies"]["wrf"] == [
         "xarray>=2024.7,<2027.0",
-        "netCDF4>=1.7,<2.0",
     ]
 
 

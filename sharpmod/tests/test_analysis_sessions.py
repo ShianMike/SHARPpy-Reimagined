@@ -33,6 +33,7 @@ from sharpmod.sessions import (
     write_session,
 )
 from sharpmod import export_paths, gui, gui_picker, gui_sessions, gui_viewer
+from sharpmod.ensemble_members import EnsembleAcquisition, MemberFailure
 from sharpmod.profile_timeline import append_collection, combine_collections
 
 
@@ -84,6 +85,34 @@ def test_collection_snapshot_round_trip_preserves_portable_analysis_state():
     assert restored.getMeta("nested")["pair"] == (1, 2)
     assert restored._mod_therm == original._mod_therm
     assert 0 in restored._orig_profs
+
+
+def test_collection_snapshot_round_trip_preserves_partial_ensemble_ledger():
+    collection = _collection()
+    collection._profs = {
+        "c00": collection._profs["member"],
+        "p01": collection._profs["member"],
+    }
+    collection._highlight = "c00"
+    acquisition = EnsembleAcquisition(
+        ("c00", "p01", "p02"),
+        ("c00", "p01"),
+        (MemberFailure("p02", "failed", "provider timeout"),),
+        (
+            {"request_id": "gefs-c00", "member": "c00"},
+            {"request_id": "gefs-p01", "member": "p01"},
+            {"request_id": "gefs-p02", "member": "p02"},
+        ),
+    )
+    acquisition.attach(collection)
+
+    restored = restore_collection(snapshot_collection(collection))
+    ledger = EnsembleAcquisition.from_collection(restored)
+
+    assert ledger.requested_members == ("c00", "p01", "p02")
+    assert ledger.loaded_members == ("c00", "p01")
+    assert ledger.failed_members == ("p02",)
+    assert [item["member"] for item in ledger.specs_for_retry()] == ["p02"]
 
 
 def test_session_file_round_trip_is_versioned_and_atomic(tmp_path):

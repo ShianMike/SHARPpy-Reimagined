@@ -100,6 +100,8 @@ def combine_collections(collections) -> ProfCollection:
 def combine_ensemble_collections(
     collections,
     member_names=None,
+    *,
+    acquisition=None,
 ) -> ProfCollection:
     """Combine single-time collections into one multi-member collection.
 
@@ -184,6 +186,15 @@ def combine_ensemble_collections(
             target_type=target_type,
             **metadata,
         )
+    if acquisition is None:
+        from sharpmod.ensemble_members import EnsembleAcquisition
+
+        acquisition = EnsembleAcquisition.complete(labels)
+    if tuple(acquisition.loaded_members) != tuple(labels):
+        raise ValueError(
+            "acquisition loaded members must match the combined profile members"
+        )
+    acquisition.attach(result)
     return result
 
 

@@ -12,12 +12,14 @@ import numpy as np
 import pytest
 
 from sharpmod import box_analysis
+from sharpmod.ensemble_members import EnsembleAcquisition, MemberFailure
 from sharpmod.profile_metrics import (
     DEFAULT_METRIC_KEYS,
     ComparisonSample,
     MetricSample,
     ProfileMetricsEngine,
     export_comparison_csv,
+    export_ensemble_csv,
     export_timeline_csv,
 )
 
@@ -264,6 +266,88 @@ def test_ensemble_reports_scalar_and_thermodynamic_percentile_bands(analyzers):
     assert summary.bands[-1].temperature.median is None
 
 
+def test_partial_ensemble_discloses_requested_loaded_and_metric_denominators(
+    tmp_path,
+):
+    requested = tuple(["c00", *(f"p{index:02d}" for index in range(1, 31))])
+    loaded = requested[:24]
+    collection = _Collection(
+        {
+            member: [_Profile(float(index + 1))]
+            for index, member in enumerate(loaded)
+        },
+        [RUN],
+        highlight="c00",
+    )
+    ledger = EnsembleAcquisition(
+        requested,
+        loaded,
+        tuple(
+            MemberFailure(member, "failed", "fixture unavailable")
+            for member in requested[24:]
+        ),
+    )
+    ledger.attach(collection)
+
+    def partial(profile):
+        index = int(profile.value)
+        return {
+            "mlcape": profile.value,
+            "srh_1km": None if index > 22 else profile.value,
+        }
+
+    summary = ProfileMetricsEngine(fast_analyzer=partial).ensemble(
+        collection,
+        ("mlcape", "srh_1km"),
+        pressure_levels=(1000.0,),
+    )
+
+    assert summary.member_count == 31
+    assert summary.requested_member_count == 31
+    assert summary.loaded_member_count == 24
+    assert summary.available_member_count == 24
+    assert summary.scalar["mlcape"].count == 24
+    assert summary.scalar["srh_1km"].count == 22
+    assert len(summary.failed_members) == 7
+
+    exported = export_ensemble_csv(tmp_path / "ensemble.csv", summary, ledger)
+    with exported.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    by_metric = {
+        row["metric"]: row
+        for row in rows
+        if row["record_type"] == "diagnostic"
+    }
+    by_member = {
+        row["member"]: row
+        for row in rows
+        if row["record_type"] == "member"
+    }
+    assert by_metric["mlcape"]["diagnostic_usable_count"] == "24"
+    assert by_metric["srh_1km"]["diagnostic_usable_count"] == "22"
+    assert by_member["p24"]["status"] == "failed"
+    assert by_member["p24"]["reason"] == "fixture unavailable"
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_one_loaded_member_retains_value_without_claiming_distribution():
+    collection = _Collection({"c00": [_Profile(1000.0)]}, [RUN], highlight="c00")
+    EnsembleAcquisition(
+        ("c00", "p01"),
+        ("c00",),
+        (MemberFailure("p01", "failed"),),
+    ).attach(collection)
+    summary = ProfileMetricsEngine(
+        fast_analyzer=lambda profile: {"mlcape": profile.value}
+    ).ensemble(collection, ("mlcape",), pressure_levels=(1000.0,))
+
+    assert summary.available
+    assert not summary.distribution_available
+    assert summary.scalar["mlcape"].count == 1
+    assert summary.scalar["mlcape"].median == 1000.0
+    assert "at least two" in summary.reason
+
+
 def test_default_ensemble_batches_fast_and_summary_once_in_member_order(monkeypatch):
     collection = _Collection(
         {
@@ -311,6 +395,26 @@ def test_default_ensemble_batches_fast_and_summary_once_in_member_order(monkeypa
     assert first.missing_members == ("missing",)
     assert first.scalar["mlcape"].median == 2000.0
     assert first.scalar["stp_cin"].median == 2.0
+
+
+def test_values_many_reuses_the_native_batch_and_profile_cache(monkeypatch):
+    profiles = (_Profile(1.0), _Profile(2.0), _Profile(3.0))
+    calls = []
+
+    def batch(items, *, include_effective_stp=False):
+        items = tuple(items)
+        calls.append((tuple(profile.value for profile in items), include_effective_stp))
+        return tuple({"mlcape": profile.value} for profile in items)
+
+    monkeypatch.setattr(box_analysis, "fast_values_many", batch)
+    engine = ProfileMetricsEngine()
+
+    first = engine.values_many(profiles, ("mlcape",))
+    second = engine.values_many(profiles, ("mlcape",))
+
+    assert calls == [((1.0, 2.0, 3.0), False)]
+    assert [row["mlcape"] for row in first] == [1.0, 2.0, 3.0]
+    assert second == first
 
 
 def test_ensemble_batch_failure_falls_back_with_per_member_isolation(monkeypatch):

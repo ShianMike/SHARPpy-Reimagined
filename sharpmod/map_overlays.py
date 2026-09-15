@@ -53,7 +53,7 @@ def _finite(value: Any) -> float | None:
 
 
 def _ring_from_coordinates(
-        raw_ring: Any,
+    raw_ring: Any,
 ) -> tuple[tuple[float, float], ...] | None:
     """Decode one GeoJSON linear ring into validated ``(lon, lat)`` points.
 
@@ -90,7 +90,7 @@ def _ring_from_coordinates(
 
 
 def rings_from_geometry(
-        geometry: Any,
+    geometry: Any,
 ) -> tuple[tuple[tuple[tuple[float, float], ...], ...], ...]:
     """Split a GeoJSON geometry into per-polygon ring groups.
 
@@ -132,7 +132,7 @@ def rings_from_geometry(
 
 
 def bounds_of(
-        rings: tuple[tuple[tuple[float, float], ...], ...],
+    rings: tuple[tuple[tuple[float, float], ...], ...],
 ) -> tuple[float, float, float, float] | None:
     """Return ``(min_lon, max_lon, min_lat, max_lat)`` over every ring.
 
@@ -186,6 +186,22 @@ class OverlayShape:
     #: soft blob, and where an outbreak clusters reports the blobs pile into one
     #: bruise instead of the crisp marks SPC plots.
     marker: bool = False
+    #: Optional screen-space station-plot payload. Ordinary vector products
+    #: leave these empty. Surface observations use them so the map can keep a
+    #: wind staff and the T/Td readings a fixed readable size while the geographic
+    #: hit target continues through the ordinary overlay machinery.
+    station_id: str = ""
+    station_longitude: float | None = None
+    station_latitude: float | None = None
+    temperature_c: float | None = None
+    dewpoint_c: float | None = None
+    wind_u_kt: float | None = None
+    wind_v_kt: float | None = None
+    #: Peak gust, when the provider reported one. Carried separately from the
+    #: barb because a barb encodes only the sustained wind, so a gust that a
+    #: forecaster would act on is otherwise invisible on the plot.
+    wind_gust_kt: float | None = None
+    stale: bool = False
 
     @property
     def point_count(self) -> int:
@@ -231,12 +247,16 @@ class OverlayLayer:
     def __post_init__(self) -> None:
         if self.bounds is None and self.shapes:
             boxes = [shape.bounds for shape in self.shapes]
-            object.__setattr__(self, "bounds", (
-                min(box[0] for box in boxes),
-                max(box[1] for box in boxes),
-                min(box[2] for box in boxes),
-                max(box[3] for box in boxes),
-            ))
+            object.__setattr__(
+                self,
+                "bounds",
+                (
+                    min(box[0] for box in boxes),
+                    max(box[1] for box in boxes),
+                    min(box[2] for box in boxes),
+                    max(box[3] for box in boxes),
+                ),
+            )
 
     def __bool__(self) -> bool:
         return bool(self.shapes)
@@ -267,10 +287,10 @@ class OverlayLayer:
 
 
 def build_layer(
-        key: str,
-        title: str,
-        shapes: list[OverlayShape] | tuple[OverlayShape, ...],
-        **kwargs: Any,
+    key: str,
+    title: str,
+    shapes: list[OverlayShape] | tuple[OverlayShape, ...],
+    **kwargs: Any,
 ) -> OverlayLayer:
     """Return an :class:`OverlayLayer` with its shapes ordered by ``rank``.
 
@@ -293,10 +313,10 @@ MAX_RASTER_BYTES = 16 * 1024 * 1024
 #: code cannot be trusted and the payload must identify itself. Checking this
 #: here means a service error can never reach the paint path as a broken image.
 _IMAGE_MAGIC: tuple[bytes, ...] = (
-    b"\x89PNG\r\n\x1a\n",   # PNG
+    b"\x89PNG\r\n\x1a\n",  # PNG
     b"GIF87a",
     b"GIF89a",
-    b"\xff\xd8\xff",        # JPEG
+    b"\xff\xd8\xff",  # JPEG
 )
 
 
@@ -443,10 +463,10 @@ class OverlayRaster:
         return (now - stamp).total_seconds()
 
     def is_stale(
-            self,
-            now: datetime | None = None,
-            *,
-            tolerance: float = 2.5,
+        self,
+        now: datetime | None = None,
+        *,
+        tolerance: float = 2.5,
     ) -> bool:
         """Report whether the frame is older than its own update cadence allows.
 
@@ -499,14 +519,12 @@ def locator_overlays(collection: Any) -> tuple[OverlayLayer, ...]:
         value = collection.getMeta(LOCATOR_OVERLAY_META_KEY)
     except (AttributeError, KeyError, TypeError, IndexError):
         try:
-            value = getattr(collection, "_meta", {}).get(
-                LOCATOR_OVERLAY_META_KEY)
+            value = getattr(collection, "_meta", {}).get(LOCATOR_OVERLAY_META_KEY)
         except (AttributeError, TypeError):
             return ()
     if not isinstance(value, (list, tuple)):
         return ()
-    return tuple(
-        layer for layer in value if isinstance(layer, OverlayLayer) and layer)
+    return tuple(layer for layer in value if isinstance(layer, OverlayLayer) and layer)
 
 
 def _locator_entries(collection: Any) -> tuple[Any, ...]:
@@ -518,8 +536,7 @@ def _locator_entries(collection: Any) -> tuple[Any, ...]:
         value = collection.getMeta(LOCATOR_OVERLAY_META_KEY)
     except (AttributeError, KeyError, TypeError, IndexError):
         try:
-            value = getattr(collection, "_meta", {}).get(
-                LOCATOR_OVERLAY_META_KEY)
+            value = getattr(collection, "_meta", {}).get(LOCATOR_OVERLAY_META_KEY)
         except (AttributeError, TypeError):
             return ()
     if not isinstance(value, (list, tuple)):
@@ -538,15 +555,17 @@ def locator_rasters(collection: Any) -> tuple[OverlayRaster, ...]:
     paint path needing a type check.
     """
     return tuple(
-        entry for entry in _locator_entries(collection)
-        if isinstance(entry, OverlayRaster))
+        entry
+        for entry in _locator_entries(collection)
+        if isinstance(entry, OverlayRaster)
+    )
 
 
 def attach_locator_overlay(
-        collection: Any,
-        layer: "OverlayLayer | OverlayRaster | None",
-        *,
-        key: str | None = None,
+    collection: Any,
+    layer: "OverlayLayer | OverlayRaster | None",
+    *,
+    key: str | None = None,
 ) -> tuple[OverlayLayer, ...]:
     """Attach ``layer`` to ``collection``, replacing any layer of the same key.
 
@@ -570,7 +589,8 @@ def attach_locator_overlay(
     # replacing an image field cannot silently leave the previous frame behind
     # and attaching one cannot drop the outlook sitting beside it.
     kept = [
-        existing for existing in _locator_entries(collection)
+        existing
+        for existing in _locator_entries(collection)
         if getattr(existing, "key", None) != target_key
     ]
     if layer is not None and layer:
@@ -584,8 +604,8 @@ def attach_locator_overlay(
 
 
 def overlays_covering(
-        layers: tuple[OverlayLayer, ...] | list[OverlayLayer],
-        when: datetime | None,
+    layers: tuple[OverlayLayer, ...] | list[OverlayLayer],
+    when: datetime | None,
 ) -> tuple[OverlayLayer, ...]:
     """Return only those ``layers`` whose validity window contains ``when``.
 
@@ -630,9 +650,9 @@ def shape_contains(shape: OverlayShape, lon: float, lat: float) -> bool:
 
 
 def describe_at(
-        layers: tuple[OverlayLayer, ...] | list[OverlayLayer],
-        lon: float,
-        lat: float,
+    layers: tuple[OverlayLayer, ...] | list[OverlayLayer],
+    lon: float,
+    lat: float,
 ) -> str | None:
     """Return prose naming whatever overlay covers ``(lon, lat)``, or ``None``.
 
@@ -669,8 +689,7 @@ def describe_at(
     if owner is not None and owner.title:
         heading = owner.title
     if subject.label:
-        heading = f"{heading} \u2014 {subject.label}" if heading \
-            else subject.label
+        heading = f"{heading} \u2014 {subject.label}" if heading else subject.label
     if heading:
         lines.append(heading)
     if subject.description:
@@ -687,12 +706,41 @@ def describe_at(
     return "\n".join(lines) if lines else None
 
 
+def describe_markers_at(
+    layers: tuple[OverlayLayer, ...] | list[OverlayLayer],
+    lon: float,
+    lat: float,
+) -> str | None:
+    """Describe a point-marker under ``(lon, lat)`` without claiming areas.
+
+    Point-picking maps need a narrow precedence rule: a click directly on a
+    storm-report symbol opens its report, while a click elsewhere inside the
+    much larger outlook polygon still selects a sounding point. Filtering the
+    immutable layers first lets :func:`describe_at` retain its usual ranking,
+    ownership, label, and description formatting.
+    """
+    marker_layers = tuple(
+        replace(
+            layer,
+            shapes=tuple(
+                shape for shape in layer.shapes if getattr(shape, "marker", False)
+            ),
+        )
+        for layer in layers
+        if any(getattr(shape, "marker", False) for shape in layer.shapes)
+    )
+    marker_layers = tuple(layer for layer in marker_layers if layer.shapes)
+    if not marker_layers:
+        return None
+    return describe_at(marker_layers, lon, lat)
+
+
 def shape_at(
-        layers: tuple[OverlayLayer, ...] | list[OverlayLayer],
-        lon: float,
-        lat: float,
-        *,
-        hatch: bool | None = None,
+    layers: tuple[OverlayLayer, ...] | list[OverlayLayer],
+    lon: float,
+    lat: float,
+    *,
+    hatch: bool | None = None,
 ) -> OverlayShape | None:
     """Return the highest-ranked shape covering ``(lon, lat)``, if any.
 

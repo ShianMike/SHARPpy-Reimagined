@@ -1404,17 +1404,33 @@ def _skewt_effective_layer_labels(widget, qtcore, qtgui, tab):
     if bottom_top + rect_h > bottom_limit:
         bottom_top = float(y1) - 4.0 - rect_h
 
-    # The layer's top label and its helicity keep their places; the bottom one
-    # yields. It is the label with somewhere to go -- it already moves above its
-    # own line for a surface-based layer -- and that flip is what creates the
-    # collision: a layer that is both surface-based and shallow puts the flipped
-    # bottom label on the same line as the top one, in the same column, so a
-    # degenerate layer drew "SFC" straight through "0m".
+    # Only the top height label keeps its place unconditionally: it names the
+    # level the bracket's upper tick is drawn at, so its column is the one thing
+    # here that is not free to move.
+    #
+    # The helicity yields to it. Both sit on the same line -- ``y2 - rect_h`` --
+    # and were separated only by their columns being the -33 C and -20 C
+    # isotherms. That separation is geometric and shrinks with the plot, while the
+    # labels are text and do not: measured on the bundled example, the gap between
+    # the two columns falls from 88 px at 900x700 to 43 px at 560x460, 32 px at
+    # 470x400 and 25 px at 420x380, against the 39 px ``3300m`` alone needs and
+    # the ~60 px of a four-digit helicity. So from roughly 560 px down the two
+    # drew through each other and the layer-top height and the helicity value
+    # rendered as one unreadable smear on a single line.
+    #
+    # The bottom label then yields to both. It is the label with somewhere to go
+    # -- it already flips above its own line for a surface-based layer -- and
+    # that flip is what creates its collision: a layer both surface-based and
+    # shallow puts the flipped bottom label on the top label's line, in the same
+    # column, so a degenerate layer drew "SFC" straight through "0m".
+    right_limit = float(getattr(widget, "brx", 0))
     rect_top = _rect(x2, y2 - rect_h, text_top)
-    rect_esrh = _rect(x1 - 15.0, y2 - rect_h, text_esrh)
+    rect_esrh = _skewt_clear_of(
+        _rect(x1 - 15.0, y2 - rect_h, text_esrh), (rect_top,), qtcore,
+        right_limit=right_limit)
     rect_bot = _skewt_clear_of(
         _rect(x2, bottom_top, text_bot), (rect_top, rect_esrh), qtcore,
-        right_limit=float(getattr(widget, "brx", 0)))
+        right_limit=right_limit)
 
     return {
         "x1": x1,

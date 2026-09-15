@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
+from qtpy.QtCore import QPointF, Qt
 from qtpy.QtWidgets import QCheckBox
 
 from sharpmod import gui_maps, storm_reports
@@ -41,6 +42,38 @@ def widget(qt_app):
 
 
 @pytest.fixture
+def point_widget(qt_app):
+    w = gui_maps.PointMapWidget()
+    w.resize(640, 480)
+    w._lon0, w._lon1 = -125.0, -66.0
+    w._lat0, w._lat1 = 24.0, 50.0
+    try:
+        yield w
+    finally:
+        w.close()
+
+
+class _Click:
+    def __init__(self, pos):
+        self._pos = QPointF(pos)
+
+    def position(self):
+        return self._pos
+
+    def globalPosition(self):  # noqa: N802 - Qt spelling
+        return self._pos
+
+    def button(self):
+        return Qt.LeftButton
+
+    def buttons(self):
+        return Qt.LeftButton
+
+    def modifiers(self):
+        return Qt.NoModifier
+
+
+@pytest.fixture
 def controller(widget):
     control = StormReportsOverlayController(widget)
     try:
@@ -64,8 +97,9 @@ def test_the_switch_waits_for_the_outlook(controller):
 
     box = _box(controller)
     assert not box.isEnabled()
-    assert "SPC convective outlook" in box.toolTip(), \
+    assert "SPC convective outlook" in box.toolTip(), (
         "the reason has to be given, not just the control greyed out"
+    )
 
 
 def test_the_switch_becomes_available_with_the_outlook(controller):
@@ -157,6 +191,27 @@ def test_the_status_names_how_many_were_found(controller):
     assert "1 storm report" in controller._status.text()
 
 
+def test_point_sounding_map_opens_report_instead_of_moving_point(
+    point_widget, monkeypatch
+):
+    """A report symbol owns its exact hit even on the point-picking map."""
+    point_widget.set_overlay(storm_reports.OVERLAY_KEY, _layer())
+    shown = []
+    selected = []
+    monkeypatch.setattr(
+        gui_maps.QToolTip,
+        "showText",
+        lambda _global, text, _owner: shown.append(text),
+    )
+    point_widget.pointSelected.connect(lambda lat, lon: selected.append((lat, lon)))
+    pos = point_widget._to_px(-97.44, 35.22, point_widget._proj())
+
+    point_widget.mouseReleaseEvent(_Click(pos))
+
+    assert shown and "Golf ball hail" in shown[0]
+    assert selected == [], "report click leaked through to point selection"
+
+
 # --------------------------------------------------------------------------- #
 # the request
 # --------------------------------------------------------------------------- #
@@ -165,8 +220,9 @@ def test_the_map_extent_narrows_the_request(controller, widget, monkeypatch):
     seen: list[dict] = []
 
     class _Worker:
-        def __init__(self, valid, token, *, parent=None, view=None,
-                     window=None, span_deg=None):
+        def __init__(
+            self, valid, token, *, parent=None, view=None, window=None, span_deg=None
+        ):
             seen.append({"view": view, "span": span_deg, "valid": valid})
             self.loaded = SimpleNamespace(connect=lambda slot: None)
             self.failed = SimpleNamespace(connect=lambda slot: None)
@@ -181,8 +237,7 @@ def test_the_map_extent_narrows_the_request(controller, widget, monkeypatch):
         def deleteLater(self):  # noqa: N802 - Qt's spelling
             pass
 
-    monkeypatch.setattr("sharpmod.gui_overlay_controls._StormReportsWorker",
-                        _Worker)
+    monkeypatch.setattr("sharpmod.gui_overlay_controls._StormReportsWorker", _Worker)
     controller.set_valid_time(WHEN)
     controller.set_enabled(True)
     controller._start_fetch()

@@ -66,6 +66,7 @@ def test_picker_builds_only_station_map_before_first_tab_use(
         assert set(picker._lazy_tab_builders) == {
             "Station List",
             "Forecast Model",
+            "Field Panels",
             "Reanalysis (ERA5)",
             "Open File",
         }

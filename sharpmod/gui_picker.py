@@ -28,6 +28,8 @@ from sharpmod.gui_common import (
     _most_recent_synoptic,
     as_utc,
     install_month_calendar,
+    install_popup_placement,
+    install_wheel_guard,
     _render,
     _install_fullscreen_action,
     _show_controls_dialog,
@@ -35,8 +37,10 @@ from sharpmod.gui_common import (
 )
 from sharpmod.gui_shell import SourceSelector
 from sharpmod.gui_picker_layout import (
+    DATE_DISPLAY_FORMAT as _DATE_DISPLAY_FORMAT,
     TOWN_LOOKUP_TOOLTIP as _TOWN_LOOKUP_TOOLTIP,
     UTC_CLOCK_SAMPLE as _UTC_CLOCK_SAMPLE,
+    order_rail_cards as _order_rail_cards,
     rail_card as _rail_card,
     rail_form as _rail_form,
     rail_row as _rail_row,
@@ -52,13 +56,21 @@ from sharpmod.theme import (
     CONTROL_H,
     FIELD_W,
     OBJ_ATTRIBUTION,
+    OBJ_CARD_RULE,
     OBJ_EMPHASIS,
     OBJ_GHOST,
     OBJ_HINT,
     OBJ_NUMERIC,
     OBJ_PRIMARY,
     OBJ_PROGRESS_DETAIL,
+    OBJ_SECTION_LABEL,
     OBJ_STATUS,
+    OBJ_TOP_BAR,
+    OBJ_TOP_BAR_END,
+    OBJ_TOP_BAR_LABEL,
+    OBJ_TOP_BAR_MENU,
+    OBJ_TOP_BAR_SOURCE,
+    OBJ_UTC_CLOCK,
     PROGRESS_H,
     RAIL_W,
     SCROLLBAR_W,
@@ -276,7 +288,101 @@ def _observed_source_label(key: str) -> str:
     return str(key)
 
 
-def _fill_cycle_combo(combo, hours, selected=None) -> None:
+#: Marks the newest cycle on the selected date whose run hour has passed.
+#:
+#: One positive marker rather than a warning on every future cycle. Marking the
+#: future was the first attempt and it was measurably worse: an hourly model
+#: mid-morning put a note on most of the list, so the annotation became the
+#: background rather than the signal, and it widened the closed field to fit a
+#: label the selected value usually did not carry.
+#:
+#: This says the one thing worth saying -- which run is the freshest that can
+#: exist -- on at most one row, and it is the row the user most often wants. On a
+#: past date it lands on that day's last cycle; on a future date, on nothing.
+#:
+#: It marks rather than disables anything. Publication lags the hour, so "the hour
+#: has passed" is not proof a run is there and the converse is not proof it is
+#: absent; this panel deliberately keeps Fetch reachable when availability is
+#: uncertain -- see the availability chip's own tooltip. Greying rows out would
+#: overrule a judgement the user is entitled to make, and the chip already
+#: reports what the catalogue actually holds.
+_CYCLE_LATEST = " \u00b7 latest"
+
+
+def _run_datetime(run_date, hour: int) -> datetime | None:
+    """Compose a UTC run time from a ``QDate`` and a cycle hour."""
+    if run_date is None:
+        return None
+    try:
+        return datetime(
+            run_date.year(),
+            run_date.month(),
+            run_date.day(),
+            int(hour),
+            tzinfo=timezone.utc,
+        )
+    except (AttributeError, ValueError):
+        return None
+
+
+def _latest_elapsed_cycle(combo, run_date, now: datetime) -> int | None:
+    """Return the newest cycle hour in ``combo`` whose run time has passed."""
+    if run_date is None:
+        return None
+    elapsed = []
+    for index in range(combo.count()):
+        hour = combo.itemData(index)
+        if hour is None:
+            continue
+        run = _run_datetime(run_date, int(hour))
+        if run is not None and run <= now:
+            elapsed.append(int(hour))
+    return max(elapsed) if elapsed else None
+
+
+def _annotate_cycle_combo(combo, run_date, now: datetime | None = None) -> None:
+    """Refresh every cycle entry against ``run_date``, in place.
+
+    Rewrites item *text* rather than rebuilding the list, because the date and the
+    cycle are separate controls: a rebuild would fire ``currentIndexChanged`` and
+    so re-enter the forecast-hour refresh on every date edit, and it would drop
+    the selection whenever the new date made the chosen hour momentarily absent.
+    """
+    if combo is None:
+        return
+    resolved = now or datetime.now(timezone.utc)
+    latest = _latest_elapsed_cycle(combo, run_date, resolved)
+    for index in range(combo.count()):
+        hour = combo.itemData(index)
+        if hour is None:
+            continue
+        hour = int(hour)
+        suffix = _CYCLE_LATEST if latest is not None and hour == latest else ""
+        combo.setItemText(index, f"{hour:02d}Z{suffix}")
+        run = _run_datetime(run_date, hour)
+        combo.setItemData(
+            index,
+            f"Run {run:%a %d %b %Y %H}Z" if run is not None else f"{hour:02d}Z run",
+            Qt.ToolTipRole,
+        )
+
+
+def _fxx_item_text(hour: int, valid: datetime | None) -> str:
+    """Return one forecast-hour entry's label.
+
+    The valid time travels *in the entry*, which is the point. A bare ``F012``
+    names the offset and not the thing being chosen by -- the hour the sounding
+    depicts -- so picking one meant adding the offset to the run in your head,
+    for every candidate, while the only place the sum appeared was a label two
+    rows below that updated after the choice was committed.
+    """
+    base = f"F{int(hour):03d}"
+    if valid is None:
+        return base
+    return f"{base}  \u00b7  {valid:%b %d %H}Z"
+
+
+def _fill_cycle_combo(combo, hours, selected=None, *, run_date=None) -> None:
     """Populate ``combo`` with UTC cycle hours, newest first.
 
     Newest first because the freshest run is the one usually wanted. Ascending
@@ -286,10 +392,14 @@ def _fill_cycle_combo(combo, hours, selected=None) -> None:
 
     Hours travel as item data, so callers select by hour rather than by position
     and the display order is free to change without breaking them.
+
+    ``run_date`` is the date the hours will be composed with, used only to mark
+    cycles that have not run yet. Omit it and the entries are bare hours.
     """
     combo.clear()
     for hour in sorted({int(value) for value in hours}, reverse=True):
         combo.addItem(f"{hour:02d}Z", hour)
+    _annotate_cycle_combo(combo, run_date)
     if selected is not None:
         _select_cycle(combo, selected)
 
@@ -322,12 +432,23 @@ TAB_OVERLAY_CONTROLLERS = {
 TAB_FIELD_CONTROLLERS = {
     "Station Map": "_map_field",
     "Forecast Model": "_model_field",
+    # Rebound on every click to the panel that was clicked in, because that tab
+    # has two to four fields on screen and the one being pointed at is the one
+    # the reader means.
+    "Field Panels": "_panels_field",
+}
+
+TAB_CONTEXT_CONTROLLERS = {
+    "Station Map": "_map_context",
+    "Forecast Model": "_model_context",
+    "Field Panels": "_panels_context",
 }
 
 #: Which tab's locator selector answers for a sounding opened from it.
 TAB_LOCATOR_SELECTORS = {
     "Station Map": "_map_locator",
     "Forecast Model": "_model_locator",
+    "Field Panels": "_panels_locator",
 }
 
 
@@ -620,6 +741,10 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         # the test suite and any embedder construct PickerWindow directly -- and
         # is a no-op when the theme is already applied.
         ensure_theme_applied(color_style=_startup_color_style())
+        # Same reasoning, same shape: ``main`` installs this before any widget
+        # exists, and this call covers the direct-construction paths.
+        install_wheel_guard()
+        install_popup_placement()
 
         self.setWindowTitle(f"{APP_NAME} \u2014 Sounding Picker")
         self.resize(1000, 720)
@@ -734,18 +859,23 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         # window appears before the heavy render stack is imported.
         self.config = None
 
-        # A left navigation rail rather than a top tab bar. ``SourceSelector``
-        # keeps the QTabWidget surface (addTab / tabText / setCurrentIndex /
-        # currentChanged), so the ~40 title-keyed call sites below and the lazy
-        # placeholder swap in ``_ensure_tab`` are unchanged.
+        # A compact top-bar selector rather than tabs or a permanent left rail.
+        # ``SourceSelector`` keeps the QTabWidget surface (addTab / tabText /
+        # setCurrentIndex / currentChanged), so the title-keyed call sites and
+        # lazy placeholder swap in ``_ensure_tab`` stay unchanged.
         # "Load from" rather than "Source": two of the five entries (Station Map
         # and Station List) are the same UWyo source reached two ways, and the
         # map panel already has a "Sounding source" card naming the provider.
         self._tabs = SourceSelector(header="LOAD FROM")
         self._tabs.addTab(self._build_map_tab(), "Station Map")
+        # "Field Panels" is a source like the others: it draws HRRR fields to
+        # decide *where* to look, and a click in it picks the point a sounding is
+        # taken at. It was a floating window first, which put its panels on a run
+        # it had no controls to change.
         self._lazy_tab_builders = {
             "Station List": self._build_uwyo_tab,
             "Forecast Model": self._build_model_tab,
+            "Field Panels": self._build_panels_tab,
             "Reanalysis (ERA5)": self._build_era5_tab,
             "Open File": self._build_file_tab,
         }
@@ -758,6 +888,7 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         self._sync_tab_status()
 
         self._build_menu()
+        self._install_source_picker()
         self._install_utc_clock()
         self._restore_state()
         self._refresh_location_markers()
@@ -823,6 +954,10 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             self.statusBar().showMessage(
                 "Ready \u2014 pick a point, model, run, and forecast hour"
             )
+        elif tab == "Field Panels":
+            self.statusBar().showMessage(
+                "Ready \u2014 compare HRRR fields, then click a point for a sounding"
+            )
         elif tab == "Reanalysis (ERA5)":
             self.statusBar().showMessage(
                 "Ready \u2014 pick a global point and ERA5 analysis hour"
@@ -835,6 +970,48 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             self.statusBar().showMessage("Ready \u2014 pick a station and press Fetch")
 
     # -- UTC clock ----------------------------------------------------------- #
+    def _install_source_picker(self) -> None:
+        """Place the mutually-exclusive loading source beside the menus."""
+        self._source_picker = QFrame(self.menuBar())
+        self._source_picker.setObjectName(OBJ_TOP_BAR)
+        row = QHBoxLayout(self._source_picker)
+        # The trailing margin is `md` rather than `sm` because the frame's right
+        # edge now carries the hairline dividing this cluster from the menus, and
+        # a divider needs matched air on both sides -- the menu items supply
+        # their own `md` on the far side.
+        #
+        # No vertical margins: the frame's own height floor (QFrame#topBar) sets
+        # how tall this cluster is, and margins on top of it would only make the
+        # cluster -- rather than the menu titles it sits beside -- the thing that
+        # decides how tall the whole strip is. A menu bar sizes itself to fit its
+        # corner widgets, so that is a real consequence rather than a detail.
+        #
+        # Height is deliberately *not* taken from QMenuBar padding, which would
+        # raise every menu bar in the application, including the sounding window's,
+        # whose height the canvas-fit calculation subtracts to size a render the PNG
+        # CLI must reproduce byte-for-byte.
+        row.setContentsMargins(SPACE["xs"], 0, SPACE["md"], 0)
+        row.setSpacing(SPACE["sm"])
+
+        self._source_picker_label = QLabel("Load From", self._source_picker)
+        # An eyebrow labelling the dropdown, not a resolved value. OBJ_EMPHASIS
+        # is semibold `text_primary` at body size, which put this label at the
+        # same weight as both the control it names and the menu titles beside it.
+        self._source_picker_label.setObjectName(OBJ_TOP_BAR_LABEL)
+        self._source_picker_label.setBuddy(self._tabs.navigation_widget())
+        # Centred, not filled. A box layout stretches its children to the layout
+        # height by default, which would grow the dropdown to the frame's floor and
+        # undo the work of matching it to a menu title's height.
+        row.addWidget(self._source_picker_label, 0, Qt.AlignVCenter)
+        self._tabs.navigation_widget().setObjectName(OBJ_TOP_BAR_SOURCE)
+        # The popup is named separately because it is a top-level window: a
+        # descendant selector through the combo does not reach it. See
+        # QAbstractItemView#topBarMenu, which gives it a menu's metrics so opening
+        # this control looks like opening File or View beside it.
+        self._tabs.navigation_widget().view().setObjectName(OBJ_TOP_BAR_MENU)
+        row.addWidget(self._tabs.navigation_widget(), 0, Qt.AlignVCenter)
+        self.menuBar().setCornerWidget(self._source_picker, Qt.TopLeftCorner)
+
     def _install_utc_clock(self) -> None:
         """Show the current UTC time in the menu bar's top-right corner.
 
@@ -857,16 +1034,35 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         # silently putting the proportional UI face back and the "does not
         # twitch" promise above was not being kept. The `setFont` call remains
         # for hosts that never apply the style sheet at all.
-        self._utc_clock.setObjectName(OBJ_NUMERIC)
+        #
+        # OBJ_UTC_CLOCK carries that family plus the secondary colour. It replaces
+        # OBJ_NUMERIC, which delivered only the family and left the clock at full
+        # `text_primary` weight -- as loud as the source control opposite.
+        self._utc_clock.setObjectName(OBJ_UTC_CLOCK)
         self._utc_clock.setFont(mono_font("caption"))
         self._utc_clock.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._utc_clock.setContentsMargins(SPACE["sm"], 0, SPACE["md"], 0)
         # Pin the width the sample needs. The format is fixed and the font is
-        # monospaced, so this measurement holds for every future value.
+        # monospaced, so this measurement holds for every future value. The label
+        # carries no border or padding of its own -- both belong to the frame below
+        # -- so nothing the style sheet adds can outgrow this measurement and get
+        # clipped off the label's left edge.
         self._utc_clock.setMinimumWidth(
             self._utc_clock.sizeHint().width() + SPACE["xs"]
         )
-        self.menuBar().setCornerWidget(self._utc_clock, Qt.TopRightCorner)
+
+        # Wrapped in a frame that mirrors the source cluster's, with the same
+        # vertical margins, so the hairline dividers at the two ends of the bar are
+        # the same length by construction. Carrying the divider on the label
+        # instead meant tuning a height token until the two happened to agree, and
+        # that height then became the tallest thing in the bar and set how tall the
+        # whole strip was.
+        self._utc_clock_frame = QFrame(self.menuBar())
+        self._utc_clock_frame.setObjectName(OBJ_TOP_BAR_END)
+        clock_row = QHBoxLayout(self._utc_clock_frame)
+        clock_row.setContentsMargins(SPACE["md"], 0, SPACE["md"], 0)
+        clock_row.setSpacing(0)
+        clock_row.addWidget(self._utc_clock, 0, Qt.AlignVCenter)
+        self.menuBar().setCornerWidget(self._utc_clock_frame, Qt.TopRightCorner)
 
         self._utc_timer = QTimer(self)
         self._utc_timer.setInterval(1000)
@@ -988,6 +1184,20 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         self._map_projection = stored
         self._projection_actions[stored].setChecked(True)
         self._projection_group.triggered.connect(self._on_projection_chosen)
+
+        # A shortcut to the Field Panels source tab, not a window. Kept in this
+        # menu as well as the source list because the panels answer a question
+        # about the *map* -- which field to trust where -- and that is what a
+        # reader is already in this menu for.
+        viewmenu.addSeparator()
+        panels_act = QAction("Model Field &Panels", self)
+        panels_act.setShortcut("Ctrl+Shift+P")
+        panels_act.setToolTip(
+            "Compare two or four HRRR fields side by side on one synchronized view"
+        )
+        panels_act.triggered.connect(self._show_model_panels)
+        viewmenu.addAction(panels_act)
+        self._model_panels_action = panels_act
 
         helpmenu = self.menuBar().addMenu("&Help")
         controls_act = QAction("Sounding Window &Controls", self)
@@ -1428,6 +1638,38 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
 
         return stored if site_by_id(stored) is not None else SITE_AUTO
 
+    def _startup_satellite_channel(self) -> str:
+        try:
+            stored = str(
+                self._settings.value("overlays/goes_channel", "infrared")
+                or "infrared"
+            ).lower()
+        except Exception:  # noqa: BLE001 - an unreadable preference is harmless
+            stored = "infrared"
+        return stored if stored in {"visible", "infrared"} else "infrared"
+
+    def _startup_surface_density(self) -> str:
+        try:
+            stored = str(
+                self._settings.value("overlays/surface_density", "normal")
+                or "normal"
+            ).lower()
+        except Exception:  # noqa: BLE001 - an unreadable preference is harmless
+            stored = "normal"
+        return stored if stored in {"sparse", "normal", "dense"} else "normal"
+
+    @staticmethod
+    def _overlay_group_label(text: str) -> QLabel:
+        """Return one of the overlay card's two group headings.
+
+        Both maps build the same card, and the locator selector supplies the
+        matching heading for the second group, so this exists to keep the two
+        headings identical rather than nearly so.
+        """
+        label = QLabel(text)
+        label.setObjectName(OBJ_SECTION_LABEL)
+        return label
+
     def _add_locator_selector(self, layout):
         """Build the locator-overlay selector and add it under ``layout``.
 
@@ -1440,9 +1682,15 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
 
         from sharpmod.gui_overlay_controls import LocatorOverlaySelector
 
+        # NoFrame plus OBJ_CARD_RULE, not an HLine: Qt draws a QFrame's HLine
+        # shape from the palette through the style and ignores a style-sheet
+        # border on it, so the previous OBJ_HINT name matched nothing (it is a
+        # QLabel role) and the line was whatever bevel Fusion happened to pick.
+        # The style sheet paints this one as a 1px block on a token colour.
         rule = QFrame()
-        rule.setFrameShape(QFrame.Shape.HLine)
-        rule.setObjectName(OBJ_HINT)
+        rule.setFrameShape(QFrame.Shape.NoFrame)
+        rule.setObjectName(OBJ_CARD_RULE)
+        layout.addSpacing(SPACE["xs"])
         layout.addWidget(rule)
         selector = LocatorOverlaySelector(parent=self, settings=self._settings)
         layout.addWidget(selector.controls_widget())
@@ -1498,13 +1746,25 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         to close over a preference it could not write.
         """
         field = getattr(self, "_map_field", None) or getattr(self, "_model_field", None)
-        radar = getattr(self, "_map_radar", None) or getattr(self, "_model_radar", None)
+        radar = (
+            getattr(self, "_map_radar", None)
+            or getattr(self, "_model_radar", None)
+            or getattr(self, "_panels_radar", None)
+        )
+        context = (
+            getattr(self, "_map_context", None)
+            or getattr(self, "_model_context", None)
+            or getattr(self, "_panels_context", None)
+        )
         try:
             if field is not None:
                 self._settings.setValue("overlays/hrrr_field_product", field.product())
             if radar is not None:
                 self._settings.setValue("overlays/radar_scope", radar.scope())
                 self._settings.setValue("overlays/radar_site", radar.site())
+            if context is not None:
+                self._settings.setValue("overlays/goes_channel", context.channel())
+                self._settings.setValue("overlays/surface_density", context.density())
             self._settings.sync()
         except Exception:  # noqa: BLE001 - closing must not fail on a preference
             _LOGGER.debug("overlays.choices_unsaved", exc_info=True)
@@ -1780,14 +2040,22 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         cycle_box, cg = _rail_form("Run time (UTC)")
         default_date, default_hour = _most_recent_synoptic()
         self._map_date = QDateEdit()
-        self._map_date.setDisplayFormat("yyyy-MM-dd")
+        self._map_date.setDisplayFormat(_DATE_DISPLAY_FORMAT)
         self._map_date.setCalendarPopup(True)
         install_month_calendar(self._map_date)
         self._map_date.setDate(default_date)
         self._map_date.setMaximumDate(QDate.currentDate().addDays(1))
-        _rail_row(cg, 0, "Date:", self._map_date)
+        _rail_row(cg, 0, "Date:", self._map_date, width="timestamp")
         self._map_cycle = QComboBox()
-        _fill_cycle_combo(self._map_cycle, SYNOPTIC_HOURS, default_hour)
+        self._map_cycle.setObjectName(OBJ_NUMERIC)
+        _fill_cycle_combo(
+            self._map_cycle, SYNOPTIC_HOURS, default_hour, run_date=default_date
+        )
+        # The "not yet run" mark is relative to the date beside it, so it has to be
+        # re-derived whenever that date moves.
+        self._map_date.dateChanged.connect(
+            lambda date: _annotate_cycle_combo(self._map_cycle, date)
+        )
         recent = QToolButton()
         recent.setText("Most recent")
         recent.setToolTip("Jump to the most recent synoptic cycle")
@@ -1812,6 +2080,16 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         # empty panels and cost twice the chrome for one idea: what to draw over
         # the map.
         overlay_box, overlay_layout = _rail_card("Map overlays")
+        # The card holds two groups -- what this map draws, and what travels onto
+        # the sounding's locator inset -- and only the second one was labelled, so
+        # the first six switches read as the card's whole contents and the
+        # locator group looked like a subsection of them rather than a sibling.
+        # Tighter than the shared card spacing: this card is a list of switches,
+        # not a stack of separate controls, so a switch-to-switch gap has to match
+        # the one each controller uses internally or the rows read as unrelated
+        # blocks. See ``dependent_panel``.
+        overlay_layout.setSpacing(SPACE["xs"])
+        overlay_layout.addWidget(self._overlay_group_label("On this map"))
         self._map_outlook = OutlookOverlayController(self._map, parent=self)
         overlay_layout.addWidget(self._map_outlook.controls_widget())
 
@@ -1834,6 +2112,18 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             self._map, parent=self, product=self._startup_field_product()
         )
         overlay_layout.addWidget(self._map_field.controls_widget())
+        # GOES decoding imports NumPy; defer it until the picker actually builds
+        # a map so importing the lightweight picker facade stays fast.
+        from sharpmod.gui_environmental_context import EnvironmentalContextController
+
+        self._map_context = EnvironmentalContextController(
+            self._map,
+            parent=self,
+            channel=self._startup_satellite_channel(),
+            density=self._startup_surface_density(),
+        )
+        self._map.stationSelected.connect(self._map_context.on_location_changed)
+        overlay_layout.addWidget(self._map_context.controls_widget())
         # What travels onto the sounding's own locator inset. It belongs in this
         # card because it is the same subject -- what to draw over a map -- and is
         # separated by a rule so it still reads as being about the sounding
@@ -1865,6 +2155,10 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         self._map_gen_btn.setMinimumHeight(CONTROL_H["lg"])
         self._map_gen_btn.setEnabled(False)
         self._map_gen_btn.clicked.connect(self._map_generate)
+        # Extra air above the action, on top of the rail's own `md` gap. The
+        # cards above are all configuration; this is the one thing that acts on
+        # them, and at a uniform gap it read as a sixth card in the stack.
+        left.addSpacing(SPACE["sm"])
         left.addWidget(self._map_gen_btn)
 
         hint = QLabel(
@@ -1881,6 +2175,7 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         # and opened a large empty gap in the middle.
         left.addStretch(1)
 
+        _order_rail_cards(left)
         self._map_controls_scroll = _scrolling_control_rail(left)
         outer.addWidget(self._map_controls_scroll)
 
@@ -1910,10 +2205,34 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         controller.set_site(site_id)
 
     def _map_on_view_settled(self) -> None:
-        self._view_settled("_map_radar", "_map_field", "_map_reports")
+        self._view_settled(
+            "_map_radar", "_map_field", "_map_reports", "_map_context"
+        )
 
     def _model_on_view_settled(self) -> None:
-        self._view_settled("_model_radar", "_model_field", "_model_reports")
+        self._view_settled(
+            "_model_radar", "_model_field", "_model_reports", "_model_context"
+        )
+
+    def _sync_overlay_times(self, when, *attributes: str) -> None:
+        """Point a tab's time-aware overlays at one valid time.
+
+        Every one of these controllers refuses to fetch while its valid time is
+        ``None`` -- an outlook, a storm report, and a satellite image are all
+        answers to "at what time", so there is nothing to ask for without one.
+        That makes this call the difference between an overlay that draws and an
+        overlay whose switch does nothing, which is exactly what the field-panels
+        tab shipped with: its overlays were wired to the maps and to the rail, and
+        never told what hour to depict.
+
+        Collected here, and used by both map tabs, so a third tab cannot repeat
+        that by leaving one of the three controllers out of its own copy.
+        """
+        for attribute in attributes:
+            controller = getattr(self, attribute, None)
+            setter = getattr(controller, "set_valid_time", None)
+            if setter is not None:
+                setter(when)
 
     def _view_settled(self, *attributes: str) -> None:
         """Let a tab's view-dependent overlays catch up with a moved map.
@@ -1946,6 +2265,9 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         reports = getattr(self, "_map_reports", None)
         if reports is not None:
             reports.set_valid_time(when)
+        context = getattr(self, "_map_context", None)
+        if context is not None:
+            context.set_valid_time(when)
 
     def _map_set_recent(self) -> None:
         d, h = _most_recent_synoptic()
@@ -2059,18 +2381,24 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
 
         tg.addWidget(QLabel("Date:"), 0, 0)
         self._date_edit = QDateEdit()
-        self._date_edit.setDisplayFormat("yyyy-MM-dd")
+        self._date_edit.setDisplayFormat(_DATE_DISPLAY_FORMAT)
         self._date_edit.setCalendarPopup(True)
         install_month_calendar(self._date_edit)
         self._date_edit.setDate(default_date)
         self._date_edit.setMaximumDate(QDate.currentDate().addDays(1))
-        self._date_edit.setMinimumWidth(FIELD_W["date"])
+        self._date_edit.setMinimumWidth(FIELD_W["timestamp"])
         self._date_edit.dateChanged.connect(self._update_valid_label)
         tg.addWidget(self._date_edit, 0, 1)
 
         tg.addWidget(QLabel("Cycle:"), 1, 0)
         self._cycle_combo = QComboBox()
-        _fill_cycle_combo(self._cycle_combo, SYNOPTIC_HOURS, default_hour)
+        self._cycle_combo.setObjectName(OBJ_NUMERIC)
+        _fill_cycle_combo(
+            self._cycle_combo, SYNOPTIC_HOURS, default_hour, run_date=default_date
+        )
+        self._date_edit.dateChanged.connect(
+            lambda date: _annotate_cycle_combo(self._cycle_combo, date)
+        )
         self._cycle_combo.setMinimumWidth(FIELD_W["compact"])
         self._cycle_combo.currentIndexChanged.connect(self._update_valid_label)
         tg.addWidget(self._cycle_combo, 1, 1)
@@ -2377,6 +2705,7 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         self._model_map.pointSelected.connect(self._model_on_map_point)
         self._model_map.pointActivated.connect(lambda _lat, _lon: self._model_fetch())
         self._model_map.boxSelected.connect(self._model_on_box_selected)
+        self._model_map.boxCleared.connect(self._model_on_box_cleared)
 
         left = QVBoxLayout()
         left.setSpacing(SPACE["md"])
@@ -2393,6 +2722,8 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         left.addWidget(area_box)
 
         overlay_box, overlay_layout = _rail_card("Map overlays")
+        overlay_layout.setSpacing(SPACE["xs"])
+        overlay_layout.addWidget(self._overlay_group_label("On this map"))
         self._model_outlook = OutlookOverlayController(self._model_map, parent=self)
         overlay_layout.addWidget(self._model_outlook.controls_widget())
 
@@ -2412,6 +2743,19 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             self._model_map, parent=self, product=self._startup_field_product()
         )
         overlay_layout.addWidget(self._model_field.controls_widget())
+        # Keep optional satellite/observation dependencies out of module import.
+        from sharpmod.gui_environmental_context import EnvironmentalContextController
+
+        self._model_context = EnvironmentalContextController(
+            self._model_map,
+            parent=self,
+            channel=self._startup_satellite_channel(),
+            density=self._startup_surface_density(),
+        )
+        self._model_map.pointSelected.connect(
+            self._model_context.on_location_changed
+        )
+        overlay_layout.addWidget(self._model_context.controls_widget())
         self._model_locator = self._add_locator_selector(overlay_layout)
         left.addWidget(overlay_box)
 
@@ -2420,9 +2764,19 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         self._model_combo.setMinimumHeight(CONTROL_H["md"])
         self._model_combo.currentIndexChanged.connect(self._model_update_cycles)
         model_layout.addWidget(self._model_combo)
+        # Coverage above description, and at a stronger weight. The domain decides
+        # whether the point about to be picked is inside the grid at all, which is
+        # actionable; the blurb is background. Both shared one tertiary label
+        # before, so the line that can invalidate a selection read as a footnote
+        # to the one that cannot.
+        self._model_domain = QLabel("")
+        self._model_domain.setObjectName(OBJ_STATUS)
+        self._model_domain.setVisible(False)
+        model_layout.addWidget(self._model_domain)
         self._model_notes = QLabel("")
         self._model_notes.setWordWrap(True)
         self._model_notes.setObjectName(OBJ_HINT)
+        self._model_notes.setVisible(False)
         model_layout.addWidget(self._model_notes)
         left.addWidget(model_box)
 
@@ -2431,14 +2785,15 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         # reason this rail scrolled on a maximized window.
         time_box, time_grid = _rail_form("Run / valid time (UTC)")
         self._model_date = QDateEdit()
-        self._model_date.setDisplayFormat("yyyy-MM-dd")
+        self._model_date.setDisplayFormat(_DATE_DISPLAY_FORMAT)
         self._model_date.setCalendarPopup(True)
         install_month_calendar(self._model_date)
         self._model_date.setDate(QDate.currentDate())
         self._model_date.setMaximumDate(QDate.currentDate().addDays(1))
         self._model_date.dateChanged.connect(self._model_update_valid_label)
-        _rail_row(time_grid, 0, "Date:", self._model_date)
+        _rail_row(time_grid, 0, "Date:", self._model_date, width="timestamp")
         self._model_cycle = QComboBox()
+        self._model_cycle.setObjectName(OBJ_NUMERIC)
         self._model_cycle.currentIndexChanged.connect(self._model_update_fxx)
         recent = QToolButton()
         recent.setText("Most recent")
@@ -2446,11 +2801,13 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         recent.clicked.connect(self._model_set_recent)
         _rail_row(time_grid, 1, "Cycle:", self._model_cycle, trailing=recent)
         self._model_fxx_combo = QComboBox()
-        self._model_fxx_combo.setMaxVisibleItems(24)
+        self._model_fxx_combo.setObjectName(OBJ_NUMERIC)
         self._model_fxx_combo.currentIndexChanged.connect(
             self._model_update_valid_label
         )
-        _rail_row(time_grid, 2, "Forecast:", self._model_fxx_combo)
+        _rail_row(
+            time_grid, 2, "Forecast:", self._model_fxx_combo, width="timestamp"
+        )
         self._model_valid_lbl = QLabel("")
         self._model_valid_lbl.setObjectName(OBJ_EMPHASIS)
         time_grid.addWidget(self._model_valid_lbl, 3, 0, 1, 3)
@@ -2587,6 +2944,7 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             self._model_combo.setToolTip(unsupported_text)
         left.addStretch(1)
 
+        _order_rail_cards(left)
         self._model_controls_scroll = _scrolling_control_rail(left)
         outer.addWidget(self._model_controls_scroll)
         outer.addWidget(self._model_map, stretch=1)
@@ -2595,6 +2953,453 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         self._model_set_recent()
         self._model_point_from_spins(center=True)
         return w
+
+    # ====================================================================== #
+    # Field panels tab
+    # ====================================================================== #
+    def _build_panels_tab(self) -> QWidget:
+        """Build the synchronized HRRR field comparison tab.
+
+        Deliberately HRRR-only, so this rail carries no model chooser. Every
+        field in the catalogue is an HRRR product, and offering a model list that
+        had one entry would imply a choice that does not exist.
+        """
+        from sharpmod.gui_map_panels import PANEL_COUNTS, MapPanelsView
+
+        w = QWidget()
+        outer = QHBoxLayout(w)
+        outer.setContentsMargins(SPACE["md"], SPACE["sm"], SPACE["md"], SPACE["sm"])
+        outer.setSpacing(SPACE["md"])
+
+        self._panels_syncing_point = False
+        count, products = self._stored_panel_layout()
+        self._panels_view = MapPanelsView(panel_count=count, products=products)
+        self._panels_view.layoutChanged.connect(self._remember_panel_layout)
+        self._panels_view.productChanged.connect(self._remember_panel_layout)
+        self._panels_view.pointSelected.connect(self._panels_on_point)
+        self._panels_view.pointActivated.connect(
+            lambda _lat, _lon: self._panels_fetch_sounding()
+        )
+        self._panels_view.viewSettled.connect(self._panels_on_view_settled)
+        self._panels_view.radarSiteSelected.connect(self._panels_on_radar_site)
+        # Every panel at once, through one controller and one fetch. See
+        # ``MapPanelsView.shared_map``.
+        shared = self._panels_view.shared_map()
+
+        left = QVBoxLayout()
+        left.setSpacing(SPACE["md"])
+        left.setContentsMargins(0, 0, 0, 0)
+
+        layout_box, layout_grid = _rail_form("Panels")
+        self._panels_count_combo = QComboBox()
+        for value in PANEL_COUNTS:
+            self._panels_count_combo.addItem(f"{value} panels", value)
+        index = self._panels_count_combo.findData(self._panels_view.panel_count())
+        self._panels_count_combo.setCurrentIndex(max(0, index))
+        self._panels_count_combo.setMinimumHeight(CONTROL_H["md"])
+        self._panels_count_combo.currentIndexChanged.connect(
+            self._panels_count_changed
+        )
+        _rail_row(layout_grid, 0, "Layout:", self._panels_count_combo)
+        panels_hint = QLabel(
+            "Scroll to zoom and drag to pan \u2014 every panel follows. "
+            "Click to place the sounding point; double-click to fetch it."
+        )
+        panels_hint.setObjectName(OBJ_HINT)
+        panels_hint.setWordWrap(True)
+        layout_grid.addWidget(panels_hint, 1, 0, 1, 3)
+        left.addWidget(layout_box)
+
+        area_box, area_layout = _rail_card("Region")
+        self._panels_area_combo = QComboBox()
+        for name in MAP_AREAS:
+            self._panels_area_combo.addItem(name)
+        self._panels_area_combo.setMinimumHeight(CONTROL_H["md"])
+        self._panels_area_combo.currentTextChanged.connect(self._panels_area_changed)
+        area_layout.addWidget(self._panels_area_combo)
+        left.addWidget(area_box)
+
+        # The same overlay card the two map tabs carry, minus the model field:
+        # each panel chooses that for itself, and the card would be offering a
+        # fifth answer to a question already asked four times above the maps.
+        overlay_box, overlay_layout = _rail_card("Map overlays")
+        overlay_layout.setSpacing(SPACE["xs"])
+        overlay_layout.addWidget(self._overlay_group_label("On every panel"))
+        self._panels_outlook = OutlookOverlayController(shared, parent=self)
+        overlay_layout.addWidget(self._panels_outlook.controls_widget())
+        self._panels_reports = StormReportsOverlayController(shared, parent=self)
+        self._panels_reports.bind_outlook(self._panels_outlook)
+        overlay_layout.addWidget(self._panels_reports.controls_widget())
+        self._panels_radar = RadarOverlayController(
+            shared,
+            parent=self,
+            scope=self._startup_radar_scope(),
+            site=self._startup_radar_site(),
+        )
+        overlay_layout.addWidget(self._panels_radar.controls_widget())
+        from sharpmod.gui_environmental_context import EnvironmentalContextController
+
+        self._panels_context = EnvironmentalContextController(
+            shared,
+            parent=self,
+            channel=self._startup_satellite_channel(),
+            density=self._startup_surface_density(),
+        )
+        self._panels_view.pointSelected.connect(
+            self._panels_context.on_location_changed
+        )
+        overlay_layout.addWidget(self._panels_context.controls_widget())
+        self._panels_locator = self._add_locator_selector(overlay_layout)
+        left.addWidget(overlay_box)
+
+        time_box, time_grid = _rail_form("Run / valid time (UTC)")
+        self._panels_date = QDateEdit()
+        self._panels_date.setDisplayFormat(_DATE_DISPLAY_FORMAT)
+        self._panels_date.setCalendarPopup(True)
+        install_month_calendar(self._panels_date)
+        self._panels_date.setDate(QDate.currentDate())
+        self._panels_date.setMaximumDate(QDate.currentDate().addDays(1))
+        self._panels_date.dateChanged.connect(self._panels_update_valid_label)
+        _rail_row(time_grid, 0, "Date:", self._panels_date, width="timestamp")
+        self._panels_cycle = QComboBox()
+        self._panels_cycle.setObjectName(OBJ_NUMERIC)
+        self._panels_cycle.currentIndexChanged.connect(self._panels_update_fxx)
+        recent = QToolButton()
+        recent.setText("Most recent")
+        recent.setToolTip("Jump to the most recent published cycle")
+        recent.clicked.connect(self._panels_set_recent)
+        _rail_row(time_grid, 1, "Cycle:", self._panels_cycle, trailing=recent)
+        self._panels_fxx_combo = QComboBox()
+        self._panels_fxx_combo.setObjectName(OBJ_NUMERIC)
+        self._panels_fxx_combo.currentIndexChanged.connect(
+            self._panels_update_valid_label
+        )
+        _rail_row(
+            time_grid, 2, "Forecast:", self._panels_fxx_combo, width="timestamp"
+        )
+        self._panels_valid_lbl = QLabel("")
+        self._panels_valid_lbl.setObjectName(OBJ_EMPHASIS)
+        self._panels_valid_lbl.setWordWrap(True)
+        time_grid.addWidget(self._panels_valid_lbl, 3, 0, 1, 3)
+        left.addWidget(time_box)
+
+        point_box, point_grid = _rail_form("Sounding point")
+        self._panels_lat = QDoubleSpinBox()
+        self._panels_lat.setRange(-90.0, 90.0)
+        self._panels_lat.setDecimals(4)
+        self._panels_lat.setSingleStep(0.25)
+        self._panels_lat.setValue(35.6300)
+        self._panels_lat.valueChanged.connect(
+            lambda _value: self._panels_point_from_spins()
+        )
+        center = QToolButton()
+        center.setText("Center")
+        center.setToolTip("Center every panel on this point")
+        center.clicked.connect(lambda: self._panels_point_from_spins(center=True))
+        _rail_row(point_grid, 0, "Latitude:", self._panels_lat, trailing=center)
+        self._panels_lon = QDoubleSpinBox()
+        self._panels_lon.setRange(-180.0, 180.0)
+        self._panels_lon.setDecimals(4)
+        self._panels_lon.setSingleStep(0.25)
+        self._panels_lon.setValue(-97.4400)
+        self._panels_lon.valueChanged.connect(
+            lambda _value: self._panels_point_from_spins()
+        )
+        _rail_row(point_grid, 1, "Longitude:", self._panels_lon)
+        self._panels_point_status = QLabel("")
+        self._panels_point_status.setObjectName(OBJ_HINT)
+        self._panels_point_status.setWordWrap(True)
+        point_grid.addWidget(self._panels_point_status, 2, 0, 1, 3)
+        left.addWidget(point_box)
+
+        self._panels_fetch_btn = QPushButton("Get sounding here")
+        # The accent action for this panel, the way every other source tab has
+        # one: comparing fields is what the tab is for, but taking the sounding is
+        # what the comparison was leading to.
+        self._panels_fetch_btn.setObjectName(OBJ_PRIMARY)
+        self._panels_fetch_btn.setMinimumHeight(CONTROL_H["lg"])
+        self._panels_fetch_btn.setToolTip(
+            "Extract an HRRR sounding at the marked point, for the run and "
+            "forecast hour above"
+        )
+        self._panels_fetch_btn.clicked.connect(self._panels_fetch_sounding)
+        left.addWidget(self._panels_fetch_btn)
+        left.addStretch(1)
+
+        _order_rail_cards(left)
+        self._panels_controls_scroll = _scrolling_control_rail(left)
+        outer.addWidget(self._panels_controls_scroll)
+        outer.addWidget(self._panels_view, stretch=1)
+
+        # Which panel's field answers for a sounding before anything is clicked.
+        # Panel one is always in the layout, so it is the only safe default.
+        self._panels_field = self._panels_view.active_field_controller()
+
+        self._panels_area_changed(self._panels_area_combo.currentText())
+        self._panels_update_cycles()
+        self._panels_set_recent()
+        self._panels_point_from_spins(center=True)
+        return w
+
+    def _panels_config(self):
+        """Return the HRRR model config the panels tab works against."""
+        from sharpmod.tools import model_extract
+
+        try:
+            return model_extract.get_config(HRRR_FIELD_MODEL_KEY)
+        except Exception:  # noqa: BLE001 - an absent catalogue is not fatal here
+            _LOGGER.debug("panels.config_unavailable", exc_info=True)
+            return None
+
+    def _panels_on_view_settled(self) -> None:
+        """Let the shared overlays catch up once the grid has settled."""
+        self._view_settled("_panels_radar", "_panels_reports", "_panels_context")
+
+    def _panels_on_radar_site(self, site_id: str) -> None:
+        self._select_radar_site("_panels_radar", site_id)
+
+    def _panels_count_changed(self, _index: int) -> None:
+        count = self._panels_count_combo.currentData()
+        view = getattr(self, "_panels_view", None)
+        if view is None or count is None:
+            return
+        view.set_panel_count(int(count))
+        self._remember_panel_layout()
+
+    def _panels_area_changed(self, name: str) -> None:
+        view = getattr(self, "_panels_view", None)
+        if view is not None:
+            view.set_area(name)
+
+    def _panels_update_cycles(self) -> None:
+        if not hasattr(self, "_panels_cycle"):
+            return
+        cfg = self._panels_config()
+        cycles = cfg.cycles if cfg is not None else SYNOPTIC_HOURS
+        now = datetime.now(timezone.utc)
+        blocked = self._panels_cycle.blockSignals(True)
+        try:
+            _fill_cycle_combo(
+                self._panels_cycle,
+                cycles,
+                _newest_cycle_not_after(cycles, now.hour),
+                run_date=self._panels_date.date(),
+            )
+        finally:
+            self._panels_cycle.blockSignals(blocked)
+        view = getattr(self, "_panels_view", None)
+        if view is not None and cfg is not None:
+            # Outline but no caption. The Forecast Model tab labels its domain
+            # because that map is where a point is judged in or out of the grid;
+            # here the same words would be painted over two to four panels at once
+            # and the rail already says when the point falls outside.
+            view.set_domain(cfg.domain_bounds, "", outline=cfg.domain_outline)
+        self._panels_update_fxx()
+
+    def _panels_update_fxx(self) -> None:
+        if not hasattr(self, "_panels_fxx_combo"):
+            return
+        cfg = self._panels_config()
+        current = self._panels_fxx_combo.currentData()
+        blocked = self._panels_fxx_combo.blockSignals(True)
+        try:
+            self._panels_fxx_combo.clear()
+            if cfg is not None:
+                from sharpmod.tools import model_extract
+
+                cycle = int(self._panels_cycle.currentData() or 0)
+                run = self._panels_run_time()
+                for hour in model_extract.forecast_hours(cfg, cycle_hour=cycle):
+                    hour = int(hour)
+                    valid = run + timedelta(hours=hour)
+                    self._panels_fxx_combo.addItem(_fxx_item_text(hour, valid), hour)
+                    self._panels_fxx_combo.setItemData(
+                        self._panels_fxx_combo.count() - 1,
+                        f"Forecast hour {hour}\nValid {valid:%a %d %b %Y %H}Z",
+                        Qt.ToolTipRole,
+                    )
+                index = self._panels_fxx_combo.findData(current)
+                if index < 0:
+                    index = self._panels_fxx_combo.findData(cfg.default_fxx)
+                self._panels_fxx_combo.setCurrentIndex(index if index >= 0 else 0)
+        finally:
+            self._panels_fxx_combo.blockSignals(blocked)
+        self._panels_update_valid_label()
+
+    def _panels_run_time(self) -> datetime:
+        d = self._panels_date.date()
+        h = int(self._panels_cycle.currentData() or 0)
+        return datetime(d.year(), d.month(), d.day(), h, 0, tzinfo=timezone.utc)
+
+    def _panels_selected_fxx(self) -> int:
+        return int(self._panels_fxx_combo.currentData() or 0)
+
+    def _panels_set_recent(self) -> None:
+        cfg = self._panels_config()
+        cycles = tuple(sorted(cfg.cycles if cfg is not None else SYNOPTIC_HOURS))
+        now = datetime.now(timezone.utc)
+        day = now
+        eligible = [hour for hour in cycles if hour <= now.hour]
+        if eligible:
+            hour = eligible[-1]
+        else:
+            day = now - timedelta(days=1)
+            hour = cycles[-1] if cycles else 0
+        self._panels_date.setDate(QDate(day.year, day.month, day.day))
+        index = self._panels_cycle.findData(hour)
+        if index >= 0:
+            self._panels_cycle.setCurrentIndex(index)
+        self._panels_update_valid_label()
+
+    def _panels_update_valid_label(self) -> None:
+        """Restate the run and valid time, and push both onto every panel."""
+        if not hasattr(self, "_panels_valid_lbl"):
+            return
+        run = self._panels_run_time()
+        fxx = self._panels_selected_fxx()
+        valid = run + timedelta(hours=fxx)
+        _annotate_cycle_combo(self._panels_cycle, self._panels_date.date())
+        combo = self._panels_fxx_combo
+        for index in range(combo.count()):
+            hour = combo.itemData(index)
+            if hour is None:
+                continue
+            entry_valid = run + timedelta(hours=int(hour))
+            combo.setItemText(index, _fxx_item_text(int(hour), entry_valid))
+        self._panels_valid_lbl.setText(
+            f"Run {run:%a %d %b %H}Z  \u2192  Valid {valid:%a %d %b %H}Z"
+            f"   (+{fxx} h)"
+        )
+        # The shared overlays follow the hour the panels depict, exactly as the
+        # forecast-model tab's do. Without this the outlook switch turned on and
+        # then drew nothing, because an outlook is a question about a time.
+        self._sync_overlay_times(
+            as_utc(valid), "_panels_outlook", "_panels_reports", "_panels_context"
+        )
+        view = getattr(self, "_panels_view", None)
+        if view is not None:
+            view.set_forecast_reference(as_utc(run), int(fxx))
+
+    def _panels_point_from_spins(self, center: bool = False) -> None:
+        """Move the marker to the spin boxes' coordinates on every panel."""
+        view = getattr(self, "_panels_view", None)
+        if view is None or self._panels_syncing_point:
+            return
+        self._panels_syncing_point = True
+        try:
+            view.set_point(
+                float(self._panels_lat.value()),
+                float(self._panels_lon.value()),
+                center=bool(center),
+            )
+        finally:
+            self._panels_syncing_point = False
+        # A map click reaches the context overlay through the view's own
+        # ``pointSelected``; a typed coordinate has no such path, and without this
+        # the nearby-observations area stayed where it was last clicked.
+        context = getattr(self, "_panels_context", None)
+        handler = getattr(context, "on_location_changed", None)
+        if handler is not None:
+            handler(float(self._panels_lat.value()), float(self._panels_lon.value()))
+        self._panels_describe_point()
+
+    def _panels_on_point(self, lat: float, lon: float) -> None:
+        """Take a clicked point into the spin boxes without echoing it back."""
+        if self._panels_syncing_point:
+            return
+        # Whose field travels onto a sounding taken here. Rebound per click
+        # because this tab shows several at once; see ``TAB_FIELD_CONTROLLERS``.
+        view = getattr(self, "_panels_view", None)
+        if view is not None:
+            self._panels_field = view.active_field_controller()
+        self._panels_syncing_point = True
+        try:
+            for spin, value in (
+                (self._panels_lat, float(lat)),
+                (self._panels_lon, float(lon)),
+            ):
+                blocked = spin.blockSignals(True)
+                try:
+                    spin.setValue(value)
+                finally:
+                    spin.blockSignals(blocked)
+        finally:
+            self._panels_syncing_point = False
+        self._panels_describe_point()
+
+    def _panels_describe_point(self) -> None:
+        """Say whether the marked point is somewhere HRRR can be sampled."""
+        if not hasattr(self, "_panels_point_status"):
+            return
+        lat = float(self._panels_lat.value())
+        lon = float(self._panels_lon.value())
+        cfg = self._panels_config()
+        inside = True
+        if cfg is not None:
+            from sharpmod.tools import model_extract
+
+            try:
+                inside = bool(model_extract.point_in_domain(cfg, lat, lon))
+            except Exception:  # noqa: BLE001 - a coverage check is advisory
+                inside = True
+        label = self._panels_point_status
+        if inside:
+            label.setText(f"{lat:.4f}, {lon:.4f}")
+            label.setObjectName(OBJ_HINT)
+        else:
+            label.setText(f"{lat:.4f}, {lon:.4f} \u2014 outside the HRRR domain")
+            label.setObjectName(OBJ_STATUS)
+        # Qt does not re-evaluate style-sheet selectors when an object name
+        # changes, so the pair is what actually moves the label between the two
+        # rules rather than leaving it on whichever matched at construction.
+        style = label.style()
+        style.unpolish(label)
+        style.polish(label)
+        if hasattr(self, "_panels_fetch_btn"):
+            self._panels_fetch_btn.setEnabled(inside)
+
+    def _panels_fetch_sounding(self) -> None:
+        """Extract a sounding at the marked point, through the model tab's path.
+
+        Delegated rather than reimplemented. ``_model_fetch`` already owns the
+        runtime check, the in-flight guard, the disk cache, progress reporting,
+        cancellation, and opening the result in a viewer; a second copy of that
+        here would be a second set of those decisions to keep in agreement. So
+        this tab's choices are written into the Forecast Model tab's controls and
+        the one fetch is called.
+        """
+        if not hasattr(self, "_panels_lat"):
+            return
+        self._ensure_tab("Forecast Model")
+        if not hasattr(self, "_model_lat"):
+            QMessageBox.warning(
+                self, APP_NAME, "The forecast model tab is unavailable."
+            )
+            return
+        index = self._model_combo.findData(HRRR_FIELD_MODEL_KEY)
+        if index < 0:
+            QMessageBox.warning(
+                self,
+                APP_NAME,
+                "HRRR is not selectable for this region, so a field-panel "
+                "sounding cannot be extracted.",
+            )
+            return
+        # Setting the model rebuilds the cycle and forecast lists, so it has to
+        # happen before the run is written or the write would be discarded.
+        if self._model_combo.currentIndex() != index:
+            self._model_combo.setCurrentIndex(index)
+        run = self._panels_run_time()
+        self._model_date.setDate(QDate(run.year, run.month, run.day))
+        cycle = self._model_cycle.findData(run.hour)
+        if cycle >= 0:
+            self._model_cycle.setCurrentIndex(cycle)
+        fxx = self._model_fxx_combo.findData(self._panels_selected_fxx())
+        if fxx >= 0:
+            self._model_fxx_combo.setCurrentIndex(fxx)
+        self._model_lat.setValue(float(self._panels_lat.value()))
+        self._model_lon.setValue(float(self._panels_lon.value()))
+        self._model_fetch()
 
     def _model_unsupported_text(self) -> str:
         try:
@@ -2655,6 +3460,19 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
 
         return model_extract.get_config(key)
 
+    def _set_model_summary(self, cfg) -> None:
+        """Show the selected model's coverage and description, or neither.
+
+        Each label is hidden when it has nothing to say, rather than being set to
+        an empty string. An empty ``QLabel`` still occupies a full row, so the
+        no-selection state used to hold blank space open under the combo.
+        """
+        domain = "" if cfg is None else f"Domain: {cfg.domain}"
+        notes = "" if cfg is None else str(cfg.notes or "")
+        for label, text in ((self._model_domain, domain), (self._model_notes, notes)):
+            label.setText(text)
+            label.setVisible(bool(text))
+
     def _model_update_cycles(self) -> None:
         if not hasattr(self, "_model_cycle") or not hasattr(self, "_model_notes"):
             return
@@ -2662,7 +3480,7 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         self._model_cycle.blockSignals(True)
         self._model_cycle.clear()
         if cfg is None:
-            self._model_notes.setText("")
+            self._set_model_summary(None)
             self._model_cycle.blockSignals(False)
             self._model_update_fxx()
             self._model_update_fetch_state()
@@ -2672,11 +3490,14 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         # position now that position no longer tracks the clock.
         now = datetime.now(timezone.utc)
         _fill_cycle_combo(
-            self._model_cycle, cfg.cycles, _newest_cycle_not_after(cfg.cycles, now.hour)
+            self._model_cycle,
+            cfg.cycles,
+            _newest_cycle_not_after(cfg.cycles, now.hour),
+            run_date=self._model_date.date(),
         )
         self._model_cycle.blockSignals(False)
 
-        self._model_notes.setText(f"{cfg.notes}\nDomain: {cfg.domain}")
+        self._set_model_summary(cfg)
         if hasattr(self, "_model_map"):
             self._model_map.set_domain(
                 cfg.domain_bounds,
@@ -2711,8 +3532,16 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             from sharpmod.tools import model_extract
 
             cycle = int(self._model_cycle.currentData() or 0)
+            run = self._model_run_time()
             for hour in model_extract.forecast_hours(cfg, cycle_hour=cycle):
-                self._model_fxx_combo.addItem(f"F{int(hour):03d}", int(hour))
+                hour = int(hour)
+                valid = run + timedelta(hours=hour)
+                self._model_fxx_combo.addItem(_fxx_item_text(hour, valid), hour)
+                self._model_fxx_combo.setItemData(
+                    self._model_fxx_combo.count() - 1,
+                    f"Forecast hour {hour}\nValid {valid:%a %d %b %Y %H}Z",
+                    Qt.ToolTipRole,
+                )
             idx = self._model_fxx_combo.findData(current)
             if idx < 0:
                 idx = self._model_fxx_combo.findData(cfg.default_fxx)
@@ -2745,23 +3574,58 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             self._model_cycle.setCurrentIndex(idx)
         self._model_update_valid_label()
 
+    def _model_relabel_time_items(self) -> None:
+        """Re-derive what the cycle and forecast entries say about the run date.
+
+        Both lists describe themselves in terms of a run the *date* control owns,
+        so editing the date without this left every forecast entry advertising a
+        valid time for the previous date -- the entries would have been confidently
+        wrong rather than merely unhelpful.
+
+        Text only: the data and the current index are untouched, so nothing here
+        emits ``currentIndexChanged`` and this cannot re-enter its own caller.
+        """
+        _annotate_cycle_combo(self._model_cycle, self._model_date.date())
+        combo = getattr(self, "_model_fxx_combo", None)
+        if combo is None:
+            return
+        run = self._model_run_time()
+        for index in range(combo.count()):
+            hour = combo.itemData(index)
+            if hour is None:
+                continue
+            valid = run + timedelta(hours=int(hour))
+            combo.setItemText(index, _fxx_item_text(int(hour), valid))
+            combo.setItemData(
+                index,
+                f"Forecast hour {int(hour)}\nValid {valid:%a %d %b %Y %H}Z",
+                Qt.ToolTipRole,
+            )
+
     def _model_update_valid_label(self) -> None:
         if not hasattr(self, "_model_valid_lbl"):
             return
         run = self._model_run_time()
         fxx = self._model_selected_fxx()
         valid = run + timedelta(hours=fxx)
+        self._model_relabel_time_items()
+        # The lead time is spelled out rather than left to be inferred from the
+        # two timestamps, because that subtraction is the whole reason the pair is
+        # shown together.
         self._model_valid_lbl.setText(
-            f"Run {run:%Y-%m-%d %H}Z  \u2192  Valid {valid:%Y-%m-%d %H}Z"
+            f"Run {run:%a %d %b %H}Z  \u2192  Valid {valid:%a %d %b %H}Z"
+            f"   (+{fxx} h)"
         )
-        # The overlay tracks the forecast *valid* time, not the run time: a
+        # The overlays track the forecast *valid* time, not the run time: a
         # sounding is compared against the outlook covering the hour it depicts.
-        if hasattr(self, "_model_outlook"):
-            self._model_outlook.set_valid_time(as_utc(valid))
-        reports = getattr(self, "_model_reports", None)
-        if reports is not None:
-            reports.set_valid_time(as_utc(valid))
+        self._sync_overlay_times(
+            as_utc(valid), "_model_outlook", "_model_reports", "_model_context"
+        )
         self._model_sync_field_reference(run, fxx, valid)
+        # The field-panels tab is deliberately *not* driven from here. It owns its
+        # own date, cycle, and forecast hour so a comparison can be held on one
+        # run while this tab is moved to another; pushing this tab's cycle across
+        # would overwrite that choice every time either control was touched.
         if hasattr(self, "_model_availability"):
             self._queue_model_availability()
 
@@ -3179,13 +4043,22 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
         finally:
             self._box_mode_disarming = False
 
+    def _model_on_box_cleared(self) -> None:
+        """Keep the toolbar toggle in step when Escape clears the map box."""
+        self._disarm_box_mode()
+
     def _model_on_box_selected(self, lat0, lon0, lat1, lon1) -> None:
         """Plan, confirm, and start extraction for a rectangle from the map."""
         from sharpmod.box_sounding import BoxRegion, BoxSoundingError
         from sharpmod.gui_box import BoxPlanDialog
 
+        # A rectangle is one gesture. Release sticky draw mode before any
+        # validation or dialog so rejected, blocked, and invalid paths cannot
+        # leave every later map drag trapped in box selection.
+        self._disarm_box_mode()
         config = self._model_config()
         if config is None:
+            self._model_map.set_box(None)
             return
         if (
             self._box_extract_worker is not None
@@ -3195,11 +4068,13 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             QMessageBox.information(
                 self, APP_NAME, "A box sounding is already in progress."
             )
+            self._model_map.set_box(None)
             return
         if self._model_worker is not None or self._model_timeline_worker is not None:
             QMessageBox.information(
                 self, APP_NAME, "A model fetch is already in progress."
             )
+            self._model_map.set_box(None)
             return
         try:
             region = BoxRegion.from_corners(lat0, lon0, lat1, lon1)
@@ -3224,6 +4099,7 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             return
         plan = dialog.plan()
         if plan is None:
+            self._model_map.set_box(None)
             return
         # Show exactly which points will be sampled before anything downloads.
         self._model_map.set_box_nodes(
@@ -3231,9 +4107,6 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             f"{plan.rows} x {plan.cols} at {plan.spacing_km:.0f} km",
         )
         self._box_mode = dialog.mode()
-        # The gesture is finished, so give the map back: another drag should pan,
-        # not start a second box on top of the one now being extracted.
-        self._disarm_box_mode()
         self._start_box_extraction(
             plan, hours=dialog.hours(), mode=self._box_mode, fxx=dialog.fxx()
         )
@@ -3706,10 +4579,23 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             "_model_field",
             "_map_reports",
             "_model_reports",
+            "_map_context",
+            "_model_context",
+            "_panels_outlook",
+            "_panels_radar",
+            "_panels_reports",
+            "_panels_context",
         ):
             controller = getattr(self, attr, None)
             if controller is not None:
                 controller.shutdown()
+        # The field-panels tab owns one field controller per panel, so closing the
+        # picker without this leaves up to four fetches running against maps that
+        # are about to be destroyed.
+        panels = getattr(self, "_panels_view", None)
+        if panels is not None:
+            with suppress(RuntimeError):
+                panels.shutdown()
         self._remember_overlay_choices()
         self._remember_locator_choice()
         super().closeEvent(event)
@@ -4107,6 +4993,60 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             parent=self,
         )
         dialog.exec()
+
+    def _show_model_panels(self) -> None:
+        """Bring the field-panels tab forward.
+
+        A menu entry rather than a window: the panels are a source like the
+        others, and the run they draw is chosen in their own rail.
+        """
+        self._select_tab("Field Panels")
+
+    def _stored_panel_layout(self):
+        """Return the remembered panel count and fields, unvalidated.
+
+        Neither value is checked here on purpose. ``MapPanelsWindow`` already
+        clamps the count to a layout it offers and resolves every field through
+        the HRRR catalogue, so a preference left by a different build degrades in
+        one place instead of two that could disagree.
+        """
+        try:
+            count = self._settings.value("panels/count", None)
+            # The ``list`` hint matters: an INI list that has come down to a single
+            # entry reads back as a bare string otherwise, and iterating that would
+            # spread one product's letters across the panels.
+            products = self._settings.value("panels/products", [], list)
+        except Exception:  # noqa: BLE001 - an unreadable INI is not fatal
+            return None, ()
+        return count, tuple(str(key) for key in (products or ()))
+
+    def _remember_panel_layout(self, *_args) -> None:
+        """Persist the field-panels arrangement as the user changes it.
+
+        Saved on change rather than at shutdown so the preference survives a
+        crash or a kill, and because the two signals it is connected to are
+        exactly the moments the stored value goes stale.
+        """
+        view = getattr(self, "_panels_view", None)
+        if view is None:
+            return
+        try:
+            self._settings.setValue("panels/count", int(view.panel_count()))
+            self._settings.setValue("panels/products", list(view.panel_products()))
+            self._settings.sync()
+        except Exception:  # noqa: BLE001 - a preference must not break the UI
+            _LOGGER.debug("map_panels.layout_unsaved", exc_info=True)
+
+    def selected_map_area(self) -> str:
+        """Return the region the front map tab is showing, for a new view to adopt."""
+        for attribute in ("_area_combo", "_model_area_combo"):
+            combo = getattr(self, attribute, None)
+            if combo is None:
+                continue
+            name = combo.currentText()
+            if name in MAP_AREAS:
+                return name
+        return "United States (CONUS)"
 
     def _reuse_cache_entry(self, entry) -> None:
         """Open a portable cache item or re-extract from cached GRIB data."""
@@ -4593,6 +5533,30 @@ class PickerWindow(Era5PickerMixin, WrfPickerMixin, QMainWindow):
             return None
         return getattr(self, attribute, None)
 
+    def active_environment_context(self):
+        """Return context for the map in front, then any loaded map context."""
+
+        tabs = getattr(self, "_tabs", None)
+        if tabs is not None:
+            try:
+                title = tabs.tabText(tabs.currentIndex())
+            except (AttributeError, RuntimeError):
+                title = ""
+            attribute = TAB_CONTEXT_CONTROLLERS.get(title)
+            controller = getattr(self, attribute, None) if attribute else None
+            if controller is not None:
+                return controller
+        for attribute in ("_model_context", "_map_context"):
+            controller = getattr(self, attribute, None)
+            if controller is None:
+                continue
+            if (
+                controller.satellite_overlay() is not None
+                or controller.surface_observations() is not None
+            ):
+                return controller
+        return None
+
     def _show_sounding(self, prof_col, stn_id, title=None):
         self._prune_closed_viewers()
         if self._combine_soundings_enabled() and self._viewers:
@@ -4870,6 +5834,10 @@ def main(argv: list[str] | None = None) -> int:
     # Style, palette, bundled chrome fonts, and the generated style sheet, in
     # one place and before the first widget is constructed.
     apply_theme(app, color_style=_startup_color_style())
+    # Before any widget too, so no control is ever briefly wheel-sensitive, and no
+    # dropdown ever opens once with the old placement before the filter arrives.
+    install_wheel_guard(app)
+    install_popup_placement(app)
 
     icon = _app_icon()
     if not icon.isNull():

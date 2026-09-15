@@ -9,6 +9,7 @@ import time
 from qtpy.QtWidgets import QDockWidget, QMainWindow
 
 from sharpmod.gui_analysis_workspace import install_analysis_workspace
+from sharpmod.gui_visual_comparison import VisualComparisonWidget
 from sharpmod.profile_metrics import (
     DEFAULT_METRIC_KEYS,
     ComparisonSample,
@@ -76,8 +77,16 @@ class _Engine:
         self.calls.append(("timeline", collection, tuple(keys), member))
         return self.timeline_result
 
-    def compare(self, collections, keys, valid_time=None):
-        self.calls.append(("compare", tuple(collections), tuple(keys), valid_time))
+    def compare(self, collections, keys, valid_time=None, reference_index=0):
+        self.calls.append(
+            (
+                "compare",
+                tuple(collections),
+                tuple(keys),
+                valid_time,
+                reference_index,
+            )
+        )
         return self.compare_result
 
     def ensemble(self, collection, keys, valid_time=None, pressure_levels=None):
@@ -109,6 +118,18 @@ def _make(qt_app, collections, engine=None):
     return win, workspace, engine
 
 
+def test_visual_comparison_canvas_paints_with_the_current_theme(qt_app):
+    widget = VisualComparisonWidget()
+    try:
+        widget.resize(900, 520)
+        widget.show()
+        qt_app.processEvents()
+
+        assert not widget.grab().isNull()
+    finally:
+        widget.close()
+
+
 def test_installer_is_idempotent_hidden_and_discoverable(qt_app):
     win, workspace, engine = _make(qt_app, [_Collection("KOUN")])
     try:
@@ -121,6 +142,11 @@ def test_installer_is_idempotent_hidden_and_discoverable(qt_app):
             "Compare",
             "Ensemble",
             "Notes",
+            "Scenarios",
+            "Verify",
+            "Observed Winds",
+            "Share",
+            "Replay",
         ]
         assert workspace.dock.toggleViewAction() in win._sharpmod_view_menu.actions()
         assert engine.calls == []

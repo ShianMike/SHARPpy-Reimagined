@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v1.2.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v1.3.0). Created if it does not exist."
         required: true
-        default: "v1.2.0"
+        default: "v1.3.0"
 
 # Build and test jobs have no repository write permission. A dedicated job can
 # write only provenance attestations, and only the isolated publish job can

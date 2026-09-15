@@ -61,8 +61,8 @@ def _goes_netcdf(tmp_path: Path) -> bytes:
                 category=DeprecationWarning,
             )
             cmi[:] = values
-        dqf = dataset.createVariable("DQF", "u1", ("y", "x"))
-        dqf[:] = 0
+            dqf = dataset.createVariable("DQF", "u1", ("y", "x"))
+            dqf[:] = 0
     return path.read_bytes()
 
 

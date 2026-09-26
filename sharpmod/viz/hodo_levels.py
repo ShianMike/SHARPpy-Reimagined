@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from sharpmod import colors
+from sharpmod.viz import colors
 from sharpmod.viz.hodo_locator import locator_rect_for_widget
 
 

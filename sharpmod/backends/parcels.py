@@ -22,7 +22,7 @@ from .protocol import (
     ParcelWorkspace,
     ProfileThermodynamics,
 )
-from sharpmod.upstream_warnings import known_sharppy_numerical_warnings
+from sharpmod.upstream.upstream_warnings import known_sharppy_numerical_warnings
 
 
 PARCEL_FIELDS = tuple(ParcelDiagnostics.__dataclass_fields__)

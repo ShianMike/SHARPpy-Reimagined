@@ -1,3 +1,9 @@
+"""Regression coverage for combining and extending sounding timelines.
+
+The tests protect forecast-hour validation, chronological collection merging, ensemble
+member accounting, duplicate-time rejection, and appending newly streamed forecast
+hours."""
+
 from datetime import datetime, timedelta
 
 import pytest

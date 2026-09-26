@@ -37,8 +37,8 @@ from datetime import datetime, timezone
 
 from sharpmod.export_paths import export_file_path
 from sharpmod.tools import era5_extract as _e5
-from sharpmod.upstream_patches import apply_herbie_source_fallback
-from sharpmod.upstream_warnings import known_herbie_deprecations
+from sharpmod.upstream.upstream_patches import apply_herbie_source_fallback
+from sharpmod.upstream.upstream_warnings import known_herbie_deprecations
 from sharpmod.tools.era5_extract import (
     ERA5ExtractionError as IFSExtractionError,  # re-export under IFS names
     ParameterRangeError,

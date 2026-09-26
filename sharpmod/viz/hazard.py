@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from qtpy import QtCore, QtGui, QtWidgets
 
-from sharpmod import colors
+from sharpmod.viz import colors
 from sharpmod.sharptab.hazard import HAZARD_LABELS, classify
 
 __all__ = ["plotHazard", "hazard_label_text", "HAZARD_LABEL_COLORS", "TITLE"]

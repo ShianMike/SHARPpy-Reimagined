@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -76,6 +76,9 @@ class _Click:
 @pytest.fixture
 def controller(widget):
     control = StormReportsOverlayController(widget)
+    # Private result slots now validate the requested time as well as the
+    # token (T21.4); production always sets this before a worker starts.
+    control.set_valid_time(WHEN)
     try:
         yield control
     finally:
@@ -107,7 +110,8 @@ def test_the_switch_becomes_available_with_the_outlook(controller):
     controller.bind_outlook(outlook)
 
     assert _box(controller).isEnabled()
-    assert _box(controller).toolTip() == ""
+    assert "Triangle: tornado" in _box(controller).toolTip()
+    assert "click a marker" in _box(controller).toolTip()
 
 
 def test_losing_the_outlook_switches_the_reports_off(controller):
@@ -140,6 +144,20 @@ def _layer():
         "Public,Golf ball hail.,OKC027,Cleveland,M\n"
     )
     return storm_reports.layer_from_reports(reports, span_deg=59.0)
+
+
+def _mixed_layer():
+    reports = storm_reports.parse_reports(
+        "VALID,VALID2,LAT,LON,MAG,WFO,TYPECODE,TYPETEXT,CITY,COUNTY,STATE,"
+        "SOURCE,REMARK,UGC,UGCNAME,QUALIFIER\n"
+        "202605011800,x,35.22,-97.44,1.75,OUN,H,HAIL,Norman,Cleveland,OK,"
+        "Public,Golf ball hail.,OKC027,Cleveland,M\n"
+        "202605011805,x,35.22,-97.44,65,OUN,G,TSTM WND GST,Norman,Cleveland,OK,"
+        "Mesonet,Measured gust.,OKC027,Cleveland,M\n"
+    )
+    return storm_reports.layer_from_reports(
+        reports, span_deg=59.0, around=WHEN, window=timedelta(hours=6)
+    )
 
 
 def test_a_loaded_layer_reaches_the_map(controller, widget):
@@ -191,6 +209,22 @@ def test_the_status_names_how_many_were_found(controller):
     assert "1 storm report" in controller._status.text()
 
 
+def test_hazard_filter_reuses_the_loaded_response(controller, widget):
+    controller.set_enabled(True)
+    controller._on_loaded(controller._token, WHEN, _mixed_layer())
+
+    controller.set_hazard_filter("wind")
+    wind = widget.overlay(storm_reports.OVERLAY_KEY)
+    assert len(wind.shapes) == 1
+    assert wind.shapes[0].marker_category == "g"
+    assert "1 storm report of 2" in controller._status.text()
+    assert "Wind + wind damage" in controller._status.text()
+
+    controller.set_hazard_filter("tornado")
+    assert widget.overlay(storm_reports.OVERLAY_KEY) is None
+    assert "2 total before filter" in controller._status.text()
+
+
 def test_point_sounding_map_opens_report_instead_of_moving_point(
     point_widget, monkeypatch
 ):
@@ -223,7 +257,9 @@ def test_the_map_extent_narrows_the_request(controller, widget, monkeypatch):
         def __init__(
             self, valid, token, *, parent=None, view=None, window=None, span_deg=None
         ):
-            seen.append({"view": view, "span": span_deg, "valid": valid})
+            seen.append(
+                {"view": view, "span": span_deg, "valid": valid, "window": window}
+            )
             self.loaded = SimpleNamespace(connect=lambda slot: None)
             self.failed = SimpleNamespace(connect=lambda slot: None)
             self.finished = SimpleNamespace(connect=lambda slot: None)
@@ -239,9 +275,11 @@ def test_the_map_extent_narrows_the_request(controller, widget, monkeypatch):
 
     monkeypatch.setattr("sharpmod.gui_overlay_controls._StormReportsWorker", _Worker)
     controller.set_valid_time(WHEN)
+    controller.set_report_window(timedelta(hours=2))
     controller.set_enabled(True)
     controller._start_fetch()
 
     assert seen[-1]["view"] == widget.view_bounds()
     assert seen[-1]["span"] == pytest.approx(59.0)
     assert seen[-1]["valid"] == WHEN
+    assert seen[-1]["window"] == timedelta(hours=2)

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from qtpy.QtWidgets import QDialogButtonBox
+from qtpy.QtWidgets import QDialog, QDialogButtonBox
 
 from sharpmod import gui_batch_process
 from sharpmod import box_analysis as ba
@@ -67,7 +67,8 @@ def test_plan_dialog_resolves_a_plan_and_describes_it():
     assert plan is not None
     assert plan.count >= 4
     text = dialog._summary.text()
-    assert "HRRR" in text and "Lattice" in text and "Downloads" in text
+    assert "HRRR" in text and "Lattice" in text and "Est. work" in text
+    assert "not guaranteed" in text
     assert dialog._ok_button.isEnabled()
 
 
@@ -896,6 +897,17 @@ def save_to(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         "sharpmod.gui_box.QFileDialog.getSaveFileName", pick)
+    from sharpmod import gui_map_export
+
+    def preview_and_accept(dialog):
+        dialog.capture_preview()
+        assert dialog.output_pixmap is not None, dialog.status.text()
+        return QDialog.Accepted
+
+    # Box PNG has a mandatory exact-pixel preview before the destination;
+    # CSV/GeoJSON remain independent of this configuration dialog.
+    monkeypatch.setattr(gui_map_export.ExportImageDialog, "exec", preview_and_accept)
+    monkeypatch.setattr(gui_map_export.QFileDialog, "getSaveFileName", pick)
     return chosen
 
 
@@ -943,7 +955,7 @@ def test_export_field_png_writes_an_image(window, save_to):
     path = save_to["path"]
     assert path.suffix == ".png"
     assert path.is_file() and path.stat().st_size > 0
-    assert "Saved the field map" in window._status.text()
+    assert "Saved the map figure" in window._status.text()
 
 
 def test_export_csv_writes_every_point(window, save_to, analysis):
@@ -987,6 +999,12 @@ def test_sequence_export_name_spans_its_hours(sequence_window):
 
 
 def test_cancelling_a_save_dialog_writes_nothing(window, monkeypatch):
+    from sharpmod import gui_map_export
+
+    monkeypatch.setattr(gui_map_export.ExportImageDialog, "exec", lambda dialog: (
+        dialog.capture_preview(), QDialog.Accepted)[1])
+    monkeypatch.setattr(gui_map_export.QFileDialog, "getSaveFileName",
+                        lambda *_args, **_kwargs: ("", ""))
     monkeypatch.setattr(
         "sharpmod.gui_box.QFileDialog.getSaveFileName",
         lambda *args, **kwargs: ("", ""))

@@ -123,6 +123,8 @@ jobs:
     name: Deterministic and coverage (Python 3.13)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      junit_artifact_id: ${{ steps.fast_junit.outputs.artifact-id }}
 
     steps:
       - name: Check out tested source
@@ -184,6 +186,139 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Share JUnit results with test tree
+        id: fast_junit
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: fast-junit-python-3.13
+          path: .test-results/fast.xml
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+
+  visualization:
+    name: "Test tree / 🎨 Data visualization"
+    needs: fast
+    if: ${{ always() && !cancelled() && needs.fast.outputs.junit_artifact_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      junit_artifact_id: ${{ steps.forward_report.outputs.junit_artifact_id }}
+      fast_result: ${{ steps.forward_report.outputs.fast_result }}
+    steps:
+      - name: Forward source report to visualization branches
+        id: forward_report
+        env:
+          JUNIT_ARTIFACT_ID: ${{ needs.fast.outputs.junit_artifact_id }}
+          FAST_RESULT: ${{ needs.fast.result }}
+        run: |
+          echo "junit_artifact_id=$JUNIT_ARTIFACT_ID" >> "$GITHUB_OUTPUT"
+          echo "fast_result=$FAST_RESULT" >> "$GITHUB_OUTPUT"
+
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Download fast-lane JUnit results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: fast-junit-python-3.13
+          path: .test-results
+
+      - name: Show visualization branch
+        env:
+          SOURCE_RESULT: ${{ needs.fast.result }}
+        run: >-
+          python3 scripts/summarize_test_categories.py
+          .test-results/fast.xml
+          --group visualization
+          --source-result "$SOURCE_RESULT"
+
+  test-areas:
+    name: "Test tree / ${{ matrix.label }}"
+    # Report already-run fast-lane cases as separate status jobs. The fast lane
+    # remains the only test execution, coverage owner, and timing budget gate.
+    needs: fast
+    if: ${{ always() && !cancelled() && needs.fast.outputs.junit_artifact_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: interface
+            label: "🖥️ GUI and workflows"
+          - group: science
+            label: "🧮 Scientific calculations"
+          - group: providers
+            label: "📡 Data and providers"
+          - group: platform
+            label: "📦 Backends and packaging"
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Download fast-lane JUnit results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: fast-junit-python-3.13
+          path: .test-results
+
+      - name: Show category results
+        env:
+          SOURCE_RESULT: ${{ needs.fast.result }}
+        run: >-
+          python3 scripts/summarize_test_categories.py
+          .test-results/fast.xml
+          --group "${{ matrix.group }}"
+          --source-result "$SOURCE_RESULT"
+
+  visualization-branches:
+    name: "↳ Visualization / ${{ matrix.label }}"
+    needs: visualization
+    if: ${{ always() && !cancelled() && needs.visualization.outputs.junit_artifact_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: charts
+            label: Charts and soundings
+          - group: maps
+            label: Maps and overlays
+          - group: analysis
+            label: Analysis and animation
+          - group: exports
+            label: Exports and rendering
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Download fast-lane JUnit results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: fast-junit-python-3.13
+          path: .test-results
+
+      - name: Show visualization section
+        env:
+          SOURCE_RESULT: ${{ needs.visualization.outputs.fast_result }}
+        run: >-
+          python3 scripts/summarize_test_categories.py
+          .test-results/fast.xml
+          --group "${{ matrix.group }}"
+          --source-result "$SOURCE_RESULT"
 
   property:
     name: Full properties (${{ matrix.backend }}, Python 3.13)
@@ -382,10 +517,10 @@ jobs:
       - name: Run focused maintainability lint
         run: >-
           python -m ruff check
-          sharpmod/portable_sounding.py
-          sharpmod/model_disk_cache.py
-          sharpmod/model_sources.py
-          sharpmod/gui_cache.py
+          sharpmod/io/portable_sounding.py
+          sharpmod/models/model_disk_cache.py
+          sharpmod/models/model_sources.py
+          sharpmod/ui/features/gui_cache.py
           --select E,F,I,UP,B,SIM
 
       - name: Audit installed dependencies

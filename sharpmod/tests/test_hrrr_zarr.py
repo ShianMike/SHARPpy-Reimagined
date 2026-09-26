@@ -2,9 +2,30 @@
 
 from __future__ import annotations
 
+import importlib.util
+
 import numpy as np
-from numcodecs import get_codec
 import pytest
+
+
+def _require_numcodecs():
+    """Fail loudly when the checked [era5] extra is absent.
+
+    A collection-time ``importorskip`` would silently drop this module's five
+    tests and hide lost coverage; every lane that collects this file installs
+    ``.[era5]`` (or ``.[dev,wrf,render]`` on Windows, which still needs the
+    Zarr codec), so a missing ``numcodecs`` is a broken environment, not an
+    optional dependency.
+    """
+    if importlib.util.find_spec("numcodecs") is None:
+        pytest.fail(
+            "numcodecs is required (pip install -e '.[era5]'); "
+            "skipping would hide lost HRRR Zarr coverage"
+        )
+
+
+_require_numcodecs()
+from numcodecs import get_codec
 
 from sharpmod.hrrr_zarr import (
     _point_dataset_from_columns,

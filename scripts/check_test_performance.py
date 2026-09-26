@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
@@ -19,6 +21,58 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASELINE = ROOT / "constraints" / "test-performance-baseline.json"
+
+
+def _git_output(args: list[str]) -> str | None:
+    """Run one git probe, returning stripped stdout or ``None`` on failure."""
+    try:
+        return subprocess.run(
+            ["git", *args],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip() or None
+    except Exception:
+        return None
+
+
+def collect_run_context(*, workers: int | None = None) -> dict:
+    """Return the interpreter/backend/machine context for one timing report.
+
+    Timing numbers are meaningless without the conditions they were measured
+    under: the local Python-property result (this host, four workers) cannot
+    be compared directly with CI's two-worker Python 3.13 run. Recording the
+    context in every report makes that visible instead of implied. The SHA and
+    the dirty state are separate fields, because an uncommitted worktree is
+    not the commit it names -- a report stamped with a bare ``52989d9c900c``
+    for a tree with 286 modified files compares against nothing.
+    """
+    try:
+        from sharpmod.backends import backend_info
+    except Exception:
+        backend = {"active_backend": "unknown"}
+    else:
+        try:
+            backend = backend_info()
+        except Exception:
+            backend = {"active_backend": "unknown"}
+    dirty_count: int | None = None
+    status = _git_output(["status", "--porcelain"])
+    if status is not None:
+        dirty_count = sum(1 for line in status.splitlines() if line.strip())
+    context = {
+        "python_version": platform.python_version(),
+        "requested_backend": backend.get("requested_backend"),
+        "active_backend": backend.get("active_backend"),
+        "workers": workers,
+        "cpu_count": os.cpu_count(),
+        "platform": platform.platform(),
+        "commit": _git_output(["rev-parse", "--short=12", "HEAD"]),
+        "worktree_dirty": dirty_count is not None and dirty_count > 0,
+        "worktree_dirty_files": dirty_count,
+    }
+    return {key: value for key, value in context.items() if value is not None}
 
 
 class PerformanceBudgetError(ValueError):
@@ -276,6 +330,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--json-out", type=Path, help="write machine-readable report")
     parser.add_argument("--top", type=int, default=15, help="slow tests to report")
     parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="xdist worker count for the recorded run context",
+    )
+    parser.add_argument(
         "--environment-profile",
         default=(
             "github-actions"
@@ -323,6 +383,7 @@ def main(argv: list[str] | None = None) -> int:
         "generated_at": datetime.now(UTC).isoformat(),
         "suite": args.suite,
         "environment_profile": args.environment_profile or "default",
+        "run_context": collect_run_context(workers=args.workers),
         "suite_seconds": suite_seconds,
         "tracked_tests_present": tracked,
         "slowest_tests": [asdict(item) for item in top],

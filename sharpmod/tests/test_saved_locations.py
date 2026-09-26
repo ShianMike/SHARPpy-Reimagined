@@ -1,11 +1,16 @@
 """Saved/recent point location persistence regressions."""
 
+import json
+
 from qtpy.QtCore import QSettings
 import pytest
 
 from sharpmod.saved_locations import (
+    LOCATION_FORMAT,
+    LOCATION_VERSION,
     LocationFormatError,
     RECENT_SETTINGS_KEY,
+    SAVED_SETTINGS_KEY,
     SavedLocationStore,
     generated_recent_label,
     is_generated_recent_label,
@@ -53,13 +58,42 @@ def test_unnamed_recent_label_is_stable_and_distinguishable(tmp_path):
 
 def test_import_export_is_versioned_and_atomic(tmp_path):
     first = SavedLocationStore(_settings(tmp_path / "one"))
-    first.upsert("Guam", 13.45, 144.8)
+    first.upsert("Guam", 13.45, 144.8, group="Pacific sites")
     exported = first.export_file(tmp_path / "points.json")
     second = SavedLocationStore(_settings(tmp_path / "two"))
 
     second.import_file(exported)
 
     assert second.load() == first.load()
+
+
+def test_version_one_locations_migrate_to_ungrouped(tmp_path):
+    settings = _settings(tmp_path)
+    settings.setValue(
+        SAVED_SETTINGS_KEY,
+        json.dumps({
+            "format": LOCATION_FORMAT,
+            "version": 1,
+            "locations": [{"name": "Legacy", "lat": 35, "lon": -97}],
+        }),
+    )
+    store = SavedLocationStore(settings)
+
+    assert store.load()[0].group == ""
+
+    store.save(store.load())
+    migrated = json.loads(settings.value(SAVED_SETTINGS_KEY, "", str))
+    assert migrated["version"] == LOCATION_VERSION
+    assert migrated["locations"][0]["group"] == ""
+
+
+def test_coordinate_update_preserves_existing_group_by_default(tmp_path):
+    store = SavedLocationStore(_settings(tmp_path))
+    store.upsert("Norman", 35.18, -97.44, group="Home")
+
+    store.upsert("NORMAN", 35.22, -97.50)
+
+    assert store.load()[0].group == "Home"
 
 
 @pytest.mark.parametrize(

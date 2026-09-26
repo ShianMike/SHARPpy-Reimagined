@@ -133,6 +133,8 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         for job in jobs.values()
         for step in job["steps"]
         if ".test-results" in str(step.get("with", {}).get("path", ""))
+        and "download-artifact" not in str(step.get("uses", ""))
+        and "fast-junit" not in str(step.get("with", {}).get("name", ""))
     ]
     assert len(timing_uploads) == 6
     assert all(

@@ -139,15 +139,28 @@ def themed_app(qt_app):
     before_font = qt_app.font()
     before_applied = gui_theme._theme_applied
     before_theme = gui_theme._current_theme
-    gui_theme.apply_theme(qt_app, theme=THEMES[DEFAULT_THEME_NAME])
+    before_scale = gui_theme._current_text_scale
+    before_density = gui_theme._current_density
+    standard = THEMES[DEFAULT_THEME_NAME]
+    if (
+        not gui_theme.theme_is_applied()
+        or gui_theme.current_theme().name != standard.name
+        or gui_theme.current_text_scale() != 100
+        or gui_theme.current_density() != "comfortable"
+        or not qt_app.styleSheet()
+    ):
+        gui_theme.apply_theme(qt_app, theme=standard)
     try:
         yield qt_app
     finally:
-        qt_app.setStyleSheet(before_qss)
+        if qt_app.styleSheet() != before_qss:
+            qt_app.setStyleSheet(before_qss)
         qt_app.setPalette(before_palette)
         qt_app.setFont(before_font)
         gui_theme._theme_applied = before_applied
         gui_theme._current_theme = before_theme
+        gui_theme._current_text_scale = before_scale
+        gui_theme._current_density = before_density
 
 
 def _make(qt_app, collections):
@@ -166,6 +179,7 @@ def one_sounding(qt_app):
         qt_app, {"A (27/1200Z HRRR)": _StubCollection("KOUN")})
     yield win, widget, panel, dock
     win.close()
+    win.deleteLater()
 
 
 @pytest.fixture
@@ -177,13 +191,34 @@ def three_soundings(qt_app):
     })
     yield win, widget, panel, dock
     win.close()
+    win.deleteLater()
 
 
 def test_installs_docked_on_the_right(one_sounding):
     win, _widget, panel, dock = one_sounding
     assert isinstance(dock, QDockWidget)
     assert win.dockWidgetArea(dock) == Qt.RightDockWidgetArea
-    assert dock.widget() is panel
+    assert panel.parentWidget() is dock.widget()
+    assert dock.widget().layout().indexOf(panel) >= 0
+
+
+def test_tabified_analysis_can_widen_without_changing_sidebar_budget(one_sounding, qt_app):
+    from types import SimpleNamespace
+    from qtpy.QtWidgets import QWidget
+    from sharpmod.gui_analysis_workspace import install_analysis_workspace
+
+    win, _widget, panel, _dock = one_sounding
+    win.setCentralWidget(QWidget(win))
+    engine = SimpleNamespace(timeline=lambda *_a, **_kw: ())
+    workspace = install_analysis_workspace(win, engine=engine, async_compute=False)
+    win.resize(1600, 900)
+    win.show()
+    workspace.open("Trends")
+    win.resizeDocks([workspace.dock], [650], Qt.Horizontal)
+    qt_app.processEvents()
+    assert workspace.dock.width() >= 640, "fixed sidebar capped its analysis sibling"
+    assert panel.width() == VIEWER_SIDEBAR_W
+    assert panel.minimumWidth() == panel.maximumWidth() == VIEWER_SIDEBAR_W
 
 
 def test_is_not_floatable(one_sounding):
@@ -220,6 +255,7 @@ def test_title_bar_close_button_is_a_usable_target(themed_app):
         f"close target too small: {close.width()}x{close.height()}"
     assert "Ctrl+B" in close.toolTip()
     win.close()
+    win.deleteLater()
 
 
 def test_title_bar_close_button_hides_the_panel(one_sounding, qt_app):
@@ -256,7 +292,8 @@ def test_row_label_splits_location_from_model_and_run(three_soundings):
     _win, _widget, panel, _dock = three_soundings
     text = panel._list.item(0).text()
     assert text.startswith("KOUN\n")
-    assert "HRRR" in text and "27 Aug 1200Z" in text
+    assert "HRRR" in text and "Init: 2026-08-27 12:00 UTC" in text
+    assert "Valid: not reported" in text
 
 
 def test_row_label_falls_back_to_the_upstream_id(qt_app):
@@ -271,7 +308,8 @@ def test_row_label_falls_back_to_the_upstream_id(qt_app):
 
     win, _widget, panel, _dock = _make(qt_app, {"RAW ID": _Bare()})
     try:
-        assert panel._list.item(0).text() == "RAW ID"
+        assert panel._list.item(0).text().split("\n")[0] == "RAW ID"
+        assert panel._list.item(0).data(Qt.UserRole) == "RAW ID"
     finally:
         win.close()
 
@@ -289,6 +327,84 @@ def test_external_focus_change_syncs_the_list(three_soundings):
     widget.pc_idx = 2
     widget.updateProfs()
     assert panel._list.currentRow() == 2
+
+
+def test_search_filters_full_identities_without_implicitly_changing_focus(three_soundings):
+    _win, widget, panel, _dock = three_soundings
+    original_ids = list(widget.prof_ids)
+    original_collections = list(widget.prof_collections)
+    panel._search.setText("GFS 2026-08-27")
+    assert panel._list.count() == 1
+    assert panel._list.item(0).data(Qt.UserRole) == original_ids[1]
+    assert widget.pc_idx == 0 and widget.focus_calls == []
+    assert panel._list.currentItem() is None
+    assert not panel._remove.isEnabled()
+    panel._list.setCurrentRow(0)
+    assert widget.focus_calls == [original_ids[1]]
+    assert widget.prof_ids == original_ids and widget.prof_collections == original_collections
+    panel._search.setText("nothing matches this query")
+    assert panel._list.count() == 0
+    assert "focused profile is unchanged" in panel._empty.text()
+    assert widget.pc_idx == 1
+    panel._search.clear()
+    assert panel._list.currentItem().data(Qt.UserRole) == original_ids[1]
+
+
+def test_native_group_sort_preserves_actual_ids_and_external_focus(three_soundings):
+    _win, widget, panel, _dock = three_soundings
+    original_ids = list(widget.prof_ids)
+    panel._sort_actions["location"].trigger()
+    assert panel._sort_actions["location"].isChecked()
+    assert [panel._list.item(i).data(Qt.UserRole) for i in range(3)] == [original_ids[2], original_ids[0], original_ids[1]]
+    assert panel._list.currentItem().data(Qt.UserRole) == original_ids[0]
+    panel._reverse_action.trigger()
+    assert panel._list.item(0).data(Qt.UserRole) == original_ids[1]
+    panel._group_actions["source"].trigger()
+    assert panel._list.count() == 6
+    for index in range(panel._list.count()):
+        item = panel._list.item(index)
+        if item.data(Qt.UserRole) is None:
+            assert not item.flags() & Qt.ItemIsSelectable
+    widget.pc_idx = 2
+    widget.updateProfs()
+    assert panel._list.currentItem().data(Qt.UserRole) == original_ids[2]
+    assert widget.focus_calls == [] and widget.prof_ids == original_ids
+    assert "Profile ID:" in panel._list.currentItem().toolTip()
+
+
+def test_remove_from_sorted_filtered_list_uses_identity_not_row_index(three_soundings):
+    win, widget, panel, _dock = three_soundings
+    panel._sort_actions["location"].trigger()
+    panel._search.setText("KFWS")
+    panel._list.setCurrentRow(0)
+    panel._on_remove()
+    assert win.removed == ["C (27/1800Z NAM)"]
+    assert "C (27/1800Z NAM)" not in widget.prof_ids
+    assert panel._list.count() == 0
+
+
+def test_sidebar_live_large_text_uses_native_scroll_and_scaled_width(themed_app):
+    from sharpmod.gui_theme import apply_theme
+    from sharpmod.theme import DEFAULT_THEME_NAME, THEMES
+
+    win, _widget, panel, _dock = _make(themed_app, {"A": _StubCollection("KOUN")})
+    try:
+        win.resize(1000, 650)
+        win.show()
+        apply_theme(themed_app, theme=THEMES[DEFAULT_THEME_NAME], text_scale=200)
+        themed_app.processEvents()
+        themed_app.processEvents()
+        assert panel.width() == VIEWER_SIDEBAR_W * 2
+        assert panel._scroll.widgetResizable()
+        assert panel._scroll.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
+        assert panel._list.wordWrap() and panel._list.textElideMode() == Qt.ElideNone
+        panel._scroll.ensureWidgetVisible(panel._inspect)
+        themed_app.processEvents()
+        assert panel._inspect.isVisibleTo(panel)
+        assert panel._inspect.geometry().width() >= panel._inspect.minimumSizeHint().width()
+    finally:
+        win.close()
+        win.deleteLater()
 
 
 def test_refresh_does_not_re_focus(three_soundings):
@@ -370,6 +486,7 @@ def test_members_listed_for_an_ensemble(qt_app):
             == ["m01", "m02", "mean"]
     finally:
         win.close()
+        win.deleteLater()
 
 
 def test_members_mark_the_highlighted_one(qt_app):
@@ -383,6 +500,7 @@ def test_members_mark_the_highlighted_one(qt_app):
         assert panel._members.currentItem().text() == "m02"
     finally:
         win.close()
+        win.deleteLater()
 
 
 def test_picking_a_member_highlights_it(qt_app):
@@ -397,6 +515,7 @@ def test_picking_a_member_highlights_it(qt_app):
         assert widget.update_calls > before
     finally:
         win.close()
+        win.deleteLater()
 
 
 def test_member_rows_are_compact(qt_app):
@@ -412,6 +531,7 @@ def test_member_rows_are_compact(qt_app):
         assert panel._list.property(PROP_COMPACT) in (None, False)
     finally:
         win.close()
+        win.deleteLater()
 
 
 def test_toggle_action_is_in_the_view_menu(one_sounding):
@@ -561,7 +681,17 @@ def real_viewer(qt_app, tmp_path_factory):
     before_font = qt_app.font()
     before_applied = gui_theme._theme_applied
     before_theme = gui_theme._current_theme
-    gui_theme.apply_theme(qt_app, theme=THEMES[DEFAULT_THEME_NAME])
+    before_scale = gui_theme._current_text_scale
+    before_density = gui_theme._current_density
+    standard = THEMES[DEFAULT_THEME_NAME]
+    if (
+        not gui_theme.theme_is_applied()
+        or gui_theme.current_theme().name != standard.name
+        or gui_theme.current_text_scale() != 100
+        or gui_theme.current_density() != "comfortable"
+        or not qt_app.styleSheet()
+    ):
+        gui_theme.apply_theme(qt_app, theme=standard)
 
     render_mod.install_font(qt_app)
     render_mod.install_render_patches()
@@ -606,11 +736,18 @@ def real_viewer(qt_app, tmp_path_factory):
         yield win, controller, natural
     finally:
         win.close()
-        qt_app.setStyleSheet(before_qss)
+        win.deleteLater()
+        from qtpy.QtCore import QCoreApplication, QEvent
+
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        if qt_app.styleSheet() != before_qss:
+            qt_app.setStyleSheet(before_qss)
         qt_app.setPalette(before_palette)
         qt_app.setFont(before_font)
         gui_theme._theme_applied = before_applied
         gui_theme._current_theme = before_theme
+        gui_theme._current_text_scale = before_scale
+        gui_theme._current_density = before_density
 
 
 def test_source_and_quality_report_is_monospaced_and_unwrapped(real_viewer,

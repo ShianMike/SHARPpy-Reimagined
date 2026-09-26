@@ -68,7 +68,7 @@ from __future__ import annotations
 import numpy as np
 import numpy.ma as ma
 
-from sharpmod.upstream_warnings import (
+from sharpmod.upstream.upstream_warnings import (
     known_metpy_bounds_warning,
     known_sharppy_numerical_warnings,
 )

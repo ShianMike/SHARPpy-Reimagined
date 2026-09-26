@@ -9,10 +9,12 @@ import pytest
 
 from sharpmod import box_analysis as ba
 from sharpmod.box_sounding import BoxRegion, plan_box_samples
+from sharpmod.io import decoder as decoder_mod
 from sharpmod.tests._examples import examples_dir
 
 
 HRRR_NPZ = examples_dir() / "hrrr_point_36.68N_95.66W_f018.npz"
+SPC_OAX = examples_dir() / "14061619.OAX"
 
 pytestmark = pytest.mark.skipif(
     not HRRR_NPZ.is_file(), reason="no HRRR .npz example sounding")
@@ -113,6 +115,16 @@ def test_format_renders_absent_values_as_an_em_dash():
     assert ba.parameter("stp_cin").format(1.2345) == "1.23"
 
 
+def test_reader_facing_metric_contract_keeps_raw_units_compatible():
+    srh = ba.parameter("srh_1km")
+    assert srh.units == "m2/s2"
+    assert srh.display_units == "m²/s²"
+    assert srh.display_label == "0-1 km SRH (m²/s²)"
+    assert srh.format(125.4, with_units=True) == "125 m²/s²"
+    assert ba.parameter("downrush_t").display_units == "°C"
+    assert ba.parameter("lapse_3km").display_units == "°C/km"
+
+
 # -- missing-value coercion ------------------------------------------------ #
 
 
@@ -159,6 +171,25 @@ def test_fast_tier_values_are_physically_ordered():
     assert values["shear_6km"] >= values["shear_1km"]
     # Heights are above ground and ordered.
     assert 0.0 < values["ml_lcl"] < values["mu_el"]
+
+
+@pytest.mark.skipif(not SPC_OAX.is_file(), reason="no SPC .OAX example sounding")
+def test_fast_tier_masks_sparse_observed_winds_and_infers_surface():
+    collection = decoder_mod.getDecoder("spc")(str(SPC_OAX)).getProfiles()
+    member = next(iter(collection._profs))
+    prof = collection._profs[member][0]
+
+    serial = ba.fast_values(prof)
+    batched = ba.fast_values_many((prof,))[0]
+
+    # This observed sounding starts with a masked mandatory pressure level and
+    # has sparse wind reports.  A sentinel interpreted as wind produced shear
+    # above 2,000 kt and SRH above 40,000 m2/s2 before this regression fix.
+    assert serial["shear_1km"] == pytest.approx(31.4663775349)
+    assert serial["srh_1km"] == pytest.approx(356.0876614230)
+    assert serial["shear_6km"] == pytest.approx(55.9727501687)
+    for key in ("shear_1km", "srh_1km", "shear_6km", "srh_3km"):
+        assert batched[key] == pytest.approx(serial[key])
 
 
 def test_fast_values_many_maps_dense_rows_in_stable_profile_order(monkeypatch):
@@ -796,6 +827,7 @@ def test_criterion_describes_itself_with_units():
     assert "\u2264" in ba.Criterion("ml_lcl", maximum=1200.0).describe()
     assert "-" in ba.Criterion(
         "shear_6km", minimum=30.0, maximum=60.0).describe()
+    assert ba.Criterion("srh_1km", minimum=100.0).describe().endswith("m²/s²")
 
 
 def test_every_named_screen_is_well_formed():

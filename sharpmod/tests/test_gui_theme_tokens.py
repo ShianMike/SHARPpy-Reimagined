@@ -255,6 +255,40 @@ def test_spacing_scale_is_on_a_four_pixel_base():
         assert value % 2 == 0, f"SPACE[{key}]={value} breaks the even base"
 
 
+@pytest.mark.parametrize("value", T.TEXT_SCALE_OPTIONS)
+def test_supported_text_scales_reach_the_generated_type_ramp(value):
+    qss = T.build_chrome_qss(T.GRAPHITE_DARK, text_scale=value)
+    expected = T.FONT_PT["body"] * value / 100.0
+    assert f"font-size: {expected}pt;" in qss
+
+
+def test_density_changes_spacing_without_changing_font_size():
+    compact = T.build_chrome_qss(T.GRAPHITE_DARK, density="compact")
+    comfortable = T.build_chrome_qss(T.GRAPHITE_DARK, density="comfortable")
+
+    assert compact != comfortable
+    assert "font-size: 10.0pt;" in compact
+    assert "font-size: 10.0pt;" in comfortable
+    assert "min-height: 28px;" in compact
+    assert "min-height: 32px;" in comfortable
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [("125%", 125), (150, 150), ("125.5", 100), ("175", 100), (None, 100)],
+)
+def test_text_scale_normalization_is_bounded_to_supported_choices(value, expected):
+    assert T.normalize_text_scale(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [("COMPACT", "compact"), ("comfortable", "comfortable"), ("tiny", "comfortable")],
+)
+def test_density_normalization_is_case_insensitive_and_safe(value, expected):
+    assert T.normalize_density(value) == expected
+
+
 # ---------------------------------------------------------------------------
 # Theme selection
 # ---------------------------------------------------------------------------

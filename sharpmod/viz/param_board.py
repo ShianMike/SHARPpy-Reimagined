@@ -29,7 +29,7 @@ from qtpy import QtGui, QtCore
 from qtpy.QtCore import QRect, Qt
 from qtpy.QtWidgets import QFrame
 
-from sharpmod import colors
+from sharpmod.viz import colors
 from sharpmod.sharptab.constants import is_missing
 
 __all__ = ["ParamBoard"]

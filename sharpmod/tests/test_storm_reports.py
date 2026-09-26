@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from sharpmod import storm_reports as sr
+from sharpmod.map_overlays import marker_hits_at
 
 UTC = timezone.utc
 
@@ -80,6 +81,8 @@ def test_the_description_carries_what_a_click_should_show():
     assert "Source: Public" in text
     assert "mPING" in text
     assert "GGW" in text
+    assert "Magnitude: 3.25 in" in text
+    assert "Provider: NWS Local Storm Reports" in text
 
 
 @pytest.mark.parametrize("payload", ["", "   ", HEADER, HEADER + "\n"])
@@ -158,6 +161,55 @@ def test_the_layer_carries_one_shape_per_report_with_click_text():
     assert all(shape.label for shape in layer.shapes)
     assert all(shape.description for shape in layer.shapes)
     assert layer.attribution == sr.ATTRIBUTION
+
+
+@pytest.mark.parametrize(
+    ("hazard_filter", "expected"),
+    [
+        ("all", {"H", "G", "T"}),
+        ("hail", {"H"}),
+        ("wind", {"G"}),
+        ("tornado", {"T"}),
+        ("significant", {"H"}),
+    ],
+)
+def test_report_filters_use_parsed_hazards_and_significance(hazard_filter, expected):
+    filtered = sr.filter_reports(sr.parse_reports(FEED), hazard_filter)
+
+    assert {report.hazard.code for report in filtered} == expected
+
+
+def test_report_layer_names_filter_window_and_selected_centre():
+    centre = datetime(2026, 9, 7, 6, tzinfo=UTC)
+    layer = sr.layer_from_reports(
+        sr.parse_reports(FEED),
+        around=centre,
+        window=timedelta(hours=2),
+        hazard_filter="wind",
+    )
+
+    assert len(layer.shapes) == 1
+    assert "Wind + wind damage" in layer.subtitle
+    assert "±1 hour" in layer.subtitle
+    assert "07 Sep 0600Z" in layer.subtitle
+
+
+def test_every_coincident_report_is_returned_for_the_overlap_chooser():
+    when = datetime(2026, 9, 7, 5, tzinfo=UTC)
+    reports = (
+        sr.StormReport(sr.HAZARDS["H"], when, 35.22, -97.44, 1.0),
+        sr.StormReport(sr.HAZARDS["G"], when, 35.22, -97.44, 60.0),
+        sr.StormReport(sr.HAZARDS["T"], when, 35.22, -97.44, None),
+    )
+    layer = sr.layer_from_reports(reports, span_deg=6.0)
+
+    hits = marker_hits_at((layer,), -97.44, 35.22)
+
+    assert [hit.shape.label.split()[0] for hit in hits] == [
+        "Tornado",
+        "Wind",
+        "Hail",
+    ]
 
 
 def _ranks(layer):
@@ -328,6 +380,22 @@ def test_a_reversed_view_is_normalised():
     assert query["west"] == ["-103.0000"] and query["north"] == ["37.5000"]
 
 
+@pytest.mark.parametrize(
+    "view",
+    [
+        (0.0, 0.0, 0.0, 0.0),
+        (-100.0, -90.0, 35.0, 35.0),
+        (-100.0, -100.0, 35.0, 40.0),
+        (-100.0, -99.99999, 35.0, 40.0),
+        (float("nan"), -90.0, 35.0, 40.0),
+    ],
+)
+def test_an_unusable_view_is_omitted_to_avoid_a_provider_422(view):
+    query = _query(sr.build_url(view=view))
+
+    assert not {"west", "east", "south", "north"}.intersection(query)
+
+
 def test_the_window_is_expressed_in_seconds_back():
     query = _query(sr.build_url(window=timedelta(hours=3)))
 
@@ -356,6 +424,21 @@ def test_fetching_decodes_and_builds_the_layer():
 
     assert len(layer.shapes) == 3
     assert layer.source_url == calls[0]
+
+
+def test_historical_layer_coverage_is_the_requested_query_window():
+    around = datetime(2026, 9, 7, 6, tzinfo=UTC)
+    layer = sr.fetch_layer(
+        around=around,
+        window=timedelta(hours=6),
+        opener=lambda *_args: FEED.encode("utf-8"),
+    )
+
+    # Sparse report event times do not define the product's coverage.  The
+    # query answered the whole six-hour window, including quiet gaps.
+    assert layer.valid_from == around - timedelta(hours=3)
+    assert layer.valid_to == around + timedelta(hours=3)
+    assert layer.covers(around)
 
 
 def test_a_quiet_window_returns_no_layer():

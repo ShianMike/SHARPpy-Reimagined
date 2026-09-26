@@ -82,6 +82,43 @@ def test_point_from_widget_uses_collection_metadata_for_longitude():
     assert hodo_locator.point_from_widget(widget) == pytest.approx((39.0319, -88.6713))
 
 
+def test_requested_point_is_kept_distinct_from_the_sampled_grid_point():
+    collection = SimpleNamespace(
+        getMeta=lambda key: {
+            "lat": 35.25,
+            "lon": -97.47,
+            "requested_lat": 35.22,
+            "requested_lon": -97.44,
+        }.get(key),
+    )
+    widget = SimpleNamespace(
+        prof=SimpleNamespace(latitude=35.25, longitude=-97.47),
+        prof_collections=[collection],
+        pc_idx=0,
+    )
+
+    assert hodo_locator.requested_point_from_widget(widget) == pytest.approx(
+        (35.22, -97.44))
+
+
+def test_an_effectively_identical_request_does_not_create_a_second_marker():
+    collection = SimpleNamespace(
+        getMeta=lambda key: {
+            "lat": 35.25,
+            "lon": -97.47,
+            "requested_lat": 35.25001,
+            "requested_lon": -97.47001,
+        }.get(key),
+    )
+    widget = SimpleNamespace(
+        prof=SimpleNamespace(latitude=35.25, longitude=-97.47),
+        prof_collections=[collection],
+        pc_idx=0,
+    )
+
+    assert hodo_locator.requested_point_from_widget(widget) is None
+
+
 def test_location_name_uses_active_collection_town_label():
     collection = SimpleNamespace(
         getMeta=lambda key: {

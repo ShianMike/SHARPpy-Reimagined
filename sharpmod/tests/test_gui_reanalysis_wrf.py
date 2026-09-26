@@ -135,6 +135,184 @@ def test_picker_exposes_era5_and_guided_raw_wrf_tabs(
     picker.close()
 
 
+def test_era5_saved_request_cancel_and_stale_guard(
+        qt_app, tmp_path, monkeypatch):
+    from qtpy.QtCore import QObject, Signal
+
+    monkeypatch.setenv("SHARPMOD_SETTINGS_PATH", str(tmp_path / "settings.ini"))
+    monkeypatch.setattr(
+        gui_picker.PickerWindow, "_refresh_station_catalog", lambda *_a, **_k: None
+    )
+    picker = gui_picker.PickerWindow()
+    qt_app.processEvents()
+    try:
+        picker._select_tab("Reanalysis (ERA5)")
+        qt_app.processEvents()
+
+        class Worker(QObject):
+            finished_ok = Signal(str, object, float, float, bool)
+            failed = Signal(str)
+            cancelled = Signal()
+            progress = Signal(str)
+            finished = Signal()
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(kwargs.get("parent"))
+                self.cancelled_flag = False
+
+            def start(self):
+                pass
+
+            def isRunning(self):
+                return False
+
+            def requestInterruption(self):
+                self.cancelled_flag = True
+
+            def wait(self, timeout=None):
+                return True
+
+            def deleteLater(self):
+                pass
+
+        monkeypatch.setattr("sharpmod.gui_picker_era5._ERA5FetchWorker", Worker)
+        monkeypatch.setattr(
+            "sharpmod.tools.era5_extract.require_runtime_dependencies", lambda: None
+        )
+
+        before = (
+            picker._era5_lat.value(), picker._era5_lon.value(),
+            picker._era5_date.date().toString(), picker._era5_hour.currentIndex(),
+            picker.geometry(),
+        )
+        picker._era5_fetch()
+        old = picker._era5_worker
+        old_token = picker._era5_token
+        assert picker._era5_job.snapshot.state == "running"
+        assert picker._era5_job.snapshot.token == old_token
+        assert "ERA5" in picker._era5_job.snapshot.affected_input
+
+        picker._era5_job.cancel_button.click()
+        assert old.cancelled_flag is True
+        assert picker._era5_job.snapshot.state == "cancelling"
+        assert (
+            picker._era5_lat.value(), picker._era5_lon.value(),
+            picker._era5_date.date().toString(), picker._era5_hour.currentIndex(),
+            picker.geometry(),
+        ) == before
+        old.finished.emit()
+        qt_app.processEvents()
+        assert picker._era5_worker is None
+        assert picker._era5_job.snapshot.state == "cancelled"
+        assert picker._era5_job.snapshot.counts.cancelled == 1
+        assert picker._era5_job.snapshot.retryable is True
+        assert (
+            picker._era5_lat.value(), picker._era5_lon.value(),
+            picker._era5_date.date().toString(), picker._era5_hour.currentIndex(),
+            picker.geometry(),
+        ) == before
+
+        picker._era5_job.retry_button.click()
+        qt_app.processEvents()
+        assert picker._era5_worker is not old
+        assert picker._era5_token != old_token
+        assert picker._era5_job.snapshot.state == "running"
+        assert (
+            picker._era5_lat.value(), picker._era5_lon.value(),
+            picker._era5_date.date().toString(), picker._era5_hour.currentIndex(),
+            picker.geometry(),
+        ) == before
+
+        shown = []
+        real_show = picker._show_sounding
+        monkeypatch.setattr(
+            picker, "_show_sounding", lambda *args: shown.append(args)
+        )
+        old.finished_ok.emit("stale.npz", picker._era5_valid_time(), 35.0, -97.0, False)
+        qt_app.processEvents()
+        assert shown == []
+        assert picker._era5_job.snapshot.token == picker._era5_token
+        assert picker._era5_job.snapshot.state == "running"
+    finally:
+        picker._shutdown_model_cache()
+        picker.close()
+        picker.deleteLater()
+        qt_app.processEvents()
+
+
+def test_era5_success_published_after_cancel_is_rejected(
+        qt_app, tmp_path, monkeypatch):
+    """A success that arrives while cancelling must not publish over Cancel."""
+    from qtpy.QtCore import QObject, Signal
+
+    monkeypatch.setenv("SHARPMOD_SETTINGS_PATH", str(tmp_path / "settings.ini"))
+    monkeypatch.setattr(
+        gui_picker.PickerWindow, "_refresh_station_catalog", lambda *_a, **_k: None
+    )
+    picker = gui_picker.PickerWindow()
+    qt_app.processEvents()
+    try:
+        picker._select_tab("Reanalysis (ERA5)")
+        qt_app.processEvents()
+
+        class Worker(QObject):
+            finished_ok = Signal(str, object, float, float, bool)
+            failed = Signal(str)
+            cancelled = Signal()
+            progress = Signal(str)
+            finished = Signal()
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(kwargs.get("parent"))
+
+            def start(self):
+                pass
+
+            def isRunning(self):
+                return False
+
+            def requestInterruption(self):
+                pass
+
+            def wait(self, timeout=None):
+                return True
+
+            def deleteLater(self):
+                pass
+
+        monkeypatch.setattr("sharpmod.gui_picker_era5._ERA5FetchWorker", Worker)
+        monkeypatch.setattr(
+            "sharpmod.tools.era5_extract.require_runtime_dependencies", lambda: None
+        )
+        monkeypatch.setattr(
+            "sharpmod.gui_picker_era5.QMessageBox.critical", lambda *args: None
+        )
+
+        picker._era5_fetch()
+        worker = picker._era5_worker
+        shown = []
+        monkeypatch.setattr(
+            picker, "_show_sounding", lambda *args: shown.append(args)
+        )
+        picker._era5_job.cancel_button.click()
+        assert picker._era5_job.snapshot.state == "cancelling"
+        # A well-formed success queued just before Cancel must still lose to it.
+        worker.finished_ok.emit(
+            "queued.npz", picker._era5_valid_time(), 35.0, -97.0, False
+        )
+        worker.finished.emit()
+        qt_app.processEvents()
+        assert shown == []
+        assert picker._era5_job.snapshot.state == "cancelled"
+        assert picker._era5_job.snapshot.counts.completed == 0
+        assert picker._era5_job.snapshot.counts.cancelled == 1
+    finally:
+        picker._shutdown_model_cache()
+        picker.close()
+        picker.deleteLater()
+        qt_app.processEvents()
+
+
 def test_era5_worker_reuses_snapped_point_hour_cache(
         qt_app, tmp_path, monkeypatch):
     calls = []
@@ -271,12 +449,11 @@ def test_raw_wrf_netcdf4_file_uses_capable_xarray_engine(tmp_path):
     assert out.with_suffix(".json").exists()
 
 
-def test_wrf_runtime_rejects_scipy_only_netcdf_backend():
-    fake_xarray = SimpleNamespace(
-        backends=SimpleNamespace(list_engines=lambda: {"scipy": object()}),
-    )
+def test_wrf_runtime_rejects_scipy_only_netcdf_backend(monkeypatch):
+    monkeypatch.setitem(__import__("sys").modules, "netCDF4", None)
+    monkeypatch.setitem(__import__("sys").modules, "h5netcdf", None)
     with pytest.raises(wrf_extract.RetrievalError, match="NetCDF3-only"):
-        wrf_extract._preferred_netcdf_engine(fake_xarray)
+        wrf_extract._preferred_netcdf_engine(SimpleNamespace())
 
 
 def test_wrf_extraction_preserves_cancellation_after_opening_dataset(tmp_path):
@@ -299,6 +476,114 @@ def test_wrf_extraction_preserves_cancellation_after_opening_dataset(tmp_path):
 
     assert not out.exists()
     assert not out.with_suffix(".json").exists()
+
+
+def test_wrf_extract_saved_request_cancel_and_stale_guard(
+        qt_app, tmp_path, monkeypatch):
+    from qtpy.QtCore import QObject, Signal
+
+    monkeypatch.setenv("SHARPMOD_SETTINGS_PATH", str(tmp_path / "settings.ini"))
+    monkeypatch.setattr(
+        gui_picker.PickerWindow, "_refresh_station_catalog", lambda *_a, **_k: None
+    )
+    picker = gui_picker.PickerWindow()
+    qt_app.processEvents()
+    try:
+        picker._select_tab("Open File")
+        picker._file_modes.setCurrentIndex(1)
+        qt_app.processEvents()
+
+        class Worker(QObject):
+            finished_ok = Signal(str, object)
+            failed = Signal(str)
+            cancelled = Signal()
+            progress = Signal(str)
+            finished = Signal()
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(kwargs.get("parent"))
+                self.cancelled_flag = False
+
+            def start(self):
+                pass
+
+            def isRunning(self):
+                return False
+
+            def requestInterruption(self):
+                self.cancelled_flag = True
+
+            def wait(self, timeout=None):
+                return True
+
+            def deleteLater(self):
+                pass
+
+        source = tmp_path / "wrfout_d01"
+        source.write_bytes(b"wrf")
+        monkeypatch.setattr("sharpmod.gui_picker_wrf._WRFExtractWorker", Worker)
+        monkeypatch.setattr(
+            "sharpmod.tools.wrf_extract.point_in_domain", lambda *_a, **_k: True
+        )
+        monkeypatch.setattr(
+            "sharpmod.tools.wrf_extract.require_runtime_dependencies", lambda: None
+        )
+        picker._wrf_path_edit.setText(str(source))
+        picker._wrf_domain = {"source_file": str(source)}
+        picker._wrf_time_combo.clear()
+        picker._wrf_time_combo.addItem("file", None)
+        before = (
+            picker._wrf_path_edit.text(), picker._wrf_lat.value(), picker._wrf_lon.value(),
+            picker.geometry(),
+        )
+        picker._wrf_extract()
+
+        old = picker._wrf_extract_worker
+        old_token = picker._wrf_token
+        assert picker._wrf_job.snapshot.state == "running"
+        assert picker._wrf_job.snapshot.token == old_token
+
+        picker._wrf_job.cancel_button.click()
+        assert old.cancelled_flag is True
+        assert picker._wrf_job.snapshot.state == "cancelling"
+        assert (
+            picker._wrf_path_edit.text(), picker._wrf_lat.value(), picker._wrf_lon.value(),
+            picker.geometry(),
+        ) == before
+        old.finished.emit()
+        qt_app.processEvents()
+        assert picker._wrf_extract_worker is None
+        assert picker._wrf_job.snapshot.state == "cancelled"
+        assert picker._wrf_job.snapshot.counts.cancelled == 1
+        assert picker._wrf_job.snapshot.retryable is True
+        assert (
+            picker._wrf_path_edit.text(), picker._wrf_lat.value(), picker._wrf_lon.value(),
+            picker.geometry(),
+        ) == before
+
+        picker._wrf_job.retry_button.click()
+        qt_app.processEvents()
+        assert picker._wrf_extract_worker is not old
+        assert picker._wrf_token != old_token
+        assert picker._wrf_job.snapshot.state == "running"
+        assert (
+            picker._wrf_path_edit.text(), picker._wrf_lat.value(), picker._wrf_lon.value(),
+            picker.geometry(),
+        ) == before
+
+        shown = []
+        real_show = picker._show_sounding
+        monkeypatch.setattr(picker, "_show_sounding", lambda *args: shown.append(args))
+        old.finished_ok.emit("stale.npz", None)
+        qt_app.processEvents()
+        assert shown == []
+        assert picker._wrf_job.snapshot.token == picker._wrf_token
+        assert picker._wrf_job.snapshot.state == "running"
+    finally:
+        picker._shutdown_model_cache()
+        picker.close()
+        picker.deleteLater()
+        qt_app.processEvents()
 
 
 def test_wrf_workers_surface_inspection_and_cleanup_on_cancel(
@@ -337,3 +622,84 @@ def test_wrf_workers_surface_inspection_and_cleanup_on_cancel(
 
     assert cancelled == [True]
     assert not output_dir.exists()
+
+
+def test_wrf_success_published_after_cancel_is_rejected(
+        qt_app, tmp_path, monkeypatch):
+    """A success that arrives while cancelling must not publish over Cancel."""
+    from qtpy.QtCore import QObject, Signal
+
+    monkeypatch.setenv("SHARPMOD_SETTINGS_PATH", str(tmp_path / "settings.ini"))
+    monkeypatch.setattr(
+        gui_picker.PickerWindow, "_refresh_station_catalog", lambda *_a, **_k: None
+    )
+    picker = gui_picker.PickerWindow()
+    qt_app.processEvents()
+    try:
+        picker._select_tab("Open File")
+        picker._file_modes.setCurrentIndex(1)
+        qt_app.processEvents()
+
+        class Worker(QObject):
+            finished_ok = Signal(str, object)
+            failed = Signal(str)
+            cancelled = Signal()
+            progress = Signal(str)
+            finished = Signal()
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(kwargs.get("parent"))
+
+            def start(self):
+                pass
+
+            def isRunning(self):
+                return False
+
+            def requestInterruption(self):
+                pass
+
+            def wait(self, timeout=None):
+                return True
+
+            def deleteLater(self):
+                pass
+
+        source = tmp_path / "wrfout_d01"
+        source.write_bytes(b"wrf")
+        monkeypatch.setattr("sharpmod.gui_picker_wrf._WRFExtractWorker", Worker)
+        monkeypatch.setattr(
+            "sharpmod.tools.wrf_extract.point_in_domain", lambda *_a, **_k: True
+        )
+        monkeypatch.setattr(
+            "sharpmod.tools.wrf_extract.require_runtime_dependencies", lambda: None
+        )
+        monkeypatch.setattr(
+            "sharpmod.gui_picker_wrf.QMessageBox.critical", lambda *args: None
+        )
+        picker._wrf_path_edit.setText(str(source))
+        picker._wrf_domain = {"source_file": str(source)}
+        picker._wrf_time_combo.clear()
+        picker._wrf_time_combo.addItem("file", None)
+
+        picker._wrf_extract()
+        worker = picker._wrf_extract_worker
+        shown = []
+        monkeypatch.setattr(
+            picker, "_show_sounding", lambda *args: shown.append(args)
+        )
+        picker._wrf_job.cancel_button.click()
+        assert picker._wrf_job.snapshot.state == "cancelling"
+        # A well-formed success queued just before Cancel must still lose to it.
+        worker.finished_ok.emit("queued.npz", None)
+        worker.finished.emit()
+        qt_app.processEvents()
+        assert shown == []
+        assert picker._wrf_job.snapshot.state == "cancelled"
+        assert picker._wrf_job.snapshot.counts.completed == 0
+        assert picker._wrf_job.snapshot.counts.cancelled == 1
+    finally:
+        picker._shutdown_model_cache()
+        picker.close()
+        picker.deleteLater()
+        qt_app.processEvents()

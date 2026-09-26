@@ -1218,6 +1218,8 @@ def test_retrieve_dataset_uses_pruned_search_and_optimized_transport(
 
 def test_retrieve_dataset_prefers_nomads_point_subset_when_coordinates_exist(
         tmp_path, monkeypatch):
+    from sharpmod.tools import model_extract_retrieval
+
     seen = {}
     dataset = _dataset()
     monkeypatch.setenv("SHARPMOD_HRRR_BACKEND", "grib")
@@ -1258,7 +1260,7 @@ def test_retrieve_dataset_prefers_nomads_point_subset_when_coordinates_exist(
         lambda *_args: model_extract._NOMADS_MIN_RANGE_BYTES + 1,
     )
     monkeypatch.setattr(
-        model_extract, "download_nomads_subset", fake_nomads, raising=False
+        model_extract_retrieval, "download_nomads_subset", fake_nomads
     )
     monkeypatch.setattr(
         model_extract, "download_herbie_subset",
@@ -1400,6 +1402,8 @@ def test_point_backend_grib_mode_bypasses_nomads(tmp_path, monkeypatch):
 
 
 def test_hrrr_f000_uses_zarr_before_loading_grib_runtime(tmp_path, monkeypatch):
+    from sharpmod.tools import model_extract_retrieval
+
     dataset = _dataset()
     source = SimpleNamespace(
         grib="https://hrrrzarr/store",
@@ -1414,7 +1418,7 @@ def test_hrrr_f000_uses_zarr_before_loading_grib_runtime(tmp_path, monkeypatch):
         return dataset, source
 
     monkeypatch.setattr(
-        model_extract, "fetch_hrrr_zarr_point", fake_zarr, raising=False
+        model_extract_retrieval, "fetch_hrrr_zarr_point", fake_zarr
     )
     monkeypatch.setattr(
         model_extract,
@@ -1458,6 +1462,8 @@ def test_runtime_preflight_loads_only_the_native_eccodes_boundary(monkeypatch):
 
 def test_runtime_preflight_uses_bundled_windows_dll_without_helper_wheel(
         tmp_path, monkeypatch):
+    from sharpmod.tools import model_extract_cli
+
     """The pure Python 3.14 wheel can use its bundled DLL via findlibs."""
     package_dir = tmp_path / "eccodes"
     package_dir.mkdir()
@@ -1469,9 +1475,8 @@ def test_runtime_preflight_uses_bundled_windows_dll_without_helper_wheel(
 
     monkeypatch.setattr(model_extract.sys, "platform", "win32")
     monkeypatch.setattr(
-        model_extract, "importlib",
+        model_extract_cli, "importlib",
         SimpleNamespace(util=SimpleNamespace(find_spec=lambda _name: fake_spec)),
-        raising=False,
     )
     monkeypatch.delenv("ECCODES_PYTHON_USE_FINDLIBS", raising=False)
     monkeypatch.setenv("PATH", "C:\\Windows")

@@ -261,6 +261,35 @@ def test_field_map_renders_with_and_without_values(field_map):
         assert not pixmap.isNull()
 
 
+def test_field_map_place_names_do_not_cross_values_or_colour_key(field_map):
+    field_map.set_view(field_map.analysis().plan.region, pad=0.12)
+    field_map.set_label_density("dense")
+    labels = field_map.place_labels()
+    from sharpmod.gui_maps import _estimate_label_widths
+
+    widths = _estimate_label_widths(label for _x, _y, label in labels)
+    value_rects = []
+    projection = field_map._proj()
+    for point in field_map.analysis().points:
+        pixel = field_map._to_px(point.lon, point.lat, projection)
+        value_rects.append(QRectF(pixel.x() - 32.0, pixel.y() - 14.0,
+                                  64.0, 28.0))
+    legend_width = min(260.0, max(140.0, field_map.width() * 0.45))
+    legend = QRectF(
+        field_map.width() - legend_width - 18.0,
+        field_map.height() - 66.0,
+        legend_width + 12.0,
+        62.0,
+    )
+    for x, y, label in labels:
+        text_width = widths[label]
+        draw_x = min(x + 5.0,
+                     max(0.0, field_map.width() - text_width - 4.0))
+        label_rect = QRectF(draw_x, y - 13.0, text_width + 8.0, 14.0)
+        assert not label_rect.intersects(legend)
+        assert not any(label_rect.intersects(rect) for rect in value_rects)
+
+
 def test_field_map_click_selects_the_nearest_cell(field_map):
     from sharpmod.tests.test_gui_box_map import _MouseEvent
 

@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
-from sharpmod.box_analysis import (
+from sharpmod.analysis.box_analysis import (
     COMPOSITE_TIER,
     FAST_TIER,
     PARAMETERS,
@@ -25,8 +25,8 @@ from sharpmod.box_analysis import (
     screen,
     screen_names,
 )
-from sharpmod.box_export import write_box_csv, write_box_geojson
-from sharpmod.box_sounding import (
+from sharpmod.analysis.box_export import write_box_csv, write_box_geojson
+from sharpmod.analysis.box_sounding import (
     MAX_BOX_HOURS,
     MAX_BOX_POINTS,
     BoxRegion,
@@ -283,7 +283,7 @@ def main(argv=None) -> int:
         )
         return 2
 
-    from sharpmod.batch_extract import BatchExtractError, BatchExtractor
+    from sharpmod.analysis.batch_extract import BatchExtractError, BatchExtractor
     from sharpmod.tools import model_extract
 
     config = model_extract.get_config(plan.model_key)

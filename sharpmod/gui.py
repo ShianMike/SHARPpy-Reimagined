@@ -17,15 +17,8 @@ if "QT_QPA_PLATFORM" not in os.environ:
     )
 os.environ.setdefault("QT_API", "pyside6")
 
-from sharpmod import (  # noqa: E402
-    gui_common as _common,
-    gui_maps as _maps,
-    gui_picker as _picker,
-    gui_sessions as _sessions,
-    gui_settings as _settings,
-    gui_viewer as _viewer,
-    gui_workers as _workers,
-)
+from sharpmod.ui.features import gui_common as _common, gui_maps as _maps, gui_sessions as _sessions, gui_settings as _settings, gui_workers as _workers  # noqa: E402
+from sharpmod import gui_picker as _picker, gui_viewer as _viewer  # noqa: E402
 
 _IMPLEMENTATION_MODULES = (
     _common,

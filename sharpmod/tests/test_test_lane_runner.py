@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from scripts import check_test_performance as performance
 from scripts import run_test_lane as runner
-
-#: Hosted wall time reserved for everything in a job that is not pytest.
-#:
-#: Every job checks the tree out, installs the Qt system libraries, sets up
-#: Python and installs the package with its extras before pytest starts, so a
-#: lane cannot be budgeted for the whole of ``timeout-minutes``.
-_SETUP_RESERVE_SECONDS = 240
 
 
 def _job_timeout_seconds() -> dict[str, int]:
@@ -120,6 +115,77 @@ def test_coverage_is_rejected_outside_the_single_fast_lane(tmp_path):
         _command("property", tmp_path, coverage=True)
 
 
+def test_run_context_records_interpreter_backend_and_machine(tmp_path):
+    """Timing numbers need their conditions to be comparable across runs."""
+    junit = tmp_path / "tiny.xml"
+    junit.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<testsuite name="pytest" tests="1" time="0.01">'
+        '<testcase classname="t" name="case" time="0.01"/>'
+        "</testsuite>",
+        encoding="utf-8",
+    )
+    baseline = {
+        "schema_version": 1,
+        "suites": {"fast": {"baseline_seconds": 1.0, "maximum_seconds": 60.0}},
+        "tests": {},
+        "defaults": {},
+    }
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
+    report_path = tmp_path / "report.json"
+    assert performance.main([
+        str(junit), "--suite", "fast", "--baseline", str(baseline_path),
+        "--json-out", str(report_path), "--no-enforce", "--workers", "3",
+    ]) == 0
+    context = json.loads(report_path.read_text(encoding="utf-8"))["run_context"]
+    assert context["workers"] == 3
+    assert context["python_version"].count(".") == 2
+    assert context["active_backend"] in {"python", "rust"}
+    assert context["cpu_count"] >= 1
+    assert context["platform"]
+    # The SHA and the dirty state are separate fields: a clean CI checkout
+    # reports ``worktree_dirty: False`` next to the bare SHA, while this dirty
+    # local tree must say dirty instead of stamping a clean SHA it never ran.
+    assert isinstance(context["worktree_dirty"], bool)
+    truth = performance.collect_run_context(workers=3)
+    assert context["commit"] == truth["commit"]
+    assert context["worktree_dirty"] == truth["worktree_dirty"]
+    assert context["worktree_dirty_files"] == truth["worktree_dirty_files"]
+
+
+def test_run_context_reports_clean_and_dirty_worktrees(monkeypatch):
+    """Both checkout states must be representable (clean CI must not fail)."""
+    from unittest import mock
+
+    def fake_git(args):
+        if args == ["status", "--porcelain"]:
+            return fake_git.status
+        if args == ["rev-parse", "--short=12", "HEAD"]:
+            return "abc123def456"
+        raise AssertionError(args)
+
+    fake_git.status = ""
+    monkeypatch.setattr(performance, "_git_output", fake_git)
+    clean = performance.collect_run_context(workers=1)
+    assert clean["commit"] == "abc123def456"
+    assert clean["worktree_dirty"] is False
+    assert clean["worktree_dirty_files"] == 0
+
+    fake_git.status = " M sharpmod/a.py\n?? sharpmod/b.py\n"
+    dirty = performance.collect_run_context(workers=1)
+    assert dirty["commit"] == "abc123def456"
+    assert dirty["worktree_dirty"] is True
+    assert dirty["worktree_dirty_files"] == 2
+
+    # No git binary at all: the report still builds, minus the VCS fields.
+    monkeypatch.setattr(performance, "_git_output", mock.Mock(return_value=None))
+    nogit = performance.collect_run_context(workers=1)
+    assert "commit" not in nogit
+    assert nogit["worktree_dirty"] is False
+    assert "worktree_dirty_files" not in nogit
+
+
 @pytest.mark.parametrize("lane", sorted(runner.LANES))
 def test_each_lane_budget_can_fail_before_github_kills_the_job(lane):
     """An overrunning lane has to be reported rather than silently destroyed.
@@ -130,11 +196,16 @@ def test_each_lane_budget_can_fail_before_github_kills_the_job(lane):
     destroyed at 2700s: the budget could never fail, and because the runner
     tears the step down, no timing artifact was written either -- an overrun was
     indistinguishable from an infrastructure failure.
+
+    Every job checks the tree out, installs the Qt system libraries, sets up
+    Python and installs the package with its extras before pytest starts, so a
+    lane cannot be budgeted for the whole of ``timeout-minutes``.
     """
+    setup_reserve_seconds = 240
     timeouts = _job_timeout_seconds()
     assert lane in timeouts, f"no tests.yml job runs the {lane!r} lane"
 
-    overrun = timeouts[lane] - _SETUP_RESERVE_SECONDS
+    overrun = timeouts[lane] - setup_reserve_seconds
     violations, _tracked = performance.evaluate(
         suite_name=lane,
         suite_seconds=overrun,

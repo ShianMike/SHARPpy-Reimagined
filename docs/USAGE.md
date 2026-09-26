@@ -1,9 +1,7 @@
 # SHARPpy Reimagined Usage Guide
 
-This guide covers **how to use** SHARPpy Reimagined once it is installed. For setting up
-the environment and dependencies, see the "Installation" section of the
-[README](../README.md) first — installation and usage are intentionally kept
-separate.
+This guide covers **how to use** SHARPpy Reimagined once it is installed. For
+setup and dependencies, see [installation.txt](../installation.txt).
 
 ---
 
@@ -63,7 +61,7 @@ same way (and the same way as the bundled HRRR examples).
 
 The interactive app is the fastest way to look at a sounding — no CLI arguments,
 no `.npz` bookkeeping. It needs a display (unlike the headless renderer) and the
-SHARPpy render stack (see README → Rendering).
+SHARPpy render stack (see [installation.txt](../installation.txt)).
 
 ```bash
 sharpmod-gui             # or: python -m sharpmod.gui
@@ -78,9 +76,12 @@ their values:
 
 - **Station Map** — a clickable map of UWyo radiosonde stations over a basemap of
   coastlines, lake shores, national borders, and state lines. Borders are clipped
-  to land, so none is ruled straight across a lake. Click a dot to
-  select it, double-click to open it. Scroll to zoom, drag to pan, and jump to a
-  region with the *Map area* menu. Set the valid time (defaults to the most
+  to land, so none is ruled straight across a lake. Use **Select** to move the
+  sounding point and **Inspect** to read a marker or field without moving it;
+  double-clicking in Select opens the chosen station. Loading otherwise remains
+  explicit. Scroll at the pointer to zoom, middle/right-drag to pan, reverse a
+  move with Previous/Next view, and jump to a searchable region. Set the valid
+  time (defaults to the most
   recent synoptic hour) and open the selection. The time menu offers every
   three-hourly UTC slot from 00Z through 21Z for regular and special/asynoptic
   observations.
@@ -100,8 +101,8 @@ their values:
   sounding viewer. Its slider, previous/next, play, and loop controls update as
   results arrive; already completed hours survive cancellation and unavailable
   hours are reported explicitly.
-  **Box…** samples an area rather than a point: Shift-drag a rectangle on the
-  map (or turn the button on and drag normally) and every model grid point
+  **Box…** / **Draw box** samples an area rather than a point: Shift-drag a
+  rectangle in any tool (or choose Draw box and drag normally) and every model grid point
   inside it is extracted from one download. A confirmation dialog resolves the
   lattice, spacing, point count, and download count first, and the map previews
   the exact points that will be sampled.
@@ -228,15 +229,20 @@ Set `SHARPMOD_GUI_LOG_DIR` if the log needs to be written to another folder.
 ### Explore and edit a sounding
 
 Each sounding opens in the full interactive SPC window (the upstream SHARPpy
-widget stack), so every gesture from the
-[SHARPpy GUI guide](https://sharppy.github.io/SHARPpy/interacting_gui.html)
-works — right-click the skew-T for the readout cursor / *Modify Surface* /
-parcel lifting, or **Edit Nearest Level…**. The numeric level editor changes
+widget stack) with an explicit safety boundary around its mutation gestures.
+Use **Inspect** (`Ctrl+Alt+I`) to link the Skew-T and hodograph readout at one
+pressure/height without changing data. Use **Edit** (`Ctrl+Alt+E`) before a
+profile, interpolation, reset, or storm-motion change; the checked action,
+cursor, and status hint identify the current mode. In Edit, right-click the
+Skew-T for *Modify Surface*, parcel lifting, or **Edit Nearest Level…**. The
+numeric level editor changes
 pressure, height, temperature, dewpoint, wind direction, and wind speed at the
 level nearest the right-click. It preserves vertical ordering, rejects dewpoint
 above temperature, and recalculates all parcel levels and indices. You can also
-click-and-drag temperature, dewpoint, or wind points for quicker edits. Mouse-
-wheel zooms, and double-clicking the lower-left inset swaps lifted parcels.
+click-and-drag temperature, dewpoint, or wind points for quicker edits. Its
+feedback states the retained original, proposed value, and delta; a dashed
+original overlay remains available. The mouse wheel zooms, and double-clicking
+the lower-left inset swaps lifted parcels.
 The hodograph defaults to centering the display on the LCL-to-EL mean-wind
 vector instead of the zero-wind origin, with a viewport 20% tighter than the
 previous 200-kt full-width view. Right-click it to choose Mean Wind, Normal, or
@@ -258,15 +264,26 @@ The [offline CONUS index notes](CONUS_PLACE_INDEX.md) document its annual
 refresh command and provenance. The map itself reads nearby geometry from
 separately bundled Census county-outline tiles, with no live map request or
 town-label layer.
+
+Choose **View → Inspect Sounding Locator…** to open a read-only enlarged view.
+**Follow main map** mirrors the active picker extent; **Pinned locator** keeps
+its own Local, Regional, Fit selected area, or custom bounds until you change
+them. The inspector distinguishes the requested point from the sampled point,
+outlines the active area, and does not load or move a sounding when clicked.
+Its footer states the nearby place, valid time, scale context, geography
+attribution, and each overlay's actual time, source, and availability. Use
+**Export → Export Locator Image…** to save that same captured presentation as
+a standalone PNG.
 **File → Preferences** switches the color palette (Standard / Inverted /
-Protanopia), units, and the parcel visualized by default when a Skew-T opens.
+Protanopia), units, independent interface text scale, compact/comfortable
+density, and the parcel visualized by default when a Skew-T opens.
 The `W` key returns to the picker. A tip bar along the bottom summarizes the
 current controls.
 
 Use `Ctrl+Z` / **Edit → Undo** to reverse profile-level, interpolation, and
-storm-motion changes, and `Ctrl+Y` / **Edit → Redo** to reapply them. The
-history is local to the viewer, retains the latest 50 edits, and clears its redo
-branch after a new edit.
+storm-motion changes, and `Ctrl+Y` / **Edit → Redo** to reapply them.
+`Ctrl+Alt+H` opens the readable view of that same history. It is local to the
+viewer, retains the latest 50 edits, and clears its redo branch after a new edit.
 
 Accepted preferences persist across launches: temperature, wind, and PWAT
 units; palette; top/bottom readout variables; and the default Skew-T parcel.
@@ -298,19 +315,8 @@ window:
   evaluates single or joint conditions member by member, with qualifying,
   usable, loaded, and requested denominators. Agreement is not calibrated
   probability.
-- **Notes** stores free-form decisions and uncertainty with the session.
-- **Scenarios** manages named hypothetical changes from an immutable baseline,
-  baseline/scenario deltas, and a cancellable 121-cell maximum T/Td grid.
-- **Verify** matches forecasts to observations under explicit station, time,
-  distance, vertical-gap, initialization, and as-of rules, then reports vertical
-  errors and selected-case bias/MAE/RMSE.
-- **Observed Winds** imports or retrieves NEXRAD product-48 VAD/VWP winds,
-  compares them with a model hodograph, and computes only coverage-supported
-  wind diagnostics.
-- **Share** exports self-contained HTML/PDF briefings and timestamped fixed-scale
-  forecast-timeline or run-to-run GIFs with explicit missing frames.
-- **Replay** builds integrity-checked data-only case packages, replays exact
-  archived times, and optionally reveals products by known availability time.
+- **Animation** previews timestamped, exact-size forecast-timeline or run-to-run
+  GIFs with range, speed, and explicit missing/time-gap controls.
 
 From the forecast picker, **Workspace…** acquires different models, successive
 runs, or ensemble members for one point and exact valid time, then opens the
@@ -319,7 +325,7 @@ soundings available when another requested member fails.
 
 The picker maps also provide optional time-matched GOES visible/IR imagery and
 nearby NWS surface dewpoint/wind observations. See
-[Advanced analysis, verification, replay, and sharing](ADVANCED_ANALYSIS.md) for
+[Advanced analysis and sharing](ADVANCED_ANALYSIS.md) for
 complete controls, provider boundaries, persistence/export formats, and
 scientific limitations.
 
@@ -328,8 +334,10 @@ scientific limitations.
 Choose **File → Save Analysis Session…** (`Ctrl+Shift+E`) in a sounding window
 to preserve all loaded soundings and times, the active sounding/member, current
 profile and interpolation state, storm motion, parcel selection, visible panel,
-fit/exact zoom, picker map extent, analysis tab/controls/notes, and overlay
-descriptors. Choose **Open Analysis Session…** (`Ctrl+Shift+O`) from the picker
+fit/exact zoom, picker map extent, analysis tab/controls,
+profile visibility/reference identity, and overlay descriptors.
+The status bar identifies unsaved changes, path, and last successful save.
+Choose **Open Analysis Session…** (`Ctrl+Shift+O`) from the picker
 or a sounding window to restore everything in one multi-sounding viewer,
 independent of the normal combine-soundings setting.
 
@@ -339,24 +347,48 @@ overlay provenance only—never source GRIB downloads or raster/vector payloads�
 so the existing delete-on-viewer-close cleanup remains intact and overlays can
 be refetched from their descriptors.
 
+The application writes a bounded set of atomic recovery snapshots under
+`rendered_soundings/recovery` after real unsaved changes. The recovery chooser
+summarizes profiles and external context before replacing the active workspace;
+a successful explicit save removes obsolete recovery files for that window.
+
 ### Save from the GUI
 
 The sounding window's **Export** menu writes the current view:
 
-- **Export Image (HD PNG)** (`Ctrl+E`) — a 2x high-density image of the whole
-  window including the mounted derived-parameter panels, defaulting to
-  `STATION_YYYYMMDDHHZ_hd.png`.
-- **Export Image (UHD PNG)** — a larger 2.8x ultra-high-density image,
-  defaulting to `STATION_YYYYMMDDHHZ_uhd.png`.
-- **Export Image (Lossless PNG)** — the original-size compact/lossless image,
-  defaulting to `STATION_YYYYMMDDHHZ_lossless.png`.
+- **Export Sounding Image (PNG)…** (`Ctrl+E`) previews the focused sounding
+  canvas, labels, frame theme, and chosen pixels. Choose a 16:9, 4:3, square,
+  print, or custom output with optional aspect lock; the window layout stays
+  unchanged. The PNG uses exactly the previewed composition and dimensions.
 - **Export Text (SHARPpy)** — the focused profile as a text file that loads
   straight back into the app (or into `sharpmod-render`).
+- **Open Last Completed Export**, **Copy Last Export Path**, and **Recent
+  Exports…** find successful PNG/GIF outputs after the dialog closes.
+
+The picker has matching **Export → Active Map Figure (PNG)…** and
+**Two/Four-Panel Map Figure (PNG)…** actions. The box-analysis field map and
+sounding locator also use this shared map-figure workflow. Opening the dialog
+captures the displayed requested/actual time, extent, selected point or box,
+layer order/visibility/opacity, fixed or automatic colour scales, source, and
+attribution. Preview and final PNG use the same exact chosen pixels; changing
+the live map or receiving a later field cannot alter that capture, and export
+does not resize the live window or fetch data. Edit the figure title as needed;
+the optional caption retains the complete scientific/geographic context.
+Output-specific label and key layout is independent of the interface text
+scale. Map PNGs share the filename, `rendered_soundings`, progress, atomic-save,
+Recent Exports, and completion-action rules described below.
+
+Image/GIF filename suggestions include location, model/source, initialization,
+valid time/range; unsafe characters, long names,
+and existing suggestions are handled. In **Animation**, choose an inclusive
+frame range, check individual frames, set milliseconds per frame, and inspect
+the output-frame count and frame preview. Gaps default to visible cards; choose
+**Stop before first gap** or **Fail if any gap exists** if cards are unsuitable.
+There is no mode that silently joins nonconsecutive times.
 
 All export/save dialogs begin in `rendered_soundings` beside the source project
 or installed application. The same rule covers analysis sessions, trend and
-comparison CSV, scenario JSON, verification JSON/CSV, observed-wind JSON/CSV,
-ensemble-threshold JSON/CSV, HTML/PDF briefing, GIF, portable case,
+comparison CSV, ensemble-threshold JSON/CSV, GIF,
 box PNG/CSV/GeoJSON, saved-location JSON, and the upstream **File → Save Image** /
 **Save Text** actions. **Open Export Folder** opens that exact directory. SHARPpy
 Reimagined creates it when needed and reports a clear path-specific error if it
@@ -364,6 +396,9 @@ cannot create or write it; it never silently falls back to Desktop, Documents,
 Downloads, or the user home directory. Choosing a different destination is a
 one-export override and is not used to seed the next dialog or a later
 application run.
+Presentation choices are remembered separately from destinations. PNG/GIF
+writers publish only complete artifacts; failure leaves an existing destination
+unchanged and does not add it to Recent Exports.
 
 From the command line, `sharpmod-render INPUT` defaults to
 `rendered_soundings/sharpmod_sounding.png` beside the application. Supplying
@@ -1055,7 +1090,8 @@ wrf-extract wrfout_d02_2024-05-20_00:00:00 41.32 -96.37 oax_wrf.npz --render
 
 - **`sharpmod-render` errors about `sharppy` / `sutils` / a Qt enum** — the
   render stack isn't installed (or not Qt6-compatible). Run
-  `python scripts/install_sharppy_compat.py` (see README → Rendering).
+  `python scripts/install_sharppy_compat.py` (see
+  [installation.txt](../installation.txt)).
 - **`uwyo-sounding fetch` says the station/time is unavailable** — that site
   didn't report at that hour; try 00Z or 12Z, a nearby date, or use
   `observed-sounding fetch` for the explicit IEM fallback.

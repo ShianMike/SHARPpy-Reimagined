@@ -26,12 +26,12 @@ from types import SimpleNamespace
 import numpy as np
 
 from sharpmod import backends as _backends
-from sharpmod import eccc_geomet
-from sharpmod import lambert_grid
-from sharpmod import openmeteo
-from sharpmod import rrfs_nomads
+from sharpmod.providers import eccc_geomet
+from sharpmod.models import lambert_grid
+from sharpmod.providers import openmeteo
+from sharpmod.providers import rrfs_nomads
 from sharpmod.export_paths import export_file_path
-from sharpmod.model_fields import (
+from sharpmod.models.model_fields import (
     CFS_SURFACE_SEARCH,
     IFS_INVARIANT_FIELDS,
     IFS_INVARIANT_SEARCH,
@@ -46,7 +46,7 @@ from sharpmod.model_fields import (
     supports_ifs_surface_merge,
     supports_noaa_surface_merge,
 )
-from sharpmod.model_transport import (
+from sharpmod.models.model_transport import (
     DownloadCancelled,
     OptimizedTransportUnavailable,
     _valid_grib,
@@ -55,22 +55,22 @@ from sharpmod.model_transport import (
     range_worker_count,
     ranges_from_inventory,
 )
-from sharpmod.model_surface import (
+from sharpmod.models.model_surface import (
     SURFACE_CONTRACT_FIELDS,
     SURFACE_CONTRACT_VERSION,
 )
-from sharpmod.upstream_patches import apply_herbie_source_fallback
-from sharpmod.upstream_warnings import (
+from sharpmod.upstream.upstream_patches import apply_herbie_source_fallback
+from sharpmod.upstream.upstream_warnings import (
     known_herbie_deprecations,
     xarray_new_combine_defaults,
 )
-from sharpmod.model_sources import (
+from sharpmod.models.model_sources import (
     SourceRoutingUnavailable,
     download_nomads_subset,
     nomads_supported,
     select_herbie_provider,
 )
-from sharpmod.hrrr_zarr import (
+from sharpmod.providers.hrrr_zarr import (
     HrrrZarrPointDataset,
     ZarrBackendUnavailable,
     fetch_hrrr_zarr_point,
@@ -116,201 +116,6 @@ IFS_PRESSURE_SEARCH = build_ifs_search(("gh", "t", "u", "v", "r", "q", "w", "vo"
 _LOGGER = logging.getLogger(__name__)
 
 
-class _LocalGribDataset:
-    """Cache-owned local GRIB source with a lazy compatibility dataset.
-
-    The normal path decodes a compact point directly from ``path``. If a GRIB
-    layout is not supported by that decoder, ``fallback_dataset`` opens the
-    same file with cfgrib's persistent on-disk index and keeps the lazy xarray
-    object under the existing model-hour lease.
-    """
-
-    def __init__(self, path):
-        self.path = Path(path).expanduser().resolve(strict=True)
-        self._fallback_sources = None
-        self._pressure_sources = None
-        self._vorticity_source = None
-        self._lock = threading.RLock()
-
-    def _open_vorticity_source(self):
-        """Open only the compatible pressure group needed for a wind stencil."""
-        with self._lock:
-            if self._vorticity_source is not None:
-                return self._vorticity_source
-            try:
-                import cfgrib
-            except ImportError as exc:
-                raise RetrievalError(
-                    "forecast model wind-gradient decoding requires cfgrib"
-                ) from exc
-
-            failures = []
-            filters = (
-                # U/V share parameter category 2 in GRIB2. Selecting that
-                # category avoids cfgrib choosing another pressure group when
-                # a product (notably GEFS) stores thermodynamic and wind
-                # fields in separate hypercubes with the same level type.
-                {"typeOfLevel": "isobaricInhPa", "parameterCategory": 2},
-                {"typeOfLevel": "isobaricInPa", "parameterCategory": 2},
-                # Retain compatibility with GRIB layouts that do not expose a
-                # GRIB2 parameterCategory key.
-                {"typeOfLevel": "isobaricInhPa"},
-                {"typeOfLevel": "isobaricInPa"},
-            )
-            for filter_by_keys in filters:
-                source = None
-                try:
-                    source = cfgrib.open_dataset(
-                        os.fspath(self.path),
-                        filter_by_keys=filter_by_keys,
-                        errors="ignore",
-                    )
-                    variables = set(source.data_vars)
-                    if not variables.intersection(_VAR_U) \
-                            or not variables.intersection(_VAR_V):
-                        raise RetrievalError(
-                            "pressure group has no compatible u/v wind pair"
-                        )
-                    _level_name, levels = _coord_values(
-                        source, _LEVEL_COORDS
-                    )
-                    if levels is None or not np.asarray(levels).size:
-                        raise RetrievalError(
-                            "pressure group has no pressure coordinate"
-                        )
-                except Exception as exc:
-                    failures.append(exc)
-                    if source is not None:
-                        try:
-                            source.close()
-                        except Exception:
-                            pass
-                    continue
-                self._vorticity_source = source
-                return source
-            detail = failures[-1] if failures else "no pressure group"
-            raise RetrievalError(
-                "could not open a targeted pressure-wind group: %s" % detail
-            )
-
-    def surface_wind_vorticity(self, lat, lon, run_dt):
-        """Decode one pressure-level u/v neighbor stencil, not every field."""
-        try:
-            return _backends.decode_grib_wind_vorticity(
-                self.path, lat, lon
-            )
-        except Exception as exc:
-            # Reduced/unstructured or otherwise unusual GRIB grids retain the
-            # proven cfgrib compatibility path below.
-            _LOGGER.info(
-                "grib_decode.direct_wind_stencil_fallback path=%s reason=%s",
-                self.path,
-                exc,
-            )
-        with self._lock:
-            source = self._open_vorticity_source()
-            ds_t, _selected_time = _select_time(source, run_dt)
-            _, lats = _coord_values(ds_t, _LAT_COORDS)
-            _, lons = _coord_values(ds_t, _LON_COORDS)
-            _, levels = _coord_values(ds_t, _LEVEL_COORDS)
-            if lats is None or lons is None or levels is None:
-                raise RetrievalError(
-                    "targeted pressure-wind group is missing coordinates"
-                )
-            lon_req = float(lon)
-            try:
-                if np.nanmin(lons) >= 0.0 and lon_req < 0.0:
-                    lon_req += 360.0
-            except Exception:
-                pass
-            index_tuple, _selected_lat, _selected_lon = \
-                select_nearest_grid_point(lats, lons, float(lat), lon_req)
-            value = _surface_relative_vorticity_from_wind_grid(
-                ds_t, index_tuple, levels
-            )
-            if value is None:
-                raise RetrievalError(
-                    "targeted pressure-wind group could not produce vorticity"
-                )
-            return float(value)
-
-    def _open_fallback_sources(self):
-        with self._lock:
-            if self._pressure_sources is not None:
-                return self._pressure_sources
-            try:
-                import cfgrib
-            except ImportError as exc:
-                raise RetrievalError(
-                    "forecast model fallback decoding requires cfgrib"
-                ) from exc
-
-            sources = ()
-            try:
-                # Keep cfgrib's default ``{path}.{short_hash}.idx``. Unlike the
-                # previous no-index profiling path, this inventory is reused by
-                # later opens while the model-hour cache owns the directory.
-                with xarray_new_combine_defaults():
-                    sources = tuple(cfgrib.open_datasets(
-                        os.fspath(self.path)
-                    ))
-                point_field_names = {
-                    *_VAR_SURFACE_PRESSURE,
-                    *_VAR_SURFACE_HEIGHT,
-                    *_VAR_2M_TEMP,
-                    *_VAR_2M_DEWPOINT,
-                    *_VAR_10M_U,
-                    *_VAR_10M_V,
-                }
-                pressure_sources = tuple(
-                    source for source in sources
-                    if any(name in source.coords for name in _LEVEL_COORDS)
-                    or not point_field_names.isdisjoint(source.data_vars)
-                    or (
-                        "z" in source.data_vars
-                        and not any(
-                            name in source.coords for name in _LEVEL_COORDS
-                        )
-                    )
-                )
-                if not pressure_sources:
-                    raise RetrievalError(
-                        "cfgrib returned no pressure-level dataset"
-                    )
-            except BaseException:
-                for source in sources:
-                    try:
-                        source.close()
-                    except Exception:
-                        pass
-                raise
-            self._fallback_sources = sources
-            self._pressure_sources = pressure_sources
-            return pressure_sources
-
-    def fallback_point_dataset(self, lat, lon, run_dt):
-        """Merge only a small neighborhood around the requested grid point."""
-        return _merge_point_datasets(
-            self._open_fallback_sources(), lat, lon, run_dt
-        )
-
-    def close(self):
-        with self._lock:
-            sources = self._fallback_sources or ()
-            vorticity_source = self._vorticity_source
-            self._fallback_sources = None
-            self._pressure_sources = None
-            self._vorticity_source = None
-        for source in sources:
-            try:
-                source.close()
-            except Exception:
-                pass
-        if vorticity_source is not None:
-            try:
-                vorticity_source.close()
-            except Exception:
-                pass
 
 
 @dataclass(frozen=True)
@@ -326,55 +131,8 @@ class DecodedModelPointDataset:
         """Match the model-hour dataset protocol (there is no handle)."""
 
 
-@dataclass(frozen=True)
-class ModelConfig:
-    """Herbie-backed forecast model configuration."""
-
-    key: str
-    label: str
-    herbie_model: str
-    product: str
-    search: str = NOAA_PRESSURE_SEARCH
-    cycles: tuple[int, ...] = (0, 6, 12, 18)
-    default_fxx: int = 0
-    fxx_values: tuple[int, ...] = ()
-    domain: str = "Global"
-    domain_bounds: tuple[float, float, float, float] = (
-        -180.0, 180.0, -90.0, 90.0)
-    kwargs: dict[str, object] = field(default_factory=dict)
-    notes: str = ""
-    domain_outline: tuple[tuple[float, float], ...] = ()
-    # Set when a product is still described here but cannot currently produce a
-    # sounding, so it is withheld from every selectable model list.
-    unavailable_reason: str = ""
-    # Nominal horizontal spacing of the published grid, in kilometres. Area
-    # sampling (see sharpmod.box_sounding) snaps its request spacing to a
-    # multiple of this so a box never asks for two soundings out of one grid
-    # cell -- that would download and decode the same column twice and then
-    # draw a false gradient between the duplicates. Global products are quoted
-    # at their mid-latitude spacing because that is where the sampler is used;
-    # a degree-based grid narrows toward the poles, so this is the conservative
-    # (largest) value. Zero means "unknown", and the sampler then falls back to
-    # UNKNOWN_GRID_SPACING_KM rather than guessing per product.
-    grid_spacing_km: float = 0.0
 
 
-@dataclass(frozen=True)
-class ProviderCapability:
-    """Qt-independent description of one forecast-model provider adapter."""
-
-    model_key: str
-    provider: str
-    domain: str
-    domain_bounds: tuple[float, float, float, float]
-    cycles: tuple[int, ...]
-    forecast_hours: tuple[int, ...]
-    members: tuple[str, ...]
-    fields: tuple[str, ...]
-    levels: str
-    archive_window: str | None
-    transports: tuple[str, ...]
-    domain_outline: tuple[tuple[float, float], ...] = ()
 
 
 GLOBAL_DOMAIN = (-180.0, 180.0, -90.0, 90.0)
@@ -440,6 +198,9 @@ def _aifs_hours():
 # no step beyond F144. AIFS has no such cut-off.
 IFS_SHORT_CUTOFF_CYCLES = (6, 18)
 IFS_SHORT_CUTOFF_MAX_FXX = 144
+
+
+from sharpmod.tools.model_extract_config import ModelConfig  # noqa: E402
 
 
 _CONFIGS = (
@@ -663,6 +424,11 @@ def available_models():
     return tuple(cfg for cfg in _CONFIGS if not cfg.unavailable_reason)
 
 
+def model_aliases():
+    """Return a copy of resolver aliases for discovery without exposing mutation."""
+    return dict(_ALIASES)
+
+
 def withheld_models():
     """Return ``{key: reason}`` for configured products that cannot be used."""
     return {
@@ -723,32 +489,6 @@ def _coerce_config(model):
     return model if isinstance(model, ModelConfig) else get_config(model)
 
 
-def forecast_hours(model, cycle_hour=None):
-    """Return selectable forecast hours for ``model``.
-
-    Most products have one cadence. HRRR publishes longer forecasts on major
-    synoptic cycles than on its off-hour cycles, and ECMWF IFS runs a short
-    cut-off forecast at 06Z and 18Z that stops at F144.
-
-    RRFS needs no such rule: it publishes pressure levels only on the synoptic
-    cycles, so ``cycle_hours`` already excludes the off-hour cycles rather than
-    advertising a shorter forecast for them.
-    """
-    cfg = _coerce_config(model)
-    values = cfg.fxx_values or (cfg.default_fxx,)
-    if cfg.key in OPENMETEO_POINT_KEYS:
-        # The provider adapter owns its own cadence and cut-off rules, so ask it
-        # rather than restating them here.
-        return openmeteo.get_capability(cfg.key).hours_for_cycle(cycle_hour)
-    if cfg.key == "hrrr" and cycle_hour is not None \
-            and int(cycle_hour) not in (0, 6, 12, 18):
-        return tuple(v for v in values if int(v) <= 18)
-    if cfg.key == "ecmwf-ifs" and cycle_hour is not None \
-            and int(cycle_hour) in IFS_SHORT_CUTOFF_CYCLES:
-        return tuple(
-            v for v in values if int(v) <= IFS_SHORT_CUTOFF_MAX_FXX
-        )
-    return values
 
 
 def cycle_hours(model):
@@ -756,99 +496,6 @@ def cycle_hours(model):
     return tuple(_coerce_config(model).cycles)
 
 
-def provider_capability(model, cycle_hour=None):
-    """Return the normalized capability contract for one model adapter."""
-    cfg = _coerce_config(model)
-    if cfg.key in OPENMETEO_POINT_KEYS:
-        capability = openmeteo.get_capability(cfg.key)
-        return ProviderCapability(
-            model_key=cfg.key,
-            provider=capability.provider,
-            domain=capability.domain,
-            domain_bounds=capability.domain_bounds,
-            cycles=capability.cycles,
-            forecast_hours=capability.hours_for_cycle(cycle_hour),
-            members=(),
-            fields=capability.fields,
-            levels="%d requested pressure levels, %d hPa to %d hPa" % (
-                len(capability.pressure_levels),
-                max(capability.pressure_levels),
-                min(capability.pressure_levels),
-            ),
-            archive_window="runs archived from %s"
-            % capability.archive_start.isoformat(),
-            transports=(openmeteo.TRANSPORT,),
-            domain_outline=capability.domain_outline,
-        )
-    if cfg.key in ECCC_POINT_KEYS:
-        capability = eccc_geomet.get_capability(cfg.key)
-        return ProviderCapability(
-            model_key=cfg.key,
-            provider=capability.provider,
-            domain=capability.domain,
-            domain_bounds=capability.domain_bounds,
-            cycles=capability.cycles,
-            forecast_hours=capability.forecast_hours,
-            members=(),
-            fields=capability.fields,
-            levels="%d published pressure levels" % len(
-                capability.pressure_levels
-            ),
-            archive_window=capability.archive_window,
-            transports=capability.transports,
-            domain_outline=capability.domain_outline,
-        )
-    if cfg.key in DIRECT_GRIB_KEYS:
-        return ProviderCapability(
-            model_key=cfg.key,
-            provider=rrfs_nomads.PROVIDER,
-            domain=cfg.domain,
-            domain_bounds=cfg.domain_bounds,
-            cycles=cycle_hours(cfg),
-            forecast_hours=forecast_hours(cfg, cycle_hour=cycle_hour),
-            members=(),
-            # No VVEL is published and DZDT is not a usable substitute, so
-            # this is the one enabled GRIB product with no omega field.
-            fields=tuple(dict.fromkeys((
-                "HGT", "TMP", "UGRD", "VGRD", "RH", "ABSV",
-                *NOAA_SURFACE_FIELDS,
-            ))),
-            levels="45 published pressure levels, 1000 hPa to 2 hPa",
-            archive_window="recent runs only; NOMADS purges older files",
-            transports=(
-                rrfs_nomads.TRANSPORT, "verified-surface-companion",
-            ),
-            domain_outline=cfg.domain_outline,
-        )
-    transports = ["herbie", "indexed-ranges"]
-    if nomads_supported(cfg):
-        transports.insert(0, "nomads-subregion")
-    if cfg.key == "hrrr":
-        transports.insert(0, "hrrr-zarr-point")
-    member = cfg.kwargs.get("member")
-    fields = (
-        "HGT", "TMP", "UGRD", "VGRD", "RH-or-SPFH",
-        "VVEL-or-DZDT", "ABSV-when-published",
-    )
-    if cfg.herbie_model in {"ifs", "aifs"}:
-        fields = (
-            "gh", "t", "u", "v", "r-or-q", "w-when-published",
-            "vo-when-published",
-        )
-    return ProviderCapability(
-        model_key=cfg.key,
-        provider="Herbie",
-        domain=cfg.domain,
-        domain_bounds=cfg.domain_bounds,
-        cycles=cycle_hours(cfg),
-        forecast_hours=forecast_hours(cfg, cycle_hour=cycle_hour),
-        members=(str(member),) if member is not None else (),
-        fields=fields,
-        levels="all published pressure levels",
-        archive_window=None,
-        transports=tuple(transports),
-        domain_outline=cfg.domain_outline,
-    )
 
 
 def domain_label(model):
@@ -916,63 +563,8 @@ def _longitude_segments(lon0, lon1):
     return ((lon0, 180.0), (-180.0, lon1))
 
 
-def domain_intersects_bounds(model, bounds):
-    """Return whether a model domain intersects a map extent.
-
-    ``bounds`` is ``(lon0, lon1, lat0, lat1)`` in degrees.
-    """
-    cfg = _coerce_config(model)
-    if cfg.domain_outline:
-        blo0, blo1, bla0, bla1 = bounds
-        lat_mid = (float(bla0) + float(bla1)) / 2.0
-        samples = []
-        for left, right in _longitude_segments(blo0, blo1):
-            lon_mid = (left + right) / 2.0
-            samples.extend(
-                (lat, lon)
-                for lat in (bla0, lat_mid, bla1)
-                for lon in (left, lon_mid, right)
-            )
-        if any(point_in_domain(cfg, lat, lon) for lat, lon in samples):
-            return True
-        return any(
-            bla0 <= lat <= bla1
-            and any(left <= lon <= right for left, right in
-                    _longitude_segments(blo0, blo1))
-            for lon, lat in cfg.domain_outline
-        )
-    lon0, lon1, lat0, lat1 = cfg.domain_bounds
-    blo0, blo1, bla0, bla1 = bounds
-    if lat1 < bla0 or lat0 > bla1:
-        return False
-    return any(
-        not (right < other_left or left > other_right)
-        for left, right in _longitude_segments(lon0, lon1)
-        for other_left, other_right in _longitude_segments(blo0, blo1)
-    )
 
 
-def domain_contains_bounds(model, bounds):
-    """Return whether a model domain fully contains a map extent."""
-    cfg = _coerce_config(model)
-    if cfg.domain_outline:
-        blo0, blo1, bla0, bla1 = bounds
-        return all(
-            point_in_domain(cfg, lat, lon)
-            for left, right in _longitude_segments(blo0, blo1)
-            for lon in (left, right)
-            for lat in (bla0, bla1)
-        )
-    lon0, lon1, lat0, lat1 = cfg.domain_bounds
-    blo0, blo1, bla0, bla1 = bounds
-    if lat0 > bla0 or lat1 < bla1:
-        return False
-    model_segments = _longitude_segments(lon0, lon1)
-    return all(
-        any(left <= other_left and right >= other_right
-            for left, right in model_segments)
-        for other_left, other_right in _longitude_segments(blo0, blo1)
-    )
 
 
 def unsupported_models():
@@ -1040,75 +632,8 @@ def _herbie_kwargs(config, member=None):
     return kwargs
 
 
-def _prepare_windows_eccodes_runtime():
-    """Expose a bundled ecCodes DLL when no CPython helper wheel exists.
-
-    ECMWF's Windows wheel normally includes a version-specific ``_eccodes``
-    helper.  On Python versions for which that helper is not published, pip
-    falls back to the pure-Python wheel even though the same installation still
-    contains ``eccodes.dll`` and its dependencies.  Selecting findlibs mode and
-    putting that package directory first on ``PATH`` lets the ABI-level CFFI
-    bindings load the bundled DLL directly.
-    """
-    if sys.platform != "win32":
-        return None
-
-    try:
-        spec = importlib.util.find_spec("eccodes")
-        origin = getattr(spec, "origin", None)
-        if not origin:
-            return None
-        package_dir = os.path.dirname(os.path.abspath(origin))
-        package_files = os.listdir(package_dir)
-    except (ImportError, OSError, ValueError):
-        return None
-
-    has_helper = any(
-        name.startswith("_eccodes") and name.endswith(".pyd")
-        for name in package_files
-    )
-    if has_helper or not os.path.isfile(os.path.join(package_dir, "eccodes.dll")):
-        return None
-
-    os.environ["ECCODES_PYTHON_USE_FINDLIBS"] = "1"
-    current_path = os.environ.get("PATH", "")
-    path_entries = [entry for entry in current_path.split(os.pathsep) if entry]
-    normalized = {os.path.normcase(os.path.abspath(entry)) for entry in path_entries}
-    if os.path.normcase(package_dir) not in normalized:
-        os.environ["PATH"] = os.pathsep.join([package_dir, *path_entries])
-    return package_dir
 
 
-def require_runtime_dependencies():
-    """Load the native ecCodes boundary before starting a worker.
-
-    ecCodes is a native extension.  Importing a partially installed build for
-    the first time from a ``QThread`` can terminate the whole process before
-    Python can report the import error.  The GUI calls this function on its
-    main thread before it creates model-availability or model-fetch workers.
-    The slower pure-Python Herbie, cfgrib, and xarray imports stay on those
-    background workers.
-    """
-    _prepare_windows_eccodes_runtime()
-    try:
-        import eccodes
-
-        # Importing the pure-Python ``eccodes`` wrapper can succeed even when
-        # its binary extension is absent.  Calling the API version forces that
-        # native boundary to be resolved here, on the main thread.
-        eccodes.codes_get_api_version()
-    except Exception as exc:  # pragma: no cover - environment-specific path
-        hint = "Install the optional model stack with pip install -e \".[era5]\"."
-        if sys.platform == "win32" and sys.version_info >= (3, 14):
-            hint = (
-                "The installed Windows ecCodes package is incomplete. "
-                "Reinstall the [era5] extra, or use Python 3.11-3.13 if its "
-                "native DLL still cannot be loaded."
-            )
-        raise RetrievalError(
-            "forecast model support could not load its GRIB runtime: %s. %s"
-            % (exc, hint)
-        ) from exc
 
 
 def _load_herbie_class():
@@ -1166,50 +691,6 @@ def _is_ecmwf_open_data(config) -> bool:
     return str(getattr(config, "herbie_model", "")).lower() in {"ifs", "aifs"}
 
 
-def _planned_model_search(herbie, config):
-    """Choose one field from each equivalent group without dropping levels."""
-    try:
-        inventory = herbie.inventory(config.search).copy()
-        search, fields = choose_search(config, inventory)
-        selected_fields = tuple(fields)
-        if _is_ecmwf_open_data(config):
-            selected_fields += tuple(
-                field for field in IFS_SURFACE_FIELDS
-                if field not in selected_fields
-            )
-        else:
-            selected_fields += tuple(
-                field for field in NOAA_SURFACE_FIELDS
-                if field not in selected_fields
-            )
-        # Narrow with the chosen search rather than by variable name. Name
-        # matching alone cannot express levels, so it both over-selects (NOAA
-        # ``TMP`` at 80 m above ground) and would mis-select for ECMWF, where
-        # ``z`` is the invariant surface field *and* a pressure-level field on
-        # every published isobar. Matching the search keeps the planned byte
-        # ranges identical to what the download expression asks for.
-        planned = inventory
-        if "search_this" in inventory:
-            planned = inventory[
-                inventory["search_this"].astype(str).str.contains(
-                    search, regex=True, na=False
-                )
-            ].copy()
-        # Confirm the in-memory narrowed inventory really contains records
-        # before using the expression to name a persistent subset file.  This
-        # avoids two more regex scans/copies of Herbie's cached DataFrame.
-        if len(planned) == 0:
-            raise ValueError("planned model search matched no messages")
-        return search, selected_fields, planned
-    except Exception as exc:
-        _LOGGER.info(
-            "model_fields.fallback model=%s reason=%s", config.key, exc
-        )
-        try:
-            fallback_inventory = herbie.inventory(config.search).copy()
-        except Exception:
-            fallback_inventory = None
-        return config.search, (), fallback_inventory
 
 
 def _point_backends_enabled():
@@ -1270,7 +751,7 @@ def cached_source_fields_compatible(
 ) -> bool:
     """Return whether a cached subset satisfies the current extraction contract."""
     if contract_version is not None:
-        from sharpmod.model_disk_cache import MODEL_CACHE_CONTRACT_VERSION
+        from sharpmod.models.model_disk_cache import MODEL_CACHE_CONTRACT_VERSION
         try:
             if int(contract_version) != MODEL_CACHE_CONTRACT_VERSION:
                 return False
@@ -1335,74 +816,8 @@ def _inventory_has_surface_contract(inventory) -> bool:
     return bool(surface_contract_status(inventory)["complete"])
 
 
-def _combine_grib_payloads(paths, output_path):
-    """Atomically concatenate complete GRIB-message streams."""
-    paths = tuple(Path(path).resolve(strict=True) for path in paths)
-    output = Path(output_path)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(
-        prefix=output.name + ".",
-        suffix=".tmp",
-        dir=output.parent,
-    )
-    try:
-        with os.fdopen(fd, "wb") as destination:
-            for path in paths:
-                with path.open("rb") as source:
-                    shutil.copyfileobj(source, destination, 1024 * 1024)
-        if not _valid_grib(Path(temporary)):
-            raise RetrievalError("combined model GRIB failed completeness checks")
-        os.replace(temporary, output)
-    except BaseException:
-        _quiet_remove(temporary)
-        raise
-    return output.resolve()
 
 
-def _cfs_surface_companion(
-    Herbie,
-    config,
-    run_dt,
-    fxx,
-    member,
-    download_dir,
-    cancelled,
-):
-    """Download CFS ground fields from its separate flux product."""
-    kwargs = dict(_herbie_kwargs(config, member=member))
-    kwargs["kind"] = "flxf"
-    companion = _create_herbie(
-        Herbie,
-        run_dt.strftime("%Y-%m-%d %H:%M"),
-        model=config.herbie_model,
-        product=config.product,
-        fxx=int(fxx),
-        verbose=False,
-        **kwargs,
-    )
-    if companion.grib is None:
-        raise RetrievalError("CFS surface companion product is unavailable")
-    inventory = companion.inventory(CFS_SURFACE_SEARCH).copy()
-    if not _inventory_has_surface_contract(inventory):
-        raise RetrievalError(
-            "CFS surface companion does not expose the verified ground fields"
-        )
-    path, transferred = download_herbie_subset(
-        companion,
-        CFS_SURFACE_SEARCH,
-        inventory=inventory,
-        save_dir=download_dir,
-        cancelled=cancelled,
-        workers=range_worker_count(default=4),
-    )
-    local_path = _local_grib_path(path)
-    if local_path is None:
-        raise RetrievalError("CFS surface companion download is incomplete")
-    fields = tuple(dict.fromkeys(
-        str(value).upper()
-        for value in inventory.get("variable", ())
-    ))
-    return local_path, int(transferred or 0), str(companion.grib), fields
 
 
 def _invariant_height_plan(config):
@@ -1417,518 +832,12 @@ def _probe_cancel_if_requested(cancelled) -> None:
         raise DownloadCancelled("forecast-model availability probe cancelled")
 
 
-def _f000_publishes_surface_height(
-    Herbie,
-    config,
-    run_dt,
-    member=None,
-    *,
-    cancelled=None,
-):
-    """Return whether this run's F000 file carries the invariant terrain height."""
-    search, _fields = _invariant_height_plan(config)
-    try:
-        _probe_cancel_if_requested(cancelled)
-        companion = _create_herbie(
-            Herbie,
-            run_dt.strftime("%Y-%m-%d %H:%M"),
-            model=config.herbie_model,
-            product=config.product,
-            fxx=0,
-            verbose=False,
-            **_herbie_kwargs(config, member=member),
-        )
-        _probe_cancel_if_requested(cancelled)
-        if companion.grib is None:
-            return False
-        available = len(companion.inventory(search)) > 0
-        _probe_cancel_if_requested(cancelled)
-        return available
-    except DownloadCancelled:
-        raise
-    except Exception:
-        return False
 
 
-def _surface_height_companion(
-    Herbie,
-    config,
-    run_dt,
-    member,
-    download_dir,
-    cancelled,
-):
-    """Download the run's step-0 terrain height for a later forecast hour.
-
-    Terrain height never changes through a run, and ECMWF open data
-    (``z:sfc``) and GEFS (``HGT:surface``) publish it only in the F000 file.
-    Every later forecast hour needs that one message to complete the verified
-    ground row.
-    """
-    search, fields = _invariant_height_plan(config)
-    companion = _create_herbie(
-        Herbie,
-        run_dt.strftime("%Y-%m-%d %H:%M"),
-        model=config.herbie_model,
-        product=config.product,
-        fxx=0,
-        verbose=False,
-        **_herbie_kwargs(config, member=member),
-    )
-    if companion.grib is None:
-        raise RetrievalError(
-            "%s F000 surface-height companion is unavailable" % config.label
-        )
-    inventory = companion.inventory(search).copy()
-    if len(inventory) == 0:
-        raise RetrievalError(
-            "%s F000 file does not publish the invariant surface height "
-            "needed for a verified ground row" % config.label
-        )
-    try:
-        path, transferred = download_herbie_subset(
-            companion,
-            search,
-            inventory=inventory,
-            save_dir=download_dir,
-            cancelled=cancelled,
-            workers=range_worker_count(default=4),
-        )
-    except OptimizedTransportUnavailable as exc:
-        # A companion must never be the reason a whole sounding fails. Retain
-        # the permissive compatibility route without entering Herbie's
-        # synchronous, cancellation-blind ``download`` implementation.
-        _LOGGER.info(
-            "model_transport.companion_fallback model=%s run=%s reason=%s",
-            config.key, run_dt.isoformat(), exc,
-        )
-        path, transferred = download_herbie_subset_fallback(
-            companion,
-            search,
-            inventory=inventory,
-            save_dir=download_dir,
-            cancelled=cancelled,
-        )
-    local_path = _local_grib_path(path)
-    if local_path is None:
-        raise RetrievalError(
-            "%s surface-height companion download is incomplete" % config.label
-        )
-    return local_path, int(transferred or 0), str(companion.grib), fields
 
 
-def _retrieve_rrfs_dataset(config, run_dt, fxx, *, download_dir,
-                           progress_callback, cancelled):
-    """Fetch and combine RRFS pressure and ground GRIB over NOMADS.
-
-    RRFS is the one product this project locates itself rather than through
-    Herbie, whose ``rrfs`` template still resolves to a retired AWS prefix and
-    whose product list predates the prslev/2dfld split. The native GRIB runtime
-    is still required, because the assembled file is decoded the same way as
-    every other model's.
-
-    The two products are always fetched together. The ground file is not an
-    optional enrichment but the only published source of the verified surface
-    row, so a failure there is fatal rather than something to route around --
-    unlike the invariant-height companion, which has a working fallback.
-    """
-    require_runtime_dependencies()
-    combined_path = Path(download_dir or Path.cwd()) / (
-        f"{config.key}-{run_dt:%Y%m%d%H}-f{int(fxx):03d}"
-        "-verified-surface.grib2"
-    )
-    # A warm hit must not touch the network at all. The component subsets are
-    # deleted after they are combined, so re-running the fetch to re-derive the
-    # field list would re-transfer up to 350 MB; the sidecar records it instead.
-    if combined_path.exists() and _valid_grib(combined_path):
-        recorded = rrfs_nomads.read_provenance(combined_path)
-        if recorded is not None:
-            _emit_progress(progress_callback, "cached")
-            return _LocalGribDataset(combined_path), SimpleNamespace(
-                grib=recorded["source_url"].split(";")[0],
-                _sharpmod_source_url=recorded["source_url"],
-                _sharpmod_fields=recorded["fields"],
-                _sharpmod_search=build_noaa_search(
-                    recorded["pressure_fields"]
-                ),
-                _sharpmod_transport=(
-                    f"{rrfs_nomads.TRANSPORT}+surface-companion"
-                ),
-            )
-
-    _emit_progress(progress_callback, "downloading")
-    try:
-        pressure, surface = rrfs_nomads.fetch_pair(
-            config.key,
-            config.kwargs.get("domain"),
-            run_dt,
-            int(fxx),
-            download_dir=download_dir,
-            cancelled=cancelled,
-        )
-    except DownloadCancelled:
-        raise
-    except rrfs_nomads.RrfsUnavailable as exc:
-        raise RetrievalError(
-            "no %s data for run %s F%03d: %s"
-            % (config.label, run_dt.isoformat(), int(fxx), exc)
-        ) from exc
-    except (ValueError, OSError, OptimizedTransportUnavailable) as exc:
-        raise RetrievalError(
-            "failed to retrieve %s data for %s F%03d: %s"
-            % (config.label, run_dt.isoformat(), int(fxx), exc)
-        ) from exc
-
-    fields = tuple(dict.fromkeys((*pressure.fields, *surface.fields)))
-    if not supports_noaa_surface_merge(fields):
-        raise RetrievalError(
-            "%s did not publish a complete verified-surface contract "
-            "(fetched: %s)" % (config.label, ", ".join(fields))
-        )
-    # Pressure levels lead so the combined stream matches the message order
-    # every other verified-surface product uses.
-    combined_path = _combine_grib_payloads(
-        (pressure.path, surface.path), combined_path
-    )
-    source_url = f"{pressure.source_url};{surface.source_url}"
-    rrfs_nomads.write_provenance(
-        combined_path,
-        fields=fields,
-        source_url=source_url,
-        pressure_fields=pressure.fields,
-    )
-    # The combined stream is the only payload the decoder reads. Keeping the
-    # components as well would double a 3-km forecast hour to about 700 MB and
-    # let roughly four of them fill the managed cache budget, and it would buy
-    # nothing: pruning removes a whole model-hour entry, so a surviving
-    # component could never be reused on its own.
-    for component in (pressure.path, surface.path):
-        if component != combined_path:
-            _quiet_remove(component)
-    transferred = pressure.transferred_bytes + surface.transferred_bytes
-    _emit_progress(progress_callback, "decoding", transferred)
-    source = SimpleNamespace(
-        grib=pressure.source_url,
-        _sharpmod_source_url=source_url,
-        _sharpmod_fields=fields,
-        _sharpmod_search=build_noaa_search(pressure.fields),
-        _sharpmod_transport=(
-            f"{rrfs_nomads.TRANSPORT}+surface-companion"
-        ),
-    )
-    # A companion-completed payload is always decoded from the local file, the
-    # same way the CFS and invariant-height routes are: the combined stream is
-    # the only place both halves of the ground contract exist together.
-    return _LocalGribDataset(combined_path), source
 
 
-def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
-                      progress_callback=None, cancelled=None, lat=None,
-                      lon=None):
-    """Fetch a Herbie pressure-level subset for ``config``.
-
-    The point providers are intercepted first. ``extract`` returns early for
-    them, but the GUI's model-hour cache calls this helper directly to populate
-    a shared entry, so a provider missing from here reaches Herbie and fails
-    with ``module 'herbie.models' has no attribute ...`` -- naming a SHARPpy key
-    Herbie was never asked about.
-    """
-    if config.key in POINT_PROVIDER_KEYS:
-        if lat is None or lon is None:
-            raise RetrievalError(
-                "%s uses a point-only provider and requires lat/lon"
-                % config.label
-            )
-        if config.key in ECCC_POINT_KEYS:
-            dataset = eccc_geomet.fetch_point(
-                config.key,
-                float(lat),
-                float(lon),
-                run_time=run_dt,
-                fxx=int(fxx),
-                progress_callback=progress_callback,
-                cancelled=cancelled,
-            )
-            capability = eccc_geomet.get_capability(config.key)
-            source = SimpleNamespace(
-                grib=eccc_geomet.GEOMET_URL,
-                _sharpmod_source_url=eccc_geomet.GEOMET_URL,
-                _sharpmod_fields=capability.fields,
-                _sharpmod_transport="wms-getfeatureinfo-point",
-            )
-            return dataset, source
-
-        dataset = openmeteo.fetch_point(
-            config.key,
-            float(lat),
-            float(lon),
-            run_time=run_dt,
-            fxx=int(fxx),
-            progress_callback=progress_callback,
-            cancelled=cancelled,
-        )
-        # The dataset already publishes the three ``_sharpmod_*`` attributes the
-        # hour cache duck-types on; they are mirrored onto a source object so
-        # this returns the same shape as every other branch.
-        source = SimpleNamespace(
-            grib=dataset._sharpmod_source_url,
-            _sharpmod_source_url=dataset._sharpmod_source_url,
-            _sharpmod_fields=dataset._sharpmod_fields,
-            _sharpmod_transport=dataset._sharpmod_transport,
-        )
-        return dataset, source
-
-    _emit_progress(progress_callback, "locating")
-    if config.key in DIRECT_GRIB_KEYS:
-        return _retrieve_rrfs_dataset(
-            config, run_dt, fxx,
-            download_dir=download_dir,
-            progress_callback=progress_callback,
-            cancelled=cancelled,
-        )
-    if hrrr_zarr_candidate(config, fxx, lat, lon):
-        mode = os.environ.get("SHARPMOD_HRRR_BACKEND", "auto").strip().lower()
-        _emit_progress(progress_callback, "downloading")
-        try:
-            dataset, source = fetch_hrrr_zarr_point(
-                run_dt,
-                int(fxx),
-                float(lat),
-                float(lon),
-                cache_dir=download_dir,
-                cancelled=cancelled,
-            )
-            _emit_progress(
-                progress_callback,
-                "decoding",
-                getattr(source, "downloaded_bytes", 0),
-            )
-            return dataset, source
-        except ZarrBackendUnavailable as exc:
-            if mode == "zarr":
-                raise RetrievalError(
-                    "forced HRRR Zarr retrieval failed: %s" % exc
-                ) from exc
-            _LOGGER.info(
-                "hrrr_zarr.fallback run=%s fxx=%03d reason=%s",
-                run_dt.isoformat(), int(fxx), exc,
-            )
-    require_runtime_dependencies()
-    Herbie = _load_herbie_class()
-
-    try:  # pragma: no cover - live network / cache path
-        H = _create_herbie(
-            Herbie,
-            run_dt.strftime("%Y-%m-%d %H:%M"),
-            model=config.herbie_model,
-            product=config.product,
-            fxx=int(fxx),
-            verbose=False,
-            **_herbie_kwargs(config, member=member),
-        )
-        if H.grib is None:
-            raise RetrievalError(
-                "no %s GRIB for run %s F%03d"
-                % (config.label, run_dt.isoformat(), int(fxx)))
-        # Keep Herbie's xarray wrapper quiet if it consults its download cache.
-        # Windows GUI/worker streams can use CP1252, where Herbie's Unicode
-        # status glyphs otherwise raise before decoding starts.
-        xarray_kwargs = {"remove_grib": False, "verbose": False}
-        if download_dir is not None:
-            xarray_kwargs["save_dir"] = os.fspath(download_dir)
-        search, selected_fields, planned_inventory = _planned_model_search(
-            H, config)
-        contract_complete = _inventory_has_surface_contract(planned_inventory)
-        missing_surface = () if contract_complete else tuple(
-            surface_contract_status(planned_inventory)["missing"]
-        )
-        # Terrain height is time-invariant, and ECMWF open data and GEFS
-        # publish it only in the run's F000 file. When that single field is
-        # all that is missing, complete the contract from the analysis file
-        # instead of refusing.
-        needs_invariant_height = (
-            not contract_complete
-            and int(fxx) != 0
-            and missing_surface == ("surface_height",)
-        )
-        needs_cfs_surface = not contract_complete and not needs_invariant_height
-        if needs_cfs_surface and config.key != "cfs":
-            raise RetrievalError(
-                "%s currently publishes no complete verified-surface "
-                "contract (surface pressure/height, 2-m thermodynamics, and "
-                "10-m winds); refusing a pressure-only sounding (missing: %s)"
-                % (config.label, ", ".join(missing_surface) or "unknown")
-            )
-        expected_bytes = _subset_download_bytes(planned_inventory)
-        _emit_progress(progress_callback, "downloading", expected_bytes)
-        # Herbie 2026.3.0 unconditionally prints an emoji when it creates its
-        # download directory, even with ``verbose=False``.  Capturing stdout
-        # keeps that third-party status message from crashing CP1252 Windows
-        # GUI and worker processes; retrieval exceptions still propagate.
-        transport = None
-        local_path = None
-        source_url = str(H.grib)
-        if lat is not None and lon is not None and selected_fields \
-                and _point_backends_enabled() and nomads_supported(config) \
-                and _prefer_nomads_subset(expected_bytes):
-            try:
-                _path, transferred_bytes, source_url = download_nomads_subset(
-                    H,
-                    config,
-                    search,
-                    selected_fields,
-                    float(lat),
-                    float(lon),
-                    save_dir=download_dir,
-                    cancelled=cancelled,
-                )
-                local_path = _local_grib_path(_path)
-                transport = "nomads-subregion"
-                if transferred_bytes:
-                    expected_bytes = int(transferred_bytes)
-            except SourceRoutingUnavailable as exc:
-                _LOGGER.info(
-                    "model_sources.nomads_fallback model=%s run=%s fxx=%03d "
-                    "reason=%s",
-                    config.key, run_dt.isoformat(), int(fxx), exc,
-                )
-        if transport is None:
-            if cancelled is not None and cancelled():
-                raise DownloadCancelled("forecast-model download cancelled")
-            try:
-                select_herbie_provider(H)
-            except Exception as exc:
-                _LOGGER.info(
-                    "model_sources.provider_fallback model=%s reason=%s",
-                    config.key, exc,
-                )
-            source_url = str(H.grib)
-            transport = "optimized-ranges"
-            try:
-                _path, transferred_bytes = download_herbie_subset(
-                    H,
-                    search,
-                    inventory=planned_inventory,
-                    save_dir=download_dir,
-                    cancelled=cancelled,
-                    workers=range_worker_count(default=4),
-                )
-                local_path = _local_grib_path(_path)
-                if transferred_bytes:
-                    expected_bytes = int(transferred_bytes)
-            except OptimizedTransportUnavailable as exc:
-                transport = "compat-ranges"
-                _LOGGER.info(
-                    "model_transport.fallback model=%s run=%s fxx=%03d "
-                    "reason=%s",
-                    config.key, run_dt.isoformat(), int(fxx), exc,
-                )
-                downloaded, transferred_bytes = (
-                    download_herbie_subset_fallback(
-                        H,
-                        search,
-                        inventory=planned_inventory,
-                        save_dir=download_dir,
-                        cancelled=cancelled,
-                    )
-                )
-                local_path = _local_grib_path(downloaded)
-                if transferred_bytes:
-                    expected_bytes = int(transferred_bytes)
-        if cancelled is not None and cancelled():
-            raise DownloadCancelled("forecast-model download cancelled")
-        if local_path is None:
-            try:
-                local_path = _local_grib_path(H.get_localFilePath(search))
-            except Exception:
-                pass
-        companion_fields = ()
-        if needs_cfs_surface:
-            (
-                companion_path,
-                companion_bytes,
-                companion_url,
-                companion_fields,
-            ) = _cfs_surface_companion(
-                Herbie,
-                config,
-                run_dt,
-                fxx,
-                member,
-                download_dir,
-                cancelled,
-            )
-            if local_path is None:
-                raise RetrievalError("CFS pressure-level download is incomplete")
-            combined_name = (
-                f"cfs-f{int(fxx):03d}-verified-surface.grib2"
-            )
-            combined_dir = Path(download_dir or local_path.parent)
-            local_path = _combine_grib_payloads(
-                (local_path, companion_path),
-                combined_dir / combined_name,
-            )
-            expected_bytes += companion_bytes
-            source_url = f"{source_url};{companion_url}"
-            transport = f"{transport}+surface-companion"
-        elif needs_invariant_height:
-            (
-                companion_path,
-                companion_bytes,
-                companion_url,
-                companion_fields,
-            ) = _surface_height_companion(
-                Herbie,
-                config,
-                run_dt,
-                member,
-                download_dir,
-                cancelled,
-            )
-            if local_path is None:
-                raise RetrievalError(
-                    "%s pressure-level download is incomplete" % config.label
-                )
-            combined_name = (
-                f"{config.key}-{run_dt:%Y%m%d%H}-f{int(fxx):03d}"
-                "-verified-surface.grib2"
-            )
-            combined_dir = Path(download_dir or local_path.parent)
-            local_path = _combine_grib_payloads(
-                (local_path, companion_path),
-                combined_dir / combined_name,
-            )
-            expected_bytes += companion_bytes
-            source_url = f"{source_url};{companion_url}"
-            transport = f"{transport}+invariant-height-companion"
-        H._sharpmod_fields = selected_fields
-        if companion_fields:
-            H._sharpmod_fields = tuple(dict.fromkeys(
-                (*selected_fields, *companion_fields)
-            ))
-        H._sharpmod_search = search
-        H._sharpmod_transport = transport
-        H._sharpmod_source_url = source_url
-
-        if local_path is not None and (
-            _direct_grib_enabled()
-            or needs_cfs_surface
-            or needs_invariant_height
-        ):
-            return _LocalGribDataset(local_path), H
-
-        _emit_progress(progress_callback, "decoding", expected_bytes)
-        with redirect_stdout(io.StringIO()):
-            ds = H.xarray(search, **xarray_kwargs)
-        if isinstance(ds, list):
-            ds = _merge_datasets(ds)
-        return ds, H
-    except (RetrievalError, DownloadCancelled):
-        raise
-    except Exception as exc:  # pragma: no cover - live failure path
-        raise RetrievalError(
-            "failed to retrieve %s data for %s F%03d: %s"
-            % (config.label, run_dt.isoformat(), int(fxx), exc)) from exc
 
 
 def _selected_valid(ds_t, selected_time, run_dt, fxx):
@@ -1940,499 +849,14 @@ def _selected_valid(ds_t, selected_time, run_dt, fxx):
     return run_dt + timedelta(hours=int(fxx))
 
 
-def _point_neighborhood(ds, lat, lon, run_dt):
-    """Slice one lazy xarray group to at most a 3-by-3 horizontal window."""
-    ds_t, _selected_time = _select_time(ds, run_dt)
-    _, lats = _coord_values(ds_t, _LAT_COORDS)
-    _, lons = _coord_values(ds_t, _LON_COORDS)
-    if lats is None or lons is None:
-        raise RetrievalError(
-            "cfgrib pressure group is missing latitude/longitude coordinates"
-        )
-    lon_req = lon
-    try:
-        if np.nanmin(lons) >= 0.0 and lon < 0.0:
-            lon_req = lon + 360.0
-    except Exception:
-        pass
-    index_tuple, selected_lat, selected_lon = select_nearest_grid_point(
-        lats, lons, lat, lon_req
-    )
-    indexers, _dims = _horizontal_indexers(ds_t, index_tuple)
-    slices = {}
-    for dim, index in indexers.items():
-        size = int(ds_t.sizes[dim])
-        start = max(0, int(index) - 1)
-        stop = min(size, int(index) + 2)
-        slices[dim] = slice(start, stop)
-    compact = ds_t.isel(slices) if slices else ds_t
-    selected_lon = ((selected_lon + 180.0) % 360.0) - 180.0
-    return compact, float(selected_lat), float(selected_lon)
 
 
-def _merge_point_datasets(datasets, lat, lon, run_dt):
-    """Merge compact lazy point neighborhoods instead of complete grids."""
-    try:
-        import xarray as xr
-    except ImportError as exc:
-        raise RetrievalError(
-            "forecast model fallback decoding requires xarray"
-        ) from exc
-
-    compact = []
-    selected = None
-    for source in datasets:
-        point, selected_lat, selected_lon = _point_neighborhood(
-            source, lat, lon, run_dt
-        )
-        if not any(name in point.coords for name in _LEVEL_COORDS) \
-                and "z" in point.data_vars:
-            point = point.rename({"z": "surface_geopotential"})
-        if selected is None:
-            selected = (selected_lat, selected_lon)
-        else:
-            lon_delta = (
-                (selected_lon - selected[1] + 180.0) % 360.0
-            ) - 180.0
-            if (
-                abs(selected_lat - selected[0]) > 1.0e-6
-                or abs(lon_delta) > 1.0e-6
-            ):
-                raise RetrievalError(
-                    "cfgrib pressure groups use inconsistent horizontal grids"
-                )
-        compact.append(_promote_scalar_level_coordinate(point))
-    if not compact:
-        raise RetrievalError("cfgrib returned no pressure-level dataset")
-    return xr.merge(compact, compat="override", join="outer")
 
 
-def _decode_local_point(source, lat, lon):
-    """Decode through the selected backend, with Python fallback in auto mode."""
-    try:
-        decoded = _backends.decode_grib_point(source.path, lat, lon)
-    except Exception as rust_error:
-        info = _backends.backend_info()
-        if not (
-            info["requested_backend"] == "auto"
-            and info["active_backend"] == "rust"
-        ):
-            raise
-        _LOGGER.info(
-            "grib_decode.rust_fallback path=%s reason=%s",
-            source.path,
-            rust_error,
-        )
-        from sharpmod.backends.python_backend import PythonBackend
-        return PythonBackend().decode_grib_point(source.path, lat, lon)
-    if decoded.surface_merged:
-        return decoded
-    # The verified-surface merge is mandatory: without it ``extract`` refuses
-    # the profile outright. The native decoder carries its own port of the
-    # ground-row predicates, so a row that the shared Python contract accepts
-    # -- the saturated-ground clamp in particular -- can still be rejected
-    # there. Ask the contract owner for a second opinion before giving up a
-    # sounding. This costs one extra point decode only on rows the native
-    # decoder already refused, and it is a decode the caller would otherwise
-    # never get any value from.
-    info = _backends.backend_info()
-    if info["active_backend"] != "rust":
-        return decoded
-    try:
-        from sharpmod.backends.python_backend import PythonBackend
-        repaired = PythonBackend().decode_grib_point(source.path, lat, lon)
-    except Exception as python_error:
-        _LOGGER.info(
-            "grib_decode.surface_repair_failed path=%s reason=%s",
-            source.path,
-            python_error,
-        )
-        return decoded
-    if not repaired.surface_merged:
-        return decoded
-    _LOGGER.info(
-        "grib_decode.surface_repaired path=%s removed=%d",
-        source.path,
-        repaired.below_ground_levels_removed,
-    )
-    return repaired
 
 
-def _xarray_point_columns(ds, lat, lon, run_dt, fxx, label):
-    """Return the legacy xarray point result while materializing only columns."""
-    ds_t, selected_time = _select_time(ds, run_dt)
-    _, lats = _coord_values(ds_t, _LAT_COORDS)
-    _, lons = _coord_values(ds_t, _LON_COORDS)
-    if lats is None or lons is None:
-        raise RetrievalError(
-            "%s dataset is missing latitude/longitude coordinates" % label
-        )
-
-    lon_req = lon
-    try:
-        if np.nanmin(lons) >= 0.0 and lon < 0.0:
-            lon_req = lon + 360.0
-    except Exception:
-        pass
-    index_tuple, glat, glon = select_nearest_grid_point(
-        lats, lons, lat, lon_req
-    )
-    glon = ((glon + 180.0) % 360.0) - 180.0
-    cols, n_levels = _build_columns(ds_t, index_tuple, latitude=glat)
-    valid_dt = _selected_valid(ds_t, selected_time, run_dt, fxx)
-    return cols, n_levels, glat, glon, valid_dt, ds_t
 
 
-def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
-            member=None, dataset=None, download_dir=None,
-            source_grib=None, source_fields=None, source_transport=None,
-            progress_callback=None, cancelled=None):
-    """Extract a public forecast-model point sounding to ``out_path``.
-
-    Parameters mirror the CLI: choose a supported ``model`` key, a latitude and
-    longitude, a model run time/cycle, and a forecast hour.
-    """
-    config = _require_selectable(get_config(model))
-    lat = float(lat)
-    lon = float(lon)
-    fxx = int(fxx if fxx is not None else config.default_fxx)
-    _validate_lat_lon(lat, lon)
-    if not point_in_domain(config, lat, lon):
-        raise ParameterRangeError(
-            "%s covers %s (%s); requested point %.4f, %.4f is outside "
-            "that domain" % (
-                config.label, config.domain, config.domain_bounds, lat, lon))
-
-    if config.key in OPENMETEO_POINT_KEYS:
-        if member is not None:
-            raise RetrievalError(
-                "%s is deterministic and does not accept --member"
-                % config.label
-            )
-        return openmeteo.extract(
-            config.key,
-            lat,
-            lon,
-            run_time=run_time,
-            fxx=fxx,
-            out_path=out_path,
-            loc=loc,
-            dataset=dataset,
-            progress_callback=progress_callback,
-            cancelled=cancelled,
-        )
-
-    if config.key in ECCC_POINT_KEYS:
-        if member is not None:
-            raise RetrievalError(
-                "%s is deterministic and does not accept --member"
-                % config.label
-            )
-        return eccc_geomet.extract(
-            config.key,
-            lat,
-            lon,
-            run_time=run_time,
-            fxx=fxx,
-            out_path=out_path,
-            loc=loc,
-            dataset=dataset,
-            progress_callback=progress_callback,
-            cancelled=cancelled,
-        )
-
-    run_dt = _run_datetime(run_time, config)
-    if out_path is None:
-        out_path = str(
-            export_file_path(
-                "%s_point_%.2fN_%.2fE_%s_f%03d.npz"
-                % (
-                    config.key.replace("-", "_"),
-                    lat,
-                    lon,
-                    run_dt.strftime("%Y%m%d%H"),
-                    fxx,
-                )
-            )
-        )
-
-    owns_dataset = dataset is None
-    if owns_dataset:
-        retrieve_kwargs = {
-            "member": member,
-            "download_dir": download_dir,
-            "lat": lat,
-            "lon": lon,
-        }
-        if progress_callback is not None:
-            retrieve_kwargs["progress_callback"] = progress_callback
-        if cancelled is not None:
-            retrieve_kwargs["cancelled"] = cancelled
-        ds, H = _retrieve_dataset(config, run_dt, fxx, **retrieve_kwargs)
-    else:
-        ds = dataset
-        H = None
-
-    selected_dataset = None
-    decoder_backend = "xarray/cfgrib"
-    surface_merged = False
-    surface_pressure_hpa = None
-    below_ground_levels_removed = 0
-    try:
-        if cancelled is not None and cancelled():
-            raise DownloadCancelled("forecast-model download cancelled")
-        if isinstance(ds, DecodedModelPointDataset):
-            _emit_progress(progress_callback, "decoding")
-            decoder_backend = ds.backend
-            decoded = ds.decoded
-            cols = decoded.as_dict()
-            surface_merged = bool(getattr(decoded, "surface_merged", False))
-            below_ground_levels_removed = (
-                int(getattr(decoded, "below_ground_levels_removed", 0))
-            )
-            if decoded.surface_relative_vorticity is not None:
-                cols["surface_relative_vorticity"] = (
-                    decoded.surface_relative_vorticity
-                )
-                cols["_surface_vorticity_source"] = ds.vorticity_source
-            n_levels = int(decoded.pres.size)
-            glat = decoded.selected_lat
-            glon = decoded.selected_lon
-            valid_dt = ds.valid_time
-            _emit_progress(progress_callback, "extracting")
-        elif isinstance(ds, HrrrZarrPointDataset):
-            _emit_progress(progress_callback, "decoding")
-            decoder_backend = "HRRR Zarr direct point decoder"
-            decoded = ds.decoded
-            cols = decoded.as_dict()
-            surface_merged = bool(getattr(decoded, "surface_merged", False))
-            below_ground_levels_removed = (
-                int(getattr(decoded, "below_ground_levels_removed", 0))
-            )
-            if decoded.surface_relative_vorticity is not None:
-                cols["surface_relative_vorticity"] = (
-                    decoded.surface_relative_vorticity
-                )
-                cols["_surface_vorticity_source"] = (
-                    "absolute-vorticity pressure-level field minus Coriolis"
-                )
-            n_levels = int(decoded.pres.size)
-            glat = decoded.selected_lat
-            glon = decoded.selected_lon
-            valid_dt = ds.valid_time
-            _emit_progress(progress_callback, "extracting")
-        elif isinstance(ds, _LocalGribDataset):
-            _emit_progress(progress_callback, "decoding")
-            decoder_backend = "direct GRIB point decoder"
-            try:
-                decoded = _decode_local_point(ds, lat, lon)
-            except Exception as exc:
-                if _direct_grib_required():
-                    raise RetrievalError(
-                        "direct GRIB point decoding failed for %s: %s"
-                        % (config.label, exc)
-                    ) from exc
-                _LOGGER.info(
-                    "grib_decode.xarray_fallback model=%s path=%s reason=%s",
-                    config.key,
-                    ds.path,
-                    exc,
-                )
-                decoder_backend = "cfgrib/xarray point fallback"
-                fallback = ds.fallback_point_dataset(lat, lon, run_dt)
-                try:
-                    (
-                        cols,
-                        n_levels,
-                        glat,
-                        glon,
-                        valid_dt,
-                        selected_dataset,
-                    ) = _xarray_point_columns(
-                        fallback, lat, lon, run_dt, fxx, config.label
-                    )
-                finally:
-                    fallback.close()
-            else:
-                # Surface vorticity is an optional enrichment: only NSTP reads
-                # it, and no other parameter is affected by its absence. It is
-                # resolved here, *after* the decode has succeeded and inside its
-                # own guard, because ``surface_wind_vorticity`` raises when it
-                # cannot produce a value. Sharing the decode's ``try`` meant
-                # that raise discarded a perfectly good profile and fell through
-                # to the slower cfgrib/xarray path -- which sets no vorticity at
-                # all, so the one parameter the fallback existed to rescue was
-                # lost anyway, and every other value came from the slow path for
-                # nothing.
-                surface_vorticity = decoded.surface_relative_vorticity
-                surface_vorticity_source = (
-                    "direct pressure-level vorticity field"
-                )
-                if surface_vorticity is None:
-                    if _direct_grib_required():
-                        raise RetrievalError(
-                            "the direct decoder found no usable vorticity value"
-                        )
-                    try:
-                        surface_vorticity = ds.surface_wind_vorticity(
-                            lat, lon, run_dt
-                        )
-                    except Exception as vorticity_exc:
-                        # NSTP will report missing; everything else is intact.
-                        _LOGGER.info(
-                            "grib_decode.vorticity_unavailable model=%s "
-                            "reason=%s",
-                            config.key,
-                            vorticity_exc,
-                        )
-                        surface_vorticity = None
-                        surface_vorticity_source = ""
-                    else:
-                        surface_vorticity_source = (
-                            "targeted horizontal wind-gradient fallback"
-                        )
-                        decoder_backend = (
-                            "direct GRIB point decoder + targeted wind stencil"
-                        )
-
-                cols = decoded.as_dict()
-                surface_merged = bool(
-                    getattr(decoded, "surface_merged", False)
-                )
-                below_ground_levels_removed = (
-                    int(getattr(
-                        decoded,
-                        "below_ground_levels_removed",
-                        0,
-                    ))
-                )
-                if surface_vorticity is not None:
-                    cols["surface_relative_vorticity"] = (
-                        surface_vorticity
-                    )
-                    cols["_surface_vorticity_source"] = (
-                        surface_vorticity_source
-                    )
-                n_levels = int(decoded.pres.size)
-                glat = decoded.selected_lat
-                glon = decoded.selected_lon
-                valid_dt = run_dt + timedelta(hours=fxx)
-            _emit_progress(progress_callback, "extracting")
-        else:
-            _emit_progress(progress_callback, "extracting")
-            (
-                cols,
-                n_levels,
-                glat,
-                glon,
-                valid_dt,
-                selected_dataset,
-            ) = _xarray_point_columns(
-                ds, lat, lon, run_dt, fxx, config.label
-            )
-    finally:
-        if owns_dataset:
-            if isinstance(ds, _LocalGribDataset):
-                ds.close()
-            else:
-                try:
-                    if selected_dataset is not None:
-                        selected_dataset.close()
-                finally:
-                    if selected_dataset is not ds:
-                        ds.close()
-    surface_merged = bool(cols.pop("_surface_merged", surface_merged))
-    below_ground_levels_removed = int(cols.pop(
-        "_below_ground_levels_removed",
-        below_ground_levels_removed,
-    ))
-    surface_pressure_hpa = cols.pop("_surface_pressure_hpa", None)
-    if surface_merged and surface_pressure_hpa is None:
-        surface_pressure_hpa = float(np.asarray(cols["pres"]).reshape(-1)[0])
-    if not surface_merged:
-        raise RetrievalError(
-            "%s point sounding has no verified surface merge; refusing "
-            "a pressure ladder that may contain below-ground levels"
-            % config.label
-        )
-    qc = _require_profile_qc(cols, config.label)
-    run_str = run_dt.strftime("%Y-%m-%d %H:%M")
-    valid_str = valid_dt.strftime("%Y-%m-%d %H:%M")
-    loc_label = loc or "%s %.2f, %.2f" % (config.label, glat, glon)
-
-    arrays = {
-        "pres": cols["pres"], "hght": cols["hght"], "tmpc": cols["tmpc"],
-        "dwpc": cols["dwpc"], "wdir": cols["wdir"], "wspd": cols["wspd"],
-        "omeg": cols["omeg"], "uwnd": cols["u"], "vwnd": cols["v"],
-        "lat": glat, "lon": glon, "loc": loc_label, "model": config.label,
-        "run": run_str, "valid": valid_str, "fxx": fxx, "observed": False,
-    }
-    if "surface_relative_vorticity" in cols:
-        arrays["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
-
-    meta = {
-        "model": config.label,
-        "model_key": config.key,
-        "loc": loc_label,
-        "requested_lat": lat,
-        "requested_lon": lon,
-        "selected_lat": glat,
-        "selected_lon": glon,
-        "run": run_str,
-        "valid": valid_str,
-        "fxx": fxx,
-        "observed": False,
-        "npz": os.path.abspath(out_path),
-        "levels": int(n_levels),
-        "herbie_model": config.herbie_model,
-        "product": config.product,
-        "backend": decoder_backend,
-        "decoder": "forecast pressure-level column",
-        "surface_merged": surface_merged,
-        "surface_contract_version": SURFACE_CONTRACT_VERSION,
-        "below_ground_levels_removed": below_ground_levels_removed,
-        "qc_valid": qc.valid,
-        "qc_valid_level_count": qc.valid_level_count,
-        "qc_issues": list(qc.issues),
-        "cache_hit": False,
-    }
-    if surface_pressure_hpa is not None:
-        meta["surface_pressure_hpa"] = float(surface_pressure_hpa)
-    if member is not None:
-        meta["member"] = str(member)
-    elif "member" in config.kwargs:
-        meta["member"] = str(config.kwargs["member"])
-    if H is not None:
-        source_grib = getattr(
-            H, "_sharpmod_source_url", getattr(H, "grib", "")
-        )
-        source_fields = getattr(H, "_sharpmod_fields", source_fields)
-        source_transport = getattr(H, "_sharpmod_transport", source_transport)
-    if source_grib:
-        meta["source_grib"] = str(source_grib)
-    if source_fields:
-        meta["fields"] = list(source_fields)
-    if source_transport:
-        meta["transport"] = str(source_transport)
-    if "surface_relative_vorticity" in cols:
-        meta["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
-        meta["surface_vorticity_source"] = cols.get(
-            "_surface_vorticity_source",
-            "direct pressure-level vorticity field",
-        )
-
-    if cancelled is not None and cancelled():
-        raise DownloadCancelled("forecast-model download cancelled")
-    _emit_progress(progress_callback, "writing")
-    _atomic_write_npz(out_path, arrays)
-    json_path = os.path.splitext(out_path)[0] + ".json"
-    try:
-        _atomic_write_json(json_path, meta)
-    except BaseException:
-        _quiet_remove(out_path)
-        raise
-    _emit_progress(progress_callback, "complete")
-    return out_path
 
 
 def cleanup_transient_data(npz_path=None, download_dir=None):
@@ -2454,308 +878,12 @@ def cleanup_transient_data(npz_path=None, download_dir=None):
 _HERBIE_PROBE_REQUEST_LOCK = threading.RLock()
 
 
-class _BoundedHerbieRequests:
-    """Thread-scoped timeout/cancellation proxy for Herbie's HTTP calls."""
-
-    def __init__(
-        self,
-        delegate,
-        *,
-        owner_thread: int,
-        request_timeout: float,
-        deadline: float | None,
-        cancelled,
-    ):
-        self._delegate = delegate
-        self._owner_thread = int(owner_thread)
-        self._request_timeout = max(0.1, float(request_timeout))
-        self._deadline = deadline
-        self._cancelled = cancelled
-
-    def __getattr__(self, name):
-        return getattr(self._delegate, name)
-
-    def _owner_call(self) -> bool:
-        return threading.get_ident() == self._owner_thread
-
-    def _remaining(self) -> float:
-        _probe_cancel_if_requested(self._cancelled)
-        if self._deadline is None:
-            return self._request_timeout
-        remaining = self._deadline - time.monotonic()
-        if remaining <= 0:
-            raise TimeoutError("forecast-model availability probe timed out")
-        return min(self._request_timeout, remaining)
-
-    @staticmethod
-    def _clamp_timeout(value, limit: float):
-        if value is None:
-            return limit
-        if isinstance(value, (tuple, list)):
-            return tuple(min(max(0.1, float(item)), limit) for item in value)
-        return min(max(0.1, float(value)), limit)
-
-    def _request(self, method: str, *args, **kwargs):
-        if not self._owner_call():
-            return getattr(self._delegate, method)(*args, **kwargs)
-        limit = self._remaining()
-        kwargs["timeout"] = self._clamp_timeout(kwargs.get("timeout"), limit)
-        response = getattr(self._delegate, method)(*args, **kwargs)
-        self._remaining()
-        return response
-
-    def get(self, *args, **kwargs):
-        return self._request("get", *args, **kwargs)
-
-    def head(self, *args, **kwargs):
-        return self._request("head", *args, **kwargs)
 
 
-@contextmanager
-def _bounded_herbie_probe_requests(
-    *,
-    request_timeout: float | None,
-    deadline_seconds: float | None,
-    cancelled,
-    requests_holder=None,
-):
-    """Bound only this probe thread without changing concurrent downloads."""
-
-    if request_timeout is None and deadline_seconds is None:
-        yield
-        return
-    if requests_holder is None:
-        import herbie.core as requests_holder
-
-    timeout = 5.0 if request_timeout is None else float(request_timeout)
-    deadline = (
-        None
-        if deadline_seconds is None
-        else time.monotonic() + max(0.1, float(deadline_seconds))
-    )
-    with _HERBIE_PROBE_REQUEST_LOCK:
-        original = requests_holder.requests
-        proxy = _BoundedHerbieRequests(
-            original,
-            owner_thread=threading.get_ident(),
-            request_timeout=timeout,
-            deadline=deadline,
-            cancelled=cancelled,
-        )
-        requests_holder.requests = proxy
-        try:
-            yield
-        finally:
-            if requests_holder.requests is proxy:
-                requests_holder.requests = original
 
 
-def probe(
-    model,
-    run_time=None,
-    fxx=0,
-    member=None,
-    open_subset=False,
-    *,
-    cancelled=None,
-    request_timeout: float | None = None,
-    deadline_seconds: float | None = None,
-):
-    """Return a live availability probe dict for one supported model."""
-    _probe_cancel_if_requested(cancelled)
-    config = get_config(model)
-    if config.unavailable_reason:
-        return {
-            "model": config.key,
-            "label": config.label,
-            "fxx": int(fxx),
-            "available": False,
-            "subset_opened": False,
-            "surface_contract_complete": False,
-            "error": "%s cannot produce a sounding: %s"
-            % (config.label, config.unavailable_reason),
-        }
-    if config.key in OPENMETEO_POINT_KEYS:
-        if member is not None:
-            return {
-                "model": config.key,
-                "label": config.label,
-                "fxx": int(fxx),
-                "available": False,
-                "subset_opened": False,
-                "error": "%s is deterministic and has no members"
-                % config.label,
-            }
-        # Manifest-only. Open-Meteo requests are metered against the user's own
-        # allowance, and the interface re-probes whenever a selection changes,
-        # so a background availability check here would spend their quota on
-        # keystrokes. Ingestion is confirmed when the sounding is fetched.
-        return openmeteo.probe(
-            config.key, run_time=run_time, fxx=fxx, cancelled=cancelled)
-
-    if config.key in ECCC_POINT_KEYS:
-        if member is not None:
-            return {
-                "model": config.key,
-                "label": config.label,
-                "fxx": int(fxx),
-                "available": False,
-                "subset_opened": False,
-                "error": "%s is deterministic and has no members"
-                % config.label,
-            }
-        result = eccc_geomet.probe(
-            config.key,
-            run_time=run_time,
-            fxx=fxx,
-            cancelled=cancelled,
-            request_timeout=request_timeout,
-            deadline_seconds=deadline_seconds,
-        )
-        if open_subset:
-            result["note"] = (
-                "GeoMet availability is layer-based; point values are "
-                "opened during extraction."
-            )
-        return result
-    run_dt = _run_datetime(run_time, config)
-    result = {
-        "model": config.key,
-        "label": config.label,
-        "run": run_dt.strftime("%Y-%m-%d %H:%M"),
-        "fxx": int(fxx),
-        "available": False,
-        "subset_opened": False,
-        "surface_contract_complete": False,
-        "surface_contract_present": [],
-        "surface_contract_missing": [
-            name for name, _expression in _SURFACE_CONTRACT_EXPRESSIONS
-        ],
-        "surface_contract_version": SURFACE_CONTRACT_VERSION,
-    }
-    try:
-        _probe_cancel_if_requested(cancelled)
-        require_runtime_dependencies()
-        Herbie = _load_herbie_class()
-        request_context = _bounded_herbie_probe_requests(
-            request_timeout=request_timeout,
-            deadline_seconds=deadline_seconds,
-            cancelled=cancelled,
-        )
-        with request_context:
-            _probe_cancel_if_requested(cancelled)
-            H = _create_herbie(
-                Herbie,
-                run_dt.strftime("%Y-%m-%d %H:%M"),
-                model=config.herbie_model,
-                product=config.product,
-                fxx=int(fxx),
-                verbose=False,
-                **_herbie_kwargs(config, member=member),
-            )
-            _probe_cancel_if_requested(cancelled)
-            result["grib"] = str(H.grib)
-            inv = H.inventory()
-            _probe_cancel_if_requested(cancelled)
-            result["inventory_rows"] = 0 if inv is None else int(len(inv))
-            result["available"] = (
-                H.grib is not None and inv is not None and len(inv) > 0
-            )
-            contract = surface_contract_status(inv)
-            result["surface_contract_complete"] = contract["complete"]
-            result["surface_contract_present"] = list(contract["present"])
-            result["surface_contract_missing"] = list(contract["missing"])
-            result["surface_contract_version"] = SURFACE_CONTRACT_VERSION
-            if (
-                not contract["complete"]
-                and int(fxx) != 0
-                and tuple(contract["missing"]) == ("surface_height",)
-                and _f000_publishes_surface_height(
-                    Herbie,
-                    config,
-                    run_dt,
-                    member=member,
-                    cancelled=cancelled,
-                )
-            ):
-                # Extraction completes this from the run's F000 invariant
-                # terrain height, so this request remains usable.
-                result["surface_contract_invariant_companion"] = True
-                result["surface_contract_complete"] = True
-                result["surface_contract_present"] = [
-                    *contract["present"], "surface_height",
-                ]
-                result["surface_contract_missing"] = []
-            if open_subset and result["available"]:
-                _probe_cancel_if_requested(cancelled)
-                ds = H.xarray(config.search, remove_grib=False)
-                _probe_cancel_if_requested(cancelled)
-                if isinstance(ds, list):
-                    ds = _merge_datasets(ds)
-                result["subset_opened"] = True
-                result["data_vars"] = sorted(str(v) for v in ds.data_vars)
-    except DownloadCancelled:
-        raise
-    except Exception as exc:
-        result["error"] = "%s: %s" % (type(exc).__name__, exc)
-    return result
 
 
-def probe_recent_surface_contract(
-    model,
-    *,
-    reference_time=None,
-    fxx=0,
-    member=None,
-    lookback_cycles=8,
-    open_subset=False,
-):
-    """Probe completed cycles until one live inventory can be classified."""
-    config = get_config(model)
-    limit = int(lookback_cycles)
-    if limit < 1:
-        raise ValueError("lookback_cycles must be at least 1")
-    anchor = (
-        datetime.now(timezone.utc)
-        if reference_time is None
-        else _as_datetime(reference_time)
-    )
-    if anchor.tzinfo is None:
-        anchor = anchor.replace(tzinfo=timezone.utc)
-    cursor = anchor.astimezone(timezone.utc).replace(
-        minute=0,
-        second=0,
-        microsecond=0,
-    )
-    cycles = set(int(hour) for hour in config.cycles)
-    candidates = []
-    while len(candidates) < limit:
-        if cursor.hour in cycles:
-            candidates.append(cursor)
-        cursor -= timedelta(hours=1)
-
-    attempts = []
-    last = None
-    for candidate in candidates:
-        last = probe(
-            config.key,
-            run_time=candidate,
-            fxx=fxx,
-            member=member,
-            open_subset=open_subset,
-        )
-        attempts.append({
-            "run": last.get("run", candidate.strftime("%Y-%m-%d %H:%M")),
-            "available": bool(last.get("available")),
-            "error": last.get("error"),
-        })
-        if last.get("available"):
-            break
-    if last is None:  # pragma: no cover - limit validation prevents this
-        raise RuntimeError("no provider cycles were probed")
-    last["attempted_runs"] = attempts
-    last["lookback_cycles"] = limit
-    return last
 
 
 def _parse_time(value):
@@ -2765,118 +893,52 @@ def _parse_time(value):
         return datetime.strptime(value, "%Y-%m-%d %H:%M")
 
 
-def main(argv=None):  # pragma: no cover - CLI wrapper
-    import argparse
-    import sys
 
-    parser = argparse.ArgumentParser(
-        prog="model-extract",
-        description="Extract public forecast-model point soundings to .npz")
-    parser.add_argument("model", nargs="?", help="model key; use --list")
-    parser.add_argument("lat", nargs="?", type=float)
-    parser.add_argument("lon", nargs="?", type=float)
-    parser.add_argument("out", nargs="?", default=None)
-    parser.add_argument("--run", default=None,
-                        help="model run/cycle time, ISO or 'YYYY-MM-DD HH:MM'")
-    parser.add_argument("--fxx", type=int, default=0, help="forecast hour")
-    parser.add_argument("--member", default=None,
-                        help="ensemble/member override, e.g. GEFS c00 or p01")
-    parser.add_argument("--loc", default=None, help="location label")
-    parser.add_argument("--render", nargs="?", const="", default=None,
-                        metavar="PNG", help="also render the sounding to PNG")
-    parser.add_argument("--list", action="store_true",
-                        help="list supported and known unsupported models")
-    parser.add_argument("--probe", action="store_true",
-                        help="check inventory availability for a model")
-    parser.add_argument("--open-subset", action="store_true",
-                        help="with --probe, open the pressure-level subset too")
-    parser.add_argument(
-        "--require-surface-contract",
-        action="store_true",
-        help="with --probe, fail until every verified ground field is present",
-    )
-    parser.add_argument(
-        "--lookback-cycles",
-        type=int,
-        default=1,
-        help="with --probe, inspect this many recent cycles for live inventory",
-    )
-    args = parser.parse_args(argv if argv is not None else sys.argv[1:])
-    if args.require_surface_contract and not args.probe:
-        parser.error("--require-surface-contract requires --probe")
-    if args.lookback_cycles != 1 and not args.probe:
-        parser.error("--lookback-cycles requires --probe")
-    if args.lookback_cycles < 1:
-        parser.error("--lookback-cycles must be at least 1")
 
-    if args.list:
-        print("Supported forecast models:")
-        for cfg in available_models():
-            fxx = forecast_hours(cfg)
-            fxx_label = "F%03d-F%03d" % (min(fxx), max(fxx)) if fxx else "F---"
-            print("  %-20s %-24s %-16s %-11s %s/%s" % (
-                cfg.key, cfg.label, cfg.domain, fxx_label,
-                cfg.herbie_model, cfg.product))
-        print("\nKnown but not enabled:")
-        for key, reason in sorted(unsupported_models().items()):
-            print("  %-15s %s" % (key, reason))
-        return 0
+from sharpmod.tools.model_extract_retrieval import (  # noqa: E402
+    _combine_grib_payloads,
+    _cfs_surface_companion,
+    _f000_publishes_surface_height,
+    _surface_height_companion,
+    _retrieve_rrfs_dataset,
+    _retrieve_dataset
+)
 
-    if not args.model:
-        parser.error("model is required unless --list is used")
 
-    run = _parse_time(args.run) if args.run else None
-    if args.probe:
-        if args.lookback_cycles > 1:
-            info = probe_recent_surface_contract(
-                args.model,
-                reference_time=run,
-                fxx=args.fxx,
-                member=args.member,
-                lookback_cycles=args.lookback_cycles,
-                open_subset=args.open_subset,
-            )
-        else:
-            info = probe(
-                args.model,
-                run_time=run,
-                fxx=args.fxx,
-                member=args.member,
-                open_subset=args.open_subset,
-            )
-        for key in sorted(info):
-            print("%s: %s" % (key, info[key]))
-        usable = bool(info.get("available"))
-        if args.require_surface_contract:
-            usable = usable and bool(info.get("surface_contract_complete"))
-        return 0 if usable else 1
+from sharpmod.tools.model_extract_run import (  # noqa: E402
+    _point_neighborhood,
+    _merge_point_datasets,
+    _decode_local_point,
+    _xarray_point_columns,
+    extract
+)
 
-    if args.lat is None or args.lon is None:
-        parser.error("lat and lon are required for extraction")
-    transient = args.render is not None
-    download_dir = tempfile.mkdtemp(prefix="sharpmod-model-") \
-        if transient else None
-    path = None
-    try:
-        try:
-            path = extract(
-                args.model, args.lat, args.lon, run_time=run, fxx=args.fxx,
-                out_path=args.out, loc=args.loc, member=args.member,
-                download_dir=download_dir,
-            )
-        except (ModelExtractionError, KeyError, OSError) as exc:
-            print("ERROR: %s" % exc)
-            return 1
-        print("wrote %s" % path)
 
-        if transient:
-            from sharpmod.tools import render_npz
-            png = render_npz(path, args.render or None)
-            print("rendered %s" % png)
-        return 0
-    finally:
-        if transient:
-            cleanup_transient_data(path or args.out, download_dir)
+from sharpmod.tools.model_extract_probe import (  # noqa: E402
+    _BoundedHerbieRequests,
+    _bounded_herbie_probe_requests,
+    probe,
+    probe_recent_surface_contract
+)
+
+
+from sharpmod.tools.model_extract_config import (  # noqa: E402
+    _LocalGribDataset,
+    ModelConfig,
+    ProviderCapability,
+    forecast_hours,
+    provider_capability,
+    domain_intersects_bounds,
+    domain_contains_bounds
+)
+
+
+from sharpmod.tools.model_extract_cli import (  # noqa: E402
+    _prepare_windows_eccodes_runtime,
+    require_runtime_dependencies,
+    _planned_model_search,
+    main
+)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -311,6 +311,220 @@ def test_the_fetch_status_line_names_the_chosen_archive(picker, monkeypatch):
     assert "IGRA" in picker.statusBar().currentMessage()
 
 
+def _observed_job_worker(monkeypatch, captured):
+    from qtpy.QtCore import QObject, Signal
+
+    class Worker(QObject):
+        finished_ok = Signal(str, object, object)
+        failed = Signal(str)
+        finished = Signal()
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(kwargs.get("parent"))
+            captured["args"] = args
+            captured.update(kwargs)
+            self.cancelled = False
+
+        def isRunning(self):
+            return True
+
+        def start(self):
+            pass
+
+        def requestInterruption(self):
+            self.cancelled = True
+
+        def wait(self, timeout=None):
+            return True
+
+        def deleteLater(self):
+            pass
+
+    monkeypatch.setattr(gui_picker, "_FetchWorker", Worker)
+    return Worker
+
+
+def _observed_context(picker):
+    return (
+        picker._map_selected_id,
+        picker._map_date.date().toString(),
+        picker._map_cycle.currentIndex(),
+        picker._map_source.currentData(),
+        picker._map_controls_scroll.verticalScrollBar().value(),
+        picker.geometry(),
+    )
+
+
+def test_observed_fetch_reports_saved_request_and_cancel(picker, monkeypatch, qt_app):
+    captured = {}
+    _observed_job_worker(monkeypatch, captured)
+    picker._select_tab("Station Map")
+    qt_app.processEvents()
+    before = _observed_context(picker)
+
+    picker._start_fetch("72357", WHEN)
+    token = picker._observed_token
+    assert picker._worker is not None
+    assert picker._observed_job.snapshot.state == "running"
+    assert picker._observed_job.snapshot.token == token
+    assert "72357" in picker._observed_job.snapshot.affected_input
+    assert picker._observed_job.snapshot.total == 1
+
+    picker._observed_job.cancel_button.click()
+    assert picker._worker.cancelled is True
+    assert picker._observed_job.snapshot.state == "cancelling"
+    assert _observed_context(picker) == before
+
+    picker._worker.finished.emit()
+    qt_app.processEvents()
+    assert picker._worker is None
+    assert picker._observed_job.snapshot.state == "cancelled"
+    assert picker._observed_job.snapshot.counts.cancelled == 1
+    assert picker._observed_job.snapshot.counts.requested == 1
+    assert picker._observed_job.snapshot.retryable is True
+    assert _observed_context(picker) == before
+
+    picker._map_date.setDate(picker._map_date.date().addDays(-1))
+    retried_selection = _observed_context(picker)
+    picker._observed_job.retry_button.click()
+    qt_app.processEvents()
+    assert picker._worker is not None
+    assert captured.get("provider") == picker._observed_source()
+    assert picker._observed_job.snapshot.state == "running"
+    assert _observed_context(picker) == retried_selection
+
+
+def test_observed_stale_success_cannot_replace_newer_request(picker, monkeypatch, qt_app):
+    captured = {}
+    worker_cls = _observed_job_worker(monkeypatch, captured)
+    picker._select_tab("Station Map")
+    qt_app.processEvents()
+
+    picker._start_fetch("72357", WHEN)
+    old = picker._worker
+    old_token = picker._observed_token
+    picker._observed_job.cancel_button.click()
+    old.finished.emit()
+    qt_app.processEvents()
+    assert picker._worker is None
+
+    picker._start_fetch("72357", WHEN)
+    assert picker._worker is not old
+    assert picker._observed_token != old_token
+
+    shown = []
+    monkeypatch.setattr(
+        type(picker), "_show_sounding", lambda self, *args: shown.append(args)
+    )
+    old.finished_ok.emit("stale.npz", object(), WHEN)
+    qt_app.processEvents()
+    assert shown == []
+    assert picker._observed_job.snapshot.token == picker._observed_token
+    assert picker._observed_job.snapshot.state == "running"
+    assert worker_cls is not None
+
+
+def test_observed_transient_failure_reports_retryable_counts(picker, monkeypatch, qt_app):
+    captured = {}
+    _observed_job_worker(monkeypatch, captured)
+    picker._select_tab("Station Map")
+    qt_app.processEvents()
+    before = _observed_context(picker)
+    failures = []
+    monkeypatch.setattr(
+        "sharpmod.gui_picker.QMessageBox.critical",
+        lambda *args: failures.append(args[-1]),
+    )
+
+    picker._start_fetch("72357", WHEN)
+    worker = picker._worker
+    worker.failed.emit("temporary provider failure")
+    qt_app.processEvents()
+    assert failures == ["temporary provider failure"]
+    assert picker._observed_job.snapshot.state == "failed"
+    assert picker._observed_job.snapshot.counts.failed == 1
+    assert picker._observed_job.snapshot.counts.requested == 1
+    assert picker._observed_job.snapshot.retryable is True
+    assert "temporary provider failure" in picker._observed_job.snapshot.message
+    assert _observed_context(picker) == before
+
+    worker.finished.emit()
+    qt_app.processEvents()
+    assert picker._worker is None
+    assert picker._observed_job.snapshot.state == "failed"
+    picker._observed_job.retry_button.click()
+    qt_app.processEvents()
+    assert picker._worker is not worker
+    assert picker._observed_job.snapshot.state == "running"
+    assert _observed_context(picker) == before
+
+
+def test_observed_success_queued_before_cancel_does_not_open(picker, monkeypatch, qt_app):
+    captured = {}
+    _observed_job_worker(monkeypatch, captured)
+    picker._select_tab("Station Map")
+    qt_app.processEvents()
+    before = _observed_context(picker)
+
+    picker._start_fetch("72357", WHEN)
+    worker = picker._worker
+    picker._observed_job.cancel_button.click()
+    worker.finished_ok.emit("queued.npz", object(), WHEN)
+    worker.finished.emit()
+    qt_app.processEvents()
+    assert picker._worker is None
+    assert picker._observed_job.snapshot.state == "cancelled"
+    assert picker._observed_job.snapshot.counts.completed == 0
+    assert picker._observed_job.snapshot.counts.cancelled == 1
+    assert picker._observed_job.snapshot.retryable is True
+    assert _observed_context(picker) == before
+
+
+def test_observed_success_published_after_cancel_is_rejected(picker, monkeypatch, qt_app):
+    """A success that arrives while cancelling must not publish over Cancel."""
+    from types import SimpleNamespace
+
+    _observed_job_worker(monkeypatch, {})
+    picker._select_tab("Station Map")
+    qt_app.processEvents()
+
+    picker._start_fetch("72357", WHEN)
+    worker = picker._worker
+    shown = []
+    monkeypatch.setattr(
+        type(picker), "_show_sounding", lambda self, *args: shown.append(args)
+    )
+    monkeypatch.setattr(
+        "sharpmod.gui_picker.QMessageBox.critical", lambda *args: None
+    )
+    picker._observed_job.cancel_button.click()
+    # A well-formed success queued just before Cancel must still lose to it.
+    worker.finished_ok.emit(
+        "queued.npz", SimpleNamespace(id="72357", provider="uwyo"), WHEN,
+    )
+    worker.finished.emit()
+    qt_app.processEvents()
+    assert shown == []
+    assert picker._observed_job.snapshot.state == "cancelled"
+    assert picker._observed_job.snapshot.counts.completed == 0
+    assert picker._observed_job.snapshot.counts.cancelled == 1
+
+
+def test_observed_viewer_close_and_shutdown_leave_no_worker(picker, monkeypatch, qt_app):
+    captured = {}
+    _observed_job_worker(monkeypatch, captured)
+    picker._select_tab("Station Map")
+    qt_app.processEvents()
+
+    picker._start_fetch("72357", WHEN)
+    worker = picker._worker
+    picker._shutdown_model_cache()
+    qt_app.processEvents()
+    assert picker._worker is None
+    assert picker._observed_job.snapshot is None or picker._observed_job.snapshot.token != worker
+    assert worker is not None
+
+
 # --------------------------------------------------------------------------- #
 # Worker routing
 # --------------------------------------------------------------------------- #

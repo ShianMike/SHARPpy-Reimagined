@@ -52,7 +52,7 @@ from typing import Callable, List, Optional, Tuple
 
 from qtpy import QtCore, QtGui, QtWidgets
 
-from sharpmod import colors
+from sharpmod.viz import colors
 from sharpmod.sharptab.constants import is_missing
 
 __all__ = [
@@ -71,12 +71,12 @@ MISSING_STR = colors.MISSING_STR
 #: Per-value tier coloring for the derived-index rows (Requirement 22.5).
 #:
 #: Maps a Profile attribute to the documented Color-Scheme tier parameter
-#: (a key of :data:`sharpmod.colors.TIER_THRESHOLDS`) whose threshold map colors
+#: (a key of :data:`sharpmod.viz.colors.TIER_THRESHOLDS`) whose threshold map colors
 #: it. Both HGZ CAPE and the SFC-6 km CAPE are CAPE-scale J/kg quantities, so
 #: they are recolored on the documented CAPE tier scale; the remaining derived
 #: indices have no documented tier scale and are drawn in the neutral
 #: foreground. The color is recomputed from the *current* value at draw time
-#: (never a stale default) via :func:`sharpmod.colors.tier_color`.
+#: (never a stale default) via :func:`sharpmod.viz.colors.tier_color`.
 DERIVED_TIER_PARAMS = {
     "hgz_cape": "cape",
     "cape_0_6km": "cape",
@@ -341,7 +341,7 @@ class plotDerivedIndices(QtWidgets.QFrame):
 
         Rows carrying a documented tier scale (:data:`DERIVED_TIER_PARAMS`) are
         recolored by mapping the *current* Profile value through
-        :func:`sharpmod.colors.tier_color` on every draw, so changing the value
+        :func:`sharpmod.viz.colors.tier_color` on every draw, so changing the value
         into a different threshold band changes the drawn color and no stale
         color is retained (Requirement 22.5). Rows with no documented tier scale
         are drawn in the neutral foreground so the value stays legible.

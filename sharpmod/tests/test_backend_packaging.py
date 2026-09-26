@@ -120,7 +120,7 @@ def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
     triggers = workflow["on"]
     required_paths = {
         "sharpmod/_version.py",
-        "sharpmod/model_transport.py",
+        "sharpmod/models/model_transport.py",
         "sharpmod/tools/model_extract.py",
         "sharpmod/tests/test_grib_backend_equivalence.py",
         "sharpmod/tests/test_scalar_pressure_merge.py",

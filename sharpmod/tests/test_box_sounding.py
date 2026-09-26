@@ -391,7 +391,10 @@ def test_box_requests_rejects_a_non_plan():
 def test_describe_plan_reports_the_facts_a_reader_needs():
     plan = plan_box_samples("hrrr", _plains(), target_points=16)
     text = describe_plan(plan)
-    for expected in ("HRRR", "Lattice", "Spacing", "Downloads", "native"):
+    for expected in (
+        "HRRR", "Lattice", "Coverage", "Spacing", "Est. work", "native",
+        "not guaranteed",
+    ):
         assert expected in text
 
 

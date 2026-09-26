@@ -95,16 +95,19 @@ def _preferred_netcdf_engine(xr):
     advertises NetCDF support to xarray but only implements NetCDF3, so
     accepting it here produces a misleading dependency check followed by a
     ``not a valid NetCDF 3 file`` failure when the file is opened.
+
+    The check probes only for the two capable backend packages instead of
+    enumerating every registered xarray engine.  A full
+    ``xr.backends.list_engines()`` import walk also loads unrelated backends
+    (notably ``cfgrib``/``eccodes``); a broken optional install then fails
+    this dependency check even though the NetCDF4 path it guards is intact.
     """
-    try:
-        engines = xr.backends.list_engines()
-    except Exception as exc:  # pragma: no cover - environment dependent
-        raise RetrievalError(
-            "xarray could not inspect its NetCDF backends: %s" % exc
-        ) from exc
-    for engine in ("netcdf4", "h5netcdf"):
-        if engine in engines:
-            return engine
+    for engine, package in (("netcdf4", "netCDF4"), ("h5netcdf", "h5netcdf")):
+        try:
+            __import__(package)
+        except Exception:
+            continue
+        return engine
     raise RetrievalError(
         "raw wrfout support needs a NetCDF4/HDF5 backend (netCDF4 or "
         "h5netcdf); SciPy's NetCDF3-only backend is not sufficient. "

@@ -13,8 +13,8 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
-from qtpy import QtCore
-from qtpy.QtGui import QColor, QPixmap
+from qtpy import QtCore, QtGui
+from qtpy.QtGui import QColor, QImage, QPainter, QPixmap
 
 from sharpmod import map_overlays as mo
 from sharpmod.viz import hodo_locator
@@ -182,6 +182,53 @@ def test_the_risk_area_is_visible_in_the_inset(baseline):
 
     assert hodo_locator.draw_hodo_locator(widget) is True
     assert _inset_difference(bare, pixmap.toImage(), widget) > 0.05
+
+
+def test_custom_panned_world_copy_keeps_raster_and_hazard_aligned(qt_app):
+    view = (520.0, 40.0, 560.0, 60.0)
+    rect = QtCore.QRectF(0.0, 0.0, 320.0, 200.0)
+    source = QImage(4, 4, QImage.Format_ARGB32)
+    source.fill(QColor("#ff0000"))
+    encoded = QtCore.QBuffer()
+    encoded.open(QtCore.QBuffer.WriteOnly)
+    assert source.save(encoded, "PNG")
+    raster = mo.OverlayRaster(
+        key="radar_mosaic", title="Radar", image_bytes=bytes(encoded.data()),
+        bounds=(170.0, 180.0, 40.0, 60.0),
+    )
+    east = _shape(
+        [[170.0, 45.0], [175.0, 45.0], [175.0, 55.0],
+         [170.0, 55.0], [170.0, 45.0]],
+        fill="#00ff00", stroke="#00ff00", label="",
+    )
+    crossing = _shape(
+        [[178.0, 45.0], [-178.0, 45.0], [-178.0, 55.0],
+         [178.0, 55.0], [178.0, 45.0]],
+        fill="#0000ff", stroke="#0000ff", label="",
+    )
+    raster_surface = QPixmap(320, 200)
+    raster_surface.fill(QColor("black"))
+    risk_surface = QPixmap(320, 200)
+    risk_surface.fill(QColor("black"))
+    painter = QPainter(raster_surface)
+    try:
+        hodo_locator._draw_overlay_rasters(
+            painter, (raster,), rect, view, QtCore, QtGui)
+    finally:
+        painter.end()
+    painter = QPainter(risk_surface)
+    try:
+        hodo_locator._draw_overlay_layers(
+            painter, (_layer((east, crossing)),), rect, view, QtCore, QtGui)
+    finally:
+        painter.end()
+
+    imagery = raster_surface.toImage()
+    risk = risk_surface.toImage()
+    assert imagery.pixelColor(120, 100).red() == 255
+    assert imagery.pixelColor(200, 100) == QColor("black")
+    assert risk.pixelColor(100, 100).green() > 30
+    assert risk.pixelColor(160, 100).blue() > 30
 
 
 def test_a_filtered_layer_leaves_the_inset_untouched(baseline):

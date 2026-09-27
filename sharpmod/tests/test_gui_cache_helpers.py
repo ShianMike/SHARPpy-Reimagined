@@ -1,3 +1,9 @@
+"""Regression coverage for GUI cache helpers.
+
+These tests check binary-size formatting, strict coordinate parsing, and the rule that
+cached entries are reusable only when they contain a valid GRIB or portable sounding
+artifact."""
+
 from types import SimpleNamespace
 
 from sharpmod.gui_cache import entry_reusable, format_size, parse_spatial_point

@@ -11,8 +11,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from qtpy import QtCore
-from qtpy.QtGui import QColor, QPixmap
+from qtpy import QtCore, QtGui
+from qtpy.QtGui import QColor, QPainter, QPixmap
 
 from sharpmod.viz import hodo_locator
 
@@ -203,6 +203,28 @@ def test_the_painted_outline_lands_inside_the_inset(qt_app):
         x, y = hodo_locator._map_point(interior, bounds, lat, lon)
         assert interior.left() <= x <= interior.right()
         assert interior.top() <= y <= interior.bottom()
+
+
+def test_wrapped_box_outline_uses_the_visible_panned_longitude_copy(qt_app):
+    surface = QPixmap(320, 200)
+    surface.fill(QColor("black"))
+    painter = QPainter(surface)
+    try:
+        hodo_locator._draw_box_outline(
+            painter,
+            (170.0, 45.0, 190.0, 55.0),
+            QtCore.QRectF(0.0, 0.0, 320.0, 200.0),
+            (520.0, 40.0, 560.0, 60.0),
+            "#ffff00", QtCore, QtGui,
+        )
+    finally:
+        painter.end()
+    image = surface.toImage()
+    assert any(
+        image.pixelColor(x, y).red() > 200
+        for y in range(45, 60)
+        for x in range(80, 240)
+    ), "the 170°E–170°W box was not drawn on the displayed 530°–550° copy"
 
 
 def test_unusable_bounds_do_not_break_the_locator(qt_app):

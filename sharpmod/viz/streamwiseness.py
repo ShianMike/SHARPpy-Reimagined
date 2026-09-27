@@ -15,7 +15,7 @@ import numpy.ma as ma
 
 from qtpy import QtCore, QtGui, QtWidgets
 
-from sharpmod import colors
+from sharpmod.viz import colors
 from sharpmod.sharptab.constants import is_missing
 from sharpmod.sharptab import winds as sm_winds
 

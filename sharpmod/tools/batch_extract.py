@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import sys
 
-from sharpmod.batch_extract import (
+from sharpmod.analysis.batch_extract import (
     MAX_CONCURRENCY,
     BatchExtractError,
     BatchExtractor,
@@ -99,8 +99,8 @@ def main(argv=None) -> int:
     hour_cache = None
     try:
         if args.cache_root is not None:
-            from sharpmod.model_disk_cache import ModelDiskCache
-            from sharpmod.model_hour_cache import ModelHourCache
+            from sharpmod.models.model_disk_cache import ModelDiskCache
+            from sharpmod.models.model_hour_cache import ModelHourCache
 
             disk_cache = ModelDiskCache(
                 args.cache_root,

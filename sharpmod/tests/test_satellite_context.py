@@ -1,3 +1,9 @@
+"""Regression coverage for satellite frame discovery and rendering.
+
+The tests verify scan-time/channel parsing, bounded nearest-frame selection,
+deterministic spacecraft choice, fixed-grid geolocation, and disclosure of the selected
+frame time."""
+
 from __future__ import annotations
 
 import warnings

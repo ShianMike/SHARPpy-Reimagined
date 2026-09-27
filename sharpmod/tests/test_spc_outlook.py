@@ -210,6 +210,16 @@ def test_parse_reads_categories_colours_and_window():
     assert "valid" in layer.subtitle and "Day 1 1630Z" in layer.subtitle
 
 
+def test_same_day_validity_window_prints_the_date_once():
+    layer = spc.parse_outlook(
+        _payload(valid="202609230000", expire="202609231200"),
+        label="Day 1 · 000Z issuance",
+    )
+
+    assert "valid 23 Sep 0000–1200Z" in layer.subtitle
+    assert layer.subtitle.count("23 Sep") == 1
+
+
 def test_parse_orders_by_severity_not_payload_order():
     document = json.loads(_payload())
     document["features"].reverse()  # HIGH first

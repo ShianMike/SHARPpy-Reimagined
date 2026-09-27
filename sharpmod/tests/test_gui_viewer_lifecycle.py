@@ -20,11 +20,14 @@ def _flush_deferred_deletes(qt_app) -> None:
     qt_app.processEvents()
 
 
+@pytest.mark.parametrize("activate", (True, False))
 def test_composed_viewer_is_destroyed_and_released_on_close(
-        qt_app, monkeypatch):
+        qt_app, monkeypatch, activate):
     """Closing a normal viewer must delete it, not leave a hidden tree."""
     window_holder = [QtWidgets.QMainWindow()]
     window_holder[0].spc_widget = QtWidgets.QWidget(window_holder[0])
+    activations = []
+    window_holder[0].activateWindow = lambda: activations.append(True)
     controller = QtWidgets.QWidget()
     controller._viewers = []
     controller._config = lambda: object()
@@ -76,7 +79,7 @@ def test_composed_viewer_is_destroyed_and_released_on_close(
     )
 
     composed = gui_viewer.compose_interactive(
-        object(), profile, controller, stn_id="KOUN"
+        object(), profile, controller, stn_id="KOUN", activate=activate
     )
     window_holder.clear()
     controller._viewers.append(composed)
@@ -85,6 +88,8 @@ def test_composed_viewer_is_destroyed_and_released_on_close(
     wrapper_ref = weakref.ref(composed)
 
     assert composed.testAttribute(QtCore.Qt.WA_DeleteOnClose)
+    assert activations == ([True] if activate else [])
+    assert composed.testAttribute(QtCore.Qt.WA_ShowWithoutActivating) is (not activate)
     assert composed.close() is True
     _flush_deferred_deletes(qt_app)
 
@@ -147,11 +152,26 @@ def test_no_installer_handler_closes_over_the_window():
     window does, so a handler on one of its children that captures it strongly
     retains it just as durably.
     """
-    from sharpmod import gui_common, gui_sessions, gui_settings, gui_timeline
+    from sharpmod import (
+        gui_common,
+        gui_interaction_mode,
+        gui_sounding_readout,
+        gui_sessions,
+        gui_settings,
+        gui_timeline,
+    )
 
     offenders = []
     audited = []
-    modules = (gui_viewer, gui_sessions, gui_timeline, gui_common, gui_settings)
+    modules = (
+        gui_viewer,
+        gui_sessions,
+        gui_timeline,
+        gui_common,
+        gui_settings,
+        gui_interaction_mode,
+        gui_sounding_readout,
+    )
     for module in modules:
         for name in sorted(dir(module)):
             if not ("install" in name or "bind" in name):
@@ -170,11 +190,13 @@ def test_no_installer_handler_closes_over_the_window():
     # would pass by examining nothing. Named explicitly rather than counted, so
     # a rename cannot quietly drop one out of scope.
     assert len(audited) >= 12, f"only audited {audited}"
-    for required in ("sharpmod.gui_timeline.install_timeline_controls",
+    for required in ("sharpmod.ui.features.gui_timeline.install_timeline_controls",
                      "sharpmod.gui_viewer._install_tip_bar",
                      "sharpmod.gui_viewer._install_export_menu",
-                     "sharpmod.gui_settings._install_palette_preview",
-                     "sharpmod.gui_sessions._install_analysis_actions"):
+                     "sharpmod.ui.features.gui_settings._install_palette_preview",
+                     "sharpmod.ui.features.gui_sessions._install_analysis_actions",
+                     "sharpmod.ui.features.gui_interaction_mode.install_interaction_mode",
+                     "sharpmod.ui.features.gui_sounding_readout.install_linked_readout"):
         assert required in audited, (
             f"{required} is no longer being audited; discovery is narrower "
             f"than the defect again. Audited: {audited}")

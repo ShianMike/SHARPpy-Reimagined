@@ -151,6 +151,8 @@ def test_available_preflight_profile_is_cached_and_skips_second_fetch(
 
 
 def test_availability_worker_emits_the_decoded_profile(qt_app, monkeypatch):
+    from sharpmod.ui.features import gui_availability_worker
+
     when = datetime(2026, 8, 10, 0)
     profile = SimpleNamespace(
         pres=[1000.0 - 50.0 * index for index in range(18)],
@@ -170,12 +172,12 @@ def test_availability_worker_emits_the_decoded_profile(qt_app, monkeypatch):
         pass
 
     monkeypatch.setattr(
-        gui_workers,
+        gui_availability_worker,
         "_uwyo_decoder_classes",
         lambda: (LookupError, object, UWyoError),
     )
     monkeypatch.setattr(
-        gui_workers,
+        gui_availability_worker,
         "_decoder_for_station",
         lambda _station: (decoder, "72357"),
     )

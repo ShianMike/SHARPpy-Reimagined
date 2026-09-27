@@ -24,7 +24,7 @@ from sharpmod.gui_viewer import compose_interactive
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "examples" / "soundings" / "14061619.OAX"
-OUTPUT = ROOT / "docs" / "images" / "v1.3.0"
+OUTPUT = ROOT / "docs" / "images" / "v2.0.0"
 CAPTURE_WIDTH = 1600
 CAPTURE_HEIGHT = 950
 STYLES = ("standard", "inverted", "protanopia")

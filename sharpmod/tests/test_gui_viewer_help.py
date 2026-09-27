@@ -17,7 +17,7 @@ from qtpy.QtCore import QSettings, QTimer
 from qtpy.QtWidgets import QDialog, QMainWindow, QTextBrowser
 
 from sharpmod import gui_viewer
-from sharpmod.gui_common import CONTROLS_HTML
+from sharpmod.gui_common import CONTROLS_HTML, TIP_LINE
 
 
 class _Controller:
@@ -43,6 +43,7 @@ def viewer_window(qt_app, tmp_path):
     win, controller = _window(qt_app, tmp_path)
     yield win, controller
     win.close()
+    win.deleteLater()
 
 
 def test_the_sounding_window_has_a_help_menu(viewer_window):
@@ -78,6 +79,29 @@ def test_the_guide_is_on_f1(viewer_window):
     guide = win._sharpmod_help_menu.actions()[0]
     assert "Controls" in guide.text()
     assert guide.shortcut().toString() == "F1"
+
+
+def test_enlarged_controls_guide_does_not_cover_menu_actions(qt_app, tmp_path):
+    from qtpy.QtWidgets import QToolButton
+    from sharpmod import gui_theme
+
+    try:
+        gui_theme.apply_theme(qt_app, color_style="standard", text_scale=200)
+        win, _controller = _window(qt_app, tmp_path)
+        win.resize(900, 600)
+        win.show()
+        qt_app.processEvents()
+        tips = win._sharpmod_tips
+        guide, close = tips.findChildren(QToolButton)
+        assert guide.accessibleName() == "Sounding controls guide"
+        assert "right-click" in guide.accessibleDescription()
+        assert close.accessibleName() == "Hide interaction tips"
+        for action in win.menuBar().actions():
+            assert not win.menuBar().actionGeometry(action).intersects(tips.geometry())
+    finally:
+        gui_theme.apply_theme(qt_app, color_style="standard")
+        if "win" in locals():
+            win.close()
 
 
 def test_guide_stays_reachable_after_the_tips_strip_is_dismissed(
@@ -272,6 +296,9 @@ def test_the_guide_does_not_accumulate_on_the_window(viewer_window, qt_app):
     ("Ctrl+1", "actual size"),
     ("Ctrl+B", "the sounding panel"),
     ("F1", "this guide itself"),
+    ("Ctrl+Alt+I", "Inspect mode"),
+    ("Ctrl+Alt+E", "Edit mode"),
+    ("Ctrl+Alt+H", "edit history"),
 ])
 def test_guide_documents_the_zoom_and_view_controls(phrase, why):
     """The guide's single line about the wheel was what left zoom unexplained.
@@ -281,6 +308,16 @@ def test_guide_documents_the_zoom_and_view_controls(phrase, why):
     zoom from whole-sounding zoom on the same gesture.
     """
     assert phrase in CONTROLS_HTML, f"guide never mentions {why} ({phrase})"
+
+
+def test_help_names_the_edit_safety_boundary_before_mutation_gestures():
+    """The guide must not make a guarded drag sound unconditionally editable."""
+
+    assert "Inspect mode" in CONTROLS_HTML
+    assert "blocks every profile and storm-motion mutation" in CONTROLS_HTML
+    assert "In <b>Edit mode</b>, <b>click + drag</b>" in CONTROLS_HTML
+    assert "Inspect / Edit" in TIP_LINE
+    assert "drag points in Edit mode" in TIP_LINE
 
 
 def test_guide_states_the_zoom_direction_and_its_limit():

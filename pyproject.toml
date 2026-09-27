@@ -51,7 +51,7 @@ dependencies = [
     "certifi>=2023.7.22",
     # SHARPpy's declared runtime need (used by its datasources import chain).
     "requests>=2.28,<3.0",
-    # Animated briefing exports use Pillow's deterministic GIF encoder.
+    # Animation exports use Pillow's deterministic GIF encoder.
     "Pillow>=10,<13",
     # Optional picker-map GOES context reads CF/netCDF fixed-grid files and
     # performs the documented geostationary projection before display.
@@ -107,7 +107,7 @@ dev = [
 quality = [
     "pip-audit==2.10.1",
     "pytest-cov==7.1.0",
-    "ruff==0.16.6",
+    "ruff==0.16.8",
 ]
 # Build frontend for the optional local Rust extension. This does not install
 # Rust itself or make the extension a requirement of the Python package.
@@ -195,6 +195,22 @@ select = ["E9", "F63", "F7", "F82"]
 # Discover the top-level `sharpmod` package and its subpackages.
 packages = [
     "sharpmod",
+    "sharpmod._compat",
+    "sharpmod.analysis",
+    "sharpmod.core",
+    "sharpmod.maps",
+    "sharpmod.models",
+    "sharpmod.providers",
+    "sharpmod.state",
+    "sharpmod.upstream",
+    "sharpmod.ui",
+    "sharpmod.ui.features",
+    "sharpmod.ui.styles",
+    "sharpmod.ui.picker",
+    "sharpmod.ui.maps",
+    "sharpmod.ui.maps.overlays",
+    "sharpmod.ui.analysis",
+    "sharpmod.rendering",
     "sharpmod.backends",
     "sharpmod.sharptab",
     "sharpmod.io",

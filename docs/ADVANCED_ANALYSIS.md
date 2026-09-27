@@ -1,4 +1,4 @@
-# Advanced analysis, verification, replay, and sharing
+# Advanced analysis and sharing
 
 This guide covers the cross-sounding workflows in the sounding window and the
 optional environmental layers in the picker. The guiding rule is exactness:
@@ -13,18 +13,41 @@ uses the full window width. Controls inside a source are grouped into collapsibl
 sections; use each section's chevron to hide or reveal it without resetting its
 values.
 
-On the Forecast Model map, **Box…** arms one rectangle gesture. It releases after
-the rectangle is accepted, rejected, cancelled, or blocked, and **Escape** clears
-an in-progress or completed rectangle and releases the mode. A storm-report
-marker receives click priority over point-sounding selection: click the marker to
-read its description without moving the sounding point.
+Every map exposes explicit **Select** and **Inspect** tools; point maps also have
+**Draw box**. Select changes the intended sounding point, Inspect reads the
+underlying numeric field or overlapping markers without moving it, and loading
+remains a separate action. Lock can freeze the point while inspection,
+navigation, and box work continue; Recent point reverses the last point move.
+Hover is transient, while a pinned inspection card retains sampled and requested
+coordinates, distance, units, source, run/valid time, and native grid context.
+Imagery without a numeric field says so rather than deriving a value from colour.
+
+Scroll/trackpad zoom anchors at the pointer. Middle- or right-drag pans; a true
+right-click opens navigation, and a released pan never selects. Fit, Centre,
+Previous/Next view, a searchable region, and the View menu provide the same
+reversible actions. `V`, `I`, `B`, and `U` switch Select, Inspect, Draw box, and
+Recent point only while the map has focus, so typing in a field is unaffected.
+
+On the Forecast Model map, **Box…** and **Draw box** arm the same rectangle
+state. Shift-drag draws from any tool. A committed rectangle has handles,
+whole-box movement, numeric bounds, Reset, domain/grid coverage, and an explicit
+extraction review; changing a run/hour does not itself download. Saved areas are
+source-neutral and restore bounds without changing the selected model.
+
+The layer list states paint order, visibility, opacity, actual time, and typed
+loading/offline/no-data/failed/cancelled state. Numeric fields can lock one
+legend range across panels or times. The persistent map header distinguishes
+requested and displayed times, run/lead, observation time, and secondary
+retrieval time. Historical mode holds the correctly labelled prior frame and
+suppresses latest-only radar until Live is explicitly restored. Failed layers
+retain independent working layers and offer a scoped retry.
 
 ## Opening the analysis workspace
 
 Open a sounding, then choose **View → Analysis Workspace** or press
 `Ctrl+Shift+A`. The workspace uses the soundings already loaded in that viewer.
-Its nine top-level tabs are **Trends**, **Compare**, **Ensemble**, **Notes**,
-**Scenarios**, **Verify**, **Observed Winds**, **Share**, and **Replay**.
+Its four top-level tabs are **Trends**, **Compare**, **Ensemble**, and
+**Animation**.
 
 The forecast picker's **Workspace…** command remains the quickest way to acquire
 several models, successive runs, or ensemble members at one point and exact valid
@@ -56,14 +79,20 @@ spatial comparison remains inspectable. A conflicting parcel or storm-motion
 convention marks affected diagnostics incompatible instead of presenting a
 misleading delta. Unknown metadata remains `Unknown`.
 
-The upper comparison view supports two or four panels. It places the reference
-first, shares temperature and height ranges, and draws one cursor height across
-all visible panels. Missing vertical layers remain gaps. The lower difference
+The upper comparison view supports two or four identity-backed slots. Each can
+show a full Skew-T, hodograph, or the simplified difference view using the
+established scientific renderer; unavailable profiles keep their assigned slot.
+The reference and slot colours remain stable, axes/cursor heights are linked by
+default, and unlinking is stated explicitly. Missing vertical layers remain
+gaps. The lower difference
 view uses conservative common-height alignment for temperature, dewpoint, and
 wind components; drawing interpolation does not alter the scientific table.
-Reference choice, two/four-panel layout, splitter position, and current tab are
-restored with an analysis session. **Export CSV…** includes the values,
-compatibility issues, and provenance.
+Temperature and wind differences have separate labelled axes. **Fixed ranges**
+holds one scale per compatible family across slots/times until Refit. Reference,
+slot assignment, chart type, layout, scale lock, metric columns, splitter, and
+current tab restore with an analysis session. **Export CSV…** includes the
+selected values, compatibility issues, and provenance; image export renders the
+selected slots at chosen pixels without resizing the live view.
 
 ## Ensemble accounting and thresholds
 
@@ -98,105 +127,9 @@ In **Ensemble → Thresholds**:
 Every result reports qualifying, usable, loaded, and requested counts plus both
 `qualifying / usable` agreement and `usable / requested` coverage. It is labelled
 **ensemble ingredient agreement; not a calibrated severe-weather probability**.
-Cancelling a timeline retains the exact times already completed.
-
-## Saved sensitivity scenarios
-
-Open **Scenarios**, focus the intended profile, and select **Use focused as
-baseline**. The baseline is copied once and remains immutable; later focus or
-viewer edits do not silently replace it.
-
-Named scenarios support:
-
-- surface temperature and surface dewpoint changes in degrees Celsius;
-- a moisture-layer dewpoint change with a configurable AGL top and uniform or
-  linear-taper application;
-- a localized cap-temperature change with AGL bottom/top and uniform or
-  triangular application; and
-- a storm-motion `u`/`v` vector delta in knots.
-
-The editor shows the amount, units, vertical extent, and interpolation rule for
-every applied change. Thermodynamic changes are bounded to ±30 °C and storm
-motion to ±100 kt; malformed layers, dewpoint above temperature, and other
-invalid profiles are rejected with a reason. **Apply changes** invalidates cached
-diagnostics. The table then compares baseline and scenario using the normal
-metrics backend. **Open hypothetical in viewer** creates a separately labelled
-collection and opens Compare; it never mutates the source sounding.
-
-Use **New**, **Rename** through the name field and **Apply changes**,
-**Duplicate**, **Reset**, and **Delete** to manage scenarios. **Save / export…**
-writes a versioned JSON document containing the immutable baseline, named
-perturbations, and provenance; **Open…** restores it.
-
-The **T / Td grid** evaluates bounded surface-temperature and moisture-layer
-dewpoint deltas. A sweep contains at most 121 cells, runs outside the GUI thread,
-and caches completed results. **Cancel** leaves those cells usable. Click a
-completed cell to create and open the corresponding hypothetical scenario.
-
-## Forecast verification
-
-The **Verify** selectors intentionally separate loaded data into forecast,
-observation, analysis, and reanalysis classes. Only a forecast can occupy the
-forecast side and only a true observed sounding can occupy the observation side;
-analyses and reanalyses are counted and explained but excluded.
-
-Before **Verify pair**, set:
-
-- an optional observation station identifier;
-- the permitted valid-time mismatch (0–180 minutes);
-- maximum forecast-point to station distance;
-- maximum bracketing gap for vertical interpolation; and
-- an optional UTC **forecast as-of cutoff**.
-
-The matcher requires forecast initialization metadata and rejects a run initialized
-after its valid time or after the declared as-of cutoff. It also rejects forecast
-data whose recorded availability is later than that cutoff. No later model run is
-silently treated as an earlier forecast.
-
-For a matched pair, the vertical table is anchored to observed heights within
-observed coverage and above the higher terrain. Forecast temperature, dewpoint,
-`u`, and `v` are linearly interpolated only between bracketing levels no farther
-apart than the chosen maximum. There is no vertical extrapolation. The diagnostics
-table uses the same metrics backend on both profiles; unsupported parcel or shear
-values remain unavailable with a reason.
-
-Each attempted pair—matched or rejected—can be retained. Select the cases to use
-in the aggregate table. Aggregates group by model and forecast lead and report
-bias, MAE, RMSE, sample count, matched count, rejected count, and the matching
-rules. Invalid pairs do not contribute numeric errors. **Save…** and **Open…**
-round-trip versioned JSON; **Export CSV…** writes provenance, rejection reasons,
-vertical errors, and diagnostic errors.
-
-To acquire another observation, **Load observed sounding…** returns to the
-existing Station Map workflow. It does not introduce a second sounding provider.
-
-## Observed VAD/VWP winds
-
-The **Observed Winds** tab is wind-only. It never constructs thermodynamic
-profiles from radar data.
-
-- **Retrieve latest public VWP** requests the NWS RPCCDS NEXRAD product 48
-  `sn.last` file for the entered radar. This is a recent-product path, not a
-  historical archive selector. **Cancel** cooperatively stops the bounded
-  background response read; no partial product is imported.
-- **Import…** reads NEXRAD Level III product 48 through MetPy, or this project's
-  portable wind-profile JSON/CSV. Historical product files must be obtained from
-  a documented archive and imported; automatic NCEI archive retrieval is not
-  claimed.
-- **Save series…** writes versioned JSON; **Export current CSV…** writes the
-  selected profile's levels, units, quality, location, times, and provenance.
-
-The tab steps chronologically through observation times and overlays the selected
-observed wind vectors against a loaded model hodograph. Its table reports MSL and
-AGL heights when radar elevation permits, observed/model `u` and `v`, residual
-quality, coverage, location, UTC observation time, retrieval age, source URL, and
-attribution.
-
-Layer shear is calculated only when both requested AGL bounds lie inside accepted
-coverage. Storm-relative quantities additionally require **Use explicit storm
-motion**, both vector components, and a non-empty source such as “Bunkers RM from
-HRRR.” Sparse, missing, or poor-quality levels cannot masquerade as a complete
-layer.
+Cancelling retains exact members/times already completed. Retry uses the frozen
+definition and requests only failed or unfinished diagnostics; replacing the
+source ensemble invalidates the old result rather than relabelling it.
 
 ## Optional GOES and surface context
 
@@ -224,71 +157,31 @@ Primary provider references:
 
 - [NWS API documentation](https://www.weather.gov/documentation/services-web-api)
 - [NOAA GOES on AWS / NODD](https://registry.opendata.aws/noaa-goes/)
-- [NWS WSR-88D product specification, including VWP display behavior](https://www.weather.gov/media/roc/Documentation/2620003N.pdf)
-- [NWS WSR-88D tabular product format and VWP field units](https://www.weather.gov/media/roc/Documentation/2620003T.pdf)
-- [NCEI NEXRAD Level II and Level III archive](https://www.ncei.noaa.gov/products/radar/next-generation-weather-radar)
 
-## Briefings and animations
+## Animations
 
-Use **Share** to select loaded soundings. **Export HTML…** creates a self-contained
-briefing with embedded PNG pixels from the actual sounding viewer, the current map
-context when active, the values currently displayed in Compare and Trends, notes,
-source/run/valid timestamps, requested and selected points, scenario labels,
-ensemble coverage, attribution, and limitations. **Export PDF…** writes the same
-briefing as a real standalone PDF. Capturing several soundings temporarily changes
-the displayed collection and restores the original collection and times afterward.
-
-For GIF output, choose **Forecast timeline** or **Successive runs at focused valid
-time**, include/exclude individual frames, set frame duration, and choose **Export
-GIF…**. All available frames use the same captured viewer dimensions and a visible
-run/valid/lead timestamp. A missing exact profile becomes a labelled missing frame;
-it is not interpolated. Encoding runs in a cancellable worker and atomically
-replaces the destination only after a complete GIF is valid.
-
-## Historical replay and portable cases
-
-Use **Replay → Build package** to group the current sounding session, analysis
-notes, scenarios, verification cases, observed winds, optional satellite/surface
-context, and current radar/outlook/report map layers. You may also add a local
-archived file or a documented HTTPS archive URL with separate event/valid and
-forecaster-availability times.
-
-The current implementation records provider capabilities without implying that a
-live route is an archive. In particular, current live radar imagery is never used
-as a historical substitute. Remote downloads are bounded to four workers, have
-size and timeout limits, and support cooperative cancellation. A cancelled build
-still creates a valid partial package containing completed assets and explicit
-missing/cancelled entries.
-
-`.sharpmod-case` is a versioned ZIP data container with a JSON manifest. Every
-packaged member has a SHA-256 digest and size; opening a case validates safe member
-paths, limits, manifest membership, and every digest before exposing bytes. Members
-are read as data and are never imported or executed.
-
-After **Open case…**, use previous/next, exact-time selection, playback, and speed.
-The replay clock contains exact manifest times. If no packaged sounding exists at
-a selected time, the viewer says so and does not substitute a nearby one. **Open
-packaged soundings in this viewer** restores the ordinary portable sounding
-session when it is visible.
-
-Enable **Training mode** to reveal an asset only at or after its recorded
-availability time. An asset with unknown availability is hidden and listed as a
-training limitation; the app does not call that reconstruction faithful.
-Ordinary `.sharpmod-session` files store only Replay control preferences—not case
-payload bytes or local archive paths—so they remain lightweight.
+Use **Animation** and choose **Forecast timeline** or **Successive runs at focused
+valid time**, an inclusive first/last range, and individual frame checkboxes.
+Choose an exact pixel/aspect preset or custom dimensions independently of the
+window, and set milliseconds per frame. The output-frame count and selected
+frame preview show the configured composition, source/time labels, frame theme,
+and gaps. **Show missing/time-gap cards** is the default; **Stop before the first
+gap** truncates the sequence; **Fail if any gap exists** refuses it. A missing
+exact profile is never interpolated, and a jump beyond the smallest source
+interval receives a visible discontinuity card rather than silently joining
+times. The same ordered frames are captured at export time; encoding runs in a
+cancellable worker and atomically replaces the destination only after a complete
+GIF is valid. **Open file**, **Open folder**, **Copy path**, and **Recent exports…**
+appear on the Animation page after completion.
 
 ## File formats and export directory
 
 | Workflow | Format | Important contents |
 | --- | --- | --- |
 | Comparison / trend / ensemble threshold | CSV | Displayed values, member outcomes, denominators, compatibility/provenance |
-| Scenarios | Versioned JSON | Immutable baseline and named perturbations |
-| Verification | Versioned JSON and CSV | Pair identities/rules, rejections, vertical and diagnostic errors |
-| Observed winds | Versioned JSON and CSV | Wind-only levels, quality, coverage, source/times |
-| Briefing | Self-contained HTML or PDF | Embedded images, displayed results, notes, attribution |
-| Animation | GIF | Fixed-size timestamped frames and embedded frame manifest |
+| Animation | GIF | Chosen-size timestamped frames, gap policy, and embedded frame manifest |
+| Map / field / locator figure | PNG | Captured extent, selection, layer order/opacity, scales, requested/actual time, source, attribution |
 | Analysis session | `.sharpmod-session` JSON | Decoded sounding/workspace state; no source GRIB or context rasters |
-| Historical case | `.sharpmod-case` ZIP | Versioned manifest and integrity-checked data assets |
 
 Every new save/export/open dialog starts in the application's central
 `rendered_soundings` directory, following the same source-checkout and packaged
@@ -300,14 +193,12 @@ Documents, or Downloads folder.
 
 ## Scientific boundaries
 
-- Scenario output is a hypothetical perturbation, not a forecast or observation.
 - Ensemble threshold agreement is not calibrated probability.
-- Comparison and verification use exact horizontal/time rules and conservative
+- Comparison uses exact horizontal/time rules and conservative
   vertical alignment; an unavailable value remains unavailable.
-- VWP products contain winds only. Their algorithms, vertical sampling, and
-  residual quality are not equivalent to a radiosonde.
 - Surface station observations are point measurements at station elevation and may
   be asynchronous within the displayed tolerance.
 - GOES map imagery is resampled for display after fixed-grid geolocation; its native
   resolution and selected scan time remain in the provenance.
-- Training replay is faithful only for assets with credible availability times.
+- Cached map imagery may remain useful offline, but its actual time and stale or
+  offline state stay visible; an offline refresh is never labelled current.

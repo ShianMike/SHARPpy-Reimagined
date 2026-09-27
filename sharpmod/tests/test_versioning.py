@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_every_runtime_surface_uses_package_version():
     from sharpmod._version import __version__ as package_version
 
+    assert package_version == "2.0.0"
     assert sharpmod.__version__ == package_version
     assert gui.APP_VERSION == package_version
     assert render.application_label() == (
@@ -33,3 +34,26 @@ def test_pyproject_reads_the_version_attribute():
     assert document["tool"]["setuptools"]["dynamic"]["version"] == {
         "attr": "sharpmod._version.__version__",
     }
+
+
+def test_v2_changelog_has_a_release_date():
+    headings = [
+        line.strip()
+        for line in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+        if line.startswith("## ")
+    ]
+
+    assert headings[0] == "## [v2.0.0] - 2026-09-26"
+
+
+def test_readme_feature_summary_names_the_current_version():
+    """Do not ship a 2.x feature tour under the previous release's heading."""
+
+    from sharpmod._version import __version__ as package_version
+
+    headings = [
+        line.strip()
+        for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
+        if line.startswith("## What's new in ")
+    ]
+    assert headings == [f"## What's new in {package_version}"]

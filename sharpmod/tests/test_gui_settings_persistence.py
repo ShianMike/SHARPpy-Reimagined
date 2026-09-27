@@ -14,8 +14,11 @@ import sharpmod.gui as gui
 from sharpmod import gui_picker
 from sharpmod import colors
 from sharpmod.gui_settings import (
+    INTERFACE_DEFAULTS,
     _LIGHT_GUIDE_COLOR_KEYS,
     _color_style_preferences,
+    _read_interface_preferences,
+    _save_interface_preferences,
 )
 from sharpmod.gui import (
     CONFIG_PREFERENCE_DEFAULTS,
@@ -64,6 +67,8 @@ def test_build_settings_seeds_complete_user_preference_schema(tmp_path):
         "preferences/color_style": "standard",
         "preferences/readout_tr": "tmpc",
         "preferences/readout_br": "dwpc",
+        "interface/text_scale": "100",
+        "interface/density": "comfortable",
         "parcel/default_skewt": "MU",
     }
     assert {
@@ -97,6 +102,23 @@ def test_invalid_persisted_preferences_are_ignored(tmp_path):
     settings.sync()
 
     assert _read_settings_preferences(settings) == {}
+
+
+def test_interface_preferences_round_trip_and_reject_invalid_values(tmp_path):
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.IniFormat)
+    _save_interface_preferences(
+        settings, {"text_scale": "150", "density": "compact"}
+    )
+
+    assert _read_interface_preferences(settings) == {
+        "text_scale": "150",
+        "density": "compact",
+    }
+
+    settings.setValue("interface/text_scale", "175")
+    settings.setValue("interface/density", "microscopic")
+    settings.sync()
+    assert _read_interface_preferences(settings) == INTERFACE_DEFAULTS
 
 
 def test_lazy_config_creation_restores_celsius_and_other_preferences(

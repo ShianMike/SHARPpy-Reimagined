@@ -9,7 +9,7 @@ UNIT_FONT_SCALE = 0.78
 
 #: Glyph rasterisation settings for crisp text in both the GUI and the PNG
 #: export path.  Lives here because this module depends only on ``qtpy``, so both
-#: ``sharpmod.render`` and the ``sharpmod.viz`` widgets can use it without an
+#: ``sharpmod.rendering.cli`` and the ``sharpmod.viz`` widgets can use it without an
 #: import cycle.
 #:
 #: MEASURED on a 13px sample string as the share of inked pixels left at mid-tone

@@ -115,7 +115,7 @@ def test_accepting_preferences_persists_and_applies_selected_parcel(monkeypatch)
             layout.addWidget(QTabWidget(self))
 
         def exec(self):
-            parcel_box = self.findChild(QComboBox)
+            parcel_box = self.findChild(QComboBox, "preferencesDefaultParcel")
             parcel_box.setCurrentIndex(parcel_box.findData("SFC"))
             return QDialog.Accepted
 

@@ -13,7 +13,7 @@ __all__ = ["render_npz"]
 def render_npz(npz_path: str, png_path: str | None = None, **kwargs) -> str:
     """Render a ``.npz`` point sounding to a PNG via the headless renderer.
 
-    Thin convenience wrapper around :func:`sharpmod.render.render` so every
+    Thin convenience wrapper around :func:`sharpmod.rendering.cli.render` so every
     extractor CLI can offer an ``--render`` option that opens the freshly
     written sounding in the app. Imported lazily because the renderer pulls in
     Qt/PySide6 and the vendored ``sharppy`` widgets.
@@ -34,7 +34,7 @@ def render_npz(npz_path: str, png_path: str | None = None, **kwargs) -> str:
     from pathlib import Path
 
     from sharpmod.export_paths import export_file_path
-    from sharpmod.render import render
+    from sharpmod.rendering.cli import render
 
     if png_path is None:
         default_name = Path(npz_path).with_suffix(".png").name

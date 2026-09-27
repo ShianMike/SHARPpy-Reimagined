@@ -15,11 +15,11 @@ from sharpmod import gui
 
 def test_gui_responsibility_modules_import_independently():
     names = (
-        "sharpmod.gui_common",
-        "sharpmod.gui_settings",
-        "sharpmod.gui_workers",
-        "sharpmod.gui_maps",
-        "sharpmod.gui_sessions",
+        "sharpmod.ui.features.gui_common",
+        "sharpmod.ui.features.gui_settings",
+        "sharpmod.ui.features.gui_workers",
+        "sharpmod.ui.features.gui_maps",
+        "sharpmod.ui.features.gui_sessions",
         "sharpmod.gui_viewer",
         "sharpmod.gui_picker",
     )
@@ -47,26 +47,25 @@ def test_gui_facade_is_only_bootstrap_and_compatibility():
 
 
 def test_lower_gui_layers_do_not_import_picker_controller():
-    root = Path(gui.__file__).resolve().parent
     lower_layers = (
-        "gui_common.py",
-        "gui_settings.py",
-        "gui_workers.py",
-        "gui_maps.py",
-        "gui_sessions.py",
-        "gui_viewer.py",
+        importlib.import_module("sharpmod.ui.features.gui_common"),
+        importlib.import_module("sharpmod.ui.features.gui_settings"),
+        importlib.import_module("sharpmod.ui.features.gui_workers"),
+        importlib.import_module("sharpmod.ui.features.gui_maps"),
+        importlib.import_module("sharpmod.ui.features.gui_sessions"),
+        importlib.import_module("sharpmod.gui_viewer"),
     )
 
-    for filename in lower_layers:
-        source = (root / filename).read_text(encoding="utf-8")
+    for module in lower_layers:
+        source = Path(module.__file__).read_text(encoding="utf-8")
         assert "import gui_picker" not in source
         assert "from sharpmod.gui_picker" not in source
 
 
 def test_classes_live_in_their_responsibility_modules():
     assert gui.PickerWindow.__module__ == "sharpmod.gui_picker"
-    assert gui.StationMapWidget.__module__ == "sharpmod.gui_maps"
-    assert gui._ModelFetchWorker.__module__ == "sharpmod.gui_workers"
+    assert gui.StationMapWidget.__module__ == "sharpmod.ui.features.gui_maps"
+    assert gui._ModelFetchWorker.__module__ == "sharpmod.ui.features.gui_network_workers"
 
 
 def test_windows_python314_relaunches_gui_with_project_runtime(

@@ -239,6 +239,150 @@ def test_set_box_nodes_skips_unusable_entries(widget):
     assert widget._box_nodes == ((-97.0, 35.0),)
 
 
+# -- post-creation editing (T23.1/T23.2) ---------------------------------- #
+
+
+def test_committed_corner_handle_resizes_in_geographic_space(widget):
+    widget.set_box((34.0, -99.0, 37.0, -95.0))
+    widget.set_box_mode(True)
+    boxes, _cleared, points = _record(widget)
+    projection = widget._proj()
+    north_west = widget._box_corner_points(projection, widget.box())[0]
+
+    _drag(
+        widget,
+        (north_west.x(), north_west.y()),
+        (north_west.x() - 35.0, north_west.y() - 25.0),
+    )
+
+    lat0, lon0, lat1, lon1 = widget.box()
+    assert lat0 == pytest.approx(34.0)
+    assert lon1 == pytest.approx(-95.0)
+    assert lat1 > 37.0
+    assert lon0 < -99.0
+    assert len(boxes) == 1
+    assert points == []
+
+
+def test_dragging_projected_interior_moves_whole_box_without_resizing(widget):
+    widget.set_box((34.0, -99.0, 37.0, -95.0))
+    widget.set_box_mode(True)
+    before = widget.box()
+    p = widget._proj()
+    centre = widget._to_px(-97.0, 35.5, p)
+
+    _drag(widget, (centre.x(), centre.y()), (centre.x() + 45.0, centre.y() + 30.0))
+
+    after = widget.box()
+    assert after != before
+    assert after[2] - after[0] == pytest.approx(before[2] - before[0])
+    assert after[3] - after[1] == pytest.approx(before[3] - before[1])
+
+
+def test_completed_box_can_move_after_draw_mode_is_disarmed(widget):
+    widget.set_box((34.0, -99.0, 37.0, -95.0))
+    boxes, _cleared, _points = _record(widget)
+    centre = widget._to_px(-97.0, 35.5, widget._proj())
+
+    _drag(widget, (centre.x(), centre.y()), (centre.x() + 40, centre.y() + 20))
+
+    assert len(boxes) == 1
+    assert widget.box() != (34.0, -99.0, 37.0, -95.0)
+
+
+def test_click_inside_box_still_selects_a_point_without_moving_bounds(widget):
+    widget.set_box((34.0, -99.0, 37.0, -95.0))
+    boxes, _cleared, points = _record(widget)
+    centre = widget._to_px(-97.0, 35.5, widget._proj())
+
+    _drag(widget, (centre.x(), centre.y()), (centre.x() + 1, centre.y() + 1))
+
+    assert widget.box() == (34.0, -99.0, 37.0, -95.0)
+    assert boxes == []
+    assert len(points) == 1
+
+
+def test_curved_projection_handle_hit_uses_projected_corner(widget):
+    widget.set_projection("curved")
+    widget.set_box((-2.0, 130.0, 12.0, 155.0))
+    widget._lon0, widget._lon1 = 115.0, 170.0
+    widget._lat0, widget._lat1 = -5.0, 30.0
+    widget._invalidate()
+    p = widget._proj()
+    north_east = widget._box_corner_points(p, widget.box())[1]
+
+    target = widget._box_hit_target(north_east)
+
+    assert target is not None
+    assert target[0] == "ne"
+
+
+def test_curved_resize_numeric_bounds_match_projected_handle(widget):
+    widget.set_projection("curved")
+    widget._lon0, widget._lon1 = 115.0, 170.0
+    widget._lat0, widget._lat1 = -5.0, 30.0
+    widget._invalidate()
+    widget.set_box((-2.0, 130.0, 12.0, 155.0))
+    north_east = widget._box_corner_points(widget._proj(), widget.box())[1]
+    end = (north_east.x() + 20.0, north_east.y() - 18.0)
+    expected_lon, expected_lat = widget._to_lonlat(*end)
+
+    _drag(widget, (north_east.x(), north_east.y()), end)
+
+    assert widget.box()[2] == pytest.approx(expected_lat)
+    assert widget.box()[3] == pytest.approx(expected_lon)
+    projected = widget._box_corner_points(widget._proj(), widget.box())[1]
+    assert projected.x() == pytest.approx(end[0], abs=0.1)
+    assert projected.y() == pytest.approx(end[1], abs=0.1)
+
+
+def test_antimeridian_box_has_visible_copies_on_both_world_seams(widget):
+    widget._lon0, widget._lon1 = -180.0, 180.0
+    widget._lat0, widget._lat1 = 20.0, 70.0
+    widget._invalidate()
+    widget.set_box((45.0, 170.0, 55.0, 190.0))
+
+    copies = widget._box_longitude_copies(widget.box())
+
+    spans = {(round(item[1]), round(item[3])) for item in copies}
+    assert (170, 190) in spans
+    assert (-190, -170) in spans
+
+
+def test_panned_world_box_copy_and_handle_keep_short_wrapped_span(widget):
+    widget._lon0, widget._lon1 = 520.0, 560.0
+    widget._lat0, widget._lat1 = 40.0, 65.0
+    widget._invalidate()
+    widget.set_box((45.0, 170.0, 55.0, 190.0))
+    copies = widget._box_longitude_copies(widget.box())
+    assert len(copies) == 1
+    assert copies[0][1:] == pytest.approx((530.0, 55.0, 550.0))
+    nw = widget._box_corner_points(widget._proj(), copies[0])[0]
+
+    _drag(widget, (nw.x(), nw.y()), (nw.x() - 20.0, nw.y() - 10.0))
+
+    region = BoxRegion.from_corners(*widget.box())
+    assert region.lon_span < 30.0
+    assert region.crosses_antimeridian
+
+
+def test_escape_during_handle_edit_restores_committed_bounds(widget):
+    widget.set_box((34.0, -99.0, 37.0, -95.0))
+    widget.set_box_nodes([(35.0, -97.0)], note="planned sample")
+    widget.set_box_mode(True)
+    before = widget.box()
+    north_west = widget._box_corner_points(widget._proj(), before)[0]
+    widget.mousePressEvent(_MouseEvent((north_west.x(), north_west.y())))
+    widget.mouseMoveEvent(_MouseEvent((north_west.x() - 25.0, north_west.y() - 20.0)))
+
+    widget.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))
+
+    assert widget.box() == before
+    assert widget._box_edit_kind is None
+    assert widget._box_nodes == ((-97.0, 35.0),)
+    assert widget._box_note == "planned sample"
+
+
 # -- keyboard -------------------------------------------------------------- #
 
 

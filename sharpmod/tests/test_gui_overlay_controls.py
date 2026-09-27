@@ -64,12 +64,20 @@ def _short_debounce(monkeypatch):
     ``QTimer.setInterval``, so patching here covers controllers built by a
     fixture and controllers built inline by a test.
     """
-    for constant in (
-        "_REFRESH_DEBOUNCE_MS",
-        "_RADAR_DEBOUNCE_MS",
-        "_FIELD_DEBOUNCE_MS",
+    from sharpmod.ui.maps.overlays import (
+        hrrr_controller,
+        outlook_controller,
+        radar_controller,
+        reports_controller,
+    )
+
+    for module, constant in (
+        (outlook_controller, "_REFRESH_DEBOUNCE_MS"),
+        (reports_controller, "_REFRESH_DEBOUNCE_MS"),
+        (radar_controller, "_RADAR_DEBOUNCE_MS"),
+        (hrrr_controller, "_FIELD_DEBOUNCE_MS"),
     ):
-        monkeypatch.setattr(gui_overlay_controls, constant, TEST_DEBOUNCE_MS)
+        monkeypatch.setattr(module, constant, TEST_DEBOUNCE_MS)
 
 
 def _pump(ms: int = PUMP_MS) -> None:
@@ -1237,6 +1245,30 @@ def test_changing_the_forecast_hour_refetches(field, field_calls):
     assert field_calls[-1]["fxx"] == 12
 
 
+def test_confirmed_field_search_changes_category_once_without_interim_request(
+        field, qt_app, tmp_path, monkeypatch):
+    from qtpy.QtCore import QSettings
+    from sharpmod.gui_selectors import SelectorSearch
+
+    controller, _widget = field
+    _pump()
+    requested = []
+    monkeypatch.setattr(controller, "_request", lambda: requested.append(controller.product()))
+    settings = QSettings(str(tmp_path / "selector.ini"), QSettings.IniFormat)
+    search = SelectorSearch(controller._product, settings=settings)
+    search.search.setText("significant tornado parameter")
+    assert search.results.count() == 1
+    assert requested == []
+    search.use_selected()
+    assert controller.product() == "stp"
+    assert controller._category.currentData() == "Composite Parameters"
+    assert requested == ["stp"], "a confirmed result must not request a category's first field"
+    repeated = SelectorSearch(controller._product, settings=settings)
+    repeated.search.setText("stp")
+    repeated.use_selected()
+    assert requested == ["stp"], "reselecting the same field should not request it again"
+
+
 def test_changing_the_run_refetches_at_the_same_valid_hour(field, field_calls):
     """Same moment, different cycle: still a different forecast."""
     controller, _widget = field
@@ -1330,6 +1362,89 @@ def test_field_retries_immediately_when_the_view_reenters_coverage(qt_app, field
         _pump()
 
         assert len(field_calls) == 1
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+def test_field_rejects_old_cycle_before_the_new_debounce_fires(qt_app):
+    """Two runs can share a valid hour; the old one must not appear meanwhile."""
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, CONUS_VIEW)
+    controller = gui_overlay_controls.HrrrFieldController(widget)
+    try:
+        controller.set_forecast_reference(FIELD_RUN, 18)
+        controller.set_enabled(True)
+        controller._timer.stop()
+        old_token = controller._token
+        valid = FIELD_RUN + timedelta(hours=18)
+        controller.set_forecast_reference(FIELD_RUN + timedelta(hours=6), 12)
+        old = mo.OverlayRaster(
+            key="hrrr_field", title="HRRR old run",
+            image_bytes=_radar_png(),
+            bounds=(-134.5, -60.5, 20.5, 53.0),
+            short_name=controller.product(), valid_time=valid)
+        controller._on_loaded(old_token, valid, old)
+        assert widget.overlay("hrrr_field") is None
+    finally:
+        controller.shutdown()
+        widget.close()
+
+
+def test_field_churn_keeps_at_most_two_workers_and_queues_latest(qt_app,
+                                                                   monkeypatch):
+    """A blocked socket cannot create an unbounded field-worker fleet."""
+    widget = gui_maps.StationMapWidget([])
+    widget.resize(640, 480)
+    _look_at(widget, CONUS_VIEW)
+    created = []
+
+    class BlockingField:
+        def __init__(self, token, **_kwargs):
+            self.token = token
+            self.loaded = _FakeSignal()
+            self.failed = _FakeSignal()
+            self.finished = _FakeSignal()
+            self._running = True
+            created.append(self)
+
+        def start(self):
+            pass
+
+        def isRunning(self):  # noqa: N802 - QThread substitute
+            return self._running
+
+        def requestInterruption(self):  # noqa: N802 - QThread substitute
+            pass
+
+        def wait(self, _ms):
+            self.finish()
+            return True
+
+        def deleteLater(self):  # noqa: N802 - QObject substitute
+            pass
+
+        def finish(self):
+            self._running = False
+            self.finished.emit()
+
+    monkeypatch.setattr(gui_overlay_controls, "_HrrrFieldWorker", BlockingField)
+    controller = gui_overlay_controls.HrrrFieldController(widget)
+    try:
+        controller.set_forecast_reference(FIELD_RUN, 6)
+        controller.set_enabled(True)
+        controller._timer.stop()
+        for hour in range(8):
+            controller.set_forecast_reference(FIELD_RUN, hour)
+            controller._timer.stop()
+            controller._start_fetch()
+        assert len(created) == 2
+        assert controller._queued_fetch
+        created[0].finish()
+        _pump(10)
+        assert len(created) == 3
+        assert created[-1].token == controller._token
     finally:
         controller.shutdown()
         widget.close()
@@ -1612,15 +1727,19 @@ def test_the_pinned_antenna_is_marked_on_the_map(site_pinned):
 
 
 def test_a_map_without_the_marker_layer_is_tolerated(
-    monkeypatch, qt_app, radar_site_calls
+    qt_app, radar_site_calls
 ):
     """The layer is duck-typed, exactly as ``view_bounds`` is.
 
     A map that does not carry the antenna markers must still be able to host the
     radar overlay rather than raising out of the controller's constructor.
     """
-    monkeypatch.delattr(gui_maps.StationMapWidget, "set_radar_sites")
-    widget = gui_maps.StationMapWidget([])
+    class MapWithoutMarkerLayer(gui_maps.StationMapWidget):
+        @property
+        def set_radar_sites(self):
+            raise AttributeError("this map has no antenna marker layer")
+
+    widget = MapWithoutMarkerLayer([])
     widget.resize(640, 480)
     _look_at(widget, CONUS_VIEW)
     controller = RadarOverlayController(widget, enabled=True, scope=SCOPE_SITE)
@@ -1629,6 +1748,7 @@ def test_a_map_without_the_marker_layer_is_tolerated(
     finally:
         controller.shutdown()
         widget.close()
+        widget.deleteLater()
 
 
 # --------------------------------------------------------------------------- #

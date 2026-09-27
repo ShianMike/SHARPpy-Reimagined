@@ -1,6 +1,6 @@
 """Colour scales and painters for box-sounding fields and cross-sections.
 
-Two things are drawn from a :class:`~sharpmod.box_analysis.BoxAnalysis`:
+Two things are drawn from a :class:`~sharpmod.analysis.box_analysis.BoxAnalysis`:
 
 *A parameter field*, painted as one filled cell per sampled grid point. Cells
 are centred on their node and sized to the sample spacing, so what is on screen
@@ -16,8 +16,8 @@ A pressure-versus-distance cross-section and a per-level spread band used to liv
 here too. Both were vertical plots on a plain linear axis, which read as broken
 beside the application's own Skew-T, and neither answered a question the field
 map and the averaged sounding do not answer better.
-:meth:`~sharpmod.box_analysis.BoxAnalysis.vertical_transect` and
-:meth:`~sharpmod.box_analysis.BoxAnalysis.envelope` still return the numbers for
+:meth:`~sharpmod.analysis.box_analysis.BoxAnalysis.vertical_transect` and
+:meth:`~sharpmod.analysis.box_analysis.BoxAnalysis.envelope` still return the numbers for
 a caller that wants to plot them its own way.
 
 The colour ramp is deliberately the conventional meteorological cool-to-hot
@@ -33,7 +33,7 @@ import math
 from qtpy.QtCore import QRectF, Qt
 from qtpy.QtGui import QBrush, QColor, QPainter, QPen, QPolygonF
 
-from sharpmod.box_analysis import BoxAnalysis, BoxFieldStats, parameter
+from sharpmod.analysis.box_analysis import BoxAnalysis, BoxFieldStats, parameter
 
 
 __all__ = [
@@ -278,7 +278,7 @@ def draw_mask_overlay(
     """
     from qtpy import QtCore, QtGui
 
-    from sharpmod.overlay_hatch import hatch_brush
+    from sharpmod.maps.overlay_hatch import hatch_brush
 
     dlat, dlon = _cell_steps(analysis)
     half_lat = dlat / 2.0

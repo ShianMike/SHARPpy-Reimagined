@@ -212,6 +212,11 @@ def main(argv: list[str] | None = None) -> int:
         "--json-out",
         str(report),
     ]
+    lane = LANES[args.lane]
+    if lane.parallel:
+        checker_args.extend(("--workers", str(args.workers)))
+    else:
+        checker_args.extend(("--workers", "1"))
     if args.no_performance_budget:
         checker_args.append("--no-enforce")
     return performance.main(checker_args)

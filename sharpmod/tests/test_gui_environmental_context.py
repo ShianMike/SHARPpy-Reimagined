@@ -1,3 +1,9 @@
+"""Regression coverage for optional environmental context in the map UI.
+
+The tests check that fetches run outside the GUI thread and that displayed context
+reports its actual time coverage and sampling basis across satellite and
+surface-observation overlays."""
+
 from __future__ import annotations
 
 import base64

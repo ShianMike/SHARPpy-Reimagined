@@ -129,6 +129,8 @@ def test_bundled_oax_is_normalized_before_combined_viewer_add():
 
 def test_local_display_failure_replaces_decoding_status(
         qt_app, tmp_path, monkeypatch):
+    from sharpmod.ui.picker import files as picker_files
+
     sounding = tmp_path / "decoded.spc"
     sounding.write_text("decoded input", encoding="utf-8")
     statuses = []
@@ -146,7 +148,7 @@ def test_local_display_failure_replaces_decoding_status(
         _remember_recent_file=lambda _path: None,
     )
     monkeypatch.setattr(
-        gui_picker,
+        picker_files,
         "_render",
         lambda: SimpleNamespace(decode=lambda _path: (object(), "TEST")),
     )

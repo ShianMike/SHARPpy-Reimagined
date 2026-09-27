@@ -133,6 +133,8 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         for job in jobs.values()
         for step in job["steps"]
         if ".test-results" in str(step.get("with", {}).get("path", ""))
+        and "download-artifact" not in str(step.get("uses", ""))
+        and "fast-junit" not in str(step.get("with", {}).get("name", ""))
     ]
     assert len(timing_uploads) == 6
     assert all(
@@ -193,14 +195,12 @@ def test_release_installs_model_fetch_dependencies():
     assert workflow.count("version_consistent") >= 2
     assert "uses: ./.github/workflows/tests.yml" in workflow
     assert "run_serial_release: true" in workflow
-    # Publishing waits for every lane, so a failing test run cannot ship. The
-    # Windows build deliberately overlaps the serial gate rather than queueing
-    # behind it, which is what kept the release on its former critical path.
+    # Both Windows packaging and publication wait for every test lane.
     assert (
         "needs: [resolve-release, test-release, build-windows-exe, "
         "attest-windows-release]"
     ) in workflow
-    assert "needs: [resolve-release, test-release]" not in workflow
+    assert "needs: [resolve-release, test-release]" in workflow
     assert workflow.count("contents: write") == 1
 
 

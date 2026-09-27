@@ -32,7 +32,14 @@ from sharpmod.sessions import (
     snapshot_collection,
     write_session,
 )
-from sharpmod import export_paths, gui, gui_picker, gui_sessions, gui_viewer
+from sharpmod import (
+    export_paths,
+    gui,
+    gui_picker,
+    gui_sessions,
+    gui_viewer,
+    locator_presentation,
+)
 from sharpmod.ensemble_members import EnsembleAcquisition, MemberFailure
 from sharpmod.profile_timeline import append_collection, combine_collections
 
@@ -85,6 +92,42 @@ def test_collection_snapshot_round_trip_preserves_portable_analysis_state():
     assert restored.getMeta("nested")["pair"] == (1, 2)
     assert restored._mod_therm == original._mod_therm
     assert 0 in restored._orig_profs
+
+
+@pytest.mark.parametrize("link_mode", (
+    locator_presentation.LINK_PINNED,
+    locator_presentation.LINK_FOLLOW,
+))
+def test_collection_snapshot_preserves_locator_presentation(link_mode):
+    collection = _collection()
+    state = locator_presentation.LocatorPresentation(
+        link_mode=link_mode,
+        extent_mode=locator_presentation.EXTENT_CUSTOM,
+        custom_bounds=(-99.0, 33.0, -95.0, 37.0),
+        main_bounds=(-110.0, 25.0, -80.0, 48.0),
+        selected_area=(-101.0, 31.0, -91.0, 39.0),
+        scale_units="imperial",
+    )
+    locator_presentation.set_collection_presentation(collection, state)
+
+    restored = restore_collection(snapshot_collection(collection))
+
+    assert locator_presentation.collection_presentation(restored) == state
+
+
+def test_collection_snapshot_preserves_locator_overlay_failure_status():
+    collection = _collection()
+    locator_presentation.set_overlay_status(
+        collection, "spc_outlook", "unavailable",
+        family="risk", product="torn", detail="Provider unavailable",
+    )
+
+    restored = restore_collection(snapshot_collection(collection))
+    status = locator_presentation.overlay_statuses(restored)["spc_outlook"]
+
+    assert status["state"] == "unavailable"
+    assert status["detail"] == "Provider unavailable"
+    assert status["updated_at"].tzinfo is not None
 
 
 def test_collection_snapshot_round_trip_preserves_partial_ensemble_ledger():
@@ -280,6 +323,71 @@ def _session_window(controller, *, scale, panel_index, dock_visible):
     win._test_dock = dock
     win._test_tabs = tabs
     return win
+
+
+def test_floatable_analysis_window_placement_round_trips(qt_app):
+    """A separate analysis window remains separate when a session reopens."""
+    source_controller = _SessionController((-105.0, -90.0, 30.0, 42.0))
+    target_controller = _SessionController((-105.0, -90.0, 30.0, 42.0))
+    source = _session_window(
+        source_controller,
+        scale=1.0,
+        panel_index=1,
+        dock_visible=True,
+    )
+    target = _session_window(
+        target_controller,
+        scale=1.0,
+        panel_index=0,
+        dock_visible=False,
+    )
+    features = (
+        QDockWidget.DockWidgetClosable
+        | QDockWidget.DockWidgetMovable
+        | QDockWidget.DockWidgetFloatable
+    )
+    source._test_dock.setFeatures(features)
+    target._test_dock.setFeatures(features)
+    try:
+        source._test_dock.setFloating(True)
+        source._test_dock.setGeometry(120, 90, 900, 650)
+        qt_app.processEvents()
+        states = gui_sessions._dock_session_state(source)
+        dock_state = states["analysisWorkspace"]
+        assert dock_state["floating_geometry"] == [120, 90, 900, 650]
+        assert "floating_screen" in dock_state
+
+        # Pretend the session came from a removed second screen. Restore must
+        # map it into the current primary work area rather than honoring an
+        # unreachable native position.
+        dock_state["floating_geometry"] = [4200, 200, 1200, 800]
+        dock_state["floating_screen"] = {
+            "name": "Removed monitor",
+            "available": [3840, 0, 1920, 1080],
+            "device_pixel_ratio": 1.0,
+        }
+
+        gui_sessions._restore_dock_session_state(target, states)
+        qt_app.processEvents()
+
+        assert target._test_dock.isFloating()
+        assert not target._test_dock.isHidden()
+        assert target._test_tabs.currentIndex() == 1
+        from sharpmod.gui_workspace_layouts import (
+            current_screen_specs,
+            safe_floating_geometry,
+        )
+
+        expected = safe_floating_geometry(
+            dock_state["floating_geometry"],
+            saved_screen=dock_state["floating_screen"],
+            current_screens=current_screen_specs(),
+        )
+        actual = target._test_dock.geometry()
+        assert [actual.x(), actual.y(), actual.width(), actual.height()] == expected
+    finally:
+        source.close()
+        target.close()
 
 
 def test_viewer_workspace_state_round_trip_is_defensive_and_complete(
@@ -517,6 +625,42 @@ def test_analysis_actions_install_history_and_standard_shortcuts(qt_app):
     assert "Edit sounding level" in win._sharpmod_undo_action.text()
 
 
+def test_successful_session_save_records_history_only_after_the_actual_write(
+        qt_app, tmp_path, monkeypatch):
+    from qtpy.QtCore import QSettings
+    from sharpmod.recent_destinations import RecentDestinationStore
+
+    saved = tmp_path / "analysis.sharpmod-session"
+    window = QMainWindow()
+    window.setStatusBar(QStatusBar(window))
+    menu = window.menuBar().addMenu("File")
+    window.spc_widget = _FakeWidget(_collection())
+
+    class Controller:
+        _settings = QSettings(str(tmp_path / "history.ini"), QSettings.IniFormat)
+
+        def _open_analysis_session(self):
+            pass
+
+        def _record_recent_destination(self, kind, target, **metadata):
+            assert Path(target).is_file(), "history must follow the successful session write"
+            RecentDestinationStore(self._settings).remember(kind, target, **metadata)
+
+    controller = Controller()
+    monkeypatch.setattr(gui_sessions, "_find_window_menu", lambda _window, title: menu if title == "File" else None)
+    monkeypatch.setattr(gui_sessions.QFileDialog, "getSaveFileName", lambda *_a, **_k: (str(saved), ""))
+    try:
+        gui_sessions._install_analysis_actions(window, controller)
+        window._sharpmod_save_session_action.trigger()
+        entries = RecentDestinationStore(controller._settings).load()
+        assert saved.is_file() and len(entries) == 1
+        assert entries[0].kind == "session" and entries[0].last_used is not None
+        assert "1 sounding ·" in entries[0].details
+    finally:
+        window.close()
+        window.deleteLater()
+
+
 def test_session_save_default_and_output_use_dedicated_export_folder(
         qt_app, tmp_path, monkeypatch):
     application = tmp_path / "application"
@@ -672,3 +816,180 @@ def test_picker_opens_all_session_collections_in_one_new_viewer(
     assert owner._viewers == created
     assert composed_specs == ["risk:torn"]
     assert fetched_specs == ["hrrr:refc"]
+
+def test_recovery_snapshots_are_bounded_and_listable(tmp_path, monkeypatch):
+    from sharpmod import export_paths
+    from sharpmod.sessions import list_recovery_snapshots, write_recovery_snapshot
+
+    app_root = tmp_path / "approot"
+    monkeypatch.setattr(export_paths, "application_root", lambda: app_root)
+    document = build_session([_collection()])
+    for _ in range(7):
+        write_recovery_snapshot(document, limit=5)
+    snapshots = list_recovery_snapshots()
+    assert len(snapshots) == 5
+    assert all(s.path.is_file() for s in snapshots)
+    created = [s.created for s in snapshots]
+    assert created == sorted(created, reverse=True)
+    assert all(s.soundings == 1 for s in snapshots)
+    assert len({s.path.name for s in snapshots}) == 5
+    assert snapshots[0].identities == ("TEST · 2026-07-14 12:00Z",)
+    assert "Decoded profile data is embedded" in snapshots[0].summary()
+
+
+def test_recovery_survives_an_interrupted_write(tmp_path, monkeypatch):
+    from sharpmod import export_paths, sessions
+    from sharpmod.sessions import list_recovery_snapshots, write_recovery_snapshot
+
+    app_root = tmp_path / "approot"
+    monkeypatch.setattr(export_paths, "application_root", lambda: app_root)
+    document = build_session([_collection()])
+    first = write_recovery_snapshot(document)
+    assert read_session(first).get("collections")
+
+    def interrupted_replace(_source, _target):
+        raise OSError("simulated interruption")
+
+    monkeypatch.setattr(sessions.os, "replace", interrupted_replace)
+    with pytest.raises(OSError, match="simulated interruption"):
+        write_recovery_snapshot(document)
+
+    snapshots = list_recovery_snapshots()
+    assert [s.path for s in snapshots] == [first]
+    assert not list(first.parent.glob("*.tmp"))
+
+
+def test_session_status_shows_dirty_path_and_save_time(qt_app, tmp_path, monkeypatch):
+    from qtpy.QtCore import QSettings
+    window = QMainWindow()
+    window.setStatusBar(QStatusBar(window))
+    menu = window.menuBar().addMenu("File")
+    window.spc_widget = _FakeWidget(_collection())
+
+    class Controller:
+        _settings = QSettings(str(tmp_path / "s.ini"), QSettings.IniFormat)
+
+        def _open_analysis_session(self):
+            pass
+
+    monkeypatch.setattr(gui_sessions, "_find_window_menu", lambda _window, title: menu if title == "File" else None)
+    saved = tmp_path / "analysis.sharpmod-session"
+    monkeypatch.setattr(gui_sessions.QFileDialog, "getSaveFileName", lambda *_a, **_k: (str(saved), ""))
+    try:
+        gui_sessions._install_analysis_actions(window, Controller())
+        label = window._sharpmod_session_label
+        assert "Unsaved" in label.text()
+        window._sharpmod_save_session_action.trigger()
+        qt_app.processEvents()
+        assert "analysis.sharpmod-session" in label.text()
+        assert "Unsaved" not in label.text()
+        history = window._sharpmod_history
+        before = snapshot_collection(window.spc_widget.prof_collections[0])
+        window.spc_widget.prof_collections[0].modify(0, tmpc=28.0)
+        history.record("Edit sounding level", 0, before, snapshot_collection(window.spc_widget.prof_collections[0]))
+        assert "Unsaved changes" in label.text()
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_automatic_recovery_uses_current_workspace_and_explicit_save_cleans_it(
+    qt_app, tmp_path, monkeypatch
+):
+    from qtpy.QtCore import QSettings
+
+    app_root = tmp_path / "approot"
+    monkeypatch.setattr(export_paths, "application_root", lambda: app_root)
+    window = QMainWindow()
+    window.setStatusBar(QStatusBar(window))
+    menu = window.menuBar().addMenu("File")
+    window.spc_widget = _FakeWidget(_collection())
+    saved = tmp_path / "analysis.sharpmod-session"
+
+    class Controller:
+        _settings = QSettings(str(tmp_path / "recovery.ini"), QSettings.IniFormat)
+
+        def _open_analysis_session(self, _path=None, *, recovered=False):
+            return recovered
+
+    monkeypatch.setattr(
+        gui_sessions, "_find_window_menu",
+        lambda _window, title: menu if title == "File" else None,
+    )
+    monkeypatch.setattr(
+        gui_sessions.QFileDialog, "getSaveFileName",
+        lambda *_args, **_kwargs: (str(saved), ""),
+    )
+    try:
+        gui_sessions._install_analysis_actions(window, Controller())
+        window._sharpmod_recovery_timer.stop()
+        recovery = window._sharpmod_write_recovery(force=True)
+        assert recovery.is_file()
+        assert read_session(recovery)["collections"]
+        assert "Latest recovery snapshot" in window._sharpmod_session_label.toolTip()
+
+        window._sharpmod_save_session_action.trigger()
+        qt_app.processEvents()
+        assert saved.is_file()
+        assert not recovery.exists()
+        assert window._sharpmod_recovery_paths == []
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_recovery_choice_summarizes_context_before_replacing_workspace(
+    qt_app, tmp_path, monkeypatch
+):
+    from qtpy.QtCore import QSettings
+    from sharpmod.sessions import write_recovery_snapshot
+
+    app_root = tmp_path / "approot"
+    monkeypatch.setattr(export_paths, "application_root", lambda: app_root)
+    settings = QSettings(str(tmp_path / "restore.ini"), QSettings.IniFormat)
+    recovery = write_recovery_snapshot(
+        build_session([_collection()]), settings=settings
+    )
+    opened = []
+    questions = []
+    window = QMainWindow()
+    window.setStatusBar(QStatusBar(window))
+    menu = window.menuBar().addMenu("File")
+    window.spc_widget = _FakeWidget(_collection(temperature=25.0))
+
+    class Controller:
+        _settings = settings
+
+        def _open_analysis_session(self, path=None, *, recovered=False):
+            opened.append((path, recovered))
+            return True
+
+    monkeypatch.setattr(
+        gui_sessions, "_find_window_menu",
+        lambda _window, title: menu if title == "File" else None,
+    )
+    monkeypatch.setattr(
+        gui_sessions.QInputDialog, "getItem",
+        lambda _parent, _title, _label, choices, *_args: (choices[0], True),
+    )
+
+    def confirm(_parent, _title, text, *_args):
+        questions.append(text)
+        return gui_sessions.QMessageBox.Yes
+
+    monkeypatch.setattr(gui_sessions.QMessageBox, "question", confirm)
+    try:
+        window.show()
+        gui_sessions._install_analysis_actions(window, Controller())
+        window._sharpmod_recovery_timer.stop()
+        window._sharpmod_recover_session_action.trigger()
+        qt_app.processEvents()
+
+        assert opened == [(str(recovery), True)]
+        assert questions and "TEST · 2026-07-14 12:00Z" in questions[0]
+        assert "Decoded profile data is embedded" in questions[0]
+        assert "replace the current workspace" in questions[0]
+        assert not window.isVisible()
+    finally:
+        window.close()
+        window.deleteLater()

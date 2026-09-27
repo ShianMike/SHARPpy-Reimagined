@@ -10,7 +10,7 @@ import sys
 import numpy as np
 
 from sharpmod.export_paths import export_file_path
-from sharpmod.observations import (
+from sharpmod.providers.observations import (
     DEFAULT_PROVIDER_ORDER,
     ObservedProviderError,
     available_observed_providers,

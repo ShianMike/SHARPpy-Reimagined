@@ -54,7 +54,7 @@ from types import SimpleNamespace
 import numpy as np
 import numpy.ma as ma
 
-from sharpmod.upstream_warnings import known_sharppy_numerical_warnings
+from sharpmod.upstream.upstream_warnings import known_sharppy_numerical_warnings
 
 from . import interp
 from . import parcels
@@ -140,49 +140,6 @@ def _sfc_pres(prof):
 # DCAPE / MUCAPE via the installed sharppy oracle
 # ---------------------------------------------------------------------------
 
-def _dcape_mucape(pres, hght, tmpc, dwpc, wdir, wspd, *, mucape=None):
-    """Return ``(dcape, mucape)`` (J/kg) for the profile via ``sharppy``.
-
-    DCAPE comes from ``sharppy.sharptab.params.dcape`` and MUCAPE from the
-    most-unstable parcel ascent (``parcelx`` ``flag=3``), both computed from the
-    *same* profile so the DCP terms are internally consistent (Requirement 2.2).
-
-    Returns ``None`` on any failure or if either quantity is masked/non-finite.
-    """
-    try:
-        from sharppy.sharptab import profile as sp_profile
-        from sharppy.sharptab import params as sp_params
-    except Exception:
-        return None
-
-    try:
-        prof = sp_profile.create_profile(
-            profile="default",
-            pres=np.asarray(pres, dtype=float),
-            hght=np.asarray(hght, dtype=float),
-            tmpc=np.asarray(tmpc, dtype=float),
-            dwpc=np.asarray(dwpc, dtype=float),
-            wdir=np.asarray(wdir, dtype=float),
-            wspd=np.asarray(wspd, dtype=float),
-            missing=-9999.0,
-            strictQC=False,
-        )
-
-        if mucape is None:
-            mupcl = sp_params.parcelx(prof, flag=3)  # most-unstable parcel
-            mucape = getattr(mupcl, "bplus", None)
-        if mucape is None or is_missing(mucape) or not np.isfinite(mucape):
-            return None
-
-        dres = sp_params.dcape(prof)
-        # sharppy's dcape returns (dcape, ttrace, ptrace); accept a bare scalar too.
-        dcape = dres[0] if isinstance(dres, (tuple, list)) else dres
-        if dcape is None or is_missing(dcape) or not np.isfinite(dcape):
-            return None
-
-        return float(dcape), float(mucape)
-    except Exception:
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -225,74 +182,8 @@ def _mean_wind_0_6km(prof):
 # Public API
 # ---------------------------------------------------------------------------
 
-def dcp(prof):
-    """Compute the Derecho Composite Parameter (DCP, unitless) for ``prof``.
-
-    ``DCP = (DCAPE/980)*(MUCAPE/2000)*(shear_0_6km/20)*(mean_wind_0_6km/16)``,
-    all four terms drawn from the same analyzed ``prof`` (Evans & Doswell 2001).
-
-    Parameters
-    ----------
-    prof:
-        Any profile-like object exposing the reported-level arrays ``pres``
-        (hPa), ``hght`` (m MSL), ``tmpc`` (deg C), ``dwpc`` (deg C), ``wdir``
-        (deg), ``wspd`` (kt) -- and, for the kinematic terms, ``u`` / ``v`` (kt)
-        -- optionally with a surface index ``sfc``.
-
-    Returns
-    -------
-    float or MISSING
-        The unitless DCP value; exactly ``0.0`` when every input term is valid
-        and the computed DCAPE or MUCAPE is zero (Requirement 2.5); and
-        :data:`~sharpmod.sharptab.constants.MISSING` when any input term is
-        missing/masked or the profile lacks valid wind/height data spanning the
-        SFC->6 km AGL layer (Requirement 2.4). Never raises.
-    """
-    try:
-        return _dcp_impl(prof)
-    except Exception:
-        # Design principle: missing data propagates, never crashes.
-        return MISSING
 
 
-def _dcp_impl(prof):
-    # --- 0-6 km kinematic terms (layer-scoped: the interp/winds routines
-    # resolve these from the valid levels spanning the SFC->6 km AGL layer and
-    # tolerate masked levels elsewhere in the column) -----------------------
-    shear06 = _shear_0_6km(prof)
-    mnwind06 = _mean_wind_0_6km(prof)
-    if is_missing(shear06) or is_missing(mnwind06):
-        return MISSING
-    if not (np.isfinite(shear06) and np.isfinite(mnwind06)):
-        return MISSING
-
-    # --- DCAPE + MUCAPE via the shared, layer-scoped column oracle ----------
-    # ``_profile_columns`` carries masked levels as the -9999 sentinel to the
-    # sharppy parcel-ascent oracle, so a missing datum outside the parcel path
-    # (e.g. a missing top-of-sounding wind) no longer disqualifies DCP.
-    arrays = _profile_columns(prof)
-    if arrays is None:
-        return MISSING
-    mupcl = parcels.parcel(prof, "most_unstable")
-    mucape = None if mupcl is None else mupcl.cape
-    buoyancy = _dcape_mucape(*arrays, mucape=mucape)
-    if buoyancy is None:
-        return MISSING
-    dcape, mucape = buoyancy
-
-    # Requirement 2.5: a zero buoyancy factor makes DCP exactly zero (not MISSING).
-    if dcape == 0.0 or mucape == 0.0:
-        return 0.0
-
-    value = (
-        (dcape / _DCAPE_NORM)
-        * (mucape / _MUCAPE_NORM)
-        * (shear06 / _SHEAR_NORM)
-        * (mnwind06 / _MNWIND_NORM)
-    )
-    if not np.isfinite(value):
-        return MISSING
-    return float(value)
 
 
 # ===========================================================================
@@ -321,137 +212,10 @@ def _dcp_impl(prof):
 # versa.
 
 
-def _mu_parcel_terms(pres, hght, tmpc, dwpc, wdir, wspd):
-    """Return most-unstable parcel terms for NCAPE/NCIN via the sharppy oracle.
-
-    Returns a 5-tuple ``(mucape, cin, lfc_agl, el_agl, mu_start_agl)`` where any
-    element that ``sharppy`` cannot resolve is ``None`` (heights are metres AGL;
-    energies are J/kg with ``cin <= 0``). Returns ``None`` outright only when the
-    parcel ascent itself cannot be run (``sharppy`` missing / unexpected error);
-    this routine never raises.
-    """
-    try:
-        from sharppy.sharptab import profile as sp_profile
-        from sharppy.sharptab import params as sp_params
-        from sharppy.sharptab import interp as sp_interp
-    except Exception:
-        return None
-
-    def _num(value):
-        """Coerce a sharppy attribute to a finite float, or ``None``."""
-        if value is None or is_missing(value):
-            return None
-        try:
-            fval = float(value)
-        except (TypeError, ValueError):
-            return None
-        return fval if np.isfinite(fval) else None
-
-    try:
-        sp_prof = sp_profile.create_profile(
-            profile="default",
-            pres=np.asarray(pres, dtype=float),
-            hght=np.asarray(hght, dtype=float),
-            tmpc=np.asarray(tmpc, dtype=float),
-            dwpc=np.asarray(dwpc, dtype=float),
-            wdir=np.asarray(wdir, dtype=float),
-            wspd=np.asarray(wspd, dtype=float),
-            missing=-9999.0,
-            strictQC=False,
-        )
-        mupcl = sp_params.parcelx(sp_prof, flag=3)  # most-unstable parcel
-
-        mucape = _num(getattr(mupcl, "bplus", None))
-        cin = _num(getattr(mupcl, "bminus", None))
-        lfc_agl = _num(getattr(mupcl, "lfchght", None))
-        el_agl = _num(getattr(mupcl, "elhght", None))
-
-        # MU-parcel starting level height, converted to metres AGL to match the
-        # sharppy LFC/EL convention. ``mupcl.pres`` is the lifted-parcel-level
-        # pressure of the most-unstable parcel.
-        mu_start_agl = None
-        lpl_pres = _num(getattr(mupcl, "pres", None))
-        if lpl_pres is not None:
-            try:
-                mu_start_agl = _num(
-                    sp_interp.to_agl(sp_prof, sp_interp.hght(sp_prof, lpl_pres))
-                )
-            except Exception:
-                mu_start_agl = None
-
-        return mucape, cin, lfc_agl, el_agl, mu_start_agl
-    except Exception:
-        return None
 
 
-def normalized_cape_cin(prof):
-    """Compute the normalized CAPE and CIN ``(ncape, ncin)`` for ``prof``.
-
-    After Blanchard (1998). Both values are in J/kg per metre:
-
-    * ``ncape = MUCAPE / (EL_AGL - LFC_AGL)`` -- the most-unstable CAPE divided by
-      the depth of the buoyant layer (LFC -> EL) (Requirements 4.1, 4.3).
-    * ``ncin  = CIN / (LFC_AGL - MU_start_AGL)`` -- the convective inhibition
-      divided by the depth of the inhibiting layer (MU-parcel start -> LFC)
-      (Requirement 4.2). ``CIN <= 0`` so ``ncin <= 0``.
-
-    All terms are drawn from the same most-unstable parcel ascent (Requirement
-    4.3).
-
-    Returns
-    -------
-    tuple
-        ``(ncape, ncin)``. Each element is a float, or
-        :data:`~sharpmod.sharptab.constants.MISSING` when that variant's buoyancy
-        term is missing or its layer depth is ``<= 0`` / undefined -- computed
-        independently so one missing variant never masks the other (Requirements
-        4.4, 4.5). Both are :data:`MISSING` when the profile lacks the pressure /
-        temperature / moisture data needed to run the ascent. Never raises.
-    """
-    try:
-        return _normalized_cape_cin_impl(prof)
-    except Exception:
-        # Design principle: missing data propagates, never crashes.
-        return MISSING, MISSING
 
 
-def _normalized_cape_cin_impl(prof):
-    arrays = _profile_columns(prof)
-    if arrays is None:
-        return MISSING, MISSING
-
-    mupcl = parcels.parcel(prof, "most_unstable")
-    if mupcl is None:
-        terms = _mu_parcel_terms(*arrays)
-        if terms is None:
-            return MISSING, MISSING
-        mucape, cin, lfc_agl, el_agl, mu_start_agl = terms
-    else:
-        mucape = _finite_or_none(mupcl.cape)
-        cin = _finite_or_none(mupcl.cin)
-        lfc_agl = _finite_or_none(mupcl.lfc_height)
-        el_agl = _finite_or_none(mupcl.el_height)
-        mu_start_agl = _finite_or_none(mupcl.start_height)
-
-    # --- NCAPE: MUCAPE / (EL - LFC) ----------------------------------------
-    ncape = MISSING
-    if mucape is not None and lfc_agl is not None and el_agl is not None:
-        depth = el_agl - lfc_agl
-        if depth > 0.0:                     # Req 4.4: guard non-positive depth
-            value = mucape / depth
-            if np.isfinite(value):
-                ncape = float(value)
-
-    # --- NCIN: CIN / (LFC - MU start) --------------------------------------
-    ncin = MISSING
-    if cin is not None and lfc_agl is not None and mu_start_agl is not None:
-        depth = lfc_agl - mu_start_agl
-        if depth > 0.0:                     # Req 4.5: guard non-positive depth
-            value = cin / depth
-            if np.isfinite(value):
-                ncin = float(value)
-
-    return ncape, ncin
 
 
 # ===========================================================================
@@ -472,133 +236,12 @@ def _normalized_cape_cin_impl(prof):
 # without affecting the other (Requirement 18.5).
 
 
-def _sfc_cape(pres, hght, tmpc, dwpc, wdir, wspd):
-    """Return surface-based CAPE (J/kg) via ``sharppy`` (``parcelx`` ``flag=1``).
-
-    Returns ``None`` when ``sharppy`` is unavailable or the CAPE is masked /
-    non-finite; never raises.
-    """
-    try:
-        from sharppy.sharptab import profile as sp_profile
-        from sharppy.sharptab import params as sp_params
-    except Exception:
-        return None
-
-    try:
-        sp_prof = sp_profile.create_profile(
-            profile="default",
-            pres=np.asarray(pres, dtype=float),
-            hght=np.asarray(hght, dtype=float),
-            tmpc=np.asarray(tmpc, dtype=float),
-            dwpc=np.asarray(dwpc, dtype=float),
-            wdir=np.asarray(wdir, dtype=float),
-            wspd=np.asarray(wspd, dtype=float),
-            missing=-9999.0,
-            strictQC=False,
-        )
-        sbpcl = sp_params.parcelx(sp_prof, flag=1)  # surface-based parcel
-        cape = getattr(sbpcl, "bplus", None)
-        if cape is None or is_missing(cape) or not np.isfinite(cape):
-            return None
-        return float(cape)
-    except Exception:
-        return None
 
 
-def _layer_top_agl(layer):
-    """Resolve the ``ehi`` ``layer`` argument to a SFC-> ``top`` m AGL layer.
-
-    Accepts the layer top height in metres AGL (e.g. ``1000`` or ``3000``), a
-    ``(bottom, top)`` pair in metres AGL, or the strings ``"0-1km"`` / ``"0-3km"``
-    (and ``"1km"`` / ``"3km"``). Returns ``(bottom, top)`` in metres AGL, or
-    ``None`` when the argument cannot be interpreted.
-    """
-    if isinstance(layer, str):
-        key = layer.strip().lower().replace(" ", "")
-        mapping = {
-            "0-1km": (0.0, 1000.0), "1km": (0.0, 1000.0), "01km": (0.0, 1000.0),
-            "0-3km": (0.0, 3000.0), "3km": (0.0, 3000.0), "03km": (0.0, 3000.0),
-        }
-        return mapping.get(key)
-    if isinstance(layer, (tuple, list)) and len(layer) == 2:
-        try:
-            bottom, top = float(layer[0]), float(layer[1])
-        except (TypeError, ValueError):
-            return None
-        if np.isfinite(bottom) and np.isfinite(top):
-            return bottom, top
-        return None
-    try:
-        top = float(layer)
-    except (TypeError, ValueError):
-        return None
-    if np.isfinite(top):
-        return 0.0, top
-    return None
 
 
-def ehi(prof, layer):
-    """Compute the Energy Helicity Index (EHI, unitless) for ``prof`` over ``layer``.
-
-    ``EHI = (SBCAPE * SRH_layer) / 160000`` (Hart & Korotky / SPC), with the
-    surface-based CAPE and the layer storm-relative helicity drawn from the same
-    ``prof`` (Requirement 18.3). The SRH uses the shared Bunkers right-mover
-    storm motion so the 0-1 km and 0-3 km variants share an identical motion.
-
-    Parameters
-    ----------
-    prof:
-        Profile-like object exposing ``pres`` / ``hght`` / ``tmpc`` / ``dwpc``
-        and wind (``wdir`` / ``wspd`` or ``u`` / ``v``).
-    layer:
-        The SRH layer. Accepts the layer-top height in metres AGL (``1000`` for
-        the 0-1 km variant, ``3000`` for the 0-3 km variant), a ``(bottom, top)``
-        metres-AGL pair, or the strings ``"0-1km"`` / ``"0-3km"``.
-
-    Returns
-    -------
-    float or MISSING
-        The unitless EHI value, or
-        :data:`~sharpmod.sharptab.constants.MISSING` when the CAPE term or the
-        SRH term for this layer is missing/masked, when the storm motion cannot
-        be resolved, or when ``layer`` is uninterpretable (Requirement 18.5).
-        Never raises.
-    """
-    try:
-        return _ehi_impl(prof, layer)
-    except Exception:
-        # Design principle: missing data propagates, never crashes.
-        return MISSING
 
 
-def _ehi_impl(prof, layer):
-    bounds = _layer_top_agl(layer)
-    if bounds is None:
-        return MISSING
-    bottom, top = bounds
-
-    # --- storm-relative helicity over the layer (shared Bunkers motion) -----
-    rstu, rstv, _lstu, _lstv = winds.storm_motion(prof)
-    if is_missing(rstu) or is_missing(rstv):
-        return MISSING
-    total, _phel, _nhel = winds.helicity(prof, bottom, top, stu=rstu, stv=rstv)
-    if is_missing(total) or not np.isfinite(total):
-        return MISSING
-    srh = float(total)
-
-    # --- surface-based CAPE (same Profile) ----------------------------------
-    arrays = _profile_columns(prof)
-    if arrays is None:
-        return MISSING
-    sbpcl = parcels.parcel(prof, "surface")
-    cape = _sfc_cape(*arrays) if sbpcl is None else sbpcl.cape
-    if cape is None or not np.isfinite(cape):
-        return MISSING
-
-    value = (cape * srh) / _EHI_NORM
-    if not np.isfinite(value):
-        return MISSING
-    return float(value)
 
 
 # ---------------------------------------------------------------------------
@@ -833,77 +476,6 @@ _MOSHE_LAYER_DEPTH_KM = 2.0
 _MOSHE_LAYER_TOPS_AGL = tuple(np.arange(2000.0, 6000.0 + 0.1, 500.0))
 
 
-@known_sharppy_numerical_warnings()
-def _oracle_profile(prof):
-    """Build the shared ``sharppy`` "default" Profile oracle for ``prof``.
-
-    Returns a ``sharppy`` profile augmented with the convective attributes the
-    SPC/AMS routines (``lhp``, ``ship``, ``mmp``, ...) read -- ``mupcl``,
-    ``sfc_6km_shear``, ``lapserate_700_500``, ``srwind`` -- or ``None`` when the
-    analyzed columns are missing/masked (via :func:`_profile_columns`) or when
-    ``sharppy`` is unavailable / the ascent cannot be run. Never raises.
-    """
-    cache_attr = "_sharpmod_default_oracle"
-    cache_miss = _ORACLE_CACHE_MISS
-    cached = getattr(prof, cache_attr, cache_miss)
-    if cached is not cache_miss:
-        return cached
-
-    arrays = _profile_columns(prof)
-    if arrays is None:
-        return None
-    pres, hght, tmpc, dwpc, wdir, wspd = arrays
-
-    try:
-        from sharppy.sharptab import profile as sp_profile
-        from sharppy.sharptab import params as sp_params
-        from sharppy.sharptab import winds as sp_winds
-        from sharppy.sharptab import interp as sp_interp
-    except Exception:
-        return None
-
-    try:
-        sp = sp_profile.create_profile(
-            profile="default",
-            pres=pres, hght=hght, tmpc=tmpc, dwpc=dwpc, wdir=wdir, wspd=wspd,
-            missing=-9999.0, strictQC=False,
-        )
-        # Augment with the attributes the convective routines expect.
-        mupcl = parcels.parcel(prof, "most_unstable")
-        if mupcl is None or not np.isfinite(
-            [mupcl.el_pressure, mupcl.start_pressure, mupcl.start_dewpoint],
-        ).all():
-            sp.mupcl = sp_params.parcelx(sp, flag=3)
-        else:
-            sp.mupcl = SimpleNamespace(
-                bplus=mupcl.cape,
-                bminus=mupcl.cin,
-                pres=mupcl.start_pressure,
-                tmpc=mupcl.start_temperature,
-                dwpc=mupcl.start_dewpoint,
-                lclpres=mupcl.lcl_pressure,
-                lclhght=mupcl.lcl_height,
-                lfcpres=mupcl.lfc_pressure,
-                lfchght=mupcl.lfc_height,
-                elpres=mupcl.el_pressure,
-                elhght=mupcl.el_height,
-                b3km=mupcl.cape_3km,
-                b6km=mupcl.cape_6km,
-            )
-        sfcp = sp.pres[sp.sfc]
-        p6km = sp_interp.pres(sp, sp_interp.to_msl(sp, 6000.0))
-        sp.sfc_6km_shear = sp_winds.wind_shear(sp, pbot=sfcp, ptop=p6km)
-        sp.lapserate_700_500 = sp_params.lapse_rate(sp, 700.0, 500.0, pres=True)
-        sp.srwind = sp_winds.non_parcel_bunkers_motion(sp)
-        result = sp
-    except Exception:
-        result = None
-
-    try:
-        setattr(prof, cache_attr, result)
-    except (AttributeError, TypeError):
-        pass
-    return result
 
 
 def _finite_or_none(value):
@@ -947,59 +519,6 @@ def _metadata_raw(prof, *names):
     return None
 
 
-@known_sharppy_numerical_warnings()
-def _convective_oracle_profile(prof):
-    """Return a cached upstream SHARPpy ConvectiveProfile for SPC composites."""
-    cache_attr = "_sharpmod_convective_oracle"
-    cached = getattr(prof, cache_attr, _ORACLE_CACHE_MISS)
-    if cached is not _ORACLE_CACHE_MISS:
-        return cached
-
-    arrays = _profile_columns(prof)
-    if arrays is None:
-        return None
-    pres, hght, tmpc, dwpc, wdir, wspd = arrays
-
-    try:
-        from sharppy.sharptab import profile as sp_profile
-    except Exception:
-        return None
-
-    kwargs = dict(
-        profile="convective",
-        pres=pres,
-        hght=hght,
-        tmpc=tmpc,
-        dwpc=dwpc,
-        wdir=wdir,
-        wspd=wspd,
-        missing=-9999.0,
-        strictQC=False,
-    )
-    lat = _metadata_value(prof, "latitude", "lat")
-    if lat is not None:
-        kwargs["latitude"] = lat
-    date = _metadata_raw(prof, "date", "valid", "run", "base_time")
-    if date is not None:
-        kwargs["date"] = date
-    location = _metadata_raw(prof, "location", "loc", "station", "stn")
-    if location is not None:
-        kwargs["location"] = str(location)
-
-    omeg = _omeg_column_for_oracle(prof, len(pres))
-    if omeg is not None:
-        kwargs["omeg"] = omeg
-
-    try:
-        oracle = sp_profile.create_profile(**kwargs)
-    except Exception:
-        oracle = None
-
-    try:
-        setattr(prof, cache_attr, oracle)
-    except Exception:
-        pass
-    return oracle
 
 
 def _omeg_column_for_oracle(prof, target_len):
@@ -1349,67 +868,6 @@ def _mcs_index_impl(prof):
     return float(value)
 
 
-def _mmp_linear_predictor(sp):
-    """Return the Coniglio et al. (2006) MMP logistic linear predictor, or ``None``.
-
-    Computes the same input terms as ``sharppy.sharptab.params.mmp`` (MUCAPE, the
-    maximum bulk shear between the lowest 1 km and the 6-10 km layer, the 3-8 km
-    lapse rate, and the 3-12 km mean wind) and combines them with the published
-    regression coefficients, returning the linear predictor so that
-    ``MMP = 1 / (1 + exp(value))``. Returns ``None`` when any required term is
-    missing/masked or the profile lacks the low-level or 6-10 km levels.
-    """
-    from sharppy.sharptab import interp as sp_interp
-    from sharppy.sharptab import winds as sp_winds
-    from sharppy.sharptab import params as sp_params
-    from sharppy.sharptab import utils as sp_utils
-
-    mucape = _finite_or_none(getattr(sp.mupcl, "bplus", None))
-    if mucape is None:
-        return None
-
-    agl = sp_interp.to_agl(sp, sp.hght)
-    lowest_idx = np.where(np.asarray(agl) <= 1000.0)[0]
-    highest_idx = np.where((np.asarray(agl) >= 6000.0) & (np.asarray(agl) < 10000.0))[0]
-    if len(lowest_idx) == 0 or len(highest_idx) == 0:
-        return None
-
-    pbots = np.atleast_1d(sp_interp.pres(sp, sp.hght[lowest_idx]))
-    ptops = np.atleast_1d(sp_interp.pres(sp, sp.hght[highest_idx]))
-
-    max_shear = None
-    for pbot in pbots:
-        for ptop in ptops:
-            u_shr, v_shr = sp_winds.wind_shear(sp, pbot=pbot, ptop=ptop)
-            mag = _finite_or_none(sp_utils.mag(u_shr, v_shr))
-            if mag is None:
-                continue
-            if max_shear is None or mag > max_shear:
-                max_shear = mag
-    if max_shear is None:
-        return None
-    max_bulk_shear = float(sp_utils.KTS2MS(max_shear))  # m/s
-
-    lr38 = _finite_or_none(sp_params.lapse_rate(sp, 3000.0, 8000.0, pres=False))
-    if lr38 is None:
-        return None
-
-    plower = sp_interp.pres(sp, sp_interp.to_msl(sp, 3000.0))
-    pupper = sp_interp.pres(sp, sp_interp.to_msl(sp, 12000.0))
-    mnu, mnv = sp_winds.mean_wind(sp, pbot=plower, ptop=pupper)
-    mnwind = _finite_or_none(sp_utils.mag(mnu, mnv))
-    if mnwind is None:
-        return None
-    mnwind_ms = float(sp_utils.KTS2MS(mnwind))  # m/s
-
-    value = (
-        _MMP_A0
-        + _MMP_A1 * max_bulk_shear
-        + _MMP_A2 * lr38
-        + _MMP_A3 * mucape
-        + _MMP_A4 * mnwind_ms
-    )
-    return float(value) if np.isfinite(value) else None
 
 
 # ---------------------------------------------------------------------------
@@ -1424,51 +882,6 @@ def left_supercell_composite(prof):
         return MISSING
 
 
-def _left_supercell_composite_impl(prof):
-    sp = _convective_oracle_profile(prof)
-    if sp is None:
-        return MISSING
-
-    etop = getattr(sp, "etop", None)
-    ebottom = getattr(sp, "ebottom", None)
-    if is_missing(etop) or is_missing(ebottom):
-        return 0.0
-
-    mucape = _finite_or_none(getattr(getattr(sp, "mupcl", None), "bplus", None))
-    mucin = _finite_or_none(getattr(getattr(sp, "mupcl", None), "bminus", None))
-    left_esrh = getattr(sp, "left_esrh", None)
-    try:
-        esrh = _finite_or_none(left_esrh[0])
-    except Exception:
-        esrh = None
-    ebwd_ms = _finite_or_none(getattr(sp, "ebwspd", None))
-    if ebwd_ms is not None:
-        ebwd_ms = ebwd_ms / KTS_PER_MS
-
-    if mucape is None or mucin is None or esrh is None or ebwd_ms is None:
-        return MISSING
-    if mucape <= 0.0:
-        return 0.0
-
-    if ebwd_ms > 20.0:
-        ebwd_ms = 20.0
-    elif ebwd_ms < 10.0:
-        ebwd_ms = 0.0
-
-    if mucin > _LSCP_MUCIN_NORM:
-        mucin_term = 1.0
-    elif mucin < 0.0:
-        mucin_term = _LSCP_MUCIN_NORM / mucin
-    else:
-        mucin_term = 1.0
-
-    value = (
-        (mucape / _LSCP_MUCAPE_NORM)
-        * (esrh / _LSCP_ESRH_NORM)
-        * (ebwd_ms / _LSCP_EBWD_NORM)
-        * mucin_term
-    )
-    return float(value) if np.isfinite(value) else MISSING
 
 
 def non_supercell_tornado_parameter(prof):
@@ -1479,33 +892,6 @@ def non_supercell_tornado_parameter(prof):
         return MISSING
 
 
-def _non_supercell_tornado_parameter_impl(prof):
-    sp = _convective_oracle_profile(prof)
-    if sp is None:
-        return MISSING
-
-    lr01 = _finite_or_none(getattr(prof, "lapserate_sfc_1km", None))
-    if lr01 is None:
-        from . import params as sm_params
-        lr01 = _finite_or_none(sm_params.lapse_rate(prof, 0, 1000, agl=True))
-
-    mlpcl = getattr(sp, "mlpcl", None)
-    mlcape3 = _finite_or_none(getattr(mlpcl, "b3km", None))
-    mlcin = _finite_or_none(getattr(mlpcl, "bminus", None))
-    shear06_ms = _vector_mag_ms(getattr(sp, "sfc_6km_shear", None))
-    sfc_vort = _surface_relative_vorticity(prof)
-
-    if None in (lr01, mlcape3, mlcin, shear06_ms, sfc_vort):
-        return MISSING
-
-    value = (
-        (lr01 / _NSTP_LR_NORM)
-        * (mlcape3 / _NSTP_MLCAPE3_NORM)
-        * ((_NSTP_MLCIN_BASE - mlcin) / _NSTP_MLCIN_NORM)
-        * ((_NSTP_SHEAR_BASE_MS - shear06_ms) / _NSTP_SHEAR_NORM_MS)
-        * (sfc_vort / _NSTP_VORT_NORM_S)
-    )
-    return float(value) if np.isfinite(value) else MISSING
 
 
 def modified_sherbe(prof):
@@ -1516,25 +902,25 @@ def modified_sherbe(prof):
         return MISSING
 
 
-def _modified_sherbe_impl(prof):
-    sp = _convective_oracle_profile(prof)
-    if sp is None:
-        return MISSING
+from sharpmod.sharptab.derived_thermo import (  # noqa: E402
+    _dcape_mucape,
+    dcp,
+    _dcp_impl,
+    _mu_parcel_terms,
+    normalized_cape_cin,
+    _normalized_cape_cin_impl,
+    _sfc_cape,
+    _layer_top_agl,
+    ehi,
+    _ehi_impl
+)
 
-    lllr = _finite_or_none(getattr(sp, "lapserate_3km", None))
-    s15mg = _finite_or_none(_bulk_shear_ms(prof, _SFC_1500M_AGL))
-    eshr = _finite_or_none(getattr(sp, "ebwspd", None))
-    if eshr is not None:
-        eshr = eshr / KTS_PER_MS
-    maxtevv = _max_thetae_vertical_velocity(prof)
 
-    if None in (lllr, s15mg, eshr, maxtevv):
-        return MISSING
-
-    value = (
-        (((lllr - _MOSHE_LLLR_OFFSET) ** 2.0) / _MOSHE_LLLR_NORM)
-        * ((s15mg - _MOSHE_SHEAR_OFFSET_MS) / _MOSHE_SHEAR_NORM_MS)
-        * ((eshr - _MOSHE_SHEAR_OFFSET_MS) / _MOSHE_SHEAR_NORM_MS)
-        * ((maxtevv + _MOSHE_TEVV_OFFSET) / _MOSHE_TEVV_NORM)
-    )
-    return float(value) if np.isfinite(value) else MISSING
+from sharpmod.sharptab.derived_indices import (  # noqa: E402
+    _oracle_profile,
+    _convective_oracle_profile,
+    _mmp_linear_predictor,
+    _left_supercell_composite_impl,
+    _non_supercell_tornado_parameter_impl,
+    _modified_sherbe_impl
+)

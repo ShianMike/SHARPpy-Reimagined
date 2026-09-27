@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "description": "Checked pytest wall-time baseline. Local Rust-enabled limits stay strict; explicit GitHub Actions overrides cover the slower Python fallback on hosted runners.",
+  "description": "Checked pytest wall-time baseline. The v2.0.0 local fast and compatibility limits include the expanded GUI integration suite measured on Windows with 4-worker Rust coverage and 2-worker Python fallback; explicit GitHub Actions overrides cover hosted runners.",
   "defaults": {
     "relative_tolerance": 0.6,
     "absolute_tolerance_seconds": 2.0
   },
   "suites": {
     "compatibility": {
-      "baseline_seconds": 56.91,
-      "maximum_seconds": 150.0,
+      "baseline_seconds": 318.72,
+      "maximum_seconds": 380.0,
       "environment_overrides": {
         "github-actions": {
           "baseline_seconds": 450.0,
@@ -17,8 +17,8 @@
       }
     },
     "fast": {
-      "baseline_seconds": 81.22,
-      "maximum_seconds": 180.0,
+      "baseline_seconds": 308.18,
+      "maximum_seconds": 370.0,
       "environment_overrides": {
         "github-actions": {
           "baseline_seconds": 500.0,

@@ -66,6 +66,8 @@ class _DiskCache:
 
 
 def test_shutdown_stops_every_owned_gui_worker(monkeypatch):
+    from sharpmod.ui.picker import model_jobs
+
     timers = [_Timer() for _ in range(4)]
     catalog = _Worker(cooperative=False)
     availability = _Worker()
@@ -76,7 +78,7 @@ def test_shutdown_stops_every_owned_gui_worker(monkeypatch):
     disk_cache = _DiskCache()
     retained = []
     monkeypatch.setattr(
-        gui_picker,
+        model_jobs,
         "retain_worker_until_finished",
         lambda worker: retained.append(worker) or True,
     )

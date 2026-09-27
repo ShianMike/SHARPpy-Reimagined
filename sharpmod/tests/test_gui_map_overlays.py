@@ -561,6 +561,17 @@ def test_view_bounds_reports_the_visible_extent(widget):
     assert widget.view_bounds() == (-125.0, -66.0, 24.0, 50.0)
 
 
+def _near_boundary(widget, lon, lat, *, tolerance_deg=0.06) -> bool:
+    """Return whether a lon/lat sits on a drawn boundary polyline."""
+    for family in ("coastline", "countries", "states", "lakes"):
+        for _bounds, points in widget._layers.get(family, ()):
+            for plon, plat in points:
+                if abs(plon - lon) <= tolerance_deg and abs(
+                        plat - lat) <= tolerance_deg:
+                    return True
+    return False
+
+
 def test_magnifying_a_raster_does_not_invent_intermediate_colours(widget):
     """Bilinear upscaling is what made the radar overlay look blurred.
 
@@ -586,20 +597,27 @@ def test_magnifying_a_raster_does_not_invent_intermediate_colours(widget):
     widget._lat0, widget._lat1 = 44.0, 48.0
     widget._invalidate()
 
-    bare = _paint(widget).toImage()
     widget.set_overlay(RADAR_KEY, _raster(
         image_bytes=bytes(buffer.data()), opacity=1.0))
-    painted = _paint(widget).toImage()
-
-    # Only the pixels the raster changed, and only the upper part of the frame:
-    # sampling everything would pick up the grey basemap lines and the
-    # antialiased legend text along the bottom edge.
-    limit = int(painted.height() * 0.6)
+    # Inspect the raster pass itself on an opaque surface.  Comparing two full
+    # widget grabs made this assertion depend on process-global application
+    # theming: antialiased town-label edge pixels legitimately blend with the
+    # new red background and therefore look like invented raster colours even
+    # though the field underneath is a uniform nearest-neighbour fill.
+    surface = QPixmap(widget.size())
+    background = QColor(0, 0, 0)
+    surface.fill(background)
+    painter = QPainter(surface)
+    try:
+        widget._draw_raster_overlays(painter, widget._proj())
+    finally:
+        painter.end()
+    painted = surface.toImage()
     changed = {
         painted.pixelColor(x, y).rgb()
-        for y in range(0, limit, 3)
+        for y in range(0, painted.height(), 3)
         for x in range(0, painted.width(), 3)
-        if painted.pixelColor(x, y).rgb() != bare.pixelColor(x, y).rgb()
+        if painted.pixelColor(x, y).rgb() != background.rgb()
     }
     assert changed, "the raster drew nothing to inspect"
     # The source holds one opaque colour, so a nearest-neighbour magnification

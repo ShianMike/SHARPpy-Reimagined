@@ -71,7 +71,7 @@ def test_starts_in_fit_mode_showing_the_whole_sounding(scaled_view):
         "the stand-in should not fit at 1:1 in a 1080p-class viewport")
 
 
-def test_fit_shows_the_whole_canvas_even_when_it_arrives_offset(qt_app):
+def test_fit_shows_the_whole_canvas_even_when_it_arrives_offset(standard_qt_app):
     """The canvas reaches the scene carrying its previous parent's offset.
 
     ``QGraphicsScene.addWidget`` takes the widget's *geometry*, position
@@ -86,7 +86,7 @@ def test_fit_shows_the_whole_canvas_even_when_it_arrives_offset(qt_app):
     point: the fit is computed *from* the rect, so measuring the rect reports
     success by construction, which is how this survived the earlier tests.
     """
-    gui_theme.apply_theme(qt_app, color_style="standard")
+    qt_app = standard_qt_app
 
     window = QMainWindow()
     canvas = QWidget()
@@ -116,11 +116,12 @@ def test_fit_shows_the_whole_canvas_even_when_it_arrives_offset(qt_app):
             f"px past the viewport while fitted")
     finally:
         window.close()
+        window.deleteLater()
 
 
-def test_fit_mode_never_upscales(qt_app):
+def test_fit_mode_never_upscales(standard_qt_app):
     """Upscaling past 1:1 would blur the canvas text."""
-    gui_theme.apply_theme(qt_app, color_style="standard")
+    qt_app = standard_qt_app
     window = QMainWindow()
     canvas = QWidget()
     small = QSize(400, 300)
@@ -136,6 +137,7 @@ def test_fit_mode_never_upscales(qt_app):
         assert view.current_scale() <= 1.0
     finally:
         window.close()
+        window.deleteLater()
 
 
 def test_fit_mode_tracks_the_viewport_across_resizes(scaled_view, qt_app):
@@ -148,9 +150,9 @@ def test_fit_mode_tracks_the_viewport_across_resizes(scaled_view, qt_app):
     assert view.current_scale() != pytest.approx(before)
 
 
-def test_native_size_window_keeps_zoom_when_resized_smaller(qt_app):
+def test_native_size_window_keeps_zoom_when_resized_smaller(standard_qt_app):
     """A viewer that opens at 1:1 must not permanently lose its zoom controls."""
-    gui_theme.apply_theme(qt_app, color_style="standard")
+    qt_app = standard_qt_app
     window = QMainWindow()
     gui_viewer._install_view_controls(window)
     canvas = QWidget()
@@ -185,6 +187,7 @@ def test_native_size_window_keeps_zoom_when_resized_smaller(qt_app):
         assert window._sharpmod_zoom_slider.isEnabled()
     finally:
         window.close()
+        window.deleteLater()
 
 
 def test_scrollbars_are_hidden_while_fitting(scaled_view):
@@ -339,9 +342,9 @@ class _WheelSpy(QWidget):
 
 
 @pytest.fixture
-def view_with_panel(qt_app):
+def view_with_panel(standard_qt_app):
     """A scaled view whose canvas contains one wheel-recording child panel."""
-    gui_theme.apply_theme(qt_app, color_style="standard")
+    qt_app = standard_qt_app
 
     window = QMainWindow()
     canvas = QWidget()
@@ -358,6 +361,7 @@ def view_with_panel(qt_app):
         qt_app.processEvents()
     yield view, canvas, panel, window
     window.close()
+    window.deleteLater()
 
 
 def _wheel_at(view, viewport_point, angle=0, pixel=0,
@@ -586,13 +590,13 @@ def test_zoom_readout_tracks_the_scale(viewer_with_controls, qt_app):
     assert readout.text() == "50%"
 
 
-def test_zoom_is_disabled_rather_than_inert_on_the_one_to_one_host(qt_app):
+def test_zoom_is_disabled_rather_than_inert_on_the_one_to_one_host(standard_qt_app):
     """When the sounding already fits at 1:1 there is no transform to drive.
 
     Present-but-dead controls are worse than disabled ones, so the actions are
     disabled and say why.
     """
-    gui_theme.apply_theme(qt_app, color_style="standard")
+    qt_app = standard_qt_app
 
     window = QMainWindow()
     gui_viewer._install_view_controls(window)
@@ -608,6 +612,7 @@ def test_zoom_is_disabled_rather_than_inert_on_the_one_to_one_host(qt_app):
         assert "actual size" in actions["in"].toolTip().lower()
     finally:
         window.close()
+        window.deleteLater()
 
 
 def test_binding_without_installed_controls_is_a_no_op(qt_app):
@@ -617,6 +622,7 @@ def test_binding_without_installed_controls_is_a_no_op(qt_app):
         gui_viewer._bind_view_controls(window)  # must not raise
     finally:
         window.close()
+        window.deleteLater()
 
 
 # ---------------------------------------------------------------------------
@@ -719,8 +725,8 @@ WIDESCREEN = (1920, 1000)
 
 
 @pytest.fixture
-def realistic_view(qt_app):
-    gui_theme.apply_theme(qt_app, color_style="standard")
+def realistic_view(standard_qt_app):
+    qt_app = standard_qt_app
     window = QMainWindow()
     canvas = QWidget()
     canvas.setFixedSize(REAL_CANVAS)
@@ -732,6 +738,7 @@ def realistic_view(qt_app):
         qt_app.processEvents()
     yield view, window
     window.close()
+    window.deleteLater()
 
 
 def test_fit_is_limited_by_the_tighter_axis(realistic_view, qt_app):
@@ -860,8 +867,8 @@ def test_slider_does_not_feed_back_into_itself(viewer_with_controls, qt_app):
     assert slider.value() == 180, "the slider did not settle where it was put"
 
 
-def test_slider_is_disabled_on_the_one_to_one_host(qt_app):
-    gui_theme.apply_theme(qt_app, color_style="standard")
+def test_slider_is_disabled_on_the_one_to_one_host(standard_qt_app):
+    qt_app = standard_qt_app
     window = QMainWindow()
     gui_viewer._install_view_controls(window)
     canvas = QWidget()
@@ -874,6 +881,7 @@ def test_slider_is_disabled_on_the_one_to_one_host(qt_app):
         assert not window._sharpmod_zoom_slider.isEnabled()
     finally:
         window.close()
+        window.deleteLater()
 
 
 def test_slider_steps_are_usable(viewer_with_controls):
@@ -908,7 +916,6 @@ def test_canvas_host_is_not_inline_styled(qt_app, factory, label):
     """
     from sharpmod.theme import OBJ_CANVAS_HOST
 
-    gui_theme.apply_theme(qt_app, color_style="standard")
     window = QMainWindow()
     canvas = QWidget()
     canvas.setFixedSize(NATURAL)
@@ -922,6 +929,7 @@ def test_canvas_host_is_not_inline_styled(qt_app, factory, label):
             f"canvas-host rule does not reach it")
     finally:
         window.close()
+        window.deleteLater()
 
 
 def test_canvas_host_surround_repaints_on_a_theme_switch(qt_app):
@@ -971,6 +979,7 @@ def test_canvas_host_surround_repaints_on_a_theme_switch(qt_app):
             f"{light.surface_sunken}")
     finally:
         window.close()
+        window.deleteLater()
         gui_theme.apply_theme(qt_app, color_style="standard")
 
 

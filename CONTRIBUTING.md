@@ -31,10 +31,10 @@ source .venv/bin/activate
 python scripts/run_test_lane.py fast --workers 4
 
 # Full scientific properties (the original 100-200 examples are preserved).
-python scripts/run_test_lane.py property --workers 4
+python scripts/run_test_lane.py property --workers 2
 
 # The 3.11/3.12 compatibility smoke includes 10 examples per property.
-python scripts/run_test_lane.py compatibility --workers 4
+python scripts/run_test_lane.py compatibility --workers 2
 
 # Exact complete non-parallel gate used by official releases.
 python scripts/run_test_lane.py serial-release
@@ -47,8 +47,8 @@ python scripts/run_test_lane.py fast --workers 4 --coverage
 
 # Static correctness, focused maintainability, and dependency checks.
 python -m ruff check sharpmod scripts packaging
-python -m ruff check sharpmod/portable_sounding.py sharpmod/model_disk_cache.py `
-  sharpmod/model_sources.py sharpmod/gui_cache.py --select E,F,I,UP,B,SIM
+python -m ruff check sharpmod/io/portable_sounding.py sharpmod/models/model_disk_cache.py `
+  sharpmod/models/model_sources.py sharpmod/ui/features/gui_cache.py --select E,F,I,UP,B,SIM
 python -m pip_audit --skip-editable
 ```
 
@@ -67,17 +67,44 @@ durations have separate baselines because CPU contention changes individual
 test time. Do not raise a budget merely to make a regression pass: reproduce
 the lane, explain the change, and update the checked value in the same review.
 
+The GitHub **Tests** workflow displays a test tree: the fast lane branches into
+data visualization, GUI workflows, scientific calculations, data providers, and
+backends/packaging. Data visualization branches again into charts, maps,
+analysis/animation, and exports/rendering. Each status job reads the Python 3.13
+fast lane's JUnit report and shows a per-module breakdown, failed tests, and
+the five slowest cases. These jobs do not repeat tests; the fast lane remains
+the owner of coverage and timing budgets. If it fails a coverage or timing
+gate, inspect the fast job as well as the category summaries.
+
+For v2.0.0, the local fast baseline was measured at 308.18 seconds with
+4,670 passing tests, one skip, and coverage enabled on Rust; the compatibility
+baseline was 318.72 seconds with 4,716 passing tests and one skip on the Python
+fallback. Both runs used this 12-core Windows/Python 3.11 checkout. The new
+370/380-second local limits leave bounded headroom for the larger GUI suite;
+the separate GitHub Actions limits are unchanged. Compare timing reports only
+under matching worker, backend, coverage, and host conditions.
+
+For a final integrated/release-readiness check, first run
+`sharpmod-rust-sync --check`, finish focused diagnosis, and checkpoint the exact
+source state. Then run `python scripts/run_test_lane.py serial-release` once in a
+supported environment. Treat the generated JUnit and timing JSON as part of the
+result: a timing-budget failure is a failed gate even when every pytest assertion
+passed. Use focused reruns to diagnose; do not repeatedly run the full serial
+lane while iterating.
+
 Every test has a 180-second safety timeout by default; the deliberately
 expensive full-property and serial-release lanes raise that guard to 900 seconds
 per test. Pull requests run 3.11/3.12 compatibility smoke, Python 3.13
-deterministic coverage, and the full Python 3.13 property lane. Pushes to
-`main` also run the complete serial gate. Official releases force that serial
-gate against the exact immutable commit that is packaged. A weekly scheduled
+deterministic coverage, and full Python 3.13 properties on both Rust and the
+Python fallback. Official releases run the serial gate against the exact
+immutable commit that is packaged. A weekly scheduled
 lane runs the live-provider checks, including the multi-region CONUS HRRR
 surface regression.
 
 ## Project Conventions
 
+- Use [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md) to find the canonical
+  GUI modules; keep compatibility import paths stable when moving code.
 - Keep the `sharpmod` import/package name stable.
 - Prefer package-relative resource access through `importlib.resources`.
 - Keep optional data-source dependencies behind extras and lazy imports.
@@ -101,7 +128,7 @@ When the bug is upstream, fix it upstream. Open the report and the pull request
 against the project that owns the code, and reference both from ours.
 
 Where waiting for a release would leave the symptom in front of users, a local
-repair goes in `sharpmod/upstream_patches.py`, and it has to earn its place:
+repair goes in `sharpmod/upstream/upstream_patches.py`, and it has to earn its place:
 
 - **Name the upstream report and fix** as module constants, so the reason a
   patch exists is discoverable from the patch.

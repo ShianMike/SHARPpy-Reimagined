@@ -58,7 +58,7 @@ from typing import Optional, Sequence, Union
 
 from qtpy import QtGui, QtCore, QtWidgets
 
-from sharpmod import colors
+from sharpmod.viz import colors
 from sharpmod.sharptab.constants import is_missing, PARAM_REGISTRY
 from sharpmod.viz.unit_text import draw_text_with_smaller_unit
 

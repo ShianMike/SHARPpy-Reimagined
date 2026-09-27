@@ -1,13 +1,21 @@
+"""Regression coverage for surface station observations and map overlays.
+
+The tests protect units and missing-value semantics, actual observation times, checked
+station availability, screen-space decluttering, layer styling, and portable CSV round
+trips."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 
 import pytest
 
 from sharpmod.surface_observations import (
     SURFACE_OVERLAY_KEY,
+    SurfaceObservation,
     SurfaceObservationSet,
+    SurfaceStation,
     declutter_observations,
     export_surface_csv,
     fetch_surface_observations,
@@ -39,15 +47,22 @@ def _station_feature(station_id, lon, lat):
     }
 
 
-def _observation_feature(station_id, timestamp, *, dewpoint=15.0):
+def _observation_feature(
+    station_id,
+    timestamp,
+    *,
+    dewpoint=15.0,
+    wind_direction=225.0,
+    wind_speed=10.0,
+):
     return {
         "id": f"https://api.weather.gov/stations/{station_id}/observations/{timestamp}",
         "properties": {
             "timestamp": timestamp,
             "temperature": _quantity(22.0, "degC"),
             "dewpoint": _quantity(dewpoint, "degC"),
-            "windDirection": _quantity(225.0, "degree_(angle)"),
-            "windSpeed": _quantity(10.0, "m_s-1"),
+            "windDirection": _quantity(wind_direction, "degree_(angle)"),
+            "windSpeed": _quantity(wind_speed, "m_s-1"),
             "windGust": {"value": None, "unitCode": "wmoUnit:m_s-1"},
             "textDescription": "Mostly Cloudy",
         },
@@ -66,6 +81,18 @@ def test_station_and_observation_parsers_preserve_units_and_missing_values():
     u, v = observation.wind_uv_kt
     assert u == pytest.approx(13.745, rel=1e-3)
     assert v == pytest.approx(13.745, rel=1e-3)
+
+
+def test_calm_and_missing_winds_remain_distinct():
+    station = SurfaceStation("KAAA", "Station KAAA", 35.0, -97.0)
+    calm = SurfaceObservation(station, REQUESTED, 22.0, 15.0, None, 0.0)
+    missing = SurfaceObservation(station, REQUESTED, 22.0, 15.0, None, None)
+    partial = SurfaceObservation(station, REQUESTED, 22.0, 15.0, None, 12.0)
+
+    assert calm.wind_state == "calm" and calm.wind_uv_kt == (0.0, 0.0)
+    assert missing.wind_state == "missing" and missing.wind_uv_kt == (None, None)
+    assert partial.wind_state == "direction-missing"
+    assert partial.wind_uv_kt == (None, None)
 
 
 def test_fetch_matches_actual_times_and_discloses_missing_stations():
@@ -111,6 +138,44 @@ def test_fetch_matches_actual_times_and_discloses_missing_stations():
     assert result.unmatched_station_ids == ("KCCC",)
     assert result.stale_count == 1
     assert result.observations[0].offset_seconds(REQUESTED) == -600
+    assert result.queried_station_count == 3
+    assert result.unqueried_station_count == 0
+
+
+def test_fetch_does_not_claim_unqueried_stations_are_unavailable():
+    station_payload = {
+        "features": [
+            _station_feature("KAAA", -97.0, 35.0),
+            _station_feature("KBBB", -97.4, 35.2),
+            _station_feature("KCCC", -98.0, 35.4),
+        ]
+    }
+
+    def opener(url, **_kwargs):
+        if "/points/" in url:
+            return {
+                "properties": {
+                    "observationStations": (
+                        "https://api.weather.gov/gridpoints/OUN/1,1/stations"
+                    )
+                }
+            }
+        if "/gridpoints/" in url:
+            return station_payload
+        station_id = url.split("/stations/")[1].split("/", 1)[0]
+        return {
+            "features": [
+                _observation_feature(station_id, "2026-09-13T01:35:00Z")
+            ]
+        }
+
+    result = fetch_surface_observations(
+        35.0, -97.0, REQUESTED, opener=opener, workers=1, max_stations=2
+    )
+
+    assert result.queried_station_ids == ("KAAA", "KBBB")
+    assert result.unmatched_station_ids == ()
+    assert result.unqueried_station_count == 1
 
 
 def test_decluttering_and_layer_expose_screen_station_payload():
@@ -148,6 +213,49 @@ def test_decluttering_and_layer_expose_screen_station_payload():
     assert layer.shapes[0].station_id == "KAAA"
     assert layer.shapes[0].dewpoint_c == 15.0
     assert "1 displayed / 2 time-matched / 2 nearby" in layer.subtitle
+
+
+def test_layer_styles_calm_missing_stale_and_checked_unavailable_separately():
+    available = SurfaceStation("KCALM", "Calm", 35.0, -97.0)
+    missing = SurfaceStation("KMISS", "Missing wind", 35.8, -97.0)
+    unavailable = SurfaceStation("KNONE", "No observation", 34.2, -97.0)
+    calm = SurfaceObservation(available, REQUESTED, 20.0, 15.0, None, 0.0)
+    stale_missing = SurfaceObservation(
+        missing,
+        REQUESTED - timedelta(minutes=45),
+        19.0,
+        14.0,
+        None,
+        None,
+    )
+    dataset = SurfaceObservationSet(
+        REQUESTED,
+        35.0,
+        -97.0,
+        (calm, stale_missing),
+        4,
+        ("KNONE",),
+        queried_station_ids=("KCALM", "KMISS", "KNONE"),
+        station_catalog=(available, missing, unavailable),
+    )
+
+    layer = surface_overlay_layer(
+        dataset,
+        (-99.0, -95.0, 33.0, 37.0),
+        pixel_size=(800, 600),
+        minimum_spacing_px=20,
+        max_stations=6,
+    )
+    by_id = {shape.station_id: shape for shape in layer.shapes}
+
+    assert by_id["KCALM"].wind_state == "calm"
+    assert "calm (0 kt)" in by_id["KCALM"].description
+    assert by_id["KMISS"].wind_state == "missing"
+    assert by_id["KMISS"].stale is True
+    assert "missing (not calm)" in by_id["KMISS"].description
+    assert by_id["KNONE"].availability_state == "unavailable"
+    assert "No observation was available" in by_id["KNONE"].description
+    assert "1 not queried" in layer.subtitle
 
 
 def test_surface_set_round_trips_and_exports_explicit_units(tmp_path):

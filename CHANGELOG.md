@@ -5,7 +5,207 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v2.0.0] - 2026-09-26
+
+### Added
+
+- Text and spacing: Choose larger text or compact controls.
+- Action search: Find commands with Ctrl+K.
+- Searchable choices: Find names or aliases and save favorites with Ctrl+Space.
+- Coordinate paste: Preview coordinates and correct ambiguous axis order.
+- Recent destinations: Search history and recover missing files.
+- Profile organization: Search, group, and sort loaded soundings.
+- Pinned reference: Keep a stable comparison baseline.
+- Closed profiles: Reopen retained data without retrieval.
+- Interaction modes: Inspect safely or arm undoable edits.
+- Linked readouts: Inspect one shared level across both plots.
+- Edit feedback: See the original value, the proposed value, and the change while dragging.
+- Original overlay: Show the unedited sounding as dashed reference curves with edited levels ringed.
+- Edit history: List recorded changes and move to any point with Ctrl+Alt+H.
+- Analysis focus: Expand analysis across the main window.
+- Separate analysis: Move the same workspace into a second-monitor window.
+- Workspace layouts: Save, restore, remove, or reset named arrangements.
+- Analysis recovery: Explain missing inputs and open the right loader.
+- Comparison slots: Choose stable panel profiles without shifting missing data.
+- Difference axes: Read temperature and wind differences on separate labeled scales.
+- Fixed ranges: Lock comparison axes so slots and valid times stay comparable.
+- Comparison columns: Choose which diagnostics appear as columns, and their order.
+- Comparison charts: Compare full Skew-T and hodograph charts drawn by the sounding renderer.
+- Chart arrangement: Show each profile in its own chart or overlay them on one.
+- Linked chart axes: Hold every comparison chart on one scale, or unlink them deliberately.
+- Comparison chart export: Save comparison charts at a chosen image size.
+- Ensemble thresholds: Remember units, precision, ranges, and values for every metric.
+- Ensemble members: Filter, inspect, and retry exact member groups.
+- Job feedback: Identify inputs, progress, cancellation, retained data, and outcomes.
+- Threshold jobs: Cancel evaluation and retry only failed or unfinished members.
+- Export jobs: Cancel GIF rendering, then retry the saved capture.
+- Timeline jobs: Cancel diagnostics and retry only failed or unfinished times.
+- Comparison jobs: Cancel diagnostics and retry only failed or unfinished rows.
+- Ensemble jobs: Cancel summaries and retry only failed or unfinished members.
+- Forecast acquisition: Cancel hour queues and retry saved unfinished downloads.
+- Comparison acquisition: Cancel and retry saved unfinished soundings.
+- Member acquisition: Recover saved downloads without replacing working profiles.
+- Expanded sounding locator: Inspect geographic context without moving the selected sounding and export the same captured view as PNG.
+- Sounding image preview: Choose exact pixel/aspect presets or custom dimensions, caption and frame theme without resizing the application; the saved PNG uses the preview snapshot.
+- Animation export preview: Choose an inclusive frame range, duration, and explicit missing/time-gap policy; view an output frame and exact frame count before a GIF is written.
+- Export discovery: Safe source/time filenames, bounded collision handling, complete-file recent history, and open/copy/folder actions for PNG/GIF outputs.
+- Map figure export: Capture standalone, two/four-panel, box-field, and locator maps without refetching; preview and save exact chosen pixels with complete time, extent, layer, scale, selection, source, and attribution context.
+- GUI diagnostics: Record application errors and unhandled Qt exceptions in a small rotating log whose folder can be opened from Help.
+
+### Changed
+
+- Release dependencies: Pin herbie-data 2026.9.1 and PyInstaller 6.22.3; use Ruff 0.16.8 for quality checks.
+- Selection controls: Resize or hide controls without losing summaries and actions.
+- Picker layout: Consolidate Sounding source, Selected station, and Runtime in that order; give Forecast, Field Panels, ERA5, and WRF focused setup cards so their maps keep more of the window.
+- WRF setup: Stretch Paste coordinates and Center map evenly across the available control width.
+- Station catalogue: Replace long station sentences with sortable ID, name, latitude, and longitude columns, a bounded search, in-rail availability, and a nearby Load sounding action; keep content clear of the resize handle.
+- Field Panels: Put Load sounding in Field setup, compress repeated panel controls, and let the map grid use the freed bottom space.
+- Field activity: Move each panel's loading status, Cancel/Retry actions, and displayed valid time from its footer into Field setup so the maps gain height.
+- Forecast map details: Show source and scale information in the Field setup and Model rails; list shared field resolution and source once for matching comparison panels, while keeping each panel's color scale separate; remove duplicate time chips and extra legend prose from both map views.
+- Forecast coverage guidance: Place the warning and Change point action together in the Model card, remove the duplicate point warning, and keep the map free of the page-wide alert.
+- Forecast download status: Keep progress and recovery actions in a compact card below the map; expand Details for the exact request, outcome, and full failure reason without repeating the job panel.
+- Station selection: Keep the missing-station warning and chooser inside the
+  Selected station card, ahead of optional map-layer controls.
+- Keyboard access: Navigate trends and inspect numeric values.
+- Overlay visibility: Hide profiles without removing their data.
+- Undo labels: Name the quantity a level edit changed instead of one generic label.
+- Analysis sections: Group the analysis pages and reach any of them from one chooser.
+- Analysis labels: Spell out Animation.
+- Analysis workspace: Keep Trends, Compare, and Ensemble actions in short rows, collapse successful job details, and give Animation more room for its frame list and preview.
+- Analysis layout: Give the pages consistent edge spacing and bounded, aligned fields and actions while charts, previews, and tables continue to use the available space.
+- Version preparation: Align the Python package, Rust crate, and release-workflow tag default at v2.0.0.
+- Hide controls: Reach it from the View menu instead of a button in every source.
+- Selection context: Read it beside the top-bar clock instead of under the controls.
+- Map zoom: Scroll at the cursor with proportional wheel and trackpad steps, clamped before degenerate or world-wrapping extents.
+- Map views: Step back and forward through bounded previous/next history from the rail, View menu, Alt+Left/Right, or right-click.
+- Map region search: Type a named region to jump the active map; every Region combo shares one searchable control.
+- Map fit and centre: Return to the region or centre on the sounding point or station without moving the selection.
+- Map projection: Keep the selected point and extent across flat/curved switches, with the drawn fallback named on the scale bar and for assistive text.
+- Map gestures: Right-click for navigation without moving the point; middle/right-drag always pans and a pan never selects.
+- Map shortcuts: Find every navigation action in the View menu and Ctrl+K palette; bare keys work with map focus only so text fields keep their input.
+- Map tools: Choose Select, Inspect, or Draw box per map with cursors, hints, and V/I/B keys; the box tool and sticky box mode stay one state and Shift-drag draws in any tool.
+- Map lock: Lock the sounding point so clicks cannot move it, with a ringed marker and readout note; inspect, pan, zoom, history, and box keep working.
+- Map recent point: Return to the previous sounding point from the rail or U without touching view history.
+- Map inspection: Hover to read the numeric field without moving anything; click to pin a card that survives hover and pan, cleared by Escape or unpin.
+- Map sampled point: Read requested and sampled coordinates with distance and grid context; copy coordinates or the value with units; save the sampled point as a named location.
+- Map field values: Sample the depicted field's own numeric grid in display units with run/valid provenance; imagery-only and outside-domain states name their limitation instead of a colour-derived number.
+- Map layers: Keep switches and status in compact rows with only one layer's Edit
+  settings open at a time. Put the preset above evenly sized Apply, Hide all, and
+  Restore actions; use the same card for a distinct status/order ledger whose rows
+  separate visibility, opacity, actual time, and failure details with Retry.
+- Forecast map location: Place it below Map layers in the rail; keep its navigation
+  and point controls available without crowding the layer choices.
+- Map layer presets: Apply a named compatible set at readable opacities; opacities persist per drag and across relaunch.
+- Map layer order: See which colour field covers which, on the list and the legend, with the mitigation stated.
+- Map layer scope: Tell main-map layers from sounding-locator inset layers at a glance; storm reports stay gated on the outlook that anticipated them.
+- Active layer list: Keep the always-drawn geography row compact so one housekeeping row cannot set the width of every control rail.
+- Map time: Distinguish requested and displayed valid time, run/lead, observation time, retrieval time, and mixed-age layers in maps and exports.
+- Map frame coverage: Scrub or play the shared ready/loading/missing/failed timeline without creating a second acquisition clock.
+- Map history: Pin time-addressed historical frames, retain prior labelled data while refreshing, and suspend latest-only radar until Live mode is selected.
+- Map legend placement: Keep the key stable while the pointer moves, avoid the
+  selected point and inspection card, or pin it to a corner; collapse it to one
+  line on small windows.
+- Map legend identity: Keep product, units, and scale readable when compacted; wrapped categories, banded-vs-categorical tags, and no repeated titles.
+- Map color scale: Lock one stated range for comparisons across panels and times, with changes labelled and out-of-range ticks dropped.
+- Map hover link: See the hovered value marked on the color bar with its native grid resolution beside the rendered smoothness.
+- Station labels: Progress from protected markers to station IDs and local names while selected, hovered, and pinned labels remain visible.
+- Overlapping markers: Choose any coincident station, report, observation, or loaded profile instead of receiving only the topmost point.
+- Storm reports: Filter tornado, hail, wind, or significant reports over ±1/3/6/12-hour event windows with source time, units, report source, and supplied office preserved. Keep hazard symbols small and fixed in screen pixels; show only a few compact values at close zoom while clicks retain full details.
+- Surface observations: Distinguish calm, missing speed, missing direction, stale, checked-no-observation, query-failed, and not-queried coverage.
+- Loaded profile map: Show every open geolocated profile with observed, model/reanalysis, or imported shapes, a marker key, valid time, and synchronized focus.
+- Field crosshair: Hover one field panel to read the same location in every panel, each with its own value, units, valid time, and unavailable state.
+- Crosshair painting: Draw cursor guides in a lightweight overlay and reuse the unchanged map frame so pointer movement does not redraw four full panels.
+- Field selection: Search every field by name, abbreviation, or alias; category switches return to the last product used in that group; swap or reorder panels without repacking slots.
+- Field maximise: Fill the grid with one panel while hidden panels keep their fields without fetching; restore returns the same comparison, extent, and locks.
+- Field presets: Apply named storm, tornado, hail, wind, or surface combinations; loading panels keep their slot with the field plus the pinned run/hour.
+- Field sessions: Restore count, products, preset, and per-category memory without replaying fetched frames.
+- Sounding locator: Choose Follow main map or a pinned Local, Regional, selected-area, or custom extent, with requested/sampled points, scale, attribution, and actual overlay provenance kept consistent across inset, inspection, session, and export.
+- Map responsiveness: Reuse numeric hover grids without a full-frame cast, bound and share expensive reprojection maps, coalesce identical panel field work, and cap superseded field workers while keeping only the latest request eligible to publish.
+- Map pan and zoom performance: Reuse cached basemap and imagery during gesture previews, then render the settled view; avoid rebuilding labels and boundaries on cursor-only updates.
+- Python source layout: Split large production modules into focused analysis, maps, models, providers, state, rendering, and UI packages; retain established import paths through compatibility modules.
+- Field recovery: Keep the prior run/valid-labelled image through refresh, offline, no-data, failure, and cancellation; distinguish every condition from outside-domain and provide panel-local Cancel/Retry actions without disturbing sibling fields or map context.
+- Collapsed summaries: Read a collapsed card's summary on its header tooltip as well as its summary line.
+- Timeline playback: Choose a speed, loop part of a run, and jump to an exact valid time.
+- Timeline coverage: See every hour you asked for, and what happened to each one.
+- Trend tracks: Stack several diagnostics, each with its own units and scale.
+- Trend ranges: Fix the value ranges so successive updates stay comparable.
+- Local time: Read the local equivalent beside UTC, with zone, offset, and daylight saving.
+- Newer runs: Be told when a newer run publishes, and load it only when you choose.
+- Ensemble coverage: Reconcile requested, loaded, usable, qualifying, and excluded counts.
+- Threshold controls: Fit stacked fields and actions in narrow enlarged-text panels.
+- Acquisition scope: Read exact cycles and members in scrolling controls.
+
+### Removed
+
+- Analysis workspace: Remove the Scenarios, Verification, Observed winds, Case replay, and Notes pages, their dedicated implementations, and their saved workspace state. Older tab selections restore to a remaining page.
+- Report export: Removed the HTML/PDF generator, Report page, saved report state,
+  report-specific tests and validation, and its future roadmap work. Fixed-scale
+  GIF export remains available on the Animation page.
+
+### Fixed
+
+- Storm report loading: Keep request failures distinct from quiet report windows, and filter fetched hazards locally so an unreliable provider-side type filter cannot hide available reports.
+- Map time clutter: Show the live UTC clock once, combine identical run and
+  valid times, omit repeated same-day dates from observation/retrieval details,
+  and reserve legend match prose for offsets and warnings instead of repeating
+  exact coverage dates.
+- Station-map zoom: Spread town names across the whole viewport instead of
+  exhausting the label cap along the top and bottom edges, and index only the
+  visible place cells so zooming and hovering no longer rescan the full Census
+  catalogue.
+- Map label overlap: Reserve complete town and protected-station text bounds,
+  rather than only their anchor points, before placing another label; separate
+  clustered selected, hovered, and pinned station names with short leader lines.
+- Map legend hover: Keep a selected bottom-right overlay key fixed on pointer
+  movement, migrate the old overlapping top-left preference, and draw a quiet
+  backing card so map lines and labels cannot run through its text.
+- Map color bars: Fit tick labels to the available bar width across field palettes so ranges remain readable without overlapping labels.
+- Enlarged map text: Measure legend and header rows from the active font,
+  collapse keys that would consume the map, keep coordinate, time, and
+  inspection cards apart, and remove the stray horizontal job scrollbar below
+  Load sounding.
+- Controls guide: Name Inspect/Edit and their shortcuts before describing any
+  mutation gesture, so Help no longer implies that a drag edits in safe Inspect
+  mode.
+- Ordinary soundings: Keep unnamed upstream profiles out of ensemble accounting.
+- Layout fixes: Keep controls readable at large text sizes and in small windows.
+- Hidden map layers: Restore the scale bar and label layout on the first layer-free frame instead of reusing the previous legend box for one paint.
+- Missing winds: Exclude missing measurements from sounding calculations.
+- Load checks: Stop loads with missing forecast times or future ERA5 dates.
+- Polar points: Preserve selected latitudes at the poles.
+- Reference identity: Keep the same baseline after profile removal.
+- Resized edits: Grab the temperature curve at the level it appears after a resize.
+- Restored wind edits: Keep comparing wind after an undo or redo.
+- Analysis width: Stop the analysis tab row from holding its dock open at full width.
+- Layout action: Keep its title-bar label readable at large text sizes.
+- Chart slot labels: Shorten long slot titles and legends instead of cutting them off or overlapping.
+- Chart height: Keep comparison charts readable when interface text is enlarged.
+- Empty comparison slots: Collapse them to their explanation instead of reserving a chart's height.
+- Off-screen windows: Recover floating analysis after monitor or scale changes.
+- Mixed-unit scales: Stop a large wind difference from flattening a temperature difference.
+- Comparison labels: Thin out height ticks and elide slot titles instead of clipping them.
+- Comparison axes: Keep enlarged labels apart and traces inside their plot.
+- Empty differences: State why two profiles produced no comparable levels.
+- Ensemble refresh: Clear threshold results when the source ensemble changes.
+- Threshold tables: Keep result rows visible at enlarged text sizes.
+- Member retries: Fill missing valid-time profiles without overwriting working data.
+- Threshold cancel races: Ignore complete results queued before cancellation.
+- Observed cancel races: Ignore reports queued after cancellation is requested.
+- Reanalysis cancel races: Ignore ERA5 and WRF reports queued after cancellation.
+- Box cancel races: Ignore box results queued after cancellation is requested.
+- Cache search and sorting: Find cached hours by model, run, member, or scope, and sort sizes, hours, and dates by value.
+- Location sorting: Sort saved locations by name or true coordinate value.
+- Cache cleanup previews: State entry size and total count with bytes before deleting.
+- Cache storage summary: Show total cached hours with bytes and per-entry reuse detail.
+- Batch cache delete: Remove every highlighted entry after one count-with-bytes check.
+- Session save state: Show unsaved changes, save path, and save time in the viewer.
+- Location favorites: Star frequently used points and filter to favorites only.
+- Location groups: Organize, search, filter, sort, import, and export named points without losing legacy files.
+- Recovery snapshots: Keep bounded automatic workspace copies under rendered_soundings/recovery and restore one only after an explicit intelligible summary.
+- Map navigation click contract: End a pan over a station or point without selecting it; open the context menu only on a genuine right-click.
+- Map hovers: Name the pan, zoom, history, and context-menu gestures on the map and marker tooltips.
+- Map tool/inspect states: Keep sticky box mode and the Draw-box tool in agreement when toggled from either side; keep rail tool and history buttons refreshing together on one repaint hook; keep panel maps flat while still answering tool choices.
+- Map layer states: Paint vector overlays in a determined order (surface, reports, outlook); re-wrap attached frames when a remembered opacity is applied; keep per-half satellite/surface session slots beside the legacy context slot.
 
 ## [1.3.0] - 2026-09-15
 
@@ -19,12 +219,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dewpoint grids reuse the existing calculation backend and retain completed
   cells when cancelled.
 
-- **Self-contained briefing and animation exports.** The new *Share* workspace
-  writes HTML and PDF briefings with selected soundings, map context,
-  comparison/trend values, notes, timestamps, attribution, scenario labels, and
-  ensemble coverage. Forecast-timeline and exact-valid-time run-to-run GIFs
-  provide frame selection, fixed scales, playback speed, progress, cancellation,
-  visible timestamps, and explicit missing-frame cards.
+- **Fixed-scale animation exports.** The *Animation* workspace provides
+  forecast-timeline and exact-valid-time run-to-run GIFs with frame selection,
+  fixed scales, playback speed, progress, cancellation, visible timestamps, and
+  explicit missing-frame cards.
 
 - **Forecast verification and observed-wind workflows.** *Verify* strictly pairs
   forecasts and observations by station/location, valid time, initialization,
@@ -55,7 +253,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   surface dewpoint/wind observations. The overlays disclose actual selected
   timestamps, resolution, coverage, freshness, units, source attribution, and
   decluttering, remain optional when providers fail, and can travel into
-  briefings and portable cases.
+  portable cases.
 
 - **Synchronized HRRR field panels.** A new *Field Panels* source shows two or
   four maps side by side, each choosing a field by group and name, sharing one
@@ -111,7 +309,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **All new persistence and export actions follow the existing application-local
   folder contract.** Scenario, verification, observed-wind, ensemble,
-  comparison, briefing, animation, and case dialogs default to
+  comparison, animation, and case dialogs default to
   `rendered_soundings`; temporary files remain managed separately, explicit
   one-off destinations do not change the next default, and write failures name
   the actual destination.
@@ -2864,3 +3062,4 @@ state so only the palette changes.
   loading, HRRR Zarr decoding, cancellation, and background prefetch.
 - Updated the README, usage guide, and installation notes with CDS account,
   dataset-licence, `.cdsapirc`, and optional-dependency setup instructions.
+- Analysis queue: Release Refresh when another analysis replaces queued work.

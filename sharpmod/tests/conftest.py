@@ -32,6 +32,15 @@ os.environ.setdefault("SHARPMOD_OUTLOOK_CACHE", "off")
 import pytest
 from hypothesis import HealthCheck, is_hypothesis_test, settings
 
+try:
+    # Initialize before parallel xarray/MetPy imports when map dependencies
+    # are installed. The lean Rust quality environment omits this optional
+    # test dependency, so collection must still work there.
+    import pyproj  # noqa: F401
+except ModuleNotFoundError as exc:
+    if exc.name != "pyproj":
+        raise
+
 #: Full correctness and short feedback profile sizes.
 FULL_MAX_EXAMPLES = 100
 FAST_MAX_EXAMPLES = 10
@@ -89,7 +98,9 @@ def standard_qt_app(qt_app):
     standard = gui_theme.theme_for_color_style("standard")
     if (
         not gui_theme.theme_is_applied()
-        or gui_theme.current_theme().name != standard.name
+        or gui_theme.current_theme() != standard
+        or gui_theme.current_text_scale() != 100
+        or gui_theme.current_density() != "comfortable"
         or not qt_app.styleSheet()
     ):
         gui_theme.apply_theme(qt_app, theme=standard)
@@ -131,6 +142,8 @@ def _isolate_qt_override_cursor(request):
                 app.restoreOverrideCursor()
 
     clear_override_cursor()
+    app = QtWidgets.QApplication.instance()
+    prior_windows = set(app.topLevelWidgets()) if app is not None else set()
     yield
     clear_override_cursor()
     app = QtWidgets.QApplication.instance()
@@ -143,6 +156,22 @@ def _isolate_qt_override_cursor(request):
             None, QtCore.QEvent.Type.DeferredDelete
         )
         app.processEvents()
+        # Tests also create parentless windows and controller controls that
+        # close() merely hides. Remove only new, hidden roots so they cannot
+        # accumulate and slow every subsequent application-wide theme change.
+        for widget in app.topLevelWidgets():
+            try:
+                if (
+                    widget not in prior_windows
+                    and widget.parent() is None
+                    and not widget.isVisible()
+                ):
+                    widget.deleteLater()
+            except RuntimeError:
+                continue  # Qt destroyed it while queued events were drained.
+        QtCore.QCoreApplication.sendPostedEvents(
+            None, QtCore.QEvent.Type.DeferredDelete
+        )
 
 
 def pytest_collection_modifyitems(items):

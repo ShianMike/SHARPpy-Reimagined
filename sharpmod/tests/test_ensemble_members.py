@@ -47,6 +47,10 @@ def test_batch_ledger_distinguishes_loaded_failed_cancelled_and_unknown():
         "p03",
     ]
     assert ledger.failure_for("p01").reason == "HTTP 503"
+    assert [item["member"] for item in ledger.specs_for_members(("p02", "c00"))] == [
+        "c00",
+        "p02",
+    ]
 
 
 def test_ledger_rejects_loaded_member_outside_original_request():
@@ -61,3 +65,16 @@ def test_member_cannot_be_loaded_and_failed():
             ("c00",),
             (MemberFailure("c00", "failed"),),
         )
+
+
+def test_upstream_unnamed_ordinary_profile_is_not_an_ensemble_request():
+    collection = SimpleNamespace(_profs={"": [object()]}, _meta={})
+    ledger = EnsembleAcquisition.from_collection(collection)
+
+    assert ledger.requested_count == ledger.loaded_count == 0
+    assert not ledger.failures
+    assert collection._meta == {}
+
+    collection._meta["ensemble"] = True
+    with pytest.raises(ValueError, match="non-empty"):
+        EnsembleAcquisition.from_collection(collection)

@@ -19,7 +19,8 @@ import threading
 from typing import Any
 import zipfile
 
-from sharpmod import colors
+from sharpmod.viz import colors
+from sharpmod.maps import locator_presentation
 
 
 _MAP_FILL = "#05090b"
@@ -93,6 +94,31 @@ def point_from_widget(widget: Any) -> tuple[float, float] | None:
         return None
     if not -90.0 <= lat <= 90.0 or not -180.0 <= lon <= 180.0:
         return None
+    return lat, lon
+
+
+def requested_point_from_widget(widget: Any) -> tuple[float, float] | None:
+    """Return a distinct requested point when a source snapped to another one.
+
+    Point-model and reanalysis sources retain both ``requested_lat/lon`` and
+    the selected grid coordinate in ``lat/lon``.  Showing only the latter makes
+    a locator look as though the user requested a place they did not.  A request
+    indistinguishable at map precision is omitted so observed soundings and
+    exact grid hits keep one unambiguous marker.
+    """
+
+    lat = _as_float(_collection_meta(widget, "requested_lat"))
+    lon = _as_float(_collection_meta(widget, "requested_lon"))
+    if lat is None or lon is None:
+        return None
+    if not -90.0 <= lat <= 90.0 or not -180.0 <= lon <= 180.0:
+        return None
+    selected = point_from_widget(widget)
+    if selected is not None:
+        selected_lat, selected_lon = selected
+        delta_lon = ((lon - selected_lon + 180.0) % 360.0) - 180.0
+        if abs(lat - selected_lat) < 1.0e-4 and abs(delta_lon) < 1.0e-4:
+            return None
     return lat, lon
 
 
@@ -220,7 +246,7 @@ def overlay_layers_for_widget(widget: Any) -> tuple[Any, ...]:
     except (AttributeError, IndexError, TypeError):
         return ()
     try:
-        from sharpmod.map_overlays import locator_overlays, overlays_covering
+        from sharpmod.maps.map_overlays import locator_overlays, overlays_covering
         layers = locator_overlays(collection)
         if not layers:
             return ()
@@ -242,7 +268,7 @@ def overlay_rasters_for_widget(widget: Any) -> tuple[Any, ...]:
     except (AttributeError, IndexError, TypeError):
         return ()
     try:
-        from sharpmod.map_overlays import locator_rasters
+        from sharpmod.maps.map_overlays import locator_rasters
         rasters = locator_rasters(collection)
         if not rasters:
             return ()
@@ -355,7 +381,7 @@ def raster_chip_text(raster: Any) -> str:
             # product so a stale setting still selects something. That is right
             # for choosing a field and wrong for naming one: it would label an
             # unrecognised raster "REFC", which is worse than not labelling it.
-            from sharpmod.hrrr_products import PRODUCTS
+            from sharpmod.providers.hrrr_products import PRODUCTS
             product = PRODUCTS.get(key)
             if product is not None and product.short_label:
                 return product.short_label
@@ -365,89 +391,8 @@ def raster_chip_text(raster: Any) -> str:
     return str(getattr(raster, "title", "") or "").strip()
 
 
-def _draw_field_chip(painter, text, rect, fill, border, qtcore, qtgui) -> None:
-    """Name the attached field in the inset's bottom-right corner.
-
-    Bottom *right* because the outlook category chip already owns bottom-left and
-    the two can be showing at once -- the field is the airmass and the outlook is
-    a judgement about it, so a reader wants both at the same time.
-
-    Styled from the locator's own frame colours rather than the field's palette:
-    the chip says which quantity is drawn, and giving it a colour from that
-    quantity's own scale would read as a value.
-    """
-    if not text:
-        return
-    font = qtgui.QFont("Helvetica", 7)
-    font.setBold(True)
-    painter.setFont(font)
-    metrics = qtgui.QFontMetrics(font)
-    padding = 3.0
-    # Half the inset at most: the chip names the field, it does not become the
-    # inset. Elided rather than overflowing, so a long name loses its tail
-    # instead of running off the frame or over the outlook chip.
-    room = max(18.0, rect.width() / 2.0 - 6.0)
-    shown = metrics.elidedText(text, qtcore.Qt.ElideRight,
-                               int(room - padding * 2.0))
-    width = metrics.horizontalAdvance(shown) + padding * 2.0
-    height = metrics.height() + 1.0
-    chip = qtcore.QRectF(
-        rect.right() - width - 4.0,
-        rect.bottom() - height - 4.0,
-        width,
-        height,
-    )
-    background = qtgui.QColor(fill)
-    if not background.isValid():
-        return
-    background.setAlpha(235)
-    painter.setBrush(qtgui.QBrush(background))
-    edge = qtgui.QColor(border)
-    painter.setPen(qtgui.QPen(edge if edge.isValid() else background, 1.0))
-    painter.drawRect(chip)
-    painter.setPen(qtgui.QPen(
-        qtgui.QColor("#000000") if background.lightnessF() >= 0.5
-        else qtgui.QColor("#FFFFFF")))
-    painter.drawText(chip, qtcore.Qt.AlignCenter, shown)
 
 
-def _draw_overlay_rasters(painter, rasters, rect, bounds, qtcore, qtgui) -> None:
-    """Blit each attached field image into the inset.
-
-    Drawn beneath every line and the marker: the field is areal context and the
-    geography locating the point has to stay readable through it.
-    """
-    for raster in rasters:
-        payload = getattr(raster, "image_bytes", None)
-        if not payload:
-            continue
-        image = qtgui.QImage()
-        if not image.loadFromData(payload):
-            continue
-        rects = raster_draw_rects(
-            raster, bounds, image.width(), image.height(), rect)
-        if rects is None:
-            continue
-        source, destination = rects
-        opacity = getattr(raster, "opacity", 1.0)
-        try:
-            opacity = min(1.0, max(0.0, float(opacity)))
-        except (TypeError, ValueError):
-            opacity = 1.0
-        painter.save()
-        try:
-            painter.setOpacity(opacity)
-            # Smooth, because the inset magnifies about two source pixels per
-            # degree into a hundred: nearest-neighbour would show the field's own
-            # grid as blocks and invite reading them as structure.
-            painter.setRenderHint(qtgui.QPainter.SmoothPixmapTransform, True)
-            painter.drawImage(
-                qtcore.QRectF(*destination),
-                image,
-                qtcore.QRectF(*source),
-            )
-        finally:
-            painter.restore()
 
 
 def overlay_label_at_point(
@@ -462,13 +407,15 @@ def overlay_label_at_point(
     sounding's own position is the part that actually reports the risk.
     """
     try:
-        from sharpmod.map_overlays import shape_at
+        from sharpmod.maps.map_overlays import shape_at
         # The graded band, not the hatched qualifier drawn over it: the
         # significant-severe area outranks every band so that it paints on top,
         # and answering with it would report "SIGN" while discarding the
         # probability the point actually sits in.
-        shape = shape_at(layers, lon, lat, hatch=False)
-        qualifier = shape_at(layers, lon, lat, hatch=True)
+        # The badge names an area category. Report points have their own fixed
+        # pixel symbols and must not turn the outlook badge into a report label.
+        shape = shape_at(layers, lon, lat, hatch=False, marker=False)
+        qualifier = shape_at(layers, lon, lat, hatch=True, marker=False)
     except Exception:  # noqa: BLE001 - never break the render for a label
         return None
     if shape is None or not shape.label:
@@ -494,41 +441,6 @@ def overlay_label_at_point(
     return text, shape.stroke, (shape.fill or shape.stroke)
 
 
-def _draw_overlay_badge(
-        painter: Any,
-        label: tuple[str, str, str],
-        rect: Any,
-        qtcore: Any,
-        qtgui: Any) -> None:
-    """Draw a small chip naming the risk category at the sounding's point."""
-    text, stroke, fill = label
-    font = qtgui.QFont("Helvetica", 7)
-    font.setBold(True)
-    painter.setFont(font)
-    metrics = qtgui.QFontMetrics(font)
-    padding = 3.0
-    width = metrics.horizontalAdvance(text) + padding * 2.0
-    height = metrics.height() + 1.0
-    chip = qtcore.QRectF(
-        rect.left() + 4.0,
-        rect.bottom() - height - 4.0,
-        width,
-        height,
-    )
-    background = qtgui.QColor(fill)
-    if not background.isValid():
-        return
-    background.setAlpha(235)
-    painter.setBrush(qtgui.QBrush(background))
-    edge = qtgui.QColor(stroke)
-    painter.setPen(qtgui.QPen(edge if edge.isValid() else background, 1.0))
-    painter.drawRect(chip)
-    # Chosen against the chip's own fill rather than the map background, since
-    # the chip is opaque and the categories run from pale green to deep magenta.
-    painter.setPen(qtgui.QPen(
-        qtgui.QColor("#000000") if background.lightnessF() >= 0.5
-        else qtgui.QColor("#FFFFFF")))
-    painter.drawText(chip, qtcore.Qt.AlignCenter, text)
 
 
 def _hatch_brush(qtcore: Any, qtgui: Any, colour: Any, level: int) -> Any:
@@ -538,77 +450,12 @@ def _hatch_brush(qtcore: Any, qtgui: Any, colour: Any, level: int) -> Any:
     is a paint path, and an overlay detail is never worth failing a render for.
     """
     try:
-        from sharpmod.overlay_hatch import hatch_brush
+        from sharpmod.maps.overlay_hatch import hatch_brush
     except Exception:  # noqa: BLE001 - keep painting without the graded form
         return qtgui.QBrush(colour, qtcore.Qt.BDiagPattern)
     return hatch_brush(qtcore, qtgui, colour, level)
 
 
-def _draw_overlay_layers(
-        painter: Any,
-        layers: tuple[Any, ...],
-        rect: Any,
-        bounds: tuple[float, float, float, float],
-        qtcore: Any,
-        qtgui: Any) -> None:
-    """Fill and outline overlay polygons inside the locator's interior.
-
-    Shapes whose own bounding box misses the view are skipped: the inset spans
-    well under two degrees while a convective outlook spans the continent, so
-    almost every shape in a layer is irrelevant to a given sounding.
-    """
-    west, south, east, north = bounds
-    for layer in layers:
-        for shape in getattr(layer, "shapes", ()):
-            try:
-                min_lon, max_lon, min_lat, max_lat = shape.bounds
-            except (AttributeError, TypeError, ValueError):
-                continue
-            if max_lon < west or min_lon > east \
-                    or max_lat < south or min_lat > north:
-                continue
-
-            path = qtgui.QPainterPath()
-            # Odd-even filling makes an interior ring a hole whichever way it is
-            # wound, which is what keeps each risk category filled exactly once.
-            path.setFillRule(qtcore.Qt.OddEvenFill)
-            for ring in shape.rings:
-                if len(ring) < 3:
-                    continue
-                started = False
-                for ring_lon, ring_lat in ring:
-                    x, y = _map_point(rect, bounds, ring_lat, ring_lon)
-                    if started:
-                        path.lineTo(x, y)
-                    else:
-                        path.moveTo(x, y)
-                        started = True
-                if started:
-                    path.closeSubpath()
-            if path.isEmpty():
-                continue
-
-            fill = getattr(shape, "fill", None)
-            if fill:
-                colour = qtgui.QColor(fill)
-                if colour.isValid():
-                    if getattr(shape, "hatch", False):
-                        colour.setAlpha(_OVERLAY_HATCH_ALPHA)
-                        painter.fillPath(path, _hatch_brush(
-                            qtcore, qtgui, colour,
-                            getattr(shape, "hatch_level", 0)))
-                    else:
-                        colour.setAlpha(
-                            _OVERLAY_MARKER_FILL_ALPHA
-                            if getattr(shape, "marker", False)
-                            else _OVERLAY_FILL_ALPHA)
-                        painter.fillPath(path, qtgui.QBrush(colour))
-            stroke = getattr(shape, "stroke", None)
-            if stroke:
-                colour = qtgui.QColor(stroke)
-                if colour.isValid():
-                    painter.strokePath(path, qtgui.QPen(
-                        colour, _OVERLAY_STROKE_WIDTH))
 
 
 #: Half-height of the locator's geographic extent, in degrees of latitude, so
@@ -628,16 +475,16 @@ def _draw_overlay_layers(
 #: it, with very little to spare. Going further is a deliberate decision to
 #: widen that contract, and past roughly 1.4 the fixed-size marker grows
 #: comparable to the county it sits in and starts hiding the thing it points at.
-LOCATOR_HALF_LAT_DEGREES = 0.98
+LOCATOR_HALF_LAT_DEGREES = locator_presentation.LOCAL_HALF_LAT_DEGREES
 
 #: Longitude is widened by this before the cosine-of-latitude correction, so the
 #: extent matches the inset's landscape aspect and reads as near-square.
-LOCATOR_LON_ASPECT = 1.35
+LOCATOR_LON_ASPECT = locator_presentation.LON_ASPECT
 
 #: Room left around an averaged area's outline, as a multiplier on the distance
 #: from the sounding to the furthest edge of that area. Enough that the rectangle
 #: reads as sitting inside a region rather than being cropped by the frame.
-LOCATOR_BOX_MARGIN = 1.18
+LOCATOR_BOX_MARGIN = locator_presentation.AREA_MARGIN
 
 #: Ceiling on the box-driven zoom-out, in degrees of latitude. This is the one
 #: sanctioned way past :data:`LOCATOR_HALF_LAT_DEGREES`: an averaged area has to
@@ -677,6 +524,36 @@ def zoom_bounds(
         half_lat = min(half_lat, LOCATOR_MAX_HALF_LAT_DEGREES)
     half_lon = half_lat * LOCATOR_LON_ASPECT / cos_lat
     return lon - half_lon, lat - half_lat, lon + half_lon, lat + half_lat
+
+
+def presentation_from_widget(widget: Any) -> locator_presentation.LocatorPresentation:
+    """Return the focused collection's portable locator presentation."""
+
+    try:
+        collection = widget.prof_collections[widget.pc_idx]
+    except (AttributeError, IndexError, TypeError):
+        return locator_presentation.LocatorPresentation()
+    return locator_presentation.collection_presentation(collection)
+
+
+def bounds_from_widget(widget: Any) -> tuple[float, float, float, float] | None:
+    """Resolve the extent shared by inset, expanded view, and PNG export."""
+
+    point = point_from_widget(widget)
+    if point is None:
+        return None
+    try:
+        represented_area = box_from_widget(widget)
+    except Exception:  # noqa: BLE001 - bad metadata falls back to a point
+        represented_area = None
+    presentation = presentation_from_widget(widget)
+    try:
+        return presentation.effective_bounds(
+            point, represented_area=represented_area)
+    except (TypeError, ValueError, OverflowError):
+        # Preserve the pre-T25 renderer as a total fallback for old or damaged
+        # collection metadata.
+        return zoom_bounds(point[0], point[1], represented_area)
 
 
 def county_features_for_point(lat: float, lon: float) -> tuple[dict[str, Any], ...]:
@@ -905,7 +782,106 @@ def _rings(geometry: Any):
                 yield ring
 
 
+_GEOGRAPHY_ATTRIBUTION = "U.S. Census Bureau boundaries"
+
+
+def _format_utc(value: Any) -> str:
+    if not isinstance(value, datetime):
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.strftime("%Y-%m-%d %H:%MZ")
+
+
+def _overlay_actual_time(entry: Any) -> tuple[datetime | None, str]:
+    actual_times = tuple(getattr(entry, "actual_times", ()) or ())
+    actual_times = tuple(item for item in actual_times if isinstance(item, datetime))
+    if actual_times:
+        return max(actual_times), "observed"
+    for key, basis in (
+            ("valid_time", "valid"),
+            ("valid_from", "valid from"),
+            ("issued", "issued"),
+            ("retrieved_at", "retrieved")):
+        value = getattr(entry, key, None)
+        if isinstance(value, datetime):
+            return value, basis
+        if isinstance(entry, dict) and isinstance(entry.get(key), datetime):
+            return entry[key], basis
+    return None, ""
+
+
+def overlay_timing_text(context: dict[str, Any]) -> str:
+    """Name the provider timestamp's meaning instead of guessing validity."""
+
+    stamp = _format_utc(context.get("actual_time"))
+    if not stamp:
+        return ""
+    basis = str(context.get("time_basis") or "valid")
+    if basis == "retrieved":
+        return f"retrieved {stamp}"
+    return f"actual {basis} {stamp}"
+
+
+
+
+def _scale_bar_spec(bounds, width_px: float) -> tuple[float, str, float] | None:
+    """Return ``(pixel_width, label, km)`` for the current locator extent."""
+
+    try:
+        from sharpmod.maps.map_geography import (
+            format_scale_length,
+            km_per_pixel_at_latitude,
+            pick_scale_length,
+        )
+
+        west, south, east, north = bounds
+        latitude = (south + north) / 2.0
+        km_per_px = km_per_pixel_at_latitude(
+            east - west, max(1.0, float(width_px)), latitude)
+        km, pixel_width, _unit = pick_scale_length(
+            km_per_px, target_px=min(90.0, width_px * 0.3))
+        if not math.isfinite(km_per_px) or km_per_px <= 0.0 or km <= 0.0:
+            return None
+        return (pixel_width, format_scale_length(km, "km"), km)
+    except Exception:  # noqa: BLE001 - scale context must not break the map
+        return None
+
+
+
+
+def _draw_mode_chip(painter, presentation, rect, fill, border, qtcore, qtgui):
+    text = (
+        "FOLLOW"
+        if presentation.link_mode == locator_presentation.LINK_FOLLOW
+        else locator_presentation.EXTENT_LABELS[presentation.extent_mode].upper()
+    )
+    font = qtgui.QFont("Helvetica", max(6, min(15, round(rect.width() / 100))))
+    font.setBold(True)
+    painter.setFont(font)
+    metrics = qtgui.QFontMetrics(font)
+    width = metrics.horizontalAdvance(text) + 8.0
+    chip = qtcore.QRectF(
+        rect.right() - width - 4.0, rect.top() + 3.0, width, metrics.height() + 1.0)
+    background = qtgui.QColor(fill)
+    background.setAlpha(225)
+    painter.fillRect(chip, background)
+    painter.setPen(qtgui.QPen(qtgui.QColor(border), 0.8))
+    painter.drawRect(chip)
+    painter.drawText(chip, qtcore.Qt.AlignCenter, text)
+
+
+
+
 def _inset_rect(widget: Any, qtcore: Any):
+    explicit = getattr(widget, "_sharpmod_locator_rect", None)
+    if explicit is not None:
+        try:
+            return qtcore.QRectF(explicit)
+        except (TypeError, ValueError):
+            pass
     bitmap = widget.plotBitMap
     # Share the hodograph's upper-left corner rather than floating inward.
     frame_left = int(getattr(widget, "tlx", 0)) + 1
@@ -933,264 +909,58 @@ def _map_point(rect: Any, bounds: tuple[float, float, float, float], lat: float,
     return x, y
 
 
-def _draw_global_lines(
-        painter: Any,
-        lines: tuple[tuple[tuple[float, float], ...], ...],
-        color: str,
-        width: float,
-        rect: Any,
-        bounds: tuple[float, float, float, float],
-        qtcore: Any,
-        qtgui: Any) -> None:
-    pen = qtgui.QPen(qtgui.QColor(color), width)
-    pen.setCosmetic(True)
-    painter.setPen(pen)
-    painter.setBrush(qtcore.Qt.NoBrush)
-    for line in lines:
-        path = qtgui.QPainterPath()
-        for index, (lon, lat) in enumerate(line):
-            x, y = _map_point(rect, bounds, lat, lon)
-            if index:
-                path.lineTo(x, y)
-            else:
-                path.moveTo(x, y)
-        painter.drawPath(path)
 
 
-def _draw_box_outline(
-        painter: Any,
-        box: tuple[float, float, float, float],
-        rect: Any,
-        bounds: tuple[float, float, float, float],
-        color: str,
-        qtcore: Any,
-        qtgui: Any) -> None:
-    """Outline the averaged area inside the locator.
 
-    Dashed and unfilled, in the marker's own colour: it has to read as the extent
-    the sounding represents without competing with the boundary linework or
-    hiding whatever overlay is washed underneath it.
-    """
-    west, south, east, north = box
-    top_left = _map_point(rect, bounds, north, west)
-    bottom_right = _map_point(rect, bounds, south, east)
-    outline = qtcore.QRectF(
-        qtcore.QPointF(*top_left), qtcore.QPointF(*bottom_right)).normalized()
-    pen = qtgui.QPen(qtgui.QColor(color), 1.3)
+
+def _marker_position(rect, bounds, lat: float, lon: float):
+    """Map a point, clamping an off-view point to a visible edge indicator."""
+
+    center = (bounds[0] + bounds[2]) / 2.0
+    lon = _longitude_near(lon, center)
+    x, y = _map_point(rect, bounds, lat, lon)
+    inside = rect.contains(x, y)
+    margin = 3.0
+    x = min(rect.right() - margin, max(rect.left() + margin, x))
+    y = min(rect.bottom() - margin, max(rect.top() + margin, y))
+    return x, y, inside
+
+
+def _draw_requested_point(
+        painter, point, rect, bounds, color, qtcore, qtgui) -> None:
+    """Draw the user's request as a diamond, distinct from the sampled crosshair."""
+
+    lat, lon = point
+    x, y, _inside = _marker_position(rect, bounds, lat, lon)
+    marker = qtgui.QColor(color)
+    pen = qtgui.QPen(marker, 1.1)
     pen.setCosmetic(True)
     pen.setStyle(qtcore.Qt.DashLine)
     painter.setPen(pen)
     painter.setBrush(qtcore.Qt.NoBrush)
-    painter.drawRect(outline)
+    diamond = qtgui.QPolygonF([
+        qtcore.QPointF(x, y - 5.0),
+        qtcore.QPointF(x + 5.0, y),
+        qtcore.QPointF(x, y + 5.0),
+        qtcore.QPointF(x - 5.0, y),
+    ])
+    painter.drawPolygon(diamond)
 
 
-def draw_hodo_locator(widget: Any) -> bool:
-    """Draw an offline worldwide locator and the selected sounding point."""
-    point = point_from_widget(widget)
-    if point is None or not hasattr(widget, "plotBitMap"):
-        return False
+from sharpmod.viz.hodo_overlay_drawing import (  # noqa: E402
+    _draw_field_chip,
+    _draw_overlay_rasters,
+    _draw_overlay_badge,
+    _draw_overlay_layers,
+    overlay_context_for_widget,
+    _draw_context_footer
+)
 
-    try:
-        from qtpy import QtCore, QtGui
-    except Exception:
-        return False
 
-    rect = locator_rect_for_widget(widget, QtCore)
-    if rect is None:
-        return False
-
-    lat, lon = point
-    location_name = location_name_from_widget(widget)
-    try:
-        box = box_from_widget(widget)
-    except Exception:  # noqa: BLE001 - never lose the locator to metadata
-        box = None
-    bounds = zoom_bounds(lat, lon, box)
-    try:
-        features = county_features_for_point(lat, lon)
-    except Exception:
-        features = ()
-    try:
-        county_lines = county_lines_for_bounds(bounds)
-    except Exception:
-        county_lines = ()
-    try:
-        global_layers = global_lines_for_bounds(bounds)
-    except Exception:
-        global_layers = {name: () for name in _GLOBAL_LAYER_NAMES}
-    overlay_layers = overlay_layers_for_widget(widget)
-    overlay_rasters = overlay_rasters_for_widget(widget)
-
-    bg_color = QtGui.QColor(getattr(widget, "bg_color", _MAP_FILL))
-    fg_color = QtGui.QColor(getattr(widget, "fg_color", _MAP_BORDER))
-    if not bg_color.isValid():
-        bg_color = QtGui.QColor(_MAP_FILL)
-    if not fg_color.isValid():
-        fg_color = QtGui.QColor(_MAP_BORDER)
-    if bg_color.lightnessF() >= 0.5:
-        background = bg_color.name()
-        foreground = fg_color.name()
-        semantic = colors.semantic_palette(background, foreground)
-        map_fill = background
-        map_border = foreground
-        state_outline = colors.resolve_theme_color(
-            _GLOBAL_STATE_OUTLINE, background, foreground, minimum=3.0)
-        country_outline = colors.resolve_theme_color(
-            _GLOBAL_COUNTRY_OUTLINE, background, foreground, minimum=3.0)
-        coastline = colors.resolve_theme_color(
-            _GLOBAL_COASTLINE, background, foreground, minimum=3.0)
-        county_outline = foreground
-        point_color = semantic["marker_yellow"]
-    else:
-        # Preserve the established standard/protanopia locator byte-for-byte.
-        map_fill = _MAP_FILL
-        map_border = _MAP_BORDER
-        state_outline = _GLOBAL_STATE_OUTLINE
-        country_outline = _GLOBAL_COUNTRY_OUTLINE
-        coastline = _GLOBAL_COASTLINE
-        county_outline = _COUNTY_OUTLINE
-        point_color = _POINT_COLOR
-
-    painter = QtGui.QPainter(widget.plotBitMap)
-    try:
-        painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
-        # A one-pixel antialiased rectangle on integer coordinates is split
-        # between two pixels, making the nominal white outline look gray. Fill
-        # the surface independently, then put the shared plot-frame stroke on
-        # half-pixel centers so it resolves to solid foreground white.
-        painter.fillRect(rect, QtGui.QBrush(QtGui.QColor(map_fill)))
-        # The locator is intentionally anchored in the hodograph's upper-left
-        # corner. Reuse the hodograph's crisp top/left frame there, and draw only
-        # the locator's right/bottom edges; drawing all four would make that
-        # shared corner two pixels thick.
-        map_frame = QtCore.QRectF(rect).adjusted(-0.5, -0.5, -0.5, -0.5)
-        painter.setPen(QtGui.QPen(
-            QtGui.QColor(map_border), colors.PLOT_FRAME_WIDTH))
-        painter.setBrush(QtCore.Qt.NoBrush)
-        painter.drawLine(map_frame.topRight(), map_frame.bottomRight())
-        painter.drawLine(map_frame.bottomRight(), map_frame.bottomLeft())
-
-        padding = 5.0
-        interior = rect.adjusted(padding, padding, -padding, -padding)
-        painter.save()
-        painter.setClipRect(interior)
-        # Overlays go under the boundary linework and the marker: they are areal
-        # context, and the point being analysed plus the geography locating it
-        # must stay readable through them. The gridded field goes under the
-        # vector overlays for the same reason it does on the picker map -- the
-        # field is the airmass and the risk area is a judgement about it.
-        try:
-            _draw_overlay_rasters(
-                painter, overlay_rasters, interior, bounds, QtCore, QtGui)
-        except Exception:  # noqa: BLE001 - never lose the locator to an overlay
-            pass
-        try:
-            _draw_overlay_layers(
-                painter, overlay_layers, interior, bounds, QtCore, QtGui)
-        except Exception:  # noqa: BLE001 - never lose the locator to an overlay
-            pass
-        _draw_global_lines(
-            painter, global_layers.get("states", ()),
-            state_outline, 0.8, interior, bounds, QtCore, QtGui)
-        _draw_global_lines(
-            painter, global_layers.get("countries", ()),
-            country_outline, 1.0, interior, bounds, QtCore, QtGui)
-        # A lake shore is the same kind of boundary as a coast, so it takes the
-        # same colour. Without this layer the Great Lakes are absent entirely and
-        # a sounding beside one has nothing to locate it against.
-        _draw_global_lines(
-            painter, global_layers.get("lakes", ()),
-            coastline, 0.95, interior, bounds, QtCore, QtGui)
-        _draw_global_lines(
-            painter, global_layers.get("coastline", ()),
-            coastline, 1.15, interior, bounds, QtCore, QtGui)
-        _draw_global_lines(
-            painter, county_lines,
-            county_outline, 0.75, interior, bounds, QtCore, QtGui)
-        county_pen = QtGui.QPen(QtGui.QColor(county_outline), 1.0)
-        county_pen.setCosmetic(True)
-        painter.setPen(county_pen)
-        painter.setBrush(QtCore.Qt.NoBrush)
-        for feature in features:
-            for ring in _rings(feature.get("geometry")):
-                if not isinstance(ring, list) or len(ring) < 2:
-                    continue
-                path = QtGui.QPainterPath()
-                started = False
-                for coordinate in ring:
-                    if not isinstance(coordinate, (list, tuple)) or len(coordinate) < 2:
-                        continue
-                    ring_lon = _as_float(coordinate[0])
-                    ring_lat = _as_float(coordinate[1])
-                    if ring_lat is None or ring_lon is None:
-                        continue
-                    x, y = _map_point(interior, bounds, ring_lat, ring_lon)
-                    if started:
-                        path.lineTo(x, y)
-                    else:
-                        path.moveTo(x, y)
-                        started = True
-                if started:
-                    painter.drawPath(path)
-
-        if box is not None:
-            # An averaged sounding has no single point, so the outline replaces
-            # the marker rather than joining it. Drawing both would assert a
-            # location the numbers do not have -- the crosshair would name the
-            # box's centre as the place this sounding came from.
-            try:
-                _draw_box_outline(
-                    painter, box, interior, bounds, point_color,
-                    QtCore, QtGui)
-            except Exception:  # noqa: BLE001 - never lose the locator to this
-                pass
-        else:
-            point_x, point_y = _map_point(interior, bounds, lat, lon)
-            marker = QtGui.QColor(point_color)
-            painter.setPen(QtGui.QPen(marker, 1.4))
-            painter.setBrush(QtGui.QBrush(QtGui.QColor(map_fill)))
-            painter.drawEllipse(QtCore.QPointF(point_x, point_y), 4.0, 4.0)
-            painter.drawLine(point_x - 7.0, point_y, point_x + 7.0, point_y)
-            painter.drawLine(point_x, point_y - 7.0, point_x, point_y + 7.0)
-        painter.restore()
-        if overlay_layers:
-            badge = overlay_label_at_point(overlay_layers, lat, lon)
-            if badge is not None:
-                try:
-                    _draw_overlay_badge(painter, badge, rect, QtCore, QtGui)
-                except Exception:  # noqa: BLE001
-                    pass
-        if overlay_rasters:
-            # Whichever field is drawn last is the one on top, so that is the one
-            # the chip has to name.
-            try:
-                _draw_field_chip(
-                    painter, raster_chip_text(overlay_rasters[-1]), rect,
-                    map_fill, map_border, QtCore, QtGui)
-            except Exception:  # noqa: BLE001 - never lose the locator to a label
-                pass
-        if location_name:
-            font = QtGui.QFont("Helvetica", 8)
-            font.setBold(True)
-            painter.setFont(font)
-            metrics = QtGui.QFontMetrics(font)
-            title = metrics.elidedText(
-                location_name,
-                QtCore.Qt.ElideRight,
-                max(1, int(rect.width()) - 12),
-            )
-            title_rect = QtCore.QRectF(
-                rect.left() + 4.0,
-                rect.top() + 3.0,
-                rect.width() - 8.0,
-                metrics.height() + 3.0,
-            )
-            title_background = QtGui.QColor(map_fill)
-            title_background.setAlpha(220)
-            painter.fillRect(title_rect, title_background)
-            painter.setPen(QtGui.QPen(QtGui.QColor(map_border), 1.0))
-            painter.drawText(
-                title_rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, title)
-        return True
-    finally:
-        painter.end()
+from sharpmod.viz.hodo_render import (  # noqa: E402
+    _draw_scale_bar,
+    _draw_global_lines,
+    _draw_box_outline,
+    draw_hodo_locator,
+    render_locator_pixmap
+)

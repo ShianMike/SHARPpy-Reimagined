@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from qtpy import QtGui, QtCore, QtWidgets
 
-from sharpmod import colors
+from sharpmod.viz import colors
 from sharpmod.sharptab.constants import is_missing
 
 __all__ = ["plotSHIP", "SHIP_SCALE_MIN", "SHIP_SCALE_MAX"]
@@ -137,7 +137,7 @@ class plotSHIP(QtWidgets.QFrame):
         Mirrors the vendored inset ``setPreferences`` contract so this inset is
         driven by the same Color-Scheme re-apply path as the other panels. The
         redraw recomputes the SHIP tier color from the *current* value via
-        :func:`sharpmod.colors.ship_color` (Requirement 22.5) -- no stale color
+        :func:`sharpmod.viz.colors.ship_color` (Requirement 22.5) -- no stale color
         is retained across a re-apply.
         """
         if "bg_color" in prefs:

@@ -6,7 +6,7 @@ red/orange/yellow/green/cyan down to white for calm) instead of a single flat
 color. The vendored ``sharppy.viz.skew``
 imports ``drawBarb`` from ``sharppy.viz.barbs``; the renderer monkeypatches that
 reference to this :func:`drawBarb` so the skew-T wind profile uses the table
-(see ``sharpmod.render._install_custom_barbs``).
+(see ``sharpmod.rendering.cli._install_custom_barbs``).
 """
 
 from __future__ import annotations

@@ -8,7 +8,7 @@ on:
       - "rust/sharpmod-rs/**"
       - "sharpmod/_version.py"
       - "sharpmod/backends/**"
-      - "sharpmod/model_transport.py"
+      - "sharpmod/models/model_transport.py"
       - "sharpmod/sharptab/interp.py"
       - "sharpmod/sharptab/profile.py"
       - "sharpmod/tools/era5_extract.py"

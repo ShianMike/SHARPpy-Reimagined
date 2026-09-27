@@ -38,7 +38,8 @@ def test_dry_run_describes_the_plan_without_downloading(capsys):
     out = capsys.readouterr().out
     assert "HRRR" in out
     assert "Lattice" in out
-    assert "Downloads  1" in out
+    assert "Est. work" in out
+    assert "about 1 model-hour data transfer" in out
 
 
 def test_dry_run_honours_a_target_point_count(capsys):

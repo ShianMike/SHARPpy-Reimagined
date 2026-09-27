@@ -351,9 +351,14 @@ class _RecordingField:
 
 
 def _sync_owner(field, model_key):
+    inspection_syncs = []
     return SimpleNamespace(
         _model_field=field,
-        _model_config=lambda: SimpleNamespace(key=model_key),
+        _model_config=lambda: (
+            SimpleNamespace(key=model_key) if model_key is not None else None
+        ),
+        _sync_inspection_source=inspection_syncs.append,
+        inspection_syncs=inspection_syncs,
     )
 
 
@@ -367,11 +372,12 @@ def test_selecting_hrrr_pins_the_overlay_to_that_run_and_hour():
     run = datetime(2026, 9, 4, 12, tzinfo=timezone.utc)
     valid = datetime(2026, 9, 5, 6, tzinfo=timezone.utc)
 
-    gui_picker.PickerWindow._model_sync_field_reference(
-        _sync_owner(field, "hrrr"), run, 18, valid)
+    owner = _sync_owner(field, "hrrr")
+    gui_picker.PickerWindow._model_sync_field_reference(owner, run, 18, valid)
 
     assert field.references == [(run, 18)]
     assert field.valid_times == [], "a pinned cycle needs no fallback moment"
+    assert owner.inspection_syncs == ["_model_map"]
 
 
 @pytest.mark.parametrize("model_key", ("gfs", "nam", "rap", "ecmwf-ifs"))
@@ -390,7 +396,7 @@ def test_another_model_falls_back_to_matching_the_valid_time(model_key):
 
 def test_no_model_selected_releases_the_pin():
     field = _RecordingField()
-    owner = SimpleNamespace(_model_field=field, _model_config=lambda: None)
+    owner = _sync_owner(field, None)
     valid = datetime(2026, 9, 5, 6, tzinfo=timezone.utc)
 
     gui_picker.PickerWindow._model_sync_field_reference(

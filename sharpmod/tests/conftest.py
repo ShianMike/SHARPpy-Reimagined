@@ -30,8 +30,16 @@ os.environ.setdefault("SHARPMOD_GEOCODER_URL", "off")
 os.environ.setdefault("SHARPMOD_OUTLOOK_CACHE", "off")
 
 import pytest
-import pyproj  # noqa: F401 - initialize before threaded xarray/MetPy imports
 from hypothesis import HealthCheck, is_hypothesis_test, settings
+
+try:
+    # Initialize before parallel xarray/MetPy imports when map dependencies
+    # are installed. The lean Rust quality environment omits this optional
+    # test dependency, so collection must still work there.
+    import pyproj  # noqa: F401
+except ModuleNotFoundError as exc:
+    if exc.name != "pyproj":
+        raise
 
 #: Full correctness and short feedback profile sizes.
 FULL_MAX_EXAMPLES = 100

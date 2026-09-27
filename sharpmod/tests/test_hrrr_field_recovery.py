@@ -118,6 +118,9 @@ def test_targeted_retry_forgets_only_the_selected_negative_frame(monkeypatch):
 
 def test_failed_refresh_keeps_the_last_successful_memory_frame(monkeypatch):
     hrrr_field.clear_cache()
+    # A fresh hosted runner may have monotonic uptime below the normal TTL.
+    # Refresh must expire the frame even with a longer-than-uptime TTL.
+    monkeypatch.setattr(hrrr_field, "FRAME_CACHE_TTL_S", float("inf"))
     key = ("refc", RUN.isoformat(), 6, hrrr_field.DEFAULT_FRAME_SIZE)
     retained = _raster()
     with hrrr_field._CACHE_LOCK:

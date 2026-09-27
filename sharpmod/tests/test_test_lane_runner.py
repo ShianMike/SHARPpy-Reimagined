@@ -186,6 +186,18 @@ def test_run_context_reports_clean_and_dirty_worktrees(monkeypatch):
     assert "worktree_dirty_files" not in nogit
 
 
+def test_git_probe_preserves_successful_empty_status(monkeypatch):
+    """A clean checkout returns empty output, which still means zero dirty files."""
+    from subprocess import CompletedProcess
+
+    monkeypatch.setattr(
+        performance.subprocess,
+        "run",
+        lambda *_args, **_kwargs: CompletedProcess([], 0, stdout="\n"),
+    )
+    assert performance._git_output(["status", "--porcelain"]) == ""
+
+
 @pytest.mark.parametrize("lane", sorted(runner.LANES))
 def test_each_lane_budget_can_fail_before_github_kills_the_job(lane):
     """An overrunning lane has to be reported rather than silently destroyed.

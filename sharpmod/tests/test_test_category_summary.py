@@ -60,18 +60,22 @@ def test_workflow_displays_every_test_group():
         Loader=yaml.BaseLoader,
     )
     jobs = workflow["jobs"]
-    direct = jobs["test-areas"]
-    branch = jobs["visualization-branches"]
     assert jobs["visualization"]["needs"] == "fast"
-    assert direct["needs"] == "fast"
-    assert branch["needs"] == "visualization"
-    assert {row["group"] for row in direct["strategy"]["matrix"]["include"]} == {
-        "interface", "science", "providers", "platform"
+    categories = {
+        "gui-area": ("fast", "interface"),
+        "science-area": ("fast", "science"),
+        "providers-area": ("fast", "providers"),
+        "platform-area": ("fast", "platform"),
+        "charts-area": ("visualization", "charts"),
+        "maps-area": ("visualization", "maps"),
+        "analysis-area": ("visualization", "analysis"),
+        "exports-area": ("visualization", "exports"),
     }
-    assert {row["group"] for row in branch["strategy"]["matrix"]["include"]} == {
-        "charts", "maps", "analysis", "exports"
-    }
-    for job in (jobs["visualization"], direct, branch):
+    for name, (parent, group) in categories.items():
+        job = jobs[name]
+        assert job["needs"] == parent
+        assert f"--group {group}" in job["steps"][-1]["run"]
+    for job in (jobs["visualization"], *(jobs[name] for name in categories)):
         assert "junit_artifact_id" in job["if"]
         assert any(
             "fast-junit-python-3.13" == step.get("with", {}).get("name")

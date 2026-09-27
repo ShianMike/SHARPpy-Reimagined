@@ -786,7 +786,9 @@ def invalidate_frame(product_key: str, *, valid_time=None, run=None,
         if isinstance(cached[1], _UnpublishedFrame):
             _CACHE.pop(key, None)
         else:
-            _CACHE[key] = (0.0, cached[1])
+            # ``monotonic()`` can be less than the TTL on a fresh CI runner.
+            # Negative infinity is expired regardless of machine uptime.
+            _CACHE[key] = (float("-inf"), cached[1])
     return True
 
 

@@ -238,26 +238,14 @@ jobs:
           --group visualization
           --source-result "$SOURCE_RESULT"
 
-  test-areas:
-    name: "Test tree / ${{ matrix.label }}"
-    # Report already-run fast-lane cases as separate status jobs. The fast lane
-    # remains the only test execution, coverage owner, and timing budget gate.
+  # Explicit jobs show every test area as a branch in the Actions graph.
+  # These jobs report fast-lane cases without rerunning the suite.
+  gui-area:
+    name: "Test tree / 🖥️ GUI and workflows"
     needs: fast
     if: ${{ always() && !cancelled() && needs.fast.outputs.junit_artifact_id != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - group: interface
-            label: "🖥️ GUI and workflows"
-          - group: science
-            label: "🧮 Scientific calculations"
-          - group: providers
-            label: "📡 Data and providers"
-          - group: platform
-            label: "📦 Backends and packaging"
     steps:
       - name: Check out tested source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -277,27 +265,15 @@ jobs:
         run: >-
           python3 scripts/summarize_test_categories.py
           .test-results/fast.xml
-          --group "${{ matrix.group }}"
+          --group interface
           --source-result "$SOURCE_RESULT"
 
-  visualization-branches:
-    name: "↳ Visualization / ${{ matrix.label }}"
-    needs: visualization
-    if: ${{ always() && !cancelled() && needs.visualization.outputs.junit_artifact_id != '' }}
+  science-area:
+    name: "Test tree / 🧮 Scientific calculations"
+    needs: fast
+    if: ${{ always() && !cancelled() && needs.fast.outputs.junit_artifact_id != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - group: charts
-            label: Charts and soundings
-          - group: maps
-            label: Maps and overlays
-          - group: analysis
-            label: Analysis and animation
-          - group: exports
-            label: Exports and rendering
     steps:
       - name: Check out tested source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -311,13 +287,181 @@ jobs:
           name: fast-junit-python-3.13
           path: .test-results
 
-      - name: Show visualization section
+      - name: Show category results
+        env:
+          SOURCE_RESULT: ${{ needs.fast.result }}
+        run: >-
+          python3 scripts/summarize_test_categories.py
+          .test-results/fast.xml
+          --group science
+          --source-result "$SOURCE_RESULT"
+
+  providers-area:
+    name: "Test tree / 📡 Data and providers"
+    needs: fast
+    if: ${{ always() && !cancelled() && needs.fast.outputs.junit_artifact_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Download fast-lane JUnit results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: fast-junit-python-3.13
+          path: .test-results
+
+      - name: Show category results
+        env:
+          SOURCE_RESULT: ${{ needs.fast.result }}
+        run: >-
+          python3 scripts/summarize_test_categories.py
+          .test-results/fast.xml
+          --group providers
+          --source-result "$SOURCE_RESULT"
+
+  platform-area:
+    name: "Test tree / 📦 Backends and packaging"
+    needs: fast
+    if: ${{ always() && !cancelled() && needs.fast.outputs.junit_artifact_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Download fast-lane JUnit results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: fast-junit-python-3.13
+          path: .test-results
+
+      - name: Show category results
+        env:
+          SOURCE_RESULT: ${{ needs.fast.result }}
+        run: >-
+          python3 scripts/summarize_test_categories.py
+          .test-results/fast.xml
+          --group platform
+          --source-result "$SOURCE_RESULT"
+
+  charts-area:
+    name: "↳ Visualization / Charts and soundings"
+    needs: visualization
+    if: ${{ always() && !cancelled() && needs.visualization.outputs.junit_artifact_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Download fast-lane JUnit results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: fast-junit-python-3.13
+          path: .test-results
+
+      - name: Show category results
         env:
           SOURCE_RESULT: ${{ needs.visualization.outputs.fast_result }}
         run: >-
           python3 scripts/summarize_test_categories.py
           .test-results/fast.xml
-          --group "${{ matrix.group }}"
+          --group charts
+          --source-result "$SOURCE_RESULT"
+
+  maps-area:
+    name: "↳ Visualization / Maps and overlays"
+    needs: visualization
+    if: ${{ always() && !cancelled() && needs.visualization.outputs.junit_artifact_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Download fast-lane JUnit results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: fast-junit-python-3.13
+          path: .test-results
+
+      - name: Show category results
+        env:
+          SOURCE_RESULT: ${{ needs.visualization.outputs.fast_result }}
+        run: >-
+          python3 scripts/summarize_test_categories.py
+          .test-results/fast.xml
+          --group maps
+          --source-result "$SOURCE_RESULT"
+
+  analysis-area:
+    name: "↳ Visualization / Analysis and animation"
+    needs: visualization
+    if: ${{ always() && !cancelled() && needs.visualization.outputs.junit_artifact_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Download fast-lane JUnit results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: fast-junit-python-3.13
+          path: .test-results
+
+      - name: Show category results
+        env:
+          SOURCE_RESULT: ${{ needs.visualization.outputs.fast_result }}
+        run: >-
+          python3 scripts/summarize_test_categories.py
+          .test-results/fast.xml
+          --group analysis
+          --source-result "$SOURCE_RESULT"
+
+  exports-area:
+    name: "↳ Visualization / Exports and rendering"
+    needs: visualization
+    if: ${{ always() && !cancelled() && needs.visualization.outputs.junit_artifact_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Download fast-lane JUnit results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: fast-junit-python-3.13
+          path: .test-results
+
+      - name: Show category results
+        env:
+          SOURCE_RESULT: ${{ needs.visualization.outputs.fast_result }}
+        run: >-
+          python3 scripts/summarize_test_categories.py
+          .test-results/fast.xml
+          --group exports
           --source-result "$SOURCE_RESULT"
 
   property:

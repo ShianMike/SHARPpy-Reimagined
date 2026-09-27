@@ -54,7 +54,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Release dependencies: Pin herbie-data 2026.9.0 and PyInstaller 6.22.3; use Ruff 0.16.8 for quality checks.
+- Release dependencies: Pin herbie-data 2026.9.1 and PyInstaller 6.22.3; use Ruff 0.16.8 for quality checks.
 - Selection controls: Resize or hide controls without losing summaries and actions.
 - Picker layout: Consolidate Sounding source, Selected station, and Runtime in that order; give Forecast, Field Panels, ERA5, and WRF focused setup cards so their maps keep more of the window.
 - WRF setup: Stretch Paste coordinates and Center map evenly across the available control width.

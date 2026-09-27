@@ -26,13 +26,14 @@ DEFAULT_BASELINE = ROOT / "constraints" / "test-performance-baseline.json"
 def _git_output(args: list[str]) -> str | None:
     """Run one git probe, returning stripped stdout or ``None`` on failure."""
     try:
-        return subprocess.run(
+        completed = subprocess.run(
             ["git", *args],
             cwd=ROOT,
             capture_output=True,
             text=True,
             timeout=10,
-        ).stdout.strip() or None
+        )
+        return completed.stdout.strip() if completed.returncode == 0 else None
     except Exception:
         return None
 

@@ -30,6 +30,7 @@ os.environ.setdefault("SHARPMOD_GEOCODER_URL", "off")
 os.environ.setdefault("SHARPMOD_OUTLOOK_CACHE", "off")
 
 import pytest
+import pyproj  # noqa: F401 - initialize before threaded xarray/MetPy imports
 from hypothesis import HealthCheck, is_hypothesis_test, settings
 
 #: Full correctness and short feedback profile sizes.

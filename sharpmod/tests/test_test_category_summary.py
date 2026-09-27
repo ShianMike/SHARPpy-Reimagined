@@ -17,8 +17,13 @@ def test_modules_have_one_stable_group():
         "test_gui_viewer_zoom": "interface",
         "test_render_label_plates": "exports",
         "test_packaging_render_smoke": "exports",
+        "test_box_export": "exports",
         "test_backend_equivalence": "platform",
+        "test_grib_backend_equivalence": "platform",
+        "test_model_fetch_packaging": "platform",
+        "test_test_category_summary": "platform",
         "test_model_sources": "providers",
+        "test_place_names": "maps",
         "test_derived_dcp_property": "science",
         "test_igra2_reader": "providers",
     }

@@ -62,6 +62,7 @@ def category_for_module(module: str) -> str:
         "test_gui_storm_reports_overlay",
         "test_hrrr_products_palettes",
         "test_lambert_grid",
+        "test_place_names",
     }:
         return "maps"
     if module.startswith("test_gui_timeline_") or module in {
@@ -79,10 +80,13 @@ def category_for_module(module: str) -> str:
     if module.startswith("test_gui_") or module == "test_qt_test_environment":
         return "interface"
     if module.startswith(("test_export_", "test_render_")) or module in {
+        "test_box_export",
         "test_packaging_render_smoke",
         "test_sharppy_export",
     }:
         return "exports"
+    if module == "test_model_fetch_packaging":
+        return "platform"
     if module.startswith((
         "test_era5_", "test_hrrr_", "test_model_", "test_openmeteo",
         "test_rrfs_", "test_uwyo_",
@@ -122,10 +126,12 @@ def category_for_module(module: str) -> str:
         return "science"
     if module.startswith(("test_backend_", "test_python_backend", "test_rust_backend")) or module in {
         "test_console_encoding",
+        "test_grib_backend_equivalence",
         "test_installation_reference",
         "test_release_packaging",
         "test_sharppy_compat_installer",
         "test_sounding_parameter_guide",
+        "test_test_category_summary",
         "test_test_lane_runner",
         "test_test_performance_budget",
         "test_upstream_patches",

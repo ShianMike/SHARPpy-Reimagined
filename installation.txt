@@ -38,7 +38,7 @@ PyYAML>=6.0,<7.0
 [quality]
 pip-audit==2.10.1
 pytest-cov==7.1.0
-ruff==0.16.8
+ruff==0.16.9
 
 [rust-build]
 maturin>=1.15,<2
@@ -165,7 +165,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
               PyYAML>=6.0,<7.0
   [quality]  lint, audit, and coverage, pinned exactly so a report is
              reproducible across machines
-              ruff==0.16.8, pip-audit==2.10.1, pytest-cov==7.1.0
+              ruff==0.16.9, pip-audit==2.10.1, pytest-cov==7.1.0
   [rust-build]  local native-extension build frontend
               maturin>=1.15,<2 (install the stable Rust toolchain separately)
 

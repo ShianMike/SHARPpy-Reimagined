@@ -180,5 +180,5 @@ def pytest_collection_modifyitems(items):
     for item in items:
         if is_hypothesis_test(getattr(item, "obj", None)):
             item.add_marker("property")
-        if item.path.stem.startswith(_QT_TEST_PREFIXES):
+        if "qt_app" in item.fixturenames or item.path.stem.startswith(_QT_TEST_PREFIXES):
             item.add_marker(pytest.mark.xdist_group("qt"))

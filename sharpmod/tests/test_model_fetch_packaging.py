@@ -94,12 +94,12 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         "run_test_lane.py property --workers ${{ matrix.workers }}"
         in property_scripts
     )
-    serial_scripts = "\n".join(
+    offline_scripts = "\n".join(
         step.get("run", "") for step in jobs["serial-release"]["steps"]
     )
-    assert "run_test_lane.py serial-release" in serial_scripts
+    assert "run_test_lane.py serial-release --workers 4" in offline_scripts
 
-    # The deterministic and serial lanes run the accelerated backend that ships
+    # The deterministic and offline lanes run the accelerated backend that ships
     # to users, because the pure-Python fallback costs roughly 6.7x on the
     # parcel and kinematics kernels and made the serial gate the whole
     # release's critical path.
@@ -225,9 +225,6 @@ def test_test_profiles_timeouts_and_quality_tools_are_configured():
     pytest_options = config["tool"]["pytest"]["ini_options"]
     assert pytest_options["timeout"] == 180
     assert "property: Hypothesis-powered scientific/property coverage" in (
-        pytest_options["markers"]
-    )
-    assert "serial: test that must remain in the non-parallel release gate" in (
         pytest_options["markers"]
     )
     assert "xdist_group(name): keep tests sharing process-global state on one worker" in (

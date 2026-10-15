@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from scripts import check_test_performance as performance
 from scripts import run_test_lane as runner
+from sharpmod.tests import conftest as test_config
 
 
 def _job_timeout_seconds() -> dict[str, int]:
@@ -101,13 +104,31 @@ def test_no_parallel_lane_scatters_tests_that_asked_to_stay_together():
         )
 
 
-def test_release_lane_is_complete_serial_without_repeating_property_depth(tmp_path):
+def test_release_lane_is_complete_parallel_without_repeating_property_depth(tmp_path):
     command, environment = _command("serial-release", tmp_path)
 
     assert _marker(command) == "not live_provider"
-    assert "-n" not in command
-    assert "--dist=loadgroup" not in command
+    assert command[command.index("-n") + 1] == "4"
+    assert "--dist=loadgroup" in command
+    assert "--max-worker-restart=0" in command
     assert environment["SHARPMOD_HYPOTHESIS_PROFILE"] == "fast"
+
+
+@pytest.mark.parametrize("filename,fixtures,grouped", [
+    ("test_gui_edit_history.py", [], True),
+    ("test_sounding_view.py", ["standard_qt_app", "qt_app"], True),
+    ("test_sounding_view.py", [], False),
+])
+def test_qt_group_covers_fixtures_outside_the_filename_prefix(filename, fixtures, grouped):
+    markers = []
+    item = SimpleNamespace(
+        path=Path(filename), fixturenames=fixtures, obj=None,
+        add_marker=markers.append,
+    )
+    test_config.pytest_collection_modifyitems([item])
+    assert [(marker.name, marker.args) for marker in markers] == (
+        [("xdist_group", ("qt",))] if grouped else []
+    )
 
 
 def test_coverage_is_rejected_outside_the_single_fast_lane(tmp_path):

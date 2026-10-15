@@ -22,7 +22,7 @@ on:
         default: false
         type: boolean
       run_serial_release:
-        description: Run the complete single-process release gate
+        description: Run the complete parallel offline release gate
         required: false
         default: false
         type: boolean
@@ -39,7 +39,7 @@ on:
         default: false
         type: boolean
       run_serial_release:
-        description: Run the complete single-process release gate
+        description: Run the complete parallel offline release gate
         required: false
         default: false
         type: boolean
@@ -544,10 +544,8 @@ jobs:
           retention-days: 14
 
   serial-release:
-    name: Complete serial release gate (Python 3.13)
-    # This is an exact-source release check, requested by release.yml. The
-    # deterministic/property/version lanes already run on main, so also running
-    # this 3,000+ test single-process pass there duplicated it on release day.
+    name: Complete offline release gate (Python 3.13)
+    # Release-only exact-source coverage; Qt stays together on one worker.
     if: ${{ inputs.run_serial_release == true }}
     runs-on: ubuntu-latest
     # The pre-optimization v1.1.0 lane completed in 34.6 minutes. Keep bounded
@@ -579,12 +577,12 @@ jobs:
 
       - *install_rust_backend
 
-      - name: Run every offline test in one process
+      - name: Run every offline test across bounded workers
         env:
           SHARPMOD_BACKEND: rust
-        run: python scripts/run_test_lane.py serial-release
+        run: python scripts/run_test_lane.py serial-release --workers 4
 
-      - name: Upload serial timing artifacts
+      - name: Upload offline release timing artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

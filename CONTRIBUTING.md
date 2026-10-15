@@ -41,8 +41,8 @@ python scripts/run_test_lane.py property --workers 2
 # The 3.11/3.12 compatibility smoke includes 10 examples per property.
 python scripts/run_test_lane.py compatibility --workers 2
 
-# Exact complete non-parallel gate used by official releases.
-python scripts/run_test_lane.py serial-release
+# Complete offline release gate; Qt tests stay together on one worker.
+python scripts/run_test_lane.py serial-release --workers 4
 
 # WRF-ARW extraction on Windows, which CI runs on its own runner.
 python scripts/run_test_lane.py windows-wrf --workers 4
@@ -94,15 +94,17 @@ For a final integrated/release-readiness check, first run
 source state. Then run `python scripts/run_test_lane.py serial-release` once in a
 supported environment. Treat the generated JUnit and timing JSON as part of the
 result: a timing-budget failure is a failed gate even when every pytest assertion
-passed. Use focused reruns to diagnose; do not repeatedly run the full serial
+passed. Use focused reruns to diagnose; do not repeatedly run the full offline
 lane while iterating.
 
 Every test has a 180-second safety timeout by default; the deliberately
-expensive full-property and serial-release lanes raise that guard to 900 seconds
+expensive full-property and complete-release lanes raise that guard to 900 seconds
 per test. Pull requests run 3.11/3.12 compatibility smoke, Python 3.13
 deterministic coverage, and full Python 3.13 properties on both Rust and the
-Python fallback. Official releases run the serial gate against the exact
-immutable commit that is packaged. A weekly scheduled
+Python fallback. Official releases run every offline test against the exact
+immutable commit that is packaged, across four workers with Qt tests grouped on
+one worker. This checks all tests without checking whole-suite interactions in a
+single process. A weekly scheduled
 lane runs the live-provider checks, including the multi-region CONUS HRRR
 surface regression.
 

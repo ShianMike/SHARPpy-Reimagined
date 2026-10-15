@@ -24,6 +24,10 @@ announce a published v3.0.0 installer or a completed desktop release gate.
   notes so users can choose the old GUI after the new interface is released.
   Legacy assets retain their original versioned filenames and download URLs.
 - Keep `sharpmod-gui` available for legacy workflows during the migration.
+- Rewrite the README and desktop usage guide around the v3 interface. Add a
+  six-screen tour captured from the live v3 preview: the point inspector, two-
+  and four-panel maps, imported sounding, Overview, and Settings. Keep the old
+  tour linked as v2.0.0 Legacy documentation.
 - Align the development Python package, native Rust package, frontend, Tauri
   shell, lockfiles, and default release tag at **v3.0.0**. This version bump
   prepares the unreleased source; it does not publish a new release.
@@ -31,6 +35,11 @@ announce a published v3.0.0 installer or a completed desktop release gate.
   workflow steps to **download-artifact 8.0.2**, pinned to its immutable commit.
   Include the upgrades proposed in dependency PRs #70, #71, and #72 in the
   v3.0.0 release preparation.
+- Make bridge fixture checks portable across scientific backends and PNG
+  encoders while retaining exact metadata, missing-data, and classification
+  checks. Keep numeric differences below one hundredth of each displayed
+  metric step. Test the native Skew-T independently of the retired window
+  layout, and prevent renderer font settings from leaking into Qt chrome.
 
 ### Added
 

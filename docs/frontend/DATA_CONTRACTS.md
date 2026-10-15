@@ -24,6 +24,7 @@ unknown keys too, so drift fails a test instead of passing silently.
 | `bridge-status-changed` | event, Rust to the `main` window, `src-tauri/src/events/mod.rs` | n/a | `BridgeStatus` | n/a | `core:event:allow-listen`, `core:event:allow-unlisten` |
 | `get_model_catalog` | command, `src-tauri/src/commands/soundings.rs` | none | `ModelCatalog` (cached 10 min) | the bridge codes, `INTERNAL` | `allow-get-model-catalog` |
 | `open_sounding` | command, `commands/soundings.rs` | `request: OpenSoundingRequest` | `SoundingSummary` | `INVALID_ARGUMENT`, `SOUNDING_UNAVAILABLE`, `SOUNDING_FETCH_FAILED`, `SOUNDING_INVALID`, the bridge codes, `INTERNAL` | `allow-open-sounding` |
+| `inspect_wrf` | command, `commands/soundings.rs` | `filePath` (absolute local path) | `WrfFile` (path, name, UTC times, domain centre) | `INVALID_ARGUMENT`, `SOUNDING_INVALID`, the bridge codes, `INTERNAL` | `allow-inspect-wrf` |
 | `get_sounding_analysis` | command, `commands/soundings.rs` | `soundingId` | `SoundingAnalysis` | `INVALID_ARGUMENT`, `SOUNDING_NOT_FOUND`, `SOUNDING_INVALID`, the bridge codes, `INTERNAL` | `allow-get-sounding-analysis` |
 | `get_sounding_trends` | command, `commands/soundings.rs` | `soundingId` | `SoundingTrends` | `INVALID_ARGUMENT`, `SOUNDING_NOT_FOUND`, the bridge codes, `INTERNAL` | `allow-get-sounding-trends` |
 | `get_ensemble_summary` | command, `commands/soundings.rs` | `model`, `latitude`, `longitude`, `forecastHour` (0 to 1000), `runTime?`, `location?`, `members` (2 to 32 labels) | `EnsembleSummary` (the acquisition ledger and the labelled spreads) | `INVALID_ARGUMENT`, `SOUNDING_FETCH_FAILED` (no member could be retrieved), the bridge codes, `INTERNAL` | `allow-get-ensemble-summary` |
@@ -68,6 +69,25 @@ parses the `radar-site` frame and its serving `siteId`),
 lists recent runs; `analyze_profile` became `get_sounding_analysis`.)
 
 ## DTOs
+
+### Local sounding imports
+
+`open_sounding` accepts `kind: "file"` with `fileName` and
+`contentBase64`. Both boundaries enforce a decoded size of at most 6 MiB;
+failed decoding removes the temporary upload. NPZ, SPC, BUFKIT, PECAN, and
+UWyo text or HTML use the existing decoder registry.
+
+Raw WRF datasets stay on disk. `inspect_wrf(filePath)` maps to
+`soundings.inspect_wrf({file_path})` and returns `WrfFile` with `filePath`,
+`fileName`, `times`, `latitude`, and `longitude`. Inspection supplies
+the forecast-time menu and initial domain-centre point.
+`open_sounding({kind: "wrf", filePath, time, latitude, longitude})` maps to
+`soundings.open_wrf`. The backend requires an existing absolute file path,
+a time present in the dataset, and a point inside its grid perimeter. It calls
+the existing WRF extractor and registers the extracted NPZ as a local
+`kind: "file"` sounding with model `WRF-ARW`. Extraction and decoding
+failures remove their temporary NPZ and metadata; the source remains unchanged.
+
 
 ### `BackendHealth`
 

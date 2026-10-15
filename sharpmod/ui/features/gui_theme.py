@@ -298,6 +298,8 @@ def _font_from_stack(stack: tuple[str, ...], point_size: float,
     except (AttributeError, TypeError):
         pass
     font.setPointSizeF(float(point_size))
+    # Keep a prior renderer's application strategy from leaking into chrome.
+    font.setStyleStrategy(QFont.StyleStrategy.PreferDefault)
     if weight is not None:
         font.setWeight(_qt_weight(weight))
     return font

@@ -12,8 +12,8 @@ deck.gl, layers, graphics profiles), [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)
 (layout, themes, and tokens), [MIGRATION.md](MIGRATION.md) (phase status), and
 [AUDIT.md](AUDIT.md) (the Phase 0 audit).
 
-The current shell follows SoundScopepy's interface with the current SHARPpy
-backend. Its workspaces are Overview, Model Viewer, Soundings, Data Status,
+The current shell uses the SHARPpy backend. Its workspaces are Overview,
+Model Viewer, Soundings, Logs,
 and Settings. Analysis, Compare, and Ensemble are removed; ensemble models
 are excluded centrally from UI catalogues. The scientific bridge API remains
 compatible with the legacy app. See [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).
@@ -45,9 +45,10 @@ Rules, each enforced by a check:
 - `src-tauri` does not link `rust/sharpmod-rs` and duplicates no numerics.
   The scientific backend status comes from Python `backend_info()`
   (`sharpmod/backends/selector.py`).
-- New Python lives only in `sharpmod/bridge/` (plus the fixture exporters
+- Frontend-specific Python glue lives in `sharpmod/bridge/` (plus the fixture exporters
   `scripts/export_frontend_fixtures.py`, `scripts/export_sounding_fixtures.py`,
-  and `scripts/export_map_fixtures.py`). No Qt or scientific module changed.
+  and `scripts/export_map_fixtures.py`). Shared decoder and renderer fixes
+  belong in their existing modules and retain their regression checks.
 - Map fields travel as numbers and are coloured in the frontend from
   sharpmod's palettes; Python never draws a map image for the new app.
 - The sounding image is `sharpmod.rendering.cli.render` output, never a
@@ -263,6 +264,35 @@ focus to the indicator; an outside click closes it without moving focus. The
 `Popover` primitive (`frontend/src/components/Popover.tsx`) provides this for
 every popover.
 
+## Running the interface
+
+The [user guide](../USAGE.md) documents the v3 navigation, model panels,
+sounding imports, profile editing, and settings. The
+[README](../../README.md#run-v3-from-source) gives the Windows source setup.
+
+Development requires Python 3.11–3.13 with the verified SHARPpy render stack,
+Node.js 24.12 or newer, a stable Rust toolchain, and Tauri's platform build
+prerequisites. Windows desktop development needs the MSVC C++ build tools and
+WebView2. The scientific extension supports Rust 1.88 or newer; the Tauri
+desktop uses the current stable toolchain.
+
+From `frontend/`, after `npm ci`:
+
+```powershell
+npm run tauri -- dev
+```
+
+The wrapper starts the CLI from the repository root and serves Vite on port
+5173. Debug builds discover the repository's `.gribenv`, then `.venv`.
+Set `SHARPPY_PYTHON` to an absolute interpreter path to override discovery.
+Release builds use the bundled `backend/sharppy-backend.exe` unless that
+explicit override is set.
+
+For a browser preview, use `npm run dev:browser` and open
+`http://127.0.0.1:5174/`. Its local Python bridge calls the real providers.
+Use `npm run dev:fixture` for deterministic sample data instead. Only one
+preview can occupy that port at a time.
+
 ## Run, test, and build
 
 All frontend and Tauri commands run in `frontend/`; Rust in `src-tauri/`; Python
@@ -309,18 +339,21 @@ changes.
   only; `connect-src 'self' ipc: http://ipc.localhost`; `worker-src` and
   `child-src 'self' blob:` for the MapLibre worker; `img-src 'self' data:
   blob:`; `object-src 'none'`; `form-action` and `frame-ancestors 'none'`.
-- **Capability** (`src-tauri/capabilities/main.json`): the fourteen app commands
+- **Capability** (`src-tauri/capabilities/main.json`): the allowlisted app commands
   plus `core:event:allow-listen` and `core:event:allow-unlisten`. No
   `core:default`, no shell, fs, http, dialog, or log permission. A sounding
   file is read in the webview from the file the user picks and sent as
-  base64 (at most 6 MiB); the app never reads paths it is given.
+  base64 (at most 6 MiB). Raw WRF import is a separate operation: the user
+  supplies an absolute local dataset path, which the backend validates,
+  inspects, and reads without modifying the source.
 - **Sidecar:** fixed argv with `-I`, no `PATH` search, a method allowlist, an
   8 MiB frame cap, closed error codes, validated parameters on both sides. The
   render worker has the same fixed argv, no shell, and is only ever given files
   in the bridge's private cache directory.
-- **Network:** no runtime HTTP server and no telemetry; the basemap is a local
-  asset. The webview makes no outbound request. Outbound requests are
-  sharpmod's own, made in Python: when the user opens a sounding, the
+- **Network:** the desktop has no runtime HTTP server or telemetry. Basemap
+  tiles and their styles/fonts may load from the CSP-allowed OpenFreeMap host;
+  bundled basemap geometry is also available. Meteorological provider requests
+  run in Python: when the user opens a sounding, the
   observation providers (UWyo, IEM, IGRA) and the model data sources of
   `tools.model_extract`, plus the renderer's reverse town lookup
   (`sharpmod/maps/place_names.py`), which uses its bundled CONUS index first;
@@ -332,13 +365,14 @@ changes.
 
 ## Open items
 
-- **Python packaging for distribution.** Release builds have no default
-  interpreter. A later phase chooses a bundled venv, a frozen sidecar, or PyO3.
+- **Windows distribution validation.** The release workflow builds a frozen
+  Python backend, bundles it beside the Tauri application, and requires the
+  packaged model-fetch and sounding-render diagnostics before staging the
+  installer and portable ZIP. A passing source build alone is insufficient.
 - **macOS and Linux.** Not built or verified; POSIX code paths compile but are
   untested, and the macOS overlay title bar is not used.
-- **Hosted CI.** `frontend.yml` has not run on a hosted runner yet.
-- **sharpmod-rs linking** (AUDIT §7 option 3) waits for the first Rust-native
-  operation.
+- **Scientific Rust integration.** The Python process loads `sharpmod_rs`;
+  the Tauri crate does not link or duplicate those numerical kernels.
 - **Per-request cancellation.** Protocol version 1 has none, so a model
   download (up to 300 s) runs to the end even when the user moves on; its
   sounding then joins the open list.

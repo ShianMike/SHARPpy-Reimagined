@@ -126,7 +126,7 @@ pub struct BackendError {
     pub message: String,
     pub retryable: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub context: Option<ErrorContext>,
+    pub context: Option<Box<ErrorContext>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub details: Option<Map<String, Value>>,
 }
@@ -139,7 +139,7 @@ impl BackendError {
 
     /// The same error, reported for another operation.
     pub fn with_context(mut self, context: &ErrorContext) -> Self {
-        self.context = Some(context.clone());
+        self.context = Some(Box::new(context.clone()));
         self
     }
 }
@@ -321,7 +321,7 @@ impl BridgeFailure {
             code,
             message,
             retryable,
-            context: Some(context.clone()),
+            context: Some(Box::new(context.clone())),
             details: extra,
         }
     }

@@ -67,4 +67,22 @@ explains file/group locality and fixture reuse. The four-worker limit, loadfile
 fast/compatibility scheduling, and property grouping remain unchanged. The serial
 gate remains serial, so it can detect state and ordering failures.
 
-Final timings are recorded after the requested dependency upgrades and full runs.
+## Hosted portability findings
+
+- The committed radar bytes were generated with Pillow, while hosts without
+  Pillow use Qt. The network stand-in now reads the same fixed 479-byte
+  synthetic PNG input on every host; production PNG encoder tests remain.
+- Ensemble and threshold contracts retain exact structure, units, missing
+  values, member outcomes, and classification. Their numerical comparisons
+  allow at most one hundredth of the declared display step (for example,
+  0.01 J/kg for integer CAPE), covering Python/Rust variation without treating
+  full-precision floating-point serialization as a portable byte contract.
+- The annotation module now constructs the real native Skew-T directly, rather
+  than removing it from a complete live SPC window. All 87 geometry checks
+  remain and pass locally in 2.72 seconds.
+- Qt chrome fonts explicitly set their style strategy, so a previous render's
+  antialiasing setting cannot survive a theme reset. The existing regression
+  now checks size and strategy drift together.
+
+Final lane timings are recorded after the requested dependency upgrades and
+full runs; early failed runs are not counted as passing validation.

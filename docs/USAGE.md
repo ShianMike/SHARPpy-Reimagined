@@ -1,424 +1,172 @@
 # SHARPpy Reimagined Usage Guide
 
-This guide covers **how to use** SHARPpy Reimagined once it is installed. For
-setup and dependencies, see [installation.txt](../installation.txt).
+This guide describes the **v3.0.0 desktop interface (unreleased)** and the
+command-line tools. For installation, see the [README](../README.md#get-started)
+and [dependency reference](../installation.txt). The previous Qt interface has
+its own [v2.0.0 Legacy guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md).
 
----
+For a visual walkthrough, see the [v3.0.0 tour and screenshots](../README.md#v300-tour).
 
-## Two ways to drive it
+## Choose a workflow
 
-- **Interactive desktop GUI** (`sharpmod-gui`) — point-and-click: pick a station
-  on a map or from a list, or open a local file, and explore/edit the sounding
-  live. Start here if you just want to look at soundings. See
-  [section 0](#0-desktop-gui-sharpmod-gui).
-- **Command-line tools** (`observed-sounding`, `uwyo-sounding`, `era5-extract`,
-  `model-extract`, `model-batch-extract`, `box-extract`, `wrf-extract`,
-  `sharpmod-render`) — scriptable, headless, reproducible. Use these for batch
-  extraction and PNG rendering (sections 1–5).
+| Task | Start here |
+| --- | --- |
+| Browse forecast fields and open a map point's sounding | **Model Viewer** |
+| Fetch an observation, model profile, or ERA5 column | **Soundings → Obs. / Model / ERA5** |
+| Import NPZ or a text sounding | **Soundings → File → Point sounding** |
+| Extract a column from raw WRF NetCDF output | **Soundings → File → Raw WRF dataset** |
+| Script extraction or render a PNG | CLI sections [1](#1-university-of-wyoming-soundings-uwyo-sounding)–[5](#5-rendering-soundings-sharpmod-render) below |
 
-Both share the same portable `.npz` point-sounding format, so anything the CLI
-extracts opens in the GUI, and anything you save from the GUI renders on the CLI.
+The extractors write portable `.npz` point soundings that can be imported into
+the desktop or passed to `sharpmod-render`. Forecast fields, profile data, and
+rendered images retain their source and time metadata.
 
-## Mental model
+## 0. Desktop interface (v3.0.0)
 
-The command-line side has two kinds of capabilities:
+### Open the app
 
-1. **Get a sounding** — either *fetch* an observed one (UWyo or IEM RAOB)
-   or *extract* a model/reanalysis point column (forecast models, ERA5,
-   WRF-ARW). Each of these
-   writes a portable `.npz` point-sounding file.
-2. **Render a sounding** — turn any supported sounding file into an SPC-style
-   skew-T / hodograph PNG.
+For published Windows builds, run the installer or extract the **entire**
+portable ZIP before starting the application. The portable app needs its
+bundled `backend` folder. v3 downloads will appear on the
+[Releases page](https://github.com/ShianMike/SHARPpy-Reimagined/releases) after
+publication; v2.0.0 Legacy remains available there.
 
-```
-                 ┌── observed-sounding fetch ─┐
-observed / model │   era5-extract             │──►  <name>.npz  ──►  sharpmod-render  ──►  <name>.png
-   data          │   model-extract / batch    │        (portable point sounding)      (skew-T / hodograph)
-                 │   wrf-extract              │
-                 └────────────────────────────┘
-```
+From a prepared source checkout, run `npm run tauri -- dev` in `frontend/`.
+The [README setup](../README.md#run-v3-from-source) installs the Python analysis
+environment and frontend dependencies. `sharpmod-gui` launches the legacy Qt
+app, so it is not the entry point for this interface.
 
-The `.npz` files are all the same format, so anything you extract renders the
-same way (and the same way as the bundled HRRR examples).
+The navigation rail opens **Overview**, **Model Viewer**, **Soundings**,
+**Logs**, and **Settings**. Hover or focus a rail icon to see its name. Use Tab
+to move between controls and the arrow keys within navigation and selection
+menus; Escape closes popovers.
 
-### Which capability needs what
+### Model Viewer
 
-| You want to… | Needs the SHARPpy render stack? | Needs an extra install? |
-|---|---|---|
-| List / search / fetch UWyo soundings | No | No |
-| Fetch with UWyo → IEM RAOB fallback | No | No |
-| Extract an ERA5 point sounding | No | `pip install -e ".[era5]"` |
-| Fetch a forecast-model point sounding | No | `pip install -e ".[era5]"` |
-| Run a resumable model batch | No | `pip install -e ".[era5]"` |
-| Extract a WRF-ARW point sounding | No | `pip install -e ".[wrf]"` |
-| Render any sounding to PNG (`--render`) | **Yes** (`python scripts/install_sharppy_compat.py`) | No |
+1. Choose the **Model**, **Run · UTC**, **Forecast hour**, and **Parameter** in
+   the top toolbar. The available products depend on the model's published
+   fields; a product supported by HRRR may be absent from another model.
+2. Pan or zoom to your area. Hover over an enabled model layer for its value.
+   Click a map point to inspect the location, value, forecast time, and source,
+   then choose **Open sounding** to load the point profile.
+3. Use the timeline to step between available hours or play them in sequence.
+   Playback speed and looping are controlled beside the timeline.
+4. Use the panel controls for one, two, or four maps. Forecast time and map
+   movement stay synchronized. Click a panel's title to edit its layers and
+   choose its parameter; each panel has its own colour range on the right.
+   Four-panel ranges are shorter to fit their panels.
+5. Reopening a layout restores its last panel settings. New panels start with
+   station labels off, and station labels are off at application startup.
+   You can enable them through the map's layer controls.
+6. Use the small eye control beneath a panel's colour range to switch its
+   model layer on or off. Other overlay visibility is controlled separately.
 
-> Data extraction never requires the render stack. Only rendering does.
+**Smooth** is the default field rendering. Choose **Sharp** when you want to
+see the grid cells explicitly. Smooth interpolation changes the display; the
+hover readout comes from the model field.
 
----
+The layer controls offer SPC categorical, tornado, wind, and hail outlooks,
+radar, satellite imagery, surface observations, and storm reports. Open the
+controls for the active panel to configure its overlays. Hover a report or
+observation for its time, location, measured values, remarks, and source.
+Wind barbs become denser as you zoom in. Borders and land outlines remain
+visible above filled overlays.
 
-## 0. Desktop GUI (`sharpmod-gui`)
+The point inspector separates the selected parameter from **Forecast &
+source** details. Hide or close the inspector when you need more map space.
 
-The interactive app is the fastest way to look at a sounding — no CLI arguments,
-no `.npz` bookkeeping. It needs a display (unlike the headless renderer) and the
-SHARPpy render stack (see [installation.txt](../installation.txt)).
+### Fetch an observed or forecast sounding
 
-```bash
-sharpmod-gui             # or: python -m sharpmod.gui
-```
+Open **Soundings** and choose a source:
 
-### Pick a sounding
+- **Obs.** — select a station, UTC date and launch hour, and provider. The
+  automatic provider option tries the available observation sources.
+- **Model** — choose a model, run, forecast hour, latitude, and longitude.
+- **ERA5** — choose an analysis date/hour and point. Source installations need
+  the ERA5 dependencies and a configured CDS account, as described in
+  [installation.txt](../installation.txt).
 
-The app opens on the **Sounding Picker** with five sources selected from the
-**Load From** dropdown in the menu bar. The active source uses the full central
-area, and chevrons collapse or expand its control sections without resetting
-their values:
+Submit the form to load the profile. Provider or input errors appear beside the
+form with a retry action. Use **Hide sources** to give the image more room;
+**Show sources** brings the form back. The open-sounding list switches between
+profiles already loaded during the current backend session.
 
-- **Station Map** — a clickable map of UWyo radiosonde stations over a basemap of
-  coastlines, lake shores, national borders, and state lines. Borders are clipped
-  to land, so none is ruled straight across a lake. Use **Select** to move the
-  sounding point and **Inspect** to read a marker or field without moving it;
-  double-clicking in Select opens the chosen station. Loading otherwise remains
-  explicit. Scroll at the pointer to zoom, middle/right-drag to pan, reverse a
-  move with Previous/Next view, and jump to a searchable region. Set the valid
-  time (defaults to the most
-  recent synoptic hour) and open the selection. The time menu offers every
-  three-hourly UTC slot from 00Z through 21Z for regular and special/asynoptic
-  observations.
-- **Station List** — the station catalogue with live id/name filtering; type to
-  narrow, pick a station and any of the same three-hourly times, then fetch.
-- **Forecast Model** — choose a supported public model, run, forecast hour, and
-  map point. The picker checks the selected inventory in the background and,
-  when publication is delayed, offers an explicit **Use available cycle**
-  button for the newest earlier run. It never changes the run silently, and an
-  unknown or failed check does not block manual Fetch. Every published pressure
-  level is fetched. The isolated GRIB and point-sounding data remain available
-  while the sounding window is open, then are deleted when that window closes.
-  Enter an optional **Location/town** label, or choose a named saved location,
-  to display that name above the sounding's hodograph locator-map inset. If
-  left blank, Fetch resolves and caches the town in its background worker.
-  **Timeline…** queues an inclusive range of up to 72 published hours into one
-  sounding viewer. Its slider, previous/next, play, and loop controls update as
-  results arrive; already completed hours survive cancellation and unavailable
-  hours are reported explicitly.
-  **Box…** / **Draw box** samples an area rather than a point: Shift-drag a
-  rectangle in any tool (or choose Draw box and drag normally) and every model grid point
-  inside it is extracted from one download. A confirmation dialog resolves the
-  lattice, spacing, point count, and download count first, and the map previews
-  the exact points that will be sampled.
-  Shift-drag always draws a box; turning the button on makes a plain left-drag
-  draw one, and the map still pans on a middle-drag or right-drag so the mode
-  never takes the whole mouse. A click without a drag stays a click, and the mode
-  releases itself once a box is accepted.
-  By default the samples are **averaged into a single sounding** that opens in
-  the ordinary analysis window, with the same overlays, town name, and parcel
-  logic as a point fetch. Winds are averaged as components and moisture as
-  mixing ratio; only the layer every point shares is averaged, so the mean
-  begins at the highest ground in the box. The Skew-T title names the average and
-  its member count, an amber **BOX MEAN** callout in the top-right of the plot
-  says so on the page itself, and the locator inset draws the sampled rectangle
-  instead of a crosshair, widening its view until the whole box fits. Note that
-  the mean sounding's derived parameters are not the mean of the individual
-  points' parameters — the callout's second line says this too, because the CAPE
-  printed on the page is the CAPE of the mean column, not the mean CAPE of the
-  box. On a very small window the callout is omitted rather than crammed over the
-  data; the title still names the average.
-  The dialog opens on the forecast hour selected in the sidebar and offers a
-  **Forecast hour** picker listing every hour the product publishes, so the hour
-  can be changed without redrawing the box.
-  Choosing **Explore the box as a parameter field** opens the area workspace
-  instead. That workspace shows a
-  parameter field map, area statistics with the location of the significant
-  extreme, and a ranked list of the twelve most significant points;
-  double-clicking any cell opens it as a full Skew-T. The
-  instability and kinematic fields resolve immediately; the SPC composites are
-  opt-in behind **Add SPC composites** because they cost about 0.4 s per point.
-  The **Ingredients** picker hatches the points where every ingredient of a mode
-  holds at once and reports how much of the area qualifies. Ticking **Step
-  through forecast hours** in the dialog samples the same box at up to twelve
-  hours and adds a slider, looping playback, and **Jump to peak**. **Export**
-  saves the field map as a PNG, every point as CSV, or the sampled cells as
-  GeoJSON. Press **Escape** to abandon a rectangle, and **Cancel** to stop a run
-  while keeping the points already completed.
-- **Reanalysis (ERA5)** — choose a global map point and hourly UTC analysis.
-  The tab shows the requested and snapped 0.25-degree point, checks the local
-  CDS setup, runs retrieval outside the Qt event loop, and reuses a completed
-  cached point/hour. Cancel suppresses display and cleans the local output;
-  the stable synchronous `cdsapi` call itself may need to return first.
-  Keep **Add to active sounding window** enabled and fetch another point/hour
-  to overlay several ERA5 profiles in the same analysis window.
-- **Open File** — load a local `.npz`, SPC (`.spc`/`.OAX`), BUFKIT (`.buf`),
-  PECAN, or WRF-ARW text sounding. The nested **Raw WRF wrfout** workflow
-  inspects domain coordinates and available times in a worker, provides a
-  domain-aware point map, rejects points outside the real curvilinear grid
-  perimeter, and extracts without blocking Qt. You can also **drag a file onto
-  the window**; raw `wrfout*`/NetCDF files route to this workflow. Its matching
-  **Add to active sounding window** control lets repeated available-time or
-  point selections build one multi-sounding WRF analysis.
+### Import a point-sounding file
 
-The station set shown on the map and in the list is refreshed from UWyo for the
-**selected observation time** (via the `/wsgi/sounding_json` endpoint), so
-stations that were relocated — and had their WMO index change over time — show
-up for the period they actually reported. The bundled offline catalogue is used
-as a fallback until the live list arrives (or if the network is unavailable).
+1. Open **Soundings → File** and leave **Import format** on **Point sounding**.
+2. Choose **Browse files**, select a file, then choose **Open sounding**.
+3. Use **Change file** to select another input.
 
-Observed fetches run on a background thread and try UWyo first, followed by the
-independent IEM RAOB archive when UWyo fails. The successful provider is shown
-in the sounding metadata and viewer title.
+Supported inputs include NPZ point soundings, SPC text, BUFKIT, PECAN, and UWyo
+text or saved HTML. The upload limit is **6 MiB**. A WRF column previously
+exported to NPZ uses this same workflow. Empty files, oversized files, and
+unrecognized contents produce an error without changing the source file.
 
-Use **File → Downloaded Data Library…** to inspect cached model entries, reopen
-or re-extract them offline, pin them against automatic cleanup, delete them, or
-copy their source metadata. In **Locations**, manage searchable saved points,
-reuse recent forecast/ERA5 points, and import/export the versioned JSON format;
-saved and recent points appear as map markers.
+Try the bundled
+[HRRR NPZ](../examples/soundings/hrrr_point_36.68N_95.66W_f018.npz) for an
+offline first import.
 
-In a sounding window, **Data → Source & Quality Inspector…** reports the
-provider URL/transport, decoder/backend, cache reuse, pressure-level and missing
-field counts, vorticity source, and read-only QC warnings for the focused
-profile.
+### Import raw WRF-ARW output
 
-By default, each newly fetched or opened sounding is added to the active
-sounding window instead of opening another window. Use the sounding window's
-**Profiles** menu to focus or remove any loaded profile. Press **C** (*Collect
-Observed*) when you want compatible observed soundings displayed together for
-comparison. To return to one-window-per-sounding behavior, clear **File → Add
-New Soundings to Active Window** in the picker; the choice is remembered.
+Raw WRF datasets use local extraction rather than the point-file upload:
 
-### Flat or curved map view
+1. In **Soundings → File**, set **Import format** to **Raw WRF dataset**.
+2. Paste the **full local path** to your `wrfout` or NetCDF file, then choose
+   **Read WRF file**.
+3. Select a **Forecast time (UTC)** from the times actually present in the
+   dataset.
+4. Enter latitude in degrees north and longitude in degrees east. Western
+   longitudes are negative. The initial coordinates are the domain centre.
+5. Choose **Open WRF sounding**.
 
-**View → Map Projection** switches every map tab between two views at once, and
-the choice is remembered between sessions:
+The backend checks that the point is within the dataset's real grid perimeter
+and extracts only the requested point and time. Large datasets stay on disk;
+the 6 MiB point-upload limit does not apply to this path. The input dataset is
+read without modification. Source setups need the `wrf` extra and a capable
+NetCDF backend. The CLI equivalent is [`wrf-extract`](#4-wrf-arw-model-output-wrf-extract).
 
-- **Flat** (default) — straight, evenly spaced parallels and meridians. It is
-  what every previous version drew, and the only view that stays correct at every
-  extent the picker offers.
-- **Curved** — a Lambert conformal conic whose standard parallels sit a sixth of
-  the way in from the top and bottom of the current view. Parallels bow and
-  meridians converge toward the pole, which is the shape a regional forecast map
-  normally has.
+### Inspect, edit, and save a sounding
 
-One thing is worth knowing about the curved view: a cone cannot represent an
-extent taller than 75 degrees of latitude, or one centred within 4 degrees of the
-equator, so those views quietly fall back to the flat transform; zooming into a
-region brings the curve back. Everything else — imagery, vector layers, station
-markers, boxes, graticule labels, panning, and clicks — is projected through the
-same transform either way.
+The viewer displays the native Skew-T, hodograph, and scientific panels. The
+old locator-map inset is removed from the v3 sounding image.
 
-Imagery is warped into the cone a couple of degrees at a time rather than blitted
-as a rectangle, since a conic has no rectangle to blit into. The result agrees
-with an exact per-pixel reprojection to under a pixel, and it is cached and
-re-blitted during a pan, so a curved view with a model field and a radar frame on
-it costs about what the flat view does.
+- **Inspect** — use the zoom buttons, actual-pixel percentage, or **Fit sounding
+  to view**; drag the image to pan.
+- **Edit profile** — select a plotted profile point or choose a **Profile level**,
+  review the level's values, and apply a change. The backend recalculates the
+  profile and image.
+- **Undo edit**, **Redo edit**, and **Reset profile** — move through edits or
+  restore the imported/fetched profile. Edits do not overwrite its input file.
+- **Image resolution** — choose **HD · lossless** or **UHD · lossless**. Higher
+  resolution takes longer to render and uses more memory.
+- Use the parcel and scientific-panel selectors to choose the displayed
+  analysis, then copy or download the image from the viewer toolbar.
 
-### Debug a stuck GUI
+Opening a file and rendering its image are separate operations. The first image
+can take longer while the render worker starts. Existing open profiles belong
+to the current backend session; restart or close the backend only after saving
+any images you need. Keep the original files to reopen local soundings later.
 
-The GUI writes a small rotating diagnostic log even when launched as the
-windowed executable. Use **Help → Open Debug Log Folder**, reproduce the
-problem once, then share `sharpmod-gui.log`. On Windows the default location is
-`%LOCALAPPDATA%\SHARPpy Reimagined\Logs\sharpmod-gui.log`.
+### Settings and troubleshooting
 
-For more detail during a source run, enable debug logging before launch:
+**Settings** saves appearance, forecast playback, and map rendering choices on
+this device. Device diagnostics show the graphics capabilities used by the map.
+Reduced-motion preferences are respected by interface transitions.
 
-```powershell
-$env:SHARPMOD_GUI_DEBUG = "1"
-python -m sharpmod.gui
-```
+If a request fails, check its inline message and **Logs** for backend health
+and diagnostic details. For source development, confirm that the selected
+Python environment has `sharpmod` and its required extras installed. Desktop
+development discovers `.gribenv`, then `.venv`; an explicit `SHARPPY_PYTHON`
+takes priority and must name an existing interpreter by absolute path.
 
-Set `SHARPMOD_GUI_LOG_DIR` if the log needs to be written to another folder.
+A live browser preview runs with `npm run dev:browser`; fixture preview uses
+`npm run dev:fixture` and contains sample data. These are development modes,
+described in [Frontend architecture](frontend/ARCHITECTURE.md#running-the-interface).
 
-### Explore and edit a sounding
-
-Each sounding opens in the full interactive SPC window (the upstream SHARPpy
-widget stack) with an explicit safety boundary around its mutation gestures.
-Use **Inspect** (`Ctrl+Alt+I`) to link the Skew-T and hodograph readout at one
-pressure/height without changing data. Use **Edit** (`Ctrl+Alt+E`) before a
-profile, interpolation, reset, or storm-motion change; the checked action,
-cursor, and status hint identify the current mode. In Edit, right-click the
-Skew-T for *Modify Surface*, parcel lifting, or **Edit Nearest Level…**. The
-numeric level editor changes
-pressure, height, temperature, dewpoint, wind direction, and wind speed at the
-level nearest the right-click. It preserves vertical ordering, rejects dewpoint
-above temperature, and recalculates all parcel levels and indices. You can also
-click-and-drag temperature, dewpoint, or wind points for quicker edits. Its
-feedback states the retained original, proposed value, and delta; a dashed
-original overlay remains available. The mouse wheel zooms, and double-clicking
-the lower-left inset swaps lifted parcels.
-The hodograph defaults to centering the display on the LCL-to-EL mean-wind
-vector instead of the zero-wind origin, with a viewport 20% tighter than the
-previous 200-kt full-width view. Right-click it to choose Mean Wind, Normal, or
-Storm Relative centering. It puts 0.5, 1, 3, 6, 9, and 12 inside colored dots on
-the active profile; its locator-map inset displays the active location/town in
-the title.
-Blank forecast, ERA5, and WRF location fields first use a bundled U.S. Census
-index with 31,540 incorporated/CDP places and 21,278 named towns/townships
-across CONUS and D.C. State polygons reject nearby points in Canada, Mexico,
-the Atlantic, and the Gulf. Only when the bundled lookup has no result can a
-cached, rate-limited OpenStreetMap Nominatim fallback run; entering a label
-skips lookup, and `SHARPMOD_GEOCODER_URL=off` disables the online fallback.
-Headless rendering follows the same path for model/coordinate-only labels.
-Town names are used only in the title and are never drawn inside the map. See
-the
-[Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/)
-and [OpenStreetMap attribution](https://www.openstreetmap.org/copyright).
-The [offline CONUS index notes](CONUS_PLACE_INDEX.md) document its annual
-refresh command and provenance. The map itself reads nearby geometry from
-separately bundled Census county-outline tiles, with no live map request or
-town-label layer.
-
-Choose **View → Inspect Sounding Locator…** to open a read-only enlarged view.
-**Follow main map** mirrors the active picker extent; **Pinned locator** keeps
-its own Local, Regional, Fit selected area, or custom bounds until you change
-them. The inspector distinguishes the requested point from the sampled point,
-outlines the active area, and does not load or move a sounding when clicked.
-Its footer states the nearby place, valid time, scale context, geography
-attribution, and each overlay's actual time, source, and availability. Use
-**Export → Export Locator Image…** to save that same captured presentation as
-a standalone PNG.
-**File → Preferences** switches the color palette (Standard / Inverted /
-Protanopia), units, independent interface text scale, compact/comfortable
-density, and the parcel visualized by default when a Skew-T opens.
-The `W` key returns to the picker. A tip bar along the bottom summarizes the
-current controls.
-
-Use `Ctrl+Z` / **Edit → Undo** to reverse profile-level, interpolation, and
-storm-motion changes, and `Ctrl+Y` / **Edit → Redo** to reapply them.
-`Ctrl+Alt+H` opens the readable view of that same history. It is local to the
-viewer, retains the latest 50 edits, and clears its redo branch after a new edit.
-
-Accepted preferences persist across launches: temperature, wind, and PWAT
-units; palette; top/bottom readout variables; and the default Skew-T parcel.
-The same settings file also retains multi-sounding behavior, dismissed tips,
-recent files, and last selections. On Windows it is
-`%APPDATA%\SHARPpy Reimagined\settings.ini`; set `SHARPMOD_SETTINGS_PATH` to
-override that location.
-
-The parcel table and Skew-T labels include the **maximum parcel level (MPL)**
-alongside LCL, LFC, and EL. MPL is derived from the edited profile; it is not a
-directly editable observation.
-
-### Use the analysis workspace
-
-Choose **View → Analysis Workspace** or press `Ctrl+Shift+A` in a sounding
-window:
-
-- **Trends** plots one selected parameter over a forecast timeline, leaves a
-  visible gap for every missing hour, activates a valid time when its point is
-  clicked, and exports the displayed series to CSV.
-- **Compare** uses the reference sounding's exact valid time. It shows MLCAPE,
-  MLCIN, 0–6 km shear, 0–1 km SRH, and effective-layer STP plus deltas for each
-  loaded model/run, exposes the coordinate/terrain/run/convention/edit basis,
-  and adds synchronized two/four-panel profiles and conservative vertical
-  temperature/dewpoint/wind differences. A nonmatching time is unavailable.
-- **Ensemble** separates requested, loaded, failed/cancelled, and
-  diagnostic-usable members, retries only unavailable members, and shows
-  p10/median/p90 distributions and vertical envelopes. Its **Thresholds** page
-  evaluates single or joint conditions member by member, with qualifying,
-  usable, loaded, and requested denominators. Agreement is not calibrated
-  probability.
-- **Animation** previews timestamped, exact-size forecast-timeline or run-to-run
-  GIFs with range, speed, and explicit missing/time-gap controls.
-
-From the forecast picker, **Workspace…** acquires different models, successive
-runs, or ensemble members for one point and exact valid time, then opens the
-appropriate tab. The batch is bounded, cached, cancellable, and keeps successful
-soundings available when another requested member fails.
-
-The picker maps also provide optional time-matched GOES visible/IR imagery and
-nearby NWS surface dewpoint/wind observations. See
-[Advanced analysis and sharing](ADVANCED_ANALYSIS.md) for
-complete controls, provider boundaries, persistence/export formats, and
-scientific limitations.
-
-### Save and reopen an analysis session
-
-Choose **File → Save Analysis Session…** (`Ctrl+Shift+E`) in a sounding window
-to preserve all loaded soundings and times, the active sounding/member, current
-profile and interpolation state, storm motion, parcel selection, visible panel,
-fit/exact zoom, picker map extent, analysis tab/controls,
-profile visibility/reference identity, and overlay descriptors.
-The status bar identifies unsaved changes, path, and last successful save.
-Choose **Open Analysis Session…** (`Ctrl+Shift+O`) from the picker
-or a sounding window to restore everything in one multi-sounding viewer,
-independent of the normal combine-soundings setting.
-
-The `.sharpmod-session` file is versioned JSON, not pickle, and is validated
-before a viewer is created. It contains decoded profile state and lightweight
-overlay provenance only—never source GRIB downloads or raster/vector payloads—
-so the existing delete-on-viewer-close cleanup remains intact and overlays can
-be refetched from their descriptors.
-
-The application writes a bounded set of atomic recovery snapshots under
-`rendered_soundings/recovery` after real unsaved changes. The recovery chooser
-summarizes profiles and external context before replacing the active workspace;
-a successful explicit save removes obsolete recovery files for that window.
-
-### Save from the GUI
-
-The sounding window's **Export** menu writes the current view:
-
-- **Export Sounding Image (PNG)…** (`Ctrl+E`) previews the focused sounding
-  canvas, labels, frame theme, and chosen pixels. Choose a 16:9, 4:3, square,
-  print, or custom output with optional aspect lock; the window layout stays
-  unchanged. The PNG uses exactly the previewed composition and dimensions.
-- **Export Text (SHARPpy)** — the focused profile as a text file that loads
-  straight back into the app (or into `sharpmod-render`).
-- **Open Last Completed Export**, **Copy Last Export Path**, and **Recent
-  Exports…** find successful PNG/GIF outputs after the dialog closes.
-
-The picker has matching **Export → Active Map Figure (PNG)…** and
-**Two/Four-Panel Map Figure (PNG)…** actions. The box-analysis field map and
-sounding locator also use this shared map-figure workflow. Opening the dialog
-captures the displayed requested/actual time, extent, selected point or box,
-layer order/visibility/opacity, fixed or automatic colour scales, source, and
-attribution. Preview and final PNG use the same exact chosen pixels; changing
-the live map or receiving a later field cannot alter that capture, and export
-does not resize the live window or fetch data. Edit the figure title as needed;
-the optional caption retains the complete scientific/geographic context.
-Output-specific label and key layout is independent of the interface text
-scale. Map PNGs share the filename, `rendered_soundings`, progress, atomic-save,
-Recent Exports, and completion-action rules described below.
-
-Image/GIF filename suggestions include location, model/source, initialization,
-valid time/range; unsafe characters, long names,
-and existing suggestions are handled. In **Animation**, choose an inclusive
-frame range, check individual frames, set milliseconds per frame, and inspect
-the output-frame count and frame preview. Gaps default to visible cards; choose
-**Stop before first gap** or **Fail if any gap exists** if cards are unsuitable.
-There is no mode that silently joins nonconsecutive times.
-
-All export/save dialogs begin in `rendered_soundings` beside the source project
-or installed application. The same rule covers analysis sessions, trend and
-comparison CSV, ensemble-threshold JSON/CSV, GIF,
-box PNG/CSV/GeoJSON, saved-location JSON, and the upstream **File → Save Image** /
-**Save Text** actions. **Open Export Folder** opens that exact directory. SHARPpy
-Reimagined creates it when needed and reports a clear path-specific error if it
-cannot create or write it; it never silently falls back to Desktop, Documents,
-Downloads, or the user home directory. Choosing a different destination is a
-one-export override and is not used to seed the next dialog or a later
-application run.
-Presentation choices are remembered separately from destinations. PNG/GIF
-writers publish only complete artifacts; failure leaves an existing destination
-unchanged and does not add it to Recent Exports.
-
-From the command line, `sharpmod-render INPUT` defaults to
-`rendered_soundings/sharpmod_sounding.png` beside the application. Supplying
-`sharpmod-render INPUT OUTPUT` keeps the explicit output path.
-Point-sounding extractors likewise put default `.npz`/`.json` pairs and unnamed
-`--render` PNGs there, while preserving every explicit output path.
-
-### Standalone build (no Python required)
-
-For a distributable Windows build, use the bundled PyInstaller spec:
-
-```bash
-python -m pip install pyinstaller
-pyinstaller packaging/sharpmod_gui.spec --noconfirm
-```
-
-The result is `dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe`. See the README
-for the one-file variant.
-
----
+The remaining sections document the unchanged command-line extraction and
+rendering workflows. Features described by the
+[legacy advanced-analysis guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/ADVANCED_ANALYSIS.md)
+belong to the v2 GUI and are not a tour of the v3 navigation.
 
 ## 1. University of Wyoming soundings (`uwyo-sounding`)
 

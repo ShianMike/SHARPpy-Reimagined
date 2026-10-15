@@ -49,7 +49,18 @@ def _summary(**overrides):
 
 
 def test_ensemble_summary_matches_the_exported_fixture():
-    assert _summary() == _fixture("bridge/soundings/ensemble.result.example.json")
+    expected = _fixture("bridge/soundings/ensemble.result.example.json")
+    # Backend variation must stay below 1/100 of each metric's display step.
+    for metric in expected["metrics"]:
+        for key in ("p10", "median", "p90", "minimum", "maximum"):
+            metric[key] = pytest.approx(
+                metric[key], rel=0, abs=10 ** (-metric["decimals"] - 2))
+    for sample in expected["samples"]:
+        sample["values"] = [
+            pytest.approx(value, rel=0, abs=10 ** (-metric["decimals"] - 2))
+            for value, metric in zip(sample["values"], expected["metrics"], strict=True)
+        ]
+    assert _summary() == expected
 
 
 def test_ensemble_summary_labels_every_metric_and_keeps_the_ledger():

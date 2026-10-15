@@ -7,9 +7,8 @@ It now lives in the cold-side gutter beside the omega meter and the effective
 inflow layer -- a region with room, but not unlimited room, so the three have to
 be measured against one another rather than assumed to fit.
 
-Geometry needs a real widget size. The Skew-T inside the SPC grid cannot be
-resized while it has a parent, and its ``initUI`` reads ``size()`` to build
-every scale, so these tests detach it first.
+Geometry needs a real widget size. Build the native Skew-T on its own so each
+size can be tested without reparenting a widget out of a live SPC grid.
 """
 
 from __future__ import annotations
@@ -98,9 +97,8 @@ class _Recorder:
 
 @pytest.fixture(scope="module")
 def skewt(qt_app):
-    """A detached, resizable Skew-T with the render patches installed."""
+    """A standalone, resizable native Skew-T with the render patches installed."""
     from sharpmod.tests._examples import examples_dir
-    from sharpmod.viz.SPCWindow import compose_window
 
     example = examples_dir() / EXAMPLE
     if not example.exists():
@@ -108,19 +106,22 @@ def skewt(qt_app):
 
     installed = render_mod.install_render_patches()
     assert "skewt.lapse-rate-label-placement" in installed
+    from sharppy.viz.skew import plotSkewT
+
     prof_col, _stn = render_mod.decode(str(example))
-    win, controller = compose_window(
-        render_mod.build_config(os.devnull and "."), prof_col, mount=True)
-    qt_app.processEvents()
-    widget = win.spc_widget.sound
-    widget.setParent(None)
+    config = render_mod.build_config(".")
+    preferences = {key: value for (section, key), value in config
+                   if section == "preferences"}
+    widget = plotSkewT()
+    widget.setPreferences(update_gui=False, **preferences)
+    widget.addProfileCollection(prof_col)
+    widget.setActiveCollection(0, update_gui=False)
+    widget.setParcel(prof_col.getHighlightedProf().mupcl)
     qt_app.processEvents()
     try:
         yield widget
     finally:
         widget.deleteLater()
-        win.close()
-        controller.close()
 
 
 def _sized(skewt, qt_app, width, height):

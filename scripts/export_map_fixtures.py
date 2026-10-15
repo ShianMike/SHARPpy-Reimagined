@@ -10,8 +10,8 @@ Writes under ``src-tauri/contracts/``:
 
 The network is replaced by deterministic stand-ins: one synthetic HRRR record
 (derived, reprojected, and quantized by the real code onto a 256 by 128 frame),
-SPC payloads read by the real SPC parser, a radar PNG written by sharpmod's PNG
-encoder, and a UWyo station list. The clock is pinned. Run from the repository
+SPC payloads read by the real SPC parser, a fixed synthetic radar PNG, and a
+UWyo station list. The clock is pinned. Run from the repository
 root: ``python scripts/export_map_fixtures.py``.
 """
 
@@ -221,17 +221,8 @@ def _outlook_payloads() -> dict[str, bytes]:
 
 
 def _radar_png() -> bytes:
-    import numpy as np
-
-    from sharpmod.providers.hrrr_field_images import encode_png
-
-    rows, cols = np.mgrid[0:64, 0:128]
-    rgba = np.zeros((64, 128, 4), dtype=np.uint8)
-    echo = ((rows - 34) ** 2 + (cols - 62) ** 2) < 60
-    core = ((rows - 34) ** 2 + (cols - 62) ** 2) < 12
-    rgba[echo] = (2, 253, 2, 255)
-    rgba[core] = (253, 149, 0, 255)
-    return encode_png(rgba)
+    # Provider input stays fixed across Pillow/Qt and zlib versions.
+    return (CONTRACTS / "inputs" / "radar.png").read_bytes()
 
 
 @contextmanager

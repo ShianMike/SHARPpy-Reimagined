@@ -128,6 +128,7 @@ def test_reapplying_the_theme_restores_a_replaced_application_font(qt_app):
     expected = gui_theme.ui_font("body")
     drifted = QFont(expected)
     drifted.setPointSizeF(42.0)
+    drifted.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
     qt_app.setFont(drifted)
     assert qt_app.font() != expected
     try:

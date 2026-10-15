@@ -10,6 +10,8 @@ the suite.
 from __future__ import annotations
 
 import importlib.util
+import csv
+import io
 import json
 import subprocess
 import sys
@@ -56,7 +58,16 @@ def _evaluate(**overrides):
 
 
 def test_threshold_evaluation_matches_the_exported_fixture():
-    assert _evaluate() == _fixture("bridge/soundings/threshold.result.example.json")
+    expected = _fixture("bridge/soundings/threshold.result.example.json")
+    decimals = {row["key"]: row["decimals"] for row in _fixture(
+        "bridge/soundings/threshold-metrics.result.json")["metrics"]}
+    # Match numbers below 1/100 of their display step; keep all other fields exact.
+    for member in expected["members"]:
+        member["values"] = {
+            key: pytest.approx(value, rel=0, abs=10 ** (-decimals[key] - 2))
+            for key, value in member["values"].items()
+        }
+    assert _evaluate() == expected
 
 
 def test_threshold_metrics_match_the_exported_fixture():
@@ -66,9 +77,20 @@ def test_threshold_metrics_match_the_exported_fixture():
 def test_threshold_csv_matches_the_exported_fixture():
     request = _request()
     with patch("sharpmod.tools.model_extract.extract", EXPORT.stand_in_extract(EXPORT.EXAMPLE)):
-        assert thresholds.export_csv(request) == _fixture(
-            "bridge/soundings/threshold-csv.result.example.json"
-        )
+        actual = thresholds.export_csv(request)
+    expected = _fixture("bridge/soundings/threshold-csv.result.example.json")
+    assert actual["file_name"] == expected["file_name"]
+    decimals = {row["key"]: row["decimals"] for row in _fixture(
+        "bridge/soundings/threshold-metrics.result.json")["metrics"]}
+    for row, reference in zip(csv.DictReader(io.StringIO(actual["csv"])),
+                              csv.DictReader(io.StringIO(expected["csv"])), strict=True):
+        values = json.loads(row.pop("diagnostic_values"))
+        reference_values = json.loads(reference.pop("diagnostic_values"))
+        assert values == {
+            key: pytest.approx(value, rel=0, abs=10 ** (-decimals[key] - 2))
+            for key, value in reference_values.items()
+        }
+        assert row == reference
 
 
 def test_threshold_classifies_members_with_explicit_denominators():

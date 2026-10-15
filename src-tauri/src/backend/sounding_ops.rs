@@ -47,7 +47,7 @@ pub(crate) fn invalid(context: &ErrorContext, reason: &str) -> BackendError {
         code: ErrorCode::InvalidArgument,
         message: format!("The request was not valid: {reason}."),
         retryable: false,
-        context: Some(context.clone()),
+        context: Some(Box::new(context.clone())),
         details: None,
     }
 }

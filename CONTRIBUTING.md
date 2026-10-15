@@ -26,6 +26,11 @@ source .venv/bin/activate
 
 ## Test Before Opening a PR
 
+For the v3 React/Tauri interface, follow the
+[frontend setup and checks](docs/frontend/ARCHITECTURE.md#running-the-interface).
+`sharpmod-gui` starts the legacy Qt app; use `npm run tauri -- dev` in
+`frontend/` for the new desktop.
+
 ```powershell
 # Fast deterministic feedback (grouped across four bounded workers).
 python scripts/run_test_lane.py fast --workers 4

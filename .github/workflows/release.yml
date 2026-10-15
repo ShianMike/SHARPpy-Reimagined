@@ -240,7 +240,7 @@ jobs:
           $constraint = (Resolve-Path "constraints/release.txt").Path
           $env:PIP_CONSTRAINT = $constraint
           python -m pip install --upgrade --constraint $constraint pip
-          python -m pip install --constraint $constraint `
+          python -m pip install --no-compile --constraint $constraint `
             ".[render,era5,wrf]"
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip install --constraint $constraint pyinstaller maturin
@@ -458,7 +458,7 @@ jobs:
           RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
         run: |
           Compress-Archive -Path "release-staging/SHARPpy-Reimagined" `
-            -DestinationPath "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip" -Force
+            -DestinationPath "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip" -CompressionLevel Fastest -Force
           Get-ChildItem -LiteralPath "release-artifacts" -File | Where-Object Name -NotLike '*-SHA256SUMS.txt' | Sort-Object Name | ForEach-Object {
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)"
@@ -470,6 +470,7 @@ jobs:
           name: windows-release-${{ needs.resolve-release.outputs.tag }}
           path: release-artifacts/*
           if-no-files-found: error
+          compression-level: 0
           retention-days: 14
 
   attest-windows-release:

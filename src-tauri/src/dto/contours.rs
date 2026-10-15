@@ -45,8 +45,8 @@ impl WindBarbGrid {
             .decode(&self.data_base64)
             .map_err(|_| "wind grid is not base64")?;
         if bytes.len() as u64 != count * 2
-            || bytes.chunks_exact(2).any(|pair| {
-                let cell = u16::from_le_bytes([pair[0], pair[1]]);
+            || bytes.as_chunks::<2>().0.iter().any(|pair| {
+                let cell = u16::from_le_bytes(*pair);
                 cell != u16::MAX && (cell & 511) > 359
             })
         {

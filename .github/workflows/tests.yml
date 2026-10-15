@@ -104,6 +104,9 @@ jobs:
           python -m pip check
 
       - name: Run bounded all-offline compatibility smoke
+        env:
+          PYTHONFAULTHANDLER: "1"
+          PYTEST_ADDOPTS: "--capture=sys"
         # A standard hosted runner has two cores. Four CPU-heavy workers made
         # the same render smoke vary from 7.65s to 14.36s and occasionally trip
         # its unchanged 14s regression cap despite every assertion passing.

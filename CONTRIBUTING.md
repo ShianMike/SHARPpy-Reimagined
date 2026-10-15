@@ -89,6 +89,11 @@ fallback. Both runs used this 12-core Windows/Python 3.11 checkout. The new
 the separate GitHub Actions limits are unchanged. Compare timing reports only
 under matching worker, backend, coverage, and host conditions.
 
+The complete offline release gate measured 172.98 seconds on GitHub Actions
+with four workers, Python 3.13.16, and Rust, with all 4,614 tests included.
+Its hosted wall-time limit is 300 seconds; per-test limits allow twice the
+measured duration plus two seconds for runner variation.
+
 For a final integrated/release-readiness check, first run
 `sharpmod-rust-sync --check`, finish focused diagnosis, and checkpoint the exact
 source state. Then run `python scripts/run_test_lane.py serial-release` once in a

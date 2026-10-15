@@ -84,5 +84,24 @@ gate remains serial, so it can detect state and ordering failures.
   antialiasing setting cannot survive a theme reset. The existing regression
   now checks size and strategy drift together.
 
-Final lane timings are recorded after the requested dependency upgrades and
-full runs; early failed runs are not counted as passing validation.
+- Native CI crash traces identified a Qt 6.12 reference-count abort in
+  `QPainter.setFont` on Linux/Python 3.11. Source installs now select Qt below
+  6.12; the Windows release already pins 6.11.2. No annotation check was skipped.
+
+## Verified timings
+
+After the dependency updates, the local four-worker fast lane passed **4,560
+tests with one skip in 223.22s** (223.04s timing report), against the original
+411.70s run: about **46% less elapsed time** on this machine. The unchanged
+performance gate passed. This is an observed local comparison, not a speed
+guarantee for other machines.
+
+The isolated full-property lane passed all **46 tests in 104.35s**, including
+its timing gate. An earlier run overlapped build work and exceeded one timing
+limit; that failed timing run is not counted as passing validation.
+
+The hosted serial gate at `724b16e` passed **4,605 tests with two skips in
+410.79s**, on Python 3.13 with the Rust backend and one worker. Its timing gate
+passed. [Candidate run](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/38700586047).
+The candidate did not build while its separate Python 3.11 and Rust lint gates
+were failing; the updated source must pass the complete workflow before build.

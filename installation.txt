@@ -3,7 +3,7 @@
  Kept in this form for offline mirrors and air-gapped installs.
 ---------------------------------------------------------------------------
 numpy>=1.24,<3.0
-PySide6>=6.5,<7.0
+PySide6>=6.5,<6.12
 qtpy>=2.3,<3.0
 python-dateutil>=2.8,<3.0
 certifi>=2023.7.22
@@ -103,7 +103,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   Package           Version pin       Purpose
   ----------------  ---------------   -------------------------------------
   numpy             >=1.24,<3.0       arrays / numerical math
-  PySide6           >=6.5,<7.0        Qt6 GUI toolkit (used for rendering)
+  PySide6           >=6.5,<6.12       Qt6 GUI toolkit (used for rendering)
   qtpy              >=2.3,<3.0        Qt binding abstraction layer
   python-dateutil   >=2.8,<3.0        flexible date/time parsing
   certifi           >=2023.7.22       CA bundle for verified HTTPS fetches

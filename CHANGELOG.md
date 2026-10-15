@@ -40,6 +40,9 @@ announce a published v3.0.0 installer or a completed desktop release gate.
   checks. Keep numeric differences below one hundredth of each displayed
   metric step. Test the native Skew-T independently of the retired window
   layout, and prevent renderer font settings from leaking into Qt chrome.
+- Exclude Qt 6.12 from source installs after the Linux/Python 3.11 gate exposed
+  a native reference-count abort in repeated Skew-T drawing. The Windows
+  release keeps its existing Qt 6.11.2 pin.
 
 ### Added
 

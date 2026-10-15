@@ -328,6 +328,32 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
         assert inherited_env["SHARPMOD_BACKEND"] == "rust"
 
 
+def test_release_workflow_caches_dependencies_without_reusing_the_app():
+    steps = _load_workflow("release.yml")["jobs"]["build-windows-exe"]["steps"]
+    by_name = {step.get("name"): step for step in steps}
+    toolchain = by_name["Set up Rust stable for Tauri"]
+    cache = by_name["Cache desktop release dependencies"]
+    build = by_name["Build desktop shell and Windows installer"]
+
+    assert toolchain["id"] == "desktop-rust"
+    assert 'version=$(rustc --version)' in toolchain["run"]
+    assert cache["uses"].startswith("actions/cache@")
+    config = cache["with"]
+    assert set(config["path"].splitlines()) == {
+        "~/.cargo/registry", "~/.cargo/git",
+        "src-tauri/target/release/.fingerprint",
+        "src-tauri/target/release/build", "src-tauri/target/release/deps",
+    }
+    prefix = config["restore-keys"].strip()
+    for dimension in ("runner.os", "runner.arch", "steps.desktop-rust.outputs.version"):
+        assert "${{ " + dimension + " }}" in prefix
+    assert config["key"] == prefix + "${{ hashFiles('src-tauri/Cargo.lock') }}"
+    assert "if" not in cache and "if" not in build
+    assert steps.index(toolchain) < steps.index(cache) < steps.index(build)
+    cleanup = "cargo clean --manifest-path ../src-tauri/Cargo.toml --release -p sharppy-reimagined"
+    assert build["run"].index(cleanup) < build["run"].index("npm run tauri -- build")
+
+
 def test_release_requires_rust_runtime_reports_and_uploads_wheel():
     workflow = _load_workflow("release.yml")
     steps = workflow["jobs"]["build-windows-exe"]["steps"]

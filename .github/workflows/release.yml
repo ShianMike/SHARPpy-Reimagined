@@ -362,7 +362,26 @@ jobs:
         with: { node-version: "24.12.0", cache: npm, cache-dependency-path: frontend/package-lock.json }
 
       - name: Set up Rust stable for Tauri
-        run: rustup update stable --no-self-update && rustup default stable
+        id: desktop-rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup update stable --no-self-update
+          rustup default stable
+          echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache desktop release dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target/release/.fingerprint
+            src-tauri/target/release/build
+            src-tauri/target/release/deps
+          key: desktop-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.desktop-rust.outputs.version }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            desktop-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.desktop-rust.outputs.version }}-
 
       - name: Build desktop shell and Windows installer
         working-directory: frontend
@@ -374,6 +393,9 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) { throw "Updater signing key is not configured" }
           npm ci
           if ($LASTEXITCODE -ne 0) { throw "Frontend dependency install failed" }
+          # Refresh app assets and version metadata while retaining compiled dependencies.
+          cargo clean --manifest-path ../src-tauri/Cargo.toml --release -p sharppy-reimagined
+          if ($LASTEXITCODE -ne 0) { throw "Desktop application cleanup failed" }
           npm run tauri -- build --config src-tauri/tauri.release.conf.json --bundles nsis
           if ($LASTEXITCODE -ne 0) { throw "Desktop installer build failed" }
 

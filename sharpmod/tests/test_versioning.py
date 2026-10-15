@@ -67,9 +67,16 @@ def test_release_manifests_and_health_fixture_share_package_version():
     health = json.loads(
         (ROOT / "src-tauri/contracts/public/health.ok.json").read_text(encoding="utf-8")
     )
+    hello = json.loads(
+        (ROOT / "src-tauri/contracts/bridge/hello.result.json").read_text(encoding="utf-8")
+    )
+    backend = json.loads(
+        (ROOT / "src-tauri/contracts/bridge/health.result.ok.json").read_text(encoding="utf-8")
+    )
     assert {
         health["app"]["version"], health["python"]["sharpmodVersion"],
         health["scientificBackend"]["rustVersion"],
+        hello["sharpmod_version"], backend["scientific_backend"]["rust_version"],
     } == {package_version}
     workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
     assert f'        default: "v{package_version}"' in workflow

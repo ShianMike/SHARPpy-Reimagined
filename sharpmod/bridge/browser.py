@@ -64,6 +64,15 @@ class BrowserHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         command = "browser request"
         try:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                raise p.invalid("Content-Length must be an integer") from None
+            if not 0 < length <= MAX_FRAME_BYTES:
+                raise p.invalid("request body must be between 1 byte and 8 MiB")
+            self.connection.settimeout(15)
+            # Unread POST bytes can reset the socket before Windows receives an error.
+            body = self.rfile.read(length)
             host = f"127.0.0.1:{self.server.server_port}"
             if self.path != "/__backend" or self.headers.get("Host") != host:
                 self.send_error(403)
@@ -73,14 +82,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
                 return
             if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
                 raise p.invalid("Content-Type must be application/json")
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-            except ValueError:
-                raise p.invalid("Content-Length must be an integer") from None
-            if not 0 < length <= MAX_FRAME_BYTES:
-                raise p.invalid("request body must be between 1 byte and 8 MiB")
-            self.connection.settimeout(15)
-            request = decode_request(self.rfile.read(length))
+            request = decode_request(body)
             command = request.method
             if command == "get_backend_health":
                 p.keys(request.params, ())

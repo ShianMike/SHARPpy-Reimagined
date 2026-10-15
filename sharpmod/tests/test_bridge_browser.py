@@ -149,7 +149,7 @@ def test_http_model_status_accepts_cycle_parameters(browser, monkeypatch):
 
 def test_http_rejects_cross_origin_and_invalid_requests(browser):
     for method, params, origin, status in [
-        ("get_backend_health", {}, "https://untrusted.example", 403),
+        ("get_backend_health", {"payload": "x" * 524288}, "https://untrusted.example", 403),
         ("get_backend_health", {"extra": True}, "http://127.0.0.1:5174", 400),
         ("fields.grid", {}, "http://127.0.0.1:5174", 400),
         ("get_spc_outlook", {"validTime": "not-a-time"}, "http://127.0.0.1:5174", 400),

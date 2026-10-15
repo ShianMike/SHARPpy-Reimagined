@@ -43,6 +43,8 @@ announce a published v3.0.0 installer or a completed desktop release gate.
 - Exclude Qt 6.12 from source installs after the Linux/Python 3.11 gate exposed
   a native reference-count abort in repeated Skew-T drawing. The Windows
   release keeps its existing Qt 6.11.2 pin.
+- Return browser-preview rejection responses reliably on Windows by consuming
+  bounded POST bodies before rejecting an origin or request path.
 
 ### Added
 

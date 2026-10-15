@@ -87,6 +87,11 @@ gate remains serial, so it can detect state and ordering failures.
 - Native CI crash traces identified a Qt 6.12 reference-count abort in
   `QPainter.setFont` on Linux/Python 3.11. Source installs now select Qt below
   6.12; the Windows release already pins 6.11.2. No annotation check was skipped.
+- The local serial run exposed a Windows socket reset when the preview rejected
+  an origin without consuming its POST body. The server now reads the existing
+  bounded body before rejecting the request. A 30-request reproduction returned
+  all expected 403 responses after the fix, versus ten resets before it; the
+  existing rejection test includes a 512 KiB forbidden request.
 
 ## Verified timings
 

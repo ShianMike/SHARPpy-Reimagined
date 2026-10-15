@@ -27,9 +27,9 @@ rendered images retain their source and time metadata.
 
 For published Windows builds, run the installer or extract the **entire**
 portable ZIP before starting the application. The portable app needs its
-bundled `backend` folder. v3 downloads will appear on the
-[Releases page](https://github.com/ShianMike/SHARPpy-Reimagined/releases) after
-publication; v2.0.0 Legacy remains available there.
+bundled `backend` folder. Find v3 downloads on the
+[Releases page](https://github.com/ShianMike/SHARPpy-Reimagined/releases);
+v2.0.0 Legacy remains available there.
 
 From a prepared source checkout, run `npm run tauri -- dev` in `frontend/`.
 The [README setup](../README.md#run-v3-from-source) installs the Python analysis
@@ -146,6 +146,8 @@ Opening a file and rendering its image are separate operations. The first image
 can take longer while the render worker starts. Existing open profiles belong
 to the current backend session; restart or close the backend only after saving
 any images you need. Keep the original files to reopen local soundings later.
+After a backend restart, the app closes those profiles and clears their cached
+images and edit history. Source-form inputs remain available to reopen them.
 
 ### Settings and troubleshooting
 

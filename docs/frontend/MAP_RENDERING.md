@@ -378,6 +378,19 @@ start-up failure offers Try the map again.
 
 ## Projection: display resampling versus scientific interpolation
 
+The field routes select **3 km CONUS output**, not each model's native domain.
+HRRR, NAM CONUS nest, RRFS CONUS, and REFS m001–m005 use the common
+1799 × 1059 Lambert grid. A live check of each model's 15 October 2026 06Z,
+F001 reflectivity record confirmed 3000 m spacing, a 38.5° tangent cone,
+262.5°E central meridian, 6,371,229 m sphere, and identical scan directions.
+NAM rounds its first point to 21.138°N, 237.280°E; the other files encode
+21.138123°N, 237.280472°E, a difference under 55 m on the 3 km output grid.
+[NOAA's NAM change notice](https://www.weather.gov/media/notification/tins/tin16-41nam_updates_aac.pdf)
+identifies the shared HRRR output grid, and the
+[RRFS product catalogue](https://www.nco.ncep.noaa.gov/pmb/products/rrfs/)
+lists its CONUS dimensions. Native North American or other output domains
+would require their own geometry; those files are not selected by these routes.
+
 MapLibre renders Web Mercator. HRRR's native grid is Lambert conformal. The
 rule:
 

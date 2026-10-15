@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import healthOk from "@contracts/public/health.ok.json";
+import summaryExample from "@contracts/public/soundings/summary.example.json";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { StrictMode, type ReactNode } from "react";
@@ -8,6 +9,9 @@ import { BackendProvider, useBackendHealth } from "./BackendProvider";
 import { BackendClient } from "./client";
 import { QUERY_KEYS, createQueryClient } from "./queryOptions";
 import type { Transport } from "./transport";
+import { parseSoundingSummary } from "../contracts/soundings";
+import { useSoundingStore } from "../../stores/soundingStore";
+import { INITIAL_VIEW } from "../../features/sounding/viewHistory";
 
 const STARTING = { status: "starting", since: "2026-10-04T01:02:00Z" };
 const healthWith = (bridge: unknown): unknown => ({ ...healthOk, bridge, python: null, scientificBackend: null });
@@ -86,6 +90,7 @@ const bridgeText = (): string => screen.getByTestId("bridge").textContent;
 
 beforeEach(() => {
   vi.useFakeTimers();
+  useSoundingStore.setState(useSoundingStore.getInitialState(), true);
 });
 
 afterEach(() => {
@@ -94,6 +99,45 @@ afterEach(() => {
 });
 
 describe("BackendProvider", () => {
+  it.each(["event", "poll"])("retires process-local soundings on a new bridge instance through %s", async (mode) => {
+    const replacement = { ...healthOk, bridge: { ...healthOk.bridge, pid: healthOk.bridge.pid + (mode === "event" ? 1 : 0), restarts: 1 } };
+    const fake = controlledTransport(mode === "event" ? [healthOk, healthOk, replacement] : [healthOk, replacement]);
+    if (mode === "poll") vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { queryClient } = setup(fake.transport);
+    await act(async () => {
+      if (mode === "event") fake.resolveListen();
+      else fake.rejectListen("events unavailable");
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    await advance(10);
+    const summary = parseSoundingSummary(summaryExample);
+    useSoundingStore.getState().add(summary);
+    useSoundingStore.getState().setView(summary.soundingId, INITIAL_VIEW);
+    useSoundingStore.getState().setSource("file");
+    queryClient.setQueryData(["soundings", summary.soundingId, "analysis"], { cached: true });
+    queryClient.setQueryData(QUERY_KEYS.catalog, { keep: true });
+    let finishImage: (value: string) => void = () => undefined;
+    const pending = queryClient.query({
+      queryKey: ["soundings", summary.soundingId, "image", "MU"],
+      queryFn: () => new Promise<string>((resolve) => { finishImage = resolve; }),
+    }).catch(() => undefined);
+    await advance(10);
+    if (mode === "event") {
+      await act(async () => { fake.emit(healthOk.bridge); await vi.advanceTimersByTimeAsync(10); });
+      await advance(10);
+      expect(useSoundingStore.getState().activeId).toBe(summary.soundingId);
+      await act(async () => { fake.emit(replacement.bridge); await vi.advanceTimersByTimeAsync(10); });
+    } else {
+      await advance(5000);
+    }
+    await advance(10);
+    expect(useSoundingStore.getState()).toMatchObject({ open: [], activeId: null, views: {}, source: "file" });
+    expect(queryClient.getQueryData(QUERY_KEYS.catalog)).toEqual({ keep: true });
+    expect(queryClient.getQueryCache().findAll({ queryKey: ["soundings"] })).toHaveLength(0);
+    await act(async () => { finishImage("old process image"); await pending; });
+    expect(queryClient.getQueryCache().findAll({ queryKey: ["soundings"] })).toHaveLength(0);
+  });
+
   it("queries health only after the subscription resolves, and recovers a lost event through the 1 s backstop", async () => {
     const fake = controlledTransport([healthWith(STARTING), healthOk]);
     setup(fake.transport);

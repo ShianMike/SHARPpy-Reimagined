@@ -16,7 +16,9 @@ from typing import Any
 from sharpmod.bridge import params as p
 from sharpmod.bridge.errors import BridgeError
 
-#: The output frame over HRRR's coverage bounds: about 3.3 by 3.5 km a cell at
+#: All supported field routes request the common 3 km CONUS Lambert output
+#: grid, including NAM and RRFS/REFS; they do not request native model grids.
+#: The output frame over its coverage bounds: about 3.3 by 3.5 km a cell at
 #: 35N, close to the native 3 km grid.
 # ponytail: the grid rides base64 inside one 8 MiB JSON frame, which caps the
 # frame at about 2.9 M cells; protocol 2's binary bodies would lift that.

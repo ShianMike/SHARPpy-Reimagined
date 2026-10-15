@@ -7,12 +7,13 @@
 // 4. if subscribing fails, warn once and poll every 5 s for the session;
 // 5. unlisten on unmount.
 
-import { useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { hashKey, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { BackendHealth, BridgeStatus } from "../../types/contracts";
 import { isTransitional } from "../contracts/health";
 import type { BackendClient } from "./client";
 import { recordLog } from "../../stores/logStore";
+import { useSoundingStore } from "../../stores/soundingStore";
 import {
   BASE_QUERY_OPTIONS,
   FALLBACK_POLL_MS,
@@ -50,6 +51,25 @@ export function BackendProvider({ client, children }: BackendProviderProps): Rea
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | null = null;
+    let instance = queryClient.getQueryData<BackendHealth>(QUERY_KEYS.health)?.bridge;
+    const healthHash = hashKey(QUERY_KEYS.health);
+    // Health updates cover status events, polling, and explicit restarts alike.
+    const unwatch = queryClient.getQueryCache().subscribe((event) => {
+      if (event.type !== "updated" || event.query.queryHash !== healthHash) return;
+      const next = queryClient.getQueryData<BackendHealth>(QUERY_KEYS.health)?.bridge;
+      if (next?.status !== "up") return;
+      const previous = instance;
+      instance = next;
+      if (previous?.status !== "up" || (previous.pid === next.pid
+        && previous.since === next.since && previous.restarts === next.restarts)) return;
+      const hadSoundings = useSoundingStore.getState().open.length > 0;
+      useSoundingStore.setState({ open: [], activeId: null, views: {} });
+      void queryClient.cancelQueries({ queryKey: ["soundings"] });
+      queryClient.removeQueries({ queryKey: ["soundings"] });
+      if (hadSoundings) {
+        recordLog("warning", "Backend", "Soundings closed after backend restart", "Reopen the soundings to continue.");
+      }
+    });
     client
       .onBridgeStatus((status) => {
         if (!disposed) {
@@ -80,6 +100,7 @@ export function BackendProvider({ client, children }: BackendProviderProps): Rea
     return () => {
       disposed = true;
       unlisten?.();
+      unwatch();
     };
   }, [client, queryClient]);
 

@@ -44,6 +44,9 @@ portable ZIP; v2.0.0 Legacy remains available for the previous Qt interface.
   release keeps its existing Qt 6.11.2 pin.
 - Return browser-preview rejection responses reliably on Windows by consuming
   bounded POST bodies before rejecting an origin or request path.
+- Close process-local soundings and discard their cached images, analyses,
+  and edit history when the backend restarts. Detect the replacement through
+  status events or health polling, and retain the user's source-form inputs.
 
 ### Added
 

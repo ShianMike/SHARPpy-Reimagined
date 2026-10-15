@@ -1,8 +1,9 @@
-import { Check, Cpu, Monitor, Palette, Play } from "lucide-react";
+import { Check, Cpu, Download, Monitor, Palette, Play } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { CapabilityTable } from "./CapabilityTable";
 import { GraphicsSettings } from "./GraphicsSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
+import { UpdateSettings } from "./UpdateSettings";
 import styles from "./SettingsView.module.css";
 
 const SECTIONS = [
@@ -10,6 +11,7 @@ const SECTIONS = [
   { id: "playback", label: "Forecast playback", icon: Play, description: "Set the pace of the forecast timeline." },
   { id: "graphics", label: "Map rendering", icon: Monitor, description: "Balance map detail with performance on this computer." },
   { id: "diagnostics", label: "Device diagnostics", icon: Cpu, description: "Graphics capabilities and the current renderer state." },
+  { id: "updates", label: "Updates", icon: Download, description: "Check for and install the latest Windows release." },
 ] as const;
 
 export function SettingsView(): ReactNode {
@@ -27,6 +29,7 @@ export function SettingsView(): ReactNode {
         {section === "appearance" || section === "playback" ? <AppearanceSettings section={section} /> : null}
         {section === "graphics" ? <GraphicsSettings /> : null}
         {section === "diagnostics" ? <div className={styles.section}><CapabilityTable /></div> : null}
+        {section === "updates" ? <UpdateSettings /> : null}
       </div>
     </section>
   </div>;

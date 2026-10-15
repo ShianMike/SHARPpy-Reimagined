@@ -5,6 +5,33 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.0.1] - 2026-10-15
+
+Patch for the v3.0.0 desktop interface. The release page retains the v3.0.0
+title; the app, installer, tag, and update feed use v3.0.1.
+
+### Added
+
+- Check stable GitHub Releases on launch, hourly while open, and after
+  reconnecting. Offer **Update now** and **Later**, with a manual check in
+  **Settings → Updates**. Install only after a click, verify the updater
+  signature, and save preferences before the installer restarts the app.
+- Publish the signed installer, detached signature, and `latest.json` update
+  feed alongside checksums and build provenance.
+- Add a fullscreen button to the right of Point details, with F11 support
+  and Escape to leave fullscreen in the desktop app.
+- Set the minimum desktop window size to **1280 × 800**.
+
+### Fixed
+
+- Format SPC outlook hover details like the observation and storm-report
+  tooltips, without repeating the risk label.
+- Improve error and update notices with status icons, readable hints,
+  consistent spacing, and separated actions. Simplify the Updates page.
+
+The original v3.0.0 build needs one manual upgrade to this installer to gain
+in-app updates. Subsequent higher versions can update the existing install.
+
 ## [v3.0.0] - 2026-10-15
 
 v3.0.0 introduces the React/Tauri desktop interface with the existing

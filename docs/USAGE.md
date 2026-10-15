@@ -41,6 +41,28 @@ The navigation rail opens **Overview**, **Model Viewer**, **Soundings**,
 to move between controls and the arrow keys within navigation and selection
 menus; Escape closes popovers.
 
+The desktop window has a minimum size of **1280 × 800**.
+
+### Application updates (v3.0.1 patch)
+
+The installed Windows app checks the latest stable GitHub Release on launch,
+every hour while open, and when the internet connection returns. When a newer
+version is available, a notice offers **Update now** or **Later**. Later hides
+that version's notice for the session; the update remains under **Settings →
+Updates**, where **Check for updates** can also check immediately. Background
+connection failures do not interrupt your work.
+
+Choose **Update now** (or **Install update** in Settings) to download the signed
+installer and upgrade the existing installation. Finish your work first: the
+app closes during installation and reopens afterward. Saved preferences remain
+on the device. This downloads a complete installer rather than a binary delta
+patch. Nothing installs until you click, and checks run only while the app is
+open. Browser previews cannot install updates.
+
+The original v3.0.0 app has no updater. Install the v3.0.1 patch once using
+its Windows installer; later versions can update in the app. The patch release
+page retains the v3.0.0 title; its installer and update feed use v3.0.1.
+
 ### Model Viewer
 
 1. Choose the **Model**, **Run · UTC**, **Forecast hour**, and **Parameter** in

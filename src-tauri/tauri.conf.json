@@ -15,8 +15,8 @@
         "title": "SHARPpy Reimagined",
         "width": 1440,
         "height": 900,
-        "minWidth": 1024,
-        "minHeight": 640,
+        "minWidth": 1280,
+        "minHeight": 800,
         "center": true,
         "resizable": true,
         "decorations": true,
@@ -40,6 +40,14 @@
         "frame-ancestors": "'none'"
       },
       "capabilities": ["main"]
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENBMThDRTM5NzY0REQ1MEEKUldRSzFVMTJPYzRZeXJIczJzM0RBSGxOQVdVditrdkxFdFZxVkhTMlJPYWh0ZFNrcHV2THZJNWMK",
+      "requireSignedVersion": true,
+      "endpoints": ["https://github.com/ShianMike/SHARPpy-Reimagined/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
     }
   },
   "bundle": {

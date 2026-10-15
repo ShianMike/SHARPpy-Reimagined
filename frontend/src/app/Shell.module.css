@@ -1,6 +1,7 @@
 .shell { position: fixed; inset: 0; overflow: hidden; background: var(--surface-0); }
 .main, .mapSurface, .viewer { position: absolute; inset: 0; min-width: 0; min-height: 0; }
 .viewer { pointer-events: none; }
+.updateNotice { position: absolute; right: var(--chrome-inset); bottom: calc(var(--player-h) + 2 * var(--chrome-inset)); width: min(var(--inspector-w), calc(100% - 2 * var(--chrome-inset))); z-index: var(--z-chrome); }
 .toolbar { position: absolute; top: max(var(--chrome-inset), env(safe-area-inset-top)); left: max(var(--chrome-inset), env(safe-area-inset-left)); right: max(var(--chrome-inset), env(safe-area-inset-right)); z-index: var(--z-chrome); }
 .leftDock { position: absolute; top: var(--forecast-top); bottom: max(var(--chrome-inset), env(safe-area-inset-bottom)); left: max(var(--chrome-inset), env(safe-area-inset-left)); display: flex; flex-direction: column; justify-content: center; gap: var(--space-3); z-index: var(--z-chrome); pointer-events: none; }
 .rail, .mapTools { flex: none; pointer-events: auto; }

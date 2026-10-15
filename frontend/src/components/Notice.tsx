@@ -2,6 +2,7 @@
 // "floating" makes it its own glass surface (map notices); "flat" sits inside
 // another surface or an opaque workspace.
 
+import { CircleAlert, Info, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { Surface } from "../ui/Surface";
 import styles from "./Notice.module.css";
@@ -33,12 +34,18 @@ export function Notice({
   testId,
   children,
 }: NoticeProps): ReactNode {
+  const Icon = tone === "danger" ? CircleAlert : tone === "warning" ? TriangleAlert : Info;
   const body = (
     <>
-      <p className={styles.title}>{title}</p>
-      {message === undefined ? null : <p className={styles.message}>{message}</p>}
-      {detail === undefined ? null : <p className={styles.detail}>{detail}</p>}
-      {children}
+      <div className={styles.heading}>
+        <span className={styles.icon} aria-hidden="true"><Icon /></span>
+        <p className={styles.title}>{title}</p>
+      </div>
+      {message === undefined && detail === undefined && children === undefined ? null : <div className={styles.body}>
+        {message === undefined ? null : <p className={styles.message}>{message}</p>}
+        {detail === undefined ? null : <p className={styles.detail}>{detail}</p>}
+        {children}
+      </div>}
       {actions === undefined ? null : <div className={styles.actions}>{actions}</div>}
     </>
   );

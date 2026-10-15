@@ -62,7 +62,7 @@ export function BackendErrorNotice({
       testId={testId}
     >
       {hint === null ? null : (
-        <p className={styles.log} data-testid="error-no-retry">
+        <p className={styles.hint} data-testid="error-no-retry">
           {hint}
         </p>
       )}

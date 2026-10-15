@@ -6,7 +6,7 @@ import { MARKS, nextFrames, projectStation, waitForMark } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
-import { chooseThroughSearch } from "./support/ui";
+import { boxOf, chooseThroughSearch, isInside, viewportBox } from "./support/ui";
 
 test("python-unavailable: the instruction, no Retry, and no station count (DR6-3)", async ({ page, consoleMessages }) => {
   await page.goto("/?scenario=python-unavailable");
@@ -41,11 +41,14 @@ test("catalog-error: the notice after two automatic retries, then Retry loads 93
   page,
   consoleMessages,
 }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/?scenario=catalog-error");
   const notice = page.getByTestId("catalogue-error");
   await expect(notice).toContainText("Stations could not be loaded", { timeout: 10_000 });
   await expect(notice).toContainText("The station catalogue could not be loaded.");
   await expect(page.getByTestId("catalogue-announcement")).toHaveCount(0);
+  expect(isInside(await boxOf(notice), viewportBox(page))).toBe(true);
+  await saveScreenshot(page, "browser-catalog-error.png");
   await notice.getByRole("button", { name: "Retry" }).click();
   await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
   await expect(notice).toHaveCount(0);

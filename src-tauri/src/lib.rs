@@ -133,6 +133,7 @@ pub fn run() {
     });
     let app = tauri::Builder::default()
         .plugin(log_plugin())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
             let state = build_state(app.handle())?;
             let supervisor = state.router.supervisor().clone();

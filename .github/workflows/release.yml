@@ -494,7 +494,7 @@ jobs:
         with:
           tag_name: ${{ needs.resolve-release.outputs.tag }}
           target_commitish: ${{ needs.resolve-release.outputs.source_sha }}
-          name: SHARPpy Reimagined ${{ needs.resolve-release.outputs.tag }}${{ needs.resolve-release.outputs.tag == 'v2.0.0' && ' Legacy' || '' }}
+          name: SHARPpy Reimagined ${{ needs.resolve-release.outputs.tag == 'v3.0.1' && 'v3.0.0' || needs.resolve-release.outputs.tag }}${{ needs.resolve-release.outputs.tag == 'v2.0.0' && ' Legacy' || '' }}
           generate_release_notes: true
           body: |
             **Recommended Windows download:** `SHARPpy-Reimagined-${{ needs.resolve-release.outputs.tag }}-windows-x64-setup.exe`

@@ -152,6 +152,13 @@ def test_a_product_without_a_declared_spacing_is_padded_conservatively():
         "/hiresw.20260722",
     ),
     (
+        "hrw-wrf-nssl",
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hiresw/prod/"
+        "hiresw.20260722/hiresw.t00z.arw_5km.f00.conusmem2.grib2",
+        "filter_hiresconus.pl",
+        "/hiresw.20260722",
+    ),
+    (
         "hrw-fv3",
         "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hiresw/prod/"
         "hiresw.20260722/hiresw.t00z.fv3_5km.f00.conus.grib2",

@@ -1,0 +1,7 @@
+{
+  "scientific_backend": {
+    "status": "unavailable",
+    "code": "BACKEND_CONFIG_INVALID",
+    "message": "invalid SHARPMOD_BACKEND value 'gpu'; expected one of: auto, python, rust"
+  }
+}

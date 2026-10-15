@@ -1,0 +1,121 @@
+{
+  "product": "torn",
+  "validTime": "2026-10-04T21:00:00Z",
+  "outlook": {
+    "title": "SPC convective outlook \u2014 Day 1 tornado probability",
+    "subtitle": "Day 1 \u00b7 valid 04 Oct 1300Z \u2192 05 Oct 1200Z",
+    "validFrom": "2026-10-04T13:00:00Z",
+    "validTo": "2026-10-05T12:00:00Z",
+    "issued": "2026-10-04T12:50:00Z",
+    "covers": true,
+    "sourceUrl": "https://www.spc.noaa.gov/products/outlook/archive/2026/day1otlk_20261004_1300_torn.nolyr.geojson",
+    "attribution": "NOAA/NWS Storm Prediction Center",
+    "areas": [
+      {
+        "label": "2%",
+        "description": "2% Tornado Risk",
+        "fill": "#66A366",
+        "stroke": "#005500",
+        "rank": 20,
+        "hatch": false,
+        "hatchLevel": 0,
+        "rings": [
+          [
+            [
+              -101.0,
+              32.0
+            ],
+            [
+              -93.0,
+              32.0
+            ],
+            [
+              -93.0,
+              39.0
+            ],
+            [
+              -101.0,
+              39.0
+            ]
+          ],
+          [
+            [
+              -99.0,
+              34.0
+            ],
+            [
+              -95.0,
+              34.0
+            ],
+            [
+              -95.0,
+              37.0
+            ],
+            [
+              -99.0,
+              37.0
+            ]
+          ]
+        ]
+      },
+      {
+        "label": "5%",
+        "description": "5% Tornado Risk",
+        "fill": "#9D4E15",
+        "stroke": "#70380F",
+        "rank": 50,
+        "hatch": false,
+        "hatchLevel": 0,
+        "rings": [
+          [
+            [
+              -99.0,
+              34.0
+            ],
+            [
+              -95.0,
+              34.0
+            ],
+            [
+              -95.0,
+              37.0
+            ],
+            [
+              -99.0,
+              37.0
+            ]
+          ]
+        ]
+      },
+      {
+        "label": "SIGN",
+        "description": "10% or Greater Significant Tornado Risk",
+        "fill": "#888888",
+        "stroke": "#000000",
+        "rank": 10000,
+        "hatch": true,
+        "hatchLevel": 0,
+        "rings": [
+          [
+            [
+              -98.0,
+              34.5
+            ],
+            [
+              -96.0,
+              34.5
+            ],
+            [
+              -96.0,
+              36.5
+            ],
+            [
+              -98.0,
+              36.5
+            ]
+          ]
+        ]
+      }
+    ]
+  }
+}

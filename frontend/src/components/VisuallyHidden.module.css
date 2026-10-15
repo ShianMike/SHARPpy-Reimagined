@@ -1,0 +1,11 @@
+.hidden {
+  position: absolute;
+  width: var(--hairline);
+  height: var(--hairline);
+  margin: calc(var(--hairline) * -1);
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

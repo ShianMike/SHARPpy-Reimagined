@@ -555,10 +555,10 @@ def test_hover_fraction_matches_sampled_value():
 
         widget.render(QPixmap(widget.size()))
         fraction = widget.hover_colorbar_fraction()
-        assert fraction == pytest.approx((45.0 - 5.0) / (75.0 - 5.0), abs=1e-6)
+        assert fraction == pytest.approx((45.0 - 7.5) / (72.5 - 7.5), abs=1e-6)
         info = widget.legend_layout_info()
         assert info["bar"] is not None
-        assert info["range"] == pytest.approx((5.0, 75.0))
+        assert info["range"] == pytest.approx((7.5, 72.5))
     finally:
         widget.close()
         widget.deleteLater()

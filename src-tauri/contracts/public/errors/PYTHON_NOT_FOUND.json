@@ -1,0 +1,9 @@
+{
+  "code": "PYTHON_NOT_FOUND",
+  "message": "The Python backend is not configured. Set SHARPPY_PYTHON to a Python 3.11+ interpreter that has sharpmod installed, then restart the app.",
+  "retryable": false,
+  "context": {
+    "operation": "start_backend",
+    "provider": "python-bridge"
+  }
+}

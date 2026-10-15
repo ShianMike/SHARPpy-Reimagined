@@ -1,0 +1,169 @@
+/*
+ * Reset, typography, focus ring, scrollbars, and icon classes (DESIGN-frontend F7).
+ * Every value is a token from tokens.css.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* DR6-1: an element with the hidden attribute stays hidden even when a class sets display. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+html {
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  overflow: hidden;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-size: inherit;
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  text-wrap: balance;
+}
+
+p { text-wrap: pretty; }
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+button,
+input,
+select,
+textarea {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled {
+  cursor: default;
+}
+
+svg {
+  display: block;
+}
+
+code,
+kbd,
+samp {
+  font-family: var(--font-mono);
+}
+
+/* Data readouts: ids, coordinates, counts */
+.tabular {
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus: every interactive element shows the ring on keyboard focus. */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Native scrolling with a quiet glass thumb; keeps wheel and keyboard behavior. */
+::-webkit-scrollbar { width: var(--scrollbar-size); height: var(--scrollbar-size); }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: var(--space-0-5) solid transparent; background-clip: padding-box; border-radius: var(--radius-pill); }
+::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
+::-webkit-scrollbar-button { display: none; }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+}
+@media (forced-colors: active) {
+  ::-webkit-scrollbar-thumb { background-color: ButtonText; }
+}
+
+::selection {
+  background: var(--accent-subtle);
+  color: var(--text-primary);
+}
+
+/* Icons: Lucide glyphs are sized here, never by props. */
+.icon {
+  flex: none;
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+  stroke-width: var(--icon-stroke);
+}
+
+.icon-sm {
+  flex: none;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  stroke-width: var(--icon-stroke);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin-wght-normal.woff2") format("woff2");
+}
+[data-material="panel"] {
+  background: var(--surface-1);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+a { color: var(--link); }

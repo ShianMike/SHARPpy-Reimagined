@@ -1,0 +1,10 @@
+{
+  "code": "FIELD_UNAVAILABLE",
+  "message": "HRRR Composite Reflectivity, 2026-10-05 04Z run, F001 is not published: HRRR did not return refc.",
+  "retryable": false,
+  "context": {
+    "operation": "get_weather_field",
+    "provider": "python-bridge",
+    "resource": "HRRR refc 2026-10-05T04:00:00Z F001"
+  }
+}

@@ -1,0 +1,72 @@
+/* One map panel (REQUEST §14). The single map fills the window under the chrome; two
+   or four panels share the box inside it, one gap apart (WeatherMap.module.css). */
+.panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.panel[data-active="true"] {
+  outline: var(--focus-ring-width) solid var(--selection-indicator);
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
+.panel > .map {
+  position: absolute;
+  inset: 0;
+}
+
+/* Top-left of each panel, below the shared toolbar and clear of the rail. */
+.chip {
+  position: absolute;
+  top: calc(var(--chrome-inset) + var(--toolbar-h) + var(--space-3));
+  left: var(--chrome-inset);
+  z-index: var(--z-map-chip);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-0-5);
+  min-height: var(--control-h-xs);
+  max-width: min(var(--panel-chip-max-w), calc(100% - 2 * var(--chrome-inset)));
+  padding: var(--space-1) var(--space-3);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-tight);
+  text-align: left;
+}
+
+@media (max-height: 799px) {
+  [data-layout="2"] [data-panel="1"] .chip,
+  [data-layout="4"] [data-panel="1"] .chip,
+  [data-layout="4"] [data-panel="3"] .chip {
+    left: var(--dock-offset);
+    max-width: min(var(--panel-chip-max-w), calc(100% - var(--dock-offset) - var(--chrome-inset)));
+  }
+}
+
+button.chip:hover {
+  border-color: var(--border-strong);
+}
+
+button.chip { background: var(--glass-fill); }
+
+[data-layout="4"] [data-panel="3"] .chip,
+[data-layout="4"] [data-panel="4"] .chip { top: var(--space-3); }
+
+button.chip[aria-pressed="true"] {
+  border-color: var(--selection-indicator);
+}
+
+.product {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.status {
+  color: var(--text-secondary);
+}

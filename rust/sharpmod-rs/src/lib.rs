@@ -224,15 +224,28 @@ fn batch_inputs_from_flattened(
                 "profile {profile_index}: surface_index {surface_index} is outside a profile with {level_count} levels"
             ));
         }
+        // Normalize during the required owned copy, before derived values can equal the sentinel.
+        let snapshot = |column: &[f64]| {
+            column[start..end]
+                .iter()
+                .map(|&value| {
+                    if missing == Some(value) {
+                        f64::NAN
+                    } else {
+                        value
+                    }
+                })
+                .collect()
+        };
         inputs.push(batch_analysis::BatchProfileInput {
-            pressure: pressure[start..end].to_vec(),
-            height: height[start..end].to_vec(),
-            temperature: temperature[start..end].to_vec(),
-            dewpoint: dewpoint[start..end].to_vec(),
-            wind_direction: wind_direction[start..end].to_vec(),
-            wind_speed: wind_speed[start..end].to_vec(),
+            pressure: snapshot(pressure),
+            height: snapshot(height),
+            temperature: snapshot(temperature),
+            dewpoint: snapshot(dewpoint),
+            wind_direction: snapshot(wind_direction),
+            wind_speed: snapshot(wind_speed),
             surface_index,
-            missing,
+            missing: None,
         });
     }
     Ok(inputs)
@@ -580,7 +593,7 @@ fn py_profile_batch_analysis<'py>(
         .detach(move || {
             let mut options = batch_analysis::BatchExecutionOptions::default();
             if let Some(max_threads) = max_threads {
-                options.max_threads = max_threads;
+                options.max_threads = max_threads.min(options.max_threads);
             }
             options.parallel_threshold = parallel_threshold;
             if options == batch_analysis::BatchExecutionOptions::default() {

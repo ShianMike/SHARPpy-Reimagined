@@ -21,10 +21,9 @@ if TYPE_CHECKING:
 # shape of the extension API itself.
 BACKEND_API_VERSION = 7
 
-# Release-build adapter measurements support a bounded four-worker pool once
-# a call contains at least eight complete profiles. Keep Python defaults in
-# one place so facade and adapters cannot silently drift.
-DEFAULT_BATCH_THREADS = min(4, max(1, os.cpu_count() or 1))
+# Large batches may use every available CPU; Rust also respects process limits.
+# Keep facade and adapter defaults together, including on Python 3.11/3.12.
+DEFAULT_BATCH_THREADS = max(1, getattr(os, "process_cpu_count", os.cpu_count)() or 1)
 DEFAULT_BATCH_PARALLEL_THRESHOLD = 8
 
 REQUIRED_RUST_CAPABILITIES = (

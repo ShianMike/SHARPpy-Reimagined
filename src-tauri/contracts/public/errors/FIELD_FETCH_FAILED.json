@@ -1,0 +1,10 @@
+{
+  "code": "FIELD_FETCH_FAILED",
+  "message": "HRRR Composite Reflectivity, 2026-10-05 04Z run, F001 could not be downloaded: the connection timed out.",
+  "retryable": true,
+  "context": {
+    "operation": "get_weather_field",
+    "provider": "python-bridge",
+    "resource": "HRRR refc 2026-10-05T04:00:00Z F001"
+  }
+}

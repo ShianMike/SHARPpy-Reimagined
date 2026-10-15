@@ -1,0 +1,8 @@
+{
+  "code": "METHOD_NOT_FOUND",
+  "message": "The installed sharpmod does not support 'stations.search'. Update sharpmod or the app so their versions match.",
+  "retryable": false,
+  "details": {
+    "method": "stations.search"
+  }
+}

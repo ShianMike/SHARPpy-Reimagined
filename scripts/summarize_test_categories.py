@@ -124,7 +124,7 @@ def category_for_module(module: str) -> str:
         "test_winter_snow_ratio",
     }:
         return "science"
-    if module.startswith(("test_backend_", "test_python_backend", "test_rust_backend")) or module in {
+    if module.startswith(("test_backend_", "test_bridge_", "test_python_backend", "test_rust_backend")) or module in {
         "test_console_encoding",
         "test_grib_backend_equivalence",
         "test_installation_reference",

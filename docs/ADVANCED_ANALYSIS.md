@@ -1,5 +1,9 @@
 # Advanced analysis and sharing
 
+This is a reference for the **v2.0.0 Legacy Qt interface** and its analysis
+tools. For the current v3 interface, navigation, imports, and map controls,
+use the [v3 desktop guide](USAGE.md#0-desktop-interface-v300).
+
 This guide covers the cross-sounding workflows in the sounding window and the
 optional environmental layers in the picker. The guiding rule is exactness:
 missing members, levels, and times remain missing. The application does not turn

@@ -24,7 +24,12 @@ from sharpmod.analysis.ensemble_members import EnsembleAcquisition
 
 FORMAT = "sharpmod-ensemble-thresholds"
 VERSION = 1
-OPERATORS = frozenset({">", ">=", "<", "<=", "==", "between"})
+#: The same comparisons in the order every control lists them: common
+#: comparisons first, so keyboard users and deterministic sessions/screenshots
+#: see a stable order. ``OPERATORS`` stays a set because validation only needs
+#: membership.
+OPERATOR_ORDER = (">", ">=", "<", "<=", "==", "between")
+OPERATORS = frozenset(OPERATOR_ORDER)
 DISCLAIMER = (
     "Ensemble ingredient agreement; not a calibrated severe-weather probability."
 )
@@ -952,6 +957,7 @@ __all__ = [
     "MEMBER_STATE_SHORT_LABELS",
     "MEMBER_UNUSABLE",
     "OPERATORS",
+    "OPERATOR_ORDER",
     "ThresholdCondition",
     "ThresholdDefinition",
     "ThresholdError",

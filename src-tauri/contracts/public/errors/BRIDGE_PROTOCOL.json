@@ -1,0 +1,13 @@
+{
+  "code": "BRIDGE_PROTOCOL",
+  "message": "The Python backend sent a response the app could not read. The app and sharpmod versions may not match.",
+  "retryable": false,
+  "context": {
+    "operation": "get_station_catalog",
+    "provider": "python-bridge",
+    "resource": "bundled UWyo station catalogue"
+  },
+  "details": {
+    "method": "stations.catalog"
+  }
+}

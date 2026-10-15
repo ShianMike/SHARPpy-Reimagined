@@ -1,0 +1,20 @@
+{
+  "sounding_id": "fedcba9876543210",
+  "kind": "file",
+  "title": "KBVO hrrr_kbvo_20260625_06z.buf",
+  "location": "KBVO",
+  "station_id": null,
+  "station_name": null,
+  "latitude": null,
+  "longitude": null,
+  "valid_time": "2026-06-25T06:00:00Z",
+  "run_time": null,
+  "forecast_hour": null,
+  "model": null,
+  "provider": null,
+  "provider_name": null,
+  "source_url": null,
+  "file_name": "hrrr_kbvo_20260625_06z.buf",
+  "level_count": 50,
+  "time_count": 49
+}

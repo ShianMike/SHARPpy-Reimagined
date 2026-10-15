@@ -242,7 +242,9 @@ def test_release_workflow_gates_tag_and_source_versions():
     build = jobs["build-windows-exe"]
     # The exact-source test workflow must pass before building executable
     # artifacts, not only before publishing them.
-    assert set(build["needs"]) == {"resolve-release", "test-release"}
+    assert set(build["needs"]) == {"resolve-release", "test-release", "test-desktop"}
+    assert jobs["test-desktop"]["uses"] == "./.github/workflows/frontend.yml"
+    assert jobs["test-desktop"]["with"]["ref"] == test_job["with"]["ref"]
     assert set(jobs["publish"]["needs"]) == {
         "resolve-release",
         "test-release",
@@ -315,8 +317,8 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
     assert "wind_to_components" in verify["run"]
 
     build_names = {
-        "Build one-folder executable",
-        "Build portable single-file executable",
+        "Build one-folder desktop backend",
+        "Build desktop shell and Windows installer",
     }
     assert build_names <= {step.get("name") for step in steps}
     for name in build_names:
@@ -333,11 +335,10 @@ def test_release_requires_rust_runtime_reports_and_uploads_wheel():
     verifications = [
         step for step in steps
         if step.get("name") in {
-            "Verify recommended one-folder artifact",
-            "Verify portable single-file artifact",
+            "Verify bundled scientific backend",
         }
     ]
-    assert len(verifications) == 2
+    assert len(verifications) == 1
     for step in verifications:
         script = step["run"]
         assert 'requested_backend -ne "rust"' in script
@@ -345,6 +346,12 @@ def test_release_requires_rust_runtime_reports_and_uploads_wheel():
         assert "$null -ne $result.backend.fallback_reason" in script
         assert "rust_installed" in script
         assert "rust_version" in script
+
+    desktop = next(step for step in steps if step.get("name") == "Verify packaged desktop import and rendering")
+    assert "packaging/verify_desktop_artifact.ps1" in desktop["run"]
+    verifier = (ROOT / "packaging/verify_desktop_artifact.ps1").read_text()
+    for check in ("--desktop-runtime-check", "$env:SHARPPY_PYTHON = $null", "sharpmodVersion", "rustVersion", "levelCount", "image_bytes"):
+        assert check in verifier
 
     stage = next(
         step for step in steps
@@ -369,6 +376,8 @@ def test_release_requires_rust_runtime_reports_and_uploads_wheel():
 
 def test_release_dispatch_pins_existing_and_new_tag_sources():
     workflow = _load_workflow("release.yml")
+    assert workflow["on"]["workflow_dispatch"]["inputs"]["publish_release"]["default"] == "false"
+    assert workflow["jobs"]["publish"]["if"] == "github.event_name == 'push' || inputs.publish_release"
     jobs = workflow["jobs"]
     steps = jobs["resolve-release"]["steps"]
     names = [step.get("name") for step in steps]
@@ -399,7 +408,7 @@ def test_release_dispatch_pins_existing_and_new_tag_sources():
         step for step in jobs["publish"]["steps"]
         if step.get("name") == "Publish GitHub Release"
     )
-    assert "Build portable single-file executable" in build_names
+    assert "Build desktop shell and Windows installer" in build_names
     assert publish["with"]["tag_name"] == (
         "${{ needs.resolve-release.outputs.tag }}"
     )

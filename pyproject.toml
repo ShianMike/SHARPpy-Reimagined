@@ -45,7 +45,7 @@ classifiers = [
 # ``pip check``. The ``[render]`` extra documents its transitive packages.
 dependencies = [
     "numpy>=1.24,<3.0",
-    "PySide6>=6.5,<7.0",
+    "PySide6>=6.5,<6.12",  # 6.12 aborts in QPainter on Linux/Python 3.11.
     "qtpy>=2.3,<3.0",
     "python-dateutil>=2.8,<3.0",
     "certifi>=2023.7.22",
@@ -78,7 +78,7 @@ era5 = [
     "cdsapi>=0.7.7,<0.8",
     "herbie-data>=2026.3,<2027.0",
     "cfgrib>=0.9.15,<0.10",
-    "eccodes>=2.48,<3.0",
+    "eccodes>=2.49,<3.0",
     "xarray>=2026.4,<2027.0",
     "numcodecs>=0.11,<1.0",
 ]
@@ -107,7 +107,7 @@ dev = [
 quality = [
     "pip-audit==2.10.1",
     "pytest-cov==7.1.0",
-    "ruff==0.16.9",
+    "ruff==0.16.10",
 ]
 # Build frontend for the optional local Rust extension. This does not install
 # Rust itself or make the extension a requirement of the Python package.
@@ -212,6 +212,7 @@ packages = [
     "sharpmod.ui.analysis",
     "sharpmod.rendering",
     "sharpmod.backends",
+    "sharpmod.bridge",
     "sharpmod.sharptab",
     "sharpmod.io",
     "sharpmod.viz",

@@ -1,0 +1,8 @@
+{
+  "code": "INTERNAL",
+  "message": "Unexpected error in health; see the log.",
+  "retryable": false,
+  "details": {
+    "method": "health"
+  }
+}

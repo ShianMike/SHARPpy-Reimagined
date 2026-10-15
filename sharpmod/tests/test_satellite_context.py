@@ -123,6 +123,16 @@ def test_fixed_grid_frame_is_geolocated_to_a_real_png(tmp_path, channel):
     assert resolution == (0.5 if channel == "visible" else 2.0)
 
 
+def test_satellite_preserves_detail_within_the_shared_pixel_budget():
+    from sharpmod.providers.satellite_context import MAX_OUTPUT_PIXELS, _render_dimensions
+
+    width, height = _render_dimensions((-134.5, -60.5, 20.5, 53.0), 2.0, MAX_OUTPUT_PIXELS)
+    assert width > 2600 and height > 1400
+    assert width * height <= MAX_OUTPUT_PIXELS
+    # A small view must not be upscaled beyond the source's 2 km cells.
+    assert _render_dimensions((-100, -99, 35, 36), 2.0, MAX_OUTPUT_PIXELS) == (45, 55)
+
+
 def test_end_to_end_fetch_discloses_selected_timestamp(tmp_path):
     payload = _goes_netcdf(tmp_path)
     key = (

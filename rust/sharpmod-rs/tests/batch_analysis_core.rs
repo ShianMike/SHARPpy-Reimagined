@@ -1,7 +1,7 @@
 use sharpmod_rs::batch_analysis::{
-    analyze_profile, default_executor, BatchAnalysisExecutor, BatchExecutionMode,
-    BatchExecutionOptions, BatchProfileDiagnostics, BatchProfileInput, BOX_LAYER_TOPS_AGL,
-    MAX_BATCH_THREADS,
+    analyze_profile, available_threads, default_executor, BatchAnalysisExecutor,
+    BatchExecutionMode, BatchExecutionOptions, BatchProfileDiagnostics, BatchProfileInput,
+    BOX_LAYER_TOPS_AGL,
 };
 
 fn sounding(levels: usize, marker: f64) -> BatchProfileInput {
@@ -101,8 +101,15 @@ fn bounded_parallel_matches_serial_bit_for_bit_and_keeps_order() {
     .unwrap();
 
     assert_eq!(serial.mode, BatchExecutionMode::SerialSingleThread);
-    assert_eq!(parallel.mode, BatchExecutionMode::BoundedParallel);
-    assert_eq!(parallel.worker_count, 2);
+    assert_eq!(parallel.worker_count, 2.min(available_threads()));
+    assert_eq!(
+        parallel.mode,
+        if parallel.worker_count > 1 {
+            BatchExecutionMode::BoundedParallel
+        } else {
+            BatchExecutionMode::SerialSingleThread
+        }
+    );
     assert_eq!(serial.diagnostics.len(), inputs.len());
     assert_eq!(parallel.diagnostics.len(), inputs.len());
     for ((input, serial_row), parallel_row) in inputs
@@ -146,7 +153,14 @@ fn nested_rayon_call_stays_serial() {
         .install(|| executor.analyze(&inputs, &BOX_LAYER_TOPS_AGL))
         .unwrap();
 
-    assert_eq!(execution.mode, BatchExecutionMode::SerialNestedRayon);
+    assert_eq!(
+        execution.mode,
+        if executor.max_threads() > 1 {
+            BatchExecutionMode::SerialNestedRayon
+        } else {
+            BatchExecutionMode::SerialSingleThread
+        }
+    );
     assert_eq!(execution.worker_count, 1);
 }
 
@@ -173,7 +187,11 @@ fn worker_configuration_is_bounded_and_rejects_ambiguous_values() {
         parallel_threshold: 2,
     })
     .unwrap();
-    assert_eq!(bounded.max_threads(), MAX_BATCH_THREADS);
+    assert_eq!(bounded.max_threads(), available_threads());
+    assert_eq!(
+        BatchExecutionOptions::default().max_threads,
+        available_threads()
+    );
 
     assert!(BatchAnalysisExecutor::new(BatchExecutionOptions {
         max_threads: 0,
@@ -192,7 +210,7 @@ fn default_executor_is_process_wide_and_supports_concurrent_callers() {
     let first = default_executor().unwrap();
     let second = default_executor().unwrap();
     assert!(std::ptr::eq(first, second));
-    assert!(first.max_threads() <= MAX_BATCH_THREADS);
+    assert_eq!(first.max_threads(), available_threads());
 
     let callers: Vec<_> = (0..2)
         .map(|caller| {
@@ -209,8 +227,15 @@ fn default_executor_is_process_wide_and_supports_concurrent_callers() {
         .collect();
     for caller in callers {
         let execution = caller.join().unwrap();
-        assert_eq!(execution.mode, BatchExecutionMode::BoundedParallel);
-        assert!(execution.worker_count <= MAX_BATCH_THREADS);
+        assert_eq!(execution.worker_count, available_threads());
+        assert_eq!(
+            execution.mode,
+            if available_threads() > 1 {
+                BatchExecutionMode::BoundedParallel
+            } else {
+                BatchExecutionMode::SerialSingleThread
+            }
+        );
         assert_eq!(execution.diagnostics.len(), 8);
     }
 }

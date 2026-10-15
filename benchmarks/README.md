@@ -6,6 +6,10 @@ threshold or claim that one implementation is faster. Results depend on the
 CPU, operating system, Python and NumPy versions, compiler, build profile,
 input size, array layout, and Python/native conversion overhead.
 
+The [2026-10-15 compute report](results/2026-10-15-compute-optimization.md)
+records available-CPU scaling, Rust input cleanup, and MMP endpoint reuse on
+bundled HRRR and observed soundings, including raw samples and research sources.
+
 Network transfer is measured separately. The
 [2026-07-22 RRFS range-worker benchmark](results/2026-07-22-rrfs-range-workers.md)
 compares 1, 2, 4, and 6 workers across three live cycles and records the
@@ -156,7 +160,7 @@ duplicate fixture bytes assigned to different model names.
 | Convective parcel workspace | 32 and 128 levels, five standard parcels | Measures the public traced surface/forecast/MU/ML/effective result and effective bounds. |
 | Shared thermodynamic workspace | 32 and 128 levels | Separates Python-public, Rust-public, zero-copy Rust-buffered, and native timings for one preparation shared by parcels and DCAPE. |
 | DCAPE workspace | 32 and 128 levels | Measures the public DCAPE summary and descending temperature trace. |
-| Complete-profile batch | 8 x 32 and 32 x 128 levels | Compares Python reference, Rust serial, bounded four-worker Rust, and direct native calls, including adapter packing and result conversion. |
+| Complete-profile batch | 8 x 32 and 32 x 128 levels | Compares Python reference, Rust serial, four-worker Rust, the all-available-CPU default, and direct native calls, including adapter packing and result conversion. |
 | Two-thread diagnostic | Configurable, default 100,000 values and 10 calls per worker | Compares the same total work sequentially and in two persistent Python threads. It is diagnostic output, not a scaling assertion or gate. |
 
 The harness times the shared array kernels `wind_to_components`,
@@ -180,8 +184,8 @@ one indicates overlap in that run; it does not establish general parallel
 scaling. Small array kernels retain the Python GIL while borrowing NumPy
 storage. Complete-profile calls instead copy each Python-owned column once,
 then release the GIL; internal parcel structures borrow those owned snapshots,
-and batch workers only see Rust-owned vectors. The four-worker default applies
-only at eight or more complete profiles, is capped at available CPUs, stays
+and batch workers only see Rust-owned vectors. The shared default uses all CPUs
+available to the process at eight or more complete profiles, stays
 serial when nested in Rayon, and remains explicitly overridable by callers.
 
 ## Run

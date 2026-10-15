@@ -42,6 +42,8 @@ from PyInstaller.utils.hooks import (
 # the spec:  set SHARPMOD_ONEFILE=1 for a single self-extracting .exe.
 ONEFILE = os.environ.get("SHARPMOD_ONEFILE", "0") == "1"
 RELEASE_BUILD = os.environ.get("SHARPMOD_RELEASE_BUILD", "0") == "1"
+DESKTOP_BACKEND = os.environ.get("SHARPMOD_DESKTOP_BACKEND", "0") == "1"
+BUNDLE_NAME = "sharppy-backend" if DESKTOP_BACKEND else "SHARPpy-Reimagined"
 
 # Resolve every release field from the checked-out source, then validate the
 # installed metadata before PyInstaller can copy it. This fails closed when an
@@ -286,14 +288,14 @@ if ONEFILE:
         a.zipfiles,
         a.datas,
         [],
-        name="SHARPpy-Reimagined",
+        name=BUNDLE_NAME,
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
         upx=False,
         upx_exclude=[],
         runtime_tmpdir=None,
-        console=False,  # windowed GUI app -- no console window
+        console=DESKTOP_BACKEND,  # The desktop bridge needs stdin/stdout pipes.
         disable_windowed_traceback=False,
         argv_emulation=False,
         target_arch=None,
@@ -307,12 +309,12 @@ else:
         a.scripts,
         [],
         exclude_binaries=True,
-        name="SHARPpy-Reimagined",
+        name=BUNDLE_NAME,
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
         upx=False,
-        console=False,  # windowed GUI app -- no console window
+        console=DESKTOP_BACKEND,
         disable_windowed_traceback=False,
         argv_emulation=False,
         target_arch=None,
@@ -329,5 +331,5 @@ else:
         strip=False,
         upx=False,
         upx_exclude=[],
-        name="SHARPpy-Reimagined",
+        name=BUNDLE_NAME,
     )

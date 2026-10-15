@@ -1,0 +1,10 @@
+{
+  "code": "SOUNDING_UNAVAILABLE",
+  "message": "No provider has a sounding for 72357 at 2026-10-04 12Z. Try another time or station.",
+  "retryable": false,
+  "context": {
+    "operation": "open_sounding",
+    "provider": "python-bridge",
+    "resource": "observed sounding 72357 at 2026-10-04T12:00:00Z"
+  }
+}

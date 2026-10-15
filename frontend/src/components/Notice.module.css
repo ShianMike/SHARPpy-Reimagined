@@ -1,0 +1,45 @@
+.notice {
+  --notice-tone: var(--text-tertiary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: var(--notice-max-w);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  box-shadow: inset var(--selection-indicator-w) 0 0 var(--notice-tone);
+  pointer-events: auto;
+}
+
+.notice[data-tone="info"] {
+  --notice-tone: var(--info);
+}
+
+.notice[data-tone="warning"] {
+  --notice-tone: var(--warning);
+}
+
+.notice[data-tone="danger"] {
+  --notice-tone: var(--danger);
+}
+
+.title {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.message {
+  color: var(--text-secondary);
+}
+
+.detail {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-small);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}

@@ -786,7 +786,7 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt",
         alongside it (same stem).
     dataset : optional
         A pre-loaded xarray ``Dataset`` (used mainly for testing). When omitted,
-        the ERA5 column is retrieved via Herbie (optional ``[era5]`` extra).
+        the ERA5 column is retrieved via CDS (optional ``[era5]`` extra).
     loc : str
         Location label recorded in the output.
 

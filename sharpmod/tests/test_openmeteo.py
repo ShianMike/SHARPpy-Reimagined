@@ -23,6 +23,7 @@ from sharpmod.tools import model_extract
 
 UTC = timezone.utc
 MODEL = "openmeteo-icon-global"
+ECMWF = "openmeteo-ecmwf-ifs025"
 RUN = datetime(2026, 8, 29, 0, tzinfo=UTC)
 FXX = 12
 VALID = RUN + timedelta(hours=FXX)
@@ -53,7 +54,7 @@ class _Response:
 
 
 def _payload(*, elevation=142.0, surface_pressure=SURFACE_P,
-             drop_level=None, blank_family=None, times=None):
+             drop_level=None, blank_family=None, times=None, levels=LEVELS):
     """Build a response whose profile is hydrostatically self-consistent."""
     midnight = VALID.replace(hour=0)
     stamps = times if times is not None else [
@@ -69,7 +70,7 @@ def _payload(*, elevation=142.0, surface_pressure=SURFACE_P,
             column[slot] = value
         return column
 
-    for level in LEVELS:
+    for level in levels:
         height = _std_height(float(level))
         temperature = max(-65.0, 15.0 - 6.5 * height / 1000.0)
         values = {
@@ -132,14 +133,13 @@ def _refuse(*_args, **_kwargs):
 # --------------------------------------------------------------------------- #
 # Catalog gating
 # --------------------------------------------------------------------------- #
-def test_exactly_one_model_is_enabled():
-    """Scope is deliberate: one audited model beats a list of maybes."""
-    assert [c.model_key for c in om.available_capabilities()] == [MODEL]
+def test_only_audited_models_are_enabled():
+    assert [c.model_key for c in om.available_capabilities()] == [MODEL, ECMWF]
 
 
 @pytest.mark.parametrize("api_model", [
     "best_match", "icon_seamless", "jma_seamless", "ukmo_seamless",
-    "ncep_hgefs025_ensemble_mean", "ecmwf_ifs", "ecmwf_ifs025",
+    "ncep_hgefs025_ensemble_mean", "ecmwf_ifs",
     "ecmwf_aifs025_single",
     "ncep_gfs_global", "ncep_hrrr_conus", "cmc_gem_gdps", "cmc_gem_rdps",
 ])
@@ -149,6 +149,33 @@ def test_combined_and_duplicate_routes_are_not_selectable(api_model):
 
 def test_the_enabled_model_is_selectable():
     assert om.is_selectable_api_model("icon_global")
+    assert om.is_selectable_api_model("ecmwf_ifs025")
+
+
+def test_ecmwf_fetches_an_explicit_open_meteo_run_with_all_measured_levels():
+    capability = om.get_capability(ECMWF)
+    request_get, seen = _getter(_payload(levels=capability.pressure_levels))
+    dataset = om.fetch_point(
+        ECMWF, 38.77, -90.87, run_time=RUN, fxx=FXX,
+        request_get=request_get,
+    )
+    assert seen["params"]["models"] == "ecmwf_ifs025"
+    assert seen["params"]["run"] == "2026-08-29T00:00"
+    assert seen["params"]["forecast_hours"] == "13"
+    assert "temperature_50hPa" in seen["params"]["hourly"]
+    assert model_extract.provider_capability(ECMWF).provider == om.PROVIDER
+    assert not model_extract.requires_grib_runtime(ECMWF)
+    assert dataset._sharpmod_transport == om.TRANSPORT
+
+
+@pytest.mark.parametrize("cycle,maximum", [(0, 360), (6, 144), (12, 360), (18, 144)])
+def test_ecmwf_offers_only_native_steps_with_the_run_cutoff(cycle, maximum):
+    hours = model_extract.forecast_hours(ECMWF, cycle_hour=cycle)
+    assert max(hours) == maximum
+    assert 1 not in hours and 145 not in hours
+    assert 144 in hours
+    assert (150 in hours) is (maximum == 360)
+    assert all(hour % (3 if hour <= 144 else 6) == 0 for hour in hours)
 
 
 def test_a_withheld_model_explains_itself():

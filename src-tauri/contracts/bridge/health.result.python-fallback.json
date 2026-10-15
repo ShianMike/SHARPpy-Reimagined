@@ -1,0 +1,10 @@
+{
+  "scientific_backend": {
+    "status": "ok",
+    "requested_backend": "auto",
+    "active_backend": "python",
+    "rust_installed": false,
+    "rust_version": null,
+    "fallback_reason": "sharpmod_rs is not installed"
+  }
+}

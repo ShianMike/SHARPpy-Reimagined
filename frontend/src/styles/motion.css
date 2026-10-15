@@ -1,0 +1,47 @@
+/* Keep motion on UI chrome; forecast values, map canvases and pointer positions stay immediate. */
+:where(button, a, input, select, textarea, summary) {
+  transition: background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    opacity var(--motion-fast) var(--ease-standard),
+    scale var(--motion-fast) var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :where(button:active:not(:disabled, [role="switch"], [data-popover-move])) { scale: 0.97; }
+  :where([data-motion="enter"]) { animation: ui-enter var(--motion-base) var(--ease-standard) backwards; }
+  :where([data-motion="fade"]) { animation: ui-fade var(--motion-fast) var(--ease-standard) backwards; }
+  :where([role="tooltip"]) { animation: ui-fade var(--motion-fast) var(--ease-standard) backwards; }
+  :where(details[open] > :not(summary)) { animation: ui-fade var(--motion-fast) var(--ease-standard) backwards; }
+  :where(svg[data-loading="true"]) { animation: ui-spin calc(var(--motion-slow) * 4) linear infinite; }
+  :where([inert], [hidden]) svg[data-loading="true"] { animation: none; }
+}
+
+:where([data-motion="disclosure"]) {
+  opacity: 1;
+  transition: opacity var(--motion-fast) var(--ease-standard), display var(--motion-fast) allow-discrete;
+}
+:where([data-motion="disclosure"][hidden]) { opacity: 0; }
+@starting-style { :where([data-motion="disclosure"]:not([hidden])) { opacity: 0; } }
+
+:where(button[aria-expanded] > .lucide-chevron-down, summary > .lucide-chevron-down) {
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+:where(button[aria-expanded="true"] > .lucide-chevron-down, details[open] > summary > .lucide-chevron-down) { transform: rotate(180deg); }
+
+/* Discrete display transitions preserve hidden semantics without animating panel dimensions. */
+:where([data-motion="panel"]) {
+  opacity: 1;
+  translate: 0;
+  transition: opacity var(--motion-base) var(--ease-standard),
+    translate var(--motion-base) var(--ease-standard),
+    display var(--motion-base) allow-discrete;
+}
+:where([data-motion="panel"][hidden]) { opacity: 0; translate: var(--motion-panel-x, var(--space-2)) 0; }
+@starting-style {
+  :where([data-motion="panel"]:not([hidden])) { opacity: 0; translate: var(--motion-panel-x, var(--space-2)) 0; }
+}
+
+@keyframes ui-enter { from { opacity: 0; translate: 0 var(--space-2); } to { opacity: 1; translate: 0; } }
+@keyframes ui-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-spin { to { transform: rotate(1turn); } }

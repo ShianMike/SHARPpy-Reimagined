@@ -255,6 +255,7 @@ def _retrieve_rrfs_dataset(config, run_dt, fxx, *, download_dir,
             run_dt,
             int(fxx),
             download_dir=download_dir,
+            member=config.kwargs.get("member"),
             cancelled=cancelled,
         )
     except DownloadCancelled:

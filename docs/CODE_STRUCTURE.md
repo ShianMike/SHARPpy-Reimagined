@@ -6,7 +6,8 @@ in packages grouped by responsibility:
 
 | Package | Contents |
 | --- | --- |
-| `analysis/` | Box sampling, profile metrics, ensembles, and analysis workflows |
+| `analysis/` | Box sampling, profile metrics, ensembles, threshold rules, metric control bounds, and analysis workflows |
+| `bridge/` | Headless JSON-lines bridge serving the Tauri frontend |
 | `core/` | Shared runtime helpers |
 | `io/` | Sounding and observation file formats |
 | `maps/` | Map overlays, geography, layers, and locator data |

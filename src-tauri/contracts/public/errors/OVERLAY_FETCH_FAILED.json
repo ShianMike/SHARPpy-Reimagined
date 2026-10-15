@@ -1,0 +1,10 @@
+{
+  "code": "OVERLAY_FETCH_FAILED",
+  "message": "The radar mosaic could not be loaded: Composite reflectivity request failed: HTTP 503.",
+  "retryable": true,
+  "context": {
+    "operation": "get_radar_frame",
+    "provider": "python-bridge",
+    "resource": "MRMS radar mosaic"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "valid_time": "2026-10-04T21:00:00Z",
+  "window_s": 21600,
+  "window_label": "\u00b13 hours",
+  "hazard_filter": "significant",
+  "total_count": 4,
+  "shown_count": 1,
+  "subtitle": "1 storm report (Significant hail/wind) \u00b7 \u00b13 hours \u00b7 04 Oct 2100Z",
+  "valid_from": "2026-10-04T18:00:00Z",
+  "valid_to": "2026-10-05T00:00:00Z",
+  "source_url": "https://mesonet.agron.iastate.edu/example",
+  "attribution": "NWS Local Storm Reports via Iowa Environmental Mesonet",
+  "reports": [
+    {
+      "label": "Sig Hail 2.75 in",
+      "description": "Norman, Cleveland, OK\nEvent time: 04 Oct 1940Z\nMagnitude: 2.75 in\nSource: PUBLIC (report source)\nBaseball size hail\nIssuing office: NWS WFO OUN\nProvider: NWS Local Storm Reports via Iowa Environmental Mesonet",
+      "fill": "#FFFFFF",
+      "stroke": "#101010",
+      "radius_px": 3.5,
+      "symbol": "diamond",
+      "caption": "2.75\u2033",
+      "significant": true,
+      "category": "significant",
+      "valid": "2026-10-04T19:40:00Z",
+      "lon": -97.3,
+      "lat": 35.3
+    }
+  ]
+}

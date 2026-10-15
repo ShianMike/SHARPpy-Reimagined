@@ -1,0 +1,22 @@
+{
+  "product": "visible",
+  "satellite": "G19",
+  "label": "G19 Visible (0.64 \u00b5m)",
+  "units": "",
+  "bounds": {
+    "west": -134.5,
+    "east": -60.5,
+    "south": 20.5,
+    "north": 53.0
+  },
+  "requested_time": "2026-10-04T21:00:00Z",
+  "retrieved_at": "2026-10-04T18:30:00Z",
+  "valid_time": "2026-10-04T21:00:00Z",
+  "update_interval_s": 300.0,
+  "coverage_fraction": 0.87,
+  "native_resolution_km": 2.0,
+  "attribution": "NOAA/NESDIS GOES \u00b7 NOAA Open Data Dissemination",
+  "source_url": "https://noaa-goes19.s3.amazonaws.com/example.nc",
+  "byte_length": 479,
+  "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAIAAAABACAYAAADS1n9/AAABpklEQVR4AWIYBaNgNARGwWgIjILREBgFoyEwCkZDYBSMhsAoGA2BUTAaAqNgNARGwWgIjILREBgFoyEwCkZDYBSMhsAoGA2BUTAaAqNgNARGwWgIjILREBgFoyEwCkZDYBSMhsAoGA2BUTAaAqNgNARGwWgIDDXAONQcTIl7mf4y/cel/x/zvxEVFrBwYIIxhjuNL/JBgJA8SM1wxCMiARAbucSqG04JYdgnAFIjlVT1Qz0xDOt6D1dk/p7xDx5vrBnY88BIaRNg9z08eIYfAznyQQCdDxIbSXhEJQBckY1LfCQkhBGVAEZChJIKRhPACAcjKgHgavDhEh8JaWNEJQBQhKJHNjofpGYk4WHdDQRFJK6uIEgOFxgpXUCQ/4d9CUBqZJKqHhSIQxkP+wQAihxiI5VYdSAzhwseEQkAFFmEIpeQPMiMUTwaAqNgNARGwWgIjILREBgFoyEwCkZDYBSMhsAoGA2BUTAaAqNgNARGwWgIjILREBgFoyEwCkZDYBSMhsAoGA2BUTAaAqNgNARGwWgIjILREBgFoyEwCkZDALDBFwIAySEzHHHWxxkAAAAASUVORK5CYII="
+}

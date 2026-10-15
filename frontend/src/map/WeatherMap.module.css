@@ -1,0 +1,53 @@
+/* The map fills the workspace beneath the translucent chrome (DESIGN-frontend F8). */
+.frame {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-map);
+  background: var(--map-background);
+}
+
+/* One map fills the window; two or four panels share the box inside the chrome (REQUEST §14),
+   left of the inspector and layer column, which would otherwise hide a third of the right panels. */
+.grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  gap: var(--chrome-gap);
+}
+
+.grid[data-layout="2"] {
+  grid-template-columns: 1fr 1fr;
+}
+
+.grid[data-layout="4"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.grid[data-motion="fade"] {
+  animation-duration: var(--motion-base);
+}
+
+/* Snapshot the map area once; live map canvases resize only for the final layout. */
+.grid::view-transition-group(root),
+.grid::view-transition-old(root),
+.grid::view-transition-new(root) {
+  animation-duration: var(--motion-base);
+  animation-timing-function: var(--ease-standard);
+}
+
+/* The overlay's centre column: the catalogue status above the map notices (DR6-2). */
+.notices {
+  position: relative;
+  z-index: var(--z-notice);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--chrome-gap);
+  min-width: 0;
+  pointer-events: none;
+}
+
+.notices:empty {
+  display: none;
+}

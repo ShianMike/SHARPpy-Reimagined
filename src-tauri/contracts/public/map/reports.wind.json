@@ -1,0 +1,43 @@
+{
+  "validTime": "2026-10-04T21:00:00Z",
+  "windowS": 21600,
+  "windowLabel": "\u00b13 hours",
+  "hazardFilter": "wind",
+  "totalCount": 4,
+  "shownCount": 2,
+  "subtitle": "2 storm reports (Wind + wind damage) \u00b7 \u00b13 hours \u00b7 04 Oct 2100Z",
+  "validFrom": "2026-10-04T18:00:00Z",
+  "validTo": "2026-10-05T00:00:00Z",
+  "sourceUrl": "https://mesonet.agron.iastate.edu/example",
+  "attribution": "NWS Local Storm Reports via Iowa Environmental Mesonet",
+  "reports": [
+    {
+      "label": "Wind 68 mph",
+      "description": "Norman, Cleveland, OK\nEvent time: 04 Oct 2005Z\nMagnitude: 68 mph\nSource: MESONET (report source)\nMeasured wind gust\nIssuing office: NWS WFO OUN\nProvider: NWS Local Storm Reports via Iowa Environmental Mesonet",
+      "fill": "#3C7CFF",
+      "stroke": "#00337F",
+      "radiusPx": 2.75,
+      "symbol": "circle",
+      "caption": "68 mph",
+      "significant": false,
+      "category": "g",
+      "valid": "2026-10-04T20:05:00Z",
+      "latitude": 35.4,
+      "longitude": -97.5
+    },
+    {
+      "label": "Wind damage",
+      "description": "Norman, Cleveland, OK\nEvent time: 04 Oct 2030Z\nSource: BROADCAST MEDIA (report source)\nDamage reported\nIssuing office: NWS WFO OUN\nProvider: NWS Local Storm Reports via Iowa Environmental Mesonet",
+      "fill": "#3C7CFF",
+      "stroke": "#00337F",
+      "radiusPx": 2.75,
+      "symbol": "square",
+      "caption": "DMG",
+      "significant": false,
+      "category": "d",
+      "valid": "2026-10-04T20:30:00Z",
+      "latitude": 35.5,
+      "longitude": -97.6
+    }
+  ]
+}

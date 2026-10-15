@@ -1,0 +1,5 @@
+{
+  "code": "SOUNDING_INVALID",
+  "message": "notes.txt is not a sounding sharpmod can read (no decoder could parse it).",
+  "retryable": false
+}

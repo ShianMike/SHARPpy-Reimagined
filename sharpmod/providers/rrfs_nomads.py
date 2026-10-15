@@ -1,4 +1,4 @@
-"""Project-owned NOAA RRFS retrieval over NOMADS static GRIB2 files.
+"""Project-owned NOAA RRFS and fixed REFS member retrieval over NOMADS GRIB2.
 
 Herbie 2026.3.0 still points its ``rrfs`` template at ``noaa-rrfs-pds/rrfs_a/``
 on AWS. That prefix no longer carries operational output -- the bucket keeps
@@ -26,6 +26,10 @@ than assumed:
 *   ``prslev`` publishes DZDT and no VVEL, so a written RRFS sounding has no
     pressure vertical velocity. See ``UNUSABLE_PRESSURE_FIELDS`` for why DZDT
     is not fetched as a substitute. No derived parameter depends on VVEL.
+
+REFS members use the same pressure/ground pairing under ``rrfsens``. Live
+inventories on 2026-10-12 show 14 pressure levels from 1000 to 250 hPa and
+hourly output through F060 for each of m001-m005. They publish no VVEL or DZDT.
 
 NOMADS serves no spatial subsetting for RRFS -- no ``filter_*.pl`` CGI, no
 OpenDAP dataset, and no pressure-level AWIPS subset -- so a field plan costs
@@ -171,12 +175,20 @@ def publishes_pressure_levels(cycle_hour) -> bool:
         return False
 
 
-def build_url(release, run_dt, fxx, product, domain) -> str:
-    """Return one published RRFS GRIB2 object URL."""
+def build_url(release, run_dt, fxx, product, domain, *, member=None) -> str:
+    """Return one published RRFS or individual REFS member GRIB2 URL."""
     item = domain_for(domain)
+    directory = f"rrfs.{run_dt:%Y%m%d}/{run_dt:%H}"
+    prefix = f"rrfs.t{run_dt:%H}z"
+    if member is not None:
+        if type(member) is not int or not 1 <= member <= 5:
+            raise ValueError("REFS member must be an integer from 1 to 5")
+        directory = f"rrfsens.{run_dt:%Y%m%d}/{run_dt:%H}/m{member:03d}"
+        prefix += f".m{member:03d}"
+        product += "nomads"
     return (
-        f"{NOMADS_ROOT}/{release}/rrfs.{run_dt:%Y%m%d}/{run_dt:%H}/"
-        f"rrfs.t{run_dt:%H}z.{product}.{item.resolution}"
+        f"{NOMADS_ROOT}/{release}/{directory}/"
+        f"{prefix}.{product}.{item.resolution}"
         f".f{int(fxx):03d}.{item.tag}.grib2"
     )
 
@@ -429,6 +441,32 @@ def _inventory(session, url, *, timeout, cancelled):
     return parse_idx(text, total), total
 
 
+def _pressure_inventory(session, domain, run_dt, fxx, *, member, timeout, cancelled):
+    """Resolve the same published pressure product for probes and downloads."""
+    failures = []
+    for candidate in _release_candidates():
+        url = build_url(candidate, run_dt, fxx, PRESSURE_PRODUCT, domain, member=member)
+        try:
+            records, _total = _inventory(
+                session, url, timeout=timeout, cancelled=cancelled,
+            )
+        except DownloadCancelled:
+            raise
+        except RrfsUnavailable as exc:
+            failures.append("%s: %s" % (candidate, exc))
+            continue
+        except Exception as exc:  # noqa: BLE001 - probe every candidate
+            failures.append("%s: %s" % (candidate, type(exc).__name__))
+            continue
+        _remember_release(candidate)
+        return candidate, url, records
+    raise RrfsUnavailable(
+        "no RRFS release directory publishes %s F%03d for %s (%s)"
+        % (run_dt.isoformat(), int(fxx), domain_for(domain).label,
+           "; ".join(failures) or "no candidates")
+    )
+
+
 def _download_subset(
     session,
     url,
@@ -482,6 +520,7 @@ def fetch_pair(
     fxx,
     *,
     download_dir,
+    member=None,
     session=None,
     cancelled=None,
     progress=None,
@@ -512,36 +551,10 @@ def fetch_pair(
     if owned:
         session = _new_session()
     try:
-        failures = []
-        release = None
-        records = ()
-        pressure_url = ""
-        for candidate in _release_candidates():
-            candidate_url = build_url(
-                candidate, run_dt, fxx, PRESSURE_PRODUCT, item
-            )
-            try:
-                records, _total = _inventory(
-                    session, candidate_url,
-                    timeout=timeout, cancelled=cancelled,
-                )
-            except DownloadCancelled:
-                raise
-            except RrfsUnavailable as exc:
-                failures.append("%s: %s" % (candidate, exc))
-                continue
-            except Exception as exc:  # noqa: BLE001 - probe every candidate
-                failures.append("%s: %s" % (candidate, type(exc).__name__))
-                continue
-            release, pressure_url = candidate, candidate_url
-            _remember_release(candidate)
-            break
-        if release is None:
-            raise RrfsUnavailable(
-                "no RRFS release directory publishes %s F%03d for %s (%s)"
-                % (run_dt.isoformat(), int(fxx), item.label,
-                   "; ".join(failures) or "no candidates")
-            )
+        release, pressure_url, records = _pressure_inventory(
+            session, item, run_dt, fxx, member=member,
+            timeout=timeout, cancelled=cancelled,
+        )
 
         search, fields = pressure_field_plan(records)
         selected = select_records(records, search)
@@ -572,7 +585,7 @@ def fetch_pair(
         )
 
         surface_url = build_url(
-            release, run_dt, fxx, SURFACE_PRODUCT, item
+            release, run_dt, fxx, SURFACE_PRODUCT, item, member=member
         )
         surface_records, _surface_total = _inventory(
             session, surface_url, timeout=timeout, cancelled=cancelled,

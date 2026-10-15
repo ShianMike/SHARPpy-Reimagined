@@ -1,0 +1,29 @@
+{
+  "app": {
+    "name": "SHARPpy Reimagined",
+    "version": "3.0.0",
+    "tauriVersion": "2.12.1",
+    "buildProfile": "debug",
+    "logFile": "C:\\Users\\example\\AppData\\Local\\io.github.shianmike.sharppy-reimagined\\logs\\sharppy-reimagined.log"
+  },
+  "bridge": {
+    "status": "restarting",
+    "attempt": 1,
+    "retryInMs": 500,
+    "lastError": {
+      "code": "BRIDGE_CRASHED",
+      "message": "The Python backend stopped unexpectedly and is restarting.",
+      "retryable": true,
+      "context": {
+        "operation": "start_backend",
+        "provider": "python-bridge"
+      },
+      "details": {
+        "exitCode": 1
+      }
+    }
+  },
+  "python": null,
+  "scientificBackend": null,
+  "checkedAt": "2026-10-04T01:02:05Z"
+}

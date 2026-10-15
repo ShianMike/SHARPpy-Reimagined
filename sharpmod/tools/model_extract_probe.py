@@ -12,11 +12,13 @@ from datetime import timedelta
 from datetime import timezone
 from sharpmod.providers import eccc_geomet
 from sharpmod.providers import openmeteo
+from sharpmod.providers import rrfs_nomads
 from sharpmod.models.model_surface import SURFACE_CONTRACT_VERSION
 from sharpmod.models.model_transport import DownloadCancelled
 from sharpmod.tools.era5_extract import _as_datetime
 from sharpmod.tools.era5_extract import _merge_datasets
 import threading
+import tempfile
 import time
 from sharpmod.tools import model_extract as _api
 
@@ -68,7 +70,11 @@ class _BoundedHerbieRequests:
         limit = self._remaining()
         kwargs["timeout"] = self._clamp_timeout(kwargs.get("timeout"), limit)
         response = getattr(self._delegate, method)(*args, **kwargs)
-        self._remaining()
+        try:
+            self._remaining()
+        except (TimeoutError, DownloadCancelled):
+            response.close()
+            raise
         return response
 
     def get(self, *args, **kwargs):
@@ -202,6 +208,67 @@ def probe(
     }
     try:
         _api._probe_cancel_if_requested(cancelled)
+        if config.key in _api.DIRECT_GRIB_KEYS:
+            if member is not None and member != config.kwargs.get("member"):
+                raise ValueError("select a configured RRFS or REFS model instead of overriding its member")
+            if int(fxx) not in _api.forecast_hours(config, cycle_hour=run_dt.hour):
+                raise ValueError("forecast hour is not published by this model")
+            timeout = 5.0 if request_timeout is None else request_timeout
+            deadline = (None if deadline_seconds is None else
+                        time.monotonic() + max(0.1, float(deadline_seconds)))
+            with rrfs_nomads._new_session() as session:
+                bounded = _api._BoundedHerbieRequests(
+                    session, owner_thread=threading.get_ident(),
+                    request_timeout=timeout, deadline=deadline, cancelled=cancelled,
+                )
+                domain = config.kwargs["domain"]
+                fixed_member = config.kwargs.get("member")
+                release, url, pressure = rrfs_nomads._pressure_inventory(
+                    bounded, domain, run_dt, fxx, member=fixed_member,
+                    timeout=timeout, cancelled=cancelled,
+                )
+                rrfs_nomads.pressure_field_plan(pressure)
+                surface_url = rrfs_nomads.build_url(
+                    release, run_dt, fxx, rrfs_nomads.SURFACE_PRODUCT,
+                    domain, member=fixed_member,
+                )
+                surface, _total = rrfs_nomads._inventory(
+                    bounded, surface_url, timeout=timeout, cancelled=cancelled,
+                )
+                bounded._remaining()
+                if open_subset:
+                    _api.require_runtime_dependencies()
+                    import cfgrib
+
+                    with tempfile.TemporaryDirectory(prefix="sharpmod-probe-") as directory:
+                        payloads = rrfs_nomads.fetch_pair(
+                            config.key, domain, run_dt, fxx,
+                            download_dir=directory, member=fixed_member,
+                            session=bounded, timeout=timeout, workers=1, cancelled=cancelled,
+                        )
+                        variables = set()
+                        for payload in payloads:
+                            _api._probe_cancel_if_requested(cancelled)
+                            datasets = cfgrib.open_datasets(payload.path, backend_kwargs={"indexpath": ""})
+                            try:
+                                variables.update(str(name) for ds in datasets for name in ds.data_vars)
+                            finally:
+                                for ds in datasets:
+                                    ds.close()
+                        bounded._remaining()
+                        result.update(subset_opened=True, data_vars=sorted(variables))
+            contract = _api.surface_contract_status({
+                "search_this": [record.line for record in surface],
+            })
+            result.update(
+                available=True, grib=url, surface_grib=surface_url,
+                provider=rrfs_nomads.PROVIDER, transport=rrfs_nomads.TRANSPORT,
+                inventory_rows=len(pressure) + len(surface),
+                surface_contract_complete=contract["complete"],
+                surface_contract_present=list(contract["present"]),
+                surface_contract_missing=list(contract["missing"]),
+            )
+            return result
         _api.require_runtime_dependencies()
         Herbie = _api._load_herbie_class()
         request_context = _api._bounded_herbie_probe_requests(

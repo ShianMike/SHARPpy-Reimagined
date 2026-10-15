@@ -1,8 +1,9 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use sharpmod_rs::batch_analysis::{
-    BatchAnalysisExecutor, BatchExecutionOptions, BatchProfileInput, BOX_LAYER_TOPS_AGL,
-    MAX_BATCH_THREADS,
+    available_threads, BatchAnalysisExecutor, BatchExecutionOptions, BatchProfileInput,
+    BOX_LAYER_TOPS_AGL,
 };
+use std::collections::BTreeSet;
 use std::hint::black_box;
 use std::time::Duration;
 
@@ -53,9 +54,11 @@ fn bench_batch_analysis(c: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(3));
     group.measurement_time(Duration::from_secs(10));
 
-    for (profile_count, levels) in [(4, 32), (8, 32), (32, 32), (8, 128), (32, 128)] {
+    let available = available_threads();
+    let workers = BTreeSet::from([1, 2.min(available), 4.min(available), available]);
+    for (profile_count, levels) in [(4, 32), (8, 32), (32, 32), (8, 128), (32, 128), (512, 128)] {
         let profiles = inputs(profile_count, levels);
-        for worker_count in [1, 2, MAX_BATCH_THREADS] {
+        for &worker_count in &workers {
             let executor = BatchAnalysisExecutor::new(BatchExecutionOptions {
                 max_threads: worker_count,
                 parallel_threshold: 2,

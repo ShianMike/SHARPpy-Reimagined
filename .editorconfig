@@ -16,3 +16,11 @@ indent_size = 2
 
 [*.{bat,cmd}]
 end_of_line = crlf
+
+[*.{ts,tsx,js,mjs,css,html}]
+indent_style = space
+indent_size = 2
+
+[*.rs]
+indent_style = space
+indent_size = 4

@@ -896,8 +896,8 @@ def _inset_rect(widget: Any, qtcore: Any):
 
 
 def locator_rect_for_widget(widget: Any, qtcore: Any):
-    """Return the locator rectangle only when the widget has a map point."""
-    if point_from_widget(widget) is None:
+    """Reserve space only for an enabled locator with a map point."""
+    if _collection_meta(widget, "show_locator") is False or point_from_widget(widget) is None:
         return None
     return _inset_rect(widget, qtcore)
 

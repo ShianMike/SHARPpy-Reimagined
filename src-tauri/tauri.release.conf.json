@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "resources": {
+      "../dist/sharppy-backend/": "backend/"
+    },
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true }
+    }
+  }
+}

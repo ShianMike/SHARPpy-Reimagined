@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 
 import numpy as np
 import numpy.ma as ma
@@ -23,7 +25,7 @@ from sharpmod.backends.protocol import (
     DEFAULT_BATCH_THREADS,
 )
 from sharpmod.backends.python_backend import PythonBackend
-from sharpmod.backends.rust_backend import RustBackend
+from sharpmod.backends.rust_backend import RustBackend, _batch_analysis_from_raw
 
 
 try:
@@ -453,7 +455,31 @@ def test_profile_batch_analysis_matches_reference(backends, levels):
     ))
 
 
-def test_profile_batch_parallel_is_bit_exact_and_ordered(backends):
+@pytest.mark.parametrize("missing", [-9999.0, 0.0, 800.0, None])
+def test_batch_native_missing_cleanup_matches_nan_without_mutation(backends, missing):
+    _python, rust = backends
+    columns = [ma.array(column, copy=True) for column in _batch_profile(32, 0.0)[:6]]
+    for index, column in enumerate(columns):
+        column[index + 1] = np.nan if missing is None else missing
+        column[index + 9] = ma.masked
+    originals = [column.copy() for column in columns]
+    normalized = [column.filled(np.nan) for column in columns]
+    if missing is not None:
+        for column in normalized:
+            column[column == missing] = np.nan
+    tops = np.array([1000.0, 3000.0, 6000.0])
+    actual = rust.profile_batch_analysis([columns] * 8, tops, missing=missing)
+    expected = rust.profile_batch_analysis([normalized] * 8, tops, missing=None)
+    for name in ("parcels", "convective_parcels", "effective_bounds", "downdraft",
+                 "storm_motion", "kinematic_layers"):
+        np.testing.assert_array_equal(getattr(actual, name), getattr(expected, name))
+    for column, original in zip(columns, originals):
+        np.testing.assert_array_equal(column.data, original.data)
+        np.testing.assert_array_equal(column.mask, original.mask)
+
+
+@pytest.mark.parametrize("threads", sorted({2, DEFAULT_BATCH_THREADS}))
+def test_profile_batch_parallel_is_bit_exact_and_ordered(backends, threads):
     _python, rust = backends
     profiles = tuple(_batch_profile(64, index * 0.05) for index in range(12))
     tops = np.array([1000.0, 3000.0, 6000.0, 8000.0])
@@ -461,7 +487,7 @@ def test_profile_batch_parallel_is_bit_exact_and_ordered(backends):
         profiles, tops, max_threads=1, parallel_threshold=2,
     )
     parallel = rust.profile_batch_analysis(
-        profiles, tops, max_threads=2, parallel_threshold=2,
+        profiles, tops, max_threads=threads, parallel_threshold=2,
     )
 
     for name in (
@@ -475,8 +501,10 @@ def test_profile_batch_parallel_is_bit_exact_and_ordered(backends):
         np.testing.assert_array_equal(
             getattr(parallel, name), getattr(serial, name),
         )
-    assert parallel.execution_mode == "bounded_parallel"
-    assert parallel.worker_count == 2
+    assert 1 <= parallel.worker_count <= threads
+    assert parallel.execution_mode == (
+        "bounded_parallel" if parallel.worker_count > 1 else "serial_single_thread"
+    )
     np.testing.assert_allclose(
         parallel.parcels[:, 0, 2],
         [profile[2][0] for profile in profiles],
@@ -485,7 +513,7 @@ def test_profile_batch_parallel_is_bit_exact_and_ordered(backends):
     )
 
 
-def test_profile_batch_default_uses_measured_cutoff_and_bounded_workers(backends):
+def test_profile_batch_default_uses_measured_cutoff_and_available_workers(backends):
     _python, rust = backends
     tops = np.array([1000.0, 3000.0, 6000.0, 8000.0])
     small = tuple(_batch_profile(32, index * 0.05) for index in range(7))
@@ -496,12 +524,55 @@ def test_profile_batch_default_uses_measured_cutoff_and_bounded_workers(backends
 
     assert small_result.execution_mode == "serial_below_threshold"
     assert small_result.worker_count == 1
-    if DEFAULT_BATCH_THREADS == 1:
+    assert 1 <= threshold_result.worker_count <= DEFAULT_BATCH_THREADS
+    if threshold_result.worker_count == 1:
         assert threshold_result.execution_mode == "serial_single_thread"
         assert threshold_result.worker_count == 1
     else:
         assert threshold_result.execution_mode == "bounded_parallel"
-        assert threshold_result.worker_count == DEFAULT_BATCH_THREADS
+
+
+@pytest.mark.parametrize("workers", [0, 5, 9])
+def test_batch_worker_metadata_respects_requested_limit_not_four(workers):
+    raw = tuple(np.empty(shape) for shape in (
+        (0, 42), (0, 70), (0, 2), (0, 3), (0, 4), (0, 0),
+    )) + (3, workers)
+    if 1 <= workers <= 8:
+        assert _batch_analysis_from_raw(raw, 0, 0, 8).worker_count == workers
+    else:
+        with pytest.raises(RuntimeError, match="invalid worker count"):
+            _batch_analysis_from_raw(raw, 0, 0, 8)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows process affinity")
+def test_batch_respects_windows_process_affinity():
+    script = """
+import ctypes
+from ctypes import wintypes
+kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+kernel.GetCurrentProcess.restype = wintypes.HANDLE
+kernel.GetProcessAffinityMask.argtypes = (
+    wintypes.HANDLE, ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(ctypes.c_size_t),
+)
+kernel.SetProcessAffinityMask.argtypes = (wintypes.HANDLE, ctypes.c_size_t)
+process = kernel.GetCurrentProcess()
+allowed, system = ctypes.c_size_t(), ctypes.c_size_t()
+assert kernel.GetProcessAffinityMask(process, ctypes.byref(allowed), ctypes.byref(system))
+assert kernel.SetProcessAffinityMask(process, allowed.value & -allowed.value)
+import numpy as np
+from sharpmod.backends.rust_backend import RustBackend
+from sharpmod.tests.test_backend_equivalence import _batch_profile
+profiles = tuple(_batch_profile(32, index * 0.05) for index in range(8))
+backend = RustBackend()
+for options in ({}, {'max_threads': 1000}):
+    result = backend.profile_batch_analysis(profiles, np.array([1000., 3000.]), **options)
+    assert result.worker_count == 1, result.worker_count
+    assert result.execution_mode == 'serial_single_thread', result.execution_mode
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(

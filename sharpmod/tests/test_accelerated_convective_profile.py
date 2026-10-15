@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -128,6 +129,71 @@ def test_accelerated_profile_uses_one_shared_thermodynamic_call(monkeypatch):
     assert calls == 1
     assert np.isfinite(prof.mupcl.bplus)
     assert np.isfinite(prof.dcape)
+
+
+def test_zero_shear_marks_undefined_storm_motion_missing():
+    collection, _ = decoder.load_npz(str(SAMPLE))
+    raw = next(iter(collection._profs.values()))[0]
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        prof = AcceleratedConvectiveProfile.copy(
+            raw, wdir=np.full(raw.pres.shape, 270.0),
+            wspd=np.full(raw.pres.shape, 10.0),
+        )
+
+    assert len(prof.srwind) == 4
+    assert all(np.ma.is_masked(component) for component in prof.srwind)
+
+
+def test_mmp_uses_the_validated_shear_pairs(monkeypatch):
+    from sharppy.sharptab import params as sp_params
+    from sharpmod.sharptab.derived import _mmp_linear_predictor
+
+    def uninitialized_upstream(*_args, **_kwargs):
+        pytest.fail("MMP must not use upstream's uninitialized shear array")
+
+    monkeypatch.setattr(sp_params, "mmp", uninitialized_upstream)
+    collection, _ = decoder.load_npz(str(SAMPLE))
+    prof = collection.getHighlightedProf()
+    expected = 1 / (1 + np.exp(_mmp_linear_predictor(prof)))
+    assert 0 < prof.mmp < 1
+    assert prof.mmp == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("gap", ["none", "wind", "all_wind", "height"])
+def test_mmp_reused_endpoints_match_scalar_shear_pairs(monkeypatch, gap):
+    from sharppy.sharptab import interp, params, profile, utils, winds
+    from sharpmod.sharptab import derived
+
+    collection, _ = decoder.load_npz(str(SAMPLE))
+    raw = next(iter(collection._profs.values()))[0]
+    prof = profile.BasicProfile.copy(raw)
+    prof.mupcl = SimpleNamespace(bplus=2000.0)
+    if gap == "wind":
+        prof.u[2:4] = np.ma.masked
+        prof.v[14:17] = np.ma.masked
+    elif gap == "all_wind":
+        prof.wdir[:] = np.ma.masked
+    elif gap == "height":
+        prof.hght[2] = np.ma.masked
+    agl = np.asarray(interp.to_agl(prof, prof.hght))
+    pbots = np.atleast_1d(interp.pres(prof, prof.hght[agl <= 1000.0]))
+    ptops = np.atleast_1d(interp.pres(prof, prof.hght[(agl >= 6000.0) & (agl < 10000.0)]))
+    magnitudes = [derived._finite_or_none(utils.mag(*winds.wind_shear(prof, pbot, ptop)))
+                  for pbot in pbots for ptop in ptops]
+    usable = [value for value in magnitudes if value is not None]
+    monkeypatch.setattr(params, "lapse_rate", lambda *_args, **_kwargs: 7.0)
+    monkeypatch.setattr(winds, "mean_wind", lambda *_args, **_kwargs: (30.0, 40.0))
+    expected = None if not usable else (
+        derived._MMP_A0 + derived._MMP_A1 * float(utils.KTS2MS(max(usable)))
+        + derived._MMP_A2 * 7.0 + derived._MMP_A3 * 2000.0
+        + derived._MMP_A4 * float(utils.KTS2MS(50.0))
+    )
+    actual = derived._mmp_linear_predictor(prof)
+    if expected is None:
+        assert actual is None
+    else:
+        assert actual == pytest.approx(expected, rel=1e-12, abs=1e-12)
 
 
 def test_accelerated_profile_falls_back_to_sharppy(monkeypatch):

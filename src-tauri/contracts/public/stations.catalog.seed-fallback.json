@@ -1,0 +1,17 @@
+{
+"stations": [
+{"id": "72249", "name": "FWD Fort Worth, TX", "latitude": 32.83, "longitude": -97.3, "source": "FM35", "availability": "unknown"},
+{"id": "72357", "name": "OUN Norman, OK", "latitude": 35.18, "longitude": -97.44, "source": "FM35", "availability": "unknown"},
+{"id": "72403", "name": "IAD Washington Dulles, VA", "latitude": 38.98, "longitude": -77.47, "source": "FM35", "availability": "unknown"},
+{"id": "72451", "name": "DDC Dodge City, KS", "latitude": 37.77, "longitude": -99.97, "source": "FM35", "availability": "unknown"},
+{"id": "72469", "name": "DNR Denver, CO", "latitude": 39.77, "longitude": -104.87, "source": "FM35", "availability": "unknown"},
+{"id": "72558", "name": "OAX Omaha/Valley, NE", "latitude": 41.32, "longitude": -96.37, "source": "FM35", "availability": "unknown"},
+{"id": "72562", "name": "LBF North Platte, NE", "latitude": 41.13, "longitude": -100.68, "source": "FM35", "availability": "unknown"},
+{"id": "72572", "name": "SLC Salt Lake City, UT", "latitude": 40.77, "longitude": -111.95, "source": "FM35", "availability": "unknown"},
+{"id": "72776", "name": "TFX Great Falls, MT", "latitude": 47.46, "longitude": -111.38, "source": "FM35", "availability": "unknown"},
+{"id": "74560", "name": "ILX Lincoln, IL", "latitude": 40.15, "longitude": -89.34, "source": "FM35", "availability": "unknown"}
+],
+"origin": "seedFallback",
+"availabilityBasis": {"kind": "catalogOnly"},
+"droppedCount": 0
+}

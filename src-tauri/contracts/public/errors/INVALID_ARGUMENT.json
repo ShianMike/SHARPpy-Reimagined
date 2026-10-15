@@ -1,0 +1,9 @@
+{
+  "code": "INVALID_ARGUMENT",
+  "message": "The request was not valid: health takes no parameters.",
+  "retryable": false,
+  "context": {
+    "operation": "get_backend_health",
+    "provider": "python-bridge"
+  }
+}

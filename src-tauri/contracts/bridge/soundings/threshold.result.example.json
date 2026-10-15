@@ -1,0 +1,93 @@
+{
+  "definition": {
+    "name": "Warm-core shear",
+    "conditions": [
+      {
+        "metric": "mlcape",
+        "operator": ">=",
+        "value": 2350.0,
+        "upper": null,
+        "units": "J/kg"
+      },
+      {
+        "metric": "shear_6km",
+        "operator": "between",
+        "value": 20.0,
+        "upper": 60.0,
+        "units": "kt"
+      }
+    ]
+  },
+  "definition_summary": "MLCAPE ≥ 2350 J/kg and 0-6 km shear between 20 and 60 kt",
+  "valid_time": "2026-06-26T00:00:00",
+  "requested_member_count": 4,
+  "loaded_member_count": 3,
+  "usable_member_count": 3,
+  "qualifying_member_count": 1,
+  "nonqualifying_member_count": 2,
+  "loaded_unusable_member_count": 0,
+  "not_loaded_member_count": 1,
+  "resolved_member_count": 4,
+  "not_evaluated_member_count": 0,
+  "agreement_fraction": 0.3333333333333333,
+  "agreement": "1/3 (33%)",
+  "requested_coverage": 0.75,
+  "coverage": "3/4 (75%)",
+  "reconciles": true,
+  "cancelled": false,
+  "label": "Ensemble ingredient agreement; not a calibrated severe-weather probability.",
+  "members": [
+    {
+      "member": "c00",
+      "loaded": true,
+      "usable": true,
+      "satisfied": true,
+      "state": "qualifying",
+      "state_label": "qualifies",
+      "values": {
+        "mlcape": 2465.2614988156743,
+        "shear_6km": 47.36727991421492
+      },
+      "reason": null
+    },
+    {
+      "member": "p01",
+      "loaded": true,
+      "usable": true,
+      "satisfied": false,
+      "state": "nonqualifying",
+      "state_label": "does not qualify",
+      "values": {
+        "mlcape": 2308.809925325674,
+        "shear_6km": 47.36727991421492
+      },
+      "reason": null
+    },
+    {
+      "member": "p02",
+      "loaded": true,
+      "usable": true,
+      "satisfied": false,
+      "state": "nonqualifying",
+      "state_label": "does not qualify",
+      "values": {
+        "mlcape": 2158.341753939377,
+        "shear_6km": 47.36727991421492
+      },
+      "reason": null
+    },
+    {
+      "member": "p03",
+      "loaded": false,
+      "usable": false,
+      "satisfied": null,
+      "state": "not_loaded",
+      "state_label": "not loaded",
+      "values": {
+        "mlcape": null,
+        "shear_6km": null
+      },
+      "reason": "member was not loaded"
+    }
+  ]
+}

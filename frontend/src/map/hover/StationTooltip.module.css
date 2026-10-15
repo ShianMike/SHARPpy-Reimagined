@@ -1,0 +1,68 @@
+/* Positioned from --tooltip-x/-y (the pointer) and --tooltip-w/-h (this box),
+   set before paint; the clamps keep it inside the map container. */
+.tooltip {
+  position: absolute;
+  z-index: var(--z-tooltip);
+  top: clamp(
+    var(--chrome-gap),
+    calc(var(--tooltip-y) + var(--space-3)),
+    calc(100% - var(--tooltip-h) - var(--chrome-gap))
+  );
+  left: clamp(
+    var(--chrome-gap),
+    calc(var(--tooltip-x) + var(--space-3)),
+    calc(100% - var(--tooltip-w) - var(--chrome-gap))
+  );
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  max-width: var(--popover-w);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-tight);
+}
+
+.id {
+  color: var(--text-primary);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.name {
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.meta {
+  color: var(--text-secondary);
+}
+
+.field { top: clamp(var(--chrome-gap), calc(var(--tooltip-y) - var(--tooltip-h) - var(--space-3)), calc(100% - var(--tooltip-h) - var(--chrome-gap))); }
+
+.report {
+  --glass-fill: color-mix(in srgb, var(--surface-1) 94%, transparent);
+  width: var(--inspector-w);
+  max-width: calc(100% - var(--chrome-gap) * 2);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  line-height: var(--line-height-body);
+  overflow-wrap: anywhere;
+}
+
+.reportHeading { display: grid; gap: var(--space-1); }
+.reportTitle { font-size: var(--font-size-subhead); font-weight: var(--font-weight-semibold); }
+.reportFacts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); }
+.reportFacts dt { color: var(--text-secondary); }
+.reportFacts dd { color: var(--text-primary); font-weight: var(--font-weight-medium); }
+.reportNarrative { display: grid; gap: var(--space-2); }
+.reportAttribution {
+  display: grid;
+  gap: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: var(--hairline) solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}

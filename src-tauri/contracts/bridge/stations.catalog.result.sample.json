@@ -1,0 +1,48 @@
+{
+  "stations": [
+    {
+      "id": "03023",
+      "name": "",
+      "lat": 57.3575,
+      "lon": -7.385,
+      "src": "BUFR"
+    },
+    {
+      "id": "323306",
+      "name": "AF306 dropsonde #23",
+      "lat": 28.4,
+      "lon": -86.8,
+      "src": "FM37"
+    },
+    {
+      "id": "61998",
+      "name": "Port-Aux-Francais (Iles Kerguelen), Ocean Islands",
+      "lat": -49.35131,
+      "lon": 70.24138,
+      "src": "BUFR"
+    },
+    {
+      "id": "66160",
+      "name": "Luanda, Angola",
+      "lat": -8.85973,
+      "lon": 13.2258,
+      "src": "BUFR"
+    },
+    {
+      "id": "72357",
+      "name": "Norman/Max Westheimer A, Ok., Usa",
+      "lat": 35.18095,
+      "lon": -97.43787,
+      "src": "FM35"
+    },
+    {
+      "id": "73111",
+      "name": "Stationid\n73111    Kapuskasing\n73111    Kapuskasing\nName: Name, Dtype: Str, Stationid\n73111    Ca\n73111    Ca\nName: Country, Dtype: Str",
+      "lat": 49.4049,
+      "lon": -82.44292,
+      "src": "BUFR"
+    }
+  ],
+  "origin": "bundled",
+  "dropped_count": 0
+}

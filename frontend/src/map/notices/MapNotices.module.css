@@ -1,0 +1,14 @@
+/* Stacked and centred in the overlay's centre column, above floating panels. */
+.notices {
+  position: relative;
+  z-index: var(--z-notice);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--chrome-gap);
+  pointer-events: none;
+}
+
+.notices:empty {
+  display: none;
+}

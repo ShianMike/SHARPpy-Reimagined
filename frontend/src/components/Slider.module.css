@@ -1,0 +1,32 @@
+.slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--slider-w) var(--slider-value-w);
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h-sm);
+  padding: 0 var(--space-1);
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.input {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.input:disabled {
+  opacity: 0.5;
+}
+
+.value {
+  color: var(--text-primary);
+  font-size: var(--font-size-small);
+  text-align: end;
+}

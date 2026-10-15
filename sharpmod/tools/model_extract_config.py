@@ -370,7 +370,9 @@ def provider_capability(model, cycle_hour=None):
                 "HGT", "TMP", "UGRD", "VGRD", "RH", "ABSV",
                 *NOAA_SURFACE_FIELDS,
             ))),
-            levels="45 published pressure levels, 1000 hPa to 2 hPa",
+            levels=("14 published pressure levels, 1000 hPa to 250 hPa"
+                    if cfg.kwargs.get("member") is not None else
+                    "45 published pressure levels, 1000 hPa to 2 hPa"),
             archive_window="recent runs only; NOMADS purges older files",
             transports=(
                 rrfs_nomads.TRANSPORT, "verified-surface-companion",

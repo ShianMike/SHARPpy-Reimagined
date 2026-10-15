@@ -1,0 +1,38 @@
+{
+  "app": {
+    "name": "SHARPpy Reimagined",
+    "version": "3.0.0",
+    "tauriVersion": "2.12.1",
+    "buildProfile": "debug",
+    "logFile": "C:\\Users\\example\\AppData\\Local\\io.github.shianmike.sharppy-reimagined\\logs\\sharppy-reimagined.log"
+  },
+  "bridge": {
+    "status": "up",
+    "protocolVersion": 1,
+    "pid": 4242,
+    "since": "2026-10-04T01:02:03Z",
+    "restarts": 1
+  },
+  "python": {
+    "version": "3.11.14",
+    "executable": "C:\\repo\\.gribenv\\Scripts\\python.exe",
+    "sharpmodVersion": "3.0.0"
+  },
+  "scientificBackend": {
+    "status": "unknown",
+    "error": {
+      "code": "BRIDGE_TIMEOUT",
+      "message": "The Python backend did not answer in time while loading the backend status.",
+      "retryable": true,
+      "context": {
+        "operation": "get_backend_health",
+        "provider": "python-bridge"
+      },
+      "details": {
+        "phase": "awaitingReply",
+        "timeoutMs": 20000
+      }
+    }
+  },
+  "checkedAt": "2026-10-04T01:02:05Z"
+}

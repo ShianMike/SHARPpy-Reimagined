@@ -591,6 +591,29 @@ def test_rrfs_configs_are_direct_grib_and_map_to_published_domains():
         assert model_extract.spatial_cache_key(cfg, 35.0, -97.0) is None
 
 
+@pytest.mark.parametrize("member", range(1, 6))
+def test_refs_models_route_their_fixed_member_to_the_existing_fetcher(member, tmp_path, monkeypatch):
+    cfg = model_extract.get_config(f"refs-m{member}")
+    assert cfg.label == f"REFSm{member}"
+    assert cfg.kwargs["member"] == member
+    assert max(model_extract.forecast_hours(cfg)) == 60
+    assert "14 published pressure levels" in model_extract.provider_capability(cfg).levels
+    seen = {}
+
+    def fetch_pair(key, domain, run, fxx, **kwargs):
+        seen.update(key=key, domain=domain, member=kwargs.get("member"))
+        raise rrfs_nomads.RrfsUnavailable("test unavailable run")
+
+    monkeypatch.setattr(model_extract, "require_runtime_dependencies", lambda: None)
+    monkeypatch.setattr(rrfs_nomads, "fetch_pair", fetch_pair)
+    with pytest.raises(model_extract.RetrievalError, match="test unavailable run"):
+        model_extract._retrieve_dataset(
+            cfg, datetime(2026, 10, 12, tzinfo=timezone.utc), 0,
+            download_dir=tmp_path,
+        )
+    assert seen == {"key": cfg.key, "domain": "conus", "member": member}
+
+
 def test_model_extract_writes_loadable_npz(tmp_path, monkeypatch):
     """A supported model writes the shared point-sounding format."""
     ds = _dataset_with_surface()

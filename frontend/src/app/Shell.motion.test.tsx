@@ -1,0 +1,92 @@
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { createTransport } from "../lib/backend/fixtureTransport";
+import { useAppStore } from "../stores/appStore";
+import { useForecastStore } from "../stores/forecastStore";
+import { useGraphicsStore } from "../stores/graphicsStore";
+import { renderWithBackend } from "../test/backendHarness";
+import { Shell } from "./Shell";
+
+const { mapMounts } = vi.hoisted(() => ({ mapMounts: vi.fn() }));
+vi.mock("../map/WeatherMap", async () => {
+  const { useEffect } = await import("react");
+  return { default: function MapStandIn() {
+    useEffect(() => { mapMounts(); }, []);
+    return <div data-testid="map-canvas" />;
+  } };
+});
+
+const app = useAppStore.getState(), forecast = useForecastStore.getState(), graphics = useGraphicsStore.getState();
+beforeEach(() => {
+  useAppStore.setState(app, true); useForecastStore.setState(forecast, true);
+  useGraphicsStore.setState(graphics, true);
+  mapMounts.mockClear();
+  vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+});
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+function pendingExit(element: HTMLElement) {
+  let finish = (): void => undefined;
+  const finished = new Promise<void>((resolve) => { finish = resolve; });
+  Object.defineProperty(element, "getAnimations", { value: () => [{ finished }] });
+  return finish;
+}
+
+it("shows loading until the first map render and leaves the map mounted when ready", async () => {
+  useAppStore.getState().setActiveWorkspace("map");
+  const { queryClient } = renderWithBackend(<Shell />, createTransport());
+  expect(screen.getByRole("status", { name: "Loading map" }).textContent).toContain("Preparing your weather workspace");
+  const canvas = await screen.findByTestId("map-canvas");
+  expect(screen.getByRole("status", { name: "Loading map" })).toBeTruthy();
+  act(() => { useGraphicsStore.getState().setRendererReady(); });
+  expect(screen.queryByRole("status", { name: "Loading map" })).toBeNull();
+  expect(screen.getByTestId("map-canvas")).toBe(canvas);
+  expect(mapMounts).toHaveBeenCalledTimes(1);
+  act(() => { useGraphicsStore.getState().beginRendererAttempt(); });
+  expect(screen.getByRole("status", { name: "Loading map" })).toBeTruthy();
+  act(() => { useGraphicsStore.getState().setRendererFailed("timeout", "Test startup timeout"); });
+  expect(screen.queryByRole("status", { name: "Loading map" })).toBeNull();
+  expect(screen.getByTestId("reduced-rendering")).toBeTruthy();
+  queryClient.clear();
+});
+
+it.each(["overview", "settings", "status", "sounding"] as const)("transitions from %s to Model Viewer without rebuilding the map", async (workspace) => {
+  useAppStore.getState().setActiveWorkspace(workspace);
+  const { queryClient } = renderWithBackend(<Shell />, createTransport());
+  const canvas = await screen.findByTestId("map-canvas");
+  const panel = screen.getByTestId("workspace-panel");
+  const finish = pendingExit(panel);
+
+  fireEvent.click(screen.getByRole("button", { name: "Model Viewer" }));
+  expect(screen.getByTestId("map-canvas")).toBe(canvas);
+  expect(canvas.parentElement?.hasAttribute("inert")).toBe(false);
+  expect(screen.getByTestId("map-overlay").parentElement?.dataset.motion).toBe("fade");
+  expect(panel.dataset.motion).toBe("panel");
+  expect(panel.hidden).toBe(true);
+  expect(panel.hasAttribute("inert")).toBe(true);
+  expect(panel.getAttribute("aria-hidden")).toBe("true");
+  expect(screen.getByTestId("workspace-panel")).toBe(panel);
+
+  await act(async () => { finish(); await Promise.resolve(); });
+  expect(screen.queryByTestId("workspace-panel")).toBeNull();
+  expect(mapMounts).toHaveBeenCalledTimes(1);
+  queryClient.clear();
+});
+
+it("ignores an old exit when another workspace opens before it finishes", async () => {
+  useAppStore.getState().setActiveWorkspace("overview");
+  const { queryClient } = renderWithBackend(<Shell />, createTransport());
+  await screen.findByTestId("map-canvas");
+  const finish = pendingExit(screen.getByTestId("workspace-panel"));
+  fireEvent.click(screen.getByRole("button", { name: "Model Viewer" }));
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  await act(async () => { finish(); await Promise.resolve(); });
+  expect(screen.getByTestId("workspace-panel").dataset.workspace).toBe("settings");
+  expect(screen.getByTestId("workspace-panel").hasAttribute("inert")).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Model Viewer" }));
+  await act(async () => { await Promise.resolve(); });
+  expect(screen.queryByTestId("workspace-panel")).toBeNull();
+  expect(mapMounts).toHaveBeenCalledTimes(1);
+  queryClient.clear();
+});

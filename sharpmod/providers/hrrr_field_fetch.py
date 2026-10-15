@@ -19,7 +19,7 @@ from sharpmod.providers import hrrr_field as _api
 
 
 def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
-                     opener, timeout: float, should_cancel) -> dict[str, np.ndarray]:
+                     opener, timeout: float, should_cancel, model: str = "hrrr") -> dict[str, np.ndarray]:
     """Fetch and decode every record the product needs, grouped per source file.
 
     Records are located in the inventory, coalesced into as few HTTP ranges as
@@ -32,20 +32,33 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
 
     # Plan every range across both files first, so they can all go out together
     # rather than one file's requests waiting on the other's.
-    jobs: list[tuple[str, int, int, tuple[_api.InventoryRow, ...], dict[int, str]]] = []
+    jobs: list[tuple[str, int, int, tuple[_api.InventoryRow, ...], dict[_api.InventoryRow, str]]] = []
     for source in (SOURCE_SURFACE, SOURCE_PRESSURE):
         specs = [spec for spec in product.all_fields if spec.source == source]
         if not specs:
             continue
         if should_cancel and should_cancel():
             return {}
-        url = _api.grib_url(run, fxx, source)
-        rows = _api.fetch_inventory(url, opener=opener, timeout=timeout)
+        releases = (None,)
+        if model == "rrfs-a" or model.startswith("refs-m"):
+            from sharpmod.providers import rrfs_nomads
+            releases = rrfs_nomads._release_candidates()
+        for release in releases:
+            url = _api.grib_url(run, fxx, source, model, release=release)
+            try:
+                rows = _api.fetch_inventory(url, opener=opener, timeout=timeout)
+            except _api.HrrrFieldUnavailable:
+                if release == releases[-1]:
+                    raise
+            else:
+                if release is not None:
+                    rrfs_nomads._remember_release(release)
+                break
         located = [(_api.locate(rows, spec), spec.name) for spec in specs]
-        by_offset = {row.offset: name for row, name in located}
+        by_record = {row: name for row, name in located}
         for start, end, members in _api._merge_ranges([row for row, _ in located]):
             stop = (start + _api._TAIL_BUDGET) if not end else end
-            jobs.append((url, start, stop, tuple(members), by_offset))
+            jobs.append((url, start, stop, tuple(members), by_record))
 
     if should_cancel and should_cancel():
         return {}
@@ -74,24 +87,24 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     # Decoding stays serial: it is CPU-bound rather than latency-bound, and one
     # eccodes handle at a time keeps this independent of the C library's
     # threading guarantees.
-    for (url, start, _stop, members, by_offset), payload in zip(jobs, payloads):
+    for (url, start, _stop, members, by_record), payload in zip(jobs, payloads):
         if payload is None:
             continue
         for row in members:
-            name = by_offset.get(row.offset)
+            name = by_record.get(row)
             if name is None:
                 continue
             begin = row.offset - start
             finish = (begin + row.length) if row.length else len(payload)
             if begin < 0 or begin >= len(payload):
                 continue
-            decoded[name] = _api.decode_message(payload[begin:finish], eccodes)
+            decoded[name] = _api.decode_message(payload[begin:finish], eccodes, field_index=row.field_index)
 
     missing = [spec.name for spec in product.all_fields
                if spec.name not in decoded]
     if missing:
         raise _api.HrrrFieldUnavailable(
-            "HRRR did not return " + ", ".join(sorted(missing)))
+            f"{model} did not return " + ", ".join(sorted(missing)))
     return decoded
 
 

@@ -374,6 +374,11 @@ def _microburst(prof):
 class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
     """Convective profile using backend parcel and DCAPE workspaces."""
 
+    def get_kinematics(self):
+        super().get_kinematics()
+        # Undefined motion must use the missing-value contract before widgets read it.
+        self.srwind = tuple(_value(component) for component in self.srwind)
+
     @classmethod
     def copy(cls, prof, strictQC=False, **kwargs):
         """Copy ``prof``, carrying source-supplied surface scalars across.
@@ -484,9 +489,16 @@ class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
             super().get_parcels()
 
     def get_indices(self):
+        from sharpmod.sharptab.derived import _mmp_linear_predictor
+
         self.tei = sp_params.tei(self)
         self.esp = sp_params.esp(self)
-        self.mmp = sp_params.mmp(self)
+        # Upstream MMP reads uninitialized shear cells; reuse our complete shear-pair calculation.
+        if self.mupcl.bplus < 100:
+            self.mmp = 0.0
+        else:
+            predictor = _mmp_linear_predictor(self)
+            self.mmp = ma.masked if predictor is None else float(np.exp(-np.logaddexp(0.0, predictor)))
         self.wndg = sp_params.wndg(self)
         self.sig_severe = sp_params.sig_severe(self)
         try:

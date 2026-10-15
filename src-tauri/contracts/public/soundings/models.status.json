@@ -1,0 +1,9 @@
+{
+  "model": "hrrr",
+  "provider": "Herbie",
+  "runTime": "2026-06-26T00:00:00Z",
+  "forecastHour": 0,
+  "state": "available",
+  "message": "Example provider inventory found for this cycle and forecast hour.",
+  "checkedAt": "2026-06-26T02:00:00Z"
+}

@@ -1,0 +1,48 @@
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: var(--hairline) solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The swatches use the same canvas tokens as the deck.gl layers. */
+.swatch {
+  flex: none;
+  width: calc(2 * var(--map-station-radius));
+  height: calc(2 * var(--map-station-radius));
+  border-radius: var(--radius-round);
+  box-sizing: content-box;
+  border: var(--map-station-edge) solid transparent;
+}
+
+.swatch[data-swatch="unknown"] {
+  background: var(--map-station-unknown);
+  border-color: var(--map-station-unknown-edge);
+}
+
+.swatch[data-swatch="listed"] {
+  background: var(--map-station-listed);
+  border-color: var(--map-station-listed-edge);
+}
+
+.swatch[data-swatch="notListed"] {
+  background: var(--map-station-not-listed);
+  border-color: var(--map-station-not-listed-edge);
+}
+
+.swatch[data-swatch="selected"] {
+  width: calc(2 * var(--map-selected-radius));
+  height: calc(2 * var(--map-selected-radius));
+  background: var(--map-selected);
+  border-color: var(--map-selected-edge);
+  box-shadow: 0 0 0 var(--space-1) var(--map-selected-halo);
+}

@@ -26,6 +26,7 @@ NOMADS_ENDPOINTS = {
     "nam": "filter_nam.pl",
     "nam-3km-conus": "filter_nam_conusnest.pl",
     "hrw-wrf-arw": "filter_hiresconus.pl",
+    "hrw-wrf-nssl": "filter_hiresconus.pl",
     "hrw-fv3": "filter_hiresconus.pl",
     "gfs": "filter_gfs_0p25.pl",
     "cfs": "filter_cfs_pgb.pl",

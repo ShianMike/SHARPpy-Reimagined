@@ -33,10 +33,8 @@ from qtpy.QtWidgets import (
 
 
 MAX_COMPARISON_SOUNDINGS = 8
-ENSEMBLE_MEMBERS = {
-    "gefs": ("c00", *(f"p{index:02d}" for index in range(1, 31))),
-    "cfs": (1, 2, 3, 4),
-}
+
+from sharpmod.analysis.ensemble_members import ENSEMBLE_MEMBERS  # noqa: E402
 
 
 @dataclass(frozen=True)

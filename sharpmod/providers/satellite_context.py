@@ -39,7 +39,7 @@ CHANNELS = {
 }
 ATTRIBUTION = "NOAA/NESDIS GOES · NOAA Open Data Dissemination"
 MAX_SOURCE_BYTES = 96 * 1024 * 1024
-MAX_OUTPUT_PIXELS = 1_400_000
+MAX_OUTPUT_PIXELS = 4_000_000
 DEFAULT_TIME_TOLERANCE = timedelta(minutes=20)
 
 _SCAN_RE = re.compile(
@@ -327,9 +327,8 @@ def _render_dimensions(bounds, resolution_km: float, max_pixels: int):
     latitude = math.radians((lat0 + lat1) / 2.0)
     width = max(2, int(abs(lon1 - lon0) * 111.2 * max(0.15, math.cos(latitude)) / resolution_km))
     height = max(2, int(abs(lat1 - lat0) * 111.2 / resolution_km))
-    # Maps do not benefit from a raster much larger than the screen, but narrow
-    # views retain native-scale pixels until they reach this bounded ceiling.
-    scale = min(1.0, math.sqrt(max_pixels / float(width * height)), 1024.0 / width, 768.0 / height)
+    # Retain source detail when zoomed, within a bounded shared texture budget.
+    scale = min(1.0, math.sqrt(max_pixels / float(width * height)))
     return max(2, int(width * scale)), max(2, int(height * scale))
 
 
@@ -445,7 +444,7 @@ def render_goes_frame(
         rgba[..., :3] = colours
         rgba[..., 3] = np.where(valid, 255, 0).astype(np.uint8)
         output = io.BytesIO()
-        Image.fromarray(rgba, mode="RGBA").save(output, format="PNG", optimize=True)
+        Image.fromarray(rgba, mode="RGBA").save(output, format="PNG", compress_level=3)
         return output.getvalue(), coverage, source_resolution
     finally:
         dataset.close()

@@ -171,7 +171,7 @@ def _reuse_selected_grib_point(cache, key, decoded):
     return decoded
 
 
-def _batch_analysis_from_raw(raw, profile_count, layer_count):
+def _batch_analysis_from_raw(raw, profile_count, layer_count, max_threads):
     try:
         (
             parcels,
@@ -232,7 +232,7 @@ def _batch_analysis_from_raw(raw, profile_count, layer_count):
             f"sharpmod_rs.profile_batch_analysis returned invalid mode {mode!r}"
         ) from exc
     worker_count = int(worker_count)
-    if worker_count < 1 or worker_count > 4:
+    if worker_count < 1 or worker_count > max_threads:
         raise RuntimeError(
             "sharpmod_rs.profile_batch_analysis returned invalid worker count "
             f"{worker_count}"
@@ -540,14 +540,6 @@ class RustBackend:
                     "an optional surface index"
                 )
             arrays = prepare_qc_columns(columns[:6], _CORE_FIELDS)
-            if native_missing is not None:
-                normalized = []
-                for array in arrays:
-                    if np.any(array == native_missing):
-                        array = np.array(array, copy=True, order="C")
-                        array[array == native_missing] = np.nan
-                    normalized.append(array)
-                arrays = tuple(normalized)
             surface = prepare_sfc_index(
                 columns[6] if len(columns) == 7 else 0,
                 arrays[0].size,
@@ -568,7 +560,7 @@ class RustBackend:
             np.asarray(offsets, dtype=np.uintp),
             np.asarray(surface_indices, dtype=np.uintp),
             layer_tops,
-            None,
+            native_missing,
             max_threads,
             parallel_threshold,
         )
@@ -576,6 +568,7 @@ class RustBackend:
             raw,
             profile_count=len(profiles),
             layer_count=layer_tops.size,
+            max_threads=max_threads,
         )
 
     def basic_sounding_qc(

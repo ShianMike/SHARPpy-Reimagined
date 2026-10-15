@@ -1,11 +1,25 @@
 """Frozen-app packaging contracts for live forecast-model support."""
 
 import tomllib
+import runpy
+import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize("flag,module", [
+    ("--desktop-bridge", "sharpmod.bridge.server"),
+    ("--sounding-render-worker", "sharpmod.bridge.render_worker"),
+])
+def test_frozen_launcher_routes_desktop_workers_before_the_legacy_gui(monkeypatch, flag, module):
+    monkeypatch.setattr(sys, "argv", ["sharppy-backend.exe", flag])
+    monkeypatch.setitem(sys.modules, module, SimpleNamespace(main=lambda: 17))
+    launcher = runpy.run_path(str(ROOT / "packaging" / "sharpmod_gui_launcher.py"))
+    assert launcher["_run"]() == 17
 
 
 def test_supported_python_and_map_wrf_dependencies_are_bounded():
@@ -184,15 +198,16 @@ def test_release_installs_model_fetch_dependencies():
     assert "python scripts/install_sharppy_compat.py --sharppy-only" in workflow
     assert 'pip install --no-deps "SHARPpy' not in workflow
     assert "--model-fetch-runtime-check" in workflow
-    assert "Verify portable single-file artifact" in workflow
-    assert workflow.count("--model-fetch-runtime-check") >= 2
-    assert workflow.count("backend_kernel_ok") >= 2
-    assert workflow.count("wrf_runtime_ok") >= 2
+    assert "Verify packaged desktop import and rendering" in workflow
+    assert workflow.count("--model-fetch-runtime-check") >= 1
+    assert workflow.count("backend_kernel_ok") >= 1
+    assert workflow.count("wrf_runtime_ok") >= 1
     assert 'SHARPMOD_REQUIRE_RUST: "1"' in workflow
     assert 'SHARPMOD_BACKEND: "rust"' in workflow
-    assert workflow.count('requested_backend -ne "rust"') >= 2
-    assert workflow.count('active_backend -ne "rust"') >= 2
-    assert workflow.count("version_consistent") >= 2
+    assert workflow.count('requested_backend -ne "rust"') >= 1
+    assert workflow.count('active_backend -ne "rust"') >= 1
+    assert workflow.count("version_consistent") >= 1
+    assert "--config src-tauri/tauri.release.conf.json --bundles nsis" in workflow
     assert "uses: ./.github/workflows/tests.yml" in workflow
     assert "run_serial_release: true" in workflow
     # Both Windows packaging and publication wait for every test lane.
@@ -200,7 +215,7 @@ def test_release_installs_model_fetch_dependencies():
         "needs: [resolve-release, test-release, build-windows-exe, "
         "attest-windows-release]"
     ) in workflow
-    assert "needs: [resolve-release, test-release]" in workflow
+    assert "needs: [resolve-release, test-release, test-desktop]" in workflow
     assert workflow.count("contents: write") == 1
 
 

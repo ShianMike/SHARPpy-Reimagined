@@ -1,0 +1,13 @@
+{
+  "code": "BRIDGE_UNAVAILABLE",
+  "message": "The Python backend stopped repeatedly, so automatic restarts are paused.",
+  "retryable": false,
+  "context": {
+    "operation": "get_station_catalog",
+    "provider": "python-bridge",
+    "resource": "bundled UWyo station catalogue"
+  },
+  "details": {
+    "lastErrorCode": "BRIDGE_CRASHED"
+  }
+}

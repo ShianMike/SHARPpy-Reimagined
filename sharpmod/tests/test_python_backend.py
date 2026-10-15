@@ -8,6 +8,7 @@ import pytest
 
 from sharpmod.backends.python_backend import PythonBackend
 from sharpmod.backends._common import (
+    prepare_1d,
     prepare_broadcast_pair,
     prepare_interpolation,
     restore_pair,
@@ -46,6 +47,23 @@ def test_common_missing_rewrite_copies_without_mutating_callers():
     assert not np.shares_memory(original, left_out)
     assert not np.shares_memory(original, right_out)
     assert np.isnan(left_out[1]) and np.isnan(right_out[1])
+
+
+@pytest.mark.parametrize("value", [
+    [1, 2, 3],
+    np.arange(6.0)[::2],
+    ma.array([1, 2, 3], mask=[False, True, False]),
+    np.array([1.0, np.nan, np.inf]),
+    [],
+])
+def test_prepare_1d_preserves_masks_and_strided_values(value):
+    expected = ma.asanyarray(value, dtype=float).filled(np.nan)
+    result = prepare_1d(value, name="column")
+    np.testing.assert_array_equal(result, expected)
+    assert result.dtype == np.float64 and result.flags.c_contiguous
+    np.testing.assert_array_equal(ma.asanyarray(value, dtype=float).filled(np.nan), expected)
+    with pytest.raises(ValueError, match="one-dimensional"):
+        prepare_1d([[1, 2]], name="column")
 
 
 def test_common_restore_reuses_owned_backend_output_storage():

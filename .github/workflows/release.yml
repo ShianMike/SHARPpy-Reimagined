@@ -256,7 +256,7 @@ jobs:
           $constraint = (Resolve-Path "constraints/release.txt").Path
           $env:PIP_CONSTRAINT = $constraint
           python -m pip install --upgrade --constraint $constraint pip
-          python -m pip install --constraint $constraint `
+          python -m pip install --no-compile --constraint $constraint `
             ".[render,era5,wrf]"
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip install --constraint $constraint pyinstaller maturin

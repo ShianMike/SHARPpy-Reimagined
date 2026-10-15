@@ -26,12 +26,16 @@ export function OutlookTooltip(): ReactNode {
   if (outlook === null) {
     return null;
   }
+  const risk = outlook.description || outlook.label;
   return (
-    <Surface ref={ref} elevation="popover" role="tooltip" className={styles.tooltip} data-testid="outlook-tooltip">
-      <p className={styles.id}>{outlook.label}</p>
-      {outlook.description === "" ? null : <p className={styles.name}>{outlook.description}</p>}
-      <p className={styles.meta}>{outlook.title}</p>
-      {outlook.subtitle === "" ? null : <p className={styles.meta}>{outlook.subtitle}</p>}
+    <Surface ref={ref} elevation="popover" role="tooltip" className={[styles.tooltip, styles.report].join(" ")} data-testid="outlook-tooltip">
+      <header className={styles.reportHeading}>
+        <p className={styles.reportTitle}>{risk.includes(outlook.label) ? risk : `${risk} (${outlook.label})`}</p>
+        <p className={styles.meta}>{outlook.title}</p>
+      </header>
+      {outlook.subtitle === "" ? null : <footer className={styles.reportAttribution}>
+        <p>{outlook.subtitle}</p>
+      </footer>}
     </Surface>
   );
 }

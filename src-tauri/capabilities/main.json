@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Main window: the app's own commands and backend status events only.",
+  "description": "Main window: app commands, backend status events, fullscreen, and signed updates.",
   "windows": ["main"],
   "permissions": [
     "allow-get-backend-health",
@@ -33,6 +33,12 @@
     "allow-get-place-labels",
     "allow-get-station-availability",
     "core:event:allow-listen",
-    "core:event:allow-unlisten"
+    "core:event:allow-unlisten",
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-set-fullscreen",
+    "core:resources:allow-close",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install"
   ]
 }

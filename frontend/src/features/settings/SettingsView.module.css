@@ -57,3 +57,18 @@
 .table th { color: var(--text-secondary); font-weight: var(--font-weight-regular); white-space: nowrap; }
 .table td { color: var(--text-primary); }
 .wrap { overflow-wrap: anywhere; }
+.updates { display: flex; flex-direction: column; gap: var(--space-6); padding-block: var(--space-4); }
+.updateIdentity { display: flex; align-items: center; gap: var(--space-4); padding-bottom: var(--space-6); border-bottom: var(--hairline) solid var(--border-subtle); }
+.updateIdentity h3 { font-size: var(--font-size-title); font-weight: var(--font-weight-semibold); }
+.updateBrand { width: var(--empty-icon-size); height: var(--empty-icon-size); flex: none; }
+.updateVersion { margin-top: var(--space-1); color: var(--text-secondary); font-size: var(--font-size-small); font-variant-numeric: tabular-nums; }
+.updateStatus { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-4); }
+.updateMessage { flex: 1 1 var(--search-min-w); min-width: 0; }
+.updateTitle { color: var(--text-primary); font-weight: var(--font-weight-semibold); }
+.updateMessage[role="alert"] .updateTitle { color: var(--danger); }
+.updateMessage p + p { margin-top: var(--space-2); color: var(--text-secondary); font-size: var(--font-size-small); }
+.updateActions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.updateSchedule { padding-top: var(--space-4); border-top: var(--hairline) solid var(--border-subtle); color: var(--text-tertiary); font-size: var(--font-size-caption); line-height: var(--line-height-body); }
+.updateProgress { display: flex; align-items: center; gap: var(--space-3); font-variant-numeric: tabular-nums; }
+.updateProgress progress { flex: 1; min-width: 0; accent-color: var(--accent); }
+.releaseNotes { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: var(--space-3); }

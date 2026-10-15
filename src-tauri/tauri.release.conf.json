@@ -1,6 +1,7 @@
 {
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["nsis"],
     "resources": {
       "../dist/sharppy-backend/": "backend/"

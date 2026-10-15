@@ -130,8 +130,8 @@ test.describe("at 1440 by 900", () => {
   });
 });
 
-test.describe("at the 1024 by 640 minimum window", () => {
-  test.use({ viewport: { width: 1024, height: 640 } });
+test.describe("at the 1280 by 800 minimum window", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
 
   test("the Soundings workspace fits the minimum window", async ({
     page,

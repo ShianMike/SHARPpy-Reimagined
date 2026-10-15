@@ -13,6 +13,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, expect, test, type Browser, type Page } from "@playwright/test";
+import { version } from "../../package.json";
 
 declare global {
   interface Window {
@@ -131,7 +132,7 @@ test.describe("desktop measurements", () => {
     const popover = page.getByRole("dialog", { name: "Backend status" });
     await expect(popover).toContainText("Backend ready");
     await expect(popover).toContainText("3.11.14");
-    await expect(popover).toContainText("3.0.0");
+    await expect(popover).toContainText(version);
     results.healthPopover = await popover.innerText();
     await shot("desktop-health.png");
     await page.keyboard.press("Escape");

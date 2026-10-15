@@ -14,10 +14,12 @@ const hasPython = process.env.SHARPPY_PYTHON !== undefined || [".gribenv", ".ven
 it.skipIf(!hasPython)("starts, restarts, and closes the actual Python process tree", async () => {
   const server = await createServer({
     configFile: false, root, cacheDir: resolve(root, "node_modules/.vite-live-backend-test"), plugins: [liveBackend()],
-    server: { host: "127.0.0.1", port: 5175, strictPort: true },
+    server: { host: "127.0.0.1", port: 0, strictPort: true },
   });
   const health = async () => {
-    const response = await fetch("http://127.0.0.1:5175/__backend", {
+    const base = server.resolvedUrls?.local[0];
+    if (base === undefined) throw new Error("Missing test server URL.");
+    const response = await fetch(new URL("/__backend", base), {
       method: "POST", headers: { "Content-Type": "application/json", "Connection": "close" },
       body: JSON.stringify({ id: 1, method: "get_backend_health", params: {} }),
     });

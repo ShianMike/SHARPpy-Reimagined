@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v3.0.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v3.0.1). Created if it does not exist."
         required: true
-        default: "v3.0.0"
+        default: "v3.0.1"
       publish_release:
         description: "Publish after verification; leave off to build a release candidate only."
         required: true
@@ -367,7 +367,11 @@ jobs:
       - name: Build desktop shell and Windows installer
         working-directory: frontend
         shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) { throw "Updater signing key is not configured" }
           npm ci
           if ($LASTEXITCODE -ne 0) { throw "Frontend dependency install failed" }
           npm run tauri -- build --config src-tauri/tauri.release.conf.json --bundles nsis
@@ -399,6 +403,9 @@ jobs:
           if ($installer.Count -ne 1) { throw "Expected exactly one desktop installer" }
           $setupName = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64-setup.exe"
           Copy-Item -LiteralPath $installer[0].FullName -Destination "release-artifacts/$setupName"
+          Copy-Item -LiteralPath "$($installer[0].FullName).sig" -Destination "release-artifacts/$setupName.sig"
+          python packaging/write_updater_manifest.py "release-artifacts/$setupName" $env:RELEASE_TAG
+          if ($LASTEXITCODE -ne 0) { throw "Updater manifest generation failed" }
           Copy-Item "rust/sharpmod-rs/dist/*.whl" "release-artifacts/"
           python -m pip freeze --all | Set-Content -Encoding utf8 `
             "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-dependencies.txt"

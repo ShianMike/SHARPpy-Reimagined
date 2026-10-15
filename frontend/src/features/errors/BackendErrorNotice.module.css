@@ -1,6 +1,6 @@
-.log {
+.hint, .log {
   color: var(--text-tertiary);
-  font-family: var(--font-mono);
   font-size: var(--font-size-small);
   overflow-wrap: anywhere;
 }
+.log { font-family: var(--font-mono); }

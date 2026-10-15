@@ -3,7 +3,7 @@ import { MARKS, nextFrames, waitForMapDrawn, waitForMark } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
-import { boxOf, chooseThroughSearch, isInside, overlapArea, viewportBox } from "./support/ui";
+import { boxOf, chooseThroughSearch, hoverAt, isInside, overlapArea, turnOn, viewportBox } from "./support/ui";
 
 test("the forecast workspace has linked controls and only the supported destinations", async ({ page, consoleMessages }) => {
   await page.goto("/");
@@ -33,7 +33,7 @@ test("the forecast workspace has linked controls and only the supported destinat
   await expect(page.getByTestId("health-indicator")).toHaveCount(0);
   await expect(page.getByTestId("panel-chip-1")).toHaveCount(0);
   const actions = page.getByRole("group", { name: "Map actions", exact: true });
-  await expect(actions.getByRole("button")).toHaveCount(3);
+  await expect(actions.getByRole("button")).toHaveCount(4);
   const brand = page.getByTestId("product-name").locator("..");
   const topRow = await Promise.all([brand, forecast, actions].map(boxOf));
   expect(topRow.every((box) => Math.abs(box.y - (topRow[0]?.y ?? 0)) < 1)).toBe(true);
@@ -69,6 +69,53 @@ test("the compact dock provides one keyboard stop and arrow navigation", async (
   expect((await boxOf(rail)).width).toBe(56);
 });
 
+test("fullscreen sits after Point details and can exit from another workspace", async ({ page, consoleMessages }) => {
+  await page.goto("/");
+  await waitForMapDrawn(page);
+  const tools = page.getByRole("group", { name: "Map detail views" });
+  expect(await tools.getByRole("button").evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))))
+    .toEqual(["Layers", "Point details", "Enter fullscreen"]);
+  await tools.getByRole("button", { name: "Enter fullscreen" }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === document.documentElement)).toBe(true);
+  await expect(tools.getByRole("button", { name: "Exit fullscreen" })).toHaveAttribute("aria-pressed", "true");
+  await tools.getByRole("button", { name: "Exit fullscreen" }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
+  await tools.getByRole("button", { name: "Enter fullscreen" }).click();
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true }).click();
+  await page.keyboard.press("F11");
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
+  expectWarnings(consoleMessages, []);
+});
+
+test("the SPC hover readout uses the report heading and separated validity", async ({ page, consoleMessages }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await waitForMapDrawn(page);
+  await turnOn(page, "spc-cat");
+  await page.getByRole("button", { name: "Close map details", exact: true }).click();
+  await hoverAt(page, -96.5, 34.5);
+  const tooltip = page.getByTestId("outlook-tooltip");
+  await expect(tooltip.locator("header > p").first()).toHaveText("Slight Risk (SLGT)");
+  await expect(tooltip.locator("header")).toContainText("SPC convective outlook");
+  await expect(tooltip.locator("footer")).toContainText("valid 04 Oct 1300Z → 05 Oct 1200Z");
+  expect(isInside(await boxOf(tooltip), viewportBox(page))).toBe(true);
+  await saveScreenshot(page, "browser-outlook-formatting.png");
+  expectWarnings(consoleMessages, []);
+});
+
+test("Settings exposes application updates and explains the browser limitation", async ({ page, consoleMessages }) => {
+  await page.goto("/");
+  await waitForMapDrawn(page);
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Updates", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "SHARPpy Reimagined" })).toBeVisible();
+  await expect(page.getByText(/^Current version: \d+\.\d+\.\d+/)).toBeVisible();
+  await expect(page.getByText("Check for updates in the installed Windows app.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Check for updates" })).toBeDisabled();
+  await saveScreenshot(page, "browser-updates.png");
+  expectWarnings(consoleMessages, []);
+});
+
 test("other workspaces leave the map inert and returning preserves the selected station", async ({ page, consoleMessages }) => {
   await page.goto("/");
   await waitForMapDrawn(page);
@@ -100,8 +147,39 @@ test("other workspaces leave the map inert and returning preserves the selected 
   expectWarnings(consoleMessages, []);
 });
 
-test.describe("at the 1024 by 640 minimum window", () => {
-  test.use({ viewport: { width: 1024, height: 640 } });
+test.describe("at the 1280 by 800 minimum window", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("a desktop update notice fits above playback and Later keeps it available in Settings", async ({ page, consoleMessages }) => {
+    await page.addInitScript(() => {
+      // Exercise the native notification UI without downloading or installing a release.
+      Object.defineProperty(window, "__TAURI_INTERNALS__", { value: {
+        metadata: { currentWindow: { label: "main" } },
+        invoke: (command: string) => {
+          if (command === "plugin:updater|check") return Promise.resolve({ rid: 1, currentVersion: "3.0.0", version: "3.1.0", rawJson: {} });
+          if (command === "plugin:resources|close") return Promise.resolve();
+          if (command === "plugin:window|is_fullscreen") return Promise.resolve(false);
+          return Promise.reject(new Error(`Unexpected native command: ${command}`));
+        },
+      } });
+    });
+    await page.goto("/");
+    await waitForMapDrawn(page);
+    const notice = page.getByTestId("app-update-notice");
+    await expect(notice).toContainText("Version 3.1.0 is available");
+    await expect(notice.getByRole("button", { name: "Update now" })).toBeEnabled();
+    const box = await boxOf(notice);
+    expect(isInside(box, viewportBox(page))).toBe(true);
+    expect(overlapArea(box, await boxOf(page.getByRole("region", { name: "Forecast timeline" })))).toBe(0);
+    await saveScreenshot(page, "browser-update-notice.png");
+    await notice.getByRole("button", { name: "Later" }).click();
+    await expect(notice).toHaveCount(0);
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Updates", exact: true }).click();
+    await expect(page.getByText("Version 3.1.0 is available")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Install update" })).toBeEnabled();
+    expectWarnings(consoleMessages, []);
+  });
 
   test("floating controls fit over the full-window map", async ({ page }) => {
     await page.goto("/");

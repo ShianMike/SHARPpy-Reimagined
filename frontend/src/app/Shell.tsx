@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Layers, LoaderCircle, Map, MapPin, X } from "lucide-react";
+import { Layers, LoaderCircle, Map, MapPin, Maximize, Minimize, X } from "lucide-react";
 import { VisuallyHidden } from "../components/VisuallyHidden";
 import { useBackendHealth } from "../lib/backend/BackendProvider";
 import { ReducedRenderingView } from "../features/fallback/ReducedRenderingView";
 import { Inspector } from "../features/inspector/Inspector";
 import { NavigationRail } from "../features/rail/NavigationRail";
 import { SettingsView } from "../features/settings/SettingsView";
+import { UpdateNotice } from "../features/settings/UpdateNotice";
 import { SoundingWorkspace } from "../features/sounding/SoundingWorkspace";
 import { TimelineRegion } from "../features/timeline/TimelineRegion";
 import { useTheme } from "../stores/uiStore";
@@ -21,6 +22,7 @@ import { stationIndex } from "../stations/stationIndex";
 import { useStationCatalog } from "../stations/stationQueries";
 import { MapOverlaySlotsProvider, useSlotElements } from "./MapOverlaySlots";
 import { useGlobalShortcuts } from "./shortcuts";
+import { useFullscreen } from "./useFullscreen";
 import { workspaceDefinition, type WorkspaceDefinition } from "./workspaces";
 import styles from "./Shell.module.css";
 
@@ -49,6 +51,7 @@ function WorkspaceView({ workspace }: { workspace: WorkspaceDefinition }): React
 
 export function Shell(): ReactNode {
   useGlobalShortcuts();
+  const { fullscreen, busy: fullscreenBusy, error: fullscreenError, toggle: toggleFullscreen } = useFullscreen();
   useTheme();
   useBackendHealth();
   const workspace = workspaceDefinition(useAppStore((state) => state.activeWorkspace));
@@ -95,6 +98,8 @@ export function Shell(): ReactNode {
               onClick={() => { toggleDetails("layers"); }} />
             <IconAction icon={MapPin} label="Point details" hintSide="bottom-end" aria-expanded={detailsOpen && sideTab === "point"} aria-controls="map-details"
               onClick={() => { toggleDetails("point"); }} />
+            <IconAction icon={fullscreen ? Minimize : Maximize} label={fullscreenError || (fullscreen ? "Exit fullscreen" : "Enter fullscreen")} hintSide="bottom-end"
+              aria-pressed={fullscreen} aria-keyshortcuts="F11" disabled={fullscreenBusy} onClick={() => { void toggleFullscreen(); }} />
           </div>
         </Toolbar>
         <div className={styles.leftDock}>
@@ -137,7 +142,9 @@ export function Shell(): ReactNode {
             <WorkspaceView workspace={panelWorkspace} />
           </Surface>}
         </main>
+        <div className={styles.updateNotice}><UpdateNotice /></div>
         <VisuallyHidden role="status" aria-live="polite" data-testid={liveText === "" ? undefined : "catalogue-announcement"}>{liveText}</VisuallyHidden>
+        {fullscreenError === "" ? null : <VisuallyHidden role="alert">{fullscreenError}</VisuallyHidden>}
       </div>
     </MapOverlaySlotsProvider>
   );

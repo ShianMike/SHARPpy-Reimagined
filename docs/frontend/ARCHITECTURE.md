@@ -360,8 +360,34 @@ changes.
   when a map layer is shown, HRRR GRIB data from NOAA's open data on AWS, SPC
   outlooks, the MRMS mosaic through NCEP GeoServer, and the UWyo station list
   for a chosen release.
+  Automatic and manual update checks and installer downloads run through the native Tauri
+  updater against GitHub Releases.
   WebView2 remote debugging is enabled only through an environment variable in
   a measurement shell, never in the repo.
+
+## Windows update signing
+
+The shell checks for updates on launch, hourly, and on reconnection. It shows
+an Update now / Later notice, with Later suppressing that version for the
+session. Automatic check failures are logged without an alert; installation
+always requires a click. Settings → Updates uses the same store and official
+Tauri updater. The public verification key
+and HTTPS GitHub release endpoint live in `src-tauri/tauri.conf.json`. Release
+CI requires the encrypted repository secret `TAURI_SIGNING_PRIVATE_KEY` and
+stages the installer, its `.exe.sig`, and `latest.json` before checksums and
+provenance. The manifest points to the renamed Windows installer in that exact
+release. A failed check is never reported as “up to date”; signature verification
+must succeed before installation can start.
+
+For each future update, publish a stable GitHub Release with a higher app version
+(for example, 3.0.1 to 3.0.2) through the existing release workflow. CI generates
+and attaches the feed and signed installer together; uploading an EXE alone does
+not provide an update feed. Drafts and prereleases do not use this stable channel.
+
+Keep the private key outside the repository and back it up securely. Replacing
+the configured public key prevents existing installations from accepting future
+updates signed only by the replacement key. Locally, signing uses the Tauri
+`TAURI_SIGNING_PRIVATE_KEY` environment variable; never commit a private key.
 
 ## Open items
 

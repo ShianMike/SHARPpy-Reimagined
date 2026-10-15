@@ -1,0 +1,16 @@
+{
+"stations": [
+{"id": "72249", "name": "FWD Fort Worth, TX", "lat": 32.83, "lon": -97.3, "src": "FM35"},
+{"id": "72357", "name": "OUN Norman, OK", "lat": 35.18, "lon": -97.44, "src": "FM35"},
+{"id": "72403", "name": "IAD Washington Dulles, VA", "lat": 38.98, "lon": -77.47, "src": "FM35"},
+{"id": "72451", "name": "DDC Dodge City, KS", "lat": 37.77, "lon": -99.97, "src": "FM35"},
+{"id": "72469", "name": "DNR Denver, CO", "lat": 39.77, "lon": -104.87, "src": "FM35"},
+{"id": "72558", "name": "OAX Omaha/Valley, NE", "lat": 41.32, "lon": -96.37, "src": "FM35"},
+{"id": "72562", "name": "LBF North Platte, NE", "lat": 41.13, "lon": -100.68, "src": "FM35"},
+{"id": "72572", "name": "SLC Salt Lake City, UT", "lat": 40.77, "lon": -111.95, "src": "FM35"},
+{"id": "72776", "name": "TFX Great Falls, MT", "lat": 47.46, "lon": -111.38, "src": "FM35"},
+{"id": "74560", "name": "ILX Lincoln, IL", "lat": 40.15, "lon": -89.34, "src": "FM35"}
+],
+"origin": "seed_fallback",
+"dropped_count": 0
+}

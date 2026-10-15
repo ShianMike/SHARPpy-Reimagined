@@ -1,0 +1,5 @@
+{
+  "code": "FIELD_FETCH_FAILED",
+  "message": "HRRR Composite Reflectivity, 2026-10-05 04Z run, F001 could not be downloaded: the connection timed out.",
+  "retryable": true
+}

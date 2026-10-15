@@ -113,11 +113,12 @@ def prepare_interpolation(target, coordinate, values, *, missing=None):
 
 def prepare_1d(value, *, name: str):
     """Return a contiguous float64 vector with masks represented by NaN."""
-    array = ma.asanyarray(value, dtype=float)
+    array = np.asanyarray(value, dtype=float)
     if array.ndim != 1:
         raise ValueError(f"{name} must be one-dimensional; got shape {array.shape}")
-    return np.ascontiguousarray(
-        np.asarray(array.filled(np.nan), dtype=np.float64))
+    if ma.isMaskedArray(array):
+        array = array.filled(np.nan)
+    return np.ascontiguousarray(array, dtype=np.float64)
 
 
 def prepare_qc_columns(columns, names):

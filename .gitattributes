@@ -24,3 +24,5 @@
 *.spc   binary
 *.buf   binary
 *.OAX   binary
+*.ico   binary
+*.icns  binary

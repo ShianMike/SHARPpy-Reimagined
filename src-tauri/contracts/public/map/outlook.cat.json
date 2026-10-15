@@ -1,0 +1,139 @@
+{
+  "product": "cat",
+  "validTime": "2026-10-04T21:00:00Z",
+  "outlook": {
+    "title": "SPC convective outlook \u2014 Day 1 categorical risk",
+    "subtitle": "Day 1 \u00b7 valid 04 Oct 1300Z \u2192 05 Oct 1200Z",
+    "validFrom": "2026-10-04T13:00:00Z",
+    "validTo": "2026-10-05T12:00:00Z",
+    "issued": "2026-10-04T12:50:00Z",
+    "covers": true,
+    "sourceUrl": "https://www.spc.noaa.gov/products/outlook/archive/2026/day1otlk_20261004_1300_cat.nolyr.geojson",
+    "attribution": "NOAA/NWS Storm Prediction Center",
+    "areas": [
+      {
+        "label": "TSTM",
+        "description": "General Thunderstorms Risk",
+        "fill": "#C1E9C1",
+        "stroke": "#55BB55",
+        "rank": 0,
+        "hatch": false,
+        "hatchLevel": 0,
+        "rings": [
+          [
+            [
+              -104.0,
+              30.0
+            ],
+            [
+              -88.0,
+              30.0
+            ],
+            [
+              -88.0,
+              42.0
+            ],
+            [
+              -104.0,
+              42.0
+            ]
+          ],
+          [
+            [
+              -101.0,
+              32.0
+            ],
+            [
+              -92.0,
+              32.0
+            ],
+            [
+              -92.0,
+              39.0
+            ],
+            [
+              -101.0,
+              39.0
+            ]
+          ]
+        ]
+      },
+      {
+        "label": "MRGL",
+        "description": "Marginal Risk",
+        "fill": "#66A366",
+        "stroke": "#005500",
+        "rank": 1,
+        "hatch": false,
+        "hatchLevel": 0,
+        "rings": [
+          [
+            [
+              -101.0,
+              32.0
+            ],
+            [
+              -92.0,
+              32.0
+            ],
+            [
+              -92.0,
+              39.0
+            ],
+            [
+              -101.0,
+              39.0
+            ]
+          ],
+          [
+            [
+              -99.0,
+              34.0
+            ],
+            [
+              -95.0,
+              34.0
+            ],
+            [
+              -95.0,
+              37.0
+            ],
+            [
+              -99.0,
+              37.0
+            ]
+          ]
+        ]
+      },
+      {
+        "label": "SLGT",
+        "description": "Slight Risk",
+        "fill": "#FFE066",
+        "stroke": "#DDAA00",
+        "rank": 2,
+        "hatch": false,
+        "hatchLevel": 0,
+        "rings": [
+          [
+            [
+              -99.0,
+              34.0
+            ],
+            [
+              -95.0,
+              34.0
+            ],
+            [
+              -95.0,
+              37.0
+            ],
+            [
+              -99.0,
+              37.0
+            ]
+          ]
+        ]
+      }
+    ]
+  }
+}

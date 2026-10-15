@@ -1,0 +1,12 @@
+{
+  "code": "BRIDGE_SPAWN_FAILED",
+  "message": "The Python backend could not start: C:\\repo\\.gribenv\\Scripts\\python.exe exited with code 1 before the handshake. Check that sharpmod is installed in that interpreter and that it is Python 3.11 or newer.",
+  "retryable": false,
+  "context": {
+    "operation": "start_backend",
+    "provider": "python-bridge"
+  },
+  "details": {
+    "exitCode": 1
+  }
+}

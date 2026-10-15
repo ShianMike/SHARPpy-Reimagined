@@ -1,0 +1,5 @@
+{
+  "code": "FIELD_UNAVAILABLE",
+  "message": "HRRR Composite Reflectivity, 2026-10-05 04Z run, F001 is not published: HRRR did not return refc.",
+  "retryable": false
+}

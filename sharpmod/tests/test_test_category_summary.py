@@ -19,6 +19,7 @@ def test_modules_have_one_stable_group():
         "test_packaging_render_smoke": "exports",
         "test_box_export": "exports",
         "test_backend_equivalence": "platform",
+        "test_bridge_protocol": "platform",
         "test_grib_backend_equivalence": "platform",
         "test_model_fetch_packaging": "platform",
         "test_test_category_summary": "platform",

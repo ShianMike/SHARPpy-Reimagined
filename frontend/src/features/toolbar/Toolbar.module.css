@@ -1,0 +1,8 @@
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); pointer-events: none; }
+.brand { display: flex; align-items: center; gap: var(--space-2); min-height: var(--toolbar-h); padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3); border-radius: var(--radius-pill); pointer-events: auto; }
+.brandMark { width: var(--brand-icon-size); height: var(--brand-icon-size); flex: none; }
+.title { font-size: var(--font-size-subhead); font-weight: var(--font-weight-semibold); white-space: nowrap; }
+.title > span { font-weight: var(--font-weight-regular); color: var(--text-secondary); }
+.actions { display: flex; align-items: center; gap: var(--space-1); min-height: var(--toolbar-h); padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); pointer-events: auto; min-width: 0; }
+.forecast { flex: 0 1 var(--forecast-w); min-width: 0; pointer-events: auto; }
+.brand, .actions { flex-shrink: 0; }

@@ -1,0 +1,16 @@
+{
+  "app": {
+    "name": "SHARPpy Reimagined",
+    "version": "3.0.0",
+    "tauriVersion": "2.12.1",
+    "buildProfile": "debug",
+    "logFile": "C:\\Users\\example\\AppData\\Local\\io.github.shianmike.sharppy-reimagined\\logs\\sharppy-reimagined.log"
+  },
+  "bridge": {
+    "status": "sleeping",
+    "since": "2026-10-04T01:02:03Z"
+  },
+  "python": null,
+  "scientificBackend": null,
+  "checkedAt": "2026-10-04T01:02:05Z"
+}

@@ -1,0 +1,5 @@
+{
+  "code": "CATALOG_UNAVAILABLE",
+  "message": "The station catalogue could not be loaded.",
+  "retryable": true
+}

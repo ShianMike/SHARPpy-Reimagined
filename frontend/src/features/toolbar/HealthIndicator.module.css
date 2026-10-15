@@ -1,0 +1,28 @@
+/* The health label never shrinks (DESIGN-frontend F8 toolbar fit rule). */
+.indicator {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-2);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.indicator:hover {
+  background: var(--fill-hover);
+  color: var(--text-primary);
+}
+
+.indicator[aria-expanded="true"] {
+  background: var(--fill-selected);
+  color: var(--text-primary);
+}
+
+.label {
+  font-size: var(--font-size-caption);
+}

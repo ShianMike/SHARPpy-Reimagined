@@ -4,11 +4,9 @@ A Qt-free provider adapter that turns one Open-Meteo pressure-level response
 into the same portable point-sounding contract the Herbie, ECCC GeoMet, IFS,
 ERA5, UWyo, and WRF paths already write. It needs no GRIB runtime.
 
-Scope: this adapter deliberately enables exactly one model, ECMWF IFS on its
-native 9 km grid. Open-Meteo advertises forty-odd identifiers, but advertising a
-model and a variable independently does not prove that model publishes a
-complete sounding at every level, and each additional entry needs its own live
-capability audit. One vetted model is worth more than a long list of maybes.
+The enabled ICON Global and ECMWF IFS 0.25-degree models carry pressure ladders
+measured against the live service. Advertising a model and a variable separately
+does not prove that model publishes a complete sounding at every level.
 
 Design notes worth knowing before changing anything here:
 
@@ -18,10 +16,9 @@ stitches the newest run of each model into one series and can no longer say
 which initialisation produced a value, which makes it unusable for a sounding
 that claims to depict a specific cycle.
 
-*Distinct from the built-in ECMWF route.* This application already reads ECMWF
-through Herbie against the 0.25 degree open-data feed. This route is not a
-replacement: it reaches the native 9 km grid and archived runs the open-data
-feed no longer holds. Both are selectable, and the labels say which is which.
+*Explicit ECMWF source.* The React model picker uses Open-Meteo's archived
+0.25-degree IFS runs. The legacy Herbie open-data route keeps its own key.
+Native 9 km IFS is withheld because Open-Meteo supplies no pressure levels.
 
 *Completeness is enforced per request, not merely declared.* A level missing
 temperature, moisture, wind, or height is dropped; a profile that loses its
@@ -84,12 +81,11 @@ ALL_PRESSURE_LEVELS: tuple[int, ...] = (
 PRESSURE_LEVELS: tuple[int, ...] = tuple(
     level for level in ALL_PRESSURE_LEVELS if level >= 100)
 
-#: Pressure ladders each model actually populates, measured against the live
-#: service (run 2026-08-28 00Z, F012; evidence in the capability audit).
+#: Pressure ladders each model actually populates. ICON was audited on
+#: 2026-08-28; ECMWF IFS 0.25 on 2026-10-12 (run 2026-10-11 00Z, F012).
 #:
-#: The published schema advertises 26 levels for every model, but no model fills
-#: more than twelve of them: 950, 900, 750, 650, 550, 450, 350, 275, 225, 175,
-#: and 125 hPa came back empty everywhere. Requesting a level a model never
+#: The published schema advertises 26 levels for every model; many are empty.
+#: Requesting a level a model never
 #: populates buys nothing and costs request width, which is billable, so every
 #: capability carries its measured ladder rather than the candidate set.
 _L12_TO_100 = (1000, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100)
@@ -105,6 +101,7 @@ _L8_TO_300 = (1000, 925, 850, 700, 600, 500, 400, 300)
 #: promoting one later is a manifest entry rather than another live audit.
 MEASURED_LADDERS: dict[str, tuple[int, ...]] = {
     "icon_global": _L12_TO_100,
+    "ecmwf_ifs025": (*_L12_TO_100, 50),
     "ukmo_global_deterministic_10km": _L12_TO_100,
     "cma_grapes_global": _L12_TO_100,
     "meteofrance_arome_france": _L12_TO_100,
@@ -181,8 +178,8 @@ class OpenMeteoCapability:
     """One vetted, selectable Open-Meteo deterministic model.
 
     ``pressure_levels`` has no default on purpose. The published schema
-    advertises the same 26 levels for every model while no model fills more than
-    twelve, so a default would let an unmeasured entry inherit a ladder the
+    advertises the same 26 levels for every model, so a default would let an
+    unmeasured entry inherit a ladder the
     provider never populates. Requiring it forces each capability to carry
     audit evidence -- see :data:`MEASURED_LADDERS`.
 
@@ -257,7 +254,7 @@ ARCHIVE_START = date(2026, 4, 2)
 
 _GLOBAL_BOUNDS = (-180.0, 180.0, -90.0, 90.0)
 
-#: The one enabled model. Keyed by a namespaced SHARPpy key so it can never be
+#: Enabled models. Keyed by a namespaced SHARPpy key so they can never be
 #: confused with, or overwrite, a built-in Herbie route of the same name.
 CAPABILITIES: dict[str, OpenMeteoCapability] = {
     "openmeteo-icon-global": OpenMeteoCapability(
@@ -286,6 +283,28 @@ CAPABILITIES: dict[str, OpenMeteoCapability] = {
             "DWD's own cadence; 06Z and 18Z runs stop at F120"
         ),
     ),
+    "openmeteo-ecmwf-ifs025": OpenMeteoCapability(
+        model_key="openmeteo-ecmwf-ifs025",
+        api_model="ecmwf_ifs025",
+        label="ECMWF",
+        origin="European Centre for Medium-Range Weather Forecasts (ECMWF)",
+        resolution="0.25 degree grid (approximately 28 km)",
+        domain="Global",
+        domain_bounds=_GLOBAL_BOUNDS,
+        cycles=(0, 6, 12, 18),
+        forecast_hours=_hours((0, 144, 3), (150, 360, 6)),
+        native_cadence_hours=3,
+        archive_start=ARCHIVE_START,
+        short_cutoff_cycles=(6, 18),
+        short_cutoff_max_fxx=144,
+        pressure_levels=MEASURED_LADDERS["ecmwf_ifs025"],
+        notes=(
+            "ECMWF IFS 0.25-degree through Open-Meteo Single Runs. "
+            "Thirteen measured pressure levels from 1000 to 50 hPa, with a "
+            "verified surface row. Native three-hour steps through F144 and "
+            "six-hour steps to F360; 06Z/18Z runs stop at F144. No omega field"
+        ),
+    ),
 }
 
 
@@ -301,10 +320,6 @@ WITHHELD_API_MODELS: dict[str, str] = {
         "Open-Meteo serves ECMWF IFS without pressure-level fields. A live "
         "request returns the run and every surface variable, then zero levels "
         "for all five pressure families, so no sounding can be built from it."
-    ),
-    "ecmwf_ifs025": (
-        "The same ECMWF IFS at a coarser 0.25 degree grid, and it too publishes "
-        "no pressure-level fields."
     ),
     "ecmwf_aifs025_single": (
         "ECMWF AIFS is already a built-in route, and Open-Meteo offers it only "

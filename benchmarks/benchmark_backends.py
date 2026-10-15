@@ -849,7 +849,7 @@ def _record_profile_batch_analysis(
                 parallel_threshold=2,
             )
 
-        def native(worker_count):
+        def native(worker_count, threshold=2):
             return native_module.profile_batch_analysis(
                 *flattened,
                 offsets,
@@ -857,7 +857,7 @@ def _record_profile_batch_analysis(
                 layer_tops,
                 None,
                 worker_count,
-                2,
+                threshold,
             )
 
         # The Python reference legitimately carries masked values through
@@ -875,8 +875,12 @@ def _record_profile_batch_analysis(
                     ("python-public", python_public),
                     ("rust-serial", rust_serial),
                     ("rust-parallel-4", rust_parallel),
+                    ("rust-default", lambda: rust_backend.profile_batch_analysis(
+                        profiles, layer_tops,
+                    )),
                     ("rust-native-serial", lambda: native(1)),
                     ("rust-native-parallel-4", lambda: native(4)),
+                    ("rust-native-default", lambda: native(None, 8)),
                 ),
                 (),
                 scenario=f"profile-batch-{profile_count}x{levels}",

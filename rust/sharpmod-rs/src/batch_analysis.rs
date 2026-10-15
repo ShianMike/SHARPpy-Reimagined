@@ -5,9 +5,8 @@
 //! scheduling policy next to the Rust kernels: small batches stay serial,
 //! larger batches use a bounded Rayon pool, and calls made from an existing
 //! Rayon worker stay serial to avoid nested pools competing for the same CPUs.
-//! The ordinary Python binding shares one process-wide default executor, so
-//! simultaneous GUI callers still have one four-worker ceiling rather than one
-//! pool each. `IndexedParallelIterator::collect` preserves input order; errors
+//! The ordinary Python binding shares one process-wide default executor sized
+//! to the available CPUs. `IndexedParallelIterator::collect` preserves input order; errors
 //! are collected per input and resolved serially so the lowest failing index is
 //! deterministic too.
 
@@ -16,12 +15,32 @@ use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::sync::OnceLock;
 
-/// Hard ceiling for native profile-analysis workers.
-///
-/// The GUI already performs extraction and orchestration on worker threads.
-/// Four analysis workers leave headroom for those tasks and prevent a large
-/// box from claiming every logical CPU on a workstation.
-pub const MAX_BATCH_THREADS: usize = 4;
+/// CPU capacity available to this process, including affinity/container limits.
+pub fn available_threads() -> usize {
+    let available = std::thread::available_parallelism().map_or(1, |count| count.get());
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetCurrentProcess() -> *mut std::ffi::c_void;
+            fn GetProcessAffinityMask(
+                process: *mut std::ffi::c_void,
+                process_mask: *mut usize,
+                system_mask: *mut usize,
+            ) -> i32;
+        }
+        let (mut process_mask, mut system_mask) = (0, 0);
+        // SAFETY: the pseudo-handle is valid and both output pointers own usize storage.
+        let success = unsafe {
+            GetProcessAffinityMask(GetCurrentProcess(), &mut process_mask, &mut system_mask)
+        };
+        // Windows' standard estimate can ignore an explicit process affinity restriction.
+        if success != 0 && process_mask != 0 && process_mask != system_mask {
+            return available.min(process_mask.count_ones() as usize);
+        }
+    }
+    available
+}
 
 /// Batches smaller than this run serially by default.
 pub const DEFAULT_PARALLEL_THRESHOLD: usize = 8;
@@ -109,9 +128,8 @@ pub struct BatchExecutionOptions {
 
 impl Default for BatchExecutionOptions {
     fn default() -> Self {
-        let available = std::thread::available_parallelism().map_or(1, |count| count.get());
         Self {
-            max_threads: available.clamp(1, MAX_BATCH_THREADS),
+            max_threads: available_threads(),
             parallel_threshold: DEFAULT_PARALLEL_THRESHOLD,
         }
     }
@@ -150,8 +168,7 @@ pub fn default_executor() -> Result<&'static BatchAnalysisExecutor, String> {
 }
 
 impl BatchAnalysisExecutor {
-    /// Create an executor with a dedicated pool bounded by
-    /// [`MAX_BATCH_THREADS`].
+    /// Create an executor with a dedicated pool bounded by available CPUs.
     pub fn new(options: BatchExecutionOptions) -> Result<Self, String> {
         if options.max_threads == 0 {
             return Err("max_threads must be at least 1".to_string());
@@ -159,7 +176,7 @@ impl BatchAnalysisExecutor {
         if options.parallel_threshold < 2 {
             return Err("parallel_threshold must be at least 2".to_string());
         }
-        let worker_count = options.max_threads.min(MAX_BATCH_THREADS);
+        let worker_count = options.max_threads.min(available_threads());
         let pool = if worker_count > 1 {
             Some(
                 ThreadPoolBuilder::new()

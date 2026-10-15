@@ -1,0 +1,64 @@
+.switch {
+  --switch-inset: calc((var(--switch-track-h) - var(--switch-thumb-size)) / 2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--control-h-sm);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: start;
+}
+
+.switch:hover:not(:disabled) {
+  background: var(--fill-hover);
+}
+
+.switch:disabled {
+  color: var(--text-disabled);
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  flex: none;
+  width: var(--switch-track-w);
+  height: var(--switch-track-h);
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.thumb {
+  position: absolute;
+  top: calc(var(--switch-inset) - var(--hairline));
+  left: calc(var(--switch-inset) - var(--hairline));
+  width: var(--switch-thumb-size);
+  height: var(--switch-thumb-size);
+  border-radius: var(--radius-sm);
+  background: var(--text-secondary);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+
+.switch[aria-checked="true"] .track {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.switch[aria-checked="true"] .thumb {
+  background: var(--accent-text);
+  transform: translateX(calc(var(--switch-track-w) - var(--switch-thumb-size) - 2 * var(--switch-inset)));
+}

@@ -228,7 +228,17 @@ def pin_request(run: datetime, fxx: int | None = None) -> tuple[datetime, int]:
     return anchored, hour
 
 
-def grib_url(run: datetime, fxx: int, source: str) -> str:
+def grib_url(run: datetime, fxx: int, source: str, model: str = "hrrr", *, release=None) -> str:
+    if model == "nam-3km-conus":
+        return (f"https://noaa-nam-pds.s3.amazonaws.com/nam.{run:%Y%m%d}/"
+                f"nam.t{run:%H}z.conusnest.hiresf{int(fxx):02d}.tm00.grib2")
+    if model == "rrfs-a" or model.startswith("refs-m"):
+        from sharpmod.providers import rrfs_nomads
+        return rrfs_nomads.build_url(
+            release or rrfs_nomads._release_candidates()[0], run, fxx,
+            rrfs_nomads.SURFACE_PRODUCT if source == SOURCE_SURFACE else rrfs_nomads.PRESSURE_PRODUCT,
+            "conus", member=int(model[-1]) if model.startswith("refs-m") else None,
+        )
     kind = "wrfsfc" if source == SOURCE_SURFACE else "wrfprs"
     return (f"{BUCKET}/hrrr.{run:%Y%m%d}/conus/"
             f"hrrr.t{run:%H}z.{kind}f{int(fxx):02d}.grib2")
@@ -367,6 +377,7 @@ class InventoryRow:
     variable: str
     level: str
     forecast: str
+    field_index: int = 0
 
 
 _INVENTORY_LOCK = threading.Lock()
@@ -381,7 +392,7 @@ def parse_inventory(text: str) -> tuple[InventoryRow, ...]:
     the object, whose size the sidecar does not state, so it is left as zero and
     the caller requests an open-ended range for it.
     """
-    rows: list[tuple[int, int, str, str, str]] = []
+    rows: list[tuple[int, int, str, str, str, int]] = []
     for line in text.splitlines():
         line = line.strip()
         if not line:
@@ -390,16 +401,22 @@ def parse_inventory(text: str) -> tuple[InventoryRow, ...]:
         if len(parts) < 6 or not parts[1].isdigit():
             continue
         try:
-            index = int(parts[0])
+            number, _, part = parts[0].partition(".")
+            index = int(number)
+            field_index = int(part) - 1 if part else 0
+            if field_index < 0:
+                continue
         except ValueError:
             continue
-        rows.append((index, int(parts[1]), parts[3], parts[4], parts[5]))
+        rows.append((index, int(parts[1]), parts[3], parts[4], parts[5], field_index))
+    offsets = tuple(dict.fromkeys(row[1] for row in rows))
+    next_offset = dict(zip(offsets, (*offsets[1:], 0)))
     parsed: list[InventoryRow] = []
-    for position, (index, offset, variable, level, forecast) in enumerate(rows):
-        following = rows[position + 1][1] if position + 1 < len(rows) else 0
+    for index, offset, variable, level, forecast, field_index in rows:
+        following = next_offset[offset]
         length = max(0, following - offset) if following else 0
         parsed.append(InventoryRow(index, offset, length, variable, level,
-                                   forecast))
+                                   forecast, field_index))
     return tuple(parsed)
 
 
@@ -417,7 +434,7 @@ def fetch_inventory(url: str, *, opener=None, timeout=None,
     payload = call(url + ".idx", timeout or limit_timeout, 4 * 1024 * 1024)
     rows = parse_inventory(payload.decode("utf-8", errors="replace"))
     if not rows:
-        raise HrrrFieldUnavailable("HRRR inventory was empty or unreadable")
+        raise HrrrFieldUnavailable("model inventory was empty or unreadable")
 
     with _INVENTORY_LOCK:
         if len(_INVENTORY_CACHE) >= _INVENTORY_CACHE_MAX:
@@ -434,7 +451,7 @@ def locate(rows: tuple[InventoryRow, ...], spec) -> InventoryRow:
         if spec.matches(row.variable, row.level, row.forecast):
             return row
     raise HrrrFieldUnavailable(
-        f"HRRR does not publish {spec.variable}:{spec.level}"
+        f"model does not publish {spec.variable}:{spec.level}"
         + (f":{spec.forecast}" if spec.forecast else ""))
 
 
@@ -476,7 +493,7 @@ def _load_eccodes():
             "'era5' extra to enable them") from error
 
 
-def decode_message(payload: bytes, eccodes=None) -> np.ndarray:
+def decode_message(payload: bytes, eccodes=None, *, field_index: int = 0) -> np.ndarray:
     """Decode one GRIB message into the full HRRR grid.
 
     Takes exactly one message. The caller slices it out of a downloaded span
@@ -488,26 +505,54 @@ def decode_message(payload: bytes, eccodes=None) -> np.ndarray:
     the two do not agree -- ``.idx`` says ``REFC:entire atmosphere`` where
     eccodes says ``refc`` at ``entireAtmosphere``.
     """
-    api = eccodes or _load_eccodes()
+    from contextlib import ExitStack
+    from sharpmod.backends.grib import _ECCODES_LOCK
+
     if not payload.startswith(b"GRIB"):
         raise HrrrFieldError("byte range did not start at a GRIB message")
-    handle = api.codes_new_from_message(payload)
-    if handle is None:
-        raise HrrrFieldError("GRIB message could not be opened")
-    try:
-        ni = int(api.codes_get(handle, "Ni"))
-        nj = int(api.codes_get(handle, "Nj"))
-        values = np.asarray(api.codes_get_values(handle), dtype=np.float32)
+    # ecCodes' definition parser is global, including across browser tabs.
+    with _ECCODES_LOCK, ExitStack() as stack:
+        api = eccodes or _load_eccodes()
+        if field_index:
+            # Python omits ecCodes' in-memory multi-field reader; reuse its installed C library.
+            from gribapi import gribapi
+            ffi, lib = gribapi.ffi, gribapi.lib
+            try:
+                reader = lib.grib_handle_new_from_multi_message
+            except AttributeError:
+                ffi.cdef("grib_handle *grib_handle_new_from_multi_message(grib_context *, void **, size_t *, int *);")
+                reader = lib.grib_handle_new_from_multi_message
+            buffer = ffi.new("char[]", payload)
+            data = ffi.new("void **", buffer)
+            length = ffi.new("size_t *", len(payload))
+            error = ffi.new("int *")
+            api.codes_grib_multi_support_on()
+            stack.callback(api.codes_grib_multi_support_off)
+            for index in range(field_index + 1):
+                message = reader(ffi.NULL, data, length, error)
+                if message == ffi.NULL:
+                    raise HrrrFieldError(f"GRIB field {field_index} could not be opened ({error[0]})")
+                handle = gribapi.put_handle(message)
+                if index < field_index:
+                    api.codes_release(handle)
+        else:
+            handle = api.codes_new_from_message(payload)
+        if handle is None:
+            raise HrrrFieldError("GRIB message could not be opened")
         try:
-            missing = float(api.codes_get(handle, "missingValue"))
-        except Exception:  # noqa: BLE001 - not every message declares one
-            missing = 9999.0
-    finally:
-        api.codes_release(handle)
+            ni = int(api.codes_get(handle, "Ni"))
+            nj = int(api.codes_get(handle, "Nj"))
+            values = np.asarray(api.codes_get_values(handle), dtype=np.float32)
+            try:
+                missing = float(api.codes_get(handle, "missingValue"))
+            except Exception:  # noqa: BLE001 - not every message declares one
+                missing = 9999.0
+        finally:
+            api.codes_release(handle)
     grid = values.reshape(nj, ni)
     if grid.shape != HRRR_SHAPE:
         raise HrrrFieldError(
-            f"unexpected HRRR grid {grid.shape}, wanted {HRRR_SHAPE}")
+            f"unexpected model grid {grid.shape}, wanted {HRRR_SHAPE}")
     return np.where(grid == missing, MISSING, grid)
 
 

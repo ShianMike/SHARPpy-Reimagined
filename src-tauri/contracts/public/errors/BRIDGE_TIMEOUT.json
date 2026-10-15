@@ -1,0 +1,15 @@
+{
+  "code": "BRIDGE_TIMEOUT",
+  "message": "The Python backend is still starting, so the bundled UWyo station catalogue could not be loaded in time.",
+  "retryable": true,
+  "context": {
+    "operation": "get_station_catalog",
+    "provider": "python-bridge",
+    "resource": "bundled UWyo station catalogue"
+  },
+  "details": {
+    "phase": "waitingForBridge",
+    "state": "starting",
+    "timeoutMs": 15000
+  }
+}

@@ -1,0 +1,2404 @@
+{
+  "places": [
+    {
+      "name": "New York, New York",
+      "lat": 40.71,
+      "lon": -74.0,
+      "tier": 1
+    },
+    {
+      "name": "Los Angeles, California",
+      "lat": 34.05,
+      "lon": -118.24,
+      "tier": 1
+    },
+    {
+      "name": "Chicago, Illinois",
+      "lat": 41.88,
+      "lon": -87.63,
+      "tier": 1
+    },
+    {
+      "name": "Houston, Texas",
+      "lat": 29.76,
+      "lon": -95.37,
+      "tier": 1
+    },
+    {
+      "name": "Phoenix, Arizona",
+      "lat": 33.45,
+      "lon": -112.07,
+      "tier": 1
+    },
+    {
+      "name": "Philadelphia, Pennsylvania",
+      "lat": 39.95,
+      "lon": -75.17,
+      "tier": 1
+    },
+    {
+      "name": "San Antonio, Texas",
+      "lat": 29.42,
+      "lon": -98.49,
+      "tier": 1
+    },
+    {
+      "name": "San Diego, California",
+      "lat": 32.72,
+      "lon": -117.16,
+      "tier": 1
+    },
+    {
+      "name": "Dallas, Texas",
+      "lat": 32.78,
+      "lon": -96.8,
+      "tier": 1
+    },
+    {
+      "name": "Denver, Colorado",
+      "lat": 39.74,
+      "lon": -104.99,
+      "tier": 1
+    },
+    {
+      "name": "Seattle, Washington",
+      "lat": 47.61,
+      "lon": -122.33,
+      "tier": 1
+    },
+    {
+      "name": "Minneapolis, Minnesota",
+      "lat": 44.98,
+      "lon": -93.27,
+      "tier": 1
+    },
+    {
+      "name": "New Orleans, Louisiana",
+      "lat": 29.95,
+      "lon": -90.07,
+      "tier": 1
+    },
+    {
+      "name": "Atlanta, Georgia",
+      "lat": 33.75,
+      "lon": -84.39,
+      "tier": 1
+    },
+    {
+      "name": "Miami, Florida",
+      "lat": 25.76,
+      "lon": -80.19,
+      "tier": 1
+    },
+    {
+      "name": "Nashville, Tennessee",
+      "lat": 36.16,
+      "lon": -86.78,
+      "tier": 1
+    },
+    {
+      "name": "St. Louis, Missouri",
+      "lat": 38.63,
+      "lon": -90.2,
+      "tier": 1
+    },
+    {
+      "name": "Kansas City, Missouri",
+      "lat": 39.1,
+      "lon": -94.58,
+      "tier": 1
+    },
+    {
+      "name": "Indianapolis, Indiana",
+      "lat": 39.77,
+      "lon": -86.16,
+      "tier": 1
+    },
+    {
+      "name": "Columbus, Ohio",
+      "lat": 39.96,
+      "lon": -83.0,
+      "tier": 1
+    },
+    {
+      "name": "Pittsburgh, Pennsylvania",
+      "lat": 40.44,
+      "lon": -79.99,
+      "tier": 1
+    },
+    {
+      "name": "Baltimore, Maryland",
+      "lat": 39.29,
+      "lon": -76.61,
+      "tier": 1
+    },
+    {
+      "name": "Charlotte, North Carolina",
+      "lat": 35.23,
+      "lon": -80.84,
+      "tier": 1
+    },
+    {
+      "name": "Memphis, Tennessee",
+      "lat": 35.15,
+      "lon": -90.05,
+      "tier": 1
+    },
+    {
+      "name": "Milwaukee, Wisconsin",
+      "lat": 43.04,
+      "lon": -87.91,
+      "tier": 1
+    },
+    {
+      "name": "Detroit, Michigan",
+      "lat": 42.33,
+      "lon": -83.05,
+      "tier": 1
+    },
+    {
+      "name": "Cleveland, Ohio",
+      "lat": 41.5,
+      "lon": -81.69,
+      "tier": 1
+    },
+    {
+      "name": "Oklahoma City, Oklahoma",
+      "lat": 35.47,
+      "lon": -97.52,
+      "tier": 1
+    },
+    {
+      "name": "Albuquerque, New Mexico",
+      "lat": 35.08,
+      "lon": -106.65,
+      "tier": 1
+    },
+    {
+      "name": "Salt Lake City, Utah",
+      "lat": 40.76,
+      "lon": -111.89,
+      "tier": 1
+    },
+    {
+      "name": "Las Vegas, Nevada",
+      "lat": 36.17,
+      "lon": -115.14,
+      "tier": 1
+    },
+    {
+      "name": "Portland, Oregon",
+      "lat": 45.52,
+      "lon": -122.68,
+      "tier": 1
+    },
+    {
+      "name": "San Francisco, California",
+      "lat": 37.77,
+      "lon": -122.42,
+      "tier": 1
+    },
+    {
+      "name": "Sacramento, California",
+      "lat": 38.58,
+      "lon": -121.49,
+      "tier": 1
+    },
+    {
+      "name": "Tucson, Arizona",
+      "lat": 32.22,
+      "lon": -110.97,
+      "tier": 1
+    },
+    {
+      "name": "El Paso, Texas",
+      "lat": 31.76,
+      "lon": -106.49,
+      "tier": 1
+    },
+    {
+      "name": "Omaha, Nebraska",
+      "lat": 41.26,
+      "lon": -95.93,
+      "tier": 1
+    },
+    {
+      "name": "Little Rock, Arkansas",
+      "lat": 34.75,
+      "lon": -92.29,
+      "tier": 1
+    },
+    {
+      "name": "Birmingham, Alabama",
+      "lat": 33.52,
+      "lon": -86.8,
+      "tier": 1
+    },
+    {
+      "name": "Jacksonville, Florida",
+      "lat": 30.33,
+      "lon": -81.66,
+      "tier": 1
+    },
+    {
+      "name": "Tampa, Florida",
+      "lat": 27.95,
+      "lon": -82.46,
+      "tier": 1
+    },
+    {
+      "name": "Orlando, Florida",
+      "lat": 28.54,
+      "lon": -81.38,
+      "tier": 1
+    },
+    {
+      "name": "Richmond, Virginia",
+      "lat": 37.54,
+      "lon": -77.44,
+      "tier": 1
+    },
+    {
+      "name": "Washington, District of Columbia",
+      "lat": 38.9,
+      "lon": -77.04,
+      "tier": 1
+    },
+    {
+      "name": "Boston, Massachusetts",
+      "lat": 42.36,
+      "lon": -71.06,
+      "tier": 1
+    },
+    {
+      "name": "Buffalo, New York",
+      "lat": 42.89,
+      "lon": -78.88,
+      "tier": 1
+    },
+    {
+      "name": "Boise, Idaho",
+      "lat": 43.62,
+      "lon": -116.2,
+      "tier": 1
+    },
+    {
+      "name": "Billings, Montana",
+      "lat": 45.78,
+      "lon": -108.5,
+      "tier": 1
+    },
+    {
+      "name": "Fargo, North Dakota",
+      "lat": 46.88,
+      "lon": -96.79,
+      "tier": 1
+    },
+    {
+      "name": "Wichita, Kansas",
+      "lat": 37.69,
+      "lon": -97.34,
+      "tier": 1
+    },
+    {
+      "name": "Cheyenne, Wyoming",
+      "lat": 41.14,
+      "lon": -104.82,
+      "tier": 1
+    },
+    {
+      "name": "Spokane, Washington",
+      "lat": 47.66,
+      "lon": -117.43,
+      "tier": 1
+    },
+    {
+      "name": "Greeley County unified government (balance), Kansas",
+      "lat": 38.480413,
+      "lon": -101.806024,
+      "tier": 2
+    },
+    {
+      "name": "Jacksonville, Florida",
+      "lat": 30.336864,
+      "lon": -81.661603,
+      "tier": 2
+    },
+    {
+      "name": "Anaconda-Deer Lodge County, Montana",
+      "lat": 46.094672,
+      "lon": -113.141624,
+      "tier": 2
+    },
+    {
+      "name": "Butte-Silver Bow (balance), Montana",
+      "lat": 45.896232,
+      "lon": -112.660071,
+      "tier": 2
+    },
+    {
+      "name": "Houston, Texas",
+      "lat": 29.785743,
+      "lon": -95.388806,
+      "tier": 2
+    },
+    {
+      "name": "Oklahoma City, Oklahoma",
+      "lat": 35.467079,
+      "lon": -97.513657,
+      "tier": 2
+    },
+    {
+      "name": "Phoenix, Arizona",
+      "lat": 33.572154,
+      "lon": -112.090132,
+      "tier": 2
+    },
+    {
+      "name": "San Antonio, Texas",
+      "lat": 29.462809,
+      "lon": -98.524635,
+      "tier": 2
+    },
+    {
+      "name": "Nashville-Davidson metropolitan government (balance), Tennessee",
+      "lat": 36.1718,
+      "lon": -86.785002,
+      "tier": 2
+    },
+    {
+      "name": "Los Angeles, California",
+      "lat": 34.019394,
+      "lon": -118.410825,
+      "tier": 2
+    },
+    {
+      "name": "Echols County consolidated government, Georgia",
+      "lat": 30.714008,
+      "lon": -82.897376,
+      "tier": 2
+    },
+    {
+      "name": "Suffolk, Virginia",
+      "lat": 36.697157,
+      "lon": -76.634781,
+      "tier": 2
+    },
+    {
+      "name": "Buckeye, Arizona",
+      "lat": 33.431573,
+      "lon": -112.641626,
+      "tier": 2
+    },
+    {
+      "name": "Valle, Arizona",
+      "lat": 35.675239,
+      "lon": -112.152886,
+      "tier": 2
+    },
+    {
+      "name": "Indianapolis city (balance), Indiana",
+      "lat": 39.776664,
+      "lon": -86.145935,
+      "tier": 2
+    },
+    {
+      "name": "Fort Worth, Texas",
+      "lat": 32.781954,
+      "lon": -97.348573,
+      "tier": 2
+    },
+    {
+      "name": "Dallas, Texas",
+      "lat": 32.793333,
+      "lon": -96.766513,
+      "tier": 2
+    },
+    {
+      "name": "Chesapeake, Virginia",
+      "lat": 36.679376,
+      "lon": -76.301788,
+      "tier": 2
+    },
+    {
+      "name": "Pahrump, Nevada",
+      "lat": 36.224045,
+      "lon": -115.996744,
+      "tier": 2
+    },
+    {
+      "name": "San Diego, California",
+      "lat": 32.830391,
+      "lon": -117.120923,
+      "tier": 2
+    },
+    {
+      "name": "Austin, Texas",
+      "lat": 30.298622,
+      "lon": -97.754134,
+      "tier": 2
+    },
+    {
+      "name": "Kansas City, Missouri",
+      "lat": 39.125155,
+      "lon": -94.550313,
+      "tier": 2
+    },
+    {
+      "name": "Charlotte, North Carolina",
+      "lat": 35.209045,
+      "lon": -80.83099,
+      "tier": 2
+    },
+    {
+      "name": "Augusta-Richmond County consolidated government (balance), Georgia",
+      "lat": 33.365531,
+      "lon": -82.073422,
+      "tier": 2
+    },
+    {
+      "name": "New York, New York",
+      "lat": 40.662712,
+      "lon": -73.938677,
+      "tier": 2
+    },
+    {
+      "name": "Memphis, Tennessee",
+      "lat": 35.109164,
+      "lon": -89.968511,
+      "tier": 2
+    },
+    {
+      "name": "Lexington-Fayette urban county, Kentucky",
+      "lat": 38.040678,
+      "lon": -84.458272,
+      "tier": 2
+    },
+    {
+      "name": "Louisville/Jefferson County metro government (balance), Kentucky",
+      "lat": 38.165376,
+      "lon": -85.647377,
+      "tier": 2
+    },
+    {
+      "name": "El Paso, Texas",
+      "lat": 31.84778,
+      "lon": -106.431106,
+      "tier": 2
+    },
+    {
+      "name": "Macon-Bibb County, Georgia",
+      "lat": 32.80899,
+      "lon": -83.69406,
+      "tier": 2
+    },
+    {
+      "name": "Cusseta-Chattahoochee County unified government, Georgia",
+      "lat": 32.347445,
+      "lon": -84.788021,
+      "tier": 2
+    },
+    {
+      "name": "Virginia Beach, Virginia",
+      "lat": 36.779525,
+      "lon": -76.029142,
+      "tier": 2
+    },
+    {
+      "name": "Tucson, Arizona",
+      "lat": 32.153036,
+      "lon": -110.870773,
+      "tier": 2
+    },
+    {
+      "name": "Chicago, Illinois",
+      "lat": 41.837045,
+      "lon": -87.684939,
+      "tier": 2
+    },
+    {
+      "name": "Huntsville, Alabama",
+      "lat": 34.69772,
+      "lon": -86.67667,
+      "tier": 2
+    },
+    {
+      "name": "Owyhee, Nevada",
+      "lat": 41.927962,
+      "lon": -116.21217,
+      "tier": 2
+    },
+    {
+      "name": "Columbus, Ohio",
+      "lat": 39.985531,
+      "lon": -82.985594,
+      "tier": 2
+    },
+    {
+      "name": "Columbus, Georgia",
+      "lat": 32.510191,
+      "lon": -84.874946,
+      "tier": 2
+    },
+    {
+      "name": "Boulder City, Nevada",
+      "lat": 35.84376,
+      "lon": -114.911553,
+      "tier": 2
+    },
+    {
+      "name": "Webster County unified government, Georgia",
+      "lat": 32.046691,
+      "lon": -84.553828,
+      "tier": 2
+    },
+    {
+      "name": "California City, California",
+      "lat": 35.14659,
+      "lon": -117.869346,
+      "tier": 2
+    },
+    {
+      "name": "Colorado Springs, Colorado",
+      "lat": 38.867255,
+      "lon": -104.760749,
+      "tier": 2
+    },
+    {
+      "name": "Tulsa, Oklahoma",
+      "lat": 36.127949,
+      "lon": -95.902316,
+      "tier": 2
+    },
+    {
+      "name": "Goodyear, Arizona",
+      "lat": 33.254031,
+      "lon": -112.366472,
+      "tier": 2
+    },
+    {
+      "name": "Albuquerque, New Mexico",
+      "lat": 35.10478,
+      "lon": -106.646809,
+      "tier": 2
+    },
+    {
+      "name": "Scottsdale, Arizona",
+      "lat": 33.684272,
+      "lon": -111.861448,
+      "tier": 2
+    },
+    {
+      "name": "Hibbing, Minnesota",
+      "lat": 47.395902,
+      "lon": -92.946466,
+      "tier": 2
+    },
+    {
+      "name": "Norman, Oklahoma",
+      "lat": 35.240569,
+      "lon": -97.345299,
+      "tier": 2
+    },
+    {
+      "name": "San Jose, California",
+      "lat": 37.296011,
+      "lon": -121.814552,
+      "tier": 2
+    },
+    {
+      "name": "Peoria, Arizona",
+      "lat": 33.786186,
+      "lon": -112.308042,
+      "tier": 2
+    },
+    {
+      "name": "Parks, Arizona",
+      "lat": 35.285249,
+      "lon": -111.967182,
+      "tier": 2
+    },
+    {
+      "name": "New Orleans, Louisiana",
+      "lat": 30.05342,
+      "lon": -89.934502,
+      "tier": 2
+    },
+    {
+      "name": "Corpus Christi, Texas",
+      "lat": 27.754252,
+      "lon": -97.173385,
+      "tier": 2
+    },
+    {
+      "name": "Wichita, Kansas",
+      "lat": 37.690638,
+      "lon": -97.345836,
+      "tier": 2
+    },
+    {
+      "name": "Aurora, Colorado",
+      "lat": 39.709537,
+      "lon": -104.720509,
+      "tier": 2
+    },
+    {
+      "name": "Montgomery, Alabama",
+      "lat": 32.348503,
+      "lon": -86.267307,
+      "tier": 2
+    },
+    {
+      "name": "Denver, Colorado",
+      "lat": 39.76185,
+      "lon": -104.881105,
+      "tier": 2
+    },
+    {
+      "name": "Sierra Vista, Arizona",
+      "lat": 31.56541,
+      "lon": -110.314508,
+      "tier": 2
+    },
+    {
+      "name": "Raleigh, North Carolina",
+      "lat": 35.831868,
+      "lon": -78.641042,
+      "tier": 2
+    },
+    {
+      "name": "Georgetown-Quitman County unified government, Georgia",
+      "lat": 31.862938,
+      "lon": -85.004798,
+      "tier": 2
+    },
+    {
+      "name": "Mobile, Alabama",
+      "lat": 30.668246,
+      "lon": -88.107853,
+      "tier": 2
+    },
+    {
+      "name": "Bakersfield, California",
+      "lat": 35.353171,
+      "lon": -119.037919,
+      "tier": 2
+    },
+    {
+      "name": "Fayetteville, North Carolina",
+      "lat": 35.082766,
+      "lon": -78.973515,
+      "tier": 2
+    },
+    {
+      "name": "Birmingham, Alabama",
+      "lat": 33.527174,
+      "lon": -86.797036,
+      "tier": 2
+    },
+    {
+      "name": "Carson, Nevada",
+      "lat": 39.15306,
+      "lon": -119.747368,
+      "tier": 2
+    },
+    {
+      "name": "Lubbock, Texas",
+      "lat": 33.561901,
+      "lon": -101.888883,
+      "tier": 2
+    },
+    {
+      "name": "Omaha, Nebraska",
+      "lat": 41.262705,
+      "lon": -96.053475,
+      "tier": 2
+    },
+    {
+      "name": "Vicksburg, Arizona",
+      "lat": 33.729271,
+      "lon": -113.825404,
+      "tier": 2
+    },
+    {
+      "name": "Canyon Lake, Texas",
+      "lat": 29.875778,
+      "lon": -98.26118,
+      "tier": 2
+    },
+    {
+      "name": "Chattanooga, Tennessee",
+      "lat": 35.065958,
+      "lon": -85.248386,
+      "tier": 2
+    },
+    {
+      "name": "Mesa, Arizona",
+      "lat": 33.399355,
+      "lon": -111.715968,
+      "tier": 2
+    },
+    {
+      "name": "Las Vegas, Nevada",
+      "lat": 36.233499,
+      "lon": -115.264037,
+      "tier": 2
+    },
+    {
+      "name": "Columbia, South Carolina",
+      "lat": 34.040519,
+      "lon": -80.906099,
+      "tier": 2
+    },
+    {
+      "name": "Detroit, Michigan",
+      "lat": 42.383037,
+      "lon": -83.102237,
+      "tier": 2
+    },
+    {
+      "name": "Bunnell, Florida",
+      "lat": 29.418736,
+      "lon": -81.31948,
+      "tier": 2
+    },
+    {
+      "name": "Bouse, Arizona",
+      "lat": 33.898476,
+      "lon": -113.996364,
+      "tier": 2
+    },
+    {
+      "name": "Atlanta, Georgia",
+      "lat": 33.762909,
+      "lon": -84.422675,
+      "tier": 2
+    },
+    {
+      "name": "Greensboro, North Carolina",
+      "lat": 36.09485,
+      "lon": -79.823624,
+      "tier": 2
+    },
+    {
+      "name": "Philadelphia, Pennsylvania",
+      "lat": 40.009376,
+      "lon": -75.133346,
+      "tier": 2
+    },
+    {
+      "name": "Winston-Salem, North Carolina",
+      "lat": 36.102863,
+      "lon": -80.260829,
+      "tier": 2
+    },
+    {
+      "name": "Portland, Oregon",
+      "lat": 45.536951,
+      "lon": -122.649971,
+      "tier": 2
+    },
+    {
+      "name": "Orlando, Florida",
+      "lat": 28.472818,
+      "lon": -81.320242,
+      "tier": 2
+    },
+    {
+      "name": "Lynchburg, Moore County metropolitan government, Tennessee",
+      "lat": 35.288888,
+      "lon": -86.358684,
+      "tier": 2
+    },
+    {
+      "name": "Fernley, Nevada",
+      "lat": 39.56477,
+      "lon": -119.189433,
+      "tier": 2
+    },
+    {
+      "name": "Brownsville, Texas",
+      "lat": 25.989404,
+      "lon": -97.480625,
+      "tier": 2
+    },
+    {
+      "name": "Marana, Arizona",
+      "lat": 32.465936,
+      "lon": -111.135405,
+      "tier": 2
+    },
+    {
+      "name": "Little Rock, Arkansas",
+      "lat": 34.725393,
+      "lon": -92.358556,
+      "tier": 2
+    },
+    {
+      "name": "Yuma, Arizona",
+      "lat": 32.516286,
+      "lon": -114.521782,
+      "tier": 2
+    },
+    {
+      "name": "Henderson, Nevada",
+      "lat": 36.008958,
+      "lon": -115.0268,
+      "tier": 2
+    },
+    {
+      "name": "Big Sky, Montana",
+      "lat": 45.256435,
+      "lon": -111.332002,
+      "tier": 2
+    },
+    {
+      "name": "Durham, North Carolina",
+      "lat": 35.977928,
+      "lon": -78.898109,
+      "tier": 2
+    },
+    {
+      "name": "Port St. Lucie, Florida",
+      "lat": 27.280554,
+      "lon": -80.388261,
+      "tier": 2
+    },
+    {
+      "name": "Athens-Clarke County unified government (balance), Georgia",
+      "lat": 33.949597,
+      "lon": -83.370088,
+      "tier": 2
+    },
+    {
+      "name": "Fresno, California",
+      "lat": 36.782684,
+      "lon": -119.793359,
+      "tier": 2
+    },
+    {
+      "name": "Charleston, South Carolina",
+      "lat": 32.828017,
+      "lon": -79.972896,
+      "tier": 2
+    },
+    {
+      "name": "Eloy, Arizona",
+      "lat": 32.741255,
+      "lon": -111.594015,
+      "tier": 2
+    },
+    {
+      "name": "Tampa, Florida",
+      "lat": 27.970086,
+      "lon": -82.479673,
+      "tier": 2
+    },
+    {
+      "name": "Hartsville/Trousdale County, Tennessee",
+      "lat": 36.39303,
+      "lon": -86.156691,
+      "tier": 2
+    },
+    {
+      "name": "Casa Grande, Arizona",
+      "lat": 32.906763,
+      "lon": -111.763385,
+      "tier": 2
+    },
+    {
+      "name": "Fort Wayne, Indiana",
+      "lat": 41.088193,
+      "lon": -85.142791,
+      "tier": 2
+    },
+    {
+      "name": "Jackson, Mississippi",
+      "lat": 32.315834,
+      "lon": -90.21285,
+      "tier": 2
+    },
+    {
+      "name": "Salt Lake City, Utah",
+      "lat": 40.776928,
+      "lon": -111.930991,
+      "tier": 2
+    },
+    {
+      "name": "Sierra Vista Southeast, Arizona",
+      "lat": 31.452512,
+      "lon": -110.218977,
+      "tier": 2
+    },
+    {
+      "name": "Surprise, Arizona",
+      "lat": 33.670801,
+      "lon": -112.452546,
+      "tier": 2
+    },
+    {
+      "name": "Savannah, Georgia",
+      "lat": 32.012457,
+      "lon": -81.194157,
+      "tier": 2
+    },
+    {
+      "name": "Reno, Nevada",
+      "lat": 39.549097,
+      "lon": -119.849907,
+      "tier": 2
+    },
+    {
+      "name": "Laredo, Texas",
+      "lat": 27.560379,
+      "lon": -99.489181,
+      "tier": 2
+    },
+    {
+      "name": "Shreveport, Louisiana",
+      "lat": 32.466879,
+      "lon": -93.792193,
+      "tier": 2
+    },
+    {
+      "name": "Abilene, Texas",
+      "lat": 32.454514,
+      "lon": -99.738147,
+      "tier": 2
+    },
+    {
+      "name": "Cape Coral, Florida",
+      "lat": 26.643192,
+      "lon": -81.997364,
+      "tier": 2
+    },
+    {
+      "name": "Amarillo, Texas",
+      "lat": 35.199903,
+      "lon": -101.830194,
+      "tier": 2
+    },
+    {
+      "name": "Palmdale, California",
+      "lat": 34.591038,
+      "lon": -118.105403,
+      "tier": 2
+    },
+    {
+      "name": "Babbitt, Minnesota",
+      "lat": 47.643105,
+      "lon": -91.928336,
+      "tier": 2
+    },
+    {
+      "name": "Lucerne Valley, California",
+      "lat": 34.442719,
+      "lon": -116.902093,
+      "tier": 2
+    },
+    {
+      "name": "North Las Vegas, Nevada",
+      "lat": 36.289865,
+      "lon": -115.089181,
+      "tier": 2
+    },
+    {
+      "name": "Rio Rancho, New Mexico",
+      "lat": 35.28507,
+      "lon": -106.698867,
+      "tier": 2
+    },
+    {
+      "name": "Tallahassee, Florida",
+      "lat": 30.453529,
+      "lon": -84.252272,
+      "tier": 2
+    },
+    {
+      "name": "Lincoln, Nebraska",
+      "lat": 40.810284,
+      "lon": -96.674856,
+      "tier": 2
+    },
+    {
+      "name": "Smith Valley, Nevada",
+      "lat": 38.786902,
+      "lon": -119.368659,
+      "tier": 2
+    },
+    {
+      "name": "Black Forest, Colorado",
+      "lat": 39.063648,
+      "lon": -104.679613,
+      "tier": 2
+    },
+    {
+      "name": "Clarksville, Tennessee",
+      "lat": 36.56643,
+      "lon": -87.345216,
+      "tier": 2
+    },
+    {
+      "name": "North Port, Florida",
+      "lat": 27.058166,
+      "lon": -82.198044,
+      "tier": 2
+    },
+    {
+      "name": "St. Marys, Pennsylvania",
+      "lat": 41.455038,
+      "lon": -78.52019,
+      "tier": 2
+    },
+    {
+      "name": "Knoxville, Tennessee",
+      "lat": 35.97068,
+      "lon": -83.94927,
+      "tier": 2
+    },
+    {
+      "name": "Amargosa Valley, Nevada",
+      "lat": 36.543357,
+      "lon": -116.483903,
+      "tier": 2
+    },
+    {
+      "name": "Sacramento, California",
+      "lat": 38.567694,
+      "lon": -121.468161,
+      "tier": 2
+    },
+    {
+      "name": "Denton, Texas",
+      "lat": 33.217449,
+      "lon": -97.141346,
+      "tier": 2
+    },
+    {
+      "name": "Palm Coast, Florida",
+      "lat": 29.536837,
+      "lon": -81.242627,
+      "tier": 2
+    },
+    {
+      "name": "Milwaukee, Wisconsin",
+      "lat": 43.063348,
+      "lon": -87.966695,
+      "tier": 2
+    },
+    {
+      "name": "Arlington, Texas",
+      "lat": 32.700708,
+      "lon": -97.124691,
+      "tier": 2
+    },
+    {
+      "name": "Palm Springs, California",
+      "lat": 33.803361,
+      "lon": -116.53828,
+      "tier": 2
+    },
+    {
+      "name": "Juniper Canyon, Oregon",
+      "lat": 44.199775,
+      "lon": -120.746693,
+      "tier": 2
+    },
+    {
+      "name": "South Fulton, Georgia",
+      "lat": 33.63572,
+      "lon": -84.583417,
+      "tier": 2
+    },
+    {
+      "name": "Lehigh Acres, Florida",
+      "lat": 26.612695,
+      "lon": -81.638845,
+      "tier": 2
+    },
+    {
+      "name": "Waco, Texas",
+      "lat": 31.557994,
+      "lon": -97.18975,
+      "tier": 2
+    },
+    {
+      "name": "Dothan, Alabama",
+      "lat": 31.233698,
+      "lon": -85.406823,
+      "tier": 2
+    },
+    {
+      "name": "Cannon Ball, North Dakota",
+      "lat": 46.323693,
+      "lon": -100.629428,
+      "tier": 2
+    },
+    {
+      "name": "Des Moines, Iowa",
+      "lat": 41.57259,
+      "lon": -93.610243,
+      "tier": 2
+    },
+    {
+      "name": "Palm Bay, Florida",
+      "lat": 27.954802,
+      "lon": -80.664962,
+      "tier": 2
+    },
+    {
+      "name": "Baton Rouge, Louisiana",
+      "lat": 30.442174,
+      "lon": -91.130894,
+      "tier": 2
+    },
+    {
+      "name": "Boise City, Idaho",
+      "lat": 43.59805,
+      "lon": -116.231596,
+      "tier": 2
+    },
+    {
+      "name": "Oak Ridge, Tennessee",
+      "lat": 35.966483,
+      "lon": -84.290549,
+      "tier": 2
+    },
+    {
+      "name": "Sioux Falls, South Dakota",
+      "lat": 43.540696,
+      "lon": -96.731962,
+      "tier": 2
+    },
+    {
+      "name": "Edmond, Oklahoma",
+      "lat": 35.673807,
+      "lon": -97.413076,
+      "tier": 2
+    },
+    {
+      "name": "Madison, Wisconsin",
+      "lat": 43.087815,
+      "lon": -89.429856,
+      "tier": 2
+    },
+    {
+      "name": "Seattle, Washington",
+      "lat": 47.619335,
+      "lon": -122.351538,
+      "tier": 2
+    },
+    {
+      "name": "Coolidge, Arizona",
+      "lat": 32.933616,
+      "lon": -111.523585,
+      "tier": 2
+    },
+    {
+      "name": "Springfield, Missouri",
+      "lat": 37.194157,
+      "lon": -93.292642,
+      "tier": 2
+    },
+    {
+      "name": "Beaumont, Texas",
+      "lat": 30.084912,
+      "lon": -94.14533,
+      "tier": 2
+    },
+    {
+      "name": "Durham, California",
+      "lat": 39.629358,
+      "lon": -121.79077,
+      "tier": 2
+    },
+    {
+      "name": "Lawton, Oklahoma",
+      "lat": 34.617172,
+      "lon": -98.4214,
+      "tier": 2
+    },
+    {
+      "name": "Riverside, California",
+      "lat": 33.938143,
+      "lon": -117.393168,
+      "tier": 2
+    },
+    {
+      "name": "Baltimore, Maryland",
+      "lat": 39.300032,
+      "lon": -76.610476,
+      "tier": 2
+    },
+    {
+      "name": "Toledo, Ohio",
+      "lat": 41.664071,
+      "lon": -83.581861,
+      "tier": 2
+    },
+    {
+      "name": "Jonesboro, Arkansas",
+      "lat": 35.819755,
+      "lon": -90.679033,
+      "tier": 2
+    },
+    {
+      "name": "El Reno, Oklahoma",
+      "lat": 35.541833,
+      "lon": -97.961268,
+      "tier": 2
+    },
+    {
+      "name": "Ellsworth, Maine",
+      "lat": 44.58293,
+      "lon": -68.480094,
+      "tier": 2
+    },
+    {
+      "name": "Caribou, Maine",
+      "lat": 46.836549,
+      "lon": -67.936056,
+      "tier": 2
+    },
+    {
+      "name": "Golden Valley, Arizona",
+      "lat": 35.206066,
+      "lon": -114.232753,
+      "tier": 2
+    },
+    {
+      "name": "North Charleston, South Carolina",
+      "lat": 32.917881,
+      "lon": -80.065,
+      "tier": 2
+    },
+    {
+      "name": "Independence, Missouri",
+      "lat": 39.085469,
+      "lon": -94.352082,
+      "tier": 2
+    },
+    {
+      "name": "Cincinnati, Ohio",
+      "lat": 39.140183,
+      "lon": -84.505829,
+      "tier": 2
+    },
+    {
+      "name": "Cleveland, Ohio",
+      "lat": 41.478462,
+      "lon": -81.679435,
+      "tier": 2
+    },
+    {
+      "name": "St. George, Utah",
+      "lat": 37.077006,
+      "lon": -113.576534,
+      "tier": 2
+    },
+    {
+      "name": "Apple Valley, California",
+      "lat": 34.533376,
+      "lon": -117.210358,
+      "tier": 2
+    },
+    {
+      "name": "Las Cruces, New Mexico",
+      "lat": 32.326444,
+      "lon": -106.789695,
+      "tier": 2
+    },
+    {
+      "name": "Midland, Texas",
+      "lat": 32.024642,
+      "lon": -102.113467,
+      "tier": 2
+    },
+    {
+      "name": "Conroe, Texas",
+      "lat": 30.328717,
+      "lon": -95.4846,
+      "tier": 2
+    },
+    {
+      "name": "San Tan Valley, Arizona",
+      "lat": 33.178592,
+      "lon": -111.562823,
+      "tier": 2
+    },
+    {
+      "name": "Presque Isle, Maine",
+      "lat": 46.688378,
+      "lon": -67.993326,
+      "tier": 2
+    },
+    {
+      "name": "Port Arthur, Texas",
+      "lat": 29.900008,
+      "lon": -93.89442,
+      "tier": 2
+    },
+    {
+      "name": "Overland Park, Kansas",
+      "lat": 38.889042,
+      "lon": -94.690584,
+      "tier": 2
+    },
+    {
+      "name": "Rome, New York",
+      "lat": 43.226002,
+      "lon": -75.489523,
+      "tier": 2
+    },
+    {
+      "name": "Cedar Rapids, Iowa",
+      "lat": 41.96419,
+      "lon": -91.67917,
+      "tier": 2
+    },
+    {
+      "name": "Wheatland, Montana",
+      "lat": 45.962449,
+      "lon": -111.576998,
+      "tier": 2
+    },
+    {
+      "name": "Temple, Texas",
+      "lat": 31.104936,
+      "lon": -97.388512,
+      "tier": 2
+    },
+    {
+      "name": "Slater, Wyoming",
+      "lat": 41.877633,
+      "lon": -104.788709,
+      "tier": 2
+    },
+    {
+      "name": "Enid, Oklahoma",
+      "lat": 36.406702,
+      "lon": -97.869861,
+      "tier": 2
+    },
+    {
+      "name": "Victorville, California",
+      "lat": 34.527735,
+      "lon": -117.353579,
+      "tier": 2
+    },
+    {
+      "name": "Santa Clarita, California",
+      "lat": 34.416504,
+      "lon": -118.500693,
+      "tier": 2
+    },
+    {
+      "name": "Hesperia, California",
+      "lat": 34.397038,
+      "lon": -117.315198,
+      "tier": 2
+    },
+    {
+      "name": "Fort Valley, Arizona",
+      "lat": 35.322667,
+      "lon": -111.739777,
+      "tier": 2
+    },
+    {
+      "name": "Wichita Falls, Texas",
+      "lat": 33.906654,
+      "lon": -98.525848,
+      "tier": 2
+    },
+    {
+      "name": "Hayfork, California",
+      "lat": 40.575871,
+      "lon": -123.123629,
+      "tier": 2
+    },
+    {
+      "name": "Poinciana, Florida",
+      "lat": 28.118729,
+      "lon": -81.479234,
+      "tier": 2
+    },
+    {
+      "name": "Plano, Texas",
+      "lat": 33.050769,
+      "lon": -96.747944,
+      "tier": 2
+    },
+    {
+      "name": "Duluth, Minnesota",
+      "lat": 46.774458,
+      "lon": -92.134135,
+      "tier": 2
+    },
+    {
+      "name": "Silver Springs, Nevada",
+      "lat": 39.383454,
+      "lon": -119.21464,
+      "tier": 2
+    },
+    {
+      "name": "Picture Rocks, Arizona",
+      "lat": 32.324713,
+      "lon": -111.259861,
+      "tier": 2
+    },
+    {
+      "name": "Newport News, Virginia",
+      "lat": 37.076136,
+      "lon": -76.52198,
+      "tier": 2
+    },
+    {
+      "name": "Spokane, Washington",
+      "lat": 47.666935,
+      "lon": -117.433322,
+      "tier": 2
+    },
+    {
+      "name": "Frisco, Texas",
+      "lat": 33.155427,
+      "lon": -96.822596,
+      "tier": 2
+    },
+    {
+      "name": "Vineland, New Jersey",
+      "lat": 39.465007,
+      "lon": -74.997115,
+      "tier": 2
+    },
+    {
+      "name": "Rio Rancho Estates, New Mexico",
+      "lat": 35.300369,
+      "lon": -106.798499,
+      "tier": 2
+    },
+    {
+      "name": "Sage, California",
+      "lat": 33.594066,
+      "lon": -116.910385,
+      "tier": 2
+    },
+    {
+      "name": "Mountain Iron, Minnesota",
+      "lat": 47.53669,
+      "lon": -92.616572,
+      "tier": 2
+    },
+    {
+      "name": "Daytona Beach, Florida",
+      "lat": 29.19071,
+      "lon": -81.097083,
+      "tier": 2
+    },
+    {
+      "name": "Columbia, Missouri",
+      "lat": 38.94729,
+      "lon": -92.326387,
+      "tier": 2
+    },
+    {
+      "name": "Zionsville, Indiana",
+      "lat": 39.99153,
+      "lon": -86.32175,
+      "tier": 2
+    },
+    {
+      "name": "Crownpoint, New Mexico",
+      "lat": 35.734332,
+      "lon": -108.155392,
+      "tier": 2
+    },
+    {
+      "name": "Wildwood, Missouri",
+      "lat": 38.577073,
+      "lon": -90.667807,
+      "tier": 2
+    },
+    {
+      "name": "Lakeland, Florida",
+      "lat": 28.055496,
+      "lon": -81.954772,
+      "tier": 2
+    },
+    {
+      "name": "Texas City, Texas",
+      "lat": 29.433717,
+      "lon": -94.892695,
+      "tier": 2
+    },
+    {
+      "name": "Joliet, Illinois",
+      "lat": 41.516866,
+      "lon": -88.147963,
+      "tier": 2
+    },
+    {
+      "name": "Flagstaff, Arizona",
+      "lat": 35.185212,
+      "lon": -111.620698,
+      "tier": 2
+    },
+    {
+      "name": "Chandler, Arizona",
+      "lat": 33.282765,
+      "lon": -111.851819,
+      "tier": 2
+    },
+    {
+      "name": "Irvine, California",
+      "lat": 33.678399,
+      "lon": -117.771254,
+      "tier": 2
+    },
+    {
+      "name": "Show Low, Arizona",
+      "lat": 34.265053,
+      "lon": -110.038321,
+      "tier": 2
+    },
+    {
+      "name": "Rockford, Illinois",
+      "lat": 42.2593,
+      "lon": -89.063478,
+      "tier": 2
+    },
+    {
+      "name": "Concord, North Carolina",
+      "lat": 35.392094,
+      "lon": -80.63551,
+      "tier": 2
+    },
+    {
+      "name": "Murfreesboro, Tennessee",
+      "lat": 35.853915,
+      "lon": -86.421224,
+      "tier": 2
+    },
+    {
+      "name": "Olathe, Kansas",
+      "lat": 38.882031,
+      "lon": -94.820054,
+      "tier": 2
+    },
+    {
+      "name": "Tupelo, Mississippi",
+      "lat": 34.270604,
+      "lon": -88.732455,
+      "tier": 2
+    },
+    {
+      "name": "Gila Bend, Arizona",
+      "lat": 32.966242,
+      "lon": -112.715465,
+      "tier": 2
+    },
+    {
+      "name": "Fort Smith, Arkansas",
+      "lat": 35.349276,
+      "lon": -94.370883,
+      "tier": 2
+    },
+    {
+      "name": "Davenport, Iowa",
+      "lat": 41.55682,
+      "lon": -90.603948,
+      "tier": 2
+    },
+    {
+      "name": "Auburn, Alabama",
+      "lat": 32.607122,
+      "lon": -85.490959,
+      "tier": 2
+    },
+    {
+      "name": "Gainesville, Florida",
+      "lat": 29.679537,
+      "lon": -82.346793,
+      "tier": 2
+    },
+    {
+      "name": "Concord, New Hampshire",
+      "lat": 43.232493,
+      "lon": -71.561252,
+      "tier": 2
+    },
+    {
+      "name": "Lee's Summit, Missouri",
+      "lat": 38.921601,
+      "lon": -94.384763,
+      "tier": 2
+    },
+    {
+      "name": "Midlothian, Texas",
+      "lat": 32.468198,
+      "lon": -96.990724,
+      "tier": 2
+    },
+    {
+      "name": "Squaw Valley, California",
+      "lat": 36.719141,
+      "lon": -119.202677,
+      "tier": 2
+    },
+    {
+      "name": "Stockton, California",
+      "lat": 37.976553,
+      "lon": -121.308598,
+      "tier": 2
+    },
+    {
+      "name": "Rio Rico, Arizona",
+      "lat": 31.498168,
+      "lon": -110.987798,
+      "tier": 2
+    },
+    {
+      "name": "Tuscaloosa, Alabama",
+      "lat": 33.234404,
+      "lon": -87.5283,
+      "tier": 2
+    },
+    {
+      "name": "Florence, Arizona",
+      "lat": 33.069367,
+      "lon": -111.413992,
+      "tier": 2
+    },
+    {
+      "name": "Chino Valley, Arizona",
+      "lat": 34.73989,
+      "lon": -112.40606,
+      "tier": 2
+    },
+    {
+      "name": "McAllen, Texas",
+      "lat": 26.224966,
+      "lon": -98.246083,
+      "tier": 2
+    },
+    {
+      "name": "Lake Sumner, New Mexico",
+      "lat": 34.62361,
+      "lon": -104.40219,
+      "tier": 2
+    },
+    {
+      "name": "Central, Louisiana",
+      "lat": 30.559305,
+      "lon": -91.035507,
+      "tier": 2
+    },
+    {
+      "name": "San Bernardino, California",
+      "lat": 34.14114,
+      "lon": -117.294635,
+      "tier": 2
+    },
+    {
+      "name": "West Odessa, Texas",
+      "lat": 31.838248,
+      "lon": -102.500139,
+      "tier": 2
+    },
+    {
+      "name": "Akron, Ohio",
+      "lat": 41.080456,
+      "lon": -81.521429,
+      "tier": 2
+    },
+    {
+      "name": "Topeka, Kansas",
+      "lat": 39.034673,
+      "lon": -95.696191,
+      "tier": 2
+    },
+    {
+      "name": "St. Petersburg, Florida",
+      "lat": 27.762727,
+      "lon": -82.644131,
+      "tier": 2
+    },
+    {
+      "name": "St. Louis, Missouri",
+      "lat": 38.635699,
+      "lon": -90.244582,
+      "tier": 2
+    },
+    {
+      "name": "North Fork, Arizona",
+      "lat": 34.01057,
+      "lon": -109.959543,
+      "tier": 2
+    },
+    {
+      "name": "Waterloo, Iowa",
+      "lat": 42.492327,
+      "lon": -92.351947,
+      "tier": 2
+    },
+    {
+      "name": "Bray, Oklahoma",
+      "lat": 34.60836,
+      "lon": -97.817484,
+      "tier": 2
+    },
+    {
+      "name": "Berlin, New Hampshire",
+      "lat": 44.484328,
+      "lon": -71.277123,
+      "tier": 2
+    },
+    {
+      "name": "Springfield, Illinois",
+      "lat": 39.791063,
+      "lon": -89.644572,
+      "tier": 2
+    },
+    {
+      "name": "Washington, District of Columbia",
+      "lat": 38.904243,
+      "lon": -77.016524,
+      "tier": 2
+    },
+    {
+      "name": "Sedan, Montana",
+      "lat": 45.963337,
+      "lon": -110.879303,
+      "tier": 2
+    },
+    {
+      "name": "Newberry, Florida",
+      "lat": 29.645825,
+      "lon": -82.594604,
+      "tier": 2
+    },
+    {
+      "name": "Hitchcock, Texas",
+      "lat": 29.28262,
+      "lon": -95.007631,
+      "tier": 2
+    },
+    {
+      "name": "Hardeeville, South Carolina",
+      "lat": 32.295308,
+      "lon": -81.040983,
+      "tier": 2
+    },
+    {
+      "name": "San Angelo, Texas",
+      "lat": 31.441078,
+      "lon": -100.450499,
+      "tier": 2
+    },
+    {
+      "name": "Phelan, California",
+      "lat": 34.439816,
+      "lon": -117.524829,
+      "tier": 2
+    },
+    {
+      "name": "Newcastle, Oklahoma",
+      "lat": 35.242395,
+      "lon": -97.595336,
+      "tier": 2
+    },
+    {
+      "name": "Barnstable Town, Massachusetts",
+      "lat": 41.661481,
+      "lon": -70.356951,
+      "tier": 2
+    },
+    {
+      "name": "Spring Hill, Florida",
+      "lat": 28.479207,
+      "lon": -82.529658,
+      "tier": 2
+    },
+    {
+      "name": "Richmond, Virginia",
+      "lat": 37.531399,
+      "lon": -77.476009,
+      "tier": 2
+    },
+    {
+      "name": "Inez, Texas",
+      "lat": 28.876334,
+      "lon": -96.790882,
+      "tier": 2
+    },
+    {
+      "name": "Redding, California",
+      "lat": 40.570277,
+      "lon": -122.366766,
+      "tier": 2
+    },
+    {
+      "name": "Sioux City, Iowa",
+      "lat": 42.49538,
+      "lon": -96.389495,
+      "tier": 2
+    },
+    {
+      "name": "Bullhead City, Arizona",
+      "lat": 35.127371,
+      "lon": -114.55599,
+      "tier": 2
+    },
+    {
+      "name": "Auburn, Maine",
+      "lat": 44.084537,
+      "lon": -70.249649,
+      "tier": 2
+    },
+    {
+      "name": "Palm Beach Gardens, Florida",
+      "lat": 26.848788,
+      "lon": -80.167124,
+      "tier": 2
+    },
+    {
+      "name": "Jackson, Tennessee",
+      "lat": 35.658451,
+      "lon": -88.837399,
+      "tier": 2
+    },
+    {
+      "name": "Chaparral, New Mexico",
+      "lat": 32.044254,
+      "lon": -106.4061,
+      "tier": 2
+    },
+    {
+      "name": "Georgetown, Texas",
+      "lat": 30.668136,
+      "lon": -97.698744,
+      "tier": 2
+    },
+    {
+      "name": "Twentynine Palms, California",
+      "lat": 34.147804,
+      "lon": -116.065991,
+      "tier": 2
+    },
+    {
+      "name": "Mojave, California",
+      "lat": 35.014995,
+      "lon": -118.190209,
+      "tier": 2
+    },
+    {
+      "name": "Wildwood, Florida",
+      "lat": 28.805813,
+      "lon": -82.007324,
+      "tier": 2
+    },
+    {
+      "name": "Williamson, Arizona",
+      "lat": 34.708291,
+      "lon": -112.533729,
+      "tier": 2
+    },
+    {
+      "name": "Dolan Springs, Arizona",
+      "lat": 35.590453,
+      "lon": -114.285179,
+      "tier": 2
+    },
+    {
+      "name": "Tyler, Texas",
+      "lat": 32.317334,
+      "lon": -95.306399,
+      "tier": 2
+    },
+    {
+      "name": "Hot Springs Village, Arkansas",
+      "lat": 34.658069,
+      "lon": -92.968643,
+      "tier": 2
+    },
+    {
+      "name": "Fellsmere, Florida",
+      "lat": 27.721191,
+      "lon": -80.609944,
+      "tier": 2
+    },
+    {
+      "name": "High Point, North Carolina",
+      "lat": 35.990803,
+      "lon": -79.992713,
+      "tier": 2
+    },
+    {
+      "name": "Paulden, Arizona",
+      "lat": 34.889655,
+      "lon": -112.493724,
+      "tier": 2
+    },
+    {
+      "name": "Pie Town, New Mexico",
+      "lat": 34.340383,
+      "lon": -108.176599,
+      "tier": 2
+    },
+    {
+      "name": "Fort Collins, Colorado",
+      "lat": 40.548216,
+      "lon": -105.064833,
+      "tier": 2
+    },
+    {
+      "name": "Berry Creek, California",
+      "lat": 39.631812,
+      "lon": -121.405621,
+      "tier": 2
+    },
+    {
+      "name": "Garland, Texas",
+      "lat": 32.909826,
+      "lon": -96.630334,
+      "tier": 2
+    },
+    {
+      "name": "Rochester, Minnesota",
+      "lat": 44.014299,
+      "lon": -92.478592,
+      "tier": 2
+    },
+    {
+      "name": "Edgewood, New Mexico",
+      "lat": 35.131319,
+      "lon": -106.220161,
+      "tier": 2
+    },
+    {
+      "name": "Pueblo, Colorado",
+      "lat": 38.269228,
+      "lon": -104.610816,
+      "tier": 2
+    },
+    {
+      "name": "Harper, Texas",
+      "lat": 30.266002,
+      "lon": -99.272757,
+      "tier": 2
+    },
+    {
+      "name": "Lafayette, Louisiana",
+      "lat": 30.2056,
+      "lon": -92.028058,
+      "tier": 2
+    },
+    {
+      "name": "Fort Payne, Alabama",
+      "lat": 34.457329,
+      "lon": -85.689447,
+      "tier": 2
+    },
+    {
+      "name": "Longview, Texas",
+      "lat": 32.520234,
+      "lon": -94.761114,
+      "tier": 2
+    },
+    {
+      "name": "Union City, Oklahoma",
+      "lat": 35.399523,
+      "lon": -97.906705,
+      "tier": 2
+    },
+    {
+      "name": "Olive Branch, Mississippi",
+      "lat": 34.955752,
+      "lon": -89.841153,
+      "tier": 2
+    },
+    {
+      "name": "New River, Arizona",
+      "lat": 33.882591,
+      "lon": -112.086107,
+      "tier": 2
+    },
+    {
+      "name": "Sandy Valley, Nevada",
+      "lat": 35.842134,
+      "lon": -115.630539,
+      "tier": 2
+    },
+    {
+      "name": "Rapid City, South Dakota",
+      "lat": 44.071071,
+      "lon": -103.217924,
+      "tier": 2
+    },
+    {
+      "name": "Oakland, California",
+      "lat": 37.769846,
+      "lon": -122.22569,
+      "tier": 2
+    },
+    {
+      "name": "Hoyt Lakes, Minnesota",
+      "lat": 47.571615,
+      "lon": -92.108331,
+      "tier": 2
+    },
+    {
+      "name": "Dayton, Ohio",
+      "lat": 39.784743,
+      "lon": -84.199632,
+      "tier": 2
+    },
+    {
+      "name": "Bryan, Texas",
+      "lat": 30.666016,
+      "lon": -96.381049,
+      "tier": 2
+    },
+    {
+      "name": "Gulfport, Mississippi",
+      "lat": 30.419487,
+      "lon": -89.069022,
+      "tier": 2
+    },
+    {
+      "name": "Lame Deer, Montana",
+      "lat": 45.617651,
+      "lon": -106.613362,
+      "tier": 2
+    },
+    {
+      "name": "Spanish Springs, Nevada",
+      "lat": 39.655013,
+      "lon": -119.668817,
+      "tier": 2
+    },
+    {
+      "name": "Pittsburgh, Pennsylvania",
+      "lat": 40.439936,
+      "lon": -79.975676,
+      "tier": 2
+    },
+    {
+      "name": "Thousand Oaks, California",
+      "lat": 34.19329,
+      "lon": -118.874235,
+      "tier": 2
+    },
+    {
+      "name": "Augusta, Maine",
+      "lat": 44.334904,
+      "lon": -69.734199,
+      "tier": 2
+    },
+    {
+      "name": "Albany, Georgia",
+      "lat": 31.578117,
+      "lon": -84.176224,
+      "tier": 2
+    },
+    {
+      "name": "Gastonia, North Carolina",
+      "lat": 35.248999,
+      "lon": -81.184834,
+      "tier": 2
+    },
+    {
+      "name": "Fayetteville, Arkansas",
+      "lat": 36.071455,
+      "lon": -94.166564,
+      "tier": 2
+    },
+    {
+      "name": "Killeen, Texas",
+      "lat": 31.077669,
+      "lon": -97.731952,
+      "tier": 2
+    },
+    {
+      "name": "Decatur, Alabama",
+      "lat": 34.572995,
+      "lon": -86.989901,
+      "tier": 2
+    },
+    {
+      "name": "Minneapolis, Minnesota",
+      "lat": 44.963324,
+      "lon": -93.26832,
+      "tier": 2
+    },
+    {
+      "name": "Trego, Montana",
+      "lat": 48.652724,
+      "lon": -114.927968,
+      "tier": 2
+    },
+    {
+      "name": "Alturas, Florida",
+      "lat": 27.842056,
+      "lon": -81.681576,
+      "tier": 2
+    },
+    {
+      "name": "West Palm Beach, Florida",
+      "lat": 26.745114,
+      "lon": -80.127038,
+      "tier": 2
+    },
+    {
+      "name": "Meridian, Mississippi",
+      "lat": 32.38417,
+      "lon": -88.689448,
+      "tier": 2
+    },
+    {
+      "name": "Spring Creek, Nevada",
+      "lat": 40.744057,
+      "lon": -115.598029,
+      "tier": 2
+    },
+    {
+      "name": "Hattiesburg, Mississippi",
+      "lat": 31.307305,
+      "lon": -89.317434,
+      "tier": 2
+    },
+    {
+      "name": "Helena Valley Northeast, Montana",
+      "lat": 46.706606,
+      "lon": -111.938804,
+      "tier": 2
+    },
+    {
+      "name": "Kingsport, Tennessee",
+      "lat": 36.51937,
+      "lon": -82.543393,
+      "tier": 2
+    },
+    {
+      "name": "North Little Rock, Arkansas",
+      "lat": 34.781752,
+      "lon": -92.235057,
+      "tier": 2
+    },
+    {
+      "name": "Caliente, Nevada",
+      "lat": 37.645755,
+      "lon": -114.492926,
+      "tier": 2
+    },
+    {
+      "name": "Reserve, Wisconsin",
+      "lat": 45.823074,
+      "lon": -91.365221,
+      "tier": 2
+    },
+    {
+      "name": "Central High, Oklahoma",
+      "lat": 34.614327,
+      "lon": -98.088648,
+      "tier": 2
+    },
+    {
+      "name": "Bondurant, Wyoming",
+      "lat": 43.194859,
+      "lon": -110.402577,
+      "tier": 2
+    },
+    {
+      "name": "Hurricane, Utah",
+      "lat": 37.148473,
+      "lon": -113.358862,
+      "tier": 2
+    },
+    {
+      "name": "Santa Fe, New Mexico",
+      "lat": 35.661981,
+      "lon": -105.981815,
+      "tier": 2
+    },
+    {
+      "name": "Bluffton, South Carolina",
+      "lat": 32.214449,
+      "lon": -80.929528,
+      "tier": 2
+    },
+    {
+      "name": "Rosamond, California",
+      "lat": 34.865627,
+      "lon": -118.214767,
+      "tier": 2
+    },
+    {
+      "name": "Odessa, Texas",
+      "lat": 31.880461,
+      "lon": -102.345314,
+      "tier": 2
+    },
+    {
+      "name": "St. Paul, Minnesota",
+      "lat": 44.948901,
+      "lon": -93.104063,
+      "tier": 2
+    },
+    {
+      "name": "Fargo, North Dakota",
+      "lat": 46.8647,
+      "lon": -96.82908,
+      "tier": 2
+    },
+    {
+      "name": "Kronenwetter, Wisconsin",
+      "lat": 44.819893,
+      "lon": -89.588673,
+      "tier": 2
+    },
+    {
+      "name": "Hampton, Virginia",
+      "lat": 37.047961,
+      "lon": -76.297293,
+      "tier": 2
+    },
+    {
+      "name": "Wilmington, North Carolina",
+      "lat": 34.209225,
+      "lon": -77.885767,
+      "tier": 2
+    },
+    {
+      "name": "Moreno Valley, California",
+      "lat": 33.923253,
+      "lon": -117.205685,
+      "tier": 2
+    },
+    {
+      "name": "Eagle Mountain, Utah",
+      "lat": 40.314272,
+      "lon": -112.011983,
+      "tier": 2
+    },
+    {
+      "name": "Long Beach, California",
+      "lat": 33.780791,
+      "lon": -118.16818,
+      "tier": 2
+    },
+    {
+      "name": "Scottsboro, Alabama",
+      "lat": 34.64462,
+      "lon": -86.048155,
+      "tier": 2
+    },
+    {
+      "name": "Greeley, Colorado",
+      "lat": 40.414034,
+      "lon": -104.771043,
+      "tier": 2
+    },
+    {
+      "name": "Anaheim, California",
+      "lat": 33.855502,
+      "lon": -117.758657,
+      "tier": 2
+    },
+    {
+      "name": "Hat Creek, California",
+      "lat": 40.789806,
+      "lon": -121.474515,
+      "tier": 2
+    },
+    {
+      "name": "Ontario, California",
+      "lat": 34.037042,
+      "lon": -117.605956,
+      "tier": 2
+    },
+    {
+      "name": "Gary, Indiana",
+      "lat": 41.59074,
+      "lon": -87.347113,
+      "tier": 2
+    },
+    {
+      "name": "Jacksonville, North Carolina",
+      "lat": 34.72973,
+      "lon": -77.393661,
+      "tier": 2
+    },
+    {
+      "name": "Ardmore, Oklahoma",
+      "lat": 34.196507,
+      "lon": -97.131848,
+      "tier": 2
+    },
+    {
+      "name": "Tacoma, Washington",
+      "lat": 47.252199,
+      "lon": -122.459832,
+      "tier": 2
+    },
+    {
+      "name": "Chula Vista, California",
+      "lat": 32.62767,
+      "lon": -117.01517,
+      "tier": 2
+    },
+    {
+      "name": "Hoover, Alabama",
+      "lat": 33.375128,
+      "lon": -86.809416,
+      "tier": 2
+    },
+    {
+      "name": "Pueblo West, Colorado",
+      "lat": 38.31583,
+      "lon": -104.784972,
+      "tier": 2
+    },
+    {
+      "name": "Niarada, Montana",
+      "lat": 47.830919,
+      "lon": -114.55781,
+      "tier": 2
+    },
+    {
+      "name": "Forest Hills, Michigan",
+      "lat": 42.960191,
+      "lon": -85.489674,
+      "tier": 2
+    },
+    {
+      "name": "Pearland, Texas",
+      "lat": 29.555732,
+      "lon": -95.323012,
+      "tier": 2
+    },
+    {
+      "name": "Celina, Texas",
+      "lat": 33.323284,
+      "lon": -96.794821,
+      "tier": 2
+    },
+    {
+      "name": "Salem, Oregon",
+      "lat": 44.9239,
+      "lon": -123.023007,
+      "tier": 2
+    },
+    {
+      "name": "Lynchburg, Virginia",
+      "lat": 37.399016,
+      "lon": -79.195458,
+      "tier": 2
+    },
+    {
+      "name": "Ranchettes, Wyoming",
+      "lat": 41.218951,
+      "lon": -104.772932,
+      "tier": 2
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "scientific_backend": {
+    "status": "ok",
+    "requested_backend": "auto",
+    "active_backend": "rust",
+    "rust_installed": "yes",
+    "rust_version": "3.0.0",
+    "fallback_reason": null
+  }
+}

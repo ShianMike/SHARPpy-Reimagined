@@ -5,7 +5,387 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v2.0.0] - 2026-09-26
+## [v3.0.0] - Unreleased
+
+v3.0.0 is the next-generation interface release, currently in development.
+The changes below describe the current source and local preview; they do not
+announce a published v3.0.0 installer or a completed desktop release gate.
+
+### Release transition
+
+- Introduce a React and TypeScript interface with a Tauri 2 desktop shell,
+  MapLibre GL JS maps, and deck.gl weather layers. The existing `sharpmod`
+  scientific engine and `sharpmod-rs` numerical backend remain authoritative.
+- Designate **v2.0.0 Legacy** as the final release of the old PySide6/Qt GUI.
+  Keep its existing `v2.0.0` tag, Windows ZIP, portable executable, checksums,
+  dependency manifest, and Rust wheel available on the
+  [legacy release page](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0).
+- Keep the legacy download linked from the README and subsequent release
+  notes so users can choose the old GUI after the new interface is released.
+  Legacy assets retain their original versioned filenames and download URLs.
+- Keep `sharpmod-gui` available for legacy workflows during the migration.
+- Align the development Python package, native Rust package, frontend, Tauri
+  shell, lockfiles, and default release tag at **v3.0.0**. This version bump
+  prepares the unreleased source; it does not publish a new release.
+- Update Ruff to **0.16.10**, ecCodes to **2.49.0**, and all artifact-download
+  workflow steps to **download-artifact 8.0.2**, pinned to its immutable commit.
+  Include the upgrades proposed in dependency PRs #70, #71, and #72 in the
+  v3.0.0 release preparation.
+
+### Added
+
+#### Interface and navigation
+
+- Add consistent 120–180 ms transitions for controls, menus, drawers, tabs,
+  disclosures, hover cards and notices, with sliding layer switches and visible
+  loading feedback. Respect reduced motion, preserve focus during interrupted
+  menu transitions, and keep map positions and weather readouts immediate.
+- Fade the outgoing workspace when returning to Model Viewer and replay the
+  map controls' entrance on each visit. Preserve the map instance and camera,
+  cancel stale cleanup during rapid navigation, and honor reduced motion.
+- Crossfade between one, two, and four map panels in 180 ms on supporting
+  browsers, keeping the toolbar interactive and existing panels mounted.
+  Use a CSS fade when native transitions are unavailable. Respect reduced
+  motion and apply the latest choice during rapid switching.
+- Replace the plain map loading text with a centered, theme-aware glass card
+  and subtle loading indicator. Keep it visible until the map first renders,
+  respect reduced motion, and show recovery controls if startup fails.
+- Start station labels off in every panel when the app opens, including with
+  saved preferences. Preserve other settings and label choices made while
+  switching between one, two, and four panels during the session.
+- Reduce test startup overhead with isolated thread workers and bounded
+  concurrency. Use fake time for catalogue loading and automatic retry checks,
+  retaining all existing tests and checking the retry schedule explicitly.
+- Add Overview, Model Viewer, Soundings, Logs, and Settings workspaces around
+  a shared station or forecast-point selection.
+- Add a map-first shell with a compact navigation rail, floating forecast
+  controls, a shared timeline, and a right-side Layers or Point details drawer.
+  Keep the map mounted while another workspace is open to retain its view.
+- Add System, Light, and Dark appearance choices, shared design tokens,
+  locally bundled fonts, keyboard focus states, and graphics profiles.
+- Add custom dropdowns with keyboard navigation, type-to-select, selected-item
+  indicators, scrollable choices, and popovers matched to the trigger width.
+- Add custom UTC date pickers with month/year navigation and a latest-date
+  action. Sounding calendars open beside their source controls when space
+  permits, with viewport-aware positioning.
+- Add a model-backend overview with All models, Available, and Needs attention
+  filters; availability counts; expandable provider responses; checked cycle
+  and forecast hour; last-check time; and individual or bulk refresh actions.
+
+#### Forecast maps and weather layers
+
+- Add backend-supplied HRRR field products, including reflectivity, surface
+  temperature and dewpoint, instability, inhibition, lapse rates, shear,
+  helicity, severe-weather composites, and upper-air fields and contours.
+- Add **2 m AGL Relative Humidity** to the HRRR **Surface** category, using
+  the native percentage field and the supplied 0-100% colour table for maps,
+  legends, and numeric inspection.
+- Add **Lightning Flash Density** to HRRR **Surface**, using the native hourly
+  maximum and supplied colour thresholds, with **flashes** as the display unit.
+  Preserve readings above 15 while displaying them with the final colour.
+  Match the exact class boundaries in Sharp and Smooth, including the fine
+  lightning bands below 0.1.
+- Extend the same map categories, colour tables, numeric readouts, height
+  contours, and wind barbs to RRFS CONUS (25 parameters) and NAM 3 km CONUS
+  (24 parameters; Lightning Flash Density is unavailable). Use each model's
+  own published grids and forecast limits (84 and 60 hours respectively).
+  Interpolate NAM's 0-1 km bulk shear from its pressure-level winds above the
+  model terrain, with that method stated in the parameter information.
+- Add 16 supported map parameters to each REFS member, REFSm1-REFSm5. Omit
+  products whose inputs are absent from the reduced member stream, including
+  200 mb winds, mixed-layer CAPE/CIN, most-unstable CAPE, and related composites.
+  Apply the members' 60-hour forecast limit. Keep field, contour, and playback
+  caches distinct for each model and member.
+- Decode NAM's multipart GRIB wind records as separate U and V components while
+  sharing their byte-range download, preserving correct wind speeds and barbs.
+- Add model, run, forecast-hour, and parameter selectors connected to the
+  provider catalogue. Apply model- and cycle-specific forecast-hour limits
+  consistently to the toolbar, sounding source controls, and timeline.
+- Add one-, two-, and four-panel layouts with a synchronized camera, model,
+  run, forecast time, and selection. Each panel retains its own parameter,
+  layer visibility, opacity, and pixel-rendering choice across layout changes
+  and app reloads, with station labels reset to off on launch. Label choices
+  made during the session persist when switching layouts.
+- Add an independent parameter scale at the right of each panel. Two-panel
+  scales use the normal height; four-panel scales are 20% shorter when space
+  permits and shrink further to fit smaller viewports.
+- Add scale inspection with pointer and keyboard controls, keeping each
+  scale tied to the product and units in its own panel.
+- Add a cursor readout that samples the cached numeric model grid directly
+  and shows the product, value, and units near the pointer. Preserve raw
+  sampled values when display smoothing is enabled.
+- Add station search, point selection, station availability, geographic
+  labels, model-domain outlines, and point details with an Open sounding action.
+- Add zoom-aware wind barbs to the 200, 300, 500, 700, and 850 mb Height/Wind
+  maps. Rotate HRRR grid-relative directions to true north and retain winds
+  below the colour table's 50 kt threshold. Share compact wind grids with the
+  height-contour query across panels; sample only visible, spaced grid cells
+  after a pan or zoom settles, and reuse a cached symbol atlas during interaction.
+  Model and surface wind symbols share exact half-feathers (5 kt), full feathers
+  (10 kt), and filled flags (50 kt), with complete-symbol rotation and separate
+  outlines so font metrics cannot shrink or disconnect their shapes.
+- Add categorical, tornado, wind, and hail SPC outlooks; storm reports;
+  MRMS mosaic and single-site radar; GOES satellite imagery; and surface
+  observations with their own controls, opacity, and provider timestamps.
+- Add layer ordering and weather/map-detail controls in the Layers drawer.
+  Use the shared custom dropdown design for layer-specific choices.
+- Add shared playback, previous/next frame actions, forecast-hour scrubbing,
+  speed selection, looping, cached frames, and upcoming-frame prefetch.
+- Add a reduced-rendering station list and map retry action when WebGL or
+  renderer startup is unavailable.
+
+#### Soundings and profile editing
+
+- Add observed, forecast-model, ERA5 reanalysis, and local-file sources in a
+  compact source sidebar. Label the observed source tab **Obs.**.
+- Add source-specific station, date, launch, provider, model, run, forecast,
+  and coordinate controls, with a selected-station shortcut and UTC context.
+- Add a custom file chooser for supported sounding formats, including SPC
+  text, BUFKIT, UWyo text, and `.npz`, with file-size guidance and errors.
+- Restore raw WRF NetCDF imports in the File tab. Read an existing local
+  `wrfout` path, select an available forecast time and a point in its domain,
+  and use the existing WRF extractor without uploading or modifying the dataset.
+- Add an open-sounding list with source/time summaries, selection, and close
+  actions. Collapse the source sidebar to give the chart more space.
+- Display the existing SHARPpy Skew-T, hodograph, and diagnostic rendering as
+  a lossless PNG. Provide UHD and HD choices, fit-to-view, actual-pixel viewing,
+  zoom controls, and drag-to-pan.
+- Omit the legacy locator map from the new sounding viewer and its PNG exports,
+  freeing the hodograph corner and its height markers for the sounding data.
+- Restore temperature and dewpoint level editing on the sounding and wind
+  editing on the hodograph. Show selectable handles and a profile-level picker
+  for direct numeric edits, with changes applied through the backend renderer.
+- Add Inspect and Edit profile modes, Undo, Redo, Reset profile, and keyboard
+  undo/redo. Retain the original profile while previewing and applying edits.
+- Add a Chart panels popover containing parcel choices SFC, ML, FCST, MU, and
+  EFF, plus the backend's available height-chart and diagnostic-panel choices.
+  Restore access to streamwiseness, theta-e, and STP-related chart selections.
+- Add custom dropdowns for image resolution, profile level, height chart, and
+  diagnostic panel, matching the source controls.
+- Add Export PNG and Copy sounding image actions for the rendered view,
+  including the chosen chart options and applied profile edits.
+
+#### Backend integration and development
+
+- Add a typed Rust command bridge and supervised Python sidecar for station,
+  forecast, map, sounding, and diagnostic operations. Keep scientific
+  calculations in the existing backend rather than duplicating them in React.
+- Add a local live-browser preview that calls the real backend, alongside a
+  separate deterministic fixture mode for automated interface checks.
+- Add compact binary map frames carrying numeric cells, validity, scale,
+  offset, geographic bounds, and provenance; colour model fields in the client.
+- Add backend-rendered interactive sounding metadata and a dedicated render
+  worker, with cached profiles and image variants scoped to the backend session.
+- Add fixed REFS member sources REFSm1 through REFSm5 through NOAA NOMADS,
+  sharing the RRFS pressure-level and surface-field retrieval path.
+- Add the Open-Meteo Single Runs ECMWF IFS 0.25-degree sounding source using
+  verified pressure levels and cycle-specific forecast coverage. Keep sources
+  without usable pressure-level soundings unavailable rather than inventing data.
+- Add frontend, binary-frame, bridge-contract, process-supervision, map,
+  sounding, and provider regression coverage, plus a dedicated frontend and
+  desktop-bridge CI workflow and migration documentation.
+
+### Changed
+
+#### Layout and readability
+
+- Replace the interface's blue accents with orange for active controls,
+  selected items, links, timeline highlights, and keyboard focus in both themes.
+- Reduce glass blur and tint opacity in High and Balanced graphics profiles so
+  floating controls retain more backdrop detail. Keep opaque surfaces for Low
+  graphics and reduced-transparency preferences.
+- Remove the redundant Soundings workspace header and consolidate profile
+  identity, source/time, image dimensions, quality, and interaction hints in
+  a compact horizontal chart header.
+- Move parcel selection into Chart panels and remove the separate image footer
+  so the chart uses more of the available height.
+- Align sidebar inputs and dropdown menus; replace native-looking select and
+  date widgets in the new sounding and layer controls with shared custom controls.
+- Space the forecast toolbar controls evenly and reduce repeated field/time
+  information. Loaded multi-panel title chips show the panel number and product;
+  shared run, forecast hour, and valid time remain in the toolbar and timeline.
+- Move multi-panel title chips to the upper-left of their own maps, below the
+  shared toolbar in the top row. Give the lower row its own spacing and keep
+  titles clear of the navigation rail on shorter windows.
+- Keep parameter scales compact without repeated product/unit headings; retain
+  their product context and units in accessible descriptions and scale readouts.
+- Present surface observations with colour-distinguished temperature/dewpoint,
+  readable outlined glyphs, spaced station models, and multiline provider/time
+  details. Reveal more observations as the map is zoomed in.
+- Structure storm-report popovers into a hazard and location heading, event
+  facts, separate remarks paragraphs, and an attribution footer. Avoid repeating
+  a magnitude already shown in the heading, and wrap long provider text.
+- Apply the same readable popover layout to mesonet observations, separating
+  station identity, observation time and offset, temperature, dewpoint, wind,
+  and source instead of combining readings in one paragraph.
+- Simplify cursor and point-inspector value messages while preserving numeric
+  values, units, missing-data states, and coverage information.
+- Remove the extra location icon from the forecast-point header. Align the
+  Forecast & source labels and values, allow long source names to wrap, and
+  distinguish hover, keyboard focus, and expanded states on its disclosure.
+
+#### Colour tables and rendering
+
+- Replace the model reflectivity colour table with the supplied blue, green,
+  yellow, orange, red, purple, and grey reference bands.
+- Replace surface temperature and dewpoint colour tables with the supplied
+  Fahrenheit references, retaining their distinct cold/dry and warm/moist bands.
+- Replace all Height and Wind pressure levels with the supplied 50–170 kt
+  colour table, retaining geopotential height contours over the wind shading.
+- Replace CAPE, CIN, lapse-rate, bulk-shear, storm-relative-helicity,
+  supercell-composite, significant-tornado-parameter, and updraft-helicity
+  colour tables with the supplied references. Keep the printed reference
+  thresholds, including the CAPE 8,500 label, rather than normalizing them.
+- Use the same backend palette definitions for field images, interactive
+  scales, and legacy field rendering so colours and units remain consistent.
+- Make **Smooth** the default model-field rendering mode. Retain **Sharp** as
+  an explicit per-panel choice and preserve an explicitly saved preference.
+- Smooth numeric cells before applying the colour table, with interpolation
+  constrained to the local valid range and a missing-cell fallback. Use narrow
+  screen-space antialiasing at colour-band boundaries instead of blurring the
+  completed coloured image. Sharp mode retains discrete source-cell colours.
+- Preserve more GOES source-image detail when zoomed, subject to the existing
+  texture budget, instead of applying the former fixed 1024-by-768 ceiling.
+- Improve the dark basemap with slate land, blue water, geographic context,
+  and clearer boundaries. Keep coastlines and political borders above weather
+  overlays, with rivers and inland-water outlines underneath and no heavy road
+  outlines; retain the light-map appearance.
+- Reduce stacked SPC outlook fills and draw categorical, tornado, wind, and
+  hail labels with theme-aware text halos. Try alternate positions inside each
+  area to avoid overlapping outlook labels and viewport edges.
+- Draw CIG 1 with broken diagonal hatching, CIG 2 with continuous diagonals,
+  and CIG 3 with crosshatching. Keep hatch spacing fixed in screen pixels,
+  clip it to polygon boundaries and holes, and reuse the outlook geometry.
+- Replace font-dependent storm-report symbols with shared geometric icons
+  using contrasting outlines. Show spaced, outlined magnitude captions at
+  closer zoom levels while retaining report details on hover.
+
+#### Responsiveness and resource use
+
+- Let large sounding-analysis batches use all CPUs available to the process,
+  replacing the four-worker ceiling. Share one native pool across concurrent
+  callers, respect Windows process affinity, and retain serial execution for
+  small or nested batches with unchanged result ordering. Honour explicit
+  lower worker limits and clamp requests to the available CPU capacity.
+- Move batch missing-value cleanup into Rust's existing input copy and avoid
+  unnecessary masked-array wrappers when preparing sounding columns, retaining
+  actual masks and validation without modifying the source arrays.
+- Reuse interpolated wind endpoints in the MMP calculation, reducing repeated
+  shear work while preserving missing-data handling and the published formula.
+  Use NumPy vector operations with memory proportional to the upper-layer
+  endpoint count, avoiding a complete pairwise array.
+- Coalesce camera synchronization so following panels do not repeatedly
+  propagate unchanged camera updates or perform duplicate end-of-gesture work.
+- Share reusable field conversions across panels and generate Sharp-mode
+  colour images only when needed, reducing duplicate CPU work and allocations.
+- Account for raw and rendered field buffers in the cache budget, protect
+  visible frames, and reserve capacity for incoming frames before caching them.
+- Prefetch visible-panel products concurrently for each upcoming forecast hour
+  while keeping the prefetch window bounded.
+- Limit map-pointer work to the latest event per animation frame. Sample
+  model values from the existing in-memory frame without a request per hover
+  or rebuilding map layers for cursor movement.
+- Reuse observation and glyph data between map updates. Recompute visible
+  station spacing after a settled camera change or new observation data.
+- Separate reusable metric-control metadata from Qt widgets so backend and
+  legacy interfaces share definitions without importing UI code for headless work.
+
+### Fixed
+
+- Import saved UWyo HTML through the current decoder, including CRLF files
+  and pages containing multiple preformatted blocks. Enforce the decoded
+  upload limit and remove failed imports from the session cache.
+- Treat undefined storm motion as missing data before sounding widgets use it,
+  preventing flat-wind WRF profiles from crashing the renderer.
+- Retire tests of the old Qt picker's maps, overlay controls, menus, dialogs,
+  and settings from every lane, including the serial release gate. Preserve
+  shared Qt renderer/font tests, NetCDF runtime checks, scientific properties,
+  import validation, and the new interface's regression suite. The serial gate
+  still runs the complete remaining offline suite without parallel workers.
+- Point the Windows WRF lane at the new sounding import bridge and the retained
+  raw NetCDF extraction/runtime checks. Exercise edit/reset renders at HD and
+  check UHD output once per workflow.
+
+- Restore hover and click handling for live maps using interleaved MapLibre
+  overlays, including forecast-point selection on map areas without a picked
+  feature. Cancel pending pointer work when the map is left, moved, or disposed.
+- Keep cursor values scoped to the hovered panel and prevent stale readouts
+  from appearing over another panel or a hidden/unavailable model field.
+- Give surface-observation hover details enough space to show their individual
+  lines; place model-value readouts above the cursor to avoid covering them.
+- Select a surface station's actual coordinates when its plotted label is
+  clicked rather than using the label's screen offset as the sounding point.
+- Rebuild surface-observation presentation when new reports arrive and
+  prioritize available, recent reports during spacing selection.
+- Keep multi-panel labels clear of the navigation rail and maintain separate
+  product scales when the active panel or a sibling panel's parameter changes.
+- Centre each four-panel colour scale vertically within its own panel using
+  equal top and bottom insets, rather than inheriting space reserved for the
+  full-window toolbar and timeline.
+- Retain lossless sounding-image detail at zoom and account for display pixel
+  density instead of stretching a small preview as the only available image.
+- Recompute sounding diagnostics after profile edits using the existing engine;
+  release temporary Qt render windows so repeated images do not accumulate roots.
+- Correct RRFS and REFS availability checks to inspect both NOAA pressure-level
+  and ground/surface inventories through the real retrieval route, distinguishing
+  incomplete, unavailable, and unconfirmed results.
+- Recognize configured model keys directly, pass fixed REFS member identity
+  through retrieval, and apply the correct HRW member and forecast configuration.
+- Serialize ecCodes message decoding around its shared definition parser to
+  avoid unsafe concurrent access from multiple fields or browser sessions.
+- Close provider responses when a probe exceeds its deadline or is cancelled.
+- Correct the accelerated-profile MMP calculation to reuse the complete
+  shear-pair calculation rather than upstream uninitialized shear cells.
+- Normalize batch input sentinels before calculating derived quantities, so
+  valid computed results are not mistaken for missing input values.
+
+### Local compute validation — 2026-10-15
+
+- Record the measurements, research sources, environment, and raw samples in
+  the [compute optimization report](benchmarks/results/2026-10-15-compute-optimization.md).
+  On the tested 12-logical-CPU Windows machine, increasing the native pool from
+  four to twelve workers reduced the HRRR and observed-input batch times by
+  36.4% and 39.5%, respectively.
+- In a separate comparison with twelve workers already enabled, Rust input
+  cleanup, Python array preparation, and MMP endpoint reuse reduced batch time
+  by 22.9–39.9%, MMP calculation time by 85.9–96.3%, and complete
+  convective-profile construction time by 11.9–21.8%. These percentages describe
+  separate comparisons and must not be added together. Timings use copies of
+  bundled soundings and exclude network downloads and image rendering.
+- Pass 340 focused Python tests and 79 Rust tests covering backend equivalence,
+  ordered parallel results, concurrent pool reuse, Windows CPU affinity,
+  sentinel and mask handling, MMP equivalence, and sounding/ensemble integration.
+  Also pass Ruff, Clippy, Rust formatting, and forced Rust backend selection;
+  confirm that the local preview loads the rebuilt native extension.
+- Packaged desktop execution and release CI remain unverified by this local
+  compute pass. Additional CPU use can increase power consumption; changing
+  process affinity after the shared pool is initialized requires a restart.
+
+### Migration notes
+
+- The new interface currently focuses on Overview, Model Viewer, Soundings,
+  Logs, and Settings. Legacy Analysis, Compare, Ensemble, and Animation workflows
+  are not exposed as equivalent workspaces in this interface; their legacy
+  application and scientific APIs remain available.
+- Map-field availability is product/provider-specific. A model selectable for
+  a point sounding does not automatically supply gridded map fields.
+- ERA5 requires the existing CDS configuration and dataset access. Provider
+  checks report the cycle/hour checked and do not guarantee later availability.
+- Open soundings and rendered images are backend-session data; restarting the
+  backend clears those sessions. Preferences do not turn that cache into a
+  persistent sounding archive.
+- Desktop packaging, supported-platform runtime checks, GPU stress testing,
+  and the protected release gates still need to pass before v3.0.0 is published.
+
+## [v2.0.0 Legacy] - 2026-09-26
+
+**Final legacy PySide6/Qt GUI release.** This release remains downloadable
+after v3.0.0 is published. The tag is still `v2.0.0`; only its display label
+changes to Legacy. Use the
+[Windows ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64.zip)
+or the
+[portable executable](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64-portable.exe).
+The original v2.0.0 changes follow.
 
 ### Added
 

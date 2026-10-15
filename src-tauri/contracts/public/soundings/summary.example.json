@@ -1,0 +1,20 @@
+{
+  "soundingId": "0123456789abcdef",
+  "kind": "file",
+  "title": "HRRRpt hrrr_point_36.68N_95.66W_f018.npz",
+  "location": "HRRRpt",
+  "stationId": null,
+  "stationName": null,
+  "latitude": 36.675168663242175,
+  "longitude": -95.65655745938363,
+  "validTime": "2026-06-26T00:00:00Z",
+  "runTime": "2026-06-25T06:00:00Z",
+  "forecastHour": null,
+  "model": "HRRR",
+  "provider": null,
+  "providerName": null,
+  "sourceUrl": null,
+  "fileName": "hrrr_point_36.68N_95.66W_f018.npz",
+  "levelCount": 39,
+  "timeCount": 1
+}

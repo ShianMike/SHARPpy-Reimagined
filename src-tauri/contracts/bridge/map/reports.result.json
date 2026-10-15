@@ -1,0 +1,71 @@
+{
+  "valid_time": "2026-10-04T21:00:00Z",
+  "window_s": 21600,
+  "window_label": "\u00b13 hours",
+  "hazard_filter": "all",
+  "total_count": 4,
+  "shown_count": 4,
+  "subtitle": "4 storm reports \u00b7 \u00b13 hours \u00b7 04 Oct 2100Z",
+  "valid_from": "2026-10-04T18:00:00Z",
+  "valid_to": "2026-10-05T00:00:00Z",
+  "source_url": "https://mesonet.agron.iastate.edu/example",
+  "attribution": "NWS Local Storm Reports via Iowa Environmental Mesonet",
+  "reports": [
+    {
+      "label": "Wind 68 mph",
+      "description": "Norman, Cleveland, OK\nEvent time: 04 Oct 2005Z\nMagnitude: 68 mph\nSource: MESONET (report source)\nMeasured wind gust\nIssuing office: NWS WFO OUN\nProvider: NWS Local Storm Reports via Iowa Environmental Mesonet",
+      "fill": "#3C7CFF",
+      "stroke": "#00337F",
+      "radius_px": 2.75,
+      "symbol": "circle",
+      "caption": "68 mph",
+      "significant": false,
+      "category": "g",
+      "valid": "2026-10-04T20:05:00Z",
+      "lon": -97.5,
+      "lat": 35.4
+    },
+    {
+      "label": "Wind damage",
+      "description": "Norman, Cleveland, OK\nEvent time: 04 Oct 2030Z\nSource: BROADCAST MEDIA (report source)\nDamage reported\nIssuing office: NWS WFO OUN\nProvider: NWS Local Storm Reports via Iowa Environmental Mesonet",
+      "fill": "#3C7CFF",
+      "stroke": "#00337F",
+      "radius_px": 2.75,
+      "symbol": "square",
+      "caption": "DMG",
+      "significant": false,
+      "category": "d",
+      "valid": "2026-10-04T20:30:00Z",
+      "lon": -97.6,
+      "lat": 35.5
+    },
+    {
+      "label": "Sig Hail 2.75 in",
+      "description": "Norman, Cleveland, OK\nEvent time: 04 Oct 1940Z\nMagnitude: 2.75 in\nSource: PUBLIC (report source)\nBaseball size hail\nIssuing office: NWS WFO OUN\nProvider: NWS Local Storm Reports via Iowa Environmental Mesonet",
+      "fill": "#FFFFFF",
+      "stroke": "#101010",
+      "radius_px": 3.5,
+      "symbol": "diamond",
+      "caption": "2.75\u2033",
+      "significant": true,
+      "category": "significant",
+      "valid": "2026-10-04T19:40:00Z",
+      "lon": -97.3,
+      "lat": 35.3
+    },
+    {
+      "label": "Tornado",
+      "description": "Norman, Cleveland, OK\nEvent time: 04 Oct 1915Z\nSource: EMERGENCY MGR (report source)\nTornado reported\nIssuing office: NWS WFO OUN\nProvider: NWS Local Storm Reports via Iowa Environmental Mesonet",
+      "fill": "#E5342F",
+      "stroke": "#7F0000",
+      "radius_px": 3.25,
+      "symbol": "triangle",
+      "caption": "TOR",
+      "significant": false,
+      "category": "t",
+      "valid": "2026-10-04T19:15:00Z",
+      "lon": -97.1,
+      "lat": 35.2
+    }
+  ]
+}

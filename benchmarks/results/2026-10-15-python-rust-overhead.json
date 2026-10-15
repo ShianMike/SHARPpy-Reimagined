@@ -1,0 +1,272 @@
+{
+  "backend": {
+    "requested_backend": "auto",
+    "active_backend": "rust",
+    "rust_installed": true,
+    "rust_version": "2.0.0",
+    "fallback_reason": null
+  },
+  "seed": 42,
+  "method": "Interleaved old Python functions and current code, same installed Rust module. Batch checks include all 26 returned values; profile checks include MMP, MUCAPE, MUCIN, DCAPE, TEI.",
+  "release_sha256": "3e0b59292b8625bf3eb0fbd404749dce71abd766bb29d22c792607499b6dd378",
+  "baseline_functions": {
+    "prepare_1d": "def prepare_1d(value, *, name: str):\n    \"\"\"Return a contiguous float64 vector with masks represented by NaN.\"\"\"\n    array = ma.asanyarray(value, dtype=float)\n    if array.ndim != 1:\n        raise ValueError(f\"{name} must be one-dimensional; got shape {array.shape}\")\n    return np.ascontiguousarray(\n        np.asarray(array.filled(np.nan), dtype=np.float64))\n",
+    "profile_batch_analysis": "    def profile_batch_analysis(\n        self,\n        profiles,\n        layer_tops_agl,\n        *,\n        missing=-9999.0,\n        max_threads=DEFAULT_BATCH_THREADS,\n        parallel_threshold=DEFAULT_BATCH_PARALLEL_THRESHOLD,\n    ) -> BatchProfileAnalysis:\n        \"\"\"Compute dense diagnostics for complete profiles in stable order.\n\n        Each item is a six-column sequence followed by an optional relative\n        surface index. Columns are flattened once for the native boundary;\n        Rust owns each segment before releasing the GIL.\n        \"\"\"\n        try:\n            profiles = tuple(profiles)\n        except TypeError as exc:\n            raise TypeError(\"profiles must be an iterable of sounding columns\") from exc\n\n        layer_tops = prepare_1d(layer_tops_agl, name=\"layer_tops_agl\")\n        if np.any(~np.isfinite(layer_tops)) or np.any(layer_tops < 0.0):\n            raise ValueError(\n                \"layer_tops_agl must contain finite, non-negative heights\"\n            )\n        native_missing = None if missing is None else float(missing)\n        if native_missing is not None and not np.isfinite(native_missing):\n            raise ValueError(\"missing must be a finite numeric sentinel\")\n\n        grouped = [[] for _name in _CORE_FIELDS]\n        offsets = [0]\n        surface_indices = []\n        for profile_index, value in enumerate(profiles):\n            try:\n                columns = tuple(value)\n            except TypeError as exc:\n                raise TypeError(\n                    f\"profile {profile_index} must be a column sequence\"\n                ) from exc\n            if len(columns) not in (6, 7):\n                raise ValueError(\n                    f\"profile {profile_index} must contain six columns and \"\n                    \"an optional surface index\"\n                )\n            arrays = prepare_qc_columns(columns[:6], _CORE_FIELDS)\n            if native_missing is not None:\n                normalized = []\n                for array in arrays:\n                    if np.any(array == native_missing):\n                        array = np.array(array, copy=True, order=\"C\")\n                        array[array == native_missing] = np.nan\n                    normalized.append(array)\n                arrays = tuple(normalized)\n            surface = prepare_sfc_index(\n                columns[6] if len(columns) == 7 else 0,\n                arrays[0].size,\n            )\n            for destination, array in zip(grouped, arrays):\n                destination.append(array)\n            offsets.append(offsets[-1] + arrays[0].size)\n            surface_indices.append(surface)\n\n        flattened = tuple(\n            np.ascontiguousarray(np.concatenate(parts), dtype=np.float64)\n            if parts\n            else np.empty(0, dtype=np.float64)\n            for parts in grouped\n        )\n        raw = self._module.profile_batch_analysis(\n            *flattened,\n            np.asarray(offsets, dtype=np.uintp),\n            np.asarray(surface_indices, dtype=np.uintp),\n            layer_tops,\n            None,\n            max_threads,\n            parallel_threshold,\n        )\n        return _batch_analysis_from_raw(\n            raw,\n            profile_count=len(profiles),\n            layer_count=layer_tops.size,\n            max_threads=max_threads,\n        )\n",
+    "_profile_columns": "def _profile_columns(prof):\n    \"\"\"Return filled ``pres/hght/tmpc/dwpc/wdir/wspd`` arrays for a profile.\"\"\"\n\n    def column(name):\n        raw = getattr(prof, name, None)\n        if raw is None:\n            raise BoxAnalysisError(f\"sounding is missing its {name} column\")\n        return np.ma.filled(np.ma.asarray(raw, dtype=float), -9999.0)\n\n    return tuple(\n        column(name) for name in (\"pres\", \"hght\", \"tmpc\", \"dwpc\", \"wdir\", \"wspd\")\n    )\n",
+    "_mmp_linear_predictor": "def _mmp_linear_predictor(sp):\n    \"\"\"Return the Coniglio et al. (2006) MMP logistic linear predictor, or ``None``.\n\n    Computes the same input terms as ``sharppy.sharptab.params.mmp`` (MUCAPE, the\n    maximum bulk shear between the lowest 1 km and the 6-10 km layer, the 3-8 km\n    lapse rate, and the 3-12 km mean wind) and combines them with the published\n    regression coefficients, returning the linear predictor so that\n    ``MMP = 1 / (1 + exp(value))``. Returns ``None`` when any required term is\n    missing/masked or the profile lacks the low-level or 6-10 km levels.\n    \"\"\"\n    from sharppy.sharptab import interp as sp_interp\n    from sharppy.sharptab import winds as sp_winds\n    from sharppy.sharptab import params as sp_params\n    from sharppy.sharptab import utils as sp_utils\n\n    mucape = _api._finite_or_none(getattr(sp.mupcl, \"bplus\", None))\n    if mucape is None:\n        return None\n\n    agl = sp_interp.to_agl(sp, sp.hght)\n    lowest_idx = np.where(np.asarray(agl) <= 1000.0)[0]\n    highest_idx = np.where((np.asarray(agl) >= 6000.0) & (np.asarray(agl) < 10000.0))[0]\n    if len(lowest_idx) == 0 or len(highest_idx) == 0:\n        return None\n\n    pbots = np.atleast_1d(sp_interp.pres(sp, sp.hght[lowest_idx]))\n    ptops = np.atleast_1d(sp_interp.pres(sp, sp.hght[highest_idx]))\n\n    max_shear = None\n    for pbot in pbots:\n        for ptop in ptops:\n            u_shr, v_shr = sp_winds.wind_shear(sp, pbot=pbot, ptop=ptop)\n            mag = _api._finite_or_none(sp_utils.mag(u_shr, v_shr))\n            if mag is None:\n                continue\n            if max_shear is None or mag > max_shear:\n                max_shear = mag\n    if max_shear is None:\n        return None\n    max_bulk_shear = float(sp_utils.KTS2MS(max_shear))  # m/s\n\n    lr38 = _api._finite_or_none(sp_params.lapse_rate(sp, 3000.0, 8000.0, pres=False))\n    if lr38 is None:\n        return None\n\n    plower = sp_interp.pres(sp, sp_interp.to_msl(sp, 3000.0))\n    pupper = sp_interp.pres(sp, sp_interp.to_msl(sp, 12000.0))\n    mnu, mnv = sp_winds.mean_wind(sp, pbot=plower, ptop=pupper)\n    mnwind = _api._finite_or_none(sp_utils.mag(mnu, mnv))\n    if mnwind is None:\n        return None\n    mnwind_ms = float(sp_utils.KTS2MS(mnwind))  # m/s\n\n    value = (\n        _api._MMP_A0\n        + _api._MMP_A1 * max_bulk_shear\n        + _api._MMP_A2 * lr38\n        + _api._MMP_A3 * mucape\n        + _api._MMP_A4 * mnwind_ms\n    )\n    return float(value) if np.isfinite(value) else None\n"
+  },
+  "results": [
+    {
+      "case": "fast_values_many examples/soundings/hrrr_point_36.68N_95.66W_f018.npz 128x39",
+      "repeats": 15,
+      "samples_s": {
+        "before": [
+          0.024879199999304547,
+          0.027240399999755027,
+          0.02233650000016496,
+          0.038723900000150024,
+          0.024033099999542173,
+          0.023563900000226567,
+          0.028536199999507517,
+          0.024413099999947008,
+          0.02655959999992774,
+          0.024296399999911955,
+          0.027259800000138057,
+          0.028808199999730277,
+          0.02592350000031729,
+          0.02729189999990922,
+          0.0262840999994296
+        ],
+        "after": [
+          0.015783599999849685,
+          0.0173040999998193,
+          0.016295800000079907,
+          0.015273900000465801,
+          0.018351200000324752,
+          0.015613199999279459,
+          0.016186699999707344,
+          0.015309399999750894,
+          0.016206700000111596,
+          0.01490029999968101,
+          0.01572440000018105,
+          0.01756299999942712,
+          0.016676700000061828,
+          0.015787799999998242,
+          0.01542669999980717
+        ]
+      },
+      "median_s": {
+        "before": 0.0262840999994296,
+        "after": 0.015787799999998242
+      },
+      "reduction_percent": 39.93402855589174
+    },
+    {
+      "case": "MMP examples/soundings/hrrr_point_36.68N_95.66W_f018.npz",
+      "repeats": 15,
+      "samples_s": {
+        "before": [
+          0.06120259999988775,
+          0.04299220000029891,
+          0.03690269999970042,
+          0.03289160000076663,
+          0.03539749999981723,
+          0.03555740000047081,
+          0.03457460000026913,
+          0.0333173999997598,
+          0.03233760000057373,
+          0.03387839999959397,
+          0.034538299999439914,
+          0.03330980000009731,
+          0.03365920000032929,
+          0.033278799999607145,
+          0.034883799999988696
+        ],
+        "after": [
+          0.006654200000411947,
+          0.004674699999668519,
+          0.006806899999901361,
+          0.004654200000004494,
+          0.008427799999481067,
+          0.004768499999954656,
+          0.0057449000005362905,
+          0.0046302999999170424,
+          0.004652999999962049,
+          0.0054930999995121965,
+          0.004869399999734014,
+          0.004821300000003248,
+          0.007039199999780976,
+          0.004866400000537396,
+          0.004692099999374477
+        ]
+      },
+      "median_s": {
+        "before": 0.034538299999439914,
+        "after": 0.004866400000537396
+      },
+      "reduction_percent": 85.91013454450187
+    },
+    {
+      "case": "complete convective profile examples/soundings/hrrr_point_36.68N_95.66W_f018.npz",
+      "repeats": 9,
+      "samples_s": {
+        "before": [
+          0.32953270000052726,
+          0.25841510000009293,
+          0.23447029999988445,
+          0.2541753000004974,
+          0.23084500000004482,
+          0.24401230000057694,
+          0.24379440000029717,
+          0.24372260000018287,
+          0.24703540000064095
+        ],
+        "after": [
+          0.24645019999934448,
+          0.24315560000013647,
+          0.2149981000002299,
+          0.22309220000079222,
+          0.20693000000028405,
+          0.21396030000050814,
+          0.20538120000037452,
+          0.21109510000042064,
+          0.22120859999995446
+        ]
+      },
+      "median_s": {
+        "before": 0.24401230000057694,
+        "after": 0.2149981000002299
+      },
+      "reduction_percent": 11.890466177433856
+    },
+    {
+      "case": "fast_values_many examples/soundings/14061619.OAX 32x151",
+      "repeats": 15,
+      "samples_s": {
+        "before": [
+          0.012867800000094576,
+          0.013049700000010489,
+          0.01315009999962058,
+          0.0128921999994418,
+          0.013005599999814876,
+          0.012657400000534835,
+          0.012420799999745213,
+          0.01260920000004262,
+          0.012984699999833538,
+          0.01252810000005411,
+          0.01292109999940294,
+          0.012442700000065088,
+          0.012664500000028056,
+          0.0123105000002397,
+          0.01357430000007298
+        ],
+        "after": [
+          0.009757599999829836,
+          0.010408900000584254,
+          0.010168100000555569,
+          0.009972800000468851,
+          0.010215699999207573,
+          0.010363900000811554,
+          0.010276500000145461,
+          0.01017039999987901,
+          0.009741800000483636,
+          0.009920100000272214,
+          0.009682100000645733,
+          0.009863500000392378,
+          0.009643299999879673,
+          0.009568499999659252,
+          0.009850200000073528
+        ]
+      },
+      "median_s": {
+        "before": 0.012867800000094576,
+        "after": 0.009920100000272214
+      },
+      "reduction_percent": 22.90756772564616
+    },
+    {
+      "case": "MMP examples/soundings/14061619.OAX",
+      "repeats": 15,
+      "samples_s": {
+        "before": [
+          0.13673579999976937,
+          0.13611169999967387,
+          0.13605720000032306,
+          0.1422959000001356,
+          0.14283269999941695,
+          0.14917979999972886,
+          0.1321379999999408,
+          0.1401412999994136,
+          0.1362353999993502,
+          0.12672730000031152,
+          0.143449099999998,
+          0.13651850000042032,
+          0.15645279999989725,
+          0.1412231000003885,
+          0.15654589999940072
+        ],
+        "after": [
+          0.004926000000523345,
+          0.005211800000324729,
+          0.005873000000065076,
+          0.004876900000454043,
+          0.0061102999998183805,
+          0.006214899999577028,
+          0.005186399999729474,
+          0.004896300000837073,
+          0.005432199999631848,
+          0.004858099999182741,
+          0.004918699999507226,
+          0.005440900000394322,
+          0.00518499999998312,
+          0.005298200000652287,
+          0.007854299999962677
+        ]
+      },
+      "median_s": {
+        "before": 0.1401412999994136,
+        "after": 0.005211800000324729
+      },
+      "reduction_percent": 96.2810392080375
+    },
+    {
+      "case": "complete convective profile examples/soundings/14061619.OAX",
+      "repeats": 9,
+      "samples_s": {
+        "before": [
+          0.6644418999994741,
+          0.6653548000003866,
+          0.5208204999998998,
+          0.5889861999994537,
+          0.6962302000001728,
+          0.6034364999995887,
+          0.5667640000001484,
+          0.5409165999999459,
+          0.7187667000007423
+        ],
+        "after": [
+          0.3687840000002325,
+          0.40550960000018677,
+          0.4720919999999751,
+          0.48557549999986804,
+          0.4347242000003462,
+          0.44896410000001197,
+          0.504836900000555,
+          0.4858886000001803,
+          0.48573750000014115
+        ]
+      },
+      "median_s": {
+        "before": 0.6034364999995887,
+        "after": 0.4720919999999751
+      },
+      "reduction_percent": 21.76608474954749
+    }
+  ],
+  "verified_application_path": {
+    "profiles": 128,
+    "fields_per_profile": 26,
+    "execution_mode": "bounded_parallel",
+    "workers": 12
+  }
+}

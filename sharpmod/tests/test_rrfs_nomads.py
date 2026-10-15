@@ -158,6 +158,23 @@ def test_build_url_zero_pads_the_forecast_hour():
     assert "/prod/" in url
 
 
+@pytest.mark.parametrize("member", range(1, 6))
+@pytest.mark.parametrize("product", ["prslev", "2dfld"])
+def test_refs_member_urls_keep_the_pressure_and_ground_on_the_same_member(member, product):
+    url = rrfs_nomads.build_url("para", RUN, 60, product, "conus", member=member)
+    assert url == (
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rrfs/para/"
+        f"rrfsens.20260901/00/m{member:03d}/"
+        f"rrfs.t00z.m{member:03d}.{product}nomads.3km.f060.conus.grib2"
+    )
+
+
+@pytest.mark.parametrize("member", [0, 6, True, 1.5, "1", "../m005"])
+def test_refs_urls_refuse_invalid_members(member):
+    with pytest.raises(ValueError, match="REFS member"):
+        rrfs_nomads.build_url("para", RUN, 0, "prslev", "conus", member=member)
+
+
 @pytest.mark.parametrize("name,tag", [
     ("conus", "conus"),
     ("CONUS", "conus"),

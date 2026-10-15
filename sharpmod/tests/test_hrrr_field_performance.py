@@ -11,12 +11,83 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from sharpmod import hrrr_field
 from sharpmod.providers import hrrr_field_fetch
 
 
 RUN = datetime(2026, 9, 4, 12, tzinfo=timezone.utc)
+
+
+def test_nam_multipart_winds_share_a_range_but_decode_distinct_components(monkeypatch, tmp_path):
+    from dataclasses import replace
+    from sharpmod.providers import hrrr_products as hp
+    from sharpmod.tests.test_grib_backend_equivalence import _write_multifield_wind_message
+
+    api = pytest.importorskip("eccodes")
+    path = tmp_path / "winds.grib2"
+    with path.open("wb") as output:
+        _write_multifield_wind_message(api, output, 300, 3, 4)
+    payload = path.read_bytes()
+    inventory = ("1.1:0:d=2026090412:UGRD:300 mb:1 hour fcst:\n"
+                 "1.2:0:d=2026090412:VGRD:300 mb:1 hour fcst:\n"
+                 f"2:{len(payload)}:d=2026090412:HGT:300 mb:1 hour fcst:\n")
+    rows = hrrr_field.parse_inventory(inventory)
+    assert [(row.length, row.field_index) for row in rows[:2]] == [(len(payload), 0), (len(payload), 1)]
+    monkeypatch.setattr(hrrr_field, "HRRR_SHAPE", (2, 3))
+    monkeypatch.setattr(hrrr_field, "_INVENTORY_CACHE", {})
+    requests = []
+
+    def opener(url, _timeout, _limit, byte_range=None):
+        requests.append((url, byte_range))
+        return inventory.encode() if url.endswith(".idx") else payload
+
+    product = replace(next(item for item in hp.available_products("nam-3km-conus") if item.key == "hgt-wind-300"), contour_fields=())
+    for _repeat in range(3):
+        decoded = hrrr_field._download_fields(product, RUN, 1, opener=opener, timeout=1, should_cancel=None, model="nam-3km-conus")
+        assert decoded["ugrd300"][1, 1] == 3
+        assert decoded["vgrd300"][1, 1] == 4
+        assert product.derive(decoded)[1, 1] == pytest.approx(5 * hp.MS_TO_KT)
+    assert [byte_range for _, byte_range in requests if byte_range is not None] == [(0, len(payload) - 1)] * 3
+    with pytest.raises(hrrr_field.HrrrFieldError, match="field 2"):
+        hrrr_field.decode_message(payload, api, field_index=2)
+
+
+def test_parallel_field_requests_do_not_overlap_native_decoding(monkeypatch):
+    """Independent browser tabs must not enter ecCodes' global parser together."""
+    monkeypatch.setattr(hrrr_field, "HRRR_SHAPE", (1, 1))
+    start = threading.Barrier(2)
+    active = 0
+    peak = 0
+
+    def open_message(_payload):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        time.sleep(0.04)
+        return 1
+
+    def release(_handle):
+        nonlocal active
+        active -= 1
+
+    api = SimpleNamespace(
+        codes_new_from_message=open_message,
+        codes_get=lambda _handle, key: 9999 if key == "missingValue" else 1,
+        codes_get_values=lambda _handle: [42.0],
+        codes_release=release,
+    )
+
+    def decode(_index):
+        start.wait(timeout=5)
+        return hrrr_field.decode_message(b"GRIB", api)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(decode, range(2)))
+    assert all(result.item() == 42 for result in results)
+    assert peak == 1
+    assert active == 0
 
 
 def test_numeric_hover_does_not_copy_the_entire_remembered_frame():

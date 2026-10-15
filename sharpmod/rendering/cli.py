@@ -640,7 +640,9 @@ def render(infile: str, outfile: str | None = None,
            loc: str | None = None,
            image_mode: str = PNG_IMAGE_HD,
            parcel: str = DEFAULT_RENDER_PARCEL,
-           locator_overlay: str | None = None) -> str:
+           locator_overlay: str | None = None,
+           view: dict | None = None, view_result: dict | None = None,
+           show_locator: bool = True) -> str:
     """Render ``infile`` to ``outfile`` and return the output path.
 
     Composes :class:`~sharppy.viz.SPCWindow.SPCWindow` with a real
@@ -669,9 +671,12 @@ def render(infile: str, outfile: str | None = None,
         ) from exc
     density_context = None
     density_context_entered = False
+    win = controller = None
+    previous_windows = None
 
     try:
         app = QApplication.instance() or QApplication(sys.argv)
+        previous_windows = set(app.topLevelWidgets())
         # Install the bundled fonts and force the custom family BEFORE any
         # widget is constructed (Requirement 15.2 / layout parity).
         install_font(app)
@@ -681,6 +686,10 @@ def render(infile: str, outfile: str | None = None,
         install_render_patches()
 
         prof_col, stn_id = decode(infile)
+        prof_col.setMeta("show_locator", show_locator)
+        if view is not None:
+            from sharpmod.rendering.interactive import apply_edits
+            apply_edits(prof_col, view["edits"])
 
         if model is not None:
             prof_col.setMeta("model", model)
@@ -708,7 +717,8 @@ def render(infile: str, outfile: str | None = None,
         # offline -- a slow map service must never stall a hodograph repaint --
         # so everything it draws has to be attached to the collection before
         # composing, never fetched from inside the paint.
-        _attach_render_locator_overlay(prof_col, locator_overlay)
+        if show_locator:
+            _attach_render_locator_overlay(prof_col, locator_overlay)
 
         # Construct every scientific panel's persistent bitmap cache at the
         # requested output density.  This context must begin before
@@ -756,6 +766,15 @@ def render(infile: str, outfile: str | None = None,
         for _ in range(6):
             app.processEvents()
 
+        if view is not None:
+            from sharpmod.rendering.interactive import configure_view
+            metadata = configure_view(win, view, app)
+            _apply_render_parcel(win, parcel)
+            for _ in range(3):
+                app.processEvents()
+            if view_result is not None:
+                view_result.update(metadata)
+
         # Atomic write: render to a temp file in the destination directory,
         # verify it is a non-empty image, then rename onto the destination.
         fd, tmp_path = tempfile.mkstemp(suffix=".png", dir=out_dir)
@@ -776,6 +795,15 @@ def render(infile: str, outfile: str | None = None,
     except Exception as exc:  # noqa: BLE001 - name the input in every failure
         raise RenderError(infile, str(exc), cause=exc)
     finally:
+        if previous_windows is not None:
+            if win is not None:
+                win.close()
+            # Upstream insets and menus include parentless widgets; release this render's roots.
+            for widget in set(app.topLevelWidgets()) - previous_windows:
+                if widget.parent() is None:
+                    widget.deleteLater()
+            QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+            app.processEvents()
         if density_context_entered:
             density_context.__exit__(None, None, None)
 

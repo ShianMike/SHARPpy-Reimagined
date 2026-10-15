@@ -1,0 +1,10 @@
+{
+  "code": "SOUNDING_FETCH_FAILED",
+  "message": "No provider could be reached for the 72357 at 2026-10-04 12Z sounding. Check the connection and try again.",
+  "retryable": true,
+  "context": {
+    "operation": "open_sounding",
+    "provider": "python-bridge",
+    "resource": "observed sounding 72357 at 2026-10-04T12:00:00Z"
+  }
+}

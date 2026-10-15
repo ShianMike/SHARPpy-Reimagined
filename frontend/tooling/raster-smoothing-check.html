@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Raster smoothing regression check</title>
+<style>
+  body { font: 16px system-ui; margin: 24px; background: #17191c; color: #eee; }
+  canvas { position: relative !important; display: block; width: 256px; height: 256px; }
+  pre { white-space: pre-wrap; }
+</style>
+<h1>Raster smoothing regression check</h1>
+<p>Real field shader: shape reconstruction, crisp palette boundaries, peaks, missing data, and display limits.</p>
+<pre id="result" role="status">Running…</pre>
+<div id="render"></div>
+<script type="module">
+  // Run with the frontend dev server: /tooling/raster-smoothing-check.html
+  import { Deck, OrthographicView, COORDINATE_SYSTEM } from "@deck.gl/core";
+  import { buildFieldLayers } from "../src/map/layers/rasterLayers.ts";
+  import { colourize } from "../src/map/field/colourize.ts";
+
+  const result = document.querySelector("#result");
+  const lines = [];
+  const assert = (ok, message) => { if (!ok) throw new Error(message); };
+  function scene(values, palette, scale = 1, offset = 0) {
+    const frame = { width: 8, height: 8, cells: Uint16Array.from(values), nodata: 65535, scale, offset,
+      bounds: { west: -4, south: -4, east: 4, north: 4 } };
+    return { field: { frame, palette, bounds: frame.bounds,
+      image: new ImageData(colourize(frame, palette), 8, 8) }, contours: null, contourSpec: null };
+  }
+  const palette = { stops: [[0, "#000000"], [700, "#ffffff"], [1400, "#ffffff"]],
+    units: "", stepped: true, floor: null, ceiling: null, ticks: [] };
+  const ramp = scene(Array.from({ length: 64 }, (_, i) => (i % 8 + Math.floor(i / 8)) * 100), palette);
+
+  async function render(context, mode, zoom, target = [0.23, 0.17, 0]) {
+    const canvas = document.createElement("canvas");
+    document.querySelector("#render").append(canvas);
+    const [field] = buildFieldLayers(context, { visible: true, opacity: 1, smoothing: mode === "smooth" });
+    const layer = field.clone({
+      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN, _imageCoordinateSystem: "default",
+      ...(mode === "linear" ? { textureParameters: { minFilter: "linear", magFilter: "linear", mipmapFilter: "none" } } : {}),
+    });
+    let deck, timeout, settled = false;
+    try {
+      return await new Promise((resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error(`${mode} ${2 ** zoom}× GPU render timed out`)), 10000);
+        deck = new Deck({
+          canvas, width: 256, height: 256, useDevicePixels: false,
+          views: new OrthographicView(), initialViewState: { target, zoom }, layers: [layer],
+          onError: reject,
+          onAfterRender: ({ gl }) => {
+            if (!settled) {
+              settled = true;
+              requestAnimationFrame(() => deck.redraw(true));
+              return;
+            }
+            const pixels = new Uint8Array(256 * 256 * 4);
+            gl.readPixels(0, 0, 256, 256, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+            if (!pixels.some((value, i) => i % 4 === 3 && value > 0)) return;
+            resolve(pixels);
+          },
+        });
+      });
+    } finally {
+      clearTimeout(timeout);
+      deck?.finalize(); canvas.remove();
+    }
+  }
+
+  try {
+    for (const zoom of [3, 5, 7]) {
+      const sharp = await render(ramp, "sharp", zoom);
+      const smooth = await render(ramp, "smooth", zoom);
+      const linear = await render(ramp, "linear", zoom);
+      let changed = 0, opaque = 0, smoothMixed = 0, linearMixed = 0;
+      for (let i = 0; i < sharp.length; i += 4) {
+        if (sharp[i + 3] !== 255 || smooth[i + 3] !== 255) continue;
+        opaque++;
+        if (Math.abs(sharp[i] - smooth[i]) > 64) changed++;
+        if (smooth[i] > 2 && smooth[i] < 253) smoothMixed++;
+        if (linear[i] > 2 && linear[i] < 253) linearMixed++;
+      }
+      assert(changed > opaque * 0.025, `${2 ** zoom}×: shape is still nearest-like (${changed}/${opaque})`);
+      assert(smoothMixed < linearMixed / 2, `${2 ** zoom}×: boundary is blurred (${smoothMixed} vs ${linearMixed})`);
+      lines.push(`PASS ${2 ** zoom}×: ${changed} shape pixels changed; ${smoothMixed} mixed edge pixels vs ${linearMixed} for color blur.`);
+      result.textContent = lines.join("\n");
+    }
+
+    const grayscale = { ...palette, stepped: false, stops: [[0, "#000000"], [1000, "#ffffff"]] };
+    const peak = scene(Array.from({ length: 64 }, (_, i) => i === 27 ? 600 : 200), grayscale);
+    const peakPixels = await render(peak, "smooth", 6);
+    const reds = peakPixels.filter((_, i) => i % 4 === 0);
+    assert(Math.max(...reds) <= 154 && Math.min(...reds) >= 49, "Interpolation overshot the 200–600 source range");
+    assert(Math.max(...reds) >= 149, "Smoothing erased the isolated peak");
+    lines.push("PASS: isolated peak retained, no range overshoot or ringing.");
+
+    const masked = scene(Array.from({ length: 64 }, (_, i) => i === 27 ? 65535 : 600), grayscale);
+    const maskSharp = await render(masked, "sharp", 5);
+    const maskSmooth = await render(masked, "smooth", 5);
+    for (let i = 0; i < maskSharp.length; i += 4) {
+      assert(maskSharp[i + 3] === maskSmooth[i + 3], "Smoothing filled or expanded missing data");
+      if (maskSmooth[i + 3] === 255) assert(Math.abs(maskSmooth[i] - 153) <= 1, "No-data sentinel contaminated neighboring values");
+    }
+    lines.push("PASS: missing data stays empty and cannot contaminate valid neighbors.");
+
+    const limits = { ...grayscale, stops: [[-10, "#000000"], [10, "#ffffff"]], floor: -2, ceiling: 2 };
+    const clipped = scene(Array.from({ length: 64 }, (_, i) => (i % 8) * 100), limits, 0.02, -7);
+    const clippedSharp = await render(clipped, "sharp", 5);
+    const clippedSmooth = await render(clipped, "smooth", 5);
+    for (const [mode, pixels] of [["sharp", clippedSharp], ["smooth", clippedSmooth]]) {
+      let drawn = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i + 3] === 0) continue;
+        drawn++;
+        const alpha = pixels[i + 3] / 255;
+        assert(pixels[i] >= 100 * alpha - 1 && pixels[i] <= 154 * alpha + 1,
+          `${mode}: scale, offset, or palette display limits were lost`);
+      }
+      assert(drawn > 1000 && drawn < 256 * 200, "Display limits did not clip the field");
+    }
+    lines.push("PASS: physical units, palette floor and ceiling apply after interpolation.");
+    result.textContent = lines.join("\n") + "\nPASS: all GPU checks completed.";
+  } catch (error) {
+    result.textContent = lines.join("\n") + `\nFAIL: ${error.message}`;
+    console.error(error);
+  }
+</script>
+</html>

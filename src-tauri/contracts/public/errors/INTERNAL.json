@@ -1,0 +1,8 @@
+{
+  "code": "INTERNAL",
+  "message": "Something went wrong in get_backend_health. Details are in the log.",
+  "retryable": false,
+  "context": {
+    "operation": "get_backend_health"
+  }
+}

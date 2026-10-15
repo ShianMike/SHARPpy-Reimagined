@@ -1,0 +1,10 @@
+{
+  "code": "METHOD_NOT_FOUND",
+  "message": "The installed sharpmod does not support get_station_catalog. Update sharpmod or the app so their versions match.",
+  "retryable": false,
+  "context": {
+    "operation": "get_station_catalog",
+    "provider": "python-bridge",
+    "resource": "bundled UWyo station catalogue"
+  }
+}

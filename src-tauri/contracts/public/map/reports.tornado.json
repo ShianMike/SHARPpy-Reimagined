@@ -1,0 +1,29 @@
+{
+  "validTime": "2026-10-04T21:00:00Z",
+  "windowS": 21600,
+  "windowLabel": "\u00b13 hours",
+  "hazardFilter": "tornado",
+  "totalCount": 4,
+  "shownCount": 1,
+  "subtitle": "1 storm report (Tornado) \u00b7 \u00b13 hours \u00b7 04 Oct 2100Z",
+  "validFrom": "2026-10-04T18:00:00Z",
+  "validTo": "2026-10-05T00:00:00Z",
+  "sourceUrl": "https://mesonet.agron.iastate.edu/example",
+  "attribution": "NWS Local Storm Reports via Iowa Environmental Mesonet",
+  "reports": [
+    {
+      "label": "Tornado",
+      "description": "Norman, Cleveland, OK\nEvent time: 04 Oct 1915Z\nSource: EMERGENCY MGR (report source)\nTornado reported\nIssuing office: NWS WFO OUN\nProvider: NWS Local Storm Reports via Iowa Environmental Mesonet",
+      "fill": "#E5342F",
+      "stroke": "#7F0000",
+      "radiusPx": 3.25,
+      "symbol": "triangle",
+      "caption": "TOR",
+      "significant": false,
+      "category": "t",
+      "valid": "2026-10-04T19:15:00Z",
+      "latitude": 35.2,
+      "longitude": -97.1
+    }
+  ]
+}

@@ -509,7 +509,7 @@ def _profile_columns(prof):
         raw = getattr(prof, name, None)
         if raw is None:
             raise BoxAnalysisError(f"sounding is missing its {name} column")
-        return np.ma.filled(np.ma.asarray(raw, dtype=float), -9999.0)
+        return np.ma.filled(np.asanyarray(raw, dtype=float), -9999.0)
 
     return tuple(
         column(name) for name in ("pres", "hght", "tmpc", "dwpc", "wdir", "wspd")

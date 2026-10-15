@@ -1,0 +1,42 @@
+{
+  "windows": [
+    {
+      "label": "\u00b11 hour",
+      "seconds": 7200
+    },
+    {
+      "label": "\u00b13 hours",
+      "seconds": 21600
+    },
+    {
+      "label": "\u00b16 hours",
+      "seconds": 43200
+    },
+    {
+      "label": "\u00b112 hours",
+      "seconds": 86400
+    }
+  ],
+  "filters": [
+    {
+      "key": "all",
+      "label": "All convective hazards"
+    },
+    {
+      "key": "tornado",
+      "label": "Tornado"
+    },
+    {
+      "key": "hail",
+      "label": "Hail"
+    },
+    {
+      "key": "wind",
+      "label": "Wind + wind damage"
+    },
+    {
+      "key": "significant",
+      "label": "Significant hail/wind"
+    }
+  ]
+}

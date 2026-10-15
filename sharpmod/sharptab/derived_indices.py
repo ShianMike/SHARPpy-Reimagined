@@ -166,21 +166,26 @@ def _mmp_linear_predictor(sp):
     agl = sp_interp.to_agl(sp, sp.hght)
     lowest_idx = np.where(np.asarray(agl) <= 1000.0)[0]
     highest_idx = np.where((np.asarray(agl) >= 6000.0) & (np.asarray(agl) < 10000.0))[0]
-    if len(lowest_idx) == 0 or len(highest_idx) == 0:
+    if len(lowest_idx) == 0 or len(highest_idx) == 0 or sp.wdir.count() == 0:
         return None
 
-    pbots = np.atleast_1d(sp_interp.pres(sp, sp.hght[lowest_idx]))
-    ptops = np.atleast_1d(sp_interp.pres(sp, sp.hght[highest_idx]))
+    pbots = np.ma.masked_invalid(
+        np.atleast_1d(sp_interp.pres(sp, sp.hght[lowest_idx]))).compressed()
+    ptops = np.ma.masked_invalid(
+        np.atleast_1d(sp_interp.pres(sp, sp.hght[highest_idx]))).compressed()
+    if not pbots.size or not ptops.size:
+        return None
+    lower_u, lower_v = sp_interp.components(sp, pbots)
+    upper_u, upper_v = sp_interp.components(sp, ptops)
 
     max_shear = None
-    for pbot in pbots:
-        for ptop in ptops:
-            u_shr, v_shr = sp_winds.wind_shear(sp, pbot=pbot, ptop=ptop)
-            mag = _api._finite_or_none(sp_utils.mag(u_shr, v_shr))
-            if mag is None:
-                continue
-            if max_shear is None or mag > max_shear:
-                max_shear = mag
+    # Reuse endpoint winds; reduce one upper layer at a time to keep storage linear.
+    for u_bot, v_bot in zip(np.atleast_1d(lower_u), np.atleast_1d(lower_v)):
+        magnitudes = np.ma.masked_invalid(
+            sp_utils.mag(upper_u - u_bot, upper_v - v_bot))
+        mag = _api._finite_or_none(np.ma.max(magnitudes))
+        if mag is not None and (max_shear is None or mag > max_shear):
+            max_shear = mag
     if max_shear is None:
         return None
     max_bulk_shear = float(sp_utils.KTS2MS(max_shear))  # m/s

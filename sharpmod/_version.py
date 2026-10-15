@@ -8,14 +8,14 @@
 #: check stay a plain string comparison -- ``sharpmod_rs.__version__`` is
 #: ``CARGO_PKG_VERSION`` verbatim, and a test asserts the two are equal.
 #:
-#: A pre-release has to be spelled with a hyphen (``2.0.0-beta1``) to stay legal
-#: in both, since Cargo rejects PEP 440's ``2.0.0b1`` while the built wheel
+#: A pre-release has to be spelled with a hyphen (``3.0.0-beta1``) to stay legal
+#: in both, since Cargo rejects PEP 440's ``3.0.0b1`` while the built wheel
 #: normalizes the hyphenated form back to it -- which is why the metadata check
 #: compares parsed versions rather than strings.
 #:
 #: Bumping this requires bumping ``rust/sharpmod-rs/Cargo.toml``,
 #: ``rust/sharpmod-rs/Cargo.lock``, ``rust/sharpmod-rs/pyproject.toml``, and the
-#: default tag in ``.github/workflows/release.yml`` in lockstep; the release
-#: workflow refuses to publish when the four disagree or when the tag is not
-#: ``v`` + this value.
-__version__ = "2.0.0"
+#: frontend and Tauri package manifests and locks in lockstep, along with the
+#: default tag in ``.github/workflows/release.yml``. Versioning tests check these
+#: surfaces; release validation requires the tag to equal ``v`` + this value.
+__version__ = "3.0.0"

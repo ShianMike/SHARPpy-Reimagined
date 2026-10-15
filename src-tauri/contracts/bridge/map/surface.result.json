@@ -1,0 +1,114 @@
+{
+  "valid_time": "2026-10-04T21:00:00Z",
+  "counts": {
+    "matched": 4,
+    "stale": 1,
+    "no_observation": 1,
+    "failed": 1,
+    "nearby": 6,
+    "queried": 6,
+    "unqueried": 0
+  },
+  "plots": [
+    {
+      "id": "KOUN",
+      "longitude": -97.4,
+      "latitude": 35.2,
+      "valid": "2026-10-04T21:00:00Z",
+      "offset_min": 0.0,
+      "stale": false,
+      "availability": "available",
+      "wind_state": "available",
+      "staff": {
+        "angle_deg": 180.0,
+        "pennants": 0,
+        "barbs": 2,
+        "halves": 0
+      },
+      "upper_text": "22",
+      "lower_text": "12",
+      "label": "KOUN \u2014 Norman",
+      "description": "Observed 2026-10-04 21:00:00Z (+0 min from requested)\nTemperature 21.5 \u00b0C; dewpoint 12.2 \u00b0C; wind 270\u00b0 at 20 kt, gusting 28 kt\nSource: NOAA/NWS API station observation"
+    },
+    {
+      "id": "KOKC",
+      "longitude": -97.6,
+      "latitude": 35.4,
+      "valid": "2026-10-04T21:00:00Z",
+      "offset_min": 0.0,
+      "stale": false,
+      "availability": "available",
+      "wind_state": "calm",
+      "staff": null,
+      "upper_text": "18",
+      "lower_text": "10",
+      "label": "KOKC \u2014 Oklahoma City",
+      "description": "Observed 2026-10-04 21:00:00Z (+0 min from requested)\nTemperature 18.0 \u00b0C; dewpoint 10.0 \u00b0C; wind calm (0 kt)\nSource: NOAA/NWS API station observation"
+    },
+    {
+      "id": "KSPS",
+      "longitude": -98.5,
+      "latitude": 33.9,
+      "valid": "2026-10-04T21:00:00Z",
+      "offset_min": 0.0,
+      "stale": false,
+      "availability": "available",
+      "wind_state": "direction-missing",
+      "staff": null,
+      "upper_text": "33",
+      "lower_text": "20",
+      "label": "KSPS \u2014 Wichita Falls",
+      "description": "Observed 2026-10-04 21:00:00Z (+0 min from requested)\nTemperature 33.0 \u00b0C; dewpoint 20.0 \u00b0C; wind 12 kt; direction missing\nSource: NOAA/NWS API station observation"
+    },
+    {
+      "id": "KSWA",
+      "longitude": -97.4,
+      "latitude": 37.6,
+      "valid": "2026-10-04T20:15:00Z",
+      "offset_min": -45.0,
+      "stale": true,
+      "availability": "available",
+      "wind_state": "available",
+      "staff": {
+        "angle_deg": 90.0,
+        "pennants": 0,
+        "barbs": 1,
+        "halves": 0
+      },
+      "upper_text": "26",
+      "lower_text": "9",
+      "label": "KSWA \u2014 Wichita",
+      "description": "Observed 2026-10-04 20:15:00Z (-45 min from requested)\nTemperature 26.0 \u00b0C; dewpoint 9.0 \u00b0C; wind 180\u00b0 at 8 kt\nSource: NOAA/NWS API station observation\nStale/mismatched: more than 30 minutes from requested time"
+    },
+    {
+      "id": "KHBR",
+      "longitude": -99.0,
+      "latitude": 35.0,
+      "valid": null,
+      "offset_min": null,
+      "stale": false,
+      "availability": "unavailable",
+      "wind_state": "missing",
+      "staff": null,
+      "upper_text": "\u2014",
+      "lower_text": "\u2014",
+      "label": "KHBR \u2014 no observation",
+      "description": "No observation was available within \u00b160 minutes of the requested 2026-10-04 21:00Z.\nSource: NOAA/NWS API station catalogue"
+    },
+    {
+      "id": "KFOO",
+      "longitude": -97.0,
+      "latitude": 34.0,
+      "valid": null,
+      "offset_min": null,
+      "stale": false,
+      "availability": "unknown",
+      "wind_state": "missing",
+      "staff": null,
+      "upper_text": "\u2014",
+      "lower_text": "\u2014",
+      "label": "KFOO \u2014 query failed",
+      "description": "The station query failed; observation availability is unknown.\nSource: NOAA/NWS API station catalogue"
+    }
+  ]
+}

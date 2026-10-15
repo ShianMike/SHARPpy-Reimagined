@@ -1,0 +1,57 @@
+{
+  "stations": [
+    {
+      "id": "03023",
+      "name": "",
+      "latitude": 57.3575,
+      "longitude": -7.385,
+      "source": "BUFR",
+      "availability": "unknown"
+    },
+    {
+      "id": "323306",
+      "name": "AF306 dropsonde #23",
+      "latitude": 28.4,
+      "longitude": -86.8,
+      "source": "FM37",
+      "availability": "unknown"
+    },
+    {
+      "id": "61998",
+      "name": "Port-Aux-Francais (Iles Kerguelen), Ocean Islands",
+      "latitude": -49.35131,
+      "longitude": 70.24138,
+      "source": "BUFR",
+      "availability": "unknown"
+    },
+    {
+      "id": "66160",
+      "name": "Luanda, Angola",
+      "latitude": -8.85973,
+      "longitude": 13.2258,
+      "source": "BUFR",
+      "availability": "unknown"
+    },
+    {
+      "id": "72357",
+      "name": "Norman/Max Westheimer A, Ok., Usa",
+      "latitude": 35.18095,
+      "longitude": -97.43787,
+      "source": "FM35",
+      "availability": "unknown"
+    },
+    {
+      "id": "73111",
+      "name": "Stationid\n73111    Kapuskasing\n73111    Kapuskasing\nName: Name, Dtype: Str, Stationid\n73111    Ca\n73111    Ca\nName: Country, Dtype: Str",
+      "latitude": 49.4049,
+      "longitude": -82.44292,
+      "source": "BUFR",
+      "availability": "unknown"
+    }
+  ],
+  "origin": "bundled",
+  "availabilityBasis": {
+    "kind": "catalogOnly"
+  },
+  "droppedCount": 0
+}

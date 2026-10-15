@@ -1,0 +1,156 @@
+[
+  {
+    "backend": "python-public",
+    "scenario": "profile-batch-8x32",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      1.0851579000000129,
+      1.0102434999998877,
+      1.0310280999992756
+    ]
+  },
+  {
+    "backend": "rust-serial",
+    "scenario": "profile-batch-8x32",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.004589000000123633,
+      0.004201900000225578,
+      0.004231400000207941
+    ]
+  },
+  {
+    "backend": "rust-parallel-4",
+    "scenario": "profile-batch-8x32",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.0028512999997474253,
+      0.0023951999992277706,
+      0.0022625999999945634
+    ]
+  },
+  {
+    "backend": "rust-default",
+    "scenario": "profile-batch-8x32",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.0015694999992774683,
+      0.0015590000002703164,
+      0.001734999999825959
+    ]
+  },
+  {
+    "backend": "rust-native-serial",
+    "scenario": "profile-batch-8x32",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.003994400000010501,
+      0.004363099999864062,
+      0.0062864000001354725
+    ]
+  },
+  {
+    "backend": "rust-native-parallel-4",
+    "scenario": "profile-batch-8x32",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.0022908999999344815,
+      0.0025623999999879743,
+      0.0026182999999946333
+    ]
+  },
+  {
+    "backend": "rust-native-default",
+    "scenario": "profile-batch-8x32",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.0012915999996039318,
+      0.0013566999996328377,
+      0.001774700000169105
+    ]
+  },
+  {
+    "backend": "python-public",
+    "scenario": "profile-batch-32x128",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      12.391403800000262,
+      11.624203599999419,
+      12.865570699999807
+    ]
+  },
+  {
+    "backend": "rust-serial",
+    "scenario": "profile-batch-32x128",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.060695400000440713,
+      0.05748200000016368,
+      0.05679039999995439
+    ]
+  },
+  {
+    "backend": "rust-parallel-4",
+    "scenario": "profile-batch-32x128",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.022007399999893096,
+      0.02131069999995816,
+      0.023061699999743723
+    ]
+  },
+  {
+    "backend": "rust-default",
+    "scenario": "profile-batch-32x128",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.013608100000055856,
+      0.011851299999761977,
+      0.012086800000361109
+    ]
+  },
+  {
+    "backend": "rust-native-serial",
+    "scenario": "profile-batch-32x128",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.061960300000464485,
+      0.06382620000022143,
+      0.057479300000522926
+    ]
+  },
+  {
+    "backend": "rust-native-parallel-4",
+    "scenario": "profile-batch-32x128",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.021592000000055123,
+      0.02109030000065104,
+      0.020908099999360275
+    ]
+  },
+  {
+    "backend": "rust-native-default",
+    "scenario": "profile-batch-32x128",
+    "operation": "profile_batch_analysis",
+    "calls": 1,
+    "samples": [
+      0.011695500000314496,
+      0.011523299999680603,
+      0.011370899999747053
+    ]
+  }
+]

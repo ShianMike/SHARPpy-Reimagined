@@ -1,0 +1,51 @@
+/*
+ * The glass class family (DESIGN-frontend F7). The only file that names the
+ * backdrop property (boundary rule 4). components/GlassSurface.tsx is the only
+ * component that applies these classes; values come from tokens.css.
+ */
+
+:where(.glass, [data-material="glass"]) {
+  --glass-elevation: var(--shadow-floating);
+  background: var(--glass-sheen), var(--glass-fill);
+  /* Prefixed first: Lightning CSS keeps both only in this order (it drops the
+     standard declaration when the prefixed one follows it). */
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: var(--hairline) solid var(--glass-border);
+  box-shadow: var(--glass-highlight), var(--glass-elevation);
+  color: var(--text-primary);
+  border-radius: var(--radius-lg);
+}
+
+.glass--chrome {
+  --glass-elevation: var(--shadow-chrome);
+}
+
+.glass--floating {
+  --glass-elevation: var(--shadow-floating);
+}
+
+.glass--popover {
+  --glass-elevation: var(--shadow-popover);
+}
+
+/* No backdrop support: opaque surfaces. The condition holds no length (rule 2). */
+@supports not ((backdrop-filter: none) or (-webkit-backdrop-filter: none)) {
+  :root[data-graphics-profile] {
+    --glass-fill: var(--surface-1);
+    --glass-filter: none;
+  }
+}
+
+[data-material="glass"][data-elevation="popover"] { --glass-elevation: var(--shadow-popover); }
+
+/* A sheet is one glass surface; its contents do not blur each other. */
+[data-material="glass"] [data-material="glass"] {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+}
+
+dialog[data-material="glass"]::backdrop { background: var(--scrim); }

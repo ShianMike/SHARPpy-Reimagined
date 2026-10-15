@@ -233,9 +233,15 @@ _CONFIGS = (
         grid_spacing_km=5.0,
         notes="NOAA HiResW ARW 5-km pressure-level grids, 00Z/12Z"),
     ModelConfig(
-        "hrw-fv3", "HRW FV3", "hiresw", "fv3_5km",
+        "hrw-wrf-nssl", "HRW WRF-NSSL", "hiresw", "arw_5km",
         cycles=(0, 12),
         fxx_values=_hours(48), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        kwargs={"member": 2}, grid_spacing_km=5.0,
+        notes="NOAA HiResW ARW member 2 (NSSL), 5-km grids, 00Z/12Z"),
+    ModelConfig(
+        "hrw-fv3", "HRW FV3", "hiresw", "fv3_5km",
+        cycles=(0, 12),
+        fxx_values=_hours(60), domain="CONUS", domain_bounds=CONUS_DOMAIN,
         grid_spacing_km=5.0,
         notes="NOAA HiResW FV3 5-km pressure-level grids, 00Z/12Z"),
     # RRFS bypasses Herbie entirely; see rrfs_nomads and DIRECT_GRIB_KEYS.
@@ -285,6 +291,15 @@ _CONFIGS = (
         fxx_values=_gfs_hours(),
         grid_spacing_km=27.8,
         notes="0.25-degree GFS pressure-level forecast grids"),
+    *(ModelConfig(
+        f"refs-m{member}", f"REFSm{member}", "rrfs", "prslevnomads",
+        cycles=RRFS_CYCLES, fxx_values=_hours(60),
+        domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        kwargs={"domain": "conus", "member": member}, grid_spacing_km=3.0,
+        notes=(f"NOAA REFS fixed member {member}, 3-km CONUS; "
+               "14 pressure levels to 250 hPa plus verified surface; "
+               "hourly to F060, no VVEL published"),
+    ) for member in range(1, 6)),
     ModelConfig(
         "aigfs", "AIGFS", "aigfs", "pres",
         fxx_values=_hours(384, 6),
@@ -323,6 +338,15 @@ _CONFIGS = (
         # the label shown beside it.
         grid_spacing_km=11.0,
         notes=openmeteo.CAPABILITIES["openmeteo-icon-global"].notes),
+    ModelConfig(
+        "openmeteo-ecmwf-ifs025",
+        openmeteo.CAPABILITIES["openmeteo-ecmwf-ifs025"].label,
+        "openmeteo-ecmwf-ifs025", "open-meteo-point",
+        cycles=openmeteo.CAPABILITIES["openmeteo-ecmwf-ifs025"].cycles,
+        fxx_values=openmeteo.CAPABILITIES[
+            "openmeteo-ecmwf-ifs025"].forecast_hours,
+        grid_spacing_km=27.8,
+        notes=openmeteo.CAPABILITIES["openmeteo-ecmwf-ifs025"].notes),
     ModelConfig(
         "gefs", "GEFS", "gefs", "atmos.5",
         fxx_values=_hours(384, 3),
@@ -582,7 +606,7 @@ def unsupported_models():
 def get_config(model):
     """Resolve a model key/alias to a :class:`ModelConfig`."""
     key = str(model).strip().lower()
-    canonical = _ALIASES.get(key)
+    canonical = _ALIASES.get(key, key if key in _CONFIG_BY_KEY else None)
     if canonical is None:
         # Consult the merged map, not just this module's dict. ``--list`` prints
         # the Open-Meteo adapter's withheld keys under "known but not enabled",

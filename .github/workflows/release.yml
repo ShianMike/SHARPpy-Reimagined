@@ -7,9 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v2.0.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v3.0.0). Created if it does not exist."
         required: true
-        default: "v2.0.0"
+        default: "v3.0.0"
+      publish_release:
+        description: "Publish after verification; leave off to build a release candidate only."
+        required: true
+        type: boolean
+        default: false
 
 # Build and test jobs have no repository write permission. A dedicated job can
 # write only provenance attestations, and only the isolated publish job can
@@ -94,6 +99,7 @@ jobs:
         run: |
           python - <<'PY'
           import os
+          import json
           from pathlib import Path
           import re
           import tomllib
@@ -128,12 +134,21 @@ jobs:
                   "Cargo.lock must contain exactly one sharpmod-rs package"
               )
           lock_version = lock_packages[0]["version"]
+          desktop_lock = [package for package in tomllib.loads(
+              (root / "src-tauri/Cargo.lock").read_text(encoding="utf-8")
+          )["package"] if package.get("name") == "sharppy-reimagined"]
+          if len(desktop_lock) != 1:
+              raise SystemExit("Cargo.lock must contain exactly one desktop package")
 
           versions = {
               "sharpmod/_version.py": python_version,
               "rust/sharpmod-rs/Cargo.toml": cargo_version,
               "rust/sharpmod-rs/pyproject.toml": maturin_version,
               "rust/sharpmod-rs/Cargo.lock": lock_version,
+              "frontend/package.json": json.loads((root / "frontend/package.json").read_text())["version"],
+              "frontend/package-lock.json": json.loads((root / "frontend/package-lock.json").read_text())["packages"][""]["version"],
+              "src-tauri/Cargo.toml": tomllib.loads((root / "src-tauri/Cargo.toml").read_text())["package"]["version"],
+              "src-tauri/Cargo.lock": desktop_lock[0]["version"],
           }
           if len(set(versions.values())) != 1:
               raise SystemExit(f"release source versions do not match: {versions}")
@@ -158,11 +173,18 @@ jobs:
       run_live_providers: false
       run_serial_release: true
 
+  test-desktop:
+    name: Test exact desktop release source
+    needs: resolve-release
+    uses: ./.github/workflows/frontend.yml
+    with:
+      ref: ${{ needs.resolve-release.outputs.source_sha }}
+
   build-windows-exe:
     name: Build Windows downloads
     # Build executables only after the exact release source passes every test
     # lane. A failed gate must not spend runner time producing unusable binaries.
-    needs: [resolve-release, test-release]
+    needs: [resolve-release, test-release, test-desktop]
     runs-on: windows-latest
     timeout-minutes: 120
     permissions:
@@ -292,26 +314,24 @@ jobs:
       - name: Generate application icon
         run: python packaging/make_icon.py
 
-      - name: Build one-folder executable
-        run: pyinstaller packaging/sharpmod_gui.spec --noconfirm
-
-      - name: Build portable single-file executable
+      - name: Build one-folder desktop backend
         env:
-          SHARPMOD_ONEFILE: "1"
+          SHARPMOD_DESKTOP_BACKEND: "1"
+          SHARPMOD_ONEFILE: "0"
         run: pyinstaller packaging/sharpmod_gui.spec --noconfirm
 
-      - name: Verify recommended one-folder artifact
+      - name: Verify bundled scientific backend
         shell: pwsh
         run: |
           $expectedVersion = (& python -c "from sharpmod._version import __version__; print(__version__)").Trim()
           & "packaging/verify_windows_artifact.ps1" `
-            -Executable "dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe" `
+            -Executable "dist/sharppy-backend/sharppy-backend.exe" `
             -ExpectedVersion $expectedVersion
           $report = Join-Path $env:RUNNER_TEMP "model-fetch-runtime.json"
           $process = Start-Process `
-            -FilePath "dist/SHARPpy-Reimagined/SHARPpy-Reimagined.exe" `
+            -FilePath "dist/sharppy-backend/sharppy-backend.exe" `
             -ArgumentList "--model-fetch-runtime-check", $report `
-            -Wait -PassThru
+            -WindowStyle Hidden -Wait -PassThru
           if ($process.ExitCode -ne 0) {
             if (Test-Path $report) { Get-Content $report }
             throw "Frozen model-fetch runtime check failed"
@@ -337,42 +357,21 @@ jobs:
           }
           $result | ConvertTo-Json -Depth 5
 
-      - name: Verify portable single-file artifact
+      - name: Set up Node for the desktop shell
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: "24.12.0", cache: npm, cache-dependency-path: frontend/package-lock.json }
+
+      - name: Set up Rust stable for Tauri
+        run: rustup update stable --no-self-update && rustup default stable
+
+      - name: Build desktop shell and Windows installer
+        working-directory: frontend
         shell: pwsh
         run: |
-          $expectedVersion = (& python -c "from sharpmod._version import __version__; print(__version__)").Trim()
-          & "packaging/verify_windows_artifact.ps1" `
-            -Executable "dist/SHARPpy-Reimagined.exe" `
-            -ExpectedVersion $expectedVersion
-          $report = Join-Path $env:RUNNER_TEMP "single-file-runtime.json"
-          $process = Start-Process `
-            -FilePath "dist/SHARPpy-Reimagined.exe" `
-            -ArgumentList "--model-fetch-runtime-check", $report `
-            -Wait -PassThru
-          if ($process.ExitCode -ne 0) {
-            if (Test-Path $report) { Get-Content $report }
-            throw "Frozen single-file runtime check failed"
-          }
-          $result = Get-Content $report -Raw | ConvertFrom-Json
-          if (-not $result.ok -or -not $result.version_consistent -or `
-              $result.versions.sharpmod -ne $expectedVersion -or `
-              [string]::IsNullOrWhiteSpace([string]$result.versions.sharpmod_metadata) -or `
-              $result.versions.sharpmod_rs -ne $expectedVersion -or `
-              [string]::IsNullOrWhiteSpace([string]$result.versions.sharpmod_rs_metadata) -or `
-              $result.versions.backend_rust -ne $expectedVersion -or `
-              -not $result.backend_kernel_ok -or `
-              -not $result.wrf_runtime_ok -or `
-              $result.backend.requested_backend -ne "rust" -or `
-              $result.backend.active_backend -ne "rust" -or `
-              -not $result.backend.rust_installed -or `
-              [string]::IsNullOrWhiteSpace([string]$result.backend.rust_version) -or `
-              $null -ne $result.backend.fallback_reason -or `
-              $result.configured_models -lt 1 -or `
-              -not $result.logging_handlers -or -not $result.gui_entrypoint) {
-            $result | ConvertTo-Json -Depth 5
-            throw "Frozen single-file runtime report is invalid"
-          }
-          $result | ConvertTo-Json -Depth 5
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw "Frontend dependency install failed" }
+          npm run tauri -- build --config src-tauri/tauri.release.conf.json --bundles nsis
+          if ($LASTEXITCODE -ne 0) { throw "Desktop installer build failed" }
 
       - name: Stage clearly labeled release artifacts
         shell: pwsh
@@ -381,55 +380,60 @@ jobs:
           RELEASE_SOURCE_SHA: ${{ needs.resolve-release.outputs.source_sha }}
         run: |
           New-Item -ItemType Directory -Path "release-artifacts" -Force | Out-Null
-          New-Item -ItemType Directory -Path "release-staging" -Force | Out-Null
-          Copy-Item -LiteralPath "dist/SHARPpy-Reimagined" `
-            -Destination "release-staging/SHARPpy-Reimagined" -Recurse
-
-          $recommendedName = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip"
-          $portableName = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64-portable.exe"
+          New-Item -ItemType Directory -Path "release-staging/SHARPpy-Reimagined" -Force | Out-Null
+          Copy-Item -LiteralPath "src-tauri/target/release/sharppy-reimagined.exe" `
+            -Destination "release-staging/SHARPpy-Reimagined/SHARPpy-Reimagined.exe"
+          Copy-Item -LiteralPath "dist/sharppy-backend" `
+            -Destination "release-staging/SHARPpy-Reimagined/backend" -Recurse
           @"
           SHARPpy Reimagined $env:RELEASE_TAG for Windows x64
 
-          This one-folder package is the recommended Windows download because it starts
-          substantially faster than the self-extracting portable executable.
+          Extract the entire folder and run SHARPpy-Reimagined.exe. Keep its backend
+          folder beside it. Python is bundled; a separate installation is not needed.
+          The setup executable installs the same desktop interface and backend.
 
-          Extract the entire SHARPpy-Reimagined folder, keep its _internal directory
-          beside the executable, and run SHARPpy-Reimagined.exe.
-
-          These executables are not code-signed, so Windows SmartScreen may warn on
-          first launch. Verify the download against the published SHA256SUMS file.
-          "@ | Set-Content -Encoding utf8 `
-            "release-staging/SHARPpy-Reimagined/README-WINDOWS.txt"
-          Compress-Archive -Path "release-staging/SHARPpy-Reimagined" `
-            -DestinationPath "release-artifacts/$recommendedName" -Force
-          Copy-Item "dist/SHARPpy-Reimagined.exe" `
-            "release-artifacts/$portableName"
+          Legacy GUI: https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0
+          Verify the download against the published SHA256SUMS file.
+          "@ | Set-Content -Encoding utf8 "release-staging/SHARPpy-Reimagined/README-WINDOWS.txt"
+          $installer = @(Get-ChildItem -LiteralPath "src-tauri/target/release/bundle/nsis" -Filter '*.exe' -File)
+          if ($installer.Count -ne 1) { throw "Expected exactly one desktop installer" }
+          $setupName = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64-setup.exe"
+          Copy-Item -LiteralPath $installer[0].FullName -Destination "release-artifacts/$setupName"
           Copy-Item "rust/sharpmod-rs/dist/*.whl" "release-artifacts/"
-          python -m pip freeze --all |
-            Set-Content -Encoding utf8 `
-              "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-dependencies.txt"
-
-          $sourceVersion = (& python -c "from sharpmod._version import __version__; print(__version__)").Trim()
+          python -m pip freeze --all | Set-Content -Encoding utf8 `
+            "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-dependencies.txt"
           [ordered]@{
             product = "SHARPpy Reimagined"
-            version = $sourceVersion
+            version = $env:RELEASE_TAG.TrimStart('v')
             source_sha = $env:RELEASE_SOURCE_SHA
-            recommended_artifact = $recommendedName
-            portable_artifact = $portableName
-            portable_note = "Self-extracting convenience build; slower startup than the recommended one-folder ZIP."
+            interface = "Tauri"
+            recommended_artifact = $setupName
+            portable_artifact = "SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip"
+            legacy_url = "https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0"
           } | ConvertTo-Json | Set-Content -Encoding utf8 `
             "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-manifest.json"
 
-          $checksumLines = @(
-            Get-ChildItem -LiteralPath "release-artifacts" -File |
-              Sort-Object Name |
-              ForEach-Object {
-                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-                "$hash  $($_.Name)"
-              }
-          )
-          $checksumLines | Set-Content -Encoding ascii `
-            "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-SHA256SUMS.txt"
+      - name: Verify packaged desktop import and rendering
+        shell: pwsh
+        run: |
+          $version = (& python -c "from sharpmod._version import __version__; print(__version__)").Trim()
+          & packaging/verify_desktop_artifact.ps1 `
+            -Executable "release-staging/SHARPpy-Reimagined/SHARPpy-Reimagined.exe" `
+            -ExpectedVersion $version `
+            -Sample "examples/soundings/hrrr_point_36.68N_95.66W_f018.npz" `
+            -Report "$env:RUNNER_TEMP/desktop-runtime.json"
+
+      - name: Archive verified desktop and write checksums
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
+        run: |
+          Compress-Archive -Path "release-staging/SHARPpy-Reimagined" `
+            -DestinationPath "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip" -Force
+          Get-ChildItem -LiteralPath "release-artifacts" -File | Where-Object Name -NotLike '*-SHA256SUMS.txt' | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content -Encoding ascii "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-SHA256SUMS.txt"
 
       - name: Upload tested release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -452,7 +456,7 @@ jobs:
 
     steps:
       - name: Download tested release artifacts for attestation
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: windows-release-${{ needs.resolve-release.outputs.tag }}
           path: release-artifacts
@@ -463,6 +467,7 @@ jobs:
           subject-path: release-artifacts/*
 
   publish:
+    if: github.event_name == 'push' || inputs.publish_release
     name: Publish GitHub Release
     needs: [resolve-release, test-release, build-windows-exe, attest-windows-release]
     runs-on: ubuntu-latest
@@ -472,7 +477,7 @@ jobs:
 
     steps:
       - name: Download tested release artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: windows-release-${{ needs.resolve-release.outputs.tag }}
           path: release-artifacts
@@ -482,16 +487,18 @@ jobs:
         with:
           tag_name: ${{ needs.resolve-release.outputs.tag }}
           target_commitish: ${{ needs.resolve-release.outputs.source_sha }}
-          name: SHARPpy Reimagined ${{ needs.resolve-release.outputs.tag }}
+          name: SHARPpy Reimagined ${{ needs.resolve-release.outputs.tag }}${{ needs.resolve-release.outputs.tag == 'v2.0.0' && ' Legacy' || '' }}
           generate_release_notes: true
           body: |
-            **Recommended Windows download:** `SHARPpy-Reimagined-${{ needs.resolve-release.outputs.tag }}-windows-x64.zip`
+            **Recommended Windows download:** `SHARPpy-Reimagined-${{ needs.resolve-release.outputs.tag }}-windows-x64-setup.exe`
 
-            Extract the ZIP and run `SHARPpy-Reimagined.exe` inside its folder. This one-folder build starts substantially faster than the self-extracting portable executable.
+            Use the `setup.exe` to install the new desktop interface, or extract the ZIP and run `SHARPpy-Reimagined.exe`. Keep its `backend` folder beside it; Python and the scientific engine are included.
 
-            The file ending in `portable.exe` is retained for single-file convenience and starts more slowly because it self-extracts at launch.
+            The v3 downloads use the React/Tauri interface. The final old GUI remains available as v2.0.0 Legacy below.
 
             These executables are not code-signed, so Windows SmartScreen may warn on first launch. Check a download against the published `SHA256SUMS.txt`, and verify GitHub build provenance with `gh attestation verify PATH-TO-ASSET --repo ShianMike/SHARPpy-Reimagined`.
+
+            **Legacy GUI download:** [v2.0.0 Legacy](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0) is the final PySide6/Qt GUI release. Its original Windows ZIP and portable executable remain available there after newer releases are published.
           overwrite_files: true
           fail_on_unmatched_files: true
           files: release-artifacts/*

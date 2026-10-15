@@ -102,12 +102,23 @@ def colourize(field: np.ndarray, palette: Palette) -> np.ndarray:
     like convective inhibition needs -- its uninteresting values are the ones
     near zero, at the top of its scale.
     """
-    lut, low, high = _api.build_lut(palette)
-    span = high - low if high > low else 1.0
-    normalized = (field - low) / span
-    slot = np.clip(normalized, 0.0, 1.0) * (_api._LUT_SIZE - 1)
-    slot = np.nan_to_num(slot, nan=0.0, posinf=_api._LUT_SIZE - 1, neginf=0.0)
-    rgba = lut[slot.astype(np.uint16)]
+    low = float(palette.minimum)
+    if palette.stepped:
+        # A uniform LUT can skip narrow classes and shift their boundaries.
+        edges = np.asarray([value for value, _ in palette.stops])
+        colours = np.asarray(
+            [(*_api._hex_to_rgb(colour), 255) for _, colour in palette.stops],
+            dtype=np.uint8,
+        )
+        slot = np.clip(np.searchsorted(edges, field, side="right") - 1, 0, len(edges) - 1)
+        rgba = colours[slot]
+    else:
+        lut, low, high = _api.build_lut(palette)
+        span = high - low if high > low else 1.0
+        normalized = (field - low) / span
+        slot = np.clip(normalized, 0.0, 1.0) * (_api._LUT_SIZE - 1)
+        slot = np.nan_to_num(slot, nan=0.0, posinf=_api._LUT_SIZE - 1, neginf=0.0)
+        rgba = lut[slot.astype(np.uint16)]
 
     hidden = ~np.isfinite(field)
     hidden = hidden | (field < (low if palette.floor is None

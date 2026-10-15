@@ -109,10 +109,13 @@ Both backends expose the same named operations:
   the public Python API still exposes the existing immutable tuples.
 - `profile_batch_analysis` evaluates complete independent soundings in stable
   input order. Calls below eight profiles are serial; larger calls default to a
-  process-wide Rayon pool bounded by the available CPUs and four workers,
+  process-wide Rayon pool using all CPUs available to the process,
   remain serial when already inside Rayon, and accept explicit worker/cutoff
   overrides. Sharing the default pool keeps simultaneous GUI callers under the
-  same native thread ceiling.
+  same native thread ceiling. Batch inputs normalize their missing sentinel
+  during Rust's owned copy, avoiding a separate Python scan and temporary
+  array per column. Masks still become NaN at the Python boundary, and native
+  workers never borrow Python-owned input memory.
 - `decode_grib_point` and `decode_grib_points` reuse a bounded immutable message
   inventory, select the nearest point once per distinct grid definition, and
   return each sounding as one C-contiguous NumPy matrix. The multipoint form
@@ -322,7 +325,7 @@ construction. It also measures 32/128-level kinematics, diagnostics-only
 parcels, traced convective parcels, DCAPE, shared thermodynamic preparation,
 and complete 8-by-32 and 32-by-128 profile batches. Shared thermodynamics are
 split into public-adapter, buffered-adapter, and direct-native rows; complete
-batches split serial and bounded four-worker rows. An equal-work
+batches compare serial, four-worker, and all-available-CPU default rows. An equal-work
 sequential-versus-two-thread diagnostic remains observational:
 
 ```powershell

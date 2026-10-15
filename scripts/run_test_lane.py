@@ -84,7 +84,8 @@ LANES = {
         parallel=False,
         timeout_seconds=300,
         targets=(
-            "sharpmod/tests/test_gui_reanalysis_wrf.py",
+            "sharpmod/tests/test_wrf_workflow.py",
+            "sharpmod/tests/test_bridge_soundings.py",
             "sharpmod/tests/test_model_fetch_packaging.py",
         ),
     ),

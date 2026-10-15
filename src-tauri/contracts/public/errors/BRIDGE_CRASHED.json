@@ -1,0 +1,10 @@
+{
+  "code": "BRIDGE_CRASHED",
+  "message": "The Python backend stopped unexpectedly and is restarting.",
+  "retryable": true,
+  "context": {
+    "operation": "get_station_catalog",
+    "provider": "python-bridge",
+    "resource": "bundled UWyo station catalogue"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "code": "SOUNDING_NOT_FOUND",
+  "message": "This sounding is no longer open in the backend. Open it again.",
+  "retryable": false
+}

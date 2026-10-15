@@ -1,0 +1,650 @@
+{
+  "sounding_id": "0123456789abcdef",
+  "valid_time": "2026-06-26T00:00:00Z",
+  "watch_type": "PDS TOR",
+  "hazard": "tornado",
+  "parcel_table": {
+    "title": "Parcels",
+    "columns": [
+      {
+        "key": "cape",
+        "label": "CAPE",
+        "units": "J/kg",
+        "decimals": 0
+      },
+      {
+        "key": "cin",
+        "label": "CIN",
+        "units": "J/kg",
+        "decimals": 0
+      },
+      {
+        "key": "lcl",
+        "label": "LCL",
+        "units": "m AGL",
+        "decimals": 0
+      },
+      {
+        "key": "lfc",
+        "label": "LFC",
+        "units": "m AGL",
+        "decimals": 0
+      },
+      {
+        "key": "el",
+        "label": "EL",
+        "units": "m AGL",
+        "decimals": 0
+      },
+      {
+        "key": "li",
+        "label": "LI",
+        "units": "°C",
+        "decimals": 0
+      }
+    ],
+    "rows": [
+      {
+        "key": "sb",
+        "label": "Surface-based",
+        "short": "SFC",
+        "values": [
+          2989.407331801827,
+          -47.95863583765282,
+          478.0790074038539,
+          1299.1666564941406,
+          14178.594445309687,
+          -7.703690542320828
+        ]
+      },
+      {
+        "key": "ml",
+        "label": "Mixed-layer",
+        "short": "ML",
+        "values": [
+          2465.2614988156743,
+          -25.542259856360918,
+          976.4143467126064,
+          1556.0600891113281,
+          14178.594445309687,
+          -6.859388436669406
+        ]
+      },
+      {
+        "key": "mu",
+        "label": "Most-unstable",
+        "short": "MU",
+        "values": [
+          2989.407331801827,
+          -47.95863583765282,
+          478.0790074038539,
+          1299.1666564941406,
+          14178.594445309687,
+          -7.703690542320828
+        ]
+      },
+      {
+        "key": "fcst",
+        "label": "Forecast surface",
+        "short": "FCST",
+        "values": [
+          3451.4620362047367,
+          0.0,
+          1426.303632529733,
+          1426.303632529733,
+          14389.612702815166,
+          -8.447149224229804
+        ]
+      },
+      {
+        "key": "eff",
+        "label": "Effective inflow",
+        "short": "EFF",
+        "values": [
+          1610.726071272123,
+          -6.0583152697430585,
+          1646.8794698610302,
+          2088.874786376953,
+          13028.901641845703,
+          -5.36522584563221
+        ]
+      }
+    ]
+  },
+  "motion_table": {
+    "title": "Storm motion",
+    "columns": [
+      {
+        "key": "direction",
+        "label": "Direction",
+        "units": "°",
+        "decimals": 0
+      },
+      {
+        "key": "speed",
+        "label": "Speed",
+        "units": "kt",
+        "decimals": 0
+      }
+    ],
+    "rows": [
+      {
+        "key": "bunkers_right",
+        "label": "Bunkers right mover",
+        "short": "RM",
+        "values": [
+          274.94097945321533,
+          17.145589686022042
+        ]
+      },
+      {
+        "key": "bunkers_left",
+        "label": "Bunkers left mover",
+        "short": "LM",
+        "values": [
+          216.78384296724246,
+          34.30504373496907
+        ]
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "Instability",
+      "parameters": [
+        {
+          "key": "sbcape",
+          "label": "SBCAPE",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "high",
+          "value": 2989.407331801827
+        },
+        {
+          "key": "sbcin",
+          "label": "SBCIN",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "low",
+          "value": -47.95863583765282
+        },
+        {
+          "key": "mlcape",
+          "label": "MLCAPE",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "high",
+          "value": 2465.2614988156743
+        },
+        {
+          "key": "mlcin",
+          "label": "MLCIN",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "low",
+          "value": -25.542259856360918
+        },
+        {
+          "key": "mucape",
+          "label": "MUCAPE",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "high",
+          "value": 2989.407331801827
+        },
+        {
+          "key": "mucin",
+          "label": "MUCIN",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "low",
+          "value": -47.95863583765282
+        },
+        {
+          "key": "mucape_3km",
+          "label": "MUCAPE 0-3 km",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "high",
+          "value": 124.73923526240308
+        },
+        {
+          "key": "mucape_6km",
+          "label": "MUCAPE 0-6 km",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "high",
+          "value": 846.9884763326094
+        },
+        {
+          "key": "eff_cape",
+          "label": "Effective CAPE",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "high",
+          "value": 1610.726071272123
+        },
+        {
+          "key": "eff_cin",
+          "label": "Effective CIN",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "low",
+          "value": -6.0583152697430585
+        },
+        {
+          "key": "dcape",
+          "label": "DCAPE",
+          "units": "J/kg",
+          "decimals": 0,
+          "notable": "high",
+          "value": 613.3326779306293
+        },
+        {
+          "key": "downrush_t",
+          "label": "Downrush T",
+          "units": "°C",
+          "decimals": 1,
+          "notable": "high",
+          "value": 19.550980259598248
+        }
+      ]
+    },
+    {
+      "name": "Parcel heights",
+      "parameters": [
+        {
+          "key": "ml_lcl",
+          "label": "ML LCL",
+          "units": "m AGL",
+          "decimals": 0,
+          "notable": "low",
+          "value": 976.4143467126064
+        },
+        {
+          "key": "ml_lfc",
+          "label": "ML LFC",
+          "units": "m AGL",
+          "decimals": 0,
+          "notable": "low",
+          "value": 1556.0600891113281
+        },
+        {
+          "key": "mu_el",
+          "label": "MU EL",
+          "units": "m AGL",
+          "decimals": 0,
+          "notable": "high",
+          "value": 14178.594445309687
+        },
+        {
+          "key": "sb_lcl",
+          "label": "SB LCL",
+          "units": "m AGL",
+          "decimals": 0,
+          "notable": "low",
+          "value": 478.0790074038539
+        },
+        {
+          "key": "eff_inflow_base",
+          "label": "Eff inflow base",
+          "units": "hPa",
+          "decimals": 0,
+          "notable": "high",
+          "value": 985.8
+        },
+        {
+          "key": "eff_inflow_top",
+          "label": "Eff inflow top",
+          "units": "hPa",
+          "decimals": 0,
+          "notable": "low",
+          "value": 700.0
+        }
+      ]
+    },
+    {
+      "name": "Kinematics",
+      "parameters": [
+        {
+          "key": "shear_1km",
+          "label": "0-1 km shear",
+          "units": "kt",
+          "decimals": 0,
+          "notable": "high",
+          "value": 28.48067906826319
+        },
+        {
+          "key": "shear_3km",
+          "label": "0-3 km shear",
+          "units": "kt",
+          "decimals": 0,
+          "notable": "high",
+          "value": 27.235096021156117
+        },
+        {
+          "key": "shear_6km",
+          "label": "0-6 km shear",
+          "units": "kt",
+          "decimals": 0,
+          "notable": "high",
+          "value": 47.36727991421492
+        },
+        {
+          "key": "shear_8km",
+          "label": "0-8 km shear",
+          "units": "kt",
+          "decimals": 0,
+          "notable": "high",
+          "value": 53.50859635238058
+        },
+        {
+          "key": "srh_1km",
+          "label": "0-1 km SRH",
+          "units": "m²/s²",
+          "decimals": 0,
+          "notable": "high",
+          "value": 204.97500750681417
+        },
+        {
+          "key": "srh_3km",
+          "label": "0-3 km SRH",
+          "units": "m²/s²",
+          "decimals": 0,
+          "notable": "high",
+          "value": 341.90367751655054
+        },
+        {
+          "key": "mean_wind_6km",
+          "label": "0-6 km mean wind",
+          "units": "kt",
+          "decimals": 0,
+          "notable": "high",
+          "value": 20.84604215772815
+        },
+        {
+          "key": "storm_motion_r",
+          "label": "Bunkers right",
+          "units": "kt",
+          "decimals": 1,
+          "notable": "high",
+          "value": 14.573732969938211
+        }
+      ]
+    },
+    {
+      "name": "Composites",
+      "parameters": [
+        {
+          "key": "stp_cin",
+          "label": "STP (CIN)",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 5.163728075810338
+        },
+        {
+          "key": "stp_fixed",
+          "label": "STP (fixed)",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 3.638147343040254
+        },
+        {
+          "key": "scp",
+          "label": "Supercell composite",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 21.219042994097173
+        },
+        {
+          "key": "ship",
+          "label": "SHIP",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 1.1018968673670784
+        },
+        {
+          "key": "sig_severe",
+          "label": "Sig severe",
+          "units": "m³/s³",
+          "decimals": 0,
+          "notable": "high",
+          "value": 60073.02991319423
+        },
+        {
+          "key": "mmp",
+          "label": "MCS maintenance",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 0.9999999994138533
+        },
+        {
+          "key": "wndg",
+          "label": "Wind damage",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 0.0
+        },
+        {
+          "key": "esp",
+          "label": "Enhanced stretching",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 0.0
+        },
+        {
+          "key": "sherbe",
+          "label": "SHERBE",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 1.4721391649561237
+        },
+        {
+          "key": "esrh",
+          "label": "Effective SRH",
+          "units": "m²/s²",
+          "decimals": 0,
+          "notable": "high",
+          "value": 354.9039155731564
+        },
+        {
+          "key": "ebwd",
+          "label": "Effective shear",
+          "units": "kt",
+          "decimals": 0,
+          "notable": "high",
+          "value": 51.62546630567816
+        },
+        {
+          "key": "critical_angle",
+          "label": "Critical angle",
+          "units": "°",
+          "decimals": 0,
+          "notable": "high",
+          "value": 96.32603912632248
+        },
+        {
+          "key": "lhp",
+          "label": "Large hail parameter",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 13.37895652864018
+        },
+        {
+          "key": "hpi",
+          "label": "Hail possibility index",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 1.3800729520048065
+        },
+        {
+          "key": "peskov",
+          "label": "Peskov index",
+          "units": "",
+          "decimals": 1,
+          "notable": "high",
+          "value": 45.55415342555183
+        },
+        {
+          "key": "mcs_index",
+          "label": "MCS index",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": -0.8606072704630585
+        },
+        {
+          "key": "left_scp",
+          "label": "Left-moving SCP",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 10.02825183980879
+        },
+        {
+          "key": "dcp",
+          "label": "Derecho composite",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 2.886537523578861
+        },
+        {
+          "key": "ehi_1km",
+          "label": "0-1 km EHI",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 4.199108554651313
+        },
+        {
+          "key": "ehi_3km",
+          "label": "0-3 km EHI",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 6.606139354845602
+        },
+        {
+          "key": "vgp",
+          "label": "Vorticity generation",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": 0.19385019198487052
+        },
+        {
+          "key": "nst",
+          "label": "Non-supercell tornado",
+          "units": "",
+          "decimals": 2,
+          "notable": "high",
+          "value": null
+        }
+      ]
+    },
+    {
+      "name": "Thermodynamics",
+      "parameters": [
+        {
+          "key": "pwat",
+          "label": "Precipitable water",
+          "units": "in",
+          "decimals": 2,
+          "notable": "high",
+          "value": 2.230838551502555
+        },
+        {
+          "key": "mean_mixr",
+          "label": "Mean mixing ratio",
+          "units": "g/kg",
+          "decimals": 1,
+          "notable": "high",
+          "value": 16.83801844940744
+        },
+        {
+          "key": "low_rh",
+          "label": "Low-level RH",
+          "units": "%",
+          "decimals": 0,
+          "notable": "high",
+          "value": 77.2091365852285
+        },
+        {
+          "key": "mid_rh",
+          "label": "Mid-level RH",
+          "units": "%",
+          "decimals": 0,
+          "notable": "high",
+          "value": 91.88333191379617
+        },
+        {
+          "key": "lapse_3km",
+          "label": "0-3 km lapse rate",
+          "units": "°C/km",
+          "decimals": 1,
+          "notable": "high",
+          "value": 6.750978489860316
+        },
+        {
+          "key": "lapse_700_500",
+          "label": "700-500 mb lapse rate",
+          "units": "°C/km",
+          "decimals": 1,
+          "notable": "high",
+          "value": 6.4555787542403635
+        },
+        {
+          "key": "k_index",
+          "label": "K index",
+          "units": "",
+          "decimals": 0,
+          "notable": "high",
+          "value": 42.816650390625
+        },
+        {
+          "key": "totals_totals",
+          "label": "Total totals",
+          "units": "",
+          "decimals": 0,
+          "notable": "high",
+          "value": 51.31243896484375
+        },
+        {
+          "key": "wbz",
+          "label": "Wet-bulb zero",
+          "units": "m",
+          "decimals": 0,
+          "notable": "high",
+          "value": 4245.302494525475
+        },
+        {
+          "key": "conv_t",
+          "label": "Convective temp",
+          "units": "°F",
+          "decimals": 0,
+          "notable": "high",
+          "value": 88.99925659179692
+        },
+        {
+          "key": "max_t",
+          "label": "Max temp",
+          "units": "°F",
+          "decimals": 0,
+          "notable": "high",
+          "value": 91.55957525931484
+        }
+      ]
+    }
+  ]
+}

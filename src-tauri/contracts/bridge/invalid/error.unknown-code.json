@@ -1,0 +1,5 @@
+{
+  "code": "BACKEND_UNAVAILABLE",
+  "message": "SHARPMOD_BACKEND=rust requires sharpmod_rs, but sharpmod_rs is not installed",
+  "retryable": false
+}

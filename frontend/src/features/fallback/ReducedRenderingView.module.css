@@ -1,0 +1,11 @@
+/* The overlay box minus the inspector width and one gap on the right, so the
+   inspector never covers the list (DESIGN-frontend F8 layout frame). */
+.view {
+  position: absolute;
+  inset: var(--floating-panel-top) calc(var(--inspector-w) + 2 * var(--dock-offset)) calc(var(--player-h) + 2 * var(--chrome-inset)) var(--dock-offset);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-3);
+}

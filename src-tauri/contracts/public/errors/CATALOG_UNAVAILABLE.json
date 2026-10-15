@@ -1,0 +1,10 @@
+{
+  "code": "CATALOG_UNAVAILABLE",
+  "message": "The station catalogue could not be loaded.",
+  "retryable": true,
+  "context": {
+    "operation": "get_station_catalog",
+    "provider": "python-bridge",
+    "resource": "bundled UWyo station catalogue"
+  }
+}

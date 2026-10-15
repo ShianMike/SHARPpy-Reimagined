@@ -41,6 +41,7 @@ from sharpmod.analysis.ensemble_thresholds import (
     MEMBER_STATES,
     MEMBER_UNUSABLE,
     OPERATORS,
+    OPERATOR_ORDER,
     ThresholdCondition,
     ThresholdDefinition,
     evaluate_threshold,
@@ -275,9 +276,8 @@ class EnsembleThresholdExplorer(ThresholdEvaluationMixin, ThresholdResultsMixin,
                 "Choose a lower, upper, exact, or bounded comparison"
             )
             # OPERATORS is intentionally a set in the pure validation layer;
-            # keep the control's order stable and put the common comparisons
-            # first for keyboard users and deterministic sessions/screenshots.
-            for item in (">", ">=", "<", "<=", "==", "between"):
+            # OPERATOR_ORDER is the stable control order.
+            for item in OPERATOR_ORDER:
                 operator.addItem(item, item)
             operator.setCurrentIndex(max(0, operator.findData(">=")))
             # Bounds, step, and precision come from the diagnostic, not from one

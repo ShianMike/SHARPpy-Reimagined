@@ -344,6 +344,25 @@ def _wrap_spc_decoder():
     _decoders["spc"] = SanitizedSPCDecoder
 
 
+class _UWyoFileDecoder(Decoder):
+    """Use the current UWyo parser for saved pages as well as provider downloads."""
+
+    def _parse(self):
+        from sharpmod.io.uwyo_decoder import UWyo_Decoder
+        from sharppy.sharptab import profile, prof_collection
+
+        data = UWyo_Decoder().decode_text(self._downloadFile())
+        meta = data.pop("meta")
+        valid = meta["valid"]
+        if not isinstance(valid, datetime):
+            raise ValueError("the UWyo sounding has no valid observation time")
+        prof = profile.create_profile(
+            profile="raw", **data, location=meta["loc"], date=valid,
+            latitude=meta["lat"], missing=-9999.0,
+        )
+        return prof_collection.ProfCollection({"": [prof]}, [valid], **meta)
+
+
 def findDecoders():
     """Discover and register the built-in and custom decoders.
 
@@ -368,6 +387,7 @@ def findDecoders():
         logger.debug("Loading built-in decoder '%s'.", dec)
         _register(getattr(io, dec))
 
+    _decoders["uwyo"] = _UWyoFileDecoder
     custom = glob.glob(os.path.join(HOME_DIR, "*.py"))
     for dec in custom:
         dec_mod_name = os.path.basename(dec)[:-3]

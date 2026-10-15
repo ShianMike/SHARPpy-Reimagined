@@ -1,0 +1,94 @@
+.popover { width: var(--popover-w); padding: var(--space-2); }
+.hint { padding: var(--space-3) var(--space-2) var(--space-1); color: var(--text-secondary); font-size: var(--font-size-caption); }
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h-lg);
+  padding: 0 var(--space-3);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.field:focus-within {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.field[data-disabled="true"] {
+  border-color: var(--border-subtle);
+  background: transparent;
+}
+
+.icon {
+  color: var(--text-tertiary);
+}
+
+.input {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input:disabled::placeholder {
+  color: var(--text-disabled);
+}
+
+/* The field shows the focus ring for the input. */
+.input:focus-visible {
+  outline: none;
+}
+
+.results {
+  padding-top: var(--space-2);
+  max-height: var(--floating-panel-h);
+  overflow-y: auto;
+}
+
+.option {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  min-height: var(--control-h-lg);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  line-height: var(--control-h-lg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.option:hover {
+  background: var(--fill-hover);
+}
+
+.option[aria-selected="true"] {
+  background: var(--fill-selected);
+  box-shadow: inset var(--selection-indicator-w) 0 0 var(--selection-indicator);
+}
+
+.id {
+  flex: none;
+  color: var(--text-primary);
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+}
+
+.empty {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-tertiary);
+}

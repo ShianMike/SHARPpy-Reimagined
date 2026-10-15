@@ -1,0 +1,18 @@
+{
+  "observationTime": "2026-10-04T12:00:00Z",
+  "listedIds": [
+    "72357",
+    "72451"
+  ],
+  "extraStations": [
+    {
+      "id": "99901",
+      "name": "Example Field Site",
+      "latitude": 36.5,
+      "longitude": -98.5,
+      "source": "BUFR",
+      "availability": "listed"
+    }
+  ],
+  "droppedCount": 0
+}

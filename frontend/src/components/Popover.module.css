@@ -1,0 +1,35 @@
+/* --popover-x/-y (the anchor edge) and --popover-measured-w/-h (this box) are
+   set by Popover.tsx before paint; the clamps keep the box inside the viewport. */
+.popover {
+  position: fixed;
+  z-index: var(--z-popover);
+  top: clamp(
+    var(--chrome-gap),
+    calc(var(--popover-y) + var(--popover-gap, var(--space-1))),
+    calc(100vh - var(--popover-measured-h) - var(--chrome-gap))
+  );
+  left: clamp(var(--chrome-gap), var(--popover-x), calc(100vw - var(--popover-measured-w) - var(--chrome-gap)));
+  max-width: calc(100vw - 2 * var(--chrome-gap));
+  max-height: calc(100vh - 2 * var(--chrome-gap));
+  overflow: auto;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-body);
+  opacity: 1;
+  translate: 0;
+  transition: opacity var(--motion-base) var(--ease-standard), translate var(--motion-base) var(--ease-standard);
+}
+.popover[data-open="false"] { opacity: 0; translate: 0 var(--space-1); pointer-events: none; transition-duration: var(--motion-fast); }
+@starting-style { .popover[data-open="true"] { opacity: 0; translate: 0 var(--space-1); } }
+.popover[data-dragging="true"] { translate: 0; transition: none; }
+
+.popover[data-width="popover"] {
+  width: var(--popover-w);
+}
+
+.popover[data-width="search"] {
+  min-width: var(--search-w);
+}
+.popover[data-width="anchor"] { width: var(--popover-anchor-w); }
+.popover[data-movable="true"] [data-popover-drag] { cursor: grab; user-select: none; touch-action: none; }
+.popover[data-movable="true"] [data-popover-move] { cursor: grab; }
+.popover[data-dragging="true"], .popover[data-dragging="true"] [data-popover-drag], .popover[data-dragging="true"] [data-popover-move] { cursor: grabbing; }

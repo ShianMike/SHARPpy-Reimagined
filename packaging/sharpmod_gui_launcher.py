@@ -150,6 +150,14 @@ def _model_fetch_runtime_check(output_path: str) -> int:
 
 
 def _run() -> int:
+    if sys.argv[1:] == ["--desktop-bridge"]:
+        from sharpmod.bridge.server import main as bridge_main
+
+        return bridge_main()
+    if sys.argv[1:] == ["--sounding-render-worker"]:
+        from sharpmod.bridge.render_worker import main as render_main
+
+        return render_main()
     if len(sys.argv) == 3 and sys.argv[1] == "--model-fetch-runtime-check":
         return _model_fetch_runtime_check(sys.argv[2])
     if len(sys.argv) >= 2 and sys.argv[1] == "--model-batch-worker":

@@ -1,0 +1,10 @@
+{
+  "code": "RENDER_FAILED",
+  "message": "Drawing the sounding took too long, so it was stopped.",
+  "retryable": true,
+  "context": {
+    "operation": "render_sounding",
+    "provider": "python-bridge",
+    "resource": "sounding image"
+  }
+}

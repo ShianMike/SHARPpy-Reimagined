@@ -1,0 +1,38 @@
+// Surface observations on the forecast map (REQUEST surface observations):
+// the station models around the map's own selection, their every state, and
+// the hover readout. The committed fixture set answers regardless of the
+// anchor, so the assertions are the readouts and the states, not fetch
+// geography.
+
+import { deckLayers, nextFrames, projectPoint, waitForMapDrawn } from "./support/app";
+import { expectWarnings } from "./support/console";
+import { saveScreenshot } from "./support/screenshots";
+import { hoverAt, layerRow, turnOn } from "./support/ui";
+import { expect, test } from "./support/test";
+
+test("surface observations: the station models around the selection", async ({ page, consoleMessages }) => {
+  await page.goto("/");
+  await waitForMapDrawn(page);
+  await turnOn(page, "surface-plots");
+  const row = await layerRow(page, "surface-plots");
+  // Without a selection the layer says so instead of guessing a place.
+  await expect(row).toContainText("Select a station or a point");
+  const point = await projectPoint(page, -97.4, 35.2);
+  expect(point).not.toBeNull();
+  if (point !== null) {
+    await page.mouse.click(point.x, point.y);
+  }
+  // Every plot state counts: matched, stale, checked without a match, failed.
+  await layerRow(page, "surface-plots");
+  await expect(row.getByTestId("surface-shown")).toContainText(
+    "4 matched, 1 stale/mismatched, 1 no observation, 1 query failed",
+  );
+  await expect(row.getByTestId("surface-shown")).toContainText("6 of 6 stations queried");
+  await expect.poll(() => deckLayers(page)).toContain("surface-plots");
+  // A checked station's ring reads as its own hover block.
+  await hoverAt(page, -97.0, 34.0);
+  await expect(page.getByTestId("report-tooltip")).toContainText("KFOO");
+  await nextFrames(page);
+  await saveScreenshot(page, "browser-forecast-surface.png");
+  expectWarnings(consoleMessages, []);
+});

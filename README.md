@@ -15,9 +15,17 @@
 
 SHARPpy Reimagined brings [SHARPpy](https://github.com/sharppy/SHARPpy) sounding analysis into a modern Qt desktop app. Pick a station or forecast point, inspect severe-weather fields and outlooks, then open the Skew-T, hodograph, and analysis workspace. Published Windows builds are on the [Releases page](https://github.com/ShianMike/SHARPpy-Reimagined/releases).
 
-## What's new in 2.0.0
+## What's new in 3.0.0
 
-Safer profile editing, a four-tab analysis workspace, synchronized field panels, and clearer map and export controls. See the [changelog](CHANGELOG.md) for the full list.
+**Unreleased:** a new React/Tauri interface, synchronized weather maps with per-panel controls, interactive sounding editing, and faster Python/Rust analysis. See the [changelog](CHANGELOG.md#v300---unreleased) for the full list.
+
+**v2.0.0 Legacy is the final PySide6/Qt GUI release.** Its
+[Windows ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64.zip)
+and [portable executable](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64-portable.exe)
+remain available on the [legacy release page](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0),
+including after the next release. The screenshots and feature tour below show
+this legacy GUI. The new React/Tauri interface is being developed for
+**v3.0.0, unreleased**; see its detailed [changelog](CHANGELOG.md#v300---unreleased).
 
 ## Explore the app
 
@@ -90,7 +98,7 @@ Want a PNG from a saved sounding? Run `sharpmod-render INPUT.npz OUTPUT.png`. Th
 - [Maps, comparisons, ensembles, and exports](docs/ADVANCED_ANALYSIS.md)
 - [Installation and optional dependencies](installation.txt)
 - [Rust backend and Python fallback](docs/RUST_BACKEND.md)
-- [Changes in 2.0.0](CHANGELOG.md)
+- [Changes in 3.0.0 (unreleased)](CHANGELOG.md#v300---unreleased)
 - [Contributing and test lanes](CONTRIBUTING.md)
 
 The screenshots can be reproduced with `python scripts/capture_readme_cases.py`; it fetches the archived SPC outlooks and HRRR fields for the four exact UTC cases, then checks every saved PNG is 1920 × 1080.

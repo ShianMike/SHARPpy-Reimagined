@@ -1,0 +1,5 @@
+{
+  "code": "BRIDGE_PROTOCOL",
+  "message": "Request frame is not valid JSON.",
+  "retryable": false
+}

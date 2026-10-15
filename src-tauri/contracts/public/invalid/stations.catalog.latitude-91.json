@@ -1,0 +1,17 @@
+{
+  "stations": [
+    {
+      "id": "72357",
+      "name": "Norman/Max Westheimer A, Ok., Usa",
+      "latitude": 91,
+      "longitude": -97.43787,
+      "source": "FM35",
+      "availability": "unknown"
+    }
+  ],
+  "origin": "bundled",
+  "availabilityBasis": {
+    "kind": "catalogOnly"
+  },
+  "droppedCount": 0
+}

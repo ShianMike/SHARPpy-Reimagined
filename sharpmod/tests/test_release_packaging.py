@@ -290,23 +290,21 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
                   "signtool.exe", "Get-AuthenticodeSignature"):
         assert token not in workflow_text, f"{token} is back in the workflow"
 
-    verification_names = {
-        "Verify recommended one-folder artifact",
-        "Verify portable single-file artifact",
-    }
-    assert verification_names <= set(by_name)
-    for name in verification_names:
-        script = by_name[name]["run"]
-        assert "verify_windows_artifact.ps1" in script
-        assert "version_consistent" in script
-        assert "sharpmod_metadata" in script
-        assert "sharpmod_rs_metadata" in script
-        assert "sharpmod_metadata -ne $expectedVersion" not in script
-        assert "sharpmod_rs_metadata -ne $expectedVersion" not in script
+    script = by_name["Verify bundled scientific backend"]["run"]
+    assert "verify_windows_artifact.ps1" in script
+    assert "version_consistent" in script
+    assert "sharpmod_metadata" in script
+    assert "sharpmod_rs_metadata" in script
+    assert "sharpmod_metadata -ne $expectedVersion" not in script
+    assert "sharpmod_rs_metadata -ne $expectedVersion" not in script
+    desktop = by_name["Verify packaged desktop import and rendering"]["run"]
+    assert "verify_desktop_artifact.ps1" in desktop
+    assert "hrrr_point_36.68N_95.66W_f018.npz" in desktop
 
     stage = by_name["Stage clearly labeled release artifacts"]["run"]
     assert "windows-x64.zip" in stage
-    assert "windows-x64-portable.exe" in stage
+    assert "windows-x64-setup.exe" in stage
+    assert "dist/sharppy-backend" in stage
     assert "windows-x64-RECOMMENDED.zip" not in stage
     assert "portable-slower-startup.exe" not in stage
     assert "recommended_artifact" in stage
@@ -329,7 +327,8 @@ def test_release_install_is_clean_and_artifacts_are_clearly_prioritized():
     publish_by_name = {step.get("name"): step for step in publish_steps}
     publish = publish_by_name["Publish GitHub Release"]["with"]
     assert "Recommended Windows download" in publish["body"]
-    assert "portable.exe" in publish["body"]
+    assert "windows-x64-setup.exe" in publish["body"]
+    assert "v2.0.0" in publish["body"]
     assert "windows-x64-RECOMMENDED.zip" not in publish["body"]
     assert "portable-slower-startup.exe" not in publish["body"]
     # The notes no longer link a signing policy, but they must still tell a

@@ -1,0 +1,134 @@
+{
+  "validTime": "2026-06-26T00:00:00Z",
+  "reason": null,
+  "requestedMembers": [
+    "c00",
+    "p01",
+    "p02",
+    "p03"
+  ],
+  "loadedMembers": [
+    "c00",
+    "p01",
+    "p02"
+  ],
+  "failures": [
+    {
+      "member": "p03",
+      "status": "failed",
+      "reason": "no GRIB found for member p03"
+    }
+  ],
+  "metrics": [
+    {
+      "key": "mlcape",
+      "label": "MLCAPE",
+      "units": "J/kg",
+      "decimals": 0,
+      "count": 3,
+      "p10": 2188.4353882166365,
+      "median": 2308.809925325674,
+      "p90": 2433.971184117674,
+      "minimum": 2158.341753939377,
+      "maximum": 2465.2614988156743
+    },
+    {
+      "key": "mlcin",
+      "label": "MLCIN",
+      "units": "J/kg",
+      "decimals": 0,
+      "count": 3,
+      "p10": -42.23913795045124,
+      "median": -33.85186851048266,
+      "p90": -27.204181587185268,
+      "minimum": -44.33595531044338,
+      "maximum": -25.542259856360918
+    },
+    {
+      "key": "shear_6km",
+      "label": "0-6 km shear",
+      "units": "kt",
+      "decimals": 0,
+      "count": 3,
+      "p10": 47.36727991421492,
+      "median": 47.36727991421492,
+      "p90": 47.36727991421492,
+      "minimum": 47.36727991421492,
+      "maximum": 47.36727991421492
+    },
+    {
+      "key": "srh_1km",
+      "label": "0-1 km SRH",
+      "units": "m²/s²",
+      "decimals": 0,
+      "count": 3,
+      "p10": 204.97500750681417,
+      "median": 204.97500750681417,
+      "p90": 204.97500750681417,
+      "minimum": 204.97500750681417,
+      "maximum": 204.97500750681417
+    },
+    {
+      "key": "stp_cin",
+      "label": "STP (CIN)",
+      "units": "",
+      "decimals": 2,
+      "count": 3,
+      "p10": 3.9687108301251093,
+      "median": 4.522076668010333,
+      "p90": 5.035397794250337,
+      "minimum": 3.8303693706538033,
+      "maximum": 5.163728075810338
+    }
+  ],
+  "samples": [
+    {
+      "member": "c00",
+      "outcome": "completed",
+      "reason": null,
+      "values": [
+        2465.2614988156743,
+        -25.542259856360918,
+        47.36727991421492,
+        204.97500750681417,
+        5.163728075810338
+      ]
+    },
+    {
+      "member": "p01",
+      "outcome": "completed",
+      "reason": null,
+      "values": [
+        2308.809925325674,
+        -33.85186851048266,
+        47.36727991421492,
+        204.97500750681417,
+        4.522076668010333
+      ]
+    },
+    {
+      "member": "p02",
+      "outcome": "completed",
+      "reason": null,
+      "values": [
+        2158.341753939377,
+        -44.33595531044338,
+        47.36727991421492,
+        204.97500750681417,
+        3.8303693706538033
+      ]
+    },
+    {
+      "member": "p03",
+      "outcome": "unavailable",
+      "reason": "member is not loaded (failed: no GRIB found for member p03)",
+      "values": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  ]
+}

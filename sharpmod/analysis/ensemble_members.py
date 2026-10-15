@@ -14,6 +14,21 @@ from types import MappingProxyType
 from typing import Iterable, Mapping
 
 
+#: The member labels each ensemble model accepts, control member first. The
+#: values are the member arguments ``tools.model_extract.extract`` takes (CFS
+#: numbers its members; GEFS names them).
+ENSEMBLE_MEMBERS = {
+    "gefs": ("c00", *(f"p{index:02d}" for index in range(1, 31))),
+    "cfs": (1, 2, 3, 4),
+}
+
+
+def member_labels(model_key: object) -> tuple[str, ...] | None:
+    """The member labels of an ensemble model, or ``None`` when it has none."""
+    members = ENSEMBLE_MEMBERS.get(model_key)
+    return tuple(str(member) for member in members) if members else None
+
+
 _REQUESTED = "ensemble_requested_members"
 _LOADED = "ensemble_loaded_members"
 _FAILURES = "ensemble_member_failures"
@@ -272,6 +287,8 @@ class EnsembleAcquisition:
 
 
 __all__ = [
+    "ENSEMBLE_MEMBERS",
     "EnsembleAcquisition",
     "MemberFailure",
+    "member_labels",
 ]

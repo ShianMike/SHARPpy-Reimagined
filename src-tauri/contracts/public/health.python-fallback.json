@@ -1,0 +1,30 @@
+{
+  "app": {
+    "name": "SHARPpy Reimagined",
+    "version": "3.0.0",
+    "tauriVersion": "2.12.1",
+    "buildProfile": "debug",
+    "logFile": "C:\\Users\\example\\AppData\\Local\\io.github.shianmike.sharppy-reimagined\\logs\\sharppy-reimagined.log"
+  },
+  "bridge": {
+    "status": "up",
+    "protocolVersion": 1,
+    "pid": 4242,
+    "since": "2026-10-04T01:02:03Z",
+    "restarts": 0
+  },
+  "python": {
+    "version": "3.11.14",
+    "executable": "C:\\repo\\.gribenv\\Scripts\\python.exe",
+    "sharpmodVersion": "3.0.0"
+  },
+  "scientificBackend": {
+    "status": "ok",
+    "requestedBackend": "auto",
+    "activeBackend": "python",
+    "rustInstalled": false,
+    "rustVersion": null,
+    "fallbackReason": "sharpmod_rs is not installed"
+  },
+  "checkedAt": "2026-10-04T01:02:05Z"
+}

@@ -1,0 +1,10 @@
+{
+  "code": "STATION_LIST_UNAVAILABLE",
+  "message": "The live UWyo station list could not be loaded for 2026-10-04T00:00:00Z (timed out). The bundled list is still shown.",
+  "retryable": true,
+  "context": {
+    "operation": "get_station_catalog",
+    "provider": "python-bridge",
+    "resource": "bundled UWyo station catalogue"
+  }
+}

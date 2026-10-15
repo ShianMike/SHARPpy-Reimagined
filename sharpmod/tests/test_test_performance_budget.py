@@ -54,6 +54,10 @@ def test_performance_checker_writes_passing_machine_report(tmp_path, capsys):
     baseline = tmp_path / "baseline.json"
     report = tmp_path / "report.json"
     _write_junit(junit, suite_seconds=12.0, test_seconds=3.0)
+    junit.write_text(
+        junit.read_text(encoding="utf-8").replace('test_slow"', 'test_slow@qt"'),
+        encoding="utf-8",
+    )
     _write_baseline(baseline)
 
     result = performance.main(

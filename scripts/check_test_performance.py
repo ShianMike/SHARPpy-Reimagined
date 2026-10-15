@@ -147,7 +147,8 @@ def read_junit(path: Path) -> tuple[float, tuple[TestDuration, ...]]:
     durations: list[TestDuration] = []
     for case in root.findall(".//testcase"):
         classname = case.get("classname", "")
-        name = case.get("name", "<unnamed>")
+        # xdist appends our Qt scheduling group to JUnit names, not budget keys.
+        name = case.get("name", "<unnamed>").removesuffix("@qt")
         seconds = _positive_float(case.get("time", 0), f"duration for {name}")
         key = f"{classname}::{name}" if classname else name
         durations.append(

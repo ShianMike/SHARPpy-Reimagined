@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -129,6 +130,30 @@ def test_qt_group_covers_fixtures_outside_the_filename_prefix(filename, fixtures
     assert [(marker.name, marker.args) for marker in markers] == (
         [("xdist_group", ("qt",))] if grouped else []
     )
+
+
+def test_qt_group_runs_on_one_actual_xdist_worker(tmp_path):
+    (tmp_path / "conftest.py").write_text(
+        "from sharpmod.tests.conftest import pytest_collection_modifyitems\n",
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "test_gui_group.py"
+    test_file.write_text(
+        "from pathlib import Path\nimport pytest\n"
+        "@pytest.mark.parametrize('case', range(8))\n"
+        "def test_worker(case, worker_id):\n"
+        "    Path(__file__).with_name(f'worker-{case}').write_text(worker_id)\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [runner.sys.executable, "-m", "pytest", "-q", "-n", "2",
+         "--dist=loadgroup", "--max-worker-restart=0", str(test_file)],
+        cwd=runner.ROOT, capture_output=True, text=True, timeout=90, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    workers = [path.read_text() for path in tmp_path.glob("worker-*")]
+    assert len(workers) == 8
+    assert len(set(workers)) == 1, workers
 
 
 def test_coverage_is_rejected_outside_the_single_fast_lane(tmp_path):

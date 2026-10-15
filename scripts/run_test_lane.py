@@ -68,14 +68,14 @@ LANES = {
         # properties keep their parallelism.
         distribution="loadgroup",
     ),
-    # Exact non-parallel release gate; no ordering/state issue is hidden by
-    # xdist. Full 100-example property depth is already enforced by the
-    # dedicated property lane, so repeating it here would add cost without
-    # another correctness dimension.
+    # Complete offline coverage; loadgroup keeps Qt's shared state on one worker.
+    # The dedicated property lanes retain the full 100-example depth.
+    # Keep the lane name compatible with workflows rebuilding older release tags.
+    # shortcut: cross-worker ordering is unchecked; diagnose with pytest without -n.
     "serial-release": Lane(
         marker="not live_provider",
         hypothesis_profile="fast",
-        parallel=False,
+        parallel=True,
         timeout_seconds=900,
     ),
     "windows-wrf": Lane(

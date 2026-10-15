@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import subprocess
+from types import SimpleNamespace
 
 import pytest
 
 from scripts import check_test_performance as performance
 from scripts import run_test_lane as runner
+from sharpmod.tests import conftest as test_config
 
 
 def _job_timeout_seconds() -> dict[str, int]:
@@ -101,13 +105,55 @@ def test_no_parallel_lane_scatters_tests_that_asked_to_stay_together():
         )
 
 
-def test_release_lane_is_complete_serial_without_repeating_property_depth(tmp_path):
+def test_release_lane_is_complete_parallel_without_repeating_property_depth(tmp_path):
     command, environment = _command("serial-release", tmp_path)
 
     assert _marker(command) == "not live_provider"
-    assert "-n" not in command
-    assert "--dist=loadgroup" not in command
+    assert command[command.index("-n") + 1] == "4"
+    assert "--dist=loadgroup" in command
+    assert "--max-worker-restart=0" in command
     assert environment["SHARPMOD_HYPOTHESIS_PROFILE"] == "fast"
+
+
+@pytest.mark.parametrize("filename,fixtures,grouped", [
+    ("test_gui_edit_history.py", [], True),
+    ("test_sounding_view.py", ["standard_qt_app", "qt_app"], True),
+    ("test_sounding_view.py", [], False),
+])
+def test_qt_group_covers_fixtures_outside_the_filename_prefix(filename, fixtures, grouped):
+    markers = []
+    item = SimpleNamespace(
+        path=Path(filename), fixturenames=fixtures, obj=None,
+        add_marker=markers.append,
+    )
+    test_config.pytest_collection_modifyitems([item])
+    assert [(marker.name, marker.args) for marker in markers] == (
+        [("xdist_group", ("qt",))] if grouped else []
+    )
+
+
+def test_qt_group_runs_on_one_actual_xdist_worker(tmp_path):
+    (tmp_path / "conftest.py").write_text(
+        "from sharpmod.tests.conftest import pytest_collection_modifyitems\n",
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "test_gui_group.py"
+    test_file.write_text(
+        "from pathlib import Path\nimport pytest\n"
+        "@pytest.mark.parametrize('case', range(8))\n"
+        "def test_worker(case, worker_id):\n"
+        "    Path(__file__).with_name(f'worker-{case}').write_text(worker_id)\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [runner.sys.executable, "-m", "pytest", "-q", "-n", "2",
+         "--dist=loadgroup", "--max-worker-restart=0", str(test_file)],
+        cwd=runner.ROOT, capture_output=True, text=True, timeout=90, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    workers = [path.read_text() for path in tmp_path.glob("worker-*")]
+    assert len(workers) == 8
+    assert len(set(workers)) == 1, workers
 
 
 def test_coverage_is_rejected_outside_the_single_fast_lane(tmp_path):

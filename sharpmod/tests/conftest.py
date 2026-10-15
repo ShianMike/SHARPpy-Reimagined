@@ -174,11 +174,12 @@ def _isolate_qt_override_cursor(request):
         )
 
 
+@pytest.hookimpl(tryfirst=True)  # Add groups before xdist reads them into node IDs.
 def pytest_collection_modifyitems(items):
     """Mark properties and keep Qt-heavy tests on one bounded worker."""
 
     for item in items:
         if is_hypothesis_test(getattr(item, "obj", None)):
             item.add_marker("property")
-        if item.path.stem.startswith(_QT_TEST_PREFIXES):
+        if "qt_app" in item.fixturenames or item.path.stem.startswith(_QT_TEST_PREFIXES):
             item.add_marker(pytest.mark.xdist_group("qt"))

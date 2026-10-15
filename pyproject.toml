@@ -139,7 +139,6 @@ timeout_method = "thread"
 markers = [
     "property: Hypothesis-powered scientific/property coverage",
     "live_provider: opt-in checks against current public data providers",
-    "serial: test that must remain in the non-parallel release gate",
     "xdist_group(name): keep tests sharing process-global state on one worker",
 ]
 filterwarnings = [

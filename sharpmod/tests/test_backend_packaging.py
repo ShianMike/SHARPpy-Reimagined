@@ -328,30 +328,53 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
         assert inherited_env["SHARPMOD_BACKEND"] == "rust"
 
 
-def test_release_workflow_caches_dependencies_without_reusing_the_app():
+@pytest.mark.parametrize(
+    ("toolchain_name", "cache_name", "build_name", "toolchain_id", "target", "lockfile", "cleanup", "build_command"),
+    [
+        (
+            "Set up Rust stable for Tauri", "Cache desktop release dependencies",
+            "Build desktop shell and Windows installer", "desktop-rust",
+            "src-tauri/target", "src-tauri/Cargo.lock",
+            "cargo clean --manifest-path ../src-tauri/Cargo.toml --release -p sharppy-reimagined",
+            "npm run tauri -- build",
+        ),
+        (
+            "Set up Rust 1.88 toolchain", "Cache native release dependencies",
+            "Build and install locked Rust wheel", "native-rust",
+            "rust/sharpmod-rs/target", "rust/sharpmod-rs/Cargo.lock",
+            "cargo clean --release -p sharpmod-rs", "maturin build --release --locked",
+        ),
+    ],
+)
+def test_release_workflow_caches_dependencies_without_reusing_the_app(
+    toolchain_name, cache_name, build_name, toolchain_id, target, lockfile,
+    cleanup, build_command,
+):
     steps = _load_workflow("release.yml")["jobs"]["build-windows-exe"]["steps"]
     by_name = {step.get("name"): step for step in steps}
-    toolchain = by_name["Set up Rust stable for Tauri"]
-    cache = by_name["Cache desktop release dependencies"]
-    build = by_name["Build desktop shell and Windows installer"]
+    toolchain = by_name[toolchain_name]
+    cache = by_name[cache_name]
+    build = by_name[build_name]
 
-    assert toolchain["id"] == "desktop-rust"
+    assert toolchain["id"] == toolchain_id
     assert 'version=$(rustc --version)' in toolchain["run"]
     assert cache["uses"].startswith("actions/cache@")
     config = cache["with"]
     assert set(config["path"].splitlines()) == {
         "~/.cargo/registry", "~/.cargo/git",
-        "src-tauri/target/release/.fingerprint",
-        "src-tauri/target/release/build", "src-tauri/target/release/deps",
+        f"{target}/release/.fingerprint",
+        f"{target}/release/build", f"{target}/release/deps",
     }
     prefix = config["restore-keys"].strip()
-    for dimension in ("runner.os", "runner.arch", "steps.desktop-rust.outputs.version"):
+    for dimension in ("runner.os", "runner.arch", f"steps.{toolchain_id}.outputs.version"):
         assert "${{ " + dimension + " }}" in prefix
-    assert config["key"] == prefix + "${{ hashFiles('src-tauri/Cargo.lock') }}"
+    assert config["key"] == prefix + "${{ hashFiles('" + lockfile + "') }}"
+    if toolchain_id == "native-rust":
+        assert by_name["Set up Python"]["id"] == "release-python"
+        assert "${{ steps.release-python.outputs.python-version }}" in prefix
     assert "if" not in cache and "if" not in build
     assert steps.index(toolchain) < steps.index(cache) < steps.index(build)
-    cleanup = "cargo clean --manifest-path ../src-tauri/Cargo.toml --release -p sharppy-reimagined"
-    assert build["run"].index(cleanup) < build["run"].index("npm run tauri -- build")
+    assert build["run"].index(cleanup) < build["run"].index(build_command)
 
 
 def test_release_requires_rust_runtime_reports_and_uploads_wheel():

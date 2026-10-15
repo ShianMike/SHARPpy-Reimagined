@@ -221,18 +221,34 @@ jobs:
           }
 
       - name: Set up Python
+        id: release-python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Set up Rust 1.88 toolchain
+        id: native-rust
         shell: bash
         run: |
           set -euo pipefail
           rustup toolchain install 1.88.0 --profile minimal
           rustup default 1.88.0
           rustc --version | grep -E '^rustc 1\.88\.0 '
+          echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache native release dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/sharpmod-rs/target/release/.fingerprint
+            rust/sharpmod-rs/target/release/build
+            rust/sharpmod-rs/target/release/deps
+          key: native-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.release-python.outputs.python-version }}-${{ steps.native-rust.outputs.version }}-${{ hashFiles('rust/sharpmod-rs/Cargo.lock') }}
+          restore-keys: |
+            native-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.release-python.outputs.python-version }}-${{ steps.native-rust.outputs.version }}-
 
       - name: Install constrained package and build dependencies
         shell: pwsh
@@ -265,6 +281,10 @@ jobs:
         run: |
           Push-Location "rust/sharpmod-rs"
           try {
+            cargo clean --release -p sharpmod-rs
+            if ($LASTEXITCODE -ne 0) {
+              throw "Native application cleanup failed"
+            }
             python -m maturin build --release --locked --interpreter python --out dist
             if ($LASTEXITCODE -ne 0) {
               throw "Locked Rust wheel build failed"
@@ -458,7 +478,7 @@ jobs:
           RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
         run: |
           Compress-Archive -Path "release-staging/SHARPpy-Reimagined" `
-            -DestinationPath "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip" -Force
+            -DestinationPath "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip" -CompressionLevel Fastest -Force
           Get-ChildItem -LiteralPath "release-artifacts" -File | Where-Object Name -NotLike '*-SHA256SUMS.txt' | Sort-Object Name | ForEach-Object {
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)"
@@ -470,6 +490,7 @@ jobs:
           name: windows-release-${{ needs.resolve-release.outputs.tag }}
           path: release-artifacts/*
           if-no-files-found: error
+          compression-level: 0
           retention-days: 14
 
   attest-windows-release:

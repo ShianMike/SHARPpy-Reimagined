@@ -5,11 +5,11 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v3.0.0] - Unreleased
+## [v3.0.0] - 2026-10-15
 
-v3.0.0 is the next-generation interface release, currently in development.
-The changes below describe the current source and local preview; they do not
-announce a published v3.0.0 installer or a completed desktop release gate.
+v3.0.0 introduces the React/Tauri desktop interface with the existing
+Python/Rust scientific engine. Windows downloads include an installer and a
+portable ZIP; v2.0.0 Legacy remains available for the previous Qt interface.
 
 ### Release transition
 
@@ -29,8 +29,7 @@ announce a published v3.0.0 installer or a completed desktop release gate.
   and four-panel maps, imported sounding, Overview, and Settings. Keep the old
   tour linked as v2.0.0 Legacy documentation.
 - Align the development Python package, native Rust package, frontend, Tauri
-  shell, lockfiles, and default release tag at **v3.0.0**. This version bump
-  prepares the unreleased source; it does not publish a new release.
+  shell, lockfiles, and default release tag at **v3.0.0**.
 - Update Ruff to **0.16.10**, ecCodes to **2.49.0**, and all artifact-download
   workflow steps to **download-artifact 8.0.2**, pinned to its immutable commit.
   Include the upgrades proposed in dependency PRs #70, #71, and #72 in the

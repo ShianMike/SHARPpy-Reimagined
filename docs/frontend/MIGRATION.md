@@ -14,8 +14,8 @@ migration boundaries. The new app is described in
 
 ## Release status
 
-The new interface is planned for **v3.0.0 (unreleased)**. The
-[changelog](../../CHANGELOG.md#v300---unreleased) records its current changes
+The new interface ships in **v3.0.0**. The
+[changelog](../../CHANGELOG.md#v300---2026-10-15) records its changes
 and release limitations. **v2.0.0 Legacy** is the final PySide6/Qt GUI release;
 its [existing downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0)
 remain available after the new interface is released. The phase descriptions
@@ -182,7 +182,7 @@ The deferred and designed-only rows have landed since, except wind barbs
 | Station clustering | Not implemented | 933 points do not need it |
 | Model fields, SPC, domains, radar, wind barbs, timeline animation, multi-panel, analysis, Skew-T | Designed only | Later phases; what is still unbuilt is in [MAP_RENDERING.md](MAP_RENDERING.md#not-built) |
 | Binary transport | Format fixed, built with its first consumer (Phase 4) | Phase 1 has no binary payload |
-| CHANGELOG.md entry | Added for v3.0.0 (unreleased) | `test_versioning.py` now checks the unreleased entry separately from the dated v2.0.0 Legacy release |
+| CHANGELOG.md entry | Added for v3.0.0 and dated for release | `test_versioning.py` checks the release entry separately from the dated v2.0.0 Legacy release |
 | Python packaging, macOS and Linux, hosted CI | Open items | Not part of this milestone; see [ARCHITECTURE.md](ARCHITECTURE.md#open-items) |
 | Settings as a glass surface | Replaced by an opaque workspace | A window-sized blur over the live map is the costliest glass case on integrated GPUs |
 | deck.gl interleaved with MapLibre | Live and desktop maps use `MapLibreOverlay`; offline fixtures retain a separate canvas | The MapLibre adapter replaces the incompatible Mapbox private APIs and keeps geographic outlines above weather ([MAP_RENDERING.md](MAP_RENDERING.md#the-overlay-before-load)) |

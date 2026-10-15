@@ -75,7 +75,7 @@ def test_release_manifests_and_health_fixture_share_package_version():
     assert f'        default: "v{package_version}"' in workflow
 
 
-def test_unreleased_changelog_preserves_the_dated_legacy_release():
+def test_changelog_preserves_the_dated_legacy_release():
     headings = [
         line.strip()
         for line in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
@@ -83,7 +83,7 @@ def test_unreleased_changelog_preserves_the_dated_legacy_release():
     ]
 
     assert headings[:2] == [
-        "## [v3.0.0] - Unreleased",
+        "## [v3.0.0] - 2026-10-15",
         "## [v2.0.0 Legacy] - 2026-09-26",
     ]
 

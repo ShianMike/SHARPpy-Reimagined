@@ -240,14 +240,21 @@ def test_release_workflow_gates_tag_and_source_versions():
         "${{ needs.resolve-release.outputs.source_sha }}"
     )
     build = jobs["build-windows-exe"]
-    # The exact-source test workflow must pass before building executable
-    # artifacts, not only before publishing them.
-    assert set(build["needs"]) == {"resolve-release", "test-release", "test-desktop"}
+    # Packaging overlaps the exact-source test lanes, but the artifacts are
+    # attested and published only after every lane passes.
+    assert set(build["needs"]) == {"resolve-release"}
     assert jobs["test-desktop"]["uses"] == "./.github/workflows/frontend.yml"
     assert jobs["test-desktop"]["with"]["ref"] == test_job["with"]["ref"]
+    assert set(jobs["attest-windows-release"]["needs"]) == {
+        "resolve-release",
+        "test-release",
+        "test-desktop",
+        "build-windows-exe",
+    }
     assert set(jobs["publish"]["needs"]) == {
         "resolve-release",
         "test-release",
+        "test-desktop",
         "build-windows-exe",
         "attest-windows-release",
     }
@@ -331,12 +338,14 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
 def test_release_workflow_caches_dependencies_without_reusing_the_app():
     steps = _load_workflow("release.yml")["jobs"]["build-windows-exe"]["steps"]
     by_name = {step.get("name"): step for step in steps}
-    toolchain = by_name["Set up Rust stable for Tauri"]
+    toolchain = next(step for step in steps if step.get("id") == "desktop-rust")
     cache = by_name["Cache desktop release dependencies"]
     build = by_name["Build desktop shell and Windows installer"]
 
-    assert toolchain["id"] == "desktop-rust"
     assert 'version=$(rustc --version)' in toolchain["run"]
+    # The rustc version is part of the cache key; a floating `stable` turns
+    # every new stable release into a cold rebuild of all Tauri dependencies.
+    assert "stable" not in toolchain["run"]
     assert cache["uses"].startswith("actions/cache@")
     config = cache["with"]
     assert set(config["path"].splitlines()) == {

@@ -182,9 +182,9 @@ jobs:
 
   build-windows-exe:
     name: Build Windows downloads
-    # Build executables only after the exact release source passes every test
-    # lane. A failed gate must not spend runner time producing unusable binaries.
-    needs: [resolve-release, test-release, test-desktop]
+    # Package in parallel with the test lanes to keep the release short.
+    # Attestation and publishing still wait for every test lane to pass.
+    needs: [resolve-release]
     runs-on: windows-latest
     timeout-minutes: 120
     permissions:
@@ -361,13 +361,15 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: "24.12.0", cache: npm, cache-dependency-path: frontend/package-lock.json }
 
-      - name: Set up Rust stable for Tauri
+      # Pinned, not `stable`: the cache key below includes the rustc version, so
+      # every new stable release would otherwise force a cold build. Bump on purpose.
+      - name: Set up Rust 1.99.1 for Tauri
         id: desktop-rust
         shell: bash
         run: |
           set -euo pipefail
-          rustup update stable --no-self-update
-          rustup default stable
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
           echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
 
       - name: Cache desktop release dependencies
@@ -475,7 +477,7 @@ jobs:
 
   attest-windows-release:
     name: Attest Windows release provenance
-    needs: [resolve-release, build-windows-exe]
+    needs: [resolve-release, test-release, test-desktop, build-windows-exe]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -499,7 +501,7 @@ jobs:
   publish:
     if: github.event_name == 'push' || inputs.publish_release
     name: Publish GitHub Release
-    needs: [resolve-release, test-release, build-windows-exe, attest-windows-release]
+    needs: [resolve-release, test-release, test-desktop, build-windows-exe, attest-windows-release]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

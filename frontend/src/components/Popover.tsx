@@ -113,13 +113,18 @@ export function Popover({
     };
     placeRef.current = place;
     place();
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    let frame: number | null = null;
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
+      // Positioning can resize this popup; wait until resize delivery has finished.
+      frame ??= requestAnimationFrame(() => { frame = null; place(); });
+    });
     observer?.observe(element);
     observer?.observe(anchor);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     return () => {
       observer?.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };

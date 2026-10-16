@@ -10,6 +10,7 @@ beforeEach(() => { useUiStore.setState({ popupPosition: null }); });
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 interface HarnessProps {
@@ -75,6 +76,32 @@ async function openPopover(props: HarnessProps) {
 }
 
 describe("Popover", () => {
+  it("coalesces resize notifications after delivery and cancels positioning when closed", async () => {
+    let resized = (): void => undefined;
+    const disconnect = vi.fn();
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { resized = callback; }
+      observe() {}
+      disconnect = disconnect;
+    });
+    const frames = new Map<number, FrameRequestCallback>();
+    let next = 0;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { frames.set(++next, callback); return next; });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => { frames.delete(id); });
+    const { user, anchor, dialog } = await openPopover({ initialFocus: "first", width: "anchor" });
+    vi.spyOn(anchor, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 200, 244, 40));
+    const before = dialog.style.getPropertyValue("--popover-anchor-w");
+    resized(); resized(); resized();
+    expect(dialog.style.getPropertyValue("--popover-anchor-w")).toBe(before);
+    expect(frames.size).toBe(1);
+    const pending = [...frames.values()]; frames.clear(); pending.forEach((callback) => { callback(0); });
+    expect(dialog.style.getPropertyValue("--popover-anchor-w")).toBe("244px");
+    resized();
+    await user.keyboard("{Escape}");
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(frames.size).toBe(0);
+  });
+
   it("opens beside the anchor and flips left only when the right side has no room", async () => {
     const { anchor, dialog } = await openPopover({ initialFocus: "none", side: "right" });
     dialog.style.setProperty("--chrome-gap", "8px");

@@ -21,6 +21,7 @@ export interface RuntimeEventTarget {
   readonly primary: boolean;
   readonly watch: StartupWatch;
   readonly errors: string[];
+  overlayReady: boolean;
   dragging: boolean;
   live<T extends unknown[]>(handler: (...args: T) => void): (...args: T) => void;
   styleLoaded(): void;
@@ -75,6 +76,7 @@ export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, tar
       }),
       onClick: live(clickFromPick),
       onAfterRender: live(() => {
+        target.overlayReady = true;
         target.watch.afterRender();
       }),
       onError: live((error) => {
@@ -92,7 +94,8 @@ export function wireOverlayEvents(map: MapLibreMap, overlay: MapLibreOverlay, ta
   let pending: MapMouseEvent | null = null;
   let frame: number | null = null;
   const pick = (event: MapMouseEvent): PickingInfo => ({
-    ...overlay.pickObject({ x: event.point.x, y: event.point.y, radius }),
+    // Deck's picking resources are initialized asynchronously, before its first render.
+    ...(target.overlayReady ? overlay.pickObject({ x: event.point.x, y: event.point.y, radius }) : null),
     x: event.point.x, y: event.point.y,
     coordinate: [event.lngLat.lng, event.lngLat.lat],
   }) as PickingInfo;

@@ -38,9 +38,18 @@ export function SoundingImage({ soundingId, choice, title, heading }: { sounding
   useEffect(() => {
     const element = viewport.current;
     if (element === null) return;
-    const measure = (): void => { setSize({ width: element.clientWidth, height: element.clientHeight }); };
-    measure(); const observer = new ResizeObserver(measure); observer.observe(element);
-    return () => { observer.disconnect(); };
+    const measure = (): void => {
+      const box = element.getBoundingClientRect();
+      setSize({ width: Math.floor(box.width), height: Math.floor(box.height) });
+    };
+    let frame: number | null = null;
+    const observer = new ResizeObserver(() => {
+      frame ??= requestAnimationFrame(() => { frame = null; measure(); });
+    });
+    measure();
+    // Image scrollbars must not change the box used to fit that same image.
+    observer.observe(element, { box: "border-box" });
+    return () => { observer.disconnect(); if (frame !== null) cancelAnimationFrame(frame); };
   }, []);
 
   const exportImage = async (copy: boolean): Promise<void> => {
@@ -140,7 +149,7 @@ export function SoundingImage({ soundingId, choice, title, heading }: { sounding
       <div ref={viewport} className={styles.viewport} tabIndex={0} role="region" aria-label="Sounding image. Use zoom controls, then drag to pan.">
         <div className={styles.canvasSpace}>
           {url !== null && data !== undefined ? <div ref={frame} className={styles.imageFrame} data-editing={editing}
-            style={{ "--image-width": String(Math.round(data.width * scale)) + "px", "--image-height": String(Math.round(data.height * scale)) + "px" } as CSSProperties}
+            style={{ "--image-width": String(Math.floor(data.width * scale)) + "px", "--image-height": String(Math.floor(data.height * scale)) + "px" } as CSSProperties}
             onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={() => { gesture.current = null; setPreview(null); }}>
             <img className={styles.image} src={url} alt={"Sounding: " + title} draggable={false} data-testid="sounding-image" />
             {editing ? <svg className={styles.editOverlay} viewBox={"0 0 " + String(data.width) + " " + String(data.height)} aria-hidden="true">

@@ -38,13 +38,13 @@ export class MapRuntime implements RuntimeEventTarget {
   readonly primary: boolean;
   private tokens: CanvasTokens | null = null;
   private styleReady = false;
+  overlayReady = false;
   dragging = false;
   private snapshotTimer: ReturnType<typeof setTimeout> | null = null;
   private e2e: E2eModule | null = null;
   private probe: E2eTarget | null = null;
   readonly errors: string[] = [];
   private readonly unsubscribers: (() => void)[] = [];
-
   constructor(
     readonly container: HTMLElement,
     readonly panel = 0,

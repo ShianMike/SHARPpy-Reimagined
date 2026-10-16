@@ -80,9 +80,9 @@ describe("HealthIndicator and HealthPopover (DR6-5)", () => {
   it("shows the versions, the active backend, and the fallback reason, with no restart count at 0", async () => {
     const { dialog } = await openIndicator(scriptedTransport({ get_backend_health: [healthFallback] }), "Backend ready");
     const text = dialog.textContent;
-    expect(text).toContain("SHARPpy Reimagined 3.0.1");
+    expect(text).toContain("SHARPpy Reimagined 3.0.2");
     expect(text).toContain("3.11.14");
-    expect(text).toContain("3.0.1");
+    expect(text).toContain("3.0.2");
     expect(text).toContain("Python");
     expect(text).toContain("sharpmod_rs is not installed");
     expect(text).not.toContain("Backend restarts this session");
@@ -96,7 +96,7 @@ describe("HealthIndicator and HealthPopover (DR6-5)", () => {
 
   it("names Rust and its version when the Rust backend is active", async () => {
     const { dialog } = await openIndicator(createTransport(null), "Backend ready");
-    expect(dialog.textContent).toContain("Rust, sharpmod_rs 3.0.1");
+    expect(dialog.textContent).toContain("Rust, sharpmod_rs 3.0.2");
   });
 });
 

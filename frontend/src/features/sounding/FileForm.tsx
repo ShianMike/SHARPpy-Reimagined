@@ -63,7 +63,7 @@ function ProfileFileForm(): ReactNode {
       <div className={styles.fileField}>
         <FileUp aria-hidden="true" />
         <strong>{file === null ? "Import a sounding" : file.name}</strong>
-        <span className={styles.hint}>{file === null ? "Open a profile from your device" : `${(file.size / 1024).toFixed(1)} KiB`}</span>
+        <span className={styles.hint}>{file === null ? "Files up to 6 MiB" : `${(file.size / 1024).toFixed(1)} KiB`}</span>
         <Action onClick={() => { input.current?.click(); }}>{file === null ? "Browse files" : "Change file"}</Action>
         <input
           ref={input}
@@ -80,7 +80,7 @@ function ProfileFileForm(): ReactNode {
           }}
         />
       </div>
-      <p className={styles.hint}>NPZ point soundings, SPC, BUFKIT, PECAN, and UWyo text or HTML. Up to 6 MiB.</p>
+      <p className={styles.hint}>NPZ, SPC, BUFKIT, PECAN or UWyo.</p>
       <div className={styles.actions}>
         <Action
           tone="accent"

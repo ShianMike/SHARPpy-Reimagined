@@ -2,6 +2,8 @@
 .page { width: 100%; height: 100%; padding: var(--space-6); overflow: auto; display: flex; flex-direction: column; gap: var(--space-4); overscroll-behavior: contain; }
 .page > * { flex: none; }
 .heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding-bottom: var(--space-2); }
+.identity { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.brandMark { width: var(--control-h-lg); height: var(--control-h-lg); flex: none; }
 .heading h1 { font-size: var(--font-size-title); }
 .heading p { margin-top: var(--space-1); color: var(--text-secondary); }
 .workflows, .secondary { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--space-4); }

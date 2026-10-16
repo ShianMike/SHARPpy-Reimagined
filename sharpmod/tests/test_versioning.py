@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_every_runtime_surface_uses_package_version():
     from sharpmod._version import __version__ as package_version
 
-    assert package_version == "3.0.1"
+    assert package_version == "3.0.2"
     assert sharpmod.__version__ == package_version
     assert gui.APP_VERSION == package_version
     assert render.application_label() == (
@@ -89,7 +89,8 @@ def test_changelog_preserves_the_dated_legacy_release():
         if line.startswith("## ")
     ]
 
-    assert headings[:3] == [
+    assert headings[:4] == [
+        "## [v3.0.2] - 2026-10-16",
         "## [v3.0.1] - 2026-10-15",
         "## [v3.0.0] - 2026-10-15",
         "## [v2.0.0 Legacy] - 2026-09-26",

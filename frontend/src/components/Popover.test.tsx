@@ -201,6 +201,23 @@ describe("Popover", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("centers movable popups as their size and viewport change", async () => {
+    vi.stubGlobal("innerWidth", 1280);
+    vi.stubGlobal("innerHeight", 800);
+    const { dialog } = await openPopover({ initialFocus: "first", movable: true });
+    const rect = vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 320, 380));
+    fireEvent.resize(window);
+    expect(dialog.style.getPropertyValue("--popover-x")).toBe("480px");
+    expect(dialog.style.getPropertyValue("--popover-y")).toBe("210px");
+    expect(dialog.style.getPropertyValue("--popover-gap")).toBe("calc(var(--space-1) * 0)");
+    vi.stubGlobal("innerWidth", 1920);
+    vi.stubGlobal("innerHeight", 1080);
+    rect.mockReturnValue(new DOMRect(0, 0, 500, 600));
+    fireEvent.resize(window);
+    expect(dialog.style.getPropertyValue("--popover-x")).toBe("710px");
+    expect(dialog.style.getPropertyValue("--popover-y")).toBe("240px");
+  });
+
   it("moves only from the header handle, stays within the viewport, and retains position after scroll", async () => {
     const { user, dialog, anchor } = await openPopover({ initialFocus: "first", movable: true });
     dialog.style.setProperty("--chrome-gap", "8px");
@@ -213,8 +230,12 @@ describe("Popover", () => {
     dialog.hasPointerCapture = () => true;
     dialog.releasePointerCapture = vi.fn();
     fireEvent.resize(window);
+    const centerX = (window.innerWidth - 300) / 2;
+    const centerY = (window.innerHeight - 200) / 2;
+    expect(dialog.style.getPropertyValue("--popover-x")).toBe(`${String(centerX)}px`);
+    expect(dialog.style.getPropertyValue("--popover-y")).toBe(`${String(centerY)}px`);
     const handle = screen.getByRole("button", { name: "Move popup" });
-    await user.pointer([{ keys: "[MouseLeft>]", target: handle, coords: { clientX: 420, clientY: 120 } }, { target: handle, coords: { clientX: 170, clientY: 250 } }, { keys: "[/MouseLeft]" }]);
+    await user.pointer([{ keys: "[MouseLeft>]", target: handle, coords: { clientX: centerX + 20, clientY: centerY + 20 } }, { target: handle, coords: { clientX: 170, clientY: 250 } }, { keys: "[/MouseLeft]" }]);
     expect(dialog.style.getPropertyValue("--popover-x")).toBe("150px");
     expect(dialog.style.getPropertyValue("--popover-y")).toBe("230px");
     fireEvent.scroll(window);
@@ -225,9 +246,10 @@ describe("Popover", () => {
     expect(dialog.style.getPropertyValue("--popover-x")).toBe("8px");
     expect(dialog.style.getPropertyValue("--popover-y")).toBe("8px");
     await user.keyboard("{Home}");
-    expect(dialog.style.getPropertyValue("--popover-x")).toBe("400px");
+    expect(dialog.style.getPropertyValue("--popover-x")).toBe(`${String(centerX)}px`);
+    expect(dialog.style.getPropertyValue("--popover-y")).toBe(`${String(centerY)}px`);
     await user.pointer([{ keys: "[MouseLeft>]", target: screen.getByRole("button", { name: "Other header action" }), coords: { clientX: 600, clientY: 120 } }, { coords: { clientX: 50, clientY: 200 } }, { keys: "[/MouseLeft]" }]);
-    expect(dialog.style.getPropertyValue("--popover-x")).toBe("400px");
+    expect(dialog.style.getPropertyValue("--popover-x")).toBe(`${String(centerX)}px`);
   });
 
   it("restores a moved popup after unmounting and shares the location with other movable pickers", async () => {

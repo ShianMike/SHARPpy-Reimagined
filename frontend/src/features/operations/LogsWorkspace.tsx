@@ -34,7 +34,7 @@ export function LogsWorkspace(): ReactNode {
       <IconAction icon={Trash2} label="Clear session log" disabled={entries.length === 0} onClick={() => { useLogStore.getState().clear(); }} />
     </div>
     {exportError ? <p role="alert" className={styles.exportError}>{exportError}</p> : null}
-    <div className={styles.logBody}>
+    <div className={styles.logBody} data-empty={filtered.length === 0}>
       {filtered.length === 0 ? <EmptyPanel icon={SquareTerminal} title={entries.length === 0 ? "No events yet" : "No matching events"} message={entries.length === 0 ? "New requests and errors will appear here as you use the workspace." : "Try a different log level or search term."}>{entries.length === 0 ? null : <Action onClick={() => { setLevel("all"); setSearch(""); }}><X className="icon-sm" aria-hidden="true" />Reset filters</Action>}</EmptyPanel> :
         <table className={styles.table} aria-label="Session events"><thead><tr><th scope="col">Time · UTC</th><th scope="col">Level</th><th scope="col">Source</th><th scope="col">Event</th></tr></thead><tbody>{filtered.map((entry) => <tr key={entry.id} data-level={entry.level}>
           <td><time dateTime={entry.time} title={entry.time}>{entry.time.slice(11, 19)}</time></td><td><span className={styles.level}>{LEVEL_LABELS[entry.level]}</span></td><td className={styles.source}>{entry.source.replaceAll("_", " ")}</td>

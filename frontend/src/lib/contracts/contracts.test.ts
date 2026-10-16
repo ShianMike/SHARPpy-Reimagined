@@ -64,7 +64,7 @@ describe("public fixtures", () => {
   it("parses both positive health shapes", () => {
     const rust = parseBackendHealth(fixture("health.ok"));
     const python = parseBackendHealth(fixture("health.python-fallback"));
-    expect(rust.scientificBackend).toMatchObject({ status: "ok", activeBackend: "rust", rustVersion: "3.0.1" });
+    expect(rust.scientificBackend).toMatchObject({ status: "ok", activeBackend: "rust", rustVersion: "3.0.2" });
     expect(python.scientificBackend).toMatchObject({ status: "ok", activeBackend: "python", rustVersion: null });
     expect(parseBackendHealth(fixture("health.restarting")).bridge.status).toBe("restarting");
     expect(parseBackendHealth(fixture("health.unknown")).scientificBackend?.status).toBe("unknown");

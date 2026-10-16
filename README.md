@@ -13,11 +13,11 @@
 
 </div>
 
-## What's new in 3.0.1
+## What's new in 3.0.2
 
 SHARPpy Reimagined brings [SHARPpy](https://github.com/sharppy/SHARPpy) sounding analysis into a map-based desktop workspace. Version **3.0.0** introduces a React/Tauri interface backed by the existing Python and Rust scientific tools. This README describes that interface; the [v2.0.0 Legacy tour and screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/README.md) document the previous GUI.
 
-The **3.0.1 patch** adds signed in-app updates, a fullscreen control, a minimum window size of 1280 × 800, and clearer outlook tooltips and notices. Its release page retains the **v3.0.0** title; the installer and update feed use **3.0.1** so future updates can detect newer builds.
+The **3.0.2 patch** adds saved temperature and wind units, map rendering fixes, panel titles that open the parameter picker, cleaner Settings and Logs layouts, quicker model availability checks, and faster Windows release builds. It includes the **3.0.1** additions: signed in-app updates, a fullscreen control, a minimum window size of 1280 × 800, and clearer outlook tooltips and notices.
 
 ## Explore the app
 
@@ -29,7 +29,7 @@ Use the navigation rail to move between five workspaces:
 | **Model Viewer** | Explore forecast fields in one, two, or four synchronized maps; inspect a point and open its sounding. |
 | **Soundings** | Fetch observed, forecast-model, or ERA5 profiles, or import local files; inspect and edit the Skew-T and hodograph. |
 | **Logs** | Inspect backend health, capabilities, and diagnostic messages when a request fails. |
-| **Settings** | Adjust appearance, forecast playback, map rendering, and device-specific graphics settings. |
+| **Settings** | Choose temperature and wind units, adjust appearance, forecast playback and graphics, and check for updates. |
 
 ### v3.0.0 tour
 
@@ -115,7 +115,7 @@ Use **Inspect** to pan and zoom the sounding, or **Edit profile** to change a se
 
 ### Windows downloads
 
-Download the **v3.0.1 patch [Windows installer](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.0.1/SHARPpy-Reimagined-v3.0.1-windows-x64-setup.exe)** or the [portable ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.0.1/SHARPpy-Reimagined-v3.0.1-windows-x64.zip). Both include the app and its analysis backend; Python is bundled. Extract the complete portable folder before running the app. The executables are unsigned; [release notes, checksums, and build provenance](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v3.0.1) let you verify the download.
+Download the **v3.0.2 [Windows installer](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.0.2/SHARPpy-Reimagined-v3.0.2-windows-x64-setup.exe)** or the [portable ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.0.2/SHARPpy-Reimagined-v3.0.2-windows-x64.zip). Both include the app and its analysis backend; Python is bundled. Extract the complete portable folder before running the app. The executables are unsigned; [release notes, checksums, and build provenance](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v3.0.2) let you verify the download. Existing v3.0.1 installations can use **Settings → Updates**.
 
 **v2.0.0 Legacy is the final PySide6/Qt GUI release.** Its [Windows ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64.zip) and [portable executable](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64-portable.exe) remain downloadable from the [legacy release page](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0), including after v3 is released.
 
@@ -152,7 +152,7 @@ sharpmod-render examples/soundings/hrrr_point_36.68N_95.66W_f018.npz sounding.pn
 - [Frontend commands and data contracts](docs/frontend/DATA_CONTRACTS.md)
 - [Installation and optional dependencies](installation.txt)
 - [Rust backend and Python fallback](docs/RUST_BACKEND.md)
-- [Changes in 3.0.1](CHANGELOG.md#v301---2026-10-15)
+- [Changes in 3.0.2](CHANGELOG.md#v302---2026-10-16)
 - [Contributing and test lanes](CONTRIBUTING.md)
 - [v2.0.0 Legacy usage guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md)
 

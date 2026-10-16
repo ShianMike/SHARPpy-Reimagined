@@ -13,6 +13,7 @@
 .search input { width: 100%; min-width: 0; border: 0; background: none; outline: none; color: var(--text-primary); font: inherit; }
 .search input:focus-visible { outline: none; }
 .logBody { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.logBody[data-empty="true"] { display: grid; place-items: center; }
 .table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: var(--font-size-small); }
 .table th { position: sticky; top: 0; z-index: 1; background: var(--surface-1); color: var(--text-secondary); font-weight: var(--font-weight-medium); text-align: left; }
 .table th, .table td { padding: var(--space-2) var(--space-3); border-bottom: var(--hairline) solid var(--border-subtle); vertical-align: top; }

@@ -1,11 +1,15 @@
 // One map panel (REQUEST §14): its container and runtime, the data it draws,
-// and its chip, scale and cursor value. With two or four panels the chip makes
-// the panel the one the layer panel edits.
+// and its chip, scale and cursor value. With two or four panels the chip opens
+// the parameter picker for that panel.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cx } from "../../lib/cx";
 import { useMapStore, type PanelLayout } from "../../stores/mapStore";
 import { forecastLabel } from "../../features/sounding/soundingTime";
+import { useForecastContext } from "../../features/forecast/useForecast";
+import { ParameterPicker } from "../../features/toolbar/ParameterPicker";
+import { Popover } from "../../components/Popover";
+import pickerStyles from "../../features/toolbar/ForecastControls.module.css";
 import { ParameterScale } from "../controls/ParameterScale";
 import { FieldTooltip } from "../hover/FieldTooltip";
 import type { PanelField } from "../panelField";
@@ -42,6 +46,8 @@ export function fieldStatus(field: PanelField): string | null {
 
 function PanelChip({ panel, layout, field }: { panel: number; layout: PanelLayout; field: PanelField }): ReactNode {
   const active = useMapStore((state) => state.activePanel === panel);
+  const context = useForecastContext();
+  const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const name = field.product?.label ?? "Model field";
   const status = fieldStatus(field);
   if (layout === 1) {
@@ -54,19 +60,27 @@ function PanelChip({ panel, layout, field }: { panel: number; layout: PanelLayou
     </>
   );
   return (
-    <button
+    <><button
       type="button"
       className={styles.chip}
       data-motion="fade"
       aria-pressed={active}
-      aria-label={`Panel ${String(panel + 1)}: ${name}. Edit its layers.`}
+      aria-label={`Panel ${String(panel + 1)}: ${name}. Choose parameter.`}
+      aria-haspopup="dialog"
+      aria-expanded={anchor !== null}
+      disabled={field.catalog.data === undefined || context?.fieldsAvailable !== true}
       data-testid={`panel-chip-${String(panel + 1)}`}
-      onClick={() => {
+      onClick={(event) => {
         useMapStore.getState().setActivePanel(panel);
+        setAnchor(anchor === null ? event.currentTarget : null);
       }}
     >
       {body}
     </button>
+      <Popover open={anchor !== null} movable anchor={anchor} onClose={() => { setAnchor(null); }} role="dialog" label="Parameters" initialFocus="first" align="start" width="content" className={pickerStyles.parameterPicker}>
+        {field.catalog.data === undefined ? null : <ParameterPicker products={field.catalog.data.products} selected={field.product?.key ?? null} anchor={anchor} onClose={() => { setAnchor(null); }} />}
+      </Popover>
+    </>
   );
 }
 

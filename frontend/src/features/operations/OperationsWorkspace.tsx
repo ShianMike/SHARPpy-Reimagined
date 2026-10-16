@@ -8,6 +8,7 @@ import { useLogStore } from "../../stores/logStore";
 import { panelProduct, useMapStore } from "../../stores/mapStore";
 import { useSoundingStore, type SoundingSource } from "../../stores/soundingStore";
 import { Action } from "../../ui/Controls";
+import { BrandMark } from "../../ui/BrandMark";
 import { useForecast } from "../forecast/useForecast";
 import { compactUtc, forecastLabel, formatUtc } from "../sounding/soundingTime";
 import { HealthIndicator } from "../toolbar/HealthIndicator";
@@ -33,7 +34,7 @@ export function OperationsWorkspace(): ReactNode {
   const errors = entries.filter((entry) => entry.level === "error").length;
   const navigate = (id: WorkspaceId): void => { useAppStore.getState().setActiveWorkspace(id); };
   return <div className={styles.page}>
-    <header className={styles.heading}><div><h1>Overview</h1><p>Your forecast, ready to explore.</p></div><HealthIndicator /></header>
+    <header className={styles.heading}><div className={styles.identity}><BrandMark className={styles.brandMark} /><div><h1>SHARPpy Reimagined</h1><p>Overview · Your forecast, ready to explore.</p></div></div><HealthIndicator /></header>
     <div className={styles.workflows}>
       <section className={styles.forecast} aria-labelledby="continue-title">
         <div className={styles.sectionHeading}><Globe2 className="icon" aria-hidden="true" /><h2 id="continue-title">On your map</h2></div>

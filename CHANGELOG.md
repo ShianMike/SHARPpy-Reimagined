@@ -5,6 +5,50 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.0.2] - 2026-10-16
+
+This patch brings together the workspace fixes and release build improvements
+made after v3.0.0. It includes the updater, fullscreen control, 1280 × 800
+minimum window size, and notice and tooltip improvements introduced in v3.0.1.
+The app, installer, release page, tag, and update feed use v3.0.2.
+
+### Added
+
+- Add saved temperature (original, Celsius or Fahrenheit) and wind speed (knots,
+  km/h, mph or m/s) preferences in Settings, with live examples and a reset action.
+  Map scales, point readings, surface observations and profile editing use the
+  chosen units; chart images, exports and wind barb markings retain their
+  labelled scientific units.
+
+### Fixed
+
+- Show the app logo and title in the Overview header.
+- Keep file import formats on one line and show the size limit in the upload box.
+- Prevent deck.gl startup assertions by matching picking mode to each layer.
+- Defer sounding layout measurements to an animation frame and ignore unchanged
+  sizes, preventing ResizeObserver feedback loops.
+- Open the existing parameter picker when a map panel title is clicked, applying
+  the chosen parameter to that panel and restoring keyboard focus on close.
+- Keep parameter category names on one line when selected.
+- Give the parameter picker more room, separate category counts from labels,
+  and clarify parameter names, units, descriptions, and caveats.
+- Center forecast toolbar popups on first open, retain their saved dragged position,
+  and let the Move handle's Home key return them to the screen center.
+- Use the highlight alone for selected forecast models and parameters, removing
+  checkmark columns so model details and parameter units align at the right edge.
+- Center empty log results within the available space.
+- Simplify Settings headings and the automatic-save hint by removing the marked
+  decorative icons.
+
+### Performance
+
+- Check up to four model backends concurrently, allowing a completed or failed
+  check to free a slot while other providers are still responding.
+- Cache Windows build dependencies, reuse compiled release dependencies, and use
+  faster installer compression. Larger downloads are an accepted tradeoff.
+- Run the complete offline release test suite across parallel workers, keeping
+  Qt tests together while retaining all tests in the release gate.
+
 ## [v3.0.1] - 2026-10-15
 
 Patch for the v3.0.0 desktop interface. The release page retains the v3.0.0

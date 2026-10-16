@@ -43,7 +43,7 @@ menus; Escape closes popovers.
 
 The desktop window has a minimum size of **1280 × 800**.
 
-### Application updates (v3.0.1 patch)
+### Application updates (v3.0.1 and newer)
 
 The installed Windows app checks the latest stable GitHub Release on launch,
 every hour while open, and when the internet connection returns. When a newer
@@ -59,9 +59,17 @@ on the device. This downloads a complete installer rather than a binary delta
 patch. Nothing installs until you click, and checks run only while the app is
 open. Browser previews cannot install updates.
 
-The original v3.0.0 app has no updater. Install the v3.0.1 patch once using
-its Windows installer; later versions can update in the app. The patch release
-page retains the v3.0.0 title; its installer and update feed use v3.0.1.
+The original v3.0.0 app has no updater. Install v3.0.2 using its Windows
+installer once; later versions can update in the app. Existing v3.0.1
+installations can detect and install v3.0.2 through Settings → Updates.
+
+### Display units (v3.0.2)
+
+In **Settings → Units**, choose original temperature units, Celsius or Fahrenheit,
+and wind speeds in knots, km/h, mph or m/s. Readings and editable profile values
+use your choices immediately, and they are saved on this device. **Reset units**
+restores the defaults. Map colours and scientific calculations stay the same;
+chart images and exports retain their labelled units, and wind barbs use knots.
 
 ### Model Viewer
 

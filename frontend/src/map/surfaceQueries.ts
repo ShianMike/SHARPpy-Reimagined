@@ -4,11 +4,14 @@
 // all three and disabled without them.
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { useStationCatalog } from "../stations/stationQueries";
 import { useAppStore } from "../stores/appStore";
 import { useBackendClient } from "../lib/backend/BackendProvider";
 import { BASE_QUERY_OPTIONS, mapKeys } from "../lib/backend/queryOptions";
 import type { SurfacePlots } from "../types/surface";
+import { useUiStore } from "../stores/uiStore";
+import { surfaceDisplay } from "./surfaceDisplay";
 
 const PLOTS_STALE_MS = 10 * 60_000;
 
@@ -38,6 +41,8 @@ export function useSurfacePlots(
   enabled: boolean,
 ): UseQueryResult<SurfacePlots> {
   const client = useBackendClient();
+  const temperature = useUiStore((state) => state.units.temperature);
+  const select = useCallback((data: SurfacePlots) => surfaceDisplay(data, temperature), [temperature]);
   return useQuery({
     ...BASE_QUERY_OPTIONS,
     queryKey: mapKeys.surface(anchor?.latitude ?? 0, anchor?.longitude ?? 0, validTime ?? ""),
@@ -45,5 +50,6 @@ export function useSurfacePlots(
       client.getSurfacePlots(anchor?.latitude ?? 0, anchor?.longitude ?? 0, validTime ?? ""),
     enabled: enabled && anchor !== null && validTime !== null,
     staleTime: PLOTS_STALE_MS,
+    select,
   });
 }

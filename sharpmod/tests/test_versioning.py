@@ -90,7 +90,7 @@ def test_changelog_preserves_the_dated_legacy_release():
     ]
 
     assert headings[:4] == [
-        "## [v3.0.2] - Unreleased",
+        "## [v3.0.2] - 2026-10-16",
         "## [v3.0.1] - 2026-10-15",
         "## [v3.0.0] - 2026-10-15",
         "## [v2.0.0 Legacy] - 2026-09-26",

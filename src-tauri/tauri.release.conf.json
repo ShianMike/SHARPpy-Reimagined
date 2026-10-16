@@ -7,7 +7,7 @@
       "../dist/sharppy-backend/": "backend/"
     },
     "windows": {
-      "nsis": { "compression": "none" },
+      "nsis": { "compression": "zlib" },
       "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true }
     }
   }

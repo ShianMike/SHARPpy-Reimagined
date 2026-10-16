@@ -210,12 +210,14 @@ def test_release_installs_model_fetch_dependencies():
     assert "--config src-tauri/tauri.release.conf.json --bundles nsis" in workflow
     assert "uses: ./.github/workflows/tests.yml" in workflow
     assert "run_serial_release: true" in workflow
-    # Both Windows packaging and publication wait for every test lane.
+    # Attestation and publication wait for every test lane.
     assert (
-        "needs: [resolve-release, test-release, build-windows-exe, "
+        "needs: [resolve-release, test-release, test-desktop, build-windows-exe, "
         "attest-windows-release]"
     ) in workflow
-    assert "needs: [resolve-release, test-release, test-desktop]" in workflow
+    assert (
+        "needs: [resolve-release, test-release, test-desktop, build-windows-exe]"
+    ) in workflow
     assert workflow.count("contents: write") == 1
 
 

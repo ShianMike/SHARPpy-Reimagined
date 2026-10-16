@@ -2,6 +2,8 @@ import { Copy, Download, Hand, Maximize, Pencil, Redo2, RotateCcw, Undo2, ZoomIn
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { Action, IconAction } from "../../ui/Controls";
 import type { ImageMode, RenderChoice } from "../../types/soundings";
+import { convertUnit, displayUnit } from "../../lib/displayUnits";
+import { useUiStore } from "../../stores/uiStore";
 import { AscentPicker } from "./AscentPicker";
 import { SoundingErrorNotice } from "./SoundingErrorNotice";
 import { useObjectUrl } from "./soundingQueries";
@@ -12,6 +14,7 @@ import { replaceValues } from "./viewHistory";
 import styles from "./Viewer.module.css";
 
 export function SoundingImage({ soundingId, choice, title, heading }: { soundingId: string; choice: RenderChoice; title: string; heading: ReactNode }): ReactNode {
+  const units = useUiStore((state) => state.units);
   const [quality, setQuality] = useState<ImageMode>("uhd");
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -153,13 +156,13 @@ export function SoundingImage({ soundingId, choice, title, heading }: { sounding
             onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={() => { gesture.current = null; setPreview(null); }}>
             <img className={styles.image} src={url} alt={"Sounding: " + title} draggable={false} data-testid="sounding-image" />
             {editing ? <svg className={styles.editOverlay} viewBox={"0 0 " + String(data.width) + " " + String(data.height)} aria-hidden="true">
-              {data.points.map((point) => <circle key={point.id} cx={point.x * data.width} cy={point.y * data.height} r={4 / scale} data-selected={point.id === selected}><title>{point.label}: {point.values.map((v) => v.value.toFixed(1) + " " + v.unit).join(", ")}</title></circle>)}
+              {data.points.map((point) => <circle key={point.id} cx={point.x * data.width} cy={point.y * data.height} r={4 / scale} data-selected={point.id === selected}><title>{point.label}: {point.values.map((v) => { const unit = displayUnit(v.unit, units); return convertUnit(v.value, v.unit, unit).toFixed(1) + " " + unit; }).join(", ")}</title></circle>)}
               {preview === null ? null : <circle cx={preview.x * data.width} cy={preview.y * data.height} r={7 / scale} data-selected="true" />}
             </svg> : null}
           </div> : null}
         </div>
       </div>
-      {editing && point !== undefined ? <PointEditor key={point.id + JSON.stringify(point.values)} point={point} busy={unavailable} onClose={() => { setSelected(null); }} onApply={(values) => { edit.mutate({ ...request, edits: replaceValues(edits, Number(point.id.split(":")[1]), values) }); }} /> : null}
+      {editing && point !== undefined ? <PointEditor key={point.id + JSON.stringify(point.values) + JSON.stringify(units)} point={point} busy={unavailable} onClose={() => { setSelected(null); }} onApply={(values) => { edit.mutate({ ...request, edits: replaceValues(edits, Number(point.id.split(":")[1]), values) }); }} /> : null}
       {busy ? <div className={styles.rendering} data-motion="fade" role="status">{data === undefined ? "Drawing high-resolution sounding…" : edit.isPending ? "Recalculating profile…" : "Updating sounding…"}</div> : null}
       {image.isError || edit.isError ? <div className={styles.failure}><SoundingErrorNotice error={edit.error ?? image.error} operation="render_sounding" onRetry={() => { if (edit.variables) edit.mutate(edit.variables); else void image.refetch(); }} busy={busy} testId="render-error" /></div> : null}
     </div>

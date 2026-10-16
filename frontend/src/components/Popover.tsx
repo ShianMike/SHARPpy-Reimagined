@@ -86,7 +86,7 @@ export function Popover({
     return () => { closing = false; };
   }, [open, present]);
 
-  // Position from the anchor; the CSS clamps the box inside the viewport.
+  // Movable popups start centered; the CSS clamps every popup inside the viewport.
   useLayoutEffect(() => {
     const element = ref.current;
     if (!open || anchor === null || element === null) {
@@ -103,11 +103,11 @@ export function Popover({
       if (moved.current !== null) moved.current = { x: clamp(moved.current.x, window.innerWidth, box.width), y: clamp(moved.current.y, window.innerHeight, box.height) };
       const beside = target.right + gap + box.width > window.innerWidth - gap && target.left >= box.width + 2 * gap
         ? target.left - box.width - gap : target.right + gap;
-      const x = moved.current?.x ?? (side === "right" ? beside : align === "end" ? target.right - box.width : target.left);
-      const y = moved.current?.y ?? (side === "right" ? target.top : target.bottom);
+      const x = moved.current?.x ?? (movable ? (window.innerWidth - box.width) / 2 : side === "right" ? beside : align === "end" ? target.right - box.width : target.left);
+      const y = moved.current?.y ?? (movable ? (window.innerHeight - box.height) / 2 : side === "right" ? target.top : target.bottom);
       element.style.setProperty("--popover-x", `${String(x)}px`);
       element.style.setProperty("--popover-y", `${String(y)}px`);
-      element.style.setProperty("--popover-gap", moved.current === null && side === "bottom" ? "var(--space-1)" : `calc(var(--space-1) * 0)`);
+      element.style.setProperty("--popover-gap", !movable && side === "bottom" ? "var(--space-1)" : `calc(var(--space-1) * 0)`);
       element.style.setProperty("--popover-measured-w", `${String(box.width)}px`);
       element.style.setProperty("--popover-measured-h", `${String(box.height)}px`);
     };

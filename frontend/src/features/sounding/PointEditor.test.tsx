@@ -1,0 +1,36 @@
+// @vitest-environment jsdom
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, it, vi } from "vitest";
+import { DEFAULT_UNITS } from "../../lib/displayUnits";
+import { useUiStore } from "../../stores/uiStore";
+import type { ViewPoint } from "../../types/soundingView";
+import { PointEditor } from "./PointEditor";
+
+afterEach(() => { cleanup(); useUiStore.getState().setUnits(DEFAULT_UNITS); });
+
+it("edits in selected units, validates the canonical range and keeps untouched precision", async () => {
+  useUiStore.getState().setUnits({ temperature: "°F", wind: "m/s" });
+  const onApply = vi.fn();
+  const point: ViewPoint = { id: "wind:0", label: "Level", x: 0.5, y: 0.5, values: [
+    { key: "temp", label: "Temperature", value: 21.123456, unit: "°C", min: -150, max: 65 },
+    { key: "u", label: "U wind", value: 350, unit: "kt", min: -350, max: 350 },
+  ] };
+  render(<PointEditor point={point} busy={false} onApply={onApply} onClose={() => undefined} />);
+  const user = userEvent.setup();
+  const temperature = screen.getByRole<HTMLInputElement>("spinbutton", { name: "Temperature °F" });
+  const wind = screen.getByRole<HTMLInputElement>("spinbutton", { name: "U wind m/s" });
+  expect(temperature.value).toBe("70.02");
+  expect(wind.value).toBe("180.06");
+  await user.click(screen.getByRole("button", { name: "Apply & recalculate" }));
+  expect(onApply).toHaveBeenLastCalledWith({ temp: 21.123456, u: 350 });
+  await user.clear(temperature);
+  await user.type(temperature, "86");
+  await user.click(screen.getByRole("button", { name: "Apply & recalculate" }));
+  expect(onApply).toHaveBeenLastCalledWith({ temp: 30, u: 350 });
+  await user.clear(temperature);
+  await user.type(temperature, "150");
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Apply & recalculate" }).disabled).toBe(true);
+  await user.clear(temperature);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Apply & recalculate" }).disabled).toBe(true);
+});

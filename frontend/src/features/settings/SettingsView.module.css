@@ -7,14 +7,11 @@
 .navigation button { display: flex; align-items: center; gap: var(--space-3); border: 0; border-radius: var(--radius-sm); background: none; min-height: var(--control-h-lg); text-align: left; padding: var(--space-3); color: var(--text-secondary); font-size: var(--font-size-small); }
 .navigation button:hover { background: var(--control-selected); }
 .navigation button[aria-current] { color: var(--accent-bright); background: var(--accent-subtle); font-weight: var(--font-weight-medium); }
-.saved { display: flex; align-items: flex-start; gap: var(--space-2); margin-top: auto; padding: var(--space-8) var(--space-3) 0; color: var(--text-tertiary); font-size: var(--font-size-caption); line-height: var(--line-height-body); }
-.saved svg { flex: none; color: var(--success); }
+.saved { margin-top: auto; padding: var(--space-8) var(--space-3) 0; color: var(--text-tertiary); font-size: var(--font-size-caption); line-height: var(--line-height-body); }
 .content { min-width: 0; overflow: auto; padding: var(--space-6); overscroll-behavior: contain; }
-.heading { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-5); }
+.heading { margin-bottom: var(--space-5); }
 .heading h2 { font-size: var(--font-size-title); }
 .heading p { color: var(--text-secondary); margin-top: var(--space-1); }
-.sectionIcon { display: flex; align-items: center; justify-content: center; width: var(--control-h-md); height: var(--control-h-md); border-radius: var(--radius-sm); background: var(--accent-subtle); color: var(--accent-bright); flex: none; }
-.sectionIcon svg { width: var(--icon-size-md); height: var(--icon-size-md); }
 .settingsBody { display: flex; flex-direction: column; gap: var(--space-5); max-width: calc(2 * var(--picker-w)); }
 .section { padding: var(--space-4); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--control-fill); }
 .legend { color: var(--text-primary); font-weight: var(--font-weight-semibold); font-size: var(--font-size-subhead); margin-bottom: var(--space-5); padding: 0; }
@@ -72,3 +69,19 @@
 .updateProgress { display: flex; align-items: center; gap: var(--space-3); font-variant-numeric: tabular-nums; }
 .updateProgress progress { flex: 1; min-width: 0; accent-color: var(--accent); }
 .releaseNotes { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: var(--space-3); }
+.units { display: flex; flex-direction: column; gap: var(--space-4); }
+.unitsFooter { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); color: var(--text-secondary); font-size: var(--font-size-small); }
+.unitsFooter p + p { margin-top: var(--space-2); font-size: var(--font-size-caption); }
+.unitsFooter button { flex: none; }
+.unitChoices { border: 0; padding: 0; margin: 0; min-width: 0; }
+.unitChoices .legend { margin-bottom: var(--space-3); }
+.unitOptions { display: flex; gap: var(--space-2); }
+.unitOption { position: relative; display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; gap: var(--space-1); padding: var(--space-2); border: var(--hairline) solid var(--border-strong); border-radius: var(--radius-sm); cursor: pointer; }
+.unitOption input { position: absolute; opacity: 0; }
+.unitOption strong { font-size: var(--font-size-title); font-weight: var(--font-weight-medium); }
+.unitOption span { font-size: var(--font-size-caption); color: var(--text-secondary); }
+.unitOption:hover { background: var(--control-selected); }
+.unitOption:has(input:checked) { color: var(--accent-bright); border-color: var(--accent); background: var(--accent-subtle); }
+.unitOption:has(input:focus-visible) { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.unitExample { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-2); padding-top: var(--space-3); color: var(--text-secondary); font-size: var(--font-size-small); }
+.unitExample output { color: var(--text-primary); font-weight: var(--font-weight-medium); font-variant-numeric: tabular-nums; }

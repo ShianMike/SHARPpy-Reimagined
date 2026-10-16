@@ -1,9 +1,12 @@
 import { Fragment, useLayoutEffect, useRef, type ReactNode } from "react";
 import { Surface } from "../../ui/Surface";
+import { displayReading } from "../../lib/displayUnits";
+import { useUiStore } from "../../stores/uiStore";
 import { useHoverStore } from "./hoverStore";
 import styles from "./StationTooltip.module.css";
 
 export function ReportTooltip(): ReactNode {
+  const units = useUiStore((state) => state.units);
   const report = useHoverStore((state) => state.report);
   const ref = useRef<HTMLElement | null>(null);
 
@@ -46,7 +49,7 @@ export function ReportTooltip(): ReactNode {
         if (reading === undefined || reading === "") continue;
         const split = reading.indexOf(" ");
         if (split < 1) paragraphs.push(reading);
-        else readings.push({ name: reading.charAt(0).toUpperCase() + reading.slice(1, split), value: reading.slice(split + 1) });
+        else readings.push({ name: reading.charAt(0).toUpperCase() + reading.slice(1, split), value: displayReading(reading.slice(split + 1), units) });
       }
       continue;
     }

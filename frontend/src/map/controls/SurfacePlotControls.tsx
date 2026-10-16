@@ -7,10 +7,13 @@ import { useForecastContext } from "../../features/forecast/useForecast";
 import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice";
 import { compactUtc } from "../../features/sounding/soundingTime";
 import { formatLatitude, formatLongitude } from "../../stations/stationFormat";
+import { displayUnit } from "../../lib/displayUnits";
+import { useUiStore } from "../../stores/uiStore";
 import { useSelectionAnchor, useSurfacePlots } from "../surfaceQueries";
 import styles from "./LayerPanel.module.css";
 
 export function SurfacePlotControls(): ReactNode {
+  const units = useUiStore((state) => state.units);
   const context = useForecastContext();
   const anchor = useSelectionAnchor();
   const plots = useSurfacePlots(anchor, context?.validTime ?? null, true);
@@ -45,7 +48,7 @@ export function SurfacePlotControls(): ReactNode {
           {plots.data.counts.noObservation + plots.data.counts.failed === 0 ? null : <p className={styles.hint}>{`${String(plots.data.counts.noObservation)} without a report · ${String(plots.data.counts.failed)} could not be checked`}</p>}
         </div>
       )}
-      <p className={styles.hint}><span className={styles.obsUpper}>Temperature</span> / <span className={styles.obsLower}>dewpoint</span> in °C · wind barbs in kt.</p>
+      <p className={styles.hint}><span className={styles.obsUpper}>Temperature</span> / <span className={styles.obsLower}>dewpoint</span> in {displayUnit("°C", units)} · wind barbs in kt.</p>
       <p className={styles.hint}>Hover for station details. Zoom in to reveal more observations; click a plot to select its location.</p>
     </div>
   );

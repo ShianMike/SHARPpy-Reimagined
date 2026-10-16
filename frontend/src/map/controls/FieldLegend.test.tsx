@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import { parseMapCatalog } from "../../lib/contracts/map";
 import { useForecastStore } from "../../stores/forecastStore";
-import { panelLayers, useMapStore } from "../../stores/mapStore";
+import { panelLayers, panelProduct, useMapStore } from "../../stores/mapStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import type { Palette } from "../../types/map";
 import { LUT_SIZE } from "../field/colourize";
@@ -15,6 +15,10 @@ import { FieldLegend, spacedTicks } from "./FieldLegend";
 import { MapPanel } from "../panels/MapPanel";
 import { useHoverStore } from "../hover/hoverStore";
 import { FieldControls } from "./FieldControls";
+import { useUiStore } from "../../stores/uiStore";
+import { DEFAULT_UNITS, convertUnit } from "../../lib/displayUnits";
+import { formatValue } from "../field/colourize";
+import { PointDetails } from "../../features/inspector/PointDetails";
 
 const initialMap = useMapStore.getState();
 const initialForecast = useForecastStore.getState();
@@ -37,9 +41,55 @@ beforeEach(() => {
     constructor(readonly data: Uint8ClampedArray, readonly width: number, readonly height: number) {}
   });
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); useUiStore.getState().setUnits(DEFAULT_UNITS); });
 
 const palette: Palette = { stops: [[-800, "#113355"], [-25, "#abcdef"]], units: "J/kg", stepped: false, floor: null, ceiling: -25, ticks: [-750, -500, -250] };
+
+it("updates the scale, cursor and point values together while preserving the map's source frame and colours", async () => {
+  useMapStore.getState().setProduct("tmp-2m");
+  useMapStore.getState().setLayerVisible("model-field", true);
+  const point = { longitude: -97.5, latitude: 35.5 };
+  renderWithBackend(<><MapPanel panel={0} layout={1} /><PointDetails point={point} /></>, createTransport());
+  const scale = await screen.findByRole("complementary", { name: "Parameter scale" });
+  act(() => { useHoverStore.getState().setPointer({ ...point, panel: 0, x: 100, y: 100 }); });
+  const readout = await screen.findByTestId("pointer-value");
+  const original = Number.parseFloat(readout.querySelector("strong")?.textContent ?? "");
+  const scenes = setScene.mock.calls.length, colours = putImageData.mock.calls.length;
+  act(() => { useUiStore.getState().setUnits({ temperature: "°C", wind: "m/s" }); });
+  const expected = `${formatValue(convertUnit(original, "°F", "°C"))} °C`;
+  expect(readout.textContent).toContain(expected);
+  expect(screen.getByTestId("point-value-1").textContent).toContain(expected);
+  expect(scale.getAttribute("aria-description")).toContain("°C");
+  expect(Number(within(scale).getByRole("slider").getAttribute("aria-valuemin"))).toBeCloseTo(-51.6666667);
+  const slider = within(scale).getByRole("slider");
+  fireEvent.keyDown(slider, { key: "Home" });
+  expect(slider.getAttribute("aria-valuenow")).toBe(slider.getAttribute("aria-valuemin"));
+  expect(setScene).toHaveBeenCalledTimes(scenes);
+  expect(putImageData).toHaveBeenCalledTimes(colours);
+});
+
+it("opens parameters from a panel title and changes only that panel, returning keyboard focus", async () => {
+  useMapStore.getState().setPanelLayout(2);
+  renderWithBackend(<MapPanel panel={1} layout={2} />, createTransport());
+  const title = screen.getByTestId("panel-chip-2");
+  await waitFor(() => { expect(title.getAttribute("disabled")).toBeNull(); });
+  const first = panelProduct(useMapStore.getState(), 0);
+  const user = userEvent.setup();
+  await user.click(title);
+  expect(useMapStore.getState().activePanel).toBe(1);
+  const picker = screen.getByRole("dialog", { name: "Parameters" });
+  expect(document.activeElement).toBe(within(picker).getByRole("searchbox", { name: "Search parameters" }));
+  await user.click(within(picker).getByRole("button", { name: "2 m AGL Temperature, °F" }));
+  expect(panelProduct(useMapStore.getState(), 1)).toBe("tmp-2m");
+  expect(panelProduct(useMapStore.getState(), 0)).toBe(first);
+  expect(panelLayers(useMapStore.getState(), 1)["model-field"].visible).toBe(true);
+  expect(document.activeElement).toBe(title);
+  await user.keyboard("{Enter}");
+  expect(title.getAttribute("aria-expanded")).toBe("true");
+  await user.keyboard("{Escape}");
+  expect(title.getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).toBe(title);
+});
 
 it("draws the highest colour at the top and lowest at the bottom, including negative endpoints", () => {
   const view = render(<FieldLegend palette={palette} vertical />);

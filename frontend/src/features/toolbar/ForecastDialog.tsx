@@ -1,4 +1,4 @@
-import { CalendarDays, Check, ChevronLeft, ChevronRight, GripHorizontal, Search, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, GripHorizontal, Search, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useForecastStore } from "../../stores/forecastStore";
 import { Action, IconAction } from "../../ui/Controls";
@@ -33,14 +33,14 @@ export function ForecastDialog({ context, step, anchor, onClose }: {
     useForecastStore.getState().setPlaying(false); useForecastStore.getState().setRun(run); done();
   };
   return <>
-    <header className={styles.dialogHeader} data-popover-drag><IconAction icon={GripHorizontal} size="sm" label="Move popup" data-popover-move aria-description="Drag to move. Arrow keys move the popup; Home returns it to the toolbar." /><h2>{FORECAST_TITLES[step]}</h2><span className={styles.badge}>{context.model.label}</span><IconAction icon={X} size="sm" label="Close forecast setup" onClick={done} /></header>
+    <header className={styles.dialogHeader} data-popover-drag><IconAction icon={GripHorizontal} size="sm" label="Move popup" data-popover-move aria-description="Drag to move. Arrow keys move the popup; Home centers it on the screen." /><h2>{FORECAST_TITLES[step]}</h2><span className={styles.badge}>{context.model.label}</span><IconAction icon={X} size="sm" label="Close forecast setup" onClick={done} /></header>
     {step === "model" ? <>
       <label className={styles.search}><Search className="icon-sm" aria-hidden="true" /><input data-autofocus type="search" aria-label="Search models" placeholder="Find a model or region…" value={query} onChange={(event) => { setQuery(event.target.value); }} /></label>
       <div className={styles.listHeading}><span>Model</span><span>Resolution · region</span></div>
       <div className={styles.dialogBody}><div className={styles.modelChoices}>
         {models.map((model) => <button key={model.key} aria-label={`Choose ${model.label}`} type="button" className={styles.modelChoice} aria-pressed={model.key === context.model.key} title={model.notes} onClick={() => {
           useForecastStore.getState().setModel(model.key); done();
-        }}><strong>{model.label}</strong><small>{model.gridSpacingKm === null ? "" : `${String(model.gridSpacingKm)} km · `}{model.domain}</small><span className={styles.check}>{model.key === context.model.key ? <Check className="icon-sm" aria-hidden="true" /> : null}</span></button>)}
+        }}><strong>{model.label}</strong><small>{model.gridSpacingKm === null ? "" : `${String(model.gridSpacingKm)} km · `}{model.domain}</small></button>)}
       </div>{models.length === 0 ? <div className={styles.empty}><p>No matching models.</p><Action onClick={() => { setQuery(""); }}>Clear search</Action></div> : null}</div>
       <footer className={styles.pickerFooter}>{models.length} {models.length === 1 ? "model" : "models"} · point soundings available</footer>
     </> : step === "run" ? <>

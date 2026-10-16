@@ -5,6 +5,8 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode 
 import type { Palette } from "../../types/map";
 import { VisuallyHidden } from "../../components/VisuallyHidden";
 import { cx } from "../../lib/cx";
+import { convertUnit, displayUnit } from "../../lib/displayUnits";
+import { useUiStore } from "../../stores/uiStore";
 import { buildLut, LUT_SIZE, paletteRange } from "../field/colourize";
 import styles from "./LayerPanel.module.css";
 import hints from "../../ui/HoverHint.module.css";
@@ -30,6 +32,9 @@ export function spacedTicks(ticks: readonly number[], low: number, high: number,
 const tickText = (value: number): string => String(Number(value.toFixed(2)));
 
 export function FieldLegend({ palette, vertical = false }: { palette: Palette; vertical?: boolean }): ReactNode {
+  const preferences = useUiStore((state) => state.units);
+  const unit = displayUnit(palette.units, preferences);
+  const shown = (value: number): number => convertUnit(value, palette.units, unit);
   const ref = useRef<HTMLCanvasElement | null>(null);
   const [at, setAt] = useState(0.5);
   const [active, setActive] = useState(false);
@@ -46,14 +51,14 @@ export function FieldLegend({ palette, vertical = false }: { palette: Palette; v
   const { low, high } = paletteRange(palette);
   const hidden =
     palette.ceiling !== null
-      ? `Values above ${tickText(palette.ceiling)} are not drawn.`
-      : `Values below ${tickText(palette.floor ?? low)} are not drawn.`;
+      ? `Values above ${tickText(shown(palette.ceiling))} are not drawn.`
+      : `Values below ${tickText(shown(palette.floor ?? low))} are not drawn.`;
   const value = low + at * (high - low);
-  const valueText = `${tickText(value)} ${palette.units || "unitless"}`;
+  const valueText = `${tickText(shown(value))} ${unit || "unitless"}`;
   return (
     <figure className={styles.scale} data-testid="field-legend" data-orientation={vertical ? "vertical" : "horizontal"} title={vertical ? undefined : hidden}>
       <canvas ref={ref} className={styles.ramp} width={vertical ? RAMP_THICKNESS : LUT_SIZE} height={vertical ? LUT_SIZE : RAMP_THICKNESS} aria-hidden="true" />
-      {vertical ? <div className={styles.scaleExplore} role="slider" tabIndex={0} aria-label="Explore parameter scale" aria-orientation="vertical" aria-valuemin={low} aria-valuemax={high} aria-valuenow={Number(value.toFixed(2))} aria-valuetext={valueText} aria-describedby={descriptionId}
+      {vertical ? <div className={styles.scaleExplore} role="slider" tabIndex={0} aria-label="Explore parameter scale" aria-orientation="vertical" aria-valuemin={shown(low)} aria-valuemax={shown(high)} aria-valuenow={Math.max(shown(low), Math.min(shown(high), Number(shown(value).toFixed(2))))} aria-valuetext={valueText} aria-describedby={descriptionId}
         style={{ "--hint-at": `${String((1 - at) * 100)}%` } as CSSProperties}
         onPointerMove={(event) => { const box = event.currentTarget.getBoundingClientRect(); if (box.height > 0) setAt(Math.max(0, Math.min(1, 1 - (event.clientY - box.top) / box.height))); setActive(true); }}
         onPointerLeave={(event) => { if (document.activeElement !== event.currentTarget) setActive(false); }}
@@ -66,18 +71,18 @@ export function FieldLegend({ palette, vertical = false }: { palette: Palette; v
         }}>
         {active ? <><span className={styles.scalePointer} aria-hidden="true" /><span className={cx(hints.hint, "tabular")} role="tooltip" data-side="left" data-open="true">{valueText}</span></> : null}
         <VisuallyHidden id={descriptionId}>{hidden} Use arrow keys to explore values; Home and End show the limits.</VisuallyHidden>
-      </div> : <ol className={cx(styles.ticks, "tabular")} aria-label={`Scale ticks, ${palette.units || "unitless"}`}>
+      </div> : <ol className={cx(styles.ticks, "tabular")} aria-label={`Scale ticks, ${unit || "unitless"}`}>
         {spacedTicks(palette.ticks, low, high).map((tick) => (
           <li
             key={tick.value}
             data-edge={tick.at < 0.08 ? "start" : tick.at > 0.92 ? "end" : undefined}
             style={{ "--tick-at": `${String(tick.at * 100)}%` } as CSSProperties}
           >
-            {tickText(tick.value)}
+            {tickText(shown(tick.value))}
           </li>
         ))}
       </ol>}
-      {vertical ? null : <figcaption className={styles.hint}>{`${palette.units === "" ? "No units" : palette.units}. ${hidden}`}</figcaption>}
+      {vertical ? null : <figcaption className={styles.hint}>{`${unit === "" ? "No units" : unit}. ${hidden}`}</figcaption>}
     </figure>
   );
 }

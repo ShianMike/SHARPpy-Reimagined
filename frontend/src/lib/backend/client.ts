@@ -69,9 +69,8 @@ export function failureFromRejection(reason: unknown, operation: string): Backen
 
 export class BackendClient {
   private lastBridgeStatus = "";
-  private statusChecks: Promise<unknown> = Promise.resolve();
+  private readonly statusChecks = new Set<Promise<void>>();
   constructor(private readonly transport: Transport) {}
-
   async getBackendHealth(): Promise<BackendHealth> {
     const health = await this.request("get_backend_health", parseBackendHealth);
     this.recordBridgeStatus(health.bridge);
@@ -100,19 +99,19 @@ export class BackendClient {
   getModelCatalog(): Promise<ModelCatalog> {
     return this.request("get_model_catalog", parseModelCatalog);
   }
-
-  getModelStatus(model: string, runTime: string, forecastHour: number): Promise<ModelStatus> {
-    // Serial probes leave bridge workers available for forecasting and health checks.
-    const result = this.statusChecks.then(() => this.request("get_model_status",
-      (value) => parseModelStatus(value, model, runTime, forecastHour), { model, runTime, forecastHour }));
-    this.statusChecks = result.then(() => undefined, () => undefined);
+  async getModelStatus(model: string, runTime: string, forecastHour: number): Promise<ModelStatus> {
+    // Four background probes leave half the bridge workers for foreground requests.
+    while (this.statusChecks.size >= 4) await Promise.race(this.statusChecks);
+    const result = this.request("get_model_status",
+      (value) => parseModelStatus(value, model, runTime, forecastHour), { model, runTime, forecastHour });
+    const settled = result.then(() => undefined, () => undefined);
+    this.statusChecks.add(settled);
+    void settled.then(() => { this.statusChecks.delete(settled); });
     return result;
   }
-
   openSounding(request: OpenSoundingRequest): Promise<SoundingSummary> {
     return this.request("open_sounding", parseSoundingSummary, { request });
   }
-
   inspectWrf(filePath: string): Promise<WrfFile> { return this.request("inspect_wrf", parseWrfFile, { filePath }); }
   getSoundingAnalysis(soundingId: string): Promise<SoundingAnalysis> {
     return this.request("get_sounding_analysis", parseSoundingAnalysis, { soundingId });

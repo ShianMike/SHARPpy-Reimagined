@@ -5,8 +5,10 @@ import surface from "@contracts/public/map/surface.json";
 import { afterEach, describe, expect, it } from "vitest";
 import { ReportTooltip } from "./ReportTooltip";
 import { useHoverStore, type HoveredReport } from "./hoverStore";
+import { DEFAULT_UNITS } from "../../lib/displayUnits";
+import { useUiStore } from "../../stores/uiStore";
 
-afterEach(() => { cleanup(); useHoverStore.getState().clear(); });
+afterEach(() => { cleanup(); useHoverStore.getState().clear(); useUiStore.getState().setUnits(DEFAULT_UNITS); });
 function show(overrides: Partial<HoveredReport> = {}) {
   const report = fixture.reports[0];
   if (report === undefined) throw new Error("Missing report fixture");
@@ -16,6 +18,17 @@ function show(overrides: Partial<HoveredReport> = {}) {
 }
 
 describe("report popup paragraphs", () => {
+  it("updates observation readings and gusts without changing timing, missing status or provider text", () => {
+    const plot = surface.plots[0];
+    if (plot === undefined) throw new Error("Missing observation");
+    const tooltip = show({ ...plot, caption: "" });
+    act(() => { useUiStore.getState().setUnits({ temperature: "°F", wind: "km/h" }); });
+    expect(tooltip.textContent).toContain("70.7 °F");
+    expect(tooltip.textContent).toContain("54 °F");
+    expect(tooltip.textContent).toContain("270° at 37 km/h, gusting 51.9 km/h");
+    expect(tooltip.textContent).toContain("2026-10-04 21:00:00Z");
+    expect(tooltip.textContent).toContain("Source: NOAA/NWS API station observation");
+  });
   it("separates location, labeled facts, narrative and attribution without repeating the magnitude", () => {
     const tooltip = show();
     const header = tooltip.querySelector("header"), footer = tooltip.querySelector("footer");

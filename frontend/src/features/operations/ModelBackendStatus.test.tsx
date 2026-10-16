@@ -19,26 +19,34 @@ it("rejects untrusted status states, wrong cycles and malformed timestamps", () 
   for (const invalid of [{ state: "healthy" }, { model: "other" }, { runTime: "2026-06-26T06:00:00Z" }, { forecastHour: 6 }, { checkedAt: "yesterday" }, { extra: true }]) expect(() => parse({ ...fixture, ...invalid })).toThrow();
 });
 
-it("serializes probes without blocking other requests and continues after a failed check", async () => {
+it("runs four probes at a time, fills a freed slot and continues after a failed check without blocking health", async () => {
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   const base = createTransport();
-  let release: (() => void) | undefined;
-  let calls = 0;
-  const firstGate = new Promise<void>((resolve) => { release = resolve; });
+  const release: (() => void)[] = [];
+  const gates = Array.from({ length: 6 }, () => new Promise<void>((resolve) => { release.push(resolve); }));
+  let calls = 0, active = 0, peak = 0;
   const client = new BackendClient({ ...base, call: async (command, args) => {
     if (command !== "get_model_status") return base.call(command, args);
-    calls += 1;
-    if (calls === 1) { await firstGate; throw new Error("First probe unavailable"); }
+    const index = calls++;
+    peak = Math.max(peak, ++active);
+    await gates[index];
+    active -= 1;
+    if (index === 0) throw new Error("First probe unavailable");
     return base.call(command, args);
   } });
-  const first = client.getModelStatus(fixture.model, fixture.runTime, 0).catch((error: unknown) => error);
-  const second = client.getModelStatus(fixture.model, fixture.runTime, 0);
-  await client.getBackendHealth();
-  expect(calls).toBe(1);
-  release?.();
-  await first;
-  expect((await second).state).toBe("available");
-  expect(calls).toBe(2);
+  const checks = Array.from({ length: gates.length }, () => client.getModelStatus(fixture.model, fixture.runTime, 0).catch((error: unknown) => error));
+  try {
+    await client.getBackendHealth();
+    expect(calls).toBe(4);
+    release[1]?.();
+    await waitFor(() => { expect(calls).toBe(5); });
+    release[0]?.();
+    await waitFor(() => { expect(calls).toBe(6); });
+    expect(peak).toBe(4);
+  } finally { release.forEach((done) => { done(); }); }
+  const results = await Promise.all(checks);
+  expect(results[0]).toBeInstanceOf(Error);
+  for (const result of results.slice(1)) expect(result).toMatchObject({ state: "available" });
 });
 
 it("filters provider results, opens check details, retries one model and preserves results during refresh", async () => {

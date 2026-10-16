@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { DEFAULT_UNITS, parseUnitPreferences, type UnitPreferences } from "../lib/displayUnits";
 
 export type Theme = "system" | "light" | "dark";
 interface UiState {
@@ -10,6 +11,8 @@ interface UiState {
   theme: Theme;
   speed: number;
   loop: boolean;
+  units: UnitPreferences;
+  setUnits(value: UnitPreferences): void;
   popupPosition: { x: number; y: number } | null;
   setPopupPosition(value: UiState["popupPosition"]): void;
   setCollapsed(value: boolean): void;
@@ -25,6 +28,8 @@ export const useUiStore = create<UiState>()(persist((set) => ({
   theme: "system",
   speed: 1,
   loop: true,
+  units: DEFAULT_UNITS,
+  setUnits: (units) => { set({ units: parseUnitPreferences(units) }); },
   popupPosition: null,
   setPopupPosition: (popupPosition) => { set({ popupPosition }); },
   setCollapsed: (collapsed) => { set({ collapsed }); },
@@ -33,7 +38,7 @@ export const useUiStore = create<UiState>()(persist((set) => ({
   setLoop: (loop) => { set({ loop }); },
 }), {
   name: "sharppy-workspace-ui",
-  partialize: ({ collapsed, theme, speed, loop, popupPosition }) => ({ collapsed, theme, speed, loop, popupPosition }),
+  partialize: ({ collapsed, theme, speed, loop, popupPosition, units }) => ({ collapsed, theme, speed, loop, popupPosition, units }),
   merge: (saved, current) => {
     const value = saved !== null && typeof saved === "object" ? saved as Record<string, unknown> : {};
     const point = value.popupPosition !== null && typeof value.popupPosition === "object" ? value.popupPosition as Record<string, unknown> : {};
@@ -42,6 +47,7 @@ export const useUiStore = create<UiState>()(persist((set) => ({
       theme: value.theme === "light" || value.theme === "dark" ? value.theme : "system",
       speed: PLAYBACK_SPEEDS.find((speed) => speed === value.speed) ?? 1,
       loop: typeof value.loop === "boolean" ? value.loop : current.loop,
+      units: parseUnitPreferences(value.units),
       popupPosition: typeof point.x === "number" && Number.isFinite(point.x) && typeof point.y === "number" && Number.isFinite(point.y) ? { x: point.x, y: point.y } : null,
     };
   },

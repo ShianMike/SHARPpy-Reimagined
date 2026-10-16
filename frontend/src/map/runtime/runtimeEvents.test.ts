@@ -21,10 +21,14 @@ it("coalesces map movement into one atomic pick, selects points without a pick, 
     off: (name: string) => { handlers.delete(name); },
     isMoving: vi.fn(() => false),
   };
-  const overlay = { pickObject: vi.fn(() => null) };
+  let initialized = false;
+  const overlay = { pickObject: vi.fn(() => {
+    if (!initialized) throw new Error("deck.gl: assertion failed.");
+    return null;
+  }) };
   const target: RuntimeEventTarget = {
     panel: 2, container: document.createElement("div"), primary: false, watch: NO_WATCH,
-    errors: [], dragging: false, live: (fn) => fn, styleLoaded: vi.fn(), runtimeError: vi.fn(),
+    errors: [], dragging: false, overlayReady: false, live: (fn) => fn, styleLoaded: vi.fn(), runtimeError: vi.fn(),
   };
   const event = (x: number): MapMouseEvent => ({ point: { x, y: 30 }, lngLat: { lng: -97, lat: 35 } }) as MapMouseEvent;
   const emit = (name: string, x = 50): void => { handlers.get(name)?.(event(x)); };
@@ -33,6 +37,14 @@ it("coalesces map movement into one atomic pick, selects points without a pick, 
   let writes = 0;
   const stop = useHoverStore.subscribe(() => { writes += 1; });
   try {
+    emit("mousemove");
+    flush();
+    emit("click");
+    expect(overlay.pickObject).not.toHaveBeenCalled();
+    expect(useAppStore.getState().selectedPoint).toEqual({ longitude: -97, latitude: 35 });
+    initialized = true;
+    target.overlayReady = true;
+    writes = 0;
     for (let x = 0; x < 100; x++) emit("mousemove", x);
     expect(overlay.pickObject).not.toHaveBeenCalled();
     expect(frames.size).toBe(1);

@@ -47,6 +47,41 @@ async function openObserved(page: Page): Promise<void> {
 }
 
 test.describe("at 1440 by 900", () => {
+  test("fit sounding settles at fractional viewport sizes without a scrollbar resize loop", async ({ page }) => {
+    await page.goto("/");
+    await waitForMark(page, MARKS.shellPainted);
+    await showWorkspace(page, "Soundings");
+    await page.getByRole("textbox", { name: "Station" }).fill("72357");
+    await openObserved(page);
+    const stage = page.getByTestId("sounding-stage");
+    await stage.evaluate((element) => {
+      const image = element.querySelector("img");
+      if (image === null) throw new Error("Sounding image missing");
+      const height = 500.5;
+      element.style.flex = "none";
+      element.style.height = `${String(height)}px`;
+      element.style.width = `${String((height - 24) * image.naturalWidth / image.naturalHeight + 24 + 0.25)}px`;
+    });
+    for (let frame = 0; frame < 10; frame++) await nextFrames(page);
+    const fit = await stage.evaluate((element) => {
+      const viewport = element.firstElementChild;
+      const image = element.querySelector("img");
+      if (viewport === null || image === null) throw new Error("Sounding viewport missing");
+      const box = viewport.getBoundingClientRect();
+      const drawn = image.getBoundingClientRect();
+      return { width: box.width, height: box.height, imageWidth: drawn.width, imageHeight: drawn.height };
+    });
+    expect(fit.imageWidth + 24).toBeLessThanOrEqual(fit.width);
+    expect(fit.imageHeight + 24).toBeLessThanOrEqual(fit.height);
+    await page.getByRole("button", { name: "Actual pixels (100%)", exact: true }).click();
+    await page.getByRole("button", { name: "Fit sounding to view", exact: true }).click();
+    await nextFrames(page);
+    await expectImageDrawn(stage);
+    await showWorkspace(page, "Logs");
+    await page.getByRole("button", { name: "Errors", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "No matching events", exact: true })).toBeVisible();
+  });
+
   test("observed: from a map station to sharpmod's image and parcel selection", async ({
     page,
     consoleMessages,

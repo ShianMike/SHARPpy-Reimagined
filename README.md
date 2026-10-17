@@ -13,11 +13,11 @@
 
 </div>
 
-## What's new in 3.0.3 (Unreleased)
+## What's new in 3.0.3
 
 SHARPpy Reimagined brings [SHARPpy](https://github.com/sharppy/SHARPpy) sounding analysis into a map-based desktop workspace. Version **3.0.0** introduces a React/Tauri interface backed by the existing Python and Rust scientific tools. This README describes that interface; the [v2.0.0 Legacy tour and screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/README.md) document the previous GUI.
 
-The **3.0.3 candidate is Unreleased**; the Windows downloads below remain **v3.0.2**. It expands HRRR weather products and colour tables, with supported products for NAM 3 km, RRFS and REFS members; adds forecast-hour preloading and Fast / Smooth playback; remembers map settings and projection; and checks station availability automatically. Storage settings show cache usage and cleanup controls, while temporary forecast-model downloads are removed when the app closes. The legacy Qt interface and unused ensemble-summary API are retired; individual model members and threshold calculations remain supported. See the [full v3.0.3 changelog](CHANGELOG.md#v303---unreleased).
+Version **3.0.3** expands HRRR weather products and colour tables, with supported products for NAM 3 km, RRFS and REFS members; adds forecast-hour preloading and Fast / Smooth playback; remembers map settings and projection; and checks station availability automatically. Storage settings show cache usage and cleanup controls, while temporary forecast-model downloads are removed when the app closes. The legacy Qt interface and unused ensemble-summary API are retired; individual model members and threshold calculations remain supported. See the [full v3.0.3 changelog](CHANGELOG.md#v303---2026-10-17).
 
 The **3.0.2 patch** adds saved temperature and wind units, map rendering fixes, panel titles that open the parameter picker, cleaner Settings and Logs layouts, quicker model availability checks, and faster Windows release builds. It includes the **3.0.1** additions: signed in-app updates, a fullscreen control, a minimum window size of 1280 × 800, and clearer outlook tooltips and notices.
 
@@ -105,7 +105,7 @@ Two- and four-panel layouts share the map view and forecast time while keeping e
 
 Field rendering defaults to **Smooth**, with **Sharp** available to show grid cells; this choice is separate from Fast / Smooth playback. Station labels default off and retain your saved choice. Layers include SPC outlooks, radar, satellite imagery, surface observations, and storm reports. Wind barbs adapt their density to the zoom level. **Layers → Map details** offers a saved **Flat (Mercator) / Curved (Globe)** projection shared by all panels.
 
-New HRRR products include total precipitation, precipitation rates, precipitable water, snow depth, surface winds and gusts, effective storm-relative helicity, maximum updraft velocity, Surface-Based Lifted Index, and 2 m Theta-e with 10 m wind barbs. Model menus show only supported products for HRRR, NAM 3 km, RRFS and REFS members; the [changelog](CHANGELOG.md#v303---unreleased) details model limits and units.
+New HRRR products include total precipitation, precipitation rates, precipitable water, snow depth, surface winds and gusts, effective storm-relative helicity, maximum updraft velocity, Surface-Based Lifted Index, and 2 m Theta-e with 10 m wind barbs. Model menus show only supported products for HRRR, NAM 3 km, RRFS and REFS members; the [changelog](CHANGELOG.md#v303---2026-10-17) details model limits and units.
 
 **Settings → Storage** shows forecast-download, map-image and SPC-outlook cache usage, including preloaded forecast frames. Clear a category or all available caches while keeping saved files, open soundings, pinned data and active downloads. **Layers → Reset layers** restores layer options and the flat projection across panels; **Settings → Workspace** resets app preferences while keeping open work, cached data and the map location.
 
@@ -123,7 +123,7 @@ Use **Inspect** to pan and zoom the sounding, or **Edit profile** to change a se
 
 ### Windows downloads
 
-Download the **v3.0.2 [Windows installer](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.0.2/SHARPpy-Reimagined-v3.0.2-windows-x64-setup.exe)** or the [portable ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.0.2/SHARPpy-Reimagined-v3.0.2-windows-x64.zip). Both include the app and its analysis backend; Python is bundled. Extract the complete portable folder before running the app. The executables are unsigned; [release notes, checksums, and build provenance](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v3.0.2) let you verify the download. Existing v3.0.1 installations can use **Settings → Updates**.
+Download the **v3.0.3 [Windows installer](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.0.3/SHARPpy-Reimagined-v3.0.3-windows-x64-setup.exe)** or the [portable ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.0.3/SHARPpy-Reimagined-v3.0.3-windows-x64.zip). Both include the app and its analysis backend; Python is bundled. Extract the complete portable folder before running the app. The executables are unsigned; [release notes, checksums, and build provenance](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v3.0.3) let you verify the download. Existing v3.0.1 and v3.0.2 installations can use **Settings → Updates**.
 
 **v2.0.0 Legacy is the final PySide6/Qt GUI release.** Its [Windows ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64.zip) and [portable executable](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64-portable.exe) remain downloadable from the [legacy release page](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0), including after v3 is released.
 
@@ -160,7 +160,7 @@ The legacy Qt interface and `sharpmod-gui` entry point are retired from the curr
 - [Frontend commands and data contracts](docs/frontend/DATA_CONTRACTS.md)
 - [Installation and optional dependencies](installation.txt)
 - [Rust backend and Python fallback](docs/RUST_BACKEND.md)
-- [Changes in 3.0.3](CHANGELOG.md#v303---unreleased)
+- [Changes in 3.0.3](CHANGELOG.md#v303---2026-10-17)
 - [Contributing and test lanes](CONTRIBUTING.md)
 - [v2.0.0 Legacy usage guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md)
 

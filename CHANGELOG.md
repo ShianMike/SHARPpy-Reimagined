@@ -5,7 +5,7 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v3.0.3] - Unreleased
+## [v3.0.3] - 2026-10-17
 
 ### Added
 

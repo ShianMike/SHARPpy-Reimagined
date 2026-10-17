@@ -95,10 +95,8 @@ def _datetime_matches(value: str, pattern: str) -> bool:
 #: troposphere -- around 10 km -- where the humidity sensor is least reliable.
 #: Refusing the whole archive over it meant a sounding a forecaster wanted to
 #: look at could not be opened at all, which hides the contamination instead of
-#: showing it. The code is still reported, and
-#: :mod:`sharpmod.ui.features.profile_inspector` already raises it as a
-#: warning finding, so
-#: the reader is told what is wrong with what they are looking at.
+#: showing it. The decoder still reports the advisory issue so consumers can
+#: explain the contamination alongside the sounding.
 #:
 #: Everything else in :func:`_physical_profile_issues` stays fatal: a
 #: non-decreasing pressure column or a negative wind speed is not contaminated

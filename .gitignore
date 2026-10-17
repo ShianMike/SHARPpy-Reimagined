@@ -57,8 +57,8 @@ pip-wheel-metadata/
 *.spec
 # Native-extension build output is local and can be regenerated with Cargo.
 /rust/**/target/
-# ...but keep the maintained PyInstaller spec for the standalone GUI build.
-!packaging/sharpmod_gui.spec
+# ...but keep the maintained PyInstaller spec for the v3 Python backend.
+!packaging/sharpmod_backend.spec
 
 # ---------------------------------------------------------------------------
 # Test / type-checker / lint caches
@@ -92,6 +92,7 @@ sharpmod-gui.log*
 *.sharpmod-session
 *.grib
 *.grib2
+*.grib*.provenance.json
 *.grib*.idx
 *.idx
 

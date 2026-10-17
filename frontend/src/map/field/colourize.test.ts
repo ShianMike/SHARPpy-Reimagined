@@ -62,13 +62,97 @@ describe("field colouring", () => {
   });
 
   it("interpolates a continuous palette and hides values above a ceiling", () => {
-    const ramp: Palette = { stops: [[0, "#000000"], [20, "#ff0000"]], units: "", stepped: false, floor: null, ceiling: 15, ticks: [] };
+    const ramp: Palette = { display: "auto", stops: [[0, "#000000"], [20, "#ff0000"]], units: "", stepped: false, floor: null, ceiling: 15, ticks: [] };
     // Values 0, 5, 10, and 16; table entries 0, 255, and 511 hold 0, 4.985, and 9.990.
     const pixels = colourize(frame([0, 10, 20, 32], 4, 1, 0.5, 0), ramp);
     expect(rgba(pixels, 0)).toEqual([0, 0, 0, 255]);
     expect(rgba(pixels, 1)).toEqual([63, 0, 0, 255]);
     expect(rgba(pixels, 2)).toEqual([127, 0, 0, 255]);
     expect(rgba(pixels, 3)[3]).toBe(0);
+  });
+
+  it.each(["wind-10m", "gust"])("uses the supplied 1 kt bands for %s", (key) => {
+    const pixels = colourize(frame([999, 1000, 1499, 1500, 3500, 5000, 6000, 8000, 65535], 9, 1, 0.01, 0), palette(key));
+    expect(rgba(pixels, 0)[3]).toBe(0);
+    expect(rgba(pixels, 1)).toEqual([240, 248, 255, 255]);
+    expect(rgba(pixels, 2)).toEqual([139, 208, 250, 255]);
+    expect(rgba(pixels, 3)).toEqual([129, 183, 241, 255]);
+    expect(rgba(pixels, 4)).toEqual([200, 0, 40, 255]);
+    expect(rgba(pixels, 5)).toEqual([232, 210, 82, 255]);
+    expect(rgba(pixels, 6)).toEqual([160, 90, 10, 255]);
+    expect(rgba(pixels, 7)).toEqual(rgba(pixels, 6));
+    expect(rgba(pixels, 8)[3]).toBe(0);
+  });
+
+  it("uses the supplied snow-depth bands in inches and hides values below 0.1 in", () => {
+    expect(palette("snod").units).toBe("in");
+    const pixels = colourize(frame([0, 9, 10, 24, 25, 50, 100, 300, 600, 1200, 2400, 3600, 6000, 10000, 65535], 15, 1, 0.01, 0), palette("snod"));
+    expect(rgba(pixels, 0)[3]).toBe(0);
+    expect(rgba(pixels, 1)[3]).toBe(0);
+    expect(rgba(pixels, 2)).toEqual([225, 225, 225, 255]);
+    expect(rgba(pixels, 3)).toEqual(rgba(pixels, 2));
+    expect(rgba(pixels, 4)).toEqual([200, 200, 200, 255]);
+    expect(rgba(pixels, 5)).toEqual([175, 175, 175, 255]);
+    expect(rgba(pixels, 6)).toEqual([169, 231, 242, 255]);
+    expect(rgba(pixels, 7)).toEqual([0, 70, 176, 255]);
+    expect(rgba(pixels, 8)).toEqual([201, 173, 219, 255]);
+    expect(rgba(pixels, 9)).toEqual([135, 10, 71, 255]);
+    expect(rgba(pixels, 10)).toEqual([235, 167, 183, 255]);
+    expect(rgba(pixels, 11)).toEqual([220, 129, 80, 255]);
+    expect(rgba(pixels, 12)).toEqual([251, 249, 222, 255]);
+    expect(rgba(pixels, 13)).toEqual(rgba(pixels, 12));
+    expect(rgba(pixels, 14)[3]).toBe(0);
+  });
+
+  it("uses the supplied PWAT bands in inches starting at 0.05 in", () => {
+    expect(palette("pwat").units).toBe("in");
+    const pixels = colourize(frame([49, 50, 99, 100, 499, 500, 999, 1000, 1500, 2000, 2500, 3000, 4000, 65535], 14, 1, 0.001, 0), palette("pwat"));
+    expect(rgba(pixels, 0)[3]).toBe(0);
+    expect(rgba(pixels, 1)).toEqual([67, 57, 32, 255]);
+    expect(rgba(pixels, 2)).toEqual(rgba(pixels, 1));
+    expect(rgba(pixels, 3)).toEqual([83, 74, 49, 255]);
+    expect(rgba(pixels, 4)).toEqual([194, 190, 166, 255]);
+    expect(rgba(pixels, 5)).toEqual([185, 229, 185, 255]);
+    expect(rgba(pixels, 6)).toEqual([8, 78, 8, 255]);
+    expect(rgba(pixels, 7)).toEqual([97, 163, 175, 255]);
+    expect(rgba(pixels, 8)).toEqual([102, 102, 154, 255]);
+    expect(rgba(pixels, 9)).toEqual([114, 65, 114, 255]);
+    expect(rgba(pixels, 10)).toEqual([201, 151, 140, 255]);
+    expect(rgba(pixels, 11)).toEqual([246, 240, 215, 255]);
+    expect(rgba(pixels, 12)).toEqual(rgba(pixels, 11));
+    expect(rgba(pixels, 13)[3]).toBe(0);
+  });
+
+  it.each([["apcp", "in"], ["prate", "in/h"]])("uses the supplied inch bands and units for %s", (key, units) => {
+    expect(palette(key).units).toBe(units);
+    const pixels = colourize(frame([0, 9, 10, 29, 30, 50, 100, 500, 1000, 2000, 4000, 15000, 60000, 65535], 14, 1, 0.001, 0), palette(key));
+    expect(rgba(pixels, 0)[3]).toBe(0);
+    expect(rgba(pixels, 1)[3]).toBe(0);
+    expect(rgba(pixels, 2)).toEqual([220, 220, 220, 255]);
+    expect(rgba(pixels, 3)).toEqual(rgba(pixels, 2));
+    expect(rgba(pixels, 4)).toEqual([190, 190, 190, 255]);
+    expect(rgba(pixels, 5)).toEqual([160, 160, 160, 255]);
+    expect(rgba(pixels, 6)).toEqual([183, 240, 190, 255]);
+    expect(rgba(pixels, 7)).toEqual([20, 80, 180, 255]);
+    expect(rgba(pixels, 8)).toEqual([206, 188, 224, 255]);
+    expect(rgba(pixels, 9)).toEqual([165, 58, 52, 255]);
+    expect(rgba(pixels, 10)).toEqual([248, 238, 162, 255]);
+    expect(rgba(pixels, 11)).toEqual([85, 49, 21, 255]);
+    expect(rgba(pixels, 12)).toEqual(rgba(pixels, 11));
+    expect(rgba(pixels, 13)[3]).toBe(0);
+  });
+
+  it.each([
+    ["prate-frzr", [255, 166, 175, 255], [255, 69, 4, 255]],
+    ["prate-sleet", [173, 168, 255, 255], [220, 68, 91, 255]],
+    ["prate-snow", [0, 255, 255, 255], [255, 0, 128, 255]],
+  ] as const)("uses the supplied winter rate bands for %s", (key, low, high) => {
+    const pixels = colourize(frame([99, 100, 14000, 50000, 65535], 5, 1, 0.001, 0), palette(key));
+    expect(rgba(pixels, 0)[3]).toBe(0);
+    expect(rgba(pixels, 1)).toEqual(low);
+    expect(rgba(pixels, 2)).toEqual(high);
+    expect(rgba(pixels, 3)).toEqual(high);
+    expect(rgba(pixels, 4)[3]).toBe(0);
   });
 
   it("preserves narrow lightning classes and the exact reflectivity boundary", () => {

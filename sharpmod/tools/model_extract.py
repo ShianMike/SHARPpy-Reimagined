@@ -222,7 +222,8 @@ _CONFIGS = (
         notes="12-km NAM CONUS pressure-level forecast grids"),
     ModelConfig(
         "nam-3km-conus", "NAM 3km CONUS", "nam", "conusnest.hiresf",
-        fxx_values=_hours(60), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        fxx_values=_hours(60), domain="CONUS", domain_bounds=HRRR_DOMAIN,
+        domain_outline=HRRR_OUTLINE,
         grid_spacing_km=3.0,
         notes="NAM CONUS nest pressure-level forecast grids"),
     # HiResW CONUS nests run twice a day; 06Z and 18Z are never published.
@@ -251,7 +252,8 @@ _CONFIGS = (
     ModelConfig(
         "rrfs-a", "RRFS A", "rrfs", "prslev",
         cycles=RRFS_CYCLES, fxx_values=_hours(84),
-        domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        domain="CONUS", domain_bounds=HRRR_DOMAIN,
+        domain_outline=HRRR_OUTLINE,
         kwargs={"domain": "conus"},
         grid_spacing_km=3.0,
         notes="RRFS-A 3-km pressure-level grids; no VVEL published"),
@@ -294,7 +296,8 @@ _CONFIGS = (
     *(ModelConfig(
         f"refs-m{member}", f"REFSm{member}", "rrfs", "prslevnomads",
         cycles=RRFS_CYCLES, fxx_values=_hours(60),
-        domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        domain="CONUS", domain_bounds=HRRR_DOMAIN,
+        domain_outline=HRRR_OUTLINE,
         kwargs={"domain": "conus", "member": member}, grid_spacing_km=3.0,
         notes=(f"NOAA REFS fixed member {member}, 3-km CONUS; "
                "14 pressure levels to 250 hPa plus verified surface; "

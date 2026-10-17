@@ -12,6 +12,8 @@ const plot = (over: Partial<SurfacePlot>): SurfacePlot => ({
   availability: "available",
   windState: "available",
   staff: { angleDeg: 180, pennants: 0, barbs: 2, halves: 0 },
+  temperatureC: 21.5,
+  dewpointC: 12.2,
   upperText: "22",
   lowerText: "12",
   label: "KOUN",

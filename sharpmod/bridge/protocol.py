@@ -112,6 +112,8 @@ def decode_request(line: bytes) -> Request:
 #: Methods whose handler validates its own parameters (bridge/soundings.py,
 #: bridge/fields.py, bridge/map_layers.py).
 HANDLER_VALIDATED = frozenset({
+    "soundings.progress",
+    "storage.clear",
     "models.catalog",
     "models.status",
     "soundings.open_observed",
@@ -135,7 +137,6 @@ HANDLER_VALIDATED = frozenset({
     "reports.options",
     "fields.contours",
     "surface.plots",
-    "ensemble.summary",
     "thresholds.metrics",
     "thresholds.evaluate",
     "thresholds.export_csv",

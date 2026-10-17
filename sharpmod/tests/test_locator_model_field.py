@@ -436,44 +436,6 @@ def test_a_corrupt_payload_paints_nothing_and_does_not_raise(qt_app):
 # --------------------------------------------------------------------------- #
 # The picker hands its live raster over
 # --------------------------------------------------------------------------- #
-def test_the_viewer_reads_the_field_off_the_controller():
-    from sharpmod.gui_viewer import _controller_model_field
-
-    raster = _raster()
-    controller = SimpleNamespace(selected_model_field=lambda: raster)
-
-    assert _controller_model_field(controller) is raster
-
-
-def test_a_controller_without_the_accessor_is_tolerated():
-    from sharpmod.gui_viewer import _controller_model_field
-
-    assert _controller_model_field(SimpleNamespace()) is None
-    assert _controller_model_field(None) is None
-
-
-def test_a_raising_controller_is_tolerated():
-    from sharpmod.gui_viewer import _controller_model_field
-
-    def _boom():
-        raise RuntimeError("no map")
-
-    assert _controller_model_field(
-        SimpleNamespace(selected_model_field=_boom)) is None
-
-
-def test_attaching_reports_whether_it_found_anything():
-    from sharpmod.gui_viewer import attach_locator_model_field
-
-    collection = _Collection()
-    raster = _raster()
-
-    assert attach_locator_model_field(
-        None, collection, SimpleNamespace(selected_model_field=lambda: raster))
-    assert mo.locator_rasters(collection) == (raster,)
-
-    assert not attach_locator_model_field(
-        None, _Collection(), SimpleNamespace())
 
 
 # --------------------------------------------------------------------------- #

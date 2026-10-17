@@ -27,6 +27,27 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("reports an incompatible map catalogue and recovers after the backend is updated", async () => {
+  const incompatible = structuredClone(mapCatalog);
+  for (const product of incompatible.products) Reflect.deleteProperty(product.palette, "display");
+  const base = createTransport("field-error");
+  let staleBackend = true;
+  renderWithBackend(<ForecastControls />, {
+    ...base, call: (command, args) => command === "get_map_catalog" && staleBackend
+      ? Promise.resolve(incompatible) : base.call(command, args),
+  });
+  const retry = await screen.findByRole("button", { name: "Retry parameters" });
+  const parameter = screen.getByRole<HTMLButtonElement>("button", { name: "Choose parameter" });
+  expect(parameter.textContent).toContain("Unavailable");
+  expect(parameter.getAttribute("aria-description")).toContain("versions may not match");
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Choose model" }).disabled).toBe(false);
+  staleBackend = false;
+  await userEvent.click(retry);
+  await waitFor(() => { expect(parameter.disabled).toBe(false); });
+  expect(parameter.textContent).toContain("Composite Reflectivity");
+  expect(screen.queryByRole("button", { name: "Retry parameters" })).toBeNull();
+});
+
 async function chooseDate(date: string): Promise<void> {
   await userEvent.click(screen.getByRole("button", { name: "Run date · UTC" }));
   await userEvent.click(screen.getByRole("button", { name: "Choose month and year" }));

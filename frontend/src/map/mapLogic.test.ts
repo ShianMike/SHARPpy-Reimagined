@@ -57,11 +57,18 @@ describe("the forecast context", () => {
 });
 
 describe("panel products", () => {
+  it("replaces a removed product selection with each panel's default", () => {
+    for (const panel of [0, 1, 2, 3]) {
+      expect(productOf(catalog, "4lftx", panel)).toBe(defaultProductFor(catalog, panel));
+    }
+  });
+
   it("gives each panel the first product of a different category, and honours a listed choice", () => {
     const keys = [0, 1, 2, 3].map((panel) => defaultProductFor(catalog, panel)?.category);
     expect(keys[0]).toBe(catalog.products.find((p) => p.key === catalog.defaultProduct)?.category);
     expect(new Set(keys).size).toBe(4);
     expect(productOf(catalog, "tmp-2m", 2)?.key).toBe("tmp-2m");
+    expect(productOf(catalog, "lftx", 2)?.key).toBe("lftx");
     expect(productOf(catalog, "not-listed", 0)?.key).toBe(catalog.defaultProduct);
     expect(productOf(undefined, "tmp-2m", 0)).toBeNull();
   });

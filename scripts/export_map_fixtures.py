@@ -23,6 +23,7 @@ from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from unittest.mock import patch
 
@@ -247,6 +248,8 @@ def stand_ins() -> Iterator[None]:
 
     hrrr_field.clear_derived_cache()
     stack = ExitStack()
+    cache_root = stack.enter_context(TemporaryDirectory(prefix="sharpmod-map-fixtures-"))
+    stack.enter_context(patch.object(hrrr_field, "disk_cache_root", lambda: Path(cache_root)))
     stack.callback(hrrr_field.clear_derived_cache)
     stack.enter_context(patch.object(p, "now", lambda: FIXED_NOW))
     stack.enter_context(patch.object(fields, "FRAME", FIXTURE_FRAME))

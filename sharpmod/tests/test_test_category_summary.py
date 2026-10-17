@@ -9,12 +9,10 @@ def test_modules_have_one_stable_group():
     examples = {
         "test_viz_streamwiseness": "charts",
         "test_skewt_label_bounds": "charts",
-        "test_gui_map_layers": "maps",
-        "test_gui_box_picker": "maps",
-        "test_gui_analysis_workspace": "analysis",
-        "test_gui_timeline_playback": "analysis",
-        "test_gui_chrome_theme": "interface",
-        "test_gui_viewer_zoom": "interface",
+        "test_map_geography": "maps",
+        "test_animation_exports": "analysis",
+        "test_timeline_frames": "analysis",
+        "test_mounted_profile_refresh": "interface",
         "test_render_label_plates": "exports",
         "test_packaging_render_smoke": "exports",
         "test_box_export": "exports",
@@ -37,7 +35,7 @@ def test_report_marks_a_failed_category_and_escapes_names(tmp_path, monkeypatch)
         '<testsuites><testsuite name="pytest" tests="3" time="3.0">'
         '<testcase classname="sharpmod.tests.test_viz_streamwiseness" name="ok" time="1" />'
         '<testcase classname="sharpmod.tests.test_viz_streamwiseness" name="bad|case" time="2"><failure/></testcase>'
-        '<testcase classname="sharpmod.tests.test_gui_map_layers" name="later" time="0"><skipped/></testcase>'
+        '<testcase classname="sharpmod.tests.test_map_geography" name="later" time="0"><skipped/></testcase>'
         "</testsuite></testsuites>",
         encoding="utf-8",
     )
@@ -68,7 +66,7 @@ def test_workflow_displays_every_test_group():
     jobs = workflow["jobs"]
     assert jobs["visualization"]["needs"] == "fast"
     categories = {
-        "gui-area": ("fast", "interface"),
+        "interface-area": ("fast", "interface"),
         "science-area": ("fast", "science"),
         "providers-area": ("fast", "providers"),
         "platform-area": ("fast", "platform"),

@@ -6,8 +6,8 @@ for polygons and :class:`~sharpmod.maps.map_overlays.OverlayRaster` for imagery.
 was missing was a way to *say* which ones, so the inset silently inherited
 whatever the picker happened to have switched on.
 
-This module owns that decision, and only that decision, so the GUI control and
-the render CLI cannot drift apart on it. Three rules shape it:
+This module owns the renderer's overlay selection, including the render CLI.
+Three rules shape it:
 
 * **The convective outlook and a model field compose; radar does not.** Risk
   areas and a gridded field answer different questions and read fine together.
@@ -22,9 +22,8 @@ the render CLI cannot drift apart on it. Three rules shape it:
   extent falls back to the mosaic rather than showing one corner of the area.
 
 Imports of the four provider modules are deliberately deferred into the
-functions that need them. This module is reachable from picker start-up, which
-:mod:`sharpmod.tests.test_gui_startup_optimization` requires to stay free of
-NumPy and the heavier analysis stack.
+functions that need them, so selecting an overlay does not eagerly load every
+provider and the heavier analysis stack.
 """
 
 from __future__ import annotations

@@ -124,8 +124,8 @@ def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
         "sharpmod/tools/model_extract.py",
         "sharpmod/tests/test_grib_backend_equivalence.py",
         "sharpmod/tests/test_scalar_pressure_merge.py",
-        "packaging/sharpmod_gui.spec",
-        "packaging/sharpmod_gui_launcher.py",
+        "packaging/sharpmod_backend.spec",
+        "packaging/sharpmod_backend_launcher.py",
         ".github/workflows/release.yml",
     }
     assert required_paths <= set(triggers["pull_request"]["paths"])

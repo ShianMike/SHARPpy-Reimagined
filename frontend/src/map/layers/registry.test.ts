@@ -51,13 +51,13 @@ const ctx: LayerBuildContext = {
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 describe("layer registry", () => {
-  it.each([true, false])("reconstructs raw field values only in Smooth with stepped=%s", (stepped) => {
+  it.each([["", true], ["", false], ["flag", true]] as const)("keeps flags sharp and reconstructs other fields only in Smooth: units=%s, stepped=%s", (units, stepped) => {
     vi.stubGlobal("ImageData", class { constructor(public data: Uint8ClampedArray, public width: number, public height: number) {} });
     const image: ImageBitmap = { width: 2, height: 2, close: vi.fn() };
     const raster = { image, bounds: { west: -100, south: 30, east: -90, north: 40 } };
     const frame = { ...parseFieldFrame(Uint8Array.from(atob(fieldFixture.split(",")[1] ?? ""), (c) => c.charCodeAt(0)).buffer),
       width: 2, height: 2, cells: new Uint16Array([0, 255, 256, 65535]), nodata: 65535 };
-    const palette = { stops: [[-0.3, "#000000"], [0.01, "#f0f0f0"], [15, "#893d48"]] as const, units: "", stepped, floor: null, ceiling: null, ticks: [] };
+    const palette = { display: "auto" as const, stops: [[-0.3, "#000000"], [0.01, "#f0f0f0"], [15, "#893d48"]] as const, units, stepped, floor: null, ceiling: null, ticks: [] };
     const context = { ...ctx, field: { ...raster, frame, palette }, radar: raster, satellite: raster };
     const sharpImage = vi.fn(() => image);
     Object.defineProperty(context.field, "image", { get: sharpImage });
@@ -65,10 +65,11 @@ describe("layer registry", () => {
     let smoothImage: unknown;
     let paletteImage: unknown;
     for (const smoothing of [true, undefined, false, true]) {
+      const reconstruct = smoothing && units !== "flag";
       sharpImage.mockClear();
       states["model-field"] = { visible: true, opacity: 0.7, ...(smoothing === undefined ? {} : { smoothing }) };
       const layers = buildDeckLayers(LAYER_REGISTRY, states, context).filter((layer): layer is BitmapLayer => layer instanceof BitmapLayer);
-      expect(layers.map((layer) => layer.id)).toEqual([smoothing ? "model-field-smooth" : "model-field", "satellite", "radar"]);
+      expect(layers.map((layer) => layer.id)).toEqual([reconstruct ? "model-field-smooth" : "model-field", "satellite", "radar"]);
       for (const layer of layers) {
         expect(layer.props.textureParameters).toEqual({ minFilter: "nearest", magFilter: "nearest", mipmapFilter: "none" });
         if (layer.id === "model-field-smooth") {
@@ -99,7 +100,10 @@ describe("layer registry", () => {
       }
       expect(layers[0]?.props.visible).toBe(true);
       expect(layers[0]?.props.opacity).toBe(0.7);
-      expect(sharpImage).toHaveBeenCalledTimes(smoothing ? 0 : 1);
+      expect(sharpImage).toHaveBeenCalledTimes(reconstruct ? 0 : 1);
+      const blend = buildDeckLayers(LAYER_REGISTRY, states, { ...context, previousField: context.field, fieldMix: 0.25 }).filter((layer): layer is BitmapLayer => layer instanceof BitmapLayer);
+      expect(blend).toHaveLength(layers.length + 1);
+      expect((blend[0]?.props.opacity ?? 0) * (1 - (blend[1]?.props.opacity ?? 0)) + (blend[1]?.props.opacity ?? 0)).toBeCloseTo(0.7);
     }
   });
 

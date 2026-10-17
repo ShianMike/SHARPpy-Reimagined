@@ -1,0 +1,11 @@
+{
+  "usage": {
+    "caches": [
+      { "key": "models", "bytes": 33554432, "files": 2, "clearable_bytes": 0 },
+      { "key": "maps", "bytes": 0, "files": 0, "clearable_bytes": 0 },
+      { "key": "outlooks", "bytes": 0, "files": 0, "clearable_bytes": 0 }
+    ]
+  },
+  "freed_bytes": 117440512,
+  "failed_files": 0
+}

@@ -11,7 +11,7 @@ import { panelLayers, panelProduct, useMapStore } from "../../stores/mapStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import type { Palette } from "../../types/map";
 import { LUT_SIZE } from "../field/colourize";
-import { FieldLegend, spacedTicks } from "./FieldLegend";
+import { convertedTicks, FieldLegend, spacedTicks } from "./FieldLegend";
 import { MapPanel } from "../panels/MapPanel";
 import { useHoverStore } from "../hover/hoverStore";
 import { FieldControls } from "./FieldControls";
@@ -43,7 +43,50 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); useUiStore.getState().setUnits(DEFAULT_UNITS); });
 
-const palette: Palette = { stops: [[-800, "#113355"], [-25, "#abcdef"]], units: "J/kg", stepped: false, floor: null, ceiling: -25, ticks: [-750, -500, -250] };
+const palette: Palette = { display: "auto", stops: [[-800, "#113355"], [-25, "#abcdef"]], units: "J/kg", stepped: false, floor: null, ceiling: -25, ticks: [-750, -500, -250] };
+
+it("chooses round converted labels at their true positions without changing source ticks", () => {
+  const low = convertUnit(-61, "°F", "°C"), high = convertUnit(122, "°F", "°C");
+  const ticks = convertedTicks(low, high);
+  expect(ticks.map((tick) => tick.value)).toEqual([-40, -20, 0, 20, 40]);
+  for (const tick of ticks) expect(low + tick.at * (high - low)).toBeCloseTo(tick.value);
+  expect(convertedTicks(5, 5)).toEqual([{ value: 5, at: 0 }]);
+  expect(convertedTicks(convertUnit(9, "kt", "m/s"), convertUnit(61, "kt", "m/s")).map((tick) => tick.value)).toEqual([5, 10, 15, 20, 25, 30]);
+  const dense = convertedTicks(0, 70);
+  expect(dense.every((tick, index) => index === 0 || tick.at - (dense[index - 1]?.at ?? 0) >= 0.16)).toBe(true);
+  expect(convertedTicks(0.01, 0.06).map((tick) => Number(tick.value.toFixed(2)))).toEqual([0.01, 0.02, 0.03, 0.04, 0.05, 0.06]);
+  useUiStore.getState().setUnits({ temperature: "°C", wind: "m/s" });
+  render(<FieldLegend palette={{ ...palette, units: "°F", stops: [[-61, "#113355"], [122, "#abcdef"]], ceiling: null }} />);
+  expect(screen.getAllByRole("listitem").map((tick) => tick.textContent)).toEqual(["-40", "-20", "0", "20", "40"]);
+});
+
+it.each([
+  ["maxuvv", 0.5, 40, "m/s"], ["lftx", -20, 0, "\u00b0C"],
+  ["thetae-2m", 229, 370, "K"],
+] as const)("keeps %s in its fixed units when preferences change", (key, minimum, maximum, units) => {
+  useUiStore.getState().setUnits({ temperature: "\u00b0F", wind: "mph" });
+  const product = parseMapCatalog(catalog).products.find((item) => item.key === key);
+  if (product === undefined) throw new Error(`Missing ${key} palette`);
+  render(<FieldLegend palette={product.palette} vertical />);
+  const slider = screen.getByRole("slider");
+  expect(slider.getAttribute("aria-valuemin")).toBe(String(minimum));
+  expect(slider.getAttribute("aria-valuemax")).toBe(String(maximum));
+  expect(slider.getAttribute("aria-valuetext")).toBe(`${String((minimum + maximum) / 2)} ${units}`);
+  fireEvent.keyDown(slider, { key: "End" });
+  expect(slider.getAttribute("aria-valuetext")).toBe(`${String(maximum)} ${units}`);
+});
+
+it("explores occurrence masks as present or absent without inventing fractional categories", () => {
+  render(<FieldLegend palette={{ display: "auto", stops: [[0, "#38bdf8"], [1, "#38bdf8"]], units: "flag", stepped: true, floor: 0.5, ceiling: null, ticks: [0, 1] }} vertical />);
+  const slider = screen.getByRole("slider");
+  expect(slider.getAttribute("aria-valuenow")).toBe("1");
+  expect(slider.getAttribute("aria-valuetext")).toBe("Present (1)");
+  fireEvent.keyDown(slider, { key: "ArrowDown" });
+  expect(slider.getAttribute("aria-valuenow")).toBe("0");
+  expect(slider.getAttribute("aria-valuetext")).toBe("Absent (0)");
+  fireEvent.keyDown(slider, { key: "ArrowUp" });
+  expect(screen.getByRole("tooltip").textContent).toBe("Present (1)");
+});
 
 it("updates the scale, cursor and point values together while preserving the map's source frame and colours", async () => {
   useMapStore.getState().setProduct("tmp-2m");
@@ -134,7 +177,7 @@ it.each([2, 4] as const)("gives all %i panels independent scales, compact titles
   expect(within(scale).queryByText("dBZ")).toBeNull();
   expect(scale.getAttribute("aria-description")).toContain("dBZ");
   expect(scale.getAttribute("aria-description")).toContain("Panel 1");
-  await waitFor(() => { expect(screen.getByTestId("panel-chip-1").textContent).toBe("1. Composite Reflectivity"); });
+  await waitFor(() => { expect(screen.getByTestId("panel-chip-1").textContent).toBe("1 • Composite Reflectivity"); });
   expect(screen.getByTestId("map-panel-1").contains(scale)).toBe(true);
   const product = parseMapCatalog(catalog).products.find((item) => item.key === "tmp-2m");
   expect(product).toBeDefined();

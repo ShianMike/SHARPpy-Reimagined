@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import modelCatalog from "@contracts/public/soundings/models.catalog.json";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
+import { mapKeys } from "../../lib/backend/queryOptions";
 import { useForecastStore } from "../../stores/forecastStore";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { useUiStore } from "../../stores/uiStore";
@@ -143,10 +144,30 @@ it("searches models, returns to the map, and scrubs sparse hours while pausing p
 });
 
 it("changes shared playback speed and loop settings", async () => {
-  useUiStore.setState({ speed: 1, loop: true });
+  useUiStore.setState({ speed: 1, loop: true, smoothPlayback: false });
   renderWithBackend(<TimelineRegion />, createTransport());
   await userEvent.click(screen.getByRole("button", { name: "Playback speed 1 times" }));
   expect(useUiStore.getState().speed).toBe(1.5);
   await userEvent.click(screen.getByRole("button", { name: "Loop forecast animation" }));
   expect(useUiStore.getState().loop).toBe(false);
+  await userEvent.click(screen.getByRole("button", { name: "Smooth playback" }));
+  expect(useUiStore.getState().smoothPlayback).toBe(true);
+  expect(screen.getByRole("button", { name: "Smooth playback" }).getAttribute("aria-pressed")).toBe("true");
+});
+
+it.each([mapKeys.field, mapKeys.contours])("only marks the displayed frame as loading", async (key) => {
+  const run = "2026-10-04T12:00:00Z";
+  useForecastStore.setState({ modelKey: "hrrr", runTime: run, forecastHour: 0 });
+  const { view, queryClient } = renderWithBackend(<TimelineRegion />, createTransport());
+  try {
+    await waitFor(() => { expect(screen.getByRole("slider", { name: "Forecast hour" }).getAttribute("aria-valuetext")).toContain("F000"); });
+    const valid = screen.getByLabelText("Valid time");
+    const pending = (queryKey: readonly unknown[]) => queryClient.query({ queryKey, queryFn: () => new Promise(() => undefined) }).catch(() => undefined);
+    void pending(key("refc", run, 1, "hrrr"));
+    void pending(key("refc", run, 0, "rrfs-a"));
+    await act(async () => { await new Promise((resolve) => { setTimeout(resolve, 0); }); });
+    expect(valid.getAttribute("aria-busy")).toBe("false");
+    void pending(key("refc", run, 0, "hrrr"));
+    await waitFor(() => { expect(valid.getAttribute("aria-busy")).toBe("true"); });
+  } finally { view.unmount(); queryClient.clear(); }
 });

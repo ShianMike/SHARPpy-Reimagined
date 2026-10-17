@@ -74,7 +74,8 @@
 .product { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: var(--control-h-lg); padding: var(--space-3); margin-bottom: var(--space-1); border: var(--hairline) solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-primary); text-align: left; }
 .product strong { flex: 1; min-width: 0; font-size: var(--font-size-body); font-weight: var(--font-weight-medium); }
 .productUnit { flex: none; padding: var(--space-0-5) var(--space-2); border-radius: var(--radius-pill); background: var(--control-fill); color: var(--text-secondary); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); white-space: nowrap; }
-.parameterDetail { flex: none; min-height: calc(var(--control-h-lg) + var(--space-8)); max-height: 30%; overflow-y: auto; padding: var(--space-4); border-top: var(--hairline) solid var(--border-subtle); font-size: var(--font-size-caption); line-height: var(--line-height-body); }
+/* Keep the preview compact and steady so changing descriptions cannot move rows under the pointer. */
+.parameterDetail { flex: none; min-height: calc(var(--control-h-lg) + var(--space-8)); height: calc(var(--control-h-lg) + 2 * var(--space-8)); overflow-y: auto; overscroll-behavior: contain; padding: var(--space-3) var(--space-4); border-top: var(--hairline) solid var(--border-subtle); font-size: var(--font-size-caption); line-height: var(--line-height-body); }
 .parameterDetail strong { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-2); font-size: var(--font-size-body); }
 .parameterDetail p { color: var(--text-secondary); text-wrap: pretty; }
 .parameterDetail p:first-of-type { color: var(--text-primary); font-size: var(--font-size-small); }

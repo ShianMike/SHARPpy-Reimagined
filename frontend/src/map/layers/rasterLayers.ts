@@ -202,18 +202,27 @@ function rasterLayer(id: string, raster: RasterImage | null, state: LayerState):
   ];
 }
 
-export function buildFieldLayers(ctx: LayerBuildContext, state: LayerState): Layer[] {
-  const field = ctx.field;
-  const sampling = state.smoothing && field !== null ? smoothFieldProps(field) : null;
-  let bitmap = rasterLayer(FIELD_LAYER_ID,
+function fieldBitmap(field: FieldImage | null, state: LayerState, id: string): BitmapLayer[] {
+  // Occurrence flags stay nearest-neighbour: interpolation would invent fractional categories.
+  const sampling = state.smoothing && field !== null && field.palette.units !== "flag" ? smoothFieldProps(field) : null;
+  let bitmap = rasterLayer(id,
     sampling !== null && field !== null ? { image: sampling.image, bounds: field.bounds } : field, state);
   if (sampling !== null) {
     bitmap = bitmap.map((layer) => new BitmapLayer<FieldSamplingProps>({
-      ...layer.props, id: `${FIELD_LAYER_ID}-smooth`, ...sampling, extensions: SMOOTH_FIELD,
+      ...layer.props, id: `${id}-smooth`, ...sampling, extensions: SMOOTH_FIELD,
     }));
   }
-  // The product's contour lines ride with its colour: one row, one product.
-  return [...bitmap, ...buildContourLayers(ctx, state), ...buildWindBarbLayers(ctx, state)];
+  return bitmap;
+}
+
+export function buildFieldLayers(ctx: LayerBuildContext, state: LayerState): Layer[] {
+  const mix = ctx.previousField == null ? 1 : ctx.fieldMix ?? 1;
+  // Account for source-over compositing so the map does not brighten halfway through a blend.
+  const previousOpacity = mix === 1 ? 0 : state.opacity * (1 - mix) / (1 - state.opacity * mix);
+  const previous = fieldBitmap(ctx.previousField ?? null, { ...state, opacity: previousOpacity }, `${FIELD_LAYER_ID}-previous`);
+  const current = fieldBitmap(ctx.field, { ...state, opacity: state.opacity * mix }, FIELD_LAYER_ID);
+  // Wind barbs and contour lines follow the current hour once, in either mode.
+  return [...previous, ...current, ...buildContourLayers(ctx, state), ...buildWindBarbLayers(ctx, state)];
 }
 
 export function buildSatelliteLayers(ctx: LayerBuildContext, state: LayerState): BitmapLayer[] {

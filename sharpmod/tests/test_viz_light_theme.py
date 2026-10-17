@@ -20,9 +20,9 @@ from sharppy.viz.preferences import PrefDialog
 from sutils.config import Config
 
 from sharpmod import colors, render as render_mod
-from sharpmod.gui_settings import (
+from sharpmod.rendering.input import (
     _color_style_preferences,
-    _write_config_preferences,
+    _apply_selected_color_style,
 )
 from sharpmod.tests._examples import examples_dir
 from sharpmod.viz.SPCWindow import compose_window
@@ -55,7 +55,7 @@ def mounted_sounding(qt_app, tmp_path_factory):
 
 def _apply_style(qt_app, controller, config, style):
     """Select ``style`` and use only the interactive controller signal."""
-    _write_config_preferences(config, {"color_style": style})
+    _apply_selected_color_style(config, style)
     controller.config_changed.emit(config)
     for _ in range(4):
         qt_app.processEvents()

@@ -21,7 +21,7 @@ export function ParameterScale({ panel, field, className }: { panel: number; fie
   const visible = blocked !== "hidden";
   const status = !visible ? null : frame.isError ? "Unavailable" : frame.isFetching ? "Loading…" : null;
   const StatusIcon = frame.isError ? TriangleAlert : LoaderCircle;
-  return <Surface as="aside" data-motion="fade" aria-label="Parameter scale" aria-description={`${product.label} · ${displayUnit(product.palette.units, units) || "Unitless"}${layout > 1 ? ` · Panel ${String(panel + 1)}` : ""}`} className={cx(styles.panel, className)} data-testid="parameter-scale">
+  return <Surface as="aside" data-motion="fade" aria-label="Parameter scale" aria-description={`${product.label} · ${displayUnit(product.palette.units, units, product.palette.display) || "Unitless"}${layout > 1 ? ` · Panel ${String(panel + 1)}` : ""}`} className={cx(styles.panel, className)} data-testid="parameter-scale">
     <FieldLegend palette={product.palette} vertical />
     {status === null ? null : <span className={cx(styles.status, hints.target)} tabIndex={0} role="img" aria-label={status}><StatusIcon className="icon-sm" data-loading={!frame.isError} aria-hidden="true" /><span className={hints.hint} data-side="left" aria-hidden="true">{status}</span></span>}
     <IconAction className={styles.visibility} size="sm" icon={visible ? Eye : EyeOff} label="Model layer" aria-pressed={visible} aria-description={visible ? "Layer on. Activate to hide." : "Layer off. Activate to show."} hintSide="left"

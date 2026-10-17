@@ -64,7 +64,7 @@ describe("ReducedRenderingView", () => {
     renderWithBackend(<ReducedRenderingView />, createTransport(null));
     const list = await screen.findByRole("listbox", { name: "Stations" });
     const options = within(list).getAllByRole("option");
-    expect(options).toHaveLength(933);
+    expect(options).toHaveLength(934);
     expect(options.find((option) => option.textContent.startsWith("72357"))?.textContent).toBe(
       "72357 · Norman/Max Westheimer A, Ok., Usa · 35.18° N, 97.44° W",
     );
@@ -80,7 +80,7 @@ describe("ReducedRenderingView", () => {
     await user.keyboard("{PageUp}");
     expect(activeId()).toBe(options[0]?.id);
     await user.keyboard("{End}");
-    expect(activeId()).toBe(options[932]?.id);
+    expect(activeId()).toBe(options.at(-1)?.id);
     await user.keyboard("{Home}{ArrowDown}{Enter}");
     expect(useAppStore.getState().selectedStationId).toBe(options[1]?.textContent.split(" ")[0]);
     expect(options[1]?.getAttribute("aria-selected")).toBe("true");

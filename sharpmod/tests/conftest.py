@@ -16,9 +16,7 @@ from __future__ import annotations
 
 import os
 
-# Select Qt's headless platform before pytest imports any GUI test modules.
-# Module-local ``setdefault`` calls are too late when an earlier collection
-# import has already loaded ``sharpmod.gui_common`` on Windows.
+# Select the headless platform before collecting any sounding-renderer tests.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # Unit and render-smoke tests must never depend on the public geocoder. Tests
 # that exercise reverse lookup replace this default with a controlled endpoint.
@@ -70,7 +68,7 @@ if _requested_profile not in {"fast", "full"}:
 settings.load_profile(f"sharpmod-{_requested_profile}")
 
 
-# GUI tests share one QApplication singleton per worker. Module-local fixtures
+# Renderer tests share one QApplication singleton per worker. Module-local fixtures
 # may themselves be module-scoped, so this owner fixture must remain at least
 # as broad while the function-scoped guard below isolates mutable global state.
 @pytest.fixture(scope="session")
@@ -84,33 +82,10 @@ def qt_app():
     return app
 
 
-@pytest.fixture
-def standard_qt_app(qt_app):
-    """Return the Qt application in the standard theme without restyling it.
-
-    Applying an application style sheet re-polishes every live widget. Many
-    inexpensive GUI tests only need a known starting theme, so doing that work
-    for every fixture made a long single-process run progressively slower.
-    """
-
-    from sharpmod import gui_theme
-
-    standard = gui_theme.theme_for_color_style("standard")
-    if (
-        not gui_theme.theme_is_applied()
-        or gui_theme.current_theme() != standard
-        or gui_theme.current_text_scale() != 100
-        or gui_theme.current_density() != "comfortable"
-        or not qt_app.styleSheet()
-    ):
-        gui_theme.apply_theme(qt_app, theme=standard)
-    return qt_app
 
 
 _QT_TEST_PREFIXES = (
-    "test_analysis_sessions",
     "test_custom_panel",
-    "test_gui_",
     "test_inset_",
     "test_mounted_profile_refresh",
     "test_mpl_display",

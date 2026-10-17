@@ -62,12 +62,20 @@ fn window(
 }
 
 fn invoke(webview: &WebviewWindow<tauri::test::MockRuntime>, cmd: &str) -> Result<Value, Value> {
+    invoke_args(webview, cmd, serde_json::json!({}))
+}
+
+fn invoke_args(
+    webview: &WebviewWindow<tauri::test::MockRuntime>,
+    cmd: &str,
+    args: Value,
+) -> Result<Value, Value> {
     let request = InvokeRequest {
         cmd: cmd.into(),
         callback: CallbackFn(0),
         error: CallbackFn(1),
         url: "http://tauri.localhost".parse().unwrap(),
-        body: InvokeBody::default(),
+        body: InvokeBody::Json(args),
         headers: Default::default(),
         invoke_key: INVOKE_KEY.to_string(),
     };
@@ -77,6 +85,60 @@ fn invoke(webview: &WebviewWindow<tauri::test::MockRuntime>, cmd: &str) -> Resul
 
 fn parse<T: DeserializeOwned>(value: Value) -> T {
     serde_json::from_value(value).expect("public DTO")
+}
+
+#[test]
+fn storage_commands_return_validated_usage_and_reject_arbitrary_paths() {
+    let (_app, webview) = window(FakeLauncher::with(vec![]));
+    assert_eq!(
+        invoke(&webview, "get_storage_usage").unwrap(),
+        fixture("public/storage/usage.json")
+    );
+    assert_eq!(
+        invoke_args(&webview, "clear_cache", serde_json::json!({"cache": "all"})).unwrap(),
+        fixture("public/storage/clear.json")
+    );
+    let error: BackendError = parse(
+        invoke_args(
+            &webview,
+            "clear_cache",
+            serde_json::json!({"cache": "../saved"}),
+        )
+        .unwrap_err(),
+    );
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
+}
+
+#[test]
+fn sounding_progress_command_tracks_the_model_request_and_validates_ids() {
+    let (_app, webview) = window(FakeLauncher::with(vec![]));
+    let args = serde_json::json!({"progressId": "download1"});
+    assert_eq!(
+        invoke_args(&webview, "get_sounding_progress", args).unwrap(),
+        fixture("public/soundings/progress.json"),
+    );
+    invoke_args(
+        &webview,
+        "open_sounding",
+        serde_json::json!({
+            "progressId": "download1", "request": {
+                "kind": "model", "model": "hrrr", "latitude": 36.68,
+                "longitude": -95.66, "forecastHour": 18,
+            },
+        }),
+    )
+    .unwrap();
+    for id in ["", "../saved", "é"] {
+        let error: BackendError = parse(
+            invoke_args(
+                &webview,
+                "get_sounding_progress",
+                serde_json::json!({"progressId": id}),
+            )
+            .unwrap_err(),
+        );
+        assert_eq!(error.code, ErrorCode::InvalidArgument);
+    }
 }
 
 #[test]
@@ -147,4 +209,8 @@ fn errors_cross_ipc_as_backend_error_and_health_still_succeeds() {
 fn unknown_commands_are_rejected() {
     let (_app, webview) = window(FakeLauncher::with(vec![]));
     assert!(invoke(&webview, "run_python").is_err());
+    assert_eq!(
+        invoke(&webview, "get_ensemble_summary").unwrap_err(),
+        Value::String("Command get_ensemble_summary not found".into()),
+    );
 }

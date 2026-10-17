@@ -13,7 +13,7 @@ the intended sounding location stable":
 * The explicit tool vocabulary (``select``/``inspect``/``box``) and its
   validation, shared by the maps and the rail helper.
 
-No Qt import. The paint path and the clipboard stay in ``gui_maps``; the
+No Qt import. Desktop painting and clipboard actions stay in the frontend; the
 gridded sampling itself stays in ``hrrr_field`` (which owns the cached
 frames). Anything this module cannot know -- for example terrain height, which
 none of the current raster sources supplies -- is represented as ``None`` and

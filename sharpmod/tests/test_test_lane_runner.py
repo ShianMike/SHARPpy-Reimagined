@@ -116,8 +116,8 @@ def test_release_lane_is_complete_parallel_without_repeating_property_depth(tmp_
 
 
 @pytest.mark.parametrize("filename,fixtures,grouped", [
-    ("test_gui_edit_history.py", [], True),
-    ("test_sounding_view.py", ["standard_qt_app", "qt_app"], True),
+    ("test_viz_light_theme.py", [], True),
+    ("test_sounding_view.py", ["qt_app"], True),
     ("test_sounding_view.py", [], False),
 ])
 def test_qt_group_covers_fixtures_outside_the_filename_prefix(filename, fixtures, grouped):
@@ -137,17 +137,19 @@ def test_qt_group_runs_on_one_actual_xdist_worker(tmp_path):
         "from sharpmod.tests.conftest import pytest_collection_modifyitems\n",
         encoding="utf-8",
     )
-    test_file = tmp_path / "test_gui_group.py"
+    test_file = tmp_path / "test_viz_group.py"
     test_file.write_text(
         "from pathlib import Path\nimport pytest\n"
         "@pytest.mark.parametrize('case', range(8))\n"
-        "def test_worker(case, worker_id):\n"
+        "def test_worker(case, worker_id, pytestconfig):\n"
+        "    assert pytestconfig.rootpath == Path(__file__).parent\n"
         "    Path(__file__).with_name(f'worker-{case}').write_text(worker_id)\n",
         encoding="utf-8",
     )
     result = subprocess.run(
         [runner.sys.executable, "-m", "pytest", "-q", "-n", "2",
-         "--dist=loadgroup", "--max-worker-restart=0", str(test_file)],
+         "--dist=loadgroup", "--max-worker-restart=0",
+         f"--rootdir={tmp_path}", f"--confcutdir={tmp_path}", str(test_file)],
         cwd=runner.ROOT, capture_output=True, text=True, timeout=90, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr

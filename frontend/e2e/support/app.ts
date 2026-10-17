@@ -20,6 +20,7 @@ interface E2eHooks {
   labelCount: () => number;
   labelTier: () => string | null;
   camera: () => { center: [number, number]; zoom: number } | null;
+  projection: () => string | null;
   profile: () => { mode: string; profile: string; reasons: string[] };
   basemapFeatureCounts: () => Record<string, number>;
   mapErrors: () => string[];

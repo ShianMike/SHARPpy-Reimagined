@@ -17,6 +17,19 @@ const initial = useMapStore.getState();
 beforeEach(() => { useMapStore.setState(initial, true); });
 afterEach(cleanup);
 
+it("changes the shared projection from Map details and resets it with layers", async () => {
+  renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
+  await userEvent.click(screen.getByRole("button", { name: "Map details" }));
+  const curved = screen.getByRole("button", { name: "Globe" });
+  const flat = screen.getByRole("button", { name: "Flat map" });
+  expect(flat.getAttribute("aria-pressed")).toBe("true");
+  await userEvent.click(curved);
+  expect(curved.getAttribute("aria-pressed")).toBe("true");
+  expect(useMapStore.getState().projection).toBe("globe");
+  await userEvent.click(screen.getByRole("button", { name: "Reset layers" }));
+  expect(useMapStore.getState().projection).toBe("mercator");
+});
+
 it("opens settings when enabled, keeps them independent of visibility, and edits the active panel", async () => {
   useMapStore.getState().setPanelLayout(2);
   useMapStore.getState().setActivePanel(1);
@@ -61,6 +74,26 @@ it("leads with enabled layers and keeps newly enabled provider settings open aft
   expect(screen.queryByRole("button", { name: "Radar mosaic settings" })).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Map details" }));
   expect(within(panel).getByRole("switch", { name: "Station labels" })).toBeTruthy();
+});
+
+it("remembers its category after reopening and resets layers in every panel", async () => {
+  const map = useMapStore.getState();
+  map.setPanelLayout(4);
+  map.setActivePanel(2);
+  map.setLayerVisible("station-labels", true);
+  map.setProduct("tmp-2m");
+  map.setLayerPanelGroup("map");
+  const { view } = renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
+  expect(screen.getByRole("button", { name: "Map details" }).getAttribute("aria-pressed")).toBe("true");
+  view.unmount();
+  renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
+  expect(screen.getByRole("button", { name: "Map details" }).getAttribute("aria-pressed")).toBe("true");
+  await userEvent.click(screen.getByRole("button", { name: "Reset layers" }));
+  expect(screen.getByRole("status").textContent).toBe("Layers reset · all panels");
+  expect(screen.getByRole("button", { name: "Weather" }).getAttribute("aria-pressed")).toBe("true");
+  expect(useMapStore.getState()).toMatchObject({ panelLayout: 4, activePanel: 2 });
+  expect(useMapStore.getState().panels[1]?.productKey).toBe("tmp-2m");
+  for (let panel = 0; panel < 4; panel++) expect(panelLayers(useMapStore.getState(), panel)["station-labels"].visible).toBe(false);
 });
 
 it("chooses provider settings through custom menus and preserves numeric and automatic values", async () => {

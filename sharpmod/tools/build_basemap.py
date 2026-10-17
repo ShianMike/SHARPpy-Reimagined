@@ -1,10 +1,10 @@
-"""Build the bundled HD basemap resource for the GUI station map.
+"""Build the bundled HD basemap resource for maps and sounding locators.
 
 Downloads the public-domain Natural Earth 1:50m vector layers -- coastline,
 lake shorelines, country boundary lines, and state/province boundary lines --
 and writes a compact multi-layer JSON resource
-``sharpmod/resources/basemap.json`` consumed by
-:class:`sharpmod.gui.StationMapWidget`.
+``sharpmod/resources/basemap.json`` consumed by the frontend's fixture basemap
+and ``sharpmod.viz.hodo_locator``.
 
 Lakes are a separate layer because ``ne_50m_coastline`` is strictly the
 ocean/land boundary: it does not contain a single inland shoreline. Without

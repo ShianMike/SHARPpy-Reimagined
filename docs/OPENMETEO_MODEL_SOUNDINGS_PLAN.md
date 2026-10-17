@@ -1,5 +1,10 @@
 # Open-Meteo Forecast-Model Soundings Implementation Plan
 
+The Qt interface tasks and `gui_*` paths below are historical. That interface
+was retired from v3.0.3; current source controls live in
+`frontend/src/features/sounding/`, and retrieval runs through `sharpmod/bridge/`.
+The provider implementation and model-extraction notes remain relevant.
+
 **Status:** Partially implemented. The Qt-free provider core is delivered and
 wired into `model_extract`; see [Implementation status](#12-implementation-status)
 for exactly what landed, what the implementation corrected in this plan, and what

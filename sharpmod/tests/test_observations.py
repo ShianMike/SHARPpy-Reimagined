@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
-import os
-from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import numpy as np
@@ -15,7 +13,6 @@ from sharpmod.io.decoder import load_npz
 from sharpmod.observations import (
     IEMObservedProvider,
     ObservedProviderInfo,
-    ObservedSounding,
     ObservedUnavailableError,
     fetch_observed,
     write_observed_npz,
@@ -163,57 +160,3 @@ def test_observed_writer_and_npz_decoder_retain_provider_provenance(tmp_path):
     assert collection.getMeta("source_provider") == "iem"
     assert collection.getMeta("source_station") == "KOUN"
     assert collection.getMeta("fallback_from") == ("uwyo",)
-
-
-def test_gui_fetch_worker_uses_provider_fallback_and_emits_actual_source(
-    monkeypatch,
-):
-    from qtpy.QtCore import QCoreApplication
-
-    from sharpmod import gui_workers, observations
-
-    QCoreApplication.instance() or QCoreApplication([])
-    captured = {}
-    result = SimpleNamespace(
-        provider="iem",
-        provider_name="IEM RAOB Archive",
-        station_id="KOUN",
-        metadata={
-            "station_name": "OUN Norman, OK",
-            "lat": 35.22,
-            "lon": -97.4,
-        },
-    )
-
-    monkeypatch.setattr(
-        gui_workers, "_decoder_for_station", lambda _station: (object(), "72357")
-    )
-
-    def fake_fetch(station, when, *, providers):
-        captured["station"] = station
-        captured["providers"] = [provider.info.key for provider in providers]
-        return result
-
-    def fake_write(selected, path, *, loc):
-        captured["loc"] = loc
-        open(path, "wb").close()
-        return path
-
-    monkeypatch.setattr(observations, "fetch_observed", fake_fetch)
-    monkeypatch.setattr(observations, "write_observed_npz", fake_write)
-    successes = []
-    failures = []
-    worker = gui_workers._FetchWorker("72357", WHEN)
-    worker.finished_ok.connect(
-        lambda path, meta, when: successes.append((path, meta, when))
-    )
-    worker.failed.connect(failures.append)
-
-    worker.run()
-
-    assert failures == []
-    assert captured["station"] == "72357"
-    assert captured["providers"] == ["uwyo", "iem"]
-    assert successes[0][1].provider == "iem"
-    assert successes[0][1].id == "KOUN"
-    os.remove(successes[0][0])

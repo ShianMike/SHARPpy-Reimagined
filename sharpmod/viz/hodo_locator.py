@@ -1,8 +1,8 @@
 """Zoomed worldwide locator drawn over the hodograph pixmap.
 
 All map geometry used by the paint path is bundled with the application.
-Keeping painting offline is important for the interactive GUI: a slow or
-unavailable map service must never stall a hodograph repaint.
+Keeping painting offline prevents a slow or unavailable map service from
+stalling a sounding render.
 """
 
 from __future__ import annotations
@@ -42,9 +42,7 @@ _COUNTY_ARCHIVE_LOCK = threading.RLock()
 _OVERLAY_FILL_ALPHA = 90
 _OVERLAY_HATCH_ALPHA = 200
 #: A shape standing in for a point is a symbol, not a wash: it covers a few
-#: pixels, so it hides nothing and has no reason to be translucent. Matches
-#: ``gui_maps.OVERLAY_MARKER_FILL_ALPHA`` so a storm report looks the same on
-#: the inset as it did on the map it was chosen from.
+#: pixels, so it hides nothing and has no reason to be translucent.
 _OVERLAY_MARKER_FILL_ALPHA = 255
 _OVERLAY_STROKE_WIDTH = 1.2
 _COORDINATE_LABEL_RE = re.compile(

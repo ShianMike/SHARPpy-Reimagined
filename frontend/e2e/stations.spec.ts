@@ -9,12 +9,13 @@ import { pixelAt } from "./support/pixels";
 import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
 
-/** --map-station-unknown, #9c978d. */
-const UNKNOWN_MARKER: [number, number, number] = [156, 151, 141];
+/** --map-station-listed, #e03030. */
+const AVAILABLE_MARKER: [number, number, number] = [224, 48, 48];
 
 test("deck.gl draws station 72357 and shows its tooltip on hover", async ({ page, consoleMessages }) => {
   await page.goto("/");
   await waitForMark(page, MARKS.stationsRendered);
+  await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   await nextFrames(page);
 
   const profile = await effectiveProfile(page);
@@ -32,9 +33,9 @@ test("deck.gl draws station 72357 and shows its tooltip on hover", async ({ page
   const [r, g, b] = await pixelAt(page, shot, 2, 2);
   test.info().annotations.push({ type: "marker-pixel", description: JSON.stringify([r, g, b]) });
   for (const [actual, expected] of [
-    [r, UNKNOWN_MARKER[0]],
-    [g, UNKNOWN_MARKER[1]],
-    [b, UNKNOWN_MARKER[2]],
+    [r, AVAILABLE_MARKER[0]],
+    [g, AVAILABLE_MARKER[1]],
+    [b, AVAILABLE_MARKER[2]],
   ] as const) {
     expect(Math.abs(actual - expected)).toBeLessThanOrEqual(24);
   }
@@ -46,7 +47,7 @@ test("deck.gl draws station 72357 and shows its tooltip on hover", async ({ page
   await expect(tooltip).toContainText("72357");
   await expect(tooltip).toContainText("Norman/Max Westheimer A, Ok., Usa");
   await expect(tooltip).toContainText("35.18° N, 97.44° W");
-  await expect(tooltip).toContainText("Availability unknown");
+  await expect(tooltip).toContainText("Availability: Available");
   await expect(tooltip).toContainText("UWyo FM35");
   await nextFrames(page);
   await saveScreenshot(page, "browser-hover.png");
@@ -66,9 +67,9 @@ test("a click selects 72357 in the chip and the inspector, and Esc clears it", a
   await expect(inspector).toContainText("Norman/Max Westheimer A, Ok., Usa");
   await expect(inspector).toContainText("35.18° N");
   await expect(inspector).toContainText("97.44° W");
-  await expect(inspector).toContainText("Unknown");
+  await expect(inspector).toContainText("Available");
   await expect(inspector).toContainText("UWyo FM35");
-  await expect(inspector).toContainText("Bundled UWyo list, 933 stations");
+  await expect(inspector).toContainText("Bundled UWyo list, 934 stations");
   // Off the map (over the timeline), so no tooltip covers the selection.
   await page.mouse.move(720, 872);
   await nextFrames(page);

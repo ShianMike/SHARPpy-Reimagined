@@ -1,0 +1,7 @@
+{
+  "caches": [
+    { "key": "models", "bytes": 134217728, "files": 8, "clearable_bytes": 100663296 },
+    { "key": "maps", "bytes": 12582912, "files": 3, "clearable_bytes": 12582912 },
+    { "key": "outlooks", "bytes": 4194304, "files": 4, "clearable_bytes": 4194304 }
+  ]
+}

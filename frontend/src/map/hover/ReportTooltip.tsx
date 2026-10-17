@@ -1,6 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, type ReactNode } from "react";
 import { Surface } from "../../ui/Surface";
-import { displayReading } from "../../lib/displayUnits";
+import { convertUnit, displayReading, displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
 import { useHoverStore } from "./hoverStore";
 import styles from "./StationTooltip.module.css";
@@ -28,13 +28,19 @@ export function ReportTooltip(): ReactNode {
   const lines = report.description.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const eventIndex = lines.findIndex((line) => line.startsWith("Event time:"));
   const stationBreak = eventIndex < 0 ? report.label.indexOf(" — ") : -1;
-  const title = stationBreak < 0 ? report.label : report.label.slice(0, stationBreak);
+  const title = eventIndex < 0 ? (stationBreak < 0 ? report.label : report.label.slice(0, stationBreak)) : displayReading(report.label, units);
   const location = eventIndex > 0 ? lines.slice(0, eventIndex).join(" ")
     : stationBreak < 0 ? "" : report.label.slice(stationBreak + 3);
   const facts: { name: string; value: string }[] = [];
   const readings: { name: string; value: string }[] = [];
   const attribution: string[] = [];
   const paragraphs: string[] = [];
+  if (report.observation !== undefined) {
+    const unit = displayUnit("°C", units);
+    for (const [name, value] of [["Temperature", report.observation.temperatureC], ["Dewpoint", report.observation.dewpointC]] as const) {
+      readings.push({ name, value: value === null ? "missing" : `${String(Number(convertUnit(value, "°C", unit).toFixed(1)))} ${unit}` });
+    }
+  }
   for (const line of lines.slice(Math.max(0, eventIndex))) {
     const observed = eventIndex < 0 ? /^Observed (.+?)(?: \(([^()]*)\))?$/.exec(line) : null;
     if (observed?.[1] !== undefined) {
@@ -45,7 +51,7 @@ export function ReportTooltip(): ReactNode {
     if (eventIndex < 0 && line.startsWith("Temperature ")) {
       // Only the first two separators divide readings; later ones belong to the wind's status text.
       const [upper, lower, ...rest] = line.split(/;\s*/);
-      for (const reading of [upper, lower, rest.join("; ")]) {
+      for (const reading of report.observation === undefined ? [upper, lower, rest.join("; ")] : [rest.join("; ")]) {
         if (reading === undefined || reading === "") continue;
         const split = reading.indexOf(" ");
         if (split < 1) paragraphs.push(reading);
@@ -57,7 +63,7 @@ export function ReportTooltip(): ReactNode {
     const name = field?.[1], value = field?.[2];
     if (name === undefined || value === undefined) paragraphs.push(line);
     else if (name === "Issuing office" || name === "Provider" || (eventIndex < 0 && name === "Source")) attribution.push(line);
-    else if (name !== "Magnitude" || !report.label.includes(value)) facts.push({ name, value });
+    else if (name !== "Magnitude" || !report.label.includes(value)) facts.push({ name, value: name === "Magnitude" ? displayReading(value, units) : value });
   }
   return (
     <Surface ref={ref} elevation="popover" role="tooltip" className={[styles.tooltip, styles.report].join(" ")} data-testid="report-tooltip">

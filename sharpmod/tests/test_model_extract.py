@@ -1618,6 +1618,38 @@ def test_probe_request_scope_bounds_owner_and_passes_through_other_threads():
     assert holder.requests is delegate
 
 
+def test_queued_probe_gets_its_full_network_budget(monkeypatch):
+    clock = [0.0]
+    calls = []
+
+    class QueuedLock:
+        def __enter__(self):
+            clock[0] += 20.0
+
+        def __exit__(self, *_):
+            pass
+
+    class Requests:
+        def head(self, _url, **kwargs):
+            calls.append(kwargs)
+            return object()
+
+    delegate = Requests()
+    holder = SimpleNamespace(requests=delegate)
+    monkeypatch.setattr(model_extract, "_HERBIE_PROBE_REQUEST_LOCK", QueuedLock())
+    monkeypatch.setattr("sharpmod.tools.model_extract_probe.time.monotonic", lambda: clock[0])
+    with model_extract._bounded_herbie_probe_requests(
+        request_timeout=2.0, deadline_seconds=8.0, cancelled=None,
+        requests_holder=holder,
+    ):
+        holder.requests.head("https://example.invalid/model.grib2")
+        assert calls == [{"timeout": 2.0}]
+        clock[0] += 9.0
+        with pytest.raises(TimeoutError):
+            holder.requests.head("https://example.invalid/model.grib2")
+    assert holder.requests is delegate
+
+
 def test_probe_forwards_bounds_to_scoped_herbie_requests(monkeypatch):
     owner_thread = model_extract.threading.get_ident()
     events = []

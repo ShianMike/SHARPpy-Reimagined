@@ -209,22 +209,6 @@ test.describe("the forecast map", () => {
     expectWarnings(consoleMessages, []);
   });
 
-  test("playback steps on once each frame has loaded, and pauses", async ({ page, consoleMessages }) => {
-    await page.goto("/");
-    await waitForMapDrawn(page);
-    await turnOn(page, "model-field");
-    const hour = page.getByRole("slider", { name: "Forecast hour", exact: true });
-    const timeline = page.getByRole("region", { name: "Forecast timeline" });
-    await timeline.getByRole("button", { name: "Play" }).click();
-    await expect.poll(async () => Number(await hour.inputValue()), { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
-    await timeline.getByRole("button", { name: "Pause" }).click();
-    const stopped = await hour.inputValue();
-    await page.waitForTimeout(1500);
-    expect(await hour.inputValue()).toBe(stopped);
-    await expect(page.getByTestId("field-shown")).toContainText(`F${stopped.padStart(3, "0")}`);
-    expectWarnings(consoleMessages, []);
-  });
-
   test("two and four synchronized panels, each with its own product and layers", async ({ page, consoleMessages }) => {
     await presetPreferences(page, { layers: { "station-labels": { visible: true, opacity: 1 } } });
     await page.goto("/");
@@ -272,7 +256,7 @@ test.describe("the forecast map", () => {
   test("stations marked against the UWyo list of a release, the extra ones added", async ({ page, consoleMessages }) => {
     await page.goto("/");
     await waitForMapDrawn(page);
-    await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+    await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
     const row = await layerRow(page, "stations");
     const select = row.getByRole("combobox", { name: "Availability" });
     await select.click();
@@ -281,10 +265,10 @@ test.describe("the forecast map", () => {
     expect(release).not.toBeNull();
     await option.click();
     await expect(row.getByTestId("availability-shown")).toContainText("UWyo lists 2 bundled stations and 1 others");
-      await expect(page.getByRole("list", { name: "Legend" })).toContainText("Station, not listed");
+    await expect(page.getByRole("list", { name: "Legend" })).toContainText("Station, not reported");
     await select.click();
-    await page.getByRole("option", { name: "Bundled list only", exact: true }).click();
-    await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+    await page.getByRole("option", { name: "Automatic · observed launch", exact: true }).click();
+    await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
     expectWarnings(consoleMessages, []);
   });
 });

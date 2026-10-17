@@ -16,7 +16,7 @@ import sys
 from collections.abc import Callable, Iterable
 from typing import Any
 
-from sharpmod.bridge import contours, ensemble, fields, map_layers, reports, satellite, soundings, surface_plots, thresholds
+from sharpmod.bridge import contours, fields, map_layers, reports, satellite, soundings, storage, surface_plots, thresholds
 from sharpmod.bridge.errors import BridgeError
 from sharpmod.bridge.protocol import PROTOCOL_VERSION
 
@@ -183,6 +183,6 @@ HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     **reports.HANDLERS,
     **contours.HANDLERS,
     **surface_plots.HANDLERS,
-    **ensemble.HANDLERS,
     **thresholds.HANDLERS,
+    **storage.HANDLERS,
 }

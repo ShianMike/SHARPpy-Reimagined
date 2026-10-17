@@ -9,6 +9,7 @@ it("converts precise observation readings, preserves missing/status marks and le
   expect(surfaceDisplay(data, "source")).toBe(data);
   expect(surfaceDisplay(data, "°C")).toBe(data);
   const converted = surfaceDisplay(data, "°F");
+  expect(surfaceDisplay(data, "°F")).toBe(converted);
   expect(converted.plots[0]?.upperText).toBe("71"); // 21.5 °C, rather than the rounded plot's 22.
   expect(converted.plots[0]?.lowerText).toBe("54");
   expect(converted.plots[0]?.staff).toBe(data.plots[0]?.staff);
@@ -17,6 +18,10 @@ it("converts precise observation readings, preserves missing/status marks and le
   expect(JSON.stringify(data)).toBe(original);
   const plot = data.plots[0];
   if (plot === undefined) throw new Error("Missing available observation");
-  expect(surfaceDisplay({ ...data, plots: [{ ...plot, description: "Temperature missing; missing; wind missing" }] }, "°F").plots[0])
+  expect(surfaceDisplay({ ...data, plots: [{ ...plot, temperatureC: null, dewpointC: null }] }, "°F").plots[0])
     .toMatchObject({ upperText: "—", lowerText: "—" });
+  expect(surfaceDisplay({ ...data, plots: [{ ...plot, temperatureC: 21.38, description: "Provider wording changed." }] }, "°F").plots[0]?.upperText).toBe("70");
+  const refreshed = surfaceDisplay({ ...data, plots: [{ ...plot, temperatureC: 31.5 }] }, "°F");
+  expect(refreshed).not.toBe(converted);
+  expect(refreshed.plots[0]?.upperText).toBe("89");
 });

@@ -20,14 +20,17 @@ async fn check(router: &Router, sample: PathBuf) -> Result<Value, BackendError> 
         )
     })?;
     let summary = router
-        .open_sounding(OpenSoundingRequest::File {
-            file_name: sample
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned(),
-            content_base64: base64::engine::general_purpose::STANDARD.encode(data),
-        })
+        .open_sounding(
+            OpenSoundingRequest::File {
+                file_name: sample
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
+                content_base64: base64::engine::general_purpose::STANDARD.encode(data),
+            },
+            None,
+        )
         .await?;
     let image = router
         .render_sounding(&summary.sounding_id, RenderParcel::Mu, ImageMode::Hd)

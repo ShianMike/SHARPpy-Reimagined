@@ -3,7 +3,6 @@
 pub mod analysis;
 pub mod checks;
 pub mod contours;
-pub mod ensemble;
 pub mod health;
 pub mod map;
 pub mod models;
@@ -11,8 +10,10 @@ pub mod overlays;
 pub mod radar;
 pub mod reports;
 pub mod satellite;
+pub mod sounding_progress;
 pub mod soundings;
 pub mod stations;
+pub mod storage;
 pub mod surface;
 pub mod threshold_catalog;
 pub mod thresholds;

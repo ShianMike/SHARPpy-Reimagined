@@ -10,6 +10,7 @@ import type { CommandName, Transport } from "../../lib/backend/transport";
 import { useAppStore } from "../../stores/appStore";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { renderWithBackend } from "../../test/backendHarness";
+import * as displayUnits from "../../lib/displayUnits";
 import { SoundingWorkspace } from "./SoundingWorkspace";
 import { CHOICE_LABEL } from "./AscentPicker";
 import { MAX_FILE_BYTES } from "./FileForm";
@@ -63,12 +64,17 @@ afterEach(() => {
 
 describe("SoundingWorkspace", () => {
   it("edits a level, undoes and redoes it, and retains it across navigation", async () => {
+    const formatUnit = vi.spyOn(displayUnits, "displayUnit");
     const transport = recordingTransport();
     const workspace = renderWithBackend(<SoundingWorkspace />, transport);
     await userEvent.type(screen.getByRole("textbox", { name: "Station" }), "72357");
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     await screen.findByTestId("sounding-image");
     await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+    const formatted = formatUnit.mock.calls.length;
+    expect(formatted).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(formatUnit.mock.calls).toHaveLength(formatted);
     const level = screen.getByRole("combobox", { name: "Profile level" });
     await userEvent.click(level);
     await userEvent.keyboard("{Escape}");
@@ -82,6 +88,7 @@ describe("SoundingWorkspace", () => {
     await userEvent.clear(input); await userEvent.type(input, "30");
     await userEvent.click(screen.getByRole("button", { name: "Apply & recalculate" }));
     await waitFor(() => { expect(useSoundingStore.getState().views[useSoundingStore.getState().activeId ?? ""]?.cursor).toBe(1); });
+    expect(screen.getByTestId("sounding-stage").querySelector("svg title")?.textContent).toContain("30.0");
     await userEvent.click(screen.getByRole("button", { name: "Undo edit" }));
     await waitFor(() => { expect(screen.getByRole<HTMLInputElement>("spinbutton", { name: /Temperature/u }).value).toBe(before); });
     await userEvent.click(screen.getByRole("button", { name: "Redo edit" }));
@@ -168,6 +175,8 @@ describe("SoundingWorkspace", () => {
     const resolution = screen.getByRole("combobox", { name: "Image resolution" });
     await userEvent.click(resolution);
     expect(within(screen.getByRole("listbox", { name: "Image resolution" })).getAllByRole("option")).toHaveLength(2);
+    const selectedResolution = screen.getByRole("option", { name: "UHD · lossless", selected: true });
+    expect(selectedResolution.querySelector("svg")).toBeNull();
     await userEvent.keyboard("{End}{Enter}");
     expect(document.activeElement).toBe(resolution);
     await waitFor(() => {

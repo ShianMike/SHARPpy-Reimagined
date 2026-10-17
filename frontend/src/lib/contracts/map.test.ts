@@ -111,6 +111,7 @@ describe("map contracts", () => {
     (c.outlook as { areas: { rings: unknown[][] }[] }).areas[0]?.rings[0] ?? [];
   it.each([
     ["a bad colour", () => parseMapCatalog(edit(catalog, (c) => stops(c)[0]?.splice(1, 1, "red")))],
+    ["an unknown display quantity", () => parseMapCatalog(edit(catalog, (c) => { ((c.products as { palette: Record<string, unknown> }[])[0] as { palette: Record<string, unknown> }).palette.display = "unknown"; }))],
     ["stops out of order", () => parseMapCatalog(edit(catalog, (c) => stops(c).reverse()))],
     ["too many colour stops", () => parseMapCatalog(edit(catalog, (c) => stops(c).splice(0, stops(c).length, ...Array.from({ length: 257 }, (_, i) => [i, "#123456"]))))],
     ["an unlisted default product", () => parseMapCatalog(edit(catalog, (c) => (c.defaultProduct = "none")))],

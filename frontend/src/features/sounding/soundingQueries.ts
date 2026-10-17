@@ -6,7 +6,7 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useBackendClient } from "../../lib/backend/BackendProvider";
 import { BASE_QUERY_OPTIONS, QUERY_KEYS, soundingKeys } from "../../lib/backend/queryOptions";
 import { useAppStore } from "../../stores/appStore";
@@ -16,6 +16,7 @@ import type {
   OpenSoundingRequest,
   RenderChoice,
   SoundingSummary,
+  SoundingProgress,
 } from "../../types/soundings";
 
 const MODEL_LIST_STALE_MS = 10 * 60_000;
@@ -63,15 +64,31 @@ export function useModelCatalog(): UseQueryResult<ModelCatalog> {
  * Opens a sounding. On success it joins the open list, becomes the active
  * sounding, and the Sounding workspace comes forward.
  */
-export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, OpenSoundingRequest> {
+export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, OpenSoundingRequest> & { progress: SoundingProgress | undefined } {
   const client = useBackendClient();
-  return useMutation({
-    mutationFn: (request: OpenSoundingRequest) => client.openSounding(request),
+  const [progressId, setProgressId] = useState<string | null>(null);
+  const mutation = useMutation({
+    mutationFn: (request: OpenSoundingRequest) => {
+      const id = request.kind === "model" ? crypto.randomUUID().replaceAll("-", "") : undefined;
+      setProgressId(id ?? null);
+      return client.openSounding(request, id);
+    },
     onSuccess: (summary) => {
       useSoundingStore.getState().add(summary);
       useAppStore.getState().setActiveWorkspace("sounding");
     },
+    onSettled: () => { setProgressId(null); },
   });
+  const progress = useQuery({
+    queryKey: ["soundings", "progress", progressId],
+    queryFn: () => client.getSoundingProgress(progressId ?? ""),
+    enabled: mutation.isPending && progressId !== null,
+    refetchInterval: 1000,
+    refetchIntervalInBackground: true,
+    retry: false,
+    gcTime: 0,
+  });
+  return { ...mutation, progress: mutation.isPending ? progress.data : undefined };
 }
 
 export function useSoundingImage(soundingId: string | null, choice: RenderChoice): UseQueryResult<Blob> {

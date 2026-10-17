@@ -1,7 +1,7 @@
 // The station catalogue query (DESIGN-frontend F3, PLAN P17). With an
-// observation time chosen in the layer panel, every view sees the catalogue
-// marked against the UWyo list for it (availability.ts); without one, or while
-// that list loads or after it failed, the bundled list as it is.
+// observation time chosen in the layer panel (otherwise the observed launch),
+// every view sees the catalogue marked against its live UWyo list. The bundled
+// list remains usable while the availability check loads or fails.
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useMemo } from "react";

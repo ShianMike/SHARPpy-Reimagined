@@ -21,7 +21,7 @@ test("without WebGL2 the station list replaces the map, and the keyboard selects
   await expect(page.getByRole("button", { name: "Try the map again" })).toHaveCount(0);
   await expect(page.getByTestId("map")).toHaveCount(0);
   const list = page.getByRole("listbox", { name: "Stations" });
-  await expect(list.getByRole("option")).toHaveCount(933);
+  await expect(list.getByRole("option")).toHaveCount(934);
 
   await list.focus();
   await page.keyboard.press("End");
@@ -33,7 +33,7 @@ test("without WebGL2 the station list replaces the map, and the keyboard selects
   const id = ((await second.textContent()) ?? "").split(" ")[0] ?? "";
   const inspector = page.getByRole("complementary", { name: "Inspector" });
   await expect(inspector).toContainText(id);
-  await expect(inspector).toContainText("Bundled UWyo list, 933 stations");
+  await expect(inspector).toContainText("Bundled UWyo list, 934 stations");
   // The list stops short of the inspector, so the two never overlap.
   const listBox = await boxOf(list);
   const inspectorBox = await boxOf(inspector);

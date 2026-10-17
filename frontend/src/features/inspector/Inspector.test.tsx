@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import catalogFull from "@contracts/public/stations.catalog.full.json";
 import catalogSeed from "@contracts/public/stations.catalog.seed-fallback.json";
+import availability from "@contracts/public/map/availability.json";
+import unavailable from "@contracts/public/errors/STATION_LIST_UNAVAILABLE.json";
 import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import { useAppStore } from "../../stores/appStore";
 import { useForecastStore } from "../../stores/forecastStore";
@@ -12,6 +14,9 @@ import { useSoundingStore } from "../../stores/soundingStore";
 import { renderWithBackend, scriptedTransport } from "../../test/backendHarness";
 import { Inspector } from "./Inspector";
 import { catalogueText } from "./StationDetails";
+import { StationTooltip } from "../../map/hover/StationTooltip";
+import { useHoverStore } from "../../map/hover/hoverStore";
+import { mapKeys } from "../../lib/backend/queryOptions";
 
 const appInitial = useAppStore.getState();
 const mapInitial = useMapStore.getState();
@@ -23,6 +28,7 @@ beforeEach(() => {
   useMapStore.setState(mapInitial, true);
   useSoundingStore.setState(soundingInitial, true);
   useForecastStore.setState(forecastInitial, true);
+  useHoverStore.getState().clear();
 });
 
 afterEach(() => {
@@ -64,15 +70,16 @@ describe("Inspector", () => {
 
   it("shows only real catalogue fields for the selected station", async () => {
     const aside = await showStation("72357");
+    await screen.findByText("Available");
     const text = aside.textContent;
     expect(text).toContain("72357");
     expect(text).toContain("Norman/Max Westheimer A, Ok., Usa");
     expect(text).toContain("Latitude35.18° N");
     expect(text).toContain("Longitude97.44° W");
-    expect(text).toContain("AvailabilityUnknown");
-    expect(text).toContain("The bundled catalogue does not record availability.");
+    expect(text).toContain("AvailabilityAvailable");
+    expect(text).toContain("UWyo reports a sounding for this launch.");
     expect(text).toContain("SourceUWyo FM35");
-    expect(text).toContain("CatalogueBundled UWyo list, 933 stations");
+    expect(text).toContain("CatalogueBundled UWyo list, 934 stations");
     const source = screen.getByText("Station & source").closest("details");
     expect(source?.open).toBe(false);
     await userEvent.click(screen.getByText("Station & source"));
@@ -88,11 +95,67 @@ describe("Inspector", () => {
     expect(aside.textContent).toContain("UWyo BUFR");
   });
 
-  it("says Seed list, 10 stations with the seed fallback", async () => {
+  it("includes newly reporting stations with the seed fallback", async () => {
     const aside = await showStation("72357", "seed-fallback");
+    await screen.findByText("Available");
     expect(aside.textContent).toContain("OUN Norman, OK");
-    expect(aside.textContent).toContain("Seed list, 10 stations");
+    expect(aside.textContent).toContain("Seed list, 11 stations");
     expect(catalogueText("bundled", 1)).toBe("Bundled UWyo list, 1 station");
+  });
+
+  it("checks automatically once for all views, then updates them when the observed launch changes", async () => {
+    useSoundingStore.getState().setObserved({ date: "2026-10-16", hour: 12 });
+    useAppStore.getState().selectStation("72357");
+    useHoverStore.getState().setHovered({ stationId: "72357", x: 100, y: 100 });
+    let finish: (value: unknown) => void = () => { throw new Error("Availability request not started"); };
+    const pending = new Promise<unknown>((resolve) => { finish = resolve; });
+    const fixture = createTransport();
+    const call = vi.fn((command: Parameters<typeof fixture.call>[0], args?: Readonly<Record<string, unknown>>) => {
+      if (command !== "get_station_availability") return fixture.call(command, args);
+      if (args?.observationTime === "2026-10-16T12:00:00Z") return pending;
+      return Promise.resolve({ ...availability, observationTime: args?.observationTime, listedIds: [] });
+    });
+    renderWithBackend(<><Inspector /><StationTooltip /></>, { ...fixture, call });
+    await screen.findByRole("complementary", { name: "Inspector" });
+    expect(screen.getByRole("status").textContent).toContain("Checking…");
+    expect(screen.getByRole("tooltip").textContent).toContain("Checking availability…");
+    expect(call.mock.calls.filter(([command]) => command === "get_station_availability")).toEqual([["get_station_availability", { observationTime: "2026-10-16T12:00:00Z" }]]);
+    await act(async () => { finish({ ...availability, observationTime: "2026-10-16T12:00:00Z" }); await pending; });
+    await screen.findByText("Available");
+    expect(screen.getByRole("status").textContent).toContain("2026-10-16 12Z");
+    expect(screen.getByRole("tooltip").textContent).toContain("Availability: Available · 10-16 12Z");
+    act(() => { useSoundingStore.getState().setObserved({ date: "2026-10-15", hour: 0 }); });
+    await screen.findByText("Not reported");
+    expect(screen.getByRole("status").textContent).toContain("2026-10-15 00Z");
+    expect(screen.getByRole("tooltip").textContent).toContain("Availability: Not reported · 10-15 00Z");
+    expect(call.mock.calls.filter(([command]) => command === "get_station_availability")).toHaveLength(2);
+  });
+
+  it("offers retry after a failed check and keeps a previous result if refreshing fails", async () => {
+    useSoundingStore.getState().setObserved({ date: "2026-10-16", hour: 12 });
+    useAppStore.getState().selectStation("72357");
+    const report = { ...availability, observationTime: "2026-10-16T12:00:00Z" };
+    const transport = scriptedTransport({ get_station_catalog: [catalogFull], get_station_availability: [{ reject: { ...unavailable, retryable: false } }, report, { reject: { ...unavailable, retryable: false } }] });
+    const { queryClient } = renderWithBackend(<Inspector />, transport);
+    await screen.findByText("Check failed");
+    expect(screen.queryByText("Unknown")).toBeNull();
+    expect(transport.calls("get_station_availability")).toBe(1);
+    await userEvent.click(screen.getByRole("button", { name: "Retry station availability check" }));
+    await screen.findByText("Available");
+    await act(async () => { await queryClient.refetchQueries({ queryKey: mapKeys.availability(report.observationTime), exact: true }); });
+    expect(screen.getByRole("status").textContent).toContain("Available");
+    await waitFor(() => { expect(screen.getByRole("status").textContent).toContain("Showing the last check."); });
+    expect(screen.getByRole("status").textContent).toContain("2026-10-16 12Z");
+    expect(screen.getByRole("button", { name: "Retry station availability check" })).toBeTruthy();
+  });
+
+  it("opens the same launch that an explicit availability check describes", async () => {
+    useMapStore.getState().setAvailabilityTime("2026-10-14T00:00:00Z");
+    await showStation("72357");
+    await screen.findByText("Available");
+    expect(screen.getByRole("status").textContent).toContain("2026-10-14 00Z");
+    await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
+    expect(useSoundingStore.getState().observed).toMatchObject({ stationId: "72357", date: "2026-10-14", hour: 0 });
   });
 
   it("Clear selection clears the selection and hides the inspector", async () => {

@@ -1,9 +1,8 @@
 //! `evaluate_threshold` DTOs: one definition's member verdicts with their
 //! denominators. Read from the bridge in snake_case (the evaluator's own
-//! `as_dict`), written to the webview in camelCase, like
-//! `ensemble::EnsembleSummary`. Every label, unit, member state, and
-//! interpretation sentence arrives from sharpmod, so the webview renders the
-//! tables without naming or computing any quantity. The form's catalog and the
+//! `as_dict`), written to the webview in camelCase. Every label, unit, member
+//! state, and interpretation sentence arrives from sharpmod, so the webview
+//! renders the tables without naming or computing any quantity. The form's catalog and the
 //! CSV download live in `dto::threshold_catalog`.
 //!
 //! Rust is the trust boundary in front of the webview: every payload is

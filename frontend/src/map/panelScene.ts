@@ -18,6 +18,7 @@ import { useEffectiveRadarSite, usePlaceLabels, useRadarFrame, useRadarSiteFrame
 import { useSelectionAnchor, useSurfacePlots } from "./surfaceQueries";
 import { usePanelField, type PanelField } from "./panelField";
 import type { MapRuntime } from "./runtime/MapRuntime";
+import { useFieldTransition } from "./useFieldTransition";
 
 const NO_STATIONS: readonly Station[] = [];
 const NO_PLACES: readonly Place[] = [];
@@ -34,7 +35,8 @@ export function domainPath(model: ForecastModel): Path | null {
   const first = outline[0];
   let path: Path | null = null;
   if (outline.length >= 3 && first !== undefined) {
-    path = [...outline, first];
+    const last = outline.at(-1);
+    path = last?.[0] === first[0] && last[1] === first[1] ? outline : [...outline, first];
   } else if (bounds.east - bounds.west < 359) {
     const { west, east, south, north } = bounds;
     path = [[west, south], [east, south], [east, north], [west, north], [west, south]];
@@ -149,7 +151,7 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
     field.request?.product ?? null,
     field.request?.runTime ?? null,
     field.request?.forecastHour ?? null,
-    contourSpec !== null && field.request !== null,
+    (contourSpec !== null || field.product?.wind === true) && field.request !== null,
     field.request?.model,
   );
   const contourLines = contourQuery.isError ? null : contourQuery.data ?? null;
@@ -161,9 +163,7 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   useEffect(() => {
     runtime?.setStations(stations);
   }, [runtime, stations]);
-  useEffect(() => {
-    runtime?.setScene({ field: image });
-  }, [runtime, image]);
+  useFieldTransition(runtime, image, model?.key);
   useEffect(() => {
     runtime?.setScene({ radar, satellite, reports, surfacePlots, contourSpec, contours: contourLines, outlooks, domain });
   }, [runtime, radar, satellite, reports, surfacePlots, contourSpec, contourLines, outlooks, domain]);

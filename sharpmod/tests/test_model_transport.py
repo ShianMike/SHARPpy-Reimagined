@@ -227,10 +227,14 @@ def test_completed_fragment_is_reused_and_output_is_atomic(tmp_path):
     session = _RangeSession(payload)
     ranges = [ByteRange(0, len(payload) - 1)]
     output = tmp_path / "subset.grib2"
+    received = []
 
-    download_ranges(session, "https://data/file", ranges, output)
-    download_ranges(session, "https://data/file", ranges, output)
+    download_ranges(session, "https://data/file", ranges, output, on_bytes=received.append)
+    assert sum(received) == len(payload)
+    received.clear()
+    download_ranges(session, "https://data/file", ranges, output, on_bytes=received.append)
 
+    assert received == []
     assert output.read_bytes() == payload
     assert session.requests == [(0, len(payload) - 1)]
     assert not list(tmp_path.glob("*.tmp"))
@@ -243,14 +247,17 @@ def test_partial_fragment_resumes_from_existing_size(tmp_path):
     fragments.mkdir()
     (fragments / f"0-{len(payload) - 1}.part").write_bytes(payload[:9])
     session = _RangeSession(payload)
+    received = []
 
     download_ranges(
         session,
         "https://data/file",
         [ByteRange(0, len(payload) - 1)],
         output,
+        on_bytes=received.append,
     )
 
+    assert sum(received) == len(payload) - 9
     assert output.read_bytes() == payload
     assert session.requests == [(9, len(payload) - 1)]
 
@@ -290,10 +297,12 @@ def test_compatibility_fallback_accepts_full_payload_without_herbie_download(
             raise AssertionError("fallback re-entered Herbie.download")
 
     observed_parts = []
+    received = []
     output, transferred = download_herbie_subset_fallback(
         Herbie(),
         ":chosen:",
         session=session,
+        on_bytes=received.append,
         progress=lambda *_args: observed_parts.extend(
             tmp_path.glob("compat.grib2.*.part")
         ),
@@ -301,6 +310,7 @@ def test_compatibility_fallback_accepts_full_payload_without_herbie_download(
 
     assert output.read_bytes() == payload
     assert transferred == len(payload)
+    assert sum(received) == len(payload)
     assert observed_parts
     assert not list(tmp_path.glob("compat.grib2.*.part"))
 

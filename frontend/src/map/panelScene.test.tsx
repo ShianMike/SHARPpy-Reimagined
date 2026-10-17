@@ -16,16 +16,31 @@ import { BackendClient } from "../lib/backend/client";
 import { createQueryClient, mapKeys } from "../lib/backend/queryOptions";
 import { parseFieldFrame } from "../lib/contracts/frames";
 import { parseMapCatalog } from "../lib/contracts/map";
+import { parseModelCatalog } from "../lib/contracts/soundings";
 import type { CommandName, Transport } from "../lib/backend/transport";
 import type { FieldFrame } from "../types/map";
 import { useForecastStore } from "../stores/forecastStore";
 import { useMapStore } from "../stores/mapStore";
 import { defaultLayerStates, type SceneData } from "./layers/registry";
-import { useFieldImage, usePanelScene } from "./panelScene";
+import { domainPath, useFieldImage, usePanelScene } from "./panelScene";
 import type { MapRuntime } from "./runtime/MapRuntime";
 
 const savedMap = useMapStore.getState();
 const savedForecast = useForecastStore.getState();
+
+it("uses the same closed grid perimeter without adding a zero-length segment", () => {
+  const catalogue = parseModelCatalog(models);
+  const reference = catalogue.models.find((model) => model.key === "hrrr");
+  if (reference === undefined) throw new Error("Missing model fixture");
+  for (const model of catalogue.models.filter((item) => item.key === "hrrr" || item.key === "nam-3km-conus" || item.key === "rrfs-a" || item.key.startsWith("refs-m"))) {
+    const path = domainPath(model);
+    expect(path).toBe(model.outline);
+    expect(path).toEqual(reference.outline);
+    expect(path?.length).toBeGreaterThan(100);
+    expect(path?.[0]).toEqual(path?.at(-1));
+    expect(domainPath(model)).toBe(path);
+  }
+});
 afterEach(() => {
   cleanup();
   useMapStore.setState(savedMap);

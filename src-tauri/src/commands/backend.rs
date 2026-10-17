@@ -1,6 +1,7 @@
 //! Backend status commands.
 
 use crate::dto::health::{BackendHealth, BridgeStatus};
+use crate::dto::storage::{CacheClearResult, StorageUsage};
 use crate::error::BackendError;
 use crate::state::AppState;
 
@@ -19,4 +20,19 @@ pub async fn restart_backend(
     state: tauri::State<'_, AppState>,
 ) -> Result<BridgeStatus, BackendError> {
     state.router.restart_backend().await
+}
+
+#[tauri::command]
+pub async fn get_storage_usage(
+    state: tauri::State<'_, AppState>,
+) -> Result<StorageUsage, BackendError> {
+    state.router.storage_usage().await
+}
+
+#[tauri::command]
+pub async fn clear_cache(
+    state: tauri::State<'_, AppState>,
+    cache: String,
+) -> Result<CacheClearResult, BackendError> {
+    state.router.clear_cache(&cache).await
 }

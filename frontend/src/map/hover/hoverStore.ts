@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import type { SurfacePlot } from "../../types/surface";
 
 export interface HoveredStation {
   stationId: string;
@@ -26,6 +27,7 @@ export interface HoveredOutlook {
 
 /** A storm report marker under the pointer. */
 export interface HoveredReport {
+  observation?: Pick<SurfacePlot, "temperatureC" | "dewpointC">;
   label: string;
   description: string;
   caption: string;

@@ -91,7 +91,7 @@ export function ObservedForm(): ReactNode {
         >
           Open sounding
         </Action>
-        {open.isPending ? <span className={styles.busy}>{`Fetching ${stationId} ${formatUtc(time)}`}</span> : null}
+        {open.isPending ? <span className={styles.busy} role="status">{`Fetching ${stationId} ${formatUtc(time)}`}</span> : null}
       </div>
       {open.isError ? (
         <SoundingErrorNotice

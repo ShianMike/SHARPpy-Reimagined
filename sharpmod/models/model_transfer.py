@@ -28,6 +28,7 @@ def download_ranges(
     chunk_size: int = 256 * 1024,
     cancelled: Callable[[], bool] | None = None,
     progress: Callable[[int, int], None] | None = None,
+    on_bytes: Callable[[int], None] | None = None,
     workers: int = 1,
     session_factory: Callable[[], object] | None = None,
     retries: int = 2,
@@ -295,6 +296,8 @@ def download_ranges(
                                     add_metric(
                                         "transferred_bytes", len(chunk)
                                     )
+                                    if on_bytes is not None:
+                                        on_bytes(len(chunk))
                                     if existing > item.size:
                                         fragment.unlink(missing_ok=True)
                                         report_progress(item, 0)
@@ -459,6 +462,7 @@ def download_herbie_subset(
     session=None,
     cancelled: Callable[[], bool] | None = None,
     progress: Callable[[int, int], None] | None = None,
+    on_bytes: Callable[[int], None] | None = None,
     max_gap: int = 2 * 1024 * 1024,
     max_overhead_ratio: float = 0.25,
     workers: int | None = None,
@@ -517,6 +521,7 @@ def download_herbie_subset(
                 output,
                 cancelled=cancelled,
                 progress=progress,
+                on_bytes=on_bytes,
                 workers=worker_count,
                 session_factory=session_factory,
                 retries=retries,
@@ -543,6 +548,7 @@ def download_herbie_subset(
                 output,
                 cancelled=cancelled,
                 progress=progress,
+                on_bytes=on_bytes,
                 workers=1,
                 retries=retries,
                 metrics=sequential_metrics,
@@ -582,6 +588,7 @@ def download_herbie_subset_fallback(
     session=None,
     cancelled: Callable[[], bool] | None = None,
     progress: Callable[[int, int], None] | None = None,
+    on_bytes: Callable[[int], None] | None = None,
     timeout=(10, 30),
     chunk_size: int = 256 * 1024,
 ) -> tuple[Path, int]:
@@ -718,6 +725,8 @@ def download_herbie_subset_fallback(
                                 destination.write(chunk)
                                 received += len(chunk)
                                 completed += len(chunk)
+                                if on_bytes is not None:
+                                    on_bytes(len(chunk))
                                 if progress is not None:
                                     progress(completed, planned_total)
                                 _api._check_cancelled(cancelled)

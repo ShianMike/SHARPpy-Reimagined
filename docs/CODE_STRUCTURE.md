@@ -8,25 +8,23 @@ in packages grouped by responsibility:
 | --- | --- |
 | `analysis/` | Box sampling, profile metrics, ensembles, threshold rules, metric control bounds, and analysis workflows |
 | `bridge/` | Headless JSON-lines bridge serving the Tauri frontend |
-| `core/` | Shared runtime helpers |
 | `io/` | Sounding and observation file formats |
 | `maps/` | Map overlays, geography, layers, and locator data |
 | `models/` | Model fields, caches, transfer, and transport |
 | `providers/` | HRRR, ECCC, OpenMeteo, radar, satellite, SPC, and observation providers |
-| `state/` | Saved locations and session persistence |
 | `tools/` | Command-line extraction and maintenance tools |
-| `ui/features/` | Application-level GUI modules and feature controllers |
-| `ui/picker/`, `ui/maps/`, `ui/analysis/` | Focused picker, map, and analysis interfaces |
-| `ui/styles/` | Theme tokens and stylesheet sections |
 | `viz/`, `rendering/`, `render_patches/` | Plot widgets, headless image output, and vendored widget patches |
 | `sharptab/`, `backends/`, `upstream/` | Meteorological calculations, optimized decoders, and upstream compatibility |
 
-The executable desktop entry point remains `sharpmod/gui.py`. The public
-`PickerWindow`, `StationMapWidget`, and `AnalysisWorkspace` imports remain
-available from their established paths. Existing top-level imports such as
-`sharpmod.gui_maps`, `sharpmod.box_analysis`, and `sharpmod.render` resolve
-through `sharpmod/_compat/`; new implementation work belongs in the grouped
-packages above.
+The desktop entry point is the Tauri application in `src-tauri/`, with its
+React interface in `frontend/`. `packaging/sharpmod_backend.spec` freezes the
+Python bridge and render worker. The legacy Qt interface, `sharpmod-gui` entry
+point, `ui/`, `state/` and `core/` packages and GUI import aliases are retired;
+their source remains in the
+[v2.0.0 Legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0).
+Scientific top-level imports such as `sharpmod.box_analysis` and
+`sharpmod.render` still resolve through `sharpmod/_compat/`; new implementation
+work belongs in the grouped packages above.
 
 Keep production Python modules below 1,000 physical lines. Move cohesive
 behavior into adjacent modules when a file approaches that limit, and keep

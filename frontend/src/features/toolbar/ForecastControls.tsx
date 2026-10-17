@@ -25,7 +25,9 @@ export function ForecastControls({ className }: ForecastControlsProps): ReactNod
   const [pickerOpen, setPickerOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const reason = forecast.status === "error" ? forecast.error.message : forecast.status === "empty" ? "No models available" : "Loading…";
-  const parameterHint = context !== null && !context.fieldsAvailable ? "Map fields unavailable for this model. Point soundings are available." : field.product?.label ?? "Loading parameters…";
+  const catalogMissing = field.catalog.data === undefined;
+  const parameterLabel = catalogMissing ? (field.catalog.isError ? "Unavailable" : "Loading…") : context !== null && !context.fieldsAvailable ? "Soundings only" : field.product?.shortLabel ?? "—";
+  const parameterHint = catalogMissing ? (field.catalog.isError ? field.catalog.error.message : "Loading parameters…") : context !== null && !context.fieldsAvailable ? "Map fields unavailable for this model. Point soundings are available." : field.product?.label;
   const open = (kind: ForecastStep | "parameter", element: HTMLButtonElement): void => {
     setAnchor(element); setPicker(kind); setPickerOpen(!(pickerOpen && picker === kind));
   };
@@ -46,11 +48,12 @@ export function ForecastControls({ className }: ForecastControlsProps): ReactNod
       disabled={field.catalog.data === undefined || context === null || !context.fieldsAvailable}
       aria-description={parameterHint}
       onClick={(event) => { open("parameter", event.currentTarget); }}>
-      <SlidersHorizontal className="icon-sm" aria-hidden="true" /><span className={styles.triggerCopy}><span className={styles.name}>Parameter{panel > 0 ? ` · ${String(panel + 1)}` : ""}</span><strong>{context !== null && !context.fieldsAvailable ? "Soundings only" : field.product?.shortLabel ?? "—"}</strong></span><ChevronDown className="icon-sm" aria-hidden="true" />
+      <SlidersHorizontal className="icon-sm" aria-hidden="true" /><span className={styles.triggerCopy}><span className={styles.name}>Parameter{panel > 0 ? ` · ${String(panel + 1)}` : ""}</span><strong>{parameterLabel}</strong></span><ChevronDown className="icon-sm" aria-hidden="true" />
       <span className={hints.hint} data-side="bottom" aria-hidden="true">{parameterHint}</span>
     </button>
     {forecast.status === "error" ? <button type="button" className={styles.retry} onClick={forecast.retry} disabled={forecast.retrying}>Retry models</button> : null}
-    <Popover key={picker} open={pickerOpen && context !== null} movable anchor={anchor} onClose={() => { setPickerOpen(false); }} role="dialog"
+    {field.catalog.isError ? <button type="button" className={styles.retry} onClick={() => { void field.catalog.refetch(); }} disabled={field.catalog.isFetching}>Retry parameters</button> : null}
+    <Popover key={picker} id={`forecast-${picker}-picker`} open={pickerOpen && context !== null} movable anchor={anchor} onClose={() => { setPickerOpen(false); }} role="dialog"
       label={picker === "parameter" ? "Parameters" : FORECAST_TITLES[picker]} initialFocus="first" align={picker === "parameter" ? "end" : "start"} width="content"
       className={picker === "parameter" ? styles.parameterPicker : cx(styles.picker, picker === "hour" && styles.hourPicker)}>
       {picker !== "parameter" && context !== null ? <ForecastDialog context={context} step={picker} anchor={anchor} onClose={() => { setPickerOpen(false); }} /> : null}

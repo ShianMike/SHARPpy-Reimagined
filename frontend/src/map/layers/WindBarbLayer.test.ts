@@ -59,6 +59,16 @@ describe("zoom-aware model wind barbs", () => {
     expect(quarter.length).toBeLessThan(original.length * 0.35);
   });
 
+  it("measures spacing inside the visible grid when the western edge is behind the globe", () => {
+    const map = view(24);
+    const project = map.project.bind(map);
+    map.project = vi.fn((position: Parameters<MapLibreMap["project"]>[0]) => {
+      const point = project(position);
+      return point.x < 0 ? { x: NaN, y: NaN } as ReturnType<typeof project> : point;
+    });
+    expect(selectWindBarbs(grid, map).length).toBeGreaterThan(20);
+  });
+
   it("retains calm and unshaded winds, skips missing cells, and does no work off-domain", () => {
     const low = { ...grid, data: new Uint16Array(grid.data.length).fill((3 << 9) | 180) };
     expect(selectWindBarbs(low, view(24)).every((b) => b.speed === 15)).toBe(true);

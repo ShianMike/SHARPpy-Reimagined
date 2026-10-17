@@ -274,7 +274,7 @@ def test_county_archive_is_declared_for_wheels_and_pyinstaller():
         manifest = tomllib.load(source)
     package_data = manifest["tool"]["setuptools"]["package-data"][
         "sharpmod.resources"]
-    spec = (root / "packaging" / "sharpmod_gui.spec").read_text(
+    spec = (root / "packaging" / "sharpmod_backend.spec").read_text(
         encoding="utf-8")
 
     assert "*.zip" in package_data

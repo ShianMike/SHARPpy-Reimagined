@@ -128,6 +128,8 @@ def plots(params: dict[str, Any]) -> dict[str, Any]:
                 "staff": _staff_spec(u, v) if obs.wind_state == "available" else None,
                 "upper_text": _reading(obs.temperature_c),
                 "lower_text": _reading(obs.dewpoint_c),
+                "temperature_c": obs.temperature_c,
+                "dewpoint_c": obs.dewpoint_c,
                 "label": f"{obs.station.station_id} \u2014 {obs.station.name}",
                 "description": "\n".join(body),
             }
@@ -164,6 +166,8 @@ def plots(params: dict[str, Any]) -> dict[str, Any]:
                 "staff": None,
                 "upper_text": "\u2014",
                 "lower_text": "\u2014",
+                "temperature_c": None,
+                "dewpoint_c": None,
                 "label": f"{station.station_id} \u2014 "
                 + ("no observation" if no_match else "query failed"),
                 "description": "\n".join(body),

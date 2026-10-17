@@ -13,9 +13,11 @@
 
 </div>
 
-## What's new in 3.0.2
+## What's new in 3.0.3 (Unreleased)
 
 SHARPpy Reimagined brings [SHARPpy](https://github.com/sharppy/SHARPpy) sounding analysis into a map-based desktop workspace. Version **3.0.0** introduces a React/Tauri interface backed by the existing Python and Rust scientific tools. This README describes that interface; the [v2.0.0 Legacy tour and screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/README.md) document the previous GUI.
+
+The **3.0.3 candidate is Unreleased**; the Windows downloads below remain **v3.0.2**. It expands HRRR weather products and colour tables, with supported products for NAM 3 km, RRFS and REFS members; adds forecast-hour preloading and Fast / Smooth playback; remembers map settings and projection; and checks station availability automatically. Storage settings show cache usage and cleanup controls, while temporary forecast-model downloads are removed when the app closes. The legacy Qt interface and unused ensemble-summary API are retired; individual model members and threshold calculations remain supported. See the [full v3.0.3 changelog](CHANGELOG.md#v303---unreleased).
 
 The **3.0.2 patch** adds saved temperature and wind units, map rendering fixes, panel titles that open the parameter picker, cleaner Settings and Logs layouts, quicker model availability checks, and faster Windows release builds. It includes the **3.0.1** additions: signed in-app updates, a fullscreen control, a minimum window size of 1280 × 800, and clearer outlook tooltips and notices.
 
@@ -29,7 +31,7 @@ Use the navigation rail to move between five workspaces:
 | **Model Viewer** | Explore forecast fields in one, two, or four synchronized maps; inspect a point and open its sounding. |
 | **Soundings** | Fetch observed, forecast-model, or ERA5 profiles, or import local files; inspect and edit the Skew-T and hodograph. |
 | **Logs** | Inspect backend health, capabilities, and diagnostic messages when a request fails. |
-| **Settings** | Choose temperature and wind units, adjust appearance, forecast playback and graphics, and check for updates. |
+| **Settings** | Choose units, appearance, playback and graphics; manage saved settings and cached data; check for updates. |
 
 ### v3.0.0 tour
 
@@ -97,15 +99,21 @@ Preferences save on the current device.
 
 ### Weather maps
 
-Choose a model, UTC run, forecast hour, and parameter from the floating toolbar. The timeline steps through available forecast hours, with playback speed and looping controls.
+Choose a model, UTC run, forecast hour, and parameter from the floating toolbar. The timeline steps through available forecast hours, with playback speed and looping controls. **Load hours** downloads the selected run's hours for the visible panels, including wind barbs and contours, with progress, stop and retry controls. **Fast** switches frames instantly; **Smooth** briefly blends their colours while point readings keep the actual hourly values. The playback choice is saved and respects reduced motion.
 
-Two- and four-panel layouts share the map view and forecast time while keeping each panel's parameter, layers, and colour range. Their settings return when you reopen a layout. Hover over a model field to read its value; select a point for details and **Open sounding**.
+Two- and four-panel layouts share the map view and forecast time while keeping each panel's parameter, layers, and colour range. The layout, active panel, layer choices and model selection return between sessions, with the model opening on its latest suggested run. Hover over a model field to read its value; select a point for details and **Open sounding**.
 
-Smooth rendering is the default, with a Sharp option available. Station labels start off when the app opens. Layers include SPC outlooks, radar, satellite imagery, surface observations, and storm reports. Wind barbs adapt their density to the zoom level. Model menus show the parameters supported by each model, including RRFS, NAM 3 km, and REFS members.
+Field rendering defaults to **Smooth**, with **Sharp** available to show grid cells; this choice is separate from Fast / Smooth playback. Station labels default off and retain your saved choice. Layers include SPC outlooks, radar, satellite imagery, surface observations, and storm reports. Wind barbs adapt their density to the zoom level. **Layers → Map details** offers a saved **Flat (Mercator) / Curved (Globe)** projection shared by all panels.
+
+New HRRR products include total precipitation, precipitation rates, precipitable water, snow depth, surface winds and gusts, effective storm-relative helicity, maximum updraft velocity, Surface-Based Lifted Index, and 2 m Theta-e with 10 m wind barbs. Model menus show only supported products for HRRR, NAM 3 km, RRFS and REFS members; the [changelog](CHANGELOG.md#v303---unreleased) details model limits and units.
+
+**Settings → Storage** shows forecast-download, map-image and SPC-outlook cache usage, including preloaded forecast frames. Clear a category or all available caches while keeping saved files, open soundings, pinned data and active downloads. **Layers → Reset layers** restores layer options and the flat projection across panels; **Settings → Workspace** resets app preferences while keeping open work, cached data and the map location.
 
 ### Soundings and local imports
 
 The **Soundings** workspace has **Obs.**, **Model**, **ERA5**, and **File** sources. Open NPZ point soundings, SPC, BUFKIT, PECAN, and UWyo text or saved HTML files up to **6 MiB**.
+
+Station availability is checked automatically against the observed launch's UWyo list. Station details, hover tooltips and map markers share the result; failed checks keep the bundled station catalogue available and offer a retry.
 
 For raw WRF-ARW output, choose **File → Import format → Raw WRF dataset**, paste the full local path to the `wrfout`/NetCDF file, and click **Read WRF file**. Select a UTC forecast time and a point within its grid, then **Open WRF sounding**. The dataset stays on disk while the backend extracts the selected column.
 
@@ -143,7 +151,7 @@ To render a saved sounding without the desktop, run:
 sharpmod-render examples/soundings/hrrr_point_36.68N_95.66W_f018.npz sounding.png
 ~~~
 
-`sharpmod-gui` continues to start the legacy Qt interface from source. Start the v3 interface with the Tauri command above.
+The legacy Qt interface and `sharpmod-gui` entry point are retired from the current source tree. Use the [v2.0.0 Legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0) for that interface. Start the current interface with the Tauri command above; Qt remains part of its headless sounding renderer.
 
 ## Guides
 
@@ -152,7 +160,7 @@ sharpmod-render examples/soundings/hrrr_point_36.68N_95.66W_f018.npz sounding.pn
 - [Frontend commands and data contracts](docs/frontend/DATA_CONTRACTS.md)
 - [Installation and optional dependencies](installation.txt)
 - [Rust backend and Python fallback](docs/RUST_BACKEND.md)
-- [Changes in 3.0.2](CHANGELOG.md#v302---2026-10-16)
+- [Changes in 3.0.3](CHANGELOG.md#v303---unreleased)
 - [Contributing and test lanes](CONTRIBUTING.md)
 - [v2.0.0 Legacy usage guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md)
 

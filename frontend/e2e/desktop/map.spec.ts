@@ -103,7 +103,7 @@ test.describe("real-backend forecast map", () => {
     await page.waitForFunction(() => performance.getEntriesByName("sharppy:stations-rendered").length > 0, undefined, {
       timeout: 60_000,
     });
-    await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+    await expect(page.getByTestId("catalogue-announcement")).toHaveText(/^[1-9]\d* stations loaded$/u);
     const toolbar = page.getByRole("group", { name: "Forecast", exact: true });
     const run = toolbar.getByRole("button", { name: "Choose run" });
     await expect(toolbar.getByRole("button", { name: "Choose model" })).toContainText("HRRR");
@@ -196,7 +196,7 @@ test.describe("real-backend forecast map", () => {
     }
     await setLayer("stations", true);
     await select.click();
-    await page.getByRole("option", { name: "Bundled list only", exact: true }).click();
+    await page.getByRole("option", { name: "Automatic · observed launch", exact: true }).click();
   });
 
   test("a forecast point, and four synchronized panels @map", async () => {

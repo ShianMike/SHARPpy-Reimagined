@@ -8,6 +8,10 @@ import { ChevronDown } from "lucide-react";
 import { cx } from "../../lib/cx";
 import { useAppStore } from "../../stores/appStore";
 import { useSoundingStore } from "../../stores/soundingStore";
+import { useMapStore } from "../../stores/mapStore";
+import { useStationAvailability } from "../../map/mapQueries";
+import { formatUtc } from "../sounding/soundingTime";
+import { Action } from "../../ui/Controls";
 import {
   availabilityExplanation,
   availabilityText,
@@ -31,6 +35,22 @@ export interface StationDetailsProps {
 }
 
 export function StationDetails({ station, origin, stationCount }: StationDetailsProps): ReactNode {
+  const report = useStationAvailability(useMapStore((state) => state.availabilityTime));
+  let status = availabilityText(station.availability);
+  let explanation = availabilityExplanation(station.availability);
+  if (report.data === undefined) {
+    status = "Choose a launch time";
+    explanation = "Choose a valid observed launch date and time.";
+    if (report.isFetching) {
+      status = "Checking…";
+      explanation = "Checking the launch with UWyo…";
+    } else if (report.isError) {
+      status = "Check failed";
+      explanation = "Could not check UWyo. Try again.";
+    }
+  } else if (report.isError) {
+    explanation = "Could not refresh UWyo. Showing the last check.";
+  }
   return (
     <>
       <dl className={styles.coordinateGrid}>
@@ -39,9 +59,11 @@ export function StationDetails({ station, origin, stationCount }: StationDetails
       </dl>
       <dl className={styles.availability}>
         <dt>Availability</dt>
-        <dd>
-          {availabilityText(station.availability)}
-          <span className={styles.explanation}>{availabilityExplanation(station.availability)}</span>
+        <dd role="status" aria-live="polite">
+          {status}
+          <span className={styles.explanation}>{explanation}</span>
+          {report.data === undefined ? null : <span className={cx(styles.explanation, "tabular")}>{`UWyo · ${formatUtc(report.data.observationTime)}`}{report.isFetching ? " · Refreshing…" : ""}</span>}
+          {report.isError ? <Action onClick={() => { void report.refetch(); }} disabled={report.isFetching} aria-label="Retry station availability check">Retry check</Action> : null}
         </dd>
       </dl>
       <details className={styles.disclosure}>
@@ -62,7 +84,8 @@ export function StationDetails({ station, origin, stationCount }: StationDetails
 /** The Sounding workspace, on its Observed form, with this station filled in. */
 export function openInSounding(stationId: string): void {
   const sounding = useSoundingStore.getState();
+  const time = useMapStore.getState().availabilityTime;
   sounding.setSource("observed");
-  sounding.setObserved({ stationId });
+  sounding.setObserved({ stationId, ...(time === null ? {} : { date: time.slice(0, 10), hour: new Date(time).getUTCHours() }) });
   useAppStore.getState().setActiveWorkspace("sounding");
 }

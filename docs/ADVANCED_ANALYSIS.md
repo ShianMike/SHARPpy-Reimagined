@@ -1,7 +1,8 @@
 # Advanced analysis and sharing
 
 This is a reference for the **v2.0.0 Legacy Qt interface** and its analysis
-tools. For the current v3 interface, navigation, imports, and map controls,
+tools, available in the [legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0).
+Its GUI source is retired from the current tree. For the current v3 interface, navigation, imports, and map controls,
 use the [v3 desktop guide](USAGE.md#0-desktop-interface-v300).
 
 This guide covers the cross-sounding workflows in the sounding window and the

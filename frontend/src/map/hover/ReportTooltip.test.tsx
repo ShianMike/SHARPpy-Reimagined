@@ -18,10 +18,25 @@ function show(overrides: Partial<HoveredReport> = {}) {
 }
 
 describe("report popup paragraphs", () => {
+  it("converts a wind magnitude in the title or facts, while leaving hail sizes unchanged", () => {
+    useUiStore.getState().setUnits({ temperature: "°C", wind: "m/s" });
+    const tooltip = show({ label: "Wind", description: "Event time: 14 Oct 2038Z\nMagnitude: 65 kt" });
+    expect(tooltip.textContent).toContain("33.4 m/s");
+    act(() => { useHoverStore.getState().setReport({ label: "Hail 2 in", description: "Event time: 14 Oct 2038Z\nMagnitude: 2 in", caption: "", x: 100, y: 50 }); });
+    expect(tooltip.querySelector("header")?.textContent).toBe("Hail 2 in");
+  });
+
+  it("reads observation temperatures from numbers even when the prose changes", () => {
+    useUiStore.getState().setUnits({ temperature: "°F", wind: "kt" });
+    const tooltip = show({ label: "KOUN — Norman", description: "Provider wording changed.", observation: { temperatureC: 21.38, dewpointC: null } });
+    expect(tooltip.textContent).toContain("70.5 °F");
+    expect(tooltip.textContent).toContain("missing");
+    expect(tooltip.textContent).toContain("Provider wording changed.");
+  });
   it("updates observation readings and gusts without changing timing, missing status or provider text", () => {
     const plot = surface.plots[0];
     if (plot === undefined) throw new Error("Missing observation");
-    const tooltip = show({ ...plot, caption: "" });
+    const tooltip = show({ ...plot, ...(plot.availability === "available" ? { observation: plot } : {}), caption: "" });
     act(() => { useUiStore.getState().setUnits({ temperature: "°F", wind: "km/h" }); });
     expect(tooltip.textContent).toContain("70.7 °F");
     expect(tooltip.textContent).toContain("54 °F");
@@ -33,7 +48,7 @@ describe("report popup paragraphs", () => {
     const tooltip = show();
     const header = tooltip.querySelector("header"), footer = tooltip.querySelector("footer");
     if (header === null || footer === null) throw new Error("Missing report sections");
-    expect(within(header).getByText("Wind 68 mph")).toBeTruthy();
+    expect(within(header).getByText("Wind 59.1 kt")).toBeTruthy();
     expect(within(header).getByText("Norman, Cleveland, OK")).toBeTruthy();
     expect(tooltip.querySelector("dl")?.textContent).toBe("Event time04 Oct 2005ZSourceMESONET (report source)");
     expect(screen.queryByText("Magnitude")).toBeNull();
@@ -46,7 +61,7 @@ describe("report popup paragraphs", () => {
   it("retains a magnitude absent from the title, unknown lines, multiple paragraphs and escaped provider text", () => {
     const tooltip = show({ label: "Wind", description: "Event time: 14 Oct 2038Z\r\nMagnitude: 64 mph\r\n\r\nMeasured gust.\r\nDamage: a fence fell.\r\n<img src=x onerror=alert(1)>" });
     expect(tooltip.querySelector("header")?.textContent).toBe("Wind");
-    expect(screen.getByText("64 mph").tagName).toBe("DD");
+    expect(screen.getByText("55.6 kt").tagName).toBe("DD");
     for (const line of ["Measured gust.", "Damage: a fence fell.", "<img src=x onerror=alert(1)>"]) {
       expect(screen.getByText(line).tagName).toBe("P");
     }
@@ -56,7 +71,7 @@ describe("report popup paragraphs", () => {
   it("separates the station, observation time, individual readings and source", () => {
     const plot = surface.plots[0];
     if (plot === undefined) throw new Error("Missing surface fixture");
-    const tooltip = show({ ...plot, caption: "" });
+    const tooltip = show({ ...plot, ...(plot.availability === "available" ? { observation: plot } : {}), caption: "" });
     const header = tooltip.querySelector("header"), footer = tooltip.querySelector("footer");
     if (header === null || footer === null) throw new Error("Missing observation sections");
     expect([...header.querySelectorAll("p")].map((p) => p.textContent)).toEqual(["KOUN", "Norman"]);
@@ -75,7 +90,7 @@ describe("report popup paragraphs", () => {
   ] as const)("keeps the complete wind reading and status for surface fixture %s", (index, value) => {
     const plot = surface.plots[index];
     if (plot === undefined) throw new Error("Missing surface fixture");
-    const tooltip = show({ ...plot, caption: "" });
+    const tooltip = show({ ...plot, ...(plot.availability === "available" ? { observation: plot } : {}), caption: "" });
     expect(screen.getByText(value).tagName).toBe("DD");
     if (plot.stale) expect(screen.getByText("Stale/mismatched: more than 30 minutes from requested time").tagName).toBe("P");
     expect(tooltip.querySelectorAll("dt")).toHaveLength(5);
@@ -84,7 +99,7 @@ describe("report popup paragraphs", () => {
   it.each([4, 5])("preserves unavailable and failed observation messages for fixture %s", (index) => {
     const plot = surface.plots[index];
     if (plot === undefined) throw new Error("Missing surface fixture");
-    const tooltip = show({ ...plot, caption: "" });
+    const tooltip = show({ ...plot, ...(plot.availability === "available" ? { observation: plot } : {}), caption: "" });
     expect(tooltip.querySelector("dl")).toBeNull();
     expect(screen.getByText(plot.description.split("\n")[0] ?? "").tagName).toBe("P");
     expect(tooltip.querySelector("footer")?.textContent).toBe("Source: NOAA/NWS API station catalogue");
@@ -94,7 +109,7 @@ describe("report popup paragraphs", () => {
     const plot = surface.plots[2];
     if (plot === undefined) throw new Error("Missing surface fixture");
     const description = plot.description.replace(/ \(\+0 min from requested\)/, "").replace("33.0 °C", "missing") + "\nAdditional note: test.";
-    const tooltip = show({ ...plot, description, caption: "" });
+    const tooltip = show({ ...plot, observation: { ...plot, temperatureC: null }, description, caption: "" });
     expect(screen.getByText("missing").tagName).toBe("DD");
     expect(screen.getByText("Additional note: test.").tagName).toBe("P");
     expect(screen.queryByText("Time offset")).toBeNull();

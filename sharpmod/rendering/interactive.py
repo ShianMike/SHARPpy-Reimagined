@@ -1,6 +1,7 @@
 """Browser hit targets use the same transforms and edits as the Qt viewer."""
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 
 from qtpy.QtCore import QPoint
@@ -127,8 +128,6 @@ def _drag(sw, drag, edits):
 
 
 def configure_view(win, view, app):
-    from sharpmod.gui_viewer import show_sounding_panel
-
     sw = win.spc_widget
     edits = deepcopy(view["edits"])
     if view.get("drag") is not None:
@@ -148,3 +147,36 @@ def configure_view(win, view, app):
             {"key": key, "label": label} for key, label in sw.inset_names.items()
             if key != sw.left_inset]},
     ]}
+
+
+def show_sounding_panel(win, key: str) -> bool:
+    """Show the swappable panel named ``key``. Returns whether it changed.
+
+    Drives the vendored swap rather than reaching into the layout, because that
+    path does more than move a widget: it re-creates the outgoing panel, persists
+    the choice, and turns the matching Skew-T annotation on or off -- the mixing
+    height for the fire panel, the dendritic growth zone band for the winter one.
+    Those pairings are the reason a separate "mode" concept is unnecessary, and
+    bypassing ``swapInset`` would lose them.
+    """
+    sw = getattr(win, "spc_widget", None)
+    if sw is None or not key:
+        return False
+    if getattr(sw, "right_inset", None) == key:
+        return False  # already showing; nothing to do
+    try:
+        # Rebuilt exactly as a right-click would: the vendored swap reads its
+        # target from ``menu_ag``'s checked action and ``inset_to_swap``.
+        sw.makeInsetMenu(sw.left_inset, sw.right_inset)
+        action = next(
+            (item for item in sw.menu_ag.actions() if item.data() == key), None
+        )
+        if action is None:
+            return False
+        action.setChecked(True)
+        sw.inset_to_swap = "RIGHT"
+        sw.swapInset()
+        return True
+    except Exception:
+        logging.getLogger(__name__).exception("panel.swap_failed key=%s", key)
+        return False

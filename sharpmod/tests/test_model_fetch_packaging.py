@@ -15,11 +15,19 @@ ROOT = Path(__file__).resolve().parents[2]
     ("--desktop-bridge", "sharpmod.bridge.server"),
     ("--sounding-render-worker", "sharpmod.bridge.render_worker"),
 ])
-def test_frozen_launcher_routes_desktop_workers_before_the_legacy_gui(monkeypatch, flag, module):
+def test_frozen_launcher_routes_desktop_workers(monkeypatch, flag, module):
     monkeypatch.setattr(sys, "argv", ["sharppy-backend.exe", flag])
     monkeypatch.setitem(sys.modules, module, SimpleNamespace(main=lambda: 17))
-    launcher = runpy.run_path(str(ROOT / "packaging" / "sharpmod_gui_launcher.py"))
+    launcher = runpy.run_path(str(ROOT / "packaging" / "sharpmod_backend_launcher.py"))
     assert launcher["_run"]() == 17
+
+
+@pytest.mark.parametrize("args", [[], ["--unknown"], ["--desktop-bridge", "extra"]])
+def test_frozen_backend_requires_a_worker_command(monkeypatch, capsys, args):
+    monkeypatch.setattr(sys, "argv", ["sharppy-backend.exe", *args])
+    launcher = runpy.run_path(str(ROOT / "packaging/sharpmod_backend_launcher.py"))
+    assert launcher["_run"]() == 2
+    assert "started by the SHARPpy Reimagined desktop app" in capsys.readouterr().err
 
 
 def test_supported_python_and_map_wrf_dependencies_are_bounded():
@@ -250,7 +258,7 @@ def test_test_profiles_timeouts_and_quality_tools_are_configured():
 
 
 def test_pyinstaller_bundles_model_fetch_runtime():
-    spec = (ROOT / "packaging" / "sharpmod_gui.spec").read_text(
+    spec = (ROOT / "packaging" / "sharpmod_backend.spec").read_text(
         encoding="utf-8"
     )
     collection_block = spec.split("a = Analysis", 1)[0]
@@ -273,7 +281,7 @@ def test_pyinstaller_bundles_model_fetch_runtime():
 
 
 def test_pyinstaller_requires_rust_only_for_official_release_builds():
-    spec = (ROOT / "packaging" / "sharpmod_gui.spec").read_text(
+    spec = (ROOT / "packaging" / "sharpmod_backend.spec").read_text(
         encoding="utf-8"
     )
     collection_block = spec.split("a = Analysis", 1)[0]
@@ -295,7 +303,7 @@ def test_pyinstaller_requires_rust_only_for_official_release_builds():
 
 
 def test_frozen_runtime_check_imports_cds_client():
-    launcher = (ROOT / "packaging" / "sharpmod_gui_launcher.py").read_text(
+    launcher = (ROOT / "packaging" / "sharpmod_backend_launcher.py").read_text(
         encoding="utf-8"
     )
 
@@ -308,4 +316,4 @@ def test_frozen_runtime_check_imports_cds_client():
     assert "backend_kernel_ok=backend_kernel_ok" in launcher
     assert "wrf_runtime_ok=wrf_runtime_ok" in launcher
     assert "logging_handlers=bool(RotatingFileHandler)" in launcher
-    assert "gui_entrypoint=callable(gui_main)" in launcher
+    assert "backend_entrypoint=callable(bridge_main)" in launcher

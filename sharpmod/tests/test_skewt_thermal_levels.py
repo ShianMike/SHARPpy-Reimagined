@@ -25,7 +25,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from qtpy import QtGui
 
-from sharpmod import gui_viewer
+from sharpmod.rendering.interactive import show_sounding_panel
 from sharpmod import render as render_mod
 from sharpmod.viz.SPCWindow import attach_thermal_levels
 
@@ -50,8 +50,6 @@ def skewt_window(qt_app, tmp_path_factory):
     win, controller = compose_window(config, prof_col, mount=True)
     win.resize(1630, 1100)
     qt_app.processEvents()
-    gui_viewer._install_view_controls(win)
-    gui_viewer._install_panel_menu(win)
     try:
         yield win
     finally:
@@ -114,7 +112,7 @@ class _Annotations:
 
 def _repaint(win, panel):
     """Show ``panel``, repaint the Skew-T, and report what it annotated."""
-    gui_viewer.show_sounding_panel(win, panel)
+    show_sounding_panel(win, panel)
     skewt = win.spc_widget.sound
     with _Annotations(skewt) as record:
         skewt.plotData()
@@ -204,7 +202,7 @@ def test_a_failing_annotation_cannot_break_the_repaint(skewt_window):
     only this pass draws the levels is the case under test.
     """
     skewt = skewt_window.spc_widget.sound
-    gui_viewer.show_sounding_panel(skewt_window, "STP STATS")
+    show_sounding_panel(skewt_window, "STP STATS")
     assert getattr(skewt, "plotdgz", False) is not True, \
         "sanity: the vendored branch must be the inactive one here"
     original = skewt.draw_sig_levels

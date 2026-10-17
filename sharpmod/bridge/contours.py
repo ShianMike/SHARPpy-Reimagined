@@ -179,10 +179,15 @@ def contours(params: dict[str, Any]) -> dict[str, Any]:
     from sharpmod.providers import hrrr_field
 
     model, product, run, hour = bridge_fields._request(params)
-    if product.contour is None or not product.contour_fields:
+    if product.contour is None and not product.wind:
         raise p.invalid(f"product {product.key!r} carries no contour lines")
+    from sharpmod.bridge import frame_cache
+    target = frame_cache.path("contours", model, product.key, run, hour, bridge_fields.FRAME)
+    cached = frame_cache.read(target)
+    if cached is not None:
+        return cached
     spec = product.contour
-    convert = spec.convert if spec.convert is not None else (lambda values: values)
+    convert = spec.convert if spec is not None and spec.convert is not None else (lambda values: values)
     # The contour field is a separate record from the product's own; take it
     # from one download of all the product's fields.
     try:
@@ -195,11 +200,12 @@ def contours(params: dict[str, Any]) -> dict[str, Any]:
             should_cancel=None,
             model=model,
         )
-        raw = np.asarray(convert(decoded[spec.name]), dtype=np.float32)
-        if raw.shape != hrrr_field.HRRR_SHAPE:
-            raise hrrr_field.HrrrFieldError(f"contour field is a {raw.shape} grid")
-        mapping = hrrr_field.index_map(bridge_fields.FRAME, hrrr_field.COVERAGE_BOUNDS)
-        grid = hrrr_field.reproject(raw, mapping)
+        if spec is not None:
+            raw = np.asarray(convert(decoded[spec.name]), dtype=np.float32)
+            if raw.shape != hrrr_field.HRRR_SHAPE:
+                raise hrrr_field.HrrrFieldError(f"contour field is a {raw.shape} grid")
+            mapping = hrrr_field.index_map(bridge_fields.FRAME, hrrr_field.COVERAGE_BOUNDS)
+            grid = hrrr_field.reproject(raw, mapping)
         # shortcut: half-size winds already exceed the 64-pixel barb density at
         # map MAX_ZOOM 9; enlarge this frame if that maximum zoom is raised.
         wind_size = tuple(max(1, side // 2) for side in bridge_fields.FRAME)
@@ -220,7 +226,7 @@ def contours(params: dict[str, Any]) -> dict[str, Any]:
         raise BridgeError(
             "FIELD_FETCH_FAILED", f"{product.label} could not be read.", False
         ) from None
-    height, width = grid.shape
+    width, height = bridge_fields.FRAME
     lon0, lon1, lat0, lat1 = hrrr_field.COVERAGE_BOUNDS
 
     def to_lon(x: float) -> float:
@@ -234,17 +240,17 @@ def contours(params: dict[str, Any]) -> dict[str, Any]:
             [round(to_lon(ax), POINT_DECIMALS), round(to_lat(ay), POINT_DECIMALS)],
             [round(to_lon(bx), POINT_DECIMALS), round(to_lat(by), POINT_DECIMALS)],
         ]
-        for (ax, ay), (bx, by) in contour_segments(grid, float(spec.interval))
+        for (ax, ay), (bx, by) in (contour_segments(grid, float(spec.interval)) if spec is not None else [])
     ]
-    return {
+    return frame_cache.write(target, {
         "product": product.key,
         "run_time": p.iso(run),
         "forecast_hour": hour,
-        "unit": spec.label,
-        "interval": float(spec.interval),
+        "unit": spec.label if spec is not None else "kt",
+        "interval": float(spec.interval) if spec is not None else 5.0,
         "segments": segments,
         "wind": wind,
-    }
+    })
 
 
 HANDLERS = {"fields.contours": contours}

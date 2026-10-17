@@ -1,4 +1,4 @@
-import { CalendarDays, Check, ChevronDown } from "lucide-react";
+import { CalendarDays, ChevronDown } from "lucide-react";
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Popover } from "../../components/Popover";
 import { RunCalendar } from "../toolbar/RunCalendar";
@@ -44,7 +44,7 @@ export function SourceSelect<T extends string | number>({ label, value, options,
       <div ref={list} onKeyDown={onKeyDown}>
         {options.map((option, index) => <button key={option.value} type="button" value={option.value} disabled={disabled} role="option" aria-label={option.label} aria-description={option.detail} aria-selected={option.value === value} tabIndex={focused === index ? 0 : -1}
           data-autofocus={selected === index ? true : undefined} className={styles.sourceOption} onFocus={() => { setFocused(index); }} onClick={() => { choose(option.value); }}>
-          <span>{option.label}{option.detail === undefined ? null : <small>{option.detail}</small>}</span>{option.value === value ? <Check className="icon-sm" aria-hidden="true" /> : null}
+          <span>{option.label}{option.detail === undefined ? null : <small>{option.detail}</small>}</span>
         </button>)}
       </div>
     </Popover>

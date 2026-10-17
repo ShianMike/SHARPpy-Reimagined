@@ -136,35 +136,23 @@ every geometry; TypeScript chooses the pixels
 - **Panels.** One, two, or four synchronized panels: one camera, time, run, and
   selection; each panel its own product, opacity, and layers.
 
-The Ensemble workspace landed after the map. Its members come from the same
-extract pipeline the sounding form uses, one portable file per member, and the
-readout is sharpmod's own words:
-
-- **Ensemble.** Request the control member and any number of an ensemble
-  model's members (`tools.model_extract.extract` per member, through
-  `analysis.profile_timeline.combine_ensemble_collections`), and read the
-  acquisition ledger (`analysis.ensemble_members.EnsembleAcquisition`: what was
-  asked for, what loaded, and why the rest did not), the labelled spreads
-  (`analysis.profile_metrics.ProfileMetricsEngine.ensemble`), and one row per
-  requested member. One member's failed download is that member's ledger row,
-  not a failed request.
-- **Threshold explorer.** Define a rule of one to three conditions over the
-  registry's diagnostics (`analysis.ensemble_thresholds.ThresholdDefinition`),
-  and classify every requested member against it
-  (`analysis.ensemble_thresholds.evaluate_threshold`): the agreement and
-  coverage sentences with their denominators, the counts that partition the
-  request, one row per member in its own state phrase, and the CSV
-  (`analysis.ensemble_thresholds.export_threshold_csv`) as a download.
+The Ensemble workspace and its unused summary API have been removed.
+Threshold evaluation and CSV export remain backend operations using the same
+member extraction pipeline as model soundings. They retain the acquisition
+ledger so a failed member download stays explicit in the threshold result.
 
 ## What remains Qt-based
 
-The supported desktop application is still `sharpmod-gui`
-(`sharpmod/gui.py`). Still only there:
-the interactive
-sounding viewer (a user-defined
-parcel, the readout cursor, stepping through the times of a forecast file,
-inset and table swaps), and every export. The new app's sounding image is drawn by the same Qt
-widget stack, headless, in its render worker process.
+The current desktop application is the Tauri interface. The legacy picker,
+viewer and `sharpmod-gui` source entry point are retired as of v3.0.3; the
+[v2.0.0 Legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0)
+keeps that interface available.
+
+Qt remains in the headless sounding render worker and `sharpmod-render`.
+Renderer palette handling and diagnostic-panel selection live in `rendering/`,
+so v3 profile editing, chart selection and PNG exports do not import the
+retired GUI. The scientific calculations, providers, decoders and extraction
+tools remain in the Python backend.
 
 ## Scope decisions in Phase 1
 
@@ -192,9 +180,9 @@ The deferred and designed-only rows have landed since, except wind barbs
 | Requirement | Disposition | Reason |
 |---|---|---|
 | Skew-T and hodograph in React or Canvas | Replaced by sharpmod's own image | The user's decision: the image stays sharpmod's, so it matches the legacy viewer and `sharpmod-render` exactly |
-| The image of a file with several valid times | The first time, labelled "first of N times" | `cli.render` has no time option; stepping through times stays in `sharpmod-gui` |
+| The image of a file with several valid times | The first time, labelled "first of N times" | `cli.render` has no time option; the v2 Legacy release retains the old time-stepping viewer |
 | Parameters and Trends | Labelled values from sharpmod's registry and `timeline` | No quantity is named or computed in TypeScript; `check-boundaries.mjs` allows one visible word, the control label "Parcel" |
-| Ensemble | Migrated: member acquisition and the summary readout land in the Ensemble workspace, and the threshold explorer classifies the members against a user-defined rule and exports its CSV | One member's failed download stays that member's ledger row (`EnsembleAcquisition`), never a failed request |
+| Ensemble | Workspace and unused summary API removed; member acquisition remains for threshold evaluation and CSV export | One member's failed download stays that member's ledger row (`EnsembleAcquisition`), never a failed request |
 | Toolbar Model, Run, Forecast, Valid and the timeline | Still honest disabled controls (live since Phases 3 and 7) | They drive map forecast layers (Phases 3 to 7); model soundings have their own form |
 | Model domains on the map | Not drawn yet (drawn since Phase 3) | `get_model_catalog` already returns each domain outline for Phase 3 |
 
@@ -222,8 +210,8 @@ The deferred and designed-only rows have landed since, except wind barbs
 
 - The backend produces meteorological data; the frontend produces pixels. The
   per-domain seams are in [AUDIT.md §11](AUDIT.md#11-migration-boundaries).
-- The legacy application stays operational and keeps its tests. New work lands
-  beside it.
+- The published v2.0.0 Legacy release preserves the old interface. Current
+  source and tests target v3 and the shared scientific and rendering tools.
 - No meteorological calculation is reimplemented in TypeScript. Calculations
   that currently run inside Qt paint or chart code
   ([AUDIT.md §4](AUDIT.md#4-modules-that-mix-rendering-with-meteorological-logic))

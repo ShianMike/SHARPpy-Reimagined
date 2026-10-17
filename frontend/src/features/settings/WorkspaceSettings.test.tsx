@@ -1,0 +1,66 @@
+// @vitest-environment jsdom
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, it } from "vitest";
+import { useAppStore } from "../../stores/appStore";
+import { useForecastStore } from "../../stores/forecastStore";
+import { useGraphicsStore } from "../../stores/graphicsStore";
+import { panelLayers, useMapStore } from "../../stores/mapStore";
+import { useSoundingStore } from "../../stores/soundingStore";
+import { useUiStore } from "../../stores/uiStore";
+import { SettingsView } from "./SettingsView";
+
+const initialMap = useMapStore.getInitialState();
+const initialUi = useUiStore.getInitialState();
+const initialForecast = useForecastStore.getInitialState();
+const initialGraphics = useGraphicsStore.getInitialState();
+const initialApp = useAppStore.getInitialState();
+afterEach(() => {
+  cleanup();
+  useMapStore.setState(initialMap, true);
+  useUiStore.setState(initialUi, true);
+  useForecastStore.setState(initialForecast, true);
+  useGraphicsStore.setState(initialGraphics, true);
+  useAppStore.setState(initialApp, true);
+});
+
+it("cancels without changing the setup, then resets preferences while keeping open work and location", async () => {
+  const user = userEvent.setup();
+  const map = useMapStore.getState();
+  map.setPanelLayout(4);
+  map.setActivePanel(3);
+  map.setLayerVisible("radar", true);
+  map.setProduct("tmp-2m");
+  map.setRadarScope("site");
+  map.setRadarSite("KTLX");
+  map.setCameraSnapshot({ center: [-90, 40], zoom: 5 });
+  useForecastStore.getState().setModel("namnest");
+  useUiStore.getState().setTheme("dark");
+  useUiStore.getState().setSpeed(2);
+  useUiStore.getState().setLoop(false);
+  useUiStore.getState().setUnits({ temperature: "°C", wind: "m/s" });
+  useUiStore.getState().setPopupPosition("model", { x: 80, y: 90 });
+  useGraphicsStore.getState().setOverride("low");
+  useGraphicsStore.setState({ renderer: "ready", mapAttempt: 7 });
+  useAppStore.getState().selectPoint({ latitude: 40, longitude: -90 });
+  const openWork = useSoundingStore.getState();
+  const before = useMapStore.getState();
+  render(<SettingsView />);
+  await user.click(screen.getByRole("button", { name: "Workspace" }));
+  expect(screen.getByRole("heading", { name: "Saved automatically" })).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Reset all settings…" }));
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(useMapStore.getState()).toBe(before);
+  expect(useUiStore.getState().theme).toBe("dark");
+  await user.click(screen.getByRole("button", { name: "Reset all settings…" }));
+  await user.click(screen.getByRole("button", { name: "Reset now" }));
+  expect(screen.getByRole("status").textContent).toBe("Settings reset to defaults.");
+  expect(useMapStore.getState()).toMatchObject({ ...initialMap, cameraSnapshot: { center: [-90, 40], zoom: 5 } });
+  for (let panel = 0; panel < 4; panel++) expect(panelLayers(useMapStore.getState(), panel)).toEqual(panelLayers(initialMap, panel));
+  expect(useForecastStore.getState()).toEqual(initialForecast);
+  expect(useUiStore.getState()).toEqual(initialUi);
+  expect(JSON.parse(localStorage.getItem("sharppy-workspace-ui") ?? "{}")).toMatchObject({ state: { theme: "system", units: initialUi.units, speed: 1, loop: true, popupPositions: {} } });
+  expect(useGraphicsStore.getState()).toMatchObject({ override: "auto", renderer: "ready", mapAttempt: 7 });
+  expect(useAppStore.getState().selectedPoint).toEqual({ latitude: 40, longitude: -90 });
+  expect(useSoundingStore.getState()).toBe(openWork);
+});

@@ -9,7 +9,7 @@ layers. Code lives under `frontend/src/map/` unless noted. See
 
 | Library | Owns |
 |---|---|
-| MapLibre GL JS 6.12.0 | Projection (Web Mercator), camera, pan and zoom, the basemap style layers, attribution, keyboard and pointer interaction |
+| MapLibre GL JS 6.12.0 | Projection (Mercator or Globe), camera, pan and zoom, the basemap style layers, attribution, keyboard and pointer interaction |
 | deck.gl 9.4.0 (`@deck.gl/maplibre` `MapLibreOverlay`) | Scientific and data layers: model fields, radar, SPC outlooks, the model domain, station markers and labels, and the selection; offline fixtures also draw local boundaries and place names |
 | React | Orchestration only: it mounts the maps, renders panels and popovers, and never renders per-station DOM or re-renders per frame |
 
@@ -80,8 +80,8 @@ add its id to `LAYER_IDS`. `WeatherMap.tsx` does not change;
 ## Basemap
 
 - **Pipeline.** `frontend/tooling/basemapPlugin.ts` (a Vite plugin, using
-  `tooling/basemap.ts`) converts `sharpmod/resources/basemap.json`, the data the
-  Qt map uses, into `geo/states.geojson`, `countries`, `lakes`, and
+  `tooling/basemap.ts`) converts the bundled `sharpmod/resources/basemap.json`
+  into `geo/states.geojson`, `countries`, `lakes`, and
   `coastline` at dev and build time. Nothing generated is committed.
 - **Style.** `basemap/basemapStyle.ts`: style version 8, four `geojson`
   sources (`maxzoom: 8`), a `background` layer and `basemap-states`,
@@ -159,7 +159,7 @@ add its id to `LAYER_IDS`. `WeatherMap.tsx` does not change;
 | Balanced | 55° | 16° | 64 px |
 | Low | 30° | 8° | 96 px |
 
-  High and Balanced use the legacy thresholds (`sharpmod/ui/maps/station_labels.py`).
+  High and Balanced share thresholds defined in `lib/graphics/profileSettings.ts`.
 - **Tooltip** (`hover/StationTooltip.tsx`): a glass popover near the pointer
   with the id, the normalized name, coordinates, "Availability unknown", and
   the source. Hover state lives only in `hover/hoverStore.ts`.
@@ -283,6 +283,21 @@ says so.
   every span, towns once the view spans 30° or less, names twice the station
   cell apart and clear of the station labels, each name up to its first comma.
 
+Layers → Map details offers Flat (Mercator) and Curved (Globe), shared across
+panels and saved with workspace preferences. The runtime reapplies this choice
+after style/theme changes; MapLibreOverlay selects the matching deck.gl view.
+Switching projection rebuilds each panel's renderer. Globe uses an overlaid
+weather canvas to avoid incompatible depth buffers between MapLibre and deck.gl;
+Mercator retains interleaved rendering and its native labels above weather.
+Globe's basemap labels sit underneath weather, so full field opacity can cover
+them. Text and icon quads disable back-face culling, always pass the depth test,
+and do not write depth, so globe geometry cannot cut through screen-facing
+annotations. Geographic meshes retain their normal culling and depth behavior.
+Domain paths remain geographic coordinates, including the true shared CONUS
+Lambert perimeter for HRRR, NAM 3 km, RRFS and REFS. A curved perimeter is still
+curved on a flat Mercator map: the model grid's projection differs from the map's.
+Reset layers restores Mercator without moving the camera.
+
 ## Forecast time and playback
 
 - **One time.** `stores/forecastStore.ts` holds the model, run, forecast hour,
@@ -290,16 +305,33 @@ says so.
   against the model list and the map catalogue (HRRR hours stop at
   `maxForecastHours[run hour]`). The toolbar, the timeline, every panel, the
   SPC queries, and the point inspector read that one value.
-- **Frames.** Each field frame is a TanStack Query keyed by product, run, and
-  hour (`mapQueries.ts`). While a new hour loads, a panel keeps the previous
-  frame of its product, marked as loading. After each new frame the cache
+- **Frames.** Each field frame is a TanStack Query keyed by model, product, run,
+  and hour (`mapQueries.ts`). Manually selecting an uncached hour shows a loading
+  state until that hour is ready. After each new frame the cache
   drops the oldest frames no panel shows until it is within the profile's CPU
   budget (`trimFieldCache`).
-- **Playback** (`usePlayback.ts`). Playing steps on 750 ms after every drawn
-  product's frame for the hour has loaded or failed, so a slow download holds
-  the animation instead of skipping it, and loops at the run's last hour. The
-  next hours are prefetched one frame at a time for every drawn product: the
-  profile's `next` frames, plus `prefetched` while playing.
+- **Playback** (`usePlayback.ts`). Every visible product's upcoming fields and
+  wind/contour data load in parallel across the profile's frame window: `next`
+  hours, plus `prefetched` while playing. The current hour stays visible until
+  the next hour has loaded or failed across all panels. Loading overlaps the
+  750 ms interval (divided by playback speed), so a slow download adds no second
+  interval. Playback loops at the run's last hour when enabled. Background
+  prefetches do not mark the displayed hour as loading.
+- **Load hours** (`useFrameDownload.ts`). The button beside Loop downloads all
+  allowed hours of each unique visible product, including its wind/contour
+  query. Two hours are queued at a time, existing queries are reused, and the
+  count advances only when all of an hour's requests succeed. Stop prevents
+  further queued work; changing model, run or products also stops the old job.
+  Retry reuses ready data. The backend retains compressed immutable grid and
+  contour responses beside map PNGs (`bridge/frame_cache.py`), so RAM eviction
+  does not require another provider download. Storage's map-cache usage and
+  cleanup include these frames; temporary writes stay excluded.
+- **Fast / Smooth** (`useFieldTransition.ts`). A saved UI preference chooses
+  instant changes or a 220 ms crossfade of the old/new coloured field images.
+  The runtime updates their opacity directly on animation frames; React does
+  not re-render for each tick. Wind barbs, contour lines and numeric readouts
+  retain the real hourly values. Pausing, changing products/models/runs or
+  choosing Fast releases the old image; reduced motion switches instantly.
 
 ## Panels
 
@@ -391,7 +423,7 @@ identifies the shared HRRR output grid, and the
 lists its CONUS dimensions. Native North American or other output domains
 would require their own geometry; those files are not selected by these routes.
 
-MapLibre renders Web Mercator. HRRR's native grid is Lambert conformal. The
+MapLibre renders Mercator or Globe. HRRR's native grid is Lambert conformal. The
 rule:
 
 - **Scientific interpolation is backend work.** sharpmod reprojects the
@@ -399,7 +431,7 @@ rule:
   (`hrrr_field.index_map` and `reproject`, the legacy map's code) before it is
   quantized. Values the user reads are backend values.
 - **Display resampling is frontend work.** deck.gl places the equirectangular
-  image in Web Mercator per screen pixel, with optional value interpolation for
+  image in the selected map projection, with optional value interpolation for
   model fields. Either display mode leaves readouts at the cell's own value.
 
 ## Not built

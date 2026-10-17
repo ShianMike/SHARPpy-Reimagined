@@ -47,6 +47,10 @@ export function createRuntimeProbe(source: () => ProbeSource): E2eTarget {
       }
       return counts;
     },
+    projection: () => {
+      const type = source().map?.getProjection().type;
+      return typeof type === "string" ? type : null;
+    },
     mapErrors: () => [...source().errors],
     deckLayers: () => [...(source().scene?.shownLayerIds ?? [])],
     projectPoint: (longitude, latitude) => {

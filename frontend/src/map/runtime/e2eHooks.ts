@@ -24,6 +24,7 @@ export interface E2eTarget {
   /** "id", "name", or null when no labels are shown. */
   labelTier: () => string | null;
   camera: () => CameraState | null;
+  projection: () => string | null;
   basemapFeatureCounts: () => Record<string, number>;
   mapErrors: () => string[];
   /** The deck.gl layers last drawn visible on the primary map, bottom first. */
@@ -38,6 +39,7 @@ export interface SharppyE2eHooks {
   labelTier: () => string | null;
   camera: () => CameraState | null;
   profile: () => GraphicsSelection;
+  projection: () => string | null;
   basemapFeatureCounts: () => Record<string, number>;
   mapErrors: () => string[];
   deckLayers: () => string[];
@@ -62,6 +64,7 @@ export function install(target: E2eTarget): void {
     labelCount: () => current?.labelCount() ?? 0,
     labelTier: () => current?.labelTier() ?? null,
     camera: () => current?.camera() ?? null,
+    projection: () => current?.projection() ?? null,
     profile: () => structuredClone(useGraphicsStore.getState().effective),
     basemapFeatureCounts: () => current?.basemapFeatureCounts() ?? {},
     mapErrors: () => current?.mapErrors() ?? [],

@@ -115,6 +115,30 @@ describe("BackendErrorNotice", () => {
     expect(errorTitle({ operation: "something_new" })).toBe("A backend request failed");
   });
 
+  it.each([
+    ["get_storage_usage", "Cache usage could not be loaded"],
+    ["clear_cache", "Cached weather data could not be cleared"],
+    ["get_model_status", "Model availability could not be checked"],
+    ["get_sounding_progress", "Sounding download progress could not be checked"],
+    ["inspect_wrf", "The WRF file could not be inspected"],
+    ["get_sounding_trends", "Sounding trends could not be loaded"],
+    ["render_sounding_view", "The sounding view could not be drawn"],
+    ["get_radar_sites", "Radar sites could not be loaded"],
+    ["get_radar_site_frame", "The radar site image could not be loaded"],
+    ["get_satellite_frame", "The satellite image could not be loaded"],
+    ["get_storm_reports", "Storm reports could not be loaded"],
+    ["get_report_options", "Storm report options could not be loaded"],
+    ["get_field_contours", "Map contours could not be loaded"],
+    ["get_surface_plots", "Surface observations could not be loaded"],
+  ])("names the failed operation %s", (operation, title) => {
+    render(<BackendErrorNotice error={transportFailed(operation)} onRetry={vi.fn()} onRestart={vi.fn()} logFile={null} />);
+    expect(screen.getByRole("alert").textContent).toContain(title);
+  });
+
+  it.each([undefined, "something_new", "constructor", "__proto__", "toString"])("uses the generic title for unknown operation %s", (operation) => {
+    expect(errorTitle(operation === undefined ? undefined : { operation })).toBe("A backend request failed");
+  });
+
   it("calls onRetry and onRestart, and shows the log path when it is known", async () => {
     const onRetry = vi.fn();
     const onRestart = vi.fn();

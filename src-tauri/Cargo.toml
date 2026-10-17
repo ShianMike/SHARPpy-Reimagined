@@ -1,6 +1,6 @@
 [package]
 name = "sharppy-reimagined"
-version = "3.0.2"
+version = "3.0.3"
 edition = "2021"
 rust-version = "1.90"          # rust-version of tauri 2.12.1, tauri-build 2.7.1, tauri-plugin-log 2.10.0
 publish = false
@@ -22,7 +22,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.21"
 time = "0.3.55"                # RFC 3339 timestamps; already in the graph through tauri-plugin-log
-tokio = { version = "1.53.2", features = ["process", "io-util", "sync", "time", "macros", "rt-multi-thread"] }
+tokio = { version = "1.53.2", features = ["process", "io-util", "sync", "time", "macros", "rt-multi-thread", "fs"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }

@@ -21,6 +21,7 @@
 .detailTools { display: flex; align-items: center; gap: var(--space-1); }
 .sidePanel { position: absolute; top: var(--forecast-top); right: calc(var(--chrome-inset) + var(--parameter-scale-w) + var(--space-3)); width: min(var(--inspector-w), calc(100% - 2 * var(--dock-offset))); height: var(--floating-panel-h); max-height: calc(100% - var(--forecast-top) - var(--player-h) - 2 * var(--chrome-inset)); min-height: 0; display: flex; flex-direction: column; overflow: hidden; pointer-events: auto; z-index: var(--z-floating); }
 .sidePanel[data-view="point"] { height: auto; }
+.sidePanel button:not(:disabled):not([data-tone="accent"]):is(:hover, :focus-visible) { background: var(--accent-subtle); color: var(--accent-bright); }
 .sideHeader { display: flex; flex: none; align-items: center; gap: var(--space-1); min-height: var(--toolbar-h); padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4); border-bottom: var(--hairline) solid var(--border-subtle); }
 .sideHeader h2 { display: flex; align-items: center; flex: 1; gap: var(--space-2); font-size: var(--font-size-subhead); font-weight: var(--font-weight-semibold); }
 .sideHeader h2 svg { color: var(--accent-bright); }

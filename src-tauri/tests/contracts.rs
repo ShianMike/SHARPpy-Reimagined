@@ -87,6 +87,23 @@ fn bridge_to_public<T: DeserializeOwned + Serialize>(bridge: &str, public: &str)
 }
 
 #[test]
+fn storage_fixtures_convert_and_reject_impossible_counts() {
+    use sharppy_reimagined_lib::dto::storage::{CacheClearResult, StorageUsage};
+    let usage: StorageUsage =
+        bridge_to_public("bridge/storage/usage.json", "public/storage/usage.json");
+    usage.validate().unwrap();
+    let cleared: CacheClearResult =
+        bridge_to_public("bridge/storage/clear.json", "public/storage/clear.json");
+    cleared.validate().unwrap();
+    let mut invalid = usage.clone();
+    invalid.caches[0].clearable_bytes = invalid.caches[0].bytes + 1;
+    assert!(invalid.validate().is_err());
+    let mut duplicate = usage;
+    duplicate.caches[1].key = "models".into();
+    assert!(duplicate.validate().is_err());
+}
+
+#[test]
 fn sounding_fixtures_convert_from_bridge_to_public_form() {
     use sharppy_reimagined_lib::dto::analysis::SoundingAnalysis;
     use sharppy_reimagined_lib::dto::models::ModelCatalog;
@@ -142,6 +159,33 @@ fn sounding_fixtures_convert_from_bridge_to_public_form() {
 }
 
 #[test]
+fn sounding_progress_rejects_invalid_counters() {
+    use sharppy_reimagined_lib::dto::sounding_progress::{DownloadStage, SoundingProgress};
+    let progress: SoundingProgress = bridge_to_public(
+        "bridge/soundings/progress.result.json",
+        "public/soundings/progress.json",
+    );
+    progress.validate().unwrap();
+    for speed in [-1.0, f64::NAN, f64::INFINITY] {
+        let mut bad = progress.clone();
+        bad.bytes_per_second = speed;
+        assert!(bad.validate().is_err());
+    }
+    let mut bad = progress.clone();
+    bad.stage = DownloadStage::Processing;
+    assert!(bad.validate().is_err());
+    let mut bad = progress;
+    bad.downloaded_bytes = 1 << 53;
+    assert!(bad.validate().is_err());
+    assert!(
+        serde_json::from_value::<SoundingProgress>(serde_json::json!({
+            "stage": "unknown", "downloaded_bytes": 0, "bytes_per_second": 0,
+        }))
+        .is_err()
+    );
+}
+
+#[test]
 fn model_status_fixture_preserves_provider_state_and_cycle() {
     use sharppy_reimagined_lib::dto::models::ModelStatus;
     let mut status: ModelStatus = bridge_to_public(
@@ -154,81 +198,6 @@ fn model_status_fixture_preserves_provider_state_and_cycle() {
     let mut raw = value("bridge/soundings/models.status.result.json");
     raw["state"] = serde_json::json!("healthy");
     assert!(serde_json::from_value::<ModelStatus>(raw).is_err());
-}
-
-#[test]
-fn ensemble_fixtures_convert_from_bridge_to_public_form() {
-    use sharppy_reimagined_lib::dto::ensemble::{EnsembleSummary, MetricSpread};
-    let summary: EnsembleSummary = bridge_to_public(
-        "bridge/soundings/ensemble.result.example.json",
-        "public/soundings/ensemble.example.json",
-    );
-    summary.validate().unwrap();
-    // The ledger: four members asked for, three loaded, one failed to download.
-    assert_eq!(summary.requested_members, ["c00", "p01", "p02", "p03"]);
-    assert_eq!(summary.loaded_members, ["c00", "p01", "p02"]);
-    assert_eq!(summary.failures.len(), 1);
-    assert_eq!(summary.failures[0].member, "p03");
-    assert_eq!(summary.failures[0].status, "failed");
-    assert!(summary.failures[0].reason.as_ref().unwrap().contains("p03"));
-    // Each diagnostic arrives labelled, with its own usable denominator.
-    assert_eq!(summary.metrics.len(), 5);
-    let first = &summary.metrics[0];
-    assert_eq!(first.key, "mlcape");
-    assert_eq!(first.label, "MLCAPE");
-    assert_eq!(first.units, "J/kg");
-    assert_eq!(first.count, 3);
-    assert!(first.p10.unwrap() <= first.median.unwrap());
-    assert!(first.median.unwrap() <= first.p90.unwrap());
-    // Every requested member keeps one row, including the one that failed.
-    assert_eq!(summary.samples.len(), 4);
-    let missing = summary
-        .samples
-        .iter()
-        .find(|row| row.member == "p03")
-        .unwrap();
-    assert_eq!(missing.outcome, "unavailable");
-    assert!(missing.values.iter().all(Option::is_none));
-
-    let mut refused = summary.clone();
-    refused.metrics[0].p10 = refused.metrics[0].p90.map(|value| value + 1.0);
-    assert!(refused.validate().is_err());
-    let mut refused = summary.clone();
-    refused.metrics[0].count += 1;
-    assert!(refused.validate().is_err());
-    let mut refused = summary.clone();
-    refused.samples[0].outcome = "half".to_owned();
-    assert!(refused.validate().is_err());
-    let mut refused = summary.clone();
-    refused.samples[0].values.push(Some(1.0));
-    assert!(refused.validate().is_err());
-    let mut refused = summary.clone();
-    refused.failures[0].member = "c00".to_owned();
-    assert!(refused.validate().is_err());
-    let mut refused = summary.clone();
-    refused.requested_members.push("p01".to_owned());
-    refused.samples.push(refused.samples[0].clone());
-    assert!(refused.validate().is_err());
-    let mut refused = summary.clone();
-    refused.samples[1].values[0] = Some(f64::NAN);
-    assert!(refused.validate().is_err());
-
-    let empty = MetricSpread {
-        key: "mlcape".to_owned(),
-        label: "MLCAPE".to_owned(),
-        units: "J/kg".to_owned(),
-        decimals: 0,
-        count: 0,
-        p10: None,
-        median: None,
-        p90: None,
-        minimum: None,
-        maximum: None,
-    };
-    empty.validate().unwrap();
-    let mut refused = empty.clone();
-    refused.median = Some(1.0);
-    assert!(refused.validate().is_err());
 }
 
 #[test]
@@ -385,11 +354,11 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
         assert_eq!(
             catalog.products.len(),
             if model.starts_with("refs-") {
-                16
+                22
             } else if model == "nam-3km-conus" {
-                24
+                36
             } else {
-                25
+                38
             }
         );
         assert_eq!(
@@ -523,6 +492,8 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
     assert_eq!(staff.halves, 0);
     assert_eq!(koun.upper_text, "22");
     assert_eq!(koun.lower_text, "12");
+    assert_eq!(koun.temperature_c, Some(21.5));
+    assert_eq!(koun.dewpoint_c, Some(12.2));
     let stale = plots.plots.iter().find(|plot| plot.stale).unwrap();
     assert_eq!(stale.id, "KSWA");
     assert_eq!(stale.offset_min, Some(-45.0));
@@ -535,6 +506,9 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
     }
 
     use sharppy_reimagined_lib::dto::surface::{StaffSpec, SurfacePlot};
+    let mut refused = plots.clone();
+    refused.plots[0].temperature_c = Some(f64::NAN);
+    assert!(refused.validate().is_err());
     let mut refused = plots.clone();
     refused.plots[0].staff = None;
     assert!(refused.validate().is_err());

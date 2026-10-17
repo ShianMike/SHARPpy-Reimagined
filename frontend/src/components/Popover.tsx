@@ -92,7 +92,7 @@ export function Popover({
     if (!open || anchor === null || element === null) {
       return;
     }
-    moved.current = movable ? useUiStore.getState().popupPosition : null;
+    moved.current = movable && id !== undefined ? useUiStore.getState().popupPositions[id] ?? null : null;
     drag.current = null;
     const place = (): void => {
       const target = anchor.getBoundingClientRect();
@@ -128,7 +128,7 @@ export function Popover({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open, anchor, align, side, width, movable]);
+  }, [open, anchor, align, side, width, movable, id]);
 
   // Initial focus when it opens.
   useEffect(() => {
@@ -190,7 +190,7 @@ export function Popover({
         const box = element.getBoundingClientRect();
         moved.current = delta === undefined ? null : { x: box.left + (delta[0] ?? 0), y: box.top + (delta[1] ?? 0) };
         placeRef.current();
-        useUiStore.getState().setPopupPosition(moved.current);
+        if (id !== undefined) useUiStore.getState().setPopupPosition(id, moved.current);
         return;
       }
     }
@@ -218,7 +218,7 @@ export function Popover({
   };
   const endDrag = (event: ReactPointerEvent<HTMLElement>): void => {
     if (drag.current === null) return;
-    useUiStore.getState().setPopupPosition(moved.current);
+    if (id !== undefined) useUiStore.getState().setPopupPosition(id, moved.current);
     drag.current = null;
     delete event.currentTarget.dataset.dragging;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);

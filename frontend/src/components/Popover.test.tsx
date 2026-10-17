@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Popover, type PopoverCloseReason, type PopoverProps } from "./Popover";
 import { useUiStore } from "../stores/uiStore";
 
-beforeEach(() => { useUiStore.setState({ popupPosition: null }); });
+beforeEach(() => { useUiStore.setState({ popupPositions: {} }); });
 
 afterEach(() => {
   cleanup();
@@ -14,6 +14,7 @@ afterEach(() => {
 });
 
 interface HarnessProps {
+  id?: string;
   initialFocus: PopoverProps["initialFocus"];
   withButtons?: boolean;
   onClose?: (reason: PopoverCloseReason) => void;
@@ -23,7 +24,7 @@ interface HarnessProps {
 }
 
 /** A toolbar-like anchor button that toggles a non-modal dialog, plus an outside target. */
-function Harness({ initialFocus, withButtons = true, onClose, movable = false, side = "bottom", width = "content" }: HarnessProps): ReactNode {
+function Harness({ initialFocus, withButtons = true, onClose, movable = false, side = "bottom", width = "content", id = "test-popup" }: HarnessProps): ReactNode {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   return (
@@ -41,6 +42,7 @@ function Harness({ initialFocus, withButtons = true, onClose, movable = false, s
       </button>
       <input aria-label="Elsewhere" />
       <Popover
+        id={id}
         open={open}
         anchor={anchor}
         role="dialog"
@@ -252,8 +254,8 @@ describe("Popover", () => {
     expect(dialog.style.getPropertyValue("--popover-x")).toBe(`${String(centerX)}px`);
   });
 
-  it("restores a moved popup after unmounting and shares the location with other movable pickers", async () => {
-    useUiStore.getState().setPopupPosition({ x: 150, y: 230 });
+  it("restores each popup independently after unmounting and centers only the current popup with Home", async () => {
+    useUiStore.getState().setPopupPosition("test-popup", { x: 150, y: 230 });
     const { user, dialog } = await openPopover({ initialFocus: "first", movable: true });
     expect(dialog.style.getPropertyValue("--popover-x")).toBe("150px");
     expect(dialog.style.getPropertyValue("--popover-y")).toBe("230px");
@@ -261,10 +263,14 @@ describe("Popover", () => {
     await user.keyboard("{ArrowRight}");
     const movedX = dialog.style.getPropertyValue("--popover-x");
     cleanup();
+    const other = await openPopover({ initialFocus: "first", movable: true, id: "other-popup" });
+    expect(other.dialog.style.getPropertyValue("--popover-x")).toBe(`${String(window.innerWidth / 2)}px`);
+    useUiStore.getState().setPopupPosition("other-popup", { x: 80, y: 90 });
+    cleanup();
     const reopened = await openPopover({ initialFocus: "first", movable: true });
     expect(reopened.dialog.style.getPropertyValue("--popover-x")).toBe(movedX);
     expect(reopened.dialog.style.getPropertyValue("--popover-y")).toBe("230px");
     await reopened.user.keyboard("{Home}");
-    expect(useUiStore.getState().popupPosition).toBeNull();
+    expect(useUiStore.getState().popupPositions).toMatchObject({ "test-popup": null, "other-popup": { x: 80, y: 90 } });
   });
 });

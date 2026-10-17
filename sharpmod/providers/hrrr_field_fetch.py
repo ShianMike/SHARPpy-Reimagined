@@ -5,6 +5,7 @@ live in ``hrrr_field_images`` and downloads use shared model transport helpers."
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -27,14 +28,24 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     itself. A product spanning both output files makes one inventory request and
     one range request per file in the common case.
     """
+    if should_cancel and should_cancel():
+        return {}
+    if product.key == "apcp" and fxx == 0:
+        return {"apcp": np.zeros(_api.HRRR_SHAPE, dtype=np.float32)}
     eccodes = _api._load_eccodes()
     decoded: dict[str, np.ndarray] = {}
+    nam_total = model == "nam-3km-conus" and product.key == "apcp"
 
     # Plan every range across both files first, so they can all go out together
     # rather than one file's requests waiting on the other's.
     jobs: list[tuple[str, int, int, tuple[_api.InventoryRow, ...], dict[_api.InventoryRow, str]]] = []
-    for source in (SOURCE_SURFACE, SOURCE_PRESSURE):
+    # NAM resets APCP every three hours; sum disjoint intervals from the run start.
+    sources = (tuple((SOURCE_SURFACE, hour) for hour in (*range(3, fxx, 3), fxx))
+               if nam_total else ((SOURCE_SURFACE, fxx), (SOURCE_PRESSURE, fxx)))
+    for source, hour in sources:
         specs = [spec for spec in product.all_fields if spec.source == source]
+        if nam_total:
+            specs = [replace(spec, forecast=f"{(hour - 1) // 3 * 3}-{hour} hour acc fcst") for spec in specs]
         if not specs:
             continue
         if should_cancel and should_cancel():
@@ -44,7 +55,7 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
             from sharpmod.providers import rrfs_nomads
             releases = rrfs_nomads._release_candidates()
         for release in releases:
-            url = _api.grib_url(run, fxx, source, model, release=release)
+            url = _api.grib_url(run, hour, source, model, release=release)
             try:
                 rows = _api.fetch_inventory(url, opener=opener, timeout=timeout)
             except _api.HrrrFieldUnavailable:
@@ -89,7 +100,7 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     # threading guarantees.
     for (url, start, _stop, members, by_record), payload in zip(jobs, payloads):
         if payload is None:
-            continue
+            raise _api.HrrrFieldUnavailable(f"{model} did not return a GRIB byte range")
         for row in members:
             name = by_record.get(row)
             if name is None:
@@ -97,8 +108,12 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
             begin = row.offset - start
             finish = (begin + row.length) if row.length else len(payload)
             if begin < 0 or begin >= len(payload):
-                continue
-            decoded[name] = _api.decode_message(payload[begin:finish], eccodes, field_index=row.field_index)
+                raise _api.HrrrFieldUnavailable(f"{model} returned an incomplete GRIB byte range")
+            values = _api.decode_message(payload[begin:finish], eccodes, field_index=row.field_index)
+            if nam_total and name in decoded:
+                decoded[name] += values
+            else:
+                decoded[name] = values
 
     missing = [spec.name for spec in product.all_fields
                if spec.name not in decoded]

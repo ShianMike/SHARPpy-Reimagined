@@ -11,6 +11,7 @@ import { SoundingErrorNotice } from "./SoundingErrorNotice";
 import { useModelCatalog, useOpenSounding } from "./soundingQueries";
 import { addHours, forecastLabel, formatUtc, resolveModelRun } from "./soundingTime";
 import { SourceSelect } from "./SourceFields";
+import { DownloadStatus } from "./DownloadStatus";
 import styles from "./Sounding.module.css";
 
 export function parseCoordinate(text: string, limit: number): number | null {
@@ -23,6 +24,7 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
   const setModel = useSoundingStore((state) => state.setModel);
   const selected = useSelectedStation();
   const open = useOpenSounding();
+  const request = open.isPending && open.variables.kind === "model" ? open.variables : null;
   const ids = { lat: useId(), lon: useId() };
   /** An edit clears a failure notice: it described the request before the edit. */
   const edit = (patch: Parameters<typeof setModel>[0]): void => {
@@ -114,7 +116,10 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
         >
           Open sounding
         </Action>
-        {open.isPending ? <span className={styles.busy}>{`Retrieving ${model.label} ${forecastLabel(hour)}`}</span> : null}
+        {request !== null ? <DownloadStatus
+          label={`${models.find((item) => item.key === request.model)?.label ?? model.label} ${forecastLabel(request.forecastHour)}`}
+          progress={open.progress}
+        /> : null}
       </div>
       {open.isPending ? <p className={styles.hint}>Model data downloads can take a minute or more.</p> : null}
       {open.isError ? (

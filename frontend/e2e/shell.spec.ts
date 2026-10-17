@@ -29,7 +29,7 @@ test("the forecast workspace has linked controls and only the supported destinat
   await expect(forecast.getByRole("button", { name: "Choose forecast hour" })).toContainText("F001");
   await expect(timeline.getByRole("slider", { name: "Forecast hour", exact: true })).toHaveValue("1");
   await expect(timeline.getByLabel("Valid time")).toContainText("10-04 17Z");
-  await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+  await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   await expect(page.getByTestId("health-indicator")).toHaveCount(0);
   await expect(page.getByTestId("panel-chip-1")).toHaveCount(0);
   const actions = page.getByRole("group", { name: "Map actions", exact: true });
@@ -131,7 +131,7 @@ test("other workspaces leave the map inert and returning preserves the selected 
     await expect(page.locator('section[aria-label="Model map"]')).toHaveAttribute("inert", "");
     await expect(inspector).toBeHidden();
   }
-  await page.getByRole("button", { name: "Device diagnostics", exact: true }).click();
+  await page.getByRole("button", { name: "Device Info", exact: true }).click();
   await expect(page.getByTestId("capability-table")).toContainText("WebGL2");
   await saveScreenshot(page, "browser-settings.png");
   await rail.getByRole("button", { name: "Model Viewer" }).click();

@@ -25,6 +25,7 @@ pub struct Palette {
     /// `[value, "#rrggbb"]` in the product's display units, ascending.
     pub stops: Vec<(f64, String)>,
     pub units: String,
+    pub display: String,
     pub stepped: bool,
     pub floor: Option<f64>,
     pub ceiling: Option<f64>,
@@ -58,6 +59,7 @@ pub struct FieldProduct {
     pub caveat: String,
     pub palette: Palette,
     pub contour: Option<ProductContour>,
+    pub wind: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -107,6 +109,12 @@ pub(crate) fn colour_ok(text: &str) -> bool {
 
 impl Palette {
     fn validate(&self) -> Result<(), String> {
+        if !matches!(
+            self.display.as_str(),
+            "auto" | "fixed" | "temperature-difference"
+        ) {
+            return Err("unknown palette display quantity".into());
+        }
         let ascending = self.stops.windows(2).all(|w| w[0].0 < w[1].0);
         let finite = self.stops.iter().all(|(v, _)| v.is_finite())
             && self.ticks.iter().all(|t| t.is_finite())

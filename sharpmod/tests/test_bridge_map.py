@@ -37,10 +37,36 @@ def _exporter():
 EXPORT = _exporter()
 
 
+@pytest.fixture(autouse=True)
+def map_cache(tmp_path, monkeypatch):
+    monkeypatch.setenv("SHARPMOD_HRRR_FIELD_CACHE", str(tmp_path / "maps"))
+
+
 @pytest.fixture
 def offline():
     with EXPORT.stand_ins():
         yield
+
+
+def test_downloaded_frames_survive_memory_eviction_and_corrupt_files_reload(offline, monkeypatch):
+    from sharpmod.bridge import contours, frame_cache
+    from sharpmod.providers import hrrr_field
+
+    request = {"model": "hrrr", "product": "hgt-wind-500", "run_time": EXPORT.RUN_TIME, "forecast_hour": 1}
+    grid = fields.grid(request)
+    lines = contours.contours(request)
+    hrrr_field.clear_cache()
+    monkeypatch.setattr(hrrr_field, "_download_fields", lambda *_args, **_kwargs: pytest.fail("redownloaded a saved frame"))
+    assert fields.grid(request) == grid
+    assert contours.contours(request) == lines
+    model, product, run, hour = fields._request(request)
+    target = frame_cache.path("grid", model, product.key, run, hour, fields.FRAME)
+    assert target != frame_cache.path("grid", "rrfs-a", product.key, run, hour, fields.FRAME)
+    assert target != frame_cache.path("grid", model, product.key, run, hour, (1, 1))
+    target.write_bytes(b"interrupted download")
+    assert frame_cache.read(target) is None
+    with pytest.raises(BridgeError):
+        fields.grid({**request, "forecast_hour": -1})
 
 
 def test_the_committed_map_fixtures_are_current():
@@ -56,7 +82,7 @@ def test_model_catalogues_reuse_scales_and_only_offer_published_products(model):
 
     catalog = fields.catalog({"model": model})
     assert catalog["field_model"] == model
-    assert len(catalog["products"]) == (16 if model.startswith("refs-") else 24 if model == "nam-3km-conus" else 25)
+    assert len(catalog["products"]) == (22 if model.startswith("refs-") else 36 if model == "nam-3km-conus" else 38)
     assert any(item["key"] == "ltng" for item in catalog["products"]) == (model != "nam-3km-conus")
     if model == "nam-3km-conus":
         with pytest.raises(BridgeError, match="not a nam-3km-conus field product"):
@@ -347,6 +373,8 @@ def test_surface_plots_split_speeds_and_distinguish_every_state(offline):
         "halves": 0,
     }
     assert plots["KOUN"]["upper_text"] == "22" and plots["KOUN"]["lower_text"] == "12"
+    assert plots["KOUN"]["temperature_c"] == 21.5
+    assert plots["KOUN"]["dewpoint_c"] == 12.2
     # Calm stands without a staff; a speed without a direction asks instead.
     assert plots["KOKC"]["wind_state"] == "calm" and plots["KOKC"]["staff"] is None
     assert plots["KSPS"]["wind_state"] == "direction-missing"

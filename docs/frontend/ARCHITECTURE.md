@@ -1,7 +1,9 @@
 # Frontend architecture
 
-The new desktop frontend of SHARPpy Reimagined is a Tauri 2 application that
-runs beside the legacy PySide6 app. It is a React 19 + TypeScript (strict) +
+The desktop frontend of SHARPpy Reimagined is a Tauri 2 application. The legacy
+PySide6 interface is retired from this source tree and remains available in
+the [v2.0.0 release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0).
+The current frontend is a React 19 + TypeScript (strict) +
 Vite 8 single-page app in `frontend/`, a Rust application bridge in
 `src-tauri/`, and a headless Python package, `sharpmod/bridge/`, that serves
 semantic operations from the existing `sharpmod` code.
@@ -15,8 +17,8 @@ deck.gl, layers, graphics profiles), [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)
 The current shell uses the SHARPpy backend. Its workspaces are Overview,
 Model Viewer, Soundings, Logs,
 and Settings. Analysis, Compare, and Ensemble are removed; ensemble models
-are excluded centrally from UI catalogues. The scientific bridge API remains
-compatible with the legacy app. See [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).
+are excluded centrally from UI catalogues. The scientific Python tools and
+headless Qt renderer remain shared backend components. See [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).
 
 ## Boundary and ownership
 
@@ -95,7 +97,10 @@ usually 7 to 8 s.
 computed parameters, and its rendered PNGs. The files go to a private
 directory, `tempfile.mkdtemp(prefix="sharpmod-bridge-")` (under
 `SHARPMOD_BRIDGE_CACHE` when that is set), which the bridge deletes when it
-exits. A sounding id from before a bridge restart gets `SOUNDING_NOT_FOUND`.
+exits. Forecast-model GRIBs and their metadata stay here too. The desktop
+launcher gives each backend process its own parent cache and removes it after
+that process exits, including when shutdown has to stop a busy backend.
+A sounding id from before a bridge restart gets `SOUNDING_NOT_FOUND`.
 
 The transport is chosen by Vite mode in `frontend/src/main.tsx`: `--mode live`
 (`npm run dev:browser`, or `npm run build:browser` then `npm run preview:browser`)

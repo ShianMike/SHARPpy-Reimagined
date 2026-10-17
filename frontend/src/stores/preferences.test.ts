@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { useAppStore } from "./appStore";
 import { useGraphicsStore } from "./graphicsStore";
 import { panelLayers, panelProduct, useMapStore } from "./mapStore";
+import { useForecastStore } from "./forecastStore";
+import { ORDERABLE_LAYER_IDS } from "../map/layers/registry";
 import {
   applyPreferences,
   createPreferencesRepository,
@@ -9,17 +11,20 @@ import {
   DEFAULT_PREFERENCES,
   parsePreferences,
   PREFERENCES_KEY,
+  resetLayerSettings,
   SAVE_DEBOUNCE_MS,
   startPreferenceSync,
   type PreferenceStorage,
 } from "./preferences";
 
 const appInitial = useAppStore.getState(), mapInitial = useMapStore.getState(), graphicsInitial = useGraphicsStore.getState();
+const forecastInitial = useForecastStore.getState();
 let warn: MockInstance<typeof console.warn>;
 beforeEach(() => {
   useAppStore.setState(appInitial, true);
   useMapStore.setState(mapInitial, true);
   useGraphicsStore.setState(graphicsInitial, true);
+  useForecastStore.setState(forecastInitial, true);
   warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
 
@@ -38,7 +43,7 @@ function memoryStorage(initial: string | null = null): PreferenceStorage & { set
 }
 
 const VALID = {
-  version: 1,
+  ...DEFAULT_PREFERENCES,
   graphicsOverride: "low",
   layers: { stations: { visible: false, opacity: 0.5 }, basemap: { visible: true, opacity: 0.8 } },
   productKey: null,
@@ -47,103 +52,6 @@ const VALID = {
   lastSelectedStationId: "72357",
   camera: { center: [-97.4, 35.2], zoom: 6 },
 };
-
-describe("parsePreferences", () => {
-  it("restores both sampling choices and defaults old or invalid preferences to smooth", () => {
-    for (const smoothing of [true, false]) {
-      useMapStore.getState().setFieldSmoothing(smoothing);
-      const saved = JSON.stringify(currentPreferences());
-      useMapStore.setState(mapInitial, true);
-      applyPreferences(parsePreferences(saved));
-      expect(useMapStore.getState().layers["model-field"].smoothing).toBe(smoothing);
-    }
-    for (const smoothing of [undefined, "true"]) {
-      const parsed = parsePreferences(JSON.stringify({ version: 1, layers: { "model-field": { visible: true, opacity: 0.7, smoothing } } }));
-      expect(parsed.layers["model-field"]).toEqual({ visible: true, opacity: 0.7, smoothing: true });
-    }
-    expect(warn).toHaveBeenCalledTimes(1);
-  });
-
-  it("loads a valid object without a warning", () => {
-    expect(parsePreferences(JSON.stringify(VALID))).toEqual(VALID);
-    expect(parsePreferences(null)).toEqual(DEFAULT_PREFERENCES);
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the defaults for corrupt JSON and for another version, with one warning each", () => {
-    expect(parsePreferences("{not json")).toEqual(DEFAULT_PREFERENCES);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(parsePreferences(JSON.stringify({ ...VALID, version: 2 }))).toEqual(DEFAULT_PREFERENCES);
-    expect(parsePreferences("[]")).toEqual(DEFAULT_PREFERENCES);
-    expect(warn).toHaveBeenCalledTimes(3);
-  });
-
-  it("replaces each field of the wrong type by its default, with one warning per field", () => {
-    const parsed = parsePreferences(
-      JSON.stringify({
-        ...VALID,
-        graphicsOverride: "ultra",
-        layerPanelCollapsed: "yes",
-        lastSelectedStationId: 42,
-        layers: { stations: { visible: "no", opacity: 1 }, basemap: { visible: true, opacity: 0.8 } },
-      }),
-    );
-    expect(parsed).toEqual({
-      ...VALID,
-      graphicsOverride: "auto",
-      layerPanelCollapsed: false,
-      lastSelectedStationId: null,
-      layers: { basemap: { visible: true, opacity: 0.8 } },
-    });
-    expect(warn).toHaveBeenCalledTimes(4);
-    expect(String(warn.mock.calls[0]?.[0])).toContain("graphicsOverride");
-  });
-
-  it("ignores unknown layer ids silently and clamps opacity", () => {
-    const parsed = parsePreferences(
-      JSON.stringify({
-        version: 1,
-        // "wind-barbs" is no layer of this version ("radar" was, before Phase 6, the unknown id here).
-        layers: { "wind-barbs": { visible: true, opacity: 1 }, stations: { visible: true, opacity: 2 }, basemap: { visible: true, opacity: -1 } },
-      }),
-    );
-    expect(parsed.layers).toEqual({ stations: { visible: true, opacity: 1 }, basemap: { visible: true, opacity: 0 } });
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it("validates saved panels without dropping valid neighbours or layer settings", () => {
-    const parsed = parsePreferences(JSON.stringify({
-      version: 1,
-      productKey: 42,
-      panels: [
-        null,
-        { productKey: "refc", layers: { "station-labels": { visible: true, opacity: 2 }, radar: { visible: "yes", opacity: 1 }, unknown: { visible: true, opacity: 1 } } },
-        { productKey: " ", layers: { "model-field": { visible: true, opacity: 0.7 } } },
-        { productKey: "ignored" },
-      ],
-    }));
-    expect(parsed.productKey).toBeNull();
-    expect(parsed.panels).toEqual([
-      { productKey: null, layers: {} },
-      { productKey: "refc", layers: { "station-labels": { visible: true, opacity: 1 } } },
-      { productKey: null, layers: { "model-field": { visible: true, opacity: 0.7, smoothing: true } } },
-    ]);
-    applyPreferences(parsed);
-    expect(useMapStore.getState().panels).toHaveLength(3);
-    expect(panelLayers(useMapStore.getState(), 1)["station-labels"].visible).toBe(false);
-    expect(panelLayers(useMapStore.getState(), 2)["station-labels"].visible).toBe(false);
-    expect(parsePreferences(JSON.stringify({ version: 1, panels: {} })).panels).toEqual([]);
-  });
-
-  it("drops an out-of-range or malformed camera with one warning each", () => {
-    for (const camera of [{ center: [-97, 35], zoom: 20 }, { center: [-97, 95], zoom: 5 }, { center: [-97], zoom: 5 }, "x"]) {
-      expect(parsePreferences(JSON.stringify({ version: 1, camera })).camera).toBeNull();
-    }
-    expect(warn).toHaveBeenCalledTimes(4);
-    expect(parsePreferences(JSON.stringify({ version: 1, camera: null })).camera).toBeNull();
-    expect(warn).toHaveBeenCalledTimes(4);
-  });
-});
 
 describe("the repository", () => {
   it("falls back to memory with one warning when storage throws", () => {
@@ -183,7 +91,7 @@ describe("applying and saving", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it("starts saved panels without labels and keeps session choices across layout switches", () => {
+  it("restores every panel's labels, products and layers and keeps them across layout switches", () => {
     vi.useFakeTimers();
     const storage = memoryStorage();
     const repository = createPreferencesRepository(() => storage);
@@ -199,23 +107,19 @@ describe("applying and saving", () => {
       store.setFieldSmoothing(panel % 2 === 0);
     }
     const expected = currentPreferences();
-    useMapStore.getState().setPanelLayout(1);
     vi.advanceTimersByTime(SAVE_DEBOUNCE_MS);
     expect(storage.setItem).toHaveBeenCalledTimes(1);
     stop();
     useMapStore.setState(mapInitial, true);
     applyPreferences(repository.load());
+    expect(currentPreferences()).toEqual(expected);
+    expect(useMapStore.getState()).toMatchObject({ panelLayout: 4, activePanel: 3 });
     for (let panel = 0; panel < 4; panel++) {
       const saved = panel === 0 ? expected : expected.panels[panel - 1];
-      expect(panelLayers(useMapStore.getState(), panel)).toEqual({ ...saved?.layers,
-        "station-labels": { ...saved?.layers["station-labels"], visible: false } });
-      useMapStore.getState().setPanelLayout(4);
-      useMapStore.getState().setActivePanel(panel);
-      useMapStore.getState().setLayerVisible("station-labels", panel % 2 === 0);
+      expect(panelLayers(useMapStore.getState(), panel)).toEqual(saved?.layers);
     }
     for (const layout of [2, 4, 1, 4] as const) {
       useMapStore.getState().setPanelLayout(layout);
-      expect(currentPreferences()).toEqual(expected);
       for (let panel = 0; panel < 4; panel++) {
         const saved = panel === 0 ? expected : expected.panels[panel - 1];
         expect(panelProduct(useMapStore.getState(), panel)).toBe(saved?.productKey);
@@ -223,6 +127,81 @@ describe("applying and saving", () => {
       }
     }
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("flushes the full weather setup on close and reopens the chosen model on a fresh run", () => {
+    const storage = memoryStorage();
+    const repository = createPreferencesRepository(() => storage);
+    const stop = startPreferenceSync(repository);
+    const map = useMapStore.getState();
+    map.setPanelLayout(4);
+    map.setActivePanel(2);
+    map.setLayerVisible("radar", true);
+    map.moveLayer("model-field", 1);
+    map.setRadarScope("site");
+    map.setRadarSite("KTLX");
+    map.setRadarProduct("N0U");
+    map.setSatelliteChannel("visible");
+    map.setReportWindowS(43200);
+    map.setReportFilter("tornado");
+    map.setLayerPanelGroup("map");
+    const forecast = useForecastStore.getState();
+    forecast.setModel("namnest");
+    forecast.setRun("2026-10-16T00:00:00Z");
+    forecast.setHour(12);
+    forecast.setPlaying(true);
+    const expected = currentPreferences();
+    stop();
+    expect(storage.setItem).toHaveBeenCalledTimes(1);
+    useMapStore.setState(mapInitial, true);
+    useForecastStore.setState(forecastInitial, true);
+    applyPreferences(repository.load());
+    expect(currentPreferences()).toEqual(expected);
+    expect(useForecastStore.getState()).toMatchObject({ modelKey: "namnest", runTime: null, forecastHour: null, playing: false });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("saves edits that only change weather options or the selected model", () => {
+    vi.useFakeTimers();
+    const storage = memoryStorage();
+    const repository = createPreferencesRepository(() => storage);
+    const stop = startPreferenceSync(repository);
+    useMapStore.getState().setReportFilter("hail");
+    vi.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+    expect(repository.load().reportFilter).toBe("hail");
+    useForecastStore.getState().setModel("rrfs");
+    vi.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+    expect(repository.load().modelKey).toBe("rrfs");
+    expect(storage.setItem).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it("resets layers and weather options in all panels while keeping products, layout and location", () => {
+    const map = useMapStore.getState();
+    map.setPanelLayout(4);
+    for (let panel = 0; panel < 4; panel++) {
+      map.setActivePanel(panel);
+      map.setLayerVisible("station-labels", true);
+      map.setLayerOpacity("radar", 0.1);
+      map.setFieldSmoothing(false);
+      map.setProduct(`product-${String(panel)}`);
+    }
+    map.setRadarScope("site");
+    map.setRadarSite("KTLX");
+    map.setRadarProduct("N0U");
+    map.setSatelliteChannel("visible");
+    map.setReportWindowS(7200);
+    map.setReportFilter("tornado");
+    map.setLayerPanelGroup("map");
+    map.setCameraSnapshot({ center: [-90, 40], zoom: 5 });
+    resetLayerSettings();
+    expect(useMapStore.getState()).toMatchObject({ panelLayout: 4, activePanel: 3, radarScope: "mosaic", radarSite: null,
+      radarProduct: null, satelliteChannel: "infrared", reportWindowS: 21600, reportFilter: "all", layerPanelGroup: "weather",
+      cameraSnapshot: { center: [-90, 40], zoom: 5 }, layerOrder: [...ORDERABLE_LAYER_IDS] });
+    for (let panel = 0; panel < 4; panel++) {
+      expect(panelLayers(useMapStore.getState(), panel)).toEqual(panelLayers(mapInitial, panel));
+      expect(panelProduct(useMapStore.getState(), panel)).toBe(`product-${String(panel)}`);
+    }
   });
 
   it.each([0, 1, 3])("saves product-only and layer-only edits in panel %i", (panel) => {

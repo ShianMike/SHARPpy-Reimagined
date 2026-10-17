@@ -53,7 +53,7 @@ dependencies = [
     "requests>=2.28,<3.0",
     # Animation exports use Pillow's deterministic GIF encoder.
     "Pillow>=10,<13",
-    # Optional picker-map GOES context reads CF/netCDF fixed-grid files and
+    # Satellite context reads CF/netCDF fixed-grid files and
     # performs the documented geostationary projection before display.
     "netCDF4>=1.7,<2.0",
     "pyproj>=3.5,<4.0",
@@ -114,10 +114,6 @@ quality = [
 rust-build = [
     "maturin>=1.15,<2",
 ]
-
-[project.gui-scripts]
-# Windowed (no-console) GUI entry point installed on `pip install .`.
-sharpmod-gui = "sharpmod.gui:main"
 
 [project.scripts]
 # Console entry points installed on `pip install .`.
@@ -196,19 +192,10 @@ packages = [
     "sharpmod",
     "sharpmod._compat",
     "sharpmod.analysis",
-    "sharpmod.core",
     "sharpmod.maps",
     "sharpmod.models",
     "sharpmod.providers",
-    "sharpmod.state",
     "sharpmod.upstream",
-    "sharpmod.ui",
-    "sharpmod.ui.features",
-    "sharpmod.ui.styles",
-    "sharpmod.ui.picker",
-    "sharpmod.ui.maps",
-    "sharpmod.ui.maps.overlays",
-    "sharpmod.ui.analysis",
     "sharpmod.rendering",
     "sharpmod.backends",
     "sharpmod.bridge",
@@ -228,7 +215,7 @@ version = { attr = "sharpmod._version.__version__" }
 # Bundle the TTF fonts as package data so they resolve via importlib.resources
 # (never absolute paths) — Requirements 15.1, 15.2.
 "sharpmod.resources.fonts" = ["*.ttf"]
-# Bundle the full UWyo station catalogue, GUI basemap coastlines, and compact
+# Bundle the full UWyo station catalogue, basemap coastlines, and compact
 # Census title-place/county indexes so CONUS titles and map context work
 # offline.
 "sharpmod.resources" = ["*.json", "*.tsv.gz", "*.zip"]

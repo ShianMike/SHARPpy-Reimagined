@@ -243,8 +243,8 @@ jobs:
 
   # Explicit jobs show every test area as a branch in the Actions graph.
   # These jobs report fast-lane cases without rerunning the suite.
-  gui-area:
-    name: "Test tree / 🖥️ GUI and workflows"
+  interface-area:
+    name: "Test tree / 🖥️ Workspace and workflows"
     needs: fast
     if: ${{ always() && !cancelled() && needs.fast.outputs.junit_artifact_id != '' }}
     runs-on: ubuntu-latest
@@ -665,7 +665,6 @@ jobs:
           sharpmod/io/portable_sounding.py
           sharpmod/models/model_disk_cache.py
           sharpmod/models/model_sources.py
-          sharpmod/ui/features/gui_cache.py
           --select E,F,I,UP,B,SIM
 
       - name: Audit installed dependencies

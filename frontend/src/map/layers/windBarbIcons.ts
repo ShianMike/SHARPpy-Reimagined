@@ -1,4 +1,5 @@
 import type { IconLayerProps } from "@deck.gl/layers";
+import { svgIconAtlas } from "./iconAtlas";
 
 /** Fixed pixel paths, pointing east; direction rotates the complete symbol. */
 export function windBarbPaths(speed: number) {
@@ -43,7 +44,7 @@ export const WIND_BARB_ICONS = (() => {
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="${String((y + 24) * 2)}" viewBox="0 0 512 ${String(y + 24)}">${paths.join("")}</svg>`;
   return {
-    iconAtlas: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    ...svgIconAtlas(svg),
     iconMapping: mapping,
     getSize: 24,
     sizeUnits: "pixels" as const,

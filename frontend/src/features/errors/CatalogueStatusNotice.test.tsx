@@ -12,6 +12,8 @@ import { parseBackendHealth } from "../../lib/contracts/health";
 import { renderWithBackend, scriptedTransport } from "../../test/backendHarness";
 import { CATALOGUE_EMPTY, CATALOGUE_LOADING, CatalogueStatusNotice, seedFallbackText } from "./CatalogueStatusNotice";
 
+vi.mock("../../map/mapQueries", () => ({ useStationAvailability: () => ({ data: undefined }) }));
+
 const EMPTY = { stations: [], origin: "bundled", availabilityBasis: { kind: "catalogOnly" }, droppedCount: 0 };
 const BRIDGE_UP = { status: "up", protocolVersion: 1, pid: 9, since: "2026-10-04T01:03:00Z", restarts: 1 };
 

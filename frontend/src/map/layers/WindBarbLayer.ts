@@ -22,9 +22,9 @@ export function selectWindBarbs(grid: WindBarbGrid, map: Pick<MapLibreMap, "getB
   const top = Math.max(0, Math.ceil((north - bounds.getNorth()) / dy - 0.5));
   const bottom = Math.min(height - 1, Math.floor((north - bounds.getSouth()) / dy - 0.5));
   if (left > right || top > bottom) return [];
-  // Mercator's closest rows are at the southern edge of this northern-hemisphere grid.
-  const lat = north - (bottom + 0.5) * dy;
-  const a = map.project([west, lat]), b = map.project([west + dx, lat]), c = map.project([west, lat + dy]);
+  // Sample inside the visible grid; its western edge can be behind a globe's horizon.
+  const lon = west + (left + right + 1) * dx / 2, lat = north - (top + bottom + 1) * dy / 2;
+  const a = map.project([lon, lat]), b = map.project([lon + dx, lat]), c = map.project([lon, lat + dy]);
   const xStep = 2 ** Math.max(0, Math.ceil(Math.log2(spacing / Math.hypot(b.x - a.x, b.y - a.y))));
   const yStep = 2 ** Math.max(0, Math.ceil(Math.log2(spacing / Math.hypot(c.x - a.x, c.y - a.y))));
   const canvas = map.getCanvas();

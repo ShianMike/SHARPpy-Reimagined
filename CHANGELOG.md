@@ -5,6 +5,151 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.0.3] - Unreleased
+
+### Added
+
+- Add Load hours beside Loop in the forecast timeline, with a ready-hour count,
+  progress strip, stop and retry states. Download every forecast hour for the
+  visible panels, including wind barbs and contours, and retain compressed
+  frames in the map cache without bypassing the memory budget. Storage settings
+  include these downloaded frames in map-cache usage and cleanup.
+- Add a saved Fast / Smooth playback button. Fast switches frames instantly;
+  Smooth briefly blends forecast colours while preserving the actual hourly
+  values. Honour reduced motion and stop the blend immediately when paused.
+- Refine the playback bar with consistent control spacing, a distinct play
+  action, compact progress badges and accent highlights for active controls.
+- Add a saved Flat (Mercator) / Curved (Globe) choice in Layers → Map details,
+  shared by every panel. Draw NAM 3 km, RRFS and REFS domains from their actual
+  CONUS grid perimeter, matching HRRR, in either projection. Reset layers also
+  restores the flat projection.
+- Add 2 m AGL Theta-e in kelvin with the supplied 1 K colour bands and 10 m
+  wind barbs in knots to HRRR, NAM 3 km, RRFS and REFS. Derive theta-e using
+  MetPy's Bolton formulation, 2 m temperature/dewpoint and surface pressure.
+- Remember the map layout, active panel, layer order, station labels, radar,
+  satellite and storm-report options, layer category and selected model between
+  sessions. Reopen the model on its latest suggested run. Add a Layers reset
+  for all panels and a Workspace settings reset that keeps open work and data.
+- Show a download strip while fetching or importing a sounding, with an
+  accessible request status and reduced-motion support. Point-model soundings
+  show live received bytes and transfer speed, followed by a processing state.
+- Add Storage settings with cache usage, per-category cleanup and clear-all
+  controls. Keep open soundings, saved files, pinned data and active downloads.
+- Add Surface-Based Lifted Index to HRRR, RRFS and NAM 3 km, shown in Celsius
+  with the supplied colour bands. Keep its values in Celsius when temperature
+  preferences change, and normalize the Kelvin offset in NAM/RRFS data.
+- Add 11 other HRRR map products: total precipitation, effective storm-relative
+  helicity, gusts, maximum updraft velocity, precipitation rate, precipitable
+  water, snow depth, and 10 m wind speed, plus liquid-equivalent snow, sleet and
+  freezing-rain rates with the supplied colour tables. Show total precipitation,
+  precipitable water and snow depth in inches and general precipitation rate in
+  inches per hour with the supplied inch scales. Keep the winter-type rates in
+  liquid-equivalent mm/h; they do not represent snow depth or ice accretion per
+  hour. Include units and descriptions.
+- Extend the supported HRRR weather products to NAM 3 km, RRFS and REFS members,
+  using each model's available fields and accumulation periods. NAM omits
+  lightning and effective-layer helicity. REFS adds total precipitation, gusts,
+  10 m wind, precipitable water and maximum updraft velocity; its reduced stream
+  omits effective-layer helicity, surface lifted index, instantaneous
+  precipitation rates and snow depth. Sum NAM's non-overlapping precipitation
+  intervals from the run start, accounting for its three-hour resets. Run totals
+  start at zero at F000; NAM/RRFS/REFS hourly maximum updraft velocity starts at
+  F001.
+
+### Fixed
+
+- Buffer multi-panel playback across the upcoming frame window in parallel,
+  including wind and contour data. Keep the loaded hour visible until every
+  panel's next frame has loaded or reported an error, overlap loading with the
+  playback interval, and avoid showing background prefetches as a loading
+  current frame.
+- Simplify the map view and saved-settings wording, with balanced spacing,
+  separated notes and a clearly placed reset action in Workspace settings.
+- Keep labels and wind/report symbols above curved-map geometry so outlook
+  fills and the globe surface do not slice through their text or icons.
+- Load wind and storm-report symbols through the browser's image loader so the
+  app's content-security policy does not block their SVG atlases.
+- Shorten the Settings section names to Playback and Device Info.
+- Show map panel titles only in Model Viewer, hiding them in Overview, Logs,
+  Soundings and Settings while keeping the selected map layout and products.
+- Fit all eight Settings sections and the save hint at 1280 × 800, with browser
+  checks for every heading and clipping. Load manifest-derived versions correctly
+  in browser and desktop end-to-end test runners.
+- Use orange hover and keyboard-focus feedback throughout the Layers panel,
+  with outlined selected tabs and enabled layers so their states stay clear.
+- Match the Point panel's buttons and Station & source disclosure to the orange
+  hover and keyboard-focus feedback used by Layers.
+- Keep parameter previews compact at a steady height so hovering STP, updraft helicity,
+  effective storm-relative helicity and EHI does not shift the scrolled list
+  beneath the pointer in toolbar and map-panel pickers. Longer descriptions
+  scroll inside the keyboard-accessible preview.
+- Close HTTP error responses in browser-boundary tests and assert they are
+  closed, avoiding deferred resource cleanup under warnings-as-errors.
+- Check station availability automatically for the observed launch, with live
+  checking, available and not-reported states, the checked time and retry controls.
+  Keep station details, hover tooltips and map markers on the same result.
+- Separate map panel numbers from parameter titles with a bullet.
+- Name the failed operation in all backend error notices, including storage,
+  model availability and sounding download progress, with a compile-time check
+  that every frontend command has an error title.
+- Balance sounding toolbar groups and dropdown padding, and use highlighted
+  selections without checkmarks in sounding and map-layer dropdowns.
+- Show map catalogue errors with a retry action instead of incorrectly
+  labelling models as "Soundings only" when their parameter catalogue fails.
+- Give open soundings their own scrollbar, keeping the source controls visible.
+- Remember dragged popup positions separately for each forecast picker and map
+  panel, while keeping new popups centered and saved positions on screen.
+- Keep maximum updraft velocity in its scientific units when wind preferences
+  change.
+- Use rounded scale labels after converting display units, and apply selected
+  units to storm-report magnitudes and observation tooltip temperatures.
+- Read observation temperatures from numeric fields so display values remain
+  available when descriptive wording changes.
+- Derive version expectations in release checks from the app manifests instead
+  of repeating version numbers in tests.
+- Give queued model availability checks their full network timeout, preventing
+  other checks from making available models appear unavailable.
+- Keep forecast-model GRIB downloads and their metadata inside the desktop
+  session cache, including ensemble members. Remove them when the app closes,
+  even when a busy backend must be stopped after the shutdown timeout.
+- Remove each sounding's GRIB directory and metadata when it leaves the
+  bounded cache. Saved files and persistent model caches keep their existing
+  retention rules.
+
+### Performance
+
+- Reuse directory metadata and the initial model-entry scan during cache
+  cleanup, retaining link checks, active-download protection and a fresh usage
+  scan after deletion.
+- Skip linked directories while finding model-cache metadata instead of
+  resolving every entry's full path repeatedly.
+- Reuse sounding-point tooltip text during chart interactions and share
+  converted surface observations between map panels.
+- Remove desktop session caches asynchronously so cleanup does not block the
+  runtime thread during shutdown.
+
+### Removed
+
+- Remove Best Lifted Index from all map product catalogues.
+- Remove eight unreferenced legacy import aliases, retaining their canonical
+  scientific/provider implementations and the aliases still used in the repo.
+- Retire the legacy Qt picker and viewer, GUI-only tests, import aliases and
+  maintenance scripts from the v3 source tree. Remove `sharpmod-gui` and build
+  only the Python backend for the Tauri desktop. Keep the shared scientific
+  tools, headless sounding renderer, editing and export support. The published
+  [v2.0.0 Legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0)
+  remains available for the old interface.
+- Remove the remaining legacy Qt session/history, saved-location, recent-file,
+  local-time and map-presentation helpers, their aliases and tests. Drop the
+  unused export-settings migration and stale launcher references in current docs.
+  Remove disconnected native save-dialog and picker/readout hooks from the
+  headless renderer, and exclude the unused upstream GUI, progress and updater
+  modules from frozen backend collection.
+- Remove the unused ensemble summary API, desktop command, frontend client,
+  contracts and fixtures. Retain member acquisition for threshold calculations
+  and individual forecast-model members.
+- Remove unused frontend controls and their stylesheets.
+
 ## [v3.0.2] - 2026-10-16
 
 This patch brings together the workspace fixes and release build improvements

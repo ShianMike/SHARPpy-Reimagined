@@ -10,9 +10,9 @@ export interface LegendProps {
 }
 
 const ENTRIES: readonly { key: string; label: string; swatch: string; shown: (set: ReadonlySet<StationAvailability>) => boolean }[] = [
-  { key: "unknown", label: "Station, availability unknown", swatch: "unknown", shown: () => true },
-  { key: "listed", label: "Station, listed", swatch: "listed", shown: (set) => set.has("listed") },
-  { key: "notListed", label: "Station, not listed", swatch: "notListed", shown: (set) => set.has("notListed") },
+  { key: "unknown", label: "Station, not checked", swatch: "unknown", shown: (set) => set.has("unknown") },
+  { key: "listed", label: "Station, available", swatch: "listed", shown: (set) => set.has("listed") },
+  { key: "notListed", label: "Station, not reported", swatch: "notListed", shown: (set) => set.has("notListed") },
   { key: "selected", label: "Selected station", swatch: "selected", shown: () => true },
 ];
 

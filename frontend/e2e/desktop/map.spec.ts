@@ -133,7 +133,7 @@ test.describe("real-backend forecast map", () => {
     results.fieldAttempts = attempts;
     expect(outcome.ok, `a field frame loaded: ${JSON.stringify(attempts)}`).toBe(true);
     const scale = page.getByRole("complementary", { name: "Parameter scale" });
-    await expect(scale).toContainText("dBZ");
+    await expect(scale).toHaveAccessibleDescription(/dBZ/u);
     await expect(page.getByTestId("panel-chip-1")).toHaveCount(0);
     results.scale = await text(scale);
     await shot("desktop-map-field.png");
@@ -141,7 +141,7 @@ test.describe("real-backend forecast map", () => {
     await row("model-field").getByRole("combobox", { name: "Product" }).click();
     await page.getByRole("listbox", { name: "Product" }).locator('[value="tmp-2m"]').click();
     results.secondProduct = await fieldOutcome();
-    await expect(scale).toContainText("°F");
+    await expect(scale).toHaveAccessibleDescription(/°F/u);
     results.secondScale = await text(scale);
 
     const timeline = page.getByRole("region", { name: "Forecast timeline" });

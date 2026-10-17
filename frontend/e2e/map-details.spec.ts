@@ -82,6 +82,7 @@ test("Point buttons and source disclosure use the accent on hover and keyboard f
   const zoom = point.getByRole("button", { name: "Zoom to station", exact: true });
   for (const colorScheme of ["dark", "light"] as const) {
     await page.emulateMedia({ colorScheme });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", colorScheme);
     const accent = await point.getByRole("heading", { name: "Point", exact: true }).locator("svg").evaluate((element) => getComputedStyle(element).color);
     await summary.hover();
     await expect(summary).toHaveCSS("color", accent);

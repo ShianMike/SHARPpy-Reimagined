@@ -48,13 +48,13 @@ test.describe("the forecast map", () => {
     expect(await deckLayers(page)).toContain("boundaries-states");
     await expect(page.getByTestId("panel-chip-1")).toHaveCount(0);
     const scale = page.getByRole("complementary", { name: "Parameter scale" });
-    await expect(scale).toContainText("dBZ");
+    await expect(scale).toHaveAccessibleDescription(/dBZ/u);
 
     await row.getByRole("combobox", { name: "Product" }).click();
     await page.getByRole("listbox", { name: "Product" }).locator('[value="tmp-2m"]').click();
     await expect(row.getByTestId("field-shown")).toBeVisible();
     await expect(row).toContainText("°F");
-    await expect(scale).toContainText("°F");
+    await expect(scale).toHaveAccessibleDescription(/°F/u);
     await nextFrames(page);
     await saveScreenshot(page, "browser-forecast-field.png");
     // A contoured product: the lines draw with the colour, and the row says so.

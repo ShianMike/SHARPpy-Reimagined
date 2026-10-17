@@ -5,7 +5,7 @@ setuptools==84.0.0
 wheel==0.48.0
 
 numpy==2.4.6
-PySide6==6.11.2
+PySide6==6.12.0
 QtPy==2.4.3
 python-dateutil==2.9.0.post0
 certifi==2026.7.22

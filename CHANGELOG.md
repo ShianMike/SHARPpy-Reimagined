@@ -58,6 +58,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Restore real weather providers after bridge-map tests, including failures,
+  so fixture data cannot leak into later GRIB, precipitation or radar checks.
 - Buffer multi-panel playback across the upcoming frame window in parallel,
   including wind and contour data. Keep the loaded hour visible until every
   panel's next frame has loaded or reported an error, overlap loading with the

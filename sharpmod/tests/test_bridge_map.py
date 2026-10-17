@@ -43,9 +43,35 @@ def map_cache(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def offline():
+def offline(monkeypatch):
     with EXPORT.stand_ins():
-        yield
+        try:
+            yield
+        finally:
+            # Undo test overrides before stand_ins restores the real providers.
+            monkeypatch.undo()
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_offline_restores_providers_after_test_overrides(fail):
+    from sharpmod.providers import hrrr_field, radar_mosaic
+
+    download = hrrr_field._download_fields
+    radar = radar_mosaic.fetch_frame
+    patches = pytest.MonkeyPatch()
+    fixture = offline.__wrapped__(patches)
+    try:
+        next(fixture)
+        patches.setattr(hrrr_field, "_download_fields", lambda *_args, **_kwargs: {})
+        patches.setattr(radar_mosaic, "fetch_frame", lambda *_args, **_kwargs: None)
+        if fail:
+            with pytest.raises(RuntimeError, match="test failed"):
+                fixture.throw(RuntimeError("test failed"))
+    finally:
+        fixture.close()
+        patches.undo()
+    assert hrrr_field._download_fields is download
+    assert radar_mosaic.fetch_frame is radar
 
 
 def test_downloaded_frames_survive_memory_eviction_and_corrupt_files_reload(offline, monkeypatch):

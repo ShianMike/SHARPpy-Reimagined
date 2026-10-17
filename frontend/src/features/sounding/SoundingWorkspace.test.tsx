@@ -253,7 +253,7 @@ describe("SoundingWorkspace", () => {
     const bytes = Uint8Array.from({ length: 65_537 }, (_, index) => index % 256);
     const file = new File([bytes], "profile.npz");
     Object.defineProperty(file, "arrayBuffer", { value: () => Promise.resolve(bytes.buffer) });
-    renderWithBackend(<SoundingWorkspace />, transport);
+    const { queryClient } = renderWithBackend(<SoundingWorkspace />, transport);
     await userEvent.click(screen.getByRole("tab", { name: "File" }));
     await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), file);
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
@@ -262,6 +262,7 @@ describe("SoundingWorkspace", () => {
     expect(uploaded.request.kind).toBe("file");
     expect(uploaded.request.fileName).toBe(file.name);
     expect(Uint8Array.from(atob(uploaded.request.contentBase64), (char) => char.charCodeAt(0))).toEqual(bytes);
+    await waitFor(() => { expect(queryClient.isMutating()).toBe(0); });
   });
 
   it("rejects oversized files before reading or uploading them", async () => {

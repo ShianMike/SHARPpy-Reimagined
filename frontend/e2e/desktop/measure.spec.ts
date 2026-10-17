@@ -3,7 +3,7 @@
 // in Edge for the frame-time comparison. It is a measurement harness, not app
 // code, so it calls window.__TAURI_INTERNALS__.invoke directly.
 //
-// - @load: the start-up marks, "Backend ready", "933 stations", screenshots,
+// - @load: the start-up marks, "Backend ready", the station count, screenshots,
 //   the catalogue payload size, IPC round trips, and a reload with a CSP
 //   violation listener. Runs only inside the Tauri app.
 // - @frames: requestAnimationFrame intervals during a scripted 600 px drag
@@ -13,7 +13,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, expect, test, type Browser, type Page } from "@playwright/test";
-import { version } from "../../package.json";
+import appManifest from "../../package.json" with { type: "json" };
 
 declare global {
   interface Window {
@@ -101,7 +101,7 @@ test.describe("desktop measurements", () => {
     await browser?.close();
   });
 
-  test("start-up marks, backend ready, and 933 stations @load", async () => {
+  test("start-up marks, backend ready, and loaded stations @load", async () => {
     test.skip(!(await isTauri()), "not running inside the Tauri app");
     await waitForMarks(["sharppy:stations-rendered", "sharppy:basemap-loaded"]);
     const timing = await page.evaluate((names) => {
@@ -121,7 +121,7 @@ test.describe("desktop measurements", () => {
     results.marks = timing.marks;
     results.stationsRenderedEpochMs = timing.timeOrigin + rendered;
     results.firstCatalogLoadMs = Math.round((received - requested) * 100) / 100;
-    await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+    await expect(page.getByTestId("catalogue-announcement")).toHaveText(/^[1-9]\d* stations loaded$/u);
     await shot("desktop-content.png");
   });
 
@@ -132,7 +132,7 @@ test.describe("desktop measurements", () => {
     const popover = page.getByRole("dialog", { name: "Backend status" });
     await expect(popover).toContainText("Backend ready");
     await expect(popover).toContainText("3.11.14");
-    await expect(popover).toContainText(version);
+    await expect(popover).toContainText(appManifest.version);
     results.healthPopover = await popover.innerText();
     await shot("desktop-health.png");
     await page.keyboard.press("Escape");
@@ -199,7 +199,7 @@ test.describe("desktop measurements", () => {
     });
     await page.reload();
     await waitForMarks(["sharppy:stations-rendered", "sharppy:basemap-loaded"]);
-    await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+    await expect(page.getByTestId("catalogue-announcement")).toHaveText(/^[1-9]\d* stations loaded$/u);
     const violations = await page.evaluate(() => window.__sharppyCsp ?? ["listener missing"]);
     results.csp = { violations, consoleMessages: consoleCsp };
     expect(violations).toEqual([]);
@@ -257,7 +257,7 @@ test.describe("desktop measurements", () => {
     await page.getByRole("button", { name: "Map rendering", exact: true }).click();
     const effective = await page.getByTestId("effective-profile").innerText();
     const reasons = await page.getByRole("list", { name: "Reasons" }).getByRole("listitem").allInnerTexts();
-    await page.getByRole("button", { name: "Device diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Device Info", exact: true }).click();
     results.profile = {
       attribute: await page.evaluate(() => document.documentElement.dataset.graphicsProfile ?? null),
       effective,

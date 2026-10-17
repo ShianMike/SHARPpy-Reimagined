@@ -424,8 +424,17 @@ def test_open_model_extracts_to_the_cache_and_maps_errors(monkeypatch):
 
     calls = []
 
-    def extract(model, lat, lon, *, run_time, fxx, out_path, loc):
+    def extract(model, lat, lon, *, run_time, fxx, out_path, loc, download_dir,
+                progress_callback, on_bytes):
         calls.append((model, lat, lon, run_time, fxx, loc))
+        assert Path(download_dir).parent == sounding_cache.cache().root
+        progress_callback("downloading", 9_000_000)
+        on_bytes(500_000)
+        progress = soundings.get_progress({"progress_id": "download1"})
+        assert progress["downloaded_bytes"] == 500_000
+        assert progress["stage"] == "downloading"
+        progress_callback("decoding", 9_000_000)
+        assert soundings.get_progress({"progress_id": "download1"})["bytes_per_second"] == 0
         shutil.copyfile(NPZ, out_path)
         return out_path
 
@@ -437,6 +446,7 @@ def test_open_model_extracts_to_the_cache_and_maps_errors(monkeypatch):
             "latitude": 36.68,
             "longitude": -95.66,
             "run_time": "2026-06-25T06:00:00Z",
+            "progress_id": "download1",
         }
     )
     assert calls[0][:3] == ("hrrr", 36.68, -95.66) and calls[0][4] == 18
@@ -446,6 +456,7 @@ def test_open_model_extracts_to_the_cache_and_maps_errors(monkeypatch):
         and summary["forecast_hour"] == 18
     )
     assert summary["title"] == "HRRR 36.68N 95.66W"
+    assert soundings.get_progress({"progress_id": "download1"})["downloaded_bytes"] == 0
 
     def out_of_domain(*_args, **_kwargs):
         raise era5_extract.ParameterRangeError("outside the domain")
@@ -467,6 +478,23 @@ def test_open_model_extracts_to_the_cache_and_maps_errors(monkeypatch):
         )
     assert info.value.code == "SOUNDING_FETCH_FAILED" and info.value.retryable is True
     assert "traceback" not in info.value.message
+
+
+def test_cache_eviction_removes_model_downloads_and_metadata(tmp_path):
+    cache = sounding_cache.SoundingCache(tmp_path, max_entries=1)
+    for entry_id in ("first", "second"):
+        path = cache.data_path(entry_id, ".npz")
+        shutil.copyfile(NPZ, path)
+        downloads = tmp_path / f"{entry_id}-grib"
+        downloads.mkdir()
+        (downloads / "model.grib2").write_bytes(b"GRIB")
+        (downloads / "model.grib2.provenance.json").write_text("{}")
+        cache.add(sounding_cache.Entry(entry_id, path, {}))
+
+    assert not (tmp_path / "first.npz").exists()
+    assert not (tmp_path / "first-grib").exists()
+    assert (tmp_path / "second.npz").is_file()
+    assert (tmp_path / "second-grib/model.grib2.provenance.json").is_file()
 
 
 def test_render_returns_the_png_and_reuses_it(monkeypatch, opened):

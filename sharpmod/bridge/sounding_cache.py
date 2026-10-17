@@ -2,8 +2,8 @@
 
 Every opened sounding gets a random id. Its data file (the portable ``.npz``
 that sharpmod writes for observed and model soundings, or the uploaded file
-itself) lives in ``<root>/<id><suffix>``, and rendered images in
-``<root>/renders/``. The root is a new directory made for this process with
+itself) lives in ``<root>/<id><suffix>``, downloaded GRIBs in ``<root>/<id>-grib``,
+and rendered images in ``<root>/renders/``. The root is made for this process with
 ``tempfile.mkdtemp`` (inside ``SHARPMOD_BRIDGE_CACHE`` when that is set), and
 it is removed when the process exits. Nothing outside that directory is ever
 deleted.
@@ -111,13 +111,21 @@ class SoundingCache:
             )
         return entry
 
+    def completed_downloads(self) -> tuple[Path, ...]:
+        """Raw GRIBs can be discarded once the portable sounding is registered."""
+        with self._lock:
+            return tuple(self.root / f"{entry_id}-grib" for entry_id in self._entries)
+
     def _remove_files(self, sounding_id: str) -> None:
         for path in [
             *self.root.glob(f"{sounding_id}*"),
             *self.renders.glob(f"{sounding_id}-*"),
         ]:
             try:
-                path.unlink()
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
             except OSError:
                 log.warning("could not remove cached file %s", path)
 

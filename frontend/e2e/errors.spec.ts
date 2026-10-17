@@ -37,7 +37,7 @@ test("python-unavailable: the instruction, no Retry, and no station count (DR6-3
   expectWarnings(consoleMessages, [{ pattern: /^\[backend\] PYTHON_NOT_FOUND in get_station_catalog/u, count: 1 }]);
 });
 
-test("catalog-error: the notice after two automatic retries, then Retry loads 933 stations", async ({
+test("catalog-error: the notice after two automatic retries, then Retry loads the stations", async ({
   page,
   consoleMessages,
 }) => {
@@ -50,23 +50,23 @@ test("catalog-error: the notice after two automatic retries, then Retry loads 93
   expect(isInside(await boxOf(notice), viewportBox(page))).toBe(true);
   await saveScreenshot(page, "browser-catalog-error.png");
   await notice.getByRole("button", { name: "Retry" }).click();
-  await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+  await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   await expect(notice).toHaveCount(0);
   await waitForMark(page, MARKS.stationsRendered);
   expectWarnings(consoleMessages, [{ pattern: /^\[backend\] CATALOG_UNAVAILABLE in get_station_catalog/u, count: 3 }]);
 });
 
-test("seed-fallback: the warning, 10 stations, and the seed list in the inspector", async ({ page, consoleMessages }) => {
+test("seed-fallback: the warning, newly reporting stations, and the seed list in the inspector", async ({ page, consoleMessages }) => {
   await page.goto("/?scenario=seed-fallback");
   await expect(page.getByTestId("catalogue-seed-fallback")).toContainText(
-    "Showing the 10-station seed list: the bundled catalogue could not be read",
+    "Showing the 11-station seed list: the bundled catalogue could not be read",
   );
-  await expect(page.getByTestId("catalogue-announcement")).toHaveText("10 stations loaded");
+  await expect(page.getByTestId("catalogue-announcement")).toHaveText("11 stations loaded");
   await waitForMark(page, MARKS.stationsRendered);
   await chooseThroughSearch(page, "72357");
   const inspector = page.getByRole("complementary", { name: "Inspector" });
   await expect(inspector).toContainText("OUN Norman, OK");
-  await expect(inspector).toContainText("Seed list, 10 stations");
+  await expect(inspector).toContainText("Seed list, 11 stations");
   expectWarnings(consoleMessages, []);
 });
 
@@ -78,7 +78,7 @@ test("restarting: the indicator and its popover say so, and the stations still l
   await expect(page.getByRole("dialog", { name: "Backend status" })).toContainText(
     "The Python backend stopped unexpectedly and is restarting. Attempt 1.",
   );
-  await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+  await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   expectWarnings(consoleMessages, []);
 });
 
@@ -90,7 +90,7 @@ test("slow-catalog: Loading stations until the catalogue arrives", async ({ page
   await page.getByRole("button", { name: "Search stations" }).click();
   await expect(page.getByRole("combobox", { name: "Search stations" })).toHaveAttribute("placeholder", "Loading stations");
   await saveScreenshot(page, "browser-loading.png");
-  await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+  await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   await expect(loading).toHaveCount(0);
   expectWarnings(consoleMessages, []);
 });
@@ -106,7 +106,7 @@ test("health-error: Backend status unknown with the INTERNAL message, and the st
   await expect(page.getByRole("dialog", { name: "Backend status" })).toContainText(
     "Something went wrong in get_backend_health. Details are in the log.",
   );
-  await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+  await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   await waitForMark(page, MARKS.stationsRendered);
   expectWarnings(consoleMessages, [{ pattern: /^\[backend\] INTERNAL in get_backend_health/u }]);
 });

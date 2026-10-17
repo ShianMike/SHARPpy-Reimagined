@@ -169,6 +169,8 @@ it("spaces whole surface plots, prioritizes fresh observations and reveals more 
   expect(plots[2]?.upperText).toBe(base.upperText);
   const saved = useAppStore.getState();
   try {
+    hoverFromPick({ layer: { id: "surface-plots" }, object: { plot: plots[2] }, x: 100, y: 50 } as unknown as PickingInfo, 0, { left: 0, top: 0 });
+    expect(useHoverStore.getState().report?.observation).toEqual({ temperatureC: base.temperatureC, dewpointC: base.dewpointC });
     clickFromPick({ layer: { id: "surface-plots" }, object: { plot: plots[2] }, coordinate: [1, 1] } as unknown as PickingInfo);
     expect(useAppStore.getState().selectedPoint).toEqual({ longitude: 0, latitude: 0 });
   } finally { useAppStore.setState(saved, true); }

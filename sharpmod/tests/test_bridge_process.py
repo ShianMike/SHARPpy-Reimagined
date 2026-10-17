@@ -65,6 +65,50 @@ def test_bridge_process_serves_every_method_and_exits_cleanly():
     assert by_id[99] == {"id": 99, "result": {"ok": True}}
 
 
+def test_shutdown_removes_model_grib_and_metadata(tmp_path):
+    sentinel = tmp_path / "keep.txt"
+    sentinel.write_text("not owned by the bridge")
+    code = textwrap.dedent("""
+        import os, shutil, sys
+        from pathlib import Path
+        from sharpmod.bridge import server, sounding_cache
+        from sharpmod.providers.rrfs_nomads import write_provenance
+        from sharpmod.tools import model_extract
+
+        os.environ['SHARPMOD_BRIDGE_CACHE'] = sys.argv[1]
+
+        def extract(model, lat, lon, *, out_path, download_dir, **kwargs):
+            directory = Path(download_dir)
+            assert directory.parent == sounding_cache.cache().root
+            directory.mkdir(parents=True)
+            grib = directory / 'model.grib2'
+            grib.write_bytes(b'GRIB')
+            write_provenance(grib, fields=('TMP',), source_url='offline',
+                             pressure_fields=('TMP',))
+            shutil.copyfile('examples/soundings/hrrr_point_36.68N_95.66W_f018.npz',
+                            out_path)
+            return out_path
+
+        model_extract.extract = extract
+        raise SystemExit(server.main())
+    """)
+    request = {
+        "id": 1, "method": "soundings.open_model", "params": {
+            "model": "hrrr", "forecast_hour": 18,
+            "latitude": 36.68, "longitude": -95.66,
+            "run_time": "2026-06-25T06:00:00Z",
+        },
+    }
+    frames, stderr, status = _session(
+        [sys.executable, *FLAGS, "-c", code, str(tmp_path)],
+        [json.dumps(request).encode() + b"\n"],
+    )
+    assert status == 0, stderr
+    assert "result" in frames[0], (frames, stderr)
+    assert frames[0]["result"]["kind"] == "model"
+    assert list(tmp_path.iterdir()) == [sentinel]
+
+
 def test_handlers_load_no_qt_module():
     code = textwrap.dedent("""
         import json, sys

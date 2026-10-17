@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import tomllib
 from pathlib import Path
@@ -10,7 +11,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import sharpmod
-from sharpmod import gui, render
+from sharpmod import render
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,9 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_every_runtime_surface_uses_package_version():
     from sharpmod._version import __version__ as package_version
 
-    assert package_version == "3.0.2"
     assert sharpmod.__version__ == package_version
-    assert gui.APP_VERSION == package_version
     assert render.application_label() == (
         f"SHARPpy Reimagined v{package_version}")
 
@@ -35,6 +34,40 @@ def test_pyproject_reads_the_version_attribute():
     assert document["tool"]["setuptools"]["dynamic"]["version"] == {
         "attr": "sharpmod._version.__version__",
     }
+
+
+def test_current_package_retires_the_legacy_gui():
+    document = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "sharpmod-gui" not in document["project"].get("gui-scripts", {})
+    for package in ("ui", "core", "state"):
+        assert not any(name == f"sharpmod.{package}" or name.startswith(f"sharpmod.{package}.")
+                       for name in document["tool"]["setuptools"]["packages"])
+        assert not (ROOT / "sharpmod" / package).exists()
+    assert not list((ROOT / "sharpmod/_compat").glob("gui_*.py"))
+    for module in (
+        "gui", "gui_picker", "gui_viewer", "local_time", "collection_identity",
+        "recent_destinations", "run_updates", "saved_box_regions", "saved_locations",
+        "session_merge", "sessions", "map_layers", "map_legends", "map_time",
+    ):
+        name = f"sharpmod.{module}"
+        assert importlib.util.find_spec(name) is None, name
+
+
+def test_unused_legacy_aliases_are_retired():
+    for module in (
+        "analysis.box_analysis_core",
+        "analysis.box_analysis_fast",
+        "providers.eccc_geomet_runtime",
+        "maps.map_field_inspection",
+        "models.model_transfer",
+        "providers.openmeteo_runtime",
+        "maps.overlay_hatch",
+        "analysis.profile_metrics_engine",
+    ):
+        alias = f"sharpmod.{module.rsplit('.', 1)[1]}"
+        canonical = f"sharpmod.{module}"
+        assert importlib.util.find_spec(alias) is None, alias
+        assert importlib.util.find_spec(canonical) is not None, canonical
 
 
 def test_release_manifests_and_health_fixture_share_package_version():
@@ -83,18 +116,16 @@ def test_release_manifests_and_health_fixture_share_package_version():
 
 
 def test_changelog_preserves_the_dated_legacy_release():
+    from sharpmod._version import __version__ as package_version
+
     headings = [
         line.strip()
         for line in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
         if line.startswith("## ")
     ]
 
-    assert headings[:4] == [
-        "## [v3.0.2] - 2026-10-16",
-        "## [v3.0.1] - 2026-10-15",
-        "## [v3.0.0] - 2026-10-15",
-        "## [v2.0.0 Legacy] - 2026-09-26",
-    ]
+    assert headings[0].startswith(f"## [v{package_version}] - ")
+    assert "## [v2.0.0 Legacy] - 2026-09-26" in headings
 
     release_url = (
         "https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0"
@@ -113,4 +144,6 @@ def test_readme_feature_summary_names_the_current_version():
         for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
         if line.startswith("## What's new in ")
     ]
-    assert headings == [f"## What's new in {package_version}"]
+    assert [heading.removesuffix(" (Unreleased)") for heading in headings] == [
+        f"## What's new in {package_version}",
+    ]

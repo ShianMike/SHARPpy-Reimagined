@@ -1,11 +1,11 @@
 // Query keys and the options every backend query shares (DESIGN-frontend F3).
 
 import { QueryClient } from "@tanstack/react-query";
-import type { EnsembleSummaryRequest } from "../../types/ensemble";
 import type { ThresholdEvaluationRequest } from "../../types/thresholds";
 import { BackendFailure } from "./errors";
 
 export const QUERY_KEYS = {
+  storage: ["storage", "usage"],
   health: ["backend", "health"],
   catalog: ["stations", "catalog"],
   models: ["models", "catalog"],
@@ -37,20 +37,6 @@ export const soundingKeys = {
   analysis: (soundingId: string) => ["soundings", soundingId, "analysis"] as const,
   trends: (soundingId: string) => ["soundings", soundingId, "trends"] as const,
   image: (soundingId: string, choice: string) => ["soundings", soundingId, "image", choice] as const,
-};
-
-/** The summary of one run's members at one point: its request is its identity. */
-export const ensembleKeys = {
-  summary: (request: EnsembleSummaryRequest) =>
-    [
-      "ensemble",
-      request.model,
-      request.runTime,
-      request.forecastHour,
-      request.latitude,
-      request.longitude,
-      request.members.join(","),
-    ] as const,
 };
 
 export const thresholdKeys = {

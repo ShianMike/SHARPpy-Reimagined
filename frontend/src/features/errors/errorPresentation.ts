@@ -4,6 +4,7 @@
 // the producer and shown as it is.
 
 import type { AnyBackendError, ErrorContext } from "../../types/contracts";
+import type { CommandName } from "../../lib/backend/transport";
 
 export interface ErrorActions {
   /** Retry: repeating the same request may succeed. */
@@ -60,29 +61,42 @@ export function noRetryHint(actions: ErrorActions): string | null {
 }
 
 const TITLES: Readonly<Record<string, string>> = {
+  get_storage_usage: "Cache usage could not be loaded",
+  clear_cache: "Cached weather data could not be cleared",
   get_station_catalog: "Stations could not be loaded",
   get_backend_health: "The backend status could not be checked",
   restart_backend: "The backend could not be restarted",
   start_backend: "The Python backend could not start",
   get_model_catalog: "Forecast models could not be loaded",
+  get_model_status: "Model availability could not be checked",
   open_sounding: "The sounding could not be opened",
+  get_sounding_progress: "Sounding download progress could not be checked",
+  inspect_wrf: "The WRF file could not be inspected",
   get_sounding_analysis: "The sounding parameters could not be computed",
-  get_ensemble_summary: "The ensemble summary could not be computed",
+  get_sounding_trends: "Sounding trends could not be loaded",
   get_threshold_metrics: "The threshold diagnostics could not be loaded",
   evaluate_threshold: "The threshold could not be evaluated",
   export_threshold_csv: "The threshold results could not be exported",
   render_sounding: "The sounding image could not be drawn",
+  render_sounding_view: "The sounding view could not be drawn",
   get_map_catalog: "Map products could not be loaded",
   get_weather_field: "The model field could not be loaded",
   get_spc_outlook: "The SPC outlook could not be loaded",
   get_radar_frame: "The radar mosaic could not be loaded",
+  get_radar_sites: "Radar sites could not be loaded",
+  get_radar_site_frame: "The radar site image could not be loaded",
+  get_satellite_frame: "The satellite image could not be loaded",
+  get_storm_reports: "Storm reports could not be loaded",
+  get_report_options: "Storm report options could not be loaded",
+  get_field_contours: "Map contours could not be loaded",
+  get_surface_plots: "Surface observations could not be loaded",
   get_place_labels: "Place names could not be loaded",
   get_station_availability: "Station availability could not be checked",
-};
+} satisfies Record<CommandName | "start_backend", string>;
 
 /** "Stations could not be loaded" for get_station_catalog. */
 export function errorTitle(context: ErrorContext | undefined): string {
-  return (context === undefined ? undefined : TITLES[context.operation]) ?? "A backend request failed";
+  return (context !== undefined && Object.hasOwn(TITLES, context.operation) ? TITLES[context.operation] : undefined) ?? "A backend request failed";
 }
 
 const PROVIDERS: Readonly<Record<string, string>> = {

@@ -2,106 +2,10 @@
 
 from datetime import datetime
 import json
-from types import SimpleNamespace
 
 import numpy as np
 
 from sharpmod.io.decoder import load_npz
-from sharpmod.profile_inspector import format_report, inspect_profile, provenance
-
-
-class _Collection:
-    def __init__(self, profile, metadata=None):
-        self.profile = profile
-        self.metadata = dict(metadata or {})
-
-    def getCurrentProfs(self):
-        return {"": self.profile}
-
-    def getMeta(self, key):
-        return self.metadata.get(key)
-
-
-def _profile(**overrides):
-    values = {
-        "pres": np.array([1000, 900, 800, 700, 600, 500, 400, 300]),
-        "hght": np.arange(8) * 1000.0,
-        "tmpc": np.linspace(25, -45, 8),
-        "dwpc": np.linspace(20, -50, 8),
-        "wspd": np.linspace(5, 60, 8),
-        "missing": -9999.0,
-    }
-    values.update(overrides)
-    return SimpleNamespace(**values)
-
-
-def test_clean_profile_report_includes_provenance():
-    collection = _Collection(
-        _profile(),
-        {"model": "RRFS A", "transport": "optimized-ranges", "fxx": 3},
-    )
-
-    assert inspect_profile(collection) == []
-    assert provenance(collection)["transport"] == "optimized-ranges"
-    report = format_report(collection)
-    assert "RRFS A" in report
-    assert "Pressure levels: 8 usable / 8 rows" in report
-    assert "Missing fields:" in report
-    assert "Surface relative vorticity:" in report
-    assert "No basic structural problems" in report
-
-
-def test_provenance_uses_focused_timeline_hour_metadata():
-    collection = _Collection(
-        _profile(),
-        {
-            "fxx": 0,
-            "source_url": "https://example.test/f000",
-            "timeline_provenance": [
-                {"fxx": 6, "source_url": "https://example.test/f006"}
-            ],
-        },
-    )
-    collection._prof_idx = 0
-
-    metadata = provenance(collection)
-
-    assert metadata["fxx"] == 6
-    assert metadata["source_url"].endswith("f006")
-
-
-def test_inspector_flags_order_supersaturation_and_negative_wind():
-    profile = _profile(
-        pres=np.array([1000, 900, 900, 700, 600, 500, 400, 350]),
-        dwpc=np.linspace(30, -40, 8),
-        wspd=np.array([-1, 5, 10, 15, 20, 25, 30, 35]),
-    )
-
-    codes = {item.code for item in inspect_profile(_Collection(profile))}
-
-    assert {
-        "pressure-order",
-        "dewpoint-above-temperature",
-        "negative-wind-speed",
-        "shallow-profile",
-    } <= codes
-
-
-def test_inspector_prefers_highlighted_ensemble_member():
-    first_member = _profile(wspd=np.array([-1, 5, 10, 15, 20, 25, 30, 35]))
-    highlighted_member = _profile()
-    collection = SimpleNamespace(
-        getHighlightedProf=lambda: highlighted_member,
-        getCurrentProfs=lambda: {
-            "first": first_member,
-            "highlighted": highlighted_member,
-        },
-        getMeta=lambda _key: None,
-    )
-
-    codes = {item.code for item in inspect_profile(collection)}
-
-    assert "negative-wind-speed" not in codes
 
 
 def test_npz_decoder_attaches_json_sidecar_provenance(tmp_path):

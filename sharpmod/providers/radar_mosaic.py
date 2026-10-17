@@ -34,8 +34,7 @@ current viewport. That is the central design decision here and it buys three
 things. One request serves all four picker maps whichever way each is panned;
 panning and zooming cost nothing because the image's corners are simply
 re-projected; and because the extent is constant, a frame stays glued to the
-basemap during the wheel-zoom preview that :meth:`gui_maps.StationMapWidget.
-_draw_basemap` performs, with no equivalent of that method's affine fix-up. The
+basemap during pan and zoom, without viewport-specific image adjustments. The
 cost is fixed resolution -- see :data:`DEFAULT_FRAME_SIZE`.
 """
 

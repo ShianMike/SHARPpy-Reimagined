@@ -19,8 +19,8 @@ export function FieldTooltip({ panel, field }: { panel: number; field: PanelFiel
   const value = visible ? sampleAt(frame, pointer.longitude, pointer.latitude) : null;
   const note = value === null || palette === undefined ? "" : drawnRangeNote(value, palette);
   const source = frame?.units ?? "";
-  const unit = displayUnit(source, units);
-  const text = value === null ? "No data here" : `${formatValue(convertUnit(value, source, unit))} ${unit}${note === "" ? "" : ` (${note})`}`;
+  const unit = displayUnit(source, units, palette?.display);
+  const text = value === null ? "No data here" : `${formatValue(convertUnit(value, source, unit, palette?.display))} ${unit}${note === "" ? "" : ` (${note})`}`;
   const label = field.product?.label;
   useLayoutEffect(() => {
     const element = ref.current;

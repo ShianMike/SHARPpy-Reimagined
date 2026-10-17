@@ -36,16 +36,18 @@ export function scriptedTransport(replies: Partial<Record<CommandName, ScriptedR
   calls: (command: CommandName) => number;
 } {
   const counts: Record<CommandName, number> = {
+    get_storage_usage: 0,
+    clear_cache: 0,
     get_backend_health: 0,
     get_station_catalog: 0,
     restart_backend: 0,
     get_model_catalog: 0,
     get_model_status: 0,
     open_sounding: 0,
+    get_sounding_progress: 0,
     inspect_wrf: 0,
     get_sounding_analysis: 0,
     get_sounding_trends: 0,
-    get_ensemble_summary: 0,
     get_threshold_metrics: 0,
     evaluate_threshold: 0,
     export_threshold_csv: 0,

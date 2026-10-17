@@ -9,6 +9,7 @@ import type {
   ModelCatalog,
   SoundingAnalysis,
   SoundingSummary,
+  SoundingProgress,
   SoundingTrends,
   TableColumn,
   TableRow,
@@ -35,6 +36,16 @@ const label = (value: unknown, path: string): string => expectString(value, path
 const optionalText = (value: unknown, path: string): string | null =>
   expectNullable(value, path, (v, p) => expectString(v, p, TEXT));
 const optionalNumber = (value: unknown, path: string): number | null => expectNullable(value, path, expectFiniteNumber);
+
+export function parseSoundingProgress(value: unknown): SoundingProgress {
+  const obj = expectObject(value, "progress");
+  expectExactKeys(obj, "progress", ["stage", "downloadedBytes", "bytesPerSecond"]);
+  const stage = expectOneOf(obj.stage, "progress.stage", ["waiting", "downloading", "processing"] as const);
+  const downloadedBytes = expectInteger(obj.downloadedBytes, "progress.downloadedBytes", { min: 0, max: Number.MAX_SAFE_INTEGER });
+  const bytesPerSecond = expectFiniteNumber(obj.bytesPerSecond, "progress.bytesPerSecond", { min: 0, max: Number.MAX_SAFE_INTEGER });
+  if (stage !== "downloading" && bytesPerSecond !== 0) throw new ContractError("progress.bytesPerSecond", "speed must be zero outside a download");
+  return { stage, downloadedBytes, bytesPerSecond };
+}
 
 export function parseWrfFile(value: unknown, path = ""): WrfFile {
   const obj = expectObject(value, path);

@@ -101,12 +101,14 @@ def _bounded_herbie_probe_requests(
         import herbie.core as requests_holder
 
     timeout = 5.0 if request_timeout is None else float(request_timeout)
-    deadline = (
-        None
-        if deadline_seconds is None
-        else time.monotonic() + max(0.1, float(deadline_seconds))
-    )
+    # shortcut: Herbie shares its requests handle; serialize probes until transport is per instance.
     with _api._HERBIE_PROBE_REQUEST_LOCK:
+        # Waiting for another probe must not consume this probe's network budget.
+        deadline = (
+            None
+            if deadline_seconds is None
+            else time.monotonic() + max(0.1, float(deadline_seconds))
+        )
         original = requests_holder.requests
         proxy = _api._BoundedHerbieRequests(
             original,

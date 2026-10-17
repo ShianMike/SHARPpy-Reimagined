@@ -43,6 +43,8 @@ pub struct SurfacePlot {
     pub availability: String,
     pub wind_state: String,
     pub staff: Option<StaffSpec>,
+    pub temperature_c: Option<f64>,
+    pub dewpoint_c: Option<f64>,
     pub upper_text: String,
     pub lower_text: String,
     pub label: String,
@@ -99,6 +101,11 @@ impl StaffSpec {
 
 impl SurfacePlot {
     fn validate(&self) -> Result<(), String> {
+        if !self.temperature_c.is_none_or(f64::is_finite)
+            || !self.dewpoint_c.is_none_or(f64::is_finite)
+        {
+            return Err("surface temperatures must be finite or null".into());
+        }
         check_text("id", &self.id, 1, 16)?;
         check_lat_lon(Some(self.latitude), Some(self.longitude))?;
         time_ok(&self.valid)?;

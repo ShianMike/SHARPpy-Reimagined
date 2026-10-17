@@ -28,8 +28,8 @@ source .venv/bin/activate
 
 For the v3 React/Tauri interface, follow the
 [frontend setup and checks](docs/frontend/ARCHITECTURE.md#running-the-interface).
-`sharpmod-gui` starts the legacy Qt app; use `npm run tauri -- dev` in
-`frontend/` for the new desktop.
+Use `npm run tauri -- dev` in `frontend/` for the current desktop. The retired
+Qt interface is available in the [v2.0.0 Legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0).
 
 ```powershell
 # Fast deterministic feedback (grouped across four bounded workers).
@@ -53,7 +53,7 @@ python scripts/run_test_lane.py fast --workers 4 --coverage
 # Static correctness, focused maintainability, and dependency checks.
 python -m ruff check sharpmod scripts packaging
 python -m ruff check sharpmod/io/portable_sounding.py sharpmod/models/model_disk_cache.py `
-  sharpmod/models/model_sources.py sharpmod/ui/features/gui_cache.py --select E,F,I,UP,B,SIM
+  sharpmod/models/model_sources.py --select E,F,I,UP,B,SIM
 python -m pip_audit --skip-editable
 ```
 
@@ -73,7 +73,7 @@ test time. Do not raise a budget merely to make a regression pass: reproduce
 the lane, explain the change, and update the checked value in the same review.
 
 The GitHub **Tests** workflow displays a test tree: the fast lane branches into
-data visualization, GUI workflows, scientific calculations, data providers, and
+data visualization, workspace workflows, scientific calculations, data providers, and
 backends/packaging. Data visualization branches again into charts, maps,
 analysis/animation, and exports/rendering. Each status job reads the Python 3.13
 fast lane's JUnit report and shows a per-module breakdown, failed tests, and
@@ -85,7 +85,7 @@ For v2.0.0, the local fast baseline was measured at 308.18 seconds with
 4,670 passing tests, one skip, and coverage enabled on Rust; the compatibility
 baseline was 318.72 seconds with 4,716 passing tests and one skip on the Python
 fallback. Both runs used this 12-core Windows/Python 3.11 checkout. The new
-370/380-second local limits leave bounded headroom for the larger GUI suite;
+370/380-second local limits were set for that legacy suite;
 the separate GitHub Actions limits are unchanged. Compare timing reports only
 under matching worker, backend, coverage, and host conditions.
 
@@ -115,8 +115,8 @@ surface regression.
 
 ## Project Conventions
 
-- Use [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md) to find the canonical
-  GUI modules; keep compatibility import paths stable when moving code.
+- Use [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md) to find the frontend,
+  bridge and scientific modules. The legacy Qt GUI is retired from this tree.
 - Keep the `sharpmod` import/package name stable.
 - Prefer package-relative resource access through `importlib.resources`.
 - Keep optional data-source dependencies behind extras and lazy imports.

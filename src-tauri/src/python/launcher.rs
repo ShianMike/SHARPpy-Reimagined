@@ -65,6 +65,7 @@ impl TokioLauncher {
 
 struct TokioChild {
     child: tokio::process::Child,
+    cache_dir: PathBuf,
     #[cfg(windows)]
     _job: Option<super::job_windows::Job>,
 }
@@ -72,11 +73,14 @@ struct TokioChild {
 impl ChildControl for TokioChild {
     fn wait(&mut self) -> ExitFuture<'_> {
         Box::pin(async move {
-            self.child
-                .wait()
-                .await
-                .ok()
-                .and_then(|status| status.code())
+            let status = self.child.wait().await.ok()?;
+            // Python's atexit cleanup is skipped when shutdown has to kill it.
+            if let Err(err) = tokio::fs::remove_dir_all(&self.cache_dir).await {
+                if err.kind() != std::io::ErrorKind::NotFound {
+                    log::warn!("could not remove {}: {err}", self.cache_dir.display());
+                }
+            }
+            status.code()
         })
     }
 
@@ -99,10 +103,16 @@ impl ProcessLauncher for TokioLauncher {
         if let Err(err) = std::fs::create_dir_all(&self.working_dir) {
             log::warn!("could not create {}: {err}", self.working_dir.display());
         }
+        let cache_dir = self.working_dir.join(format!(
+            "bridge-cache-{}-{}",
+            std::process::id(),
+            time::OffsetDateTime::now_utc().unix_timestamp_nanos()
+        ));
         let mut command = tokio::process::Command::new(&interpreter);
         command
             .args(args)
             .current_dir(&self.working_dir)
+            .env("SHARPMOD_BRIDGE_CACHE", &cache_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -143,6 +153,7 @@ impl ProcessLauncher for TokioLauncher {
             stderr: Box::new(stderr),
             control: Box::new(TokioChild {
                 child,
+                cache_dir,
                 #[cfg(windows)]
                 _job: job,
             }),

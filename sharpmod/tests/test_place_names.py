@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 from importlib.resources import files
 import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from sharpmod import gui_workers, place_names, render
-from sharpmod.tools import model_extract
+from sharpmod import place_names, render
 
 
 class _Response:
@@ -418,42 +416,3 @@ def test_render_preserves_an_explicit_location_title(monkeypatch):
     assert render._resolve_location_title(
         collection, explicit_loc="My forecast point"
     ) == "My forecast point"
-
-
-def test_gui_model_worker_writes_resolved_town_into_sounding(
-        tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        place_names,
-        "reverse_town_name",
-        lambda lat, lon: "Town of Birchwood, Wisconsin",
-    )
-    received_locations = []
-
-    def fake_extract(*_args, **kwargs):
-        received_locations.append(kwargs["loc"])
-        target = Path(kwargs["out_path"])
-        target.write_bytes(b"portable")
-        target.with_suffix(".json").write_text(
-            json.dumps({"backend": "test"}), encoding="utf-8")
-        return str(target)
-
-    monkeypatch.setattr(model_extract, "extract", fake_extract)
-    out_path = tmp_path / "sounding.npz"
-    worker = gui_workers._ModelFetchWorker(
-        "hrrr",
-        45.76,
-        -91.60,
-        datetime(2026, 7, 27, 3, tzinfo=timezone.utc),
-        8,
-        str(out_path),
-        resolve_place=True,
-        download_dir=str(tmp_path),
-        model_hour_cache=None,
-    )
-    completed = []
-    worker.finished_ok.connect(lambda path, *_args: completed.append(path))
-
-    worker.run()
-
-    assert completed == [str(out_path)]
-    assert received_locations == ["Town of Birchwood, Wisconsin"]

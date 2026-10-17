@@ -70,6 +70,7 @@ def _cfs_surface_companion(
     member,
     download_dir,
     cancelled,
+    on_bytes=None,
 ):
     """Download CFS ground fields from its separate flux product."""
     kwargs = dict(_api._herbie_kwargs(config, member=member))
@@ -97,6 +98,7 @@ def _cfs_surface_companion(
         save_dir=download_dir,
         cancelled=cancelled,
         workers=range_worker_count(default=4),
+        on_bytes=on_bytes,
     )
     local_path = _api._local_grib_path(path)
     if local_path is None:
@@ -148,6 +150,7 @@ def _surface_height_companion(
     member,
     download_dir,
     cancelled,
+    on_bytes=None,
 ):
     """Download the run's step-0 terrain height for a later forecast hour.
 
@@ -184,6 +187,7 @@ def _surface_height_companion(
             save_dir=download_dir,
             cancelled=cancelled,
             workers=range_worker_count(default=4),
+            on_bytes=on_bytes,
         )
     except OptimizedTransportUnavailable as exc:
         # A companion must never be the reason a whole sounding fails. Retain
@@ -199,6 +203,7 @@ def _surface_height_companion(
             inventory=inventory,
             save_dir=download_dir,
             cancelled=cancelled,
+            on_bytes=on_bytes,
         )
     local_path = _api._local_grib_path(path)
     if local_path is None:
@@ -209,7 +214,7 @@ def _surface_height_companion(
 
 
 def _retrieve_rrfs_dataset(config, run_dt, fxx, *, download_dir,
-                           progress_callback, cancelled):
+                           progress_callback, cancelled, on_bytes=None):
     """Fetch and combine RRFS pressure and ground GRIB over NOMADS.
 
     RRFS is the one product this project locates itself rather than through
@@ -257,6 +262,7 @@ def _retrieve_rrfs_dataset(config, run_dt, fxx, *, download_dir,
             download_dir=download_dir,
             member=config.kwargs.get("member"),
             cancelled=cancelled,
+            on_bytes=on_bytes,
         )
     except DownloadCancelled:
         raise
@@ -316,7 +322,7 @@ def _retrieve_rrfs_dataset(config, run_dt, fxx, *, download_dir,
 
 def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                       progress_callback=None, cancelled=None, lat=None,
-                      lon=None):
+                      lon=None, on_bytes=None):
     """Fetch a Herbie pressure-level subset for ``config``.
 
     The point providers are intercepted first. ``extract`` returns early for
@@ -377,6 +383,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
             download_dir=download_dir,
             progress_callback=progress_callback,
             cancelled=cancelled,
+            on_bytes=on_bytes,
         )
     if _api.hrrr_zarr_candidate(config, fxx, lat, lon):
         mode = os.environ.get("SHARPMOD_HRRR_BACKEND", "auto").strip().lower()
@@ -389,6 +396,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                 float(lon),
                 cache_dir=download_dir,
                 cancelled=cancelled,
+                on_bytes=on_bytes,
             )
             _api._emit_progress(
                 progress_callback,
@@ -473,6 +481,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                     float(lon),
                     save_dir=download_dir,
                     cancelled=cancelled,
+                    on_bytes=on_bytes,
                 )
                 local_path = _api._local_grib_path(_path)
                 transport = "nomads-subregion"
@@ -504,6 +513,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                     save_dir=download_dir,
                     cancelled=cancelled,
                     workers=range_worker_count(default=4),
+                    on_bytes=on_bytes,
                 )
                 local_path = _api._local_grib_path(_path)
                 if transferred_bytes:
@@ -522,6 +532,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                         inventory=planned_inventory,
                         save_dir=download_dir,
                         cancelled=cancelled,
+                        on_bytes=on_bytes,
                     )
                 )
                 local_path = _api._local_grib_path(downloaded)
@@ -549,6 +560,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                 member,
                 download_dir,
                 cancelled,
+                on_bytes=on_bytes,
             )
             if local_path is None:
                 raise RetrievalError("CFS pressure-level download is incomplete")
@@ -576,6 +588,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                 member,
                 download_dir,
                 cancelled,
+                on_bytes=on_bytes,
             )
             if local_path is None:
                 raise RetrievalError(

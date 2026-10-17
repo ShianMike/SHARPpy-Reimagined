@@ -20,6 +20,7 @@ use crate::backend::router::Router;
 use crate::dto::analysis::{SoundingAnalysis, SoundingTrends};
 use crate::dto::checks::check_text;
 use crate::dto::models::{ModelCatalog, ModelStatus};
+use crate::dto::sounding_progress::SoundingProgress;
 use crate::dto::soundings::{
     ImageMode, OpenSoundingRequest, RenderParcel, RenderResult, SoundingSummary,
 };
@@ -179,6 +180,7 @@ impl Router {
     pub async fn open_sounding(
         &self,
         request: OpenSoundingRequest,
+        progress_id: Option<&str>,
     ) -> Result<SoundingSummary, BackendError> {
         let resource = request.resource();
         let context = ErrorContext::new(OP_OPEN, Some(PYTHON_PROVIDER), Some(&resource));
@@ -193,7 +195,16 @@ impl Router {
             OpenSoundingRequest::File { .. } => OPEN_FILE_TIMEOUT,
             OpenSoundingRequest::Wrf { .. } => OPEN_MODEL_TIMEOUT,
         };
-        let (method, params) = request.bridge_call();
+        let (method, mut params) = request.bridge_call();
+        if let Some(id) = progress_id {
+            if !sounding_id_ok(id) || method != "soundings.open_model" {
+                return Err(invalid(
+                    &context,
+                    "progressId requires a model request and 1 to 64 letters or digits",
+                ));
+            }
+            params["progress_id"] = json!(id);
+        }
         let summary: SoundingSummary = self.call(&context, method, params, limit).await?;
         summary
             .validate()
@@ -205,6 +216,31 @@ impl Router {
             summary.sounding_id
         );
         Ok(summary)
+    }
+
+    pub async fn sounding_progress(
+        &self,
+        progress_id: &str,
+    ) -> Result<SoundingProgress, BackendError> {
+        let context = ErrorContext::new("get_sounding_progress", Some(PYTHON_PROVIDER), None);
+        if !sounding_id_ok(progress_id) {
+            return Err(invalid(
+                &context,
+                "progressId must be 1 to 64 letters or digits",
+            ));
+        }
+        let result: SoundingProgress = self
+            .call(
+                &context,
+                "soundings.progress",
+                json!({"progress_id": progress_id}),
+                Duration::from_secs(5),
+            )
+            .await?;
+        result
+            .validate()
+            .map_err(|reason| rejected(&context, "soundings.progress", reason))?;
+        Ok(result)
     }
 
     /// Parcels, storm motion, hazard type, and every parameter, from sharpmod.

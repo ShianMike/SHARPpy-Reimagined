@@ -1,21 +1,17 @@
 """Frozen geometry model for toggleable, time-aware map overlays.
 
-An *overlay* is a set of geographic polygons the picker maps draw on top of
-the cached basemap raster: SPC convective outlooks today, other products
-later.  Three constraints shaped this module.
+An *overlay* is a set of geographic polygons drawn over the basemap, including
+SPC convective outlooks. Three constraints shaped this module.
 
 **It holds no Qt import.**  Overlay payloads are decoded on a worker thread
-and the decoded result is handed to the GUI thread, so the model, its
-validation, and the time-window logic are all exercised in tests without a
-``QApplication``.  Qt colours are constructed by the paint path from the
-plain ``#rrggbb`` strings kept here.
+and passed to the desktop frontend or sounding renderer. The model, validation
+and time-window logic are exercised without a ``QApplication``. Paint paths
+consume the plain ``#rrggbb`` strings kept here.
 
-**Geometry is prepared once and frozen**, mirroring
-:func:`sharpmod.ui.features.gui_maps._prepare_basemap_layers`.  Every shape carries a
-precomputed ``(min_lon, max_lon, min_lat, max_lat)`` box -- the same tuple
-order :meth:`sharpmod.ui.features.gui_maps.StationMapWidget._draw_layer` already unpacks
--- so the paint path rejects off-screen shapes without transforming a single
-point.  Immutability lets one decoded layer be shared by several map widgets.
+**Geometry is prepared once and frozen.** Every shape carries a precomputed
+``(min_lon, max_lon, min_lat, max_lat)`` box, so paint paths can reject off-screen
+shapes without transforming a single point. Immutability lets one decoded layer
+be shared by several maps.
 
 **Decoding is bounded and total.**  The payload is remote, so ring counts and
 point counts are capped and every coordinate is range-checked.  Malformed
@@ -396,8 +392,7 @@ class OverlayRaster:
     construction is not.
 
     ``bounds`` is ``(min_lon, max_lon, min_lat, max_lat)`` -- the same tuple
-    order :class:`OverlayShape` uses and :meth:`gui_maps.StationMapWidget.
-    _draw_layer` already unpacks -- and describes the image's full geographic
+    order :class:`OverlayShape` uses -- and describes the image's full geographic
     extent, with pixel (0, 0) at the north-west corner. The image is assumed to
     be an equirectangular (plate carree) grid, which is what makes it blittable
     into the map's own linear lon/lat transform without resampling.

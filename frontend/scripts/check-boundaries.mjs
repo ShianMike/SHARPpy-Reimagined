@@ -131,6 +131,10 @@ const SCIENCE_ALLOWLIST = new Map([
     "map/controls/SurfacePlotControls.tsx:dewpoint",
     "the visible legend for sharpmod.bridge.surface_plots' lower_text; sharpmod formats the provider's reading",
   ],
+  [
+    "map/hover/ReportTooltip.tsx:dewpoint",
+    "the visible label for sharpmod.bridge.surface_plots' numeric reading; only display units change",
+  ],
 ]);
 for (const file of srcFiles.filter(isTs)) {
   linesOf(file).forEach((text, index) => {

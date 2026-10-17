@@ -301,6 +301,7 @@ def download_nomads_subset(
     session=None,
     cancelled=None,
     progress=None,
+    on_bytes=None,
     throttle: bool = True,
 ) -> tuple[Path, int, str]:
     """Download one small server-side geographic GRIB subset atomically."""
@@ -339,6 +340,8 @@ def download_nomads_subset(
                         continue
                     handle.write(chunk)
                     downloaded += len(chunk)
+                    if on_bytes is not None:
+                        on_bytes(len(chunk))
                     if progress is not None:
                         progress(downloaded, total)
                     if cancelled is not None and cancelled():

@@ -1,4 +1,4 @@
-"""Bounded ownership for decoded forecast-model hours used by the GUI."""
+"""Bounded ownership for decoded forecast-model hours used by batch extraction."""
 
 from __future__ import annotations
 

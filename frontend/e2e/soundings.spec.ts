@@ -47,6 +47,40 @@ async function openObserved(page: Page): Promise<void> {
 }
 
 test.describe("at 1440 by 900", () => {
+  test("open soundings scroll independently and keep source controls and the list heading fixed", async ({ page }) => {
+    await page.goto("/");
+    await waitForMark(page, MARKS.shellPainted);
+    await showWorkspace(page, "Soundings");
+    for (let index = 0; index < 12; index++) {
+      await page.getByRole("textbox", { name: "Station" }).fill(String(72357 + index));
+      await page.getByTestId("open-observed").click();
+      await expect(page.getByTestId("open-soundings").getByRole("listitem")).toHaveCount(index + 1);
+    }
+    for (const height of [900, 600]) {
+      await page.setViewportSize({ width: 1440, height });
+      const side = page.locator("#sounding-sources");
+      const list = page.getByTestId("open-soundings");
+      const heading = page.getByRole("heading", { name: "Open soundings 12" });
+      const before = await boxOf(page.getByRole("tablist", { name: "Source" }));
+      const headingBefore = await boxOf(heading);
+      expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+      await list.getByRole("button", { name: /^72357 /u }).focus();
+      await nextFrames(page);
+      expect(await list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      expect(await side.evaluate((element) => element.scrollTop === 0 && element.scrollHeight <= element.clientHeight)).toBe(true);
+      expect(await boxOf(page.getByRole("tablist", { name: "Source" }))).toEqual(before);
+      expect(await boxOf(heading)).toEqual(headingBefore);
+      await expect(page.getByRole("button", { name: "Hide sources" })).toBeVisible();
+      await page.getByRole("tab", { name: "Model", exact: true }).click();
+      await page.getByTestId("open-model").scrollIntoViewIfNeeded();
+      expect(await side.evaluate((element) => element.scrollTop === 0 && element.scrollHeight <= element.clientHeight)).toBe(true);
+      await expect(heading).toBeVisible();
+      await expect(page.getByRole("tablist", { name: "Source" })).toBeVisible();
+      await page.getByRole("tab", { name: "Obs.", exact: true }).click();
+    }
+    await saveScreenshot(page, "sounding-list-independent-scroll.png");
+  });
+
   test("fit sounding settles at fractional viewport sizes without a scrollbar resize loop", async ({ page }) => {
     await page.goto("/");
     await waitForMark(page, MARKS.shellPainted);

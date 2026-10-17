@@ -1,15 +1,13 @@
-"""The bridge's ensemble summary against real sharpmod, with offline stand-ins.
+"""Member acquisition for thresholds, with offline download stand-ins.
 
 The member download is replaced by the exporter's own stand-in (one fixed
 offset per member, one member that fails), so the module runs offline and
-fast; decode, combine, ledger, and diagnostics are the real code. The result
-is pinned to the exported contract fixture, so drift breaks the suite.
+fast; decode, combine, and the acquisition ledger are the real code.
 """
 
 from __future__ import annotations
 
 import importlib.util
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -21,7 +19,6 @@ from sharpmod.bridge import ensemble
 from sharpmod.bridge.errors import BridgeError
 
 ROOT = Path(__file__).resolve().parents[2]
-CONTRACTS = ROOT / "src-tauri" / "contracts"
 EXPORTER = ROOT / "scripts" / "export_sounding_fixtures.py"
 
 
@@ -37,88 +34,77 @@ def _exporter():
 EXPORT = _exporter()
 
 
-def _fixture(relative: str):
-    return json.loads((CONTRACTS / relative).read_text(encoding="utf-8"))
-
-
-def _summary(**overrides):
+def _acquire(**overrides):
     request = dict(EXPORT.ENSEMBLE_REQUEST)
     request.update(overrides)
     with patch("sharpmod.tools.model_extract.extract", EXPORT.stand_in_extract(EXPORT.EXAMPLE)):
-        return ensemble.summary(request)
+        return ensemble.acquire(request)
 
 
-def test_ensemble_summary_matches_the_exported_fixture():
-    expected = _fixture("bridge/soundings/ensemble.result.example.json")
-    # Backend variation must stay below 1/100 of each metric's display step.
-    for metric in expected["metrics"]:
-        for key in ("p10", "median", "p90", "minimum", "maximum"):
-            metric[key] = pytest.approx(
-                metric[key], rel=0, abs=10 ** (-metric["decimals"] - 2))
-    for sample in expected["samples"]:
-        sample["values"] = [
-            pytest.approx(value, rel=0, abs=10 ** (-metric["decimals"] - 2))
-            for value, metric in zip(sample["values"], expected["metrics"], strict=True)
-        ]
-    assert _summary() == expected
-
-
-def test_ensemble_summary_labels_every_metric_and_keeps_the_ledger():
-    result = _summary()
+def test_member_acquisition_keeps_partial_failures_in_the_ledger():
+    _, ledger = _acquire()
     # The ledger says what was asked for, what loaded, and why the rest did not.
-    assert result["requested_members"] == ["c00", "p01", "p02", "p03"]
-    assert result["loaded_members"] == ["c00", "p01", "p02"]
-    assert result["failures"] == [
-        {"member": "p03", "status": "failed", "reason": "no GRIB found for member p03"}
-    ]
-    assert result["valid_time"] == "2026-06-26T00:00:00Z" and result["reason"] is None
-    # Each diagnostic arrives labelled; the frontend names no quantity.
-    keys = [row["key"] for row in result["metrics"]]
-    assert keys == ["mlcape", "mlcin", "shear_6km", "srh_1km", "stp_cin"]
-    first = result["metrics"][0]
-    assert (first["label"], first["units"], first["decimals"]) == ("MLCAPE", "J/kg", 0)
-    assert first["count"] == 3 and first["p10"] <= first["median"] <= first["p90"]
-    assert first["minimum"] <= first["p10"] and first["maximum"] >= first["p90"]
-    # Every requested member keeps one row with its own outcome and reason.
-    samples = {row["member"]: row for row in result["samples"]}
-    assert set(samples) == {"c00", "p01", "p02", "p03"}
-    assert all(samples[name]["outcome"] == "completed" for name in ("c00", "p01", "p02"))
-    assert all(len(samples[name]["values"]) == len(keys) for name in samples)
-    missing = samples["p03"]
-    assert missing["outcome"] == "unavailable" and missing["values"] == [None] * 5
-    assert "no GRIB found for member p03" in missing["reason"]
+    assert ledger.requested_members == ("c00", "p01", "p02", "p03")
+    assert ledger.loaded_members == ("c00", "p01", "p02")
+    assert len(ledger.failures) == 1
+    failed = ledger.failures[0]
+    assert (failed.member, failed.status, failed.reason) == (
+        "p03", "failed", "no GRIB found for member p03",
+    )
 
 
-def test_ensemble_metric_rows_agree_with_the_member_samples():
-    result = _summary()
-    completed = [row for row in result["samples"] if row["outcome"] == "completed"]
-    for index, metric in enumerate(result["metrics"]):
-        column = [row["values"][index] for row in completed]
-        assert metric["count"] == sum(value is not None for value in column)
-        assert metric["minimum"] == min(column) and metric["maximum"] == max(column)
+@pytest.mark.parametrize("fail_all", [False, True])
+def test_ensemble_removes_member_downloads_and_metadata(monkeypatch, tmp_path, fail_all):
+    from sharpmod.bridge import sounding_cache
+    from sharpmod.tools import era5_extract, model_extract
+
+    monkeypatch.setattr(sounding_cache, "_CACHE", sounding_cache.SoundingCache(tmp_path))
+    stand_in = EXPORT.stand_in_extract(EXPORT.EXAMPLE)
+    downloads = []
+
+    def extract(*args, download_dir, **kwargs):
+        directory = Path(download_dir)
+        assert directory.parent == Path(kwargs["out_path"]).parent
+        assert directory.parent.parent == tmp_path
+        downloads.append(directory)
+        directory.mkdir()
+        (directory / "member.grib2").write_bytes(b"GRIB")
+        (directory / "member.grib2.provenance.json").write_text("{}")
+        if fail_all:
+            raise era5_extract.RetrievalError("offline")
+        return stand_in(*args, **kwargs)
+
+    monkeypatch.setattr(model_extract, "extract", extract)
+    if fail_all:
+        with pytest.raises(BridgeError, match="could not be retrieved"):
+            ensemble.acquire(dict(EXPORT.ENSEMBLE_REQUEST))
+    else:
+        ensemble.acquire(dict(EXPORT.ENSEMBLE_REQUEST))
+    assert len(downloads) == len(EXPORT.ENSEMBLE_REQUEST["members"])
+    assert all(not directory.parent.exists() for directory in downloads)
 
 
 def test_ensemble_refuses_bad_member_requests():
     with pytest.raises(BridgeError) as info:
-        _summary(members=["c00"])
+        _acquire(members=["c00"])
     assert info.value.code == "INVALID_ARGUMENT"
     with pytest.raises(BridgeError) as info:
-        _summary(members=["c00", "c00"])
+        _acquire(members=["c00", "c00"])
     assert info.value.code == "INVALID_ARGUMENT"
     with pytest.raises(BridgeError) as info:
-        _summary(members=["c00", "p77"])
+        _acquire(members=["c00", "p77"])
     assert info.value.code == "INVALID_ARGUMENT"
     with pytest.raises(BridgeError) as info:
-        _summary(members="c00")
+        _acquire(members="c00")
     assert info.value.code == "INVALID_ARGUMENT"
     with pytest.raises(BridgeError) as info:
-        _summary(members=["c00"] + [f"p{i:02d}" for i in range(1, 32)])
+        _acquire(members=["c00"] + [f"p{i:02d}" for i in range(1, 32)])
     assert info.value.code == "INVALID_ARGUMENT"
     with pytest.raises(BridgeError) as info:
-        _summary(model="hrrr")
+        _acquire(model="hrrr")
     assert info.value.code == "INVALID_ARGUMENT" and "deterministic" in info.value.message
     with pytest.raises(BridgeError) as info:
-        _summary(model="nope")
+        _acquire(model="nope")
     assert info.value.code == "INVALID_ARGUMENT"
 
 
@@ -131,7 +117,7 @@ def test_ensemble_isolates_member_failures_and_fails_when_none_load(monkeypatch)
 
     monkeypatch.setattr(mx, "extract", unreachable)
     with pytest.raises(BridgeError) as info:
-        ensemble.summary(dict(EXPORT.ENSEMBLE_REQUEST))
+        ensemble.acquire(dict(EXPORT.ENSEMBLE_REQUEST))
     assert info.value.code == "SOUNDING_FETCH_FAILED" and info.value.retryable is True
     assert "traceback" not in info.value.message
 
@@ -140,7 +126,7 @@ def test_ensemble_isolates_member_failures_and_fails_when_none_load(monkeypatch)
 
     monkeypatch.setattr(mx, "extract", out_of_domain)
     with pytest.raises(BridgeError) as info:
-        ensemble.summary(dict(EXPORT.ENSEMBLE_REQUEST))
+        ensemble.acquire(dict(EXPORT.ENSEMBLE_REQUEST))
     assert info.value.code == "INVALID_ARGUMENT"
 
 

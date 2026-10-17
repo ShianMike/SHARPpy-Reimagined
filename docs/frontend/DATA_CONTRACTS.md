@@ -23,13 +23,13 @@ unknown keys too, so drift fails a test instead of passing silently.
 | `restart_backend` | command, `commands/backend.rs` | none | `BridgeStatus` after the attempt | `INTERNAL` only | `allow-restart-backend` |
 | `bridge-status-changed` | event, Rust to the `main` window, `src-tauri/src/events/mod.rs` | n/a | `BridgeStatus` | n/a | `core:event:allow-listen`, `core:event:allow-unlisten` |
 | `get_model_catalog` | command, `src-tauri/src/commands/soundings.rs` | none | `ModelCatalog` (cached 10 min) | the bridge codes, `INTERNAL` | `allow-get-model-catalog` |
-| `open_sounding` | command, `commands/soundings.rs` | `request: OpenSoundingRequest` | `SoundingSummary` | `INVALID_ARGUMENT`, `SOUNDING_UNAVAILABLE`, `SOUNDING_FETCH_FAILED`, `SOUNDING_INVALID`, the bridge codes, `INTERNAL` | `allow-open-sounding` |
+| `open_sounding` | command, `commands/soundings.rs` | `request: OpenSoundingRequest`, optional `progressId` for model requests | `SoundingSummary` | `INVALID_ARGUMENT`, `SOUNDING_UNAVAILABLE`, `SOUNDING_FETCH_FAILED`, `SOUNDING_INVALID`, the bridge codes, `INTERNAL` | `allow-open-sounding` |
+| `get_sounding_progress` | command, `commands/soundings.rs` | `progressId` (1 to 64 ASCII letters or digits) | `stage` (`waiting`, `downloading`, `processing`), `downloadedBytes`, `bytesPerSecond` | `INVALID_ARGUMENT`, the bridge codes, `INTERNAL` | `allow-get-sounding-progress` |
 | `inspect_wrf` | command, `commands/soundings.rs` | `filePath` (absolute local path) | `WrfFile` (path, name, UTC times, domain centre) | `INVALID_ARGUMENT`, `SOUNDING_INVALID`, the bridge codes, `INTERNAL` | `allow-inspect-wrf` |
 | `get_sounding_analysis` | command, `commands/soundings.rs` | `soundingId` | `SoundingAnalysis` | `INVALID_ARGUMENT`, `SOUNDING_NOT_FOUND`, `SOUNDING_INVALID`, the bridge codes, `INTERNAL` | `allow-get-sounding-analysis` |
 | `get_sounding_trends` | command, `commands/soundings.rs` | `soundingId` | `SoundingTrends` | `INVALID_ARGUMENT`, `SOUNDING_NOT_FOUND`, the bridge codes, `INTERNAL` | `allow-get-sounding-trends` |
-| `get_ensemble_summary` | command, `commands/soundings.rs` | `model`, `latitude`, `longitude`, `forecastHour` (0 to 1000), `runTime?`, `location?`, `members` (2 to 32 labels) | `EnsembleSummary` (the acquisition ledger and the labelled spreads) | `INVALID_ARGUMENT`, `SOUNDING_FETCH_FAILED` (no member could be retrieved), the bridge codes, `INTERNAL` | `allow-get-ensemble-summary` |
 | `get_threshold_metrics` | command, `commands/soundings.rs` | none | `ThresholdMetrics` (every registry diagnostic with its control bounds, the comparison rules in order, and the starting diagnostics) | the bridge codes, `INTERNAL` | `allow-get-threshold-metrics` |
-| `evaluate_threshold` | command, `commands/soundings.rs` | the `get_ensemble_summary` fields plus `definition: ThresholdDefinitionInput` (a name and 1 to 3 conditions) | `ThresholdEvaluation` (the classification counts with their denominators and one row per member) | `INVALID_ARGUMENT`, `SOUNDING_FETCH_FAILED`, the bridge codes, `INTERNAL` | `allow-evaluate-threshold` |
+| `evaluate_threshold` | command, `commands/soundings.rs` | `model`, `latitude`, `longitude`, `forecastHour` (0 to 1000), `runTime?`, `location?`, `members` (2 to 32 labels), `definition: ThresholdDefinitionInput` (a name and 1 to 3 conditions) | `ThresholdEvaluation` (the classification counts with their denominators and one row per member) | `INVALID_ARGUMENT`, `SOUNDING_FETCH_FAILED`, the bridge codes, `INTERNAL` | `allow-evaluate-threshold` |
 | `export_threshold_csv` | command, `commands/soundings.rs` | the `evaluate_threshold` arguments | `ThresholdCsv` (`fileName`, `csv` — the rows `export_threshold_csv` writes) | `INVALID_ARGUMENT`, `SOUNDING_FETCH_FAILED`, the bridge codes, `INTERNAL` | `allow-export-threshold-csv` |
 | `render_sounding` | command, `commands/soundings.rs` | `soundingId`, `ascent?: "SFC" \| "ML" \| "FCST" \| "MU" \| "EFF"` (MU), `imageMode?: "hd" \| "uhd"` (hd) | raw PNG bytes (`tauri::ipc::Response`; an `ArrayBuffer` in JavaScript) | `INVALID_ARGUMENT`, `SOUNDING_NOT_FOUND`, `RENDER_FAILED`, the bridge codes, `INTERNAL` | `allow-render-sounding` |
 | `get_map_catalog` | command, `src-tauri/src/commands/map.rs` | optional `model` (HRRR by default) | `MapCatalog` for the model | the bridge codes, `INTERNAL` | `allow-get-map-catalog` |
@@ -184,8 +184,8 @@ export interface StationCatalog {
  "origin": "bundled", "availabilityBasis": {"kind": "catalogOnly"}, "droppedCount": 0}
 ```
 
-- **Source.** `uwyo_catalog.all_stations()`, the call the legacy picker makes
-  (`sharpmod/gui_picker.py:490`). The bridge never reads the JSON file itself.
+- **Source.** `uwyo_catalog.all_stations()`, called by `sharpmod/bridge/handlers.py`.
+  The bridge never reads the JSON file itself.
 - **Availability.** REQUEST §6's `available: boolean` is replaced: the bundled
   catalogue has no availability flag, so every station is `"unknown"` with
   `availabilityBasis.kind: "catalogOnly"`. `true` is never fabricated.
@@ -256,19 +256,6 @@ export interface ModelCatalog {
             suggestedRun: string }[];     // the newest run likely published
   generatedAt: string;
 }
-export interface EnsembleSummary {        // ProfileMetricsEngine.ensemble(DEFAULT_METRIC_KEYS)
-  validTime: string | null; reason: string | null;
-  requestedMembers: string[]; loadedMembers: string[];
-  failures: { member: string; status: "failed" | "cancelled" | "unknown";
-              reason: string | null }[];  // the acquisition ledger
-  metrics: { key: string; label: string; units: string; decimals: number;
-             count: number;               // its own usable denominator
-             p10: number | null; median: number | null; p90: number | null;
-             minimum: number | null; maximum: number | null }[];
-  samples: { member: string;
-             outcome: "completed" | "failed" | "cancelled" | "unavailable";
-             reason: string | null; values: (number | null)[] }[];  // one row per requested member
-}
 export interface ThresholdMetrics {     // the registry + metric_controls.control_for
   metrics: { key: string; label: string; units: string; displayLabel: string;
              decimals: number;          // the form's bounds, step, and starting value
@@ -326,6 +313,7 @@ The TypeScript types are in `frontend/src/types/map.ts`, the Rust ones in
 export interface Palette {                 // sharpmod's colour scale, in display units
   stops: [number, string][];               // ascending values, "#rrggbb"
   units: string;
+  display: "auto" | "fixed" | "temperature-difference";
   stepped: boolean;                        // banded classes, else RGB between stops
   floor: number | null; ceiling: number | null;   // the drawn range (null: first stop, or clip to the last)
   ticks: number[];
@@ -379,6 +367,7 @@ interface SurfacePlot {
   availability: "available" | "unavailable" | "unknown";
   windState: "available" | "calm" | "missing" | "direction-missing";
   staff: StaffSpec | null;                // present exactly with an "available" wind
+  temperatureC: number | null; dewpointC: number | null; // source readings before rounding
   upperText: string; lowerText: string;   // the reading pair, in the plot's own slots
   label: string; description: string;     // the hover block, the provider's own words
 }
@@ -531,13 +520,13 @@ three outcomes:
 | `shutdown` | `{}` | `{"ok": true}`, then the bridge stops reading and exits 0 |
 | `models.catalog` | `{}` | `{"models": [...], "generated_at"}`, from `tools.model_extract.available_models()` |
 | `soundings.open_observed` | `station_id`, `time`, optional `provider` (`auto`, `uwyo`, `iem`, `igra`) | the sounding summary (snake_case `SoundingSummary`) |
-| `soundings.open_model` | `model`, `forecast_hour`, `latitude`, `longitude`, optional `run_time` and `location` | the sounding summary |
+| `soundings.open_model` | `model`, `forecast_hour`, `latitude`, `longitude`, optional `run_time`, `location` and `progress_id` | the sounding summary |
+| `soundings.progress` | `progress_id` | `stage`, `downloaded_bytes`, `bytes_per_second`; active requests only, zero counters otherwise |
 | `soundings.open_file` | `file_name`, `content_base64` (at most 6 MiB of data) | the sounding summary |
 | `soundings.analysis` | `sounding_id` | the parameters (snake_case `SoundingAnalysis`) |
 | `soundings.trends` | `sounding_id` | the Trends (snake_case `SoundingTrends`) |
-| `ensemble.summary` | `model`, `latitude`, `longitude`, `forecast_hour`, `members` (2 to 32 labels), optional `run_time` and `location` | `valid_time`, the acquisition ledger (`requested_members`, `loaded_members`, `failures`), the labelled `metrics` spreads, and one `samples` row per requested member (`sharpmod/bridge/ensemble.py`) |
 | `thresholds.metrics` | `{}` | the registry diagnostics with their control bounds (`analysis.metric_controls.control_for`), the `operators` in control order, and the `default_metrics` (`sharpmod/bridge/thresholds.py`) |
-| `thresholds.evaluate` | the `ensemble.summary` fields plus `definition` (`name` and 1 to 3 `conditions` of `metric`, `operator`, `value`, optional `upper`) | the evaluator's own `as_dict`: the definition with its registry units, the counts and their denominators, and one `members` row per requested member (`sharpmod/bridge/thresholds.py`) |
+| `thresholds.evaluate` | `model`, `latitude`, `longitude`, `forecast_hour`, `members` (2 to 32 labels), optional `run_time` and `location`, plus `definition` (`name` and 1 to 3 `conditions` of `metric`, `operator`, `value`, optional `upper`) | the evaluator's own `as_dict`: the definition with its registry units, the counts and their denominators, and one `members` row per requested member (`sharpmod/bridge/thresholds.py`) |
 | `thresholds.export_csv` | the `thresholds.evaluate` fields | `file_name` and `csv`, the rows `analysis.ensemble_thresholds.export_threshold_csv` writes |
 | `soundings.render` | `sounding_id`, optional `parcel` (`SFC`, `ML`, `FCST`, `MU`, `EFF`) and `image_mode` (`hd`, `uhd`) | `sounding_id`, `parcel`, `image_mode`, `width`, `height`, `byte_length`, `png_base64` |
 | `map.catalog` | optional `model` (HRRR by default) | the snake_case `MapCatalog` (`sharpmod/bridge/fields.py`) |
@@ -555,8 +544,19 @@ three outcomes:
 | `stations.availability` | `observation_time` (a whole hour, at most one hour ahead) | `observation_time`, `listed_ids`, `extra_stations` (station records), `dropped_count` |
 
 Fields support `hrrr`, `rrfs-a`, `nam-3km-conus`, and `refs-m1` through `refs-m5`.
-The selected catalogue lists only supported products: 25 for HRRR and RRFS,
-24 for NAM (without Lightning Flash Density), and 16 for REFS members.
+The selected catalogue lists only supported products: 38 for HRRR and RRFS,
+36 for NAM (without lightning or effective-layer helicity), and 22 for each
+REFS member. The same palettes and display units apply across models. REFS adds
+total precipitation, gusts, 10 m wind, precipitable water, and maximum updraft
+velocity; its reduced stream lacks effective-layer helicity, surface lifted index,
+instantaneous precipitation rates, and snow depth. Surface-based lifted index uses
+native LFTX temperature differences, shown in fixed Celsius with the supplied
+negative-index colour bands and values above zero hidden. NAM/RRFS encode LFTX
+with a Kelvin offset; their catalogue derivation removes it, while HRRR's
+already unshifted index is preserved. NAM total precipitation sums
+non-overlapping accumulation intervals from the run start; each native APCP
+record resets every three hours. Run-total precipitation starts at zero at F000.
+NAM/RRFS/REFS MAXUVV uses the published 100-1000 mb layer and starts at F001.
 RRFS runs end at F084; NAM and REFS at F060; HRRR retains
 its 18/48-hour cycle limits. Model/member identity is part of field, contour,
 catalogue and playback cache keys. `catalog.models.json` fixtures cover the added
@@ -565,6 +565,12 @@ terrain and differences them against the 10 m wind; its parameter caveat states
 this. Multipart NAM U/V records share a byte range and decode as distinct fields.
 
 The wind grid uses the existing field extent and north-to-south cell centres.
+Each product declares a `wind` boolean. Wind-only products use the existing
+`fields.contours` response with empty `segments`, `unit: "kt"` and `interval: 5`.
+`thetae-2m` shades MetPy's Bolton equivalent potential temperature, using 2 m
+temperature/dewpoint and surface pressure, with a fixed-K supplied palette;
+its 10 m U/V components supply the same earth-relative wind grid as height/wind
+products. All supported field models publish these five ingredients.
 It is half the scalar frame's width and height: 1024 by 512 in the live map.
 This supports the fixed barb spacing through the map's maximum zoom of 9
 while keeping the response, including dense height contours, below the
@@ -777,5 +783,5 @@ frontend then marks stations `listed` or `notListed` and adds the extras
 (`stations/availability.ts`, through the catalogue query's `select`), with
 `availabilityBasis: {kind: "listedAt", observationTime}`. While it loads, the
 bundled list stays and the control says it is checking;
-`STATION_LIST_UNAVAILABLE` keeps the bundled list and says so, as the legacy
-picker does (`sharpmod/ui/picker/availability.py`).
+`STATION_LIST_UNAVAILABLE` keeps the bundled list and shows the failure in the
+current availability control.

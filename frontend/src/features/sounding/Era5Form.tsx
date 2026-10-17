@@ -56,7 +56,7 @@ export function Era5Form(): ReactNode {
       <p className={styles.hint}>Uses your backend’s Copernicus CDS profile. <a href="https://cds.climate.copernicus.eu/how-to-api" target="_blank" rel="noreferrer">CDS setup</a></p>
       <div className={styles.actions}>
         <Action tone="accent" disabled={!valid || open.isPending} onClick={() => { submit(); }} data-testid="open-era5">Open sounding</Action>
-        {open.isPending ? <span className={styles.busy}>{`Retrieving ERA5 ${formatUtc(time)}`}</span> : null}
+        {open.isPending ? <span className={styles.busy} role="status">{`Retrieving ERA5 ${formatUtc(time)}`}</span> : null}
       </div>
       {open.isPending ? <p className={styles.hint}>Copernicus queues requests; a download can take several minutes.</p> : null}
       {open.isError ? <SoundingErrorNotice error={open.error} operation="open_sounding" onRetry={() => { submit(); }} busy={open.isPending} testId="era5-error" /> : null}

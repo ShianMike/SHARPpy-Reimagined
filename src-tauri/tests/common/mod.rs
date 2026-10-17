@@ -95,6 +95,21 @@ pub async fn bridge(mut io: FakeIo, hellos: Arc<AtomicUsize>) -> i32 {
                 io.reply(&id, hello_result()).await;
             }
             Some("health") => io.reply(&id, fixture("bridge/health.result.ok.json")).await,
+            Some("soundings.progress") => {
+                assert_eq!(request["params"], json!({"progress_id": "download1"}));
+                io.reply(&id, fixture("bridge/soundings/progress.result.json"))
+                    .await;
+            }
+            Some("soundings.open_model") => {
+                assert_eq!(request["params"]["progress_id"], "download1");
+                io.reply(&id, fixture("bridge/soundings/open.result.example.json"))
+                    .await;
+            }
+            Some("storage.usage") => io.reply(&id, fixture("bridge/storage/usage.json")).await,
+            Some("storage.clear") => {
+                assert_eq!(request["params"], json!({"cache": "all"}));
+                io.reply(&id, fixture("bridge/storage/clear.json")).await;
+            }
             Some("stations.catalog") => {
                 io.reply(&id, fixture("bridge/stations.catalog.result.sample.json"))
                     .await

@@ -9,6 +9,12 @@ export interface Bounds {
   north: number;
 }
 
+export interface SoundingProgress {
+  stage: "waiting" | "downloading" | "processing";
+  downloadedBytes: number;
+  bytesPerSecond: number;
+}
+
 export interface ForecastModel {
   key: string;
   label: string;

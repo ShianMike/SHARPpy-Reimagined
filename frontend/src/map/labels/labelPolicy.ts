@@ -1,7 +1,7 @@
 // Zoom-dependent label tiers (DESIGN-frontend F5). Pure: the visible longitude
 // span and the graphics profile give the tier and the declutter cell. High and
-// Balanced use the legacy thresholds (ui/maps/station_labels.py:21 and :22);
-// Low halves the label work on weak GPUs. The table is profileSettings.labels.
+// Balanced share thresholds; Low halves the label work on weak GPUs.
+// The table is profileSettings.labels.
 
 import { profileSettings } from "../../lib/graphics/profileSettings";
 import type { LabelTier } from "../../stations/stationFormat";

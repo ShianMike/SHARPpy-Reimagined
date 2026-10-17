@@ -3,16 +3,18 @@
 // fixtures in offline builds and tests. BackendClient validates every response.
 
 export type CommandName =
+  | "get_storage_usage"
+  | "clear_cache"
   | "get_backend_health"
   | "get_station_catalog"
   | "restart_backend"
   | "get_model_catalog"
   | "get_model_status"
   | "open_sounding"
+  | "get_sounding_progress"
   | "inspect_wrf"
   | "get_sounding_analysis"
   | "get_sounding_trends"
-  | "get_ensemble_summary"
   | "get_threshold_metrics"
   | "evaluate_threshold"
   | "export_threshold_csv"

@@ -16,7 +16,6 @@ import reportsSignificant from "@contracts/public/map/reports.significant.json";
 import reportOptions from "@contracts/public/map/reports-options.json";
 import contoursFixture from "@contracts/public/map/contours.json";
 import surfaceFixture from "@contracts/public/map/surface.json";
-import ensembleFixture from "@contracts/public/soundings/ensemble.example.json";
 import thresholdFixture from "@contracts/public/soundings/threshold.example.json";
 import { encodeShrf, parseShrf } from "../contracts/frames";
 
@@ -115,23 +114,6 @@ export function surfacePlotsFor(args: Readonly<Record<string, unknown>> | undefi
   const base = structuredClone(surfaceFixture) as Record<string, unknown>;
   if (typeof args?.validTime === "string") {
     base.validTime = args.validTime;
-  }
-  return base;
-}
-
-/**
- * The fixture ensemble summary. The committed members are the exporter's own
- * set and do not move with the requested members or point — the e2e asserts
- * the readouts and the states (three loaded, one member's download failed),
- * not fetch geography. The requested run's valid time echoes back, as the
- * frames echo a requested site or time.
- */
-export function ensembleFor(args: Readonly<Record<string, unknown>> | undefined): unknown {
-  const base = structuredClone(ensembleFixture) as Record<string, unknown>;
-  const runTime = typeof args?.runTime === "string" ? args.runTime : null;
-  const forecastHour = typeof args?.forecastHour === "number" ? args.forecastHour : 0;
-  if (runTime !== null && base.validTime !== null) {
-    base.validTime = hoursLater(runTime, forecastHour);
   }
   return base;
 }

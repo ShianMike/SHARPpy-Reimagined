@@ -112,16 +112,18 @@
   font-size: var(--font-size-small);
 }
 .imageViewer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.tools, .toolGroup, .exportTools { display: flex; align-items: center; gap: var(--space-1); }
-.tools { flex-wrap: wrap; flex: none; padding: var(--space-2) var(--space-3); gap: var(--space-3); border-bottom: var(--hairline) solid var(--border-subtle); background: var(--surface-1); }
-.toolGroup + .toolGroup { padding-left: var(--space-3); border-left: var(--hairline) solid var(--border-subtle); }
+.tools, .toolGroup, .exportTools { display: flex; align-items: center; gap: var(--space-2); }
+.tools { flex-wrap: wrap; flex: none; padding: var(--space-2) var(--space-3); gap: var(--space-4); border-bottom: var(--hairline) solid var(--border-subtle); background: var(--surface-1); }
+.toolGroup:first-child { margin-inline-end: auto; }
 .toolGroup > [data-compact] { min-width: calc(4 * var(--control-h-lg)); }
-.exportTools { margin-left: auto; }
+.exportTools { margin-inline-start: auto; }
 .tools button { min-height: var(--control-h-sm); }
 .tools button[aria-pressed="true"] { color: var(--accent-bright); background: var(--accent-subtle); }
 .zoomLabel { border: 0; background: transparent; color: var(--text-secondary); font-variant-numeric: tabular-nums; padding: var(--space-1); min-width: var(--control-h-lg); font-size: var(--font-size-small); }
 .panelPicker { position: relative; font-size: var(--font-size-small); }
-.panelPicker summary { cursor: pointer; padding: var(--space-2) var(--space-3); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-pill); }
+.panelPicker summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: var(--control-h-sm); padding: var(--space-1) var(--space-3); list-style: none; cursor: pointer; border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-pill); }
+.panelPicker summary::-webkit-details-marker { display: none; }
+.panelPicker summary > svg { flex: none; color: var(--text-tertiary); }
 .panelPicker[open] summary { color: var(--accent-bright); background: var(--accent-subtle); }
 .options { position: absolute; right: 0; top: calc(100% + var(--space-2)); z-index: var(--z-popover); width: var(--popover-w); display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); background: var(--surface-1); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); box-shadow: var(--shadow-floating); }
 .viewport { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; }

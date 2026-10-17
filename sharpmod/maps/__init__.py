@@ -1,4 +1,5 @@
 """Map-domain data and geometry shared by map providers and widgets.
 
 This package owns projections, geographic labels, overlay records, and layer semantics;
-Qt interaction and painting live under ``sharpmod.ui.maps``."""
+Desktop interaction lives in ``frontend/src/map``; sounding locator painting
+lives in ``sharpmod.viz``."""

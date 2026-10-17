@@ -177,6 +177,7 @@ def test_unparsable_frames_get_a_null_id_reply(line):
     (b'{"id":4,"method":"hello","params":{"protocol_version":1,"x":0}}\n',
      "INVALID_ARGUMENT"),
     (b'{"id":4,"method":"stations.search","params":{}}\n', "METHOD_NOT_FOUND"),
+    (b'{"id":4,"method":"ensemble.summary","params":{}}\n', "METHOD_NOT_FOUND"),
 ])
 def test_bad_requests_are_answered_under_their_id(line, code):
     (reply,) = run_sync(line)
@@ -184,7 +185,7 @@ def test_bad_requests_are_answered_under_their_id(line, code):
     assert reply["error"]["code"] == code
     assert reply["error"]["retryable"] is False
     if code == "METHOD_NOT_FOUND":
-        assert reply["error"]["details"] == {"method": "stations.search"}
+        assert reply["error"]["details"] == {"method": json.loads(line)["method"]}
 
 
 def test_oversized_line_is_drained_and_rejected():

@@ -9,6 +9,7 @@ import WeatherMap from "./WeatherMap";
 
 const { mounts } = vi.hoisted(() => ({ mounts: vi.fn() }));
 vi.mock("../stations/stationQueries", () => ({ useStationCatalog: () => ({ data: { stations: [] } }) }));
+vi.mock("./mapQueries", () => ({ useStationAvailability: () => ({ data: undefined }) }));
 vi.mock("./usePlayback", () => ({ usePlayback: () => undefined }));
 vi.mock("./panels/MapPanel", async () => {
   const { useEffect } = await import("react");

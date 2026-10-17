@@ -50,17 +50,17 @@ describe("StationCount (DR6-3)", () => {
     expect(transport.calls("get_station_catalog")).toBe(1);
   });
 
-  it("reads 933 stations with the golden catalogue", async () => {
+  it("includes newly reporting stations with the golden catalogue", async () => {
     renderWithBackend(<StationCount />, createTransport(null));
     await waitFor(() => {
-      expect(count()?.textContent).toBe("933 stations");
+      expect(count()?.textContent).toBe("934 stations");
     });
   });
 
-  it("reads 10 stations with the seed fallback", async () => {
+  it("includes newly reporting stations with the seed fallback", async () => {
     renderWithBackend(<StationCount />, createTransport("seed-fallback"));
     await waitFor(() => {
-      expect(count()?.textContent).toBe("10 stations");
+      expect(count()?.textContent).toBe("11 stations");
     });
   });
 

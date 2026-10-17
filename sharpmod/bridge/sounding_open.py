@@ -1,9 +1,7 @@
 """Opening soundings: observed, forecast model, ERA5, or a file from disk.
 
-Observed soundings come from ``providers.observations.fetch_observed`` and model
-soundings from ``tools.model_extract.extract``; both are written as sharpmod's
-portable ``.npz``. Files are decoded by the same decoder registry the renderer
-uses. Every opened sounding is kept in the bridge's sounding cache.
+Provider results are written as portable ``.npz`` files. All sources share the
+renderer's decoder registry and the bridge's cache of open soundings.
 """
 
 from __future__ import annotations
@@ -19,6 +17,7 @@ from typing import Any
 from sharpmod.bridge import params as p
 from sharpmod.bridge.errors import BridgeError
 from sharpmod.bridge.sounding_cache import cache
+from sharpmod.bridge.sounding_progress import track
 from sharpmod.bridge.sounding_summary import decode, meta, register, summary
 
 log = logging.getLogger("sharpmod.bridge")
@@ -128,8 +127,13 @@ def open_model(params: dict[str, Any]) -> dict[str, Any]:
     p.keys(
         params,
         ("model", "forecast_hour", "latitude", "longitude"),
-        ("run_time", "location"),
+        ("run_time", "location", "progress_id"),
     )
+    with track(params.get("progress_id")) as progress:
+        return _open_model(params, progress)
+
+
+def _open_model(params, progress):
     key = p.text(params, "model", 1, 40)
     fxx = p.integer(params, "forecast_hour", 0, 1000)
     lat = p.number(params, "latitude", -90.0, 90.0)
@@ -158,6 +162,9 @@ def open_model(params: dict[str, Any]) -> dict[str, Any]:
             fxx=fxx,
             out_path=str(path),
             loc=location,
+            download_dir=str(cache().root / f"{entry_id}-grib"),
+            progress_callback=progress.stage,
+            on_bytes=progress.receive,
         )
     except era5_extract.ParameterRangeError as exc:
         raise BridgeError("INVALID_ARGUMENT", str(exc), False) from None

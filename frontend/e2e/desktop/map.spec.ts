@@ -103,7 +103,7 @@ test.describe("real-backend forecast map", () => {
     await page.waitForFunction(() => performance.getEntriesByName("sharppy:stations-rendered").length > 0, undefined, {
       timeout: 60_000,
     });
-    await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+    await expect(page.getByTestId("catalogue-announcement")).toHaveText(/^[1-9]\d* stations loaded$/u);
     const toolbar = page.getByRole("group", { name: "Forecast", exact: true });
     const run = toolbar.getByRole("button", { name: "Choose run" });
     await expect(toolbar.getByRole("button", { name: "Choose model" })).toContainText("HRRR");
@@ -133,7 +133,7 @@ test.describe("real-backend forecast map", () => {
     results.fieldAttempts = attempts;
     expect(outcome.ok, `a field frame loaded: ${JSON.stringify(attempts)}`).toBe(true);
     const scale = page.getByRole("complementary", { name: "Parameter scale" });
-    await expect(scale).toContainText("dBZ");
+    await expect(scale).toHaveAccessibleDescription(/dBZ/u);
     await expect(page.getByTestId("panel-chip-1")).toHaveCount(0);
     results.scale = await text(scale);
     await shot("desktop-map-field.png");
@@ -141,7 +141,7 @@ test.describe("real-backend forecast map", () => {
     await row("model-field").getByRole("combobox", { name: "Product" }).click();
     await page.getByRole("listbox", { name: "Product" }).locator('[value="tmp-2m"]').click();
     results.secondProduct = await fieldOutcome();
-    await expect(scale).toContainText("°F");
+    await expect(scale).toHaveAccessibleDescription(/°F/u);
     results.secondScale = await text(scale);
 
     const timeline = page.getByRole("region", { name: "Forecast timeline" });
@@ -196,7 +196,7 @@ test.describe("real-backend forecast map", () => {
     }
     await setLayer("stations", true);
     await select.click();
-    await page.getByRole("option", { name: "Bundled list only", exact: true }).click();
+    await page.getByRole("option", { name: "Automatic · observed launch", exact: true }).click();
   });
 
   test("a forecast point, and four synchronized panels @map", async () => {

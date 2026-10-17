@@ -38,8 +38,8 @@ export function sourceText(source: string): string {
 
 const AVAILABILITY_TEXT: Readonly<Record<StationAvailability, { label: string; explanation: string }>> = {
   unknown: { label: "Unknown", explanation: "The bundled catalogue does not record availability." },
-  listed: { label: "Listed", explanation: "UWyo listed this station for the chosen observation time." },
-  notListed: { label: "Not listed", explanation: "UWyo did not list this station for the chosen observation time." },
+  listed: { label: "Available", explanation: "UWyo reports a sounding for this launch." },
+  notListed: { label: "Not reported", explanation: "UWyo has not reported a sounding for this launch." },
 };
 
 export function availabilityText(availability: StationAvailability): string {

@@ -37,10 +37,12 @@ import radarShrfUrl from "@contracts/public/map/radar.shrf?url&no-inline";
 import { encodeShrf, parseShrf } from "../contracts/frames";
 import type { CommandName, Transport } from "./transport";
 import radarSites from "@contracts/public/map/radar-sites.json";
-import { contoursFor, ensembleFor, hoursLater, reportsFor, satelliteFrameFor, siteFrameFor, surfacePlotsFor, thresholdFor } from "./fixtureFrames";
+import { contoursFor, hoursLater, reportsFor, satelliteFrameFor, siteFrameFor, surfacePlotsFor, thresholdFor } from "./fixtureFrames";
 import reportOptionsFixture from "@contracts/public/map/reports-options.json";
 import thresholdMetricsFixture from "@contracts/public/soundings/threshold-metrics.json";
 import thresholdCsvFixture from "@contracts/public/soundings/threshold-csv.example.json";
+import storageFixture from "@contracts/public/storage/usage.json";
+import clearedStorageFixture from "@contracts/public/storage/clear.json";
 
 export const SCENARIOS = [
   "python-unavailable",
@@ -187,6 +189,7 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
   const scenario = resolveScenario(scenarioParam);
   let catalogCalls = 0;
   let opened = 0;
+  let storage = structuredClone(storageFixture);
 
   const health = (): unknown => {
     if (scenario === "python-unavailable") {
@@ -196,6 +199,16 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
   };
 
   const handlers: Record<CommandName, (args?: Readonly<Record<string, unknown>>) => Promise<unknown>> = {
+    get_storage_usage: () => Promise.resolve(copy(storage)),
+    clear_cache: (args) => {
+      let freedBytes = 0;
+      storage = { caches: storage.caches.map((row) => {
+        if (args?.cache !== "all" && args?.cache !== row.key) return row;
+        freedBytes += row.clearableBytes;
+        return { ...clearedStorageFixture.usage.caches.find((item) => item.key === row.key) ?? row };
+      }) };
+      return Promise.resolve({ usage: copy(storage), freedBytes, failedFiles: 0 });
+    },
     get_backend_health: () =>
       scenario === "health-error" ? rejectWith(internalError) : Promise.resolve(copy(health())),
     get_station_catalog: () => {
@@ -225,12 +238,12 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
       opened += 1;
       return delay(SLOW_CATALOG_MS / 3).then(() => summaryFor(`fixture${String(opened)}`, args));
     },
+    get_sounding_progress: () => Promise.resolve({ stage: "waiting", downloadedBytes: 0, bytesPerSecond: 0 }),
     inspect_wrf: (args) => Promise.resolve({ filePath: args?.filePath, fileName: "wrfout_d01.nc", times: ["2026-06-25T06:00:00Z", "2026-06-25T07:00:00Z"], latitude: 35, longitude: -97 }),
     get_sounding_analysis: (args) =>
       Promise.resolve({ ...(copy(soundingAnalysis) as Record<string, unknown>), soundingId: args?.soundingId }),
     get_sounding_trends: (args) =>
       Promise.resolve({ ...(copy(soundingTrends) as Record<string, unknown>), soundingId: args?.soundingId }),
-    get_ensemble_summary: (args) => Promise.resolve(ensembleFor(args)),
     get_threshold_metrics: () => Promise.resolve(copy(thresholdMetricsFixture)),
     evaluate_threshold: (args) => Promise.resolve(thresholdFor(args)),
     export_threshold_csv: () => Promise.resolve(copy(thresholdCsvFixture)),

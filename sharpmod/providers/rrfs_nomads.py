@@ -477,6 +477,7 @@ def _download_subset(
     workers,
     cancelled,
     progress,
+    on_bytes,
 ):
     """Fetch selected GRIB messages into ``output_path``."""
     plan = plan_ranges(
@@ -498,6 +499,7 @@ def _download_subset(
         timeout=timeout,
         cancelled=cancelled,
         progress=progress,
+        on_bytes=on_bytes,
         workers=workers,
         session_factory=_new_session if workers > 1 else None,
         metrics=metrics,
@@ -524,6 +526,7 @@ def fetch_pair(
     session=None,
     cancelled=None,
     progress=None,
+    on_bytes=None,
     workers=None,
     timeout=(10, 90),
 ):
@@ -573,6 +576,7 @@ def fetch_pair(
                 session, pressure_url, selected, pressure_path,
                 timeout=timeout, workers=resolved,
                 cancelled=cancelled, progress=progress,
+                on_bytes=on_bytes,
             )
             pressure_bytes = int(metrics.transferred_bytes)
         pressure = RrfsPayload(
@@ -606,6 +610,7 @@ def fetch_pair(
                 session, surface_url, surface_selected, surface_path,
                 timeout=timeout, workers=resolved,
                 cancelled=cancelled, progress=progress,
+                on_bytes=on_bytes,
             )
             surface_bytes = int(metrics.transferred_bytes)
         surface = RrfsPayload(

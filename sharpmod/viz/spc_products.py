@@ -58,24 +58,6 @@ def compose_window(config, prof_col=None, *, check_integrity=False,
         returned reference for the window's duration.
     """
     _api._install_streamwiseness_hooks()
-    _api._install_export_directory_hooks()
-    # Install before ``SPCWidget`` is constructed so its existing Qt signal
-    # connections bind the history-aware mutation methods. Headless renderers
-    # never attach an ``AnalysisHistory``, so these wrappers are no-ops there.
-    from sharpmod.state.sessions import install_history_hooks
-    install_history_hooks(_VendoredSPCWidget)
-    # Install the mode guard after history so allowed edits still pass through
-    # the existing capture/commit wrapper, while Inspect-mode signals stop
-    # before either the scientific collection or its history can change.
-    from sharpmod.ui.features.gui_interaction_mode import install_interaction_mode_hooks
-    install_interaction_mode_hooks(_VendoredSPCWidget)
-    # Outermost of the three mutation wrappers: a gesture the mode guard blocks
-    # changes nothing, so the comparison below reports nothing. Headless
-    # renderers attach no feedback controller, so this is a no-op there.
-    from sharpmod.ui.features.gui_edit_feedback import install_edit_feedback_hooks
-    install_edit_feedback_hooks(_VendoredSPCWidget)
-    from sharpmod.ui.features.gui_sounding_readout import install_linked_readout_hooks
-    install_linked_readout_hooks(_VendoredSPCWidget)
     if controller is None:
         controller = _api.RenderController(config)
     win = _api.SPCWindow(parent=controller, cfg=config)

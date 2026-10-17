@@ -80,6 +80,8 @@ export interface FieldImage extends RasterImage {
 export interface SceneData {
   /** This panel's coloured model field. */
   field: FieldImage | null;
+  previousField?: FieldImage | null;
+  fieldMix?: number;
   /** The GOES frame, rendered by the backend over the map's extent. */
   satellite: RasterImage | null;
   radar: RasterImage | null;
@@ -101,6 +103,8 @@ export interface SceneData {
 
 export const NO_SCENE_DATA: SceneData = {
   field: null,
+  previousField: null,
+  fieldMix: 1,
   satellite: null,
   radar: null,
   reports: null,

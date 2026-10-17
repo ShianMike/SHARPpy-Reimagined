@@ -26,10 +26,11 @@ import { useSurfacePlots } from "./surfaceQueries";
 import { useFieldContours } from "./contourQueries";
 import { defaultLayerStates } from "./layers/registry";
 import { defaultProductFor } from "./panelField";
-import { usePlayback } from "./usePlayback";
+import { FRAME_INTERVAL_MS, usePlayback } from "./usePlayback";
 import { useMapStore } from "../stores/mapStore";
 import { useForecastStore } from "../stores/forecastStore";
 import { useGraphicsStore } from "../stores/graphicsStore";
+import { useUiStore } from "../stores/uiStore";
 import type { FieldFrame } from "../types/map";
 
 const bytes = (url: string): ArrayBuffer => Uint8Array.from(atob(url.split(",")[1] ?? ""), (c) => c.charCodeAt(0)).buffer;
@@ -51,8 +52,58 @@ function useLayerQuery(kind: Kind, changed: boolean) {
 const savedMap = useMapStore.getState();
 const savedForecast = useForecastStore.getState();
 const savedGraphics = useGraphicsStore.getState();
+const savedUi = useUiStore.getState();
 afterEach(() => {
-  cleanup(); useMapStore.setState(savedMap); useForecastStore.setState(savedForecast); useGraphicsStore.setState(savedGraphics);
+  cleanup(); useMapStore.setState(savedMap); useForecastStore.setState(savedForecast); useGraphicsStore.setState(savedGraphics); useUiStore.setState(savedUi); vi.useRealTimers(); vi.restoreAllMocks();
+});
+
+it.each([2, 4] as const)("keeps %i panels on the loaded hour until the next frame is ready, without a second playback delay", async (panelLayout) => {
+  vi.useFakeTimers();
+  const mapCatalog = parseMapCatalog(catalog);
+  const frame = parseFieldFrame(payloads.field);
+  const runTime = "2026-10-04T12:00:00Z";
+  const layers = defaultLayerStates(); layers["model-field"].visible = true;
+  useMapStore.setState({ panelLayout, productKey: "hgt-wind-500", layers, panels: Array.from({ length: 3 }, () => ({ productKey: null, layers })) });
+  useForecastStore.setState({ modelKey: "hrrr", runTime, forecastHour: 0, playing: true });
+  useUiStore.setState({ speed: 1, loop: true });
+  useGraphicsStore.setState({ effective: { ...savedGraphics.effective, profile: "balanced" } });
+  const pendingLines: { hour: number; resolve: (lines: unknown) => void }[] = [];
+  const client = new BackendClient({
+    call: (_command, args) => new Promise((resolve) => { pendingLines.push({ hour: Number(args?.forecastHour), resolve }); }),
+    listen: () => Promise.resolve(() => undefined),
+  });
+  const pending: { hour: number; resolve: (frame: FieldFrame) => void }[] = [];
+  vi.spyOn(client, "getWeatherField").mockImplementation((_product, _run, hour) => new Promise((resolve) => { pending.push({ hour, resolve }); }));
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
+  queryClient.setQueryData(mapKeys.catalog("hrrr"), mapCatalog);
+  for (let panel = 0; panel < panelLayout; panel++) {
+    queryClient.setQueryData(mapKeys.field(panel === 0 ? "hgt-wind-500" : defaultProductFor(mapCatalog, panel)?.key ?? "", runTime, 0), frame);
+  }
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
+  );
+  const hook = renderHook(usePlayback, { wrapper });
+  try {
+    await act(async () => { await vi.advanceTimersByTimeAsync(FRAME_INTERVAL_MS); });
+    expect(useForecastStore.getState().forecastHour).toBe(0);
+    const next = pending.filter(({ hour }) => hour === 1);
+    expect(next).toHaveLength(panelLayout);
+    await act(async () => { next.slice(0, -1).forEach(({ resolve }) => { resolve(frame); }); await vi.advanceTimersByTimeAsync(0); });
+    expect(useForecastStore.getState().forecastHour).toBe(0);
+    await act(async () => { next.at(-1)?.resolve(frame); await vi.advanceTimersByTimeAsync(0); });
+    expect(useForecastStore.getState().forecastHour).toBe(0);
+    expect(pendingLines.filter(({ hour }) => hour === 1)).toHaveLength(1);
+    await act(async () => { pendingLines.filter(({ hour }) => hour === 1).forEach(({ resolve }) => { resolve(contours); }); await vi.advanceTimersByTimeAsync(0); });
+    expect(useForecastStore.getState().forecastHour).toBe(1);
+    act(() => { useForecastStore.getState().setPlaying(false); });
+    await act(async () => {
+      pending.forEach(({ resolve }) => { resolve(frame); });
+      pendingLines.forEach(({ resolve }) => { resolve(contours); });
+      await vi.advanceTimersByTimeAsync(FRAME_INTERVAL_MS * 2);
+    });
+    expect(useForecastStore.getState().forecastHour).toBe(1);
+  } finally { hook.unmount(); queryClient.clear(); }
 });
 
 it.each(Object.keys(payloads) as Kind[])("clears %s data when its selection changes", async (kind) => {
@@ -109,7 +160,7 @@ it.each(["rrfs-a", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "refs-m4", 
       }
       const catalogue = parseMapCatalog((modelCatalogs as Readonly<Record<string, unknown>>)[model]);
       expect(catalogue.fieldModel).toBe(model);
-      expect(catalogue.products).toHaveLength(model.startsWith("refs-") ? 16 : model === "nam-3km-conus" ? 24 : 25);
+      expect(catalogue.products).toHaveLength(model.startsWith("refs-") ? 22 : model === "nam-3km-conus" ? 36 : 38);
       expect(catalogue.products.some(({ key }) => key === "ltng")).toBe(model !== "nam-3km-conus");
       const secondaryProduct = defaultProductFor(parseMapCatalog(catalog), 1)?.key;
       expect(catalogue.products.some(({ key }) => key === secondaryProduct)).toBe(!model.startsWith("refs-"));
@@ -117,7 +168,7 @@ it.each(["rrfs-a", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "refs-m4", 
   },
 );
 
-it.each([2, 4] as const)("prefetches %i panels concurrently, with only one future hour in flight", async (panelLayout) => {
+it.each([2, 4] as const)("prefetches %i panels and the configured future hours concurrently while paused", async (panelLayout) => {
   const mapCatalog = parseMapCatalog(catalog);
   const frame = parseFieldFrame(payloads.field);
   const runTime = "2026-10-04T12:00:00Z";
@@ -130,7 +181,7 @@ it.each([2, 4] as const)("prefetches %i panels concurrently, with only one futur
   useMapStore.setState({ panelLayout, productKey: null, layers, panels: Array.from({ length: 3 }, () => ({ productKey: null, layers })) });
   useForecastStore.setState({ modelKey: "hrrr", runTime, forecastHour: 0, playing: false });
   useGraphicsStore.setState({ effective: { ...savedGraphics.effective, profile: "high" } });
-  const client = new BackendClient({ call: () => Promise.reject(new Error("Unexpected request")), listen: () => Promise.resolve(() => undefined) });
+  const client = new BackendClient({ call: () => Promise.resolve(contours), listen: () => Promise.resolve(() => undefined) });
   const pending: { product: string; hour: number; resolve: (frame: FieldFrame) => void }[] = [];
   vi.spyOn(client, "getWeatherField").mockImplementation((product, _run, hour) => new Promise((resolve) => { pending.push({ product, hour, resolve }); }));
   const queryClient = createQueryClient();
@@ -142,17 +193,16 @@ it.each([2, 4] as const)("prefetches %i panels concurrently, with only one futur
   );
   const hook = renderHook(usePlayback, { wrapper });
   try {
-    await waitFor(() => { expect(pending.map(({ product, hour }) => [product, hour])).toEqual(products.map((product) => [product, 1])); });
+    await waitFor(() => { expect(pending.map(({ product, hour }) => [product, hour])).toEqual([1, 2].flatMap((hour) => products.map((product) => [product, hour]))); });
     await act(async () => {
       pending.slice(0, -1).forEach(({ resolve }) => { resolve(frame); });
       await Promise.resolve();
     });
-    expect(pending).toHaveLength(panelLayout);
-    await act(async () => { pending[panelLayout - 1]?.resolve(frame); await Promise.resolve(); });
-    await waitFor(() => { expect(pending.slice(panelLayout).map(({ product, hour }) => [product, hour])).toEqual(products.map((product) => [product, 2])); });
+    expect(pending).toHaveLength(2 * panelLayout);
+    expect(useForecastStore.getState().forecastHour).toBe(0);
     hook.unmount();
     await act(async () => {
-      pending.slice(panelLayout).forEach(({ resolve }) => { resolve(frame); });
+      pending.forEach(({ resolve }) => { resolve(frame); });
       await Promise.resolve();
     });
     expect(pending).toHaveLength(2 * panelLayout);

@@ -4,6 +4,7 @@ import { parseColour } from "../canvasTokens";
 import { declutterPoints } from "../labels/declutter";
 import type { LayerBuildContext, LayerState } from "./registry";
 import { deckColour } from "./StationLayer";
+import { svgIconAtlas } from "./iconAtlas";
 
 export const REPORTS_LAYER_ID = "storm-reports";
 const CAPTION_SPAN_DEG = 16;
@@ -27,7 +28,7 @@ export const REPORT_ICONS = (() => {
     }
   }
   return {
-    iconAtlas: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${String(x * 2)}" height="48" viewBox="0 0 ${String(x)} 24">${paths.join("")}</svg>`)}`,
+    ...svgIconAtlas(`<svg xmlns="http://www.w3.org/2000/svg" width="${String(x * 2)}" height="48" viewBox="0 0 ${String(x)} 24">${paths.join("")}</svg>`),
     iconMapping,
     sizeUnits: "pixels" as const,
     textureParameters: { minFilter: "linear", magFilter: "linear", mipmapFilter: "none" } as const,

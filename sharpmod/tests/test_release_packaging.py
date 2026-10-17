@@ -14,7 +14,7 @@ from sharpmod._version import __version__ as package_version
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = ROOT / "packaging" / "release_contract.py"
-LAUNCHER_PATH = ROOT / "packaging" / "sharpmod_gui_launcher.py"
+LAUNCHER_PATH = ROOT / "packaging" / "sharpmod_backend_launcher.py"
 
 
 def _load_contract():
@@ -33,7 +33,7 @@ CONTRACT = _load_contract()
 
 def _load_launcher():
     spec = importlib.util.spec_from_file_location(
-        "_sharpmod_gui_launcher_tests", LAUNCHER_PATH
+        "_sharpmod_backend_launcher_tests", LAUNCHER_PATH
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -199,7 +199,7 @@ def test_official_windows_dll_path_excludes_unrelated_host_tools(tmp_path):
 
 
 def test_pyinstaller_uses_validated_metadata_and_source_pe_version():
-    spec = (ROOT / "packaging" / "sharpmod_gui.spec").read_text(encoding="utf-8")
+    spec = (ROOT / "packaging" / "sharpmod_backend.spec").read_text(encoding="utf-8")
 
     assert 'os.environ.get("SHARPMOD_RELEASE_BUILD", "0") == "1"' in spec
     assert 'run_path(os.path.join(SPECPATH, "release_contract.py"))' in spec
@@ -216,15 +216,19 @@ def test_pyinstaller_uses_validated_metadata_and_source_pe_version():
     assert "append_pkg=False" in spec
     assert spec.count("upx=False") == 3
     assert "upx=True" not in spec
+    assert '_RETIRED_GUI_MODULES = ("sharppy.gui", "sutils.progress", "sutils.ver_updates")' in spec
+    assert "filter_submodules=lambda name: name not in _RETIRED_GUI_MODULES" in spec
+    assert "exclude_datas=[" in spec
+    assert "excludes=[*_RETIRED_GUI_MODULES," in spec
 
 
-def test_frozen_launcher_reports_every_version_and_uses_lazy_picker_entrypoint():
-    launcher = (ROOT / "packaging" / "sharpmod_gui_launcher.py").read_text(
+def test_frozen_launcher_reports_every_version_without_the_legacy_gui():
+    launcher = (ROOT / "packaging" / "sharpmod_backend_launcher.py").read_text(
         encoding="utf-8"
     )
 
-    assert launcher.count("from sharpmod.gui_picker import main") == 2
-    assert "from sharpmod.gui import main" not in launcher
+    assert "sharpmod.gui" not in launcher
+    assert "backend_entrypoint=callable(bridge_main)" in launcher
     for key in (
         '"sharpmod"',
         '"sharpmod_metadata"',
@@ -236,7 +240,7 @@ def test_frozen_launcher_reports_every_version_and_uses_lazy_picker_entrypoint()
     assert "version_consistent=True" in launcher
     assert "_versions_consistent(runtime_versions)" in launcher
     runtime_check = launcher.split("def _model_fetch_runtime_check", 1)[1]
-    assert runtime_check.index("from sharpmod.gui_picker import main") < (
+    assert runtime_check.index("from PySide6 import QtCore") < (
         runtime_check.index("import cdsapi")
     )
 

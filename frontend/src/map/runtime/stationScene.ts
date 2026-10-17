@@ -5,6 +5,7 @@
 // so a rebuild never re-uploads a buffer that did not change.
 
 import type { Layer, PickingInfo } from "@deck.gl/core";
+import { IconLayer, TextLayer } from "@deck.gl/layers";
 import type { MapLibreOverlay } from "@deck.gl/maplibre";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useAppStore } from "../../stores/appStore";
@@ -192,7 +193,10 @@ export class StationScene {
       },
       mapState.layerOrder,
     );
-    this.overlay.setProps({ layers: built });
+    // Globe geometry can slice through screen-facing labels and icons at ground level.
+    this.overlay.setProps({ layers: mapState.projection === "globe"
+      ? built.map((layer): Layer => layer instanceof TextLayer || layer instanceof IconLayer
+        ? layer.clone({ parameters: { cullMode: "none", depthCompare: "always", depthWriteEnabled: false } }) as Layer : layer) : built });
     this.shownLayerIds = built.filter((layer) => layer.props.visible).map((layer) => layer.id);
     this.onSubmitted(this.stations.length > 0 && layers.stations.visible);
   }
@@ -236,7 +240,7 @@ export function hoverFromPick(info: PickingInfo, panel: number, origin: { left: 
     hovered: station === undefined ? null : { stationId: station.id, x, y },
     outlook: area === undefined ? null : { label: area.area.label, description: area.area.description, title: area.outlook.title, subtitle: area.outlook.subtitle, x, y },
     report: report !== undefined ? { label: report.label, description: report.description, caption: report.caption, x, y }
-      : plot === undefined ? null : { label: plot.label, description: plot.description, caption: "", x, y },
+      : plot === undefined ? null : { label: plot.label, description: plot.description, caption: "", ...(plot.availability === "available" ? { observation: { temperatureC: plot.temperatureC, dewpointC: plot.dewpointC } } : {}), x, y },
     pointer: at === undefined || !Number.isFinite(at[0]) || !Number.isFinite(at[1]) ? null
       : { panel, longitude: at[0] ?? 0, latitude: at[1] ?? 0, x: info.x, y: info.y },
   });

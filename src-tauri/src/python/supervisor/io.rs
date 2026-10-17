@@ -29,6 +29,9 @@ impl Supervisor {
             let mut inner = self.lock();
             if inner.epoch != epoch || inner.shutting_down {
                 process.control.start_kill();
+                self.shared.rt.spawn(async move {
+                    process.control.wait().await;
+                });
                 return None;
             }
             inner.generation += 1;

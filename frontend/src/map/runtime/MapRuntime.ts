@@ -68,7 +68,7 @@ export class MapRuntime implements RuntimeEventTarget {
       const overlay = createPanelOverlay(tokens, this.pixelRatio(), this);
       this.overlay = overlay;
       map.addControl(overlay);
-      if (import.meta.env.MODE !== "fixture") this.unsubscribers.push(wireOverlayEvents(map, overlay, this, tokens.lengths.pickingRadius));
+      if (import.meta.env.MODE !== "fixture" && useMapStore.getState().projection === "mercator") this.unsubscribers.push(wireOverlayEvents(map, overlay, this, tokens.lengths.pickingRadius));
       this.scene = new StationScene(overlay, tokens, read("--font-mono").trim(), panel, (shown) => { this.watch.layersSubmitted(shown); });
     } catch (error) {
       this.failConstruction(error);
@@ -141,7 +141,6 @@ export class MapRuntime implements RuntimeEventTarget {
     }
   }
 
-  /** Wraps a callback so it does nothing once this runtime is disposed. */
   live<T extends unknown[]>(handler: (...args: T) => void): (...args: T) => void {
     return (...args) => {
       if (!this.disposed) {
@@ -152,6 +151,7 @@ export class MapRuntime implements RuntimeEventTarget {
 
   styleLoaded(): void {
     this.styleReady = true;
+    this.map?.setProjection({ type: useMapStore.getState().projection });
     if (this.map !== null && import.meta.env.MODE !== "fixture") this.scene?.setWeatherBeforeId(prepareBasemap(this.map));
     this.applyStyleState();
   }
@@ -166,7 +166,6 @@ export class MapRuntime implements RuntimeEventTarget {
     useMapNoticeStore.getState().addRuntimeError();
   }
 
-  /** The profile's pixel ratio, scaled down in the four-panel layout. */
   private pixelRatio(): number {
     return panelPixelRatio(useGraphicsStore.getState().effective.profile, useMapStore.getState().panelLayout);
   }
@@ -205,7 +204,6 @@ export class MapRuntime implements RuntimeEventTarget {
   }
 
   private subscribe(): void {
-    // Follow the resolved DOM theme, including changes to the system preference.
     let theme = document.documentElement.dataset.theme;
     const themeObserver = new MutationObserver(() => {
       const next = document.documentElement.dataset.theme;
@@ -276,7 +274,6 @@ export class MapRuntime implements RuntimeEventTarget {
     this.map.flyTo({ center: [station.longitude, station.latitude], zoom, duration: this.cameraDuration() });
   }
 
-  /** Read at each move, so a reduced-motion change applies without a remount. */
   private cameraDuration(): number {
     return readCameraDurationMs(documentTokenReader());
   }

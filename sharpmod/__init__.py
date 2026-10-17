@@ -3,14 +3,13 @@
 The top-level package exposes the derived-parameter library (``sharptab``), the
 input decoders (``io``), the Qt6/PySide6 rendering widgets (``viz``), and the
 data-extraction tools (``tools``). It targets Python >= 3.11, NumPy >= 1.24, and
-PySide6 (Qt6) with no legacy compatibility shims.
+PySide6 (Qt6) for headless sounding images.
 """
 
 from pathlib import Path as _Path
 
-# Keep imports like ``sharpmod.ui.features.gui_maps`` working while their implementations
-# live in the role-based packages. Compatibility files live in one directory
-# so the package root only contains its entry points and package metadata.
+# Keep scientific imports such as ``sharpmod.render`` and ``sharpmod.box_analysis``
+# working while their implementations live in the role-based packages.
 __path__.append(str(_Path(__file__).resolve().parent / "_compat"))
 
 from ._version import __version__

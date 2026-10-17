@@ -1,8 +1,8 @@
 //! Sounding and forecast-model commands.
 
 use crate::dto::analysis::{SoundingAnalysis, SoundingTrends};
-use crate::dto::ensemble::EnsembleSummary;
 use crate::dto::models::{ModelCatalog, ModelStatus};
+use crate::dto::sounding_progress::SoundingProgress;
 use crate::dto::soundings::{ImageMode, OpenSoundingRequest, RenderParcel, SoundingSummary};
 use crate::dto::threshold_catalog::{ThresholdCsv, ThresholdMetrics};
 use crate::dto::thresholds::{ThresholdDefinitionInput, ThresholdEvaluation};
@@ -45,8 +45,20 @@ pub async fn inspect_wrf(
 pub async fn open_sounding(
     state: tauri::State<'_, AppState>,
     request: OpenSoundingRequest,
+    progress_id: Option<String>,
 ) -> Result<SoundingSummary, BackendError> {
-    state.router.open_sounding(request).await
+    state
+        .router
+        .open_sounding(request, progress_id.as_deref())
+        .await
+}
+
+#[tauri::command]
+pub async fn get_sounding_progress(
+    state: tauri::State<'_, AppState>,
+    progress_id: String,
+) -> Result<SoundingProgress, BackendError> {
+    state.router.sounding_progress(&progress_id).await
 }
 
 /// The parameters of an open sounding.
@@ -65,34 +77,6 @@ pub async fn get_sounding_trends(
     sounding_id: String,
 ) -> Result<SoundingTrends, BackendError> {
     state.router.sounding_trends(&sounding_id).await
-}
-
-/// The metric spreads of one ensemble run at one valid time, with the
-/// member acquisition ledger. `members` names the requested members (2 to 32).
-#[tauri::command]
-#[allow(clippy::too_many_arguments)] // Published IPC fields stay separate.
-pub async fn get_ensemble_summary(
-    state: tauri::State<'_, AppState>,
-    model: String,
-    latitude: f64,
-    longitude: f64,
-    forecast_hour: u32,
-    run_time: Option<String>,
-    location: Option<String>,
-    members: Vec<String>,
-) -> Result<EnsembleSummary, BackendError> {
-    state
-        .router
-        .ensemble_summary(
-            &model,
-            latitude,
-            longitude,
-            forecast_hour,
-            run_time.as_deref(),
-            location.as_deref(),
-            &members,
-        )
-        .await
 }
 
 /// The sounding image of an open sounding, as raw PNG bytes (an ArrayBuffer in JS).

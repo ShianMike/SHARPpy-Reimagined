@@ -2,20 +2,14 @@
 
 from __future__ import annotations
 
-import json
-import os
 from pathlib import Path
-import subprocess
-import sys
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from qtpy.QtCore import QSettings
 
 from sharpmod import export_paths
 from sharpmod.export_paths import ExportDirectoryError
-from sharpmod.gui_settings import _build_settings
 
 
 def test_source_export_directory_is_project_relative_outside_cwd(
@@ -95,80 +89,6 @@ def test_frozen_build_uses_installed_executable_directory(tmp_path, monkeypatch)
     monkeypatch.setattr(export_paths.sys, "executable", str(executable))
 
     assert export_paths.application_root() == executable.parent.resolve()
-
-
-def test_stale_export_setting_is_removed_across_settings_restart(
-    tmp_path, monkeypatch
-):
-    settings_path = tmp_path / "settings.ini"
-    legacy_path = tmp_path / "legacy.ini"
-    stale = tmp_path / "user" / "Desktop"
-    application = tmp_path / "installed-app"
-    application.mkdir()
-    monkeypatch.setattr(export_paths, "application_root", lambda: application)
-    legacy = QSettings(str(legacy_path), QSettings.IniFormat)
-    legacy.setValue("export_dir", str(stale))
-    legacy.sync()
-
-    settings = _build_settings(settings_path, legacy)
-    assert not settings.contains("export_dir")
-    assert export_paths.export_file_path(
-        "first.png", settings=settings
-    ) == application / "rendered_soundings" / "first.png"
-    settings.sync()
-    del settings
-
-    restarted = QSettings(str(settings_path), QSettings.IniFormat)
-    assert not restarted.contains("export_dir")
-    assert export_paths.export_file_path(
-        "second.png", settings=restarted
-    ) == application / "rendered_soundings" / "second.png"
-
-
-def test_process_restart_uses_project_directory_and_ignores_stale_setting(
-    tmp_path,
-):
-    project_root = Path(export_paths.__file__).resolve().parents[1]
-    settings_path = tmp_path / "settings.ini"
-    settings = QSettings(str(settings_path), QSettings.IniFormat)
-    settings.setValue("meta/native_settings_migrated", True)
-    settings.setValue("export_dir", str(tmp_path / "user" / "Desktop"))
-    settings.sync()
-    del settings
-    script = (
-        "import json; "
-        "from sharpmod.export_paths import application_root, export_directory; "
-        "from sharpmod.gui_settings import _build_settings; "
-        "settings = _build_settings(); "
-        "print(json.dumps({'root': str(application_root()), "
-        "'directory': str(export_directory(settings=settings)), "
-        "'has_stale': settings.contains('export_dir')}))"
-    )
-    environment = os.environ.copy()
-    environment["SHARPMOD_SETTINGS_PATH"] = str(settings_path)
-    environment["PYTHONPATH"] = os.pathsep.join(
-        filter(None, (str(project_root), environment.get("PYTHONPATH", "")))
-    )
-
-    payloads = tuple(
-        json.loads(
-            subprocess.run(
-                [sys.executable, "-c", script],
-                cwd=tmp_path,
-                env=environment,
-                check=True,
-                capture_output=True,
-                text=True,
-            ).stdout.strip()
-        )
-        for _restart in range(2)
-    )
-
-    assert {Path(payload["root"]) for payload in payloads} == {project_root}
-    assert {Path(payload["directory"]) for payload in payloads} == {
-        project_root / "rendered_soundings"
-    }
-    assert not any(payload["has_stale"] for payload in payloads)
 
 
 def test_export_file_path_discards_parent_components(tmp_path, monkeypatch):
@@ -319,79 +239,3 @@ def test_observed_cli_default_sounding_uses_export_folder(tmp_path, monkeypatch)
         / "rendered_soundings"
         / "observed_uwyo_72357_2024052000.npz"
     ]
-
-
-def test_saved_locations_dialog_accepts_default_in_export_folder(
-    qt_app, tmp_path, monkeypatch
-):
-    from sharpmod import gui_locations
-
-    application = tmp_path / "installed-app"
-    application.mkdir()
-    monkeypatch.setattr(export_paths, "application_root", lambda: application)
-    chosen = []
-
-    class Store:
-        @staticmethod
-        def load():
-            return []
-
-        @staticmethod
-        def export_file(path):
-            Path(path).write_text("{}", encoding="utf-8")
-
-    def accept_default(_parent, _caption, start, _filter):
-        chosen.append(Path(start))
-        return start, "SHARPpy Locations (*.json)"
-
-    monkeypatch.setattr(
-        gui_locations.QFileDialog, "getSaveFileName", accept_default
-    )
-    dialog = gui_locations.SavedLocationsDialog(Store())
-    try:
-        dialog._export()
-        expected = application / "rendered_soundings" / "sharpmod-locations.json"
-        assert chosen == [expected]
-        assert expected.read_text(encoding="utf-8") == "{}"
-    finally:
-        dialog.close()
-
-
-@pytest.mark.parametrize(
-    ("method_name", "config_key"),
-    (("saveimage", "save_img"), ("savetext", "save_txt")),
-)
-def test_vendored_file_save_actions_reset_default_after_one_off_choice(
-    qt_app, tmp_path, monkeypatch, method_name, config_key
-):
-    import importlib
-
-    application = tmp_path / "installed-app"
-    application.mkdir()
-    monkeypatch.setattr(export_paths, "application_root", lambda: application)
-    dedicated = application / "rendered_soundings"
-    selected = tmp_path / f"one-off-{method_name}.dat"
-    starts = []
-    upstream = importlib.import_module("sharppy.viz.SPCWindow")
-    spc_window = importlib.import_module("sharpmod.viz.SPCWindow")
-
-    def choose(_parent, _caption, start, _filter):
-        starts.append(Path(start))
-        return str(selected), "selected filter"
-
-    monkeypatch.setattr(upstream.QFileDialog, "getSaveFileName", choose)
-    spc_window._install_export_directory_hooks()
-    config = {("paths", config_key): str(tmp_path / "user" / "Desktop")}
-    dummy = SimpleNamespace(config=config)
-    if method_name == "saveimage":
-        dummy.pixmapToFile = lambda path: Path(path).write_bytes(b"png")
-    else:
-        dummy.default_prof = SimpleNamespace(
-            toFile=lambda path: Path(path).write_text("sounding", encoding="utf-8")
-        )
-
-    getattr(spc_window._VendoredSPCWidget, method_name)(dummy)
-
-    assert starts == [dedicated]
-    assert selected.is_file()
-    assert config["paths", config_key] == str(dedicated)

@@ -49,7 +49,7 @@ function stop(value: unknown, path: string): readonly [number, string] {
 
 function parsePalette(value: unknown, path: string): Palette {
   const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["stops", "units", "stepped", "floor", "ceiling", "ticks"]);
+  expectExactKeys(obj, path, ["stops", "units", "display", "stepped", "floor", "ceiling", "ticks"]);
   const stops = expectArray(obj.stops, at(path, "stops"), stop);
   if (stops.length < 2 || stops.length > 256 || stops.some((s, i) => i > 0 && s[0] <= (stops[i - 1]?.[0] ?? s[0]))) {
     throw new ContractError(at(path, "stops"), "expected 2 to 256 ascending stops");
@@ -58,6 +58,7 @@ function parsePalette(value: unknown, path: string): Palette {
   return {
     stops,
     units: expectString(obj.units, at(path, "units"), { maxLength: 40 }),
+    display: expectOneOf(obj.display, at(path, "display"), ["auto", "fixed", "temperature-difference"]),
     stepped: expectBoolean(obj.stepped, at(path, "stepped")),
     floor: optional(obj.floor, at(path, "floor")),
     ceiling: optional(obj.ceiling, at(path, "ceiling")),
@@ -78,7 +79,7 @@ function parseContour(value: unknown, path: string): ProductContour {
 
 function parseProduct(value: unknown, path: string): FieldProduct {
   const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["key", "label", "shortLabel", "category", "description", "caveat", "palette", "contour"]);
+  expectExactKeys(obj, path, ["key", "label", "shortLabel", "category", "description", "caveat", "palette", "contour", "wind"]);
   return {
     key: key(obj.key, at(path, "key")),
     label: label(obj.label, at(path, "label")),
@@ -88,6 +89,7 @@ function parseProduct(value: unknown, path: string): FieldProduct {
     caveat: prose(obj.caveat, at(path, "caveat")),
     palette: parsePalette(obj.palette, at(path, "palette")),
     contour: expectNullable(obj.contour, at(path, "contour"), parseContour),
+    wind: expectBoolean(obj.wind, at(path, "wind")),
   };
 }
 

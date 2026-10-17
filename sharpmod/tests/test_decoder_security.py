@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from sharpmod import gui_viewer, gui_workers, render
+from sharpmod import render
 from sharpmod.io import decoder
 from sharpmod.tests._examples import examples_dir
 
@@ -61,21 +61,6 @@ def test_npz_decoder_never_executes_pickled_object_data(tmp_path):
     with pytest.raises(ValueError, match="Object arrays|unsafe object"):
         decoder.load_npz(archive)
 
-    assert not marker.exists()
-
-
-def test_gui_cache_validator_rejects_pickled_object_data(tmp_path):
-    marker = tmp_path / "cache-pickle-ran.txt"
-    archive = tmp_path / "unsafe-cache.npz"
-    np.savez(
-        archive,
-        **_portable_arrays(
-            loc=np.array([_PicklePayload(marker)], dtype=object),
-        ),
-    )
-    archive.with_suffix(".json").write_text("{}", encoding="utf-8")
-
-    assert gui_workers._portable_pair_valid(archive) is False
     assert not marker.exists()
 
 
@@ -276,41 +261,3 @@ def test_file_url_npz_uses_local_safe_loader(tmp_path):
 
     assert station_id == "TEST"
     assert collection.getMeta("lon") == pytest.approx(-97.4)
-
-
-def test_interactive_metadata_uses_same_location_resolver_as_headless(
-        monkeypatch):
-    metadata = {
-        "loc": "HRRRpt",
-        "lat": 35.2,
-        "lon": -97.4,
-        "base_time": datetime(2026, 7, 27),
-        "observed": False,
-    }
-
-    class Collection:
-        _meta = metadata
-
-        def getMeta(self, key):
-            return metadata[key]
-
-        def setMeta(self, key, value):
-            metadata[key] = value
-
-        def getCurrentDate(self):
-            return datetime(2026, 7, 27)
-
-    calls = []
-    monkeypatch.setattr(
-        gui_viewer,
-        "_render",
-        lambda: SimpleNamespace(
-            _resolve_location_title=lambda collection, explicit_loc=None:
-            calls.append((collection, explicit_loc))
-        ),
-    )
-
-    collection = Collection()
-    gui_viewer._fill_metadata(collection, "HRRRpt")
-
-    assert calls == [(collection, None)]

@@ -27,6 +27,8 @@
       },
       "upper_text": "22",
       "lower_text": "12",
+      "temperature_c": 21.5,
+      "dewpoint_c": 12.2,
       "label": "KOUN \u2014 Norman",
       "description": "Observed 2026-10-04 21:00:00Z (+0 min from requested)\nTemperature 21.5 \u00b0C; dewpoint 12.2 \u00b0C; wind 270\u00b0 at 20 kt, gusting 28 kt\nSource: NOAA/NWS API station observation"
     },
@@ -42,6 +44,8 @@
       "staff": null,
       "upper_text": "18",
       "lower_text": "10",
+      "temperature_c": 18.0,
+      "dewpoint_c": 10.0,
       "label": "KOKC \u2014 Oklahoma City",
       "description": "Observed 2026-10-04 21:00:00Z (+0 min from requested)\nTemperature 18.0 \u00b0C; dewpoint 10.0 \u00b0C; wind calm (0 kt)\nSource: NOAA/NWS API station observation"
     },
@@ -57,6 +61,8 @@
       "staff": null,
       "upper_text": "33",
       "lower_text": "20",
+      "temperature_c": 33.0,
+      "dewpoint_c": 20.0,
       "label": "KSPS \u2014 Wichita Falls",
       "description": "Observed 2026-10-04 21:00:00Z (+0 min from requested)\nTemperature 33.0 \u00b0C; dewpoint 20.0 \u00b0C; wind 12 kt; direction missing\nSource: NOAA/NWS API station observation"
     },
@@ -77,6 +83,8 @@
       },
       "upper_text": "26",
       "lower_text": "9",
+      "temperature_c": 26.0,
+      "dewpoint_c": 9.0,
       "label": "KSWA \u2014 Wichita",
       "description": "Observed 2026-10-04 20:15:00Z (-45 min from requested)\nTemperature 26.0 \u00b0C; dewpoint 9.0 \u00b0C; wind 180\u00b0 at 8 kt\nSource: NOAA/NWS API station observation\nStale/mismatched: more than 30 minutes from requested time"
     },
@@ -92,6 +100,8 @@
       "staff": null,
       "upper_text": "\u2014",
       "lower_text": "\u2014",
+      "temperature_c": null,
+      "dewpoint_c": null,
       "label": "KHBR \u2014 no observation",
       "description": "No observation was available within \u00b160 minutes of the requested 2026-10-04 21:00Z.\nSource: NOAA/NWS API station catalogue"
     },
@@ -107,6 +117,8 @@
       "staff": null,
       "upper_text": "\u2014",
       "lower_text": "\u2014",
+      "temperature_c": null,
+      "dewpoint_c": null,
       "label": "KFOO \u2014 query failed",
       "description": "The station query failed; observation availability is unknown.\nSource: NOAA/NWS API station catalogue"
     }

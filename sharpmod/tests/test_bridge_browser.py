@@ -14,6 +14,9 @@ from sharpmod.bridge.public import bridge_request, public_result
 
 CONTRACTS = Path(__file__).resolve().parents[2] / "src-tauri" / "contracts"
 CASES = [
+    ("get_sounding_progress", "soundings/progress.result.json", "soundings/progress.json"),
+    ("get_storage_usage", "storage/usage.json", "storage/usage.json"),
+    ("clear_cache", "storage/clear.json", "storage/clear.json"),
     ("get_map_catalog", "map/catalog.result.json", "map/catalog.json"),
     ("get_weather_field", "map/field.result.json", "map/field.shrf"),
     ("get_radar_frame", "map/radar.result.json", "map/radar.shrf"),
@@ -26,6 +29,10 @@ CASES = [
         "map/satellite.visible.shrf",
     ),
     ("get_storm_reports", "map/reports.result.json", "map/reports.json"),
+    *[
+        ("get_storm_reports", f"map/reports.result.{hazard}.json", f"map/reports.{hazard}.json")
+        for hazard in ("tornado", "hail", "wind", "significant")
+    ],
     (
         "get_report_options",
         "map/reports-options.result.json",
@@ -65,11 +72,6 @@ CASES = [
         "get_sounding_trends",
         "soundings/trends.result.example.json",
         "soundings/trends.example.json",
-    ),
-    (
-        "get_ensemble_summary",
-        "soundings/ensemble.result.example.json",
-        "soundings/ensemble.example.json",
     ),
     (
         "get_threshold_metrics",
@@ -152,11 +154,16 @@ def test_http_rejects_cross_origin_and_invalid_requests(browser):
         ("get_backend_health", {"payload": "x" * 524288}, "https://untrusted.example", 403),
         ("get_backend_health", {"extra": True}, "http://127.0.0.1:5174", 400),
         ("fields.grid", {}, "http://127.0.0.1:5174", 400),
+        ("get_ensemble_summary", {}, "http://127.0.0.1:5174", 400),
         ("get_spc_outlook", {"validTime": "not-a-time"}, "http://127.0.0.1:5174", 400),
     ]:
         with pytest.raises(HTTPError) as raised:
             post(browser, method, params, origin)
-        assert raised.value.code == status
+        with raised.value as response:
+            assert response.code == status
+            if method == "get_ensemble_summary":
+                assert json.load(response)["code"] == "METHOD_NOT_FOUND"
+        assert raised.value.closed
     with pytest.raises(HTTPError) as raised:
         urlopen(
             Request(
@@ -166,7 +173,9 @@ def test_http_rejects_cross_origin_and_invalid_requests(browser):
             ),
             timeout=5,
         )
-    assert json.load(raised.value)["code"] == "BRIDGE_PROTOCOL"
+    with raised.value as response:
+        assert json.load(response)["code"] == "BRIDGE_PROTOCOL"
+    assert raised.value.closed
 
 
 def test_special_request_arguments_and_corrupt_provider_bytes():

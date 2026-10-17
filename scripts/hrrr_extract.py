@@ -393,8 +393,7 @@ def main():
 
     print(f"\n  Wrote: {OUT_NPZ}")
     print(f"  Wrote: {json_path}")
-    print("\nDone! Open with:")
-    print(f"  sharpmod-gui {OUT_NPZ}")
+    print("\nDone! Import the NPZ in Soundings > File, or render it with:")
     print(f"  sharpmod-render {OUT_NPZ} output.png")
 
 

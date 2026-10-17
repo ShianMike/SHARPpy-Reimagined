@@ -29,7 +29,7 @@ function FieldValue({ panel, point, numbered }: { panel: number; point: MapPoint
   }
   const value = frame === undefined || field.frame.isError ? null : sampleAt(frame, point.longitude, point.latitude);
   const note = value === null ? "" : drawnRangeNote(value, field.product.palette);
-  const unit = displayUnit(frame?.units ?? "", units);
+  const unit = displayUnit(frame?.units ?? "", units, field.product.palette.display);
   return (
     <div className={styles.reading}>
       <dt title={field.product.label}>
@@ -38,7 +38,7 @@ function FieldValue({ panel, point, numbered }: { panel: number; point: MapPoint
       </dt>
       <dd data-testid={`point-value-${String(panel + 1)}`}>
         <span className={cx(styles.readingValue, "tabular")}>
-          {field.frame.isError ? "Unavailable" : frame === undefined ? "Loading…" : value === null ? "No data" : formatValue(convertUnit(value, frame.units, unit))}
+          {field.frame.isError ? "Unavailable" : frame === undefined ? "Loading…" : value === null ? "No data" : formatValue(convertUnit(value, frame.units, unit, field.product.palette.display))}
           {value === null ? null : <span className={styles.units}> {unit}</span>}
         </span>
         {note === "" ? null : <span className={styles.explanation}>{note}</span>}

@@ -27,9 +27,10 @@ its ``caveat`` so the difference is never silent.
 from __future__ import annotations
 
 from dataclasses import dataclass, field as _dataclass_field, replace
+from fnmatch import fnmatchcase
 from functools import lru_cache
 from types import MappingProxyType
-from typing import Callable
+from typing import Callable, Literal
 
 import numpy as np
 
@@ -65,6 +66,22 @@ def ms_to_kt(values: np.ndarray) -> np.ndarray:
     return values * MS_TO_KT
 
 
+def mm_to_in(values: np.ndarray) -> np.ndarray:
+    return values / 25.4
+
+
+def m_to_in(values: np.ndarray) -> np.ndarray:
+    return values * 1000.0 / 25.4
+
+
+def precipitation_rate_to_mm_per_hour(values: np.ndarray) -> np.ndarray:
+    return values * 3600.0
+
+
+def precipitation_rate_to_in_per_hour(values: np.ndarray) -> np.ndarray:
+    return mm_to_in(precipitation_rate_to_mm_per_hour(values))
+
+
 # --------------------------------------------------------------------------- #
 # GRIB record addressing
 # --------------------------------------------------------------------------- #
@@ -79,11 +96,10 @@ class FieldSpec:
     what NCEP publishes and paraphrasing them is how a product silently starts
     matching the wrong record.
 
-    ``forecast`` is a substring the forecast column must contain, or ``""`` for
-    the plain instantaneous field. It exists for the run-maximum records, whose
-    column reads ``0-1 hour max fcst`` at F01 and ``1-2 hour max fcst`` at F02 --
-    a literal would only ever match one hour, so the shared token is matched
-    instead.
+    ``forecast`` is a substring, a whole-column glob when it contains ``*``, or
+    ``""`` for the instantaneous field. ``max fcst`` selects hourly maxima;
+    ``0-* acc fcst`` selects run totals in either hours or days, excluding
+    preceding-hour accumulations such as ``10-11 hour acc fcst``.
     """
 
     name: str
@@ -97,7 +113,8 @@ class FieldSpec:
         if variable != self.variable or level != self.level:
             return False
         if self.forecast:
-            return self.forecast in forecast
+            return (fnmatchcase(forecast, self.forecast) if "*" in self.forecast
+                    else self.forecast in forecast)
         # An instantaneous request must not match a max/min/average record.
         return not any(token in forecast
                        for token in (" max ", " min ", " ave ", " acc "))
@@ -116,6 +133,7 @@ def _prs(name: str, variable: str, level: str) -> FieldSpec:
 F_REFC = _sfc("refc", "REFC", "entire atmosphere")
 F_TMP2M = _sfc("tmp2m", "TMP", "2 m above ground")
 F_DPT2M = _sfc("dpt2m", "DPT", "2 m above ground")
+F_PRES = _sfc("pres", "PRES", "surface")
 F_RH2M = _sfc("rh2m", "RH", "2 m above ground")
 # NOAA documents LTNG in flashes/km²/5 min despite its dimensionless GRIB label.
 F_LTNG = _sfc("ltng", "LTNG", "entire atmosphere")
@@ -134,6 +152,19 @@ F_VSHR06 = _sfc("vshr06", "VVCSH", "0-6000 m above ground")
 F_LCL = _sfc("lcl", "HGT", "level of adiabatic condensation from sfc")
 F_UH03 = _sfc("uh03", "MXUPHL", "3000-0 m above ground", forecast="max fcst")
 F_SFC_HGT = _sfc("sfchgt", "HGT", "surface")
+F_APCP = _sfc("apcp", "APCP", "surface", forecast="0-* acc fcst")
+F_CFRZR = _sfc("cfrzr", "CFRZR", "surface")
+F_CSNOW = _sfc("csnow", "CSNOW", "surface")
+F_CICEP = _sfc("cicep", "CICEP", "surface")
+F_EFHL = _sfc("efhl", "EFHL", "surface")
+F_GUST = _sfc("gust", "GUST", "surface")
+F_LFTX = _sfc("lftx", "LFTX", "500-1000 mb")
+F_MAXUVV = _sfc("maxuvv", "MAXUVV", "100-1000 mb above ground", forecast="max fcst")
+F_PRATE = _sfc("prate", "PRATE", "surface")
+F_PWAT = _sfc("pwat", "PWAT", "entire atmosphere (considered as a single layer)")
+F_SNOD = _sfc("snod", "SNOD", "surface")
+F_U10 = _sfc("u10", "UGRD", "10 m above ground")
+F_V10 = _sfc("v10", "VGRD", "10 m above ground")
 
 
 # --------------------------------------------------------------------------- #
@@ -170,8 +201,11 @@ class Palette:
     ceiling: float | None = None
     #: Labelled ticks for the colour bar. Empty means "use the stop values".
     ticks: tuple[float, ...] = ()
+    display: Literal["auto", "fixed", "temperature-difference"] = "auto"
 
     def __post_init__(self) -> None:
+        if self.display not in {"auto", "fixed", "temperature-difference"}:
+            raise ValueError("unknown palette display quantity")
         if len(self.stops) < 2:
             raise ValueError("a palette needs at least two stops")
         if (self.floor is not None and self.ceiling is not None
@@ -605,6 +639,146 @@ PALETTE_ISOTACH_KT = Palette(
 )
 
 
+# Precipitation totals and rates: colour bands sampled from the supplied inch table.
+PALETTE_PRECIPITATION = Palette(
+    stops=tuple(zip(
+        (0.01, 0.03, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45,
+         0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95,
+         1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9,
+         2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.5, 5, 5.5, 6, 7,
+         8, 9, 10, 12.5, 15, 17.5),
+        ("#dcdcdc", "#bebebe", "#a0a0a0", "#828282", "#b7f0be", "#9fdbb3",
+         "#87c7a7", "#6fb29c", "#579d90", "#3f8885", "#277479", "#146473",
+         "#1450b4", "#2a61bb", "#3f73c2", "#5584c9", "#6b96d0", "#80a7d6",
+         "#96b9dd", "#accae4", "#c1dceb", "#d7edf2", "#cebce0", "#c9addb",
+         "#c49ed5", "#bf90d0", "#ba81ca", "#b472c5", "#af63bf", "#aa55ba",
+         "#a546b4", "#a037af", "#a53a34", "#ad4842", "#b5554f", "#bd635d",
+         "#c6716b", "#ce7f79", "#d68c86", "#de9a94", "#f8eea2", "#eed68c",
+         "#e5bd76", "#dba560", "#d28c4a", "#c87434", "#ac632d", "#965727",
+         "#814a21", "#6b3e1b", "#553115", "#553115"), strict=True)),
+    # The repeated final colour closes the 15+ band at the reference's right edge.
+    units="in", stepped=True, floor=0.01,
+    ticks=(0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
+           1, 1.2, 1.4, 1.6, 1.8, 2, 2.5, 3, 3.5, 4, 5, 6, 8, 10, 15, 17.5),
+)
+PALETTE_PRECIPITATION_RATE = replace(PALETTE_PRECIPITATION, units="in/h")
+# Winter precipitation rates: supplied colours, with identical adjacent bands combined.
+PALETTE_FREEZING_RAIN_RATE = Palette(
+    stops=(
+        (0.1, "#ffa6af"), (0.25, "#ef82ab"), (0.75, "#df5893"),
+        (1.5, "#cc3e80"), (2, "#c5266c"), (3, "#af0848"),
+        (4, "#be112e"), (6, "#cc2d0d"), (10, "#ec3801"),
+        (14, "#ff4504"), (16, "#ff4504"),
+    ),
+    units="mm/h", stepped=True, floor=0.1,
+    ticks=(0.1, 0.5, 1, 2, 3, 4, 6, 10, 14, 16),
+)
+PALETTE_SLEET_RATE = replace(
+    PALETTE_FREEZING_RAIN_RATE,
+    stops=(
+        (0.1, "#ada8ff"), (0.25, "#c376ff"), (0.75, "#c24df7"),
+        (2, "#ad22d9"), (3, "#9700b9"), (4, "#a60983"),
+        (5, "#a5119f"), (6, "#c02782"), (10, "#c5266c"),
+        (12, "#dc445b"), (16, "#dc445b"),
+    ),
+)
+PALETTE_SNOW_RATE = replace(
+    PALETTE_FREEZING_RAIN_RATE,
+    stops=(
+        (0.1, "#00ffff"), (0.25, "#00eaff"), (0.75, "#00bfff"),
+        (1, "#009ffd"), (2, "#006aee"), (2.5, "#0449d1"),
+        (3.5, "#0326cf"), (4, "#0e0ba3"), (8, "#5b1291"),
+        (10, "#a60983"), (12, "#ce0094"), (14, "#ff0080"),
+        (16, "#ff0080"),
+    ),
+)
+# Snow depth: colour bands sampled from the supplied inch table.
+PALETTE_SNOW_DEPTH = Palette(
+    stops=tuple(zip(
+        (0, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5,
+         6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32,
+         34, 36, 40, 44, 48, 52, 56, 60, 64),
+        ("#ffffff", "#e1e1e1", "#c8c8c8", "#afafaf", "#969696", "#a9e7f2",
+         "#72bfd7", "#3b98bb", "#0470a0", "#0046b0", "#2764bc", "#4d82c8",
+         "#74a0d3", "#9abedf", "#c1dceb", "#c9addb", "#c195d2", "#b97ec9",
+         "#b066c1", "#a84fb8", "#a037af", "#870a47", "#971c5a", "#a72d6e",
+         "#b63f81", "#c65095", "#d662a8", "#eba7b7", "#e89ba1", "#e68f8a",
+         "#e38274", "#e1765d", "#de6a47", "#dc8150", "#e19568", "#e6a97f",
+         "#ecbd97", "#f1d1af", "#f6e5c6", "#fbf9de", "#fbf9de"),
+        strict=True)),
+    # The repeated final colour closes the 60+ band at the reference's right edge.
+    units="in", stepped=True, floor=0.1,
+    ticks=(0, 0.1, 0.5, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 28,
+           32, 36, 44, 52, 60, 64),
+)
+# PWAT: 0.05 inch colour bands sampled from the supplied reference.
+PALETTE_PRECIPITABLE_WATER = Palette(
+    stops=tuple(zip(
+        (step / 20 for step in range(1, 61)),
+        ("#433920", "#534a31", "#635a42", "#736b52", "#837c63", "#928c74",
+         "#a29d85", "#b2ad95", "#c2bea6", "#b9e5b9", "#a5d4a5", "#92c392",
+         "#7eb37e", "#6aa26a", "#579157", "#438043", "#2f702f", "#1c5f1c",
+         "#084e08", "#61a3af", "#5896a0", "#508992", "#477b83", "#3e6e74",
+         "#366166", "#2d5457", "#244648", "#1c393a", "#132c2b", "#66669a",
+         "#605e94", "#59568e", "#534e88", "#4d4682", "#463e7c", "#403676",
+         "#3a2e70", "#33266a", "#2d1e64", "#724172", "#784674", "#7d4c75",
+         "#835177", "#885779", "#8e5c7a", "#93627c", "#99677e", "#9e6d7f",
+         "#a47281", "#c9978c", "#cea093", "#d2a99b", "#d7b2a2", "#dbbbaa",
+         "#e0c4b1", "#e4ccb9", "#e9d5c0", "#eddec8", "#f2e7cf", "#f6f0d7"),
+        strict=True)) + ((3.05, "#f6f0d7"),),
+    units="in", stepped=True, floor=0.05,
+    ticks=(0.05, *(step / 4 for step in range(1, 13)), 3.05),
+)
+# Surface lifted index: supplied Celsius bands, with end bands at -20 and 0.
+PALETTE_LIFTED_INDEX = Palette(
+    stops=tuple(zip(
+        (-20, *(step / 5 for step in range(-90, -50, 2)),
+         *(step / 5 for step in range(-50, 0))),
+        ("#c9a6a8", "#c29b9f", "#bc9195", "#b6868b", "#af7c82", "#a97178",
+         "#a2676f", "#9c5c65", "#96525b", "#8f4752", "#893d48", "#b2445a",
+         "#b85266", "#be5f71", "#c46d7d", "#ca7a89", "#d18894", "#d795a0",
+         "#dda3ac", "#e3b0b7", "#e9bec3", "#da99e7", "#cf89dd", "#c379d2",
+         "#b869c8", "#ac59be", "#a148b3", "#9538a9", "#8a289f", "#7e1894",
+         "#73088a", "#8b0950", "#940f49", "#9d1542", "#a61c3b", "#af2234",
+         "#b8282c", "#c12e25", "#ca351e", "#d33b17", "#dc4110", "#e16f02",
+         "#e27b12", "#e38723", "#e49433", "#e5a044", "#e5ac54", "#e6b865",
+         "#e7c575", "#e8d186", "#e9dd96", "#a7c8ce", "#9bbbc3", "#8eaeb8",
+         "#82a1ad", "#7594a2", "#698796", "#5c7a8b", "#506d80", "#436075",
+         "#37536a", "#696969", "#787878", "#878787", "#969696", "#a5a5a5",
+         "#c3c3c3", "#d2d2d2", "#e1e1e1", "#f0f0f0", "#ffffff"), strict=True))
+    + ((0, "#ffffff"),),
+    units="\u00b0C", display="fixed", stepped=True, ceiling=0,
+    ticks=(-20, -18, -14, -10, -8, -6, -4, -2, 0),
+)
+# Updraft RGB table adapted from NOAA-GSL pygraf
+# specs.py/default_specs.yml (MIT; see NOTICE). No Matplotlib runtime dependency.
+PALETTE_MAX_UPDRAFT = Palette(
+    stops=tuple(zip(
+        (0.5, 1, 1.5, 2, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 30, 35, 40),
+        ("#0000c4", "#0000ff", "#0034ff", "#0070ff", "#00acff", "#02e8f4",
+         "#33ffc4", "#63ff94", "#94ff63", "#c4ff33", "#f4f802", "#ffc100",
+         "#ff8900", "#ff5200", "#ff1a00", "#c40000", "#800000"), strict=True)),
+    units="m/s", display="fixed", stepped=True, floor=0.5,
+    ticks=(0.5, 5, 10, 20, 30, 40),
+)
+# Surface wind and gusts: 1 kt colour bands sampled from the supplied knot table.
+PALETTE_SURFACE_WIND = Palette(
+    stops=tuple(zip(
+        range(9, 61),
+        ("#fefefe", "#f0f8ff", "#d7eefe", "#bee4fd", "#a4dafb", "#8bd0fa",
+         "#81b7f1", "#7a9be6", "#737fdb", "#6c63d1", "#7e64cf", "#9c72d3",
+         "#b980d7", "#d78fda", "#e28fd8", "#db80d1", "#d472ca", "#cd64c3",
+         "#c554bb", "#bb44b1", "#b233a8", "#a8229e", "#a21392", "#ab0e77",
+         "#b50a5d", "#be0542", "#c80028", "#cd0a2d", "#d21332", "#d61d36",
+         "#db263b", "#e03040", "#e53a45", "#ea434a", "#ee4d4e", "#f26a53",
+         "#f49058", "#f6b65d", "#f9dd62", "#f6ea60", "#efde59", "#e8d252",
+         "#e1c64b", "#daba44", "#d2ae3c", "#cba235", "#c4962e", "#bd8a27",
+         "#b67e20", "#ae7218", "#a76611", "#a05a0a"), strict=True))
+    + ((61.0, "#a05a0a"),),
+    units="kt", stepped=True, floor=10, ticks=(9, *range(10, 61, 5), 61),
+)
+
+
 # --------------------------------------------------------------------------- #
 # Derivations
 #
@@ -614,12 +788,74 @@ PALETTE_ISOTACH_KT = Palette(
 # --------------------------------------------------------------------------- #
 
 
+# 1 K bands sampled from the supplied theta-e table; its labelled ticks run 230-360 K.
+PALETTE_THETAE = Palette(
+    stops=tuple(zip(range(229, 370), (
+        "#986d4d", "#966c4c", "#946b4c", "#926a4b", "#90694b", "#8e684a",
+        "#8c664a", "#8a6549", "#886448", "#866348", "#846247", "#826147",
+        "#806046", "#7e5f46", "#7c5e45", "#7a5d44", "#785b44", "#765a43",
+        "#745943", "#725842", "#715742", "#6f5641", "#6d5540", "#6b5440",
+        "#69533f", "#67523f", "#65503e", "#634f3d", "#614e3d", "#5f4d3c",
+        "#5d4c3c", "#5b4b3b", "#594a3b", "#57493a", "#554839", "#534739",
+        "#514538", "#4f4438", "#4d4337", "#4b4237", "#494136", "#4d4334",
+        "#504737", "#544a3b", "#574e3e", "#5b5141", "#5e5545", "#615848",
+        "#655c4b", "#68604f", "#6c6352", "#6f6755", "#726a59", "#766e5c",
+        "#79715f", "#7d7563", "#807966", "#847c69", "#87806d", "#8a8370",
+        "#8e8773", "#918a77", "#958e7a", "#98927d", "#9b9581", "#9f9984",
+        "#a29c87", "#a6a08a", "#a9a38e", "#aca791", "#b0ab94", "#b3ae98",
+        "#b7b29b", "#bab59e", "#bdb9a2", "#c1bca5", "#c4c0a8", "#c8c4ac",
+        "#cbc7af", "#cfcbb2", "#d2ceb6", "#d5d2b9", "#d9d5bc", "#dcd9c0",
+        "#e0ddc3", "#e3e0c6", "#e6e4ca", "#eae7cd", "#edebd0", "#f1eed4",
+        "#f4f2d7", "#e6f5e6", "#d7f0d7", "#c8eac8", "#b9e5b9", "#aadfaa",
+        "#9bda9b", "#8cd48c", "#7dcf7d", "#6ec96e", "#5fc45f", "#30ae30",
+        "#2ca32c", "#279927", "#238e23", "#1e831e", "#1a791a", "#156e15",
+        "#116311", "#0c590c", "#084e08", "#61a3af", "#5896a0", "#508992",
+        "#477b83", "#3e6e74", "#366166", "#2d5457", "#244648", "#1c393a",
+        "#132c2b", "#66669a", "#605e94", "#59568e", "#534e88", "#4d4682",
+        "#463e7c", "#403676", "#3a2e70", "#33266a", "#2d1e64", "#724071",
+        "#784573", "#7d4b75", "#835076", "#885678", "#8e5b7a", "#93617c",
+        "#99667d", "#9e6c7f", "#a47181",
+    ), strict=True)) + ((370.0, "#a47181"),),
+    units="K", display="fixed", stepped=True, ticks=(229, *range(230, 370, 10), 370),
+)
+
+
+def _thetae_2m(fields: dict[str, np.ndarray]) -> np.ndarray:
+    """Bolton equivalent potential temperature using 2 m T/Td and surface pressure."""
+    from metpy.calc import equivalent_potential_temperature
+    from metpy.units import units
+
+    pressure, temperature, dewpoint = (np.asarray(fields[key]) for key in ("pres", "tmp2m", "dpt2m"))
+    valid = ((pressure > 0) & (temperature > 0) & (dewpoint > 0)
+             & np.isfinite(pressure) & np.isfinite(temperature) & np.isfinite(dewpoint))
+    with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
+        result = equivalent_potential_temperature(
+            units.Quantity(np.where(valid, pressure, MISSING), "Pa"),
+            units.Quantity(np.where(valid, temperature, MISSING), "K"),
+            units.Quantity(np.where(valid, dewpoint, MISSING), "K"),
+        ).m_as("K")
+    return np.where(np.isfinite(result), result, MISSING)
+
+
 def _single(name: str, convert: Callable[[np.ndarray], np.ndarray] | None = None):
     """Return a derivation that passes one record through, optionally converted."""
 
     def derive(fields: dict[str, np.ndarray]) -> np.ndarray:
         values = fields[name]
         return values if convert is None else convert(values)
+
+    return derive
+
+
+def _precipitation_type_rate(name: str):
+    """Total liquid-equivalent rate in cells with the published type flag."""
+
+    def derive(fields: dict[str, np.ndarray]) -> np.ndarray:
+        rate = precipitation_rate_to_mm_per_hour(fields["prate"])
+        flag = fields[name]
+        valid = np.isfinite(rate) & (rate >= 0) & ((flag == 0) | (flag == 1))
+        # Type flags select cells, not mass fractions; mixed types can overlap.
+        return np.where(valid, np.where(flag == 1, rate, 0.0), MISSING)
 
     return derive
 
@@ -797,6 +1033,8 @@ class ContourSpec:
 CATEGORIES = (
     "Height and Wind",
     "Surface",
+    "Precipitation",
+    "Winter Weather",
     "Radar",
     "Instability",
     "Wind Shear",
@@ -821,6 +1059,8 @@ class HrrrProduct:
     #: Records needed only by the contour, kept separate so a product's own
     #: colour field cannot accidentally depend on them.
     contour_fields: tuple[FieldSpec, ...] = ()
+    #: Display the product's UGRD/VGRD components as wind barbs in knots.
+    wind: bool = False
     #: The shortest name a forecaster would still recognise, for places with no
     #: room for :attr:`label` -- the locator inset beside a sounding is about a
     #: hundred pixels wide. Left empty where the key already *is* the standard
@@ -880,6 +1120,7 @@ def _height_wind_product(level: int) -> HrrrProduct:
                             convert=lambda values: values * M_TO_DAM,
                             label="dam"),
         contour_fields=(hgt,),
+        wind=True,
     )
 
 
@@ -904,6 +1145,12 @@ def _build_catalogue() -> tuple[HrrrProduct, ...]:
         palette=PALETTE_DEWPOINT_F,
         description="Dewpoint at 2 m above ground."))
     products.append(HrrrProduct(
+        key="thetae-2m", label="2 m AGL Theta-e, 10 m AGL Wind", chip="2 m Theta-e",
+        category="Surface", fields=(F_TMP2M, F_DPT2M, F_PRES, F_U10, F_V10),
+        derive=_thetae_2m, palette=PALETTE_THETAE, wind=True,
+        description="2 m equivalent potential temperature in kelvin, with 10 m wind barbs in knots.",
+        caveat="Bolton formulation using 2 m temperature and dewpoint with model surface pressure."))
+    products.append(HrrrProduct(
         key="rh-2m", label="2 m AGL Relative Humidity", chip="2 m RH",
         category="Surface",
         fields=(F_RH2M,), derive=_single("rh2m"),
@@ -916,6 +1163,52 @@ def _build_catalogue() -> tuple[HrrrProduct, ...]:
         palette=PALETTE_LIGHTNING,
         description=("Hourly maximum predicted flash density per square kilometre "
                      "in a five-minute period. Values of 15 or more share the final colour.")))
+    products.append(HrrrProduct(
+        key="gust", label="Wind Gust", category="Surface",
+        fields=(F_GUST,), derive=_single("gust", ms_to_kt),
+        palette=PALETTE_SURFACE_WIND,
+        description="Model wind gust potential at this forecast time, from GUST."))
+    products.append(HrrrProduct(
+        key="wind-10m", label="10 m Wind Speed", chip="10 m Wind", category="Surface",
+        fields=(F_U10, F_V10), derive=_magnitude("u10", "v10", ms_to_kt),
+        palette=PALETTE_SURFACE_WIND,
+        description="Instantaneous wind speed at 10 m above ground, from UGRD and VGRD.",
+        caveat="Sustained model wind, distinct from gusts and the previous-hour WIND maximum."))
+
+    # -- Precipitation ------------------------------------------------------ #
+    products.append(HrrrProduct(
+        key="apcp", label="Total Precipitation", category="Precipitation",
+        fields=(F_APCP,), derive=_single("apcp", mm_to_in),
+        palette=PALETTE_PRECIPITATION,
+        description="Accumulated precipitation since the selected model run, in liquid-equivalent inches.",
+        caveat="Includes all precipitation types; this is a run total, not an hourly amount."))
+    products.append(HrrrProduct(
+        key="prate", label="Precipitation Rate", category="Precipitation",
+        fields=(F_PRATE,), derive=_single("prate", precipitation_rate_to_in_per_hour),
+        palette=PALETTE_PRECIPITATION_RATE,
+        description="Instantaneous liquid-equivalent precipitation rate, in inches per hour.",
+        caveat="A rate at the selected time, not the amount accumulated over an hour."))
+    products.append(HrrrProduct(
+        key="pwat", label="Precipitable Water", category="Precipitation",
+        fields=(F_PWAT,), derive=_single("pwat", mm_to_in), palette=PALETTE_PRECIPITABLE_WATER,
+        description="Total water vapour in the atmospheric column, expressed as inches of liquid water."))
+
+    # -- Winter Weather ----------------------------------------------------- #
+    for key, label, chip, flag, palette in (
+        ("prate-frzr", "Freezing Rain", "FrzR rate", F_CFRZR, PALETTE_FREEZING_RAIN_RATE),
+        ("prate-sleet", "Sleet", "Sleet rate", F_CICEP, PALETTE_SLEET_RATE),
+        ("prate-snow", "Snow", "Snow rate", F_CSNOW, PALETTE_SNOW_RATE),
+    ):
+        products.append(HrrrProduct(
+            key=key, label=f"{label} Precipitation Rate", chip=chip,
+            category="Winter Weather", fields=(F_PRATE, flag),
+            derive=_precipitation_type_rate(flag.name), palette=palette,
+            description=f"Instantaneous liquid-equivalent rate where the model identifies {label.lower()}, in mm/h.",
+            caveat="Uses total rate in flagged cells; mixed types can overlap. Not snow depth or ice accretion per hour."))
+    products.append(HrrrProduct(
+        key="snod", label="Snow Depth", category="Winter Weather",
+        fields=(F_SNOD,), derive=_single("snod", m_to_in), palette=PALETTE_SNOW_DEPTH,
+        description="Total snow depth on the ground in inches at the selected forecast time, including existing snow."))
 
     # -- Radar -------------------------------------------------------------- #
     products.append(HrrrProduct(
@@ -943,6 +1236,12 @@ def _build_catalogue() -> tuple[HrrrProduct, ...]:
         key="sbcape", label="Surface-Based CAPE", category="Instability",
         fields=(F_SBCAPE,), derive=_single("sbcape"), palette=PALETTE_CAPE,
         description="CAPE for a parcel lifted from the surface."))
+    products.append(HrrrProduct(
+        key="lftx", label="Surface-Based Lifted Index", chip="Sfc LI", category="Instability",
+        # LFTX is a temperature difference: its native kelvins equal Celsius degrees.
+        fields=(F_LFTX,), derive=_single("lftx"), palette=PALETTE_LIFTED_INDEX,
+        description=("Temperature at 500 mb minus the temperature of a parcel lifted from the surface. "
+                     "Negative values indicate instability. Shown in \u00b0C.")))
     products.append(HrrrProduct(
         key="lapse-0-3km", label="Lapse Rate: 0-3 km AGL, CAPE>500",
         chip="0-3 km LR", category="Instability",
@@ -992,6 +1291,12 @@ def _build_catalogue() -> tuple[HrrrProduct, ...]:
         palette=PALETTE_SRH,
         description="Storm-relative helicity in the lowest three kilometres."))
 
+    products.append(HrrrProduct(
+        key="efhl", label="Effective Storm Relative Helicity", category="Wind Shear",
+        fields=(F_EFHL,), derive=_single("efhl"), palette=PALETTE_SRH,
+        description="Effective-layer storm-relative helicity published directly by the model as EFHL.",
+        caveat="The inflow layer varies with the environment; this is distinct from fixed 0-1 km or 0-3 km SRH."))
+
     # -- Composite Parameters ----------------------------------------------- #
     products.append(HrrrProduct(
         key="ehi-0-1km", label="Energy Helicity Index: 0-1 km AGL",
@@ -1034,6 +1339,11 @@ def _build_catalogue() -> tuple[HrrrProduct, ...]:
         derive=_single("uh03"), palette=PALETTE_UPDRAFT_HELICITY,
         description=("Largest 0-3 km updraft helicity the model produced during "
                      "the hour ending at this forecast time.")))
+    products.append(HrrrProduct(
+        key="maxuvv", label="Maximum Updraft Velocity (1 h)", category="Explicit Convective",
+        fields=(F_MAXUVV,), derive=_single("maxuvv"), palette=PALETTE_MAX_UPDRAFT,
+        description="Maximum upward vertical velocity during the hour ending at the selected forecast time.",
+        caveat="Native MAXUVV layer: 100-1000 mb above ground. F000 is the zero-length initial interval."))
 
     return tuple(products)
 
@@ -1051,6 +1361,7 @@ FIELD_MODELS = ("hrrr", "rrfs-a", "nam-3km-conus", *(f"refs-m{i}" for i in range
 _REFS_UNSUPPORTED = frozenset({
     "hgt-wind-200", "mlcape", "mlcin", "mucape", "lapse-0-3km",
     "ehi-0-1km", "ehi-0-3km", "scp", "stp",
+    "efhl", "lftx", "prate", "prate-frzr", "prate-sleet", "prate-snow", "snod",
 })
 _SHEAR_LEVELS = (925, 850, 750, 650, 550, 450)
 
@@ -1082,16 +1393,23 @@ def available_products(model: str = "hrrr") -> tuple[HrrrProduct, ...]:
         return replace(
             spec,
             source=SOURCE_SURFACE if model == "nam-3km-conus" else spec.source,
-            level="entire atmosphere (considered as a single layer)" if spec.variable == "REFC" else spec.level,
-            forecast="max fcst" if spec.variable == "LTNG" else spec.forecast,
+            level=("entire atmosphere (considered as a single layer)" if spec.variable == "REFC"
+                   else "100-1000 mb" if spec.variable == "MAXUVV" else spec.level),
+            forecast=("max fcst" if spec.variable == "LTNG" else "* acc fcst"
+                      if model == "nam-3km-conus" and spec.variable == "APCP" else spec.forecast),
         )
 
     products = []
     for product in PRODUCTS.values():
-        if model == "nam-3km-conus" and product.key == "ltng":
+        if model == "nam-3km-conus" and product.key in {"ltng", "efhl"}:
             continue
         if model.startswith("refs-") and product.key in _REFS_UNSUPPORTED:
             continue
+        if product.key == "lftx":
+            # NAM/RRFS encode this index with a Kelvin offset; HRRR does not.
+            product = replace(product, derive=_single("lftx", kelvin_to_celsius))
+        if product.key == "maxuvv":
+            product = replace(product, caveat="Native MAXUVV layer: 100-1000 mb. Hourly maxima are published from F001.")
         if model == "nam-3km-conus" and product.key == "shear-0-1km":
             product = replace(
                 product,

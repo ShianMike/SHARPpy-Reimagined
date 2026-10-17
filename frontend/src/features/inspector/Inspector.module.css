@@ -28,10 +28,10 @@
 .outlook dt { color: var(--text-secondary); font-size: var(--font-size-small); }
 .outlook dd { margin: 0; color: var(--text-primary); font-weight: var(--font-weight-medium); }
 .disclosure { width: 100%; padding: var(--space-1); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--control-fill); overflow: hidden; transition: border-color var(--motion-fast) var(--ease-standard); }
-.disclosure:hover, .disclosure:focus-within { border-color: var(--border-strong); }
+.disclosure:hover, .disclosure:focus-within { border-color: var(--accent); }
 .disclosure summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: var(--control-h-lg); padding: var(--space-3); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: var(--font-size-small); font-weight: var(--font-weight-medium); cursor: pointer; list-style: none; transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard); }
 .disclosure summary::-webkit-details-marker { display: none; }
-.disclosure summary:is(:hover, :focus-visible) { background: var(--control-selected); color: var(--text-primary); }
+.disclosure summary:is(:hover, :focus-visible) { background: var(--accent-subtle); color: var(--accent-bright); }
 .disclosure summary:focus-visible { outline-offset: calc(var(--focus-ring-width) * -1); }
 .disclosure summary:active { background: var(--accent-subtle); }
 .disclosure summary svg { flex: none; transition: transform var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard); }

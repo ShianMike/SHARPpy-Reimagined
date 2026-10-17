@@ -76,7 +76,7 @@ export function usePanelField(panel: number): PanelField {
  * The products the visible panels draw now, without repeats (playback waits
  * for and prefetches them). A stable array while they do not change.
  */
-export function useDrawnProducts(): readonly string[] {
+export function useDrawnProducts(): readonly FieldProduct[] {
   const catalog = useMapCatalog().data;
   const fieldsAvailable = useForecastContext()?.fieldsAvailable === true;
   const layout = useMapStore((state) => state.panelLayout);
@@ -90,9 +90,9 @@ export function useDrawnProducts(): readonly string[] {
     if (catalog === undefined || !fieldsAvailable) {
       return [];
     }
-    const keys = chosen.split("|").map((entry, panel) =>
-      entry === "" ? null : (productOf(catalog, entry === "*" ? null : entry, panel)?.key ?? null),
+    const products = chosen.split("|").map((entry, panel) =>
+      entry === "" ? null : productOf(catalog, entry === "*" ? null : entry, panel),
     );
-    return [...new Set(keys.filter((key): key is string => key !== null))];
+    return [...new Set(products.filter((product): product is FieldProduct => product !== null))];
   }, [catalog, fieldsAvailable, chosen]);
 }

@@ -23,9 +23,8 @@ them as they pan.
 Composition
 -----------
 The key is distinct from the mosaic's, so this is a separate slot: a user can run
-a model field, an SPC outlook and a site frame together, and
-:data:`sharpmod.ui.features.gui_maps.RASTER_DRAW_ORDER` puts this one on top because it is the
-smallest and brightest of the three. Site and mosaic are separate slots too, so
+a model field, an SPC outlook and a site frame together. Display order belongs
+to the frontend's layer registry. Site and mosaic are separate slots too, so
 both *can* be shown -- but the controller offers one or the other, because two
 reflectivity ramps over the same storm is not twice the information.
 """

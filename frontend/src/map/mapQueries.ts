@@ -12,6 +12,8 @@ import { profileSettings } from "../lib/graphics/profileSettings";
 import { useGraphicsStore } from "../stores/graphicsStore";
 import { useMapStore } from "../stores/mapStore";
 import { useForecastStore } from "../stores/forecastStore";
+import { useSoundingStore } from "../stores/soundingStore";
+import { releaseTime } from "../features/sounding/soundingTime";
 import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type MapCatalog, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
 import { nearestRadarSite } from "./nearestSite";
 
@@ -267,11 +269,17 @@ export function usePlaceLabels(enabled: boolean): UseQueryResult<PlaceLabels> {
 
 export function useStationAvailability(observationTime: string | null): UseQueryResult<AvailabilityReport> {
   const client = useBackendClient();
+  const date = useSoundingStore((state) => state.observed.date);
+  const hour = useSoundingStore((state) => state.observed.hour);
+  const time = observationTime ?? releaseTime(date, hour);
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.availability(observationTime ?? ""),
-    queryFn: () => client.getStationAvailability(observationTime ?? ""),
-    enabled: observationTime !== null,
+    queryKey: mapKeys.availability(time ?? ""),
+    queryFn: () => client.getStationAvailability(time ?? ""),
+    enabled: time !== null,
     staleTime: AVAILABILITY_STALE_MS,
+    refetchInterval: AVAILABILITY_STALE_MS,
+    // Opening another station view must not restart a failed shared check.
+    retryOnMount: false,
   });
 }

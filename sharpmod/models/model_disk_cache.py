@@ -6,6 +6,7 @@ import errno
 import json
 import os
 import shutil
+import stat
 import tempfile
 import threading
 import time
@@ -336,14 +337,41 @@ class ModelDiskCache:
     def _entries(self):
         if not self.root.exists():
             return []
+        pending = [self.root]
+        metadata_files = []
+        while pending:
+            directory = pending.pop()
+            try:
+                with os.scandir(directory) as children:
+                    for child in children:
+                        try:
+                            info = child.stat(follow_symlinks=False)
+                        except FileNotFoundError:
+                            continue
+                        if (
+                            stat.S_ISLNK(info.st_mode)
+                            or getattr(info, "st_file_attributes", 0)
+                            & stat.FILE_ATTRIBUTE_REPARSE_POINT
+                        ):
+                            continue
+                        if stat.S_ISDIR(info.st_mode):
+                            pending.append(Path(child.path))
+                        elif (
+                            child.name == _METADATA
+                            and directory != self.root
+                            and stat.S_ISREG(info.st_mode)
+                        ):
+                            metadata_files.append((Path(child.path), info))
+            except FileNotFoundError:
+                continue
         result = []
-        for metadata in self.root.rglob(_METADATA):
+        for metadata, info in metadata_files:
             directory = metadata.parent
             try:
                 payload = json.loads(metadata.read_text(encoding="utf-8"))
                 if not isinstance(payload, dict):
                     payload = {}
-                accessed = float(payload.get("accessed", metadata.stat().st_mtime))
+                accessed = float(payload.get("accessed", info.st_mtime))
             except (OSError, ValueError, TypeError):
                 payload = {}
                 accessed = 0.0

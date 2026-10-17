@@ -40,6 +40,7 @@ export function buildDomainLayers(ctx: LayerBuildContext, state: LayerState): Pa
       getColor: deckColour(ctx.tokens.colours.domain),
       widthUnits: "pixels",
       getWidth: ctx.tokens.lengths.domainWidth,
+      wrapLongitude: true,
       pickable: false,
       visible: state.visible,
       opacity: state.opacity,

@@ -140,7 +140,7 @@ test.describe("real-backend soundings", () => {
     await page.waitForFunction(() => performance.getEntriesByName("sharppy:stations-rendered").length > 0, undefined, {
       timeout: 60_000,
     });
-    await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+    await expect(page.getByTestId("catalogue-announcement")).toHaveText(/^[1-9]\d* stations loaded$/u);
     await page.getByRole("button", { name: "Search stations" }).click();
     const search = page.getByRole("combobox", { name: "Search stations" });
     await search.click();

@@ -33,6 +33,7 @@ def _palette(palette: Any) -> dict[str, Any]:
     return {
         "stops": [[float(value), colour] for value, colour in palette.stops],
         "units": palette.units,
+        "display": palette.display,
         "stepped": bool(palette.stepped),
         "floor": None if palette.floor is None else float(palette.floor),
         "ceiling": None if palette.ceiling is None else float(palette.ceiling),
@@ -73,6 +74,7 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
                 "description": product.description,
                 "caveat": product.caveat,
                 "palette": _palette(product.palette),
+                "wind": product.wind,
                 "contour": (
                     None
                     if product.contour is None
@@ -165,6 +167,11 @@ def grid(params: dict[str, Any]) -> dict[str, Any]:
     from sharpmod.providers import hrrr_field
 
     model, product, run, hour = _request(params)
+    from sharpmod.bridge import frame_cache
+    target = frame_cache.path("grid", model, product.key, run, hour, FRAME)
+    cached = frame_cache.read(target)
+    if cached is not None:
+        return cached
     what = f"{model.upper()} {product.label}, {run:%Y-%m-%d %H}Z run, F{hour:03d}"
     cache_key = product.key if model == "hrrr" else f"{model}:{product.key}"
     values = hrrr_field.cached_derived(cache_key, run, hour, FRAME)
@@ -200,7 +207,7 @@ def grid(params: dict[str, Any]) -> dict[str, Any]:
         hrrr_field.remember_derived(cache_key, run, hour, FRAME, values)
     data, scale, low, high = _quantize(np.asarray(values, dtype=np.float32))
     height, width = values.shape
-    return {
+    return frame_cache.write(target, {
         "product": product.key,
         "run_time": p.iso(run),
         "forecast_hour": hour,
@@ -219,7 +226,7 @@ def grid(params: dict[str, Any]) -> dict[str, Any]:
             "NOAA/NCEP NAM via AWS Open Data" if model == "nam-3km-conus" else "NOAA/NCEP RRFS via NOMADS"
         ),
         "data_base64": base64.b64encode(data).decode("ascii"),
-    }
+    })
 
 
 HANDLERS = {

@@ -33,8 +33,11 @@ v2.0.0 Legacy remains available there.
 
 From a prepared source checkout, run `npm run tauri -- dev` in `frontend/`.
 The [README setup](../README.md#run-v3-from-source) installs the Python analysis
-environment and frontend dependencies. `sharpmod-gui` launches the legacy Qt
-app, so it is not the entry point for this interface.
+environment and frontend dependencies. The old `sharpmod-gui` entry point and
+Qt interface are retired from this source tree; use the
+[v2.0.0 Legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0)
+to run that interface. Qt still renders the current app's sounding images
+headlessly.
 
 The navigation rail opens **Overview**, **Model Viewer**, **Soundings**,
 **Logs**, and **Settings**. Hover or focus a rail icon to see its name. Use Tab

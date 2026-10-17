@@ -6,6 +6,7 @@ import type { Bounds } from "./soundings";
 
 /** A sharpmod colour scale: `[value, "#rrggbb"]` stops in display units, ascending. */
 export interface Palette {
+  display: "auto" | "fixed" | "temperature-difference";
   stops: readonly (readonly [number, string])[];
   units: string;
   /** Banded: each class takes its stop's flat colour; otherwise RGB between stops. */
@@ -27,6 +28,8 @@ export interface FieldProduct {
   palette: Palette;
   /** The product's contour-line spec; null for products drawn as colour only. */
   contour: ProductContour | null;
+  /** Wind barbs in knots, independent of the shaded field's quantity. */
+  wind: boolean;
 }
 
 /** A product's contour lines: a level set of its own contour field. */

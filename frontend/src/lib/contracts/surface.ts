@@ -40,7 +40,7 @@ function parsePlot(value: unknown, path: string): SurfacePlot {
   expectExactKeys(obj, path, [
     "id", "longitude", "latitude", "valid", "offsetMin", "stale",
     "availability", "windState", "staff", "upperText", "lowerText",
-    "label", "description",
+    "label", "description", "temperatureC", "dewpointC",
   ]);
   const valid = expectNullable(obj.valid, at(path, "valid"), expectTimestamp);
   const offsetMin = expectNullable(obj.offsetMin, at(path, "offsetMin"), (v, p) =>
@@ -68,6 +68,8 @@ function parsePlot(value: unknown, path: string): SurfacePlot {
     ]),
     windState,
     staff,
+    temperatureC: expectNullable(obj.temperatureC, at(path, "temperatureC"), expectFiniteNumber),
+    dewpointC: expectNullable(obj.dewpointC, at(path, "dewpointC"), expectFiniteNumber),
     upperText: expectString(obj.upperText, at(path, "upperText"), { minLength: 1, maxLength: 4 }),
     lowerText: expectString(obj.lowerText, at(path, "lowerText"), { minLength: 1, maxLength: 4 }),
     label: expectString(obj.label, at(path, "label"), { minLength: 1, maxLength: 120 }),

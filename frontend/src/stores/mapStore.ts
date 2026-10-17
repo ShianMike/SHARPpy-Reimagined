@@ -43,6 +43,7 @@ export interface MapState {
   productKey: string | null;
   panels: PanelState[];
   panelLayout: PanelLayout;
+  projection: "mercator" | "globe";
   /** The panel the layer panel edits, 0 to 3. */
   activePanel: number;
   /** Bottom first. */
@@ -59,9 +60,10 @@ export interface MapState {
   reportWindowS: number;
   /** The provider's hazard-filter key for the storm reports. */
   reportFilter: string;
-  /** The UWyo observation time stations are marked against; null shows the bundled list alone. */
+  /** Explicit UWyo launch, or null to follow the observed sounding form. */
   availabilityTime: string | null;
   layerPanelCollapsed: boolean;
+  layerPanelGroup: "weather" | "map";
   /** For persistence only; written on moveend. */
   cameraSnapshot: CameraSnapshot | null;
   focusRequest: FocusRequest | null;
@@ -73,6 +75,7 @@ export interface MapState {
   /** The field product of the active panel. */
   setProduct: (key: string) => void;
   setPanelLayout: (layout: PanelLayout) => void;
+  setProjection: (projection: MapState["projection"]) => void;
   setActivePanel: (panel: number) => void;
   moveLayer: (id: OrderableLayerId, direction: 1 | -1) => void;
   setRadarProduct: (key: string | null) => void;
@@ -83,6 +86,7 @@ export interface MapState {
   setReportFilter: (filter: string) => void;
   setAvailabilityTime: (time: string | null) => void;
   setLayerPanelCollapsed: (collapsed: boolean) => void;
+  setLayerPanelGroup: (group: "weather" | "map") => void;
   setCameraSnapshot: (snapshot: CameraSnapshot) => void;
   requestFocus: (stationId: string) => void;
 }
@@ -124,6 +128,7 @@ export const useMapStore = create<MapState>()(
     productKey: null,
     panels: [extraPanel(), extraPanel(), extraPanel()],
     panelLayout: 1,
+    projection: "mercator",
     activePanel: 0,
     layerOrder: [...ORDERABLE_LAYER_IDS],
     radarProduct: null,
@@ -134,6 +139,7 @@ export const useMapStore = create<MapState>()(
     reportFilter: "all",
     availabilityTime: null,
     layerPanelCollapsed: false,
+    layerPanelGroup: "weather",
     cameraSnapshot: null,
     focusRequest: null,
     setLayerVisible: (id, visible) => {
@@ -155,6 +161,7 @@ export const useMapStore = create<MapState>()(
     setPanelLayout: (layout) => {
       set((state) => ({ panelLayout: layout, activePanel: state.activePanel < layout ? state.activePanel : 0 }));
     },
+    setProjection: (projection) => { set({ projection }); },
     setActivePanel: (panel) => {
       set((state) => (panel >= 0 && panel < state.panelLayout ? { activePanel: panel } : {}));
     },
@@ -191,6 +198,9 @@ export const useMapStore = create<MapState>()(
     },
     setLayerPanelCollapsed: (collapsed) => {
       set({ layerPanelCollapsed: collapsed });
+    },
+    setLayerPanelGroup: (layerPanelGroup) => {
+      set({ layerPanelGroup });
     },
     setCameraSnapshot: (snapshot) => {
       set({ cameraSnapshot: { center: [snapshot.center[0], snapshot.center[1]], zoom: snapshot.zoom } });

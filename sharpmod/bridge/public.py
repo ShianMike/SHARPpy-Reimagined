@@ -11,6 +11,9 @@ from typing import Any
 from sharpmod.bridge import params as p
 
 COMMANDS = {
+    "get_sounding_progress": "soundings.progress",
+    "get_storage_usage": "storage.usage",
+    "clear_cache": "storage.clear",
     "get_station_catalog": "stations.catalog",
     "get_model_catalog": "models.catalog",
     "get_model_status": "models.status",
@@ -32,7 +35,6 @@ COMMANDS = {
     "get_sounding_trends": "soundings.trends",
     "render_sounding": "soundings.render",
     "render_sounding_view": "soundings.view",
-    "get_ensemble_summary": "ensemble.summary",
     "get_threshold_metrics": "thresholds.metrics",
     "evaluate_threshold": "thresholds.evaluate",
     "export_threshold_csv": "thresholds.export_csv",
@@ -80,13 +82,16 @@ def public_station(
 
 def bridge_request(command: str, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     if command == "open_sounding":
-        p.keys(args, ("request",))
+        p.keys(args, ("request",), ("progressId",))
         request = args["request"]
         if not isinstance(request, dict):
             raise p.invalid("request must be an object")
         kind = p.choice(request, "kind", ("observed", "model", "era5", "file", "wrf"), "")
         method = f"soundings.open_{kind}"
+        progress_id = args.get("progressId")
         args = {key: value for key, value in request.items() if key != "kind"}
+        if progress_id is not None:
+            args["progressId"] = progress_id
     else:
         method = COMMANDS[command]
     renamed = {"site": "site_id", "ascent": "parcel"}

@@ -31,6 +31,12 @@ describe("surface plot contracts", () => {
   });
 
   it.each([
+    ["a nonfinite temperature", (c: Record<string, unknown>) => {
+      ((c.plots as unknown[])[0] as Record<string, unknown>).temperatureC = Infinity;
+    }],
+    ["a textual reading", (c: Record<string, unknown>) => {
+      ((c.plots as unknown[])[0] as Record<string, unknown>).dewpointC = "12.2";
+    }],
     ["a staff out of the blue", (c: Record<string, unknown>) => {
       (((c.plots as unknown[])[0] as Record<string, unknown>).staff as Record<string, number>).barbs = 9;
     }],

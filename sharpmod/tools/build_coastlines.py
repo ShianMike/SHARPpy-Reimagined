@@ -1,9 +1,8 @@
-"""Build the bundled coastline resource for the GUI station map.
+"""Build the bundled coastline resource for sounding locator fallbacks.
 
 Downloads the public-domain Natural Earth 1:110m coastline (a small, low-detail
 vector suitable for a picker background) and writes a *compact* JSON resource
-``sharpmod/resources/coastlines.json`` consumed by
-:class:`sharpmod.gui.StationMapWidget`.
+``sharpmod/resources/coastlines.json`` consumed by ``sharpmod.viz.hodo_locator``.
 
 The output schema is intentionally tiny -- a list of polylines, each a list of
 ``[lon, lat]`` pairs rounded to two decimals::

@@ -1,5 +1,5 @@
-import { Copy, Download, Hand, Maximize, Pencil, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { ChevronDown, Copy, Download, Hand, Maximize, Pencil, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { Action, IconAction } from "../../ui/Controls";
 import type { ImageMode, RenderChoice } from "../../types/soundings";
 import { convertUnit, displayUnit } from "../../lib/displayUnits";
@@ -27,6 +27,10 @@ export function SoundingImage({ soundingId, choice, title, heading }: { sounding
   const gesture = useRef<{ id: string | null; x: number; y: number; left: number; top: number } | null>(null);
   const { image, edit, state, edits, request, busy, update } = useSoundingView(soundingId, choice, quality);
   const data = image.data;
+  const pointTitles = useMemo(() => editing ? data?.points.map((point) => `${point.label}: ${point.values.map((v) => {
+    const unit = displayUnit(v.unit, units);
+    return convertUnit(v.value, v.unit, unit).toFixed(1) + " " + unit;
+  }).join(", ")}`) : [], [data?.points, units, editing]);
   const unavailable = busy || image.isError;
   const message = notice?.image === data?.image ? notice?.text : undefined;
   const url = useObjectUrl(data?.image);
@@ -131,7 +135,7 @@ export function SoundingImage({ soundingId, choice, title, heading }: { sounding
       </div>
       <div className={styles.exportTools}>
         {data === undefined ? null : <details className={styles.panelPicker}>
-          <summary>Chart panels</summary>
+          <summary>Chart panels<ChevronDown className="icon-sm" aria-hidden="true" /></summary>
           <div className={styles.options} data-motion="enter">
             <strong>Chart panels</strong>
             <AscentPicker />
@@ -156,7 +160,7 @@ export function SoundingImage({ soundingId, choice, title, heading }: { sounding
             onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={() => { gesture.current = null; setPreview(null); }}>
             <img className={styles.image} src={url} alt={"Sounding: " + title} draggable={false} data-testid="sounding-image" />
             {editing ? <svg className={styles.editOverlay} viewBox={"0 0 " + String(data.width) + " " + String(data.height)} aria-hidden="true">
-              {data.points.map((point) => <circle key={point.id} cx={point.x * data.width} cy={point.y * data.height} r={4 / scale} data-selected={point.id === selected}><title>{point.label}: {point.values.map((v) => { const unit = displayUnit(v.unit, units); return convertUnit(v.value, v.unit, unit).toFixed(1) + " " + unit; }).join(", ")}</title></circle>)}
+              {data.points.map((point, index) => <circle key={point.id} cx={point.x * data.width} cy={point.y * data.height} r={4 / scale} data-selected={point.id === selected}><title>{pointTitles?.[index]}</title></circle>)}
               {preview === null ? null : <circle cx={preview.x * data.width} cy={preview.y * data.height} r={7 / scale} data-selected="true" />}
             </svg> : null}
           </div> : null}

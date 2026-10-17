@@ -3,9 +3,6 @@
 import { Activity, House, SquareTerminal, Globe2, Settings, type LucideIcon } from "lucide-react";
 import type { WorkspaceId } from "../stores/appStore";
 
-/** The legacy app's entry point, shown as code where work still lives there. */
-export const LEGACY_COMMAND = "sharpmod-gui";
-
 export interface WorkspaceDefinition {
   id: WorkspaceId;
   label: string;

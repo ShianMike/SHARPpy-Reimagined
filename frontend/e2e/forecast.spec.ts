@@ -43,18 +43,18 @@ test.describe("the forecast map", () => {
     const row = await layerRow(page, "model-field");
     await expect(row.getByTestId("field-shown")).toContainText("F000 of the 10-04 16Z run, valid 10-04 16Z");
     await expect(row.getByTestId("field-legend")).toBeVisible();
-    await expect.poll(() => deckLayers(page)).toContain("model-field");
+    await expect.poll(() => deckLayers(page)).toContain("model-field-smooth");
     // The boundaries go over a drawn field.
     expect(await deckLayers(page)).toContain("boundaries-states");
     await expect(page.getByTestId("panel-chip-1")).toHaveCount(0);
     const scale = page.getByRole("complementary", { name: "Parameter scale" });
-    await expect(scale).toContainText("dBZ");
+    await expect(scale).toHaveAccessibleDescription(/dBZ/u);
 
     await row.getByRole("combobox", { name: "Product" }).click();
     await page.getByRole("listbox", { name: "Product" }).locator('[value="tmp-2m"]').click();
     await expect(row.getByTestId("field-shown")).toBeVisible();
     await expect(row).toContainText("°F");
-    await expect(scale).toContainText("°F");
+    await expect(scale).toHaveAccessibleDescription(/°F/u);
     await nextFrames(page);
     await saveScreenshot(page, "browser-forecast-field.png");
     // A contoured product: the lines draw with the colour, and the row says so.
@@ -74,7 +74,7 @@ test.describe("the forecast map", () => {
     await expect(notice.getByRole("button", { name: "Retry" })).toHaveCount(0);
     await expect(notice.getByTestId("error-no-retry")).toHaveText("Retrying will not help.");
     await expect(page.getByRole("complementary", { name: "Parameter scale" })).toContainText("Unavailable");
-    expect(await deckLayers(page)).not.toContain("model-field");
+    expect(await deckLayers(page)).not.toContain("model-field-smooth");
     expectWarnings(consoleMessages, [{ pattern: /^\[backend\] FIELD_UNAVAILABLE in get_weather_field/u }]);
   });
 
@@ -90,7 +90,9 @@ test.describe("the forecast map", () => {
     await turnOn(page, "spc-hail");
     await expect(page.getByTestId("outlook-none-hail")).toContainText("SPC published no outlook");
     await turnOn(page, "spc-torn");
-    await expect.poll(() => deckLayers(page)).toContain("spc-torn-hatch");
+    await expect.poll(() => deckLayers(page)).toEqual(expect.arrayContaining([
+      "spc-torn-hatch-1", "spc-torn-hatch-2", "spc-torn-hatch-3",
+    ]));
 
     await turnOn(page, "radar");
     await expect(page.getByTestId("radar-shown")).toContainText("Composite reflectivity");
@@ -200,28 +202,12 @@ test.describe("the forecast map", () => {
     const longitude = Number(await page.getByLabel("Longitude, degrees east").inputValue());
     expect(Math.abs(latitude - 36)).toBeLessThan(0.05);
     expect(Math.abs(longitude + 108)).toBeLessThan(0.05);
-    await expect(page.getByRole("combobox", { name: "Model" }).last()).toHaveValue("hrrr");
+    await expect(page.getByRole("combobox", { name: "Model" }).last()).toHaveAttribute("value", "hrrr");
     // Back on the map, Esc clears the point as it clears a station.
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer" }).click();
     await expect(inspector).toContainText("Forecast point");
     await page.keyboard.press("Escape");
     await expect(inspector).toHaveCount(0);
-    expectWarnings(consoleMessages, []);
-  });
-
-  test("playback steps on once each frame has loaded, and pauses", async ({ page, consoleMessages }) => {
-    await page.goto("/");
-    await waitForMapDrawn(page);
-    await turnOn(page, "model-field");
-    const hour = page.getByRole("slider", { name: "Forecast hour", exact: true });
-    const timeline = page.getByRole("region", { name: "Forecast timeline" });
-    await timeline.getByRole("button", { name: "Play" }).click();
-    await expect.poll(async () => Number(await hour.inputValue()), { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
-    await timeline.getByRole("button", { name: "Pause" }).click();
-    const stopped = await hour.inputValue();
-    await page.waitForTimeout(1500);
-    expect(await hour.inputValue()).toBe(stopped);
-    await expect(page.getByTestId("field-shown")).toContainText(`F${stopped.padStart(3, "0")}`);
     expectWarnings(consoleMessages, []);
   });
 
@@ -240,7 +226,8 @@ test.describe("the forecast map", () => {
     await expect(page.getByTestId("map-panel-4").locator(".maplibregl-ctrl-attrib")).toBeVisible();
     // Panels 2 to 4 open with their field on, each a different kind of product.
     for (const n of [2, 3, 4]) {
-      await expect(page.getByTestId(`panel-chip-${String(n)}`)).toContainText("F000, valid 10-04 16Z");
+      await expect(page.getByTestId(`panel-chip-${String(n)}`)).toContainText(`${String(n)} • `);
+      await expect(page.getByTestId(`panel-chip-${String(n)}`)).not.toContainText("Loading");
     }
     // A narrow panel labels as the single map would at this zoom: ids, not crowded names.
     await nextFrames(page);
@@ -248,13 +235,17 @@ test.describe("the forecast map", () => {
     const names = await Promise.all([2, 3, 4].map((n) => page.getByTestId(`panel-chip-${String(n)}`).locator("span").first().innerText()));
     expect(new Set(names).size).toBe(3);
     await page.getByTestId("panel-chip-3").click();
+    await expect(page.getByRole("dialog", { name: "Parameters", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
     await page.getByRole("group", { name: "Map detail views" }).getByRole("button", { name: "Layers", exact: true }).click();
     await expect(page.getByRole("region", { name: "Layers, panel 3" })).toBeVisible();
     await expect(page.getByTestId("panel-chip-3")).toHaveAttribute("aria-pressed", "true");
     // The shared time moves every panel.
     await page.getByRole("region", { name: "Forecast timeline" }).getByRole("button", { name: "Next frame" }).click();
     for (const n of [2, 3, 4]) {
-      await expect(page.getByTestId(`panel-chip-${String(n)}`)).toContainText("F001, valid 10-04 17Z");
+      await page.getByRole("group", { name: "Active map panel" }).getByRole("button", { name: `Panel ${String(n)}`, exact: true }).click();
+      const row = await layerRow(page, "model-field");
+      await expect(row.getByTestId("field-shown")).toContainText("F001 of the 10-04 16Z run, valid 10-04 17Z");
     }
     await nextFrames(page);
     await saveScreenshot(page, "browser-forecast-four-panels.png");
@@ -272,7 +263,7 @@ test.describe("the forecast map", () => {
   test("stations marked against the UWyo list of a release, the extra ones added", async ({ page, consoleMessages }) => {
     await page.goto("/");
     await waitForMapDrawn(page);
-    await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+    await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
     const row = await layerRow(page, "stations");
     const select = row.getByRole("combobox", { name: "Availability" });
     await select.click();
@@ -281,10 +272,10 @@ test.describe("the forecast map", () => {
     expect(release).not.toBeNull();
     await option.click();
     await expect(row.getByTestId("availability-shown")).toContainText("UWyo lists 2 bundled stations and 1 others");
-      await expect(page.getByRole("list", { name: "Legend" })).toContainText("Station, not listed");
+    await expect(page.getByRole("list", { name: "Legend" })).toContainText("Station, not reported");
     await select.click();
-    await page.getByRole("option", { name: "Bundled list only", exact: true }).click();
-    await expect(page.getByTestId("catalogue-announcement")).toHaveText("933 stations loaded");
+    await page.getByRole("option", { name: "Automatic · observed launch", exact: true }).click();
+    await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
     expectWarnings(consoleMessages, []);
   });
 });

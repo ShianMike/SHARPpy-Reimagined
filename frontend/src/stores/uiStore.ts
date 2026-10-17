@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 import { DEFAULT_UNITS, parseUnitPreferences, type UnitPreferences } from "../lib/displayUnits";
 
 export type Theme = "system" | "light" | "dark";
+type PopupPosition = { x: number; y: number } | null;
 interface UiState {
   navigationOpen: boolean;
   setNavigationOpen(value: boolean): void;
@@ -11,14 +12,16 @@ interface UiState {
   theme: Theme;
   speed: number;
   loop: boolean;
+  smoothPlayback: boolean;
   units: UnitPreferences;
   setUnits(value: UnitPreferences): void;
-  popupPosition: { x: number; y: number } | null;
-  setPopupPosition(value: UiState["popupPosition"]): void;
+  popupPositions: Record<string, PopupPosition>;
+  setPopupPosition(id: string, value: PopupPosition): void;
   setCollapsed(value: boolean): void;
   setTheme(value: Theme): void;
   setSpeed(value: number): void;
   setLoop(value: boolean): void;
+  setSmoothPlayback(value: boolean): void;
 }
 export const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2] as const;
 export const useUiStore = create<UiState>()(persist((set) => ({
@@ -28,27 +31,34 @@ export const useUiStore = create<UiState>()(persist((set) => ({
   theme: "system",
   speed: 1,
   loop: true,
+  smoothPlayback: false,
   units: DEFAULT_UNITS,
   setUnits: (units) => { set({ units: parseUnitPreferences(units) }); },
-  popupPosition: null,
-  setPopupPosition: (popupPosition) => { set({ popupPosition }); },
+  popupPositions: {},
+  setPopupPosition: (id, position) => { set((state) => ({ popupPositions: { ...state.popupPositions, [id]: position } })); },
   setCollapsed: (collapsed) => { set({ collapsed }); },
   setTheme: (theme) => { set({ theme }); },
   setSpeed: (speed) => { if (PLAYBACK_SPEEDS.some((value) => value === speed)) set({ speed }); },
   setLoop: (loop) => { set({ loop }); },
+  setSmoothPlayback: (smoothPlayback) => { set({ smoothPlayback }); },
 }), {
   name: "sharppy-workspace-ui",
-  partialize: ({ collapsed, theme, speed, loop, popupPosition, units }) => ({ collapsed, theme, speed, loop, popupPosition, units }),
+  partialize: ({ collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }) => ({ collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }),
   merge: (saved, current) => {
     const value = saved !== null && typeof saved === "object" ? saved as Record<string, unknown> : {};
-    const point = value.popupPosition !== null && typeof value.popupPosition === "object" ? value.popupPosition as Record<string, unknown> : {};
+    const positions = value.popupPositions !== null && typeof value.popupPositions === "object" ? value.popupPositions as Record<string, unknown> : {};
     return { ...current,
       collapsed: typeof value.collapsed === "boolean" ? value.collapsed : current.collapsed,
       theme: value.theme === "light" || value.theme === "dark" ? value.theme : "system",
       speed: PLAYBACK_SPEEDS.find((speed) => speed === value.speed) ?? 1,
       loop: typeof value.loop === "boolean" ? value.loop : current.loop,
+      smoothPlayback: typeof value.smoothPlayback === "boolean" ? value.smoothPlayback : current.smoothPlayback,
       units: parseUnitPreferences(value.units),
-      popupPosition: typeof point.x === "number" && Number.isFinite(point.x) && typeof point.y === "number" && Number.isFinite(point.y) ? { x: point.x, y: point.y } : null,
+      popupPositions: Object.fromEntries(Object.entries(positions).flatMap(([id, point]) => {
+        if (point === null || typeof point !== "object") return [];
+        const { x, y } = point as Record<string, unknown>;
+        return typeof x === "number" && Number.isFinite(x) && typeof y === "number" && Number.isFinite(y) ? [[id, { x, y }]] : [];
+      })),
     };
   },
 }));

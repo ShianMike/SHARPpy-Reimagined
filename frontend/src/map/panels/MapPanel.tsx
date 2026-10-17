@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cx } from "../../lib/cx";
+import { useAppStore } from "../../stores/appStore";
 import { useMapStore, type PanelLayout } from "../../stores/mapStore";
 import { forecastLabel } from "../../features/sounding/soundingTime";
 import { useForecastContext } from "../../features/forecast/useForecast";
@@ -55,7 +56,7 @@ function PanelChip({ panel, layout, field }: { panel: number; layout: PanelLayou
   }
   const body = (
     <>
-      <span className={styles.product}>{`${String(panel + 1)}. ${name}`}</span>
+      <span className={styles.product}>{`${String(panel + 1)} • ${name}`}</span>
       {status === null ? null : <span className={cx(styles.status, "tabular")}>{status}</span>}
     </>
   );
@@ -77,7 +78,7 @@ function PanelChip({ panel, layout, field }: { panel: number; layout: PanelLayou
     >
       {body}
     </button>
-      <Popover open={anchor !== null} movable anchor={anchor} onClose={() => { setAnchor(null); }} role="dialog" label="Parameters" initialFocus="first" align="start" width="content" className={pickerStyles.parameterPicker}>
+      <Popover id={`panel-${String(panel)}-parameters`} open={anchor !== null} movable anchor={anchor} onClose={() => { setAnchor(null); }} role="dialog" label="Parameters" initialFocus="first" align="start" width="content" className={pickerStyles.parameterPicker}>
         {field.catalog.data === undefined ? null : <ParameterPicker products={field.catalog.data.products} selected={field.product?.key ?? null} anchor={anchor} onClose={() => { setAnchor(null); }} />}
       </Popover>
     </>
@@ -94,7 +95,9 @@ export interface MapPanelProps {
 export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [runtime, setRuntime] = useState<MapRuntime | null>(null);
+  const isMap = useAppStore((state) => state.activeWorkspace === "map");
   const active = useMapStore((state) => state.activePanel === panel);
+  const projection = useMapStore((state) => state.projection);
   const field = usePanelScene(runtime, panel);
 
   useEffect(() => {
@@ -109,7 +112,7 @@ export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode
       created.dispose();
       onRuntime?.(null);
     };
-  }, [panel, onRuntime]);
+  }, [panel, onRuntime, projection]);
 
   return (
     <div
@@ -129,7 +132,7 @@ export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode
         }}
       />
       <ParameterScale panel={panel} field={field} />
-      <PanelChip panel={panel} layout={layout} field={field} />
+      {isMap ? <PanelChip panel={panel} layout={layout} field={field} /> : null}
       <FieldTooltip panel={panel} field={field} />
     </div>
   );

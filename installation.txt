@@ -234,7 +234,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
   Task                                    Core   +SHARPpy   +extra
   --------------------------------------  -----  ---------  ----------
-  Run the interactive GUI (sharpmod-gui)   yes      YES        -
+  Run v3 desktop (Tauri + frontend)       yes      YES      [era5,wrf]
   List / search / fetch UWyo soundings     yes      no         -
   Render a sounding to PNG                 yes      YES        -
   Extract a forecast-model point sounding  yes      no       [era5]
@@ -256,7 +256,6 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
 ---------------------------------------------------------------------------
 8. CONSOLE COMMANDS INSTALLED
 ---------------------------------------------------------------------------
-  sharpmod-gui        interactive desktop app (station map / list / open file)
   sharpmod-render     render a sounding file to PNG
   uwyo-sounding       list / search / fetch University of Wyoming soundings
   observed-sounding   fetch an observed sounding -> .npz
@@ -267,9 +266,11 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   wrf-extract         WRF-ARW point sounding -> .npz                 [wrf]
   sharpmod-rust-sync  check / repair / verify the local Rust extension
 
-  (sharpmod-gui is a windowed/no-console entry point; it needs a display and
-   the SHARPpy render stack from section 4. The commands marked [era5] need
-   that extra, for the reason given in section 5.)
+  Start the current desktop with npm run tauri -- dev in frontend/ after
+  preparing the source environment (README.md). The legacy Qt interface is
+  retired from this tree and remains available in the v2.0.0 Legacy release:
+  https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0
+  The commands marked [era5] need that extra, as explained in section 5.
 
 
 ---------------------------------------------------------------------------

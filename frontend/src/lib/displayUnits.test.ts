@@ -1,6 +1,16 @@
 import { expect, it } from "vitest";
 import { convertUnit, DEFAULT_UNITS, displayReading, displayUnit, parseUnitPreferences } from "./displayUnits";
 
+it("honours fixed quantities and scales temperature differences without an offset", () => {
+  const preferences = { temperature: "°F", wind: "mph" } as const;
+  expect(displayUnit("m/s", preferences, "fixed")).toBe("m/s");
+  expect(convertUnit(20, "m/s", "mph", "fixed")).toBe(20);
+  expect(displayUnit("°C", preferences, "temperature-difference")).toBe("°F");
+  expect(convertUnit(0, "°C", "°F", "temperature-difference")).toBe(0);
+  expect(convertUnit(-5, "°C", "°F", "temperature-difference")).toBe(-9);
+  expect(convertUnit(-9, "°F", "°C", "temperature-difference")).toBe(-5);
+});
+
 it.each([[32, "°F", "°C", 0], [-40, "°C", "°F", -40], [20, "°C", "°F", 68],
   [20, "kt", "km/h", 37.04], [20, "kt", "mph", 23.0155889605], [20, "kt", "m/s", 10.2888888889],
   [-12.5, "m/s", "kt", -24.2980561555]] as const)("converts %s %s to %s and back", (value, source, target, expected) => {

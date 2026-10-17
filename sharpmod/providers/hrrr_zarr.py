@@ -455,6 +455,7 @@ def fetch_hrrr_zarr_point(
     cache_dir=None,
     get_bytes=None,
     progress=None,
+    on_bytes=None,
     cancelled=None,
     max_workers: int = 16,
 ):
@@ -507,6 +508,8 @@ def fetch_hrrr_zarr_point(
         payload = get_bytes(url)
         with progress_lock:
             downloaded += len(payload)
+            if on_bytes is not None:
+                on_bytes(len(payload))
             if progress is not None:
                 progress(downloaded, 0)
         return payload

@@ -6,7 +6,9 @@ import { Fragment, useState, type ReactNode } from "react";
 import { useForecastContext } from "../../features/forecast/useForecast";
 import { compactUtc, forecastLabel } from "../../features/sounding/soundingTime";
 import { panelLayers, useMapStore } from "../../stores/mapStore";
+import { resetLayerSettings } from "../../stores/preferences";
 import type { StationAvailability } from "../../types/contracts";
+import { Action } from "../../ui/Controls";
 import { LAYER_REGISTRY } from "../layers/descriptors";
 import { ORDERABLE_LAYER_IDS, type LayerDescriptor, type OrderableLayerId } from "../layers/registry";
 import { AvailabilityControl } from "./AvailabilityControl";
@@ -54,7 +56,9 @@ function WeatherExtra({ id, panel }: { id: OrderableLayerId; panel: number }): R
 }
 
 export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
-  const [group, setGroup] = useState<"weather" | "map">("weather");
+  const group = useMapStore((state) => state.layerPanelGroup);
+  const projection = useMapStore((state) => state.projection);
+  const [reset, setReset] = useState(false);
   const panel = useMapStore((state) => state.activePanel);
   const layout = useMapStore((state) => state.panelLayout);
   const states = useMapStore((state) => panelLayers(state, panel));
@@ -81,10 +85,10 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
             onClick={() => { useMapStore.getState().setActivePanel(index); }}>Panel {index + 1}</button>)}
         </div>}
         <div className={styles.groups} role="group" aria-label="Layer categories">
-          <button type="button" aria-pressed={group === "weather"} onClick={() => { setGroup("weather"); }}>
+          <button type="button" aria-pressed={group === "weather"} onClick={() => { useMapStore.getState().setLayerPanelGroup("weather"); }}>
             <CloudSun className="icon" aria-hidden="true" /> Weather
           </button>
-          <button type="button" aria-pressed={group === "map"} onClick={() => { setGroup("map"); }}>
+          <button type="button" aria-pressed={group === "map"} onClick={() => { useMapStore.getState().setLayerPanelGroup("map"); }}>
             <MapIcon className="icon" aria-hidden="true" /> Map details
           </button>
         </div>
@@ -106,6 +110,14 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
           })}
         </div>
         <div data-motion="fade" inert={group !== "map"} hidden={group !== "map"}>
+          <div className={styles.projection}>
+            <h3 className={styles.group}>Map view <span>All panels</span></h3>
+            <div className={styles.panelPicker} role="group" aria-label="Map projection">
+              {(["mercator", "globe"] as const).map((value) => <button key={value} type="button" aria-pressed={projection === value}
+                onClick={() => { useMapStore.getState().setProjection(value); }}>{value === "globe" ? "Globe" : "Flat map"}</button>)}
+            </div>
+            <p className={styles.hint}>Layers and model boundaries adapt to this view.</p>
+          </div>
           <h3 className={styles.group}>Map details</h3>
           {MAP_LAYERS.map((layer) => (
             <LayerRow key={layer.id} layer={layer} state={states[layer.id]}>
@@ -115,6 +127,11 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
           <Legend availabilities={availabilities} />
         </div>
       </div>
+      <footer className={styles.footer}>
+        <span role="status">{reset ? "Layers reset · all panels" : "Saves automatically"}</span>
+        <Action title="Reset layers, projection and weather options in all panels. Keep the layout, parameters and map location."
+          onClick={() => { resetLayerSettings(); setReset(true); }}>Reset layers</Action>
+      </footer>
     </section>
   );
 }

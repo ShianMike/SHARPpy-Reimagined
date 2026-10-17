@@ -1,7 +1,7 @@
 // Surface station-plot records (DESIGN-contracts C8): where a station is, what
 // it reported, and the display slots its station model draws. The reading pair
-// is position-keyed (upper, lower) exactly as the plot stands, so no quantity
-// is named here; `label` and `description` carry the provider's own words.
+// is position-keyed (upper, lower); numeric temperatures support display-unit
+// conversion without parsing the provider's description.
 
 export interface StaffSpec {
   /** Screen degrees of the staff tip from east, y down: toward the wind's source. */
@@ -27,6 +27,8 @@ export interface SurfacePlot {
   windState: PlotWindState;
   /** The wind mark spec; present exactly when `windState` is "available". */
   staff: StaffSpec | null;
+  temperatureC: number | null;
+  dewpointC: number | null;
   /** The plot's upper reading, at its own whole-degree precision. */
   upperText: string;
   /** The plot's lower reading, at its own whole-degree precision. */

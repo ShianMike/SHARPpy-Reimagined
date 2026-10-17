@@ -7,9 +7,8 @@
 //! | `evaluate_threshold` | `thresholds.evaluate` | 300 s + 60 s per member |
 //! | `export_threshold_csv` | `thresholds.export_csv` | 300 s + 60 s per member |
 //!
-//! The evaluation is the same acquisition as `ensemble.summary`: the request
-//! names its members, and each member's verdict keeps the reason it could not
-//! be used. Units for the form's conditions are filled from the registry in
+//! The request names its members; each verdict keeps the reason a member could
+//! not be used. Units for the form's conditions are filled from the registry in
 //! the bridge, so no unit string crosses from the webview.
 
 use std::time::Duration;

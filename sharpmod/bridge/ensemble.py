@@ -1,18 +1,6 @@
-"""Ensemble acquisition and summary: one forecast-model run's members at a point.
+"""Fetch and merge forecast-model members for ``bridge.thresholds``.
 
-Every value comes from sharpmod: members are fetched by
-``tools.model_extract.extract`` (one portable ``.npz`` per member), combined by
-``analysis.profile_timeline.combine_ensemble_collections``, accounted by
-``analysis.ensemble_members.EnsembleAcquisition``, and summarized by
-``analysis.profile_metrics.ProfileMetricsEngine.ensemble`` with the same keys,
-labels, units, and decimals the legacy tables use. The results are labelled
-rows, so the frontend renders them without naming any quantity. These modules
-only validate requests, move data between those functions, and shape the
-results. They import sharpmod inside each handler, so importing them stays
-cheap and never loads Qt.
-
-``acquire`` is the shared fetch-and-merge seam: ``bridge.thresholds`` evaluates
-rules against the same merged collection this module summarizes.
+Imports stay lazy so loading the bridge does not load Qt.
 """
 
 from __future__ import annotations
@@ -78,7 +66,7 @@ def acquire(params: dict[str, Any]):
 
     from sharpmod.analysis.ensemble_members import EnsembleAcquisition, MemberFailure
     from sharpmod.analysis.profile_timeline import combine_ensemble_collections
-    from sharpmod.bridge.sounding_cache import SoundingDecodeError, decode_collection
+    from sharpmod.bridge.sounding_cache import SoundingDecodeError, cache, decode_collection
     from sharpmod.tools import era5_extract
     from sharpmod.tools import model_extract as mx
 
@@ -102,7 +90,7 @@ def acquire(params: dict[str, Any]):
     collections = []
     labels: list[str] = []
     failures: list[MemberFailure] = []
-    with tempfile.TemporaryDirectory(prefix="sharpmod-ensemble") as tmp:
+    with tempfile.TemporaryDirectory(prefix="sharpmod-ensemble", dir=cache().root) as tmp:
         for member in members:
             path = Path(tmp) / f"{member}.npz"
             try:
@@ -115,6 +103,7 @@ def acquire(params: dict[str, Any]):
                     out_path=str(path),
                     loc=location,
                     member=allowed[member],
+                    download_dir=str(Path(tmp) / f"{member}-grib"),
                 )
                 collection, _ = decode_collection(Path(written) if written else path)
             except era5_extract.ParameterRangeError as exc:
@@ -145,65 +134,3 @@ def acquire(params: dict[str, Any]):
     # between it and the profiles it merged.
     merged = combine_ensemble_collections(collections, tuple(labels), acquisition=ledger)
     return merged, ledger
-
-
-def summary(params: dict[str, Any]) -> dict[str, Any]:
-    """The metric spreads of one ensemble run at one valid time."""
-    p.keys(
-        params,
-        ("model", "latitude", "longitude", "forecast_hour", "members"),
-        ("run_time", "location"),
-    )
-    from sharpmod.analysis import box_analysis
-    from sharpmod.analysis.profile_metrics import DEFAULT_METRIC_KEYS
-    from sharpmod.analysis.profile_metrics_engine import ProfileMetricsEngine
-
-    merged, ledger = acquire(params)
-    result = ProfileMetricsEngine().ensemble(merged, DEFAULT_METRIC_KEYS)
-
-    metrics = []
-    for wanted in DEFAULT_METRIC_KEYS:
-        spread = result.scalar[wanted]
-        item = box_analysis.parameter(wanted)
-        metrics.append(
-            {
-                "key": wanted,
-                "label": item.label,
-                "units": item.display_units,
-                "decimals": int(item.decimals),
-                "count": int(spread.count),
-                "p10": p.num(spread.p10),
-                "median": p.num(spread.median),
-                "p90": p.num(spread.p90),
-                "minimum": p.num(spread.minimum),
-                "maximum": p.num(spread.maximum),
-            }
-        )
-    samples = [
-        {
-            "member": row.member,
-            "outcome": row.outcome,
-            "reason": row.reason[:MAX_REASON] if row.reason else None,
-            "values": [p.num(row.values.get(wanted)) for wanted in DEFAULT_METRIC_KEYS],
-        }
-        for row in result.member_samples
-    ]
-    return {
-        "valid_time": p.iso(result.valid_time),
-        "reason": result.reason[:MAX_REASON] if result.reason else None,
-        "requested_members": list(ledger.requested_members),
-        "loaded_members": list(result.loaded_members),
-        "failures": [
-            {
-                "member": item.member,
-                "status": item.status,
-                "reason": item.reason[:MAX_REASON] if item.reason else None,
-            }
-            for item in ledger.failures
-        ],
-        "metrics": metrics,
-        "samples": samples,
-    }
-
-
-HANDLERS = {"ensemble.summary": summary}

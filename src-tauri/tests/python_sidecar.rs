@@ -6,15 +6,86 @@ mod common;
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
+use base64::Engine as _;
 use common::{fixture, RecordingSink};
+use serde_json::json;
 use sharppy_reimagined_lib::backend::router::Router;
 use sharppy_reimagined_lib::dto::health::{
     AppInfo, BridgeStatus, BuildProfile, ScientificBackendStatus,
 };
 use sharppy_reimagined_lib::dto::stations::CatalogOrigin;
-use sharppy_reimagined_lib::python::launcher::TokioLauncher;
+use sharppy_reimagined_lib::python::launcher::{ProcessLauncher, TokioLauncher};
 use sharppy_reimagined_lib::python::supervisor::{Supervisor, SupervisorConfig};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+#[tokio::test]
+#[ignore = "needs a Python interpreter with sharpmod (SHARPPY_PYTHON or .gribenv)"]
+async fn session_files_are_removed_after_normal_and_forced_exit() {
+    let sample = std::fs::read(
+        sharppy_reimagined_lib::python::interpreter::repo_root()
+            .join("examples/soundings/hrrr_point_36.68N_95.66W_f018.npz"),
+    )
+    .unwrap();
+    for force in [false, true] {
+        let working_dir =
+            std::env::temp_dir().join(format!("sharppy-cache-test-{}-{force}", std::process::id()));
+        std::fs::create_dir_all(&working_dir).unwrap();
+        let saved = working_dir.join("keep.npz");
+        std::fs::write(&saved, &sample).unwrap();
+        let mut process = TokioLauncher::new(working_dir.clone(), working_dir.clone())
+            .launch()
+            .unwrap();
+        let request = json!({"id": 1, "method": "soundings.open_file", "params": {
+            "file_name": "sample.npz",
+            "content_base64": base64::engine::general_purpose::STANDARD.encode(&sample)
+        }});
+        process
+            .stdin
+            .write_all(format!("{request}\n").as_bytes())
+            .await
+            .unwrap();
+        process.stdin.flush().await.unwrap();
+        let mut stdout = BufReader::new(process.stdout);
+        let mut line = String::new();
+        tokio::time::timeout(Duration::from_secs(60), stdout.read_line(&mut line))
+            .await
+            .unwrap()
+            .unwrap();
+        let response: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert!(response.get("result").is_some(), "{response}");
+        let cache = std::fs::read_dir(&working_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| path.is_dir())
+            .expect("a session-owned cache directory");
+        let downloads = cache.join("model-grib");
+        std::fs::create_dir(&downloads).unwrap();
+        std::fs::write(downloads.join("model.grib2"), b"GRIB").unwrap();
+        std::fs::write(downloads.join("model.grib2.provenance.json"), b"{}").unwrap();
+        if force {
+            process.control.start_kill();
+        } else {
+            process
+                .stdin
+                .write_all(b"{\"id\":2,\"method\":\"shutdown\",\"params\":{}}\n")
+                .await
+                .unwrap();
+            process.stdin.flush().await.unwrap();
+        }
+        let code = tokio::time::timeout(Duration::from_secs(10), process.control.wait())
+            .await
+            .unwrap();
+        if !force {
+            assert_eq!(code, Some(0));
+        }
+        assert!(!cache.exists(), "session files survived (forced={force})");
+        assert_eq!(std::fs::read(&saved).unwrap(), sample);
+        std::fs::remove_file(saved).unwrap();
+        std::fs::remove_dir(working_dir).unwrap();
+    }
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "needs a Python interpreter with sharpmod (SHARPPY_PYTHON or .gribenv)"]

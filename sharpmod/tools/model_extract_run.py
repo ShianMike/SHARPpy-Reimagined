@@ -179,7 +179,7 @@ def _xarray_point_columns(ds, lat, lon, run_dt, fxx, label):
 def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
             member=None, dataset=None, download_dir=None,
             source_grib=None, source_fields=None, source_transport=None,
-            progress_callback=None, cancelled=None):
+            progress_callback=None, cancelled=None, on_bytes=None):
     """Extract a public forecast-model point sounding to ``out_path``.
 
     Parameters mirror the CLI: choose a supported ``model`` key, a latitude and
@@ -259,6 +259,8 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
         }
         if progress_callback is not None:
             retrieve_kwargs["progress_callback"] = progress_callback
+        if on_bytes is not None:
+            retrieve_kwargs["on_bytes"] = on_bytes
         if cancelled is not None:
             retrieve_kwargs["cancelled"] = cancelled
         ds, H = _api._retrieve_dataset(config, run_dt, fxx, **retrieve_kwargs)

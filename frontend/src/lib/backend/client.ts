@@ -11,10 +11,10 @@ import {
   parsePng,
   parseSoundingAnalysis,
   parseSoundingSummary,
+  parseSoundingProgress,
   parseSoundingTrends, parseWrfFile,
 } from "../contracts/soundings";
 import { parseContourLines } from "../contracts/contours";
-import { parseEnsembleSummary } from "../contracts/ensemble";
 import { parseFieldFrame, parseRadarFrame, parseRadarSiteFrame, parseSatelliteFrame } from "../contracts/frames";
 import { parseAvailabilityReport, parseMapCatalog, parsePlaceLabels, parseRadarSiteCatalog, parseSpcOutlook } from "../contracts/map";
 import { parseReportOptions, parseStormReports } from "../contracts/reports";
@@ -24,7 +24,6 @@ import { parseThresholdEvaluation, thresholdArgs } from "../contracts/thresholds
 import { parseThresholdCsv, parseThresholdMetrics } from "../contracts/thresholdCatalog";
 import type { AvailabilityReport, ContourLines, FieldFrame, MapCatalog, OutlookKey, PlaceLabels, RadarFrame, RadarSiteCatalog, RadarSiteFrame, ReportOptions, SatelliteFrame, SatelliteChannel, SpcOutlook, StormReports } from "../../types/map";
 import type { SurfacePlots } from "../../types/surface";
-import type { EnsembleSummary, EnsembleSummaryRequest } from "../../types/ensemble";
 import type {
   ThresholdCsv,
   ThresholdEvaluation,
@@ -32,9 +31,11 @@ import type {
   ThresholdMetrics,
 } from "../../types/thresholds";
 import type {
-  ImageMode, ModelCatalog, ModelStatus, OpenSoundingRequest, RenderChoice, SoundingAnalysis, SoundingSummary, SoundingTrends, WrfFile,
+  ImageMode, ModelCatalog, ModelStatus, OpenSoundingRequest, RenderChoice, SoundingAnalysis, SoundingSummary, SoundingTrends, SoundingProgress, WrfFile,
 } from "../../types/soundings";
 import { MARKS, markOnce } from "../metrics";
+import type { CacheClearResult, CacheTarget, StorageUsage } from "../../types/storage";
+import { parseCacheClearResult, parseStorageUsage } from "../contracts/storage";
 import { BackendFailure, contractViolation, transportFailed } from "./errors";
 import { BRIDGE_STATUS_CHANGED } from "./events";
 import type { CommandName, Transport } from "./transport";
@@ -96,11 +97,12 @@ export class BackendClient {
     return this.request("restart_backend", (value) => parseBridgeStatus(value, ""));
   }
 
-  getModelCatalog(): Promise<ModelCatalog> {
-    return this.request("get_model_catalog", parseModelCatalog);
-  }
+  getStorageUsage(): Promise<StorageUsage> { return this.request("get_storage_usage", parseStorageUsage); }
+  clearCache(cache: CacheTarget): Promise<CacheClearResult> { return this.request("clear_cache", parseCacheClearResult, { cache }); }
+
+  getModelCatalog(): Promise<ModelCatalog> { return this.request("get_model_catalog", parseModelCatalog); }
   async getModelStatus(model: string, runTime: string, forecastHour: number): Promise<ModelStatus> {
-    // Four background probes leave half the bridge workers for foreground requests.
+    // sharpmod/bridge/server.py has eight workers; reserve half for foreground requests.
     while (this.statusChecks.size >= 4) await Promise.race(this.statusChecks);
     const result = this.request("get_model_status",
       (value) => parseModelStatus(value, model, runTime, forecastHour), { model, runTime, forecastHour });
@@ -109,8 +111,11 @@ export class BackendClient {
     void settled.then(() => { this.statusChecks.delete(settled); });
     return result;
   }
-  openSounding(request: OpenSoundingRequest): Promise<SoundingSummary> {
-    return this.request("open_sounding", parseSoundingSummary, { request });
+  openSounding(request: OpenSoundingRequest, progressId?: string): Promise<SoundingSummary> {
+    return this.request("open_sounding", parseSoundingSummary, { request, ...(progressId === undefined ? {} : { progressId }) });
+  }
+  getSoundingProgress(progressId: string): Promise<SoundingProgress> {
+    return this.request("get_sounding_progress", parseSoundingProgress, { progressId });
   }
   inspectWrf(filePath: string): Promise<WrfFile> { return this.request("inspect_wrf", parseWrfFile, { filePath }); }
   getSoundingAnalysis(soundingId: string): Promise<SoundingAnalysis> {
@@ -121,22 +126,7 @@ export class BackendClient {
     return this.request("get_sounding_trends", parseSoundingTrends, { soundingId });
   }
 
-  /** What one ensemble run's members said at one valid time, with the ledger. */
-  getEnsembleSummary(request: EnsembleSummaryRequest): Promise<EnsembleSummary> {
-    return this.request("get_ensemble_summary", parseEnsembleSummary, {
-      model: request.model,
-      latitude: request.latitude,
-      longitude: request.longitude,
-      forecastHour: request.forecastHour,
-      runTime: request.runTime,
-      location: request.location,
-      members: request.members,
-    });
-  }
-
-  getThresholdMetrics(): Promise<ThresholdMetrics> {
-    return this.request("get_threshold_metrics", parseThresholdMetrics);
-  }
+  getThresholdMetrics(): Promise<ThresholdMetrics> { return this.request("get_threshold_metrics", parseThresholdMetrics); }
 
   evaluateThreshold(request: ThresholdEvaluationRequest): Promise<ThresholdEvaluation> {
     return this.request("evaluate_threshold", parseThresholdEvaluation, thresholdArgs(request));
@@ -282,7 +272,7 @@ export class BackendClient {
     }
     try {
       const result = parse(raw);
-      if (command !== "get_backend_health") {
+      if (command !== "get_backend_health" && command !== "get_sounding_progress") {
         const detail = ["product", "model", "runTime", "forecastHour", "validTime"].flatMap((key) => { const value = args?.[key]; return typeof value === "string" || typeof value === "number" ? [`${key}: ${String(value)}`] : []; }).join(" · ");
         recordLog("info", command, `Request completed in ${String(Math.round(performance.now() - started))} ms`, detail);
       }

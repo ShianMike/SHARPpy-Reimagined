@@ -23,7 +23,7 @@ GROUPS = {
     "maps": "Maps & overlays",
     "analysis": "Analysis & animation",
     "exports": "Exports & rendering",
-    "interface": "GUI & workflows",
+    "interface": "Workspace & workflows",
     "science": "Scientific calculations",
     "providers": "Data & providers",
     "platform": "Backends & packaging",
@@ -49,35 +49,19 @@ def category_for_module(module: str) -> str:
         "test_mpl_display",
     }:
         return "charts"
-    if module.startswith(("test_gui_map_", "test_gui_locator_", "test_locator_", "test_map_")) or module in {
+    if module.startswith(("test_locator_", "test_map_")) or module in {
         "test_conus_county_tiles",
-        "test_gui_basemap_cache",
-        "test_gui_box_map",
-        "test_gui_box_picker",
-        "test_gui_domain_outline",
-        "test_gui_environmental_context",
-        "test_gui_palette_preview",
-        "test_gui_picker_overlay_product",
-        "test_gui_radar_markers",
-        "test_gui_storm_reports_overlay",
         "test_hrrr_products_palettes",
         "test_lambert_grid",
         "test_place_names",
     }:
         return "maps"
-    if module.startswith("test_gui_timeline_") or module in {
+    if module in {
         "test_animation_exports",
-        "test_gui_analysis_workspace",
-        "test_gui_animation",
-        "test_gui_comparison_charts",
-        "test_gui_ensemble_thresholds",
-        "test_gui_model_compare",
-        "test_gui_overlay_controls",
-        "test_gui_trend_tracks",
         "test_timeline_frames",
     }:
         return "analysis"
-    if module.startswith("test_gui_") or module == "test_qt_test_environment":
+    if module == "test_qt_test_environment":
         return "interface"
     if module.startswith(("test_export_", "test_render_")) or module in {
         "test_box_export",
@@ -116,9 +100,7 @@ def category_for_module(module: str) -> str:
         "test_ensemble_thresholds",
         "test_fire_ventilation",
         "test_interp",
-        "test_metric_controls",
         "test_comparison",
-        "test_t22_marker_semantics",
         "test_reference_agreement_property",
         "test_scalar_pressure_merge",
         "test_winter_snow_ratio",
@@ -139,15 +121,7 @@ def category_for_module(module: str) -> str:
         "test_versioning",
     }:
         return "platform"
-    if module in {
-        "test_analysis_sessions",
-        "test_collection_identity",
-        "test_coordinate_input",
-        "test_mounted_profile_refresh",
-        "test_recent_destinations",
-        "test_saved_box_regions",
-        "test_saved_locations",
-    }:
+    if module == "test_mounted_profile_refresh":
         return "interface"
     return "providers"
 

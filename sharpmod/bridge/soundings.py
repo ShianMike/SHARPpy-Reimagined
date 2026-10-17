@@ -24,6 +24,7 @@ from sharpmod.bridge.sounding_open import (
     open_era5, open_file, open_model, open_observed,
 )
 from sharpmod.bridge.sounding_view import render_view
+from sharpmod.bridge.sounding_progress import get_progress
 from sharpmod.bridge.sounding_wrf import inspect_wrf, open_wrf
 
 #: Base64 makes the PNG a third larger; this keeps the whole reply frame, its
@@ -168,6 +169,7 @@ def models_catalog(params: dict[str, Any]) -> dict[str, Any]:
 
 
 HANDLERS = {
+    "soundings.progress": get_progress,
     "models.catalog": models_catalog,
     "models.status": model_status,
     "soundings.open_observed": open_observed,

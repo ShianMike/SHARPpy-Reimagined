@@ -1,3 +1,5 @@
+import type { Palette } from "../types/map";
+
 export const TEMPERATURE_UNITS = ["source", "°C", "°F"] as const;
 export const WIND_UNITS = ["kt", "km/h", "mph", "m/s"] as const;
 export interface UnitPreferences {
@@ -14,7 +16,8 @@ export function parseUnitPreferences(saved: unknown): UnitPreferences {
   };
 }
 
-export function displayUnit(source: string, preferences: UnitPreferences): string {
+export function displayUnit(source: string, preferences: UnitPreferences, display: Palette["display"] = "auto"): string {
+  if (display === "fixed") return source;
   if (source === "°C" || source === "°F") return preferences.temperature === "source" ? source : preferences.temperature;
   return WIND_UNITS.some((unit) => unit === source) ? preferences.wind : source;
 }
@@ -22,8 +25,13 @@ export function displayUnit(source: string, preferences: UnitPreferences): strin
 const WIND_IN_MS = new Map<string, number>([["kt", 1852 / 3600], ["km/h", 1 / 3.6], ["mph", 0.44704], ["m/s", 1]]);
 
 /** Display conversion only: source values, colour thresholds and calculations stay in their original units. */
-export function convertUnit(value: number, source: string, target: string): number {
-  if (source === target) return value;
+export function convertUnit(value: number, source: string, target: string, display: Palette["display"] = "auto"): number {
+  if (source === target || display === "fixed") return value;
+  if (display === "temperature-difference") {
+    if (source === "°C" && target === "°F") return value * 9 / 5;
+    if (source === "°F" && target === "°C") return value * 5 / 9;
+    return value;
+  }
   if (source === "°C" && target === "°F") return value * 9 / 5 + 32;
   if (source === "°F" && target === "°C") return (value - 32) * 5 / 9;
   const from = WIND_IN_MS.get(source), to = WIND_IN_MS.get(target);

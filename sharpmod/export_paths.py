@@ -9,18 +9,11 @@ directory and user-profile folders are never candidates.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import sys
 import tempfile
-from typing import Any
-
+from pathlib import Path
 
 EXPORT_DIRECTORY_NAME = "rendered_soundings"
-
-# ``export_dir`` was written by the interactive sounding viewer.  Keeping the
-# key would let an older Desktop/Pictures selection return after a restart.
-LEGACY_EXPORT_SETTING_KEYS = ("export_dir",)
-
 
 class ExportDirectoryError(OSError):
     """Raised when the dedicated export directory cannot safely be used."""
@@ -40,31 +33,6 @@ def application_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def discard_stale_export_settings(settings: Any | None) -> tuple[str, ...]:
-    """Remove remembered export directories from a QSettings-like object.
-
-    Export destination choices are per operation.  They must not influence the
-    next dialog or survive an application restart.  Failure to update a
-    read-only settings store is harmless because no export code reads the keys.
-    """
-
-    if settings is None:
-        return ()
-    removed: list[str] = []
-    try:
-        for key in LEGACY_EXPORT_SETTING_KEYS:
-            if settings.contains(key):
-                settings.remove(key)
-                removed.append(key)
-        if removed:
-            settings.sync()
-    except (AttributeError, OSError, RuntimeError, TypeError):
-        # The migration is best effort; callers always ignore these keys even
-        # when the backing settings file itself cannot be changed.
-        return tuple(removed)
-    return tuple(removed)
-
-
 def _assert_writable_directory(directory: Path) -> None:
     """Probe creation and deletion, which ``os.access`` cannot prove on ACLs."""
 
@@ -82,14 +50,13 @@ def _assert_writable_directory(directory: Path) -> None:
         ) from exc
 
 
-def export_directory(*, settings: Any | None = None) -> Path:
+def export_directory() -> Path:
     """Create, validate, and return ``rendered_soundings``.
 
     There is intentionally no fallback.  A caller can show this function's
     path-rich exception to the user instead of silently writing somewhere else.
     """
 
-    discard_stale_export_settings(settings)
     directory = application_root() / EXPORT_DIRECTORY_NAME
     if directory.exists() and not directory.is_dir():
         raise ExportDirectoryError(
@@ -109,24 +76,19 @@ def export_directory(*, settings: Any | None = None) -> Path:
     return directory
 
 
-def export_file_path(
-    default_name: str | os.PathLike[str],
-    *,
-    settings: Any | None = None,
-) -> Path:
+def export_file_path(default_name: str | os.PathLike[str]) -> Path:
     """Return an export-dialog suggestion inside the dedicated directory."""
 
     name = Path(os.fspath(default_name)).name
     if not name or name in {".", ".."}:
         raise ValueError("an export filename is required")
-    return export_directory(settings=settings) / name
+    return export_directory() / name
 
 
 __all__ = [
     "EXPORT_DIRECTORY_NAME",
     "ExportDirectoryError",
     "application_root",
-    "discard_stale_export_settings",
     "export_directory",
     "export_file_path",
 ]

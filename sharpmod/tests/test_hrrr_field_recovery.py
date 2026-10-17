@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from qtpy.QtCore import QBuffer, QByteArray, Qt
+from qtpy.QtCore import QBuffer, QByteArray
 from qtpy.QtGui import QColor, QImage
 
 from sharpmod import hrrr_field
@@ -139,99 +139,3 @@ def test_failed_refresh_keeps_the_last_successful_memory_frame(monkeypatch):
             assert hrrr_field._CACHE[key][1] is retained
     finally:
         hrrr_field.clear_cache()
-
-
-def test_same_valid_hour_from_another_run_is_not_reused(qt_app):
-    from sharpmod.gui_maps import StationMapWidget
-    from sharpmod.gui_overlay_controls import HrrrFieldController
-
-    widget = StationMapWidget([])
-    controller = HrrrFieldController(widget)
-    try:
-        controller.set_forecast_reference(RUN + timedelta(hours=6), 6)
-        old = _raster(run=RUN, hour=12)
-        assert old.valid_time == controller._valid_time
-        assert not controller._raster_matches_request(old)
-    finally:
-        controller.shutdown()
-        widget.close()
-
-
-def test_panel_failure_exposes_cached_time_and_scoped_retry(qt_app, monkeypatch):
-    from sharpmod.gui_map_panels import MapPanelsView
-
-    view = MapPanelsView(panel_count=4)
-    try:
-        panel = view._panels[0]
-        panel.set_forecast_reference(RUN, 6)
-        # Make it an active panel without making a remote request in this test.
-        monkeypatch.setattr(panel.field, "_request", lambda: None)
-        panel.field.set_enabled(True)
-        cached = _raster()
-        panel.map.set_overlay("hrrr_field", cached)
-        panel.field._set_status("Loading replacement", state="loading")
-        panel.field.on_view_settled()
-        assert panel.field.layer_state() == "loading"
-        assert not panel.cancel_btn.isHidden()
-        panel.field._set_status("Offline: connection timed out", state="offline")
-        assert "Offline" in panel.status.text()
-        assert "cached" in panel.status.text().casefold()
-        assert "valid" in panel.status.text().casefold()
-        calls = []
-        monkeypatch.setattr(panel.field, "retry", lambda: calls.append(1))
-        panel.retry_btn.click()
-        assert calls == [1]
-        assert all(other.field is not panel.field for other in view._panels[1:])
-        assert panel.map.overlay("hrrr_field") is cached
-    finally:
-        view.shutdown()
-        view.close()
-
-
-def test_async_panel_result_preserves_layout_focus_extent_point_and_peer(
-        qt_app, monkeypatch):
-    from sharpmod.gui_map_panels import MapPanelsView
-
-    view = MapPanelsView(panel_count=4)
-    view.resize(1100, 800)
-    view.show()
-    try:
-        first, peer = view._panels[:2]
-        monkeypatch.setattr(first.field, "_request", lambda: None)
-        first.field.set_enabled(True)
-        first.set_forecast_reference(RUN, 6)
-        first.map.set_extent(-105, -94, 30, 43, pad=0.0)
-        first.map._point_lonlat = (-97.44, 35.63)
-        peer_image = _raster(product=peer.product())
-        peer.map.set_overlay("hrrr_field", peer_image)
-        view.activateWindow()
-        first.map.setFocus(Qt.OtherFocusReason)
-        qt_app.processEvents()
-        before = (view.geometry(), first.map.view_bounds(),
-                  first.map._point_lonlat, view.panel_products(),
-                  view.panel_count(), first.map.hasFocus())
-        assert before[-1]
-
-        first.field._on_loaded(first.field._token, first.field._valid_time,
-                               _raster(product=first.product()))
-        first.field._on_failed(first.field._token, "disconnected", "offline")
-        assert (view.geometry(), first.map.view_bounds(),
-                first.map._point_lonlat, view.panel_products(),
-                view.panel_count(), first.map.hasFocus()) == before
-        assert peer.map.overlay("hrrr_field") is peer_image
-        assert first.map.overlay("hrrr_field") is not None
-        assert "Offline" in first.status.text()
-        assert "cached" in first.status.text().casefold()
-        assert "disconnected" in first.status.toolTip()
-        assert "disconnected" in first.status.accessibleDescription()
-
-        first.field.cancel()  # A completed request is not cancelled.
-        assert first.field.layer_state() == "offline"
-        first.field._set_status("Loading", state="loading")
-        first.field.cancel()
-        assert first.field.layer_state() == "canceled"
-        assert first.map.overlay("hrrr_field") is not None
-        assert peer.map.overlay("hrrr_field") is peer_image
-    finally:
-        view.shutdown()
-        view.close()

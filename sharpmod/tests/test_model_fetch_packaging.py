@@ -105,7 +105,7 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     offline_scripts = "\n".join(
         step.get("run", "") for step in jobs["serial-release"]["steps"]
     )
-    assert "run_test_lane.py serial-release --workers 4" in offline_scripts
+    assert "run_test_lane.py serial-release --workers 2" in offline_scripts
 
     # The deterministic and offline lanes run the accelerated backend that ships
     # to users, because the pure-Python fallback costs roughly 6.7x on the

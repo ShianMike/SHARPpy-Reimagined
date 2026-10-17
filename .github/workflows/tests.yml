@@ -580,7 +580,8 @@ jobs:
       - name: Run every offline test across bounded workers
         env:
           SHARPMOD_BACKEND: rust
-        run: python scripts/run_test_lane.py serial-release --workers 4
+        # Match compatibility/property lanes to keep CPU contention out of render timings.
+        run: python scripts/run_test_lane.py serial-release --workers 2
 
       - name: Upload offline release timing artifacts
         if: always()

@@ -56,7 +56,7 @@ def test_clear_all_keeps_pinned_active_saved_and_open_data_and_reports_real_size
         assert cleared["failed_files"] == 0
         assert cleared["usage"] == {"caches": [
             {"key": "models", "bytes": 28, "files": 3, "clearable_bytes": 0},
-            {"key": "maps", "bytes": 0, "files": 0, "clearable_bytes": 0},
+            {"key": "maps", "bytes": 11, "files": 1, "clearable_bytes": 0},
             {"key": "outlooks", "bytes": 0, "files": 0, "clearable_bytes": 0},
         ]}
         assert not directories[0].exists()
@@ -82,9 +82,25 @@ def test_map_cleanup_counts_downloaded_grids_and_winds_but_keeps_inflight_files(
     grid = write(root / "maps" / "grid-v1.json.gz", b"grid")
     wind = write(root / "maps" / "contours-v1.json.gz", b"winds")
     partial = write(root / "maps" / "downloading.part")
-    assert storage.usage({})["caches"][1] == {"key": "maps", "bytes": 9, "files": 2, "clearable_bytes": 9}
+    assert storage.usage({})["caches"][1] == {"key": "maps", "bytes": 14, "files": 3, "clearable_bytes": 9}
     assert storage.clear({"cache": "maps"})["freed_bytes"] == 9
     assert not grid.exists() and not wind.exists() and partial.exists()
+
+
+@pytest.mark.parametrize("target", ["maps", "outlooks"])
+def test_cleanup_reports_all_partials_and_reclaims_only_abandoned_ones(roots, target):
+    root, _ = roots
+    abandoned = write(root / target / "ab" / "interrupted.part", b"abandoned")
+    recent = write(root / target / "ab" / "writing.part", b"active")
+    os.utime(abandoned, (0, 0))
+    category = storage.usage({})["caches"][storage.KEYS.index(target)]
+    assert category == {"key": target, "bytes": 15, "files": 2, "clearable_bytes": 9}
+    result = storage.clear({"cache": "all"})
+    assert result["freed_bytes"] == 9 and result["failed_files"] == 0
+    assert not abandoned.exists() and recent.read_bytes() == b"active"
+    assert result["usage"]["caches"][storage.KEYS.index(target)] == {
+        "key": target, "bytes": 6, "files": 1, "clearable_bytes": 0,
+    }
 
 
 def test_model_cache_root_is_never_treated_as_a_deletable_entry(roots):

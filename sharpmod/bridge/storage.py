@@ -6,6 +6,7 @@ import fnmatch
 import os
 import stat
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,7 @@ def _regular(info: os.stat_result) -> bool:
                 or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT)
 
 
-def _files(root: Path | None, pattern: str | tuple[str, ...] = "*") -> list[tuple[Path, int]]:
+def _files(root: Path | None, pattern: str | tuple[str, ...] = "*") -> list[tuple[Path, int, bool]]:
     if root is None:
         return []
     try:
@@ -31,6 +32,8 @@ def _files(root: Path | None, pattern: str | tuple[str, ...] = "*") -> list[tupl
         return []
     boundary = root.resolve()
     patterns = (pattern,) if isinstance(pattern, str) else pattern
+    # shortcut: allow an hour for atomic writes; longer writes need explicit leases.
+    partial_cutoff = time.time() - 3600
     result = []
     pending = [root]
     while pending:
@@ -49,7 +52,8 @@ def _files(root: Path | None, pattern: str | tuple[str, ...] = "*") -> list[tupl
                     if stat.S_ISDIR(info.st_mode):
                         pending.append(Path(child.path))
                     elif stat.S_ISREG(info.st_mode) and any(fnmatch.fnmatch(child.name, item) for item in patterns):
-                        result.append((Path(child.path), info.st_size))
+                        ready = not child.name.endswith(".part") or info.st_mtime < partial_cutoff
+                        result.append((Path(child.path), info.st_size, ready))
         except FileNotFoundError:
             continue
     return result
@@ -67,23 +71,24 @@ def _scan():
     downloads = [path for path in session.root.iterdir()
                  if path.name.endswith("-grib") or path.name.startswith("sharpmod-ensemble")]
     session_files = [(path, size, directory in completed)
-                     for directory in downloads for path, size in _files(directory)]
-    candidates = {
-        "models": [(path, size) for path, size, ready in session_files if ready],
-        "maps": _files(hrrr_field.disk_cache_root(), ("*.png", "*.json.gz")),
-        "outlooks": _files(spc_outlook.disk_cache_root(), "*.json"),
+                     for directory in downloads for path, size, _ in _files(directory)]
+    files = {
+        "models": [(path, size, True) for path, size, ready in session_files if ready],
+        "maps": _files(hrrr_field.disk_cache_root(), ("*.png", "*.json.gz", "*.part")),
+        "outlooks": _files(spc_outlook.disk_cache_root(), ("*.json", "*.part")),
     }
     usage = {"caches": [{
         "key": key,
-        "bytes": sum(size for _, size in candidates[key]),
-        "files": len(candidates[key]),
-        "clearable_bytes": sum(size for _, size in candidates[key]),
+        "bytes": sum(size for _, size, _ in files[key]),
+        "files": len(files[key]),
+        "clearable_bytes": sum(size for _, size, ready in files[key] if ready),
     } for key in KEYS]}
     models = usage["caches"][0]
     models["bytes"] = sum(entry.size for entry in entries) + sum(size for _, size, _ in session_files)
     models["files"] = sum(entry.file_count for entry in entries) + len(session_files)
     models["clearable_bytes"] += sum(entry.size for entry in entries
                                      if not entry.pinned and not entry.protected)
+    candidates = {key: [(path, size) for path, size, ready in files[key] if ready] for key in KEYS}
     return usage, candidates, disk, entries
 
 

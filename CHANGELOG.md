@@ -58,6 +58,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Include interrupted map and outlook cache files in Storage usage and reclaim
+  partial files older than an hour, keeping recent writes protected.
 - Restore real weather providers after bridge-map tests, including failures,
   so fixture data cannot leak into later GRIB, precipitation or radar checks.
 - Buffer multi-panel playback across the upcoming frame window in parallel,

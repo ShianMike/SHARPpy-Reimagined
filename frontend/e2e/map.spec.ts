@@ -6,6 +6,7 @@ import { basemapFeatureCounts, MARKS, mapErrors, nextFrames, waitForMark } from 
 import { regionStats } from "./support/pixels";
 import { saveScreenshot, screenshotPath } from "./support/screenshots";
 import { expect, test } from "./support/test";
+import { layerRow } from "./support/ui";
 
 /** Inside the map overlay, clear of the map toolbar and the layer panel, at 1440 by 900. */
 const MAP_REGION = { x: 160, y: 80, width: 900, height: 600 };
@@ -27,8 +28,8 @@ test("MapLibre draws the offline basemap", async ({ page }) => {
   await saveScreenshot(page, "browser-map.png");
 
   // The basemap alone: the station and label layers off.
-  const stations = page.getByRole("switch", { name: "Stations", exact: true });
-  const labels = page.getByRole("switch", { name: "Station labels", exact: true });
+  const stations = (await layerRow(page, "stations")).getByRole("switch", { name: "Stations", exact: true });
+  const labels = (await layerRow(page, "station-labels")).getByRole("switch", { name: "Station labels", exact: true });
   await stations.click();
   await labels.setChecked(false);
   await expect(stations).toHaveAttribute("aria-checked", "false");

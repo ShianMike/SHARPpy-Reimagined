@@ -24,10 +24,10 @@ test("surface observations: the station models around the selection", async ({ p
   }
   // Every plot state counts: matched, stale, checked without a match, failed.
   await layerRow(page, "surface-plots");
-  await expect(row.getByTestId("surface-shown")).toContainText(
-    "4 matched, 1 stale/mismatched, 1 no observation, 1 query failed",
-  );
-  await expect(row.getByTestId("surface-shown")).toContainText("6 of 6 stations queried");
+  const status = row.getByTestId("surface-shown");
+  await expect(status).toContainText("4 observations · 6 of 6 stations checked");
+  await expect(status).toContainText("1 stale observations · shown with a dashed ring");
+  await expect(status).toContainText("1 without a report · 1 could not be checked");
   await expect.poll(() => deckLayers(page)).toContain("surface-plots");
   // A checked station's ring reads as its own hover block.
   await hoverAt(page, -97.0, 34.0);

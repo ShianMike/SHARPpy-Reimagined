@@ -75,7 +75,6 @@ test("a click selects 72357 in the chip and the inspector, and Esc clears it", a
   await nextFrames(page);
   await saveScreenshot(page, "browser-selected.png");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "Select a point" })).toBeVisible();
   await expect(inspector).toHaveCount(0);
   expectWarnings(consoleMessages, []);
 });

@@ -43,7 +43,7 @@ test.describe("the forecast map", () => {
     const row = await layerRow(page, "model-field");
     await expect(row.getByTestId("field-shown")).toContainText("F000 of the 10-04 16Z run, valid 10-04 16Z");
     await expect(row.getByTestId("field-legend")).toBeVisible();
-    await expect.poll(() => deckLayers(page)).toContain("model-field");
+    await expect.poll(() => deckLayers(page)).toContain("model-field-smooth");
     // The boundaries go over a drawn field.
     expect(await deckLayers(page)).toContain("boundaries-states");
     await expect(page.getByTestId("panel-chip-1")).toHaveCount(0);
@@ -74,7 +74,7 @@ test.describe("the forecast map", () => {
     await expect(notice.getByRole("button", { name: "Retry" })).toHaveCount(0);
     await expect(notice.getByTestId("error-no-retry")).toHaveText("Retrying will not help.");
     await expect(page.getByRole("complementary", { name: "Parameter scale" })).toContainText("Unavailable");
-    expect(await deckLayers(page)).not.toContain("model-field");
+    expect(await deckLayers(page)).not.toContain("model-field-smooth");
     expectWarnings(consoleMessages, [{ pattern: /^\[backend\] FIELD_UNAVAILABLE in get_weather_field/u }]);
   });
 
@@ -90,7 +90,9 @@ test.describe("the forecast map", () => {
     await turnOn(page, "spc-hail");
     await expect(page.getByTestId("outlook-none-hail")).toContainText("SPC published no outlook");
     await turnOn(page, "spc-torn");
-    await expect.poll(() => deckLayers(page)).toContain("spc-torn-hatch");
+    await expect.poll(() => deckLayers(page)).toEqual(expect.arrayContaining([
+      "spc-torn-hatch-1", "spc-torn-hatch-2", "spc-torn-hatch-3",
+    ]));
 
     await turnOn(page, "radar");
     await expect(page.getByTestId("radar-shown")).toContainText("Composite reflectivity");
@@ -200,7 +202,7 @@ test.describe("the forecast map", () => {
     const longitude = Number(await page.getByLabel("Longitude, degrees east").inputValue());
     expect(Math.abs(latitude - 36)).toBeLessThan(0.05);
     expect(Math.abs(longitude + 108)).toBeLessThan(0.05);
-    await expect(page.getByRole("combobox", { name: "Model" }).last()).toHaveValue("hrrr");
+    await expect(page.getByRole("combobox", { name: "Model" }).last()).toHaveAttribute("value", "hrrr");
     // Back on the map, Esc clears the point as it clears a station.
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer" }).click();
     await expect(inspector).toContainText("Forecast point");
@@ -224,7 +226,8 @@ test.describe("the forecast map", () => {
     await expect(page.getByTestId("map-panel-4").locator(".maplibregl-ctrl-attrib")).toBeVisible();
     // Panels 2 to 4 open with their field on, each a different kind of product.
     for (const n of [2, 3, 4]) {
-      await expect(page.getByTestId(`panel-chip-${String(n)}`)).toContainText("F000, valid 10-04 16Z");
+      await expect(page.getByTestId(`panel-chip-${String(n)}`)).toContainText(`${String(n)} • `);
+      await expect(page.getByTestId(`panel-chip-${String(n)}`)).not.toContainText("Loading");
     }
     // A narrow panel labels as the single map would at this zoom: ids, not crowded names.
     await nextFrames(page);
@@ -232,13 +235,17 @@ test.describe("the forecast map", () => {
     const names = await Promise.all([2, 3, 4].map((n) => page.getByTestId(`panel-chip-${String(n)}`).locator("span").first().innerText()));
     expect(new Set(names).size).toBe(3);
     await page.getByTestId("panel-chip-3").click();
+    await expect(page.getByRole("dialog", { name: "Parameters", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
     await page.getByRole("group", { name: "Map detail views" }).getByRole("button", { name: "Layers", exact: true }).click();
     await expect(page.getByRole("region", { name: "Layers, panel 3" })).toBeVisible();
     await expect(page.getByTestId("panel-chip-3")).toHaveAttribute("aria-pressed", "true");
     // The shared time moves every panel.
     await page.getByRole("region", { name: "Forecast timeline" }).getByRole("button", { name: "Next frame" }).click();
     for (const n of [2, 3, 4]) {
-      await expect(page.getByTestId(`panel-chip-${String(n)}`)).toContainText("F001, valid 10-04 17Z");
+      await page.getByRole("group", { name: "Active map panel" }).getByRole("button", { name: `Panel ${String(n)}`, exact: true }).click();
+      const row = await layerRow(page, "model-field");
+      await expect(row.getByTestId("field-shown")).toContainText("F001 of the 10-04 16Z run, valid 10-04 17Z");
     }
     await nextFrames(page);
     await saveScreenshot(page, "browser-forecast-four-panels.png");

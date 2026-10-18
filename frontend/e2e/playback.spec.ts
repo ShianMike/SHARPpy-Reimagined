@@ -25,7 +25,8 @@ test.describe("forecast playback", () => {
       await timeline.getByRole("button", { name: "Smooth playback", exact: true }).click();
     }
     await timeline.getByRole("button", { name: "Play", exact: true }).click();
-    await expect.poll(async () => Number(await hour.inputValue()), { timeout: 30_000 }).toBeGreaterThanOrEqual(3);
+    // SwiftShader renders four maps on the CPU; this verifies progress, not GPU throughput.
+    await expect.poll(async () => Number(await hour.inputValue()), { timeout: 60_000 }).toBeGreaterThanOrEqual(3);
     await expect(valid).toHaveAttribute("aria-busy", "false");
     for (let panel = 1; panels > 1 && panel <= panels; panel++) {
       await expect(page.getByTestId(`panel-chip-${String(panel)}`)).not.toContainText("Loading");

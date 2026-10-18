@@ -82,7 +82,7 @@ test("a click selects 72357 in the chip and the inspector, and Esc clears it", a
 });
 
 test("labels appear by tier as the view narrows", async ({ page, consoleMessages }) => {
-  await presetPreferences(page, { layers: { "station-labels": { visible: true, opacity: 1 } } });
+  await presetPreferences(page, { graphicsOverride: "balanced", layers: { "station-labels": { visible: true, opacity: 1 } } });
   await page.goto("/");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.stationsRendered);

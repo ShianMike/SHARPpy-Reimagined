@@ -27,11 +27,11 @@ test.describe("forecast playback", () => {
     if (panels === 4) {
       await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
       await timeline.getByRole("button", { name: "Download all forecast hours", exact: true }).press("Enter");
-      // Advance fixture download timers without rendering every intervening SwiftShader frame.
+      // Drive paused fixture timers without real-time polling backoff or intervening SwiftShader frames.
       await expect.poll(async () => {
         await page.clock.fastForward(300);
         return timeline.getByRole("status", { name: "Forecast downloads" }).textContent();
-      }).toContain("All 19 forecast hours downloaded");
+      }, { intervals: [0] }).toContain("All 19 forecast hours downloaded");
       await expect(timeline.getByRole("button", { name: "Download all forecast hours", exact: true })).toContainText("19/19");
       await timeline.getByRole("button", { name: "Smooth playback", exact: true }).press("Enter");
       await expect(timeline.getByRole("button", { name: "Smooth playback", exact: true })).toHaveAttribute("aria-pressed", "true");

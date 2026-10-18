@@ -64,7 +64,7 @@ def test_a_clean_profile_is_accepted(tmp_path):
         ({"pair_generation": " "}, {"pair_generation": " "}, False),
         ({"pair_generation": 7}, {"pair_generation": 7}, False),
         ({}, {"pair_generation": None}, False),
-        ({"pair_generation": np.datetime64("NaT")}, {}, False),
+        ({"pair_generation": np.datetime64("NaT", "ns")}, {}, False),
         ({"pair_generation": "first"}, {"pair_generation": ["first"]}, False),
         ({"pair_generation": ["first", "second"]},
          {"pair_generation": "first"}, False),

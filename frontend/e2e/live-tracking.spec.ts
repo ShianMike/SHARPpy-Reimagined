@@ -147,6 +147,21 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await page.getByRole("button", { name: "Pause", exact: true }).press("Enter");
   await page.clock.resume();
   await page.getByRole("button", { name: "Live", exact: true }).click();
+  await expect(time).toHaveValue("0");
+  expectWarnings(consoleMessages, []);
+});
+
+test("single-site radar controls follow the active live panel and its scale", async ({ page, consoleMessages }) => {
+  await page.clock.setFixedTime(new Date("2026-10-04T21:00:00Z"));
+  await page.goto("/");
+  const rail = page.getByRole("navigation", { name: "Workspaces" });
+  await rail.getByRole("button", { name: "Live Tracking", exact: true }).click();
+  await waitForMapDrawn(page);
+  await page.getByRole("button", { name: "Four synchronized panels", exact: true }).click();
+  await expect(page.getByTestId("panel-chip-4")).toBeVisible();
+  const radar = await layerRow(page, "radar");
+  const liveRadar = page.getByRole("group", { name: "Live radar", exact: true });
+  const firstScale = page.getByTestId("map-panel-1").getByTestId("radar-scale");
   await liveRadar.getByRole("combobox", { name: "Site", exact: true }).click();
   await page.getByRole("option", { name: "KTLX", exact: true }).click();
   await expect(radar.getByRole("combobox", { name: "Radar", exact: true })).toContainText("Single site");

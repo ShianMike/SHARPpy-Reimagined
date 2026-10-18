@@ -37,7 +37,7 @@ Use the navigation rail to move between six workspaces:
 ### v3.1.0 tour
 
 These screenshots show the **current v3.1.0 interface**, captured from the running
-live browser preview on **18 October 2026** at its native **1280 × 720** viewport.
+live browser preview on **18 October 2026** at its native **1920 × 1080** viewport.
 Click an image for its original pixels. Forecast maps use **HRRR 18 October 02Z,
 F000**. Live Tracking shows actual **PGUA radar scans** from the capture session;
 the imported sounding is the bundled **25 June 06Z, F018** case, valid **26 June
@@ -56,7 +56,7 @@ conditions, or open an observed, model, ERA5, or local-file sounding.
 <details>
 <summary><strong>Model Viewer · forecast field and point inspector</strong></summary>
 
-[![v3.1.0 Model Viewer with HRRR surface Theta-e, 10 m wind barbs, forecast playback controls, and a 303 K point reading](docs/images/v3.1.0/model-viewer.jpg)](docs/images/v3.1.0/model-viewer.jpg)
+[![v3.1.0 Model Viewer with HRRR surface Theta-e, 10 m wind barbs, forecast playback controls, and a 305 K point reading](docs/images/v3.1.0/model-viewer.jpg)](docs/images/v3.1.0/model-viewer.jpg)
 
 Select a point to read its value and source, then open its sounding.
 
@@ -83,7 +83,7 @@ Each panel keeps its own layers and a scale positioned within that panel.
 <details>
 <summary><strong>Live Tracking · native radar products and measured hover values</strong></summary>
 
-[![v3.1.0 Live Tracking with PGUA Base Reflectivity and Velocity in separate panels, independent scales, a minus 10.1 mph hover reading, and past-hour playback controls](docs/images/v3.1.0/live-tracking.jpg)](docs/images/v3.1.0/live-tracking.jpg)
+[![v3.1.0 Live Tracking with PGUA Base Reflectivity and Velocity in separate panels, independent scales, a minus 61.5 mph hover reading, and past-hour playback controls](docs/images/v3.1.0/live-tracking.jpg)](docs/images/v3.1.0/live-tracking.jpg)
 
 Compare products and available tilts while moving both maps together. Hover to
 read the decoded radar data. Scan timestamps and delay indicators distinguish

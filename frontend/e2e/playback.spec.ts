@@ -7,9 +7,10 @@ import { expect, test } from "./support/test";
 test.describe("forecast playback", () => {
   for (const panels of [1, 2, 4]) test(`playback keeps ${String(panels)} panels loaded while advancing, and pauses`, async ({ page, consoleMessages }) => {
     test.setTimeout(120_000);
-    // Exercise temporal blending without the separate 16-sample spatial reconstruction shader on SwiftShader.
+    // Keep this functional check within SwiftShader's budget; rendering quality and auxiliary layers have separate specs.
     const layers = { "model-field": { visible: true, opacity: 0.5, smoothing: false } };
-    await presetPreferences(page, { layers, panels: Array.from({ length: 3 }, () => ({ productKey: null, layers })) });
+    await presetPreferences(page, { graphicsOverride: "low", productKey: "tmp-2m", layers,
+      panels: ["dpt-2m", "rh-2m", "mlcape"].map((productKey) => ({ productKey, layers })) });
     await page.goto("/");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);

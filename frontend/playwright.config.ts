@@ -16,7 +16,8 @@ export default defineConfig({
   // Anchored at e2e/: a bare "desktop/**" also matches a Desktop folder in the checkout path.
   testIgnore: ["**/e2e/desktop/**"],
   outputDir: "test-results",
-  fullyParallel: false,
+  // Balance individual tests across CI machines; one browser per machine avoids GPU contention.
+  fullyParallel: true,
   workers: 1,
   retries: 0,
   reporter: [["list"]],

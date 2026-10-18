@@ -25,13 +25,16 @@ test.describe("forecast playback", () => {
     const valid = page.getByLabel("Valid time");
     await expect(valid).toHaveAttribute("aria-busy", "false");
     if (panels === 4) {
-      await timeline.getByRole("button", { name: "Download all forecast hours", exact: true }).click();
-      await expect(timeline.getByRole("status", { name: "Forecast downloads" })).toContainText("All 19 forecast hours downloaded");
-      await expect(timeline.getByRole("button", { name: "Download all forecast hours", exact: true })).toContainText("19/19");
-      await timeline.getByRole("button", { name: "Smooth playback", exact: true }).click();
-      await expect(timeline.getByRole("button", { name: "Smooth playback", exact: true })).toHaveAttribute("aria-pressed", "true");
-      // Let the map load naturally before controlling playback timers.
       await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
+      await timeline.getByRole("button", { name: "Download all forecast hours", exact: true }).press("Enter");
+      // Advance fixture download timers without rendering every intervening SwiftShader frame.
+      await expect.poll(async () => {
+        await page.clock.fastForward(300);
+        return timeline.getByRole("status", { name: "Forecast downloads" }).textContent();
+      }).toContain("All 19 forecast hours downloaded");
+      await expect(timeline.getByRole("button", { name: "Download all forecast hours", exact: true })).toContainText("19/19");
+      await timeline.getByRole("button", { name: "Smooth playback", exact: true }).press("Enter");
+      await expect(timeline.getByRole("button", { name: "Smooth playback", exact: true })).toHaveAttribute("aria-pressed", "true");
     }
     if (panels === 4) {
       await timeline.getByRole("button", { name: "Play", exact: true }).press("Enter");

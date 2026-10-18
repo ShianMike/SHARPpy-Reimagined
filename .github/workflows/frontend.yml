@@ -18,7 +18,7 @@ concurrency:
   group: ${{ github.workflow }}-frontend-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  frontend:
+  frontend-checks:
     runs-on: windows-latest
     timeout-minutes: 20
     defaults: { run: { working-directory: frontend } }
@@ -34,8 +34,23 @@ jobs:
       - run: npm run build
       - run: npm run build:browser
       - run: npm run build:fixture
+  browser:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { ref: "${{ inputs.ref || github.sha }}", persist-credentials: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: "24.12.0", cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+      - run: npm run build:fixture
       - name: Test browser workflows against the desktop CSP
-        run: npm run e2e
+        run: npm run e2e -- --shard=${{ matrix.shard }}/4
         env:
           E2E_SWIFTSHADER: "1"
           E2E_SCREENSHOT_DIR: ${{ runner.temp }}/e2e-screenshots
@@ -43,12 +58,24 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: browser-failure-diagnostics
+          name: browser-failure-diagnostics-${{ matrix.shard }}
           path: |
             frontend/test-results
             ${{ runner.temp }}/e2e-screenshots
           if-no-files-found: ignore
           retention-days: 7
+  frontend:
+    needs: [frontend-checks, browser]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every frontend check and browser shard
+        env:
+          CHECKS_RESULT: ${{ needs.frontend-checks.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+        run: |
+          test "$CHECKS_RESULT" = success
+          test "$BROWSER_RESULT" = success
   desktop-bridge:
     runs-on: windows-latest
     timeout-minutes: 30

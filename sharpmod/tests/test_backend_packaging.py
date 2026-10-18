@@ -267,6 +267,28 @@ def test_release_workflow_gates_tag_and_source_versions():
     )
 
 
+def test_frontend_gate_requires_checks_and_all_browser_shards():
+    jobs = _load_workflow("frontend.yml")["jobs"]
+    gate = jobs["frontend"]
+    assert set(gate["needs"]) == {"frontend-checks", "browser"}
+    assert gate["if"] == "always()"
+    step = gate["steps"][0]
+    assert step["env"] == {
+        "CHECKS_RESULT": "${{ needs.frontend-checks.result }}",
+        "BROWSER_RESULT": "${{ needs.browser.result }}",
+    }
+    assert step["run"].splitlines() == [
+        'test "$CHECKS_RESULT" = success',
+        'test "$BROWSER_RESULT" = success',
+    ]
+    browser = jobs["browser"]
+    assert browser["strategy"] == {
+        "fail-fast": "false", "matrix": {"shard": ["1", "2", "3", "4"]},
+    }
+    assert any(step.get("run") == "npm run e2e -- --shard=${{ matrix.shard }}/4"
+               for step in browser["steps"])
+
+
 def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
     workflow = _load_workflow("release.yml")
     job = workflow["jobs"]["build-windows-exe"]

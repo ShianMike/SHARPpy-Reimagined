@@ -1,4 +1,4 @@
-import { waitForMapDrawn } from "./support/app";
+import { presetPreferences, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
 import { turnOn } from "./support/ui";
@@ -7,6 +7,9 @@ import { expect, test } from "./support/test";
 test.describe("forecast playback", () => {
   for (const panels of [1, 2, 4]) test(`playback keeps ${String(panels)} panels loaded while advancing, and pauses`, async ({ page, consoleMessages }) => {
     test.setTimeout(120_000);
+    // Exercise temporal blending without the separate 16-sample spatial reconstruction shader on SwiftShader.
+    const layers = { "model-field": { visible: true, opacity: 0.5, smoothing: false } };
+    await presetPreferences(page, { layers, panels: Array.from({ length: 3 }, () => ({ productKey: null, layers })) });
     await page.goto("/");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
@@ -23,6 +26,7 @@ test.describe("forecast playback", () => {
       await expect(timeline.getByRole("status", { name: "Forecast downloads" })).toContainText("All 19 forecast hours downloaded");
       await expect(timeline.getByRole("button", { name: "Download all forecast hours", exact: true })).toContainText("19/19");
       await timeline.getByRole("button", { name: "Smooth playback", exact: true }).click();
+      await expect(timeline.getByRole("button", { name: "Smooth playback", exact: true })).toHaveAttribute("aria-pressed", "true");
     }
     await timeline.getByRole("button", { name: "Play", exact: true }).click();
     // SwiftShader renders four maps on the CPU; this verifies progress, not GPU throughput.

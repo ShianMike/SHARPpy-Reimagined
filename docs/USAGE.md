@@ -126,6 +126,15 @@ chart images and exports retain their labelled units, and wind barbs use knots.
 6. Use the small eye control beneath a panel's colour range to switch its
    model layer on or off. Other overlay visibility is controlled separately.
 
+In v3.2.0 source builds, **Load hours** saves the selected panels' forecast
+frames and required contours or winds to disk. Its details button separates
+**Saved to cache** from **Ready in memory**: playback retains a rolling set of
+frames in RAM and reads other saved hours as needed. The details show missing
+or failed hours, with **Check cache** and retry actions. **Stop** cancels unused
+transfers; work still needed by a visible panel or another preload continues.
+Forecast map files are retained for up to **48 hours after use**, within a
+**2 GiB** limit. **Settings → Storage** can clear them sooner.
+
 **Smooth** is the default field rendering. Choose **Sharp** when you want to
 see the grid cells explicitly. Smooth interpolation changes the display; the
 hover readout comes from the model field.
@@ -155,6 +164,9 @@ Submit the form to load the profile. Provider or input errors appear beside the
 form with a retry action. Use **Hide sources** to give the image more room;
 **Show sources** brings the form back. The open-sounding list switches between
 profiles already loaded during the current backend session.
+In v3.2.0 source builds, **Stop download** cancels a model request and removes
+that attempt's temporary files after its I/O stops. Provider calls stop at
+their cancellation checkpoints; an already-running decoder may need to finish.
 
 ### Import a point-sounding file
 
@@ -163,7 +175,7 @@ profiles already loaded during the current backend session.
 3. Use **Change file** to select another input.
 
 Supported inputs include NPZ point soundings, SPC text, BUFKIT, PECAN, and UWyo
-text or saved HTML. The upload limit is **6 MiB**. A WRF column previously
+text or saved HTML. The upload limit is **5 MiB**. A WRF column previously
 exported to NPZ uses this same workflow. Empty files, oversized files, and
 unrecognized contents produce an error without changing the source file.
 
@@ -186,7 +198,7 @@ Raw WRF datasets use local extraction rather than the point-file upload:
 
 The backend checks that the point is within the dataset's real grid perimeter
 and extracts only the requested point and time. Large datasets stay on disk;
-the 6 MiB point-upload limit does not apply to this path. The input dataset is
+the 5 MiB point-upload limit does not apply to this path. The input dataset is
 read without modification. Source setups need the `wrf` extra and a capable
 NetCDF backend. The CLI equivalent is [`wrf-extract`](#4-wrf-arw-model-output-wrf-extract).
 

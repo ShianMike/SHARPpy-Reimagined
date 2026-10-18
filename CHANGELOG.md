@@ -5,7 +5,51 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] — v3.2.0
+
+### Fixed
+
+- Select above-ground pressure levels separately for each point's fallback
+  surface-vorticity stencil, including its neighboring wind cells. Filter the
+  compatibility path by surface pressure and original common wind levels,
+  leave unusable stencils missing, preserve direct-vorticity precedence, and
+  invalidate derived model soundings with the previous fallback values (E04).
+- Align sounding-file imports at 5 MiB in the UI, Rust and Python, reserving
+  space for base64, UTF-8 names and JSON metadata. Reject oversized serialized
+  requests locally before they can disrupt other bridge replies (E05).
+- Carry forecast-download and model-sounding cancellation through the frontend,
+  desktop or browser transport, worker queue and provider. Stop unused transfers
+  between chunks, cancel obsolete preloads after selection changes, and preserve
+  shared work while another preload or visible panel still needs it. Keep
+  cancellation and progress available outside the bounded 24-request work
+  admission limit; request cancellation after bridge timeouts (E06).
+- Remove a failed model sounding's generated files and raw-download directory
+  after extraction or decoding unwinds, preserving concurrent successful opens.
+  Report malformed portable inputs as sounding errors (E07).
+- Preserve old cache leases owned by live processes. Record process birth
+  identities to reject reused PIDs; use Windows process-query APIs and retain
+  protection when ownership metadata cannot be read (E08).
+
+### Changed
+
+- Enforce configured persistent batch-cache limits at startup and after cached
+  datasets close and release their directory leases, including long runs (E09).
+- Bound forecast map files to 2 GiB and 48 hours after use. Evict old frames
+  before retaining new ones, preserve active partial writes and skip symlinks,
+  junctions and unmanaged files. Reconcile concurrent backend writes after
+  publishing. Keep rendering usable when the disk is full or
+  protected files prevent retaining another frame (E09).
+- Acquire a cold model product once for its raster, winds and contours, sharing
+  the compact results across simultaneous requests and releasing raw arrays.
+  Keep usable raster data when auxiliary geometry fails, and allow retry (E10).
+- Distinguish forecast hours saved to disk from frames ready in memory. Add
+  download details with both counts, missing and failed hours, cache checking,
+  and retry. Reconcile counts after memory eviction and cache clearing while
+  retaining bounded memory and rolling playback prefetch (E11).
+
+### Added
+
+- Add a Stop download action beside a model sounding's transfer progress (E06).
 
 ## [v3.1.0] - 2026-10-18
 

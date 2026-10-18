@@ -33,12 +33,14 @@ function setup() {
   queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
   queryClient.setQueryData(mapKeys.catalog("hrrr"), parseMapCatalog(catalog));
   const client = new BackendClient({ call: () => new Promise(() => undefined), listen: () => Promise.resolve(() => undefined) });
-  const fields = vi.spyOn(client, "getWeatherField").mockResolvedValue(frame);
-  const winds = vi.spyOn(client, "getFieldContours").mockResolvedValue(parseContourLines(contours));
+  const storedFields = new Set<number>(), storedWinds = new Set<number>();
+  const fields = vi.spyOn(client, "getWeatherField").mockImplementation((_product, _run, hour) => { storedFields.add(hour); return Promise.resolve(frame); });
+  const winds = vi.spyOn(client, "getFieldContours").mockImplementation((_product, _run, hour) => { storedWinds.add(hour); return Promise.resolve(parseContourLines(contours)); });
+  const saved = vi.spyOn(client, "getCachedForecastHours").mockImplementation((_model, _products, _run, hours) => Promise.resolve(hours.filter((hour) => storedFields.has(hour) && storedWinds.has(hour))));
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
   );
-  return { queryClient, fields, winds, wrapper };
+  return { queryClient, fields, winds, saved, storedFields, wrapper };
 }
 
 it("downloads every hour and winds once across four matching panels, keeps the selected hour, and reuses ready queries", async () => {
@@ -57,6 +59,24 @@ it("downloads every hour and winds once across four matching panels, keeps the s
   } finally { hook.unmount(); queryClient.clear(); }
 });
 
+it("keeps saved hours separate from memory readiness after eviction and reconciles a clear", async () => {
+  const { queryClient, wrapper, saved } = setup();
+  const hook = renderHook(useFrameDownload, { wrapper });
+  try {
+    act(() => { hook.result.current.toggle(); });
+    await waitFor(() => { expect(hook.result.current.complete).toBe(true); });
+    expect(hook.result.current.ready).toBe(hook.result.current.total);
+    act(() => { queryClient.removeQueries({ queryKey: ["fields"] }); });
+    await waitFor(() => { expect(hook.result.current.ready).toBe(0); });
+    expect(hook.result.current.cached).toBe(hook.result.current.total);
+    expect(hook.result.current.message).toContain("0 ready in memory");
+    saved.mockResolvedValue([]);
+    act(() => { hook.result.current.refresh(); });
+    await waitFor(() => { expect(hook.result.current.cached).toBe(0); });
+    expect(hook.result.current.complete).toBe(false);
+  } finally { hook.unmount(); queryClient.clear(); }
+});
+
 it("does not claim success for a failed hour, and retry completes the missing wind data", async () => {
   const { queryClient, winds, wrapper } = setup();
   winds.mockRejectedValueOnce(new Error("unavailable"));
@@ -68,6 +88,24 @@ it("does not claim success for a failed hour, and retry completes the missing wi
     expect(hook.result.current.loaded).toBe(hook.result.current.total - 1);
     act(() => { hook.result.current.toggle(); });
     await waitFor(() => { expect(hook.result.current.complete).toBe(true); });
+  } finally { hook.unmount(); queryClient.clear(); }
+});
+
+it("restores a missing disk frame even while its successful query remains in memory", async () => {
+  const { queryClient, fields, storedFields, wrapper } = setup();
+  const hook = renderHook(useFrameDownload, { wrapper });
+  try {
+    act(() => { hook.result.current.toggle(); });
+    await waitFor(() => { expect(hook.result.current.complete).toBe(true); });
+    storedFields.delete(0);
+    act(() => { hook.result.current.refresh(); });
+    await waitFor(() => { expect(hook.result.current.cached).toBe(hook.result.current.total - 1); });
+    expect(hook.result.current.ready).toBe(hook.result.current.total);
+    fields.mockClear();
+    act(() => { hook.result.current.toggle(); });
+    await waitFor(() => { expect(hook.result.current.complete).toBe(true); });
+    expect(fields).toHaveBeenCalledTimes(1);
+    expect(storedFields.has(0)).toBe(true);
   } finally { hook.unmount(); queryClient.clear(); }
 });
 

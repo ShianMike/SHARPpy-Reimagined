@@ -38,3 +38,29 @@ def write(target: Path, value: dict[str, Any]) -> dict[str, Any]:
         compresslevel=1, mtime=0,
     ))
     return value
+
+
+def cached_hours(params):
+    """Hours with every selected compact field and required auxiliary file on disk."""
+    from sharpmod.bridge import fields, params as p, storage
+
+    p.keys(params, ("model", "products", "run_time", "hours"))
+    products, hours = params["products"], params["hours"]
+    if not isinstance(products, list) or not 1 <= len(products) <= 4:
+        raise p.invalid("products must contain 1 to 4 product keys")
+    if not isinstance(hours, list) or not 1 <= len(hours) <= 85:
+        raise p.invalid("hours must contain 1 to 85 forecast hours")
+    selections = [fields._request({"model": params["model"], "product": product,
+                                   "run_time": params["run_time"], "forecast_hour": 0})
+                  for product in products]
+    hours = [p.integer({"hour": hour}, "hour", 0, 84) for hour in hours]
+    hrrr_field._prune_disk_cache()
+    present = {target for target, size, ready in storage._files(hrrr_field.disk_cache_root(), "*.json.gz") if size > 0 and ready}
+    result = []
+    for hour in sorted(set(hours)):
+        needed = [path(kind, model, product.key, run, hour, fields.FRAME)
+                  for model, product, run, _ in selections
+                  for kind in (["grid", "contours"] if product.contour is not None or product.wind else ["grid"])]
+        if all(target in present for target in needed):
+            result.append(hour)
+    return result

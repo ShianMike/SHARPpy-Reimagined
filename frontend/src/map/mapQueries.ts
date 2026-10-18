@@ -66,8 +66,8 @@ export function fieldQueryOptions(client: BackendClient, queryClient: QueryClien
   return {
     ...BASE_QUERY_OPTIONS,
     queryKey: mapKeys.field(request.product, request.runTime, request.forecastHour, request.model),
-    queryFn: async () => {
-      const frame = await client.getWeatherField(request.product, request.runTime, request.forecastHour, request.model);
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      const frame = await client.getWeatherField(request.product, request.runTime, request.forecastHour, request.model, signal);
       const budget = profileSettings(useGraphicsStore.getState().effective.profile).cpuFieldCacheMb;
       trimFieldCache(queryClient, budget * 1024 * 1024, frame);
       return frame;

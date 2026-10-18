@@ -41,6 +41,26 @@ def _surface_relative_vorticity_from_wind_grid(
     if iy < 0 or ix < 0 or iy >= ysize or ix >= xsize:
         return None
 
+    x_pair = _api._neighbor_pair(ix, xsize)
+    y_pair = _api._neighbor_pair(iy, ysize)
+    if x_pair is None or y_pair is None:
+        return None
+    x0, x1 = x_pair
+    y0, y1 = y_pair
+    pressure_name = _api._first_present(ds, _api._VAR_SURFACE_PRESSURE)
+    if pressure_name is not None:
+        try:
+            window = np.asarray(ds[pressure_name].isel({
+                ydim: slice(y0, y1 + 1), xdim: slice(x0, x1 + 1),
+            }).transpose(ydim, xdim).values, dtype=float)
+            pressures = window[[iy-y0, iy-y0, iy-y0, 0, y1-y0],
+                               [ix-x0, 0, x1-x0, ix-x0, ix-x0]]
+            if not np.all(np.isfinite(pressures)) or np.any(pressures <= 0):
+                return None
+            minimum = float(np.min(np.where(pressures > 2000, pressures / 100, pressures)))
+            surface_pressure = minimum if surface_pressure is None else min(surface_pressure, minimum)
+        except (ValueError, IndexError, KeyError):
+            return None
     try:
         levels = np.asarray(levels, dtype=float)
         eligible = np.isfinite(levels)
@@ -51,13 +71,6 @@ def _surface_relative_vorticity_from_wind_grid(
         surface_level = int(np.nanargmax(np.where(eligible, levels, np.nan)))
     except Exception:
         return None
-    x_pair = _api._neighbor_pair(ix, xsize)
-    y_pair = _api._neighbor_pair(iy, ysize)
-    if x_pair is None or y_pair is None:
-        return None
-    x0, x1 = x_pair
-    y0, y1 = y_pair
-
     level_name = _api._first_present(ds.coords, _api._LEVEL_COORDS)
     if level_name is None:
         return None

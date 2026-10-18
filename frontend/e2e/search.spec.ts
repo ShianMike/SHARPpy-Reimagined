@@ -47,8 +47,9 @@ test("Ctrl+K, norman, ArrowDown and Enter select 72357 and the camera moves ther
         : Math.max(Math.abs(now.center[0] - NORMAN.longitude), Math.abs(now.center[1] - NORMAN.latitude));
     })
     .toBeLessThan(0.01);
+  // The center can reach its tolerance just before the zoom animation finishes.
+  await expect.poll(async () => (await camera(page))?.zoom ?? 0).toBeGreaterThanOrEqual(5);
   const after = await camera(page);
-  expect(after?.zoom).toBeGreaterThanOrEqual(5);
   expect(after?.zoom).toBeGreaterThan(before?.zoom ?? Number.POSITIVE_INFINITY);
   expectWarnings(consoleMessages, []);
 });

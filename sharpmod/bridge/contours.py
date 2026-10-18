@@ -186,20 +186,22 @@ def contours(params: dict[str, Any]) -> dict[str, Any]:
     cached = frame_cache.read(target)
     if cached is not None:
         return cached
+    result = bridge_fields._acquire(model, product, run, hour)[1]
+    if isinstance(result, BridgeError):
+        raise result
+    return result
+
+
+def _from_decoded(model, product, run, hour, decoded):
+    from sharpmod.bridge import fields as bridge_fields, frame_cache
+    from sharpmod.providers import hrrr_field
+
+    target = frame_cache.path("contours", model, product.key, run, hour, bridge_fields.FRAME)
     spec = product.contour
     convert = spec.convert if spec is not None and spec.convert is not None else (lambda values: values)
     # The contour field is a separate record from the product's own; take it
     # from one download of all the product's fields.
     try:
-        decoded = hrrr_field._download_fields(
-            product,
-            run,
-            hour,
-            opener=hrrr_field._default_opener,
-            timeout=hrrr_field._remote_limits()[0],
-            should_cancel=None,
-            model=model,
-        )
         if spec is not None:
             raw = np.asarray(convert(decoded[spec.name]), dtype=np.float32)
             if raw.shape != hrrr_field.HRRR_SHAPE:

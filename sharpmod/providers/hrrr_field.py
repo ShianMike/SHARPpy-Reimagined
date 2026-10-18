@@ -40,6 +40,7 @@ import logging
 import os
 import re
 import ssl
+import stat
 import tempfile
 import threading
 import time
@@ -62,6 +63,7 @@ from sharpmod.providers.hrrr_products import (
     get_product,
 )
 from sharpmod.models.lambert_grid import HRRR_GRID, HRRR_PROJ4
+from sharpmod.models.model_transport import DownloadCancelled
 from sharpmod.maps.map_overlays import MAX_RASTER_BYTES, OverlayRaster
 
 _LOGGER = logging.getLogger("sharpmod.providers.hrrr_field")
@@ -304,7 +306,7 @@ def _session():
 
 
 def _default_opener(url: str, timeout: float, limit: int,
-                    byte_range: tuple[int, int] | None = None) -> bytes:
+                    byte_range: tuple[int, int] | None = None, *, should_cancel=None) -> bytes:
     """Fetch ``url``, optionally one byte range, capped at ``limit`` bytes."""
     headers = {}
     if byte_range is not None:
@@ -326,7 +328,9 @@ def _default_opener(url: str, timeout: float, limit: int,
                 raise HrrrFieldError(
                     f"HRRR request failed: HTTP {response.status_code}")
             try:
-                payload = response.raw.read(limit + 1, decode_content=True)
+                payload = _read_body(response.raw, limit, should_cancel)
+            except DownloadCancelled:
+                raise
             except Exception as error:  # noqa: BLE001 - transport's read errors
                 raise HrrrFieldOffline(
                     f"HRRR connection failed while reading: {error}") from error
@@ -340,7 +344,7 @@ def _default_opener(url: str, timeout: float, limit: int,
     try:
         with urllib.request.urlopen(request, timeout=timeout,
                                     context=_ssl_context()) as response:
-            payload = response.read(limit + 1)
+            payload = _read_body(response, limit, should_cancel)
     except urllib.error.HTTPError as error:
         if error.code in (403, 404):
             raise HrrrFieldUnavailable(
@@ -351,6 +355,18 @@ def _default_opener(url: str, timeout: float, limit: int,
     if len(payload) > limit:
         raise HrrrFieldError("HRRR response exceeded the byte budget")
     return payload
+
+
+def _read_body(stream, limit, should_cancel):
+    payload = bytearray()
+    while len(payload) <= limit:
+        if should_cancel and should_cancel():
+            raise DownloadCancelled("field download cancelled")
+        chunk = stream.read(min(64 * 1024, limit + 1 - len(payload)))
+        if not chunk:
+            break
+        payload.extend(chunk)
+    return bytes(payload)
 
 
 def _remote_limits() -> tuple[float, int]:
@@ -643,10 +659,77 @@ def _disk_path(product_key: str, run: datetime, fxx: int,
     return disk_cache_root() / f"{stem}.png"
 
 
+MAX_MAP_DISK_BYTES = 2 * 1024 ** 3
+MAX_MAP_DISK_AGE_SECONDS = 48 * 3600
+_DISK_LOCK = threading.RLock()
+_NEXT_DISK_PRUNE = 0.0
+_MANAGED_FRAME = re.compile(
+    r"(?:[a-z0-9-]+_\d{10}_f\d{2,3}_\d+x\d+\.png|"
+    r"(?:grid|contours)-v1_[a-z0-9-]+_[a-z0-9-]+_\d{10}_f\d{3}_\d+x\d+\.json\.gz|"
+    r"tmp[a-z0-9_]{8}\.part)"
+)
+
+
+def _prune_disk_cache(*, keep: Path | None = None, incoming: int = 0) -> bool:
+    """Retain recent managed frames, reserving space before an atomic write."""
+    root = disk_cache_root()
+    if incoming > MAX_MAP_DISK_BYTES:
+        return False
+    with _DISK_LOCK:
+        try:
+            if keep is not None and keep.parent.resolve() != root.resolve():
+                return False
+            info = root.lstat()
+            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+                return False
+            now = time.time()
+            entries = []
+            with os.scandir(root) as children:
+                for child in children:
+                    try:
+                        info = child.stat(follow_symlinks=False)
+                    except FileNotFoundError:
+                        continue
+                    if (not stat.S_ISREG(info.st_mode)
+                            or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+                            or _MANAGED_FRAME.fullmatch(child.name) is None):
+                        continue
+                    path = Path(child.path)
+                    if path == keep:
+                        continue
+                    partial = child.name.endswith(".part")
+                    protected = partial and now - info.st_mtime < 3600
+                    expired = now - info.st_mtime > (3600 if partial else MAX_MAP_DISK_AGE_SECONDS)
+                    entries.append((info.st_mtime, info.st_size, path, protected, expired))
+            total = incoming + sum(entry[1] for entry in entries)
+            # shortcut: scan this flat cache on writes; add an index if directory scans become material.
+            for _, size, path, protected, expired in sorted(entries):
+                if protected or (not expired and total <= MAX_MAP_DISK_BYTES):
+                    continue
+                try:
+                    path.unlink()
+                    total -= size
+                except OSError:
+                    pass  # Locked files still count; refuse a new cache write if necessary.
+            return total <= MAX_MAP_DISK_BYTES
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+
+
 def _disk_read(path: Path) -> bytes | None:
+    global _NEXT_DISK_PRUNE
     try:
-        if path.is_file():
-            return path.read_bytes()
+        with _DISK_LOCK:
+            if time.monotonic() >= _NEXT_DISK_PRUNE:
+                _prune_disk_cache()
+                _NEXT_DISK_PRUNE = time.monotonic() + 60
+            if path.is_file():
+                data = path.read_bytes()
+                with suppress(OSError):
+                    os.utime(path, None)
+                return data
     except OSError:
         return None
     return None
@@ -655,16 +738,21 @@ def _disk_read(path: Path) -> bytes | None:
 def _disk_write(path: Path, payload: bytes) -> None:
     """Write a frame atomically, and never fail the render if we cannot."""
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        handle, temporary = tempfile.mkstemp(dir=str(path.parent), suffix=".part")
-        try:
-            with os.fdopen(handle, "wb") as stream:
-                stream.write(payload)
-            os.replace(temporary, path)
-        except BaseException:
-            with suppress(OSError):
-                os.unlink(temporary)
-            raise
+        with _DISK_LOCK:
+            if not _prune_disk_cache(keep=path, incoming=len(payload)):
+                return
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handle, temporary = tempfile.mkstemp(dir=str(path.parent), suffix=".part")
+            try:
+                with os.fdopen(handle, "wb") as stream:
+                    stream.write(payload)
+                os.replace(temporary, path)
+                # Reconcile frames published by other backend processes during this write.
+                _prune_disk_cache()
+            except BaseException:
+                with suppress(OSError):
+                    os.unlink(temporary)
+                raise
     except OSError:
         _LOGGER.debug("hrrr_field.disk_write_failed path=%s", path, exc_info=True)
 

@@ -274,7 +274,7 @@ describe("SoundingWorkspace", () => {
     await userEvent.click(screen.getByRole("tab", { name: "File" }));
     await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), file);
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
-    expect(screen.getByRole("alert").textContent).toContain("larger than 6 MiB");
+    expect(screen.getByRole("alert").textContent).toContain("larger than 5 MiB");
     expect(read).not.toHaveBeenCalled();
     expect(transport.calls.some((call) => call.command === "open_sounding")).toBe(false);
   });

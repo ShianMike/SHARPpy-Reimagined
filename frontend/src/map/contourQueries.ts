@@ -15,8 +15,8 @@ export function contourQueryOptions(client: BackendClient, queryClient: QueryCli
   return {
     ...BASE_QUERY_OPTIONS,
     queryKey: mapKeys.contours(request.product, request.runTime, request.forecastHour, request.model),
-    queryFn: async () => {
-      const lines = await client.getFieldContours(request.product, request.runTime, request.forecastHour, request.model);
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      const lines = await client.getFieldContours(request.product, request.runTime, request.forecastHour, request.model, signal);
       const budget = profileSettings(useGraphicsStore.getState().effective.profile).cpuFieldCacheMb;
       trimFieldCache(queryClient, budget * 1024 * 1024, lines);
       return lines;

@@ -116,6 +116,7 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
         >
           Open sounding
         </Action>
+        {open.isPending ? <Action onClick={open.cancel}>Stop download</Action> : null}
         {request !== null ? <DownloadStatus
           label={`${models.find((item) => item.key === request.model)?.label ?? model.label} ${forecastLabel(request.forecastHour)}`}
           progress={open.progress}

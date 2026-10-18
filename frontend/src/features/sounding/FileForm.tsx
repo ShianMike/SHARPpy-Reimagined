@@ -10,8 +10,8 @@ import { SourceSelect } from "./SourceFields";
 import { WrfForm } from "./WrfForm";
 import styles from "./Sounding.module.css";
 
-/** The bridge accepts 6 MiB; anything larger is refused before it is read. */
-export const MAX_FILE_BYTES = 6 * 1024 * 1024;
+/** The bridge accepts 5 MiB; anything larger is refused before it is read. */
+export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 /** Base64 of the file's bytes, encoded in chunks so large files do not overflow the stack. */
 export async function fileToBase64(file: Blob): Promise<string> {
@@ -45,7 +45,7 @@ function ProfileFileForm(): ReactNode {
       return;
     }
     if (file.size === 0 || file.size > MAX_FILE_BYTES) {
-      setProblem(file.size === 0 ? `${file.name} is empty.` : `${file.name} is larger than 6 MiB.`);
+      setProblem(file.size === 0 ? `${file.name} is empty.` : `${file.name} is larger than 5 MiB.`);
       return;
     }
     setProblem(null);
@@ -63,7 +63,7 @@ function ProfileFileForm(): ReactNode {
       <div className={styles.fileField}>
         <FileUp aria-hidden="true" />
         <strong>{file === null ? "Import a sounding" : file.name}</strong>
-        <span className={styles.hint}>{file === null ? "Files up to 6 MiB" : `${(file.size / 1024).toFixed(1)} KiB`}</span>
+        <span className={styles.hint}>{file === null ? "Files up to 5 MiB" : `${(file.size / 1024).toFixed(1)} KiB`}</span>
         <Action onClick={() => { input.current?.click(); }}>{file === null ? "Browse files" : "Change file"}</Action>
         <input
           ref={input}

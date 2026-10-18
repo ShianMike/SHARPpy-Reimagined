@@ -31,8 +31,15 @@ test.describe("forecast playback", () => {
       await expect.poll(async () => {
         await page.clock.fastForward(300);
         return timeline.getByRole("status", { name: "Forecast downloads" }).textContent();
-      }, { intervals: [0] }).toContain("All 19 forecast hours downloaded");
+      }, { intervals: [0] }).toContain("All 19 forecast hours saved to cache");
       await expect(timeline.getByRole("button", { name: "Download all forecast hours", exact: true })).toContainText("19/19");
+      const detailsButton = timeline.getByRole("button", { name: "Forecast download details", exact: true });
+      await detailsButton.press("Enter");
+      const details = page.getByRole("dialog", { name: "Forecast downloads", exact: true });
+      await expect(details.getByText("Saved to cache", { exact: true }).locator("..")).toContainText("19 / 19");
+      await expect(details.getByText("Ready in memory", { exact: true })).toBeVisible();
+      await details.press("Escape");
+      await expect(detailsButton).toBeFocused();
       await timeline.getByRole("button", { name: "Smooth playback", exact: true }).press("Enter");
       await expect(timeline.getByRole("button", { name: "Smooth playback", exact: true })).toHaveAttribute("aria-pressed", "true");
     }

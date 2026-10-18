@@ -77,6 +77,9 @@ def test_thetae_wind_only_endpoint_encodes_winds_without_contour_segments(model,
     mapping = hf._IndexMap(3, 2, hf.COVERAGE_BOUNDS, np.arange(6),
                            np.array([True, True, True, True, True, False]))
     decoded = {
+        "pres": np.full((2, 3), 100000, dtype=np.float32),
+        "tmp2m": np.full((2, 3), 300, dtype=np.float32),
+        "dpt2m": np.full((2, 3), 290, dtype=np.float32),
         "u10": np.array([[10, 0, np.nan], [3, 5, 20]], dtype=np.float32),
         "v10": np.array([[0, 0, 0], [4, 0, 0]], dtype=np.float32),
     }
@@ -87,8 +90,11 @@ def test_thetae_wind_only_endpoint_encodes_winds_without_contour_segments(model,
         return decoded
 
     def index_map(size, bounds):
-        assert size == (3, 2) and bounds == hf.COVERAGE_BOUNDS
-        return mapping
+        assert bounds == hf.COVERAGE_BOUNDS
+        if size == (3, 2):
+            return mapping
+        assert size == (6, 4)
+        return hf._IndexMap(6, 4, bounds, np.tile(np.arange(6), 4), np.ones(24, dtype=bool))
 
     monkeypatch.setattr(hf, "_download_fields", download)
     monkeypatch.setattr(hf, "index_map", index_map)

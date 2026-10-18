@@ -264,6 +264,25 @@ def test_open_file_checks_decoded_size_before_writing(monkeypatch):
     assert set(sounding_cache.cache().root.iterdir()) == before
 
 
+@pytest.mark.parametrize("extra", [-1, 0, 1])
+def test_upload_boundary_fits_the_full_utf8_frame(monkeypatch, extra):
+    from sharpmod.bridge import sounding_open
+    from sharpmod.bridge.protocol import MAX_FRAME_BYTES, encode_frame
+
+    def decode_boundary(_path, *, display):
+        raise BridgeError("SOUNDING_INVALID", "reached decoder", False)
+
+    monkeypatch.setattr(sounding_open, "decode", decode_boundary)
+    request = {"file_name": "雷" * 251 + ".npz", "content_base64": base64.b64encode(
+        b"x" * (sounding_open.MAX_UPLOAD_BYTES + extra)
+    ).decode()}
+    frame = encode_frame({"id": 2**53 - 1, "method": "soundings.open_file", "params": request})
+    assert len(frame) - 1 <= MAX_FRAME_BYTES
+    with pytest.raises(BridgeError) as error:
+        soundings.open_file(request)
+    assert error.value.code == ("INVALID_ARGUMENT" if extra > 0 else "SOUNDING_INVALID")
+
+
 def test_unknown_or_malformed_ids_are_structured_errors():
     with pytest.raises(BridgeError) as info:
         soundings.analysis({"sounding_id": "0000000000000000"})
@@ -425,8 +444,9 @@ def test_open_model_extracts_to_the_cache_and_maps_errors(monkeypatch):
     calls = []
 
     def extract(model, lat, lon, *, run_time, fxx, out_path, loc, download_dir,
-                progress_callback, on_bytes):
+                progress_callback, on_bytes, cancelled):
         calls.append((model, lat, lon, run_time, fxx, loc))
+        assert not cancelled()
         assert Path(download_dir).parent == sounding_cache.cache().root
         progress_callback("downloading", 9_000_000)
         on_bytes(500_000)
@@ -478,6 +498,46 @@ def test_open_model_extracts_to_the_cache_and_maps_errors(monkeypatch):
         )
     assert info.value.code == "SOUNDING_FETCH_FAILED" and info.value.retryable is True
     assert "traceback" not in info.value.message
+
+
+@pytest.mark.parametrize("failure", ["extract", "decode"])
+def test_failed_model_open_removes_only_its_namespace(monkeypatch, failure):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from sharpmod.tools import era5_extract, model_extract
+
+    paths = {}
+    barrier = Barrier(2)
+    def extract(_model, lat, _lon, *, out_path, download_dir, **_kwargs):
+        path = Path(out_path)
+        paths[lat] = path
+        directory = Path(download_dir)
+        directory.mkdir()
+        (directory / "partial.grib2").write_bytes(b"partial")
+        path.with_suffix(".json").write_text("{}")
+        barrier.wait(timeout=5)
+        if lat == 35.0:
+            path.write_bytes(b"unreadable")
+            if failure == "extract":
+                raise era5_extract.RetrievalError("partial transfer failed")
+        else:
+            shutil.copyfile(NPZ, path)
+        return path
+
+    monkeypatch.setattr(model_extract, "extract", extract)
+    def open_at(lat):
+        return soundings.open_model({"model": "hrrr", "forecast_hour": 0,
+                                     "latitude": lat, "longitude": -97.0})
+    with ThreadPoolExecutor(2) as pool:
+        failed, succeeded = pool.submit(open_at, 35.0), pool.submit(open_at, 36.0)
+        with pytest.raises(BridgeError):
+            failed.result(timeout=10)
+        result = succeeded.result(timeout=10)
+    root = sounding_cache.cache().root
+    assert not list(root.glob(paths[35.0].stem + "*"))
+    assert paths[36.0].is_file()
+    assert (root / (paths[36.0].stem + "-grib") / "partial.grib2").is_file()
+    assert sounding_cache.cache().get(result["sounding_id"]).path == paths[36.0]
 
 
 def test_cache_eviction_removes_model_downloads_and_metadata(tmp_path):

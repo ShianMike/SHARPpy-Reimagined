@@ -30,6 +30,9 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     """
     if should_cancel and should_cancel():
         return {}
+    if opener is _api._default_opener and should_cancel is not None:
+        def opener(url, timeout, limit, byte_range=None):
+            return _api._default_opener(url, timeout, limit, byte_range, should_cancel=should_cancel)
     if product.key == "apcp" and fxx == 0:
         return {"apcp": np.zeros(_api.HRRR_SHAPE, dtype=np.float32)}
     eccodes = _api._load_eccodes()

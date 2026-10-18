@@ -76,7 +76,17 @@ impl Supervisor {
             .filter(|c| c.generation == generation)?;
         let id = self.shared.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
-        child.writer.send(encode_request(id, method, params)).ok()?;
+        let frame = match encode_request(id, method, params) {
+            Ok(frame) => frame,
+            Err(reason) => {
+                let _ = tx.send(Err(BridgeFailure::Protocol {
+                    reason,
+                    details: None,
+                }));
+                return Some((id, rx));
+            }
+        };
+        child.writer.send(frame).ok()?;
         inner.pending.insert(
             id,
             Pending {
@@ -103,6 +113,12 @@ impl Supervisor {
         else {
             return;
         };
+        if method != "cancel" && method != "hello" {
+            let cancel_id = self.shared.next_id.fetch_add(1, Ordering::Relaxed);
+            if let Ok(frame) = encode_request(cancel_id, "cancel", json!({"id": id})) {
+                let _ = child.writer.send(frame);
+            }
+        }
         if child.ping_in_flight {
             return;
         }

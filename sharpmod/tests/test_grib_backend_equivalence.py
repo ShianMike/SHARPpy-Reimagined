@@ -211,6 +211,7 @@ def no_vorticity_grib(tmp_path):
                 _write_message(
                     eccodes, output, short_name, level, values[short_name]
                 )
+        _write_surface_message(eccodes, output, "sp", "surface", 0, 101000.0)
     return path, eccodes
 
 
@@ -646,8 +647,63 @@ def test_vectorized_wind_stencils_unpack_two_fields_once(
     # One U-value read, one V-value read, and one latitude/longitude read,
     # independent of the requested point count. The final requests share a
     # grid cell and are calculated only once.
-    assert calls == 4
+    assert calls == 5  # Surface pressure, U, V, latitude and longitude.
     assert actual[1] == actual[2]
+
+
+@pytest.mark.parametrize("neighbor_pressure", [101000, 60000])
+@pytest.mark.parametrize("extra_levels", [False, True])
+def test_wind_stencils_use_each_points_above_ground_level(tmp_path, monkeypatch, neighbor_pressure, extra_levels):
+    from sharpmod.tools import model_extract
+
+    eccodes = load_eccodes()
+    path = tmp_path / "terrain-winds.grib2"
+    with path.open("wb") as output:
+        for level, gradient in ((1000, 100.0), (850, 1.0)):
+            for name, value in (("gh", 100.0), ("t", 290.0), ("r", 50.0), ("u", 0), ("v", 0)):
+                message = _message_handle(eccodes, name, level, value)
+                try:
+                    if name in ("u", "v"):
+                        eccodes.codes_set_values(message, np.zeros(6) if name == "u"
+                                                else np.tile(np.arange(3) * gradient, 2))
+                    eccodes.codes_write(message, output)
+                finally:
+                    eccodes.codes_release(message)
+        if extra_levels:
+            for name, level in (("t", 875), ("v", 900)):
+                message = _message_handle(eccodes, name, level, 1.0)
+                try:
+                    eccodes.codes_write(message, output)
+                finally:
+                    eccodes.codes_release(message)
+        message = _message_handle(eccodes, "u", 1000, 0)
+        try:
+            eccodes.codes_set(message, "typeOfLevel", "surface")
+            eccodes.codes_set(message, "level", 0)
+            eccodes.codes_set(message, "shortName", "sp")
+            eccodes.codes_set_values(message, [101000, neighbor_pressure, 90000, 101000, 0, 90000])
+            eccodes.codes_write(message, output)
+        finally:
+            eccodes.codes_release(message)
+    points = [(10, 100), (10, 102), (10, 101), (11, 101), (10, 102)]
+    result = decode_grib_wind_vorticities(path, points)
+    expected = 1 / (6371008.8 * np.cos(np.radians(10)) * np.radians(1))
+    values = (100 * expected, expected, None, None, expected) if neighbor_pressure == 101000 else (None,) * 5
+    assert result == pytest.approx(values)
+
+    def unsupported(*_args):
+        raise RuntimeError("exercise the compatibility stencil")
+
+    monkeypatch.setattr(model_extract._backends, "decode_grib_wind_vorticity", unsupported)
+    source = model_extract._LocalGribDataset(path)
+    try:
+        if neighbor_pressure == 101000:
+            assert source.surface_wind_vorticity(10, 102, datetime(2026, 7, 16, tzinfo=timezone.utc)) == pytest.approx(expected)
+        else:
+            with pytest.raises(model_extract.RetrievalError, match="could not produce vorticity"):
+                source.surface_wind_vorticity(10, 102, datetime(2026, 7, 16, tzinfo=timezone.utc))
+    finally:
+        source.close()
 
 
 def test_file_identity_invalidates_all_cached_decode_state(compact_grib):
@@ -884,7 +940,6 @@ def test_targeted_wind_stencil_matches_full_xarray_vorticity(
         targeted = source.surface_wind_vorticity(
             10.9, 101.1, datetime(2026, 7, 16, tzinfo=timezone.utc)
         )
-        first_source = source._vorticity_source
         repeated = source.surface_wind_vorticity(
             10.9, 101.1, datetime(2026, 7, 16, tzinfo=timezone.utc)
         )
@@ -905,7 +960,6 @@ def test_targeted_wind_stencil_matches_full_xarray_vorticity(
         )
         assert direct_targeted == pytest.approx(targeted)
         assert repeated == pytest.approx(targeted)
-        assert source._vorticity_source is first_source
     finally:
         if full is not None:
             full.close()

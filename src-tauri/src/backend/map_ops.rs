@@ -1,6 +1,4 @@
-//! Map operations served by the Python fields and map_layers bridge modules.
-//! Field and radar payloads use SHRF: a JSON header followed by aligned binary data.
-
+//! Python map operations, with SHRF JSON headers and aligned binary bodies.
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -51,7 +49,6 @@ pub fn shrf_frame<H: Serialize>(header: &H, body: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Product keys are short slugs; anything else never reaches Python.
 pub(crate) fn key_ok(key: &str) -> bool {
     (1..=40).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
 }
@@ -112,6 +109,7 @@ impl Router {
         run_time: &str,
         forecast_hour: u32,
         model: &str,
+        request_id: Option<&str>,
     ) -> Result<Vec<u8>, BackendError> {
         let resource = format!("{model} {product} {run_time} F{forecast_hour:03}");
         let context = context(OP_FIELD, &resource);
@@ -121,7 +119,10 @@ impl Router {
                 "model and product must be keys, runTime an RFC 3339 time, forecastHour 0 to 84",
             ));
         }
-        let params = json!({ "model": model, "product": product, "run_time": run_time, "forecast_hour": forecast_hour });
+        let mut params = json!({ "model": model, "product": product, "run_time": run_time, "forecast_hour": forecast_hour });
+        if let Some(id) = request_id {
+            params["request_id"] = json!(id);
+        }
         let grid: FieldGridResult = self
             .call(&context, "fields.grid", params, FIELD_TIMEOUT)
             .await?;

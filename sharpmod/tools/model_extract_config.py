@@ -25,9 +25,9 @@ from sharpmod.tools.era5_extract import _VAR_2M_DEWPOINT
 from sharpmod.tools.era5_extract import _VAR_2M_TEMP
 from sharpmod.tools.era5_extract import _VAR_SURFACE_HEIGHT
 from sharpmod.tools.era5_extract import _VAR_SURFACE_PRESSURE
-from sharpmod.tools.era5_extract import _VAR_U
-from sharpmod.tools.era5_extract import _VAR_V
 from sharpmod.tools.era5_extract import _coord_values
+from sharpmod.tools.era5_extract import _column
+from sharpmod.tools.era5_extract import _first_surface_value
 from sharpmod.tools.era5_extract import _select_time
 from sharpmod.tools.era5_extract import _surface_relative_vorticity_from_wind_grid
 from sharpmod.tools.era5_extract import select_nearest_grid_point
@@ -51,76 +51,16 @@ class _LocalGribDataset:
         self.path = Path(path).expanduser().resolve(strict=True)
         self._fallback_sources = None
         self._pressure_sources = None
-        self._vorticity_source = None
         self._lock = threading.RLock()
-
-    def _open_vorticity_source(self):
-        """Open only the compatible pressure group needed for a wind stencil."""
-        with self._lock:
-            if self._vorticity_source is not None:
-                return self._vorticity_source
-            try:
-                import cfgrib
-            except ImportError as exc:
-                raise RetrievalError(
-                    "forecast model wind-gradient decoding requires cfgrib"
-                ) from exc
-
-            failures = []
-            filters = (
-                # U/V share parameter category 2 in GRIB2. Selecting that
-                # category avoids cfgrib choosing another pressure group when
-                # a product (notably GEFS) stores thermodynamic and wind
-                # fields in separate hypercubes with the same level type.
-                {"typeOfLevel": "isobaricInhPa", "parameterCategory": 2},
-                {"typeOfLevel": "isobaricInPa", "parameterCategory": 2},
-                # Retain compatibility with GRIB layouts that do not expose a
-                # GRIB2 parameterCategory key.
-                {"typeOfLevel": "isobaricInhPa"},
-                {"typeOfLevel": "isobaricInPa"},
-            )
-            for filter_by_keys in filters:
-                source = None
-                try:
-                    source = cfgrib.open_dataset(
-                        os.fspath(self.path),
-                        filter_by_keys=filter_by_keys,
-                        errors="ignore",
-                    )
-                    variables = set(source.data_vars)
-                    if not variables.intersection(_VAR_U) \
-                            or not variables.intersection(_VAR_V):
-                        raise RetrievalError(
-                            "pressure group has no compatible u/v wind pair"
-                        )
-                    _level_name, levels = _coord_values(
-                        source, _LEVEL_COORDS
-                    )
-                    if levels is None or not np.asarray(levels).size:
-                        raise RetrievalError(
-                            "pressure group has no pressure coordinate"
-                        )
-                except Exception as exc:
-                    failures.append(exc)
-                    if source is not None:
-                        try:
-                            source.close()
-                        except Exception:
-                            pass
-                    continue
-                self._vorticity_source = source
-                return source
-            detail = failures[-1] if failures else "no pressure group"
-            raise RetrievalError(
-                "could not open a targeted pressure-wind group: %s" % detail
-            )
 
     def surface_wind_vorticity(self, lat, lon, run_dt):
         """Decode one pressure-level u/v neighbor stencil, not every field."""
         try:
-            return _backends.decode_grib_wind_vorticity(
+            value = _backends.decode_grib_wind_vorticity(
                 self.path, lat, lon
             )
+            if value is not None:
+                return value
         except Exception as exc:
             # Reduced/unstructured or otherwise unusual GRIB grids retain the
             # proven cfgrib compatibility path below.
@@ -129,8 +69,8 @@ class _LocalGribDataset:
                 self.path,
                 exc,
             )
-        with self._lock:
-            source = self._open_vorticity_source()
+        # Reuse the small point window so pressure and winds share coordinates.
+        with self._lock, self.fallback_point_dataset(lat, lon, run_dt) as source:
             ds_t, _selected_time = _select_time(source, run_dt)
             _, lats = _coord_values(ds_t, _LAT_COORDS)
             _, lons = _coord_values(ds_t, _LON_COORDS)
@@ -147,8 +87,32 @@ class _LocalGribDataset:
                 pass
             index_tuple, _selected_lat, _selected_lon = \
                 select_nearest_grid_point(lats, lons, float(lat), lon_req)
+            pressure = _first_surface_value(
+                _column(ds_t, *index_tuple, len(index_tuple) == 2)(
+                    _VAR_SURFACE_PRESSURE
+                )
+            )
+            if pressure is None or pressure <= 0:
+                raise RetrievalError("wind stencil requires valid surface pressure")
+            if pressure > 2000.0:
+                pressure /= 100.0
+            levels = np.asarray(levels, dtype=float)
+            if np.nanmax(levels) > 2000.0:
+                levels = levels / 100.0
+            # Outer merges introduce coordinates that have no original U/V pair.
+            available = []
+            for names in (_api._VAR_U, _api._VAR_V):
+                variable_levels = set()
+                for dataset in self._open_fallback_sources():
+                    if not set(names).isdisjoint(dataset.data_vars):
+                        _, original = _coord_values(dataset, _LEVEL_COORDS)
+                        if original is not None:
+                            original = np.atleast_1d(original).astype(float)
+                            variable_levels.update(np.where(original > 2000, original / 100, original))
+                available.append(variable_levels)
+            levels = np.where(np.isin(levels, list(available[0] & available[1])), levels, np.nan)
             value = _surface_relative_vorticity_from_wind_grid(
-                ds_t, index_tuple, levels
+                ds_t, index_tuple, levels, surface_pressure=pressure
             )
             if value is None:
                 raise RetrievalError(
@@ -220,18 +184,11 @@ class _LocalGribDataset:
     def close(self):
         with self._lock:
             sources = self._fallback_sources or ()
-            vorticity_source = self._vorticity_source
             self._fallback_sources = None
             self._pressure_sources = None
-            self._vorticity_source = None
         for source in sources:
             try:
                 source.close()
-            except Exception:
-                pass
-        if vorticity_source is not None:
-            try:
-                vorticity_source.close()
             except Exception:
                 pass
 

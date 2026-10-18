@@ -6,7 +6,7 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useBackendClient } from "../../lib/backend/BackendProvider";
 import { BASE_QUERY_OPTIONS, QUERY_KEYS, soundingKeys } from "../../lib/backend/queryOptions";
 import { useAppStore } from "../../stores/appStore";
@@ -64,20 +64,24 @@ export function useModelCatalog(): UseQueryResult<ModelCatalog> {
  * Opens a sounding. On success it joins the open list, becomes the active
  * sounding, and the Sounding workspace comes forward.
  */
-export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, OpenSoundingRequest> & { progress: SoundingProgress | undefined } {
+export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, OpenSoundingRequest> & { progress: SoundingProgress | undefined; cancel: () => void } {
   const client = useBackendClient();
   const [progressId, setProgressId] = useState<string | null>(null);
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => { controller.current?.abort(); }, []);
   const mutation = useMutation({
     mutationFn: (request: OpenSoundingRequest) => {
       const id = request.kind === "model" ? crypto.randomUUID().replaceAll("-", "") : undefined;
       setProgressId(id ?? null);
-      return client.openSounding(request, id);
+      const job = new AbortController();
+      controller.current = job;
+      return client.openSounding(request, id, request.kind === "model" ? job.signal : undefined);
     },
     onSuccess: (summary) => {
       useSoundingStore.getState().add(summary);
       useAppStore.getState().setActiveWorkspace("sounding");
     },
-    onSettled: () => { setProgressId(null); },
+    onSettled: () => { setProgressId(null); controller.current = null; },
   });
   const progress = useQuery({
     queryKey: ["soundings", "progress", progressId],
@@ -88,7 +92,8 @@ export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, Ope
     retry: false,
     gcTime: 0,
   });
-  return { ...mutation, progress: mutation.isPending ? progress.data : undefined };
+  return { ...mutation, progress: mutation.isPending ? progress.data : undefined,
+    cancel: () => { controller.current?.abort(); mutation.reset(); setProgressId(null); } };
 }
 
 export function useSoundingImage(soundingId: string | null, choice: RenderChoice): UseQueryResult<Blob> {

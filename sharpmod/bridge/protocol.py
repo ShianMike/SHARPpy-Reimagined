@@ -128,6 +128,7 @@ HANDLER_VALIDATED = frozenset({
     "soundings.view",
     "map.catalog",
     "fields.grid",
+    "fields.cached",
     "outlooks.spc",
     "alerts.weather",
     "radar.mosaic",

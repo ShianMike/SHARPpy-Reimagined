@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
 from pathlib import Path
 import sys
@@ -107,10 +108,20 @@ def main(argv=None) -> int:
                 max_bytes=args.cache_max_bytes,
                 max_age_hours=args.cache_max_age_hours,
             )
+            disk_cache.prune()
+
+            @contextmanager
+            def protect_directory(directory):
+                try:
+                    with disk_cache.protect(directory):
+                        yield directory
+                finally:
+                    disk_cache.prune()
+
             hour_cache = ModelHourCache(
                 max_entries=args.workers,
                 directory_factory=disk_cache.directory_for,
-                directory_protector=disk_cache.protect,
+                directory_protector=protect_directory,
                 metadata_writer=disk_cache.annotate,
                 delete_download_dirs=False,
             )

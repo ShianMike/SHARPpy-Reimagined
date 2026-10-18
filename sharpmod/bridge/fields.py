@@ -10,11 +10,14 @@ quantized to uint16 with a stated scale and offset, so the frontend colours it.
 from __future__ import annotations
 
 import base64
+from concurrent.futures import Future
 from datetime import timedelta
 from typing import Any
+import threading
 
-from sharpmod.bridge import params as p
+from sharpmod.bridge import cancellation, params as p
 from sharpmod.bridge.errors import BridgeError
+from sharpmod.models.model_transport import DownloadCancelled
 
 #: All supported field routes request the common 3 km CONUS Lambert output
 #: grid, including NAM and RRFS/REFS; they do not request native model grids.
@@ -27,6 +30,8 @@ FRAME = (2048, 1024)
 NODATA = 65535
 #: The outlook products the map draws as separate layers.
 OUTLOOK_PRODUCTS = ("cat", "torn", "wind", "hail")
+_FLIGHT_LOCK = threading.Lock()
+_FLIGHTS: dict[tuple, tuple[Future, list]] = {}
 
 
 def _palette(palette: Any) -> dict[str, Any]:
@@ -163,19 +168,66 @@ def _request(params: dict[str, Any]):
 
 def grid(params: dict[str, Any]) -> dict[str, Any]:
     """One selected model product/run/hour, as a lat/lon grid of values."""
+    from sharpmod.bridge.frame_cache import path, read
+    model, product, run, hour = _request(params)
+    return read(path("grid", model, product.key, run, hour, FRAME)) or _acquire(model, product, run, hour)[0]
+
+
+def _acquire(model, product, run, hour):
+    """Produce compact raster and auxiliary outputs from one cold acquisition."""
+    from sharpmod.bridge import frame_cache
+
+    target = frame_cache.path("grid", model, product.key, run, hour, FRAME)
+    auxiliary = frame_cache.path("contours", model, product.key, run, hour, FRAME)
+    key = (str(target),)
+    with _FLIGHT_LOCK:
+        current = _FLIGHTS.get(key)
+        owner = current is None
+        if owner:
+            current = _FLIGHTS[key] = (Future(), [])
+        flight, consumers = current
+        consumer = cancellation.event()
+        consumers.append(consumer)
+    try:
+        if not owner:
+            while True:
+                cancellation.check()
+                try:
+                    return flight.result(timeout=0.1)
+                except TimeoutError:
+                    if flight.done():
+                        raise
+        cached = frame_cache.read(target)
+        lines = frame_cache.read(auxiliary) if product.contour is not None or product.wind else None
+        if cached is None or ((product.contour is not None or product.wind) and lines is None):
+            def stopped():
+                with _FLIGHT_LOCK:
+                    return all(event is not None and event.is_set() for event in consumers)
+            cached, lines = _produce(model, product, run, hour, target, stopped)
+        result = (cached, lines)
+        flight.set_result(result)
+        return result
+    except BaseException as error:
+        if owner:
+            flight.set_exception(error)
+        raise
+    finally:
+        with _FLIGHT_LOCK:
+            consumers.remove(consumer)
+            if owner:
+                _FLIGHTS.pop(key, None)
+
+
+def _produce(model, product, run, hour, target, stopped):
     import numpy as np
     from sharpmod.providers import hrrr_field
-
-    model, product, run, hour = _request(params)
-    from sharpmod.bridge import frame_cache
-    target = frame_cache.path("grid", model, product.key, run, hour, FRAME)
-    cached = frame_cache.read(target)
-    if cached is not None:
-        return cached
+    from sharpmod.bridge import contours, frame_cache
     what = f"{model.upper()} {product.label}, {run:%Y-%m-%d %H}Z run, F{hour:03d}"
     cache_key = product.key if model == "hrrr" else f"{model}:{product.key}"
     values = hrrr_field.cached_derived(cache_key, run, hour, FRAME)
-    if values is None:
+    needs_auxiliary = product.contour is not None or product.wind
+    lines = None
+    if values is None or needs_auxiliary:
         timeout, _limit = hrrr_field._remote_limits()
         try:
             decoded = hrrr_field._download_fields(
@@ -184,14 +236,18 @@ def grid(params: dict[str, Any]) -> dict[str, Any]:
                 hour,
                 opener=hrrr_field._default_opener,
                 timeout=timeout,
-                should_cancel=None,
+                should_cancel=stopped,
                 model=model,
             )
+            if stopped():
+                raise cancellation.Cancelled()
             field = np.asarray(product.derive(decoded), dtype=np.float32)
             if field.shape != hrrr_field.HRRR_SHAPE:
                 raise hrrr_field.HrrrFieldError(f"derived a {field.shape} grid")
             mapping = hrrr_field.index_map(FRAME, hrrr_field.COVERAGE_BOUNDS)
             values = hrrr_field.reproject(field, mapping)
+        except DownloadCancelled:
+            raise cancellation.Cancelled() from None
         except hrrr_field.HrrrFieldUnavailable as exc:
             raise _field_error(
                 "FIELD_UNAVAILABLE", f"{what} is not published", exc, False
@@ -206,8 +262,10 @@ def grid(params: dict[str, Any]) -> dict[str, Any]:
             ) from None
         hrrr_field.remember_derived(cache_key, run, hour, FRAME, values)
     data, scale, low, high = _quantize(np.asarray(values, dtype=np.float32))
+    if stopped():
+        raise cancellation.Cancelled()
     height, width = values.shape
-    return frame_cache.write(target, {
+    result = frame_cache.write(target, {
         "product": product.key,
         "run_time": p.iso(run),
         "forecast_hour": hour,
@@ -227,6 +285,12 @@ def grid(params: dict[str, Any]) -> dict[str, Any]:
         ),
         "data_base64": base64.b64encode(data).decode("ascii"),
     })
+    if needs_auxiliary:
+        try:
+            lines = contours._from_decoded(model, product, run, hour, decoded)
+        except BridgeError as error:
+            lines = error  # Keep a usable scalar frame when its auxiliary geometry fails.
+    return result, lines
 
 
 HANDLERS = {

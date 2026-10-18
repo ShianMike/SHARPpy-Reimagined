@@ -46,10 +46,11 @@ pub async fn open_sounding(
     state: tauri::State<'_, AppState>,
     request: OpenSoundingRequest,
     progress_id: Option<String>,
+    request_id: Option<String>,
 ) -> Result<SoundingSummary, BackendError> {
     state
         .router
-        .open_sounding(request, progress_id.as_deref())
+        .open_sounding(request, progress_id.as_deref(), request_id.as_deref())
         .await
 }
 

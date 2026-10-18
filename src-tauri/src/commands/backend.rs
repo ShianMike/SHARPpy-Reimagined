@@ -5,6 +5,30 @@ use crate::dto::storage::{CacheClearResult, StorageUsage};
 use crate::error::BackendError;
 use crate::state::AppState;
 
+#[tauri::command]
+pub async fn cancel_request(
+    state: tauri::State<'_, AppState>,
+    request_id: String,
+) -> Result<(), BackendError> {
+    let context = crate::error::ErrorContext::new("cancel_request", Some("Python"), None);
+    if !crate::backend::sounding_ops::sounding_id_ok(&request_id) {
+        return Err(crate::backend::sounding_ops::invalid(
+            &context,
+            "requestId must be 1 to 64 letters or digits",
+        ));
+    }
+    let _: serde_json::Value = state
+        .router
+        .call(
+            &context,
+            "cancel",
+            serde_json::json!({"request_id": request_id}),
+            std::time::Duration::from_secs(5),
+        )
+        .await?;
+    Ok(())
+}
+
 /// The health report; succeeds in every bridge state.
 #[tauri::command]
 pub async fn get_backend_health(

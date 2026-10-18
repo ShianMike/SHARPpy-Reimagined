@@ -9,7 +9,7 @@ import styles from "./SettingsView.module.css";
 
 const LABELS = {
   models: { title: "Forecast downloads", description: "Model data used to open forecast soundings." },
-  maps: { title: "Map images", description: "Forecast maps, downloaded frames, wind barbs and contours." },
+  maps: { title: "Map images", description: "Forecast frames, wind barbs and contours." },
   outlooks: { title: "SPC outlooks", description: "Downloaded severe weather outlooks." },
   radar: { title: "Radar data", description: "Level II volumes, single-site radar and mosaic frames." },
   satellite: { title: "Satellite imagery", description: "Downloaded GOES imagery for Live Tracking." },
@@ -30,7 +30,14 @@ export function StorageSettings(): ReactNode {
   const usage = useQuery({ queryKey: QUERY_KEYS.storage, queryFn: () => client.getStorageUsage(), retry: false });
   const clearing = useIsMutating({ mutationKey: CLEAR_KEY }) > 0;
   const mutation = useMutation({ mutationKey: CLEAR_KEY, mutationFn: (cache: CacheTarget) => client.clearCache(cache),
-    onSuccess: (result) => { queryClient.setQueryData(QUERY_KEYS.storage, result.usage); setConfirm(false); } });
+    onSuccess: (result, target) => {
+      queryClient.setQueryData(QUERY_KEYS.storage, result.usage);
+      if (target === "maps" || target === "all") {
+        queryClient.removeQueries({ predicate: (query) => query.queryKey[0] === "fields" || query.queryKey[0] === "contours" });
+        void queryClient.invalidateQueries({ queryKey: ["forecast-cache"] });
+      }
+      setConfirm(false);
+    } });
   const busy = clearing || usage.isFetching;
   const total = usage.data?.caches.reduce((sum, row) => sum + row.bytes, 0) ?? 0;
   const clearable = usage.data?.caches.reduce((sum, row) => sum + row.clearableBytes, 0) ?? 0;
@@ -49,6 +56,7 @@ export function StorageSettings(): ReactNode {
       : <div className={styles.storageFeedback} role="alert"><p>{error.message}</p><Action disabled={busy} onClick={() => { mutation.reset(); void usage.refetch(); }}>Try again</Action></div>}
     {usage.data === undefined ? null : <section className={styles.section} aria-label="Cache categories">{usage.data.caches.map((row) => <div className={styles.cacheRow} key={row.key}>
       <div className={styles.cacheLabel}><h3><span data-cache={row.key} aria-hidden="true" />{LABELS[row.key].title}</h3><p className={styles.hint}>{LABELS[row.key].description}</p>
+        {row.key === "maps" ? <p className={styles.cacheKept}>Up to 2 GiB · 48 hours after last use</p> : null}
         {row.bytes > row.clearableBytes ? <p className={styles.cacheKept}>{formatStorageBytes(row.bytes - row.clearableBytes)} kept while in use or pinned</p> : null}</div>
       <div className={styles.cacheActions}><span className="tabular">{formatStorageBytes(row.bytes)}</span><Action aria-label={`Clear ${LABELS[row.key].title.toLowerCase()}`} disabled={busy || row.clearableBytes === 0} onClick={() => { mutation.mutate(row.key); }}>{clearing && mutation.variables === row.key ? "Clearing…" : "Clear"}</Action></div>
     </div>)}</section>}

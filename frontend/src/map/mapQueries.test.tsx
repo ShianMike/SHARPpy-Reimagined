@@ -156,7 +156,7 @@ it.each(["rrfs-a", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "refs-m4", 
       expect(hook.result.current.contours.data).toBeUndefined();
       await waitFor(() => { expect(call).toHaveBeenCalledTimes(4); });
       for (const command of ["get_weather_field", "get_field_contours"]) {
-        expect(call).toHaveBeenCalledWith(command, { model, product: "hgt-wind-500", runTime, forecastHour: 1 });
+        expect(call).toHaveBeenCalledWith(command, expect.objectContaining({ model, product: "hgt-wind-500", runTime, forecastHour: 1 }));
       }
       const catalogue = parseMapCatalog((modelCatalogs as Readonly<Record<string, unknown>>)[model]);
       expect(catalogue.fieldModel).toBe(model);

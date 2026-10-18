@@ -15,6 +15,7 @@ import { useUiStore } from "../stores/uiStore";
 import { fieldQueryOptions, useFieldFrames } from "./mapQueries";
 import { useDrawnProducts } from "./panelField";
 import { contourQueryOptions } from "./contourQueries";
+import { queryFrame } from "./queryFrame";
 
 /** Minimum time to display each loaded frame, divided by playback speed. */
 export const FRAME_INTERVAL_MS = 750;
@@ -57,6 +58,7 @@ export function usePlayback(): void {
       return;
     }
     let stopped = false;
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const upcoming = [...new Set(Array.from({ length: ahead }, (_, i) => hourAfter(hours, hour, i + 1, playing && loop)).filter(
       (next): next is number => next !== null && next !== hour,
@@ -65,9 +67,9 @@ export function usePlayback(): void {
       const request = { model, product: product.key, runTime: run, forecastHour: next };
       // Failed queries retain their error state for the panel when that hour is shown.
       return Promise.all([
-        queryClient.query(fieldQueryOptions(client, queryClient, request)).catch(() => undefined),
+        queryFrame(queryClient, fieldQueryOptions(client, queryClient, request), controller.signal).catch(() => undefined),
         ...(product.contour !== null || product.wind
-          ? [queryClient.query(contourQueryOptions(client, queryClient, request)).catch(() => undefined)] : []),
+          ? [queryFrame(queryClient, contourQueryOptions(client, queryClient, request), controller.signal).catch(() => undefined)] : []),
       ]);
     })));
     if (playing) {
@@ -82,6 +84,7 @@ export function usePlayback(): void {
     }
     return () => {
       stopped = true;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [model, run, hour, hours, products, settled, ahead, playing, loop, speed, client, queryClient]);

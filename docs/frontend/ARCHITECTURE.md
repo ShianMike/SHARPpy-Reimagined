@@ -348,13 +348,18 @@ changes.
   plus `core:event:allow-listen` and `core:event:allow-unlisten`. No
   `core:default`, no shell, fs, http, dialog, or log permission. A sounding
   file is read in the webview from the file the user picks and sent as
-  base64 (at most 6 MiB). Raw WRF import is a separate operation: the user
+  base64 (at most 5 MiB). Raw WRF import is a separate operation: the user
   supplies an absolute local dataset path, which the backend validates,
   inspects, and reads without modifying the source.
 - **Sidecar:** fixed argv with `-I`, no `PATH` search, a method allowlist, an
   8 MiB frame cap, closed error codes, validated parameters on both sides. The
   render worker has the same fixed argv, no shell, and is only ever given files
   in the bridge's private cache directory.
+- **Cancellation and admission:** forecast queries and model opens forward a
+  request token through `cancel_request` to the Python worker. Stop is
+  cooperative; shared preloads continue while another consumer needs them.
+  The bridge admits at most 24 ordinary requests across its eight workers and
+  queue. Hello, progress and cancellation bypass that admission limit.
 - **Network:** the desktop has no runtime HTTP server or telemetry. Basemap
   tiles and their styles/fonts may load from the CSP-allowed OpenFreeMap host;
   bundled basemap geometry is also available. Meteorological provider requests
@@ -404,9 +409,6 @@ updates signed only by the replacement key. Locally, signing uses the Tauri
   untested, and the macOS overlay title bar is not used.
 - **Scientific Rust integration.** The Python process loads `sharpmod_rs`;
   the Tauri crate does not link or duplicate those numerical kernels.
-- **Per-request cancellation.** Protocol version 1 has none, so a model
-  download (up to 300 s) runs to the end even when the user moves on; its
-  sounding then joins the open list.
 - **Sounding ids after a bridge restart.** The open list keeps its entries,
   but their parameters and new images fail with `SOUNDING_NOT_FOUND` ("Open it
   again"); the frontend does not reopen them by itself.

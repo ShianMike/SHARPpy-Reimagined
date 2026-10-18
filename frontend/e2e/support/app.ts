@@ -107,8 +107,12 @@ export async function stubNoWebgl2(page: Page): Promise<void> {
 
 /** Stations and all four basemap sources drawn: the state a map screenshot should show. */
 export async function waitForMapDrawn(page: Page): Promise<void> {
-  await waitForMark(page, MARKS.stationsRendered);
-  await waitForMark(page, MARKS.basemapLoaded);
+  // Playwright's clock returns no User Timing entries; inspect the rendered map instead.
+  await page.waitForFunction(() => {
+    const hooks = window.__SHARPPY_E2E__;
+    const counts = Object.values(hooks?.basemapFeatureCounts() ?? {});
+    return hooks?.deckLayers().includes("stations") && counts.length === 4 && counts.every((count) => count > 0);
+  });
   await nextFrames(page);
 }
 

@@ -11,6 +11,8 @@ test.describe("forecast playback", () => {
     const layers = { "model-field": { visible: true, opacity: 0.5, smoothing: false } };
     await presetPreferences(page, { graphicsOverride: "low", productKey: "tmp-2m", layers,
       panels: ["dpt-2m", "rh-2m", "mlcape"].map((productKey) => ({ productKey, layers })) });
+    // Install before app timers exist; the pause target exceeds this test's entire timeout.
+    if (panels === 4) await page.clock.install({ time: new Date("2026-10-04T20:00:00Z") });
     await page.goto("/");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
@@ -28,8 +30,7 @@ test.describe("forecast playback", () => {
       await expect(timeline.getByRole("button", { name: "Download all forecast hours", exact: true })).toContainText("19/19");
       await timeline.getByRole("button", { name: "Smooth playback", exact: true }).click();
       await expect(timeline.getByRole("button", { name: "Smooth playback", exact: true })).toHaveAttribute("aria-pressed", "true");
-      // Install after real map startup; advance the app's timers without benchmarking software-GPU frames.
-      await page.clock.install({ time: new Date("2026-10-04T21:00:00Z") });
+      // Let the map load naturally before controlling playback timers.
       await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
     }
     if (panels === 4) {

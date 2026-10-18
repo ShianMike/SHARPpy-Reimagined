@@ -93,6 +93,8 @@ test("Live Tracking ignores map clicks and preserves Model Viewer's point", asyn
 });
 
 test("Live Tracking has independent layers, a past-hour clock, and a session cache", async ({ page, consoleMessages }) => {
+  // Install before app timers exist; the pause target exceeds this test's entire timeout.
+  await page.clock.install({ time: new Date("2026-10-04T20:00:00Z") });
   await page.goto("/");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
@@ -101,6 +103,7 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await page.getByRole("button", { name: "Four synchronized panels", exact: true }).click();
   await expect(page.getByTestId("panel-chip-4")).toBeVisible();
   await rail.getByRole("button", { name: "Live Tracking", exact: true }).click();
+  await waitForMapDrawn(page);
   await expect(page.getByTestId("live-timeline")).toBeVisible();
   await expect(page.getByRole("group", { name: "Forecast", exact: true })).toHaveCount(0);
   const liveRadar = page.getByRole("group", { name: "Live radar", exact: true });
@@ -137,7 +140,6 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await expect(time).toHaveValue("0");
   await page.getByRole("button", { name: "Cache past hour", exact: true }).click();
   await expect(page.getByRole("status", { name: "Live data status" })).toContainText("13 cached");
-  await page.clock.install({ time: new Date("2026-10-04T21:00:00Z") });
   await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
   await page.getByRole("button", { name: "Play", exact: true }).press("Enter");
   await page.clock.fastForward(750);

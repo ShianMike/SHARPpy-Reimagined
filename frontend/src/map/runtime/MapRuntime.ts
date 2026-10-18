@@ -64,6 +64,8 @@ export class MapRuntime implements RuntimeEventTarget {
       const map = new maplibregl.Map({ ...mapOptions(container, tokens, profile), pixelRatio: this.pixelRatio() });
       this.map = map;
       wireMapEvents(map, this);
+      // The overlay snapshots this camera for picking before its first move event.
+      this.initialView(map);
       // Right after construction: the stations never wait for the basemap.
       const overlay = createPanelOverlay(tokens, this.pixelRatio(), this);
       this.overlay = overlay;
@@ -74,7 +76,6 @@ export class MapRuntime implements RuntimeEventTarget {
       this.failConstruction(error);
       return;
     }
-    this.initialView(this.map);
     this.unsubscribers.push(linkCamera(this.map, this.live(() => { this.moveEnded(); })));
     this.subscribe();
     this.redraw();

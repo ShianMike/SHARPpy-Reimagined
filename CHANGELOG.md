@@ -86,6 +86,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Initialize each map's saved or default camera before attaching the weather
+  overlay, so station hover and click picking use the displayed geography from
+  startup instead of selecting a station elsewhere in the world.
 - Keep the preceding radar request visible during a minute refresh when the
   provider's latest scan is delayed, while rejecting a different site, product,
   tilt, or history direction and scans beyond the provider window.

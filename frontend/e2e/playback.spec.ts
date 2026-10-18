@@ -28,21 +28,33 @@ test.describe("forecast playback", () => {
       await expect(timeline.getByRole("button", { name: "Download all forecast hours", exact: true })).toContainText("19/19");
       await timeline.getByRole("button", { name: "Smooth playback", exact: true }).click();
       await expect(timeline.getByRole("button", { name: "Smooth playback", exact: true })).toHaveAttribute("aria-pressed", "true");
+      // Install after real map startup; advance the app's timers without benchmarking software-GPU frames.
+      await page.clock.install({ time: new Date("2026-10-04T21:00:00Z") });
+      await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
     }
-    await timeline.getByRole("button", { name: "Play", exact: true }).click();
-    // SwiftShader renders four maps on the CPU; this verifies progress, not GPU throughput.
-    await expect.poll(async () => Number(await hour.inputValue()), { timeout: 60_000 }).toBeGreaterThanOrEqual(3);
+    if (panels === 4) {
+      await timeline.getByRole("button", { name: "Play", exact: true }).press("Enter");
+      for (let frame = 1; frame <= 3; frame++) {
+        await page.clock.fastForward(750);
+        await expect(hour).toHaveValue(String(frame));
+      }
+    } else {
+      await timeline.getByRole("button", { name: "Play", exact: true }).click();
+      await expect.poll(async () => Number(await hour.inputValue()), { timeout: 60_000 }).toBeGreaterThanOrEqual(3);
+    }
     // Take one stable frame before checking every panel; playback can advance between serial assertions.
-    await timeline.getByRole("button", { name: "Pause", exact: true }).click();
+    await timeline.getByRole("button", { name: "Pause", exact: true }).press("Enter");
     await expect(valid).toHaveAttribute("aria-busy", "false");
     for (let panel = 1; panels > 1 && panel <= panels; panel++) {
       await expect(page.getByTestId(`panel-chip-${String(panel)}`)).not.toContainText("Loading");
     }
     const stopped = await hour.inputValue();
-    await page.waitForTimeout(1500);
+    if (panels === 4) await page.clock.fastForward(1500);
+    else await page.waitForTimeout(1500);
     expect(await hour.inputValue()).toBe(stopped);
     await expect(page.getByTestId("field-shown")).toContainText(`F${stopped.padStart(3, "0")}`);
     if (panels === 4) {
+      await page.clock.resume();
       await saveScreenshot(page, "browser-four-panel-playback.png");
       await page.setViewportSize({ width: 720, height: 800 });
       await expect(valid).toBeHidden();

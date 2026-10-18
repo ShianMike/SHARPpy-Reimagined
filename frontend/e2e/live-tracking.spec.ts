@@ -137,9 +137,13 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await expect(time).toHaveValue("0");
   await page.getByRole("button", { name: "Cache past hour", exact: true }).click();
   await expect(page.getByRole("status", { name: "Live data status" })).toContainText("13 cached");
-  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.clock.install({ time: new Date("2026-10-04T21:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
+  await page.getByRole("button", { name: "Play", exact: true }).press("Enter");
+  await page.clock.fastForward(750);
   await expect.poll(async () => Number(await time.inputValue())).toBeGreaterThan(-60);
-  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await page.getByRole("button", { name: "Pause", exact: true }).press("Enter");
+  await page.clock.resume();
   await page.getByRole("button", { name: "Live", exact: true }).click();
   await liveRadar.getByRole("combobox", { name: "Site", exact: true }).click();
   await page.getByRole("option", { name: "KTLX", exact: true }).click();

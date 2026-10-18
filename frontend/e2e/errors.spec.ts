@@ -86,6 +86,8 @@ test("restarting: the indicator and its popover say so, and the stations still l
 });
 
 test("slow-catalog: Loading stations until the catalogue arrives", async ({ page, consoleMessages }) => {
+  await page.clock.install({ time: new Date("2026-10-04T21:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
   await page.goto("/?scenario=slow-catalog");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   const loading = page.getByTestId("catalogue-loading");
@@ -94,6 +96,7 @@ test("slow-catalog: Loading stations until the catalogue arrives", async ({ page
   await page.getByRole("button", { name: "Search stations" }).click();
   await expect(page.getByRole("combobox", { name: "Search stations" })).toHaveAttribute("placeholder", "Loading stations");
   await saveScreenshot(page, "browser-loading.png");
+  await page.clock.resume();
   await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   await expect(loading).toHaveCount(0);
   expectWarnings(consoleMessages, []);

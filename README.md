@@ -34,27 +34,38 @@ Use the navigation rail to move between six workspaces:
 | **Logs** | Inspect backend health, capabilities, and diagnostic messages when a request fails. |
 | **Settings** | Choose units, appearance, playback and graphics; manage saved settings and cached data; check for updates. |
 
-### v3.0.0 tour
+### v3.1.0 tour
 
-These **v3 development-interface screenshots** were captured from the live
-browser preview at its native viewport size, **1864 pixels wide**. Click an image for its original pixels.
-The maps use **HRRR 14 October 2026, 13Z, F000**. The sounding is the bundled
-**25 June 06Z, F018** profile, valid **26 June 00Z**; it shows a different case.
-[Capture details](docs/images/v3.0.0/README.md).
+These screenshots show the **current v3.1.0 interface**, captured from the running
+live browser preview on **18 October 2026** at its native **1280 × 720** viewport.
+Click an image for its original pixels. Forecast maps use **HRRR 18 October 02Z,
+F000**. Live Tracking shows actual **PGUA radar scans** from the capture session;
+the imported sounding is the bundled **25 June 06Z, F018** case, valid **26 June
+00Z**. [Capture details and data times](docs/images/v3.1.0/README.md).
 
 <details open>
+<summary><strong>Overview · forecast, live weather, and sounding workflows</strong></summary>
+
+[![v3.1.0 Overview with direct entry points to Model Viewer, Live Tracking, and sounding sources](docs/images/v3.1.0/overview.jpg)](docs/images/v3.1.0/overview.jpg)
+
+Overview opens when the app starts. Resume your forecast setup, follow live
+conditions, or open an observed, model, ERA5, or local-file sounding.
+
+</details>
+
+<details>
 <summary><strong>Model Viewer · forecast field and point inspector</strong></summary>
 
-[![v3 Model Viewer with HRRR composite reflectivity, forecast toolbar, timeline, and a 34.0 dBZ point inspector](docs/images/v3.0.0/model-viewer.jpg)](docs/images/v3.0.0/model-viewer.jpg)
+[![v3.1.0 Model Viewer with HRRR surface Theta-e, 10 m wind barbs, forecast playback controls, and a 303 K point reading](docs/images/v3.1.0/model-viewer.jpg)](docs/images/v3.1.0/model-viewer.jpg)
 
 Select a point to read its value and source, then open its sounding.
 
 </details>
 
 <details>
-<summary><strong>Two panels · upper-air winds beside reflectivity</strong></summary>
+<summary><strong>Two panels · surface Theta-e and dewpoint</strong></summary>
 
-[![v3 two-panel view with 300 mb wind shading and barbs beside composite reflectivity, each with its own scale](docs/images/v3.0.0/two-panels.jpg)](docs/images/v3.0.0/two-panels.jpg)
+[![v3.1.0 synchronized panels showing 2 m Theta-e with surface wind barbs beside 2 m dewpoint](docs/images/v3.1.0/two-panels.jpg)](docs/images/v3.1.0/two-panels.jpg)
 
 Compare products at the same forecast time with synchronized map movement.
 
@@ -63,16 +74,28 @@ Compare products at the same forecast time with synchronized map movement.
 <details>
 <summary><strong>Four panels · independent products and scales</strong></summary>
 
-[![v3 four-panel view of 300 mb winds, composite reflectivity, supercell composite, and 2 m dewpoint](docs/images/v3.0.0/four-panels.jpg)](docs/images/v3.0.0/four-panels.jpg)
+[![v3.1.0 four-panel forecast with Theta-e, dewpoint, temperature, and relative humidity, each with a separate scale](docs/images/v3.1.0/four-panels.jpg)](docs/images/v3.1.0/four-panels.jpg)
 
 Each panel keeps its own layers and a scale positioned within that panel.
 
 </details>
 
 <details>
+<summary><strong>Live Tracking · native radar products and measured hover values</strong></summary>
+
+[![v3.1.0 Live Tracking with PGUA Base Reflectivity and Velocity in separate panels, independent scales, a minus 10.1 mph hover reading, and past-hour playback controls](docs/images/v3.1.0/live-tracking.jpg)](docs/images/v3.1.0/live-tracking.jpg)
+
+Compare products and available tilts while moving both maps together. Hover to
+read the decoded radar data. Scan timestamps and delay indicators distinguish
+the actual observation from the timeline's viewing time. Load the past hour
+where the provider has data, then play the cached frames.
+
+</details>
+
+<details>
 <summary><strong>Soundings · local import, Skew-T, hodograph, and editing controls</strong></summary>
 
-[![v3 Soundings after importing the bundled HRRR NPZ, with the Skew-T, hodograph, scientific panels, and lossless image controls](docs/images/v3.0.0/sounding.jpg)](docs/images/v3.0.0/sounding.jpg)
+[![v3.1.0 Soundings with the imported HRRR NPZ, native Skew-T and hodograph, scientific panels, editing controls, and UHD lossless export](docs/images/v3.1.0/sounding.jpg)](docs/images/v3.1.0/sounding.jpg)
 
 The NPZ was imported through the File form and rendered at UHD resolution.
 Inspect or edit the profile, then copy or export the image.
@@ -80,21 +103,12 @@ Inspect or edit the profile, then copy or export the image.
 </details>
 
 <details>
-<summary><strong>Overview · forecast context and model availability</strong></summary>
+<summary><strong>Settings · saved preferences and weather cache management</strong></summary>
 
-[![v3 Overview with the current forecast, four sounding-source shortcuts, and backend availability](docs/images/v3.0.0/overview.jpg)](docs/images/v3.0.0/overview.jpg)
+[![v3.1.0 Storage settings with forecast map and radar cache usage, category clearing controls, and navigation to saved workspace, playback, and device settings](docs/images/v3.1.0/settings.jpg)](docs/images/v3.1.0/settings.jpg)
 
-Resume the map or start an observed, model, ERA5, or local-file sounding.
-Provider availability is a snapshot of the capture session.
-
-</details>
-
-<details>
-<summary><strong>Settings · appearance, playback, rendering, and diagnostics</strong></summary>
-
-[![v3 Settings with system, light, and dark appearance choices and links to playback, map rendering, and device diagnostics](docs/images/v3.0.0/settings.jpg)](docs/images/v3.0.0/settings.jpg)
-
-Preferences save on the current device.
+Preferences save on the current device. Storage reports forecast and live-data
+caches separately; live data is removed when the app closes.
 
 </details>
 
@@ -104,7 +118,7 @@ Choose a model, UTC run, forecast hour, and parameter from the floating toolbar.
 
 Two- and four-panel layouts share the map view and forecast time while keeping each panel's parameter, layers, and colour range. The layout, active panel, layer choices and model selection return between sessions, with the model opening on its latest suggested run. Hover over a model field to read its value; select a point for details and **Open sounding**.
 
-Field rendering defaults to **Smooth**, with **Sharp** available to show grid cells; this choice is separate from Fast / Smooth playback. Station labels default off and retain your saved choice. Layers include SPC outlooks, radar, satellite imagery, surface observations, and storm reports. Wind barbs adapt their density to the zoom level. **Layers → Map details** offers a saved **Flat (Mercator) / Curved (Globe)** projection shared by all panels.
+Field rendering defaults to **Smooth**, with **Sharp** available to show grid cells; this choice is separate from Fast / Smooth playback. Station labels default off and retain your saved choice. Model Viewer layers include SPC outlooks and storm reports; radar, satellite imagery, surface observations, warnings, and watches are in Live Tracking. Wind barbs adapt their density to the zoom level. **Layers → Map details** offers a saved **Flat map / Globe** projection shared by all panels; Live Tracking uses a flat map.
 
 New HRRR products include total precipitation, precipitation rates, precipitable water, snow depth, surface winds and gusts, effective storm-relative helicity, maximum updraft velocity, Surface-Based Lifted Index, and 2 m Theta-e with 10 m wind barbs. Model menus show only supported products for HRRR, NAM 3 km, RRFS and REFS members; the [changelog](CHANGELOG.md#v303---2026-10-17) details model limits and units.
 

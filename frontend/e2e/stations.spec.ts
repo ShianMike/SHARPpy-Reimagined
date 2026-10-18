@@ -3,7 +3,7 @@
 // position, and its tooltip on hover; a click selects it in the toolbar chip
 // and the inspector, and Esc clears it; labels appear by tier as the view
 // narrows.
-import { effectiveProfile, labels, MARKS, nextFrames, presetPreferences, projectStation, waitForMapDrawn, waitForMark } from "./support/app";
+import { camera, effectiveProfile, labels, MARKS, nextFrames, presetPreferences, projectStation, waitForMapDrawn, waitForMark } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { pixelAt } from "./support/pixels";
 import { saveScreenshot } from "./support/screenshots";
@@ -88,10 +88,13 @@ test("labels appear by tier as the view narrows", async ({ page, consoleMessages
   await waitForMark(page, MARKS.stationsRendered);
   // The CONUS view spans more than 55 degrees of longitude: no labels (Balanced, F5).
   expect(await labels(page)).toEqual({ count: 0, tier: null });
+  const initialZoom = (await camera(page))?.zoom;
+  if (initialZoom === undefined) throw new Error("The station map has no camera");
   const zoomIn = page.getByRole("button", { name: "Zoom in" });
   await zoomIn.click();
   await expect.poll(async () => (await labels(page)).tier).toBe("id");
   expect((await labels(page)).count).toBeGreaterThan(0);
+  await expect.poll(async () => (await camera(page))?.zoom).toBeCloseTo(initialZoom + 1, 1);
   await zoomIn.click();
   await expect.poll(async () => (await labels(page)).tier).toBe("name");
   expect((await labels(page)).count).toBeGreaterThan(0);

@@ -31,6 +31,7 @@ test("radar site labels toggle and persist on the flat live map", async ({ page,
 });
 
 test("Live Tracking forces a flat map and restores Model Viewer's saved Globe setting", async ({ page, consoleMessages }) => {
+  test.setTimeout(120_000); // Four software-rendered globes and a reload exceed a minute on hosted Windows.
   await page.goto("/");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);

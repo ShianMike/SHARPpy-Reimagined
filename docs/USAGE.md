@@ -5,7 +5,7 @@ command-line tools. For installation, see the [README](../README.md#get-started)
 and [dependency reference](../installation.txt). The previous Qt interface has
 its own [v2.0.0 Legacy guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md).
 
-For a visual walkthrough, see the [v3.0.0 tour and screenshots](../README.md#v300-tour).
+For a visual walkthrough, see the [v3.1.0 tour and screenshots](../README.md#v310-tour).
 
 ## Choose a workflow
 

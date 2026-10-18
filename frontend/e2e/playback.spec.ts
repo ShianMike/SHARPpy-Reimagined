@@ -32,11 +32,12 @@ test.describe("forecast playback", () => {
     await timeline.getByRole("button", { name: "Play", exact: true }).click();
     // SwiftShader renders four maps on the CPU; this verifies progress, not GPU throughput.
     await expect.poll(async () => Number(await hour.inputValue()), { timeout: 60_000 }).toBeGreaterThanOrEqual(3);
+    // Take one stable frame before checking every panel; playback can advance between serial assertions.
+    await timeline.getByRole("button", { name: "Pause", exact: true }).click();
     await expect(valid).toHaveAttribute("aria-busy", "false");
     for (let panel = 1; panels > 1 && panel <= panels; panel++) {
       await expect(page.getByTestId(`panel-chip-${String(panel)}`)).not.toContainText("Loading");
     }
-    await timeline.getByRole("button", { name: "Pause", exact: true }).click();
     const stopped = await hour.inputValue();
     await page.waitForTimeout(1500);
     expect(await hour.inputValue()).toBe(stopped);

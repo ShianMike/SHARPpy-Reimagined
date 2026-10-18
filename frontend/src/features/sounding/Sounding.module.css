@@ -51,14 +51,22 @@
 .fieldButton:disabled { color: var(--text-disabled); cursor: default; background: var(--control-fill); border-color: var(--border-subtle); }
 .field[data-compact="true"] { flex: none; }
 .field[data-compact="true"] .fieldButton { min-height: var(--control-h-sm); padding: var(--space-1) var(--space-3); font-size: var(--font-size-small); }
-.sourceMenu, .sourceCalendar {
+.sourceMenu, .sourceCalendar, .discardDialog {
   --accent: var(--workspace-orange); --accent-hover: var(--workspace-orange-hover); --accent-bright: var(--workspace-orange-text); --accent-subtle: var(--workspace-orange-subtle); --focus-ring: var(--workspace-orange-text);
   padding: var(--space-2);
 }
 .sourceMenu[role="listbox"] { max-height: min(calc(8 * var(--control-h-lg)), calc(100dvh - 2 * var(--chrome-gap))); }
 .sourceCalendar { width: var(--popover-w); padding: var(--space-3); }
+.discardDialog { display: flex; flex-direction: column; gap: var(--space-4); width: var(--notice-max-w); padding: var(--space-5); overflow-wrap: anywhere; }
+.discardHeading { font-size: var(--font-size-title); font-weight: var(--font-weight-semibold); }
+.discardProfile { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3) var(--space-4); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--control-fill); }
+.discardTitle { font-weight: var(--font-weight-semibold); }
+.discardMessage { display: flex; flex-direction: column; gap: var(--space-1); }
+.discardMessage > p:first-child { color: var(--text-secondary); }
+.discardActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); padding-top: var(--space-4); border-top: var(--hairline) solid var(--border-subtle); }
+.discardActions > button { flex: 1; min-width: max-content; min-height: var(--control-h-md); border-radius: var(--radius-sm); }
 .sourceOption { display: flex; align-items: center; width: 100%; min-height: var(--control-h-lg); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-primary); text-align: left; }
 .sourceOption > span { flex: 1; min-width: 0; }
 .sourceOption small { display: block; margin-top: var(--space-0-5); color: var(--text-tertiary); font-size: var(--font-size-caption); }
-.sourceOption:hover, .sourceOption:focus-visible { background: var(--fill-hover); }
+.sourceOption:is(:hover, :focus-visible):not(:disabled) { background: var(--accent-subtle); color: var(--accent-bright); box-shadow: inset 0 0 0 var(--hairline) var(--accent); }
 .sourceOption[aria-selected="true"] { background: var(--accent-subtle); color: var(--accent-bright); }

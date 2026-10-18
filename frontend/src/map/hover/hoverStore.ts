@@ -14,11 +14,11 @@ export interface HoveredStation {
   y: number;
 }
 
-/** An SPC outlook area under the pointer. */
+/** An SPC outlook or NWS warning/watch area under the pointer. */
 export interface HoveredOutlook {
   label: string;
   description: string;
-  /** The outlook's title and validity, as SPC states them. */
+  /** The provider's title and validity. */
   title: string;
   subtitle: string;
   x: number;

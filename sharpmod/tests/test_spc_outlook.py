@@ -506,6 +506,17 @@ def test_oversized_response_is_refused():
     assert spc.fetch_layer(target, now=NOW, opener=flood) is None
 
 
+def test_session_only_outlook_never_uses_persistent_cache(monkeypatch):
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("a session-only outlook used the persistent cache")
+
+    monkeypatch.setattr(spc, "_disk_read", forbidden)
+    monkeypatch.setattr(spc, "_disk_write", forbidden)
+    target = datetime(2025, 3, 31, 18, tzinfo=UTC)
+    layer = spc.fetch_layer(target, now=NOW, opener=lambda *_: _payload(), disk_cache=False)
+    assert layer is not None and layer.covers(target)
+
+
 def test_cancellation_stops_the_walk():
     target = datetime(2023, 3, 31, 18, tzinfo=UTC)
     calls: list[str] = []

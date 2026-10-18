@@ -8,6 +8,7 @@
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import { RADAR_TILTABLE_PRODUCTS, type RadarTilt } from "../types/map";
 import type { CameraSnapshot } from "../map/runtime/camera";
 import {
   clampOpacity,
@@ -36,7 +37,19 @@ export interface PanelState {
   layers: Record<LayerId, LayerState>;
 }
 
+export interface WeatherOptions {
+  radarTilt: RadarTilt;
+  radarProduct: string | null;
+  radarScope: "mosaic" | "site";
+  radarSite: string | null;
+  satelliteChannel: "infrared" | "visible";
+}
+export interface LivePanelState extends WeatherOptions { layers: Record<LayerId, LayerState>; }
+
 export interface MapState {
+  radarTilt: RadarTilt;
+  view: "map" | "live";
+  livePanels: LivePanelState[];
   /** Panel 0's layers. */
   layers: Record<LayerId, LayerState>;
   /** Panel 0's field product; null takes the catalogue's default. */
@@ -79,6 +92,7 @@ export interface MapState {
   setActivePanel: (panel: number) => void;
   moveLayer: (id: OrderableLayerId, direction: 1 | -1) => void;
   setRadarProduct: (key: string | null) => void;
+  setRadarTilt: (tilt: RadarTilt) => void;
   setRadarScope: (scope: "mosaic" | "site") => void;
   setRadarSite: (site: string | null) => void;
   setSatelliteChannel: (channel: "infrared" | "visible") => void;
@@ -98,9 +112,30 @@ function extraPanel(): PanelState {
   return { productKey: null, layers };
 }
 
+function livePanel(): LivePanelState {
+  const layers = defaultLayerStates();
+  layers.radar = { ...layers.radar, visible: true };
+  layers["model-domain"] = { ...layers["model-domain"], visible: false };
+  return { layers, radarProduct: null, radarScope: "mosaic", radarSite: null, radarTilt: "0", satelliteChannel: "infrared" };
+}
+
+/** Live Tracking stays flat without changing the saved Model Viewer projection. */
+export function mapProjection(state: Pick<MapState, "view" | "projection">): MapState["projection"] {
+  return state.view === "live" ? "mercator" : state.projection;
+}
+
 /** The layers a panel shows. */
-export function panelLayers(state: Pick<MapState, "layers" | "panels">, panel: number): Record<LayerId, LayerState> {
+export function panelLayers(state: Pick<MapState, "layers" | "panels"> & Partial<Pick<MapState, "view" | "livePanels">>, panel: number): Record<LayerId, LayerState> {
+  if (state.view === "live") return state.livePanels?.[panel]?.layers ?? state.layers;
   return panel === 0 ? state.layers : (state.panels[panel - 1]?.layers ?? state.layers);
+}
+
+export function panelWeather(state: MapState, panel = state.activePanel): WeatherOptions {
+  return state.view === "live" ? state.livePanels[panel] ?? state : state;
+}
+
+function patchWeather(state: MapState, patch: Partial<WeatherOptions>): Partial<MapState> {
+  return state.view === "live" ? { livePanels: state.livePanels.map((panel, index) => index === state.activePanel ? { ...panel, ...patch } : panel) } : patch;
 }
 
 /** The field product a panel chose, or null for its default. */
@@ -112,6 +147,7 @@ type LayerPatch = (layer: LayerState) => LayerState;
 
 /** The state change that patches one layer of the active panel. */
 function patchLayer(state: MapState, id: LayerId, patch: LayerPatch): Partial<MapState> {
+  if (state.view === "live") return { livePanels: state.livePanels.map((panel, index) => index === state.activePanel ? { ...panel, layers: { ...panel.layers, [id]: patch(panel.layers[id]) } } : panel) };
   if (state.activePanel === 0) {
     return { layers: { ...state.layers, [id]: patch(state.layers[id]) } };
   }
@@ -124,6 +160,8 @@ function patchLayer(state: MapState, id: LayerId, patch: LayerPatch): Partial<Ma
 
 export const useMapStore = create<MapState>()(
   subscribeWithSelector((set) => ({
+    view: "map",
+    livePanels: Array.from({ length: MAX_PANELS }, livePanel),
     layers: defaultLayerStates(),
     productKey: null,
     panels: [extraPanel(), extraPanel(), extraPanel()],
@@ -132,6 +170,7 @@ export const useMapStore = create<MapState>()(
     activePanel: 0,
     layerOrder: [...ORDERABLE_LAYER_IDS],
     radarProduct: null,
+    radarTilt: "0",
     radarScope: "mosaic",
     radarSite: null,
     satelliteChannel: "infrared",
@@ -161,7 +200,7 @@ export const useMapStore = create<MapState>()(
     setPanelLayout: (layout) => {
       set((state) => ({ panelLayout: layout, activePanel: state.activePanel < layout ? state.activePanel : 0 }));
     },
-    setProjection: (projection) => { set({ projection }); },
+    setProjection: (projection) => { set((state) => state.view === "live" ? state : { projection }); },
     setActivePanel: (panel) => {
       set((state) => (panel >= 0 && panel < state.panelLayout ? { activePanel: panel } : {}));
     },
@@ -174,18 +213,19 @@ export const useMapStore = create<MapState>()(
       });
     },
     setRadarProduct: (key) => {
-      set({ radarProduct: key });
+      set((state) => patchWeather(state, { radarProduct: key, ...(RADAR_TILTABLE_PRODUCTS.some((product) => product === key) ? {} : { radarTilt: "0" }) }));
     },
+    setRadarTilt: (radarTilt) => { set((state) => patchWeather(state, { radarTilt })); },
     setRadarScope: (scope) => {
       // The two scopes publish different products; the mosaic's key is not a
       // site's key, so switching clears the choice and each scope takes its own default.
-      set({ radarScope: scope, radarProduct: null });
+      set((state) => patchWeather(state, { radarScope: scope, radarProduct: null, radarTilt: "0" }));
     },
     setRadarSite: (site) => {
-      set({ radarSite: site });
+      set((state) => patchWeather(state, { radarSite: site }));
     },
     setSatelliteChannel: (channel) => {
-      set({ satelliteChannel: channel });
+      set((state) => patchWeather(state, { satelliteChannel: channel }));
     },
     setReportWindowS: (windowS) => {
       set({ reportWindowS: windowS });

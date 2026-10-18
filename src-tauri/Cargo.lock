@@ -3108,7 +3108,7 @@ dependencies = [
 
 [[package]]
 name = "sharppy-reimagined"
-version = "3.0.3"
+version = "3.1.0"
 dependencies = [
  "base64 0.22.1",
  "log",

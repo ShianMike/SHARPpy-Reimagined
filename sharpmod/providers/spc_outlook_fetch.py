@@ -20,6 +20,7 @@ def fetch_layer(
         product: str = _api.DEFAULT_PRODUCT,
         opener: Callable[..., bytes] | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        disk_cache: bool = True,
 ) -> OverlayLayer | None:
     """Return the outlook layer covering ``valid_time``, or ``None``.
 
@@ -60,7 +61,7 @@ def fetch_layer(
 
         # An archived issuance is immutable, so a previous session's copy is
         # as good as a fresh request and costs no network at all.
-        from_disk = None if request.live else _api._disk_read(request.url)
+        from_disk = None if request.live or not disk_cache else _api._disk_read(request.url)
         if from_disk is not None:
             try:
                 layer = _api.parse_outlook(
@@ -111,7 +112,7 @@ def fetch_layer(
 
         ttl = _api.LIVE_CACHE_TTL_S if request.live else _api.ARCHIVE_CACHE_TTL_S
         _api._cache_put(request.url, layer if layer else None, ttl)
-        if layer and not request.live:
+        if layer and not request.live and disk_cache:
             _api._disk_write(request.url, payload)
 
         if not layer:

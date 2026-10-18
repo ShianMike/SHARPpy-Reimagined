@@ -22,6 +22,7 @@ CASES = [
     ("get_radar_frame", "map/radar.result.json", "map/radar.shrf"),
     ("get_radar_site_frame", "map/radar-site.result.json", "map/radar-site.shrf"),
     ("get_radar_sites", "map/radar-sites.result.json", "map/radar-sites.json"),
+    ("get_radar_tilts", "map/radar-tilts.result.json", "map/radar-tilts.json"),
     ("get_satellite_frame", "map/satellite.result.json", "map/satellite.shrf"),
     (
         "get_satellite_frame",
@@ -39,6 +40,7 @@ CASES = [
         "map/reports-options.json",
     ),
     ("get_spc_outlook", "map/outlook.result.cat.json", "map/outlook.cat.json"),
+    ("get_weather_alerts", "map/alerts.result.json", "map/alerts.json"),
     ("get_field_contours", "map/contours.result.json", "map/contours.json"),
     ("get_surface_plots", "map/surface.result.json", "map/surface.json"),
     ("get_place_labels", "map/places.result.json", "map/places.json"),

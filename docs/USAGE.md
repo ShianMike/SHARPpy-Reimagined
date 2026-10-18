@@ -1,17 +1,18 @@
 # SHARPpy Reimagined Usage Guide
 
-This guide describes the **v3.0.0 desktop interface** and the
+This guide describes the **v3.1.0 desktop interface** and the
 command-line tools. For installation, see the [README](../README.md#get-started)
 and [dependency reference](../installation.txt). The previous Qt interface has
 its own [v2.0.0 Legacy guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md).
 
-For a visual walkthrough, see the [v3.0.0 tour and screenshots](../README.md#v300-tour).
+For a visual walkthrough, see the [v3.1.0 tour and screenshots](../README.md#v310-tour).
 
 ## Choose a workflow
 
 | Task | Start here |
 | --- | --- |
 | Browse forecast fields and open a map point's sounding | **Model Viewer** |
+| Follow radar, satellite, observations, warnings, and watches | **Live Tracking** |
 | Fetch an observation, model profile, or ERA5 column | **Soundings → Obs. / Model / ERA5** |
 | Import NPZ or a text sounding | **Soundings → File → Point sounding** |
 | Extract a column from raw WRF NetCDF output | **Soundings → File → Raw WRF dataset** |
@@ -21,7 +22,7 @@ The extractors write portable `.npz` point soundings that can be imported into
 the desktop or passed to `sharpmod-render`. Forecast fields, profile data, and
 rendered images retain their source and time metadata.
 
-## 0. Desktop interface (v3.0.0)
+## 0. Desktop interface (v3.1.0)
 
 ### Open the app
 
@@ -39,8 +40,12 @@ Qt interface are retired from this source tree; use the
 to run that interface. Qt still renders the current app's sounding images
 headlessly.
 
-The navigation rail opens **Overview**, **Model Viewer**, **Soundings**,
-**Logs**, and **Settings**. Hover or focus a rail icon to see its name. Use Tab
+The app opens **Overview** at startup, with direct entry cards for Model Viewer,
+Live Tracking, and soundings. Your saved layers, products, and panel layout remain
+available. Expand **Model availability** when you want to check providers.
+
+The navigation rail opens **Overview**, **Model Viewer**, **Live Tracking**,
+**Soundings**, **Logs**, and **Settings**. Hover or focus a rail icon to see its name. Use Tab
 to move between controls and the arrow keys within navigation and selection
 menus; Escape closes popovers.
 
@@ -55,16 +60,43 @@ that version's notice for the session; the update remains under **Settings →
 Updates**, where **Check for updates** can also check immediately. Background
 connection failures do not interrupt your work.
 
-Choose **Update now** (or **Install update** in Settings) to download the signed
-installer and upgrade the existing installation. Finish your work first: the
+Choose **Update now** (or **Install update** in Settings) to download and verify the
+installer before upgrading the existing installation. Finish your work first: the
 app closes during installation and reopens afterward. Saved preferences remain
 on the device. This downloads a complete installer rather than a binary delta
 patch. Nothing installs until you click, and checks run only while the app is
 open. Browser previews cannot install updates.
 
-The original v3.0.0 app has no updater. Install v3.0.2 using its Windows
-installer once; later versions can update in the app. Existing v3.0.1
-installations can detect and install v3.0.2 through Settings → Updates.
+The original v3.0.0 app has no updater. Install the current Windows release using
+its installer once; v3.0.1 and newer can update through **Settings → Updates**.
+
+### Live Tracking
+
+Open **Live Tracking** for radar, GOES imagery, surface observations, and NWS
+warnings and watches. It has its own saved layers and products, with one, two,
+or four synchronized panels. SPC outlooks and storm reports stay in Model Viewer.
+Live Tracking uses the flat map; Model Viewer keeps its saved projection.
+
+Use **Site** to select the nearest radar or pin an antenna, **Site Product** to
+choose a product, and **Site Tilt** to choose a verified available elevation.
+Enhanced Echo Tops uses the full volume, so its tilt control is disabled. The
+toolbar and Layers controls edit the active panel.
+
+Hover over native radar to read Base Reflectivity in dBZ, Velocity in mph,
+unitless Correlation Coefficient, or Enhanced Echo Tops in thousands of feet.
+The readout identifies the site and product, preserves missing and range-folded
+gates, and marks lower-bound echo-top heights with **≥**. Image-only products
+without numeric calibration do not expose measured hover values.
+
+Use the player to step, scrub, or animate up to the past **60 minutes**, where
+the provider supplies history. **Load hour** caches the selected panels' available
+frames; **Stop caching** stops queuing further downloads. Changing a data source
+resets readiness for that selection. **Live** returns to current data, and the
+refresh button requests it again. The player reports unavailable layers rather
+than treating an incomplete download as ready.
+
+Downloaded live data appears in **Settings → Storage**. Caches are bounded and
+cleared when the app session closes; cleared data downloads again when needed.
 
 ### Display units (v3.0.2)
 

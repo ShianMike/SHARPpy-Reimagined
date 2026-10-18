@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { LAYER_DEFAULTS } from "../map/layers/registry";
-import { panelLayers, panelProduct, useMapStore } from "./mapStore";
+import { mapProjection, panelLayers, panelProduct, useMapStore } from "./mapStore";
 
 const initial = useMapStore.getState();
 
@@ -9,6 +9,19 @@ beforeEach(() => {
 });
 
 describe("mapStore", () => {
+  it("keeps Live Tracking flat and preserves the Model Viewer projection", () => {
+    useMapStore.getState().setProjection("globe");
+    expect(mapProjection(useMapStore.getState())).toBe("globe");
+    useMapStore.setState({ view: "live" });
+    expect(mapProjection(useMapStore.getState())).toBe("mercator");
+    useMapStore.getState().setProjection("mercator");
+    expect(useMapStore.getState().projection).toBe("globe");
+    useMapStore.getState().setProjection("globe");
+    expect(mapProjection(useMapStore.getState())).toBe("mercator");
+    useMapStore.setState({ view: "map" });
+    expect(mapProjection(useMapStore.getState())).toBe("globe");
+  });
+
   it("starts from the registry defaults", () => {
     const { layers, layerPanelCollapsed, cameraSnapshot, focusRequest } = useMapStore.getState();
     expect(layers).toEqual(LAYER_DEFAULTS);

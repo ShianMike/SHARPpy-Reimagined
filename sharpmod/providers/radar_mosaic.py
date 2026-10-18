@@ -50,6 +50,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Callable
 
 from sharpmod.maps.map_overlays import (
@@ -57,8 +58,22 @@ from sharpmod.maps.map_overlays import (
     OverlayRaster,
     looks_like_image,
 )
+from sharpmod.providers import radar_time
 
 logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=32)
+def legend_png(url: str) -> bytes | None:
+    """Cache the provider's own legend without failing an otherwise usable scan."""
+    from sharpmod.providers.radar_site import _remote_limits
+    try:
+        data = _default_opener(url, min(_remote_limits()[0], 10), 128 * 1024)
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
+            return data
+    except (OSError, ValueError, RadarError) as exc:
+        logger.warning("Radar legend unavailable: %s", exc)
+    return None
 
 #: Stable overlay identifier, used as the map's registry key. One key for every
 #: product: the radar overlay is a single slot the user retargets, not three
@@ -108,6 +123,8 @@ COVERAGE_BOUNDS = (-130.0, -60.0, 20.0, 55.0)
 #: spends a comparable pixel budget on one antenna's box, which works out around
 #: 0.38 km per pixel against this frame's 1.5 km.
 DEFAULT_FRAME_SIZE = (4096, 2048)
+# At about 0.95 km per pixel, timed MRMS frames retain the source's 1 km detail.
+HISTORY_FRAME_SIZE = (8192, 4096)
 
 #: Bounds on a caller-supplied frame size. The upper bound is what keeps a
 #: request from asking the shared public service for something enormous.
@@ -179,7 +196,7 @@ PRODUCTS: dict[str, RadarProduct] = {
     "composite-reflectivity": RadarProduct(
         key="composite-reflectivity",
         layer="conus_cref_qcd",
-        label="Composite reflectivity",
+        label="Composite Reflectivity",
         description=(
             "Quality-controlled 1 km CONUS composite reflectivity, the maximum "
             "returned power in any tilt above each point"
@@ -190,7 +207,7 @@ PRODUCTS: dict[str, RadarProduct] = {
     "base-reflectivity": RadarProduct(
         key="base-reflectivity",
         layer="conus_bref_qcd",
-        label="Base reflectivity",
+        label="Base Reflectivity",
         description=(
             "Quality-controlled 1 km CONUS base reflectivity, the lowest tilt "
             "only, which is what most public radar displays show"
@@ -201,7 +218,7 @@ PRODUCTS: dict[str, RadarProduct] = {
     "echo-tops": RadarProduct(
         key="echo-tops",
         layer="conus_neet_v18",
-        label="Enhanced echo tops",
+        label="Enhanced Echo Tops",
         description="1 km CONUS enhanced echo tops, the height of the echo top",
         style="radar_echo_tops",
         units="kft",
@@ -273,19 +290,17 @@ def build_query(
         *,
         size: tuple[int, int] | None = None,
         transparent: bool = True,
+        valid_time: datetime | None = None,
 ) -> dict[str, str]:
     """Build one WMS 1.3.0 ``GetMap`` query for a full-extent radar frame.
 
-    No ``TIME`` parameter is sent. Omitting it selects the layer's advertised
-    default, which is the newest frame -- the thing a live overlay wants. Naming
-    an explicit time would require first fetching the capabilities document to
-    learn which times exist, doubling the request count per refresh to gain a
-    label the overlay can convey honestly from its retrieval time instead.
+    Omitting ``valid_time`` keeps the latest-image default. Timed callers first
+    resolve an actual advertised scan with ``radar_time.select_time``.
     """
     resolved = get_product(product)
-    width, height = _frame_size(size)
+    width, height = HISTORY_FRAME_SIZE if size is None and valid_time is not None else _frame_size(size)
     lon0, lon1, lat0, lat1 = COVERAGE_BOUNDS
-    return {
+    query = {
         "SERVICE": "WMS",
         "VERSION": WMS_VERSION,
         "REQUEST": "GetMap",
@@ -299,6 +314,9 @@ def build_query(
         "FORMAT": WMS_FORMAT,
         "TRANSPARENT": "TRUE" if transparent else "FALSE",
     }
+    if valid_time is not None:
+        query["TIME"] = radar_time.stamp(valid_time)
+    return query
 
 
 def frame_url(
@@ -306,9 +324,10 @@ def frame_url(
         *,
         size: tuple[int, int] | None = None,
         transparent: bool = True,
+        valid_time: datetime | None = None,
 ) -> str:
     """Return the full ``GetMap`` URL for a radar frame."""
-    query = build_query(product, size=size, transparent=transparent)
+    query = build_query(product, size=size, transparent=transparent, valid_time=valid_time)
     return "%s?%s" % (WMS_URL, urllib.parse.urlencode(query))
 
 
@@ -457,10 +476,11 @@ def fetch_frame(
         size: tuple[int, int] | None = None,
         opacity: float = 1.0,
         now: datetime | None = None,
+        valid_time: datetime | None = None,
         opener: Callable[..., bytes] | None = None,
         should_cancel: Callable[[], bool] | None = None,
 ) -> OverlayRaster | None:
-    """Return the newest radar frame as an :class:`OverlayRaster`.
+    """Return the latest frame, or a real recent scan near ``valid_time``.
 
     ``None`` means the fetch was cancelled, which is an ordinary answer when the
     user turns the overlay off mid-flight. Every other failure raises
@@ -472,8 +492,23 @@ def fetch_frame(
     a service that is already struggling.
     """
     resolved = get_product(product)
-    frame_size = _frame_size(size)
+    if should_cancel is not None and should_cancel():
+        return None
+    selected = None
+    if valid_time is not None:
+        from sharpmod.io.decoder import _remote_timeout
+
+        try:
+            selected = radar_time.select_time(
+                WMS_URL, resolved.layer, valid_time, opener=opener or _default_opener,
+                timeout=_remote_timeout(), now=now,
+            )
+        except (radar_time.RadarTimeError, urllib.error.URLError, OSError) as exc:
+            raise RadarError(f"{resolved.label} history is unavailable: {exc}") from exc
+    frame_size = HISTORY_FRAME_SIZE if size is None and selected is not None else _frame_size(size)
     key = _cache_key(resolved, frame_size)
+    if selected is not None:
+        key += (selected,)
 
     hit, cached = _cache_get(key)
     if hit:
@@ -490,7 +525,7 @@ def fetch_frame(
     if should_cancel is not None and should_cancel():
         return None
 
-    url = frame_url(resolved, size=frame_size)
+    url = frame_url(resolved, size=size, valid_time=selected)
     try:
         payload = _fetch_bytes(url, opener)
     except RadarError:
@@ -531,6 +566,7 @@ def fetch_frame(
             subtitle=resolved.description,
             short_name=resolved.label,
             retrieved_at=now,
+            valid_time=selected,
             update_interval_s=resolved.update_interval_s,
             opacity=opacity,
             source_url=url,

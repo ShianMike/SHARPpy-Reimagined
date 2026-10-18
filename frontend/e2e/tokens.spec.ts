@@ -25,6 +25,7 @@ async function resolved(page: Page, token: string, property: "color" | "width" |
 
 test("the :root tokens resolve to the design values", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.shellPainted);
   expect(await resolved(page, "--surface-0", "color")).toBe("rgb(20, 21, 22)");
   expect(await resolved(page, "--text-primary", "color")).toBe("rgb(242, 242, 242)");
@@ -44,6 +45,7 @@ for (const override of ["high", "balanced", "low"] as const) {
   test(`the floating controls use the ${override} glass profile`, async ({ page, consoleMessages }) => {
     await presetPreferences(page, { graphicsOverride: override });
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMark(page, MARKS.stationsRendered);
     expect(await effectiveProfile(page)).toEqual({ mode: "full", profile: override, reasons: ["Chosen in Settings"] });
     const glass = await toolbarGlass(page);
@@ -55,6 +57,7 @@ for (const override of ["high", "balanced", "low"] as const) {
 
 test("ids and counts use tabular numerals", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.stationsRendered);
   await chooseThroughSearch(page, "72357");
   const numeric = async (locator: ReturnType<Page["getByTestId"]>): Promise<string> =>

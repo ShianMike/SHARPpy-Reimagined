@@ -36,7 +36,7 @@ from sharpmod.io.uwyo_decoder import (
     StationTimeUnavailableError as UWyoStationTimeUnavailableError,
     UWyo_Decoder,
 )
-from sharpmod.tools.era5_extract import _atomic_write_json, _atomic_write_npz
+from sharpmod.tools.era5_extract import _atomic_write_sounding_pair
 
 
 MISSING = -9999.0
@@ -727,8 +727,6 @@ def write_observed_npz(
         "fallback_from": np.asarray(fallback_from, dtype=str),
     }
     out_path = str(out_path)
-    _atomic_write_npz(out_path, arrays)
-    sidecar_path = out_path.rsplit(".", 1)[0] + ".json"
     sidecar = _json_metadata(metadata)
     sidecar.update({
         "provider": result.provider,
@@ -744,16 +742,7 @@ def write_observed_npz(
         "surface_vorticity_source": "not provided by observed archive",
         "npz": str(out_path),
     })
-    try:
-        _atomic_write_json(sidecar_path, sidecar)
-    except BaseException:
-        try:
-            import os
-
-            os.remove(out_path)
-        except OSError:
-            pass
-        raise
+    _atomic_write_sounding_pair(out_path, arrays, sidecar)
     return out_path
 
 

@@ -45,11 +45,9 @@ from sharpmod.tools.era5_extract import (
     RetrievalError,
     MISSING,
     _as_datetime,
-    _atomic_write_json,
-    _atomic_write_npz,
+    _atomic_write_sounding_pair,
     _build_columns,
     _coord_values,
-    _quiet_remove,
     _select_time,
     great_circle_distance_km,
     select_nearest_grid_point,
@@ -291,13 +289,7 @@ def extract(lat, lon, valid_time=None, out_path=None, dataset=None,
     if "surface_relative_vorticity" in cols:
         meta["surface_relative_vorticity"] = cols["surface_relative_vorticity"]
 
-    _atomic_write_npz(out_path, arrays)
-    json_path = os.path.splitext(out_path)[0] + ".json"
-    try:
-        _atomic_write_json(json_path, meta)
-    except BaseException:
-        _quiet_remove(out_path)
-        raise
+    _atomic_write_sounding_pair(out_path, arrays, meta)
 
     return out_path
 

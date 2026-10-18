@@ -16,6 +16,7 @@ import { useForecastContext } from "../forecast/useForecast";
 import { compactUtc, forecastLabel } from "../sounding/soundingTime";
 import { openModelSounding, PointDetails } from "./PointDetails";
 import { openInSounding, StationDetails } from "./StationDetails";
+import { SurfacePlotControls } from "../../map/controls/SurfacePlotControls";
 import styles from "./Inspector.module.css";
 
 export interface InspectorProps {
@@ -28,6 +29,7 @@ function clearSelection(): void {
 
 function PointInspector({ point, className }: { point: MapPoint; className?: string | undefined }): ReactNode {
   const context = useForecastContext();
+  const live = useMapStore((state) => state.view === "live");
   return (
     <Surface
       as="aside"
@@ -39,19 +41,19 @@ function PointInspector({ point, className }: { point: MapPoint; className?: str
     >
       <div className={styles.header}>
         <div className={styles.heading}>
-          <p className={styles.id}>Forecast point</p>
+          <p className={styles.id}>{live ? "Live location" : "Forecast point"}</p>
           <p className={cx(styles.coordinates, "tabular")}>{formatCoordinates(point)}</p>
         </div>
         <IconAction icon={MapPinOff} size="sm" label="Clear selection" onClick={clearSelection} />
       </div>
-      {context === null ? null : <div className={styles.context} data-testid="point-forecast">
+      {live || context === null ? null : <div className={styles.context} data-testid="point-forecast">
         <strong>{context.model.label} <span className="tabular">{forecastLabel(context.hour)}</span></strong>
         <span className="tabular">Valid {compactUtc(context.validTime)} UTC</span>
       </div>}
       <div className={styles.body}>
-        <PointDetails point={point} />
+        {live ? <SurfacePlotControls /> : <PointDetails point={point} />}
       </div>
-      <div className={styles.footer}>
+      {live ? null : <div className={styles.footer}>
         <Action
           tone="accent"
           disabled={context === null}
@@ -63,7 +65,7 @@ function PointInspector({ point, className }: { point: MapPoint; className?: str
         >
           <Activity className="icon" aria-hidden="true" /> Open sounding
         </Action>
-      </div>
+      </div>}
     </Surface>
   );
 }

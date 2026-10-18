@@ -13,6 +13,23 @@ import { StorageSettings } from "./StorageSettings";
 
 afterEach(cleanup);
 
+it.each([
+  ["radar", "Radar data"], ["satellite", "Satellite imagery"],
+  ["observations", "Surface observations"], ["alerts", "Warnings & watches"],
+])("shows and clears the %s session cache independently", async (cache, title) => {
+  const transport = createTransport(null);
+  const call = vi.spyOn(transport, "call");
+  renderWithBackend(<StorageSettings />, transport);
+  await screen.findByRole("heading", { name: title });
+  const button = screen.getByRole<HTMLButtonElement>("button", { name: `Clear ${title.toLowerCase()}` });
+  expect(button.disabled).toBe(false);
+  await userEvent.click(button);
+  await screen.findByText("1 KiB cleared.");
+  expect(call).toHaveBeenCalledWith("clear_cache", { cache });
+  expect(button.disabled).toBe(true);
+  expect(screen.getByText(/cleared when you close the app/)).toBeTruthy();
+});
+
 it("loads only when Storage is opened, clears one category and requires confirmation for all", async () => {
   const user = userEvent.setup();
   const transport = createTransport(null);

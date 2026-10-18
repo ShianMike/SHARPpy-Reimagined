@@ -13,6 +13,7 @@ import { expect, test } from "./support/test";
 test.describe("the forecast map", () => {
   test("the forecast setup and timeline share run limits and time", async ({ page, consoleMessages }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     const hours = page.getByRole("slider", { name: "Forecast hour", exact: true });
     await expect(hours).toHaveAttribute("max", "18");
@@ -38,6 +39,7 @@ test.describe("the forecast map", () => {
 
   test("the model field: product, colour scale, frame state, pointer value", async ({ page, consoleMessages }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "model-field");
     const row = await layerRow(page, "model-field");
@@ -67,6 +69,7 @@ test.describe("the forecast map", () => {
 
   test("an unpublished field frame says so, with no retry", async ({ page, consoleMessages }) => {
     await page.goto("/?scenario=field-error");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "model-field");
     const notice = page.getByTestId("field-error");
@@ -78,8 +81,9 @@ test.describe("the forecast map", () => {
     expectWarnings(consoleMessages, [{ pattern: /^\[backend\] FIELD_UNAVAILABLE in get_weather_field/u }]);
   });
 
-  test("SPC outlooks, the radar mosaic, and the stacking order", async ({ page, consoleMessages }) => {
+  test("SPC stays in Model Viewer while live imagery has its own stacking order", async ({ page, consoleMessages }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "spc-cat");
     await expect(page.getByTestId("outlook-shown-cat")).toContainText("Day 1");
@@ -95,18 +99,19 @@ test.describe("the forecast map", () => {
     ]));
 
     await turnOn(page, "radar");
-    await expect(page.getByTestId("radar-shown")).toContainText("Composite reflectivity");
+    await expect(page.getByTestId("radar-shown")).toContainText("Composite Reflectivity");
     await expect.poll(() => deckLayers(page)).toContain("radar");
-    // Radar starts above the field and under the outlooks; Move up twice puts it over the categorical one.
+    expect(await deckLayers(page)).not.toContain("spc-cat-fill");
+    await turnOn(page, "satellite");
+    await expect.poll(() => deckLayers(page)).toContain("satellite");
     const below = async (a: string, b: string): Promise<boolean> => {
       const ids = await deckLayers(page);
       return ids.indexOf(a) < ids.indexOf(b);
     };
-    expect(await below("radar", "spc-cat-fill")).toBe(true);
+    expect(await below("satellite", "radar")).toBe(true);
     const radarRow = await layerRow(page, "radar");
-    await radarRow.getByRole("button", { name: "Move Radar mosaic up" }).click();
-    await radarRow.getByRole("button", { name: "Move Radar mosaic up" }).click();
-    await expect.poll(() => below("spc-cat-fill", "radar")).toBe(true);
+    await radarRow.getByRole("button", { name: "Move Radar mosaic down" }).click();
+    await expect.poll(() => below("radar", "satellite")).toBe(true);
     await nextFrames(page);
     await saveScreenshot(page, "browser-forecast-overlays.png");
     expectWarnings(consoleMessages, []);
@@ -114,6 +119,7 @@ test.describe("the forecast map", () => {
 
   test("single-site radar: the scope switch, the site picker, and its own frame", async ({ page, consoleMessages }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "radar");
     const row = await layerRow(page, "radar");
@@ -121,13 +127,13 @@ test.describe("the forecast map", () => {
     await row.getByRole("combobox", { name: "Radar" }).click();
     await page.getByRole("option", { name: "Single site", exact: true }).click();
     await expect(row.getByRole("combobox", { name: "Site" })).toBeVisible();
-    await expect(row.getByTestId("radar-shown")).toContainText("Base reflectivity");
+    await expect(row.getByTestId("radar-shown")).toContainText("Base Reflectivity");
     await expect(row.getByTestId("radar-shown")).toContainText("One antenna's own imagery");
     await expect.poll(() => deckLayers(page)).toContain("radar");
     // Pin an antenna by identifier: the status names the site it asked for.
     await row.getByRole("combobox", { name: "Site" }).click();
     await page.getByRole("option", { name: "KTLX", exact: true }).click();
-    await expect(row.getByTestId("radar-shown")).toContainText("Base reflectivity");
+    await expect(row.getByTestId("radar-shown")).toContainText("Base Reflectivity");
     await expect.poll(() => deckLayers(page)).toContain("radar");
     await nextFrames(page);
     await saveScreenshot(page, "browser-forecast-radar-site.png");
@@ -135,12 +141,13 @@ test.describe("the forecast map", () => {
     await row.getByRole("combobox", { name: "Radar" }).click();
     await page.getByRole("option", { name: "CONUS mosaic", exact: true }).click();
     await expect(row.getByRole("combobox", { name: "Site" })).toHaveCount(0);
-    await expect(row.getByTestId("radar-shown")).toContainText("Composite reflectivity");
+    await expect(row.getByTestId("radar-shown")).toContainText("Composite Reflectivity");
     expectWarnings(consoleMessages, []);
   });
 
   test("the GOES satellite layer: channel, scan provenance, and stacking", async ({ page, consoleMessages }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "satellite");
     const row = await layerRow(page, "satellite");
@@ -159,6 +166,7 @@ test.describe("the forecast map", () => {
 
   test("storm reports: window and hazard filter, with the marker readout", async ({ page, consoleMessages }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "storm-reports");
     const row = await layerRow(page, "storm-reports");
@@ -180,6 +188,7 @@ test.describe("the forecast map", () => {
 
   test("a forecast point picked on the map opens a model sounding there", async ({ page, consoleMessages }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "model-field");
     await expect(page.getByTestId("field-shown")).toContainText("F000");
@@ -214,6 +223,7 @@ test.describe("the forecast map", () => {
   test("two and four synchronized panels, each with its own product and layers", async ({ page, consoleMessages }) => {
     await presetPreferences(page, { layers: { "station-labels": { visible: true, opacity: 1 } } });
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     const mapToolbar = page.getByRole("toolbar", { name: "Map" });
     await mapToolbar.getByRole("button", { name: "Zoom in" }).click();
@@ -262,6 +272,7 @@ test.describe("the forecast map", () => {
 
   test("stations marked against the UWyo list of a release, the extra ones added", async ({ page, consoleMessages }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
     const row = await layerRow(page, "stations");

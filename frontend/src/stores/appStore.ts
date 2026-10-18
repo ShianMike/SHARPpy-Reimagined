@@ -4,8 +4,10 @@
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import { useMapStore } from "./mapStore";
+import { useLiveTrackingStore } from "./liveTrackingStore";
 
-export const WORKSPACE_IDS = ["overview", "map", "sounding", "status", "settings"] as const;
+export const WORKSPACE_IDS = ["overview", "map", "live", "sounding", "status", "settings"] as const;
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number];
 
 export type PendingOutcome = "none" | "selected" | "dropped";
@@ -38,11 +40,13 @@ export interface AppState {
 
 export const useAppStore = create<AppState>()(
   subscribeWithSelector((set, get) => ({
-    activeWorkspace: "map",
+    activeWorkspace: "overview",
     selectedStationId: null,
     selectedPoint: null,
     pendingStationId: null,
     setActiveWorkspace: (workspace) => {
+      if (workspace === "live") useLiveTrackingStore.getState().tick();
+      if (workspace === "map" || workspace === "live") useMapStore.setState({ view: workspace });
       set({ activeWorkspace: workspace });
     },
     selectStation: (id) => {

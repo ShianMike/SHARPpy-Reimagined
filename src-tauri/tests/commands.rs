@@ -14,7 +14,7 @@ use tauri::test::{get_ipc_response, mock_builder, mock_context, noop_assets, INV
 use tauri::webview::InvokeRequest;
 use tauri::{WebviewWindow, WebviewWindowBuilder};
 
-use common::{fixture, FakeLauncher, NotConfigured, RecordingSink};
+use common::{fixture, script, FakeLauncher, NotConfigured, RecordingSink};
 use sharppy_reimagined_lib::backend::convert;
 use sharppy_reimagined_lib::backend::router::Router;
 use sharppy_reimagined_lib::dto::health::{
@@ -142,6 +142,127 @@ fn sounding_progress_command_tracks_the_model_request_and_validates_ids() {
 }
 
 #[test]
+fn radar_commands_forward_optional_scan_times_and_preserve_the_actual_time() {
+    let launcher = FakeLauncher::with(vec![script(|mut io| async move {
+        for (method, params, file) in [
+            ("radar.mosaic", serde_json::json!({}), "radar.result.json"),
+            (
+                "radar.mosaic",
+                serde_json::json!({"product": "composite-reflectivity", "valid_time": "2026-10-17T11:40:00Z"}),
+                "radar.result.json",
+            ),
+            (
+                "radar.site",
+                serde_json::json!({"site_id": "KTLX"}),
+                "radar-site.result.json",
+            ),
+            (
+                "radar.site",
+                serde_json::json!({"product": "reflectivity", "site_id": "KTLX", "valid_time": "2026-10-17T11:40:00Z", "tilt": "1"}),
+                "radar-site.result.json",
+            ),
+            (
+                "radar.site",
+                serde_json::json!({"latitude": 35.2, "longitude": -97.4, "valid_time": "2026-10-17T11:40:00Z"}),
+                "radar-site.result.json",
+            ),
+        ] {
+            let request = io.expect(method).await.unwrap();
+            assert_eq!(request["params"], params);
+            let mut result = fixture(&format!("bridge/map/{file}"));
+            if params.get("valid_time").is_some() {
+                result["valid_time"] = serde_json::json!("2026-10-17T11:38:49Z");
+            }
+            io.reply(&request["id"], result).await;
+        }
+        io.expect("shutdown").await;
+        0
+    })]);
+    let (_app, webview) = window(launcher);
+    let error: BackendError = parse(
+        invoke_args(
+            &webview,
+            "get_radar_site_frame",
+            serde_json::json!({"site": "KTLX", "tilt": "../0"}),
+        )
+        .unwrap_err(),
+    );
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
+    for (command, args) in [
+        ("get_radar_frame", serde_json::json!({})),
+        (
+            "get_radar_frame",
+            serde_json::json!({"product": "composite-reflectivity", "validTime": "2026-10-17T11:40:00Z"}),
+        ),
+        ("get_radar_site_frame", serde_json::json!({"site": "KTLX"})),
+        (
+            "get_radar_site_frame",
+            serde_json::json!({"product": "reflectivity", "site": "KTLX", "validTime": "2026-10-17T11:40:00Z", "tilt": "1"}),
+        ),
+        (
+            "get_radar_site_frame",
+            serde_json::json!({"latitude": 35.2, "longitude": -97.4, "validTime": "2026-10-17T11:40:00Z"}),
+        ),
+    ] {
+        let timed = args.get("validTime").is_some();
+        let bytes: Vec<u8> = parse(invoke_args(&webview, command, args).unwrap());
+        assert_eq!(&bytes[..8], b"SHRF\x01\x00\x00\x00");
+        let length = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
+        let header: Value = serde_json::from_slice(&bytes[12..12 + length]).unwrap();
+        assert_eq!(
+            header["validTime"],
+            if timed {
+                serde_json::json!("2026-10-17T11:38:49Z")
+            } else if command == "get_radar_site_frame" {
+                fixture("bridge/map/radar-site.result.json")["valid_time"].clone()
+            } else {
+                Value::Null
+            }
+        );
+        assert!(bytes[12 + length..].starts_with(b"\x89PNG\r\n\x1a\n"));
+    }
+}
+
+#[test]
+fn timed_radar_rejects_an_untimed_provider_frame() {
+    let launcher = FakeLauncher::with(vec![script(|mut io| async move {
+        for (method, file) in [
+            ("radar.mosaic", "radar.result.json"),
+            ("radar.site", "radar-site.result.json"),
+        ] {
+            let request = io.expect(method).await.unwrap();
+            assert_eq!(request["params"]["valid_time"], "2026-10-17T11:40:00Z");
+            let mut result = fixture(&format!("bridge/map/{file}"));
+            result["valid_time"] = Value::Null;
+            io.reply(&request["id"], result).await;
+        }
+        io.expect("shutdown").await;
+        0
+    })]);
+    let (_app, webview) = window(launcher);
+    for command in ["get_radar_frame", "get_radar_site_frame"] {
+        let error: BackendError = parse(
+            invoke_args(
+                &webview,
+                command,
+                serde_json::json!({"site": "KTLX", "validTime": "2026-10-17T11:40:00Z"}),
+            )
+            .unwrap_err(),
+        );
+        assert_eq!(error.code, ErrorCode::BridgeProtocol);
+        let error: BackendError = parse(
+            invoke_args(
+                &webview,
+                command,
+                serde_json::json!({"site": "KTLX", "validTime": ""}),
+            )
+            .unwrap_err(),
+        );
+        assert_eq!(error.code, ErrorCode::InvalidArgument);
+    }
+}
+
+#[test]
 fn commands_return_public_dtos() {
     let (_app, webview) = window(FakeLauncher::with(vec![]));
     let catalog: StationCatalog = parse(invoke(&webview, "get_station_catalog").unwrap());
@@ -213,4 +334,77 @@ fn unknown_commands_are_rejected() {
         invoke(&webview, "get_ensemble_summary").unwrap_err(),
         Value::String("Command get_ensemble_summary not found".into()),
     );
+}
+
+#[test]
+fn weather_alerts_validate_requests_and_return_the_public_snapshot() {
+    let launcher = FakeLauncher::with(vec![script(|mut io| async move {
+        let request = io.expect("alerts.weather").await.unwrap();
+        assert_eq!(
+            request["params"],
+            serde_json::json!({"valid_time": "2026-10-04T21:00:00Z"})
+        );
+        io.reply(&request["id"], fixture("bridge/map/alerts.result.json"))
+            .await;
+        io.expect("shutdown").await;
+        0
+    })]);
+    let (_app, webview) = window(launcher);
+    let error: BackendError = parse(
+        invoke_args(
+            &webview,
+            "get_weather_alerts",
+            serde_json::json!({"validTime": "not-an-instant"}),
+        )
+        .unwrap_err(),
+    );
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
+    assert_eq!(
+        invoke_args(
+            &webview,
+            "get_weather_alerts",
+            serde_json::json!({"validTime": "2026-10-04T21:00:00Z"})
+        )
+        .unwrap(),
+        fixture("public/map/alerts.json")
+    );
+}
+
+#[test]
+fn radar_tilts_validate_requests_and_expose_all_checked_cuts() {
+    for product in ["velocity", "correlation-coefficient"] {
+        let launcher = FakeLauncher::with(vec![script(move |mut io| async move {
+            let request = io.expect("radar.tilts").await.unwrap();
+            assert_eq!(
+                request["params"],
+                serde_json::json!({"site_id": "KTLX", "product": product, "valid_time": "2026-10-17T08:00:00Z"})
+            );
+            let mut result = fixture("bridge/map/radar-tilts.result.json");
+            result["product"] = serde_json::json!(product);
+            io.reply(&request["id"], result).await;
+            io.expect("shutdown").await;
+            0
+        })]);
+        let (_app, webview) = window(launcher);
+        for args in [
+            serde_json::json!({"site": "../bad", "product": "velocity"}),
+            serde_json::json!({"site": "KTLX", "product": "echo-tops"}),
+            serde_json::json!({"site": "KTLX", "product": "velocity", "validTime": "bad"}),
+        ] {
+            let error: BackendError =
+                parse(invoke_args(&webview, "get_radar_tilts", args).unwrap_err());
+            assert_eq!(error.code, ErrorCode::InvalidArgument);
+        }
+        let mut expected = fixture("public/map/radar-tilts.json");
+        expected["product"] = serde_json::json!(product);
+        assert_eq!(invoke_args(&webview, "get_radar_tilts", serde_json::json!({"site": "KTLX", "product": product, "validTime": "2026-10-17T08:00:00Z"})).unwrap(), expected);
+        let mut invalid = fixture("bridge/map/radar-tilts.result.json");
+        invalid["tilts"][0]["tilt"] = serde_json::json!("0");
+        assert!(
+            serde_json::from_value::<sharppy_reimagined_lib::dto::radar::RadarTilts>(invalid)
+                .unwrap()
+                .validate()
+                .is_err()
+        );
+    }
 }

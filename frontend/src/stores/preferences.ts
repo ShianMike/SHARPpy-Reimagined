@@ -69,6 +69,7 @@ export function applyPreferences(preferences: Preferences): void {
   const initial = useMapStore.getInitialState();
   useMapStore.setState({
     layers: { ...initial.layers, ...preferences.layers },
+    livePanels: initial.livePanels.map((panel, index) => ({ ...panel, ...preferences.livePanels[index], layers: { ...panel.layers, ...preferences.livePanels[index]?.layers } })),
     productKey: preferences.productKey,
     panels: initial.panels.map((panel, index) => {
       const saved = preferences.panels[index];
@@ -80,6 +81,7 @@ export function applyPreferences(preferences: Preferences): void {
     activePanel: preferences.activePanel,
     layerOrder: preferences.layerOrder,
     radarProduct: preferences.radarProduct,
+    radarTilt: preferences.radarTilt,
     radarScope: preferences.radarScope,
     radarSite: preferences.radarSite,
     satelliteChannel: preferences.satelliteChannel,
@@ -105,6 +107,7 @@ export function currentPreferences(): Preferences {
     activePanel: map.activePanel,
     layerOrder: [...map.layerOrder],
     radarProduct: map.radarProduct,
+    radarTilt: map.radarTilt,
     radarScope: map.radarScope,
     radarSite: map.radarSite,
     satelliteChannel: map.satelliteChannel,
@@ -112,6 +115,7 @@ export function currentPreferences(): Preferences {
     reportFilter: map.reportFilter,
     layerPanelGroup: map.layerPanelGroup,
     layers: { ...map.layers },
+    livePanels: map.livePanels.map((panel) => ({ ...panel, layers: { ...panel.layers } })),
     productKey: map.productKey,
     panels: map.panels.map(({ productKey, layers }) => ({ productKey, layers: { ...layers } })),
     layerPanelCollapsed: map.layerPanelCollapsed,
@@ -124,12 +128,18 @@ export function currentPreferences(): Preferences {
 /** Reset every panel's layers and shared weather options, keeping its products and view. */
 export function resetLayerSettings(): void {
   const initial = useMapStore.getInitialState();
+  if (useMapStore.getState().view === "live") {
+    useMapStore.setState({ livePanels: initial.livePanels, reportWindowS: initial.reportWindowS,
+      reportFilter: initial.reportFilter, layerPanelGroup: initial.layerPanelGroup });
+    return;
+  }
   useMapStore.setState((state) => ({
     layers: initial.layers,
     panels: state.panels.map((panel, index) => ({ ...panel, layers: initial.panels[index]?.layers ?? initial.layers })),
     layerOrder: initial.layerOrder,
     projection: initial.projection,
     radarProduct: initial.radarProduct,
+    radarTilt: initial.radarTilt,
     radarScope: initial.radarScope,
     radarSite: initial.radarSite,
     satelliteChannel: initial.satelliteChannel,

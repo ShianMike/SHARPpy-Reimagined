@@ -23,6 +23,15 @@ const VALID = {
 };
 
 describe("parsePreferences", () => {
+  it("restores removed radar tilts to the default while preserving supported cuts", () => {
+    for (const radarTilt of ["x", "y", "z", "0", "1"]) {
+      const parsed = parsePreferences(JSON.stringify({ ...VALID, radarTilt, livePanels: [{ radarTilt }] }));
+      const expected = radarTilt === "x" || radarTilt === "y" ? "0" : radarTilt;
+      expect(parsed.radarTilt).toBe(expected);
+      expect(parsed.livePanels[0]?.radarTilt).toBe(expected);
+    }
+  });
+
   it("restores both projections and uses the flat default for old or invalid values", () => {
     for (const projection of ["mercator", "globe"] as const) {
       useMapStore.getState().setProjection(projection);

@@ -260,6 +260,7 @@ class OverlayLayer:
     issued: datetime | None = None
     source_url: str = ""
     attribution: str = ""
+
     bounds: tuple[float, float, float, float] | None = field(default=None)
     #: List this layer's categories as swatches in the map legend.
     #:
@@ -418,8 +419,11 @@ class OverlayRaster:
     opacity: float = 1.0
     source_url: str = ""
     attribution: str = ""
+    elevation_angle: float | None = None
 
     def __post_init__(self) -> None:
+        if self.elevation_angle is not None and (not math.isfinite(self.elevation_angle) or not -1 <= self.elevation_angle <= 90):
+            raise ValueError("radar elevation must be a finite angle between -1 and 90 degrees")
         if not looks_like_image(self.image_bytes):
             raise ValueError("raster payload is not a supported image")
         if len(self.image_bytes) > MAX_RASTER_BYTES:

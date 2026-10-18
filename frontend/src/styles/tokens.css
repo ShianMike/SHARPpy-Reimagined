@@ -212,7 +212,7 @@
   --map-states-width: 1px;
   --map-countries-width: 1.2px;
   --map-lakes-width: 1.1px;
-  --map-coastline-width: 1.4px;
+  --map-coastline-width: 2.4px;
 
   /* Native dark basemap paints; inland water stays below forecast layers. */
   --basemap-background: #202d38;
@@ -267,6 +267,7 @@
   /* Map workspace: the forecast fields, the field legend, and the 2- and 4-panel layouts */
   --model-select-w: 144px;
   --legend-ramp-h: 10px;
+  --radar-legend-w: 540px;
   --panel-chip-max-w: 320px;
 }
 

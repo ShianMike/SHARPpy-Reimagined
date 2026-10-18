@@ -108,7 +108,7 @@ pub(crate) fn colour_ok(text: &str) -> bool {
 }
 
 impl Palette {
-    fn validate(&self) -> Result<(), String> {
+    pub(crate) fn validate(&self) -> Result<(), String> {
         if !matches!(
             self.display.as_str(),
             "auto" | "fixed" | "temperature-difference"
@@ -271,6 +271,7 @@ impl FieldGridResult {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RadarResult {
+    pub legend_png_base64: Option<String>,
     pub product: String,
     pub label: String,
     pub units: String,
@@ -288,6 +289,7 @@ pub struct RadarResult {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RadarFrameHeader {
+    pub legend_png_base64: Option<String>,
     pub kind: &'static str,
     pub product: String,
     pub label: String,
@@ -302,6 +304,7 @@ pub struct RadarFrameHeader {
 
 impl RadarResult {
     pub fn validate(&self) -> Result<(), String> {
+        crate::dto::checks::check_radar_legend(self.legend_png_base64.as_ref())?;
         check_text("product", &self.product, 1, 40)?;
         check_text("label", &self.label, 1, 120)?;
         if !bounds_ok(&self.bounds) || !self.update_interval_s.is_finite() {
@@ -312,6 +315,7 @@ impl RadarResult {
 
     pub fn header(&self) -> RadarFrameHeader {
         RadarFrameHeader {
+            legend_png_base64: self.legend_png_base64.clone(),
             kind: "radar",
             product: self.product.clone(),
             label: self.label.clone(),

@@ -5,6 +5,130 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [v3.1.0] - 2026-10-18
+
+### Added
+
+- Show measured values when hovering over native radar in Live Tracking,
+  following each panel's product, site, tilt and scan. Preserve missing data,
+  range folding and lower-bound echo-top heights without extra network requests.
+- Open Overview by default at startup. Give Model Viewer and Live Tracking
+  dedicated entry cards, group the four sounding sources together, and defer
+  provider checks until Model availability is expanded.
+- Add Correlation Coefficient from the native Level II RHO moment, sharing
+  reflectivity downloads across products and panels. Add single-site Enhanced
+  Echo Tops from NEXRAD Level III product 135, with an interactive height scale
+  in thousands of feet. Check correlation tilts automatically; Echo Tops uses
+  the full volume. Include both in history playback and the radar session cache.
+- Capitalize radar product titles consistently, including Base Reflectivity,
+  Velocity, Correlation Coefficient and Enhanced Echo Tops.
+- Use native NEXRAD Level II volumes for single-site base reflectivity, preserving
+  250 m gates and half-degree radials where the radar supplies them. Keep the
+  BR HiRes colour table, actual sweep times, missing sectors and range folding.
+  Share one download across panels, tilt checks and elevation changes; retain
+  two compact decoded volumes and bound raw session downloads to 512 MiB.
+- Show radar data, satellite imagery, surface observations and warnings/watches
+  separately in Settings → Storage, with real disk usage and individual Clear
+  actions. Include raw Level II volumes in radar usage, keep forecast images
+  separate, and remove live caches with app-session cleanup, including forced
+  Windows browser-preview shutdown.
+- Optimize Live Tracking's past-hour downloads with two independent download
+  slots, stable five-minute history addresses and a byte-bounded compressed
+  frame cache. Reuse loaded frames across panels and minute-clock updates,
+  prepare playback images before advancing, and retain recent imagery during
+  refresh decoding. Bound decoded bitmap reuse separately by graphics profile.
+  Render native radar as lossless indexed PNGs, preserving full
+  resolution, colour tables, missing data and range folding with smaller transfers.
+- Automatically check published radar tilts for the selected site, product and
+  viewing time. Offer verified elevations in both pickers, select an available
+  cut when needed, and skip unavailable cuts during background preloading.
+  Reuse Level II reflectivity volumes and briefly cached Level III velocity
+  directory metadata for the checks.
+- Show radar site IDs in Live Tracking with a Radar site labels toggle under
+  Layers → Map details, using the same rounded label design as sounding stations.
+  Remember the choice independently for each panel and
+  space labels to avoid crowding as the map moves or zooms.
+- Apply the BR HiRes base-reflectivity colour table to single-site radar imagery
+  and its interactive dBZ scale, preserving all 18 stops from 0 to 95 dBZ.
+- Preload reflectivity and velocity tilts in Live Tracking after the
+  displayed scans, with two background requests at a time and shared panel caches.
+  Reuse a bounded WGS84 projection lookup across products, tilts and scans, and
+  retain a recent scan of the same tilt while its next update loads.
+- Add a separate Live Tracking workspace below Model Viewer. Move radar,
+  GOES satellite and surface observations into
+  its own map with independent layers and a live clock. Keep search, Layers,
+  Point and fullscreen controls; preserve forecast panels when switching back.
+- Add separate NWS warning and watch layers to Live Tracking, with official
+  hazard colours, storm and zone polygons, and issue/expiry times on hover.
+  Keep SPC outlooks and storm reports in Model Viewer. Retain warning/watch
+  snapshots in the temporary session cache; report unavailable history instead
+  of substituting current alerts for a past time.
+  Cross-check empty map responses against the NWS alert feed so a service update
+  cannot be mistaken for an all-clear.
+- Browse the previous 60 minutes, refresh enabled sources, or cache the past
+  hour at five-minute steps where history is available. Keep source imagery
+  at its existing resolution, report missing scans, bound image memory, and
+  store live downloads only in the temporary app-session cache.
+- Reuse the compact map player for live playback, with stepping, speed and loop
+  controls. Support one, two or four synchronized live panels with independent
+  radar products, sites, satellite channels and layer settings. Show the app title
+  and slim radar scales matching Model Viewer, with numeric dBZ and mph hover
+  readouts and the source's labelled legends for other radar products.
+- Add centered Site, Site Product and Site Tilt controls to Live Tracking,
+  synchronized with the active panel and Layers. Load tilt-specific numeric
+  NEXRAD reflectivity and velocity, show the scan's actual elevation, and keep
+  each tilt separate in playback, saved panel settings and the session cache.
+- Render numeric NEXRAD base velocity with the reference colour table from
+  -200 to +200 mph and a matching vertical scale. Preserve missing gates and
+  range-folded returns, and retain each frame's actual radar scan time.
+
+### Fixed
+
+- Keep the preceding radar request visible during a minute refresh when the
+  provider's latest scan is delayed, while rejecting a different site, product,
+  tilt, or history direction and scans beyond the provider window.
+- Include actual scan times in radar-scale details and flag scans more than
+  ten minutes behind the selected time.
+- Reset live-history readiness when the selected data sources change, and stop
+  queuing downloads for the old selection. Keep cached data reusable when
+  returning to that selection and preserve readiness during opacity changes.
+- Refine Live Tracking's hour-cache and Live controls with the player's rounded
+  glass styling, orange accents, a separated frame count, and clear loading,
+  ready, retry and resume labels.
+- Replace the coarse coastline overlay with an outline from the detailed basemap
+  above weather layers, use a thicker 2.4 px shoreline, and hide offshore maritime
+  borders around islands.
+- Keep Live Tracking on a flat map and disable its Globe option, while retaining
+  the saved projection for Model Viewer.
+- Remove the −0.2° and 0.0° / 0.2° radar tilt choices from the controls and
+  background preload; restore saved selections of either to the default 0.5° cut.
+- Use orange highlights for top-bar dropdown buttons and options on hover and
+  keyboard focus in Model Viewer and Live Tracking.
+- Stop map clicks from placing points in Live Tracking and hide its Point buttons.
+  Hide the Model Viewer point there while preserving it when returning, and keep live
+  surface observations centered on the map or selected station.
+- Convert grid-relative model winds to true north before assembling surface
+  and pressure-level soundings. Use the GRIB wind-reference and projection
+  metadata in both Python and Rust, preserve earth-relative winds and missing
+  values, and apply the corresponding correction to the cfgrib fallback and
+  HRRR Zarr paths. Invalidate derived model caches and batch resume identities
+  that could otherwise reuse the previous wind directions.
+- Stage and validate portable NPZ/JSON sounding pairs before publishing them.
+  Restore an existing pair after write failures or cancellation, remove new
+  partial outputs, and retain recovery files if restoring the old pair fails.
+  Apply the same safeguards to model, ERA5, WRF, IFS, Open-Meteo, GeoMet,
+  observed and box-mean output writers. Match new output-pair identities during
+  validation so data and metadata from different writes cannot be reused as a
+  valid cached pair; retain compatibility with complete legacy pairs.
+- Protect local sounding changes and undo/redo history when closing soundings
+  or opening more than twelve. Evict an unmodified sounding first; require an
+  explicit discard decision if local work would be lost. Cancel and Escape
+  keep the work, and late edit responses cannot recreate a closed view.
+  Show the station and launch details in a wider confirmation with clearer
+  wording and separate cancel and discard actions.
+
 ## [v3.0.3] - 2026-10-17
 
 ### Added

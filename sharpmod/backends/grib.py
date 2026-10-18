@@ -21,6 +21,7 @@ import threading
 import numpy as np
 
 from sharpmod.models.model_surface import merge_surface_level
+from sharpmod.models.wind_reference import wind_rotation
 
 
 GRIB_COLUMN_NAMES = (
@@ -149,6 +150,7 @@ class _MessageRef:
     field_index: int
     pressure: float
     missing_value: float | None
+    wind_rotation: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -487,6 +489,15 @@ def _scan_inventory(identity: _FileIdentity, eccodes) -> _Inventory:
                     missing_value = None
                 signature = _grid_signature(eccodes, message)
                 grid_signatures.add(signature)
+                rotation = None
+                if short_name in {"u", "ugrd", "v", "vgrd"} or surface_role in {
+                    "surface_u", "surface_v",
+                }:
+                    try:
+                        rotation = wind_rotation(
+                            lambda key: _safe_get(eccodes, message, key))
+                    except (TypeError, ValueError, ZeroDivisionError) as exc:
+                        raise GribDecodeError(str(exc)) from exc
                 if is_pressure:
                     pressure = level
                     if level_type == "isobaricInPa":
@@ -500,6 +511,7 @@ def _scan_inventory(identity: _FileIdentity, eccodes) -> _Inventory:
                         pressure,
                         missing_value,
                         signature,
+                        rotation,
                     ))
                 else:
                     raw_surface_messages.append((
@@ -510,6 +522,7 @@ def _scan_inventory(identity: _FileIdentity, eccodes) -> _Inventory:
                             field_index,
                             0.0,
                             missing_value,
+                            rotation,
                         ),
                     ))
             finally:
@@ -530,9 +543,10 @@ def _scan_inventory(identity: _FileIdentity, eccodes) -> _Inventory:
         pressure,
         missing_value,
         _signature,
+        rotation,
     ) in raw_messages:
         by_short_name[short_name].append(
-            _MessageRef(offset, field_index, pressure, missing_value))
+            _MessageRef(offset, field_index, pressure, missing_value, rotation))
 
     selected_roles = []
     for role, aliases in _ROLE_ALIASES:

@@ -1,12 +1,14 @@
-import { CalendarDays, ChevronDown } from "lucide-react";
+import { CalendarDays, ChevronDown, type LucideIcon } from "lucide-react";
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Popover } from "../../components/Popover";
 import { RunCalendar } from "../toolbar/RunCalendar";
 import { releaseTime, utcDate } from "./soundingTime";
 import styles from "./Sounding.module.css";
+import toolbar from "../toolbar/ForecastControls.module.css";
 
-export function SourceSelect<T extends string | number>({ label, value, options, onChange, disabled = false, compact = false }: {
+export function SourceSelect<T extends string | number>({ label, value, options, onChange, disabled = false, compact = false, toolbarIcon: ToolbarIcon }: {
   label: string; value: T; options: readonly { value: T; label: string; detail?: string }[]; onChange: (value: T) => void; disabled?: boolean; compact?: boolean;
+  toolbarIcon?: LucideIcon;
 }): ReactNode {
   const id = useId();
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
@@ -34,12 +36,12 @@ export function SourceSelect<T extends string | number>({ label, value, options,
     setFocused(next);
     list.current?.querySelectorAll<HTMLButtonElement>("[role=option]")[next]?.focus();
   };
-  return <div className={styles.field} data-compact={compact}>
-    {compact ? null : <label htmlFor={id}>{label}</label>}
+  return <div className={ToolbarIcon === undefined ? styles.field : toolbar.select} data-compact={compact}>
+    {compact || ToolbarIcon !== undefined ? null : <label htmlFor={id}>{label}</label>}
     <button ref={setAnchor} id={id} type="button" value={value} disabled={disabled} role="combobox" aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? `${id}-options` : undefined}
-      className={styles.fieldButton} onClick={() => { if (open) setOpen(false); else show(); }} onKeyDown={(event) => {
+      className={ToolbarIcon === undefined ? styles.fieldButton : toolbar.trigger} onClick={() => { if (open) setOpen(false); else show(); }} onKeyDown={(event) => {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); show(); }
-      }}><span>{options[selected]?.label ?? "Choose…"}</span><ChevronDown className="icon-sm" aria-hidden="true" /></button>
+      }}>{ToolbarIcon === undefined ? <span>{options[selected]?.label ?? "Choose…"}</span> : <><ToolbarIcon className="icon-sm" aria-hidden="true" /><span className={toolbar.triggerCopy}><span className={toolbar.name}>{label}</span><strong>{options[selected]?.label ?? "Choose…"}</strong></span></>}<ChevronDown className="icon-sm" aria-hidden="true" /></button>
     <Popover open={open} anchor={anchor} onClose={() => { setOpen(false); }} role="listbox" label={label} id={`${id}-options`} initialFocus="first" width="anchor" className={styles.sourceMenu}>
       <div ref={list} onKeyDown={onKeyDown}>
         {options.map((option, index) => <button key={option.value} type="button" value={option.value} disabled={disabled} role="option" aria-label={option.label} aria-description={option.detail} aria-selected={option.value === value} tabIndex={focused === index ? 0 : -1}

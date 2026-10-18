@@ -147,7 +147,12 @@ def _physical_profile_issues(columns) -> tuple[str, ...]:
 
 
 def validate_portable_sounding_pair(npz_path) -> Path:
-    """Validate and return a cached ``.npz`` path or raise ``ValueError``."""
+    """Validate a pair and return its ``.npz`` path or raise ``ValueError``.
+
+    Marked pairs require matching, nonempty ``pair_generation`` strings; legacy
+    pairs with neither marker remain valid. This detects mixed publication,
+    not an atomic snapshot or a lock on the returned path.
+    """
     path = Path(npz_path).expanduser()
     sidecar = path.with_suffix(".json")
     if path.suffix.casefold() != ".npz":
@@ -205,11 +210,20 @@ def validate_portable_sounding_pair(npz_path) -> Path:
                     or not -180.0 <= longitude <= 180.0
                 ):
                     raise ValueError("portable sounding longitude is out of range")
+            marked = "pair_generation" in data
+            generation = _scalar(data, "pair_generation") if marked else None
         payload = json.loads(sidecar.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, TypeError, ValueError, zipfile.BadZipFile) as exc:
         raise ValueError(f"invalid portable sounding pair: {exc}") from exc
     if not isinstance(payload, dict):
         raise ValueError("portable sounding sidecar must contain a JSON object")
+    if (marked or "pair_generation" in payload) and (
+        not isinstance(generation, str) or not generation.strip()
+        or generation != payload.get("pair_generation")
+    ):
+        raise ValueError(
+            "portable sounding pair generation is missing or mismatched"
+        )
     return path
 
 

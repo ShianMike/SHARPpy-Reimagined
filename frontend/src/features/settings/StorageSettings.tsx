@@ -11,6 +11,10 @@ const LABELS = {
   models: { title: "Forecast downloads", description: "Model data used to open forecast soundings." },
   maps: { title: "Map images", description: "Forecast maps, downloaded frames, wind barbs and contours." },
   outlooks: { title: "SPC outlooks", description: "Downloaded severe weather outlooks." },
+  radar: { title: "Radar data", description: "Level II volumes, single-site radar and mosaic frames." },
+  satellite: { title: "Satellite imagery", description: "Downloaded GOES imagery for Live Tracking." },
+  observations: { title: "Surface observations", description: "Downloaded station readings and weather plots." },
+  alerts: { title: "Warnings & watches", description: "NWS alerts and cached warning and watch polygons." },
 };
 const CLEAR_KEY = ["storage", "clear"];
 
@@ -48,6 +52,6 @@ export function StorageSettings(): ReactNode {
         {row.bytes > row.clearableBytes ? <p className={styles.cacheKept}>{formatStorageBytes(row.bytes - row.clearableBytes)} kept while in use or pinned</p> : null}</div>
       <div className={styles.cacheActions}><span className="tabular">{formatStorageBytes(row.bytes)}</span><Action aria-label={`Clear ${LABELS[row.key].title.toLowerCase()}`} disabled={busy || row.clearableBytes === 0} onClick={() => { mutation.mutate(row.key); }}>{clearing && mutation.variables === row.key ? "Clearing…" : "Clear"}</Action></div>
     </div>)}</section>}
-    <p className={styles.hint}>Your files, open soundings and settings are kept. Cleared weather data downloads again when needed.</p>
+    <p className={styles.hint}>Live radar, satellite, observations and alerts are cleared when you close the app. Your files, open soundings and settings are kept. Cleared weather data downloads again when needed.</p>
   </div>;
 }

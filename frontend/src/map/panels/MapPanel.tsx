@@ -5,7 +5,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cx } from "../../lib/cx";
 import { useAppStore } from "../../stores/appStore";
-import { useMapStore, type PanelLayout } from "../../stores/mapStore";
+import { mapProjection, panelLayers, panelWeather, useMapStore, type PanelLayout } from "../../stores/mapStore";
+import { RadarScale } from "../../features/tracking/RadarScale";
+import { useMapCatalog } from "../mapQueries";
 import { forecastLabel } from "../../features/sounding/soundingTime";
 import { useForecastContext } from "../../features/forecast/useForecast";
 import { ParameterPicker } from "../../features/toolbar/ParameterPicker";
@@ -13,6 +15,7 @@ import { Popover } from "../../components/Popover";
 import pickerStyles from "../../features/toolbar/ForecastControls.module.css";
 import { ParameterScale } from "../controls/ParameterScale";
 import { FieldTooltip } from "../hover/FieldTooltip";
+import { RadarTooltip } from "../hover/RadarTooltip";
 import type { PanelField } from "../panelField";
 import { usePanelScene } from "../panelScene";
 import { MapRuntime } from "../runtime/MapRuntime";
@@ -92,12 +95,28 @@ export interface MapPanelProps {
   onRuntime?: ((runtime: MapRuntime | null) => void) | undefined;
 }
 
+function LivePanelChip({ panel, layout }: { panel: number; layout: PanelLayout }): ReactNode {
+  const active = useMapStore((state) => state.activePanel === panel);
+  const layers = useMapStore((state) => panelLayers(state, panel));
+  const options = useMapStore((state) => panelWeather(state, panel));
+  const catalog = useMapCatalog().data;
+  const products = options.radarScope === "site" ? catalog?.siteProducts : catalog?.radarProducts;
+  const product = products?.find((item) => item.key === options.radarProduct) ?? products?.[0];
+  const title = layers.radar.visible ? product?.label ?? "Radar" : layers.satellite.visible ? `GOES ${options.satelliteChannel}` : "Live layers";
+  if (layout === 1) return null;
+  return <button type="button" className={styles.chip} aria-pressed={active} aria-label={`Panel ${String(panel + 1)}: ${title}. Select panel.`} data-testid={`panel-chip-${String(panel + 1)}`} onClick={() => {
+    useMapStore.getState().setActivePanel(panel);
+  }}><span className={styles.product}>{String(panel + 1)} • {title}</span></button>;
+}
+
 export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [runtime, setRuntime] = useState<MapRuntime | null>(null);
   const isMap = useAppStore((state) => state.activeWorkspace === "map");
+  const isLive = useAppStore((state) => state.activeWorkspace === "live");
+  const live = useMapStore((state) => state.view === "live");
   const active = useMapStore((state) => state.activePanel === panel);
-  const projection = useMapStore((state) => state.projection);
+  const projection = useMapStore(mapProjection);
   const field = usePanelScene(runtime, panel);
 
   useEffect(() => {
@@ -131,9 +150,10 @@ export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode
           useMapStore.getState().setActivePanel(panel);
         }}
       />
-      <ParameterScale panel={panel} field={field} />
+      {live ? <RadarScale panel={panel} /> : <ParameterScale panel={panel} field={field} />}
+      {live && isLive ? <LivePanelChip panel={panel} layout={layout} /> : null}
       {isMap ? <PanelChip panel={panel} layout={layout} field={field} /> : null}
-      <FieldTooltip panel={panel} field={field} />
+      {live ? isLive ? <RadarTooltip panel={panel} /> : null : <FieldTooltip panel={panel} field={field} />}
     </div>
   );
 }

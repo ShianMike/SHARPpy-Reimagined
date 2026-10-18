@@ -73,6 +73,12 @@ def test_unused_legacy_aliases_are_retired():
 def test_release_manifests_and_health_fixture_share_package_version():
     from sharpmod._version import __version__ as package_version
 
+    for path in (ROOT / "src-tauri/contracts/public").glob("health*.json"):
+        example = json.loads(path.read_text(encoding="utf-8"))
+        assert example["app"]["version"] == package_version, path.name
+        if example["python"] is not None:
+            assert example["python"]["sharpmodVersion"] == package_version, path.name
+
     for relative, table in (
         ("rust/sharpmod-rs/Cargo.toml", "package"),
         ("rust/sharpmod-rs/pyproject.toml", "project"),
@@ -121,7 +127,7 @@ def test_changelog_preserves_the_dated_legacy_release():
     headings = [
         line.strip()
         for line in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
-        if line.startswith("## ")
+        if line.startswith("## [v")
     ]
 
     assert headings[0].startswith(f"## [v{package_version}] - ")

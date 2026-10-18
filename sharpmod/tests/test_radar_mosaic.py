@@ -98,6 +98,21 @@ def test_the_legend_url_asks_the_service_for_its_own_colour_ramp():
     assert "layer=conus_cref_qcd" in url
 
 
+def test_provider_legends_cache_pngs_and_do_not_expose_wms_errors(monkeypatch):
+    rm.legend_png.cache_clear()
+    calls = []
+    def opener(url, timeout, limit):
+        calls.append(url)
+        assert timeout <= 10 and limit == 128 * 1024
+        return b"<ServiceException>Unavailable</ServiceException>" if "error" in url else b"\x89PNG\r\n\x1a\n"
+    monkeypatch.setattr(rm, "_default_opener", opener)
+    assert rm.legend_png("https://example.test/legend") == b"\x89PNG\r\n\x1a\n"
+    assert rm.legend_png("https://example.test/legend") == b"\x89PNG\r\n\x1a\n"
+    assert calls == ["https://example.test/legend"]
+    assert rm.legend_png("https://example.test/error") is None
+    rm.legend_png.cache_clear()
+
+
 # --------------------------------------------------------------------------- #
 # Request contract
 # --------------------------------------------------------------------------- #

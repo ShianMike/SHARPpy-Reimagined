@@ -63,8 +63,9 @@ export function usePanelField(panel: number): PanelField {
   const context = useForecastContext();
   const chosen = useMapStore((state) => panelProduct(state, panel));
   const visible = useMapStore((state) => panelLayers(state, panel)["model-field"].visible);
+  const live = useMapStore((state) => state.view === "live");
   const product = productOf(catalog.data, chosen, panel);
-  const blocked = blockOf(visible, catalog.data, context);
+  const blocked = blockOf(visible && !live, catalog.data, context);
   const request =
     blocked === null && product !== null && context !== null
       ? { model: context.model.key, product: product.key, runTime: context.run, forecastHour: context.hour }

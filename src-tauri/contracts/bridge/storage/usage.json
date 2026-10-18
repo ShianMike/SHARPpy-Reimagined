@@ -1,7 +1,46 @@
 {
   "caches": [
-    { "key": "models", "bytes": 134217728, "files": 8, "clearable_bytes": 100663296 },
-    { "key": "maps", "bytes": 12582912, "files": 3, "clearable_bytes": 12582912 },
-    { "key": "outlooks", "bytes": 4194304, "files": 4, "clearable_bytes": 4194304 }
+    {
+      "key": "models",
+      "bytes": 134217728,
+      "files": 8,
+      "clearable_bytes": 100663296
+    },
+    {
+      "key": "maps",
+      "bytes": 12582912,
+      "files": 3,
+      "clearable_bytes": 12582912
+    },
+    {
+      "key": "outlooks",
+      "bytes": 4194304,
+      "files": 4,
+      "clearable_bytes": 4194304
+    },
+    {
+      "key": "radar",
+      "bytes": 1024,
+      "files": 1,
+      "clearable_bytes": 1024
+    },
+    {
+      "key": "satellite",
+      "bytes": 1024,
+      "files": 1,
+      "clearable_bytes": 1024
+    },
+    {
+      "key": "observations",
+      "bytes": 1024,
+      "files": 1,
+      "clearable_bytes": 1024
+    },
+    {
+      "key": "alerts",
+      "bytes": 1024,
+      "files": 1,
+      "clearable_bytes": 1024
+    }
   ]
 }

@@ -7,6 +7,7 @@ facade."""
 from __future__ import annotations
 
 from sharpmod.models.model_surface import merge_surface_level
+from sharpmod.models.wind_reference import rotate_winds
 import numpy as np
 from sharpmod.backends import grib as _api
 
@@ -251,6 +252,18 @@ def _assemble_point(inventory, point, decoded, missing):
             matrix[3, good] = _api._dewpoint_from_q(
                 moisture[good], levels[good])
 
+    rotations = {
+        role: {ref.pressure: ref.wind_rotation for ref in role_by_name[role].messages}
+        for role in ("u", "v")
+    }
+    for index, level in enumerate(inventory.levels):
+        u_rotation, v_rotation = rotations["u"].get(level), rotations["v"].get(level)
+        if level in rotations["u"] and level in rotations["v"] and u_rotation != v_rotation:
+            raise _api.GribDecodeError("u/v GRIB wind-reference metadata disagree")
+        matrix[7, index], matrix[8, index] = rotate_winds(
+            matrix[7, index], matrix[8, index], point.longitude,
+            u_rotation or v_rotation, missing=missing,
+        )
     good_wind = _api._valid(matrix[7], missing) & _api._valid(matrix[8], missing)
     u = matrix[7, good_wind]
     v = matrix[8, good_wind]
@@ -290,6 +303,16 @@ def _assemble_point(inventory, point, decoded, missing):
                 np.asarray([surface_rh]),
             )[0])
 
+    surface_u = _api._decoded_surface_value(decoded, "surface_u", missing)
+    surface_v = _api._decoded_surface_value(decoded, "surface_v", missing)
+    if surface_u is not None and surface_v is not None:
+        surface_roles = {role.role: role for role in inventory.surface_roles}
+        u_rotation = surface_roles["surface_u"].messages[0].wind_rotation
+        v_rotation = surface_roles["surface_v"].messages[0].wind_rotation
+        if u_rotation != v_rotation:
+            raise _api.GribDecodeError("surface u/v wind-reference metadata disagree")
+        surface_u, surface_v = rotate_winds(
+            surface_u, surface_v, point.longitude, u_rotation)
     surface_merge = merge_surface_level(
         {
             name: matrix[index]
@@ -300,8 +323,8 @@ def _assemble_point(inventory, point, decoded, missing):
             "hght": surface_height,
             "tmpc": surface_temperature,
             "dwpc": surface_dewpoint,
-            "u": _api._decoded_surface_value(decoded, "surface_u", missing),
-            "v": _api._decoded_surface_value(decoded, "surface_v", missing),
+            "u": surface_u,
+            "v": surface_v,
         },
         missing=missing,
     )

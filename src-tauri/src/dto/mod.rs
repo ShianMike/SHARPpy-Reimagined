@@ -17,6 +17,7 @@ pub mod storage;
 pub mod surface;
 pub mod threshold_catalog;
 pub mod thresholds;
+pub mod weather_alerts;
 pub mod wrf;
 
 use time::{OffsetDateTime, UtcOffset};

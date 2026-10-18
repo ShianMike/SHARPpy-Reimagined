@@ -7,9 +7,9 @@ beforeEach(() => {
 });
 
 describe("appStore", () => {
-  it("starts on the map with nothing selected", () => {
+  it("starts on Overview with nothing selected", () => {
     expect(useAppStore.getState()).toMatchObject({
-      activeWorkspace: "map",
+      activeWorkspace: "overview",
       selectedStationId: null,
       pendingStationId: null,
     });

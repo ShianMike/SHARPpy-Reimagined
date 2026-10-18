@@ -21,6 +21,11 @@
 .progress::-webkit-progress-value { background: var(--accent-bright); }
 .progress::-moz-progress-bar { background: var(--accent-bright); }
 .option[data-failed="true"] { border-color: var(--accent-bright); }
+.liveOptions { gap: var(--space-1); }
+.liveOptions .option { transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard); }
+.liveOptions .download[data-ready="true"] > svg { color: var(--accent-bright); }
+.liveOptions .download[data-failed="true"] > svg { color: var(--warning); }
+.liveOptions .count { padding: 0 0 0 var(--space-2); margin-left: var(--space-0-5); border-left: var(--hairline) solid var(--border-strong); border-radius: 0; background: transparent; color: var(--text-secondary); }
 .announcement { position: absolute; width: var(--hairline); height: var(--hairline); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .valid { display: flex; flex: none; align-items: center; gap: var(--space-2); white-space: nowrap; font-size: var(--font-size-caption); }
 .valid > span:first-child, .waiting { color: var(--text-secondary); }

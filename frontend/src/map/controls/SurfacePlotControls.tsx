@@ -3,7 +3,7 @@
 // the map's own selection and the time is the forecast valid time.
 
 import type { ReactNode } from "react";
-import { useForecastContext } from "../../features/forecast/useForecast";
+import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice";
 import { compactUtc } from "../../features/sounding/soundingTime";
 import { formatLatitude, formatLongitude } from "../../stations/stationFormat";
@@ -14,14 +14,14 @@ import styles from "./LayerPanel.module.css";
 
 export function SurfacePlotControls(): ReactNode {
   const units = useUiStore((state) => state.units);
-  const context = useForecastContext();
+  const validTime = useWeatherTime();
   const anchor = useSelectionAnchor();
-  const plots = useSurfacePlots(anchor, context?.validTime ?? null, true);
+  const plots = useSurfacePlots(anchor, validTime, true);
   return (
     <div className={styles.extra}>
-      {context === null ? (
+      {validTime === null ? (
         <p className={styles.hint}>
-          Surface observations follow the forecast valid time, which needs the forecast models.
+          Choose a time to view surface observations.
         </p>
       ) : anchor === null ? (
         <p className={styles.hint}>

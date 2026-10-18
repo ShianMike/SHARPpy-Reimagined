@@ -6,7 +6,9 @@ import { expect, test } from "./support/test";
 
 test.describe("forecast playback", () => {
   for (const panels of [1, 2, 4]) test(`playback keeps ${String(panels)} panels loaded while advancing, and pauses`, async ({ page, consoleMessages }) => {
+    test.setTimeout(120_000);
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "model-field");
     if (panels > 1) {
@@ -23,7 +25,8 @@ test.describe("forecast playback", () => {
       await timeline.getByRole("button", { name: "Smooth playback", exact: true }).click();
     }
     await timeline.getByRole("button", { name: "Play", exact: true }).click();
-    await expect.poll(async () => Number(await hour.inputValue()), { timeout: 10_000 }).toBeGreaterThanOrEqual(3);
+    // SwiftShader renders four maps on the CPU; this verifies progress, not GPU throughput.
+    await expect.poll(async () => Number(await hour.inputValue()), { timeout: 60_000 }).toBeGreaterThanOrEqual(3);
     await expect(valid).toHaveAttribute("aria-busy", "false");
     for (let panel = 1; panels > 1 && panel <= panels; panel++) {
       await expect(page.getByTestId(`panel-chip-${String(panel)}`)).not.toContainText("Loading");

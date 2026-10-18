@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { useMapStore } from "../../stores/mapStore";
 import type { MapLibreOverlay } from "@deck.gl/maplibre";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import surfaceFixture from "@contracts/public/map/surface.json";
@@ -20,6 +21,8 @@ import type { PickingInfo } from "@deck.gl/core";
 
 const read = cssTokenReader(tokensCss);
 const tokens = readCanvasTokens(read);
+const originalMap = useMapStore.getState();
+afterEach(() => { useMapStore.setState(originalMap, true); });
 
 function station(id: string, availability: StationAvailability = "unknown"): Station {
   return { id, name: `Station ${id}`, latitude: 35, longitude: -97, source: "FM35", availability };
@@ -143,6 +146,7 @@ describe("station labels", () => {
 });
 
 it("spaces whole surface plots, prioritizes fresh observations and reveals more when zoomed, without changing readings", () => {
+  useMapStore.setState({ view: "live" });
   const base = parseSurfacePlots(surfaceFixture).plots[0];
   if (base === undefined) throw new Error("Missing surface fixture");
   const plots: SurfacePlot[] = [
@@ -172,7 +176,7 @@ it("spaces whole surface plots, prioritizes fresh observations and reveals more 
     hoverFromPick({ layer: { id: "surface-plots" }, object: { plot: plots[2] }, x: 100, y: 50 } as unknown as PickingInfo, 0, { left: 0, top: 0 });
     expect(useHoverStore.getState().report?.observation).toEqual({ temperatureC: base.temperatureC, dewpointC: base.dewpointC });
     clickFromPick({ layer: { id: "surface-plots" }, object: { plot: plots[2] }, coordinate: [1, 1] } as unknown as PickingInfo);
-    expect(useAppStore.getState().selectedPoint).toEqual({ longitude: 0, latitude: 0 });
+    expect(useAppStore.getState().selectedPoint).toBe(saved.selectedPoint);
   } finally { useAppStore.setState(saved, true); }
 });
 

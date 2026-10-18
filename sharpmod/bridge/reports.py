@@ -42,7 +42,7 @@ def storm_reports(params: dict[str, Any]) -> dict[str, Any]:
 
     window = timedelta(seconds=window_s)
     try:
-        layer = reports.fetch_layer(window=window, around=when)
+        layer = reports.fetch_layer(window=window, around=when, disk_cache=False)
     except reports.StormReportsError as exc:
         raise BridgeError(
             "OVERLAY_FETCH_FAILED",

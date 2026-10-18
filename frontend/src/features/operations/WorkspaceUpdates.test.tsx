@@ -29,16 +29,36 @@ it("resumes the current forecast and opens each sounding source directly", async
   renderWithBackend(<OperationsWorkspace />, createTransport());
   const current = await screen.findByRole("heading", { name: "HRRRF006" });
   expect(current).toBeTruthy();
-  expect(screen.getByRole("region", { name: "On your map" }).textContent).toContain("02-29 18Z");
+  expect(screen.getByRole("region", { name: "Model Viewer" }).textContent).toContain("02-29 18Z");
   const user = userEvent.setup();
   for (const [name, source] of [[/^Observed/u, "observed"], [/^ForecastA/u, "model"], [/^ERA5 archive/u, "era5"], [/^Open a file/u, "file"]] as const) {
     await user.click(screen.getByRole("button", { name }));
     expect(useSoundingStore.getState().source).toBe(source);
     expect(useAppStore.getState().activeWorkspace).toBe("sounding");
   }
-  await user.click(screen.getByRole("button", { name: "Open map" }));
+  await user.click(screen.getByRole("button", { name: "Open Model Viewer" }));
   expect(useAppStore.getState().activeWorkspace).toBe("map");
   expect(useForecastStore.getState()).toMatchObject({ runTime: "2024-02-29T12:00:00Z", forecastHour: 6 });
+  const live = screen.getByRole("region", { name: "Live Tracking" });
+  expect(live.textContent).toContain("Correlation Coefficient");
+  expect(live.textContent).toContain("Enhanced Echo Tops");
+  await user.click(within(live).getByRole("button", { name: "Open Live Tracking" }));
+  expect(useAppStore.getState().activeWorkspace).toBe("live");
+  expect(useForecastStore.getState()).toMatchObject({ runTime: "2024-02-29T12:00:00Z", forecastHour: 6 });
+});
+
+it("checks model providers only after expanding Model availability", async () => {
+  const transport = createTransport();
+  const call = vi.spyOn(transport, "call");
+  const { queryClient } = renderWithBackend(<OperationsWorkspace />, transport);
+  expect(screen.getByText("Models loading…")).toBeTruthy();
+  await screen.findByRole("heading", { name: "HRRRF000" });
+  expect(call.mock.calls.some(([command]) => command === "get_model_status")).toBe(false);
+  expect(screen.queryByRole("heading", { name: "Model backends" })).toBeNull();
+  await userEvent.click(screen.getByText("Model availability", { exact: true }));
+  await screen.findByRole("heading", { name: "Model backends" });
+  await waitFor(() => { expect(call.mock.calls.some(([command]) => command === "get_model_status")).toBe(true); });
+  queryClient.clear();
 });
 
 it("hides the whole map header outside map focus", () => {

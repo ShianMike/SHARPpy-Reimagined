@@ -6,6 +6,7 @@ import { chooseThroughSearch, layerRow } from "./support/ui";
 
 test("map projection survives reload and style changes, and resets with layers", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   const domain = await layerRow(page, "model-domain");
   await domain.getByRole("switch").setChecked(true);
@@ -14,6 +15,7 @@ test("map projection survives reload and style changes, and resets with layers",
   await expect.poll(() => page.evaluate(() => window.__SHARPPY_E2E__?.projection())).toBe("globe");
   await expect.poll(() => deckLayers(page)).toContain("model-domain");
   await page.reload();
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await expect.poll(() => page.evaluate(() => window.__SHARPPY_E2E__?.projection())).toBe("globe");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true }).click();
@@ -35,6 +37,7 @@ test("map projection survives reload and style changes, and resets with layers",
 
 test("theta-e renders its fixed Kelvin palette and wind barbs in both projections", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await page.getByRole("button", { name: "Choose parameter", exact: true }).click();
   const picker = page.getByRole("dialog", { name: "Parameters", exact: true });
@@ -75,6 +78,7 @@ test("theta-e renders its fixed Kelvin palette and wind barbs in both projection
 
 test("Point buttons and source disclosure use the accent on hover and keyboard focus", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await chooseThroughSearch(page, "72357");
   const point = page.getByRole("complementary", { name: "Map details", exact: true });

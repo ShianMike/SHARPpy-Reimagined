@@ -3,7 +3,7 @@
 // position, and its tooltip on hover; a click selects it in the toolbar chip
 // and the inspector, and Esc clears it; labels appear by tier as the view
 // narrows.
-import { effectiveProfile, labels, MARKS, nextFrames, presetPreferences, projectStation, waitForMapDrawn, waitForMark } from "./support/app";
+import { camera, effectiveProfile, labels, MARKS, nextFrames, presetPreferences, projectStation, waitForMapDrawn, waitForMark } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { pixelAt } from "./support/pixels";
 import { saveScreenshot } from "./support/screenshots";
@@ -14,6 +14,7 @@ const AVAILABLE_MARKER: [number, number, number] = [224, 48, 48];
 
 test("deck.gl draws station 72357 and shows its tooltip on hover", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.stationsRendered);
   await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   await nextFrames(page);
@@ -56,6 +57,7 @@ test("deck.gl draws station 72357 and shows its tooltip on hover", async ({ page
 
 test("a click selects 72357 in the chip and the inspector, and Esc clears it", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   const point = await projectStation(page, "72357");
   expect(point).not.toBeNull();
@@ -80,15 +82,19 @@ test("a click selects 72357 in the chip and the inspector, and Esc clears it", a
 });
 
 test("labels appear by tier as the view narrows", async ({ page, consoleMessages }) => {
-  await presetPreferences(page, { layers: { "station-labels": { visible: true, opacity: 1 } } });
+  await presetPreferences(page, { graphicsOverride: "balanced", layers: { "station-labels": { visible: true, opacity: 1 } } });
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.stationsRendered);
   // The CONUS view spans more than 55 degrees of longitude: no labels (Balanced, F5).
   expect(await labels(page)).toEqual({ count: 0, tier: null });
+  const initialZoom = (await camera(page))?.zoom;
+  if (initialZoom === undefined) throw new Error("The station map has no camera");
   const zoomIn = page.getByRole("button", { name: "Zoom in" });
   await zoomIn.click();
   await expect.poll(async () => (await labels(page)).tier).toBe("id");
   expect((await labels(page)).count).toBeGreaterThan(0);
+  await expect.poll(async () => (await camera(page))?.zoom).toBeCloseTo(initialZoom + 1, 1);
   await zoomIn.click();
   await expect.poll(async () => (await labels(page)).tier).toBe("name");
   expect((await labels(page)).count).toBeGreaterThan(0);

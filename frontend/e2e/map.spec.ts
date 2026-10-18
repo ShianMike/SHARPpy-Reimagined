@@ -13,6 +13,7 @@ const MAP_REGION = { x: 160, y: 80, width: 900, height: 600 };
 
 test("MapLibre draws the offline basemap", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.mapLoaded);
   await waitForMark(page, MARKS.basemapLoaded);
 

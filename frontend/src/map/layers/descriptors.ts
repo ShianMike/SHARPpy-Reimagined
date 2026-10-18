@@ -9,8 +9,9 @@ import { LAYER_DEFAULTS, type LayerDescriptor } from "./registry";
 import { buildPointLayers, buildSelectionLayers } from "./SelectionLayer";
 import { buildOutlookLayers } from "./SPCOutlookLayer";
 import { buildReportLayers } from "./StormReportLayer";
+import { buildAlertLayers } from "./WeatherAlertLayer";
 import { buildSurfacePlotLayers } from "./SurfacePlotLayer";
-import { buildStationLabels, buildStationMarkers } from "./StationLayer";
+import { buildRadarSiteLabels, buildStationLabels, buildStationMarkers } from "./StationLayer";
 import { OUTLOOK_NAMES, type OutlookKey } from "../../types/map";
 
 function outlookDescriptor(key: OutlookKey, zOrder: number): LayerDescriptor {
@@ -82,6 +83,11 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
   outlookDescriptor("torn", 15),
   outlookDescriptor("wind", 16),
   outlookDescriptor("hail", 17),
+  ...(["watch", "warning"] as const).map((kind, index): LayerDescriptor => {
+    const id = kind === "warning" ? "warnings" : "watches";
+    return { id, label: `NWS ${id}`, kind: "deck", zOrder: 19 + index, userControllable: true,
+      opacityControl: true, defaults: LAYER_DEFAULTS[id], build: (ctx, state) => buildAlertLayers(kind, ctx, state) };
+  }),
   {
     // Last of the weather stack: station models read over the outlook washes.
     id: "surface-plots",
@@ -132,6 +138,16 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
     opacityControl: true,
     defaults: LAYER_DEFAULTS.stations,
     build: (ctx, state) => [buildStationMarkers(ctx, state)],
+  },
+  {
+    id: "radar-site-labels",
+    label: "Radar site labels",
+    kind: "deck",
+    zOrder: 105,
+    userControllable: true,
+    opacityControl: false,
+    defaults: LAYER_DEFAULTS["radar-site-labels"],
+    build: buildRadarSiteLabels,
   },
   {
     id: "station-labels",

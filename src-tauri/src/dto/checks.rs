@@ -23,6 +23,20 @@ pub fn check_opt_text(field: &str, value: Option<&String>, high: usize) -> Resul
     value.map_or(Ok(()), |v| check_text(field, v, 0, high))
 }
 
+pub fn check_radar_legend(value: Option<&String>) -> Result<(), String> {
+    use base64::Engine;
+    if let Some(text) = value {
+        check_text("radar legend", text, 1, 175_000)?;
+        let png = base64::engine::general_purpose::STANDARD
+            .decode(text)
+            .map_err(|_| "invalid radar legend base64")?;
+        if !png.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return Err("radar legend must be a PNG".into());
+        }
+    }
+    Ok(())
+}
+
 pub fn check_lat_lon(lat: Option<f64>, lon: Option<f64>) -> Result<(), String> {
     if lat.is_some_and(|v| !(-90.0..=90.0).contains(&v)) {
         return Err("latitude must be within [-90, 90]".into());

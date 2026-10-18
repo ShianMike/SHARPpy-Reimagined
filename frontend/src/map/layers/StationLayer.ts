@@ -3,9 +3,10 @@
 // colour accessors change only through updateTriggers. Labels draw the subset
 // chosen by the declutter pass on moveend.
 
-import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import { ScatterplotLayer, TextLayer, type TextLayerProps } from "@deck.gl/layers";
 import type { Rgba } from "../canvasTokens";
 import type { Station, StationAvailability } from "../../types/contracts";
+import type { RadarSite } from "../../types/map";
 import type { LayerBuildContext, LayerState } from "./registry";
 
 export const STATIONS_LAYER_ID = "stations";
@@ -73,14 +74,9 @@ export function buildStationMarkers(ctx: LayerBuildContext, state: LayerState): 
 
 const NO_LABELS: readonly Station[] = [];
 
-/** Quiet, pickable labels; the selected station shares its marker's accent. */
-export function buildStationLabels(ctx: LayerBuildContext, state: LayerState): TextLayer<Station> {
+function stationLabelStyle(ctx: LayerBuildContext) {
   const { colours, lengths } = ctx.tokens;
-  return new TextLayer<Station>({
-    id: STATION_LABELS_LAYER_ID,
-    data: ctx.labels?.stations ?? NO_LABELS,
-    getPosition: position,
-    getText: (station) => station.id,
+  return {
     getColor: deckColour(colours.stationLabelText),
     getSize: lengths.labelSize,
     sizeUnits: "pixels",
@@ -91,15 +87,42 @@ export function buildStationLabels(ctx: LayerBuildContext, state: LayerState): T
     fontWeight: 600,
     fontSettings: { sdf: false },
     background: true,
-    getBackgroundColor: (station) => deckColour(station.id === ctx.selected?.id ? colours.selected : colours.stationLabelFill),
+    getBackgroundColor: deckColour(colours.stationLabelFill),
     getBorderColor: deckColour(colours.stationLabelEdge),
     getBorderWidth: lengths.stationEdge,
     backgroundPadding: [lengths.stationRadius * 2, lengths.stationRadius],
     backgroundBorderRadius: lengths.stationRadius * 2,
     characterSet: "auto",
+  } satisfies Partial<TextLayerProps>;
+}
+
+/** Quiet, pickable labels; the selected station shares its marker's accent. */
+export function buildStationLabels(ctx: LayerBuildContext, state: LayerState): TextLayer<Station> {
+  const { colours } = ctx.tokens;
+  return new TextLayer<Station>({
+    ...stationLabelStyle(ctx),
+    id: STATION_LABELS_LAYER_ID,
+    data: ctx.labels?.stations ?? NO_LABELS,
+    getPosition: position,
+    getText: (station) => station.id,
+    getBackgroundColor: (station) => deckColour(station.id === ctx.selected?.id ? colours.selected : colours.stationLabelFill),
     pickable: true,
     updateTriggers: { getBackgroundColor: [ctx.selected?.id, colours.selected, colours.stationLabelFill] },
     visible: state.visible && ctx.labels !== null,
     opacity: state.opacity,
   });
+}
+
+export function buildRadarSiteLabels(ctx: LayerBuildContext, state: LayerState): TextLayer<RadarSite>[] {
+  if (ctx.radarSites.length === 0) return [];
+  return [new TextLayer<RadarSite>({
+    ...stationLabelStyle(ctx),
+    id: "radar-site-labels",
+    data: ctx.radarSites,
+    getPosition: (site) => [site.longitude, site.latitude],
+    getText: (site) => site.id,
+    pickable: false,
+    visible: state.visible,
+    opacity: state.opacity,
+  })];
 }

@@ -34,6 +34,21 @@ jobs:
       - run: npm run build
       - run: npm run build:browser
       - run: npm run build:fixture
+      - name: Test browser workflows against the desktop CSP
+        run: npm run e2e
+        env:
+          E2E_SWIFTSHADER: "1"
+          E2E_SCREENSHOT_DIR: ${{ runner.temp }}/e2e-screenshots
+      - name: Upload browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: browser-failure-diagnostics
+          path: |
+            frontend/test-results
+            ${{ runner.temp }}/e2e-screenshots
+          if-no-files-found: ignore
+          retention-days: 7
   desktop-bridge:
     runs-on: windows-latest
     timeout-minutes: 30

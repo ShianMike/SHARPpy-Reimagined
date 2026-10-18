@@ -9,6 +9,7 @@ test.use({ viewport: { width: 1280, height: 800 } });
 
 test("empty log results are centered within the log body", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Logs", exact: true }).click();
   await page.getByRole("searchbox", { name: "Search logs" }).fill("no-such-session-event");
@@ -25,6 +26,7 @@ test("empty log results are centered within the log body", async ({ page, consol
 
 test("Settings uses plain headings and a plain automatic-save hint", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true }).click();
   const navigation = page.getByRole("navigation", { name: "Settings sections" });
@@ -47,6 +49,7 @@ test("Settings uses plain headings and a plain automatic-save hint", async ({ pa
 
 test("unit choices fit at 1280 × 800, survive reload and reach the parameter picker and scale", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   const settings = page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true });
   await settings.click();
@@ -66,6 +69,7 @@ test("unit choices fit at 1280 × 800, survive reload and reach the parameter pi
     await saveScreenshot(page, `browser-settings-units-${colorScheme}.png`);
   }
   await page.reload();
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await settings.click();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Units", exact: true }).click();
@@ -85,6 +89,7 @@ test("unit choices fit at 1280 × 800, survive reload and reach the parameter pi
 
 test("panel titles only appear in Model Viewer and return with the saved layout", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await page.getByRole("toolbar", { name: "Map", exact: true }).getByRole("button", { name: "Four synchronized panels" }).click();
   const rail = page.getByRole("navigation", { name: "Workspaces" });
@@ -108,6 +113,7 @@ test("panel titles only appear in Model Viewer and return with the saved layout"
 
 test("panel titles open their parameter picker and selected categories stay on one line", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await page.getByRole("toolbar", { name: "Map", exact: true }).getByRole("button", { name: "Four synchronized panels" }).click();
   const first = page.getByTestId("panel-chip-1");

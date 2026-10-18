@@ -21,9 +21,8 @@ from sharpmod.io.portable_sounding import portable_sounding_pair_valid
 _METADATA = ".cache.json"
 _LEASE_PREFIX = ".lease-"
 _DEFAULT_LEASE_MAX_AGE_HOURS = 24.0
-# v4 invalidates cache trees produced by product surfaces that are no longer
-# part of the application.
-MODEL_CACHE_CONTRACT_VERSION = 4
+# v5 excludes derived soundings with uncorrected grid-relative wind directions.
+MODEL_CACHE_CONTRACT_VERSION = 5
 
 
 @dataclass(frozen=True)

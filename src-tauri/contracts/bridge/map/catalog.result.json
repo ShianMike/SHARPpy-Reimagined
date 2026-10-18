@@ -11674,19 +11674,19 @@
   "radar_products": [
     {
       "key": "composite-reflectivity",
-      "label": "Composite reflectivity",
+      "label": "Composite Reflectivity",
       "units": "dBZ",
       "description": "Quality-controlled 1 km CONUS composite reflectivity, the maximum returned power in any tilt above each point"
     },
     {
       "key": "base-reflectivity",
-      "label": "Base reflectivity",
+      "label": "Base Reflectivity",
       "units": "dBZ",
       "description": "Quality-controlled 1 km CONUS base reflectivity, the lowest tilt only, which is what most public radar displays show"
     },
     {
       "key": "echo-tops",
-      "label": "Enhanced echo tops",
+      "label": "Enhanced Echo Tops",
       "units": "kft",
       "description": "1 km CONUS enhanced echo tops, the height of the echo top"
     }
@@ -11694,31 +11694,43 @@
   "site_products": [
     {
       "key": "reflectivity",
-      "label": "Base reflectivity",
+      "label": "Base Reflectivity",
       "units": "dBZ",
       "description": "Lowest-tilt reflectivity from the single radar, at its own resolution."
     },
     {
       "key": "velocity",
-      "label": "Base velocity",
-      "units": "kt",
+      "label": "Velocity",
+      "units": "mph",
       "description": "Lowest-tilt radial velocity: toward the radar is negative, away is positive."
     },
     {
+      "key": "correlation-coefficient",
+      "label": "Correlation Coefficient",
+      "units": "",
+      "description": "Similarity of the horizontal and vertical radar returns (\u03c1HV). A dimensionless ratio; lower values indicate a mix of target shapes."
+    },
+    {
+      "key": "echo-tops",
+      "label": "Enhanced Echo Tops",
+      "units": "kft",
+      "description": "Height of the 18 dBZ radar echo in thousands of feet above sea level. Uses the full volume; heights above the highest beam are lower bounds."
+    },
+    {
       "key": "hydrometeor",
-      "label": "Hydrometeor classification",
+      "label": "Hydrometeor Classification",
       "units": "",
       "description": "The radar's own classification of what it is detecting."
     },
     {
       "key": "storm-total",
-      "label": "Storm total accumulation",
+      "label": "Storm Total Accumulation",
       "units": "in",
       "description": "Rainfall accumulated since the radar began the current precipitation episode."
     },
     {
       "key": "one-hour",
-      "label": "One-hour accumulation",
+      "label": "One-Hour Accumulation",
       "units": "in",
       "description": "Rainfall accumulated over the past hour."
     }

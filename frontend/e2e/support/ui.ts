@@ -13,6 +13,10 @@ export interface Box {
 
 /** The layer panel's row for one layer id, with its settings exposed. */
 export async function layerRow(page: Page, id: string) {
+  if (["radar", "satellite", "surface-plots", "warnings", "watches"].includes(id)) {
+    await page.clock.setFixedTime(new Date("2026-10-04T21:00:00Z"));
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Live Tracking", exact: true }).click();
+  }
   if (!(await page.getByTestId("layer-panel").isVisible())) {
     await page.getByRole("group", { name: "Map detail views" }).getByRole("button", { name: "Layers", exact: true }).click();
   }
@@ -31,8 +35,7 @@ export async function layerRow(page: Page, id: string) {
 export async function turnOn(page: Page, id: string): Promise<void> {
   const row = await layerRow(page, id);
   const toggle = row.getByRole("switch").first();
-  await expect(toggle).toHaveAttribute("aria-checked", "false");
-  await toggle.click();
+  if (await toggle.getAttribute("aria-checked") !== "true") await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
 }
 

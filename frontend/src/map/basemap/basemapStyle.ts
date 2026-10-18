@@ -16,7 +16,7 @@ export const MAP_STYLE_URLS = {
 export const BASEMAP_ATTRIBUTION = "Natural Earth";
 const SOURCE_MAX_ZOOM = 8;
 
-/** The GeoJSON of a family; deck.gl draws the same files over the weather layers. */
+/** Offline fixture geometry, also drawn over weather by deck.gl. */
 export function basemapSourceUrl(family: BasemapFamily): string {
   // Fixture builds only: ?scenario=basemap-missing points every source at a
   // file that does not exist, so tests can prove the stations draw without a

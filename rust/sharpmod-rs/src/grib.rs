@@ -157,6 +157,80 @@ struct InventoryField {
     surface_field: Option<SurfaceFieldKind>,
     grid_key: String,
     missing_value: Option<f64>,
+    wind_rotation: WindRotation,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct WindRotation {
+    cone: f64,
+    origin: f64,
+}
+
+impl WindRotation {
+    fn from_grib(api: &EccodesApi, handle: *const c_void) -> Result<Self, GribError> {
+        let relative = api
+            .get_long_value(handle, b"uvRelativeToGrid\0")
+            .or_else(|_| {
+                api.get_long_value(handle, b"resolutionAndComponentFlags\0")
+                    .map(|flags| i64::from(flags & 8 != 0) as c_long)
+            })?;
+        match relative {
+            0 => return Ok(Self::default()),
+            1 => {}
+            _ => return Err(GribError::new("invalid GRIB wind-reference flag")),
+        }
+        let grid = api.get_string_value(handle, b"gridType\0")?;
+        let (cone, origin) = match grid.as_str() {
+            "regular_ll" | "regular_gg" | "reduced_ll" | "reduced_gg" | "mercator" => {
+                return Ok(Self::default());
+            }
+            "lambert" => {
+                let first = api
+                    .get_double_value(handle, b"Latin1InDegrees\0")?
+                    .to_radians();
+                let second = api
+                    .get_double_value(handle, b"Latin2InDegrees\0")?
+                    .to_radians();
+                if first.abs() >= std::f64::consts::FRAC_PI_2
+                    || second.abs() >= std::f64::consts::FRAC_PI_2
+                {
+                    return Err(GribError::new("invalid Lambert standard parallels"));
+                }
+                let cone = if (first - second).abs() < 1.0e-12 {
+                    first.sin()
+                } else {
+                    (first.cos() / second.cos()).ln()
+                        / ((std::f64::consts::FRAC_PI_4 + second / 2.0).tan()
+                            / (std::f64::consts::FRAC_PI_4 + first / 2.0).tan())
+                        .ln()
+                };
+                (cone, api.get_double_value(handle, b"LoVInDegrees\0")?)
+            }
+            "polar_stereographic" => (
+                if api.get_long_value(handle, b"projectionCentreFlag\0")? & 128 != 0 {
+                    -1.0
+                } else {
+                    1.0
+                },
+                api.get_double_value(handle, b"orientationOfTheGridInDegrees\0")?,
+            ),
+            _ => {
+                return Err(GribError::new(format!(
+                    "unsupported grid-relative wind projection: {grid}"
+                )))
+            }
+        };
+        if !cone.is_finite() || !origin.is_finite() || cone.abs() < 1.0e-12 {
+            return Err(GribError::new("invalid GRIB wind projection metadata"));
+        }
+        Ok(Self { cone, origin })
+    }
+
+    fn rotate(self, u: f64, v: f64, longitude: f64) -> (f64, f64) {
+        let angle = (self.cone * normalize_longitude(longitude - self.origin)).to_radians();
+        let (sine, cosine) = angle.sin_cos();
+        (cosine * u + sine * v, -sine * u + cosine * v)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -987,6 +1061,8 @@ struct RecordAssembler {
     surface_specific_humidity: Option<f64>,
     surface_u_wind: Option<f64>,
     surface_v_wind: Option<f64>,
+    wind_reference: Option<(WindRotation, f64)>,
+    surface_wind_reference: Option<(WindRotation, f64)>,
 }
 
 impl RecordAssembler {
@@ -1095,8 +1171,15 @@ impl RecordAssembler {
                         .map(|humidity| dewpoint_from_rh(temperature - KELVIN_OFFSET, humidity))
                 })
             });
-        let surface_u = usable(self.surface_u_wind, missing);
-        let surface_v = usable(self.surface_v_wind, missing);
+        let (surface_u, surface_v) =
+            match usable(self.surface_u_wind, missing).zip(usable(self.surface_v_wind, missing)) {
+                Some((u, v)) => {
+                    let (rotation, longitude) = self.surface_wind_reference.unwrap_or_default();
+                    let (u, v) = rotation.rotate(u, v, longitude);
+                    (Some(u), Some(v))
+                }
+                None => (None, None),
+            };
         let surface = surface_pressure
             .zip(surface_height)
             .zip(surface_temperature.map(|value| value - KELVIN_OFFSET))
@@ -1195,8 +1278,23 @@ impl RecordAssembler {
             .filter(|value| value.is_finite())
             .unwrap_or(output_missing);
 
-            let u = usable(record.u_wind, missing);
-            let v = usable(record.v_wind, missing);
+            let (u, v) = match usable(record.u_wind, missing).zip(usable(record.v_wind, missing)) {
+                Some((u, v)) => {
+                    let (rotation, longitude) = self.wind_reference.unwrap_or_default();
+                    let (u, v) = rotation.rotate(u, v, longitude);
+                    (Some(u), Some(v))
+                }
+                None if self
+                    .wind_reference
+                    .is_some_and(|(rotation, _)| rotation.cone != 0.0) =>
+                {
+                    (None, None)
+                }
+                None => (
+                    usable(record.u_wind, missing),
+                    usable(record.v_wind, missing),
+                ),
+            };
             let (direction, speed) = match u.zip(v) {
                 Some((u_value, v_value)) => (
                     (270.0 - v_value.atan2(u_value).to_degrees()).rem_euclid(360.0),
@@ -1359,6 +1457,26 @@ fn apply_field_values(
         .zip(points.iter().copied())
         .zip(raw_values.iter().copied())
     {
+        let reference = if matches!(
+            field.pressure_field,
+            Some((_, FieldKind::UWind | FieldKind::VWind))
+        ) {
+            Some(&mut state.assembler.wind_reference)
+        } else if matches!(
+            field.surface_field,
+            Some(SurfaceFieldKind::UWind | SurfaceFieldKind::VWind)
+        ) {
+            Some(&mut state.assembler.surface_wind_reference)
+        } else {
+            None
+        };
+        if let Some(reference) = reference {
+            let candidate = (field.wind_rotation, point.longitude);
+            if reference.is_some_and(|previous| previous != candidate) {
+                return Err(GribError::new("u/v GRIB wind-reference metadata disagree"));
+            }
+            *reference = Some(candidate);
+        }
         if field.pressure_field.is_some() {
             state.selected_pressure_point.get_or_insert(point);
         } else {
@@ -1467,6 +1585,17 @@ fn scan_inventory_and_decode(
                 surface_field,
                 grid_key,
                 missing_value: api.get_optional_double(handle.as_ptr(), MISSING_VALUE_KEY),
+                wind_rotation: if matches!(
+                    pressure_field,
+                    Some((_, FieldKind::UWind | FieldKind::VWind))
+                ) || matches!(
+                    surface_field,
+                    Some(SurfaceFieldKind::UWind | SurfaceFieldKind::VWind)
+                ) {
+                    WindRotation::from_grib(api, handle.as_ptr())?
+                } else {
+                    WindRotation::default()
+                },
             };
             apply_field_values(&field, points, &raw_values, &mut states, missing)?;
             inventory_fields.push(field);
@@ -1879,6 +2008,7 @@ mod tests {
             surface_field: None,
             grid_key: "grid".to_owned(),
             missing_value: Some(9999.0),
+            wind_rotation: WindRotation::default(),
         };
         let points = [
             GridPoint {
@@ -1927,6 +2057,7 @@ mod tests {
             surface_field: None,
             grid_key: "grid".to_owned(),
             missing_value: None,
+            wind_rotation: WindRotation::default(),
         };
         let point = GridPoint {
             index: 0,

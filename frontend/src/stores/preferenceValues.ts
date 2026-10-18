@@ -2,19 +2,21 @@
 import { isValidCamera, type CameraSnapshot } from "../map/runtime/camera";
 import { clampOpacity, LAYER_IDS, ORDERABLE_LAYER_IDS, type LayerId, type LayerState, type OrderableLayerId } from "../map/layers/registry";
 import type { GraphicsOverride } from "../types/graphics";
-import { MAX_PANELS, PANEL_LAYOUTS, useMapStore, type MapState } from "./mapStore";
+import { RADAR_TILTS, type RadarTilt } from "../types/map";
+import { MAX_PANELS, PANEL_LAYOUTS, useMapStore, type MapState, type WeatherOptions } from "./mapStore";
 
 export const PREFERENCES_KEY = "sharppy.prefs.v1";
 const OVERRIDES: readonly GraphicsOverride[] = ["auto", "low", "balanced", "high"];
 const MAX_STATION_ID_LENGTH = 16;
 const initialMap = useMapStore.getInitialState();
 
-export interface Preferences extends Pick<MapState, "panelLayout" | "projection" | "activePanel" | "layerOrder" | "radarProduct" | "radarScope" | "radarSite" | "satelliteChannel" | "reportWindowS" | "reportFilter" | "layerPanelGroup"> {
+export interface Preferences extends Pick<MapState, "panelLayout" | "projection" | "activePanel" | "layerOrder" | "radarProduct" | "radarScope" | "radarSite" | "radarTilt" | "satelliteChannel" | "reportWindowS" | "reportFilter" | "layerPanelGroup"> {
   version: 1;
   graphicsOverride: GraphicsOverride;
   modelKey: string | null;
   /** The stored state of each known layer; a missing id keeps its default. */
   layers: Partial<Record<LayerId, LayerState>>;
+  livePanels: (WeatherOptions & { layers: Preferences["layers"] })[];
   productKey: string | null;
   /** Panels 1 to 3, including those currently closed. */
   panels: { productKey: string | null; layers: Preferences["layers"] }[];
@@ -32,6 +34,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   activePanel: initialMap.activePanel,
   layerOrder: [...initialMap.layerOrder],
   radarProduct: initialMap.radarProduct,
+  radarTilt: initialMap.radarTilt,
   radarScope: initialMap.radarScope,
   radarSite: initialMap.radarSite,
   satelliteChannel: initialMap.satelliteChannel,
@@ -39,6 +42,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   reportFilter: initialMap.reportFilter,
   layerPanelGroup: initialMap.layerPanelGroup,
   layers: {},
+  livePanels: [],
   productKey: null,
   panels: [],
   layerPanelCollapsed: false,
@@ -111,6 +115,21 @@ function parseLayerOrder(value: unknown): OrderableLayerId[] {
   return [...new Set([...saved, ...ORDERABLE_LAYER_IDS])];
 }
 
+function parseLivePanels(value: unknown): Preferences["livePanels"] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_PANELS).map((item: unknown) => {
+    const panel = isRecord(item) ? item : {};
+    return {
+      layers: parseLayers(panel.layers),
+      radarProduct: field(panel, "radarProduct", isProductKey, null),
+      radarTilt: field(panel, "radarTilt", isRadarTilt, "0"),
+      radarScope: field(panel, "radarScope", (scope): scope is "mosaic" | "site" => scope === "mosaic" || scope === "site", "mosaic"),
+      radarSite: field(panel, "radarSite", isStationId, null),
+      satelliteChannel: field(panel, "satelliteChannel", (channel): channel is "infrared" | "visible" => channel === "infrared" || channel === "visible", "infrared"),
+    };
+  });
+}
+
 function parseCamera(value: unknown): CameraSnapshot | null {
   if (value === undefined || value === null) {
     return null;
@@ -143,6 +162,7 @@ function field<T>(obj: Record<string, unknown>, key: string, valid: (value: unkn
 
 const isOverride = (value: unknown): value is GraphicsOverride => OVERRIDES.includes(value as GraphicsOverride);
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+const isRadarTilt = (value: unknown): value is RadarTilt => RADAR_TILTS.some((tilt) => tilt.value === value);
 const isProductKey = (value: unknown): value is string | null =>
   value === null || (typeof value === "string" && value.trim() !== "" && value.length <= 128);
 const isStationId = (value: unknown): value is string | null =>
@@ -174,6 +194,7 @@ export function parsePreferences(raw: string | null): Preferences {
     activePanel: field(data, "activePanel", (value): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0 && value < panelLayout, 0),
     layerOrder: parseLayerOrder(data.layerOrder),
     radarProduct: field(data, "radarProduct", isProductKey, null),
+    radarTilt: field(data, "radarTilt", isRadarTilt, "0"),
     radarScope: field(data, "radarScope", (value): value is MapState["radarScope"] => value === "mosaic" || value === "site", "mosaic"),
     radarSite: field(data, "radarSite", isStationId, null),
     satelliteChannel: field(data, "satelliteChannel", (value): value is MapState["satelliteChannel"] => value === "infrared" || value === "visible", "infrared"),
@@ -181,6 +202,7 @@ export function parsePreferences(raw: string | null): Preferences {
     reportFilter: field(data, "reportFilter", (value): value is string => ["all", "tornado", "hail", "wind", "significant"].includes(value as string), "all"),
     layerPanelGroup: field(data, "layerPanelGroup", (value): value is MapState["layerPanelGroup"] => value === "weather" || value === "map", "weather"),
     layers: parseLayers(data.layers),
+    livePanels: parseLivePanels(data.livePanels),
     productKey: field(data, "productKey", isProductKey, null),
     panels: parsePanels(data.panels),
     layerPanelCollapsed: field(data, "layerPanelCollapsed", isBoolean, false),

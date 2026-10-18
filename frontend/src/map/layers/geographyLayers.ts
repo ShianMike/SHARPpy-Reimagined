@@ -81,12 +81,12 @@ export function buildPlaceLabels(ctx: LayerBuildContext, state: LayerState): Tex
   ];
 }
 
-/** Keep ocean coastlines above weather; live political borders are drawn by MapLibre. */
+/** Offline fixture boundaries; online maps use the detailed vector basemap. */
 export function buildBoundaryLayers(ctx: LayerBuildContext, state: LayerState): GeoJsonLayer[] {
-  if (!ctx.weatherShown || !ctx.basemap.visible || !state.visible) {
+  if (import.meta.env.MODE !== "fixture" || !ctx.weatherShown || !ctx.basemap.visible || !state.visible) {
     return [];
   }
-  return BASEMAP_FAMILIES.filter((family) => family !== "lakes" && (import.meta.env.MODE === "fixture" || family === "coastline")).map(
+  return BASEMAP_FAMILIES.filter((family) => family !== "lakes").map(
     (family) =>
       new GeoJsonLayer({
         id: `boundaries-${family}`,

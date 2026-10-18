@@ -36,6 +36,7 @@ function MapView(): ReactNode {
   const [runtime, setRuntime] = useState<MapRuntime | null>(null);
   const slots = useMapOverlaySlots();
   const layout = useMapStore((state) => state.panelLayout);
+  const live = useMapStore((state) => state.view === "live");
   const grid = useRef<HTMLDivElement & { startViewTransition?: Document["startViewTransition"] }>(null);
   const requestedLayout = useRef<PanelLayout | null>(null);
   const catalog = useStationCatalog();
@@ -79,8 +80,8 @@ function MapView(): ReactNode {
         ))}
       </div>
       <VisuallyHidden id={MAP_HINT_ID}>
-        Arrow keys pan the map and plus and minus zoom. Select stations with the station search. Clicking the map
-        picks a forecast point.
+        Arrow keys pan the map and plus and minus zoom. Select stations with the station search.
+        {live ? " Hover over weather layers for details." : " Clicking the map picks a forecast point."}
       </VisuallyHidden>
       <StationTooltip />
       <OutlookTooltip />
@@ -117,7 +118,8 @@ function MapView(): ReactNode {
 }
 
 export default function WeatherMap(): ReactNode {
+  const view = useMapStore((state) => state.view);
   const antialias = useGraphicsStore((state) => profileSettings(state.effective.profile).antialias);
   const attempt = useGraphicsStore((state) => state.mapAttempt);
-  return <MapView key={`${String(antialias)}:${String(attempt)}`} />;
+  return <MapView key={`${view}:${String(antialias)}:${String(attempt)}`} />;
 }

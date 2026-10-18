@@ -44,7 +44,7 @@ export function convertedTicks(low: number, high: number): { value: number; at: 
   });
 }
 
-export function FieldLegend({ palette, vertical = false }: { palette: Palette; vertical?: boolean }): ReactNode {
+export function FieldLegend({ palette, vertical = false, description }: { palette: Palette; vertical?: boolean; description?: string }): ReactNode {
   const preferences = useUiStore((state) => state.units);
   const categorical = palette.units === "flag";
   const unit = displayUnit(palette.units, preferences, palette.display);
@@ -63,10 +63,10 @@ export function FieldLegend({ palette, vertical = false }: { palette: Palette; v
     }
   }, [palette, vertical]);
   const { low, high } = paletteRange(palette);
-  const hidden =
+  const hidden = description ?? (
     categorical ? "1 = present; 0 = absent. Only present cells are drawn." : palette.ceiling !== null
       ? `Values above ${tickText(shown(palette.ceiling))} are not drawn.`
-      : `Values below ${tickText(shown(palette.floor ?? low))} are not drawn.`;
+      : `Values below ${tickText(shown(palette.floor ?? low))} are not drawn.`);
   const value = categorical ? Math.round(at) : low + at * (high - low);
   const valueText = categorical ? (value === 1 ? "Present (1)" : "Absent (0)") : `${tickText(shown(value))} ${unit || "unitless"}`;
   return (

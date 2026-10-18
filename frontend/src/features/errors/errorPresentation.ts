@@ -61,6 +61,7 @@ export function noRetryHint(actions: ErrorActions): string | null {
 }
 
 const TITLES: Readonly<Record<string, string>> = {
+  get_radar_tilts: "Radar tilts could not be checked",
   get_storage_usage: "Cache usage could not be loaded",
   clear_cache: "Cached weather data could not be cleared",
   get_station_catalog: "Stations could not be loaded",
@@ -82,6 +83,7 @@ const TITLES: Readonly<Record<string, string>> = {
   get_map_catalog: "Map products could not be loaded",
   get_weather_field: "The model field could not be loaded",
   get_spc_outlook: "The SPC outlook could not be loaded",
+  get_weather_alerts: "NWS warnings and watches could not be loaded",
   get_radar_frame: "The radar mosaic could not be loaded",
   get_radar_sites: "Radar sites could not be loaded",
   get_radar_site_frame: "The radar site image could not be loaded",

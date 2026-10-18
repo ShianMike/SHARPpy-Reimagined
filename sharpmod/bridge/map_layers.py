@@ -1,10 +1,4 @@
-"""Map overlays: SPC outlooks, the radar mosaic, place labels, and the UWyo
-station list for an observation time.
-
-Each handler calls the sharpmod provider the legacy map uses and passes its
-data on as geography and numbers; the frontend draws it. Outlook areas keep
-SPC's own colours, labels, and holes; the radar frame is the service's PNG.
-"""
+"""SPC outlooks, radar imagery and legends, place labels, and station availability."""
 
 from __future__ import annotations
 
@@ -23,9 +17,30 @@ MAX_IMAGE_BYTES = 6 * 1024 * 1024 - 4096
 VERTEX_DECIMALS = 4
 
 
+def _legend(url: str) -> str | None:
+    from sharpmod.providers.radar_mosaic import legend_png
+    data = legend_png(url)
+    return base64.b64encode(data).decode("ascii") if data is not None else None
+
+
 def _short(exc: Exception) -> str:
     text = str(exc).strip()
     return text.splitlines()[0][:200] if text else type(exc).__name__
+
+
+def _radar_bytes(raster, when) -> bytes:
+    if raster is None:
+        raise BridgeError("OVERLAY_FETCH_FAILED", "The radar request was cancelled.", True)
+    if when is not None and raster.valid_time is None:
+        raise BridgeError(
+            "OVERLAY_FETCH_FAILED", "The radar provider did not identify the requested scan's actual time.", True,
+        )
+    data = bytes(raster.image_bytes)
+    if len(data) > MAX_IMAGE_BYTES or not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise BridgeError(
+            "OVERLAY_FETCH_FAILED", "The radar service did not send a usable PNG within the 6 MiB transfer limit.", True,
+        )
+    return data
 
 
 def spc_outlook(params: dict[str, Any]) -> dict[str, Any]:
@@ -37,7 +52,7 @@ def spc_outlook(params: dict[str, Any]) -> dict[str, Any]:
     from sharpmod.providers import spc_outlook_fetch
 
     try:
-        layer = spc_outlook_fetch.fetch_layer(when, product=product)
+        layer = spc_outlook_fetch.fetch_layer(when, product=product, disk_cache=False)
     except spc.OutlookError as exc:
         raise BridgeError(
             "OVERLAY_FETCH_FAILED",
@@ -83,32 +98,23 @@ def spc_outlook(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def radar_mosaic(params: dict[str, Any]) -> dict[str, Any]:
-    """The newest MRMS mosaic frame of one product, as the service's PNG."""
-    p.keys(params, (), ("product",))
+    """A latest or genuinely time-addressed MRMS frame, as the service's PNG."""
+    p.keys(params, (), ("product", "valid_time"))
+    when = p.time(params, "valid_time") if params.get("valid_time") is not None else None
     from sharpmod.providers import radar_mosaic as radar
 
     keys = tuple(product.key for product in radar.available_products())
     key = p.choice(params, "product", keys, radar.DEFAULT_PRODUCT)
     product = radar.get_product(key)
     try:
-        raster = radar.fetch_frame(key)
+        raster = radar.fetch_frame(key, **({"valid_time": when} if when is not None else {}))
     except radar.RadarError as exc:
         raise BridgeError(
             "OVERLAY_FETCH_FAILED",
             f"The radar mosaic could not be loaded: {_short(exc)}.",
             True,
         ) from None
-    if raster is None:
-        raise BridgeError(
-            "OVERLAY_FETCH_FAILED", "The radar request was cancelled.", True
-        )
-    data = bytes(raster.image_bytes)
-    if len(data) > MAX_IMAGE_BYTES or not data.startswith(b"\x89PNG\r\n\x1a\n"):
-        raise BridgeError(
-            "OVERLAY_FETCH_FAILED",
-            "The radar service did not send a usable PNG frame.",
-            True,
-        )
+    data = _radar_bytes(raster, when)
     west, east, south, north = (float(value) for value in raster.bounds)
     return {
         "product": key,
@@ -122,17 +128,14 @@ def radar_mosaic(params: dict[str, Any]) -> dict[str, Any]:
         "source_url": raster.source_url,
         "byte_length": len(data),
         "png_base64": base64.b64encode(data).decode("ascii"),
+        "legend_png_base64": _legend(product.legend_url) if when is not None else None,
     }
 
 
 def radar_site(params: dict[str, Any]) -> dict[str, Any]:
-    """One NEXRAD antenna's own frame, at its own resolution.
-
-    Pass ``site_id`` to pin an antenna by identifier, or ``latitude`` and
-    ``longitude`` to serve the nearest antenna publishing the product. The
-    reply has the mosaic's shape, plus ``site_id`` naming the serving antenna.
-    """
-    p.keys(params, (), ("product", "site_id", "latitude", "longitude"))
+    """A pinned or nearest antenna's frame, optionally at a specific elevation."""
+    p.keys(params, (), ("product", "site_id", "latitude", "longitude", "valid_time", "tilt"))
+    when = p.time(params, "valid_time") if params.get("valid_time") is not None else None
     from sharpmod.providers import radar_site as site
 
     keys = tuple(product.key for product in site.available_products())
@@ -161,6 +164,11 @@ def radar_site(params: dict[str, Any]) -> dict[str, Any]:
                 False,
             )
         fetch = {"site_id": nearest[0].id}
+    if when is not None:
+        fetch["valid_time"] = when
+    if params.get("tilt") is not None:
+        from sharpmod.providers.radar_level3 import TILTS
+        fetch["tilt"] = p.choice(params, "tilt", tuple(TILTS), "0")
     try:
         raster = site.fetch_frame(key, **fetch)
     except site.RadarSiteError as exc:
@@ -169,22 +177,22 @@ def radar_site(params: dict[str, Any]) -> dict[str, Any]:
             f"The single-site radar could not be loaded: {_short(exc)}.",
             True,
         ) from None
-    if raster is None:
-        raise BridgeError(
-            "OVERLAY_FETCH_FAILED", "The radar request was cancelled.", True
-        )
-    data = bytes(raster.image_bytes)
-    if len(data) > MAX_IMAGE_BYTES or not data.startswith(b"\x89PNG\r\n\x1a\n"):
-        raise BridgeError(
-            "OVERLAY_FETCH_FAILED",
-            "The radar service did not send a usable PNG frame.",
-            True,
-        )
+    data = _radar_bytes(raster, when)
+    palette = None
+    if key in site.NUMERIC_PRODUCTS:
+        from sharpmod.providers import radar_level3
+        palette = radar_level3.palette(key)
+        legend_png = None
+    else:
+        legend_png = _legend(product.legend_url(raster.short_name)) if when is not None else None
     west, east, south, north = (float(value) for value in raster.bounds)
     return {
         "product": key,
         "site_id": raster.short_name,
-        "label": product.label,
+        "elevation_angle": raster.elevation_angle,
+        "legend_png_base64": legend_png,
+        "palette": palette,
+        "label": raster.title.removeprefix(f"{raster.short_name} "),
         "units": product.units,
         "bounds": {"west": west, "east": east, "south": south, "north": north},
         "retrieved_at": p.iso(raster.retrieved_at),

@@ -310,9 +310,11 @@ def stand_ins() -> Iterator[None]:
     stack.enter_context(patch.object(radar_mosaic, "fetch_frame", radar_frame))
 
     def radar_site_frame(product_key=None, site_id=None, view=None, **_):
+        from sharpmod.providers import radar_level2
         product = radar_site.get_product(product_key)
         site = radar_site.site_by_id(site_id) or radar_site.site_by_id("KTLX")
         assert site is not None
+        native = product.key in radar_site.LEVEL2_PRODUCTS
         return OverlayRaster(
             key=radar_site.OVERLAY_KEY,
             title=f"{site.id} {product.label}",
@@ -321,10 +323,13 @@ def stand_ins() -> Iterator[None]:
             subtitle=f"Single site \u00b7 {site.lat:.2f}, {site.lon:.2f}",
             short_name=site.id,
             retrieved_at=FIXED_NOW,
+            valid_time=FIXED_NOW if native else None,
+            elevation_angle=0.5 if native else None,
             update_interval_s=product.update_interval_s,
             opacity=1.0,
-            source_url=radar_site.build_url(product, site, (2048, 1024)),
-            attribution=radar_site.ATTRIBUTION,
+            source_url=(f"{radar_level2.BASE}/{FIXED_NOW:%Y/%m/%d}/{site.id}/{site.id}{FIXED_NOW:%Y%m%d_%H%M%S}_V06"
+                        if native else radar_site.build_url(product, site, (2048, 1024))),
+            attribution="NOAA/NEXRAD Level II · NSF Unidata" if native else radar_site.ATTRIBUTION,
         )
 
     stack.enter_context(patch.object(radar_site, "fetch_frame", radar_site_frame))
@@ -403,8 +408,14 @@ def build() -> dict[str, bytes]:
 
 def _build() -> dict[str, bytes]:
     from sharpmod.bridge import fields, map_layers
+    from sharpmod.providers import radar_level3
 
     out: dict[str, bytes] = {}
+    out["public/map/radar-velocity.palette.json"] = _json(radar_level3.palette())
+    out["public/map/radar-reflectivity.palette.json"] = _json(radar_level3.palette("mosaic"))
+    out["public/map/radar-base-reflectivity.palette.json"] = _json(radar_level3.palette("reflectivity"))
+    out["public/map/radar-correlation.palette.json"] = _json(radar_level3.palette("correlation-coefficient"))
+    out["public/map/radar-echo-tops.palette.json"] = _json(radar_level3.palette("echo-tops"))
 
     catalog = fields.catalog({})
     out["bridge/map/catalog.result.json"] = _json(catalog)
@@ -441,6 +452,11 @@ def _build() -> dict[str, bytes]:
     )
 
     sites = map_layers.radar_sites({})
+    from sharpmod.providers import radar_inventory
+    cuts = radar_inventory.availability("KTLX", "velocity", now=FIXED_NOW, opener=lambda url, *_:
+        b'<a href="sn.0123">scan</a>04-Oct-2026 18:28' if any(f"DS.p99v{cut}/" in url for cut in "0123") else b"<title>Index of /</title>")
+    out["bridge/map/radar-tilts.result.json"] = _json(cuts)
+    out["public/map/radar-tilts.json"] = _json(_camel(cuts))
     out["bridge/map/radar-sites.result.json"] = _json(sites)
     out["public/map/radar-sites.json"] = _json(
         {
@@ -517,6 +533,16 @@ def _build() -> dict[str, bytes]:
         )
         out[f"bridge/map/outlook.result.{product}.json"] = _json(outlook)
         out[f"public/map/outlook.{product}.json"] = _json(_camel(outlook))
+
+    alerts = {"valid_time": OUTLOOK_TIME, "fetched_at": OUTLOOK_TIME, "alerts": [
+        {"id": f"synthetic-{kind}", "event": event, "kind": kind, "office": "KOUN",
+         "issued": "2026-10-04T20:45:00Z", "expires": "2026-10-04T22:00:00Z", "colour": colour,
+         "source_url": f"https://api.weather.gov/alerts/synthetic-{kind}",
+         "polygons": [[[[west, 34.0], [-96.0, 34.0], [-96.0, 36.0], [west, 36.0], [west, 34.0]]]]}
+        for kind, event, colour, west in [("warning", "Tornado Warning", "#ff0000", -98.0), ("watch", "Tornado Watch", "#ffff00", -99.0)]
+    ]}
+    out["bridge/map/alerts.result.json"] = _json(alerts)
+    out["public/map/alerts.json"] = _json(_camel(alerts))
 
     places = map_layers.place_labels({})
     places = {"places": places["places"][:PLACES_KEPT]}

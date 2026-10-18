@@ -14,7 +14,7 @@ from sharpmod.bridge import params as p
 from sharpmod.bridge.errors import BridgeError
 
 _LOCK = threading.RLock()
-KEYS = ("models", "maps", "outlooks")
+KEYS = ("models", "maps", "outlooks", "radar", "satellite", "observations", "alerts")
 
 
 def _regular(info: os.stat_result) -> bool:
@@ -76,7 +76,10 @@ def _scan():
         "models": [(path, size, True) for path, size, ready in session_files if ready],
         "maps": _files(hrrr_field.disk_cache_root(), ("*.png", "*.json.gz", "*.part")),
         "outlooks": _files(spc_outlook.disk_cache_root(), ("*.json", "*.part")),
+        "radar": _files(session.root / "radar-volumes", ("*.ar2", "*.part")),
     }
+    for key in ("radar", "satellite", "observations", "alerts"):
+        files.setdefault(key, []).extend(_files(session.root / "live" / key, ("*.json.gz", "*.part")))
     usage = {"caches": [{
         "key": key,
         "bytes": sum(size for _, size, _ in files[key]),
@@ -132,6 +135,10 @@ def clear(params: dict[str, Any]) -> dict[str, Any]:
             if "outlooks" in selected:
                 from sharpmod.providers import spc_outlook
                 spc_outlook.clear_cache()
+            if "radar" in selected:
+                from sharpmod.providers import radar_level2, radar_mosaic, radar_site
+                for provider in (radar_level2, radar_mosaic, radar_site):
+                    provider.clear_cache()
             return {"usage": _scan()[0], "freed_bytes": freed, "failed_files": failed}
     except OSError as exc:
         raise BridgeError("INTERNAL", "Some cache data could not be cleared. Refresh Storage and try again.", True) from exc

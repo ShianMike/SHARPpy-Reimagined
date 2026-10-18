@@ -5,7 +5,7 @@ import "./maplibreWorker";
 import * as maplibregl from "maplibre-gl";
 import type { MapLibreOverlay } from "@deck.gl/maplibre";
 import { useGraphicsStore } from "../../stores/graphicsStore";
-import { panelLayers, useMapStore } from "../../stores/mapStore";
+import { mapProjection, panelLayers, useMapStore } from "../../stores/mapStore";
 import type { Station } from "../../types/contracts";
 import { documentTokenReader, readCameraDurationMs, readCanvasTokens, type CanvasTokens } from "../canvasTokens";
 import { applyBasemapLabels, prepareBasemap } from "../basemap/basemapLayers";
@@ -68,7 +68,7 @@ export class MapRuntime implements RuntimeEventTarget {
       const overlay = createPanelOverlay(tokens, this.pixelRatio(), this);
       this.overlay = overlay;
       map.addControl(overlay);
-      if (import.meta.env.MODE !== "fixture" && useMapStore.getState().projection === "mercator") this.unsubscribers.push(wireOverlayEvents(map, overlay, this, tokens.lengths.pickingRadius));
+      if (import.meta.env.MODE !== "fixture" && mapProjection(useMapStore.getState()) === "mercator") this.unsubscribers.push(wireOverlayEvents(map, overlay, this, tokens.lengths.pickingRadius));
       this.scene = new StationScene(overlay, tokens, read("--font-mono").trim(), panel, (shown) => { this.watch.layersSubmitted(shown); });
     } catch (error) {
       this.failConstruction(error);
@@ -99,7 +99,7 @@ export class MapRuntime implements RuntimeEventTarget {
   /** The field, overlays, domain, and places this panel draws. */
   setScene(patch: Partial<SceneData>): void {
     if (!this.disposed && this.scene?.setData(patch) === true) {
-      if (patch.places !== undefined || patch.surfacePlots !== undefined || patch.contours !== undefined) {
+      if (patch.places !== undefined || patch.radarSites !== undefined || patch.surfacePlots !== undefined || patch.contours !== undefined) {
         this.redraw();
       } else {
         this.scene.render();
@@ -151,7 +151,7 @@ export class MapRuntime implements RuntimeEventTarget {
 
   styleLoaded(): void {
     this.styleReady = true;
-    this.map?.setProjection({ type: useMapStore.getState().projection });
+    this.map?.setProjection({ type: mapProjection(useMapStore.getState()) });
     if (this.map !== null && import.meta.env.MODE !== "fixture") this.scene?.setWeatherBeforeId(prepareBasemap(this.map));
     this.applyStyleState();
   }
@@ -167,7 +167,8 @@ export class MapRuntime implements RuntimeEventTarget {
   }
 
   private pixelRatio(): number {
-    return panelPixelRatio(useGraphicsStore.getState().effective.profile, useMapStore.getState().panelLayout);
+    const state = useMapStore.getState();
+    return panelPixelRatio(useGraphicsStore.getState().effective.profile, state.panelLayout);
   }
 
   private failConstruction(error: unknown): void {

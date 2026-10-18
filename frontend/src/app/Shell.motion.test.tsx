@@ -51,6 +51,26 @@ it("shows loading until the first map render and leaves the map mounted when rea
   queryClient.clear();
 });
 
+it("hides Point controls only in Live Tracking and returns focus to Layers after closing station details", async () => {
+  useAppStore.getState().setActiveWorkspace("map");
+  const { queryClient } = renderWithBackend(<Shell />, createTransport());
+  await screen.findByTestId("map-canvas");
+  expect(screen.getByRole("button", { name: "Point details" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Live Tracking" }));
+  expect(screen.queryByRole("button", { name: "Point details" })).toBeNull();
+  const layers = screen.getByRole("button", { name: "Layers" });
+  fireEvent.click(layers);
+  expect(screen.getByRole("heading", { name: "Layers" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Show point details" })).toBeNull();
+  act(() => { useAppStore.getState().selectStation("72357"); });
+  expect(screen.getByRole("heading", { name: "Point" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Close map details" }));
+  expect(document.activeElement).toBe(layers);
+  fireEvent.click(screen.getByRole("button", { name: "Model Viewer" }));
+  expect(screen.getByRole("button", { name: "Point details" })).toBeTruthy();
+  queryClient.clear();
+});
+
 it.each(["overview", "settings", "status", "sounding"] as const)("transitions from %s to Model Viewer without rebuilding the map", async (workspace) => {
   useAppStore.getState().setActiveWorkspace(workspace);
   const { queryClient } = renderWithBackend(<Shell />, createTransport());

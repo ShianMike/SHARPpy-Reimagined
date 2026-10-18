@@ -14,6 +14,7 @@ const AVAILABLE_MARKER: [number, number, number] = [224, 48, 48];
 
 test("deck.gl draws station 72357 and shows its tooltip on hover", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.stationsRendered);
   await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   await nextFrames(page);
@@ -56,6 +57,7 @@ test("deck.gl draws station 72357 and shows its tooltip on hover", async ({ page
 
 test("a click selects 72357 in the chip and the inspector, and Esc clears it", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   const point = await projectStation(page, "72357");
   expect(point).not.toBeNull();
@@ -82,6 +84,7 @@ test("a click selects 72357 in the chip and the inspector, and Esc clears it", a
 test("labels appear by tier as the view narrows", async ({ page, consoleMessages }) => {
   await presetPreferences(page, { layers: { "station-labels": { visible: true, opacity: 1 } } });
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.stationsRendered);
   // The CONUS view spans more than 55 degrees of longitude: no labels (Balanced, F5).
   expect(await labels(page)).toEqual({ count: 0, tier: null });

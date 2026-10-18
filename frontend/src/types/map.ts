@@ -127,6 +127,9 @@ export interface FieldFrame {
 
 /** The newest radar mosaic frame: the service's PNG over lon/lat bounds. */
 export interface RadarFrame {
+  /** Provider legend, or the same numeric palette used to render velocity. */
+  legendPng?: string | null;
+  palette?: Palette | null;
   product: string;
   label: string;
   units: string;
@@ -142,6 +145,24 @@ export interface RadarFrame {
 /** One antenna's own frame: the mosaic's shape, plus the serving site. */
 export interface RadarSiteFrame extends RadarFrame {
   siteId: string;
+  elevationAngle?: number | null;
+}
+
+// NOAA RPCCDS Level III cuts; several VCPs share a cut with different actual angles.
+export const RADAR_TILTS = [
+  { value: "z", label: "0.3° / 0.4°" }, { value: "0", label: "0.5°" },
+  { value: "a", label: "0.9°" }, { value: "1", label: "1.3° / 1.5°" },
+  { value: "b", label: "1.8°" }, { value: "2", label: "2.4° / 2.5°" },
+  { value: "3", label: "3.1° / 3.4° / 3.5°" },
+] as const;
+export type RadarTilt = (typeof RADAR_TILTS)[number]["value"];
+export const RADAR_TILTABLE_PRODUCTS = ["reflectivity", "velocity", "correlation-coefficient"] as const;
+
+export interface RadarTilts {
+  siteId: string;
+  product: (typeof RADAR_TILTABLE_PRODUCTS)[number];
+  checkedAt: string;
+  tilts: readonly { tilt: RadarTilt; status: "available" | "unavailable" | "unknown" }[];
 }
 
 /** One WSR-88D: identifier and position, for the single-site picker. */

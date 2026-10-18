@@ -52,12 +52,30 @@ describe("map contracts", () => {
     expect(new Uint8Array(await frame.png.arrayBuffer()).slice(1, 4)).toEqual(Uint8Array.from([0x50, 0x4e, 0x47]));
   });
 
+  it("accepts only bounded PNG legends and validated numeric palettes", () => {
+    const frame = parseShrf(bytes(radarShrf));
+    const encoded = btoa(String.fromCharCode(...frame.body.slice(0, 8)));
+    expect(parseRadarFrame(encodeShrf({ ...frame.header, legendPngBase64: encoded }, frame.body)).legendPng).toBe(`data:image/png;base64,${encoded}`);
+    for (const legendPngBase64 of ["not base64!", btoa("<svg/>"), "A".repeat(175001)]) {
+      expect(() => parseRadarFrame(encodeShrf({ ...frame.header, legendPngBase64 }, frame.body))).toThrow(ContractError);
+    }
+    const site = parseShrf(bytes(radarSiteShrf));
+    const palette = { stops: [[-200, "#ffdadc"], [200, "#2d0000"]], units: "mph", display: "fixed", stepped: false, floor: null, ceiling: null, ticks: [-200, 0, 200] };
+    expect(parseRadarSiteFrame(encodeShrf({ ...site.header, palette }, site.body)).palette).toEqual(palette);
+    expect(() => parseRadarSiteFrame(encodeShrf({ ...site.header, palette: { ...palette, stops: [] } }, site.body))).toThrow(ContractError);
+  });
+
   it("reads the single-site frame: the mosaic's shape plus the serving site", () => {
     const frame = parseRadarSiteFrame(bytes(radarSiteShrf).buffer);
-    expect(frame).toMatchObject({ product: "reflectivity", siteId: "KTLX", label: "Base reflectivity", units: "dBZ" });
+    expect(frame).toMatchObject({ product: "reflectivity", siteId: "KTLX", label: "Base Reflectivity", units: "dBZ" });
     expect(frame.bounds.west).toBeCloseTo(-102.278, 3);
     expect(frame.png.type).toBe("image/png");
     expect(parseRadarSiteCatalog(radarSites).sites.length).toBeGreaterThan(100);
+    const { header, body } = parseShrf(bytes(radarSiteShrf));
+    expect(parseRadarSiteFrame(encodeShrf({ ...header, elevationAngle: 1.3 }, body)).elevationAngle).toBe(1.3);
+    for (const elevationAngle of [-2, 91, "1.3"]) {
+      expect(() => parseRadarSiteFrame(encodeShrf({ ...header, elevationAngle }, body))).toThrow(ContractError);
+    }
   });
 
   it("reads the satellite frame and its scan provenance", () => {

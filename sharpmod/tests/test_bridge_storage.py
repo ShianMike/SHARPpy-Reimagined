@@ -58,6 +58,8 @@ def test_clear_all_keeps_pinned_active_saved_and_open_data_and_reports_real_size
             {"key": "models", "bytes": 28, "files": 3, "clearable_bytes": 0},
             {"key": "maps", "bytes": 11, "files": 1, "clearable_bytes": 0},
             {"key": "outlooks", "bytes": 0, "files": 0, "clearable_bytes": 0},
+            *[{"key": key, "bytes": 0, "files": 0, "clearable_bytes": 0}
+              for key in ("radar", "satellite", "observations", "alerts")],
         ]}
         assert not directories[0].exists()
         assert not any(path.exists() for path in (completed, map_image, outlook))
@@ -85,6 +87,36 @@ def test_map_cleanup_counts_downloaded_grids_and_winds_but_keeps_inflight_files(
     assert storage.usage({})["caches"][1] == {"key": "maps", "bytes": 14, "files": 3, "clearable_bytes": 9}
     assert storage.clear({"cache": "maps"})["freed_bytes"] == 9
     assert not grid.exists() and not wind.exists() and partial.exists()
+
+
+@pytest.mark.parametrize("target", ["radar", "satellite", "observations", "alerts"])
+def test_live_cleanup_counts_its_own_data_and_keeps_active_writes(roots, target):
+    _, session = roots
+    live = write(session.root / "live" / target / "frame.json.gz", b"live")
+    partial = write(session.root / "live" / target / "downloading.part", b"active")
+    others = [write(session.root / "live" / key / "frame.json.gz", b"keep")
+              for key in ("radar", "satellite", "observations", "alerts") if key != target]
+    assert storage.usage({})["caches"][storage.KEYS.index(target)] == {"key": target, "bytes": 10, "files": 2, "clearable_bytes": 4}
+    assert storage.clear({"cache": target})["freed_bytes"] == 4
+    assert not live.exists() and partial.exists()
+    assert all(path.exists() for path in others)
+
+
+def test_radar_storage_includes_level2_volumes_and_clears_reusable_memory(roots, monkeypatch):
+    from sharpmod.providers import radar_level2, radar_site
+
+    _, session = roots
+    volume = write(session.root / "radar-volumes" / "PGUA.ar2", b"native volume")
+    image = write(session.root / "live" / "radar" / "frame.json.gz", b"frame")
+    partial = write(session.root / "radar-volumes" / "active.part", b"active")
+    calls = []
+    monkeypatch.setattr(radar_level2, "clear_cache", lambda: calls.append("volumes"))
+    monkeypatch.setattr(radar_site, "clear_cache", lambda: calls.append("frames"))
+    row = storage.usage({})["caches"][storage.KEYS.index("radar")]
+    assert row == {"key": "radar", "bytes": 24, "files": 3, "clearable_bytes": 18}
+    result = storage.clear({"cache": "radar"})
+    assert result["freed_bytes"] == 18 and calls == ["volumes", "frames"]
+    assert not volume.exists() and not image.exists() and partial.exists()
 
 
 @pytest.mark.parametrize("target", ["maps", "outlooks"])

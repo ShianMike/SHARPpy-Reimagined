@@ -10,6 +10,7 @@ import { boxOf, chooseThroughSearch, isInside, viewportBox } from "./support/ui"
 
 test("python-unavailable: the instruction, no Retry, and no station count (DR6-3)", async ({ page, consoleMessages }) => {
   await page.goto("/?scenario=python-unavailable");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.mapLoaded);
   await waitForMark(page, MARKS.basemapLoaded);
   const notice = page.getByTestId("catalogue-error");
@@ -43,6 +44,7 @@ test("catalog-error: the notice after two automatic retries, then Retry loads th
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/?scenario=catalog-error");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   const notice = page.getByTestId("catalogue-error");
   await expect(notice).toContainText("Stations could not be loaded", { timeout: 10_000 });
   await expect(notice).toContainText("The station catalogue could not be loaded.");
@@ -58,6 +60,7 @@ test("catalog-error: the notice after two automatic retries, then Retry loads th
 
 test("seed-fallback: the warning, newly reporting stations, and the seed list in the inspector", async ({ page, consoleMessages }) => {
   await page.goto("/?scenario=seed-fallback");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await expect(page.getByTestId("catalogue-seed-fallback")).toContainText(
     "Showing the 11-station seed list: the bundled catalogue could not be read",
   );
@@ -84,6 +87,7 @@ test("restarting: the indicator and its popover say so, and the stations still l
 
 test("slow-catalog: Loading stations until the catalogue arrives", async ({ page, consoleMessages }) => {
   await page.goto("/?scenario=slow-catalog");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   const loading = page.getByTestId("catalogue-loading");
   await expect(loading).toHaveText("Loading stations");
   await expect(page.getByTestId("catalogue-announcement")).toHaveCount(0);
@@ -116,6 +120,7 @@ test("basemap-missing: the notice with Reload map, and the stations still draw a
   consoleMessages,
 }) => {
   await page.goto("/?scenario=basemap-missing");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   const notice = page.getByTestId("map-layers-notice");
   await expect(notice).toContainText("Some map layers could not be drawn");
   await expect(notice.getByRole("button", { name: "Reload map" })).toBeVisible();

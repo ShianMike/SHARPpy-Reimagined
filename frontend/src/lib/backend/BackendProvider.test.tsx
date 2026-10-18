@@ -113,6 +113,9 @@ describe("BackendProvider", () => {
     const summary = parseSoundingSummary(summaryExample);
     useSoundingStore.getState().add(summary);
     useSoundingStore.getState().setView(summary.soundingId, INITIAL_VIEW);
+    useSoundingStore.getState().setView(summary.soundingId, { ...INITIAL_VIEW, options: { chart: "winter" } });
+    useSoundingStore.getState().close(summary.soundingId);
+    expect(useSoundingStore.getState().pendingChanges).toHaveLength(1);
     useSoundingStore.getState().setSource("file");
     queryClient.setQueryData(["soundings", summary.soundingId, "analysis"], { cached: true });
     queryClient.setQueryData(QUERY_KEYS.catalog, { keep: true });
@@ -131,7 +134,7 @@ describe("BackendProvider", () => {
       await advance(5000);
     }
     await advance(10);
-    expect(useSoundingStore.getState()).toMatchObject({ open: [], activeId: null, views: {}, source: "file" });
+    expect(useSoundingStore.getState()).toMatchObject({ open: [], activeId: null, views: {}, pendingChanges: [], source: "file" });
     expect(queryClient.getQueryData(QUERY_KEYS.catalog)).toEqual({ keep: true });
     expect(queryClient.getQueryCache().findAll({ queryKey: ["soundings"] })).toHaveLength(0);
     await act(async () => { finishImage("old process image"); await pending; });

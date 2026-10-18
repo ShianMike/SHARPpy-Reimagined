@@ -713,7 +713,7 @@ def _remember(key: str, payload: str | None, ttl_marker: float) -> None:
 
 def download(*, window: timedelta = DEFAULT_WINDOW, view=None,
              around: datetime | None = None, opener=None,
-             should_cancel=None) -> tuple[str, str] | None:
+             should_cancel=None, disk_cache: bool = True) -> tuple[str, str] | None:
     """Request one window of reports, returning ``(csv_text, url)``.
 
     Caching follows :mod:`sharpmod.providers.hrrr_field`: answered from memory while still
@@ -743,8 +743,8 @@ def download(*, window: timedelta = DEFAULT_WINDOW, view=None,
         elif age < (ARCHIVE_CACHE_TTL_S if settled else LIVE_CACHE_TTL_S):
             return payload, url
 
-    path = disk_cache_root() / f"{key}.csv"
-    if settled:
+    path = disk_cache_root() / f"{key}.csv" if disk_cache else None
+    if settled and path is not None:
         stored = _disk_read(path)
         if stored is not None:
             _remember(key, stored, moment)
@@ -762,14 +762,14 @@ def download(*, window: timedelta = DEFAULT_WINDOW, view=None,
     text = payload.decode("utf-8", "replace") if isinstance(payload, bytes) \
         else str(payload)
     _remember(key, text, moment)
-    if settled:
+    if settled and path is not None:
         _disk_write(path, text)
     return text, url
 
 
 def fetch_layer(*, window: timedelta = DEFAULT_WINDOW, view=None,
                 around: datetime | None = None, span_deg=None, opener=None,
-                should_cancel=None):
+                should_cancel=None, disk_cache: bool = True):
     """Fetch reports as an overlay layer, downloading only when needed.
 
     Returns ``None`` for cancellation and for a window that simply contained no
@@ -777,7 +777,7 @@ def fetch_layer(*, window: timedelta = DEFAULT_WINDOW, view=None,
     :class:`StormReportsError`.
     """
     answer = download(window=window, view=view, around=around, opener=opener,
-                      should_cancel=should_cancel)
+                      should_cancel=should_cancel, disk_cache=disk_cache)
     if answer is None:
         return None
     text, url = answer

@@ -15,6 +15,8 @@ import threading
 import numpy as np
 
 from sharpmod.backends.grib import DecodedPoint, GRIB_COLUMN_NAMES
+from sharpmod.models.wind_reference import rotate_winds
+from sharpmod.models.lambert_grid import HRRR_GRID
 from sharpmod.models.model_surface import merge_surface_level
 from sharpmod.models.model_transport import DownloadCancelled
 
@@ -259,8 +261,6 @@ def _point_dataset_from_columns(
     matrix[1] = height
     good_temperature = temperature != missing
     matrix[2, good_temperature] = temperature[good_temperature] - 273.15
-    matrix[7] = u_wind
-    matrix[8] = v_wind
 
     humidity = values("RH")
     if humidity is not None:
@@ -281,7 +281,11 @@ def _point_dataset_from_columns(
         logarithm = np.log(np.clip(vapor_pressure, 1.0e-6, None) / 6.112)
         matrix[3, good] = 243.04 * logarithm / (17.625 - logarithm)
 
+    # The archive copies native GRIB values; its Zarr attrs omit the wind flag.
+    rotation = (HRRR_GRID._n, HRRR_GRID.lon_origin)
+    u_wind, v_wind = rotate_winds(u_wind, v_wind, selected_lon, rotation)
     good_wind = (u_wind != missing) & (v_wind != missing)
+    matrix[7], matrix[8] = u_wind, v_wind
     matrix[4, good_wind] = (
         270.0 - np.degrees(np.arctan2(
             v_wind[good_wind], u_wind[good_wind]
@@ -295,7 +299,11 @@ def _point_dataset_from_columns(
     if omega is not None:
         matrix[6] = omega
 
-    surface = {} if surface is None else surface
+    surface = {} if surface is None else dict(surface)
+    if all(value is not None and np.isfinite(value) and value != missing
+           for value in (surface.get("UGRD"), surface.get("VGRD"))):
+        surface["UGRD"], surface["VGRD"] = rotate_winds(
+            surface["UGRD"], surface["VGRD"], selected_lon, rotation)
     surface_merge = merge_surface_level(
         {
             name: matrix[index]

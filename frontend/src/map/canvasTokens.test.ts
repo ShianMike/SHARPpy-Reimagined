@@ -48,7 +48,7 @@ describe("readCanvasTokens over the shipped tokens.css", () => {
       statesWidth: 1,
       countriesWidth: 1.2,
       lakesWidth: 1.1,
-      coastlineWidth: 1.4,
+      coastlineWidth: 2.4,
       stationRadius: 3.5,
       stationEdge: 1,
       selectedRadius: 6,

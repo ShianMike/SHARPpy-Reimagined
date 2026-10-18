@@ -15,16 +15,15 @@ from sharpmod.models.model_surface import SURFACE_CONTRACT_VERSION
 from sharpmod.models.model_transport import DownloadCancelled
 from sharpmod.tools.era5_extract import ParameterRangeError
 from sharpmod.tools.era5_extract import RetrievalError
+from sharpmod.tools.era5_extract import ExtractionCancelled
 from sharpmod.tools.era5_extract import _LAT_COORDS
 from sharpmod.tools.era5_extract import _LEVEL_COORDS
 from sharpmod.tools.era5_extract import _LON_COORDS
-from sharpmod.tools.era5_extract import _atomic_write_json
-from sharpmod.tools.era5_extract import _atomic_write_npz
+from sharpmod.tools.era5_extract import _atomic_write_sounding_pair
 from sharpmod.tools.era5_extract import _build_columns
 from sharpmod.tools.era5_extract import _coord_values
 from sharpmod.tools.era5_extract import _horizontal_indexers
 from sharpmod.tools.era5_extract import _promote_scalar_level_coordinate
-from sharpmod.tools.era5_extract import _quiet_remove
 from sharpmod.tools.era5_extract import _require_profile_qc
 from sharpmod.tools.era5_extract import _select_time
 from sharpmod.tools.era5_extract import select_nearest_grid_point
@@ -519,12 +518,9 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
     if cancelled is not None and cancelled():
         raise DownloadCancelled("forecast-model download cancelled")
     _api._emit_progress(progress_callback, "writing")
-    _atomic_write_npz(out_path, arrays)
-    json_path = os.path.splitext(out_path)[0] + ".json"
     try:
-        _atomic_write_json(json_path, meta)
-    except BaseException:
-        _quiet_remove(out_path)
-        raise
+        _atomic_write_sounding_pair(out_path, arrays, meta, cancelled=cancelled)
+    except ExtractionCancelled as exc:
+        raise DownloadCancelled("forecast-model download cancelled") from exc
     _api._emit_progress(progress_callback, "complete")
     return out_path

@@ -9,25 +9,33 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import type { CanvasTokens } from "../canvasTokens";
 import type { LabelTier } from "../../stations/stationFormat";
 import type { Station } from "../../types/contracts";
-import type { ContourLines, FieldFrame, Outlook, OutlookKey, Palette, Place, ProductContour, ReportPoint } from "../../types/map";
+import type { ContourLines, FieldFrame, Outlook, OutlookKey, Palette, Place, ProductContour, RadarSite, ReportPoint } from "../../types/map";
 import type { Bounds } from "../../types/soundings";
 import type { SurfacePlot } from "../../types/surface";
+import type { WeatherAlert } from "../../types/weatherAlerts";
 import type { WindBarb } from "./WindBarbLayer";
 import type { ScreenPoint, Viewport } from "../labels/declutter";
 
 export const LAYER_IDS = [
   "basemap", "stations", "station-labels", "selection", "model-field", "satellite", "radar",
   "storm-reports", "surface-plots", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "boundaries",
-  "model-domain", "place-labels",
+  "model-domain", "place-labels", "watches", "warnings", "radar-site-labels",
 ] as const;
 export type LayerId = (typeof LAYER_IDS)[number];
 
 /** The weather layers, which the user may stack in any order; bottom first by default. */
 export const ORDERABLE_LAYER_IDS = [
   "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail",
-  "surface-plots",
+  "surface-plots", "watches", "warnings",
 ] as const;
 export type OrderableLayerId = (typeof ORDERABLE_LAYER_IDS)[number];
+
+/** Keep controls and rendering consistent, including previously saved layers. */
+export function layerInView(id: LayerId, view: "map" | "live"): boolean {
+  if (id === "model-field" || id === "storm-reports" || id.startsWith("spc-")) return view === "map";
+  if (["radar", "satellite", "surface-plots", "warnings", "watches", "radar-site-labels"].includes(id)) return view === "live";
+  return true;
+}
 /** The zOrder of the lowest weather layer; the rest follow at one step each. */
 const ORDERABLE_BASE = 10;
 
@@ -44,10 +52,13 @@ export const LAYER_DEFAULTS: Readonly<Record<LayerId, LayerState>> = {
   basemap: { visible: true, opacity: 1 },
   stations: { visible: true, opacity: 1 },
   "station-labels": { visible: false, opacity: 1 },
+  "radar-site-labels": { visible: true, opacity: 1 },
   selection: { visible: true, opacity: 1 },
   "model-field": { visible: false, opacity: 0.5, smoothing: true },
   satellite: { visible: false, opacity: 0.72 },
   radar: { visible: false, opacity: 0.8 },
+  watches: { visible: false, opacity: 1 },
+  warnings: { visible: false, opacity: 1 },
   "storm-reports": { visible: false, opacity: 1 },
   "surface-plots": { visible: false, opacity: 1 },
   "spc-cat": { visible: false, opacity: 1 },
@@ -87,6 +98,7 @@ export interface SceneData {
   radar: RasterImage | null;
   /** The storm reports to mark, after the provider's own hazard filter. */
   reports: readonly ReportPoint[] | null;
+  alerts: readonly WeatherAlert[] | null;
   /** The station models to mark, each carrying its own display slots. */
   surfacePlots: readonly SurfacePlot[] | null;
   /** The product's contour lines and the spec that draws them; both or neither. */
@@ -97,6 +109,7 @@ export interface SceneData {
   domain: readonly (readonly [number, number])[] | null;
   /** All place names; the label pass picks the subset to draw. */
   places: readonly Place[];
+  radarSites: readonly RadarSite[];
   /** The selected forecast point. */
   point: { latitude: number; longitude: number } | null;
 }
@@ -108,12 +121,14 @@ export const NO_SCENE_DATA: SceneData = {
   satellite: null,
   radar: null,
   reports: null,
+  alerts: null,
   surfacePlots: null,
   contours: null,
   contourSpec: null,
   outlooks: {},
   domain: null,
   places: [],
+  radarSites: [],
   point: null,
 };
 

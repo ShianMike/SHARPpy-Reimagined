@@ -4,24 +4,21 @@
 // anchor, so the assertions are the readouts and the states, not fetch
 // geography.
 
-import { camera, deckLayers, nextFrames, projectPoint, waitForMapDrawn } from "./support/app";
+import { camera, deckLayers, nextFrames, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
-import { hoverAt, layerRow, turnOn } from "./support/ui";
+import { chooseThroughSearch, hoverAt, layerRow, turnOn } from "./support/ui";
 import { expect, test } from "./support/test";
 
 test("surface observations: the station models around the selection", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await turnOn(page, "surface-plots");
   const row = await layerRow(page, "surface-plots");
-  // Without a selection the layer says so instead of guessing a place.
-  await expect(row).toContainText("Select a station or a point");
-  const point = await projectPoint(page, -97.4, 35.2);
-  expect(point).not.toBeNull();
-  if (point !== null) {
-    await page.mouse.click(point.x, point.y);
-  }
+  // Live observations start around the map centre before a location is selected.
+  await expect(row.getByTestId("surface-shown")).toContainText("4 observations");
+  await chooseThroughSearch(page, "72357");
   // At CONUS scale nearby station models are decluttered; inspect them after zooming in.
   await page.getByRole("button", { name: "Zoom to station", exact: true }).click();
   await expect.poll(async () => (await camera(page))?.zoom ?? 0).toBeGreaterThanOrEqual(5);

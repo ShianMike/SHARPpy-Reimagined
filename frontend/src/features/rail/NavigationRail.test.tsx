@@ -14,18 +14,24 @@ afterEach(cleanup);
 it("keeps all current workspaces in a compact labelled dock", () => {
   render(<NavigationRail />);
   expect(screen.getByRole("navigation", { name: "Workspaces" })).toBeTruthy();
-  expect(screen.getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Overview", "Model Viewer", "Soundings", "Logs", "Settings"]);
-  expect(screen.getByRole("button", { name: "Model Viewer" }).getAttribute("aria-current")).toBe("page");
+  expect(screen.getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Overview", "Model Viewer", "Live Tracking", "Soundings", "Logs", "Settings"]);
+  expect(screen.getByRole("button", { name: "Overview" }).getAttribute("aria-current")).toBe("page");
 });
 
 it("roves through destinations, wraps, and activates only on Enter or Space", async () => {
   render(<NavigationRail />);
   const user = userEvent.setup();
   await user.tab();
+  expect(document.activeElement?.textContent).toBe("Overview");
+  await user.keyboard("{ArrowDown}");
   expect(document.activeElement?.textContent).toBe("Model Viewer");
   await user.keyboard("{ArrowDown}");
+  expect(document.activeElement?.textContent).toBe("Live Tracking");
+  await user.keyboard("{Enter}");
+  expect(useAppStore.getState().activeWorkspace).toBe("live");
+  await user.keyboard("{ArrowDown}");
   expect(document.activeElement?.textContent).toBe("Soundings");
-  expect(useAppStore.getState().activeWorkspace).toBe("map");
+  expect(useAppStore.getState().activeWorkspace).toBe("live");
   await user.keyboard("{Enter}");
   expect(useAppStore.getState().activeWorkspace).toBe("sounding");
   await user.keyboard("{Home}{ArrowUp}");

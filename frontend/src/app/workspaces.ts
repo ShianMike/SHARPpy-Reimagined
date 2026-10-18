@@ -1,6 +1,6 @@
 // The rail destinations (DESIGN-frontend F8) and their labels.
 
-import { Activity, House, SquareTerminal, Globe2, Settings, type LucideIcon } from "lucide-react";
+import { Activity, House, Radio, SquareTerminal, Globe2, Settings, type LucideIcon } from "lucide-react";
 import type { WorkspaceId } from "../stores/appStore";
 
 export interface WorkspaceDefinition {
@@ -14,6 +14,7 @@ export const WORKSPACES: readonly WorkspaceDefinition[] = [
   // that it fills the window instead of sitting in the panel.
   { id: "overview", label: "Overview", icon: House },
   { id: "map", label: "Model Viewer", icon: Globe2 },
+  { id: "live", label: "Live Tracking", icon: Radio },
   { id: "sounding", label: "Soundings", icon: Activity },
   { id: "status", label: "Logs", icon: SquareTerminal },
   { id: "settings", label: "Settings", icon: Settings },

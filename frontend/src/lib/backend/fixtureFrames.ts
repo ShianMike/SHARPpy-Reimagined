@@ -8,6 +8,11 @@ import radarSiteShrfUrl from "@contracts/public/map/radar-site.shrf?url&no-inlin
 import satelliteShrfUrl from "@contracts/public/map/satellite.shrf?url&no-inline";
 import satelliteVisibleShrfUrl from "@contracts/public/map/satellite.visible.shrf?url&no-inline";
 import mapCatalog from "@contracts/public/map/catalog.json";
+import { RADAR_TILTABLE_PRODUCTS } from "../../types/map";
+import correlationPalette from "@contracts/public/map/radar-correlation.palette.json";
+import echoTopsPalette from "@contracts/public/map/radar-echo-tops.palette.json";
+import velocityPalette from "@contracts/public/map/radar-velocity.palette.json";
+import reflectivityPalette from "@contracts/public/map/radar-base-reflectivity.palette.json";
 import reportsAll from "@contracts/public/map/reports.json";
 import reportsTornado from "@contracts/public/map/reports.tornado.json";
 import reportsHail from "@contracts/public/map/reports.hail.json";
@@ -22,12 +27,14 @@ import { encodeShrf, parseShrf } from "../contracts/frames";
 /** A request's own time, hours on: relabelling only, never a derivation. */
 export const hoursLater = (iso: string, hours: number): string =>
   new Date(Date.parse(iso) + hours * 3_600_000).toISOString().replace(/\.\d{3}Z$/, "Z");
+const tiltAngles: Readonly<Record<string, number>> = { x: -0.2, y: 0, z: 0.3, "0": 0.5, a: 0.9, "1": 1.3, b: 1.8, "2": 2.4, "3": 3.1 };
 
 /** The fixture single-site frame, relabelled for the requested site and product. */
 export async function siteFrameFor(args: Readonly<Record<string, unknown>> | undefined): Promise<ArrayBuffer> {
   const frame = parseShrf(await (await fetch(radarSiteShrfUrl)).arrayBuffer());
   const product = typeof args?.product === "string" ? args.product : "reflectivity";
   const site = typeof args?.site === "string" ? args.site : "KTLX";
+  const tilt = typeof args?.tilt === "string" ? args.tilt : "0";
   const spec = mapCatalog.siteProducts.find((item) => item.key === product);
   const fallbackLabel = typeof frame.header.label === "string" ? frame.header.label : "";
   const fallbackUnits = typeof frame.header.units === "string" ? frame.header.units : "";
@@ -35,8 +42,11 @@ export async function siteFrameFor(args: Readonly<Record<string, unknown>> | und
     ...frame.header,
     product,
     siteId: site,
+    elevationAngle: RADAR_TILTABLE_PRODUCTS.some((key) => key === product) ? (tiltAngles[tilt] ?? 0.5) : null,
+    validTime: typeof args?.validTime === "string" ? args.validTime : frame.header.validTime,
     label: spec?.label ?? fallbackLabel,
     units: spec?.units ?? fallbackUnits,
+    palette: product === "velocity" ? velocityPalette : product === "reflectivity" ? reflectivityPalette : product === "correlation-coefficient" ? correlationPalette : product === "echo-tops" ? echoTopsPalette : null,
   };
   return encodeShrf(header, frame.body);
 }

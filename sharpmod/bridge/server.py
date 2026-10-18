@@ -20,7 +20,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, BinaryIO
 
-from sharpmod.bridge import handlers
+from sharpmod.bridge import handlers, live_cache
 from sharpmod.bridge.errors import BridgeError, error_frame, internal_error
 from sharpmod.bridge.protocol import (
     MAX_FRAME_BYTES,
@@ -144,7 +144,7 @@ class _Server:
     def _run(self, request: Request) -> None:
         handler = handlers.HANDLERS[request.method]
         try:
-            result = handler(request.params)
+            result = live_cache.call(request.method, request.params, handler)
             frame: dict[str, Any] = {"id": request.id, "result": result}
         except BridgeError as err:
             frame = error_frame(request.id, err)

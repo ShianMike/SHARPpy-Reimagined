@@ -1,0 +1,78 @@
+{
+  "validTime": "2026-10-04T21:00:00Z",
+  "fetchedAt": "2026-10-04T21:00:00Z",
+  "alerts": [
+    {
+      "id": "synthetic-warning",
+      "event": "Tornado Warning",
+      "kind": "warning",
+      "office": "KOUN",
+      "issued": "2026-10-04T20:45:00Z",
+      "expires": "2026-10-04T22:00:00Z",
+      "colour": "#ff0000",
+      "sourceUrl": "https://api.weather.gov/alerts/synthetic-warning",
+      "polygons": [
+        [
+          [
+            [
+              -98.0,
+              34.0
+            ],
+            [
+              -96.0,
+              34.0
+            ],
+            [
+              -96.0,
+              36.0
+            ],
+            [
+              -98.0,
+              36.0
+            ],
+            [
+              -98.0,
+              34.0
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "synthetic-watch",
+      "event": "Tornado Watch",
+      "kind": "watch",
+      "office": "KOUN",
+      "issued": "2026-10-04T20:45:00Z",
+      "expires": "2026-10-04T22:00:00Z",
+      "colour": "#ffff00",
+      "sourceUrl": "https://api.weather.gov/alerts/synthetic-watch",
+      "polygons": [
+        [
+          [
+            [
+              -99.0,
+              34.0
+            ],
+            [
+              -96.0,
+              34.0
+            ],
+            [
+              -96.0,
+              36.0
+            ],
+            [
+              -99.0,
+              36.0
+            ],
+            [
+              -99.0,
+              34.0
+            ]
+          ]
+        ]
+      ]
+    }
+  ]
+}

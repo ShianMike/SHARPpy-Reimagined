@@ -1,6 +1,5 @@
-// The SPC outlook tooltip (REQUEST §8 hover): the area under the pointer, its
-// SPC description, and the outlook it belongs to. Positioned like the station
-// tooltip, which wins when both apply.
+// Provider area readout for SPC outlooks and NWS warnings/watches. Positioned
+// like the station tooltip, which wins when both apply.
 
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Surface } from "../../ui/Surface";

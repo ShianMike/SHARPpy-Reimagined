@@ -1,0 +1,35 @@
+{
+  "site_id": "KTLX",
+  "product": "velocity",
+  "checked_at": "2026-10-04T18:30:00Z",
+  "tilts": [
+    {
+      "tilt": "z",
+      "status": "unavailable"
+    },
+    {
+      "tilt": "0",
+      "status": "available"
+    },
+    {
+      "tilt": "a",
+      "status": "unavailable"
+    },
+    {
+      "tilt": "1",
+      "status": "available"
+    },
+    {
+      "tilt": "b",
+      "status": "unavailable"
+    },
+    {
+      "tilt": "2",
+      "status": "available"
+    },
+    {
+      "tilt": "3",
+      "status": "available"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 // the layer marks.
 
 import type { ReactNode } from "react";
-import { useForecastContext } from "../../features/forecast/useForecast";
+import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice";
 import { SourceSelect } from "../../features/sounding/SourceFields";
 import { compactUtc } from "../../features/sounding/soundingTime";
@@ -12,11 +12,11 @@ import { useReportOptions, useStormReports } from "../mapQueries";
 import styles from "./LayerPanel.module.css";
 
 export function ReportControls(): ReactNode {
-  const context = useForecastContext();
+  const validTime = useWeatherTime();
   const windowS = useMapStore((state) => state.reportWindowS);
   const filter = useMapStore((state) => state.reportFilter);
   const options = useReportOptions(true);
-  const reports = useStormReports(context?.validTime ?? null, windowS, filter, true);
+  const reports = useStormReports(validTime, windowS, filter, true);
   return (
     <div className={styles.extra}>
       {options.data === undefined ? null : (
@@ -29,8 +29,8 @@ export function ReportControls(): ReactNode {
             onChange={useMapStore.getState().setReportFilter} />
         </>
       )}
-      {context === null ? (
-        <p className={styles.hint}>Storm reports follow the forecast valid time, which needs the forecast models.</p>
+      {validTime === null ? (
+        <p className={styles.hint}>Choose a time to view storm reports.</p>
       ) : reports.isError ? (
         <SoundingErrorNotice
           error={reports.error}

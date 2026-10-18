@@ -1,15 +1,34 @@
 // Desktop workspace navigation, linked forecast controls, and floating panel geometry.
-import { MARKS, nextFrames, waitForMapDrawn, waitForMark } from "./support/app";
+import { MARKS, deckLayers, nextFrames, waitForMapDrawn, waitForMark } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
 import { boxOf, chooseThroughSearch, hoverAt, isInside, overlapArea, turnOn, viewportBox } from "./support/ui";
 
+test("opens Overview first, including after reopening from either viewer", async ({ page, consoleMessages }) => {
+  await page.goto("/");
+  const rail = page.getByRole("navigation", { name: "Workspaces" });
+  const overview = rail.getByRole("button", { name: "Overview", exact: true });
+  const panel = page.getByTestId("workspace-panel");
+  await expect(overview).toHaveAttribute("aria-current", "page");
+  await expect(panel).toHaveAttribute("aria-label", "Overview");
+  await expect(panel).toBeVisible();
+  for (const name of ["Model Viewer", "Live Tracking"]) {
+    await rail.getByRole("button", { name, exact: true }).click();
+    await page.reload();
+    await expect(overview).toHaveAttribute("aria-current", "page");
+    await expect(panel).toHaveAttribute("aria-label", "Overview");
+    await expect(panel).toBeVisible();
+  }
+  expectWarnings(consoleMessages, []);
+});
+
 test("the forecast workspace has linked controls and only the supported destinations", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   const rail = page.getByRole("navigation", { name: "Workspaces" });
-  await expect(rail.locator("[data-workspace-link]")).toHaveText(["Overview", "Model Viewer", "Soundings", "Logs", "Settings"]);
+  await expect(rail.locator("[data-workspace-link]")).toHaveText(["Overview", "Model Viewer", "Live Tracking", "Soundings", "Logs", "Settings"]);
   const navigationBox = await boxOf(rail);
   const mapToolsBox = await boxOf(page.getByRole("toolbar", { name: "Map", exact: true }));
   expect(mapToolsBox.x).toBe(navigationBox.x);
@@ -54,12 +73,13 @@ test("the forecast workspace has linked controls and only the supported destinat
 
 test("the compact dock provides one keyboard stop and arrow navigation", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   const rail = page.getByRole("navigation", { name: "Workspaces" });
   const current = rail.getByRole("button", { name: "Model Viewer" });
   await current.focus();
   await page.keyboard.press("ArrowDown");
-  await expect(rail.getByRole("button", { name: "Soundings" })).toBeFocused();
+  await expect(rail.getByRole("button", { name: "Live Tracking" })).toBeFocused();
   await expect(current).toHaveAttribute("aria-current", "page");
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
@@ -71,6 +91,7 @@ test("the compact dock provides one keyboard stop and arrow navigation", async (
 
 test("fullscreen sits after Point details and can exit from another workspace", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   const tools = page.getByRole("group", { name: "Map detail views" });
   expect(await tools.getByRole("button").evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))))
@@ -90,9 +111,12 @@ test("fullscreen sits after Point details and can exit from another workspace", 
 test("the SPC hover readout uses the report heading and separated validity", async ({ page, consoleMessages }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await turnOn(page, "spc-cat");
   await page.getByRole("button", { name: "Close map details", exact: true }).click();
+  await expect.poll(() => deckLayers(page)).toContain("spc-cat-fill");
+  await nextFrames(page);
   await hoverAt(page, -96.5, 34.5);
   const tooltip = page.getByTestId("outlook-tooltip");
   await expect(tooltip.locator("header > p").first()).toHaveText("Slight Risk (SLGT)");
@@ -105,6 +129,7 @@ test("the SPC hover readout uses the report heading and separated validity", asy
 
 test("Settings exposes application updates and explains the browser limitation", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Updates", exact: true }).click();
@@ -118,6 +143,7 @@ test("Settings exposes application updates and explains the browser limitation",
 
 test("other workspaces leave the map inert and returning preserves the selected station", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await chooseThroughSearch(page, "72357");
   const inspector = page.getByRole("complementary", { name: "Inspector" });
@@ -164,6 +190,7 @@ test.describe("at the 1280 by 800 minimum window", () => {
       } });
     });
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     const notice = page.getByTestId("app-update-notice");
     await expect(notice).toContainText("Version 3.1.0 is available");
@@ -183,6 +210,7 @@ test.describe("at the 1280 by 800 minimum window", () => {
 
   test("floating controls fit over the full-window map", async ({ page }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await chooseThroughSearch(page, "73111");
     const surfaces = [
@@ -209,6 +237,7 @@ test.describe("at the 1280 by 800 minimum window", () => {
 
   test("search results appear over a map provider notice", async ({ page, consoleMessages }) => {
     await page.goto("/?scenario=basemap-missing");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMark(page, MARKS.stationsRendered);
     await expect(page.getByTestId("map-layers-notice")).toBeVisible();
     await page.keyboard.press("Control+k");

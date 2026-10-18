@@ -5,7 +5,7 @@
 // the two renderers' globe depth buffers disagree and hide weather meshes.
 import type { PickingInfo } from "@deck.gl/core";
 import { MapLibreOverlay } from "@deck.gl/maplibre";
-import { useMapStore } from "../../stores/mapStore";
+import { mapProjection, useMapStore } from "../../stores/mapStore";
 
 export interface OverlayHandlers {
   onHover: (info: PickingInfo) => void;
@@ -30,7 +30,7 @@ function cursor({ isDragging, isHovering }: { isDragging: boolean; isHovering: b
 
 export function createOverlay(options: OverlayOptions, handlers: OverlayHandlers): MapLibreOverlay {
   return new MapLibreOverlay({
-    interleaved: import.meta.env.MODE !== "fixture" && useMapStore.getState().projection === "mercator",
+    interleaved: import.meta.env.MODE !== "fixture" && mapProjection(useMapStore.getState()) === "mercator",
     layers: [],
     pickingRadius: options.pickingRadius,
     useDevicePixels: options.useDevicePixels,

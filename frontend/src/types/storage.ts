@@ -1,4 +1,4 @@
-export const CACHE_KEYS = ["models", "maps", "outlooks"] as const;
+export const CACHE_KEYS = ["models", "maps", "outlooks", "radar", "satellite", "observations", "alerts"] as const;
 export type CacheKey = (typeof CACHE_KEYS)[number];
 export type CacheTarget = CacheKey | "all";
 export interface CacheUsage {

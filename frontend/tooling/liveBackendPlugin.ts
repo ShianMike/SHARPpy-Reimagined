@@ -1,6 +1,7 @@
 // Vite owns the local Python process; its native proxy keeps fetches same-origin.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 import type { Plugin, PreviewOptions, PreviewServer, ServerOptions, ViteDevServer } from "vite";
 
@@ -21,9 +22,16 @@ async function connectBackend(server: ViteDevServer | PreviewServer, options: Se
   if (python === undefined || !isAbsolute(python) || !existsSync(python)) {
     throw new Error("Set SHARPPY_PYTHON to the absolute path of the project's Python interpreter.");
   }
+  const cacheDir = mkdtempSync(resolve(tmpdir(), "sharppy-browser-"));
   const child = spawn(python, ["-u", "-m", "sharpmod.bridge.browser", "--origin",
     `http://127.0.0.1:${String(options.port)}`],
-  { cwd: repo, windowsHide: true, stdio: ["ignore", "pipe", "inherit"] });
+  { cwd: repo, env: { ...process.env, SHARPMOD_BRIDGE_CACHE: cacheDir }, windowsHide: true, stdio: ["ignore", "pipe", "inherit"] });
+  const clearSession = (): void => {
+    try { rmSync(cacheDir, { recursive: true, force: true, maxRetries: 3 }); }
+    catch (error) { server.config.logger.warn(`The browser session cache could not be removed: ${String(error)}`); }
+  };
+  child.once("exit", clearSession);
+  child.once("error", clearSession);
   let stopped = false;
   const stop = (): void => {
     if (stopped || child.exitCode !== null || child.signalCode !== null) return;
@@ -31,6 +39,7 @@ async function connectBackend(server: ViteDevServer | PreviewServer, options: Se
     // Windows venv launchers own a second Python process, which also needs closing.
     if (process.platform === "win32" && child.pid !== undefined) {
       spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+      clearSession(); // Forced Windows shutdown bypasses Python's atexit handlers.
     } else {
       child.kill();
     }

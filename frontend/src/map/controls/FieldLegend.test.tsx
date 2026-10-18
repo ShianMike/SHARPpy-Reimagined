@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import { parseMapCatalog } from "../../lib/contracts/map";
 import { useForecastStore } from "../../stores/forecastStore";
+import { useAppStore } from "../../stores/appStore";
 import { panelLayers, panelProduct, useMapStore } from "../../stores/mapStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import type { Palette } from "../../types/map";
@@ -30,6 +31,7 @@ vi.mock("../runtime/MapRuntime", () => ({ MapRuntime: class {
   dispose = vi.fn();
 } }));
 beforeEach(() => {
+  useAppStore.getState().setActiveWorkspace("map");
   useMapStore.setState(initialMap, true);
   useForecastStore.setState(initialForecast, true);
   putImageData.mockClear();

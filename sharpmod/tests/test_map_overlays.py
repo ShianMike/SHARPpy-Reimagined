@@ -389,7 +389,7 @@ CONUS = (-130.0, -60.0, 20.0, 55.0)
 def _raster(**kwargs):
     fields = {
         "key": "radar",
-        "title": "Composite reflectivity",
+        "title": "Composite Reflectivity",
         "image_bytes": PNG,
         "bounds": CONUS,
     }

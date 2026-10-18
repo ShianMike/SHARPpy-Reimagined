@@ -207,6 +207,7 @@ test.describe("desktop measurements", () => {
   });
 
   test("frame times during a scripted pan and zoom @frames", async () => {
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMarks(["sharppy:stations-rendered"]);
     const map = page.getByTestId("map");
     const box = await map.boundingBox();
@@ -270,6 +271,7 @@ test.describe("desktop measurements", () => {
 
   test("without Python the basemap draws and the instruction shows @python-missing", async () => {
     test.skip(!(await isTauri()), "not running inside the Tauri app");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMarks(["sharppy:basemap-loaded"]);
     await expect(page.getByText("Stations could not be loaded")).toBeVisible();
     await expect(page.getByText(/SHARPPY_PYTHON/u).first()).toBeVisible();

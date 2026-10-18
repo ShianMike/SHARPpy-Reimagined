@@ -617,11 +617,7 @@ def write_box_mean_sounding(
     single-point path does when the user types no label, and is what makes the
     automatic town lookup fire for the centre of the box.
     """
-    from sharpmod.tools.era5_extract import (
-        _atomic_write_json,
-        _atomic_write_npz,
-        _quiet_remove,
-    )
+    from sharpmod.tools.era5_extract import _atomic_write_sounding_pair
 
     if not isinstance(profile, BoxMeanProfile):
         raise BoxMeanError("profile must be a BoxMeanProfile")
@@ -701,14 +697,5 @@ def write_box_mean_sounding(
         meta["box_mean_bounds"] = [float(value) for value in box]
 
     target = os.fspath(path)
-    parent = os.path.dirname(os.path.abspath(target))
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    _atomic_write_npz(target, arrays)
-    sidecar = os.path.splitext(target)[0] + ".json"
-    try:
-        _atomic_write_json(sidecar, meta)
-    except BaseException:
-        _quiet_remove(target)
-        raise
+    _atomic_write_sounding_pair(target, arrays, meta)
     return target

@@ -11,6 +11,7 @@ const NORMAN = { longitude: -97.43787, latitude: 35.18095 };
 
 test("Ctrl+K, norman, ArrowDown and Enter select 72357 and the camera moves there", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   const before = await camera(page);
   expect(before).not.toBeNull();
@@ -54,6 +55,7 @@ test("Ctrl+K, norman, ArrowDown and Enter select 72357 and the camera moves ther
 
 test("/ outside a text field focuses the search, and an unmatched query says so", async ({ page, consoleMessages }) => {
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.catalogReceived);
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer" }).focus();
   await page.keyboard.press("/");

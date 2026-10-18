@@ -2,6 +2,9 @@ import type { ViewEdit, ViewOptions } from "../../types/soundingView";
 
 export interface ViewState { history: ViewEdit[][]; cursor: number; options: ViewOptions }
 export const INITIAL_VIEW: ViewState = { history: [[]], cursor: 0, options: {} };
+export function hasLocalWork(state: ViewState | undefined): boolean {
+  return state !== undefined && (state.history.some((edits) => edits.length > 0) || Object.keys(state.options).length > 0);
+}
 export function appendEdit(state: ViewState, edits: ViewEdit[]): ViewState {
   // shortcut: retain 32 undo steps; increase only with a measured memory budget.
   const history = [...state.history.slice(0, state.cursor + 1), edits].slice(-33);

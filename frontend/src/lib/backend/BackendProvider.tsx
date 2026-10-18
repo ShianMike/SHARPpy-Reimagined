@@ -63,7 +63,7 @@ export function BackendProvider({ client, children }: BackendProviderProps): Rea
       if (previous?.status !== "up" || (previous.pid === next.pid
         && previous.since === next.since && previous.restarts === next.restarts)) return;
       const hadSoundings = useSoundingStore.getState().open.length > 0;
-      useSoundingStore.setState({ open: [], activeId: null, views: {} });
+      useSoundingStore.setState({ open: [], activeId: null, views: {}, pendingChanges: [] });
       void queryClient.cancelQueries({ queryKey: ["soundings"] });
       queryClient.removeQueries({ queryKey: ["soundings"] });
       if (hadSoundings) {

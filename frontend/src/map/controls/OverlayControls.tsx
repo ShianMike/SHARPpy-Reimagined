@@ -6,27 +6,29 @@
 
 import type { ReactNode } from "react";
 import { useForecastContext } from "../../features/forecast/useForecast";
+import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { compactUtc, formatUtc } from "../../features/sounding/soundingTime";
 import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice";
 import { SourceSelect } from "../../features/sounding/SourceFields";
-import { panelLayers, useMapStore } from "../../stores/mapStore";
-import { OUTLOOK_KEYS, SATELLITE_CHANNELS, type OutlookKey } from "../../types/map";
+import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
+import { OUTLOOK_KEYS, RADAR_TILTABLE_PRODUCTS, SATELLITE_CHANNELS, type OutlookKey } from "../../types/map";
+import { RadarTiltSelect } from "../../features/tracking/RadarTiltSelect";
 import { useMapCatalog, useEffectiveRadarSite, usePlaceLabels, useRadarFrame, useRadarSiteFrame, useRadarSites, useSatelliteFrame, useSpcOutlooks } from "../mapQueries";
 import { domainPath } from "../panelScene";
 import styles from "./LayerPanel.module.css";
 
 /** The satellite row's own controls: the channel, and the scan's own provenance. */
 export function SatelliteControls(): ReactNode {
-  const context = useForecastContext();
-  const channel = useMapStore((state) => state.satelliteChannel);
-  const frame = useSatelliteFrame(channel, context?.validTime ?? null, true);
+  const validTime = useWeatherTime();
+  const channel = useMapStore((state) => panelWeather(state).satelliteChannel);
+  const frame = useSatelliteFrame(channel, validTime, true);
   return (
     <div className={styles.extra}>
       <SourceSelect label="Channel" value={channel}
         options={SATELLITE_CHANNELS.map((key) => ({ value: key, label: key === "infrared" ? "Clean IR (10.3 µm)" : "Visible (0.64 µm)" }))}
         onChange={useMapStore.getState().setSatelliteChannel} />
-      {context === null ? (
-        <p className={styles.hint}>GOES imagery follows the forecast valid time, which needs the forecast models.</p>
+      {validTime === null ? (
+        <p className={styles.hint}>Choose a time to view GOES imagery.</p>
       ) : frame.isError ? (
         <>
           <SoundingErrorNotice
@@ -52,7 +54,7 @@ export function SatelliteControls(): ReactNode {
                 )} min from requested)`
           }, ${String(Math.round(frame.data.coverageFraction * 100))}% view coverage at ${String(
             Math.round(frame.data.nativeResolutionKm * 10) / 10,
-          )} km. Live, not tied to the forecast time's model run. ${frame.data.attribution}.`}
+          )} km. ${frame.data.attribution}.`}
         </p>
       )}
     </div>
@@ -60,14 +62,13 @@ export function SatelliteControls(): ReactNode {
 }
 
 export function RadarControls(): ReactNode {
+  const validTime = useWeatherTime();
   const catalog = useMapCatalog().data;
-  const scope = useMapStore((state) => state.radarScope);
-  const pinnedSite = useMapStore((state) => state.radarSite);
-  const product = useMapStore((state) => state.radarProduct);
+  const { radarScope: scope, radarTilt: tilt, radarSite: pinnedSite, radarProduct: product } = useMapStore((state) => panelWeather(state));
   const sites = useRadarSites(true);
   const effectiveSite = useEffectiveRadarSite();
-  const mosaic = useRadarFrame(product, scope === "mosaic");
-  const siteFrame = useRadarSiteFrame(product, effectiveSite, scope === "site");
+  const mosaic = useRadarFrame(product, scope === "mosaic", validTime);
+  const siteFrame = useRadarSiteFrame(product, effectiveSite, scope === "site", validTime, tilt);
   const radar = scope === "site" ? siteFrame : mosaic;
   const products = scope === "site" ? (catalog?.siteProducts ?? []) : (catalog?.radarProducts ?? []);
   const value = product ?? radar.data?.product ?? products[0]?.key ?? "";
@@ -100,6 +101,7 @@ export function RadarControls(): ReactNode {
           options={products.map((item) => ({ value: item.key, label: item.label }))}
           onChange={useMapStore.getState().setRadarProduct} />
       )}
+      {scope === "site" && RADAR_TILTABLE_PRODUCTS.some((key) => key === value) ? <RadarTiltSelect label="Tilt" site={effectiveSite} product={value} tilt={tilt} angle={siteFrame.data?.elevationAngle} /> : null}
       {radar.isError ? (
         <>
           <SoundingErrorNotice
@@ -119,8 +121,8 @@ export function RadarControls(): ReactNode {
         <p className={styles.hint} data-testid="radar-shown">
           {`${shown}. ${
             scope === "site"
-              ? "One antenna's own imagery, live, not tied to the forecast time."
-              : "Live, not tied to the forecast time."
+              ? "One antenna's own imagery at its native resolution."
+              : "High-resolution MRMS mosaic."
           } ${radar.data.attribution}.`}
         </p>
       )}
@@ -164,15 +166,15 @@ export function DomainStatus(): ReactNode {
 
 /** The state of one SPC layer of a panel, for the forecast valid time. */
 export function OutlookStatus({ panel, product }: { panel: number; product: OutlookKey }): ReactNode {
-  const context = useForecastContext();
+  const validTime = useWeatherTime();
   const visible = useMapStore((state) => panelLayers(state, panel)[`spc-${product}` as const].visible);
   const queries = useSpcOutlooks(
     OUTLOOK_KEYS.map((key) => key === product && visible),
-    context?.validTime ?? null,
+    validTime,
   );
   const query = queries[OUTLOOK_KEYS.indexOf(product)];
-  if (context === null) {
-    return <p className={styles.hint}>SPC outlooks follow the forecast valid time, which needs the forecast models.</p>;
+  if (validTime === null) {
+    return <p className={styles.hint}>Choose a time to view SPC outlooks.</p>;
   }
   if (query === undefined) {
     return null;
@@ -197,7 +199,7 @@ export function OutlookStatus({ panel, product }: { panel: number; product: Outl
   if (outlook === null || outlook === undefined) {
     return (
       <p className={styles.hint} data-testid={`outlook-none-${product}`}>
-        {`SPC published no outlook of this kind for ${compactUtc(context.validTime)}.`}
+        {`SPC published no outlook of this kind for ${compactUtc(validTime)}.`}
       </p>
     );
   }
@@ -205,7 +207,7 @@ export function OutlookStatus({ panel, product }: { panel: number; product: Outl
     <p className={outlook.covers ? styles.hint : styles.warning} data-testid={`outlook-shown-${product}`}>
       {outlook.covers
         ? `${outlook.subtitle}. ${outlook.attribution}.`
-        : `No SPC outlook covers ${compactUtc(context.validTime)}. Nearest issuance: ${outlook.subtitle}.`}
+        : `No SPC outlook covers ${compactUtc(validTime)}. Nearest issuance: ${outlook.subtitle}.`}
     </p>
   );
 }

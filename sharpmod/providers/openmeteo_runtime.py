@@ -313,6 +313,7 @@ def write_point_dataset(
         *,
         loc: str | None = None,
         progress_callback=None,
+        cancelled=None,
 ) -> str:
     """Write ``dataset`` as an NPZ plus JSON sidecar and return the NPZ path.
 
@@ -321,10 +322,10 @@ def write_point_dataset(
     trustworthy one once it is on disk.
     """
     from sharpmod import backends as _backends
+    from sharpmod.models.model_transport import DownloadCancelled
     from sharpmod.tools.era5_extract import (
-        _atomic_write_json,
-        _atomic_write_npz,
-        _quiet_remove,
+        ExtractionCancelled,
+        _atomic_write_sounding_pair,
     )
 
     if not isinstance(dataset, _api.OpenMeteoPointDataset):
@@ -377,16 +378,12 @@ def write_point_dataset(
         "observed": False,
     }
 
-    _atomic_write_npz(out_path, arrays)
-    json_path = out_path.rsplit(".", 1)[0] + ".json"
+    metadata = _api.build_metadata(dataset, loc=loc, npz_path=out_path, qc=qc)
     try:
-        _atomic_write_json(
-            json_path,
-            _api.build_metadata(dataset, loc=loc, npz_path=out_path, qc=qc))
-    except BaseException:
-        # The pair is the contract, so a half-written pair is worse than none.
-        _quiet_remove(out_path)
-        raise
+        _atomic_write_sounding_pair(
+            out_path, arrays, metadata, cancelled=cancelled)
+    except ExtractionCancelled as exc:
+        raise DownloadCancelled("Open-Meteo request cancelled") from exc
     _api._emit(progress_callback, "complete")
     return out_path
 
@@ -443,7 +440,8 @@ def extract(
         )
     )
     return _api.write_point_dataset(
-        point, target, loc=loc, progress_callback=progress_callback)
+        point, target, loc=loc, progress_callback=progress_callback,
+        cancelled=cancelled)
 
 
 def probe(

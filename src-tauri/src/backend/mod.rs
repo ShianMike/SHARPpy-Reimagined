@@ -1,8 +1,10 @@
 //! Semantic operations: the router decides who answers each one, and
 //! `convert` turns bridge payloads into public DTOs.
 
+pub mod alert_ops;
 pub mod convert;
 pub mod map_ops;
+pub mod radar_ops;
 pub mod reports_ops;
 pub mod router;
 pub mod satellite_ops;

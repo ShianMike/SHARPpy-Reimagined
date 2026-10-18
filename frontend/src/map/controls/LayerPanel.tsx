@@ -4,13 +4,15 @@
 import { CloudSun, Map as MapIcon } from "lucide-react";
 import { Fragment, useState, type ReactNode } from "react";
 import { useForecastContext } from "../../features/forecast/useForecast";
-import { compactUtc, forecastLabel } from "../../features/sounding/soundingTime";
-import { panelLayers, useMapStore } from "../../stores/mapStore";
+import { useWeatherTime } from "../../features/tracking/useWeatherTime";
+import { compactUtc, formatUtc, forecastLabel } from "../../features/sounding/soundingTime";
+import { mapProjection, panelLayers, useMapStore } from "../../stores/mapStore";
 import { resetLayerSettings } from "../../stores/preferences";
 import type { StationAvailability } from "../../types/contracts";
 import { Action } from "../../ui/Controls";
 import { LAYER_REGISTRY } from "../layers/descriptors";
-import { ORDERABLE_LAYER_IDS, type LayerDescriptor, type OrderableLayerId } from "../layers/registry";
+import { layerInView, ORDERABLE_LAYER_IDS, type LayerDescriptor, type OrderableLayerId } from "../layers/registry";
+import { WeatherAlertStatus } from "./WeatherAlertStatus";
 import { AvailabilityControl } from "./AvailabilityControl";
 import { FieldControls } from "./FieldControls";
 import { LayerRow } from "./LayerRow";
@@ -27,7 +29,7 @@ export interface LayerPanelProps {
 const ORDERABLE = new Set<string>(ORDERABLE_LAYER_IDS);
 const descriptor = (id: string): LayerDescriptor | undefined => LAYER_REGISTRY.find((item) => item.id === id);
 /** The map layers, in the order the panel lists them. */
-const MAP_LAYERS = ["model-domain", "place-labels", "stations", "station-labels", "basemap"]
+const MAP_LAYERS = ["model-domain", "place-labels", "radar-site-labels", "stations", "station-labels", "basemap"]
   .map(descriptor)
   .filter((item): item is LayerDescriptor => item !== undefined && item.userControllable);
 
@@ -40,6 +42,9 @@ const MAP_EXTRA: Readonly<Partial<Record<string, ReactNode>>> = {
 
 function WeatherExtra({ id, panel }: { id: OrderableLayerId; panel: number }): ReactNode {
   switch (id) {
+    case "warnings":
+    case "watches":
+      return <WeatherAlertStatus kind={id === "warnings" ? "warning" : "watch"} />;
     case "model-field":
       return <FieldControls panel={panel} />;
     case "satellite":
@@ -57,14 +62,16 @@ function WeatherExtra({ id, panel }: { id: OrderableLayerId; panel: number }): R
 
 export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
   const group = useMapStore((state) => state.layerPanelGroup);
-  const projection = useMapStore((state) => state.projection);
+  const projection = useMapStore(mapProjection);
+  const live = useMapStore((state) => state.view === "live");
+  const validTime = useWeatherTime();
   const [reset, setReset] = useState(false);
   const panel = useMapStore((state) => state.activePanel);
   const layout = useMapStore((state) => state.panelLayout);
   const states = useMapStore((state) => panelLayers(state, panel));
   const order = useMapStore((state) => state.layerOrder);
   const context = useForecastContext();
-  const topFirst = [...order].reverse().filter((id) => ORDERABLE.has(id));
+  const topFirst = [...order].reverse().filter((id) => ORDERABLE.has(id) && layerInView(id, live ? "live" : "map"));
   const active = topFirst.filter((id) => states[id].visible);
   const available = topFirst.filter((id) => !states[id].visible);
 
@@ -72,12 +79,12 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
     <section aria-label={layout === 1 ? "Layers" : `Layers, panel ${String(panel + 1)}`} className={styles.panel} data-testid="layer-panel">
       <div className={styles.context}>
         <div className={styles.contextHeading}>
-          <strong>{context === null ? "Weather overlays" : `${context.model.label} ${forecastLabel(context.hour)}`}</strong>
+          <strong>{live ? "Live Tracking" : context === null ? "Weather overlays" : `${context.model.label} ${forecastLabel(context.hour)}`}</strong>
           <span className={styles.dataMode} data-fixture={import.meta.env.MODE === "fixture"} data-testid="layer-data-mode">
             {import.meta.env.MODE === "fixture" ? "Test data · synthetic weather layers" : "Live providers"}
           </span>
         </div>
-        {context === null ? null : <span className={styles.hint}>Forecast valid · {compactUtc(context.validTime)} UTC</span>}
+        {live ? <span className={styles.hint}>Viewing · {formatUtc(validTime)} UTC</span> : context === null ? null : <span className={styles.hint}>Forecast valid · {compactUtc(context.validTime)} UTC</span>}
       </div>
       <div className={styles.categories}>
         {layout === 1 ? null : <div className={styles.panelPicker} role="group" aria-label="Active map panel">
@@ -111,15 +118,15 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
         </div>
         <div data-motion="fade" inert={group !== "map"} hidden={group !== "map"}>
           <div className={styles.projection}>
-            <h3 className={styles.group}>Map view <span>All panels</span></h3>
+            <h3 className={styles.group}>Map view <span>{live ? "Live Tracking" : "All panels"}</span></h3>
             <div className={styles.panelPicker} role="group" aria-label="Map projection">
-              {(["mercator", "globe"] as const).map((value) => <button key={value} type="button" aria-pressed={projection === value}
+              {(["mercator", "globe"] as const).map((value) => <button key={value} type="button" aria-pressed={projection === value} disabled={live && value === "globe"}
                 onClick={() => { useMapStore.getState().setProjection(value); }}>{value === "globe" ? "Globe" : "Flat map"}</button>)}
             </div>
-            <p className={styles.hint}>Layers and model boundaries adapt to this view.</p>
+            <p className={styles.hint}>{live ? "Live Tracking uses a flat map. Globe is available in Model Viewer." : "Layers and model boundaries adapt to this view."}</p>
           </div>
           <h3 className={styles.group}>Map details</h3>
-          {MAP_LAYERS.map((layer) => (
+          {MAP_LAYERS.filter((layer) => layerInView(layer.id, live ? "live" : "map") && (!live || layer.id !== "model-domain")).map((layer) => (
             <LayerRow key={layer.id} layer={layer} state={states[layer.id]}>
               {MAP_EXTRA[layer.id] ?? null}
             </LayerRow>
@@ -128,8 +135,8 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
         </div>
       </div>
       <footer className={styles.footer}>
-        <span role="status">{reset ? "Layers reset · all panels" : "Saves automatically"}</span>
-        <Action title="Reset layers, projection and weather options in all panels. Keep the layout, parameters and map location."
+        <span role="status">{reset ? live ? "Live layers reset" : "Layers reset · all panels" : "Saves automatically"}</span>
+        <Action title={live ? "Reset live layers and weather options." : "Reset layers, projection and weather options in all panels. Keep the layout, parameters and map location."}
           onClick={() => { resetLayerSettings(); setReset(true); }}>Reset layers</Action>
       </footer>
     </section>

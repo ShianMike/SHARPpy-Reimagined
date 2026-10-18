@@ -10,17 +10,19 @@ import type { MapLibreOverlay } from "@deck.gl/maplibre";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useAppStore } from "../../stores/appStore";
 import { useGraphicsStore } from "../../stores/graphicsStore";
-import { panelLayers, useMapStore } from "../../stores/mapStore";
+import { mapProjection, panelLayers, useMapStore } from "../../stores/mapStore";
 import { stationIndex } from "../../stations/stationIndex";
 import type { Station } from "../../types/contracts";
-import { OUTLOOK_KEYS, type Place, type ReportPoint } from "../../types/map";
+import { OUTLOOK_KEYS, type Place, type RadarSite, type ReportPoint } from "../../types/map";
 import type { CanvasTokens } from "../canvasTokens";
 import { useHoverStore } from "../hover/hoverStore";
 import { declutter, declutterPoints } from "../labels/declutter";
 import { declutterCellFor, equivalentSpan, labelTierFor, longitudeSpan } from "../labels/labelPolicy";
 import { selectPlaceLabels } from "../labels/placeLabels";
 import { LAYER_REGISTRY } from "../layers/descriptors";
-import { buildDeckLayers, NO_SCENE_DATA, type LabelSelection, type LayerBuildContext, type LayerId, type LayerState, type SceneData } from "../layers/registry";
+import { buildDeckLayers, layerInView, NO_SCENE_DATA, type LabelSelection, type LayerBuildContext, type LayerId, type LayerState, type SceneData } from "../layers/registry";
+import type { AlertShape } from "../layers/WeatherAlertLayer";
+import { formatUtc } from "../../features/sounding/soundingTime";
 import type { AreaFill } from "../layers/SPCOutlookLayer";
 import { STATIONS_LAYER_ID, STATION_LABELS_LAYER_ID } from "../layers/StationLayer";
 import { REPORTS_LAYER_ID } from "../layers/StormReportLayer";
@@ -38,6 +40,7 @@ function weatherShown(layers: Readonly<Record<LayerId, LayerState>>, data: Scene
     (layers["model-field"].visible && data.field !== null) ||
     (layers.satellite.visible && data.satellite !== null) ||
     (layers.radar.visible && data.radar !== null) ||
+    (data.alerts?.some((alert) => layers[alert.kind === "warning" ? "warnings" : "watches"].visible) ?? false) ||
     OUTLOOK_KEYS.some((key) => layers[`spc-${key}` as const].visible && data.outlooks[key] !== undefined)
   );
 }
@@ -46,6 +49,7 @@ export class StationScene {
   private stations: readonly Station[] = NO_STATIONS;
   private labels: LabelSelection | null = null;
   private placeLabels: readonly Place[] = NO_PLACES;
+  private radarSiteLabels: readonly RadarSite[] = [];
   private surfacePlots: readonly SurfacePlot[] = [];
   private windBarbs: readonly WindBarb[] = [];
   private windGrid: WindBarbGrid | null = null;
@@ -117,6 +121,8 @@ export class StationScene {
     this.span = span;
     const tier = labelTierFor(profile, span);
     const project = (lon: number, lat: number) => map.project([lon, lat]);
+    this.radarSiteLabels = declutterPoints(this.data.radarSites, (site) => project(site.longitude, site.latitude), viewport,
+      5 * this.tokens.lengths.labelSize);
     const wind = this.data.contours?.wind ?? null;
     const view = [bounds.getWest(), bounds.getEast(), bounds.getSouth(), bounds.getNorth(), viewport.width, viewport.height, profile].join();
     if (wind !== this.windGrid || view !== this.windView) {
@@ -169,19 +175,20 @@ export class StationScene {
     const app = useAppStore.getState();
     const selectedId = app.selectedStationId;
     const built: Layer[] = buildDeckLayers(
-      LAYER_REGISTRY,
+      LAYER_REGISTRY.filter(({ id }) => layerInView(id, mapState.view)),
       layers,
       {
         ...this.data,
         surfacePlots: this.surfacePlots,
         windBarbs: this.windBarbs,
-        point: app.selectedPoint,
+        point: mapState.view === "live" ? null : app.selectedPoint,
         stations: this.stations,
         labels: this.labels,
         selected: selectedId === null ? null : (this.station(selectedId) ?? null),
         tokens: this.tokens,
         labelFont: this.labelFont,
         placeLabels: this.placeLabels,
+        radarSites: this.radarSiteLabels,
         span: this.span,
         basemap: layers.basemap,
         weatherShown: weatherShown(layers, this.data),
@@ -194,7 +201,7 @@ export class StationScene {
       mapState.layerOrder,
     );
     // Globe geometry can slice through screen-facing labels and icons at ground level.
-    this.overlay.setProps({ layers: mapState.projection === "globe"
+    this.overlay.setProps({ layers: mapProjection(mapState) === "globe"
       ? built.map((layer): Layer => layer instanceof TextLayer || layer instanceof IconLayer
         ? layer.clone({ parameters: { cullMode: "none", depthCompare: "always", depthWriteEnabled: false } }) as Layer : layer) : built });
     this.shownLayerIds = built.filter((layer) => layer.props.visible).map((layer) => layer.id);
@@ -228,6 +235,7 @@ export function hoverFromPick(info: PickingInfo, panel: number, origin: { left: 
   const y = origin.top + info.y;
   const station = pickedStation(info);
   const area = station === undefined ? pickedOutlook(info) : undefined;
+  const alert = station === undefined && /^(warnings|watches)(-|$)/u.test(info.layer?.id ?? "") ? (info.object as AlertShape | undefined)?.alert : undefined;
   const report = station === undefined && area === undefined ? pickedReport(info) : undefined;
   // A station model under the pointer reads as its own hover block, sharing
   // the mark tooltip: the label, the provider's description, no caption.
@@ -238,7 +246,8 @@ export function hoverFromPick(info: PickingInfo, panel: number, origin: { left: 
   const at = info.coordinate;
   useHoverStore.setState({
     hovered: station === undefined ? null : { stationId: station.id, x, y },
-    outlook: area === undefined ? null : { label: area.area.label, description: area.area.description, title: area.outlook.title, subtitle: area.outlook.subtitle, x, y },
+    outlook: alert !== undefined ? { label: alert.event, description: alert.event, title: `NWS ${alert.office}`, subtitle: `Issued ${formatUtc(alert.issued)} · Expires ${formatUtc(alert.expires)}`, x, y }
+      : area === undefined ? null : { label: area.area.label, description: area.area.description, title: area.outlook.title, subtitle: area.outlook.subtitle, x, y },
     report: report !== undefined ? { label: report.label, description: report.description, caption: report.caption, x, y }
       : plot === undefined ? null : { label: plot.label, description: plot.description, caption: "", ...(plot.availability === "available" ? { observation: { temperatureC: plot.temperatureC, dewpointC: plot.dewpointC } } : {}), x, y },
     pointer: at === undefined || !Number.isFinite(at[0]) || !Number.isFinite(at[1]) ? null
@@ -246,13 +255,14 @@ export function hoverFromPick(info: PickingInfo, panel: number, origin: { left: 
   });
 }
 
-/** deck.gl onClick: a station selects it; anywhere else picks that forecast point. */
+/** Stations remain selectable; free points belong to Model Viewer. */
 export function clickFromPick(info: PickingInfo): void {
   const station = pickedStation(info);
   if (station !== undefined) {
     useAppStore.getState().selectStation(station.id);
     return;
   }
+  if (useMapStore.getState().view === "live") return;
   const plot = pickedSurfacePlot(info);
   const at = plot === undefined ? info.coordinate : [plot.longitude, plot.latitude];
   if (at !== undefined && Number.isFinite(at[0]) && Number.isFinite(at[1])) {

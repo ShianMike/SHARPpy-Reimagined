@@ -3,7 +3,15 @@
 use serde::{Deserialize, Serialize};
 
 const MAX_SAFE: u64 = (1 << 53) - 1;
-pub const CACHE_KEYS: [&str; 3] = ["models", "maps", "outlooks"];
+pub const CACHE_KEYS: [&str; 7] = [
+    "models",
+    "maps",
+    "outlooks",
+    "radar",
+    "satellite",
+    "observations",
+    "alerts",
+];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(

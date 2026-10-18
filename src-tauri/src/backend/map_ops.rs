@@ -1,18 +1,5 @@
-//! Map data operations, all served by the Python bridge today
-//! (`sharpmod/bridge/fields.py`, `sharpmod/bridge/map_layers.py`).
-//!
-//! | Operation | Bridge method | Deadline |
-//! |---|---|---|
-//! | `get_map_catalog` | `map.catalog`, cached for the session | 30 s |
-//! | `get_weather_field` | `fields.grid` | 120 s |
-//! | `get_spc_outlook` | `outlooks.spc` | 60 s |
-//! | `get_radar_frame` | `radar.mosaic` | 60 s |
-//! | `get_place_labels` | `places.labels`, cached for the session | 30 s |
-//! | `get_station_availability` | `stations.availability` | 35 s |
-//!
-//! Field and radar frames reach the webview as one binary SHRF frame: "SHRF",
-//! u16 version 1, u16 0, u32 header length N, N bytes of JSON (padded with
-//! spaces so the body starts on an 8-byte boundary), then the body.
+//! Map operations served by the Python fields and map_layers bridge modules.
+//! Field and radar payloads use SHRF: a JSON header followed by aligned binary data.
 
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
@@ -193,20 +180,37 @@ impl Router {
         Ok(outlook)
     }
 
-    /// The newest radar mosaic frame, as an SHRF frame holding the service's PNG.
-    pub async fn radar_frame(&self, product: Option<&str>) -> Result<Vec<u8>, BackendError> {
+    /// A latest or genuinely time-addressed radar frame holding the service's PNG.
+    pub async fn radar_frame(
+        &self,
+        product: Option<&str>,
+        valid_time: Option<&str>,
+    ) -> Result<Vec<u8>, BackendError> {
         let context = context(OP_RADAR, "MRMS radar mosaic");
-        let params = match product {
+        let mut params = match product {
             Some(key) if key_ok(key) => json!({ "product": key }),
             Some(_) => return Err(invalid(&context, "product must be a key")),
             None => json!({}),
         };
+        if let Some(time) = valid_time {
+            if !time_ok(time) {
+                return Err(invalid(&context, "validTime must be an RFC 3339 time"));
+            }
+            params["valid_time"] = json!(time);
+        }
         let frame: RadarResult = self
             .call(&context, "radar.mosaic", params, RADAR_TIMEOUT)
             .await?;
         frame
             .validate()
             .map_err(|reason| rejected(&context, "radar.mosaic", reason))?;
+        if valid_time.is_some() && frame.valid_time.is_none() {
+            return Err(rejected(
+                &context,
+                "radar.mosaic",
+                "a requested scan has no actual valid_time".to_owned(),
+            ));
+        }
         let body = decode(&frame.png_base64)
             .map_err(|reason| rejected(&context, "radar.mosaic", reason))?;
         if !body.starts_with(PNG_SIGNATURE)
@@ -229,13 +233,12 @@ impl Router {
         site: Option<&str>,
         latitude: Option<f64>,
         longitude: Option<f64>,
+        valid_time: Option<&str>,
+        tilt: Option<&str>,
     ) -> Result<Vec<u8>, BackendError> {
-        let resource = format!(
-            "single-site radar {}",
-            site.unwrap_or(product.unwrap_or("default"))
-        );
-        let context = context(OP_RADAR_SITE, &resource);
-        let params = match (site, latitude, longitude) {
+        let id = site.or(product).unwrap_or("default");
+        let context = context(OP_RADAR_SITE, &format!("single-site radar {id}"));
+        let mut params = match (site, latitude, longitude) {
             (Some(id), _, _) => {
                 if !key_ok(id) {
                     return Err(invalid(&context, "site must be a radar identifier"));
@@ -269,12 +272,38 @@ impl Router {
                 ));
             }
         };
-        let frame: RadarSiteResult = self
-            .call(&context, "radar.site", params, RADAR_TIMEOUT)
-            .await?;
+        if let Some(time) = valid_time {
+            if !time_ok(time) {
+                return Err(invalid(&context, "validTime must be an RFC 3339 time"));
+            }
+            params["valid_time"] = json!(time);
+        }
+        if let Some(cut) = tilt {
+            if !matches!(cut, "x" | "y" | "z" | "0" | "a" | "1" | "b" | "2" | "3") {
+                return Err(invalid(&context, "tilt must be a supported NEXRAD cut"));
+            }
+            params["tilt"] = json!(cut);
+        }
+        // A cold Level II request downloads and decodes a complete volume.
+        let timeout = if matches!(
+            product.unwrap_or("reflectivity"),
+            "reflectivity" | "correlation-coefficient"
+        ) {
+            Duration::from_secs(120)
+        } else {
+            RADAR_TIMEOUT
+        };
+        let frame: RadarSiteResult = self.call(&context, "radar.site", params, timeout).await?;
         frame
             .validate()
             .map_err(|reason| rejected(&context, "radar.site", reason))?;
+        if valid_time.is_some() && frame.valid_time.is_none() {
+            return Err(rejected(
+                &context,
+                "radar.site",
+                "a requested scan has no actual valid_time".to_owned(),
+            ));
+        }
         let body =
             decode(&frame.png_base64).map_err(|reason| rejected(&context, "radar.site", reason))?;
         if !body.starts_with(PNG_SIGNATURE)

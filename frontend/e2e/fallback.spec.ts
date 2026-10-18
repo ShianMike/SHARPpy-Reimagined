@@ -14,6 +14,7 @@ const NO_WEBGL2 = "Map rendering is off: WebGL2 is not available on this device.
 test("without WebGL2 the station list replaces the map, and the keyboard selects", async ({ page, consoleMessages }) => {
   await stubNoWebgl2(page);
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.catalogReceived);
   const notice = page.getByTestId("reduced-notice");
   await expect(notice).toContainText(NO_WEBGL2);
@@ -46,6 +47,7 @@ test("without WebGL2 the station list replaces the map, and the keyboard selects
 test("DR6-2: without WebGL2 or Python, the instruction sits above the empty list", async ({ page, consoleMessages }) => {
   await stubNoWebgl2(page);
   await page.goto("/?scenario=python-unavailable");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMark(page, MARKS.shellPainted);
   await expect(page.getByTestId("reduced-notice")).toContainText(NO_WEBGL2);
   const instruction = page.getByTestId("catalogue-error");

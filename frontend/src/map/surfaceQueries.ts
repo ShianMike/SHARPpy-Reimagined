@@ -4,9 +4,10 @@
 // all three and disabled without them.
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useStationCatalog } from "../stations/stationQueries";
 import { useAppStore } from "../stores/appStore";
+import { useMapStore } from "../stores/mapStore";
 import { useBackendClient } from "../lib/backend/BackendProvider";
 import { BASE_QUERY_OPTIONS, mapKeys } from "../lib/backend/queryOptions";
 import type { SurfacePlots } from "../types/surface";
@@ -25,13 +26,15 @@ export function useSelectionAnchor(): SurfaceAnchor | null {
   const point = useAppStore((state) => state.selectedPoint);
   const stationId = useAppStore((state) => state.selectedStationId);
   const stations = useStationCatalog().data?.stations;
-  if (point !== null) {
-    return point;
-  }
-  const station = stationId === null ? undefined : stations?.find((item) => item.id === stationId);
-  return station === undefined
-    ? null
-    : { latitude: station.latitude, longitude: station.longitude };
+  const camera = useMapStore((state) => state.cameraSnapshot);
+  const live = useMapStore((state) => state.view === "live");
+  return useMemo(() => {
+    if (point !== null && !live) return point;
+    const station = stationId === null ? undefined : stations?.find((item) => item.id === stationId);
+    return station === undefined
+      ? live ? { latitude: camera?.center[1] ?? 39.8, longitude: camera?.center[0] ?? -98.6 } : null
+      : { latitude: station.latitude, longitude: station.longitude };
+  }, [point, stationId, stations, camera, live]);
 }
 
 /** The station plots around an anchor at a valid time. */
@@ -50,6 +53,7 @@ export function useSurfacePlots(
       client.getSurfacePlots(anchor?.latitude ?? 0, anchor?.longitude ?? 0, validTime ?? ""),
     enabled: enabled && anchor !== null && validTime !== null,
     staleTime: PLOTS_STALE_MS,
+    gcTime: Number.POSITIVE_INFINITY,
     select,
   });
 }

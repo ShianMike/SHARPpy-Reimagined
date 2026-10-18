@@ -247,4 +247,4 @@ def main(argv=None):  # pragma: no cover - CLI wrapper
         return 0
     finally:
         if transient:
-            _api.cleanup_transient_data(path or args.out, download_dir)
+            _api.cleanup_transient_data(path, download_dir)

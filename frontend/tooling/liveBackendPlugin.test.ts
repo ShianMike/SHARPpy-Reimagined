@@ -1,5 +1,6 @@
 // Exercises the real Python lifecycle, including Windows venv launchers.
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createServer, preview } from "vite";
 import { expect, it, vi } from "vitest";
@@ -12,6 +13,7 @@ const hasPython = process.env.SHARPPY_PYTHON !== undefined || [".gribenv", ".ven
   .some((venv) => existsSync(resolve(root, "..", venv, suffix)));
 
 it.skipIf(!hasPython)("starts, restarts, and closes the actual Python process tree", async () => {
+  const before = new Set(readdirSync(tmpdir()).filter((name) => name.startsWith("sharppy-browser-")));
   const server = await createServer({
     configFile: false, root, cacheDir: resolve(root, "node_modules/.vite-live-backend-test"), plugins: [liveBackend()],
     server: { host: "127.0.0.1", port: 0, strictPort: true },
@@ -29,6 +31,7 @@ it.skipIf(!hasPython)("starts, restarts, and closes the actual Python process tr
     return bridge.pid;
   };
   let backendUrl = "";
+  let sessionDir = "";
   try {
     await server.listen();
     const firstPid = await health();
@@ -37,11 +40,21 @@ it.skipIf(!hasPython)("starts, restarts, and closes the actual Python process tr
     const proxy = server.config.server.proxy?.["/__backend"];
     if (typeof proxy !== "object" || typeof proxy.target !== "string") throw new Error("Missing backend proxy.");
     backendUrl = proxy.target;
+    const response = await fetch(`${backendUrl}/__backend`, {
+      method: "POST", headers: { "Content-Type": "application/json", "Connection": "close", "Origin": "http://127.0.0.1:0" },
+      body: JSON.stringify({ id: 2, method: "get_storage_usage", params: {} }),
+    });
+    expect(response.ok).toBe(true);
+    const sessions = readdirSync(tmpdir()).filter((name) => name.startsWith("sharppy-browser-") && !before.has(name));
+    expect(sessions).toHaveLength(1);
+    sessionDir = resolve(tmpdir(), sessions[0] ?? "missing");
+    expect(readdirSync(sessionDir).some((name) => name.startsWith("sharpmod-bridge-"))).toBe(true);
   } finally {
     await server.close();
   }
   await vi.waitFor(async () => {
     await expect(fetch(`${backendUrl}/__backend`)).rejects.toThrow();
+    expect(existsSync(sessionDir)).toBe(false);
   }, { timeout: 2000 });
 }, 45_000);
 

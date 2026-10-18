@@ -2,7 +2,7 @@
 
 # SHARPpy Reimagined
 
-**Severe-weather soundings, forecast fields, and maps in one desktop workspace.**
+**Severe-weather soundings, forecast fields, and live radar in one desktop workspace.**
 
 [![Tests](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml/badge.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml)
 ![Tauri 2 + React 19](https://img.shields.io/badge/Desktop-Tauri_2_+_React_19-F59E0B)
@@ -13,22 +13,23 @@
 
 </div>
 
-## What's new in 3.0.3
+## What's new in 3.1.0
 
 SHARPpy Reimagined brings [SHARPpy](https://github.com/sharppy/SHARPpy) sounding analysis into a map-based desktop workspace. Version **3.0.0** introduces a React/Tauri interface backed by the existing Python and Rust scientific tools. This README describes that interface; the [v2.0.0 Legacy tour and screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/README.md) document the previous GUI.
 
-Version **3.0.3** expands HRRR weather products and colour tables, with supported products for NAM 3 km, RRFS and REFS members; adds forecast-hour preloading and Fast / Smooth playback; remembers map settings and projection; and checks station availability automatically. Storage settings show cache usage and cleanup controls, while temporary forecast-model downloads are removed when the app closes. The legacy Qt interface and unused ensemble-summary API are retired; individual model members and threshold calculations remain supported. See the [full v3.0.3 changelog](CHANGELOG.md#v303---2026-10-17).
+Version **3.1.0** adds **Live Tracking**, a dedicated workspace for native radar, satellite imagery, surface observations, and NWS warnings and watches. Compare independent radar products and tilts in synchronized panels, inspect measured values under the cursor, and cache the past hour for playback. Base Reflectivity and Correlation Coefficient share Level II volumes; Velocity and Enhanced Echo Tops use native Level III products. Live caches are bounded, visible in Storage settings, and removed when the app closes. Overview now opens at startup with direct paths to Model Viewer, Live Tracking, and soundings. See the [full v3.1.0 changelog](CHANGELOG.md#v310---2026-10-18).
 
 The **3.0.2 patch** adds saved temperature and wind units, map rendering fixes, panel titles that open the parameter picker, cleaner Settings and Logs layouts, quicker model availability checks, and faster Windows release builds. It includes the **3.0.1** additions: signed in-app updates, a fullscreen control, a minimum window size of 1280 × 800, and clearer outlook tooltips and notices.
 
 ## Explore the app
 
-Use the navigation rail to move between five workspaces:
+Use the navigation rail to move between six workspaces:
 
 | Workspace | What you can do |
 | --- | --- |
 | **Overview** | Start a forecast or sounding workflow and check the backend status. |
 | **Model Viewer** | Explore forecast fields in one, two, or four synchronized maps; inspect a point and open its sounding. |
+| **Live Tracking** | Follow radar, satellite, observations, warnings, and watches; compare products and tilts, inspect radar values, and play the past hour. |
 | **Soundings** | Fetch observed, forecast-model, or ERA5 profiles, or import local files; inspect and edit the Skew-T and hodograph. |
 | **Logs** | Inspect backend health, capabilities, and diagnostic messages when a request fails. |
 | **Settings** | Choose units, appearance, playback and graphics; manage saved settings and cached data; check for updates. |

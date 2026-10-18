@@ -14,18 +14,20 @@ import { afterEach, expect, it, vi } from "vitest";
 import { BackendProvider } from "../lib/backend/BackendProvider";
 import { BackendClient } from "../lib/backend/client";
 import { createQueryClient, mapKeys } from "../lib/backend/queryOptions";
-import { parseFieldFrame } from "../lib/contracts/frames";
+import { encodeShrf, parseFieldFrame, parseShrf } from "../lib/contracts/frames";
 import { parseMapCatalog } from "../lib/contracts/map";
 import { parseModelCatalog } from "../lib/contracts/soundings";
 import type { CommandName, Transport } from "../lib/backend/transport";
 import type { FieldFrame } from "../types/map";
 import { useForecastStore } from "../stores/forecastStore";
 import { useMapStore } from "../stores/mapStore";
+import { useLiveTrackingStore } from "../stores/liveTrackingStore";
 import { defaultLayerStates, type SceneData } from "./layers/registry";
 import { domainPath, useFieldImage, usePanelScene } from "./panelScene";
 import type { MapRuntime } from "./runtime/MapRuntime";
 
 const savedMap = useMapStore.getState();
+const savedLive = useLiveTrackingStore.getState();
 const savedForecast = useForecastStore.getState();
 
 it("uses the same closed grid perimeter without adding a zero-length segment", () => {
@@ -44,6 +46,7 @@ it("uses the same closed grid perimeter without adding a zero-length segment", (
 afterEach(() => {
   cleanup();
   useMapStore.setState(savedMap);
+  useLiveTrackingStore.setState(savedLive);
   useForecastStore.setState(savedForecast);
   vi.unstubAllGlobals();
 });
@@ -76,16 +79,20 @@ it("shares a frame across panels and reopens, colouring only when its Sharp imag
   expect(construct).toHaveBeenCalledTimes(2);
 });
 
-it("keeps a decoded radar frame on refresh failure, and clears it on product change", async () => {
+it("keeps radar visible during decoding and refresh failure, and clears it on product change", async () => {
   const layers = defaultLayerStates(); layers.radar.visible = true;
-  useMapStore.setState({ layers, radarProduct: null, radarScope: "mosaic" });
+  useMapStore.setState((state) => ({ view: "live", activePanel: 0, livePanels: state.livePanels.map((panel, index) => index === 0 ? { ...panel, layers, radarProduct: null, radarScope: "mosaic" } : panel) }));
   useForecastStore.setState({ modelKey: "hrrr", runTime: null, forecastHour: 5 });
   let failed = false;
-  vi.stubGlobal("createImageBitmap", vi.fn(() => Promise.resolve({ width: 2, height: 2 })));
+  let waiting = false;
+  const raw = parseShrf(bytes(radarPng));
+  const frame = encodeShrf({ ...raw.header, validTime: new Date(savedLive.now - 10 * 60_000).toISOString().replace(".000Z", "Z") }, raw.body);
+  const decode = vi.fn(() => Promise.resolve({ width: 2, height: 2 }));
+  vi.stubGlobal("createImageBitmap", decode);
   const replies: Partial<Record<CommandName, unknown>> = { get_map_catalog: catalog, get_model_catalog: models, get_station_catalog: stations, get_radar_sites: sites, get_place_labels: places };
   const transport: Transport = {
     call: (command) => command === "get_radar_frame"
-      ? failed ? Promise.reject(new Error("Refresh failed")) : Promise.resolve(bytes(radarPng))
+      ? waiting ? new Promise(() => undefined) : failed ? Promise.reject(new Error("Refresh failed")) : Promise.resolve(frame)
       : Promise.resolve(replies[command]),
     listen: () => Promise.resolve(() => undefined),
   };
@@ -97,10 +104,21 @@ it("keeps a decoded radar frame on refresh failure, and clears it on product cha
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
   try {
     await waitFor(() => { expect(scene.radar).toBeTruthy(); });
+    const key = mapKeys.radar(null, new Date(useLiveTrackingStore.getState().now).toISOString().replace(".000Z", "Z"));
+    const first = scene.radar;
+    let ready: (image: { width: number; height: number }) => void = () => undefined;
+    decode.mockImplementationOnce(() => new Promise((resolve) => { ready = resolve; }));
+    await act(async () => { await queryClient.refetchQueries({ queryKey: key, exact: true }); });
+    expect(scene.radar).toBe(first);
+    await act(async () => { ready({ width: 2, height: 2 }); await Promise.resolve(); });
+    await waitFor(() => { expect(scene.radar !== first).toBe(true); });
     const image = scene.radar;
     failed = true;
-    await act(async () => { await queryClient.refetchQueries({ queryKey: mapKeys.radar(null), exact: true }); });
-    await waitFor(() => { expect(queryClient.getQueryState(mapKeys.radar(null))?.status).toBe("error"); });
+    await act(async () => { await queryClient.refetchQueries({ queryKey: key, exact: true }); });
+    await waitFor(() => { expect(queryClient.getQueryState(key)?.status).toBe("error"); });
+    expect(scene.radar).toBe(image);
+    waiting = true;
+    act(() => { useLiveTrackingStore.getState().tick(savedLive.now + 60_000); });
     expect(scene.radar).toBe(image);
     act(() => { useMapStore.getState().setRadarProduct("base"); });
     await waitFor(() => { expect(scene.radar).toBeNull(); });
@@ -112,8 +130,9 @@ it("keeps a decoded radar frame on refresh failure, and clears it on product cha
 it.each([true, false])("draws the SPC outlook only when it covers the selected time (%s)", async (covers) => {
   const layers = defaultLayerStates();
   layers["spc-cat"].visible = true;
-  useMapStore.setState({ layers });
-  useForecastStore.setState({ modelKey: "hrrr", runTime: null, forecastHour: 5 });
+  useMapStore.setState({ view: "map", activePanel: 0, layers });
+  useLiveTrackingStore.setState({ now: Date.parse("2026-10-04T21:00:00Z"), selectedTime: null });
+  useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T18:00:00Z", forecastHour: 3 });
   const replies: Partial<Record<CommandName, unknown>> = {
     get_map_catalog: catalog, get_model_catalog: models, get_station_catalog: stations,
     get_radar_sites: sites, get_place_labels: places,

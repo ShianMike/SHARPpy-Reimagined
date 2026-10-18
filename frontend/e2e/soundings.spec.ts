@@ -121,6 +121,7 @@ test.describe("at 1440 by 900", () => {
     consoleMessages,
   }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await chooseThroughSearch(page, "72357");
     const inspector = page.getByRole("complementary", { name: "Inspector" });
@@ -165,6 +166,7 @@ test.describe("at 1440 by 900", () => {
 
   test("a model sounding at the selected station", async ({ page, consoleMessages }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await chooseThroughSearch(page, "72357");
     await showWorkspace(page, "Soundings");

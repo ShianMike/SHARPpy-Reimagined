@@ -162,10 +162,10 @@ describe("layer registry", () => {
     expect(moveInOrder(["a", "b", "c"], "b", -1)).toEqual(["b", "a", "c"]);
   });
 
-  it.each(["live", "production"])("keeps only ocean coastlines over weather alongside native political borders in %s maps", (mode) => {
+  it.each(["live", "production"])("uses native geography without coarse duplicate coastlines in %s maps", (mode) => {
     vi.stubEnv("MODE", mode);
     const layers = buildDeckLayers(LAYER_REGISTRY, defaultLayerStates(), { ...ctx, weatherShown: true });
-    expect(layers.filter((layer) => layer.id.startsWith("boundaries-")).map((layer) => layer.id)).toEqual(["boundaries-coastline"]);
+    expect(layers.filter((layer) => layer.id.startsWith("boundaries-"))).toEqual([]);
     expect(layers.some((layer) => layer.id === "stations")).toBe(true);
   });
 
@@ -277,8 +277,8 @@ describe("layer registry", () => {
 
   it("lists only the user-controllable layers for the panel, in zOrder", () => {
     expect(controllableLayers(LAYER_REGISTRY).map((d) => d.id)).toEqual([
-      "basemap", "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "surface-plots", "model-domain", "place-labels",
-      "stations", "station-labels",
+      "basemap", "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "surface-plots", "watches", "warnings", "model-domain", "place-labels",
+      "stations", "radar-site-labels", "station-labels",
     ]);
   });
 

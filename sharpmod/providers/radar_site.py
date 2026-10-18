@@ -47,6 +47,7 @@ from functools import lru_cache
 from types import MappingProxyType
 
 from sharpmod.maps.map_overlays import MAX_RASTER_BYTES, OverlayRaster
+from sharpmod.providers import radar_time
 
 _LOGGER = logging.getLogger("sharpmod.providers.radar_site")
 
@@ -128,23 +129,32 @@ class RadarSiteProduct:
 
 _PRODUCTS = (
     RadarSiteProduct(
-        "reflectivity", "_sr_bref", "Base reflectivity",
+        "reflectivity", "_sr_bref", "Base Reflectivity",
         "Lowest-tilt reflectivity from the single radar, at its own resolution.",
         units="dBZ"),
     RadarSiteProduct(
-        "velocity", "_sr_bvel", "Base velocity",
+        "velocity", "_sr_bvel", "Velocity",
         "Lowest-tilt radial velocity: toward the radar is negative, away is "
         "positive.",
-        units="kt"),
+        units="mph"),
     RadarSiteProduct(
-        "hydrometeor", "_bdhc", "Hydrometeor classification",
+        "correlation-coefficient", "_bcc", "Correlation Coefficient",
+        "Similarity of the horizontal and vertical radar returns (ρHV). "
+        "A dimensionless ratio; lower values indicate a mix of target shapes."),
+    RadarSiteProduct(
+        "echo-tops", "_eet", "Enhanced Echo Tops",
+        "Height of the 18 dBZ radar echo in thousands of feet above sea level. "
+        "Uses the full volume; heights above the highest beam are lower bounds.",
+        units="kft"),
+    RadarSiteProduct(
+        "hydrometeor", "_bdhc", "Hydrometeor Classification",
         "The radar's own classification of what it is detecting."),
     RadarSiteProduct(
-        "storm-total", "_bdsa", "Storm total accumulation",
+        "storm-total", "_bdsa", "Storm Total Accumulation",
         "Rainfall accumulated since the radar began the current precipitation "
         "episode.", update_interval_s=300.0, units="in"),
     RadarSiteProduct(
-        "one-hour", "_boha", "One-hour accumulation",
+        "one-hour", "_boha", "One-Hour Accumulation",
         "Rainfall accumulated over the past hour.",
         update_interval_s=300.0, units="in"),
 )
@@ -153,6 +163,9 @@ PRODUCTS: MappingProxyType = MappingProxyType(
     {product.key: product for product in _PRODUCTS})
 
 DEFAULT_PRODUCT = "reflectivity"
+LEVEL2_PRODUCTS = ("reflectivity", "correlation-coefficient")
+TILTABLE_PRODUCTS = (*LEVEL2_PRODUCTS, "velocity")
+NUMERIC_PRODUCTS = (*TILTABLE_PRODUCTS, "echo-tops")
 
 
 def available_products() -> tuple[RadarSiteProduct, ...]:
@@ -195,6 +208,8 @@ class RadarSite:
                 max(-90.0, self.lat - span), min(90.0, self.lat + span))
 
     def supports(self, product: RadarSiteProduct) -> bool:
+        if product.key in LEVEL2_PRODUCTS or product.key == "echo-tops":
+            return True
         if not self.products:
             return True
         return product.suffix.lstrip("_") in self.products
@@ -321,6 +336,7 @@ def _default_opener(url: str, timeout: float, limit: int) -> bytes:
                                     context=_ssl_context()) as response:
             payload = response.read(limit + 1)
     except urllib.error.HTTPError as error:
+        error.close()
         raise RadarSiteError(
             f"radar request failed: HTTP {error.code}") from error
     except (urllib.error.URLError, TimeoutError, OSError) as error:
@@ -357,9 +373,9 @@ def _frame_size(site: RadarSite, pixels: int) -> tuple[int, int]:
 
 
 def build_url(product: RadarSiteProduct, site: RadarSite,
-              size: tuple[int, int]) -> str:
+              size: tuple[int, int], *, valid_time: datetime | None = None) -> str:
     lon0, lon1, lat0, lat1 = site.bounds()
-    query = urllib.parse.urlencode({
+    params = {
         "service": "WMS",
         "version": WMS_VERSION,
         "request": "GetMap",
@@ -371,7 +387,10 @@ def build_url(product: RadarSiteProduct, site: RadarSite,
         "height": int(size[1]),
         "format": WMS_FORMAT,
         "transparent": "TRUE",
-    })
+    }
+    if valid_time is not None:
+        params["time"] = radar_time.stamp(valid_time)
+    query = urllib.parse.urlencode(params)
     return f"{BASE}/{site.id.lower()}/ows?{query}"
 
 
@@ -387,7 +406,8 @@ def clear_cache() -> None:
 def fetch_frame(product_key: str | None, *, site_id: str | None = None,
                 view: tuple[float, float, float, float] | None = None,
                 pixels: int = DEFAULT_FRAME_PIXELS, opacity: float = 0.85,
-                opener=None, should_cancel=None) -> OverlayRaster | None:
+                opener=None, should_cancel=None, valid_time: datetime | None = None,
+                now: datetime | None = None, tilt: str | None = None) -> OverlayRaster | None:
     """Fetch one single-site frame.
 
     Give either ``site_id`` to pin a radar, or ``view`` to have the one nearest
@@ -409,9 +429,36 @@ def fetch_frame(product_key: str | None, *, site_id: str | None = None,
     if not site.supports(product):
         raise RadarSiteError(f"{site.id} does not publish {product.label}")
 
+    if should_cancel and should_cancel():
+        return None
+    if tilt is not None and product.key not in TILTABLE_PRODUCTS and tilt != "0":
+        raise RadarSiteError(f"{product.label} does not have a selectable tilt")
+    if product.key in NUMERIC_PRODUCTS:
+        from sharpmod.providers import radar_level2, radar_level3
+        provider = radar_level2 if product.key in LEVEL2_PRODUCTS else radar_level3
+        raster = provider.fetch_frame(
+            site.id, product=product.key, tilt=tilt or "0", valid_time=valid_time, pixels=MAX_FRAME_PIXELS if pixels == DEFAULT_FRAME_PIXELS and (product.key in LEVEL2_PRODUCTS or valid_time is not None) else pixels,
+            opener=opener, now=now,
+        )
+        return None if should_cancel and should_cancel() else raster.at_opacity(opacity)
+    selected = None
+    timeout, _limit = _remote_limits()
+    call = opener or _default_opener
+    if valid_time is not None:
+        try:
+            selected = radar_time.select_time(
+                f"{BASE}/{site.id.lower()}/ows", product.layer(site.id), valid_time,
+                opener=call, timeout=timeout, now=now,
+            )
+        except (radar_time.RadarTimeError, urllib.error.URLError, OSError) as exc:
+            raise RadarSiteError(f"{site.id} history is unavailable: {exc}") from exc
+    if selected is not None and pixels == DEFAULT_FRAME_PIXELS:
+        pixels = MAX_FRAME_PIXELS
     frame = _frame_size(site, max(MIN_FRAME_PIXELS,
                                   min(MAX_FRAME_PIXELS, int(pixels))))
     cache_key = (product.key, site.id, frame)
+    if selected is not None:
+        cache_key += (selected,)
     moment = time.monotonic()
     with _CACHE_LOCK:
         cached = _CACHE.get(cache_key)
@@ -429,9 +476,7 @@ def fetch_frame(product_key: str | None, *, site_id: str | None = None,
     if should_cancel and should_cancel():
         return None
 
-    timeout, _limit = _remote_limits()
-    call = opener or _default_opener
-    url = build_url(product, site, frame)
+    url = build_url(product, site, frame, valid_time=selected)
     try:
         payload = call(url, timeout, MAX_FRAME_BYTES)
     except RadarSiteError:
@@ -461,7 +506,8 @@ def fetch_frame(product_key: str | None, *, site_id: str | None = None,
             bounds=(lon0, lon1, lat0, lat1),
             subtitle=f"Single site \u00b7 {site.lat:.2f}, {site.lon:.2f}",
             short_name=site.id,
-            retrieved_at=datetime.now(timezone.utc),
+            retrieved_at=now or datetime.now(timezone.utc),
+            valid_time=selected,
             update_interval_s=product.update_interval_s,
             opacity=opacity,
             source_url=url,

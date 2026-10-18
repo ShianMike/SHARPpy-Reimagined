@@ -20,6 +20,28 @@ fn contracts() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("contracts")
 }
 
+#[test]
+fn weather_alerts_reject_unsafe_or_misleading_snapshots() {
+    use sharppy_reimagined_lib::dto::weather_alerts::WeatherAlerts;
+    for field in ["kind", "colour", "source_url", "expires", "polygons"] {
+        let mut data = value("bridge/map/alerts.result.json");
+        data["alerts"][0][field] = match field {
+            "kind" => serde_json::json!("advisory"),
+            "colour" => serde_json::json!("red"),
+            "source_url" => serde_json::json!("https://api.weather.gov.evil.example"),
+            "expires" => data["fetched_at"].clone(),
+            _ => serde_json::json!([[[[181.0, 0.0], [0.0, 1.0], [1.0, 1.0], [181.0, 0.0]]]]),
+        };
+        assert!(
+            serde_json::from_value::<WeatherAlerts>(data)
+                .unwrap()
+                .validate()
+                .is_err(),
+            "{field}"
+        );
+    }
+}
+
 fn text(relative: &str) -> String {
     fs::read_to_string(contracts().join(relative)).unwrap_or_else(|e| panic!("{relative}: {e}"))
 }
@@ -376,6 +398,9 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
     }
     let places: PlaceLabels =
         bridge_to_public("bridge/map/places.result.json", "public/map/places.json");
+    let alerts: sharppy_reimagined_lib::dto::weather_alerts::WeatherAlerts =
+        bridge_to_public("bridge/map/alerts.result.json", "public/map/alerts.json");
+    alerts.validate().unwrap();
     places.validate().unwrap();
     let report = typed::<AvailabilityResult>("bridge/map/availability.result.json").into_report();
     assert_eq!(

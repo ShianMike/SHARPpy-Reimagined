@@ -5,14 +5,13 @@ import { useUiStore } from "../../stores/uiStore";
 import { Surface } from "../../ui/Surface";
 import { drawnRangeNote, formatValue, sampleAt } from "../field/colourize";
 import type { PanelField } from "../panelField";
-import { useHoverStore } from "./hoverStore";
+import { useHoverStore, type PointerPosition } from "./hoverStore";
 import styles from "./StationTooltip.module.css";
 
 /** Reads one cached raw cell; pointer movement never updates the map scene. */
 export function FieldTooltip({ panel, field }: { panel: number; field: PanelField }): ReactNode {
   const units = useUiStore((state) => state.units);
   const pointer = useHoverStore((state) => state.pointer?.panel === panel ? state.pointer : null);
-  const ref = useRef<HTMLElement | null>(null);
   const frame = field.frame.data;
   const palette = field.product?.palette;
   const visible = pointer !== null && !field.frame.isError && frame !== undefined && palette !== undefined && field.blocked === null;
@@ -22,6 +21,12 @@ export function FieldTooltip({ panel, field }: { panel: number; field: PanelFiel
   const unit = displayUnit(source, units, palette?.display);
   const text = value === null ? "No data here" : `${formatValue(convertUnit(value, source, unit, palette?.display))} ${unit}${note === "" ? "" : ` (${note})`}`;
   const label = field.product?.label;
+  return <PointerValue pointer={visible ? pointer : null} label={label} text={text} />;
+}
+
+export function PointerValue({ pointer, label, text }: { pointer: PointerPosition | null; label: string | undefined; text: string }): ReactNode {
+  const ref = useRef<HTMLElement | null>(null);
+  const visible = pointer !== null;
   useLayoutEffect(() => {
     const element = ref.current;
     if (element === null) return;

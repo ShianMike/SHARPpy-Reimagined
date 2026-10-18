@@ -460,6 +460,7 @@ class BatchExtractor:
             outputs.add(output_path)
             sidecar_path = output_path.with_suffix(".json")
             canonical = {
+                "wind_reference": "earth-v1",
                 "id": request.id,
                 "model": config.key,
                 "lat": request.lat,

@@ -571,6 +571,18 @@ def test_a_settled_window_is_kept_on_disk_between_sessions():
     assert list(sr.disk_cache_root().glob("*.csv")), "nothing was written"
 
 
+def test_session_only_download_never_uses_persistent_cache(monkeypatch):
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("a session-only report used the persistent cache")
+
+    monkeypatch.setattr(sr, "disk_cache_root", forbidden)
+    monkeypatch.setattr(sr, "_disk_read", forbidden)
+    monkeypatch.setattr(sr, "_disk_write", forbidden)
+    opener, calls = _counting_opener()
+    assert sr.fetch_layer(around=PAST, opener=opener, disk_cache=False)
+    assert len(calls) == 1
+
+
 def test_a_live_window_is_never_written_to_disk():
     """It changes constantly, so a stored copy would only go stale."""
     opener, _calls = _counting_opener()

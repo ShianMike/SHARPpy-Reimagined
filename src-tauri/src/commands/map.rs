@@ -5,10 +5,19 @@ use crate::dto::contours::ContourLines;
 use crate::dto::map::{
     AvailabilityReport, MapCatalog, PlaceLabels, RadarSiteCatalogPublic, SpcOutlook,
 };
+use crate::dto::radar::RadarTilts;
 use crate::dto::reports::{ReportOptions, StormReports};
 use crate::dto::surface::SurfacePlots;
 use crate::error::BackendError;
 use crate::state::AppState;
+
+#[tauri::command]
+pub async fn get_weather_alerts(
+    state: tauri::State<'_, AppState>,
+    valid_time: String,
+) -> Result<crate::dto::weather_alerts::WeatherAlerts, BackendError> {
+    state.router.weather_alerts(&valid_time).await
+}
 
 /// What the map can draw: the selected model's fields, radar, outlooks.
 #[tauri::command]
@@ -55,13 +64,17 @@ pub async fn get_spc_outlook(
     state.router.spc_outlook(&product, &valid_time).await
 }
 
-/// The newest radar mosaic frame, as an SHRF frame holding a PNG.
+/// The latest or requested recent radar scan, as an SHRF frame holding a PNG.
 #[tauri::command]
 pub async fn get_radar_frame(
     state: tauri::State<'_, AppState>,
     product: Option<String>,
+    valid_time: Option<String>,
 ) -> Result<tauri::ipc::Response, BackendError> {
-    let frame = state.router.radar_frame(product.as_deref()).await?;
+    let frame = state
+        .router
+        .radar_frame(product.as_deref(), valid_time.as_deref())
+        .await?;
     Ok(tauri::ipc::Response::new(frame))
 }
 
@@ -75,12 +88,35 @@ pub async fn get_radar_site_frame(
     site: Option<String>,
     latitude: Option<f64>,
     longitude: Option<f64>,
+    valid_time: Option<String>,
+    tilt: Option<String>,
 ) -> Result<tauri::ipc::Response, BackendError> {
     let frame = state
         .router
-        .radar_site_frame(product.as_deref(), site.as_deref(), latitude, longitude)
+        .radar_site_frame(
+            product.as_deref(),
+            site.as_deref(),
+            latitude,
+            longitude,
+            valid_time.as_deref(),
+            tilt.as_deref(),
+        )
         .await?;
     Ok(tauri::ipc::Response::new(frame))
+}
+
+/// Published elevations for this antenna, product and viewing time.
+#[tauri::command]
+pub async fn get_radar_tilts(
+    state: tauri::State<'_, AppState>,
+    site: String,
+    product: String,
+    valid_time: Option<String>,
+) -> Result<RadarTilts, BackendError> {
+    state
+        .router
+        .radar_tilts(&site, &product, valid_time.as_deref())
+        .await
 }
 
 /// The bundled WSR-88D catalogue backing the single-site picker.

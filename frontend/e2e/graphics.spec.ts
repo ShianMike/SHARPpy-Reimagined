@@ -23,6 +23,7 @@ async function emulateReducedTransparency(page: Page): Promise<void> {
 test("the Low profile draws no backdrop filter on any element", async ({ page, consoleMessages }) => {
   await presetPreferences(page, { graphicsOverride: "low" });
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   expect(await elementsWithBackdropFilter(page)).toEqual([]);
   const glass = await toolbarGlass(page);
@@ -37,6 +38,7 @@ for (const override of ["auto", "high"] as const) {
     await emulateReducedTransparency(page);
     await presetPreferences(page, { graphicsOverride: override });
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     expect(await page.evaluate(() => matchMedia("(prefers-reduced-transparency: reduce)").matches)).toBe(true);
     const glass = await toolbarGlass(page);
@@ -85,6 +87,7 @@ test("the built CSS ships the no-backdrop-filter fallback", async ({ page, conso
 test("reduced motion: zero-duration transitions and a one-frame camera move", async ({ page, consoleMessages }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   // The minifier ships the token as 0s (PROGRESS I15).
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--motion-camera").trim())).toBe(

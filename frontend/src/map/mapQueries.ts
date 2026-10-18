@@ -1,17 +1,15 @@
-// Map data queries (DESIGN-frontend F3). A field frame for one product, run,
-// and hour never changes, so it is cached for the session up to the profile's
-// field budget (oldest unused frames go first); the catalogue and the place
-// names are static; outlooks go stale in ten minutes; the radar mosaic
-// refetches at the service's update interval.
+// Forecast fields are immutable; timed live frames use their own session cache keys.
 
 import { useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useBackendClient } from "../lib/backend/BackendProvider";
+import type { RadarTilt } from "../types/map";
 import type { BackendClient } from "../lib/backend/client";
 import { BASE_QUERY_OPTIONS, mapKeys, QUERY_KEYS } from "../lib/backend/queryOptions";
 import { profileSettings } from "../lib/graphics/profileSettings";
 import { useGraphicsStore } from "../stores/graphicsStore";
-import { useMapStore } from "../stores/mapStore";
+import { panelWeather, useMapStore } from "../stores/mapStore";
 import { useForecastStore } from "../stores/forecastStore";
+import { useAppStore } from "../stores/appStore";
 import { useSoundingStore } from "../stores/soundingStore";
 import { releaseTime } from "../features/sounding/soundingTime";
 import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type MapCatalog, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
@@ -33,7 +31,6 @@ export function useMapCatalog(): UseQueryResult<MapCatalog> {
   });
 }
 
-/** One frame to fetch: a product at a run and hour. */
 export interface FrameRequest {
   model: string;
   product: string;
@@ -98,11 +95,7 @@ export function useFieldFrames(requests: readonly FrameRequest[]): UseQueryResul
   return useQueries({ queries: requests.map((request) => fieldQueryOptions(client, queryClient, request)) });
 }
 
-/**
- * The time to ask for: when a loaded outlook already covers `validTime`, the
- * time it was asked for, so stepping the timeline through one outlook's
- * window fetches nothing new.
- */
+/** Reuse an outlook's request time while it still covers `validTime`. */
 export function coveringTime(
   cached: readonly (readonly [readonly unknown[], SpcOutlook | undefined])[],
   validTime: string,
@@ -128,6 +121,7 @@ export function coveringTime(
 /** The four outlook products in OUTLOOK_KEYS order; `enabled[i]` turns each on. */
 export function useSpcOutlooks(enabled: readonly boolean[], validTime: string | null): UseQueryResult<SpcOutlook>[] {
   const client = useBackendClient();
+  const live = useAppStore((state) => state.activeWorkspace === "live");
   const queryClient = useQueryClient();
   return useQueries({
     queries: OUTLOOK_KEYS.map((key, i) => {
@@ -138,19 +132,31 @@ export function useSpcOutlooks(enabled: readonly boolean[], validTime: string | 
         queryFn: () => client.getSpcOutlook(key, time),
         enabled: enabled[i] === true && time !== "",
         staleTime: OUTLOOK_STALE_MS,
+        gcTime: Number.POSITIVE_INFINITY,
+        refetchInterval: live ? OUTLOOK_STALE_MS : false,
       };
     }),
   });
 }
 
-export function useRadarFrame(product: string | null, enabled: boolean): UseQueryResult<RadarFrame> {
+export function useRadarFrame(product: string | null, enabled: boolean, validTime: string | null = null): UseQueryResult<RadarFrame> {
   const client = useBackendClient();
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.radar(product),
-    queryFn: () => client.getRadarFrame(product),
+    queryKey: mapKeys.radar(product, validTime),
+    queryFn: () => client.getRadarFrame(product, validTime),
+    placeholderData: (previous, query) => {
+      if (validTime === null || query?.queryKey[1] !== (product ?? "default")) return undefined;
+      const target = query.queryKey[2];
+      const age = Date.parse(validTime) - Date.parse(typeof target === "string" ? target : "");
+      const scanAge = Date.parse(validTime) - Date.parse(previous?.validTime ?? "");
+      return age >= 0 && age <= 10 * 60_000 && scanAge >= 0 && scanAge <= 70 * 60_000 ? previous : undefined;
+    },
     enabled,
+    staleTime: validTime === null ? 0 : Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
     refetchInterval: (query) => {
+      if (validTime !== null) return false;
       const seconds = query.state.data?.updateIntervalS ?? 0;
       return seconds > 0 ? seconds * 1000 : RADAR_DEFAULT_REFRESH_MS;
     },
@@ -169,46 +175,53 @@ export function useRadarSites(enabled: boolean): UseQueryResult<RadarSiteCatalog
   });
 }
 
-/**
- * The antenna the single-site scope draws: the user's pinned choice, or the
- * nearest catalogue antenna to the map centre (the legacy controller's auto
- * pick). Null while the catalogue is not loaded; the queries then stay off.
- */
-export function useEffectiveRadarSite(): string | null {
-  const pinned = useMapStore((state) => state.radarSite);
+/** Use the pinned antenna or the nearest to the map centre; wait for the catalogue. */
+export function useEffectiveRadarSite(panel?: number): string | null {
+  const pinned = useMapStore((state) => panelWeather(state, panel).radarSite);
   const camera = useMapStore((state) => state.cameraSnapshot);
   const sites = useRadarSites(true).data?.sites;
   return pinned ?? nearestRadarSite(sites ?? [], camera?.center[1] ?? 0, camera?.center[0] ?? 0);
 }
 
-/**
- * One antenna's own frame, refreshed at the product's cadence like the
- * mosaic. The site is fixed in the key, so a pinned antenna never refetches
- * on pan; the auto choice is resolved by `useEffectiveRadarSite`.
- */
+/** Key the frame by site so panning never refetches a pinned antenna. */
 export function useRadarSiteFrame(
   product: string | null,
   site: string | null,
   enabled: boolean,
+  validTime: string | null = null,
+  tilt: RadarTilt = "0",
 ): UseQueryResult<RadarSiteFrame> {
   const client = useBackendClient();
+  const queryClient = useQueryClient();
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.radarSite(product, site ?? ""),
-    queryFn: () => client.getRadarSiteFrame({ site: site ?? "" }, product),
+    queryKey: mapKeys.radarSite(product, site ?? "", validTime, tilt),
+    queryFn: () => client.getRadarSiteFrame({ site: site ?? "" }, product, validTime, tilt),
+    placeholderData: () => {
+      if (validTime === null || site === null) return undefined;
+      let latest: RadarSiteFrame | undefined;
+      for (const [key, frame] of queryClient.getQueriesData<RadarSiteFrame>({ queryKey: ["radar-site", product ?? "reflectivity", site] })) {
+        if (key.at(-1) !== tilt || frame?.siteId !== site) continue;
+        const target = key[3];
+        const age = Date.parse(validTime) - Date.parse(typeof target === "string" ? target : "");
+        const scanAge = Date.parse(validTime) - Date.parse(frame.validTime ?? "");
+        // Provider lag does not make the preceding minute's request an unrelated scan.
+        if (age >= 0 && age <= 10 * 60_000 && scanAge >= 0 && scanAge <= 70 * 60_000 && (latest === undefined || Date.parse(frame.validTime ?? "") > Date.parse(latest.validTime ?? ""))) latest = frame;
+      }
+      return latest;
+    },
     enabled: enabled && site !== null,
+    staleTime: validTime === null ? 0 : Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
     refetchInterval: (query) => {
+      if (validTime !== null) return false;
       const seconds = query.state.data?.updateIntervalS ?? 0;
       return seconds > 0 ? seconds * 1000 : RADAR_DEFAULT_REFRESH_MS;
     },
   });
 }
 
-/**
- * The GOES frame for a channel and valid time. Time-addressed like the
- * outlooks: the frame's own scan time is within the provider's tolerance of
- * the requested one, and the frame states both.
- */
+/** Keep the requested time and actual GOES scan time distinct. */
 export function useSatelliteFrame(
   channel: SatelliteChannel,
   validTime: string | null,
@@ -221,6 +234,7 @@ export function useSatelliteFrame(
     queryFn: () => client.getSatelliteFrame(validTime ?? "", channel),
     enabled: enabled && validTime !== null,
     staleTime: OUTLOOK_STALE_MS,
+    gcTime: Number.POSITIVE_INFINITY,
   });
 }
 
@@ -241,6 +255,7 @@ export function useStormReports(
     queryFn: () => client.getStormReports(validTime ?? "", windowS, hazardFilter),
     enabled: enabled && validTime !== null,
     staleTime: OUTLOOK_STALE_MS,
+    gcTime: Number.POSITIVE_INFINITY,
   });
 }
 

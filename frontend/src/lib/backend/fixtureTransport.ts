@@ -30,6 +30,7 @@ import modelMapCatalogs from "@contracts/public/map/catalog.models.json";
 // no-inline: a small file would otherwise become a data: URL, which the CSP's connect-src refuses.
 import fieldShrfUrl from "@contracts/public/map/field.shrf?url&no-inline";
 import outlookCat from "@contracts/public/map/outlook.cat.json";
+import weatherAlerts from "@contracts/public/map/alerts.json";
 import outlookTorn from "@contracts/public/map/outlook.torn.json";
 import outlookWind from "@contracts/public/map/outlook.wind.json";
 import placeLabels from "@contracts/public/map/places.json";
@@ -37,6 +38,7 @@ import radarShrfUrl from "@contracts/public/map/radar.shrf?url&no-inline";
 import { encodeShrf, parseShrf } from "../contracts/frames";
 import type { CommandName, Transport } from "./transport";
 import radarSites from "@contracts/public/map/radar-sites.json";
+import radarTilts from "@contracts/public/map/radar-tilts.json";
 import { contoursFor, hoursLater, reportsFor, satelliteFrameFor, siteFrameFor, surfacePlotsFor, thresholdFor } from "./fixtureFrames";
 import reportOptionsFixture from "@contracts/public/map/reports-options.json";
 import thresholdMetricsFixture from "@contracts/public/soundings/threshold-metrics.json";
@@ -259,6 +261,7 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
     },
     get_map_catalog: (args) => Promise.resolve(copy((modelMapCatalogs as Readonly<Record<string, unknown>>)[String(args?.model)] ?? mapCatalog)),
     get_weather_field: (args) => (scenario === "field-error" ? rejectWith(fieldUnavailable) : fieldFor(args)),
+    get_weather_alerts: (args) => scenario === "overlay-error" ? rejectWith(overlayFailed) : Promise.resolve({ ...copy(weatherAlerts) as Record<string, unknown>, validTime: args?.validTime }),
     get_spc_outlook: (args) =>
       scenario === "overlay-error" ? rejectWith(overlayFailed) : Promise.resolve(outlookFor(args)),
     get_radar_frame: () =>
@@ -270,6 +273,7 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
         ? rejectWith(overlayFailed)
         : siteFrameFor(args),
     get_radar_sites: () => Promise.resolve(copy(radarSites)),
+    get_radar_tilts: (args) => Promise.resolve({ ...copy(radarTilts) as object, siteId: args?.site, product: args?.product }),
     get_satellite_frame: (args) =>
       scenario === "overlay-error" ? rejectWith(overlayFailed) : satelliteFrameFor(args),
     get_storm_reports: (args) =>

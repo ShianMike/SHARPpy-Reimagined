@@ -1,7 +1,112 @@
 {
   "product": "reflectivity",
   "site_id": "KTLX",
-  "label": "Base reflectivity",
+  "elevation_angle": 0.5,
+  "legend_png_base64": null,
+  "palette": {
+    "stops": [
+      [
+        0.0,
+        "#323232"
+      ],
+      [
+        5.0,
+        "#0e0e5a"
+      ],
+      [
+        10.0,
+        "#034f8c"
+      ],
+      [
+        15.0,
+        "#07a2b6"
+      ],
+      [
+        20.0,
+        "#11e51f"
+      ],
+      [
+        25.0,
+        "#0ca914"
+      ],
+      [
+        34.5,
+        "#066808"
+      ],
+      [
+        35.0,
+        "#ffff00"
+      ],
+      [
+        40.0,
+        "#ffc200"
+      ],
+      [
+        45.0,
+        "#ff8c00"
+      ],
+      [
+        50.0,
+        "#dd0000"
+      ],
+      [
+        57.5,
+        "#6b0000"
+      ],
+      [
+        62.5,
+        "#ffa3ff"
+      ],
+      [
+        67.5,
+        "#ee1df4"
+      ],
+      [
+        72.5,
+        "#7500eb"
+      ],
+      [
+        77.5,
+        "#00ffdb"
+      ],
+      [
+        82.5,
+        "#004c4a"
+      ],
+      [
+        95.0,
+        "#000000"
+      ]
+    ],
+    "units": "dBZ",
+    "display": "fixed",
+    "stepped": false,
+    "floor": null,
+    "ceiling": null,
+    "ticks": [
+      0.0,
+      5.0,
+      10.0,
+      15.0,
+      20.0,
+      25.0,
+      30.0,
+      35.0,
+      40.0,
+      45.0,
+      50.0,
+      55.0,
+      60.0,
+      65.0,
+      70.0,
+      75.0,
+      80.0,
+      85.0,
+      90.0,
+      95.0
+    ]
+  },
+  "label": "Base Reflectivity",
   "units": "dBZ",
   "bounds": {
     "west": -102.278,
@@ -10,10 +115,10 @@
     "north": 40.333
   },
   "retrieved_at": "2026-10-04T18:30:00Z",
-  "valid_time": null,
+  "valid_time": "2026-10-04T18:30:00Z",
   "update_interval_s": 150.0,
-  "attribution": "NOAA/NWS NEXRAD via NCEP GeoServer",
-  "source_url": "https://opengeo.ncep.noaa.gov/geoserver/ktlx/ows?service=WMS&version=1.3.0&request=GetMap&layers=ktlx_sr_bref&styles=&crs=CRS%3A84&bbox=-102.278%2C30.3336%2C-92.2786%2C40.333&width=2048&height=1024&format=image%2Fpng&transparent=TRUE",
+  "attribution": "NOAA/NEXRAD Level II \u00b7 NSF Unidata",
+  "source_url": "https://unidata-nexrad-level2.s3.amazonaws.com/2026/10/04/KTLX/KTLX20261004_183000_V06",
   "byte_length": 479,
   "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAIAAAABACAYAAADS1n9/AAABpklEQVR4AWIYBaNgNARGwWgIjILREBgFoyEwCkZDYBSMhsAoGA2BUTAaAqNgNARGwWgIjILREBgFoyEwCkZDYBSMhsAoGA2BUTAaAqNgNARGwWgIjILREBgFoyEwCkZDYBSMhsAoGA2BUTAaAqNgNARGwWgIDDXAONQcTIl7mf4y/cel/x/zvxEVFrBwYIIxhjuNL/JBgJA8SM1wxCMiARAbucSqG04JYdgnAFIjlVT1Qz0xDOt6D1dk/p7xDx5vrBnY88BIaRNg9z08eIYfAznyQQCdDxIbSXhEJQBckY1LfCQkhBGVAEZChJIKRhPACAcjKgHgavDhEh8JaWNEJQBQhKJHNjofpGYk4WHdDQRFJK6uIEgOFxgpXUCQ/4d9CUBqZJKqHhSIQxkP+wQAihxiI5VYdSAzhwseEQkAFFmEIpeQPMiMUTwaAqNgNARGwWgIjILREBgFoyEwCkZDYBSMhsAoGA2BUTAaAqNgNARGwWgIjILREBgFoyEwCkZDYBSMhsAoGA2BUTAaAqNgNARGwWgIjILREBgFoyEwCkZDALDBFwIAySEzHHHWxxkAAAAASUVORK5CYII="
 }

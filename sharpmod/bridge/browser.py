@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from sharpmod.bridge import params as p
+from sharpmod.bridge import live_cache
 from sharpmod.bridge.errors import BridgeError, error_frame, internal_error
 from sharpmod.bridge.handlers import HANDLERS, health, hello
 from sharpmod.bridge.protocol import (
@@ -90,7 +91,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
             elif command in COMMANDS or command == "open_sounding":
                 method, params = bridge_request(command, request.params)
                 check_params(Request(request.id, method, params))
-                result = public_result(command, HANDLERS[method](params))
+                result = public_result(command, live_cache.call(method, params, HANDLERS[method]))
             else:
                 raise BridgeError(
                     "METHOD_NOT_FOUND",

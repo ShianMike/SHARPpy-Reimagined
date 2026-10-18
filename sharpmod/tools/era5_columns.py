@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from sharpmod import backends as _backends
 from sharpmod.models.model_surface import merge_surface_level
+from sharpmod.models.wind_reference import rotate_winds, wind_rotation
 from sharpmod.upstream.upstream_warnings import xarray_new_combine_defaults
 import numpy as np
 import os
@@ -143,6 +144,36 @@ def _build_columns(ds, index_tuple, latitude=None):
     iy, ix = index_tuple if index_is_regular else index_tuple
     get = _api._column(ds, iy, ix, index_is_regular)
 
+    def winds(u_names, v_names):
+        u, v = get(u_names), get(v_names)
+        rotations = []
+        for names in (u_names, v_names):
+            name = _api._first_present(ds, names)
+            attrs = {} if name is None else ds[name].attrs
+            try:
+                rotations.append(
+                    wind_rotation(lambda key: attrs.get("GRIB_" + key))
+                    if "GRIB_gridType" in attrs else None
+                )
+            except (TypeError, ValueError, ZeroDivisionError) as exc:
+                raise _api.RetrievalError(str(exc)) from exc
+        if u is not None and v is not None and rotations[0] != rotations[1]:
+            raise _api.RetrievalError("u/v GRIB wind-reference metadata disagree")
+        rotation = rotations[0] or rotations[1]
+        if rotation is None:
+            return u, v
+        if u is None or v is None:
+            return None, None
+        lon_name, _lons = _api._coord_values(ds, _api._LON_COORDS)
+        if lon_name is None:
+            raise _api.RetrievalError("grid-relative winds require longitude")
+        indexers, _dims = _api._horizontal_indexers(ds, index_tuple)
+        coordinate = ds[lon_name]
+        longitude = float(coordinate.isel({
+            dim: value for dim, value in indexers.items() if dim in coordinate.dims
+        }).values)
+        return rotate_winds(u, v, longitude, rotation, missing=_api.MISSING)
+
     surface_pressure = _api._first_surface_value(get(_api._VAR_SURFACE_PRESSURE))
     if surface_pressure is not None and surface_pressure > 2000.0:
         surface_pressure /= 100.0
@@ -174,13 +205,14 @@ def _build_columns(ds, index_tuple, latitude=None):
                 np.asarray([surface_temperature]),
                 np.asarray([surface_rh]),
             )[0])
+    surface_u, surface_v = winds(_api._VAR_10M_U, _api._VAR_10M_V)
     surface = {
         "pres": surface_pressure,
         "hght": surface_height,
         "tmpc": surface_temperature,
         "dwpc": surface_dewpoint,
-        "u": _api._first_surface_value(get(_api._VAR_10M_U)),
-        "v": _api._first_surface_value(get(_api._VAR_10M_V)),
+        "u": _api._first_surface_value(surface_u),
+        "v": _api._first_surface_value(surface_v),
     }
 
     t_raw = get(_api._VAR_TEMP)
@@ -204,8 +236,7 @@ def _build_columns(ds, index_tuple, latitude=None):
         if q_raw is not None:
             dwpc = _api.dewpoint_from_specific_humidity(q_raw, levels)
 
-    u_raw = get(_api._VAR_U)
-    v_raw = get(_api._VAR_V)
+    u_raw, v_raw = winds(_api._VAR_U, _api._VAR_V)
     if u_raw is not None and v_raw is not None:
         wdir, wspd = _api.uv_to_dir_spd(u_raw, v_raw)
     else:

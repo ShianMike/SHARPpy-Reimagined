@@ -15,8 +15,10 @@ import type {
   RadarProduct,
   RadarSite,
   RadarSiteCatalog,
+  RadarTilts,
   SpcOutlook,
 } from "../../types/map";
+import { RADAR_TILTABLE_PRODUCTS, RADAR_TILTS } from "../../types/map";
 import {
   ContractError,
   at,
@@ -47,7 +49,7 @@ function stop(value: unknown, path: string): readonly [number, string] {
   return [expectFiniteNumber(pair[0], at(path, 0)), colour(pair[1], at(path, 1))];
 }
 
-function parsePalette(value: unknown, path: string): Palette {
+export function parsePalette(value: unknown, path: string): Palette {
   const obj = expectObject(value, path);
   expectExactKeys(obj, path, ["stops", "units", "display", "stepped", "floor", "ceiling", "ticks"]);
   const stops = expectArray(obj.stops, at(path, "stops"), stop);
@@ -236,4 +238,18 @@ export function parseRadarSiteCatalog(value: unknown, path = ""): RadarSiteCatal
   const obj = expectObject(value, path);
   expectExactKeys(obj, path, ["sites"]);
   return { sites: expectArray(obj.sites, at(path, "sites"), parseSite) };
+}
+
+export function parseRadarTilts(value: unknown, path = "", site?: string, product?: string): RadarTilts {
+  const obj = expectObject(value, path);
+  expectExactKeys(obj, path, ["siteId", "product", "checkedAt", "tilts"]);
+  const siteId = expectString(obj.siteId, at(path, "siteId"), { minLength: 4, maxLength: 4 });
+  if (!/^[A-Z0-9]{4}$/.test(siteId) || (site !== undefined && siteId !== site.toUpperCase()) || (product !== undefined && obj.product !== product)) throw new ContractError(path, "radar availability does not match the requested site or product");
+  const tilts = expectArray(obj.tilts, at(path, "tilts"), (value, path) => {
+    const cut = expectObject(value, path);
+    expectExactKeys(cut, path, ["tilt", "status"]);
+    return { tilt: expectOneOf(cut.tilt, at(path, "tilt"), RADAR_TILTS.map((item) => item.value)), status: expectOneOf(cut.status, at(path, "status"), ["available", "unavailable", "unknown"] as const) };
+  });
+  if (tilts.length !== RADAR_TILTS.length || new Set(tilts.map((item) => item.tilt)).size !== tilts.length) throw new ContractError(at(path, "tilts"), "expected each visible radar cut once");
+  return { siteId, product: expectOneOf(obj.product, at(path, "product"), RADAR_TILTABLE_PRODUCTS), checkedAt: expectTimestamp(obj.checkedAt, at(path, "checkedAt")), tilts };
 }

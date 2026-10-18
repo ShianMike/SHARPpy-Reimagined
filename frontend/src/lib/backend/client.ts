@@ -16,13 +16,15 @@ import {
 } from "../contracts/soundings";
 import { parseContourLines } from "../contracts/contours";
 import { parseFieldFrame, parseRadarFrame, parseRadarSiteFrame, parseSatelliteFrame } from "../contracts/frames";
-import { parseAvailabilityReport, parseMapCatalog, parsePlaceLabels, parseRadarSiteCatalog, parseSpcOutlook } from "../contracts/map";
+import { parseAvailabilityReport, parseMapCatalog, parsePlaceLabels, parseRadarSiteCatalog, parseRadarTilts, parseSpcOutlook } from "../contracts/map";
 import { parseReportOptions, parseStormReports } from "../contracts/reports";
 import { parseSurfacePlots } from "../contracts/surface";
+import { parseWeatherAlerts } from "../contracts/weatherAlerts";
+import type { WeatherAlerts } from "../../types/weatherAlerts";
 import { parseStationCatalog } from "../contracts/stations";
 import { parseThresholdEvaluation, thresholdArgs } from "../contracts/thresholds";
 import { parseThresholdCsv, parseThresholdMetrics } from "../contracts/thresholdCatalog";
-import type { AvailabilityReport, ContourLines, FieldFrame, MapCatalog, OutlookKey, PlaceLabels, RadarFrame, RadarSiteCatalog, RadarSiteFrame, ReportOptions, SatelliteFrame, SatelliteChannel, SpcOutlook, StormReports } from "../../types/map";
+import type { AvailabilityReport, ContourLines, FieldFrame, MapCatalog, OutlookKey, PlaceLabels, RadarFrame, RadarSiteCatalog, RadarSiteFrame, RadarTilts, ReportOptions, SatelliteFrame, SatelliteChannel, SpcOutlook, StormReports } from "../../types/map";
 import type { SurfacePlots } from "../../types/surface";
 import type {
   ThresholdCsv,
@@ -157,9 +159,13 @@ export class BackendClient {
     return this.request("get_spc_outlook", parseSpcOutlook, { product, validTime });
   }
 
+  getWeatherAlerts(validTime: string): Promise<WeatherAlerts> {
+    return this.request("get_weather_alerts", parseWeatherAlerts, { validTime });
+  }
+
   /** The newest radar mosaic frame; `product` null takes the backend's default. */
-  getRadarFrame(product: string | null): Promise<RadarFrame> {
-    return this.request("get_radar_frame", parseRadarFrame, product === null ? {} : { product });
+  getRadarFrame(product: string | null, validTime: string | null = null): Promise<RadarFrame> {
+    return this.request("get_radar_frame", parseRadarFrame, { ...(product === null ? {} : { product }), ...(validTime === null ? {} : { validTime }) });
   }
 
   /**
@@ -170,8 +176,11 @@ export class BackendClient {
   getRadarSiteFrame(
     where: { site: string } | { latitude: number; longitude: number },
     product: string | null = null,
+    validTime: string | null = null,
+    tilt = "0",
   ): Promise<RadarSiteFrame> {
-    const args: Record<string, unknown> = {};
+    const args: Record<string, unknown> = { tilt };
+    if (validTime !== null) args.validTime = validTime;
     if (product !== null) {
       args.product = product;
     }
@@ -184,7 +193,9 @@ export class BackendClient {
     return this.request("get_radar_site_frame", parseRadarSiteFrame, args);
   }
 
-  /** The bundled WSR-88D catalogue backing the single-site picker. */
+  getRadarTilts(site: string, product: string, validTime: string | null = null): Promise<RadarTilts> {
+    return this.request("get_radar_tilts", (value) => parseRadarTilts(value, "", site, product), { site, product, ...(validTime === null ? {} : { validTime }) });
+  }
   getRadarSites(): Promise<RadarSiteCatalog> {
     return this.request("get_radar_sites", parseRadarSiteCatalog);
   }

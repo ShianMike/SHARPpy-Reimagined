@@ -1,0 +1,7 @@
+.provider { flex: 1; min-height: 0; display: flex; justify-content: center; border-radius: var(--radius-pill); }
+.provider:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.ramp { position: relative; width: var(--parameter-ramp-w); height: 100%; overflow: hidden; border-radius: var(--radius-pill); background: var(--control-fill); container-type: size; }
+/* shortcut: NOAA's current 500 x 30 legends put their ramp in the top third; use structured legends if that format changes. */
+.ramp img { position: absolute; top: 100%; left: 0; width: 100cqh; max-width: none; height: calc(3 * var(--parameter-ramp-w)); transform: rotate(-90deg); transform-origin: top left; }
+.provider > .key { display: flex; flex-direction: column; gap: var(--space-2); width: min(var(--radar-legend-w), calc(100vw - var(--dock-offset) - 3 * var(--chrome-inset))); max-width: none; white-space: normal; }
+.key img { width: 100%; height: auto; }

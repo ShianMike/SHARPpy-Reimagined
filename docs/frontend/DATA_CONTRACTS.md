@@ -758,6 +758,14 @@ interface SatelliteFrameHeader {       // the body: the rendered GOES PNG
 - **Quantization.** The bridge quantizes the reprojected field linearly between
   its finite minimum and maximum (65,534 steps), so a cell is within half a
   step of sharpmod's float value; a 2048 by 1024 frame is 4 MiB.
+- **Native radar values.** Single-site numeric radar PNGs are non-interlaced,
+  8-bit indexed images. The `sharppy-radar` PNG text entry contains a JSON object
+  with `values` (256 finite numbers or nulls in the frame's units), `folded`
+  (code 1 or null), and `lowerBounds` (echo-top codes that denote minimum heights).
+  Codes 0 and 1 have null values. Live Tracking reads these original indices
+  using the frame's bounds, without reversing colors or sending cursor requests.
+  Samples decode on hover and share the existing bounded PNG cache. Image-only
+  products without this calibration do not expose numeric readings.
 - **Parsing** (`frontend/src/lib/contracts/frames.ts`). The header must have
   exactly its keys; the field body must be exactly `width * height * 2`
   bytes and becomes a `Uint16Array` over the response without a copy; the

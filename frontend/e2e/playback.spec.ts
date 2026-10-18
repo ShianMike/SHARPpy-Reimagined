@@ -7,6 +7,7 @@ import { expect, test } from "./support/test";
 test.describe("forecast playback", () => {
   for (const panels of [1, 2, 4]) test(`playback keeps ${String(panels)} panels loaded while advancing, and pauses`, async ({ page, consoleMessages }) => {
     await page.goto("/");
+    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "model-field");
     if (panels > 1) {

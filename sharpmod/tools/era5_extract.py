@@ -24,8 +24,8 @@ Behaviour (Requirement 8):
   and return an error that names the out-of-range parameter and its permitted
   range **without writing any output file** (Requirement 8.5); a retrieval
   failure likewise leaves no partial file (Requirement 8.6).
-* Write to a temporary file and **atomically rename** on success, so a partial
-  or corrupt output is never left behind.
+* Stage and validate the NPZ/JSON pair before publication, restoring previous
+  output on handled failure. Two-file publication is not crash-atomic.
 * Record the requested source lat/lon/time and the selected grid-point lat/lon
   and analysis time in a ``.json`` metadata sidecar (Requirement 8.7).
 
@@ -37,8 +37,10 @@ functions that need them; importing this module never requires them.
 import json
 import importlib
 import os
+import shutil
 import sys
 import tempfile
+import uuid
 from datetime import datetime, timezone
 
 import numpy as np
@@ -46,7 +48,7 @@ import numpy as np
 from sharpmod import backends as _backends
 from sharpmod.export_paths import export_file_path
 from sharpmod.models.model_surface import SURFACE_CONTRACT_VERSION, merge_surface_level
-from sharpmod.io.portable_sounding import fatal_issues
+from sharpmod.io.portable_sounding import fatal_issues, validate_portable_sounding_pair
 from sharpmod.upstream.upstream_warnings import xarray_new_combine_defaults
 
 __all__ = [
@@ -767,6 +769,59 @@ def _quiet_remove(path):
         pass
 
 
+def _atomic_write_sounding_pair(out_path, arrays, metadata, *, cancelled=None):
+    """Publish a validated pair, restoring previous bytes on handled failure."""
+    out_path = os.path.abspath(out_path)
+    json_path = os.path.splitext(out_path)[0] + ".json"
+    out_dir = os.path.dirname(out_path)
+    os.makedirs(out_dir, exist_ok=True)
+    staging = tempfile.mkdtemp(prefix=".sharpmod-output-", dir=out_dir)
+    staged_npz = os.path.join(staging, "new.npz")
+    staged_json = os.path.join(staging, "new.json")
+    backups = {}
+    published = []
+    cleanup = True
+    try:
+        generation = uuid.uuid4().hex
+        _atomic_write_npz(staged_npz, {**arrays, "pair_generation": generation})
+        _atomic_write_json(staged_json, {**metadata, "pair_generation": generation})
+        validate_portable_sounding_pair(staged_npz)
+        for target, name in ((out_path, "previous.npz"),
+                             (json_path, "previous.json")):
+            if os.path.exists(target):
+                backup = os.path.join(staging, name)
+                shutil.copy2(target, backup)
+                backups[target] = backup
+
+        # shortcut: two renames are not crash-atomic; use generations for atomic visibility.
+        for source, target in ((staged_npz, out_path), (staged_json, json_path)):
+            _check_cancelled(cancelled)
+            os.replace(source, target)
+            published.append(target)
+        _check_cancelled(cancelled)
+    except BaseException as failure:
+        cleanup = False
+        rollback_errors = []
+        for target in reversed(published):
+            try:
+                if target in backups:
+                    os.replace(backups[target], target)
+                else:
+                    os.remove(target)
+            except OSError as exc:
+                rollback_errors.append(exc)
+        if rollback_errors:
+            raise OSError(
+                "Could not restore the sounding output; recovery files "
+                f"retained in {staging}: {rollback_errors}"
+            ) from failure
+        cleanup = True
+        raise
+    finally:
+        if cleanup:
+            shutil.rmtree(staging, ignore_errors=True)
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -907,24 +962,8 @@ def extract(lat, lon, valid_time, out_path, dataset=None, loc="ERA5pt",
             "_surface_vorticity_source", "unknown"
         )
 
-    # Write the .npz first, then the sidecar; both are atomic renames so a
-    # failure never leaves a partial primary output (Requirement 8.6).
     _emit_progress(progress_callback, "writing")
-    _atomic_write_npz(out_path, arrays)
-    json_path = os.path.splitext(out_path)[0] + ".json"
-    try:
-        _atomic_write_json(json_path, meta)
-    except BaseException:
-        # Roll back the primary output so no orphaned/partial pair remains.
-        _quiet_remove(out_path)
-        raise
-
-    try:
-        _check_cancelled(cancelled)
-    except ExtractionCancelled:
-        _quiet_remove(out_path)
-        _quiet_remove(json_path)
-        raise
+    _atomic_write_sounding_pair(out_path, arrays, meta, cancelled=cancelled)
     _emit_progress(progress_callback, "complete")
     return out_path
 

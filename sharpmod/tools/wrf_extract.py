@@ -54,11 +54,9 @@ from sharpmod.tools.era5_extract import (
     ParameterRangeError,
     RetrievalError,
     _as_datetime,
-    _atomic_write_json,
-    _atomic_write_npz,
+    _atomic_write_sounding_pair,
     _check_cancelled,
     _emit_progress,
-    _quiet_remove,
     great_circle_distance_km,
     select_nearest_grid_point,
     uv_to_dir_spd,
@@ -500,19 +498,7 @@ def extract(wrfout_path, lat, lon, out_path, valid_time=None,
     }
 
     _emit_progress(progress_callback, "writing")
-    _atomic_write_npz(out_path, arrays)
-    json_path = os.path.splitext(out_path)[0] + ".json"
-    try:
-        _atomic_write_json(json_path, meta)
-    except BaseException:
-        _quiet_remove(out_path)
-        raise
-    try:
-        _check_cancelled(cancelled)
-    except ExtractionCancelled:
-        _quiet_remove(out_path)
-        _quiet_remove(json_path)
-        raise
+    _atomic_write_sounding_pair(out_path, arrays, meta, cancelled=cancelled)
     _emit_progress(progress_callback, "complete")
     return out_path
 

@@ -1,11 +1,50 @@
 {
   "usage": {
     "caches": [
-      { "key": "models", "bytes": 33554432, "files": 2, "clearableBytes": 0 },
-      { "key": "maps", "bytes": 0, "files": 0, "clearableBytes": 0 },
-      { "key": "outlooks", "bytes": 0, "files": 0, "clearableBytes": 0 }
+      {
+        "key": "models",
+        "bytes": 33554432,
+        "files": 2,
+        "clearableBytes": 0
+      },
+      {
+        "key": "maps",
+        "bytes": 0,
+        "files": 0,
+        "clearableBytes": 0
+      },
+      {
+        "key": "outlooks",
+        "bytes": 0,
+        "files": 0,
+        "clearableBytes": 0
+      },
+      {
+        "key": "radar",
+        "bytes": 0,
+        "files": 0,
+        "clearableBytes": 0
+      },
+      {
+        "key": "satellite",
+        "bytes": 0,
+        "files": 0,
+        "clearableBytes": 0
+      },
+      {
+        "key": "observations",
+        "bytes": 0,
+        "files": 0,
+        "clearableBytes": 0
+      },
+      {
+        "key": "alerts",
+        "bytes": 0,
+        "files": 0,
+        "clearableBytes": 0
+      }
     ]
   },
-  "freedBytes": 117440512,
+  "freedBytes": 117444608,
   "failedFiles": 0
 }

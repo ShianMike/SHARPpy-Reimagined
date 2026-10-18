@@ -14,6 +14,7 @@ from sharpmod.providers import openmeteo
 from sharpmod.providers import rrfs_nomads
 from sharpmod.models.model_fields import NOAA_SURFACE_FIELDS
 from sharpmod.models.model_sources import nomads_supported
+from sharpmod.models.wind_reference import GRIB_WIND_KEYS
 from sharpmod.tools.era5_extract import RetrievalError
 from sharpmod.tools.era5_extract import _LAT_COORDS
 from sharpmod.tools.era5_extract import _LEVEL_COORDS
@@ -173,7 +174,8 @@ class _LocalGribDataset:
                 # later opens while the model-hour cache owns the directory.
                 with xarray_new_combine_defaults():
                     sources = tuple(cfgrib.open_datasets(
-                        os.fspath(self.path)
+                        os.fspath(self.path),
+                        backend_kwargs={"read_keys": list(GRIB_WIND_KEYS)},
                     ))
                 point_field_names = {
                     *_VAR_SURFACE_PRESSURE,

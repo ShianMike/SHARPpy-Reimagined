@@ -3,7 +3,7 @@
 // tokens. MapLibre types only; nothing here loads maplibre-gl.
 
 import type { LayerSpecification, LineLayerSpecification, Map as MapLibreMap } from "maplibre-gl";
-import { documentTokenReader, type CanvasTokens, type Rgba } from "../canvasTokens";
+import { documentTokenReader, parseLength, type CanvasTokens, type Rgba } from "../canvasTokens";
 import type { LayerState } from "../layers/registry";
 
 /** Drawn bottom to top. */
@@ -21,7 +21,7 @@ export const BASEMAP_LINE_LAYER_IDS: readonly string[] = BASEMAP_FAMILIES.map(ba
 
 const nativeStyles = new WeakMap<MapLibreMap, { layers: LayerSpecification[]; opacity: number | undefined }>();
 
-/** Political borders stay above weather; roads and inland water keep their native order. */
+/** Land edges and political borders stay above weather; roads and inland water keep their native order. */
 export function prepareBasemap(map: MapLibreMap): string | undefined {
   const dark = document.documentElement.dataset.theme === "dark";
   const read = documentTokenReader();
@@ -60,12 +60,28 @@ export function prepareBasemap(map: MapLibreMap): string | undefined {
   const outlines = map.getStyle().layers.filter((layer): layer is LineLayerSpecification =>
     layer.type === "line" && !layer.id.endsWith("-halo") && layer["source-layer"] === "boundary");
   let beforeId: string | undefined;
+  if (water?.type === "fill") {
+    // shortcut: provider polygons can expose split edges; use a dedicated coastline source if seams appear.
+    const shoreline: LineLayerSpecification = { ...water, id: "geography-shoreline", type: "line",
+      filter: ["all", water.filter ?? true, ["==", ["get", "class"], "ocean"]] as NonNullable<LineLayerSpecification["filter"]>,
+      layout: { ...water.layout, "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": read("--map-coastline").trim(), "line-width": parseLength(read("--map-coastline-width"), "--map-coastline-width") },
+    };
+    if (map.getLayer(shoreline.id) === undefined) map.addLayer(shoreline);
+    map.moveLayer(shoreline.id);
+    beforeId = shoreline.id;
+  }
   for (const layer of outlines) {
-    const halo: LineLayerSpecification = { ...layer, id: `geography-${layer.id}-halo`, paint: { ...layer.paint,
+    const halo: LineLayerSpecification = { ...layer, id: `geography-${layer.id}-halo`,
+      filter: ["all", layer.filter ?? true, ["!=", ["get", "maritime"], 1]] as NonNullable<LineLayerSpecification["filter"]>,
+      paint: { ...layer.paint,
       "line-color": read("--basemap-border-halo").trim(),
       "line-width": scaledPaint(layer.paint?.["line-width"] ?? 1, 1.7) as NonNullable<NonNullable<LineLayerSpecification["paint"]>["line-width"]>,
     } };
-    if (map.getLayer(halo.id) === undefined) map.addLayer(halo);
+    if (map.getLayer(halo.id) === undefined) {
+      map.setFilter(layer.id, halo.filter);
+      map.addLayer(halo);
+    }
     map.moveLayer(halo.id);
     beforeId ??= halo.id;
     map.moveLayer(layer.id);

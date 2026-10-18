@@ -7,10 +7,60 @@ use serde::{Deserialize, Serialize};
 use crate::dto::checks::{check_lat_lon, check_text};
 use crate::dto::models::Bounds;
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RadarTiltStatus {
+    pub tilt: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    rename_all(serialize = "camelCase", deserialize = "snake_case"),
+    deny_unknown_fields
+)]
+pub struct RadarTilts {
+    pub site_id: String,
+    pub product: String,
+    pub checked_at: String,
+    pub tilts: Vec<RadarTiltStatus>,
+}
+
+impl RadarTilts {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.site_id.len() != 4
+            || !self.site_id.bytes().all(|c| c.is_ascii_alphanumeric())
+            || !matches!(
+                self.product.as_str(),
+                "reflectivity" | "velocity" | "correlation-coefficient"
+            )
+        {
+            return Err("invalid radar site or product".into());
+        }
+        crate::dto::weather_alerts::alert_time(&self.checked_at)?;
+        let mut seen = std::collections::HashSet::new();
+        for cut in &self.tilts {
+            if !matches!(cut.tilt.as_str(), "z" | "0" | "a" | "1" | "b" | "2" | "3")
+                || !matches!(cut.status.as_str(), "available" | "unavailable" | "unknown")
+                || !seen.insert(&cut.tilt)
+            {
+                return Err("invalid or duplicate radar cut status".into());
+            }
+        }
+        if seen.len() != 7 {
+            return Err("radar availability must check all seven visible cuts".into());
+        }
+        Ok(())
+    }
+}
+
 /// `radar.site` as the bridge sends it: the mosaic's shape, plus the serving site.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RadarSiteResult {
+    pub elevation_angle: Option<f64>,
+    pub palette: Option<crate::dto::map::Palette>,
+    pub legend_png_base64: Option<String>,
     pub product: String,
     pub site_id: String,
     pub label: String,
@@ -30,6 +80,9 @@ pub struct RadarSiteResult {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RadarSiteFrameHeader {
+    pub elevation_angle: Option<f64>,
+    pub palette: Option<crate::dto::map::Palette>,
+    pub legend_png_base64: Option<String>,
     pub kind: &'static str,
     pub product: String,
     pub site_id: String,
@@ -76,6 +129,16 @@ pub struct RadarSiteCatalogPublic {
 
 impl RadarSiteResult {
     pub fn validate(&self) -> Result<(), String> {
+        if self
+            .elevation_angle
+            .is_some_and(|angle| !angle.is_finite() || !(-1.0..=90.0).contains(&angle))
+        {
+            return Err("radar elevation is out of range".into());
+        }
+        if let Some(palette) = &self.palette {
+            palette.validate()?;
+        }
+        crate::dto::checks::check_radar_legend(self.legend_png_base64.as_ref())?;
         check_text("product", &self.product, 1, 40)?;
         check_text("siteId", &self.site_id, 1, 16)?;
         check_text("label", &self.label, 1, 120)?;
@@ -87,6 +150,9 @@ impl RadarSiteResult {
 
     pub fn header(&self) -> RadarSiteFrameHeader {
         RadarSiteFrameHeader {
+            elevation_angle: self.elevation_angle,
+            palette: self.palette.clone(),
+            legend_png_base64: self.legend_png_base64.clone(),
             kind: "radar-site",
             product: self.product.clone(),
             site_id: self.site_id.clone(),

@@ -18,7 +18,8 @@ import {
   expectTimestamp,
   type JsonObject,
 } from "./guards";
-import { parseBounds } from "./soundings";
+import { parseBounds, parsePng } from "./soundings";
+import { parsePalette } from "./map";
 
 const MAGIC = [0x53, 0x48, 0x52, 0x46];
 const FIXED = 12;
@@ -143,17 +144,28 @@ const RADAR_KEYS = [
 
 const RADAR_SITE_KEYS = [...RADAR_KEYS, "siteId"] as const;
 
+function radarLegend(value: unknown, path: string): string | null {
+  if (value === undefined || value === null) return null;
+  const text = expectString(value, path, { maxLength: 175000 });
+  let decoded: string;
+  try { decoded = atob(text); }
+  catch { throw new ContractError(path, "expected a base64 PNG legend"); }
+  parsePng(Uint8Array.from(decoded, (character) => character.charCodeAt(0)), path);
+  return `data:image/png;base64,${text}`;
+}
+
 /** get_radar_frame: the header and the PNG as a Blob. */
 export function parseRadarFrame(value: unknown, path = ""): RadarFrame {
   const { header: h, body } = parseShrf(value, path);
   const hp = at(path, "header");
-  expectExactKeys(h, hp, RADAR_KEYS);
+  expectExactKeys(h, hp, RADAR_KEYS, ["legendPngBase64"]);
   expectOneOf(h.kind, at(hp, "kind"), ["radar"]);
   if (body.length < PNG_SIGNATURE.length || PNG_SIGNATURE.some((b, i) => body[i] !== b)) {
     throw new ContractError(at(path, "body"), "expected a PNG image");
   }
   return {
     product: expectString(h.product, at(hp, "product"), { minLength: 1, maxLength: 40 }),
+    legendPng: radarLegend(h.legendPngBase64, at(hp, "legendPngBase64")),
     label: expectString(h.label, at(hp, "label"), { minLength: 1, maxLength: 120 }),
     units: expectString(h.units, at(hp, "units"), { maxLength: 40 }),
     bounds: orderedBounds(h.bounds, at(hp, "bounds")),
@@ -170,7 +182,7 @@ export function parseRadarFrame(value: unknown, path = ""): RadarFrame {
 export function parseRadarSiteFrame(value: unknown, path = ""): RadarSiteFrame {
   const { header: h, body } = parseShrf(value, path);
   const hp = at(path, "header");
-  expectExactKeys(h, hp, RADAR_SITE_KEYS);
+  expectExactKeys(h, hp, RADAR_SITE_KEYS, ["legendPngBase64", "palette", "elevationAngle"]);
   expectOneOf(h.kind, at(hp, "kind"), ["radar-site"]);
   if (body.length < PNG_SIGNATURE.length || PNG_SIGNATURE.some((b, i) => body[i] !== b)) {
     throw new ContractError(at(path, "body"), "expected a PNG image");
@@ -178,6 +190,9 @@ export function parseRadarSiteFrame(value: unknown, path = ""): RadarSiteFrame {
   return {
     product: expectString(h.product, at(hp, "product"), { minLength: 1, maxLength: 40 }),
     siteId: expectString(h.siteId, at(hp, "siteId"), { minLength: 1, maxLength: 16 }),
+    elevationAngle: h.elevationAngle === undefined || h.elevationAngle === null ? null : expectFiniteNumber(h.elevationAngle, at(hp, "elevationAngle"), { min: -1, max: 90 }),
+    legendPng: radarLegend(h.legendPngBase64, at(hp, "legendPngBase64")),
+    palette: h.palette === undefined ? null : expectNullable(h.palette, at(hp, "palette"), parsePalette),
     label: expectString(h.label, at(hp, "label"), { minLength: 1, maxLength: 120 }),
     units: expectString(h.units, at(hp, "units"), { maxLength: 40 }),
     bounds: orderedBounds(h.bounds, at(hp, "bounds")),

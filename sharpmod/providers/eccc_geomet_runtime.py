@@ -17,10 +17,9 @@ from sharpmod.models.model_transport import DownloadCancelled
 from sharpmod.io.portable_sounding import fatal_issues
 from sharpmod.tools.era5_extract import ParameterRangeError
 from sharpmod.tools.era5_extract import RetrievalError
-from sharpmod.tools.era5_extract import _atomic_write_json
-from sharpmod.tools.era5_extract import _atomic_write_npz
+from sharpmod.tools.era5_extract import ExtractionCancelled
+from sharpmod.tools.era5_extract import _atomic_write_sounding_pair
 from sharpmod.tools.era5_extract import _mark_missing
-from sharpmod.tools.era5_extract import _quiet_remove
 from sharpmod.tools.era5_extract import dewpoint_from_specific_humidity
 import numpy as np
 import os
@@ -250,8 +249,9 @@ def fetch_point(
     )
 
 
-def write_point_dataset(dataset, out_path, *, loc=None, progress_callback=None):
-    """Atomically serialize one normalized GeoMet dataset to NPZ + JSON."""
+def write_point_dataset(dataset, out_path, *, loc=None, progress_callback=None,
+                        cancelled=None):
+    """Write one validated GeoMet NPZ + JSON pair, rolling back handled failures."""
     if not isinstance(dataset, _api.GeoMetPointDataset):
         raise TypeError("dataset must be GeoMetPointDataset")
     capability = dataset.capability
@@ -336,13 +336,10 @@ def write_point_dataset(dataset, out_path, *, loc=None, progress_callback=None):
     }
     if progress_callback is not None:
         _api._emit(progress_callback, "writing")
-    _atomic_write_npz(out_path, arrays)
-    json_path = os.path.splitext(out_path)[0] + ".json"
     try:
-        _atomic_write_json(json_path, meta)
-    except BaseException:
-        _quiet_remove(out_path)
-        raise
+        _atomic_write_sounding_pair(out_path, arrays, meta, cancelled=cancelled)
+    except ExtractionCancelled as exc:
+        raise DownloadCancelled("ECCC GeoMet extraction cancelled") from exc
     _api._emit(progress_callback, "complete")
     return out_path
 
@@ -412,7 +409,8 @@ def extract(
     if cancelled is not None and cancelled():
         raise DownloadCancelled("ECCC GeoMet extraction cancelled")
     return _api.write_point_dataset(
-        dataset, out_path, loc=loc, progress_callback=progress_callback
+        dataset, out_path, loc=loc, progress_callback=progress_callback,
+        cancelled=cancelled,
     )
 
 

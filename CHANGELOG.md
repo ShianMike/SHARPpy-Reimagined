@@ -11,6 +11,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Release a cancelled request's queued worker slot immediately, including
+  cancellation received before submission. Keep running downloads cooperative
+  and send one cancellation reply without waiting for busy workers to finish.
 - Retry temporary sounding calculation failures on later renders instead of
   retaining failed diagnostics in the prepared input cache.
 - Select above-ground pressure levels separately for each point's fallback

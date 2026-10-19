@@ -12,6 +12,48 @@ from sharpmod.bridge.protocol import encode_frame
 from sharpmod.tests.test_bridge_protocol import Feed, Sink
 
 
+@pytest.mark.parametrize("control", ["wire", "token", "early-token"])
+def test_cancelled_queue_releases_admission_before_running_work_finishes(monkeypatch, control):
+    started, finish = Event(), Event()
+    queued_calls = []
+    def busy(_params):
+        started.set()
+        assert finish.wait(5)
+        return {"ok": True}
+    def queued(_params):
+        queued_calls.append(1)
+        return {"ok": True}
+    monkeypatch.setitem(handlers.HANDLERS, "test.busy", busy)
+    monkeypatch.setitem(handlers.HANDLERS, "test.queued", queued)
+    monkeypatch.setitem(handlers.HANDLERS, "test.fresh", lambda _params: {"fresh": True})
+    monkeypatch.setattr(server, "WORKERS", 1)
+    monkeypatch.setattr(server, "MAX_ADMITTED", 2)
+    sink = Sink()
+    bridge = server._Server(io.BytesIO(), sink)
+    def send(request_id, method, params):
+        bridge._dispatch(encode_frame({"id": request_id, "method": method, "params": params}))
+    try:
+        send(1, "test.busy", {"request_id": "running"})
+        assert started.wait(5)
+        if control == "early-token":
+            send(3, "cancel", {"request_id": "queued"})
+        send(2, "test.queued", {"request_id": "queued"})
+        if control != "early-token":
+            send(3, "cancel", {"id": 2} if control == "wire" else {"request_id": "queued"})
+        send(4, "test.fresh", {})
+        replies = {frame["id"]: frame for frame in sink.frames()}
+        assert 4 not in replies, "cancelled queued work still blocks new admission"
+        assert replies[2]["error"]["details"]["cancelled"]
+        assert replies[3]["result"]["ok"]
+    finally:
+        finish.set()
+        bridge._pool.shutdown(wait=True)
+    replies = {frame["id"]: frame for frame in sink.frames()}
+    assert replies[4]["result"] == {"fresh": True}
+    assert queued_calls == []
+    assert not bridge._requests and not bridge._futures and not cancellation._ACTIVE
+
+
 def test_full_queue_keeps_cancel_progress_and_hello_responsive(monkeypatch):
     started = Event()
     def busy(_params):

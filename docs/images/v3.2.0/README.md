@@ -1,6 +1,6 @@
 # v3.2.0 interface captures
 
-Captured on 19 October 2026 between 11:26 and 11:29 UTC from the live browser preview at
+Captured on 19 October 2026 from the live browser preview at
 `http://127.0.0.1:5178/`, using the v3.2.0 source and real Python/Rust backend.
 All ten images are original 1920 × 1080 JPEG viewport screenshots in the app's
 dark appearance. Captures wait for map initialization and displayed data;

@@ -82,6 +82,7 @@ class _Server:
         self._lock = threading.Lock()
         self._admission = threading.BoundedSemaphore(MAX_ADMITTED)
         self._requests = {}
+        self._futures = {}
         self._pool = ThreadPoolExecutor(
             max_workers=WORKERS, thread_name_prefix="bridge"
         )
@@ -158,6 +159,10 @@ class _Server:
             else:
                 # request_id belongs to the target, not this control frame.
                 self._control(request, lambda: cancellation.cancel({"request_id": request_id}))
+            # shortcut: scan at most MAX_ADMITTED futures; index by token if this bound grows.
+            for event, future in list(self._futures.items()):
+                if event.is_set():
+                    future.cancel()
             return None
         if request.method in ("hello", "soundings.progress"):
             # The liveness ping is answered on the read loop, so a pool busy with
@@ -175,11 +180,17 @@ class _Server:
             return None
         self._requests[request.id] = event
         future = self._pool.submit(self._run_owned, request, event)
+        self._futures[event] = future
         def finished(_future):
             self._requests.pop(request.id, None)
+            self._futures.pop(event, None)
             cancellation.release(request_id)
             self._admission.release()
+            if _future.cancelled():
+                self._reply_error(request.id, cancellation.Cancelled())
         future.add_done_callback(finished)
+        if event.is_set():
+            future.cancel()
         return None
 
     def _control(self, request, handler):

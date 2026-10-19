@@ -33,7 +33,7 @@
       },
       {
         "title": "More control over downloads",
-        "description": "See which forecast hours are saved and which are ready to play. Check the cache, retry missing hours, or stop a model-sounding download."
+        "description": "See which forecast hours are saved and which are ready to play. Check the cache, retry missing hours, or stop a model-sounding download. Stopped downloads no longer block new requests."
       },
       {
         "title": "More reliable caching",

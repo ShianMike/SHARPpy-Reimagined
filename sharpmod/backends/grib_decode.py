@@ -12,14 +12,15 @@ import numpy as np
 from sharpmod.backends import grib as _api
 
 
-def decode_grib_wind_vorticities(path, points) -> tuple[float, ...]:
-    """Estimate several surface-vorticity stencils with two field unpacks.
+def decode_grib_wind_vorticities(path, points) -> tuple[float | None, ...]:
+    """Estimate above-ground stencils with two wind unpacks per chosen level.
 
     This preserves the legacy centered finite-difference definition without
     constructing cfgrib/xarray wind cubes. It supports structured GRIB grids
     with stable ``Ni``/``Nj`` indexing and falls back cleanly for reduced or
     alternating-row layouts. Duplicate requests resolving to one grid cell
-    share the same calculation.
+    share the same calculation. Missing surface pressure or an unusable
+    above-ground stencil leaves this optional enrichment missing.
     """
     requests = []
     for value in points:
@@ -67,7 +68,55 @@ def decode_grib_wind_vorticities(path, points) -> tuple[float, ...]:
         raise _api.GribDecodeError(
             "pressure-level GRIB u/v fields share no pressure level"
         )
-    pressure = max(common_levels)
+    surface = next((role for role in inventory.surface_roles
+                    if role.role == "surface_pressure"), None)
+    results_by_index = {point.index: None for point in unique_points}
+    if surface is not None:
+        reference = surface.messages[0]
+        with _api._multi_field_source(identity, eccodes) as source:
+            message = _api._message_at(
+                eccodes, source, reference.offset, reference.field_index
+            )
+            try:
+                ni = int(_api._safe_get(eccodes, message, "Ni") or _api._safe_get(eccodes, message, "Nx", 0))
+                nj = int(_api._safe_get(eccodes, message, "Nj") or _api._safe_get(eccodes, message, "Ny", 0))
+                if (ni < 2 or nj < 2
+                        or ni * nj != _api._safe_get(eccodes, message, "numberOfPoints")
+                        or _api._safe_get(eccodes, message, "alternativeRowScanning", 0)):
+                    raise _api.GribDecodeError("surface-pressure stencil requires a structured grid")
+                j_consecutive = bool(_api._safe_get(eccodes, message, "jPointsAreConsecutive", 0))
+                indexes = []
+                for point in unique_points:
+                    if j_consecutive:
+                        ix, iy = divmod(point.index, nj)
+                    else:
+                        iy, ix = divmod(point.index, ni)
+                    x0, x1 = _api._neighbor_pair(ix, ni)
+                    y0, y1 = _api._neighbor_pair(iy, nj)
+                    neighbors = ((ix, iy), (x0, iy), (x1, iy), (ix, y0), (ix, y1))
+                    indexes.extend(x * nj + y if j_consecutive else y * ni + x for x, y in neighbors)
+                pressures = _api._read_elements(
+                    eccodes, message, indexes
+                ).reshape(len(unique_points), 5)
+            finally:
+                eccodes.codes_release(message)
+        groups = {}
+        for point, values in zip(unique_points, pressures):
+            if not _api._valid_reference_values(values, reference) or np.any(values <= 0):
+                continue
+            value = float(np.min(values))
+            pressure = float(value) / 100.0 if value > 2000.0 else float(value)
+            eligible = [level for level in common_levels if level <= pressure]
+            if eligible:
+                groups.setdefault(max(eligible), []).append(point)
+        for pressure, group in groups.items():
+            results_by_index.update(_wind_stencils(
+                identity, inventory, group, pressure, eccodes
+            ))
+    return tuple(results_by_index[point.index] for point in requested_points)
+
+
+def _wind_stencils(identity, inventory, unique_points, pressure, eccodes):
     u_reference = _api._wind_reference(inventory, "u", pressure)
     v_reference = _api._wind_reference(inventory, "v", pressure)
 
@@ -183,9 +232,8 @@ def decode_grib_wind_vorticities(path, points) -> tuple[float, ...]:
             or not np.all(np.isfinite(point_lats))
             or not np.all(np.isfinite(point_lons))
         ):
-            raise _api.GribDecodeError(
-                "wind-vorticity stencil contains missing or invalid values"
-            )
+            results_by_index[point.index] = None
+            continue
         lat_center = float(point_lats[4])
         dx = (
             _api._EARTH_RADIUS_M
@@ -201,21 +249,14 @@ def decode_grib_wind_vorticities(path, points) -> tuple[float, ...]:
             not np.isfinite(dx) or not np.isfinite(dy)
             or abs(dx) < 1.0 or abs(dy) < 1.0
         ):
-            raise _api.GribDecodeError(
-                "wind-vorticity stencil has invalid grid spacing"
-            )
+            results_by_index[point.index] = None
+            continue
         value = (
             (float(point_v[1]) - float(point_v[0])) / dx
             - (float(point_u[1]) - float(point_u[0])) / dy
         )
-        if not np.isfinite(value):
-            raise _api.GribDecodeError(
-                "wind-vorticity stencil produced a non-finite value"
-            )
-        results_by_index[point.index] = float(value)
-    return tuple(
-        results_by_index[point.index] for point in requested_points
-    )
+        results_by_index[point.index] = float(value) if np.isfinite(value) else None
+    return results_by_index
 
 
 def _assemble_point(inventory, point, decoded, missing):

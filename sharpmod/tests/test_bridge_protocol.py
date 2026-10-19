@@ -275,7 +275,7 @@ def test_shutdown_replies_and_stops_reading():
     assert replies == [{"id": 5, "result": {"ok": True}}]
 
 
-def test_shutdown_waits_for_work_already_running(monkeypatch):
+def test_shutdown_cancels_and_waits_for_work_already_running(monkeypatch):
     started, release = threading.Event(), threading.Event()
 
     def busy(params):
@@ -296,8 +296,9 @@ def test_shutdown_waits_for_work_already_running(monkeypatch):
     release.set()
     thread.join(10)
     assert not thread.is_alive() and codes == [0]
-    assert sink.frames() == [{"id": 2, "result": {"ok": True}},
-                             {"id": 1, "result": {"done": True}}]
+    assert sink.frames()[0] == {"id": 2, "result": {"ok": True}}
+    assert sink.frames()[1]["id"] == 1
+    assert sink.frames()[1]["error"]["details"] == {"cancelled": True}
 
 
 def test_eof_and_partial_final_line_end_the_loop():

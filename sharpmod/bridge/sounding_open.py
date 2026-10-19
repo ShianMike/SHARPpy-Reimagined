@@ -1,8 +1,4 @@
-"""Opening soundings: observed, forecast model, ERA5, or a file from disk.
-
-Provider results are written as portable ``.npz`` files. All sources share the
-renderer's decoder registry and the bridge's cache of open soundings.
-"""
+"""Open soundings through the common decoder and process-owned cache."""
 
 from __future__ import annotations
 
@@ -14,15 +10,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sharpmod.bridge import params as p
+from sharpmod.bridge import cancellation, params as p
 from sharpmod.bridge.errors import BridgeError
 from sharpmod.bridge.sounding_cache import cache
 from sharpmod.bridge.sounding_progress import track
 from sharpmod.bridge.sounding_summary import decode, meta, register, summary
+from sharpmod.models.model_transport import DownloadCancelled
 
 log = logging.getLogger("sharpmod.bridge")
 
-MAX_UPLOAD_BYTES = 6 * 1024 * 1024
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 _SAFE_SUFFIX = re.compile(r"^\.[A-Za-z0-9_-]{1,12}$")
 
 
@@ -124,16 +121,18 @@ def open_observed(params: dict[str, Any]) -> dict[str, Any]:
 
 def open_model(params: dict[str, Any]) -> dict[str, Any]:
     """A forecast-model point sounding (HRRR, RAP, GFS, and the rest)."""
-    p.keys(
-        params,
-        ("model", "forecast_hour", "latitude", "longitude"),
-        ("run_time", "location", "progress_id"),
-    )
+    p.keys(params, ("model", "forecast_hour", "latitude", "longitude"),
+           ("run_time", "location", "progress_id"))
     with track(params.get("progress_id")) as progress:
-        return _open_model(params, progress)
+        entry_id = cache().new_id()
+        try:
+            return _open_model(params, progress, entry_id)
+        except BaseException:
+            cache()._remove_files(entry_id)
+            raise
 
 
-def _open_model(params, progress):
+def _open_model(params, progress, entry_id):
     key = p.text(params, "model", 1, 40)
     fxx = p.integer(params, "forecast_hour", 0, 1000)
     lat = p.number(params, "latitude", -90.0, 90.0)
@@ -151,8 +150,8 @@ def _open_model(params, progress):
             f"The forecast model {key!r} is not available: {exc}",
             False,
         ) from None
-    entry_id = cache().new_id()
     path = cache().data_path(entry_id, ".npz")
+    stop = cancellation.event()
     try:
         written = mx.extract(
             config.key,
@@ -165,22 +164,23 @@ def _open_model(params, progress):
             download_dir=str(cache().root / f"{entry_id}-grib"),
             progress_callback=progress.stage,
             on_bytes=progress.receive,
+            cancelled=stop.is_set if stop is not None else (lambda: False),
+            source_cache=cache().model_hours,
         )
+    except DownloadCancelled:
+        raise cancellation.Cancelled() from None
     except era5_extract.ParameterRangeError as exc:
         raise BridgeError("INVALID_ARGUMENT", str(exc), False) from None
     except era5_extract.ERA5ExtractionError as exc:
         log.info("model sounding %s: %s", config.key, exc)
-        first = (
-            str(exc).strip().splitlines()[0][:300]
-            if str(exc).strip()
-            else type(exc).__name__
-        )
+        first = str(exc).strip().splitlines()[0][:300] if str(exc).strip() else type(exc).__name__
         raise BridgeError(
             "SOUNDING_FETCH_FAILED",
             f"The {config.label} sounding could not be retrieved: {first}",
             True,
         ) from None
     data_path = Path(written) if written else path
+    cancellation.check()
     collection, _ = decode(data_path)
     north, east = ("N" if lat >= 0 else "S"), ("E" if lon >= 0 else "W")
     point = f"{abs(lat):.2f}{north} {abs(lon):.2f}{east}"
@@ -262,13 +262,13 @@ def open_file(params: dict[str, Any]) -> dict[str, Any]:
     name = Path(p.text(params, "file_name", 1, 255)).name
     encoded = params.get("content_base64")
     if not isinstance(encoded, str) or len(encoded) > (MAX_UPLOAD_BYTES * 4) // 3 + 8:
-        raise p.invalid("content_base64 must be base64 text of at most 6 MiB of data")
+        raise p.invalid("content_base64 must be base64 text of at most 5 MiB of data")
     try:
         data = base64.b64decode(encoded, validate=True)
     except (binascii.Error, ValueError):
         raise p.invalid("content_base64 is not valid base64") from None
     if len(data) > MAX_UPLOAD_BYTES:
-        raise p.invalid("the file must be at most 6 MiB")
+        raise p.invalid("the file must be at most 5 MiB")
     if not data:
         raise BridgeError("SOUNDING_INVALID", f"{name} is empty.", False)
     suffix = Path(name).suffix.lower()

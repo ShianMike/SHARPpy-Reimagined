@@ -20,7 +20,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, BinaryIO
 
-from sharpmod.bridge import handlers, live_cache
+from sharpmod.bridge import cancellation, handlers, live_cache
 from sharpmod.bridge.errors import BridgeError, error_frame, internal_error
 from sharpmod.bridge.protocol import (
     MAX_FRAME_BYTES,
@@ -35,6 +35,7 @@ log = logging.getLogger("sharpmod.bridge")
 
 #: Sounding downloads and renders can hold a worker for minutes.
 WORKERS = 8
+MAX_ADMITTED = 24
 _DRAIN_CHUNK = 64 * 1024
 _STD_INPUT_HANDLE = -10 & 0xFFFFFFFF
 _STD_OUTPUT_HANDLE = -11 & 0xFFFFFFFF
@@ -79,6 +80,9 @@ class _Server:
         self._in = proto_in
         self._out = proto_out
         self._lock = threading.Lock()
+        self._admission = threading.BoundedSemaphore(MAX_ADMITTED)
+        self._requests = {}
+        self._futures = {}
         self._pool = ThreadPoolExecutor(
             max_workers=WORKERS, thread_name_prefix="bridge"
         )
@@ -87,6 +91,8 @@ class _Server:
         try:
             self._read_loop()
         finally:
+            for event in list(self._requests.values()):
+                event.set()
             self._pool.shutdown(wait=True, cancel_futures=True)
         return 0
 
@@ -114,7 +120,13 @@ class _Server:
     def _dispatch(self, line: bytes) -> str | None:
         try:
             request = decode_request(line)
-            if request.method != "shutdown" and request.method not in handlers.HANDLERS:
+            has_request_id = "request_id" in request.params
+            request_id = cancellation.token(request.params.pop("request_id", f"wire{request.id}"))
+            if request.method == "cancel":
+                numeric = set(request.params) == {"id"} and type(request.params["id"]) is int and request.params["id"] > 0
+                if not ((numeric and not has_request_id) or (not request.params and has_request_id)):
+                    raise BridgeError("INVALID_ARGUMENT", "Cancellation requires one request ID.", False)
+            if request.method not in ("shutdown", "cancel") and request.method not in handlers.HANDLERS:
                 raise ProtocolError(
                     BridgeError(
                         "METHOD_NOT_FOUND",
@@ -125,26 +137,81 @@ class _Server:
                     ),
                     request.id,
                 )
-            check_params(request)
+            if request.method != "cancel":
+                check_params(request)
         except ProtocolError as exc:
             log.warning("rejected request frame: %s", exc.error.message)
             self._reply_error(exc.request_id, exc.error)
             return None
+        except BridgeError as error:
+            self._reply_error(request.id, error)
+            return None
         if request.method == "shutdown":
+            for event in list(self._requests.values()):
+                event.set()
             self._write({"id": request.id, "result": {"ok": True}})
             return "shutdown"
-        if request.method == "hello":
+        if request.method == "cancel":
+            target = request.params.get("id")
+            if type(target) is int and target in self._requests:
+                self._requests[target].set()
+                self._write({"id": request.id, "result": {"ok": True}})
+            else:
+                # request_id belongs to the target, not this control frame.
+                self._control(request, lambda: cancellation.cancel({"request_id": request_id}))
+            # shortcut: scan at most MAX_ADMITTED futures; index by token if this bound grows.
+            for event, future in list(self._futures.items()):
+                if event.is_set():
+                    future.cancel()
+            return None
+        if request.method in ("hello", "soundings.progress"):
             # The liveness ping is answered on the read loop, so a pool busy with
             # long downloads or renders never looks like a hung bridge.
             self._run(request)
             return None
-        self._pool.submit(self._run, request)
+        if not self._admission.acquire(blocking=False):
+            self._reply_error(request.id, BridgeError("INTERNAL", "The backend is busy. Try again shortly.", True))
+            return None
+        try:
+            event = cancellation.register(request_id)
+        except BridgeError as error:
+            self._admission.release()
+            self._reply_error(request.id, error)
+            return None
+        self._requests[request.id] = event
+        future = self._pool.submit(self._run_owned, request, event)
+        self._futures[event] = future
+        def finished(_future):
+            self._requests.pop(request.id, None)
+            self._futures.pop(event, None)
+            cancellation.release(request_id)
+            self._admission.release()
+            if _future.cancelled():
+                self._reply_error(request.id, cancellation.Cancelled())
+        future.add_done_callback(finished)
+        if event.is_set():
+            future.cancel()
         return None
+
+    def _control(self, request, handler):
+        try:
+            result = handler()
+            self._write({"id": request.id, "result": result})
+        except BridgeError as error:
+            self._reply_error(request.id, error)
+
+    def _run_owned(self, request, event):
+        try:
+            with cancellation.scope(event):
+                self._run(request)
+        except cancellation.Cancelled as error:
+            self._reply_error(request.id, error)
 
     def _run(self, request: Request) -> None:
         handler = handlers.HANDLERS[request.method]
         try:
             result = live_cache.call(request.method, request.params, handler)
+            cancellation.check()
             frame: dict[str, Any] = {"id": request.id, "result": result}
         except BridgeError as err:
             frame = error_frame(request.id, err)

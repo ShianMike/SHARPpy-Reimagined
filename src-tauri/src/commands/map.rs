@@ -12,6 +12,44 @@ use crate::error::BackendError;
 use crate::state::AppState;
 
 #[tauri::command]
+pub async fn get_cached_forecast_hours(
+    state: tauri::State<'_, AppState>,
+    model: String,
+    products: Vec<String>,
+    run_time: String,
+    hours: Vec<u32>,
+) -> Result<Vec<u32>, BackendError> {
+    let context = crate::backend::map_ops::context("get_cached_forecast_hours", "forecast cache");
+    if !crate::backend::map_ops::key_ok(&model)
+        || !crate::backend::map_ops::time_ok(&run_time)
+        || products.is_empty()
+        || products.len() > 4
+        || products
+            .iter()
+            .any(|key| !crate::backend::map_ops::key_ok(key))
+        || hours.is_empty()
+        || hours.len() > 85
+        || hours.iter().any(|hour| *hour > 84)
+    {
+        return Err(crate::backend::sounding_ops::invalid(
+            &context,
+            "invalid forecast-cache selection",
+        ));
+    }
+    let result: Vec<u32> = state.router.call(&context, "fields.cached", serde_json::json!({"model": model, "products": products, "run_time": run_time, "hours": hours}), std::time::Duration::from_secs(15)).await?;
+    if result.iter().any(|hour| !hours.contains(hour))
+        || result.windows(2).any(|pair| pair[0] >= pair[1])
+    {
+        return Err(crate::backend::sounding_ops::rejected(
+            &context,
+            "fields.cached",
+            "invalid cached hours".to_owned(),
+        ));
+    }
+    Ok(result)
+}
+
+#[tauri::command]
 pub async fn get_weather_alerts(
     state: tauri::State<'_, AppState>,
     valid_time: String,
@@ -41,6 +79,7 @@ pub async fn get_weather_field(
     run_time: String,
     forecast_hour: u32,
     model: Option<String>,
+    request_id: Option<String>,
 ) -> Result<tauri::ipc::Response, BackendError> {
     let frame = state
         .router
@@ -49,6 +88,7 @@ pub async fn get_weather_field(
             &run_time,
             forecast_hour,
             model.as_deref().unwrap_or("hrrr"),
+            request_id.as_deref(),
         )
         .await?;
     Ok(tauri::ipc::Response::new(frame))
@@ -176,6 +216,7 @@ pub async fn get_field_contours(
     run_time: String,
     forecast_hour: u32,
     model: Option<String>,
+    request_id: Option<String>,
 ) -> Result<ContourLines, BackendError> {
     state
         .router
@@ -184,6 +225,7 @@ pub async fn get_field_contours(
             &run_time,
             forecast_hour,
             model.as_deref().unwrap_or("hrrr"),
+            request_id.as_deref(),
         )
         .await
 }

@@ -4,11 +4,9 @@
 // (_imageCoordinateSystem LNGLAT). Smooth reconstructs values before coloring;
 // the source grid and point readouts stay unchanged.
 
-import { LayerExtension, type Layer, type TextureSource } from "@deck.gl/core";
+import { LayerExtension, type Layer } from "@deck.gl/core";
 import { BitmapLayer } from "@deck.gl/layers";
-import type { FieldFrame, Palette } from "../../types/map";
-import { buildLut, LUT_SIZE, paletteRange } from "../field/colourize";
-import { parseColour } from "../canvasTokens";
+import { smoothFieldProps, type FieldSamplingProps } from "../fieldImages";
 import { buildContourLayers } from "./ContourLayer";
 import { buildWindBarbLayers } from "./WindBarbLayer";
 import type { FieldImage, LayerBuildContext, LayerState, RasterImage } from "./registry";
@@ -18,12 +16,6 @@ export const SATELLITE_LAYER_ID = "satellite";
 export const RADAR_LAYER_ID = "radar";
 
 const NEAREST = { minFilter: "nearest", magFilter: "nearest", mipmapFilter: "none" } as const;
-interface FieldSamplingProps {
-  fieldPalette: TextureSource;
-  fieldTransform: [number, number, number, number];
-  fieldRange: [number, number];
-}
-
 const fieldSampling = {
   name: "fieldSampling",
   uniformTypes: { transform: "vec4<f32>", range: "vec2<f32>" },
@@ -137,51 +129,6 @@ class FieldSamplingExtension extends LayerExtension {
 }
 
 const SMOOTH_FIELD = [new FieldSamplingExtension()];
-const grids = new WeakMap<FieldFrame, ImageData>();
-const palettes = new WeakMap<Palette, ImageData>();
-
-function smoothFieldProps({ frame, palette }: FieldImage): FieldSamplingProps & { image: ImageData } {
-  let image = grids.get(frame);
-  if (image === undefined) {
-    const bytes = new Uint8ClampedArray(frame.cells.length * 4);
-    for (let i = 0; i < frame.cells.length; i++) {
-      const cell = frame.cells[i] ?? frame.nodata;
-      // Opaque RG bytes preserve all 16 bits; B is validity, independent of the palette floor.
-      bytes[i * 4] = cell >> 8;
-      bytes[i * 4 + 1] = cell & 255;
-      bytes[i * 4 + 2] = cell === frame.nodata ? 0 : 255;
-      bytes[i * 4 + 3] = 255;
-    }
-    image = new ImageData(bytes, frame.width, frame.height);
-    grids.set(frame, image);
-  }
-  let fieldPalette = palettes.get(palette);
-  if (fieldPalette === undefined) {
-    if (palette.stepped) {
-      const size = palette.stops.length;
-      const bytes = new Uint8ClampedArray(size * 12);
-      const edge = new DataView(new ArrayBuffer(4));
-      palette.stops.forEach(([value, colour], i) => {
-        bytes.set(parseColour(colour, "palette colour"), i * 4);
-        edge.setFloat32(0, value, true);
-        const bits = edge.getUint32(0, true);
-        // Opaque RGB rows preserve every float bit through browser image uploads.
-        bytes.set([bits & 255, (bits >>> 8) & 255, (bits >>> 16) & 255, 255], (size + i) * 4);
-        bytes.set([bits >>> 24, 0, 0, 255], (size * 2 + i) * 4);
-      });
-      fieldPalette = new ImageData(bytes, size, 3);
-    } else {
-      fieldPalette = new ImageData(new Uint8ClampedArray(buildLut(palette)), LUT_SIZE, 1);
-    }
-    palettes.set(palette, fieldPalette);
-  }
-  const { low, high } = paletteRange(palette);
-  return {
-    image, fieldPalette,
-    fieldTransform: [frame.scale, frame.offset, palette.floor ?? low, palette.ceiling ?? 3.4e38],
-    fieldRange: [low, high > low ? high - low : 1],
-  };
-}
 
 function rasterLayer(id: string, raster: RasterImage | null, state: LayerState): BitmapLayer[] {
   if (raster === null) {

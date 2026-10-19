@@ -15,8 +15,16 @@ def write_manifest(installer: Path, tag: str) -> Path:
     if not signature:
         raise ValueError("Updater signature is empty")
     base64.b64decode(signature, validate=True)
+    version = tag.removeprefix("v")
+    notes_path = Path(__file__).resolve().parents[1] / "frontend/release-notes.json"
+    release = json.loads(notes_path.read_text(encoding="utf-8")).get(version)
+    if release is None:
+        raise ValueError(f"No release highlights for {version} in {notes_path}")
     manifest = {
-        "version": tag.removeprefix("v"),
+        "version": version,
+        "notes": release["summary"] + "\n\n" + "\n".join(
+            f"- {item['title']}: {item['description']}" for item in release["highlights"]
+        ),
         "pub_date": datetime.now(timezone.utc).isoformat(),
         "platforms": {
             "windows-x86_64": {

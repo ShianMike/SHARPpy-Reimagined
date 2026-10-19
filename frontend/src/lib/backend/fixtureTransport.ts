@@ -3,7 +3,6 @@
 // catalogue included, and rejects with plain BackendError objects, so the
 // client's mapping is the one under test. A ?scenario= value, read once at
 // startup, selects one state; see SCENARIOS.
-
 import catalogFull from "@contracts/public/stations.catalog.full.json";
 import catalogSeedFallback from "@contracts/public/stations.catalog.seed-fallback.json";
 import catalogUnavailable from "@contracts/public/errors/CATALOG_UNAVAILABLE.json";
@@ -26,6 +25,7 @@ import overlayFailed from "@contracts/public/errors/OVERLAY_FETCH_FAILED.json";
 import stationListUnavailable from "@contracts/public/errors/STATION_LIST_UNAVAILABLE.json";
 import availabilityExample from "@contracts/public/map/availability.json";
 import mapCatalog from "@contracts/public/map/catalog.json";
+import { fixtureFrameCache } from "./fixtureFrameCache";
 import modelMapCatalogs from "@contracts/public/map/catalog.models.json";
 // no-inline: a small file would otherwise become a data: URL, which the CSP's connect-src refuses.
 import fieldShrfUrl from "@contracts/public/map/field.shrf?url&no-inline";
@@ -45,7 +45,6 @@ import thresholdMetricsFixture from "@contracts/public/soundings/threshold-metri
 import thresholdCsvFixture from "@contracts/public/soundings/threshold-csv.example.json";
 import storageFixture from "@contracts/public/storage/usage.json";
 import clearedStorageFixture from "@contracts/public/storage/clear.json";
-
 export const SCENARIOS = [
   "python-unavailable",
   "catalog-error",
@@ -62,16 +61,13 @@ export const SCENARIOS = [
   "overlay-error",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
-
 /** Rejections the catalog-error scenario makes before it succeeds: the call and two automatic retries. */
 export const CATALOG_ERROR_FAILURES = 3;
 /** Delay of the slow-catalog scenario. */
 export const SLOW_CATALOG_MS = 1500;
-
 function isScenario(value: string): value is Scenario {
   return (SCENARIOS as readonly string[]).includes(value);
 }
-
 /** Resolves a ?scenario= value; an unknown value is a test-authoring error. */
 export function resolveScenario(value: string | null): Scenario | null {
   if (value === null || value === "") {
@@ -83,16 +79,13 @@ export function resolveScenario(value: string | null): Scenario | null {
   console.error(`[fixture] unknown scenario ${JSON.stringify(value)}; serving the defaults`);
   return null;
 }
-
 function scenarioFromLocation(): string | null {
   return typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("scenario");
 }
-
 /** A fresh copy, so no caller can alias or mutate the shared fixture. */
 function copy(value: unknown): unknown {
   return structuredClone(value);
 }
-
 /**
  * A catalogue request while Python is unavailable: the stored error with the
  * request's own context, as the Rust supervisor returns it (PROGRESS I9), so
@@ -192,6 +185,7 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
   let catalogCalls = 0;
   let opened = 0;
   let storage = structuredClone(storageFixture);
+  const frames = fixtureFrameCache();
 
   const health = (): unknown => {
     if (scenario === "python-unavailable") {
@@ -201,8 +195,11 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
   };
 
   const handlers: Record<CommandName, (args?: Readonly<Record<string, unknown>>) => Promise<unknown>> = {
+    cancel_request: () => Promise.resolve(null),
+    get_cached_forecast_hours: (args) => Promise.resolve(frames.hours(args)),
     get_storage_usage: () => Promise.resolve(copy(storage)),
     clear_cache: (args) => {
+      if (args?.cache === "all" || args?.cache === "maps") frames.clear();
       let freedBytes = 0;
       storage = { caches: storage.caches.map((row) => {
         if (args?.cache !== "all" && args?.cache !== row.key) return row;
@@ -291,7 +288,7 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
   };
 
   return {
-    call: (command, args) => handlers[command](args),
+    call: async (command, args) => { const result = await handlers[command](args); frames.record(command, args); return result; },
     // Fixture data never changes, so no event is ever emitted.
     listen: () => Promise.resolve(() => undefined),
   };

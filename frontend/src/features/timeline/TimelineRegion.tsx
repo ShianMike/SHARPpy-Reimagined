@@ -1,5 +1,5 @@
 import { useIsFetching } from "@tanstack/react-query";
-import { Blend, Check, Download, Pause, Play, Repeat, Square, StepBack, StepForward, TriangleAlert, Zap } from "lucide-react";
+import { Blend, Pause, Play, Repeat, StepBack, StepForward, Zap } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { Action, IconAction } from "../../ui/Controls";
 import { Surface } from "../../ui/Surface";
@@ -13,6 +13,7 @@ import { compactUtc, forecastLabel } from "../sounding/soundingTime";
 import { FORECAST_RANGE_ID } from "../toolbar/ForecastControls";
 import styles from "./TimelineRegion.module.css";
 import hints from "../../ui/HoverHint.module.css";
+import { ForecastDownloads } from "./ForecastDownloads";
 
 export { FORECAST_RANGE_ID } from "../toolbar/ForecastControls";
 export interface TimelineRegionProps { className?: string | undefined; }
@@ -23,7 +24,6 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
   const loop = useUiStore((state) => state.loop);
   const smooth = useUiStore((state) => state.smoothPlayback);
   const download = useFrameDownload();
-  const DownloadIcon = download.running ? Square : download.complete ? Check : download.failed ? TriangleAlert : Download;
   const context = forecast.status === "ready" ? forecast.context : null;
   const loading = useIsFetching({ predicate: ({ queryKey: key }) =>
     (key[0] === "fields" || key[0] === "contours") && key[2] === context?.run && key[3] === context?.hour && key[4] === context?.model.key,
@@ -67,15 +67,7 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
         useUiStore.getState().setSpeed(PLAYBACK_SPEEDS[(current + 1) % PLAYBACK_SPEEDS.length] ?? 1);
       }}>{speed}×<span className={hints.hint} data-side="top" aria-hidden="true">Change playback speed · {speed}×</span></button>
       <IconAction icon={Repeat} size="sm" label="Loop forecast animation" hintSide="top" aria-pressed={loop} onClick={() => { useUiStore.getState().setLoop(!loop); }} />
-      <Action className={cx(styles.option, styles.download, hints.target)} aria-label={download.running ? "Stop downloading forecast hours" : "Download all forecast hours"}
-        aria-description={download.message} data-active={download.running || download.complete} data-failed={download.failed && !download.running}
-        disabled={download.disabled} onClick={download.toggle}>
-        <DownloadIcon className="icon" aria-hidden="true" />
-        <span className={styles.downloadLabel}>{download.running ? "Loading" : download.complete ? "Ready" : download.failed ? "Retry" : "Load hours"}</span>
-        {download.started ? <span className={styles.count}>{download.loaded}<span>/</span>{download.total}</span> : null}
-        {download.running ? <progress className={styles.progress} aria-label="Downloaded forecast hours" max={download.total} value={download.loaded} /> : null}
-        <span className={hints.hint} data-side="top" aria-hidden="true">{download.message}</span>
-      </Action>
+      <ForecastDownloads download={download} />
       <Action className={cx(styles.option, styles.mode, hints.target)} aria-label="Smooth playback" aria-pressed={smooth}
         onClick={() => { useUiStore.getState().setSmoothPlayback(!smooth); }}>
         {smooth ? <Blend className="icon" aria-hidden="true" /> : <Zap className="icon" aria-hidden="true" />}<span>{smooth ? "Smooth" : "Fast"}</span>

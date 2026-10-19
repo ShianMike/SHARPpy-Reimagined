@@ -642,7 +642,7 @@ def render(infile: str, outfile: str | None = None,
            parcel: str = DEFAULT_RENDER_PARCEL,
            locator_overlay: str | None = None,
            view: dict | None = None, view_result: dict | None = None,
-           show_locator: bool = True) -> str:
+           show_locator: bool = True, *, _prepared=None) -> str:
     """Render ``infile`` to ``outfile`` and return the output path.
 
     Composes :class:`~sharppy.viz.SPCWindow.SPCWindow` with a real
@@ -653,6 +653,9 @@ def render(infile: str, outfile: str | None = None,
     onto ``outfile`` only after a non-empty image exists. On any failure a
     :class:`RenderError` naming ``infile`` is raised and no partial PNG is left
     behind (Requirements 11.4, 11.7, 15.5).
+
+    ``_prepared`` is the serial worker's optional input cache. Omit it to use
+    the ordinary reference decoding and scientific reconstruction path.
     """
     if outfile is None:
         try:
@@ -685,7 +688,8 @@ def render(infile: str, outfile: str | None = None,
         _apply_sars_match_color()
         install_render_patches()
 
-        prof_col, stn_id = decode(infile)
+        decoded = _prepared.load(infile) if _prepared is not None else None
+        prof_col, stn_id = decode(infile) if decoded is None else decoded
         prof_col.setMeta("show_locator", show_locator)
         if view is not None:
             from sharpmod.rendering.interactive import apply_edits
@@ -807,6 +811,8 @@ def render(infile: str, outfile: str | None = None,
         if density_context_entered:
             density_context.__exit__(None, None, None)
 
+    if _prepared is not None:
+        _prepared.retain_derived(infile, decoded)
     return outfile
 
 

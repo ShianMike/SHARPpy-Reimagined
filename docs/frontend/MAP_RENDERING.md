@@ -208,6 +208,9 @@ says so.
   the main panel's choice persists across reloads. Smooth uploads a cached,
   lossless RG encoding of the uint16 grid with a separate validity channel;
   deck.gl owns and releases both grid and palette textures.
+  `fieldImages.ts` shares lazy and prepared images by immutable frame identity.
+  Rolling playback packs only the active Sharp/Smooth modes before advancing,
+  yields between short packing tasks, and publishes no partial canceled image.
   With the dev server running, `/tooling/raster-smoothing-check.html` checks
   the real GPU shader against Sharp and the former color-space linear filter
   at three zooms, plus peaks, missing data, and palette display limits.
@@ -308,12 +311,18 @@ Reset layers restores Mercator without moving the camera.
 - **Frames.** Each field frame is a TanStack Query keyed by model, product, run,
   and hour (`mapQueries.ts`). Manually selecting an uncached hour shows a loading
   state until that hour is ready. After each new frame the cache
-  drops the oldest frames no panel shows until it is within the profile's CPU
-  budget (`trimFieldCache`).
+  drops the oldest frames no panel or preload observes until it is within the
+  profile's CPU budget (`trimFieldCache`). The estimate includes raw uint16 cells
+  and both Sharp and Smooth RGBA images; weak image caches add no independent
+  retained-frame collection.
 - **Playback** (`usePlayback.ts`). Every visible product's upcoming fields and
   wind/contour data load in parallel across the profile's frame window: `next`
   hours, plus `prefetched` while playing. The current hour stays visible until
-  the next hour has loaded or failed across all panels. Loading overlaps the
+  the next hour has loaded and prepared the active pixel-sampling modes, or
+  failed, across all panels. Cached network results still await preparation.
+  An observer keeps the shared query owned through preparation; stopping one
+  preload releases its ownership without canceling another panel's request.
+  Loading and preparation overlap the
   750 ms interval (divided by playback speed), so a slow download adds no second
   interval. Playback loops at the run's last hour when enabled. Background
   prefetches do not mark the displayed hour as loading.

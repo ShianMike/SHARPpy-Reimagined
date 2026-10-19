@@ -1,6 +1,4 @@
-// The shared API boundary: validate every reply, normalize rejections, and log
-// every request outcome once for all transports (DESIGN-frontend F2, C6).
-
+// Validate replies, normalize failures and log once for all transports (F2, C6).
 import type { BackendHealth, BridgeStatus, StationCatalog } from "../../types/contracts";
 import { parseBackendError } from "../contracts/errors";
 import { ContractError } from "../contracts/guards";
@@ -37,14 +35,13 @@ import type {
 } from "../../types/soundings";
 import { MARKS, markOnce } from "../metrics";
 import type { CacheClearResult, CacheTarget, StorageUsage } from "../../types/storage";
-import { parseCacheClearResult, parseStorageUsage } from "../contracts/storage";
+import { parseCachedHours, parseCacheClearResult, parseStorageUsage } from "../contracts/storage";
 import { BackendFailure, contractViolation, transportFailed } from "./errors";
 import { BRIDGE_STATUS_CHANGED } from "./events";
-import type { CommandName, Transport } from "./transport";
+import { callWithSignal, type CommandName, type Transport } from "./transport";
 import { recordLog } from "../../stores/logStore";
 import { parseSoundingView } from "../contracts/soundingView";
 import type { SoundingView, ViewRequest } from "../../types/soundingView";
-
 function warnFailure(failure: BackendFailure, extra?: unknown): void {
   const { code, context, details } = failure.error;
   const parts: unknown[] = [`[backend] ${code} in ${context?.operation ?? "unknown operation"}: ${failure.error.message}`];
@@ -57,7 +54,6 @@ function warnFailure(failure: BackendFailure, extra?: unknown): void {
   console.warn(...parts);
   recordLog("error", context?.operation ?? "Backend", failure.error.message, `${code}${context?.provider === undefined ? "" : ` · ${context.provider}`}`);
 }
-
 export function failureFromRejection(reason: unknown, operation: string): BackendFailure {
   try {
     const parsed = parseBackendError(reason);
@@ -69,7 +65,6 @@ export function failureFromRejection(reason: unknown, operation: string): Backen
     throw error;
   }
 }
-
 export class BackendClient {
   private lastBridgeStatus = "";
   private readonly statusChecks = new Set<Promise<void>>();
@@ -79,7 +74,6 @@ export class BackendClient {
     this.recordBridgeStatus(health.bridge);
     return health;
   }
-
   private recordBridgeStatus(status: BridgeStatus): void {
     const key = JSON.stringify(status);
     if (key === this.lastBridgeStatus) return;
@@ -87,19 +81,20 @@ export class BackendClient {
     const error = status.status === "unavailable" ? status.error : status.status === "restarting" ? status.lastError : null;
     recordLog(status.status === "unavailable" ? "error" : status.status === "restarting" ? "warning" : "info", "Backend", `Backend ${status.status}`, error === null ? "" : `${error.code} · ${error.message}`);
   }
-
   async getStationCatalog(): Promise<StationCatalog> {
     markOnce(MARKS.catalogRequested);
     const catalog = await this.request("get_station_catalog", parseStationCatalog);
     markOnce(MARKS.catalogReceived);
     return catalog;
   }
-
   restartBackend(): Promise<BridgeStatus> {
     return this.request("restart_backend", (value) => parseBridgeStatus(value, ""));
   }
 
   getStorageUsage(): Promise<StorageUsage> { return this.request("get_storage_usage", parseStorageUsage); }
+  getCachedForecastHours(model: string, products: string[], runTime: string, hours: readonly number[]): Promise<number[]> {
+    return this.request("get_cached_forecast_hours", parseCachedHours, { model, products, runTime, hours });
+  }
   clearCache(cache: CacheTarget): Promise<CacheClearResult> { return this.request("clear_cache", parseCacheClearResult, { cache }); }
 
   getModelCatalog(): Promise<ModelCatalog> { return this.request("get_model_catalog", parseModelCatalog); }
@@ -113,8 +108,8 @@ export class BackendClient {
     void settled.then(() => { this.statusChecks.delete(settled); });
     return result;
   }
-  openSounding(request: OpenSoundingRequest, progressId?: string): Promise<SoundingSummary> {
-    return this.request("open_sounding", parseSoundingSummary, { request, ...(progressId === undefined ? {} : { progressId }) });
+  openSounding(request: OpenSoundingRequest, progressId?: string, signal?: AbortSignal): Promise<SoundingSummary> {
+    return this.request("open_sounding", parseSoundingSummary, { request, ...(progressId === undefined ? {} : { progressId }) }, signal);
   }
   getSoundingProgress(progressId: string): Promise<SoundingProgress> {
     return this.request("get_sounding_progress", parseSoundingProgress, { progressId });
@@ -151,8 +146,8 @@ export class BackendClient {
     return this.request("get_map_catalog", parseMapCatalog, { model });
   }
 
-  getWeatherField(product: string, runTime: string, forecastHour: number, model = "hrrr"): Promise<FieldFrame> {
-    return this.request("get_weather_field", parseFieldFrame, { product, runTime, forecastHour, model });
+  getWeatherField(product: string, runTime: string, forecastHour: number, model = "hrrr", signal?: AbortSignal): Promise<FieldFrame> {
+    return this.request("get_weather_field", parseFieldFrame, { product, runTime, forecastHour, model }, signal);
   }
 
   getSpcOutlook(product: OutlookKey, validTime: string): Promise<SpcOutlook> {
@@ -227,8 +222,8 @@ export class BackendClient {
   }
 
   /** The isolines of one product's contour field, as lon/lat segments. */
-  getFieldContours(product: string, runTime: string, forecastHour: number, model = "hrrr"): Promise<ContourLines> {
-    return this.request("get_field_contours", parseContourLines, { product, runTime, forecastHour, model });
+  getFieldContours(product: string, runTime: string, forecastHour: number, model = "hrrr", signal?: AbortSignal): Promise<ContourLines> {
+    return this.request("get_field_contours", parseContourLines, { product, runTime, forecastHour, model }, signal);
   }
 
   /** The station models near one point at one valid time. */
@@ -271,12 +266,14 @@ export class BackendClient {
     command: CommandName,
     parse: (value: unknown) => T,
     args?: Readonly<Record<string, unknown>>,
+    signal?: AbortSignal,
   ): Promise<T> {
     const started = performance.now();
     let raw: unknown;
     try {
-      raw = await this.transport.call(command, args);
+      raw = await callWithSignal(this.transport, command, args, signal);
     } catch (reason) {
+      if (signal?.aborted === true) throw reason;
       const failure = failureFromRejection(reason, command);
       warnFailure(failure, failure.error.code === "TRANSPORT_FAILED" ? reason : undefined);
       throw failure;

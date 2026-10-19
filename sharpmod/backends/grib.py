@@ -768,7 +768,7 @@ def _valid_reference_values(values, reference):
 
 
 
-def decode_grib_wind_vorticity(path, lat, lon) -> float:
+def decode_grib_wind_vorticity(path, lat, lon) -> float | None:
     """Estimate one direct surface wind-vorticity stencil."""
     return decode_grib_wind_vorticities(path, [(lat, lon)])[0]
 

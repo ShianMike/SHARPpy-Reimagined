@@ -63,7 +63,7 @@ pub(crate) fn rejected(context: &ErrorContext, method: &str, reason: String) -> 
 }
 
 /// Sounding ids are the bridge's 16 hex digits; anything else never reaches Python.
-fn sounding_id_ok(id: &str) -> bool {
+pub(crate) fn sounding_id_ok(id: &str) -> bool {
     (1..=64).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 
@@ -181,6 +181,7 @@ impl Router {
         &self,
         request: OpenSoundingRequest,
         progress_id: Option<&str>,
+        request_id: Option<&str>,
     ) -> Result<SoundingSummary, BackendError> {
         let resource = request.resource();
         let context = ErrorContext::new(OP_OPEN, Some(PYTHON_PROVIDER), Some(&resource));
@@ -196,6 +197,9 @@ impl Router {
             OpenSoundingRequest::Wrf { .. } => OPEN_MODEL_TIMEOUT,
         };
         let (method, mut params) = request.bridge_call();
+        if let Some(id) = request_id {
+            params["request_id"] = json!(id);
+        }
         if let Some(id) = progress_id {
             if !sounding_id_ok(id) || method != "soundings.open_model" {
                 return Err(invalid(

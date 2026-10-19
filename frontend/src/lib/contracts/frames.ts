@@ -28,16 +28,18 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 export interface ShrfFrame {
   header: JsonObject;
-  /** A view of the response; nobody else holds the buffer, so nothing is copied. */
-  body: Uint8Array;
+  /** A view of an ordinary response buffer; shared input is snapshotted once. */
+  body: Uint8Array<ArrayBuffer>;
 }
 
-function bytesOf(value: unknown, path: string): Uint8Array {
+function bytesOf(value: unknown, path: string): Uint8Array<ArrayBuffer> {
   if (value instanceof ArrayBuffer) {
     return new Uint8Array(value);
   }
   if (value instanceof Uint8Array) {
-    return value;
+    return value.buffer instanceof ArrayBuffer
+      ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+      : new Uint8Array(value);
   }
   if (Array.isArray(value) && value.every((b) => typeof b === "number")) {
     return Uint8Array.from(value);
@@ -174,7 +176,7 @@ export function parseRadarFrame(value: unknown, path = ""): RadarFrame {
     updateIntervalS: expectFiniteNumber(h.updateIntervalS, at(hp, "updateIntervalS"), { min: 0 }),
     attribution: expectString(h.attribution, at(hp, "attribution"), { maxLength: 300 }),
     sourceUrl: expectString(h.sourceUrl, at(hp, "sourceUrl"), { maxLength: 2000 }),
-    png: new Blob([body.slice()], { type: "image/png" }),
+    png: new Blob([body], { type: "image/png" }),
   };
 }
 
@@ -201,7 +203,7 @@ export function parseRadarSiteFrame(value: unknown, path = ""): RadarSiteFrame {
     updateIntervalS: expectFiniteNumber(h.updateIntervalS, at(hp, "updateIntervalS"), { min: 0 }),
     attribution: expectString(h.attribution, at(hp, "attribution"), { maxLength: 300 }),
     sourceUrl: expectString(h.sourceUrl, at(hp, "sourceUrl"), { maxLength: 2000 }),
-    png: new Blob([body.slice()], { type: "image/png" }),
+    png: new Blob([body], { type: "image/png" }),
   };
 }
 
@@ -234,6 +236,6 @@ export function parseSatelliteFrame(value: unknown, path = ""): SatelliteFrame {
     nativeResolutionKm: expectFiniteNumber(h.nativeResolutionKm, at(hp, "nativeResolutionKm"), { min: 0 }),
     attribution: expectString(h.attribution, at(hp, "attribution"), { maxLength: 300 }),
     sourceUrl: expectString(h.sourceUrl, at(hp, "sourceUrl"), { maxLength: 2000 }),
-    png: new Blob([body.slice()], { type: "image/png" }),
+    png: new Blob([body], { type: "image/png" }),
   };
 }

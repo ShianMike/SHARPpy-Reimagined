@@ -83,6 +83,39 @@ async fn starts_up_and_serves_typed_requests() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn oversized_outbound_request_does_not_poison_other_replies() {
+    let launcher = FakeLauncher::with(vec![script(|mut io| async move {
+        let first = io.expect("health").await.unwrap();
+        let second = io.expect("stations.catalog").await.unwrap();
+        io.reply(&first["id"], fixture("bridge/health.result.ok.json"))
+            .await;
+        io.reply(
+            &second["id"],
+            fixture("bridge/stations.catalog.result.sample.json"),
+        )
+        .await;
+        bridge(io, Arc::default()).await
+    })]);
+    let (supervisor, _sink) = start(launcher);
+    let health = supervisor.request("health", json!({}), 20 * SECOND);
+    let upload = async {
+        sleep(Duration::from_millis(10)).await;
+        let error = supervisor
+            .request(
+                "soundings.open_file",
+                json!({"content_base64": "x".repeat(8 * 1024 * 1024)}),
+                20 * SECOND,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, BridgeFailure::Protocol { .. }));
+        catalog(&supervisor).await
+    };
+    let (health, stations) = tokio::join!(health, upload);
+    assert!(health.is_ok() && stations.is_ok());
+}
+
+#[tokio::test(start_paused = true)]
 async fn replies_are_routed_by_id_out_of_order_and_accept_crlf() {
     let launcher = FakeLauncher::with(vec![script(|mut io| async move {
         let first = io.expect("health").await.unwrap();
@@ -108,6 +141,9 @@ async fn replies_are_routed_by_id_out_of_order_and_accept_crlf() {
 async fn late_reply_after_a_timeout_is_dropped_without_a_restart() {
     let launcher = FakeLauncher::with(vec![script(|mut io| async move {
         let request = io.expect("stations.catalog").await.unwrap();
+        let cancel = io.expect("cancel").await.unwrap();
+        assert_eq!(cancel["params"]["id"], request["id"]);
+        io.reply(&cancel["id"], json!({"ok": true})).await;
         let ping = io.next_request().await.unwrap();
         assert_eq!(ping["method"], "hello");
         io.reply(&ping["id"], hello_result()).await;

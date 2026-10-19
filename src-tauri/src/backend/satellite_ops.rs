@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use crate::backend::map_ops::{context, decode, shrf_frame, time_ok};
+use crate::backend::map_ops::{context, shrf_frame, time_ok};
 use crate::backend::router::Router;
 use crate::backend::sounding_ops::{invalid, rejected};
 use crate::dto::satellite::SatelliteResult;
@@ -54,8 +54,9 @@ impl Router {
         frame
             .validate()
             .map_err(|reason| rejected(&context, "satellite.goes", reason))?;
-        let body = decode(&frame.png_base64)
+        let (bytes, body_offset) = shrf_frame(&frame.header(), &frame.png_base64)
             .map_err(|reason| rejected(&context, "satellite.goes", reason))?;
+        let body = &bytes[body_offset..];
         if !body.starts_with(PNG_SIGNATURE)
             || u64::try_from(body.len()).ok() != Some(frame.byte_length)
         {
@@ -65,6 +66,6 @@ impl Router {
                 "the frame is not the PNG that was described".to_owned(),
             ));
         }
-        Ok(shrf_frame(&frame.header(), &body))
+        Ok(bytes)
     }
 }

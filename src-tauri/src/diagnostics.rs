@@ -30,6 +30,7 @@ async fn check(router: &Router, sample: PathBuf) -> Result<Value, BackendError> 
                 content_base64: base64::engine::general_purpose::STANDARD.encode(data),
             },
             None,
+            None,
         )
         .await?;
     let image = router

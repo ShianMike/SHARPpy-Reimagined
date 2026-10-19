@@ -12,10 +12,12 @@ Related documents: [DATA_CONTRACTS.md](DATA_CONTRACTS.md) (commands, DTOs,
 errors, the bridge protocol), [MAP_RENDERING.md](MAP_RENDERING.md) (MapLibre,
 deck.gl, layers, graphics profiles), [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)
 (layout, themes, and tokens), [MIGRATION.md](MIGRATION.md) (phase status), and
-[AUDIT.md](AUDIT.md) (the Phase 0 audit).
+[AUDIT.md](AUDIT.md) (the Phase 0 audit), and
+[performance/PERFORMANCE_AUDIT.md](../performance/PERFORMANCE_AUDIT.md) (the
+current Rust-first execution map, measurements and migration gates).
 
 The current shell uses the SHARPpy backend. Its workspaces are Overview,
-Model Viewer, Soundings, Logs,
+Model Viewer, Live Tracking, Soundings, Logs,
 and Settings. Analysis, Compare, and Ensemble are removed; ensemble models
 are excluded centrally from UI catalogues. The scientific Python tools and
 headless Qt renderer remain shared backend components. See [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).
@@ -88,9 +90,14 @@ draws one image at a time with `cli.render(infile, outfile, parcel,
 image_mode)`, so successive image requests are serialized. A render that
 passes 120 s (plus 60 s for the worker's start) stops the worker; the next
 request starts a new one. The worker exits with the bridge: its stdin closes,
-and on Windows it is inside the bridge's kill-on-close Job Object. Measured on
-the development machine: the first image of a session about 18 s, later ones
-usually 7 to 8 s.
+and on Windows it is inside the bridge's kill-on-close Job Object. The serial
+worker retains one pristine decoded input and independently calculated science,
+deep-copies it for each request, and invalidates it on source/sidecar/science
+changes. Qt widgets and output images are not shared through that input cache.
+The ordinary unprepared renderer remains the reference and fallback. Current
+measurements, exact-output checks and the historical cold/warm timing limits
+are recorded in [BENCHMARK_RESULTS.md](../performance/BENCHMARK_RESULTS.md);
+the older 18 s / 7-8 s figures are not a current performance guarantee.
 
 **The sounding cache.** Opened soundings live in the bridge: a 24-entry LRU
 (`sharpmod/bridge/sounding_cache.py`) holding each decoded collection, its
@@ -101,6 +108,10 @@ exits. Forecast-model GRIBs and their metadata stay here too. The desktop
 launcher gives each backend process its own parent cache and removes it after
 that process exits, including when shutdown has to stop a busy backend.
 A sounding id from before a bridge restart gets `SOUNDING_NOT_FOUND`.
+An additional session-owned source-hour cache retains one idle model dataset,
+leases active sources and separates model/run/hour/member/spatial identity.
+Its source downloads appear in Storage and are cleaned with the session;
+point-only providers and HRRR Zarr analyses retain their dedicated paths.
 
 The transport is chosen by Vite mode in `frontend/src/main.tsx`: `--mode live`
 (`npm run dev:browser`, or `npm run build:browser` then `npm run preview:browser`)
@@ -348,13 +359,18 @@ changes.
   plus `core:event:allow-listen` and `core:event:allow-unlisten`. No
   `core:default`, no shell, fs, http, dialog, or log permission. A sounding
   file is read in the webview from the file the user picks and sent as
-  base64 (at most 6 MiB). Raw WRF import is a separate operation: the user
+  base64 (at most 5 MiB). Raw WRF import is a separate operation: the user
   supplies an absolute local dataset path, which the backend validates,
   inspects, and reads without modifying the source.
 - **Sidecar:** fixed argv with `-I`, no `PATH` search, a method allowlist, an
   8 MiB frame cap, closed error codes, validated parameters on both sides. The
   render worker has the same fixed argv, no shell, and is only ever given files
   in the bridge's private cache directory.
+- **Cancellation and admission:** forecast queries and model opens forward a
+  request token through `cancel_request` to the Python worker. Stop is
+  cooperative; shared preloads continue while another consumer needs them.
+  The bridge admits at most 24 ordinary requests across its eight workers and
+  queue. Hello, progress and cancellation bypass that admission limit.
 - **Network:** the desktop has no runtime HTTP server or telemetry. Basemap
   tiles and their styles/fonts may load from the CSP-allowed OpenFreeMap host;
   bundled basemap geometry is also available. Meteorological provider requests
@@ -404,9 +420,6 @@ updates signed only by the replacement key. Locally, signing uses the Tauri
   untested, and the macOS overlay title bar is not used.
 - **Scientific Rust integration.** The Python process loads `sharpmod_rs`;
   the Tauri crate does not link or duplicate those numerical kernels.
-- **Per-request cancellation.** Protocol version 1 has none, so a model
-  download (up to 300 s) runs to the end even when the user moves on; its
-  sounding then joins the open list.
 - **Sounding ids after a bridge restart.** The open list keeps its entries,
   but their parameters and new images fail with `SOUNDING_NOT_FOUND` ("Open it
   again"); the frontend does not reopen them by itself.

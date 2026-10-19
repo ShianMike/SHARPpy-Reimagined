@@ -11,6 +11,8 @@ from sharpmod.bridge import params as p
 from sharpmod.bridge import live_cache
 from sharpmod.bridge.errors import BridgeError, error_frame, internal_error
 from sharpmod.bridge.handlers import HANDLERS, health, hello
+from sharpmod.bridge import cancellation
+import threading
 from sharpmod.bridge.protocol import (
     MAX_FRAME_BYTES,
     ProtocolError,
@@ -57,6 +59,7 @@ class BrowserServer(ThreadingHTTPServer):
         super().__init__(address, BrowserHandler)
         self.origins = {origin, origin.replace("127.0.0.1", "localhost")}
         self.since = p.iso(p.now())
+        self.admission = threading.BoundedSemaphore(24)
 
 
 class BrowserHandler(BaseHTTPRequestHandler):
@@ -85,14 +88,33 @@ class BrowserHandler(BaseHTTPRequestHandler):
                 raise p.invalid("Content-Type must be application/json")
             request = decode_request(body)
             command = request.method
+            request_id = request.params.pop("requestId", None)
+            if command == "cancel_request":
+                p.keys(request.params, ())
+                result = cancellation.cancel({"request_id": request_id})
             if command == "get_backend_health":
                 p.keys(request.params, ())
                 result = backend_health(self.server.since)
             elif command in COMMANDS or command == "open_sounding":
                 method, params = bridge_request(command, request.params)
                 check_params(Request(request.id, method, params))
-                result = public_result(command, live_cache.call(method, params, HANDLERS[method]))
-            else:
+                if method == "soundings.progress":
+                    result = public_result(command, HANDLERS[method](params))
+                else:
+                    if not self.server.admission.acquire(blocking=False):
+                        raise BridgeError("INTERNAL", "The backend is busy. Try again shortly.", True)
+                    registered = False
+                    try:
+                        event = cancellation.register(request_id) if request_id is not None else threading.Event()
+                        registered = request_id is not None
+                        with cancellation.scope(event):
+                            result = public_result(command, live_cache.call(method, params, HANDLERS[method]))
+                            cancellation.check()
+                    finally:
+                        if registered:
+                            cancellation.release(request_id)
+                        self.server.admission.release()
+            elif command != "cancel_request":
                 raise BridgeError(
                     "METHOD_NOT_FOUND",
                     f"{command} is unavailable in browser development.",

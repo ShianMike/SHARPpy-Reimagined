@@ -7,6 +7,90 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v3.2.0] - 2026-10-19
+
+### Fixed
+
+- Release a cancelled request's queued worker slot immediately, including
+  cancellation received before submission. Keep running downloads cooperative
+  and send one cancellation reply without waiting for busy workers to finish.
+- Retry temporary sounding calculation failures on later renders instead of
+  retaining failed diagnostics in the prepared input cache.
+- Select above-ground pressure levels separately for each point's fallback
+  surface-vorticity stencil, including its neighboring wind cells. Filter the
+  compatibility path by surface pressure and original common wind levels,
+  leave unusable stencils missing, preserve direct-vorticity precedence, and
+  invalidate derived model soundings with the previous fallback values (E04).
+- Align sounding-file imports at 5 MiB in the UI, Rust and Python, reserving
+  space for base64, UTF-8 names and JSON metadata. Reject oversized serialized
+  requests locally before they can disrupt other bridge replies (E05).
+- Carry forecast-download and model-sounding cancellation through the frontend,
+  desktop or browser transport, worker queue and provider. Stop unused transfers
+  between chunks, cancel obsolete preloads after selection changes, and preserve
+  shared work while another preload or visible panel still needs it. Keep
+  cancellation and progress available outside the bounded 24-request work
+  admission limit; request cancellation after bridge timeouts (E06).
+- Remove a failed model sounding's generated files and raw-download directory
+  after extraction or decoding unwinds, preserving concurrent successful opens.
+  Report malformed portable inputs as sounding errors (E07).
+- Preserve old cache leases owned by live processes. Record process birth
+  identities to reject reused PIDs; use Windows process-query APIs and retain
+  protection when ownership metadata cannot be read (E08).
+
+### Changed
+
+- Refresh the README tour with current 1920 × 1080 app screenshots, release
+  highlights and v3.2.0 downloads. Ignore generated release staging folders
+  and TypeScript compiler state. Keep agent and release instructions local
+  and excluded from Git.
+- Require AI agents to maintain the changelog and user-facing release
+  highlights through repository release instructions, preserving the
+  unreleased status until publication is explicitly authorized.
+- Redesign Overview around three clear workspace choices for Model Viewer,
+  Live Tracking and Soundings. Remove decorative icons and nested cards,
+  keep model availability and session activity in expandable rows, and retain
+  direct sounding-source navigation and saved forecast selections.
+- Prepare upcoming model-field images before playback advances, yielding
+  between packing tasks. Share prepared Sharp and Smooth data across panels,
+  cancel obsolete preparation, and preserve full field values and palettes.
+- Reuse one pristine decoded sounding in the serial render worker, cloning it
+  for each request and retaining only independently calculated diagnostics.
+  Invalidate reuse when source files, sidecars, science configuration or profile
+  inputs change; preserve exact chart pixels, edits, metadata and export quality.
+- Reuse one model-hour source across repeated forecast sounding requests,
+  retaining independent point profiles, exact model/run/hour/member identity
+  and point-provider boundaries. Share downloads without letting one Stop
+  cancel another consumer; bound background producers and protect active
+  sources during storage clearing and shutdown.
+- Decode model, radar and satellite base64 bodies directly into their final
+  native map frame and remove redundant frontend PNG copies, preserving all
+  binary contracts, data validation and immutable image bytes.
+- Reduce HD and UHD sounding PNG encoding effort while preserving every
+  decoded pixel, chart dimension and lossless export. Keep original-size
+  compression and explicit compression overrides available.
+- Enforce configured persistent batch-cache limits at startup and after cached
+  datasets close and release their directory leases, including long runs (E09).
+- Bound forecast map files to 2 GiB and 48 hours after use. Evict old frames
+  before retaining new ones, preserve active partial writes and skip symlinks,
+  junctions and unmanaged files. Reconcile concurrent backend writes after
+  publishing. Keep rendering usable when the disk is full or
+  protected files prevent retaining another frame (E09).
+- Acquire a cold model product once for its raster, winds and contours, sharing
+  the compact results across simultaneous requests and releasing raw arrays.
+  Keep usable raster data when auxiliary geometry fails, and allow retry (E10).
+- Distinguish forecast hours saved to disk from frames ready in memory. Add
+  download details with both counts, missing and failed hours, cache checking,
+  and retry. Reconcile counts after memory eviction and cache clearing while
+  retaining bounded memory and rolling playback prefetch (E11).
+
+### Added
+
+- Show concise release highlights once after an installed version changes,
+  with a permanent summary and a View highlights action in Settings → Updates.
+  Share version-specific notes with the updater feed, while fresh installs
+  continue to open Overview.
+- Add a Stop download action beside a model sounding's transfer progress (E06).
+
 ## [v3.1.0] - 2026-10-18
 
 ### Added

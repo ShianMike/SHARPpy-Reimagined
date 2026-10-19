@@ -6,6 +6,10 @@ import { DEFAULT_UNITS, parseUnitPreferences, type UnitPreferences } from "../li
 export type Theme = "system" | "light" | "dark";
 type PopupPosition = { x: number; y: number } | null;
 interface UiState {
+  lastVersion: string | null;
+  whatsNewOpen: boolean;
+  prepareReleaseNotes(version: string, returning: boolean): void;
+  setWhatsNewOpen(value: boolean): void;
   navigationOpen: boolean;
   setNavigationOpen(value: boolean): void;
   collapsed: boolean;
@@ -24,7 +28,20 @@ interface UiState {
   setSmoothPlayback(value: boolean): void;
 }
 export const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2] as const;
-export const useUiStore = create<UiState>()(persist((set) => ({
+export const useUiStore = create<UiState>()(persist((set, get) => ({
+  lastVersion: null,
+  whatsNewOpen: false,
+  prepareReleaseNotes: (version, returning) => {
+    const previous = get().lastVersion;
+    if (previous === version) return;
+    // A failed storage write must not prevent startup; Zustand already updated the session state.
+    try { set({ lastVersion: version, whatsNewOpen: previous !== null || returning }); }
+    catch (error) { console.warn(`[updates] Release highlights could not be remembered (${String(error)})`); }
+  },
+  setWhatsNewOpen: (whatsNewOpen) => {
+    try { set({ whatsNewOpen }); }
+    catch (error) { console.warn(`[updates] Release highlights stay available for this session (${String(error)})`); }
+  },
   navigationOpen: false,
   setNavigationOpen: (navigationOpen) => { set({ navigationOpen }); },
   collapsed: false,
@@ -43,11 +60,12 @@ export const useUiStore = create<UiState>()(persist((set) => ({
   setSmoothPlayback: (smoothPlayback) => { set({ smoothPlayback }); },
 }), {
   name: "sharppy-workspace-ui",
-  partialize: ({ collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }) => ({ collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }),
+  partialize: ({ lastVersion, collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }) => ({ lastVersion, collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }),
   merge: (saved, current) => {
     const value = saved !== null && typeof saved === "object" ? saved as Record<string, unknown> : {};
     const positions = value.popupPositions !== null && typeof value.popupPositions === "object" ? value.popupPositions as Record<string, unknown> : {};
     return { ...current,
+      lastVersion: typeof value.lastVersion === "string" && /^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/u.test(value.lastVersion) ? value.lastVersion : null,
       collapsed: typeof value.collapsed === "boolean" ? value.collapsed : current.collapsed,
       theme: value.theme === "light" || value.theme === "dark" ? value.theme : "system",
       speed: PLAYBACK_SPEEDS.find((speed) => speed === value.speed) ?? 1,

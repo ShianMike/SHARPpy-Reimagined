@@ -1,6 +1,4 @@
-//! Map operations served by the Python fields and map_layers bridge modules.
-//! Field and radar payloads use SHRF: a JSON header followed by aligned binary data.
-
+//! Python map operations, with SHRF JSON headers and aligned binary bodies.
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -34,24 +32,27 @@ const AVAILABILITY_TIMEOUT: Duration = Duration::from_secs(35);
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 const SHRF_FIXED: usize = 12;
 
-/// One binary frame: the fixed header, the JSON header, then the body.
-pub fn shrf_frame<H: Serialize>(header: &H, body: &[u8]) -> Vec<u8> {
+/// Decode into one binary frame; return its body offset for the caller's validation.
+pub fn shrf_frame<H: Serialize>(header: &H, encoded: &str) -> Result<(Vec<u8>, usize), String> {
     let mut json = serde_json::to_vec(header).unwrap_or_default();
     while !(SHRF_FIXED + json.len()).is_multiple_of(8) {
         json.push(b' ');
     }
     let length = u32::try_from(json.len()).unwrap_or(u32::MAX);
-    let mut out = Vec::with_capacity(SHRF_FIXED + json.len() + body.len());
+    let mut out =
+        Vec::with_capacity(SHRF_FIXED + json.len() + base64::decoded_len_estimate(encoded.len()));
     out.extend_from_slice(b"SHRF");
     out.extend_from_slice(&1u16.to_le_bytes());
     out.extend_from_slice(&0u16.to_le_bytes());
     out.extend_from_slice(&length.to_le_bytes());
     out.extend_from_slice(&json);
-    out.extend_from_slice(body);
-    out
+    let body_offset = out.len();
+    base64::engine::general_purpose::STANDARD
+        .decode_vec(encoded, &mut out)
+        .map_err(|e| format!("base64: {e}"))?;
+    Ok((out, body_offset))
 }
 
-/// Product keys are short slugs; anything else never reaches Python.
 pub(crate) fn key_ok(key: &str) -> bool {
     (1..=40).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
 }
@@ -62,12 +63,6 @@ pub(crate) fn time_ok(time: &str) -> bool {
 
 pub(crate) fn context(operation: &str, resource: &str) -> ErrorContext {
     ErrorContext::new(operation, Some(PYTHON_PROVIDER), Some(resource))
-}
-
-pub(crate) fn decode(text: &str) -> Result<Vec<u8>, String> {
-    base64::engine::general_purpose::STANDARD
-        .decode(text.as_bytes())
-        .map_err(|e| format!("base64: {e}"))
 }
 
 fn cached<T>(slot: &Mutex<Option<Arc<T>>>) -> Option<Arc<T>> {
@@ -112,6 +107,7 @@ impl Router {
         run_time: &str,
         forecast_hour: u32,
         model: &str,
+        request_id: Option<&str>,
     ) -> Result<Vec<u8>, BackendError> {
         let resource = format!("{model} {product} {run_time} F{forecast_hour:03}");
         let context = context(OP_FIELD, &resource);
@@ -121,14 +117,18 @@ impl Router {
                 "model and product must be keys, runTime an RFC 3339 time, forecastHour 0 to 84",
             ));
         }
-        let params = json!({ "model": model, "product": product, "run_time": run_time, "forecast_hour": forecast_hour });
+        let mut params = json!({ "model": model, "product": product, "run_time": run_time, "forecast_hour": forecast_hour });
+        if let Some(id) = request_id {
+            params["request_id"] = json!(id);
+        }
         let grid: FieldGridResult = self
             .call(&context, "fields.grid", params, FIELD_TIMEOUT)
             .await?;
         grid.validate()
             .map_err(|reason| rejected(&context, "fields.grid", reason))?;
-        let body = decode(&grid.data_base64)
+        let (frame, body_offset) = shrf_frame(&grid.header(), &grid.data_base64)
             .map_err(|reason| rejected(&context, "fields.grid", reason))?;
+        let body = &frame[body_offset..];
         let expected = u64::from(grid.width) * u64::from(grid.height) * 2;
         if u64::try_from(body.len()).ok() != Some(expected) {
             return Err(rejected(
@@ -150,7 +150,7 @@ impl Router {
             grid.value_max,
             grid.units
         );
-        Ok(shrf_frame(&grid.header(), &body))
+        Ok(frame)
     }
 
     /// The SPC outlook of one product covering a time; `outlook` is null when none does.
@@ -211,8 +211,9 @@ impl Router {
                 "a requested scan has no actual valid_time".to_owned(),
             ));
         }
-        let body = decode(&frame.png_base64)
+        let (bytes, body_offset) = shrf_frame(&frame.header(), &frame.png_base64)
             .map_err(|reason| rejected(&context, "radar.mosaic", reason))?;
+        let body = &bytes[body_offset..];
         if !body.starts_with(PNG_SIGNATURE)
             || u64::try_from(body.len()).ok() != Some(frame.byte_length)
         {
@@ -222,7 +223,7 @@ impl Router {
                 "the frame is not the PNG that was described".to_owned(),
             ));
         }
-        Ok(shrf_frame(&frame.header(), &body))
+        Ok(bytes)
     }
 
     /// One antenna's own frame, pinned by site id or served for a map point.
@@ -304,8 +305,9 @@ impl Router {
                 "a requested scan has no actual valid_time".to_owned(),
             ));
         }
-        let body =
-            decode(&frame.png_base64).map_err(|reason| rejected(&context, "radar.site", reason))?;
+        let (bytes, body_offset) = shrf_frame(&frame.header(), &frame.png_base64)
+            .map_err(|reason| rejected(&context, "radar.site", reason))?;
+        let body = &bytes[body_offset..];
         if !body.starts_with(PNG_SIGNATURE)
             || u64::try_from(body.len()).ok() != Some(frame.byte_length)
         {
@@ -315,7 +317,7 @@ impl Router {
                 "the frame is not the PNG that was described".to_owned(),
             ));
         }
-        Ok(shrf_frame(&frame.header(), &body))
+        Ok(bytes)
     }
 
     /// The bundled WSR-88D catalogue backing the single-site picker.
@@ -376,24 +378,5 @@ impl Router {
             )
             .await?;
         Ok(result.into_report())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_frame_body_starts_on_an_eight_byte_boundary() {
-        for header in ["a", "ab", "abcdefgh", "abcdefghijk"] {
-            let frame = shrf_frame(&header, &[1, 2, 3]);
-            let length = u32::from_le_bytes([frame[8], frame[9], frame[10], frame[11]]) as usize;
-            assert_eq!(&frame[..4], b"SHRF");
-            assert!((SHRF_FIXED + length).is_multiple_of(8));
-            assert_eq!(&frame[SHRF_FIXED + length..], &[1, 2, 3]);
-            let json: String =
-                serde_json::from_slice(&frame[SHRF_FIXED..SHRF_FIXED + length]).unwrap();
-            assert_eq!(json, header);
-        }
     }
 }

@@ -100,7 +100,7 @@ def entry_collection(sounding_id: Any) -> tuple[Entry, Any]:
 def decode(path: Path, display: str | None = None) -> tuple[Any, str]:
     try:
         return decode_collection(path)
-    except SoundingDecodeError as exc:
+    except (SoundingDecodeError, ValueError) as exc:
         raise BridgeError(
             "SOUNDING_INVALID",
             f"{display or path.name} is not a sounding sharpmod can read "

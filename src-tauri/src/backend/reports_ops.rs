@@ -102,6 +102,7 @@ impl Router {
         run_time: &str,
         forecast_hour: u32,
         model: &str,
+        request_id: Option<&str>,
     ) -> Result<ContourLines, BackendError> {
         let context = context(
             OP_CONTOURS,
@@ -116,13 +117,12 @@ impl Router {
         if forecast_hour > 84 {
             return Err(invalid(&context, "forecastHour must be 0 to 84"));
         }
+        let mut params = json!({ "model": model, "product": product, "run_time": run_time, "forecast_hour": forecast_hour });
+        if let Some(id) = request_id {
+            params["request_id"] = json!(id);
+        }
         let lines: ContourLines = self
-            .call(
-                &context,
-                "fields.contours",
-                json!({ "model": model, "product": product, "run_time": run_time, "forecast_hour": forecast_hour }),
-                CONTOURS_TIMEOUT,
-            )
+            .call(&context, "fields.contours", params, CONTOURS_TIMEOUT)
             .await?;
         lines
             .validate()

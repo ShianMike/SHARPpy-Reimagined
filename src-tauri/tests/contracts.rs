@@ -359,7 +359,6 @@ fn split_frame(frame: &[u8]) -> (Value, &[u8]) {
 
 #[test]
 fn map_fixtures_convert_from_bridge_to_public_form() {
-    use base64::Engine as _;
     use sharppy_reimagined_lib::backend::map_ops::shrf_frame;
     use sharppy_reimagined_lib::dto::map::{
         AvailabilityResult, FieldGridResult, MapCatalog, PlaceLabels, RadarResult,
@@ -408,11 +407,9 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
         value("public/map/availability.json")
     );
 
-    let engine = base64::engine::general_purpose::STANDARD;
     let grid: FieldGridResult = typed("bridge/map/field.result.json");
     grid.validate().unwrap();
-    let cells = engine.decode(&grid.data_base64).unwrap();
-    let built = shrf_frame(&grid.header(), &cells);
+    let (built, _) = shrf_frame(&grid.header(), &grid.data_base64).unwrap();
     let committed = fs::read(contracts().join("public/map/field.shrf")).unwrap();
     let (built_header, built_body) = split_frame(&built);
     let (header, body) = split_frame(&committed);
@@ -422,8 +419,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
 
     let radar: RadarResult = typed("bridge/map/radar.result.json");
     radar.validate().unwrap();
-    let png = engine.decode(&radar.png_base64).unwrap();
-    let built = shrf_frame(&radar.header(), &png);
+    let (built, _) = shrf_frame(&radar.header(), &radar.png_base64).unwrap();
     let committed = fs::read(contracts().join("public/map/radar.shrf")).unwrap();
     let (built_header, built_body) = split_frame(&built);
     let (header, body) = split_frame(&committed);
@@ -434,8 +430,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
     let site: RadarSiteResult = typed("bridge/map/radar-site.result.json");
     site.validate().unwrap();
     assert_eq!(site.site_id, "KTLX");
-    let png = engine.decode(&site.png_base64).unwrap();
-    let built = shrf_frame(&site.header(), &png);
+    let (built, _) = shrf_frame(&site.header(), &site.png_base64).unwrap();
     let committed = fs::read(contracts().join("public/map/radar-site.shrf")).unwrap();
     let (built_header, built_body) = split_frame(&built);
     let (header, body) = split_frame(&committed);
@@ -572,8 +567,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
         goes.validate().unwrap();
         assert_eq!(goes.satellite, "G19");
         assert_eq!(goes.product, channel);
-        let png = engine.decode(&goes.png_base64).unwrap();
-        let built = shrf_frame(&goes.header(), &png);
+        let (built, _) = shrf_frame(&goes.header(), &goes.png_base64).unwrap();
         let committed = fs::read(contracts().join(public)).unwrap();
         let (built_header, built_body) = split_frame(&built);
         let (header, body) = split_frame(&committed);
@@ -731,4 +725,46 @@ fn golden_catalogue_holds_the_whole_bundled_file() {
     let catalog: StationCatalog = typed("public/stations.catalog.full.json");
     assert_eq!(catalog.stations.len(), 933);
     catalog.validate().unwrap();
+}
+
+#[test]
+fn the_frame_body_starts_on_an_eight_byte_boundary() {
+    use sharppy_reimagined_lib::backend::map_ops::shrf_frame;
+    for header in ["a", "ab", "abcdefgh", "abcdefghijk"] {
+        let (frame, body_offset) = shrf_frame(&header, "AQID").unwrap();
+        let length = u32::from_le_bytes([frame[8], frame[9], frame[10], frame[11]]) as usize;
+        assert_eq!(&frame[..4], b"SHRF");
+        assert!((12 + length).is_multiple_of(8));
+        assert_eq!(body_offset, 12 + length);
+        assert_eq!(&frame[12 + length..], &[1, 2, 3]);
+        let json: String = serde_json::from_slice(&frame[12..12 + length]).unwrap();
+        assert_eq!(json, header);
+    }
+}
+
+#[test]
+fn direct_decode_preserves_every_padding_length_and_rejects_noncanonical_base64() {
+    use base64::Engine as _;
+    use sharppy_reimagined_lib::backend::map_ops::shrf_frame;
+    for body in [
+        &[][..],
+        &[1][..],
+        &[1, 2][..],
+        &[1, 2, 3][..],
+        &[1, 2, 3, 4][..],
+    ] {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(body);
+        let (frame, body_offset) =
+            shrf_frame(&serde_json::json!({"label": "雷"}), &encoded).unwrap();
+        assert_eq!(&frame[body_offset..], body);
+        assert!(body_offset.is_multiple_of(8));
+    }
+    for encoded in [
+        "!", "A", "AQ", "AQI", "AQ===", "AQ==AA==", "AA=A", "AB==", "AAB=", "AQID\n",
+    ] {
+        assert!(
+            shrf_frame(&(), encoded).unwrap_err().starts_with("base64:"),
+            "{encoded:?}"
+        );
+    }
 }

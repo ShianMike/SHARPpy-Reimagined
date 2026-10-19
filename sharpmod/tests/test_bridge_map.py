@@ -86,6 +86,8 @@ def test_downloaded_frames_survive_memory_eviction_and_corrupt_files_reload(offl
     assert fields.grid(request) == grid
     assert contours.contours(request) == lines
     model, product, run, hour = fields._request(request)
+    frame_cache.path("contours", model, product.key, run, hour, fields.FRAME).unlink()
+    assert fields.grid(request) == grid  # A missing auxiliary file must not block an offline raster.
     target = frame_cache.path("grid", model, product.key, run, hour, fields.FRAME)
     assert target != frame_cache.path("grid", "rrfs-a", product.key, run, hour, fields.FRAME)
     assert target != frame_cache.path("grid", model, product.key, run, hour, (1, 1))
@@ -100,6 +102,57 @@ def test_the_committed_map_fixtures_are_current():
         assert (CONTRACTS / relative).read_bytes() == data, (
             f"{relative} is stale; run scripts/export_map_fixtures.py"
         )
+
+
+def test_cold_raster_and_geometry_share_one_acquisition(offline, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from sharpmod.bridge import contours
+    from sharpmod.providers import hrrr_field
+
+    hrrr_field.clear_cache()
+    original = hrrr_field._download_fields
+    calls = []
+    downloading, resume = Event(), Event()
+    def download(*args, **kwargs):
+        calls.append((args[0].key, kwargs["model"]))
+        downloading.set()
+        assert resume.wait(timeout=5)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(hrrr_field, "_download_fields", download)
+    request = {"model": "hrrr", "product": "hgt-wind-500", "run_time": EXPORT.RUN_TIME, "forecast_hour": 2}
+    with ThreadPoolExecutor(2) as pool:
+        raster = pool.submit(fields.grid, request)
+        assert downloading.wait(timeout=5)
+        geometry = pool.submit(contours.contours, request)
+        resume.set()
+        grid, lines = raster.result(timeout=10), geometry.result(timeout=10)
+    assert calls == [("hgt-wind-500", "hrrr")]
+    assert grid["data_base64"] and lines["wind"] and lines["segments"]
+    hrrr_field.clear_cache()
+    assert fields.grid(request) == grid and contours.contours(request) == lines
+    assert len(calls) == 1 and not fields._FLIGHTS
+    from sharpmod.bridge.frame_cache import cached_hours, path
+    cache_request = {"model": "hrrr", "products": ["hgt-wind-500"], "run_time": EXPORT.RUN_TIME, "hours": [1, 2]}
+    assert cached_hours(cache_request) == [2]
+    model, product, run, hour = fields._request(request)
+    path("contours", model, product.key, run, hour, fields.FRAME).unlink()
+    assert cached_hours(cache_request) == []
+
+
+def test_auxiliary_failure_keeps_the_raster_and_can_retry(offline, monkeypatch):
+    from sharpmod.bridge import contours
+    original = contours._from_decoded
+    def fail(*_args):
+        raise BridgeError("FIELD_FETCH_FAILED", "too many contours", False)
+    monkeypatch.setattr(contours, "_from_decoded", fail)
+    request = {"model": "hrrr", "product": "hgt-wind-500", "run_time": EXPORT.RUN_TIME, "forecast_hour": 3}
+    assert fields.grid(request)["data_base64"]
+    with pytest.raises(BridgeError, match="too many contours"):
+        contours.contours(request)
+    monkeypatch.setattr(contours, "_from_decoded", original)
+    assert contours.contours(request)["wind"]
+    assert not fields._FLIGHTS
 
 
 @pytest.mark.parametrize("model", ["hrrr", "rrfs-a", "nam-3km-conus", *(f"refs-m{i}" for i in range(1, 6))])

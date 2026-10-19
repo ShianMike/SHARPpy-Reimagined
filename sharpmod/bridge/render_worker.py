@@ -55,7 +55,9 @@ def main() -> int:
     if warning:
         log.warning("%s; descriptor-level protection still holds", warning)
     from sharpmod.rendering import cli  # Qt, fonts, and the SHARPpy widgets, once
+    from sharpmod.rendering.prepared import PreparedInputCache
 
+    prepared = PreparedInputCache()
     log.info("render worker ready (pid %d)", os.getpid())
     for line in proto_in:
         try:
@@ -73,7 +75,7 @@ def main() -> int:
             view_result: dict[str, Any] = {}
             cli.render(infile, outfile, parcel=parcel, image_mode=mode,
                        view=request.get("view"), view_result=view_result,
-                       show_locator=False)
+                       show_locator=False, _prepared=prepared)
             reply: dict[str, Any] = {"id": request_id, "ok": True, "view": view_result}
         except Exception as exc:  # noqa: BLE001 - every failure is reported
             log.exception("render of %s failed", infile)

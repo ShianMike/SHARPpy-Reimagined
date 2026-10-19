@@ -43,5 +43,6 @@
   --accent-bright: var(--workspace-orange-text); --accent-subtle: var(--workspace-orange-subtle);
   --fill-selected: var(--workspace-orange-subtle); --fill-pressed: var(--workspace-orange-subtle); --focus-ring: var(--workspace-orange-text); --link: var(--workspace-orange-text);
 }
+.workspace[data-workspace="overview"] { height: auto; }
 .workspace[data-workspace="settings"] { width: min(var(--dialog-w), calc(100% - var(--dock-offset) - var(--chrome-inset))); height: min(var(--floating-panel-h), calc(100% - 2 * var(--chrome-inset))); }
 .workspace[data-workspace="status"] { height: min(var(--floating-panel-h), calc(100% - 2 * var(--chrome-inset))); }

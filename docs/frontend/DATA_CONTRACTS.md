@@ -73,7 +73,7 @@ lists recent runs; `analyze_profile` became `get_sounding_analysis`.)
 ### Local sounding imports
 
 `open_sounding` accepts `kind: "file"` with `fileName` and
-`contentBase64`. Both boundaries enforce a decoded size of at most 6 MiB;
+`contentBase64`. Both boundaries enforce a decoded size of at most 5 MiB;
 failed decoding removes the temporary upload. NPZ, SPC, BUFKIT, PECAN, and
 UWyo text or HTML use the existing decoder registry.
 
@@ -212,7 +212,7 @@ export type OpenSoundingRequest =
       provider: "auto" | "uwyo" | "iem" | "igra" }
   | { kind: "model"; model: string; runTime: string | null;       // null: the model's latest
       forecastHour: number; latitude: number; longitude: number; location: string | null }
-  | { kind: "file"; fileName: string; contentBase64: string };    // at most 6 MiB of data
+  | { kind: "file"; fileName: string; contentBase64: string };    // at most 5 MiB of data
 export interface SoundingSummary {
   soundingId: string;                     // the bridge cache key, 16 hex characters
   kind: "observed" | "model" | "file";
@@ -508,8 +508,10 @@ three outcomes:
 - **Envelope.** Request `{"id", "method", "params"}`, exactly those keys;
   reply `{"id", "result"}` or `{"id", "error"}`. `id` is an integer from 1 to
   2^53 − 1; `null` only in replies to frames Python could not parse. Replies may
-  arrive in any order (an eight-thread pool; `hello` is answered on the read
-  loop itself) and are matched by id.
+  arrive in any order (an eight-thread pool with at most 24 admitted ordinary
+  requests). Hello, progress and cancellation run outside that pool and its
+  admission limit. Replies are matched by id. Rust checks the final serialized
+  UTF-8 frame size before writing, so an oversized request fails on its own.
 - **Methods** (an allowlist; anything else is `METHOD_NOT_FOUND`):
 
 | Method | Params | Result |
@@ -518,11 +520,12 @@ three outcomes:
 | `health` | `{}` | `{"scientific_backend": {...}}`: the five `backend_info()` keys plus `status` |
 | `stations.catalog` | `{}` | `{"stations": [{"id", "name", "lat", "lon", "src"}], "origin": "bundled" \| "seed_fallback", "dropped_count"}` |
 | `shutdown` | `{}` | `{"ok": true}`, then the bridge stops reading and exits 0 |
+| `cancel` | `request_id` (1 to 64 ASCII letters/digits), or numeric wire `id` for a supervisor timeout | `{"ok": true}`; cooperative stop for the target |
 | `models.catalog` | `{}` | `{"models": [...], "generated_at"}`, from `tools.model_extract.available_models()` |
 | `soundings.open_observed` | `station_id`, `time`, optional `provider` (`auto`, `uwyo`, `iem`, `igra`) | the sounding summary (snake_case `SoundingSummary`) |
 | `soundings.open_model` | `model`, `forecast_hour`, `latitude`, `longitude`, optional `run_time`, `location` and `progress_id` | the sounding summary |
 | `soundings.progress` | `progress_id` | `stage`, `downloaded_bytes`, `bytes_per_second`; active requests only, zero counters otherwise |
-| `soundings.open_file` | `file_name`, `content_base64` (at most 6 MiB of data) | the sounding summary |
+| `soundings.open_file` | `file_name`, `content_base64` (at most 5 MiB of data) | the sounding summary |
 | `soundings.analysis` | `sounding_id` | the parameters (snake_case `SoundingAnalysis`) |
 | `soundings.trends` | `sounding_id` | the Trends (snake_case `SoundingTrends`) |
 | `thresholds.metrics` | `{}` | the registry diagnostics with their control bounds (`analysis.metric_controls.control_for`), the `operators` in control order, and the `default_metrics` (`sharpmod/bridge/thresholds.py`) |
@@ -531,6 +534,7 @@ three outcomes:
 | `soundings.render` | `sounding_id`, optional `parcel` (`SFC`, `ML`, `FCST`, `MU`, `EFF`) and `image_mode` (`hd`, `uhd`) | `sounding_id`, `parcel`, `image_mode`, `width`, `height`, `byte_length`, `png_base64` |
 | `map.catalog` | optional `model` (HRRR by default) | the snake_case `MapCatalog` (`sharpmod/bridge/fields.py`) |
 | `fields.grid` | `product`, `run_time` (a whole hour), `forecast_hour` (0 to 84), optional `model` | the field header in snake_case plus `data_base64`, the uint16 cells |
+| `fields.cached` | `model`, `products` (1 to 4 keys), `run_time`, `hours` (1 to 85 values from 0 to 84) | sorted unique hours with every requested field and required auxiliary file saved on disk |
 | `outlooks.spc` | `product` (`cat`, `torn`, `wind`, `hail`), `valid_time` | `product`, `valid_time`, `outlook` (null, or the snake_case outlook) (`sharpmod/bridge/map_layers.py`) |
 | `radar.mosaic` | optional `product` | the radar header in snake_case plus `byte_length` and `png_base64` |
 | `radar.site` | optional `product`, `site_id` (a WSR-88D id) or `latitude` + `longitude` | the single-site header in snake_case plus `site_id`, `byte_length`, and `png_base64` (`sharpmod/bridge/map_layers.py`) |
@@ -627,11 +631,16 @@ attempt counter resets to 0 once a child has stayed `up` 60 s, checked at the
 next crash, so no timer is needed. The fifth crash in a sliding 60 s window
 gives `BRIDGE_UNAVAILABLE`; only `restart_backend` leaves it.
 
-**Cancellation.** Version 1 has no per-request cancellation. A timed-out
-request leaves the pending map; its Python work finishes and the late reply is
-dropped. The frontend does not forward TanStack's `AbortSignal`, because
-`invoke` cannot be cancelled. Only `shutdown` (cancels queued work) and a kill
-stop Python work. Requests pending when Restart backend kills the child fail
+**Cancellation.** Forecast field/contour requests and model opens may carry
+`request_id` in their bridge params. The frontend consumes TanStack's
+`AbortSignal` and sends `cancel_request` with `requestId`; the desktop maps it
+to `cancel`, while browser development signals the same registry directly.
+Imperative preloads retain ownership until no other preload or visible query
+needs the work. Cancellation stops queued work before it starts and running
+providers at their next checkpoint, rather than terminating a Python thread.
+Timeouts remove the pending waiter, request cancellation by numeric wire id,
+then perform the existing liveness check; late replies are dropped. Requests
+pending when Restart backend kills the child fail
 `BRIDGE_CRASHED` with `details.reason: "restartRequested"`, and the client then
 refetches.
 
@@ -698,7 +707,7 @@ to `uwyo_catalog.search_stations()`.
 | Input | Rule | Owner |
 |---|---|---|
 | Phase 1 command arguments | None are read | n/a |
-| Sounding command arguments | `deny_unknown_fields`; station id 1 to 16 characters; model key 1 to 40; file name 1 to 255; file data 1 byte to 6 MiB; forecast hour at most 1000; finite coordinates in range; sounding id 1 to 64 ASCII letters and digits (the bridge issues 16 hex digits) | `src-tauri/src/dto/soundings.rs`, `backend/sounding_ops.rs` |
+| Sounding command arguments | `deny_unknown_fields`; station id 1 to 16 characters; model key 1 to 40; file name 1 to 255; file data 1 byte to 5 MiB; forecast hour at most 1000; finite coordinates in range; sounding id 1 to 64 ASCII letters and digits (the bridge issues 16 hex digits) | `src-tauri/src/dto/soundings.rs`, `backend/sounding_ops.rs` |
 | Bridge `params` | an object; `hello` exactly `protocol_version: 1`; the sounding methods check their keys, types, ranges, and choices again | `sharpmod/bridge/protocol.py`, `sharpmod/bridge/params.py` |
 | Bridge replies | envelope, frame cap, UTF-8 JSON, routing by id, closed codes, `deny_unknown_fields`, the record rule | `src-tauri/src/python/protocol.rs`, `supervisor/`, `backend/convert.rs` |
 | Command replies and events | hand-written parsers (`guards.ts`, `health.ts`, `stations.ts`, `errors.ts`); timestamps must match `^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$`; duplicate ids rejected | `frontend/src/lib/contracts/` |

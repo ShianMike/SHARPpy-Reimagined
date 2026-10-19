@@ -5,13 +5,14 @@
 //! Rust is the trust boundary in front of the webview: every payload is
 //! checked with `validate` before it is returned.
 
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 
 use crate::dto::checks::{check_lat_lon, check_opt_text, check_text};
 
 pub const MAX_TEXT: usize = 300;
-/// About 6 MiB of data as base64.
-pub const MAX_UPLOAD_BASE64: usize = 8 * 1024 * 1024 + 8;
+/// Five MiB of data, leaving room for UTF-8 names and the 8 MiB wire envelope.
+pub const MAX_UPLOAD_BASE64: usize = (5 * 1024 * 1024_usize).div_ceil(3) * 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -121,8 +122,13 @@ impl OpenSoundingRequest {
                 content_base64,
             } => {
                 check_text("fileName", file_name, 1, 255)?;
-                if content_base64.is_empty() || content_base64.len() > MAX_UPLOAD_BASE64 {
-                    return Err("the file must be 1 byte to 6 MiB".into());
+                if content_base64.is_empty()
+                    || content_base64.len() > MAX_UPLOAD_BASE64
+                    || base64::engine::general_purpose::STANDARD
+                        .decode(content_base64)
+                        .map_or(true, |data| data.len() > 5 * 1024 * 1024)
+                {
+                    return Err("the file must be 1 byte to 5 MiB".into());
                 }
                 Ok(())
             }

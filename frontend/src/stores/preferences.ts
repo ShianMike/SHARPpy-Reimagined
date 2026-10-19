@@ -155,7 +155,7 @@ export function resetAllSettings(): void {
   const { cameraSnapshot, focusRequest } = useMapStore.getState();
   useMapStore.setState({ ...useMapStore.getInitialState(), cameraSnapshot, focusRequest }, true);
   useForecastStore.setState(useForecastStore.getInitialState(), true);
-  useUiStore.setState(useUiStore.getInitialState(), true);
+  useUiStore.setState({ ...useUiStore.getInitialState(), lastVersion: useUiStore.getState().lastVersion }, true);
   useGraphicsStore.getState().setOverride(DEFAULT_PREFERENCES.graphicsOverride);
 }
 

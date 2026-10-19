@@ -20,6 +20,7 @@ COMMANDS = {
     "inspect_wrf": "soundings.inspect_wrf",
     "get_map_catalog": "map.catalog",
     "get_weather_field": "fields.grid",
+    "get_cached_forecast_hours": "fields.cached",
     "get_spc_outlook": "outlooks.spc",
     "get_weather_alerts": "alerts.weather",
     "get_radar_frame": "radar.mosaic",
@@ -106,6 +107,8 @@ def bridge_request(command: str, args: dict[str, Any]) -> tuple[str, dict[str, A
 
 
 def public_result(command: str, result: dict[str, Any]) -> dict[str, Any] | bytes:
+    if command == "get_cached_forecast_hours":
+        return result
     if command in FRAME_KINDS or command == "render_sounding":
         encoded_key = "data_base64" if command == "get_weather_field" else "png_base64"
         body = base64.b64decode(result[encoded_key], validate=True)

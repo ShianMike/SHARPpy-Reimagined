@@ -40,6 +40,7 @@ it("cancels without changing the setup, then resets preferences while keeping op
   useUiStore.getState().setLoop(false);
   useUiStore.getState().setUnits({ temperature: "°C", wind: "m/s" });
   useUiStore.getState().setPopupPosition("model", { x: 80, y: 90 });
+  useUiStore.setState({ lastVersion: "3.1.0" });
   useGraphicsStore.getState().setOverride("low");
   useGraphicsStore.setState({ renderer: "ready", mapAttempt: 7 });
   useAppStore.getState().selectPoint({ latitude: 40, longitude: -90 });
@@ -58,8 +59,8 @@ it("cancels without changing the setup, then resets preferences while keeping op
   expect(useMapStore.getState()).toMatchObject({ ...initialMap, cameraSnapshot: { center: [-90, 40], zoom: 5 } });
   for (let panel = 0; panel < 4; panel++) expect(panelLayers(useMapStore.getState(), panel)).toEqual(panelLayers(initialMap, panel));
   expect(useForecastStore.getState()).toEqual(initialForecast);
-  expect(useUiStore.getState()).toEqual(initialUi);
-  expect(JSON.parse(localStorage.getItem("sharppy-workspace-ui") ?? "{}")).toMatchObject({ state: { theme: "system", units: initialUi.units, speed: 1, loop: true, popupPositions: {} } });
+  expect(useUiStore.getState()).toEqual({ ...initialUi, lastVersion: "3.1.0" });
+  expect(JSON.parse(localStorage.getItem("sharppy-workspace-ui") ?? "{}")).toMatchObject({ state: { lastVersion: "3.1.0", theme: "system", units: initialUi.units, speed: 1, loop: true, popupPositions: {} } });
   expect(useGraphicsStore.getState()).toMatchObject({ override: "auto", renderer: "ready", mapAttempt: 7 });
   expect(useAppStore.getState().selectedPoint).toEqual({ latitude: 40, longitude: -90 });
   expect(useSoundingStore.getState()).toBe(openWork);

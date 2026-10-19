@@ -553,13 +553,32 @@ def _derived_profile(prof):
     if prof is None:
         return None
     try:
-        from sharpmod.sharptab.profile import Profile as _SMProfile
+        from sharpmod.sharptab.constants import is_missing
+        from sharpmod.sharptab.profile import DERIVED_ATTRS, Profile as _SMProfile
         from sharpmod.sharptab.profile import create_profile as _sm_create
     except Exception:
         return prof
     # Already a SHARPpy Reimagined Profile -> read its derived attributes directly.
     if isinstance(prof, _SMProfile):
         return prof
+    signature = None
+    if hasattr(prof, "_sharpmod_prepared_derived"):
+        try:
+            from sharpmod.rendering.prepared import _profile_signature
+
+            signature = _profile_signature(prof)
+            cached = prof._sharpmod_prepared_derived
+            if cached is not None and cached[0] == signature:
+                derived = cached[1]
+                # A successful PNG can still contain failed, memoized science.
+                if not any(name.startswith("_sharpmod_") and value is None
+                           for name, value in vars(derived).items()):
+                    for name in DERIVED_ATTRS & vars(derived).keys():
+                        if is_missing(vars(derived)[name]):
+                            delattr(derived, name)
+                    return derived
+        except Exception:
+            pass  # An unsupported input keeps the ordinary reconstruction path.
     try:
         raw_meta = getattr(prof, "meta", None)
         meta = dict(raw_meta) if isinstance(raw_meta, dict) else {}
@@ -592,13 +611,16 @@ def _derived_profile(prof):
                 continue
             if fval == fval:
                 meta[key] = fval
-        return _sm_create(
+        derived = _sm_create(
             pres=prof.pres, hght=prof.hght, tmpc=prof.tmpc, dwpc=prof.dwpc,
             wdir=prof.wdir, wspd=prof.wspd,
             omeg=getattr(prof, "omeg", None),
             wetbulb=getattr(prof, "wetbulb", None),
             meta=meta,
         )
+        if signature is not None:
+            prof._sharpmod_prepared_derived = (signature, derived)
+        return derived
     except Exception:
         return prof
 

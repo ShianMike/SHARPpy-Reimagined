@@ -226,11 +226,14 @@ pub fn decode_payload<T: DeserializeOwned>(value: Value) -> Result<T, String> {
 }
 
 /// Serializes one request frame, including its `\n` terminator.
-pub fn encode_request(id: u64, method: &str, params: Value) -> Vec<u8> {
+pub fn encode_request(id: u64, method: &str, params: Value) -> Result<Vec<u8>, String> {
     let frame = serde_json::json!({ "id": id, "method": method, "params": params });
-    let mut bytes = serde_json::to_vec(&frame).unwrap_or_default();
+    let mut bytes = serde_json::to_vec(&frame).map_err(|error| error.to_string())?;
+    if bytes.len() > MAX_FRAME_BYTES {
+        return Err("request frame exceeds the 8 MiB limit".into());
+    }
     bytes.push(b'\n');
-    bytes
+    Ok(bytes)
 }
 
 /// One read from the child's stdout.
@@ -311,11 +314,30 @@ mod tests {
 
     #[test]
     fn requests_are_compact_lines() {
-        let bytes = encode_request(3, "hello", serde_json::json!({"protocol_version": 1}));
+        let bytes = encode_request(3, "hello", serde_json::json!({"protocol_version": 1})).unwrap();
         assert_eq!(
             bytes,
             b"{\"id\":3,\"method\":\"hello\",\"params\":{\"protocol_version\":1}}\n"
         );
+    }
+
+    #[test]
+    fn request_limit_counts_serialized_utf8_envelope() {
+        let overhead = encode_request(
+            1,
+            "test",
+            serde_json::json!({"name": "雷".repeat(255), "data": ""}),
+        )
+        .unwrap()
+        .len()
+            - 1;
+        let exact = serde_json::json!({"name": "雷".repeat(255), "data": "x".repeat(MAX_FRAME_BYTES - overhead)});
+        assert_eq!(
+            encode_request(1, "test", exact).unwrap().len(),
+            MAX_FRAME_BYTES + 1
+        );
+        let oversized = serde_json::json!({"name": "雷".repeat(255), "data": "x".repeat(MAX_FRAME_BYTES - overhead + 1)});
+        assert!(encode_request(1, "test", oversized).is_err());
     }
 
     #[tokio::test]

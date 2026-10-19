@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { Update } from "@tauri-apps/plugin-updater";
+import { version } from "../../../package.json";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -10,8 +11,8 @@ import { UpdateNotice } from "./UpdateNotice";
 const check = vi.hoisted(() => vi.fn<() => Promise<Update | null>>());
 vi.mock("../../lib/backend/tauriTransport", () => ({ checkForUpdates: check }));
 
-function availableUpdate(version = "3.1.0") {
-  const update = new Update({ rid: 1, currentVersion: "3.0.0", version, rawJson: {} });
+function availableUpdate(targetVersion = "3.3.0") {
+  const update = new Update({ rid: 1, currentVersion: version, version: targetVersion, rawJson: {} });
   return { update,
     close: vi.spyOn(update, "close").mockResolvedValue(),
     download: vi.spyOn(update, "download").mockResolvedValue(),
@@ -35,7 +36,7 @@ it("checks once on startup in StrictMode and installs only after Update now", as
   render(<StrictMode><UpdateNotice /></StrictMode>);
   await waitFor(() => { expect(check).toHaveBeenCalledOnce(); });
   await act(async () => { announce?.(update); await Promise.resolve(); });
-  expect(screen.getByText("Version 3.1.0 is available")).toBeTruthy();
+  expect(screen.getByText("Version 3.3.0 is available")).toBeTruthy();
   expect(download).not.toHaveBeenCalled();
   expect(install).not.toHaveBeenCalled();
   let finish: (() => void) | undefined;
@@ -55,7 +56,7 @@ it("checks once on startup in StrictMode and installs only after Update now", as
 
 it("Later hides the same version across hourly checks but announces a newer version", async () => {
   vi.useFakeTimers();
-  const first = availableUpdate(), repeat = availableUpdate(), newer = availableUpdate("3.2.0");
+  const first = availableUpdate(), repeat = availableUpdate(), newer = availableUpdate("3.4.0");
   check.mockResolvedValueOnce(first.update).mockResolvedValueOnce(repeat.update).mockResolvedValueOnce(newer.update);
   await act(async () => { render(<UpdateNotice />); await vi.dynamicImportSettled(); });
   fireEvent.click(screen.getByRole("button", { name: "Later" }));
@@ -67,7 +68,7 @@ it("Later hides the same version across hourly checks but announces a newer vers
   expect(screen.queryByRole("status")).toBeNull();
   expect(first.close).toHaveBeenCalledOnce();
   await act(async () => { await vi.advanceTimersByTimeAsync(60 * 60 * 1000); });
-  expect(screen.getByText("Version 3.2.0 is available")).toBeTruthy();
+  expect(screen.getByText("Version 3.4.0 is available")).toBeTruthy();
   expect(first.download).not.toHaveBeenCalled();
   expect(repeat.download).not.toHaveBeenCalled();
   expect(newer.download).not.toHaveBeenCalled();
@@ -96,7 +97,7 @@ it("keeps background failures quiet and preserves a known update for installatio
   expect(screen.queryByRole("alert")).toBeNull();
   expect(useLogStore.getState().entries[0]?.detail).toContain("offline");
   await act(async () => { fireEvent(window, new Event("online")); await vi.dynamicImportSettled(); });
-  expect(screen.getByText("Version 3.1.0 is available")).toBeTruthy();
+  expect(screen.getByText("Version 3.3.0 is available")).toBeTruthy();
   await act(async () => { fireEvent(window, new Event("online")); await vi.dynamicImportSettled(); });
   expect(screen.queryByRole("alert")).toBeNull();
   expect(useUpdateStore.getState().update).toBe(update);

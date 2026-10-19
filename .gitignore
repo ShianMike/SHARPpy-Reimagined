@@ -6,6 +6,7 @@
 /docs/ENGINEERING_BACKLOG.md
 /foundissues/
 /AGENTS.md
+/instruction-release.md
 
 # Agent / assistant tooling state. Local configuration and caches, not project
 # source. (.kiro/ previously sat under virtual environments, which it is not.)
@@ -53,6 +54,11 @@ build/
 dist/
 wheels/
 pip-wheel-metadata/
+# Release jobs regenerate installers, feeds and staging folders from source.
+/release-artifacts/
+/release-staging/
+# TypeScript incremental compiler state is local to the build environment.
+*.tsbuildinfo
 *.manifest
 *.spec
 # Native-extension build output is local and can be regenerated with Cargo.

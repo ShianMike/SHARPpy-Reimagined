@@ -39,6 +39,26 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Sounding local work protection", () => {
+  it("stops successive model downloads without opening a sounding or losing cancellation ownership", async () => {
+    useSoundingStore.getState().setModel({ atStation: false, latitude: "35", longitude: "-97" });
+    const base = viewTransport();
+    const call = vi.fn<Transport["call"]>((command, args) => command === "open_sounding"
+      ? new Promise(() => undefined) : base.call(command, args));
+    const { queryClient } = renderWithBackend(<SoundingWorkspace />, { ...base, call });
+    await userEvent.click(screen.getByRole("tab", { name: "Model" }));
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      await userEvent.click(await screen.findByRole("button", { name: "Open sounding" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Stop download" }));
+      await waitFor(() => { expect(queryClient.isMutating()).toBe(0); });
+      expect(call.mock.calls.filter(([command]) => command === "cancel_request")).toHaveLength(attempt);
+      expect(useSoundingStore.getState().open).toHaveLength(0);
+    }
+    const started = call.mock.calls.filter(([command]) => command === "open_sounding");
+    const cancelled = call.mock.calls.filter(([command]) => command === "cancel_request");
+    expect(cancelled.map(([, args]) => args?.requestId)).toEqual(started.map(([, args]) => args?.requestId));
+    queryClient.clear();
+  });
+
   it("confirms closing local work, focuses Cancel, and retains it on Cancel or Escape", async () => {
     const store = useSoundingStore.getState();
     store.add(summary);

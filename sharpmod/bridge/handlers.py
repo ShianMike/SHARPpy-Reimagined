@@ -16,7 +16,7 @@ import sys
 from collections.abc import Callable, Iterable
 from typing import Any
 
-from sharpmod.bridge import contours, fields, map_layers, radar_inventory, reports, satellite, soundings, storage, surface_plots, thresholds, weather_alerts
+from sharpmod.bridge import contours, fields, frame_cache, map_layers, radar_inventory, reports, satellite, soundings, storage, surface_plots, thresholds, weather_alerts
 from sharpmod.bridge.errors import BridgeError
 from sharpmod.bridge.protocol import PROTOCOL_VERSION
 
@@ -175,6 +175,7 @@ def is_seed_catalog(records: list[dict[str, Any]], seed: dict[str, tuple]) -> bo
 HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "hello": hello,
     "health": health,
+    "fields.cached": frame_cache.cached_hours,
     "stations.catalog": stations_catalog,
     **soundings.HANDLERS,
     **fields.HANDLERS,

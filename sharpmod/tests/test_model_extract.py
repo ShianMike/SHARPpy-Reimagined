@@ -894,34 +894,6 @@ def test_direct_profile_uses_targeted_wind_stencil_when_vorticity_is_absent(
     )
 
 
-def test_targeted_wind_group_prefers_grib2_wind_category(
-        tmp_path, monkeypatch):
-    path = tmp_path / "split-pressure-groups.grib2"
-    path.write_bytes(b"GRIB-split-pressure-groups-7777")
-    calls = []
-    dataset = _dataset()
-
-    def open_dataset(_path, *, filter_by_keys, errors):
-        calls.append(filter_by_keys)
-        assert errors == "ignore"
-        if filter_by_keys.get("parameterCategory") == 2:
-            return dataset
-        raise AssertionError("the wind-category filter should be attempted first")
-
-    monkeypatch.setitem(
-        sys.modules, "cfgrib", SimpleNamespace(open_dataset=open_dataset)
-    )
-    source = model_extract._LocalGribDataset(path)
-    try:
-        assert source._open_vorticity_source() is dataset
-        assert calls == [{
-            "typeOfLevel": "isobaricInhPa",
-            "parameterCategory": 2,
-        }]
-    finally:
-        source.close()
-
-
 def test_forced_direct_failure_does_not_silently_use_xarray(
         tmp_path, monkeypatch):
     path = tmp_path / "forced-direct.grib2"

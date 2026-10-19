@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { version } from "../../../package.json";
 import { useUpdateStore } from "../../stores/updateStore";
+import { useUiStore } from "../../stores/uiStore";
 import { BrandMark } from "../../ui/BrandMark";
 import { Action } from "../../ui/Controls";
 import styles from "./SettingsView.module.css";
+import { ReleaseNotes } from "./ReleaseNotes";
 
 export function UpdateSettings(): ReactNode {
   const { status, update, downloaded, total, error, check, install } = useUpdateStore();
@@ -38,7 +40,11 @@ export function UpdateSettings(): ReactNode {
       <progress aria-label="Update download" value={total === undefined ? undefined : downloaded} max={total ?? 1} />
       {total === undefined ? null : <span>{Math.min(100, Math.floor(downloaded / total * 100))}%</span>}
     </div> : null}
-    {update?.body ? <details><summary>What’s new</summary><p className={styles.releaseNotes}>{update.body}</p></details> : null}
+    {update?.body ? <section className={styles.releaseSummary} aria-label="Available update highlights"><h3>Coming in version {update.version}</h3><p className={styles.availableNotes}>{update.body}</p></section> : null}
+    <section className={styles.releaseSummary} aria-labelledby="installed-release-title">
+      <div className={styles.releaseHeader}><h3 id="installed-release-title">What’s new in {version}</h3><Action aria-haspopup="dialog" onClick={() => { useUiStore.getState().setWhatsNewOpen(true); }}>View highlights</Action></div>
+      <ReleaseNotes version={version} />
+    </section>
     <p className={styles.updateSchedule}>The Windows app checks on launch, hourly, and when your connection returns. You choose when to install.</p>
   </div>;
 }

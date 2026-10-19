@@ -61,6 +61,8 @@ export function noRetryHint(actions: ErrorActions): string | null {
 }
 
 const TITLES: Readonly<Record<string, string>> = {
+  get_cached_forecast_hours: "Downloaded hours could not be checked",
+  cancel_request: "The request could not be stopped",
   get_radar_tilts: "Radar tilts could not be checked",
   get_storage_usage: "Cache usage could not be loaded",
   clear_cache: "Cached weather data could not be cleared",

@@ -4,9 +4,15 @@ SHARPpy Reimagined supports `sharpmod_rs` as its primary numerical and
 direct pressure-level GRIB point-decoding backend. Official Windows executables
 bundle the extension, and default `auto` mode selects Rust after validating its
 package version, backend API, and required operations. Rust works behind the
-Python facade; the PySide6 GUI, renderer, command-line tools, SHARPpy widget
+Python facade; the headless Qt renderer, command-line tools, SHARPpy widget
 stack, model retrieval, and profile orchestration remain shared Python
-application layers.
+application layers. The current application UI is Tauri/React; the old Qt
+picker/viewer is retired and remains available in the legacy release.
+
+The [Rust-first performance plan](performance/RUST_MIGRATION_PLAN.md) and
+[current architecture audit](performance/PERFORMANCE_AUDIT.md) track measured,
+progressive modernization. Native kernels, decoder time, network retrieval,
+rendering and IPC are measured separately before selecting a migration.
 
 The independently optimized Python backend remains fully functional and is the
 portable fallback. Source and Python-only installations therefore do not need

@@ -1,5 +1,36 @@
 # Backend benchmarks
 
+The [current performance plan](../docs/performance/RUST_MIGRATION_PLAN.md),
+[audit](../docs/performance/PERFORMANCE_AUDIT.md) and
+[results](../docs/performance/BENCHMARK_RESULTS.md) distinguish completed prior
+optimizations from new experiments. Keep individual samples and correctness
+evidence before making a speed claim.
+
+## Headless sounding renders
+
+`benchmark_rendering.py` measures the real bundled-input renderer in one fresh
+process. It records renderer import separately, first/subsequent renders, process
+CPU and native process-memory counters, exact output density/bytes and RGBA
+hashes. Every image is validated and repeats must preserve decoded pixels. The
+optional cProfile run occurs after, outside elapsed samples. No provider network
+request or new dependency is required. Choose one image mode per process:
+
+```powershell
+python benchmarks/benchmark_rendering.py --mode hd --repeat 5 `
+  --output-json C:/path/to/render-hd.json --profile
+python benchmarks/benchmark_rendering.py --mode uhd --repeat 5 `
+  --output-json C:/path/to/render-uhd.json
+```
+
+Force `SHARPMOD_BACKEND=rust` when measuring native behavior and record the
+resolved backend. Use `--input` for a different existing local sounding. The
+output lives in an automatically cleaned temporary directory; only measurement
+records are retained. Peak memory is cumulative process peak, not a Python heap
+or GPU allocation measure. First render may benefit from OS file/code caches
+even in a fresh process; do not label it a reboot-cold measurement.
+
+## Numerical backend and GRIB
+
 `benchmark_backends.py` records comparable timings for the fully functional
 Python backend and the optional Rust backend. It does not enforce a speed
 threshold or claim that one implementation is faster. Results depend on the

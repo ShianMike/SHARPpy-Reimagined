@@ -21,8 +21,8 @@ from sharpmod.io.portable_sounding import portable_sounding_pair_valid
 _METADATA = ".cache.json"
 _LEASE_PREFIX = ".lease-"
 _DEFAULT_LEASE_MAX_AGE_HOURS = 24.0
-# v5 excludes derived soundings with uncorrected grid-relative wind directions.
-MODEL_CACHE_CONTRACT_VERSION = 5
+# v6 excludes derived surface vorticity from underground fallback winds.
+MODEL_CACHE_CONTRACT_VERSION = 6
 
 
 @dataclass(frozen=True)
@@ -186,7 +186,7 @@ class ModelDiskCache:
         marker = directory / (
             f"{_LEASE_PREFIX}{os.getpid()}-{threading.get_ident()}-{uuid.uuid4().hex}"
         )
-        marker.touch()
+        _write_json(marker, {"process_identity": self._process_info(os.getpid())[1]})
         try:
             self.touch(directory)
             yield directory
@@ -265,31 +265,60 @@ class ModelDiskCache:
         return max(1.0, hours * 3600.0)
 
     @staticmethod
-    def _process_is_running(pid: int) -> bool:
+    def _process_info(pid: int) -> tuple[bool, str | None]:
         if pid <= 0:
-            return False
-        if pid == os.getpid():
-            return True
+            return False, None
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+
+            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel.OpenProcess.argtypes = (
+                wintypes.DWORD, wintypes.BOOL, wintypes.DWORD,
+            )
+            kernel.OpenProcess.restype = wintypes.HANDLE
+            kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+            kernel.GetExitCodeProcess.argtypes = (
+                wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD),
+            )
+            kernel.GetProcessTimes.argtypes = (
+                wintypes.HANDLE, *(ctypes.POINTER(wintypes.FILETIME),) * 4,
+            )
+            handle = kernel.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+            if not handle:
+                return ctypes.get_last_error() == 5, None
+            try:
+                code = wintypes.DWORD()
+                if not kernel.GetExitCodeProcess(handle, ctypes.byref(code)):
+                    # Inaccessible metadata must not authorize deletion.
+                    return True, None
+                if code.value != 259:  # STILL_ACTIVE
+                    return False, None
+                created, exited, system, user = (wintypes.FILETIME() for _ in range(4))
+                if kernel.GetProcessTimes(
+                    handle, *(ctypes.byref(value)
+                              for value in (created, exited, system, user)),
+                ):
+                    return True, str(
+                        (created.dwHighDateTime << 32) | created.dwLowDateTime
+                    )
+                return True, None
+            finally:
+                kernel.CloseHandle(handle)
         try:
             os.kill(pid, 0)
         except ProcessLookupError:
-            return False
+            return False, None
         except PermissionError:
-            return True
+            return True, None
         except OSError as exc:
-            return exc.errno == errno.EPERM or getattr(exc, "winerror", None) == 5
-        except SystemError as exc:
-            # CPython on Windows can surface ``os.kill(pid, 0)`` for an
-            # invalid/stale PID as a SystemError whose direct cause is
-            # WinError 87 instead of raising the OSError normally.
-            cause = exc.__cause__
-            if not isinstance(cause, OSError):
-                raise
-            return (
-                cause.errno == errno.EPERM
-                or getattr(cause, "winerror", None) == 5
-            )
-        return True
+            return exc.errno == errno.EPERM, None
+        try:
+            fields = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()
+            boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+            return fields[0] != "Z", f"{boot}:{fields[19]}"
+        except (OSError, ValueError, IndexError):
+            return True, None
 
     @classmethod
     def _lease_is_active(cls, marker: Path, *, now: float | None = None) -> bool:
@@ -297,16 +326,26 @@ class ModelDiskCache:
             age = float(time.time() if now is None else now) - marker.stat().st_mtime
         except OSError:
             return False
-        if age > cls._lease_max_age_seconds():
-            with suppress(OSError):
-                marker.unlink()
-            return False
         try:
             pid = int(marker.name[len(_LEASE_PREFIX):].split("-", 1)[0])
         except (TypeError, ValueError):
-            return True
-        if cls._process_is_running(pid):
-            return True
+            pid = None
+        if pid is None:
+            if age <= cls._lease_max_age_seconds():
+                return True
+        else:
+            running, identity = cls._process_info(pid)
+            if running:
+                try:
+                    owner = json.loads(marker.read_text()).get("process_identity")
+                    if not isinstance(owner, str) or not owner:
+                        owner = None
+                except (OSError, ValueError, AttributeError):
+                    owner = None
+                # shortcut: legacy leases lack birth IDs; preserve live PIDs
+                # until those sessions exit.
+                if owner is None or identity is None or owner == identity:
+                    return True
         with suppress(OSError):
             marker.unlink()
         return False

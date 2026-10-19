@@ -7,10 +7,11 @@ import { Inspector } from "../features/inspector/Inspector";
 import { NavigationRail } from "../features/rail/NavigationRail";
 import { SettingsView } from "../features/settings/SettingsView";
 import { UpdateNotice } from "../features/settings/UpdateNotice";
+import { WhatsNew } from "../features/settings/WhatsNew";
 import { SoundingWorkspace } from "../features/sounding/SoundingWorkspace";
 import { TimelineRegion } from "../features/timeline/TimelineRegion";
 import { LiveTimeline } from "../features/tracking/LiveTimeline";
-import { useTheme } from "../stores/uiStore";
+import { useTheme, useUiStore } from "../stores/uiStore";
 import { EmptyPanel, IconAction } from "../ui/Controls";
 import { Surface } from "../ui/Surface";
 import { OperationsWorkspace } from "../features/operations/OperationsWorkspace";
@@ -52,6 +53,7 @@ function WorkspaceView({ workspace }: { workspace: WorkspaceDefinition }): React
 }
 
 export function Shell(): ReactNode {
+  const whatsNewOpen = useUiStore((state) => state.whatsNewOpen);
   useGlobalShortcuts();
   const { fullscreen, busy: fullscreenBusy, error: fullscreenError, toggle: toggleFullscreen } = useFullscreen();
   useTheme();
@@ -146,6 +148,7 @@ export function Shell(): ReactNode {
           </Surface>}
         </main>
         <div className={styles.updateNotice}><UpdateNotice /></div>
+        {whatsNewOpen ? <WhatsNew /> : null}
         <VisuallyHidden role="status" aria-live="polite" data-testid={liveText === "" ? undefined : "catalogue-announcement"}>{liveText}</VisuallyHidden>
         {fullscreenError === "" ? null : <VisuallyHidden role="alert">{fullscreenError}</VisuallyHidden>}
       </div>

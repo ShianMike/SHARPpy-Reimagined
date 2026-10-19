@@ -11,6 +11,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, useEffect, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import { version } from "../package.json";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/glass.css";
@@ -24,7 +25,8 @@ import { probeGraphics, watchDevicePixelRatio } from "./lib/graphics/probe";
 import { MARKS, markOnce } from "./lib/metrics";
 import { useGraphicsStore } from "./stores/graphicsStore";
 import { startSessionLog } from "./stores/logStore";
-import { applyPreferences, createPreferencesRepository, startPreferenceSync } from "./stores/preferences";
+import { applyPreferences, createPreferencesRepository, DEFAULT_PREFERENCES, startPreferenceSync } from "./stores/preferences";
+import { useUiStore } from "./stores/uiStore";
 import type { GraphicsProfile } from "./types/graphics";
 
 function startGraphics(): void {
@@ -68,18 +70,21 @@ function isDesktopBuildInBrowser(): boolean {
 }
 
 /** Preferences first, so the graphics override applies to the first profile selection. */
-function startPreferences(): void {
+function startPreferences(): boolean {
   const repository = createPreferencesRepository(() => window.localStorage);
-  applyPreferences(repository.load());
+  const preferences = repository.load();
+  applyPreferences(preferences);
   const stop = startPreferenceSync(repository);
   // A pending debounced write is flushed when the page goes away.
   window.addEventListener("pagehide", stop, { once: true });
+  return preferences !== DEFAULT_PREFERENCES;
 }
 
 async function boot(container: HTMLElement): Promise<void> {
   const stopLog = startSessionLog();
   window.addEventListener("pagehide", stopLog, { once: true });
-  startPreferences();
+  const returning = startPreferences();
+  useUiStore.getState().prepareReleaseNotes(version, returning);
   startGraphics();
   const root = createRoot(container);
   if (isDesktopBuildInBrowser()) {

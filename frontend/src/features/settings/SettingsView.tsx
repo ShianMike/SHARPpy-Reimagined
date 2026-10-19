@@ -17,7 +17,7 @@ const SECTIONS = [
   { id: "graphics", label: "Map rendering", icon: Monitor, description: "Balance map detail with performance on this computer." },
   { id: "storage", label: "Storage", icon: HardDrive, description: "See what’s cached and free up space on this device." },
   { id: "diagnostics", label: "Device Info", icon: Cpu, description: "Graphics capabilities and the current renderer state." },
-  { id: "updates", label: "Updates", icon: Download, description: "Check for and install the latest Windows release." },
+  { id: "updates", label: "Updates", icon: Download, description: "See what’s new and manage Windows app updates." },
 ] as const;
 
 export function SettingsView(): ReactNode {

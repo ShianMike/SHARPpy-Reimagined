@@ -1,0 +1,52 @@
+{
+  "3.1.0": {
+    "summary": "Live weather joins forecasts and soundings in one workspace.",
+    "highlights": [
+      {
+        "title": "Live Tracking",
+        "description": "Follow radar, satellite imagery, surface observations, warnings and watches. Replay the past hour where the source provides history."
+      },
+      {
+        "title": "More radar detail",
+        "description": "Explore high-resolution Base Reflectivity, Velocity, Correlation Coefficient and Enhanced Echo Tops, with verified tilts and values on hover."
+      },
+      {
+        "title": "Your panels, your setup",
+        "description": "Use up to four synchronized panels. Layers, map projection, playback and display preferences are remembered on this device."
+      },
+      {
+        "title": "Clearer downloads and storage",
+        "description": "Load forecast hours before playback and manage forecast and live-weather caches separately in Settings."
+      },
+      {
+        "title": "Safer sounding edits",
+        "description": "Closing a sounding with local changes asks before discarding your edits and undo history."
+      }
+    ]
+  },
+  "3.2.0": {
+    "summary": "A faster workspace with clearer downloads and more reliable caching.",
+    "highlights": [
+      {
+        "title": "Faster maps and soundings",
+        "description": "Upcoming forecast images are prepared before playback advances. Repeated sounding requests reuse downloaded model data and prepared rendering work."
+      },
+      {
+        "title": "More control over downloads",
+        "description": "See which forecast hours are saved and which are ready to play. Check the cache, retry missing hours, or stop a model-sounding download."
+      },
+      {
+        "title": "More reliable caching",
+        "description": "Forecast caches have size and age limits. Active downloads stay protected, and failed sounding downloads clean up their temporary files."
+      },
+      {
+        "title": "A simpler Overview",
+        "description": "Start with Model Viewer, Live Tracking or Soundings. Model availability and recent activity stay close at hand in expandable rows."
+      },
+      {
+        "title": "Release highlights in the app",
+        "description": "See a short What’s new popup after a version change, and revisit the highlights anytime in Settings → Updates."
+      }
+    ]
+  }
+}

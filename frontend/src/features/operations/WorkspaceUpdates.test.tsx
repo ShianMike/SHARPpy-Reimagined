@@ -27,11 +27,11 @@ it("resumes the current forecast and opens each sounding source directly", async
   useForecastStore.getState().setRun("2024-02-29T12:00:00Z");
   useForecastStore.getState().setHour(6);
   renderWithBackend(<OperationsWorkspace />, createTransport());
-  const current = await screen.findByRole("heading", { name: "HRRRF006" });
+  const current = await screen.findByRole("heading", { name: "HRRR F006" });
   expect(current).toBeTruthy();
   expect(screen.getByRole("region", { name: "Model Viewer" }).textContent).toContain("02-29 18Z");
   const user = userEvent.setup();
-  for (const [name, source] of [[/^Observed/u, "observed"], [/^ForecastA/u, "model"], [/^ERA5 archive/u, "era5"], [/^Open a file/u, "file"]] as const) {
+  for (const [name, source] of [["Observed", "observed"], ["Forecast", "model"], ["ERA5 archive", "era5"], ["Open a file", "file"]] as const) {
     await user.click(screen.getByRole("button", { name }));
     expect(useSoundingStore.getState().source).toBe(source);
     expect(useAppStore.getState().activeWorkspace).toBe("sounding");
@@ -52,12 +52,54 @@ it("checks model providers only after expanding Model availability", async () =>
   const call = vi.spyOn(transport, "call");
   const { queryClient } = renderWithBackend(<OperationsWorkspace />, transport);
   expect(screen.getByText("Models loading…")).toBeTruthy();
-  await screen.findByRole("heading", { name: "HRRRF000" });
+  await screen.findByRole("heading", { name: "HRRR F000" });
   expect(call.mock.calls.some(([command]) => command === "get_model_status")).toBe(false);
   expect(screen.queryByRole("heading", { name: "Model backends" })).toBeNull();
   await userEvent.click(screen.getByText("Model availability", { exact: true }));
   await screen.findByRole("heading", { name: "Model backends" });
   await waitFor(() => { expect(call.mock.calls.some(([command]) => command === "get_model_status")).toBe(true); });
+  queryClient.clear();
+});
+
+it("keeps viewer and sounding navigation available during a failed forecast, then retries", async () => {
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  const base = createTransport();
+  let fail = true;
+  const { queryClient } = renderWithBackend(<OperationsWorkspace />, {
+    ...base,
+    call: (command, args) => command === "get_model_catalog" && fail
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- backend contract is a plain object
+      ? Promise.reject({ code: "CATALOG_UNAVAILABLE", message: "Forecast service unavailable", retryable: false, context: { operation: command } }) : base.call(command, args),
+  });
+  await screen.findByRole("heading", { name: "Forecast unavailable" });
+  expect(screen.getByText("Forecast service unavailable")).toBeTruthy();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Open Live Tracking" }));
+  expect(useAppStore.getState().activeWorkspace).toBe("live");
+  await user.click(screen.getByRole("button", { name: "Open a file" }));
+  expect(useSoundingStore.getState().source).toBe("file");
+  expect(useAppStore.getState().activeWorkspace).toBe("sounding");
+  fail = false;
+  await user.click(screen.getByRole("button", { name: "Retry catalogue" }));
+  await screen.findByRole("heading", { name: "HRRR F000" });
+  await user.click(screen.getByRole("button", { name: "Open Model Viewer" }));
+  expect(useAppStore.getState().activeWorkspace).toBe("map");
+  queryClient.clear();
+});
+
+it("keeps session errors visible in the activity summary and links to full logs", async () => {
+  recordLog("error", "Application", "A recorded session error");
+  const { queryClient } = renderWithBackend(<OperationsWorkspace />, createTransport());
+  const summary = screen.getByText("Recent activity").closest("summary");
+  expect(summary?.textContent).toContain("1 error this session");
+  expect(summary?.closest("details")?.open).toBe(false);
+  const user = userEvent.setup();
+  await user.click(screen.getByText("Recent activity", { exact: true }));
+  expect(summary?.closest("details")?.open).toBe(true);
+  await user.click(screen.getByRole("button", { name: "View logs" }));
+  expect(useAppStore.getState().activeWorkspace).toBe("status");
+  await user.click(screen.getByRole("button", { name: "Open Settings" }));
+  expect(useAppStore.getState().activeWorkspace).toBe("settings");
   queryClient.clear();
 });
 

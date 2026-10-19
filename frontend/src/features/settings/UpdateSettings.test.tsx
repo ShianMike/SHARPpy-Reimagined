@@ -3,16 +3,18 @@ import { Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { version } from "../../../package.json";
+import releaseNotes from "../../../release-notes.json";
 import { useLogStore } from "../../stores/logStore";
 import { PREFERENCES_KEY } from "../../stores/preferences";
 import { useUpdateStore } from "../../stores/updateStore";
+import { useUiStore } from "../../stores/uiStore";
 import { UpdateSettings } from "./UpdateSettings";
 
 const check = vi.hoisted(() => vi.fn<() => Promise<Update | null>>());
 vi.mock("../../lib/backend/tauriTransport", () => ({ checkForUpdates: check }));
 
 function availableUpdate() {
-  const update = new Update({ rid: 1, currentVersion: "3.0.0", version: "3.1.0", body: "New map tools", rawJson: {} });
+  const update = new Update({ rid: 1, currentVersion: version, version: "3.3.0", body: "New map tools", rawJson: {} });
   return { update,
     close: vi.spyOn(update, "close").mockResolvedValue(),
     download: vi.spyOn(update, "download").mockResolvedValue(),
@@ -23,6 +25,7 @@ function availableUpdate() {
 beforeEach(() => {
   useUpdateStore.setState({ status: "idle", update: null, downloaded: 0, total: undefined, error: null, dismissedVersion: null });
   useLogStore.getState().clear();
+  useUiStore.setState({ whatsNewOpen: false });
   localStorage.removeItem(PREFERENCES_KEY);
   check.mockReset();
   vi.stubGlobal("__TAURI_INTERNALS__", {});
@@ -42,7 +45,7 @@ it("shows a newer version and downloads only after an explicit install click, pr
   expect(screen.getByText(`Current version: ${version}`)).toBeTruthy();
   expect(check).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-  await screen.findByText("Version 3.1.0 is available");
+  await screen.findByText("Version 3.3.0 is available");
   expect(download).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Install update" }));
   act(() => {
@@ -76,7 +79,7 @@ it("reports up to date, closes an unused update on recheck, and allows retry aft
   expect(screen.queryByText("You’re up to date")).toBeNull();
   expect(useLogStore.getState().entries[0]?.detail).toContain("offline");
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-  await screen.findByText("Version 3.1.0 is available");
+  await screen.findByText("Version 3.3.0 is available");
   close.mockRejectedValueOnce(new Error("resource already closed"));
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
   await screen.findByText("You’re up to date");
@@ -90,7 +93,7 @@ it("does not install a failed or unverified download and can retry with an unkno
   check.mockResolvedValue(update);
   render(<UpdateSettings />);
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-  await screen.findByText("Version 3.1.0 is available");
+  await screen.findByText("Version 3.3.0 is available");
   fireEvent.click(screen.getByRole("button", { name: "Install update" }));
   await screen.findByRole("alert");
   expect(install).not.toHaveBeenCalled();
@@ -112,4 +115,22 @@ it("explains the desktop requirement in the browser without contacting an update
   expect(screen.getByText("Check for updates in the installed Windows app.")).toBeTruthy();
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Check for updates" }).disabled).toBe(true);
   expect(check).not.toHaveBeenCalled();
+  expect(screen.getByRole("heading", { name: `What’s new in ${version}` })).toBeTruthy();
+  expect(screen.getByText(releaseNotes[version as keyof typeof releaseNotes].summary)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "View highlights" }));
+  expect(useUiStore.getState().whatsNewOpen).toBe(true);
+});
+
+it("distinguishes incoming release notes from installed highlights and renders them as text", async () => {
+  const { update } = availableUpdate();
+  const body = "A shorter summary.\n- New radar tools\n<img src=x onerror=alert(1)>";
+  Object.defineProperty(update, "body", { value: body });
+  check.mockResolvedValue(update);
+  render(<UpdateSettings />);
+  fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
+  const incoming = await screen.findByRole("region", { name: "Available update highlights" });
+  expect(incoming.textContent).toContain(body);
+  expect(incoming.querySelector("img")).toBeNull();
+  expect(screen.getByRole("heading", { name: `What’s new in ${version}` })).toBeTruthy();
+  expect(screen.queryByText(releaseNotes["3.1.0"].summary)).toBeNull();
 });

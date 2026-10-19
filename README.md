@@ -13,11 +13,13 @@
 
 </div>
 
-## What's new in 3.1.0
+## What's new in 3.2.0
 
 SHARPpy Reimagined brings [SHARPpy](https://github.com/sharppy/SHARPpy) sounding analysis into a map-based desktop workspace. Version **3.0.0** introduces a React/Tauri interface backed by the existing Python and Rust scientific tools. This README describes that interface; the [v2.0.0 Legacy tour and screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/README.md) document the previous GUI.
 
-Version **3.1.0** adds **Live Tracking**, a dedicated workspace for native radar, satellite imagery, surface observations, and NWS warnings and watches. Compare independent radar products and tilts in synchronized panels, inspect measured values under the cursor, and cache the past hour for playback. Base Reflectivity and Correlation Coefficient share Level II volumes; Velocity and Enhanced Echo Tops use native Level III products. Live caches are bounded, visible in Storage settings, and removed when the app closes. Overview now opens at startup with direct paths to Model Viewer, Live Tracking, and soundings. See the [full v3.1.0 changelog](CHANGELOG.md#v310---2026-10-18).
+Version **3.2.0** improves forecast playback, repeated model sounding requests, and weather-cache reliability. The redesigned Overview gives Model Viewer, Live Tracking and Soundings equal prominence. Forecast download details distinguish hours saved to disk from frames ready in memory, and model sounding downloads have a Stop action. A short **What's new** popup appears after an update; its highlights remain in **Settings → Updates**. See the [full v3.2.0 changelog](CHANGELOG.md#v320---2026-10-19).
+
+Live Tracking provides native radar, satellite imagery, surface observations and NWS warnings and watches. Compare radar products and verified tilts in synchronized panels, inspect measured values on hover, and cache the previous hour where data is available.
 
 The **3.0.2 patch** adds saved temperature and wind units, map rendering fixes, panel titles that open the parameter picker, cleaner Settings and Logs layouts, quicker model availability checks, and faster Windows release builds. It includes the **3.0.1** additions: signed in-app updates, a fullscreen control, a minimum window size of 1280 × 800, and clearer outlook tooltips and notices.
 
@@ -34,19 +36,16 @@ Use the navigation rail to move between six workspaces:
 | **Logs** | Inspect backend health, capabilities, and diagnostic messages when a request fails. |
 | **Settings** | Choose units, appearance, playback and graphics; manage saved settings and cached data; check for updates. |
 
-### v3.1.0 tour
+### v3.2.0 tour
 
-These screenshots show the **current v3.1.0 interface**, captured from the running
-live browser preview on **18 October 2026** at its native **1920 × 1080** viewport.
-Click an image for its original pixels. Forecast maps use **HRRR 18 October 02Z,
-F000**. Live Tracking shows actual **PGUA radar scans** from the capture session;
-the imported sounding is the bundled **25 June 06Z, F018** case, valid **26 June
-00Z**. [Capture details and data times](docs/images/v3.1.0/README.md).
+These **1920 × 1080** screenshots show the current **v3.2.0** interface connected
+to the real Python/Rust backend. Forecasts and radar retain their source times;
+the sounding is the bundled HRRR example. [Capture details and data times](docs/images/v3.2.0/README.md).
 
 <details open>
 <summary><strong>Overview · forecast, live weather, and sounding workflows</strong></summary>
 
-[![v3.1.0 Overview with direct entry points to Model Viewer, Live Tracking, and sounding sources](docs/images/v3.1.0/overview.jpg)](docs/images/v3.1.0/overview.jpg)
+[![v3.2.0 Overview with direct entry points to Model Viewer, Live Tracking, and sounding sources](docs/images/v3.2.0/overview.jpg)](docs/images/v3.2.0/overview.jpg)
 
 Overview opens when the app starts. Resume your forecast setup, follow live
 conditions, or open an observed, model, ERA5, or local-file sounding.
@@ -54,9 +53,9 @@ conditions, or open an observed, model, ERA5, or local-file sounding.
 </details>
 
 <details>
-<summary><strong>Model Viewer · forecast field and point inspector</strong></summary>
+<summary><strong>Model Viewer · forecast fields and playback</strong></summary>
 
-[![v3.1.0 Model Viewer with HRRR surface Theta-e, 10 m wind barbs, forecast playback controls, and a 305 K point reading](docs/images/v3.1.0/model-viewer.jpg)](docs/images/v3.1.0/model-viewer.jpg)
+[![v3.2.0 Model Viewer with HRRR surface Theta-e, 10 m wind barbs, forecast playback controls, and current source times](docs/images/v3.2.0/model-viewer.jpg)](docs/images/v3.2.0/model-viewer.jpg)
 
 Select a point to read its value and source, then open its sounding.
 
@@ -65,7 +64,7 @@ Select a point to read its value and source, then open its sounding.
 <details>
 <summary><strong>Two panels · surface Theta-e and dewpoint</strong></summary>
 
-[![v3.1.0 synchronized panels showing 2 m Theta-e with surface wind barbs beside 2 m dewpoint](docs/images/v3.1.0/two-panels.jpg)](docs/images/v3.1.0/two-panels.jpg)
+[![v3.2.0 synchronized panels showing 2 m Theta-e with surface wind barbs beside 2 m dewpoint](docs/images/v3.2.0/two-panels.jpg)](docs/images/v3.2.0/two-panels.jpg)
 
 Compare products at the same forecast time with synchronized map movement.
 
@@ -74,16 +73,26 @@ Compare products at the same forecast time with synchronized map movement.
 <details>
 <summary><strong>Four panels · independent products and scales</strong></summary>
 
-[![v3.1.0 four-panel forecast with Theta-e, dewpoint, temperature, and relative humidity, each with a separate scale](docs/images/v3.1.0/four-panels.jpg)](docs/images/v3.1.0/four-panels.jpg)
+[![v3.2.0 four-panel forecast with Theta-e, dewpoint, temperature, and relative humidity, each with a separate scale](docs/images/v3.2.0/four-panels.jpg)](docs/images/v3.2.0/four-panels.jpg)
 
 Each panel keeps its own layers and a scale positioned within that panel.
 
 </details>
 
 <details>
+<summary><strong>Forecast downloads · saved hours and playback readiness</strong></summary>
+
+[![v3.2.0 forecast download details showing hours saved to disk, frames ready in memory, missing hours, and cache and download controls](docs/images/v3.2.0/download-details.jpg)](docs/images/v3.2.0/download-details.jpg)
+
+Check which hours are cached and which are ready for playback. Load the remaining
+hours or check the cache again without leaving the map.
+
+</details>
+
+<details>
 <summary><strong>Live Tracking · native radar products and measured hover values</strong></summary>
 
-[![v3.1.0 Live Tracking with PGUA Base Reflectivity and Velocity in separate panels, independent scales, a minus 61.5 mph hover reading, and past-hour playback controls](docs/images/v3.1.0/live-tracking.jpg)](docs/images/v3.1.0/live-tracking.jpg)
+[![v3.2.0 Live Tracking with PGUA Base Reflectivity and Velocity over Guam in separate panels, independent scales, and past-hour playback controls](docs/images/v3.2.0/live-tracking.jpg)](docs/images/v3.2.0/live-tracking.jpg)
 
 Compare products and available tilts while moving both maps together. Hover to
 read the decoded radar data. Scan timestamps and delay indicators distinguish
@@ -95,7 +104,7 @@ where the provider has data, then play the cached frames.
 <details>
 <summary><strong>Soundings · local import, Skew-T, hodograph, and editing controls</strong></summary>
 
-[![v3.1.0 Soundings with the imported HRRR NPZ, native Skew-T and hodograph, scientific panels, editing controls, and UHD lossless export](docs/images/v3.1.0/sounding.jpg)](docs/images/v3.1.0/sounding.jpg)
+[![v3.2.0 Soundings with the imported HRRR NPZ, native Skew-T and hodograph, scientific panels, editing controls, and UHD lossless export](docs/images/v3.2.0/sounding.jpg)](docs/images/v3.2.0/sounding.jpg)
 
 The NPZ was imported through the File form and rendered at UHD resolution.
 Inspect or edit the profile, then copy or export the image.
@@ -105,10 +114,22 @@ Inspect or edit the profile, then copy or export the image.
 <details>
 <summary><strong>Settings · saved preferences and weather cache management</strong></summary>
 
-[![v3.1.0 Storage settings with forecast map and radar cache usage, category clearing controls, and navigation to saved workspace, playback, and device settings](docs/images/v3.1.0/settings.jpg)](docs/images/v3.1.0/settings.jpg)
+[![v3.2.0 Storage settings with forecast map and radar cache usage, category clearing controls, and navigation to saved workspace, playback, and device settings](docs/images/v3.2.0/settings.jpg)](docs/images/v3.2.0/settings.jpg)
 
 Preferences save on the current device. Storage reports forecast and live-data
 caches separately; live data is removed when the app closes.
+
+</details>
+
+<details>
+<summary><strong>Updates · release highlights when you need them</strong></summary>
+
+[![v3.2.0 Updates settings with the installed version and a summary of release highlights](docs/images/v3.2.0/updates.jpg)](docs/images/v3.2.0/updates.jpg)
+
+[![v3.2.0 What's new popup summarizing performance, downloads, caching, and the redesigned Overview](docs/images/v3.2.0/whats-new.jpg)](docs/images/v3.2.0/whats-new.jpg)
+
+A short popup introduces an installed update. Reopen the same highlights from
+Settings → Updates; the full technical history stays in the changelog.
 
 </details>
 
@@ -126,7 +147,7 @@ New HRRR products include total precipitation, precipitation rates, precipitable
 
 ### Soundings and local imports
 
-The **Soundings** workspace has **Obs.**, **Model**, **ERA5**, and **File** sources. Open NPZ point soundings, SPC, BUFKIT, PECAN, and UWyo text or saved HTML files up to **6 MiB**.
+The **Soundings** workspace has **Obs.**, **Model**, **ERA5**, and **File** sources. Open NPZ point soundings, SPC, BUFKIT, PECAN, and UWyo text or saved HTML files up to **5 MiB**.
 
 Station availability is checked automatically against the observed launch's UWyo list. Station details, hover tooltips and map markers share the result; failed checks keep the bundled station catalogue available and offer a retry.
 
@@ -138,7 +159,7 @@ Use **Inspect** to pan and zoom the sounding, or **Edit profile** to change a se
 
 ### Windows downloads
 
-Download the **v3.0.3 [Windows installer](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.0.3/SHARPpy-Reimagined-v3.0.3-windows-x64-setup.exe)** or the [portable ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.0.3/SHARPpy-Reimagined-v3.0.3-windows-x64.zip). Both include the app and its analysis backend; Python is bundled. Extract the complete portable folder before running the app. The executables are unsigned; [release notes, checksums, and build provenance](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v3.0.3) let you verify the download. Existing v3.0.1 and v3.0.2 installations can use **Settings → Updates**.
+Download the **v3.2.0 [Windows installer](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.2.0/SHARPpy-Reimagined-v3.2.0-windows-x64-setup.exe)** or the [portable ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.2.0/SHARPpy-Reimagined-v3.2.0-windows-x64.zip). Both include the app and its analysis backend; Python is bundled. Extract the complete portable folder before running the app. The executables are unsigned; [release notes, checksums, and build provenance](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v3.2.0) let you verify the download. Existing installations with in-app updates can use **Settings → Updates**.
 
 **v2.0.0 Legacy is the final PySide6/Qt GUI release.** Its [Windows ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64.zip) and [portable executable](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64-portable.exe) remain downloadable from the [legacy release page](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0), including after v3 is released.
 

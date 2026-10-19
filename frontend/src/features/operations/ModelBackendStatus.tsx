@@ -1,5 +1,5 @@
 import { useQueries } from "@tanstack/react-query";
-import { ChevronDown, RefreshCw, Server } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useBackendClient, useBackendHealth } from "../../lib/backend/BackendProvider";
 import type { ForecastModel, ModelStatus } from "../../types/soundings";
@@ -34,7 +34,7 @@ export function ModelBackendStatus({ models }: { models: readonly ForecastModel[
   const counts = { all: rows.length, available: rows.filter((row) => row.state === "available").length, attention: rows.filter((row) => row.attention).length };
   const visible = rows.filter((row) => filter === "all" || (filter === "attention" ? row.attention : row.state === "available"));
   return <section className={styles.backends} aria-labelledby="model-backends-title">
-    <div className={styles.sectionHeading}><span className={styles.iconTile}><Server aria-hidden="true" /></span><div><h2 id="model-backends-title">Model backends</h2><p>Latest cycle availability</p></div><Action aria-label="Refresh statuses" disabled={!enabled || checking} onClick={() => { void Promise.all(queries.map((query) => query.refetch())); }}><RefreshCw className="icon-sm" aria-hidden="true" />{checking ? "Checking…" : "Refresh"}</Action></div>
+    <div className={styles.sectionHeading}><div><h2 id="model-backends-title">Model backends</h2><p>Latest cycle availability</p></div><Action aria-label="Refresh statuses" disabled={!enabled || checking} onClick={() => { void Promise.all(queries.map((query) => query.refetch())); }}>{checking ? "Checking…" : "Refresh"}</Action></div>
     <div className={styles.backendToolbar}><div className={styles.backendFilters} role="group" aria-label="Filter model statuses">{FILTERS.map((item) => <button key={item.key} type="button" aria-pressed={filter === item.key} onClick={() => { setFilter(item.key); }}>{item.label}<span aria-hidden="true">{counts[item.key]}</span></button>)}</div><span className={styles.backendProgress} role="status">{checking ? `${String(queries.filter((query) => !query.isFetching && (query.data !== undefined || query.isError)).length)} of ${String(models.length)} checked` : "Select a model for details"}</span></div>
     <ul className={styles.backendList} aria-label="Model backend statuses">{visible.map(({ model, query, status, state, label, message }) => <li key={model.key}>
       <details className={styles.backendModel}>

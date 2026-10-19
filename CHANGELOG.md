@@ -5,7 +5,9 @@ All notable changes to SHARPpy Reimagined are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — v3.2.0
+## [Unreleased]
+
+## [v3.2.0] - 2026-10-19
 
 ### Fixed
 
@@ -34,6 +36,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Refresh the README tour with current 1920 × 1080 app screenshots, release
+  highlights and v3.2.0 downloads. Ignore generated release staging folders
+  and TypeScript compiler state while keeping agent instructions tracked.
+- Require AI agents to maintain the changelog and user-facing release
+  highlights through repository release instructions, preserving the
+  unreleased status until publication is explicitly authorized.
+- Redesign Overview around three clear workspace choices for Model Viewer,
+  Live Tracking and Soundings. Remove decorative icons and nested cards,
+  keep model availability and session activity in expandable rows, and retain
+  direct sounding-source navigation and saved forecast selections.
 - Prepare upcoming model-field images before playback advances, yielding
   between packing tasks. Share prepared Sharp and Smooth data across panels,
   cancel obsolete preparation, and preserve full field values and palettes.
@@ -69,6 +81,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Show concise release highlights once after an installed version changes,
+  with a permanent summary and a View highlights action in Settings → Updates.
+  Share version-specific notes with the updater feed, while fresh installs
+  continue to open Overview.
 - Add a Stop download action beside a model sounding's transfer progress (E06).
 
 ## [v3.1.0] - 2026-10-18

@@ -12,7 +12,7 @@ import { panelLayers, panelWeather, useMapStore } from "../stores/mapStore";
 import type { Station } from "../types/contracts";
 import { OUTLOOK_KEYS, type FieldFrame, type Outlook, type OutlookKey, type Palette, type Place, type RadarFrame, type RadarSite } from "../types/map";
 import type { ForecastModel } from "../types/soundings";
-import { colourize } from "./field/colourize";
+import { fieldImage } from "./fieldImages";
 import type { FieldImage, RasterImage } from "./layers/registry";
 import { useFieldContours } from "./contourQueries";
 import { useEffectiveRadarSite, usePlaceLabels, useRadarFrame, useRadarSiteFrame, useRadarSites, useSatelliteFrame, useStormReports, useSpcOutlooks } from "./mapQueries";
@@ -49,22 +49,9 @@ export function domainPath(model: ForecastModel): Path | null {
   return path;
 }
 
-const fieldImages = new WeakMap<FieldFrame, { palette: Palette; image: FieldImage }>();
-
 /** Share a frame; colour it only if Sharp uses it, then release it with the query's frame. */
 export function useFieldImage(frame: FieldFrame | undefined, palette: Palette | undefined): FieldImage | null {
-  return useMemo(() => {
-    if (frame === undefined || palette === undefined) return null;
-    const cached = fieldImages.get(frame);
-    if (cached?.palette === palette) return cached.image;
-    let coloured: ImageData | undefined;
-    const image: FieldImage = {
-      get image() { return coloured ??= new ImageData(colourize(frame, palette), frame.width, frame.height); },
-      bounds: frame.bounds, frame, palette,
-    };
-    fieldImages.set(frame, { palette, image });
-    return image;
-  }, [frame, palette]);
+  return useMemo(() => frame === undefined || palette === undefined ? null : fieldImage(frame, palette), [frame, palette]);
 }
 
 /** Any backend frame that arrives as one PNG over lon/lat bounds. */

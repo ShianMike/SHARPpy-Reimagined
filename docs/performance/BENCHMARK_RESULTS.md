@@ -1,10 +1,14 @@
 # Performance measurements
 
-Status: baseline collection in progress, 2026-10-19. No new speedup claimed.
+Status: measured implementation and integration in progress, 2026-10-19.
+Accepted changes and unmodified baselines are distinguished below. v3.2.0
+remains unreleased; these measurements are not release approval.
 
 ## Environment and evidence
 
-- Candidate: `0b505e649c554dc718ae55498c177434c4bcfe65`.
+- Starting candidate: `0b505e649c554dc718ae55498c177434c4bcfe65`;
+  PNG/native-transfer/model-source checkpoint: `f651b1c`. Subsequent prepared
+  renderer measurements include the explicitly recorded uncommitted source.
 - Windows 11 Home Single Language, build 10.0.26200; Intel Core i5-1235U,
   10 cores/12 logical processors, about 15.7 GiB usable RAM.
 - Existing `.gribenv`, forced Rust backend 3.1.0, API 7, verified synchronization.
@@ -203,3 +207,183 @@ The fixture is 161,875,836 bytes and reports `surface_merged=false`; it is a loc
 decoder/reuse experiment only, not a successful modern verified-ground sounding
 open, live-network speedup, or complete bridge latency measurement. No missing
 ground fields were fabricated and no validation was bypassed.
+
+## Real local GRIB baseline
+
+The existing decoding harness ran both optimized implementations with numerical
+and scalar/multipoint equivalence enabled, three repetitions and no warmup.
+Input: canonical HRRR July 16 F000 pressure subset, 161,875,836 bytes,
+SHA-256 `b6e291f5e4b2628f44bc9f2050ec1fb846d196b12adf6d57fdd1d206d3aa69e6`.
+Network is excluded; application caches are cleared for cold samples and OS
+file cache is not flushed. This fixture lacks the modern mandatory ground
+contract, so it is not a full live sounding-open result.
+
+| Existing operation | Python median | Rust median | Interpretation |
+| --- | ---: | ---: | --- |
+| Application-cache-cold local point | 8.917 s | 9.367 s | Broad range, ~5.9-12.0 s; no universal Rust win |
+| Exact point-cache hit | 0.364 ms | 0.267 ms | Exact identity/cache reuse dominates repeat work |
+| Four-point native/vector decode | 6.698 s | 7.152 s | Existing batched field reads amortize decoding |
+| Same requests as repeated scalar calls | 19.549 s | 17.373 s | Python ~65.7%, Rust ~58.8% less time when batched |
+
+The batch benefit is already implemented, not a new improvement in this program.
+The measurements support source reuse and batching, rather than another GRIB
+parser rewrite. Raw samples/environment/equivalence and exact commands are in
+external `performance/grib-hrrr-baseline.json` and `.log`. No tolerance was relaxed.
+
+## Real archived radar baseline
+
+Three decodes/renders use one actual PGUA Level II volume, archive time
+2026-10-17T18:03:58.850Z, 14,942,194 bytes, SHA-256
+`ed7025da541cffd4391a371835fa22257accf7641cf90a73bd3aeb9fd412d329`.
+The payload was copied outside its expiring session cache before measurement.
+Network and file reading are outside decode timing. The decoder validates site
+and scan time and returns 12 available reflectivity/correlation cuts. Selecting
+reflectivity preserves native codes and quantitative calibration.
+
+| Operation | Median | Observed range |
+| --- | ---: | --- |
+| Decode local archived volume | 3.519 s | 2.579-5.607 s |
+| 4096 px reflectivity, cold WGS84 projection | 5.329 s | 4.760-5.551 s |
+| Same render, warm projection | 1.345 s | 1.317-1.618 s |
+
+Every warm PNG is byte-identical to its corresponding cold render, exactly
+4096 x 4096 and 1,167,774 bytes, with the `sharppy-radar` value metadata present.
+Peak working set reached 888,643,584 bytes (~847 MiB); cold projection uses the
+existing four-worker path and process CPU exceeds wall time. The current source
+already caches projection and decoded volumes; these are baseline costs, not a
+new cache improvement. Numeric hover decode and GPU display are separate work.
+The archive reader printed `Unknown message: 32`; this is retained in the raw
+log, and supported moments/cuts still passed all stated identity/output checks.
+Do not extrapolate one station/reflectivity scan to all products/sites/tilts.
+Raw JSON, code, log and original output PNG: external `performance/radar-baseline*`.
+
+## Accepted change R01b — prepared input in the actual render worker
+
+The serial Qt worker keeps one pristine decoded collection and deep-copies it
+for each request. Only diagnostics reached by normal rendering are retained,
+after a successful export and widget cleanup. They use the ordinary independent
+Python oracle, not the numerically different source substitution rejected above.
+The unprepared `cli.render` path remains the reference and automatic fallback.
+
+Two actual isolated candidate workers processed 13 paired requests: cold, three
+unchanged warm views, alternate chart/panels/ML parcel, temperature/wind/both
+motion-vector edits, storm drag, reset, UHD, sidecar add/change and source
+replacement. Every pair has identical PNG bytes, decoded RGBA and full returned
+view metadata; reset restores the original output without modifying input.
+
+| Worker operation | Reference | Prepared | Interpretation |
+| --- | ---: | ---: | --- |
+| Cold first RPC, one pair | 7.518 s | 8.216 s | Candidate slower in this single pair; no cold-start gain |
+| Unchanged warm RPC, median of three | 2.860 s | 2.638 s | 0.222 s / 7.77% less elapsed time |
+| Unchanged warm process CPU, median | 2.750 s | 2.453 s | 0.297 s / 10.80% less CPU |
+| Input decodes over 13 requests | 13 | 4 | Source/sidecar changes invalidate correctly |
+| Peak working set over the sequence | 988.63 MiB | 968.36 MiB | Whole-process observation, not a memory saving guarantee |
+
+Post-review validation passes 46 prepared-input checks and 215 related science,
+decoder, rendering and cancellation regressions. Three warm samples are the two
+unchanged initial views and the unchanged reset after edit trials; raw samples
+retain that order and cache history. Individual edited cases have only one pair;
+they prove equivalence, not a repeatable edited-view speedup. The comparison is
+local render-worker RPC, excluding Tauri/UI and network; both workers exit.
+
+File content and replacement identity, both applicable JSON sidecars, backend
+selection/version, science environment, masks, optional columns, source metadata,
+vorticity and both storm motions govern validity. Unsupported, unstable or
+uncopyable input takes the reference path. Failed decode/render is never retained
+as a successful derived result. Only one prepared collection is retained, but
+expanded collections, their active clone and Qt/native allocations have no hard
+RSS byte cap; existing input byte caps are not an RSS guarantee.
+
+The original pre-review experiment is retained in `performance/prepared-input-reuse/`.
+Current post-review script, source snapshots, 26 PNGs, raw measurements and test
+reports are in `performance/prepared-input-reuse-post-review-20261019T013513Z/`.
+The original 19.21% median gain predates the retry fixes; the table above uses
+the final 7.77% run instead. The application-level comparison remains a separate
+integration gate; no additional GPU or incremental-chart gain is claimed.
+
+Independent review subsequently found two failure-retry defects: an analyzed
+parcel fallback or a failed lazy/oracle result could remain cached after a PNG
+was successfully produced. The patch now avoids retaining the fallback and
+retries missing/failed diagnostics. The three regressions and all thirteen actual
+worker pairs pass after that patch; unchanged reset preserves original bytes and
+source changes require new decoding. Previous measurements are preserved rather
+than being presented as proof of the reviewed source.
+
+## Native desktop integration baseline on Intel Iris Xe
+
+The real Tauri debug app runs the candidate's isolated interpreter (including
+its `-I` subprocesses), actual Python bridge and native Rust 3.1.0/API 7.
+The existing `@load|@frames` desktop harness passes all six checks. A separate
+WebView profile preserves the user's main settings. Viewport is 1920 x 1080,
+DPR 1, Windows Balanced power plan, and the active renderer reports ANGLE Intel
+Iris Xe Direct3D 11 with WebGL2, no major performance caveat, 16,384 maximum
+texture size and float color/filter/blend support. This verifies hardware use;
+device detection alone was not used as evidence.
+
+| Current debug/native baseline | Measurement |
+| --- | --- |
+| Shell-painted mark | 2,162.3 ms after time origin |
+| Stations catalogue request/receive | 2,138.3 / 2,427.8 ms; 289.5 ms request duration |
+| Stations-rendered mark | 5,069.6 ms |
+| Basemap/map-loaded marks | 6,885.9 / 10,176.2 ms |
+| 50 real native health RPCs | p50 2.8 ms, p95 4.8 ms, max 5.0 ms |
+| 20 cached native catalogue RPCs | p50 8.2 ms, p95 8.7 ms, max 10.1 ms |
+| Basemap/stations pan/zoom, 447 rAF intervals | p50 16.7 ms, p95 33.2 ms, max 116.6 ms; 25 over 33 ms |
+
+Health shows expected debug/package/Python/native versions. Real station 72357
+loads; CSP checks report no violations or collected console messages. This is
+a Vite debug build, not packaged startup. The gesture case has the weather field
+disabled: it is deliberately not labeled loaded-weather, four-panel or playback
+performance. Those require separate field-ready measurements. External basemap
+warnings about a missing `circle-11` sprite and a null boundary filter are in the
+runtime log; the stated checks do not prove those provider tiles are fault-free.
+
+Raw measurements/log, actual screenshots and native process log are external
+`performance/desktop-measurements*`, `desktop-screenshots/` and
+`desktop-runtime.log`. No release installer, tag, publication or version bump
+was produced by the debug application build.
+
+## Accepted change P01a — prepare exact fields before playback display
+
+The actual `useFieldImage` hook and complete field-layer registry were measured
+in Node 24.12/jsdom at the production 2048 x 1024 shape. The committed numeric
+fixture is tiled without changing codes, scale, offset or nodata; alternate
+palettes exercise encoding and are not represented as genuine different weather
+products. A paired run alternates lazy/prepared order, uses two warmups and five
+samples per lane, includes a warm previous frame at 50% blend, and verifies all
+image bytes. This measures CPU scene construction, excluding provider retrieval,
+GRIB/PNG decode, real browser ImageData validation, GPU upload and presented FPS.
+
+| Four distinct fields, first complete scene | Lazy median | Prepared median | Display work removed | Preparation wall median |
+| --- | ---: | ---: | ---: | ---: |
+| Sharp | 39.238 ms | 2.377 ms | 36.861 ms / 93.9% | 37.731 ms |
+| Smooth | 27.643 ms | 1.921 ms | 25.722 ms / 93.1% | 36.262 ms |
+
+This is rescheduling, not eliminating the packing cost: preparation occurs
+before advancing and yields to input/render tasks. Prepared display constructs
+zero ImageData objects instead of four. Source codes, masks, colors, palette
+limits and Sharp/Smooth behavior remain exact. Four matching panels share one
+prepared field, and only the active modes in the bounded rolling window are
+prepared; Load hours does not expand every saved hour into resident RGBA.
+
+The existing query owner is retained through preparation, including memory hits.
+Abort cancels obsolete work between tasks without publishing partial pixels or
+canceling another consumer. Images are keyed weakly by frames; the existing CPU
+cache estimate already counts raw uint16 plus both possible RGBA images. Active
+observers may temporarily exceed the eviction target, as before. Partial packing
+temporarily owns its output array and releases it when aborted; no total-process
+or GPU memory reduction is claimed.
+
+The task loop targets 4 ms, checking every 65,536 cells. Measured maximum Sharp
+task was 13.802 ms and Smooth 4.247 ms in this CPU run; 4 ms is a cooperative
+target, not a hard real-time guarantee. The native scheduler uses its yield
+feature when available and falls back to a timer. Cold/manual cache misses still
+have the synchronous reference display path; no new dependency/worker is added.
+
+68 focused checks pass; all four checks in the opt-in benchmark run pass;
+TypeScript and focused ESLint pass. Correctness includes every committed palette
+and every uint16 code with default/non-default nodata, flag/continuous cases,
+same-frame sharing, warm reuse, cached-query ownership, abort and stale-window
+playback. These are focused results, not a full frontend/native runtime pass.
+Raw full samples/summary/log and source snapshots are retained externally under
+`performance/field-preparation/`. Native loaded-weather integration remains open.

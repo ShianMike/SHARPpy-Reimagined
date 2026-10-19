@@ -33,16 +33,16 @@ Unmeasured hypotheses remain open; an unsuccessful experiment is not a gain.
 | A03 | Audit model/provider/GRIB, native decoder locks and memory ownership | A01 | Source audit complete |
 | A04 | Audit frontend, Tauri, bridge, playback and GPU delivery | A01 | Source audit complete |
 | A05 | Reproduce sounding cold/warm render, profile phases and peak memory | A01 | Baseline, cold/warm profiles and interleaved HD/UHD complete |
-| A06 | Measure startup, backend initialization, IPC and cache-hit overhead | A01 | Real isolated stdio baseline complete; Tauri/WebView pending |
+| A06 | Measure startup, backend initialization, IPC and cache-hit overhead | A01 | Real isolated stdio and actual Tauri/Iris Xe debug baselines complete |
 | A07 | Run existing single-profile/batch Python-Rust equivalence benchmarks | A02 | Complete, raw output retained |
-| A08 | Establish local GRIB/map/radar and playback baselines with fixture identity | A03, A04 | Local GRIB in progress; maps/radar/playback pending |
+| A08 | Establish local GRIB/map/radar and playback baselines with fixture identity | A03, A04 | Local HRRR/PGUA baselines complete; loaded maps/playback in progress |
 | L01 | Select and implement measured low-risk repeated-work/copy reductions | A02-A05 | PNG effort and SHRF/Blob copy removal validated |
 | S01 | Improve remaining scientific hotspots only after reference profiling | A02, A07 | Native-source reuse rejected on equivalence; retain exact oracle |
 | M01 | Optimize complete model/data operation; separate network and local CPU | A03, A08 | Source reuse implemented; 405 focused checks, work counts; elapsed/live pending |
-| R01 | Improve measured renderer initialization/redraw/encoding costs | A05 | Lossless HD/UHD effort validated; prepared input in progress |
-| R02 | Evaluate incremental/native/GPU renderer without replacing reference early | R01 | Pending evidence/prototype |
+| R01 | Improve measured renderer initialization/redraw/encoding costs | A05 | PNG and prepared-input worker measured; exact output checks pass, integration pending |
+| R02 | Evaluate incremental/native/GPU renderer without replacing reference early | R01 | Research complete; exact prepared-science prototype implemented; replacement deferred under D08 |
 | I01 | Route suitable operations natively or eliminate unnecessary IPC work | A04, A06 | Native final-buffer decode validated; actual app integration pending |
-| P01 | Optimize bounded maps/radar/multi-panel scheduling and memory | A04, A08 | Pending evidence |
+| P01 | Optimize bounded maps/radar/multi-panel scheduling and memory | A04, A08 | Exact rolling field preparation measured and focused checks pass; loaded native integration pending |
 | V01 | Run focused correctness and numerical-equivalence checks per change | Each implementation | Ongoing requirement |
 | V02 | Run integrated Python, Rust and frontend gates at major milestones | L01-S01-M01-R01-I01-P01 | Pending |
 | V03 | Compare end-to-end results, allocations, memory and tradeoffs | Baseline and implementation | Pending |

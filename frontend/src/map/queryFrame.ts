@@ -1,7 +1,8 @@
 import { QueryObserver, type QueryClient, type QueryExecuteOptions } from "@tanstack/react-query";
 
 /** Stop an imperative preload only when no other preload or visible panel owns it. */
-export async function queryFrame<T>(client: QueryClient, options: QueryExecuteOptions<T>, signal?: AbortSignal): Promise<T> {
+export async function queryFrame<T>(client: QueryClient, options: QueryExecuteOptions<T>, signal?: AbortSignal,
+  prepare?: (data: T) => Promise<unknown>): Promise<T> {
   signal?.throwIfAborted();
   // A real observer also protects this owner when the last visible panel leaves.
   const observer = new QueryObserver<T>(client, { ...options, enabled: false });
@@ -14,6 +15,11 @@ export async function queryFrame<T>(client: QueryClient, options: QueryExecuteOp
     };
     signal?.addEventListener("abort", abort, { once: true });
   });
-  try { return await Promise.race([client.query(options), stopped]); }
+  try {
+    const data = await Promise.race([client.query(options), stopped]);
+    // Retain the same owner while its image is prepared, including cache hits.
+    if (prepare !== undefined) await Promise.race([prepare(data), stopped]);
+    return data;
+  }
   finally { signal?.removeEventListener("abort", abort); release(); }
 }

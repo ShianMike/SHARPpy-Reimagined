@@ -9,6 +9,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Retry temporary sounding calculation failures on later renders instead of
+  retaining failed diagnostics in the prepared input cache.
 - Select above-ground pressure levels separately for each point's fallback
   surface-vorticity stencil, including its neighboring wind cells. Filter the
   compatibility path by surface pressure and original common wind levels,
@@ -32,6 +34,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Prepare upcoming model-field images before playback advances, yielding
+  between packing tasks. Share prepared Sharp and Smooth data across panels,
+  cancel obsolete preparation, and preserve full field values and palettes.
+- Reuse one pristine decoded sounding in the serial render worker, cloning it
+  for each request and retaining only independently calculated diagnostics.
+  Invalidate reuse when source files, sidecars, science configuration or profile
+  inputs change; preserve exact chart pixels, edits, metadata and export quality.
 - Reuse one model-hour source across repeated forecast sounding requests,
   retaining independent point profiles, exact model/run/hour/member identity
   and point-provider boundaries. Share downloads without letting one Stop

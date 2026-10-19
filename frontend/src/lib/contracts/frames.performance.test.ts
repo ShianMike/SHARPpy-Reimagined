@@ -50,4 +50,3 @@ it.skipIf(env.SHARPPY_SHRF_BENCHMARK !== "1")("compares PNG Blob copies with ide
     synthetic_scope: "repeated fixture bytes for transport only, not valid PNG codec timing", results,
   }));
 }, 60_000);
-

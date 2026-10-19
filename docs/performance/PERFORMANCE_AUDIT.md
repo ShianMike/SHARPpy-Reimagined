@@ -86,11 +86,12 @@ profile construction must be included in any new scientific speed claim.
 - E04 fixes above-ground wind stencils. E10 shares cold map acquisitions across
   raster/winds/contours. Neither should be reimplemented as a new optimization.
 
-The active desktop point handler still requests an isolated GRIB directory per
-opened sounding. Existing batch `ModelHourCache` leases are not automatically
-used by that handler. Repeated points from a shared model hour are therefore a
-practical acquisition/caching opportunity, subject to identity, cancellation,
-storage-clear and lifecycle correctness.
+At the audited baseline the desktop point handler requested an isolated GRIB
+directory per opened sounding and did not use existing batch `ModelHourCache`
+leases. M01 now reuses that shared cache at the real extractor/bridge seam,
+preserving point-only routes, exact source identity, independent cancellation,
+active leases, storage clearing and lifecycle cleanup. Local work counts and
+405 focused checks support it; a live verified-ground speed claim remains open.
 
 ### Model-specific constraints
 
@@ -134,6 +135,9 @@ Source-proven and measured candidates:
    The warm trace attributes about 0.93 s to that construction under profiling.
    Existing formulas and CIN terms require ingredient-level equivalence before
    reusing source data; `source.left_scp` is not an established substitute.
+   Direct native-source reuse failed equivalence and was removed. R01b instead
+   retains the exact independently calculated oracle across cloned requests;
+   post-review retry fixes and final integration remain separate gates.
 3. **Composition and redraw.** A warm trace spends about 3.26 s in composition,
    including mounted products, multiple layout sizes and redraws. Disabling
    QWidget updates alone does not prevent explicit `plotData` work. Removing
@@ -210,6 +214,12 @@ depends on layer/features and browser/driver; custom shaders, textures and
 interleaving need their own migration validation. Keep software/reduced-graphics
 fallbacks and test an actual Intel Iris Xe rather than reporting SwiftShader as
 hardware acceleration.
+
+P01a now prepares upcoming active field modes with the same exact packing as
+display, retaining the shared query owner and yielding between tasks. The
+paired CPU scene benchmark removes first-display packing from the interaction
+path while preserving bytes and the existing memory estimate. This does not
+prove GPU/presented-frame gains; native loaded-weather validation is separate.
 
 ## Priority and evidence gates
 

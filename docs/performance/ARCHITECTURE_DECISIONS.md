@@ -89,3 +89,70 @@ Research: [ndarray](https://docs.rs/ndarray/latest/ndarray/),
 The measured host has Intel Iris Xe Graphics, driver 32.0.101.7085. Detection
 alone is not evidence of GPU acceleration or frame-rate gains. Benchmarks must
 record the actual active renderer; software fallback stays a separate result.
+
+## D07 — apply established weather-viewer techniques selectively
+
+Metview's documented Fieldset selection treats ordered GRIB fields as a shared
+source rather than reconstructing a new full data product for every view. That
+supports this application's existing message inventory and model-hour reuse;
+it does not justify introducing Metview as another runtime.
+
+Unidata IDV and SSEC McIDAS-V both document temporal/spatial subsetting and
+retaining reused data, while explaining cache-versus-memory tradeoffs. Apply the
+same principles to query ownership, rolling prefetch, exact-source reuse and
+bounded graphics preparation. Their optional fast-rendering/resolution tradeoffs
+are not appropriate substitutes for this task's full scientific/pixel fidelity.
+
+AWIPS CAVE's plan-view animation makes the time/space distinction explicit.
+Preserve model valid-time and live-scan identity in each panel rather than
+blending scans/tilts simply because the display looks smooth. Its separate
+server architecture is not needed for this local desktop application.
+
+Primary references: [Metview Fieldset](https://metview.readthedocs.io/en/latest/data_types/fieldset.html),
+[IDV performance tuning](https://docs.unidata.ucar.edu/idv/5.7/userguide/misc/PerformanceTuning.html),
+[SSEC McIDAS-V guide](https://www.ssec.wisc.edu/mcidas/doc/mcv_guide/current/mcv_guide.pdf),
+[Unidata CAVE plan views](https://www.unidata.ucar.edu/blogs/news/entry/awips-tips-explore-the-cave1).
+These sources inform design choices, not local benchmark claims. No competing
+interface, external service or viewer implementation was copied.
+
+## D08 — reuse exact prepared science before replacing calibrated charts
+
+Accepted: one pristine decoded collection in the serial Qt worker, isolated by
+deep copy per request; retain only the ordinary independently calculated oracle
+after a successful render. Full file/sidecar/science/profile identity prevents
+stale reuse, and the default `cli.render` remains the fallback/reference. Thirteen
+paired worker requests preserve exact PNG bytes, pixels and metadata; three warm
+unchanged requests show 7.77% less elapsed time in the post-review run. Input caps and a single retained
+collection limit admission/count, but are not a hard process-memory ceiling.
+
+Keep calibrated Qt charts and the existing interactive image transforms/edit
+pipeline. A new Plotters/tiny-skia/WebGPU renderer would need verified matching
+fonts, clipping, pressure/log axes, pixel calibration, all insets, masks, export
+density, edits and context-loss behavior. Current measurement supports eliminating
+duplicate decoding/oracle construction; it does not prove a replacement can meet
+that gate or improve end-to-end editing. Native/GPU replacement is therefore a
+documented deferred experiment, not a completed renderer migration. No chart
+information, resolution or scientific tolerance is sacrificed to obtain a gain.
+
+## D09 — prepare the rolling field window with cooperative browser tasks
+
+Accepted for integration: share the exact existing pixel packing between lazy
+display and preparation, and await only active sampling modes before advancing.
+Use the native scheduler yield feature when present, with the existing platform
+timer as fallback; no worker framework, service or dependency is needed. Browser
+task yielding gives input/render work an opportunity to run but does not make
+the packing computation disappear or impose a hard frame-time guarantee.
+
+The CPU benchmark demonstrates a smaller first scene after preparation and exact
+bytes; it does not demonstrate real presented FPS or a GPU speedup. Retain the
+query's existing observer through preparation so cache eviction/cancellation do
+not orphan a live consumer. Keep images weakly owned by frames, preserve the
+existing five-times-uint16 cache estimate and prepare only the rolling window.
+Disk Load hours remains distinct from ready-in-memory graphics. Manual cold
+selection retains the synchronous fallback. Actual native loaded-weather checks
+remain the acceptance gate for browser/device behavior.
+
+Research: [Chrome scheduler.yield guidance](https://developer.chrome.com/blog/use-scheduler-yield),
+[Scheduler.yield API](https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/yield),
+and [deck.gl performance](https://deck.gl/docs/developer-guide/performance).
+Feature detection avoids assuming the API exists on every supported WebView.

@@ -41,3 +41,24 @@ it("keeps an imperative download alive after the last visible panel leaves", asy
   expect(await download).toBe(42);
   client.clear();
 });
+
+it.each([false, true])("retains a cached field through preparation and releases its owner on completion or abort (%s)", async (abort) => {
+  const client = new QueryClient();
+  const options = { queryKey: ["fields", "prepare"], queryFn: () => Promise.resolve(42), staleTime: Infinity };
+  client.setQueryData(options.queryKey, 42);
+  const controller = new AbortController();
+  let finish = (): void => undefined;
+  const prepare = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+  let settled = false;
+  const result = queryFrame(client, options, controller.signal, prepare).finally(() => { settled = true; });
+  const checked = abort ? expect(result).rejects.toMatchObject({ name: "AbortError" }) : expect(result).resolves.toBe(42);
+  await vi.waitFor(() => { expect(prepare).toHaveBeenCalledWith(42); });
+  expect(settled).toBe(false);
+  expect(client.getQueryCache().find({ queryKey: options.queryKey })?.getObserversCount()).toBe(1);
+  if (abort) controller.abort();
+  else finish();
+  await checked;
+  expect(client.getQueryCache().find({ queryKey: options.queryKey })?.getObserversCount()).toBe(0);
+  finish();
+  client.clear();
+});

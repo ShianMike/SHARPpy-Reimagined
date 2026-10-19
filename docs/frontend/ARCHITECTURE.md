@@ -90,9 +90,14 @@ draws one image at a time with `cli.render(infile, outfile, parcel,
 image_mode)`, so successive image requests are serialized. A render that
 passes 120 s (plus 60 s for the worker's start) stops the worker; the next
 request starts a new one. The worker exits with the bridge: its stdin closes,
-and on Windows it is inside the bridge's kill-on-close Job Object. Measured on
-the development machine: the first image of a session about 18 s, later ones
-usually 7 to 8 s.
+and on Windows it is inside the bridge's kill-on-close Job Object. The serial
+worker retains one pristine decoded input and independently calculated science,
+deep-copies it for each request, and invalidates it on source/sidecar/science
+changes. Qt widgets and output images are not shared through that input cache.
+The ordinary unprepared renderer remains the reference and fallback. Current
+measurements, exact-output checks and the historical cold/warm timing limits
+are recorded in [BENCHMARK_RESULTS.md](../performance/BENCHMARK_RESULTS.md);
+the older 18 s / 7-8 s figures are not a current performance guarantee.
 
 **The sounding cache.** Opened soundings live in the bridge: a 24-entry LRU
 (`sharpmod/bridge/sounding_cache.py`) holding each decoded collection, its
@@ -103,6 +108,10 @@ exits. Forecast-model GRIBs and their metadata stay here too. The desktop
 launcher gives each backend process its own parent cache and removes it after
 that process exits, including when shutdown has to stop a busy backend.
 A sounding id from before a bridge restart gets `SOUNDING_NOT_FOUND`.
+An additional session-owned source-hour cache retains one idle model dataset,
+leases active sources and separates model/run/hour/member/spatial identity.
+Its source downloads appear in Storage and are cleaned with the session;
+point-only providers and HRRR Zarr analyses retain their dedicated paths.
 
 The transport is chosen by Vite mode in `frontend/src/main.tsx`: `--mode live`
 (`npm run dev:browser`, or `npm run build:browser` then `npm run preview:browser`)

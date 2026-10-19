@@ -12,10 +12,14 @@ import { profileSettings } from "../lib/graphics/profileSettings";
 import { useForecastStore } from "../stores/forecastStore";
 import { useGraphicsStore } from "../stores/graphicsStore";
 import { useUiStore } from "../stores/uiStore";
+import { panelLayers, panelProduct, useMapStore } from "../stores/mapStore";
+import { mapKeys } from "../lib/backend/queryOptions";
+import type { MapCatalog } from "../types/map";
 import { fieldQueryOptions, useFieldFrames } from "./mapQueries";
-import { useDrawnProducts } from "./panelField";
+import { productOf, useDrawnProducts } from "./panelField";
 import { contourQueryOptions } from "./contourQueries";
 import { queryFrame } from "./queryFrame";
+import { prepareFieldImage } from "./fieldImages";
 
 /** Minimum time to display each loaded frame, divided by playback speed. */
 export const FRAME_INTERVAL_MS = 750;
@@ -44,6 +48,12 @@ export function usePlayback(): void {
   const queryClient = useQueryClient();
   const run = context?.run ?? null;
   const model = context?.model.key ?? "hrrr";
+  const catalog = queryClient.getQueryData<MapCatalog>(mapKeys.catalog(model));
+  const sampling = useMapStore((state) => Array.from({ length: state.panelLayout }, (_, panel) => {
+    const layer = panelLayers(state, panel)["model-field"];
+    const product = productOf(catalog, panelProduct(state, panel), panel);
+    return layer.visible && product !== null ? `${product.key}/${layer.smoothing === true && product.palette.units !== "flag" ? "smooth" : "sharp"}` : "";
+  }).join("|"));
   const hour = context?.hour ?? null;
   const hours = context?.hours ?? null;
   const current = useFieldFrames(
@@ -67,7 +77,9 @@ export function usePlayback(): void {
       const request = { model, product: product.key, runTime: run, forecastHour: next };
       // Failed queries retain their error state for the panel when that hour is shown.
       return Promise.all([
-        queryFrame(queryClient, fieldQueryOptions(client, queryClient, request), controller.signal).catch(() => undefined),
+        queryFrame(queryClient, fieldQueryOptions(client, queryClient, request), controller.signal, (frame) =>
+          Promise.all([false, true].filter((smooth) => sampling.split("|").includes(`${product.key}/${smooth ? "smooth" : "sharp"}`))
+            .map((smooth) => prepareFieldImage(frame, product.palette, smooth, controller.signal)))).catch(() => undefined),
         ...(product.contour !== null || product.wind
           ? [queryFrame(queryClient, contourQueryOptions(client, queryClient, request), controller.signal).catch(() => undefined)] : []),
       ]);
@@ -87,5 +99,5 @@ export function usePlayback(): void {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [model, run, hour, hours, products, settled, ahead, playing, loop, speed, client, queryClient]);
+  }, [model, run, hour, hours, products, sampling, settled, ahead, playing, loop, speed, client, queryClient]);
 }

@@ -273,23 +273,35 @@ class ModelDiskCache:
             from ctypes import wintypes
 
             kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-            kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+            kernel.OpenProcess.argtypes = (
+                wintypes.DWORD, wintypes.BOOL, wintypes.DWORD,
+            )
             kernel.OpenProcess.restype = wintypes.HANDLE
             kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
-            kernel.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
-            kernel.GetProcessTimes.argtypes = (wintypes.HANDLE, *(ctypes.POINTER(wintypes.FILETIME),) * 4)
+            kernel.GetExitCodeProcess.argtypes = (
+                wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD),
+            )
+            kernel.GetProcessTimes.argtypes = (
+                wintypes.HANDLE, *(ctypes.POINTER(wintypes.FILETIME),) * 4,
+            )
             handle = kernel.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
             if not handle:
                 return ctypes.get_last_error() == 5, None
             try:
                 code = wintypes.DWORD()
                 if not kernel.GetExitCodeProcess(handle, ctypes.byref(code)):
-                    return True, None  # Inaccessible metadata must not authorize deletion.
+                    # Inaccessible metadata must not authorize deletion.
+                    return True, None
                 if code.value != 259:  # STILL_ACTIVE
                     return False, None
                 created, exited, system, user = (wintypes.FILETIME() for _ in range(4))
-                if kernel.GetProcessTimes(handle, *(ctypes.byref(value) for value in (created, exited, system, user))):
-                    return True, str((created.dwHighDateTime << 32) | created.dwLowDateTime)
+                if kernel.GetProcessTimes(
+                    handle, *(ctypes.byref(value)
+                              for value in (created, exited, system, user)),
+                ):
+                    return True, str(
+                        (created.dwHighDateTime << 32) | created.dwLowDateTime
+                    )
                 return True, None
             finally:
                 kernel.CloseHandle(handle)
@@ -330,7 +342,8 @@ class ModelDiskCache:
                         owner = None
                 except (OSError, ValueError, AttributeError):
                     owner = None
-                # shortcut: legacy leases lack birth IDs; preserve live PIDs until those sessions exit.
+                # shortcut: legacy leases lack birth IDs; preserve live PIDs
+                # until those sessions exit.
                 if owner is None or identity is None or owner == identity:
                     return True
         with suppress(OSError):

@@ -1,7 +1,7 @@
 # Architecture and performance audit
 
 Audit date: 2026-10-19. Baseline candidate: `0b505e649c554dc718ae55498c177434c4bcfe65`.
-This is an implementation program in progress, not a release-readiness claim.
+This is the audit behind the measured implementation checkpoint, not release approval.
 See [the plan](RUST_MIGRATION_PLAN.md), [measurements](BENCHMARK_RESULTS.md) and
 [recoverable checkpoints](TASK_CHECKPOINTS.md) for execution status.
 
@@ -91,7 +91,10 @@ directory per opened sounding and did not use existing batch `ModelHourCache`
 leases. M01 now reuses that shared cache at the real extractor/bridge seam,
 preserving point-only routes, exact source identity, independent cancellation,
 active leases, storage clearing and lifecycle cleanup. Local work counts and
-405 focused checks support it; a live verified-ground speed claim remains open.
+405 focused checks support it. A current ground-valid HRRR capture and three
+paired complete local extraction sequences preserve exact output and reduce the
+median from 21.880 to 6.994 s. Network, bridge/UI and other model/member speed
+claims remain outside that measured scope.
 
 ### Model-specific constraints
 
@@ -137,7 +140,7 @@ Source-proven and measured candidates:
    reusing source data; `source.left_scp` is not an established substitute.
    Direct native-source reuse failed equivalence and was removed. R01b instead
    retains the exact independently calculated oracle across cloned requests;
-   post-review retry fixes and final integration remain separate gates.
+  post-review retry, paired worker and native BUFKIT/UHD checks pass.
 3. **Composition and redraw.** A warm trace spends about 3.26 s in composition,
    including mounted products, multiple layout sizes and redraws. Disabling
    QWidget updates alone does not prevent explicit `plotData` work. Removing
@@ -262,5 +265,5 @@ prove GPU/presented-frame gains; native loaded-weather validation is separate.
   binary delivery, stable attributes and measured feature-compatible adoption.
 
 All recommendations are constrained by current source; research is not a local
-benchmark. Broader gates, unsupported environments and outstanding experiments
-remain explicitly open in the plan/checkpoint documents.
+benchmark. Passing local gates, unsupported environments and explicitly deferred
+experiments are distinguished in the plan/checkpoint and final report.

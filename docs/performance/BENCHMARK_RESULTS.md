@@ -7,11 +7,15 @@ remains unreleased; these measurements are not release approval.
 ## Environment and evidence
 
 - Starting candidate: `0b505e649c554dc718ae55498c177434c4bcfe65`;
-  PNG/native-transfer/model-source checkpoint: `f651b1c`. Subsequent prepared
-  renderer measurements include the explicitly recorded uncommitted source.
+  PNG/native-transfer/model-source checkpoint: `f651b1c`; prepared renderer and
+  field checkpoint: `6566efb`. Measurements retain their actual source snapshots,
+  including changes not yet committed when the original samples were taken.
 - Windows 11 Home Single Language, build 10.0.26200; Intel Core i5-1235U,
   10 cores/12 logical processors, about 15.7 GiB usable RAM.
-- Existing `.gribenv`, forced Rust backend 3.1.0, API 7, verified synchronization.
+- Existing dependencies, forced Rust backend 3.1.0/API 7, verified synchronization.
+  Actual native/final subprocess work uses the external isolated candidate venv,
+  avoiding the primary editable checkout under `-I`. Node 24.12.0; current native
+  checks use Rust/Cargo 1.97.0. Per-experiment metadata remains authoritative.
 - Real input: `examples/soundings/hrrr_point_36.68N_95.66W_f018.npz`.
 - Reference: `sharpmod.rendering.cli.render(..., show_locator=False)`, matching
   the worker's chart configuration. Original HD/UHD density and PNG compression
@@ -43,14 +47,26 @@ and repeated chart layouts are candidates, not independently additive totals.
 No claim is made that changing compression, caching or Rust would automatically
 eliminate these costs.
 
-## Required final comparison matrix
+## Measurement coverage and limits
 
-Startup, backend initialization, first/warm renderer, single-profile science,
-ordered batches, local GRIB/HRRR extraction, model map delivery, radar processing,
-forecast playback, IPC, CPU, memory, cache efficacy and export metrics remain to
-be measured or explicitly constrained with evidence. Each implemented change
-must add raw samples, an end-to-end comparison, correctness results, memory and
-tradeoffs here before it is marked complete.
+| Requested metric | Evidence in this record | Limit |
+| --- | --- | --- |
+| Application startup / backend initialization | Fresh isolated stdio and real Tauri marks/health/native identity | Debug Windows host; no packaged startup claim |
+| First / subsequent sounding render | Cold profiles, interleaved complete HD/UHD renders and 13 worker pairs | Cold wall-time variability; no universal edit/cold speedup |
+| Single / multi-profile science | Existing public backend and ordered-batch equivalence harness | Existing native coverage; no new kernel speedup claimed |
+| HRRR / local GRIB extraction | Older Python/Rust scalar/batch/cache baseline; current ground-valid HRRR capture and six complete source-reuse samples | Only the current capture proves a ground-valid open; one model/run/point is not an all-model result |
+| Map field loading | Actual HRRR values/run/hour/source identity and native four-field transitions | Cached requests do not measure provider bandwidth |
+| Radar processing | Real PGUA volume decode/cold-warm projection and actual MRMS display | One volume/product baseline, not an all-site/tilt matrix |
+| Forecast playback / hover | Exact CPU packing, query ownership, actual loaded four-panel rAF/values | No before/after native FPS or GPU upload-time claim |
+| IPC | Actual native health/catalogue plus isolated stdio; paired SHRF transport/allocation | Transport microbenchmarks exclude providers and GPU work |
+| CPU / peak memory / allocation | Per-render/worker/radar observations, paired process CPU and native allocator counts | Native/Qt/GPU retention is not a hard RSS cap; no long soak |
+| Cache effectiveness | Source/decode counts, invalidation/leases/cancel tests, exact point/projection hits | Model/run/provider-specific coverage is stated separately |
+| Export generation | Complete HD/UHD PNG time, dimensions, byte sizes and exact RGBA hashes | Export/render gains are separate experiments and not additive |
+
+Every gain below is scoped to its actual measured operation. Baseline-only and
+deferred work are labeled explicitly; language/framework research is not a
+performance result. Current complete-source acquisition is recorded separately
+from the older pressure-only decoder fixture.
 
 ## Accepted change R01a — HD/UHD lossless encoding effort
 
@@ -207,6 +223,63 @@ The fixture is 161,875,836 bytes and reports `surface_merged=false`; it is a loc
 decoder/reuse experiment only, not a successful modern verified-ground sounding
 open, live-network speedup, or complete bridge latency measurement. No missing
 ground fields were fabricated and no validation was bypassed.
+
+## Accepted change M01a — complete current HRRR source reuse
+
+A current production fetch/extraction captured HRRR initialized October 19 07Z,
+F001 valid 08Z, requested 35.18 N / 97.44 W. It uses the Google NOAA mirror's
+`hrrr.20261019/conus/hrrr.t07z.wrfprsf01.grib2`, optimized byte ranges,
+223,970,241 transferred/source bytes, SHA-256
+`1fabd020d3fcb7e0ff010097c2f9d1a39a12f4393dee540e3fdd265827317f7d`.
+The real extractor returns 39 QC-valid levels, verified surface pressure
+983.3 hPa, two below-ground levels removed and selected coordinates
+35.18069065447114 / -97.4398067119418. No surface row or validation was fabricated.
+This first fetch plus extraction took 29.070 s wall / 8.625 s process CPU after
+imports. One network sample is not a before/after download-speed benchmark.
+
+For the paired comparison, replace only acquisition with a byte-identical local
+copy of that captured source. Run three same-point extractions per fresh process,
+through real `mx.extract`, native decoding, ground/QC validation and atomic
+NPZ/JSON writing. Reference behavior uses a unique source directory per request;
+candidate behavior uses the real optional source cache. Imports and networking
+are excluded, application/native caches start empty, OS file cache is not flushed.
+Three pairs alternate unique/reuse, reuse/unique, unique/reuse; no build, test
+suite or native app runs concurrently.
+
+| Complete three-request local sequence | Unique source/reference | Reused source | Difference |
+| --- | ---: | ---: | ---: |
+| Median wall time | 21.880 s | 6.994 s | 14.886 s / 68.0% less |
+| Individual wall-time range | 19.896-22.824 s | 6.705-12.123 s | Raw variability retained |
+| Median process CPU | 20.141 s | 6.750 s | 13.391 s less |
+| Source acquisitions / native point decode calls | 3 / 3 | 1 / 1 | Two repeated acquisitions/decodes avoided |
+| Locally copied source bytes | 671,910,723 | 223,970,241 | 447,940,482 fewer bytes |
+| Fresh-process peak working-set range | 304.3-306.9 MiB | 304.0-305.7 MiB | Similar; no RSS saving claim |
+
+Every output's NPZ/JSON atomic pair validates through the existing portable
+validator. Pair-generation tokens are deliberately unique and must match within
+each pair. Only those tokens and the output pathname are excluded from cross-run
+comparison. All remaining arrays, scalar dtypes/shapes/content hashes and stable
+metadata match exactly across all six processes. No scientific tolerance is used
+to excuse a mismatch. Selected coordinates, run/F001/valid time, fields, source,
+ground handling, vorticity provenance, masks and QC remain unchanged.
+
+This demonstrates complete local repeated-HRRR extraction, not full bridge/UI
+latency, network throughput, nearby cropped-source sharing, RRFS/REFS or all-model
+performance. The cache still retains one idle source and protects active leases;
+the avoided copies are work counts, not a new universal cache/RSS bound.
+
+Raw capture, original NPZ/JSON, source bytes/hash, script, six sample JSON files
+and logs are in external `performance/model-source-complete-20261019T0925/`;
+the passing process log is `model-source-complete-20261019T0925-paired-final.log`.
+The earlier measurement-script cleanup-name error and UUID-comparison rejection
+remain as diagnostics, not successful application comparisons. The script uses
+the existing public cache-clear facade and validates atomic identity separately.
+Automatic approval review blocked deletion of the failed probe's byte-identical
+223,970,241-byte temporary source copy (reason: `blocked by policy`). The user
+requested the exact PowerShell command to remove it. A subsequent read-only check
+confirmed that temporary directory is absent; the canonical source/results remain.
+The initial block is recorded in `cleanup-deferred.json` and the final audit
+records its resolution. No repository file was involved in this cleanup.
 
 ## Real local GRIB baseline
 
@@ -386,4 +459,123 @@ and every uint16 code with default/non-default nodata, flag/continuous cases,
 same-frame sharing, warm reuse, cached-query ownership, abort and stale-window
 playback. These are focused results, not a full frontend/native runtime pass.
 Raw full samples/summary/log and source snapshots are retained externally under
-`performance/field-preparation/`. Native loaded-weather integration remains open.
+`performance/field-preparation/`. Native loaded-weather results follow below.
+
+## Native loaded-weather integration on Intel Iris Xe
+
+The updated real desktop harness verifies all four panels carry actual HRRR
+fields, matching model/run/hour/valid time, enabled layer, exact product title,
+numeric scale and numeric pointer value. It checks screenshot differences with
+each field hidden/shown, so titles over an empty basemap cannot pass. Actual
+temperature/dewpoint/relative-humidity/theta-e-with-wind frames load at 1920 x
+1080 on the real hardware WebView. The loaded case passes in 44.7 s (45.4 s test
+process); timing includes setup/checks/screenshots and is not a playback latency.
+
+| Loaded interaction | Samples | p50 | p95 | Maximum | Intervals over 33 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Four-panel pan | 196 | 16.7 ms | 16.9 ms | 33.7 ms | 9 |
+| Playback from F002 to F003 at 0.5x | 121 | 16.7 ms | 17.0 ms | 66.6 ms | 6 |
+
+Both before/after checks name run 2026-10-18 23Z; F002 is valid October 19 01Z
+and F003 02Z. All four panels show the new hour and pixels after the real player
+advances. Pause is verified to hold the hour. Inspector readouts preserve the
+same forecast identity and numeric units. The rAF window includes the transition
+and its surrounding paint opportunities; it is not a GPU timer or a comparison
+against an earlier native build, and no native FPS improvement is asserted.
+
+The real single-field case also passes: HRRR reflectivity, numeric dBZ hover,
+temperature/degree scale, next F001 and prefetched F002 with exact valid time.
+These requests use already cached provider data; they do not establish cold
+network loading speed. Warm UI `fieldOutcome` timers round to 0.0 s and must not
+be represented as literally zero latency.
+
+The first harness run stalled because the Layers overlay intercepted a timeline
+action; that raw failure remains. Its source-traced correction closes the overlay
+before timeline actions and adds bounded action waits. A subsequent complete run
+passes the field case but fails a success-only tornado-outlook assertion: the
+actual UI explicitly reports no published outlook for 01Z, while categorical
+Day 1 loads. Later independent four-panel coverage is recorded separately; the
+failed full run is not called passing. Subsequent targeted cases preserve that
+failure and verify the actual quiet-SPC null-outlook contract, successful
+categorical provenance and matching requested forecast identity. They reject
+generic errors/timeouts. The live availability check also passes: October 19
+00Z, 479 bundled stations plus twelve additional reporting stations, retrieved
+in 1.9 s. The full serial harness has not been rerun as an all-green run.
+
+The actual MRMS Live Tracking case passes independently in 1.2 minutes; its
+field-ready wait is 64.5 s. The displayed reflectivity is valid October 19 02Z,
+retrieved 02:02Z, with NOAA/NWS MRMS/NCEP GeoServer provenance and matching dBZ
+scale/scan identity. Unavailable history messages remain in the runtime log;
+current success is not evidence that every past-minute scan exists.
+
+External evidence: `performance/desktop-map-loaded-weather-measurements.json`,
+`desktop-map-loaded-weather.log`, full Playwright report/results, and original
+1920 x 1080 PNGs in `desktop-screenshots1920/loaded-weather/`. Native runtime
+was restarted once after a graceful exit before CDP attachment; the failed
+attachment and both logs are retained. No debug-process crash is inferred.
+
+## Final corrected native map run — all four cases in one invocation
+
+The final native serial `@map` invocation passes all four cases, zero retries,
+108.217 s process elapsed (Playwright 1.8 min), 1920 x 1080. It uses the same
+isolated interpreter and dedicated WebView profile, on the measured Iris Xe host:
+
+- HRRR fields, units, pointer values and F000/F001/F002 identity: 28.1 s.
+- SPC categorical/quiet-tornado contract and real launch availability: 16.8 s.
+- Actual Live Tracking MRMS reflectivity/scan/scale/provenance: 8.4 s.
+- Forecast point plus four loaded weather fields, pixels/values, pan and
+  F002 -> F003 playback/valid time/pause: 52.3 s.
+
+The run is October 19 07Z; before/after hours are valid 09Z / 10Z. All four
+weather panels draw distinct full-resolution products. The post-play point at
+36.83 N, 98.70 W shows 47.0 F, 43.1 F, 78.9% and 301 K. Separate pointer reads
+and hidden-versus-shown pixel checks prove real fields, not a basemap-only view.
+
+| Final full-run window | rAF intervals | p50 | p95 | Max | Over 33 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Loaded pan | 213 | 16.7 ms | 33.4 ms | 83.2 ms | 26 |
+| Loaded F002 -> F003 transition | 121 | 16.7 ms | 17.0 ms | 133.3 ms | 5 |
+
+These newer observations are retained alongside the earlier faster pan sample;
+there is no stable-60-FPS, GPU-timer or before/after native speed claim. The four
+fields require 28.9 s to configure/load in this run, and the next-hour window may
+still be loading while the user interacts. Provider and background processing
+cost remain visible; prepared CPU scene timing is a separate experiment.
+
+Actual availability now lists 554 bundled plus 16 additional reporting stations,
+949 total, for October 19 00Z. Earlier 479/12 and the bundled 933 are different
+snapshots/roles, not an inconsistent hardcoded catalogue. The runtime first logs
+two UWyo TLS/reset failures, then the UI check succeeds. MRMS is valid 09:36Z,
+retrieved 09:38Z; its field-ready wait is 4.0 s in this run, not a controlled
+comparison against the earlier 64.5 s fetch.
+
+Diagnostics remain unresolved and unsuppressed: 40 field and 19 contour
+`INTERNAL` warnings during selection/prefetch, zero Python tracebacks, plus one
+connection-pool-full warning. Intentional cancellation also uses an INTERNAL
+bridge code, but current native logs omit request IDs/structured cancelled flags;
+these records cannot prove every warning was cancellation. The real UI checks
+passing do not establish that every background request succeeded. Correlating
+request outcomes is an explicit follow-up before release confidence is claimed.
+
+Evidence: external `performance/desktop-map-final-{measurements,result}.json`,
+`.log`, `-runtime.log`, full Playwright results and six original 1920 x 1080 PNGs
+in `desktop-map-final-screenshots1920/`. The final four-panel screenshot was
+visually inspected. The dedicated app was intentionally stopped afterward;
+ports 5180/9234 and its known bridge processes were verified absent.
+
+## Actual native sounding import and render integration
+
+The existing real desktop BUFKIT case passes (11.5 s test, 12.1 s process).
+The user flow imports `hrrr_kbvo_20260625_06z.buf`, opens KBVO in 0.6 s, reports
+June 25 06Z/50 levels/first of 49 times, and decodes the actual 4564 x 3077
+lossless PNG after a 10.1 s drawing wait. This exercises real file transport,
+bridge decode, persistent offscreen worker, export and frontend display through
+native Tauri; no fixture transport or artificial image is used. It is a current
+first-UHD-render integration observation, not a before/after speed claim.
+
+Existing upstream thermo divide-by-zero/invalid-power warnings from this BUFKIT
+input remain in the native log; the image still passes its decoding/metadata
+checks. The dedicated native app was then stopped and its listeners/bridge
+processes confirmed absent before the timing-budgeted offline milestone.
+Evidence: external `performance/desktop-sounding-file-measurements.json`, `.log`
+and original `desktop-screenshots1920/desktop-sounding-file.png`.

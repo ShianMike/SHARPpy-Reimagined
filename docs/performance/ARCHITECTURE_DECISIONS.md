@@ -1,7 +1,7 @@
 # Performance architecture decisions and research
 
-Status: research and baseline stage, 2026-10-19. Decisions below describe the
-current constraints, not a completed migration or a release approval.
+Status: implemented decisions and documented deferrals, 2026-10-19. These
+decisions preserve the reference contracts; they are not release approval.
 
 ## D01 — retain the existing scientific facade and native ownership
 
@@ -136,7 +136,7 @@ information, resolution or scientific tolerance is sacrificed to obtain a gain.
 
 ## D09 — prepare the rolling field window with cooperative browser tasks
 
-Accepted for integration: share the exact existing pixel packing between lazy
+Accepted after focused and actual native integration: share exact packing between lazy
 display and preparation, and await only active sampling modes before advancing.
 Use the native scheduler yield feature when present, with the existing platform
 timer as fallback; no worker framework, service or dependency is needed. Browser
@@ -149,8 +149,9 @@ query's existing observer through preparation so cache eviction/cancellation do
 not orphan a live consumer. Keep images weakly owned by frames, preserve the
 existing five-times-uint16 cache estimate and prepare only the rolling window.
 Disk Load hours remains distinct from ready-in-memory graphics. Manual cold
-selection retains the synchronous fallback. Actual native loaded-weather checks
-remain the acceptance gate for browser/device behavior.
+selection retains the synchronous fallback. The real native four-loaded-panel
+pan/playback check passes on hardware Iris Xe; this establishes current behavior,
+not a before/after GPU speedup or extended-session memory guarantee.
 
 Research: [Chrome scheduler.yield guidance](https://developer.chrome.com/blog/use-scheduler-yield),
 [Scheduler.yield API](https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/yield),

@@ -220,3 +220,120 @@ the broad timing-budgeted offline lane. Run frontend/native gates on the final
 integrated tree; record actual counts, skipped coverage and any regression.
 The full Rust-first objective remains active until those gates/report are done.
 No release/version/ref/publication action is authorized.
+
+## Checkpoint 5 — integrated local gates and complete HRRR source (2026-10-19)
+
+Candidate base: detached `6566efb`; final validation/doc/harness changes below
+are not yet committed. Stable main remains `206d188`. Latest user instruction:
+continue without subagents. Do not start or resume any agents. Release hold and
+unchanged 3.1.0 application metadata remain in force.
+
+Completed:
+
+- Offline `serial-release` lane: 3,764 passed, one native-wheel-metadata skip,
+  213.12 s, unchanged timing budget passes. Actual isolated candidate imports and
+  forced native backend verified. No debug app/build overlaps this timing.
+- Frontend typecheck/lint/boundaries, 808 routine tests and all three builds pass;
+  two opt-in performance cases are separate measurements. All 70 browser flows
+  pass in 3.7 min with zero retries and explicit software rendering.
+- Desktop Rust formatting/strict Clippy and 64 routine checks pass; both opt-in
+  real-sidecar normal/forced cleanup tests pass separately. Scientific Rust
+  formatting/strict Clippy/all-target tests pass, 79 unit/integration checks plus
+  benchmark smoke cases. Optional direct GRIB fixture is not configured in that
+  invocation; real local GRIB checks and benchmarks are retained separately.
+- A live HRRR October 19 07Z F001 capture validates the full surface contract,
+  39 QC-valid levels and exact run/valid/grid identity. Six fresh-process local
+  samples preserve every stable array/metadata field and valid unique atomic
+  pair tokens. Three repeated extractions: median 21.880 -> 6.994 s, 68.0% less;
+  acquisitions/decodes 3 -> 1, peak working sets similar. Networking/imports are
+  outside this comparison. No other-model or whole-UI speedup is inferred.
+- Existing native field, quiet-SPC/availability, MRMS, four-loaded-panel and
+  BUFKIT/UHD cases have passed individually. Their earlier failures remain.
+
+Files changed since the committed checkpoint: performance documents;
+`frontend/e2e/desktop/map.spec.ts` and new `mapSupport.ts`; two SHRF checks moved
+from `src-tauri/src/backend/map_ops.rs` into existing `tests/contracts.rs`;
+`sharpmod/models/model_disk_cache.py` formatting/comments only. Existing 300/400
+line limits are unchanged. AST equality verifies the cache formatting; 54 affected
+cache/Storage checks pass after it. No production semantics changed after the
+offline milestone. No new dependency or test threshold adjustment.
+
+Evidence: external `performance/integrated-*` logs/JSON/XML, full browser results,
+native measurement JSON and original 1920 x 1080 screenshots. Current complete
+source evidence is `performance/model-source-complete-20261019T0925/`, with source
+SHA-256 in its manifest and exact paired script/sample files. Failed script
+cleanup-name and deliberately unique UUID comparisons are diagnostics, not
+application failures; corrected public cache clearing/portable pair validation
+and the passing final log are retained. Automatic approval review blocked
+deletion of its byte-identical 223,970,241-byte temporary copy, returning only
+`blocked by policy`; it is left intact outside the checkout with a hash record.
+
+Pending final milestone: corrected native serial four-case `@map` run, then
+final requirement/status reconciliation, source diff/release-ref/changelog audit,
+coherent candidate commit and verified recovery bundle. This is a full run for
+additional integration evidence, not a rerun of scientific timing.
+
+Exact continuation at this checkpoint:
+
+1. Candidate remains `C:\Users\shian\Documents\CodexReports\v3.2.0\workspace`;
+   use external `performance/venv/Scripts/python.exe`, including `-I` children.
+2. Native debug app session is 57928, Vite 5180/CDP 9234, isolated WebView profile;
+   serial map harness session is 23977. Check these handles before starting a
+   duplicate. Raw logs/results are `performance/desktop-map-final*`. The current
+   runtime already records a UWyo TLS timeout/reset; do not soften that check or
+   report an unavailable provider as a successful availability fetch.
+3. Read the final process result; retain any failure and successful independent
+   cases distinctly. Stop only this dedicated debug app before later heavy work.
+4. No benchmark/build/test workload should overlap a new measured comparison.
+   Do not rerun the passing broad lanes without a changed behavior or concern.
+5. Finish the final report/plan, preserve only-main refs and the Unreleased
+   changelog, commit the detached candidate, and verify a new incremental bundle.
+   No publication, version bump, installer, tag or push is authorized.
+
+## Checkpoint 6 — final native integration and recovery boundary (2026-10-19)
+
+The corrected native serial map run now passes all four cases in one invocation,
+zero retries, 108.217 s: HRRR fields/hours/values, SPC and launch availability,
+actual MRMS, then four loaded weather panels/point/pixels/pan/playback/pause.
+Run 07Z, F002 -> F003, valid 09Z -> 10Z, 1920 x 1080. Six original screenshots,
+full results, measurement JSON and runtime logs remain external under
+`performance/desktop-map-final*`. The final four-panel PNG was visually inspected.
+
+Current loaded-pan rAF p50/p95 is 16.7/33.4 ms; playback 16.7/17.0 ms, maximum
+133.3 ms. Earlier faster samples remain visible. This is current behavior, not
+a native FPS speedup. Availability succeeds after earlier TLS/reset failures:
+554 bundled + 16 additional reporting stations, 949 merged. No error/timeout was
+accepted as a published outlook or successful availability response.
+
+Known unresolved observations: 40 field and 19 contour INTERNAL warnings,
+zero Python tracebacks and one connection-pool warning. Cancellation uses the
+same code; the retained logs cannot prove every warning's cause. Do not suppress
+them or equate passing visible panels with all background work succeeding.
+The final report lists diagnostic correlation and longer soak/cross-model
+measurements as deferred investigations with their acceptance evidence.
+
+The dedicated native app was stopped intentionally after the test. Ports 5180
+and 9234 and its known bridge processes are confirmed absent. The temporary
+duplicate whose automated deletion was blocked is now absent after the user's
+manual-command request; canonical source/outputs remain. Final read-only audit
+records exact existence, hashes, refs, versions, changelog and source state.
+
+All ten required deliverables now have concrete artifacts: source audit; task
+dependencies; migration strategy/primary research; actual code improvements;
+before/after/raw measurements; focused/numerical/integrated checks; renderer
+findings and implemented exact prototype; architecture decisions; recoverable
+checkpoints; and the final report with remaining bottlenecks. Deferred native/GPU
+replacement, wider model/member/site coverage, long soak and hosted/packaged
+release gates are not marked completed or inferred from local tests.
+
+Files since checkpoint 5: performance documents only. Production code has not
+changed since its passing checks/format-equivalence validation. The final source
+commit, clean status and verified incremental recovery bundle are recorded in
+external `performance/final-state.json` and `RECOVERY.md` after committing.
+
+Resume by reading this checkpoint and the final report, inspecting that external
+record and `git status`, then use the existing detached candidate. Do not create
+a branch, replay passing benchmarks, resume agents or publish v3.2.0 by default.
+Remaining work must be selected from an explicitly deferred evidence gate or a
+new user request. The primary checkout keeps only its Unreleased changelog;
+stable main/origin/main remain `206d188`, with only main named locally.

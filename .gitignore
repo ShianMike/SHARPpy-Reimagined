@@ -5,6 +5,8 @@
 /docs/improvement-goal/
 /docs/ENGINEERING_BACKLOG.md
 /foundissues/
+/AGENTS.md
+/instruction-release.md
 
 # Agent / assistant tooling state. Local configuration and caches, not project
 # source. (.kiro/ previously sat under virtual environments, which it is not.)

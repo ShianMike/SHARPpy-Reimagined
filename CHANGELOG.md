@@ -38,7 +38,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Refresh the README tour with current 1920 × 1080 app screenshots, release
   highlights and v3.2.0 downloads. Ignore generated release staging folders
-  and TypeScript compiler state while keeping agent instructions tracked.
+  and TypeScript compiler state. Keep agent and release instructions local
+  and excluded from Git.
 - Require AI agents to maintain the changelog and user-facing release
   highlights through repository release instructions, preserving the
   unreleased status until publication is explicitly authorized.

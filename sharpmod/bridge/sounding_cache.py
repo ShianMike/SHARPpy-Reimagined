@@ -2,7 +2,8 @@
 
 Every opened sounding gets a random id. Its data file (the portable ``.npz``
 that sharpmod writes for observed and model soundings, or the uploaded file
-itself) lives in ``<root>/<id><suffix>``, downloaded GRIBs in ``<root>/<id>-grib``,
+itself) lives in ``<root>/<id><suffix>``, reusable model sources in
+``<root>/model-hours/``, other downloads in ``<root>/<id>-grib``,
 and rendered images in ``<root>/renders/``. The root is made for this process with
 ``tempfile.mkdtemp`` (inside ``SHARPMOD_BRIDGE_CACHE`` when that is set), and
 it is removed when the process exits. Nothing outside that directory is ever
@@ -25,6 +26,7 @@ from typing import Any
 
 from sharpmod.bridge.compat import ensure_profile_compat
 from sharpmod.bridge.errors import BridgeError
+from sharpmod.models.model_hour_cache import ModelHourCache
 
 log = logging.getLogger("sharpmod.bridge")
 
@@ -72,6 +74,11 @@ class SoundingCache:
         self._entries: OrderedDict[str, Entry] = OrderedDict()
         self._lock = threading.Lock()
         self.renders.mkdir(parents=True, exist_ok=True)
+        self.model_root = root / "model-hours"
+        self.model_root.mkdir(exist_ok=True)
+        self.model_hours = ModelHourCache(
+            directory_factory=lambda _key: tempfile.mkdtemp(prefix="source-", dir=self.model_root),
+        )
 
     @staticmethod
     def new_id() -> str:
@@ -140,6 +147,7 @@ def cache() -> SoundingCache:
     with _CACHE_LOCK:
         if _CACHE is None:
             _CACHE = SoundingCache(default_root())
+            atexit.register(_CACHE.model_hours.clear)
         return _CACHE
 
 
@@ -147,8 +155,12 @@ def reset_cache(root: Path | None = None) -> SoundingCache | None:
     """Replace the process-wide cache (tests); ``None`` drops it."""
     global _CACHE
     with _CACHE_LOCK:
+        previous = _CACHE
         _CACHE = None if root is None else SoundingCache(root)
-        return _CACHE
+        current = _CACHE
+    if previous is not None:
+        previous.model_hours.clear()
+    return current
 
 
 def decode_collection(path: Path) -> tuple[Any, str]:

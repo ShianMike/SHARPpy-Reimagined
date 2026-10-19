@@ -72,8 +72,11 @@ def _scan():
                  if path.name.endswith("-grib") or path.name.startswith("sharpmod-ensemble")]
     session_files = [(path, size, directory in completed)
                      for directory in downloads for path, size, _ in _files(directory)]
+    protected = tuple(Path(path) for path in session.model_hours.protected_directories())
+    source_files = [(path, size, not any(path.is_relative_to(directory) for directory in protected))
+                    for path, size, _ in _files(session.model_root)]
     files = {
-        "models": [(path, size, True) for path, size, ready in session_files if ready],
+        "models": [(path, size, True) for path, size, ready in session_files if ready] + source_files,
         "maps": _files(hrrr_field.disk_cache_root(), ("*.png", "*.json.gz", "*.part")),
         "outlooks": _files(spc_outlook.disk_cache_root(), ("*.json", "*.part")),
         "radar": _files(session.root / "radar-volumes", ("*.ar2", "*.part")),
@@ -87,11 +90,14 @@ def _scan():
         "clearable_bytes": sum(size for _, size, ready in files[key] if ready),
     } for key in KEYS]}
     models = usage["caches"][0]
-    models["bytes"] = sum(entry.size for entry in entries) + sum(size for _, size, _ in session_files)
-    models["files"] = sum(entry.file_count for entry in entries) + len(session_files)
+    models["bytes"] = sum(entry.size for entry in entries) + sum(size for _, size, _ in session_files + source_files)
+    models["files"] = sum(entry.file_count for entry in entries) + len(session_files) + len(source_files)
     models["clearable_bytes"] += sum(entry.size for entry in entries
                                      if not entry.pinned and not entry.protected)
     candidates = {key: [(path, size) for path, size, ready in files[key] if ready] for key in KEYS}
+    # Clear rechecks source leases after invalidating the cache, including a
+    # source that finished loading between this snapshot and the clear.
+    candidates["models"] += [(path, size) for path, size, ready in source_files if not ready]
     return usage, candidates, disk, entries
 
 
@@ -113,6 +119,24 @@ def clear(params: dict[str, Any]) -> dict[str, Any]:
             _, candidates, disk, entries = _scan()
             freed = failed = 0
             if "models" in selected:
+                from sharpmod.bridge.sounding_cache import cache
+                session = cache()
+                # Lease admission and deletion share the ownership lock: a
+                # previously idle source cannot gain a lease before unlink.
+                with session.model_hours._condition:
+                    session.model_hours.clear()
+                    protected = tuple(Path(path) for path in session.model_hours.protected_directories())
+                    for path, size in candidates["models"]:
+                        if not path.is_relative_to(session.model_root) \
+                                or any(path.is_relative_to(directory) for directory in protected):
+                            continue
+                        try:
+                            path.unlink()
+                            freed += size
+                        except FileNotFoundError:
+                            freed += size  # The cache already disposed this idle source.
+                        except OSError:
+                            failed += 1
                 for entry in entries:
                     if entry.protected or entry.pinned:
                         continue
@@ -122,6 +146,8 @@ def clear(params: dict[str, Any]) -> dict[str, Any]:
                         failed += entry.file_count
             for key in selected:
                 for path, size in candidates[key]:
+                    if key == "models" and path.is_relative_to(session.model_root):
+                        continue
                     try:
                         path.unlink()
                         freed += size

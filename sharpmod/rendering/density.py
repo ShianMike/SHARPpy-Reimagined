@@ -81,8 +81,8 @@ def _png_hd_image_scale() -> float:
 
 
 def _png_hd_compression_quality() -> int:
-    """Return Qt's PNG compression setting for HD exports."""
-    return _bounded_int_env("SHARPMOD_HD_PNG_QUALITY", 0, 0, 100)
+    """Use moderate lossless compression; maximal effort delays chart display."""
+    return _bounded_int_env("SHARPMOD_HD_PNG_QUALITY", 50, 0, 100)
 
 
 def _png_uhd_image_scale() -> float:
@@ -91,8 +91,8 @@ def _png_uhd_image_scale() -> float:
 
 
 def _png_uhd_compression_quality() -> int:
-    """Return Qt's PNG compression setting for UHD exports."""
-    return _bounded_int_env("SHARPMOD_UHD_PNG_QUALITY", 0, 0, 100)
+    """Use the same lossless compression effort as HD at the higher density."""
+    return _bounded_int_env("SHARPMOD_UHD_PNG_QUALITY", 50, 0, 100)
 
 
 def _png_image_scale(image_mode: str | None) -> float:

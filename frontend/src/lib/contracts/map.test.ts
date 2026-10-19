@@ -102,6 +102,46 @@ describe("map contracts", () => {
     }
   });
 
+  it("keeps ordinary offset input as a view and snapshots shared input", () => {
+    const encoded = bytes(fieldShrf);
+    const padded = new Uint8Array(encoded.length + 16);
+    padded.set(encoded, 8);
+    const input = padded.subarray(8, 8 + encoded.length);
+    const parsed = parseShrf(input);
+    expect(parsed.body.buffer).toBe(padded.buffer);
+    expect(parseFieldFrame(input).cells.buffer).toBe(padded.buffer);
+    const shared = new Uint8Array(new SharedArrayBuffer(encoded.length + 16), 8, encoded.length);
+    shared.set(encoded);
+    const snapshot = parseShrf(shared);
+    shared.fill(0);
+    expect(snapshot.body.buffer).toBeInstanceOf(ArrayBuffer);
+    expect(snapshot.body).toEqual(parseShrf(encoded).body);
+  });
+
+  it.each([
+    ["radar", radarShrf, parseRadarFrame],
+    ["site radar", radarSiteShrf, parseRadarSiteFrame],
+    ["satellite", satelliteShrf, parseSatelliteFrame],
+  ] as const)("keeps %s PNG bytes independent of mutable input and rejects invalid bodies", async (_name, fixture, parse) => {
+    const encoded = bytes(fixture);
+    const { header, body } = parseShrf(encoded);
+    const expected = body.slice();
+    for (const kind of ["buffer", "offset", "array", "shared"] as const) {
+      const input = kind === "shared" ? new Uint8Array(new SharedArrayBuffer(encoded.length + 16)) : new Uint8Array(encoded.length + 16);
+      input.set(encoded, 8);
+      const view = input.subarray(8, 8 + encoded.length);
+      const value = kind === "buffer" ? encoded.slice().buffer : kind === "array" ? Array.from(view) : view;
+      const frame = parse(value);
+      if (value instanceof ArrayBuffer) new Uint8Array(value).fill(0);
+      else value.fill(0);
+      expect(frame.png.type).toBe("image/png");
+      expect(new Uint8Array(await frame.png.arrayBuffer())).toEqual(expected);
+    }
+    for (const invalid of [body.subarray(0, 7), new Uint8Array(body.length)]) {
+      expect(() => parse(encodeShrf(header, invalid))).toThrow(ContractError);
+    }
+  });
+
   it("rejects malformed frames", () => {
     const field = parseShrf(bytes(fieldShrf).buffer);
     const short = encodeShrf(field.header, field.body.subarray(2));

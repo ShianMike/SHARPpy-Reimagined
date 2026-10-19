@@ -32,6 +32,17 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Reuse one model-hour source across repeated forecast sounding requests,
+  retaining independent point profiles, exact model/run/hour/member identity
+  and point-provider boundaries. Share downloads without letting one Stop
+  cancel another consumer; bound background producers and protect active
+  sources during storage clearing and shutdown.
+- Decode model, radar and satellite base64 bodies directly into their final
+  native map frame and remove redundant frontend PNG copies, preserving all
+  binary contracts, data validation and immutable image bytes.
+- Reduce HD and UHD sounding PNG encoding effort while preserving every
+  decoded pixel, chart dimension and lossless export. Keep original-size
+  compression and explicit compression overrides available.
 - Enforce configured persistent batch-cache limits at startup and after cached
   datasets close and release their directory leases, including long runs (E09).
 - Bound forecast map files to 2 GiB and 48 hours after use. Evict old frames

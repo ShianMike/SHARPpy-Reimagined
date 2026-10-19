@@ -12,10 +12,12 @@ Related documents: [DATA_CONTRACTS.md](DATA_CONTRACTS.md) (commands, DTOs,
 errors, the bridge protocol), [MAP_RENDERING.md](MAP_RENDERING.md) (MapLibre,
 deck.gl, layers, graphics profiles), [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)
 (layout, themes, and tokens), [MIGRATION.md](MIGRATION.md) (phase status), and
-[AUDIT.md](AUDIT.md) (the Phase 0 audit).
+[AUDIT.md](AUDIT.md) (the Phase 0 audit), and
+[performance/PERFORMANCE_AUDIT.md](../performance/PERFORMANCE_AUDIT.md) (the
+current Rust-first execution map, measurements and migration gates).
 
 The current shell uses the SHARPpy backend. Its workspaces are Overview,
-Model Viewer, Soundings, Logs,
+Model Viewer, Live Tracking, Soundings, Logs,
 and Settings. Analysis, Compare, and Ensemble are removed; ensemble models
 are excluded centrally from UI catalogues. The scientific Python tools and
 headless Qt renderer remain shared backend components. See [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).

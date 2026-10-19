@@ -151,6 +151,7 @@ def _open_model(params, progress, entry_id):
             False,
         ) from None
     path = cache().data_path(entry_id, ".npz")
+    stop = cancellation.event()
     try:
         written = mx.extract(
             config.key,
@@ -163,7 +164,8 @@ def _open_model(params, progress, entry_id):
             download_dir=str(cache().root / f"{entry_id}-grib"),
             progress_callback=progress.stage,
             on_bytes=progress.receive,
-            cancelled=cancellation.cancelled,
+            cancelled=stop.is_set if stop is not None else (lambda: False),
+            source_cache=cache().model_hours,
         )
     except DownloadCancelled:
         raise cancellation.Cancelled() from None

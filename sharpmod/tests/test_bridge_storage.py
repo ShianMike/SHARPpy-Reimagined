@@ -217,6 +217,104 @@ def test_clear_scans_model_entries_only_before_and_after_deleting(roots, monkeyp
     assert result["failed_files"] == 0
 
 
+def test_session_source_accounting_and_clear_keep_open_sounding_artifacts(roots):
+    from types import SimpleNamespace
+
+    _, session = roots
+    key = ModelHourKey.create("rrfs-a", datetime(2026, 10, 16, tzinfo=UTC), 0)
+    closed = []
+
+    def loader(directory):
+        write(Path(directory) / "subset.grib2", b"source")
+        return SimpleNamespace(close=lambda: closed.append(directory)), None
+
+    with session.model_hours.lease(key, loader) as (entry, _hit):
+        source = Path(entry.download_dir)
+        row = storage.usage({})["caches"][0]
+        assert row == {"key": "models", "bytes": 6, "files": 1, "clearable_bytes": 0}
+    profile = write(session.data_path("opened", ".npz"), b"portable sounding")
+    sidecar = write(profile.with_suffix(".json"), b"metadata")
+    session.add(sounding_cache.Entry("opened", profile, {}))
+    assert storage.usage({})["caches"][0]["clearable_bytes"] == 6
+    result = storage.clear({"cache": "models"})
+    assert result["freed_bytes"] == 6 and result["failed_files"] == 0
+    assert result["usage"]["caches"][0]["bytes"] == 0
+    assert closed == [str(source)] and not source.exists()
+    assert profile.exists() and sidecar.exists() and session.get("opened").path == profile
+
+
+def test_source_clear_defers_active_disposal_and_does_not_resurrect_entry(roots):
+    from types import SimpleNamespace
+
+    _, session = roots
+    key = ModelHourKey.create("rrfs-a", datetime(2026, 10, 16, tzinfo=UTC), 0)
+    closed = []
+
+    def loader(directory):
+        write(Path(directory) / "subset.grib2", b"source")
+        return SimpleNamespace(close=lambda: closed.append(directory)), None
+
+    with session.model_hours.lease(key, loader) as (entry, _hit):
+        source = Path(entry.download_dir)
+        result = storage.clear({"cache": "models"})
+        assert result["freed_bytes"] == 0 and result["failed_files"] == 0
+        assert result["usage"]["caches"][0] == {"key": "models", "bytes": 6, "files": 1, "clearable_bytes": 0}
+        assert source.exists() and not closed and len(session.model_hours) == 0
+    assert closed == [str(source)] and not source.exists()
+    assert storage.usage({})["caches"][0]["bytes"] == 0
+
+
+def test_source_deletion_holds_ownership_lock_against_new_lease_admission(roots, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from types import SimpleNamespace
+
+    _, session = roots
+    key = ModelHourKey.create("rrfs-a", datetime(2026, 10, 16, tzinfo=UTC), 0)
+
+    def loader(directory):
+        write(Path(directory) / "subset.grib2", b"source")
+        return SimpleNamespace(close=lambda: None), None
+
+    with session.model_hours.lease(key, loader) as (entry, _hit):
+        old = Path(entry.download_dir) / "subset.grib2"
+    checked, acquired, release = Event(), Event(), Event()
+    available = []
+    unlink = Path.unlink
+    pending = []
+
+    def consumer():
+        locked = session.model_hours._lock.acquire(blocking=False)
+        available.append(locked)
+        if locked:
+            session.model_hours._lock.release()
+        checked.set()
+        with session.model_hours.lease(key, loader) as (current, hit):
+            acquired.set()
+            assert release.wait(5)
+            assert not hit and Path(current.download_dir, "subset.grib2").exists()
+            return Path(current.download_dir)
+
+    with ThreadPoolExecutor(1) as pool:
+        def guarded(path, *args, **kwargs):
+            if path == old:
+                pending.append(pool.submit(consumer))
+                assert checked.wait(5)
+                assert available == [False] and not acquired.is_set()
+            return unlink(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "unlink", guarded)
+        try:
+            result = storage.clear({"cache": "models"})
+            assert result["freed_bytes"] == 6 and not old.exists()
+            assert acquired.wait(5)
+        finally:
+            release.set()
+        current = pending[0].result(timeout=5)
+    assert current.exists() and current != old.parent
+    session.model_hours.clear()
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows directory junction")
 def test_cache_scans_and_cleanup_never_follow_windows_junctions(roots):
     from _winapi import CreateJunction

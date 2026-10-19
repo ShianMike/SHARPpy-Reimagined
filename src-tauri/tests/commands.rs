@@ -224,6 +224,98 @@ fn radar_commands_forward_optional_scan_times_and_preserve_the_actual_time() {
 }
 
 #[test]
+fn every_raster_route_rejects_invalid_base64_padding_size_and_png_signatures() {
+    use base64::Engine as _;
+
+    for (command, method, file) in [
+        ("get_weather_field", "fields.grid", "field.result.json"),
+        ("get_radar_frame", "radar.mosaic", "radar.result.json"),
+        (
+            "get_radar_site_frame",
+            "radar.site",
+            "radar-site.result.json",
+        ),
+        (
+            "get_satellite_frame",
+            "satellite.goes",
+            "satellite.result.json",
+        ),
+    ] {
+        let cases = if method == "fields.grid" { 4 } else { 5 };
+        let launcher = FakeLauncher::with(vec![script(move |mut io| async move {
+            let encoded = if method == "fields.grid" {
+                "data_base64"
+            } else {
+                "png_base64"
+            };
+            for fault in 0..cases {
+                let request = io.expect(method).await.unwrap();
+                let mut result = fixture(&format!("bridge/map/{file}"));
+                match fault {
+                    0 => result[encoded] = serde_json::json!("!"),
+                    1 => result[encoded] = serde_json::json!("iVBORw0KGgo"),
+                    2 => result[encoded] = serde_json::json!("iVBORw0KGgp="),
+                    3 if method == "fields.grid" => {
+                        result["width"] = serde_json::json!(result["width"].as_u64().unwrap() + 1);
+                    }
+                    3 => {
+                        result["byte_length"] =
+                            serde_json::json!(result["byte_length"].as_u64().unwrap() + 1);
+                    }
+                    _ => {
+                        let engine = base64::engine::general_purpose::STANDARD;
+                        let mut bytes = engine.decode(result[encoded].as_str().unwrap()).unwrap();
+                        bytes[0] = 0;
+                        result[encoded] = serde_json::json!(engine.encode(bytes));
+                    }
+                }
+                io.reply(&request["id"], result).await;
+            }
+            let request = io.expect(method).await.unwrap();
+            io.reply(&request["id"], fixture(&format!("bridge/map/{file}")))
+                .await;
+            io.expect("shutdown").await;
+            0
+        })]);
+        let (_app, webview) = window(launcher);
+        let args = serde_json::json!({
+            "product": "refc", "runTime": "2026-10-04T20:00:00Z", "forecastHour": 1,
+            "site": "KTLX", "validTime": "2026-10-04T21:00:00Z"
+        });
+        // Leave radar untimed: the mosaic fixture intentionally describes the latest scan.
+        let args = if method.starts_with("radar.") {
+            serde_json::json!({"site": "KTLX"})
+        } else {
+            args
+        };
+        for fault in 0..cases {
+            let error: BackendError =
+                parse(invoke_args(&webview, command, args.clone()).unwrap_err());
+            assert_eq!(
+                error.code,
+                ErrorCode::BridgeProtocol,
+                "{command}, fault {fault}"
+            );
+            assert_eq!(error.context.as_ref().unwrap().operation, command);
+        }
+        let bytes: Vec<u8> = parse(invoke_args(&webview, command, args).unwrap());
+        let header_len = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
+        let expected = fixture(&format!("bridge/map/{file}"));
+        let encoded = if method == "fields.grid" {
+            "data_base64"
+        } else {
+            "png_base64"
+        };
+        assert_eq!(
+            &bytes[12 + header_len..],
+            base64::engine::general_purpose::STANDARD
+                .decode(expected[encoded].as_str().unwrap())
+                .unwrap()
+        );
+    }
+}
+
+#[test]
 fn timed_radar_rejects_an_untimed_provider_frame() {
     let launcher = FakeLauncher::with(vec![script(|mut io| async move {
         for (method, file) in [

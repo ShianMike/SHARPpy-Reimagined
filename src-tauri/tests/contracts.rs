@@ -359,7 +359,6 @@ fn split_frame(frame: &[u8]) -> (Value, &[u8]) {
 
 #[test]
 fn map_fixtures_convert_from_bridge_to_public_form() {
-    use base64::Engine as _;
     use sharppy_reimagined_lib::backend::map_ops::shrf_frame;
     use sharppy_reimagined_lib::dto::map::{
         AvailabilityResult, FieldGridResult, MapCatalog, PlaceLabels, RadarResult,
@@ -408,11 +407,9 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
         value("public/map/availability.json")
     );
 
-    let engine = base64::engine::general_purpose::STANDARD;
     let grid: FieldGridResult = typed("bridge/map/field.result.json");
     grid.validate().unwrap();
-    let cells = engine.decode(&grid.data_base64).unwrap();
-    let built = shrf_frame(&grid.header(), &cells);
+    let (built, _) = shrf_frame(&grid.header(), &grid.data_base64).unwrap();
     let committed = fs::read(contracts().join("public/map/field.shrf")).unwrap();
     let (built_header, built_body) = split_frame(&built);
     let (header, body) = split_frame(&committed);
@@ -422,8 +419,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
 
     let radar: RadarResult = typed("bridge/map/radar.result.json");
     radar.validate().unwrap();
-    let png = engine.decode(&radar.png_base64).unwrap();
-    let built = shrf_frame(&radar.header(), &png);
+    let (built, _) = shrf_frame(&radar.header(), &radar.png_base64).unwrap();
     let committed = fs::read(contracts().join("public/map/radar.shrf")).unwrap();
     let (built_header, built_body) = split_frame(&built);
     let (header, body) = split_frame(&committed);
@@ -434,8 +430,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
     let site: RadarSiteResult = typed("bridge/map/radar-site.result.json");
     site.validate().unwrap();
     assert_eq!(site.site_id, "KTLX");
-    let png = engine.decode(&site.png_base64).unwrap();
-    let built = shrf_frame(&site.header(), &png);
+    let (built, _) = shrf_frame(&site.header(), &site.png_base64).unwrap();
     let committed = fs::read(contracts().join("public/map/radar-site.shrf")).unwrap();
     let (built_header, built_body) = split_frame(&built);
     let (header, body) = split_frame(&committed);
@@ -572,8 +567,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
         goes.validate().unwrap();
         assert_eq!(goes.satellite, "G19");
         assert_eq!(goes.product, channel);
-        let png = engine.decode(&goes.png_base64).unwrap();
-        let built = shrf_frame(&goes.header(), &png);
+        let (built, _) = shrf_frame(&goes.header(), &goes.png_base64).unwrap();
         let committed = fs::read(contracts().join(public)).unwrap();
         let (built_header, built_body) = split_frame(&built);
         let (header, body) = split_frame(&committed);

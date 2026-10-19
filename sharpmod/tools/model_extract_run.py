@@ -178,11 +178,15 @@ def _xarray_point_columns(ds, lat, lon, run_dt, fxx, label):
 def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
             member=None, dataset=None, download_dir=None,
             source_grib=None, source_fields=None, source_transport=None,
-            progress_callback=None, cancelled=None, on_bytes=None):
+            progress_callback=None, cancelled=None, on_bytes=None,
+            source_cache=None):
     """Extract a public forecast-model point sounding to ``out_path``.
 
     Parameters mirror the CLI: choose a supported ``model`` key, a latitude and
     longitude, a model run time/cycle, and a forecast hour.
+
+    ``source_cache`` optionally leases acquired grid sources through the existing
+    ``dataset`` seam. Point providers and the HRRR analysis-point route bypass it.
     """
     config = _api._require_selectable(_api.get_config(model))
     lat = float(lat)
@@ -234,6 +238,38 @@ def extract(model, lat, lon, run_time=None, fxx=0, out_path=None, loc=None,
         )
 
     run_dt = _api._run_datetime(run_time, config)
+    if dataset is None and source_cache is not None \
+            and not _api.hrrr_zarr_candidate(config, fxx, lat, lon):
+        from sharpmod.models.model_hour_cache import ModelHourKey
+
+        spatial = _api.spatial_cache_key(config, lat, lon)
+        if spatial is not None:
+            # A point subset must never borrow another request's coordinates.
+            spatial = f"{lat!r},{_api._normalize_lon180(lon)!r}"
+        key = ModelHourKey.create(
+            config.key, run_dt, fxx, config.kwargs.get("member") if member is None else member,
+            spatial=spatial,
+        )
+
+        def load(directory, **callbacks):
+            return _api._retrieve_dataset(
+                config, run_dt, fxx, member=member, download_dir=directory,
+                lat=lat, lon=lon, **callbacks,
+            )
+
+        with source_cache.lease(
+            key, load, cancelled=cancelled or (lambda: False),
+            progress_callback=progress_callback, on_bytes=on_bytes,
+        ) as (entry, hit):
+            if hit:
+                _api._emit_progress(progress_callback, "cached")
+            return _api.extract(
+                config.key, lat, lon, run_time=run_dt, fxx=fxx,
+                out_path=out_path, loc=loc, member=member, dataset=entry.dataset,
+                download_dir=entry.download_dir, source_grib=entry.source_grib,
+                source_fields=entry.source_fields, source_transport=entry.source_transport,
+                progress_callback=progress_callback, cancelled=cancelled, on_bytes=on_bytes,
+            )
     if out_path is None:
         out_path = str(
             export_file_path(

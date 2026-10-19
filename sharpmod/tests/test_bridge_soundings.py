@@ -444,10 +444,11 @@ def test_open_model_extracts_to_the_cache_and_maps_errors(monkeypatch):
     calls = []
 
     def extract(model, lat, lon, *, run_time, fxx, out_path, loc, download_dir,
-                progress_callback, on_bytes, cancelled):
+                progress_callback, on_bytes, cancelled, source_cache):
         calls.append((model, lat, lon, run_time, fxx, loc))
         assert not cancelled()
         assert Path(download_dir).parent == sounding_cache.cache().root
+        assert source_cache is sounding_cache.cache().model_hours
         progress_callback("downloading", 9_000_000)
         on_bytes(500_000)
         progress = soundings.get_progress({"progress_id": "download1"})

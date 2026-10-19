@@ -212,15 +212,21 @@ def test_font_resolution_does_not_require_system_font_dir(monkeypatch):
     assert path.is_file()
 
 
+@pytest.mark.parametrize("mode,quality_env", [
+    ("lossless", "SHARPMOD_PNG_QUALITY"),
+    ("hd", "SHARPMOD_HD_PNG_QUALITY"),
+    ("uhd", "SHARPMOD_UHD_PNG_QUALITY"),
+])
 def test_png_export_lossless_compression_preserves_legacy_pixels(
-        tmp_path, monkeypatch):
-    """Lossless PNG export keeps the legacy widget grab dimensions/pixels."""
+        tmp_path, monkeypatch, mode, quality_env):
+    """Every default compression effort retains the full-density grab pixels."""
     from qtpy import QtCore, QtGui, QtWidgets
 
     from sharpmod.render import (
-        PNG_IMAGE_LOSSLESS, grab_widget_pixmap, save_widget_png)
+        _png_image_scale, grab_widget_pixmap, save_widget_png)
 
-    monkeypatch.setenv("SHARPMOD_PNG_QUALITY", "0")
+    monkeypatch.delenv(quality_env, raising=False)
+    scale = _png_image_scale(mode)
 
     app = QtWidgets.QApplication.instance()
     if app is None:
@@ -246,10 +252,10 @@ def test_png_export_lossless_compression_preserves_legacy_pixels(
 
     legacy = tmp_path / "legacy_q100.png"
     compressed = tmp_path / "compressed.png"
-    pixmap = grab_widget_pixmap(widget)
+    pixmap = grab_widget_pixmap(widget, scale=scale)
     assert pixmap.save(str(legacy), "PNG", 100)
     assert save_widget_png(widget, str(compressed),
-                           image_mode=PNG_IMAGE_LOSSLESS)
+                           image_mode=mode)
 
     legacy_img = QtGui.QImage(str(legacy))
     compressed_img = QtGui.QImage(str(compressed))
@@ -257,7 +263,7 @@ def test_png_export_lossless_compression_preserves_legacy_pixels(
     assert (compressed_img.width(), compressed_img.height()) == (
         legacy_img.width(), legacy_img.height())
     assert (compressed_img.width(), compressed_img.height()) == (
-        widget.width(), widget.height())
+        round(widget.width() * scale), round(widget.height() * scale))
     assert _qimage_rgba_bytes(compressed_img) == _qimage_rgba_bytes(legacy_img)
     assert compressed.stat().st_size < legacy.stat().st_size
 

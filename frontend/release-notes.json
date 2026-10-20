@@ -66,7 +66,7 @@
       },
       {
         "title": "Clearer Map Controls And Recovery",
-        "description": "Controls use orange hover feedback throughout both themes. Maps remove the heavy road network for clearer weather and labels. Manage forecast downloads in one panel with animated hour lists; the Fast/Smooth icon sits beside Loop. Recover failed maps, imagery and overlays. Pan with arrow keys and press Enter to inspect the map’s centre."
+        "description": "Controls use orange hover feedback throughout both themes. Maps remove the heavy road network for clearer weather and labels. Manage forecast downloads in one panel with animated hour lists; the Fast/Smooth icon sits beside Loop. Drawn maps stay available through recoverable rendering errors. Retry failed maps, imagery and overlays. Pan with arrow keys and press Enter to inspect the map’s centre."
       },
       {
         "title": "Settings stay usable",

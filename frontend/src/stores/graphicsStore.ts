@@ -72,7 +72,8 @@ export const useGraphicsStore = create<GraphicsState>()(
     setRendererFailed: (kind, message, panel = 0) => {
       recordLog("error", `Map panel ${String(panel + 1)}`, message, kind);
       const error = { kind, message };
-      set({ panelErrors: { ...get().panelErrors, [panel]: error }, ...(panel === 0 ? { renderer: "failed", rendererError: error } as const : {}) });
+      // Keep an initialized map mounted so its next draw can clear the panel error.
+      set({ panelErrors: { ...get().panelErrors, [panel]: error }, ...(panel === 0 && get().renderer !== "ready" ? { renderer: "failed", rendererError: error } as const : {}) });
     },
     setContextLost: (lost) => {
       if (lost !== get().contextLost) recordLog(lost ? "warning" : "info", "Map renderer", lost ? "Graphics context lost" : "Graphics context restored");

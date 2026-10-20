@@ -28,7 +28,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Report renderer startup and later draw failures for every map panel, with
   recovery after a successful draw and an explicit reload action. Show imagery
   decode and missing wind/contour errors with layer retry controls; stale image
-  fallbacks retain their original timestamp.
+  fallbacks retain their original timestamp. Keep an initialized primary map
+  mounted through a recoverable overlay error so its next draw can clear the
+  notice; retain reduced rendering for failed startup.
 - Preserve the entered observed station when source tabs or workspaces remount;
   update it on an explicit station selection. Keep all workspace UI settings
   usable in memory if browser storage fails, with one warning per session.

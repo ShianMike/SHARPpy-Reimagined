@@ -23,10 +23,22 @@ The full frontend suite passes 835 tests, with two opt-in performance cases
 skipped; TypeScript, ESLint and architecture boundaries pass. The first local
 offline run passes all 3,795 assertions in 266.78 seconds, but NPZ rendering at
 20.14 seconds exceeds its 16.8-second local ceiling. Preserve that failed timing
-evidence. The documented two-worker configuration is rerunning alone, without
-changing limits. CI also identified a browser assertion capturing the trigger's
+evidence. The documented two-worker configuration passes all 3,795 assertions
+and the timing gate in 271.59 seconds, with NPZ rendering at 7.23 seconds. All
+three live-provider contracts pass in 64.66 seconds without skips. CI also identified a browser assertion capturing the trigger's
 intermediate hover color; both disclosure checks now poll the live colors until
-they match, retaining all motion and playback assertions.
+they match, retaining all motion and playback assertions. Both focused browser
+cases pass locally in 33 seconds, and all four hosted browser shards pass.
+
+The PR review then identified a primary-panel recovery regression: setting the
+global renderer to failed after an already successful draw unmounted WeatherMap,
+preventing the next frame from clearing the error. The shared graphics store now
+retains the initialized renderer and its per-panel error until the next draw;
+startup/constructor failures still use the reduced view. The existing Shell
+integration test now verifies canvas identity, notice state, recovery and startup
+fallback through the real graphics store. This fix requires fresh final CI.
+All 47 focused graphics, Shell, map-panel and update/highlight tests pass;
+TypeScript, focused ESLint and four Python updater-packaging checks pass.
 
 Commit the complete change set, pass the normal PR gates, merge normally and publish through the
 existing protected release workflow. Verify the final tag, assets, checksums,

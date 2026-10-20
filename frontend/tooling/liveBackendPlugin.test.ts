@@ -11,6 +11,7 @@ const root = resolve(import.meta.dirname, "..");
 const suffix = process.platform === "win32" ? "Scripts/python.exe" : "bin/python";
 const hasPython = process.env.SHARPPY_PYTHON !== undefined || [".gribenv", ".venv"]
   .some((venv) => existsSync(resolve(root, "..", venv, suffix)));
+if (process.env.CI === "true" && !hasPython) throw new Error("CI must provide SHARPPY_PYTHON; live boundary tests cannot be skipped.");
 
 it.skipIf(!hasPython)("starts, restarts, and closes the actual Python process tree", async () => {
   const before = new Set(readdirSync(tmpdir()).filter((name) => name.startsWith("sharppy-browser-")));

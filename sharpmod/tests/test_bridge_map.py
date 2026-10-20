@@ -281,6 +281,46 @@ def test_native_surface_grid_keeps_values_units_and_catalogue_scale(
     assert product["palette"]["ticks"] == ticks
 
 
+@pytest.mark.parametrize("missing", ["ugrd300", "vgrd300"])
+def test_missing_wind_component_is_a_field_failure_not_an_internal_error(offline, monkeypatch, missing):
+    from sharpmod.bridge import contours
+    from sharpmod.providers import hrrr_field
+
+    original = hrrr_field._download_fields
+
+    def incomplete(*args, **kwargs):
+        decoded = original(*args, **kwargs)
+        decoded.pop(missing, None)
+        return decoded
+
+    monkeypatch.setattr(hrrr_field, "_download_fields", incomplete)
+    request = {"product": "hgt-wind-300", "run_time": "2026-10-04T18:00:00Z", "forecast_hour": 0}
+    for operation in (fields.grid, contours.contours):
+        with pytest.raises(BridgeError) as failure:
+            operation(request)
+        assert failure.value.code == "FIELD_FETCH_FAILED"
+        assert failure.value.retryable is False
+
+
+def test_missing_contour_keeps_scalar_winds_usable_and_reports_auxiliary_failure(offline, monkeypatch):
+    from sharpmod.bridge import contours
+    from sharpmod.providers import hrrr_field
+
+    original = hrrr_field._download_fields
+
+    def incomplete(*args, **kwargs):
+        decoded = original(*args, **kwargs)
+        decoded.pop("hgt300", None)
+        return decoded
+
+    monkeypatch.setattr(hrrr_field, "_download_fields", incomplete)
+    request = {"product": "hgt-wind-300", "run_time": "2026-10-04T18:00:00Z", "forecast_hour": 0}
+    assert fields.grid(request)["data_base64"]
+    with pytest.raises(BridgeError) as failure:
+        contours.contours(request)
+    assert failure.value.code == "FIELD_FETCH_FAILED"
+
+
 def test_wind_barbs_rotate_to_earth_and_keep_weak_calm_and_missing_winds():
     from pyproj import Transformer
     from sharpmod.bridge.contours import wind_grid

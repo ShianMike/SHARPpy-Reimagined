@@ -1,7 +1,23 @@
+// @vitest-environment jsdom
 import { expect, it, vi } from "vitest";
+import { useGraphicsStore } from "../../stores/graphicsStore";
 import { useMapStore } from "../../stores/mapStore";
 import { defaultLayerStates } from "../layers/registry";
-import { subscribeToStores } from "./runtimeWiring";
+import { createRuntimeWatch, subscribeToStores } from "./runtimeWiring";
+
+it.each([1, 2, 3])("reports secondary panel %s failures and clears them after a successful render", (panel) => {
+  const saved = useGraphicsStore.getState();
+  const watch = createRuntimeWatch(panel);
+  try {
+    watch.overlayError("shader failed");
+    expect(useGraphicsStore.getState().panelErrors[panel]?.message).toBe("shader failed");
+    expect(useGraphicsStore.getState().renderer).toBe(saved.renderer);
+    watch.afterRender();
+    expect(useGraphicsStore.getState().panelErrors[panel]).toBeUndefined();
+    watch.overlayError("later failure");
+    expect(useGraphicsStore.getState().panelErrors[panel]?.message).toBe("later failure");
+  } finally { watch.dispose(); useGraphicsStore.setState(saved, true); }
+});
 
 it("keeps label geometry on opacity and weather changes, refreshing it for label visibility", () => {
   const saved = useMapStore.getState();

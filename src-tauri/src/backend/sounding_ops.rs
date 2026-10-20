@@ -82,11 +82,22 @@ impl Router {
             .await
             .map_err(|failure| {
                 let error = failure.into_backend_error(context);
-                log::warn!(
-                    "{} failed: {} ({})",
+                log::log!(
+                    if error.is_cancelled() {
+                        log::Level::Info
+                    } else {
+                        log::Level::Warn
+                    },
+                    "{} {}: {} ({}) details={:?}",
                     context.operation,
+                    if error.is_cancelled() {
+                        "cancelled"
+                    } else {
+                        "failed"
+                    },
                     error.message,
-                    error.code.as_str()
+                    error.code.as_str(),
+                    error.details
                 );
                 error
             })

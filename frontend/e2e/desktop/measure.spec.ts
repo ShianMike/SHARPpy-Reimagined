@@ -132,7 +132,7 @@ test.describe("desktop measurements", () => {
     await page.getByTestId("health-indicator").click();
     const popover = page.getByRole("dialog", { name: "Backend status" });
     await expect(popover).toContainText("Backend ready");
-    await expect(popover).toContainText("3.11.14");
+    await expect(popover).toContainText(/3\.(?:11|12|13)\.\d+/u);
     await expect(popover).toContainText(appManifest.version);
     results.healthPopover = await popover.innerText();
     await shot("desktop-health.png");

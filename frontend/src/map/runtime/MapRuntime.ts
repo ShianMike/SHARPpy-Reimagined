@@ -1,5 +1,5 @@
-// One panel's MapLibre map and deck.gl overlay. Panel 0 reports startup,
-// notices, and the camera snapshot; cameraLink synchronizes the other panels.
+// One panel's MapLibre map, renderer health and deck.gl overlay. Panel 0 owns
+// basemap notices and the camera snapshot; cameraLink synchronizes the panels.
 
 import "./maplibreWorker";
 import * as maplibregl from "maplibre-gl";
@@ -18,7 +18,7 @@ import { CAMERA_SNAPSHOT_DEBOUNCE_MS, CONUS_BOUNDS, FOCUS_ZOOM, isValidCamera } 
 import { linkCamera } from "./cameraLink";
 import { mapOptions, panelPixelRatio } from "./mapOptions";
 import { createPanelOverlay, wireMapEvents, wireOverlayEvents, type RuntimeEventTarget } from "./runtimeEvents";
-import { createRuntimeWatch, NO_WATCH, subscribeToStores } from "./runtimeWiring";
+import { createRuntimeWatch, subscribeToStores } from "./runtimeWiring";
 import type { StartupWatch } from "./startupWatch";
 import { StationScene } from "./stationScene";
 
@@ -50,12 +50,12 @@ export class MapRuntime implements RuntimeEventTarget {
     readonly panel = 0,
   ) {
     this.primary = panel === 0;
+    useGraphicsStore.getState().beginRendererAttempt(panel);
     if (this.primary) {
       // Every new primary runtime starts pending, with no lost context and no notices.
-      useGraphicsStore.getState().beginRendererAttempt();
       useMapNoticeStore.getState().reset();
     }
-    this.watch = this.primary ? createRuntimeWatch() : NO_WATCH;
+    this.watch = createRuntimeWatch(panel);
     const profile = useGraphicsStore.getState().effective.profile;
     try {
       const read = documentTokenReader();
@@ -183,9 +183,7 @@ export class MapRuntime implements RuntimeEventTarget {
     }
     this.map = null;
     this.overlay = null;
-    if (this.primary) {
-      useGraphicsStore.getState().setRendererFailed("constructor", message);
-    }
+    useGraphicsStore.getState().setRendererFailed("constructor", message, this.panel);
   }
 
   private initialView(map: maplibregl.Map): void {

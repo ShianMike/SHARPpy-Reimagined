@@ -104,6 +104,8 @@ export interface SoundingSummary {
   fileName: string | null;
   levelCount: number;
   timeCount: number;
+  /** Every file time in collection order, including undated entries. */
+  times?: readonly (string | null)[];
 }
 
 export interface TableColumn {

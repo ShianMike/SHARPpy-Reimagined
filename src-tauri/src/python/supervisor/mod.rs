@@ -88,6 +88,7 @@ struct Pending {
     tx: oneshot::Sender<Reply>,
     generation: u64,
     method: String,
+    request_id: Option<String>,
 }
 
 struct ChildSlot {

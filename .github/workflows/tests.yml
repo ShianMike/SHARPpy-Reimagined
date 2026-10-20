@@ -653,7 +653,7 @@ jobs:
           python -m pip install --upgrade \
             --constraint constraints/release.txt \
             pip setuptools wheel
-          python -m pip install -e ".[quality,era5,wrf,render]"
+          python -m pip install --constraint constraints/release.txt -e ".[quality,era5,wrf,render]"
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip check
 

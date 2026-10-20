@@ -58,9 +58,11 @@ export function useFieldImage(frame: FieldFrame | undefined, palette: Palette | 
 type PngFrame = Pick<RadarFrame, "png" | "bounds" | "validTime">;
 
 /** Decode once across panels; keep this query's last good image during refresh errors. */
-function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data">, enabled: boolean, source: string): RasterImage | null {
+export function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data" | "isError" | "refetch">, enabled: boolean, source: string) {
   const frame = enabled ? query.data : undefined;
   const [decoded, setDecoded] = useState<{ frame: PngFrame; source: string; image: RasterImage } | null>(null);
+  const [failure, setFailure] = useState<PngFrame | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (frame === undefined) {
       return;
@@ -70,23 +72,30 @@ function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data">, enabled: boo
       (image) => {
         if (live) {
           setDecoded({ frame, source, image: { image, bounds: frame.bounds } });
+          setFailure(null);
         }
       },
       (error: unknown) => {
-        console.warn("[map] the frame could not be decoded", error);
+        if (live) {
+          setFailure(frame);
+          console.warn("[map] the frame could not be decoded", error);
+        }
       },
     );
     return () => {
       live = false;
     };
-  }, [frame, source]);
+  }, [frame, source, attempt]);
   const ready = frame === undefined ? undefined : cachedPng(frame.png);
-  return useMemo(() => {
+  const image = useMemo(() => {
     if (frame === undefined) return null;
     if (ready !== undefined) return { image: ready, bounds: frame.bounds };
     const age = Date.parse(frame.validTime ?? "") - Date.parse(decoded?.frame.validTime ?? "");
     return decoded?.source === source && (decoded.frame === frame || age >= 0 && age <= 10 * 60_000) ? decoded.image : null;
   }, [frame, ready, decoded, source]);
+  const failed = enabled && (query.isError || frame !== undefined && failure === frame);
+  const issue = failed ? `${query.isError ? "Imagery could not be loaded" : "Imagery could not be decoded"}.${image !== null && decoded !== null ? ` Showing the earlier image from ${decoded.frame.validTime ?? "an unknown time"}.` : " No image is shown."}` : null;
+  return { image, issue, retry: () => { if (enabled) { setAttempt((value) => value + 1); void query.refetch(); } } };
 }
 
 /** The outlooks this panel has loaded, keyed by product; a stable object while they do not change. */
@@ -111,7 +120,7 @@ function useOutlooks(panel: number, validTime: string | null): Readonly<Partial<
 }
 
 /** Feeds a panel's runtime; returns the panel's field for its chip. */
-export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelField {
+export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelField & { issues: string[]; retry: () => void } {
   const field = usePanelField(panel);
   const image = useFieldImage(field.request === null || field.frame.isError ? undefined : field.frame.data, field.product?.palette);
   const stations = useStationCatalog().data?.stations ?? NO_STATIONS;
@@ -130,7 +139,8 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const site = useEffectiveRadarSite(panel);
   const mosaic = usePngImage(useRadarFrame(radarProduct, live && radarVisible && scope === "mosaic", live ? validTime : null), live && radarVisible && scope === "mosaic", radarProduct ?? "default");
   const siteFrame = usePngImage(useRadarSiteFrame(radarProduct, site, live && radarVisible && scope === "site", live ? validTime : null, tilt), live && radarVisible && scope === "site", `${site ?? ""}/${radarProduct ?? "reflectivity"}/${tilt}`);
-  const radar = scope === "site" ? siteFrame : mosaic;
+  const radarImage = scope === "site" ? siteFrame : mosaic;
+  const radar = radarImage.image;
   const satellite = usePngImage(useSatelliteFrame(channel, validTime, live && layers.satellite.visible), live && layers.satellite.visible, channel);
   const alertQuery = useWeatherAlerts(validTime, live && (layers.warnings.visible || layers.watches.visible));
   const alerts = live && !alertQuery.isError && (layers.warnings.visible || layers.watches.visible) ? alertQuery.data?.alerts ?? null : null;
@@ -158,10 +168,17 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   }, [runtime, stations]);
   useFieldTransition(runtime, image, model?.key);
   useEffect(() => {
-    runtime?.setScene({ radar, satellite, reports, alerts, surfacePlots, contourSpec, contours: contourLines, outlooks, domain, radarSites });
-  }, [runtime, radar, satellite, reports, alerts, surfacePlots, contourSpec, contourLines, outlooks, domain, radarSites]);
+    runtime?.setScene({ radar, satellite: satellite.image, reports, alerts, surfacePlots, contourSpec, contours: contourLines, outlooks, domain, radarSites });
+  }, [runtime, radar, satellite.image, reports, alerts, surfacePlots, contourSpec, contourLines, outlooks, domain, radarSites]);
   useEffect(() => {
     runtime?.setScene({ places });
   }, [runtime, places]);
-  return field;
+  const auxiliaryWanted = !live && field.request !== null && (contourSpec !== null || field.product?.wind === true);
+  const missingWind = auxiliaryWanted && contourLines !== null && field.product?.wind === true && contourLines.wind === null;
+  return { ...field, issues: [
+    ...(radarImage.issue === null ? [] : [`Radar: ${radarImage.issue}`]),
+    ...(satellite.issue === null ? [] : [`Satellite: ${satellite.issue}`]),
+    ...(auxiliaryWanted && contourQuery.isError ? ["Wind and contour overlays could not be loaded; the coloured field may still be available."] : []),
+    ...(missingWind ? ["Wind barbs are missing from this frame; available contours and the coloured field are still shown."] : []),
+  ], retry: () => { radarImage.retry(); satellite.retry(); if (auxiliaryWanted) void contourQuery.refetch(); } };
 }

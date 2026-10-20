@@ -1,10 +1,10 @@
 // Observed sounding: a station, a UTC date and launch hour, and a provider.
 // The station defaults to the map selection. Which reports exist is the
 // backend's answer: the form never guesses availability.
-import { useEffect, useId, type ReactNode, type SyntheticEvent } from "react";
+import { useId, type ReactNode, type SyntheticEvent } from "react";
 import { Action } from "../../ui/Controls";
 import { useSoundingStore } from "../../stores/soundingStore";
-import { stationIndex, useSelectedStation } from "../../stations/stationIndex";
+import { stationIndex } from "../../stations/stationIndex";
 import { displayName } from "../../stations/stationFormat";
 import { useStationCatalog } from "../../stations/stationQueries";
 import { OBSERVED_PROVIDERS, type ObservedProvider } from "../../types/soundings";
@@ -24,7 +24,6 @@ const PROVIDER_LABELS: Readonly<Record<ObservedProvider, string>> = {
 export function ObservedForm(): ReactNode {
   const inputs = useSoundingStore((state) => state.observed);
   const setObserved = useSoundingStore((state) => state.setObserved);
-  const selected = useSelectedStation();
   const catalog = useStationCatalog();
   const open = useOpenSounding();
   const stationInput = useId();
@@ -35,13 +34,6 @@ export function ObservedForm(): ReactNode {
     }
     setObserved(patch);
   };
-
-  const selectedId = selected.state === "found" ? selected.station.id : null;
-  useEffect(() => {
-    if (selectedId !== null) {
-      setObserved({ stationId: selectedId });
-    }
-  }, [selectedId, setObserved]);
 
   const stationId = inputs.stationId.trim();
   const known = catalog.data === undefined ? undefined : stationIndex(catalog.data.stations).get(stationId);

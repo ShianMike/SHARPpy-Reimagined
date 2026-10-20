@@ -2,10 +2,10 @@ name: Frontend and desktop bridge
 on:
   push:
     branches: [main]
-    paths: ["frontend/**", "src-tauri/**", "sharpmod/resources/basemap.json", ".github/workflows/frontend.yml"]
+    paths: ["frontend/**", "src-tauri/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
   pull_request:
     branches: [main]
-    paths: ["frontend/**", "src-tauri/**", "sharpmod/resources/basemap.json", ".github/workflows/frontend.yml"]
+    paths: ["frontend/**", "src-tauri/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -28,8 +28,21 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: "24.12.0", cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with: { python-version: "3.13", cache: pip }
+      - name: Require the real Python boundary in UI tests
+        working-directory: .
+        shell: pwsh
+        run: |
+          python -m pip install --constraint constraints/release.txt -e ".[render]"
+          if ($LASTEXITCODE -ne 0) { throw "Python boundary dependencies failed" }
+          python scripts/install_sharppy_compat.py --sharppy-only
+          if ($LASTEXITCODE -ne 0) { throw "SHARPpy compatibility install failed" }
+          "SHARPPY_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
       - run: npm run typecheck
       - run: npm run lint
+      - name: Audit production frontend dependencies
+        run: npm audit --omit=dev
       - run: npm test
       - run: npm run build
       - run: npm run build:browser
@@ -95,3 +108,24 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
+      - name: Audit locked desktop and scientific dependencies
+        run: |
+          cargo install cargo-audit --version 0.22.2 --locked
+          if ($LASTEXITCODE -ne 0) { throw "Dependency audit tool install failed" }
+          cargo audit --file Cargo.lock
+          if ($LASTEXITCODE -ne 0) { throw "Desktop dependency audit failed" }
+          cargo audit --file ../rust/sharpmod-rs/Cargo.lock
+          if ($LASTEXITCODE -ne 0) { throw "Scientific dependency audit failed" }
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with: { python-version: "3.13", cache: pip }
+      - name: Install the real sidecar for lifecycle checks
+        working-directory: .
+        shell: pwsh
+        run: |
+          python -m pip install --constraint constraints/release.txt -e ".[render]"
+          if ($LASTEXITCODE -ne 0) { throw "Sidecar dependencies failed" }
+          python scripts/install_sharppy_compat.py --sharppy-only
+          if ($LASTEXITCODE -ne 0) { throw "SHARPpy compatibility install failed" }
+          "SHARPPY_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
+      - name: Require normal and forced sidecar cleanup
+        run: cargo test --locked --test python_sidecar -- --ignored --test-threads=1

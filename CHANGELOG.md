@@ -7,6 +7,68 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Target version: **3.2.1** (not published).
+
+### Fixed
+
+- Recover forecast requests that return to a field while its previous download
+  is stopping. Replace fully abandoned acquisitions and preserve shared work
+  while another consumer needs it; old cleanup cannot remove a new acquisition.
+- Stop sibling and queued model-field range transfers after a provider failure,
+  retain the original failure, and check cancellation before opening another
+  connection. Preserve source order, weather values and existing timeouts.
+- Stop automatic forecast playback preparation and prefetch outside Model Viewer,
+  preserving the retained map, cached frames and explicit bulk-download ownership.
+- Identify intentional cancellations separately from genuine backend failures.
+  Correlate native errors and timeouts with request tokens, wire IDs, methods
+  and bridge generations; retain real failures and unexpected replies in logs.
+- Report renderer startup and later draw failures for every map panel, with
+  recovery after a successful draw and an explicit reload action. Show imagery
+  decode and missing wind/contour errors with layer retry controls; stale image
+  fallbacks retain their original timestamp.
+- Preserve the entered observed station when source tabs or workspaces remount;
+  update it on an explicit station selection. Keep all workspace UI settings
+  usable in memory if browser storage fails, with one warning per session.
+- Select every profile time in multi-time sounding files. Keep chart calculations,
+  edit/undo histories and PNG exports tied to the selected time; preserve edits
+  on other times when switching, and include them in discard protection.
+- Inspect arbitrary forecast points with the keyboard: pan a map with arrow keys
+  and press Enter to select its centre through the existing point inspector.
+
+### Changed
+
+- Reclaim unreachable Qt chart buffers between serial sounding renders, including
+  failed renders. Fifteen paired worker requests preserve exact PNGs and view
+  metadata; measured peak working set falls from 683.3 to 448.4 MiB in that
+  sequence. Keep chart dimensions, calibration, profile edits and lossless exports.
+- Retain HTTP connections for the existing bounded field-download concurrency,
+  avoiding repeated connection churn across concurrent products without adding
+  workers or blocking cancellation on connection-pool admission.
+- Add focused cancellation, provider-failure, connection-reuse, workspace and
+  renderer cleanup regressions, real browser interaction checks, and
+  patch-specific measurements and continuation checkpoints.
+- Allow the requested 20% headroom on the local serial-release NPZ timing ceiling
+  (14.0 to 16.8 seconds), retaining its measured baseline, hosted limits,
+  scientific tolerances and output assertions.
+- Reuse unchanged station and observation label layouts across forecast contour
+  frames, invalidating on camera, selection, label visibility or source changes.
+  Four panels over 30 frames reduce station projections from 111,960 to 3,732;
+  this work-count result does not establish a desktop FPS speedup.
+- Require real browser/Python lifecycle and native sidecar cleanup checks in CI,
+  and audit the locked npm/Cargo and release-constrained Python dependencies.
+  Add a resolved Windows runtime CycloneDX SBOM to release artifacts, checksums
+  and provenance, including dependency edges, available licenses and graph limits.
+- Require the final staged updater signature and signed version to verify through
+  the real updater library, including tampering rejection; add a disposable-runner
+  in-place installer upgrade and frozen rendering check. These release checks
+  remain pending until a signed candidate is built and exercised.
+
+### Security
+
+- Remove unused legacy ZIP updater extraction and its three reported RustSec
+  advisories while retaining signed NSIS updates, TLS and system proxy support.
+  Constrain aiohttp to 3.14.5 to address three reported Python advisories.
+
 ## [v3.2.0] - 2026-10-19
 
 ### Fixed

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { DEFAULT_UNITS, parseUnitPreferences, type UnitPreferences } from "../lib/displayUnits";
 
 export type Theme = "system" | "light" | "dark";
@@ -34,13 +34,10 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
   prepareReleaseNotes: (version, returning) => {
     const previous = get().lastVersion;
     if (previous === version) return;
-    // A failed storage write must not prevent startup; Zustand already updated the session state.
-    try { set({ lastVersion: version, whatsNewOpen: previous !== null || returning }); }
-    catch (error) { console.warn(`[updates] Release highlights could not be remembered (${String(error)})`); }
+    set({ lastVersion: version, whatsNewOpen: previous !== null || returning });
   },
   setWhatsNewOpen: (whatsNewOpen) => {
-    try { set({ whatsNewOpen }); }
-    catch (error) { console.warn(`[updates] Release highlights stay available for this session (${String(error)})`); }
+    set({ whatsNewOpen });
   },
   navigationOpen: false,
   setNavigationOpen: (navigationOpen) => { set({ navigationOpen }); },
@@ -60,6 +57,23 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
   setSmoothPlayback: (smoothPlayback) => { set({ smoothPlayback }); },
 }), {
   name: "sharppy-workspace-ui",
+  storage: createJSONStorage(() => {
+    let memory: string | null = null;
+    let unavailable = false;
+    const access = (operation: () => void): void => {
+      if (unavailable) return;
+      try { operation(); }
+      catch (error) {
+        unavailable = true;
+        console.warn(`[preferences] UI settings last for this session only (${String(error)})`);
+      }
+    };
+    return {
+      getItem: (name) => { access(() => { memory = localStorage.getItem(name); }); return memory; },
+      setItem: (name, value) => { memory = value; access(() => { localStorage.setItem(name, value); }); },
+      removeItem: (name) => { memory = null; access(() => { localStorage.removeItem(name); }); },
+    };
+  }),
   partialize: ({ lastVersion, collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }) => ({ lastVersion, collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }),
   merge: (saved, current) => {
     const value = saved !== null && typeof saved === "object" ? saved as Record<string, unknown> : {};

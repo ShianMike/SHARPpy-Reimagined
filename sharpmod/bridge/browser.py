@@ -67,6 +67,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         command = "browser request"
+        request_id = None
         try:
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -88,7 +89,8 @@ class BrowserHandler(BaseHTTPRequestHandler):
                 raise p.invalid("Content-Type must be application/json")
             request = decode_request(body)
             command = request.method
-            request_id = request.params.pop("requestId", None)
+            if "requestId" in request.params:
+                request_id = cancellation.token(request.params.pop("requestId"))
             if command == "cancel_request":
                 p.keys(request.params, ())
                 result = cancellation.cancel({"request_id": request_id})
@@ -129,25 +131,30 @@ class BrowserHandler(BaseHTTPRequestHandler):
             if command != "get_backend_health":
                 log.info("live %s completed", command)
         except ProtocolError as exc:
-            self._error(command, exc.error)
+            self._error(command, exc.error, request_id)
         except BridgeError as exc:
-            self._error(command, exc)
+            self._error(command, exc, request_id)
         except TimeoutError as exc:
-            self._error(command, p.invalid(str(exc)))
+            self._error(command, p.invalid(str(exc)), request_id)
         except Exception:
             log.exception("live %s failed", command)
-            self._error(command, internal_error(command))
+            self._error(command, internal_error(command), request_id)
 
-    def _error(self, command: str, error: BridgeError) -> None:
-        log.warning("live %s: %s", command, error.message)
+    def _error(self, command: str, error: BridgeError, request_id=None) -> None:
+        cancelled = isinstance(error, cancellation.Cancelled)
+        log.log(logging.INFO if cancelled else logging.WARNING,
+                "live command=%s request_id=%s code=%s cancelled=%s: %s",
+                command, request_id, error.code, cancelled, error.message)
         status = (
             400
             if error.code in ("INVALID_ARGUMENT", "BRIDGE_PROTOCOL", "METHOD_NOT_FOUND")
             else 502
         )
-        self._reply(
-            status, encode_frame(error_frame(None, error)["error"]), "application/json"
-        )
+        payload = error_frame(None, error)["error"]
+        payload["context"] = {"operation": command, "provider": "python-bridge"}
+        if request_id is not None:
+            payload.setdefault("details", {})["request_id"] = request_id
+        self._reply(status, encode_frame(payload), "application/json")
 
     def _reply(self, status: int, data: bytes, content_type: str) -> None:
         self.send_response(status)

@@ -1,10 +1,8 @@
 """The map catalogue and model field grids for the map workspace.
 
-Every value comes from sharpmod: the products and their palettes from
-``providers.hrrr_products``, the grid from ``providers.hrrr_field`` (the same
-download, derivation, and reprojection the legacy map colours), and the radar
-and SPC product lists from their providers. The grid travels as numbers,
-quantized to uint16 with a stated scale and offset, so the frontend colours it.
+Products and palettes come from ``hrrr_products``, grids from ``hrrr_field``,
+and radar/SPC lists from their providers. The shared derivation/reprojection
+travels as uint16 values with a scale and offset; the frontend colours it.
 """
 
 from __future__ import annotations
@@ -19,10 +17,7 @@ from sharpmod.bridge import cancellation, params as p
 from sharpmod.bridge.errors import BridgeError
 from sharpmod.models.model_transport import DownloadCancelled
 
-#: All supported field routes request the common 3 km CONUS Lambert output
-#: grid, including NAM and RRFS/REFS; they do not request native model grids.
-#: The output frame over its coverage bounds: about 3.3 by 3.5 km a cell at
-#: 35N, close to the native 3 km grid.
+#: HRRR/NAM/RRFS/REFS share this CONUS Lambert output, about 3.3 x 3.5 km per cell at 35N.
 # ponytail: the grid rides base64 inside one 8 MiB JSON frame, which caps the
 # frame at about 2.9 M cells; protocol 2's binary bodies would lift that.
 FRAME = (2048, 1024)
@@ -177,12 +172,13 @@ def _acquire(model, product, run, hour):
     """Produce compact raster and auxiliary outputs from one cold acquisition."""
     from sharpmod.bridge import frame_cache
 
+    cancellation.check()
     target = frame_cache.path("grid", model, product.key, run, hour, FRAME)
     auxiliary = frame_cache.path("contours", model, product.key, run, hour, FRAME)
     key = (str(target),)
     with _FLIGHT_LOCK:
         current = _FLIGHTS.get(key)
-        owner = current is None
+        owner = current is None or all(event is not None and event.is_set() for event in current[1])
         if owner:
             current = _FLIGHTS[key] = (Future(), [])
         flight, consumers = current
@@ -214,7 +210,7 @@ def _acquire(model, product, run, hour):
     finally:
         with _FLIGHT_LOCK:
             consumers.remove(consumer)
-            if owner:
+            if owner and _FLIGHTS.get(key) is current:
                 _FLIGHTS.pop(key, None)
 
 
@@ -241,6 +237,10 @@ def _produce(model, product, run, hour, target, stopped):
             )
             if stopped():
                 raise cancellation.Cancelled()
+            missing = [item.name for item in product.fields if item.name not in decoded
+                       and item.name != getattr(product.contour, "name", None)]
+            if missing:
+                raise hrrr_field.HrrrFieldError(f"decoded fields are missing: {', '.join(missing)}")
             field = np.asarray(product.derive(decoded), dtype=np.float32)
             if field.shape != hrrr_field.HRRR_SHAPE:
                 raise hrrr_field.HrrrFieldError(f"derived a {field.shape} grid")

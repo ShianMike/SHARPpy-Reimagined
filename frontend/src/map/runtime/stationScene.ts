@@ -54,6 +54,8 @@ export class StationScene {
   private windBarbs: readonly WindBarb[] = [];
   private windGrid: WindBarbGrid | null = null;
   private windView = "";
+  private labelView = "";
+  private labelInputs: readonly unknown[] = [];
   private data: SceneData = NO_SCENE_DATA;
   /** The view's longitude span from the last moveend; full-world before it. */
   private span = 360;
@@ -121,15 +123,23 @@ export class StationScene {
     this.span = span;
     const tier = labelTierFor(profile, span);
     const project = (lon: number, lat: number) => map.project([lon, lat]);
-    this.radarSiteLabels = declutterPoints(this.data.radarSites, (site) => project(site.longitude, site.latitude), viewport,
-      5 * this.tokens.lengths.labelSize);
     const wind = this.data.contours?.wind ?? null;
-    const view = [bounds.getWest(), bounds.getEast(), bounds.getSouth(), bounds.getNorth(), viewport.width, viewport.height, profile].join();
+    const view = [bounds.getWest(), bounds.getEast(), bounds.getSouth(), bounds.getNorth(), viewport.width, viewport.height,
+      map.getZoom(), map.getBearing(), map.getPitch(), profile].join();
     if (wind !== this.windGrid || view !== this.windView) {
       this.windGrid = wind;
       this.windView = view;
       this.windBarbs = wind === null ? [] : selectWindBarbs(wind, map, profile === "low" ? 88 : 64);
     }
+    const layers = panelLayers(useMapStore.getState(), this.panel);
+    const labelView = [view, window.innerWidth, useAppStore.getState().selectedStationId,
+      layers.stations.visible, layers["station-labels"].visible, layers["place-labels"].visible].join();
+    const inputs = [this.stations, this.data.radarSites, this.data.surfacePlots, this.data.places];
+    if (labelView === this.labelView && inputs.every((input, index) => input === this.labelInputs[index])) return;
+    this.labelView = labelView;
+    this.labelInputs = inputs;
+    this.radarSiteLabels = declutterPoints(this.data.radarSites, (site) => project(site.longitude, site.latitude), viewport,
+      5 * this.tokens.lengths.labelSize);
     const plots = [...(this.data.surfacePlots ?? [])].sort((a, b) =>
       Number(b.availability === "available") - Number(a.availability === "available") || Number(a.stale) - Number(b.stale) || a.id.localeCompare(b.id),
     );
@@ -151,7 +161,6 @@ export class StationScene {
       });
       this.labels = { stations, tier };
     }
-    const layers = panelLayers(useMapStore.getState(), this.panel);
     if (import.meta.env.MODE !== "fixture" || !layers["place-labels"].visible || this.data.places.length === 0) {
       this.placeLabels = NO_PLACES;
       return;

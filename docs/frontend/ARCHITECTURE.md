@@ -94,6 +94,11 @@ and on Windows it is inside the bridge's kill-on-close Job Object. The serial
 worker retains one pristine decoded input and independently calculated science,
 deep-copies it for each request, and invalidates it on source/sidecar/science
 changes. Qt widgets and output images are not shared through that input cache.
+After each successful or failed job, the serial worker collects unreachable
+Python cycles so deleted Qt wrappers release their native chart buffers before
+the reply. Active prepared science remains referenced. The patch's exact-output
+and native-memory evidence is in
+[V3_2_1_PERFORMANCE_REPORT.md](../performance/V3_2_1_PERFORMANCE_REPORT.md).
 The ordinary unprepared renderer remains the reference and fallback. Current
 measurements, exact-output checks and the historical cold/warm timing limits
 are recorded in [BENCHMARK_RESULTS.md](../performance/BENCHMARK_RESULTS.md);
@@ -256,6 +261,10 @@ Each value lives in exactly one place. Zustand stores use
   when another workspace opens: the overlay gets the `hidden` attribute (made
   binding by the `[hidden]` reset in `frontend/src/styles/base.css`), so the
   layer panel, inspector, and selection persist and reappear unchanged on Map.
+  Automatic forecast playback preparation and prefetch run only while Model
+  Viewer is active. Leaving it releases that effect's query owners and aborts
+  obsolete preparation; other live owners and explicit bulk downloads retain
+  their existing lifetime.
 - The live camera stays inside MapLibre; nothing re-renders per frame. With
   two or four panels, `map/runtime/cameraLink.ts` keeps the cameras together.
 - Preferences are keyed to the app identifier and origin; changing the
@@ -371,6 +380,13 @@ changes.
   cooperative; shared preloads continue while another consumer needs them.
   The bridge admits at most 24 ordinary requests across its eight workers and
   queue. Hello, progress and cancellation bypass that admission limit.
+  Native error details retain safe request tokens, wire IDs, methods and child
+  generations. Explicit non-retryable cancellation is logged as an expected
+  operation; genuine failures, timeouts, late errors and unknown replies remain
+  visible. Field range failures stop only their own sibling/queued transfers.
+  The shared field HTTP adapter retains up to 32 reusable connections for the
+  existing eight-by-four request concurrency; it does not add workers or block
+  cancellation on pool admission.
 - **Network:** the desktop has no runtime HTTP server or telemetry. Basemap
   tiles and their styles/fonts may load from the CSP-allowed OpenFreeMap host;
   bundled basemap geometry is also available. Meteorological provider requests
@@ -411,6 +427,30 @@ updates signed only by the replacement key. Locally, signing uses the Tauri
 `TAURI_SIGNING_PRIVATE_KEY` environment variable; never commit a private key.
 
 ## Open items
+
+The 3.2.1 follow-up gives every map runtime a startup/recovery watch. Only
+panel 0 owns the aggregate startup/basemap state; secondary failures remain
+local notices and recover after a successful render. Image decode failures
+are part of panel status, retain a correctly dated fallback only for the same
+source, and can retry without reloading unrelated queries. Missing required
+decoded fields fail with FIELD_FETCH_FAILED at the shared bridge boundary.
+
+Observed station defaults follow explicit selection actions in appStore,
+rather than form mount effects. The UI persist adapter catches storage access
+failures once and keeps the serialized session value in memory. Multi-time
+file summaries optionally include all times, preserving older summary shapes;
+the selected index travels inside the existing reversible view request. View
+history keys include the time, and closing a collection checks every time's
+local work. The original collection/file is never edited.
+
+CI now provisions Python for live browser boundary checks, explicitly runs
+sidecar cleanup tests, and audits production npm/Cargo graphs. Release staging
+requires the updater library to verify the actual installer and signed version,
+followed by a silent installed upgrade in a disposable runner account. The
+runtime CycloneDX graph accompanies artifacts/checksums; its metadata lists
+unidentified native/system components rather than claiming complete binary
+coverage. Actual signed-candidate and interactive upgrade acceptance remain
+release gates, not results inferred from source checks.
 
 - **Windows distribution validation.** The release workflow builds a frozen
   Python backend, bundles it beside the Tauri application, and requires the

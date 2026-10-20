@@ -17,10 +17,43 @@ ROOT = Path(__file__).resolve().parents[2]
     {"edits": [{"index": 0, "values": {"u": 1}}] * 2},
     {"edits": [], "chart": "not-a-chart"},
     {"edits": [], "drag": {"target": "wind:0", "x": 1.5, "y": 0.3}},
+    {"edits": [], "timeIndex": -1},
+    {"edits": [], "timeIndex": True},
+    {"edits": [], "timeIndex": 1.5},
 ])
 def test_rejects_unsafe_edits(view):
     with pytest.raises(BridgeError):
         validate_view(view)
+
+
+def test_all_file_times_are_selectable_without_mutating_other_profiles(tmp_path):
+    from sharpmod.bridge import render_client, sounding_cache, soundings
+
+    source = ROOT / "examples/soundings/hrrr_kbvo_20260625_06z.buf"
+    original_hash = hashlib.sha256(source.read_bytes()).digest()
+    sounding_cache.reset_cache(tmp_path)
+    try:
+        summary = soundings.open_file({"file_name": source.name,
+            "content_base64": base64.b64encode(source.read_bytes()).decode("ascii")})
+        assert len(summary["times"]) == summary["time_count"] == 49
+        request = {"sounding_id": summary["sounding_id"], "image_mode": "hd", "view": {"edits": []}}
+        with pytest.raises(BridgeError, match="outside"):
+            soundings.render_view({**request, "view": {"edits": [], "timeIndex": 49}})
+        original = soundings.render_view(request)
+        final = soundings.render_view({**request, "view": {"edits": [], "timeIndex": 48}})
+        collection, _ = sounding_cache.decode_collection(source)
+        collection._prof_idx = 48
+        profile = collection.getHighlightedProf()
+        temperatures = {point["id"]: point["values"][0]["value"] for point in final["points"] if point["id"].startswith("tmpc:")}
+        assert temperatures and temperatures == {f"tmpc:{index}": float(value) for index, value in enumerate(profile.tmpc)
+                                                if f"tmpc:{index}" in temperatures}
+        assert final["points"] != original["points"]
+        assert soundings.render_view(request)["points"] == original["points"]
+        assert sounding_cache.cache().get(summary["sounding_id"]).collection._prof_idx == 0
+        assert hashlib.sha256(source.read_bytes()).digest() == original_hash
+    finally:
+        render_client.client().close()
+        sounding_cache.reset_cache()
 
 
 @pytest.mark.parametrize("show_locator", [True, False])

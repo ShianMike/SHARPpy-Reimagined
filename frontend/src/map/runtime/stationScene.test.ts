@@ -2,6 +2,10 @@
 import type { Layer } from "@deck.gl/core";
 import { IconLayer, SolidPolygonLayer, TextLayer } from "@deck.gl/layers";
 import type { MapLibreOverlay } from "@deck.gl/maplibre";
+import type { Map as MapLibreMap } from "maplibre-gl";
+import stationFixture from "@contracts/public/stations.catalog.full.json";
+import type { Station } from "../../types/contracts";
+import type { ContourLines } from "../../types/map";
 import { afterEach, expect, it, vi } from "vitest";
 import outlookFixture from "@contracts/public/map/outlook.cat.json";
 import reportsFixture from "@contracts/public/map/reports.json";
@@ -18,6 +22,40 @@ import { clickFromPick, StationScene } from "./stationScene";
 afterEach(() => {
   useMapStore.setState(useMapStore.getInitialState(), true);
   useAppStore.setState(useAppStore.getInitialState(), true);
+});
+
+it("reuses unchanged label layouts during four-panel contour playback, invalidating on selection and camera changes", () => {
+  const project = vi.fn(([lon, lat]: readonly number[]) => ({ x: ((lon ?? 0) + 100) * 180, y: (40 - (lat ?? 0)) * 180 }));
+  let east = -96;
+  const map = { getBounds: () => ({ getWest: () => -100, getEast: () => east, getSouth: () => 34, getNorth: () => 40 }),
+    getCanvas: () => ({ clientWidth: 800, clientHeight: 600 }), getZoom: () => 5, getBearing: () => 0, getPitch: () => 0, project } as unknown as MapLibreMap;
+  const read = cssTokenReader(tokensCss);
+  const scenes = Array.from({ length: 4 }, (_, panel) => {
+    const scene = new StationScene({ setProps: vi.fn() } as unknown as MapLibreOverlay, readCanvasTokens(read), read("--font-mono"), panel, vi.fn());
+    scene.setStations(stationFixture.stations as Station[]);
+    return scene;
+  });
+  const samples: number[] = [];
+  for (let frame = 0; frame < 30; frame++) {
+    const start = performance.now();
+    for (const scene of scenes) {
+      scene.setData({ contours: { wind: null, segments: [] } as unknown as ContourLines });
+      scene.updateLabels(map);
+    }
+    samples.push(performance.now() - start);
+  }
+  const sorted = [...samples].sort((a, b) => a - b);
+  console.log(JSON.stringify({ benchmark: "four-panel-contour-labels", frames: 30, stations: stationFixture.stations.length,
+    projections: project.mock.calls.length, p50Ms: sorted[14], p95Ms: sorted[28], samples }));
+  expect(project.mock.calls.length).toBe(stationFixture.stations.length * 4);
+  project.mockClear();
+  useAppStore.getState().selectStation("72357");
+  scenes[0]?.updateLabels(map);
+  expect(project).toHaveBeenCalled();
+  project.mockClear();
+  east = -95;
+  scenes[0]?.updateLabels(map);
+  expect(project).toHaveBeenCalled();
 });
 
 it("ignores live point clicks and hides the forecast point until Model Viewer is restored", () => {

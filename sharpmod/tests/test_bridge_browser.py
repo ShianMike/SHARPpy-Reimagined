@@ -151,6 +151,34 @@ def test_http_model_status_accepts_cycle_parameters(browser, monkeypatch):
         assert json.load(response) == json.loads((CONTRACTS / "public/soundings/models.status.json").read_bytes())
 
 
+@pytest.mark.parametrize("cancelled", [True, False])
+def test_http_diagnostics_identify_cancellation_and_keep_real_failures_visible(browser, monkeypatch, caplog, cancelled):
+    import logging
+    from sharpmod.bridge.cancellation import Cancelled
+    from sharpmod.bridge.errors import BridgeError
+
+    def fails(_params):
+        raise Cancelled() if cancelled else BridgeError("INTERNAL", "genuine failure", False)
+
+    monkeypatch.setitem(HANDLERS, "fields.grid", fails)
+    caplog.set_level(logging.INFO, logger="sharpmod.bridge.browser")
+    with pytest.raises(HTTPError) as raised:
+        post(browser, "get_weather_field", {
+            "product": "tmp-2m", "runTime": "2026-10-19T00:00:00Z",
+            "forecastHour": 1, "requestId": "consumer123",
+        })
+    with raised.value as response:
+        error = json.load(response)
+        assert error["code"] == "INTERNAL"
+        assert error.get("details", {}).get("cancelled", False) is cancelled
+        assert error["context"] == {"operation": "get_weather_field", "provider": "python-bridge"}
+        assert error["details"]["request_id"] == "consumer123"
+    records = [record for record in caplog.records if record.name == "sharpmod.bridge.browser"]
+    assert len(records) == 1
+    assert records[0].levelno == (logging.INFO if cancelled else logging.WARNING)
+    assert "request_id=consumer123" in records[0].getMessage()
+
+
 def test_http_rejects_cross_origin_and_invalid_requests(browser):
     for method, params, origin, status in [
         ("get_backend_health", {"payload": "x" * 524288}, "https://untrusted.example", 403),

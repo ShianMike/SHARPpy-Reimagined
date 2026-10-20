@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { useMapStore } from "./mapStore";
 import { useLiveTrackingStore } from "./liveTrackingStore";
+import { useSoundingStore } from "./soundingStore";
 
 export const WORKSPACE_IDS = ["overview", "map", "live", "sounding", "status", "settings"] as const;
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number];
@@ -51,6 +52,7 @@ export const useAppStore = create<AppState>()(
     },
     selectStation: (id) => {
       set({ selectedStationId: id, selectedPoint: null, pendingStationId: null });
+      useSoundingStore.getState().setObserved({ stationId: id });
     },
     selectPoint: (point) => {
       set({ selectedPoint: { latitude: point.latitude, longitude: point.longitude }, selectedStationId: null, pendingStationId: null });
@@ -68,6 +70,7 @@ export const useAppStore = create<AppState>()(
       }
       if (hasStation(pending)) {
         set({ selectedStationId: pending, pendingStationId: null });
+        if (useSoundingStore.getState().observed.stationId === "") useSoundingStore.getState().setObserved({ stationId: pending });
         return "selected";
       }
       console.warn(`[selection] restored station ${pending} is not in the catalogue; the selection was cleared`);

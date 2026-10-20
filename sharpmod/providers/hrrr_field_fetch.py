@@ -15,6 +15,7 @@ from sharpmod.providers.hrrr_products import SOURCE_SURFACE
 from sharpmod.providers.hrrr_products import get_product
 from sharpmod.maps.map_overlays import OverlayRaster
 import numpy as np
+import threading
 import time
 from sharpmod.providers import hrrr_field as _api
 
@@ -30,9 +31,14 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     """
     if should_cancel and should_cancel():
         return {}
-    if opener is _api._default_opener and should_cancel is not None:
+    failed = threading.Event()
+
+    def stopped():
+        return failed.is_set() or (should_cancel is not None and should_cancel())
+
+    if opener is _api._default_opener:
         def opener(url, timeout, limit, byte_range=None):
-            return _api._default_opener(url, timeout, limit, byte_range, should_cancel=should_cancel)
+            return _api._default_opener(url, timeout, limit, byte_range, should_cancel=stopped)
     if product.key == "apcp" and fxx == 0:
         return {"apcp": np.zeros(_api.HRRR_SHAPE, dtype=np.float32)}
     eccodes = _api._load_eccodes()
@@ -78,6 +84,9 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
         return {}
 
     def fetch(job):
+        if stopped():
+            from sharpmod.models.model_transport import DownloadCancelled
+            raise DownloadCancelled("field download stopped")
         url, start, stop, _members, _names = job
         return opener(url, timeout, stop - start + 4096, (start, stop))
 
@@ -85,15 +94,21 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     if len(jobs) == 1:
         payloads[0] = fetch(jobs[0])
     else:
-        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         workers = min(_api._RANGE_WORKERS, len(jobs))
         with ThreadPoolExecutor(max_workers=workers,
                                thread_name_prefix="hrrr-range") as pool:
             futures = {pool.submit(fetch, job): position
                        for position, job in enumerate(jobs)}
-            for future in futures:
-                position = futures[future]
-                payloads[position] = future.result()
+            try:
+                for future in as_completed(futures):
+                    position = futures[future]
+                    payloads[position] = future.result()
+            except BaseException:
+                failed.set()
+                for future in futures:
+                    future.cancel()
+                raise
 
     if should_cancel and should_cancel():
         return {}

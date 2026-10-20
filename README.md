@@ -13,9 +13,13 @@
 
 </div>
 
-## What's new in 3.2.0
+## What's new in 3.2.1 (Unreleased)
 
 SHARPpy Reimagined brings [SHARPpy](https://github.com/sharppy/SHARPpy) sounding analysis into a map-based desktop workspace. Version **3.0.0** introduces a React/Tauri interface backed by the existing Python and Rust scientific tools. This README describes that interface; the [v2.0.0 Legacy tour and screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/README.md) document the previous GUI.
+
+Version **3.2.1** is being prepared as a maintenance patch. It recovers forecast requests during rapid changes, stops unused automatic preloading outside Model Viewer, preserves original provider errors, and releases unreachable chart buffers between sounding renders. Paired renders preserve exact images and scientific metadata while using less memory in the measured sequence. See the [Unreleased changelog](CHANGELOG.md#unreleased) and [measurements and validation limits](docs/performance/V3_2_1_PERFORMANCE_REPORT.md). **v3.2.0 remains the latest published download** below.
+
+The follow-up also makes every imported sounding time selectable with separate edit histories, preserves typed stations and session settings, reports missing layers and renderer recovery per panel, and adds keyboard forecast-point inspection. Dependency audits, a runtime SBOM and final updater/installed-upgrade checks strengthen the release gates; those hosted artifact checks must pass before release readiness is established.
 
 Version **3.2.0** improves forecast playback, repeated model sounding requests, and weather-cache reliability. The redesigned Overview gives Model Viewer, Live Tracking and Soundings equal prominence. Forecast download details distinguish hours saved to disk from frames ready in memory, and model sounding downloads have a Stop action. A short **What's new** popup appears after an update; its highlights remain in **Settings → Updates**. See the [full v3.2.0 changelog](CHANGELOG.md#v320---2026-10-19).
 
@@ -38,7 +42,7 @@ Use the navigation rail to move between six workspaces:
 
 ### v3.2.0 tour
 
-These **1920 × 1080** screenshots show the current **v3.2.0** interface connected
+These **1920 × 1080** screenshots show the published **v3.2.0** interface connected
 to the real Python/Rust backend. Forecasts and radar retain their source times;
 the sounding is the bundled HRRR example. [Capture details and data times](docs/images/v3.2.0/README.md).
 

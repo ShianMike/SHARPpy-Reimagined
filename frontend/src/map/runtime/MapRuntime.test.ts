@@ -16,7 +16,7 @@ vi.mock("../canvasTokens", () => ({ documentTokenReader: () => () => "monospace"
 vi.mock("./mapOptions", () => ({ mapOptions: () => ({}), panelPixelRatio: () => 1 }));
 vi.mock("./runtimeEvents", () => ({ wireMapEvents: () => undefined, createPanelOverlay: () => ({}), wireOverlayEvents: () => () => undefined }));
 vi.mock("./cameraLink", () => ({ linkCamera: () => () => undefined }));
-vi.mock("./runtimeWiring", () => ({ NO_WATCH: { dispose: () => undefined }, subscribeToStores: () => [] }));
+vi.mock("./runtimeWiring", () => ({ createRuntimeWatch: () => ({ dispose: () => undefined }), subscribeToStores: () => [] }));
 vi.mock("./stationScene", () => ({ StationScene: class { updateLabels() {} render() {} } }));
 
 const original = useMapStore.getState();

@@ -37,10 +37,15 @@ def wind_grid(product, decoded, mapping):
     """Packed display winds: low 9 bits are wind-from degrees, high 7 are 5 kt."""
     from sharpmod.models.lambert_grid import HRRR_GRID
     from sharpmod.providers.hrrr_products import ms_to_kt
+    from sharpmod.providers.hrrr_field import HrrrFieldError
 
     names = {field.variable: field.name for field in product.fields}
     if not {"UGRD", "VGRD"} <= names.keys():
+        if product.wind:
+            raise HrrrFieldError("wind product is missing a required component")
         return None
+    if any(names[key] not in decoded for key in ("UGRD", "VGRD")):
+        raise HrrrFieldError("decoded wind is missing a required component")
     u, v = (
         np.asarray(decoded[names[key]], dtype=np.float32) for key in ("UGRD", "VGRD")
     )
@@ -203,6 +208,8 @@ def _from_decoded(model, product, run, hour, decoded):
     # from one download of all the product's fields.
     try:
         if spec is not None:
+            if spec.name not in decoded:
+                raise hrrr_field.HrrrFieldError("decoded contour field is missing")
             raw = np.asarray(convert(decoded[spec.name]), dtype=np.float32)
             if raw.shape != hrrr_field.HRRR_SHAPE:
                 raise hrrr_field.HrrrFieldError(f"contour field is a {raw.shape} grid")

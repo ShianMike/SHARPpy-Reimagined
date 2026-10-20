@@ -6,6 +6,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { useAppStore } from "../stores/appStore";
 import { useForecastContext } from "../features/forecast/useForecast";
 import { useBackendClient } from "../lib/backend/BackendProvider";
 import { profileSettings } from "../lib/graphics/profileSettings";
@@ -38,6 +39,7 @@ export function hourAfter(hours: readonly number[], hour: number, steps: number,
 }
 
 export function usePlayback(): void {
+  const active = useAppStore((state) => state.activeWorkspace === "map");
   const context = useForecastContext();
   const products = useDrawnProducts();
   const playing = useForecastStore((state) => state.playing);
@@ -57,14 +59,14 @@ export function usePlayback(): void {
   const hour = context?.hour ?? null;
   const hours = context?.hours ?? null;
   const current = useFieldFrames(
-    run === null || hour === null ? [] : products.map((product) => ({ model, product: product.key, runTime: run, forecastHour: hour })),
+    !active || run === null || hour === null ? [] : products.map((product) => ({ model, product: product.key, runTime: run, forecastHour: hour })),
   );
   const settled = current.every((query) => query.isSuccess || query.isError);
   // While playing, the extra frames of the window are fetched too.
   const ahead = Math.max(1, frameWindow.next + (playing ? frameWindow.prefetched : 0));
 
   useEffect(() => {
-    if (run === null || hour === null || hours === null || !settled) {
+    if (!active || run === null || hour === null || hours === null || !settled) {
       return;
     }
     let stopped = false;
@@ -99,5 +101,5 @@ export function usePlayback(): void {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [model, run, hour, hours, products, sampling, settled, ahead, playing, loop, speed, client, queryClient]);
+  }, [active, model, run, hour, hours, products, sampling, settled, ahead, playing, loop, speed, client, queryClient]);
 }

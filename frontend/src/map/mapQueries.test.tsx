@@ -31,6 +31,7 @@ import { useMapStore } from "../stores/mapStore";
 import { useForecastStore } from "../stores/forecastStore";
 import { useGraphicsStore } from "../stores/graphicsStore";
 import { useUiStore } from "../stores/uiStore";
+import { useAppStore } from "../stores/appStore";
 import type { FieldFrame } from "../types/map";
 import * as fieldImages from "./fieldImages";
 
@@ -54,10 +55,13 @@ const savedMap = useMapStore.getState();
 const savedForecast = useForecastStore.getState();
 const savedGraphics = useGraphicsStore.getState();
 const savedUi = useUiStore.getState();
+const savedApp = useAppStore.getState();
 beforeEach(() => {
+  useAppStore.setState({ activeWorkspace: "map" });
   vi.stubGlobal("ImageData", class { constructor(public data: Uint8ClampedArray, public width: number, public height: number) {} });
 });
 afterEach(() => {
+  useAppStore.setState(savedApp);
   cleanup(); useMapStore.setState(savedMap); useForecastStore.setState(savedForecast); useGraphicsStore.setState(savedGraphics); useUiStore.setState(savedUi); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals();
 });
 

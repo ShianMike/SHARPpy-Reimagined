@@ -70,3 +70,9 @@ button.chip[aria-pressed="true"] {
 .status {
   color: var(--text-secondary);
 }
+
+.notice {
+  position: absolute;
+  inset: auto var(--space-3) var(--space-3);
+  z-index: var(--z-map-chip);
+}

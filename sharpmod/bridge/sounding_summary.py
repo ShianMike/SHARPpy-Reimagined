@@ -75,6 +75,8 @@ def summary(entry_id: str, kind: str, collection: Any, **fields: Any) -> dict[st
         "time_count": len(getattr(collection, "_dates", ()) or ()),
     }
     summary.update(fields)
+    if summary["time_count"] > 1:
+        summary["times"] = [p.iso(value) for value in collection._dates]
     if not summary["title"]:
         summary["title"] = summary["location"] or summary["file_name"] or "Sounding"
     return summary

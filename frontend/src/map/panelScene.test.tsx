@@ -23,12 +23,37 @@ import { useForecastStore } from "../stores/forecastStore";
 import { useMapStore } from "../stores/mapStore";
 import { useLiveTrackingStore } from "../stores/liveTrackingStore";
 import { defaultLayerStates, type SceneData } from "./layers/registry";
-import { domainPath, useFieldImage, usePanelScene } from "./panelScene";
+import { domainPath, useFieldImage, usePanelScene, usePngImage } from "./panelScene";
 import type { MapRuntime } from "./runtime/MapRuntime";
 
 const savedMap = useMapStore.getState();
 const savedLive = useLiveTrackingStore.getState();
 const savedForecast = useForecastStore.getState();
+
+it("exposes image decode failure, ignores an obsolete rejection, and retries the displayed frame", async () => {
+  const refetch = vi.fn();
+  let rejectOld: (error: Error) => void = () => undefined;
+  const decode = vi.fn().mockImplementationOnce(() => new Promise((_, reject) => { rejectOld = reject; }))
+    .mockRejectedValueOnce(new Error("corrupt PNG")).mockResolvedValue({ width: 2, height: 2 });
+  vi.stubGlobal("createImageBitmap", decode);
+  const bounds = { west: -100, east: -90, south: 30, north: 40 };
+  const older = { png: new Blob(["old"]), bounds, validTime: "2026-10-04T18:00:00Z" };
+  const newer = { png: new Blob(["new"]), bounds, validTime: "2026-10-04T19:00:00Z" };
+  const hook = renderHook(({ data, enabled }) => usePngImage({ data, isError: false, refetch }, enabled, "radar"),
+    { initialProps: { data: older, enabled: true } });
+  hook.rerender({ data: newer, enabled: true });
+  await waitFor(() => { expect(hook.result.current.issue).toContain("could not be decoded"); });
+  await act(async () => { rejectOld(new Error("obsolete")); await Promise.resolve(); });
+  expect(hook.result.current.issue).toContain("could not be decoded");
+  act(() => { hook.result.current.retry(); });
+  await waitFor(() => { expect(hook.result.current.image).not.toBeNull(); });
+  expect(hook.result.current.issue).toBeNull();
+  expect(refetch).toHaveBeenCalledTimes(1);
+  hook.rerender({ data: newer, enabled: false });
+  expect(hook.result.current.image).toBeNull();
+  act(() => { hook.result.current.retry(); });
+  expect(refetch).toHaveBeenCalledTimes(1);
+});
 
 it("uses the same closed grid perimeter without adding a zero-length segment", () => {
   const catalogue = parseModelCatalog(models);

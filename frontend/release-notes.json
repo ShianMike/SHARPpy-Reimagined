@@ -48,5 +48,34 @@
         "description": "See a short What’s new popup after a version change, and revisit the highlights anytime in Settings → Updates."
       }
     ]
+  },
+  "3.2.1": {
+    "summary": "More reliable maps and soundings, with clearer recovery and safer saved settings.",
+    "highlights": [
+      {
+        "title": "More reliable forecast changes",
+        "description": "Switching back to a field recovers while older requests stop. Shared downloads keep running for panels that still need them, and provider failures report their original cause."
+      },
+      {
+        "title": "Less unused background work",
+        "description": "Automatic forecast preloading pauses outside Model Viewer. Failed field downloads stop their remaining transfers, and concurrent products reuse their connections."
+      },
+      {
+        "title": "Lower memory between sounding renders",
+        "description": "Completed and failed chart renders release unused image buffers before the next request. Scientific values, profile edits and lossless HD and UHD exports keep their existing quality."
+      },
+      {
+        "title": "Every sounding time",
+        "description": "Choose any time in an imported forecast file. Each time keeps its own edits and undo history, and exported charts use the selected profile. Typed station IDs survive source-tab changes."
+      },
+      {
+        "title": "Clearer map recovery",
+        "description": "Every map panel reports rendering failures. Missing wind or contour overlays and unreadable imagery offer recovery controls. Pan with the keyboard and press Enter to inspect the point at the centre of a forecast map."
+      },
+      {
+        "title": "Settings stay usable",
+        "description": "If device storage is unavailable or full, workspace settings keep working for the current session. Unchanged map labels also reuse their layout during forecast playback."
+      }
+    ]
   }
 }

@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v3.2.0). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v3.2.1). Created if it does not exist."
         required: true
-        default: "v3.2.0"
+        default: "v3.2.1"
       publish_release:
         description: "Publish after verification; leave off to build a release candidate only."
         required: true
@@ -453,6 +453,52 @@ jobs:
             -Sample "examples/soundings/hrrr_point_36.68N_95.66W_f018.npz" `
             -Report "$env:RUNNER_TEMP/desktop-runtime.json"
 
+      - name: Verify final updater artifacts
+        working-directory: src-tauri
+        shell: pwsh
+        env:
+          SHARPPY_UPDATER_ARTIFACT_DIR: ${{ github.workspace }}/release-artifacts
+        run: |
+          cargo test --locked --test updater_artifacts -- --ignored --nocapture
+          if ($LASTEXITCODE -ne 0) { throw "Final updater artifact verification failed" }
+
+      - name: Verify installed upgrade from the previous stable release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
+        run: |
+          $previous = gh api "repos/$env:GH_REPO/releases/latest" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "Previous stable release lookup failed" }
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          $previousVersion = $previous.tag_name.TrimStart('v')
+          python -c 'import sys; from packaging.version import Version; assert Version(sys.argv[1]) < Version(sys.argv[2]), "Upgrade baseline must precede the candidate"' $previousVersion $version
+          if ($LASTEXITCODE -ne 0) { throw "Upgrade baseline must precede the candidate" }
+          $asset = @($previous.assets | Where-Object name -Like '*-windows-x64-setup.exe')
+          if ($asset.Count -ne 1) { throw "Previous stable release has no unique installer" }
+          $previousDirectory = Join-Path $env:RUNNER_TEMP 'previous-installer'
+          New-Item -ItemType Directory -Path $previousDirectory | Out-Null
+          gh release download $previous.tag_name --pattern $asset[0].name --dir $previousDirectory
+          if ($LASTEXITCODE -ne 0) { throw "Previous installer download failed" }
+          $candidate = @(Get-ChildItem -LiteralPath release-artifacts -Filter '*-setup.exe' -File)
+          if ($candidate.Count -ne 1) { throw "Candidate installer is not unique" }
+          & packaging/verify_installed_upgrade.ps1 -PreviousInstaller (Join-Path $previousDirectory $asset[0].name) `
+            -PreviousVersion $previousVersion -Installer $candidate[0].FullName -ExpectedVersion $version `
+            -Sample 'examples/soundings/hrrr_point_36.68N_95.66W_f018.npz' `
+            -ReportDirectory (Join-Path $env:RUNNER_TEMP 'installed-upgrade')
+
+      - name: Preserve updater and installed runtime evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: updater-runtime-evidence-${{ needs.resolve-release.outputs.tag }}
+          path: |
+            ${{ runner.temp }}/desktop-runtime.json
+            ${{ runner.temp }}/installed-upgrade/*.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Archive verified desktop and write checksums
         shell: pwsh
         env:
@@ -460,6 +506,8 @@ jobs:
         run: |
           Compress-Archive -Path "release-staging/SHARPpy-Reimagined" `
             -DestinationPath "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip" -CompressionLevel Fastest -Force
+          python packaging/generate_sbom.py --output "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-sbom.cdx.json" --artifacts release-artifacts
+          if ($LASTEXITCODE -ne 0) { throw "Runtime SBOM generation failed" }
           Get-ChildItem -LiteralPath "release-artifacts" -File | Where-Object Name -NotLike '*-SHA256SUMS.txt' | Sort-Object Name | ForEach-Object {
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)"

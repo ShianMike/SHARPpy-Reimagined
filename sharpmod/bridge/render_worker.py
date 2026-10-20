@@ -13,6 +13,7 @@ one sounding at a time, and not in the bridge's worker threads. It uses
 
 from __future__ import annotations
 
+import gc
 import json
 import logging
 import os
@@ -80,6 +81,9 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 - every failure is reported
             log.exception("render of %s failed", infile)
             reply = {"id": request_id, "ok": False, "message": _short(exc)}
+        finally:
+            # Deleted Qt wrappers form Python cycles that retain native pixmaps between jobs.
+            gc.collect()
         _reply(proto_out, reply)
     return 0
 

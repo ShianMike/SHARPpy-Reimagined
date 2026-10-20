@@ -294,7 +294,8 @@ def _session():
                           status_forcelist=(429, 500, 502, 503, 504),
                           allowed_methods=frozenset({"GET"}))
             adapter = HTTPAdapter(pool_connections=4,
-                                  pool_maxsize=_RANGE_WORKERS * 2,
+                                  # Retain the ranges of all eight bridge workers.
+                                  pool_maxsize=_RANGE_WORKERS * 8,
                                   max_retries=retry)
             session.mount("https://", adapter)
             session.headers.update({"User-Agent": "sharpmod",
@@ -308,6 +309,8 @@ def _session():
 def _default_opener(url: str, timeout: float, limit: int,
                     byte_range: tuple[int, int] | None = None, *, should_cancel=None) -> bytes:
     """Fetch ``url``, optionally one byte range, capped at ``limit`` bytes."""
+    if should_cancel and should_cancel():
+        raise DownloadCancelled("field download cancelled")
     headers = {}
     if byte_range is not None:
         headers["Range"] = "bytes=%d-%d" % byte_range

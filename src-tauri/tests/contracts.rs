@@ -42,6 +42,26 @@ fn weather_alerts_reject_unsafe_or_misleading_snapshots() {
     }
 }
 
+#[test]
+fn only_explicit_non_retryable_internal_cancellation_is_expected() {
+    let mut error = BackendError::internal("get_weather_field");
+    for flag in [
+        Value::Null,
+        serde_json::json!(false),
+        serde_json::json!("true"),
+        serde_json::json!(true),
+    ] {
+        error.details =
+            Some(serde_json::from_value(serde_json::json!({"cancelled": flag})).unwrap());
+        assert_eq!(error.is_cancelled(), flag == serde_json::json!(true));
+    }
+    error.retryable = true;
+    assert!(!error.is_cancelled());
+    error.retryable = false;
+    error.code = ErrorCode::FieldFetchFailed;
+    assert!(!error.is_cancelled());
+}
+
 fn text(relative: &str) -> String {
     fs::read_to_string(contracts().join(relative)).unwrap_or_else(|e| panic!("{relative}: {e}"))
 }

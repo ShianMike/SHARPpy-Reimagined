@@ -83,6 +83,45 @@ async fn starts_up_and_serves_typed_requests() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn reported_errors_retain_request_correlation_and_explicit_cancellation() {
+    let launcher = FakeLauncher::with(vec![script(|mut io| async move {
+        for cancelled in [true, false] {
+            let request = io.expect("fields.grid").await.unwrap();
+            io.reply_error(
+                &request["id"],
+                json!({
+                    "code": "INTERNAL", "message": "original message", "retryable": false,
+                    "details": {"cancelled": cancelled, "provider": "test"}
+                }),
+            )
+            .await;
+        }
+        bridge(io, Arc::default()).await
+    })]);
+    let (supervisor, _sink) = start(launcher);
+    for cancelled in [true, false] {
+        let error = public(
+            supervisor
+                .request("fields.grid", json!({"request_id": "consumer123"}), SECOND)
+                .await
+                .unwrap_err(),
+        );
+        assert_eq!(error.code, ErrorCode::Internal);
+        assert_eq!(detail(&error, "cancelled"), cancelled);
+        assert_eq!(detail(&error, "provider"), "test");
+        if cancelled {
+            assert_eq!(error.message, "The request was cancelled.");
+        } else {
+            assert!(error.message.starts_with("Something went wrong"));
+        }
+        assert_eq!(detail(&error, "request_id"), "consumer123");
+        assert_eq!(detail(&error, "method"), "fields.grid");
+        assert!(detail(&error, "wire_id").as_u64().unwrap() > 0);
+        assert_eq!(detail(&error, "generation"), 1);
+    }
+}
+
+#[tokio::test(start_paused = true)]
 async fn oversized_outbound_request_does_not_poison_other_replies() {
     let launcher = FakeLauncher::with(vec![script(|mut io| async move {
         let first = io.expect("health").await.unwrap();

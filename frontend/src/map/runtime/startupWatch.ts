@@ -7,8 +7,8 @@
 // - Basemap sources are loaded, failed (an error event; it stays failed), or
 //   slow (still pending when the deadline fires). Both issue sets are reported
 //   whenever one changes.
-// - The first deck.gl render sets the renderer ready; an overlay error before
-//   it, or the deadline with no render, sets it failed.
+// - A deck.gl render sets the renderer ready, including recovery after failure;
+//   an overlay error or the deadline with no render sets it failed.
 
 import { MARKS, markOnce } from "../../lib/metrics";
 
@@ -50,7 +50,7 @@ export interface StartupWatch {
   afterRender: () => void;
   /** A setProps call; stationsShown when the stations layer is visible and non-empty. */
   layersSubmitted: (stationsShown: boolean) => void;
-  /** deck.gl's onError. Returns true when it failed the start-up (before the first render). */
+  /** deck.gl's onError. Returns true when the renderer failure was handled. */
   overlayError: (message: string) => boolean;
   dispose: () => void;
 }
@@ -174,8 +174,9 @@ export function createStartupWatch(options: StartupWatchOptions): StartupWatch {
       if (disposed) {
         return;
       }
-      if (!rendered && !startupFailed) {
+      if (!rendered || startupFailed) {
         rendered = true;
+        startupFailed = false;
         sink.rendererReady();
       }
       if (stationsPending) {
@@ -190,10 +191,10 @@ export function createStartupWatch(options: StartupWatchOptions): StartupWatch {
       }
     },
     overlayError: (message) => {
-      if (disposed || rendered || startupFailed) {
-        return false;
-      }
+      if (disposed) return false;
+      if (startupFailed) return true;
       startupFailed = true;
+      rendered = false;
       sink.rendererFailed("overlay", message);
       settle();
       return true;

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Multi-panel playback measurement</title>
+<style>
+body { margin: 0; font: 14px system-ui; background: #17191c; color: #eee; }
+header { padding: 12px; display: flex; gap: 12px; align-items: center; }
+iframe { display: block; border: 0; width: 100%; height: calc(100vh - 64px); }
+dialog { max-height: 80vh; overflow: auto; max-width: 90vw; }
+pre { white-space: pre-wrap; }
+</style>
+<header><strong>Browser playback measurement</strong><button id="start">Record 20 seconds</button><button id="show">Show measurements</button><output id="status">Choose the panels, products and playback in the app below.</output></header>
+<iframe title="Application under measurement" src="/"></iframe>
+<dialog><button id="close">Close measurements</button><pre id="result">No recording yet.</pre></dialog>
+<script type="module">
+// Development tooling only: Vite serves this file; production builds do not include it.
+// RAF intervals measure browser scheduling, not GPU presentation or native desktop FPS.
+const iframe = document.querySelector('iframe');
+const status = document.querySelector('#status');
+let recording = false;
+document.querySelector('#start').onclick = () => {
+  if (recording) return;
+  recording = true;
+  const page = iframe.contentWindow;
+  const document = page.document;
+  const started = page.performance.now();
+  const visibility = document.visibilityState;
+  const canvas = document.querySelector('canvas.maplibregl-canvas');
+  const gl = canvas?.getContext('webgl2');
+  const debug = gl?.getExtension('WEBGL_debug_renderer_info');
+  const renderer = debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : 'unavailable';
+  const intervals = [], frames = [];
+  let previous = started, shown = '';
+  const panels = document.querySelectorAll('[data-panel]').length;
+  const products = [...document.querySelectorAll('[data-testid^="panel-chip-"]')].map((element) => element.textContent);
+  status.textContent = `Recording ${panels} panel(s)…`;
+  const tick = (now) => {
+    intervals.push(now - previous); previous = now;
+    const hour = document.querySelector('input[aria-label="Forecast hour"]');
+    const field = `${hour?.value ?? ''} | ${document.querySelector('[aria-label="Valid time"]')?.textContent ?? ''} | ${[...document.querySelectorAll('[data-testid^="panel-chip-"]')].map((element) => element.textContent).join(' | ')}`;
+    if (field !== shown) { shown = field; frames.push({ atMs: now - started, field }); }
+    if (now - started < 20_000) { page.requestAnimationFrame(tick); return; }
+    if (intervals.length === 0 || !intervals.every((value) => Number.isFinite(value) && value >= 0)) {
+      recording = false; throw new Error('Invalid browser timing samples');
+    }
+    const sorted = [...intervals].sort((a, b) => a - b);
+    const rank = (p) => sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)];
+    const result = { environment: 'Live Chromium browser, same-origin app iframe', renderer, visibility, panels, products,
+      elapsedMs: now - started, samples: intervals.length, p50Ms: rank(.5), p95Ms: rank(.95), maxMs: sorted.at(-1),
+      intervalsOver33ms: intervals.filter((value) => value > 33.34).length, frames, intervals,
+      limitation: 'RAF scheduling and displayed forecast identities; not GPU presentation, native WebView2 FPS or a paired hardware comparison.' };
+    parent.document.querySelector('#result').textContent = JSON.stringify(result, null, 2);
+    status.textContent = `Recorded ${intervals.length} intervals and ${frames.length} displayed identities. Open measurements to save the result.`;
+    recording = false;
+  };
+  page.requestAnimationFrame(tick);
+};
+document.querySelector('#show').onclick = () => document.querySelector('dialog').showModal();
+document.querySelector('#close').onclick = () => document.querySelector('dialog').close();
+</script>
+</html>

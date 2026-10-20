@@ -216,12 +216,12 @@ class _Server:
         except BridgeError as err:
             frame = error_frame(request.id, err)
         except Exception:
-            log.exception("unexpected error in %s", request.method)
+            log.exception("unexpected error method=%s wire_id=%s", request.method, request.id)
             frame = error_frame(request.id, internal_error(request.method))
         try:
             data = encode_frame(frame)
         except (TypeError, ValueError):
-            log.exception("result of %s could not be encoded", request.method)
+            log.exception("result could not be encoded method=%s wire_id=%s", request.method, request.id)
             data = encode_frame(error_frame(request.id, internal_error(request.method)))
         self._write_bytes(data)
 

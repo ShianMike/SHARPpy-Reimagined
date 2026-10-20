@@ -1,9 +1,13 @@
 # Rust-first performance modernization
 
-Status: measured implementation checkpoint validated locally, 2026-10-19.
-Deferred experiments and coverage limits remain explicit. v3.2.0 is unreleased and publication requires
-the user's explicit instruction. No tag, updater publication or installer build
-is part of this work. The application version remains 3.1.0 during validation.
+Historical v3.2.0 implementation plan, updated 2026-10-19. The published v3.2.0
+baseline is `b2b396df766717b6ecbb0758aa83bc1964ddd7dc`; the starting revisions
+and experiment sequence below describe its development history. Current patch
+work is recorded in [V3_2_1_CHECKPOINTS.md](V3_2_1_CHECKPOINTS.md) and
+[V3_2_1_PERFORMANCE_REPORT.md](V3_2_1_PERFORMANCE_REPORT.md). v3.2.1 retains
+the scientific backend and calibrated Qt renderer; no further kernel migration
+is justified by this patch's measurements. Publication requires separate user
+authorization.
 
 ## Scope and preservation requirements
 

@@ -137,7 +137,9 @@ const SUMMARY_KEYS = [
 
 export function parseSoundingSummary(value: unknown, path = ""): SoundingSummary {
   const obj = expectObject(value, path);
-  expectExactKeys(obj, path, SUMMARY_KEYS);
+  expectExactKeys(obj, path, SUMMARY_KEYS, ["times"]);
+  const times = obj.times === undefined ? undefined : expectArray(obj.times, at(path, "times"), (value, p) => expectNullable(value, p, expectTimestamp));
+  if (times !== undefined && times.length !== obj.timeCount) throw new ContractError(at(path, "times"), "must match timeCount");
   const latitude = optionalNumber(obj.latitude, at(path, "latitude"));
   const longitude = optionalNumber(obj.longitude, at(path, "longitude"));
   if ((latitude !== null && Math.abs(latitude) > 90) || (longitude !== null && Math.abs(longitude) > 180)) {
@@ -162,6 +164,7 @@ export function parseSoundingSummary(value: unknown, path = ""): SoundingSummary
     fileName: optionalText(obj.fileName, at(path, "fileName")),
     levelCount: expectInteger(obj.levelCount, at(path, "levelCount"), { min: 0 }),
     timeCount: expectInteger(obj.timeCount, at(path, "timeCount"), { min: 0 }),
+    ...(times === undefined ? {} : { times }),
   };
 }
 

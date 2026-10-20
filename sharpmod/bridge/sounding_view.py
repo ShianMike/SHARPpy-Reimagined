@@ -16,10 +16,12 @@ PANELS = ("STP STATS", "COND STP", "WINTER", "FIRE", "SHIP", "VROT")
 def validate_view(value):
     if not isinstance(value, dict):
         raise p.invalid("view must be an object")
-    p.keys(value, ("edits",), ("chart", "panel", "drag"))
+    p.keys(value, ("edits",), ("chart", "panel", "drag", "timeIndex"))
     value = {"chart": "streamwiseness", "panel": "STP STATS", **value}
     p.choice(value, "chart", CHARTS, "streamwiseness")
     p.choice(value, "panel", PANELS, "STP STATS")
+    if "timeIndex" in value:
+        p.integer(value, "timeIndex", 0, 1_000_000)
     edits = value["edits"]
     if not isinstance(edits, list) or len(edits) > 2000:
         raise p.invalid("edits must contain at most 2000 levels")
@@ -65,6 +67,8 @@ def render_view(params):
     p.keys(params, ("sounding_id", "view"), ("parcel", "image_mode"))
     entry = cache().get(params["sounding_id"])
     view = validate_view(params["view"])
+    if view.get("timeIndex", 0) >= max(1, entry.summary["time_count"]):
+        raise p.invalid("timeIndex is outside this sounding's times")
     parcel = p.choice(params, "parcel", RENDER_PARCELS, "MU")
     mode = p.choice(params, "image_mode", IMAGE_MODES, "uhd")
     # Each view is replayed on a fresh collection; the source file is never edited.

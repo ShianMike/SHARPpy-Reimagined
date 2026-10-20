@@ -54,11 +54,7 @@
     "highlights": [
       {
         "title": "More reliable forecast changes",
-        "description": "Switching back to a field recovers while older requests stop. Shared downloads keep running for panels that still need them, and provider failures report their original cause."
-      },
-      {
-        "title": "Less unused background work",
-        "description": "Automatic forecast preloading pauses outside Model Viewer. Failed field downloads stop their remaining transfers, and concurrent products reuse their connections."
+        "description": "Forecast changes recover while older requests stop. Shared downloads keep running for panels that need them; leaving Model Viewer pauses automatic preloading. Failed downloads stop their remaining transfers, and provider failures report their original cause."
       },
       {
         "title": "Lower memory between sounding renders",

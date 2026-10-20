@@ -8,6 +8,7 @@ import json
 import math
 from pathlib import Path
 import statistics
+import sys
 
 
 def memory_report(samples):
@@ -66,7 +67,13 @@ def report(root):
     if complete["soak"]["elapsedSeconds"] < 7200 or complete["soak"]["errors"]:
         raise ValueError("Native workload did not complete two healthy hours")
     samples = [json.loads(line) for line in (root / "processes.ndjson").read_text(encoding="utf-8-sig").splitlines()]
-    result = {"memory": memory_report(samples), "presentation": [presentation_report(root / f"presentation-{index}.csv") for index in range(2)],
+    presentation, errors = [], []
+    for index in range(2):
+        try:
+            presentation.append(presentation_report(root / f"presentation-{index}.csv"))
+        except (OSError, ValueError) as error:
+            errors.append(str(error))
+    result = {"memory": memory_report(samples), "presentation": presentation, "presentation_errors": errors,
               "workload": complete["soak"], "graphics": json.loads((root / "graphics.json").read_text(encoding="utf-8-sig"))}
     (root / "native-summary.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return result
@@ -75,4 +82,6 @@ def report(root):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
-    print(json.dumps(report(parser.parse_args().directory), indent=2))
+    result = report(parser.parse_args().directory)
+    print(json.dumps(result, indent=2))
+    sys.exit(bool(result["presentation_errors"]))

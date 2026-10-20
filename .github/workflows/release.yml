@@ -167,6 +167,7 @@ jobs:
     needs: resolve-release
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/tests.yml
     with:
       ref: ${{ needs.resolve-release.outputs.source_sha }}

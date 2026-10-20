@@ -481,6 +481,7 @@ def test_release_dispatch_pins_existing_and_new_tag_sources():
 def test_release_write_permission_is_isolated_and_actions_are_immutable():
     workflow = _load_workflow("release.yml")
     assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["jobs"]["test-release"]["permissions"] == {"contents": "read", "actions": "read"}
     assert workflow["jobs"]["build-windows-exe"]["permissions"] == {
         "actions": "read",
         "contents": "read",

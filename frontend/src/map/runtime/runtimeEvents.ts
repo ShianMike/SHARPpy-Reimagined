@@ -52,7 +52,8 @@ export function wireMapEvents(map: MapLibreMap, target: RuntimeEventTarget): voi
       target.watch.sourceLoaded(sourceId);
     }),
     contextLost: live(() => {
-      useGraphicsStore.getState().setContextLost(true);
+      target.watch.overlayError("The graphics context was lost.");
+      if (target.primary) useGraphicsStore.getState().setContextLost(true);
     }),
     dragStart: live(() => {
       target.dragging = true;

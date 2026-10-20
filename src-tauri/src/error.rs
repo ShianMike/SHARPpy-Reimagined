@@ -132,6 +132,13 @@ pub struct BackendError {
 }
 
 impl BackendError {
+    /// Only the bridge's explicit, non-retryable cancellation is expected.
+    pub fn is_cancelled(&self) -> bool {
+        self.code == ErrorCode::Internal
+            && !self.retryable
+            && self.details.as_ref().and_then(|d| d.get("cancelled")) == Some(&Value::Bool(true))
+    }
+
     /// An unexpected failure in `operation`.
     pub fn internal(operation: &str) -> Self {
         BridgeFailure::Internal.into_backend_error(&ErrorContext::new(operation, None, None))
@@ -317,13 +324,17 @@ impl BridgeFailure {
                 None,
             ),
         };
-        BackendError {
+        let mut error = BackendError {
             code,
             message,
             retryable,
             context: Some(Box::new(context.clone())),
             details: extra,
+        };
+        if error.is_cancelled() {
+            error.message = "The request was cancelled.".to_owned();
         }
+        error
     }
 }
 

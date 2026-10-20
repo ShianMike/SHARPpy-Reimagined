@@ -2,5 +2,5 @@
 [data-layout="4"] .panel { --scale-top: var(--chrome-inset); --scale-bottom: var(--chrome-inset); height: min(calc(var(--parameter-scale-h) * 0.8), calc(100% - var(--scale-top) - var(--scale-bottom))); }
 .status { display: flex; align-items: center; justify-content: center; align-self: center; width: var(--control-h-xs); height: var(--control-h-xs); border-radius: var(--radius-round); font-size: var(--font-size-caption); color: var(--text-secondary); }
 .panel .visibility[data-size="sm"] { align-self: center; width: var(--control-h-xs); height: var(--control-h-xs); background: transparent; color: var(--text-secondary); --focus-ring: var(--text-primary); }
-.panel .visibility:hover { background: var(--fill-hover); color: var(--text-primary); }
+.panel .visibility:hover:not(:disabled) { background: var(--fill-hover); color: var(--accent-bright); }
 .visibility > svg { width: var(--icon-size-sm); height: var(--icon-size-sm); }

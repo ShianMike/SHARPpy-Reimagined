@@ -28,6 +28,7 @@ it("positions readable site IDs and respects visibility in Live Tracking with ei
   const map = {
     getBounds: () => ({ getWest: () => -110, getEast: () => -90, getSouth: () => 30, getNorth: () => 45 }),
     getCanvas: () => ({ clientWidth: 800, clientHeight: 600 }),
+    getZoom: () => 5, getBearing: () => 0, getPitch: () => 0,
     project: ([lon, lat]: [number, number]) => ({ x: (lon + 110) * 40, y: (45 - lat) * 40 }),
   } as unknown as MapLibreMap;
   useAppStore.getState().setActiveWorkspace("live");

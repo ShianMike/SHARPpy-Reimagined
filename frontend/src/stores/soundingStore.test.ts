@@ -24,6 +24,28 @@ beforeEach(() => {
 });
 
 describe("soundingStore", () => {
+  it("keeps each file time's edits and protects all times when closing", () => {
+    const store = useSoundingStore.getState();
+    store.add({ ...summary("multi"), timeCount: 49 });
+    store.setTimeIndex("multi", 48);
+    store.setView("multi:48", edited);
+    store.setTimeIndex("multi", 0);
+    store.setTimeIndex("multi", 49);
+    expect(useSoundingStore.getState().timeIndices.multi).toBe(0);
+    expect(useSoundingStore.getState().views.multi).toBeUndefined();
+    expect(useSoundingStore.getState().views["multi:48"]).toBe(edited);
+    store.close("multi");
+    expect(pendingDiscardSounding(useSoundingStore.getState())?.soundingId).toBe("multi");
+    store.resolveDiscard(false);
+    store.setTimeIndex("multi", 48);
+    expect(useSoundingStore.getState().views["multi:48"]).toBe(edited);
+    store.close("multi"); store.resolveDiscard(true);
+    expect(useSoundingStore.getState().views["multi:48"]).toBeUndefined();
+    expect(useSoundingStore.getState().timeIndices.multi).toBeUndefined();
+    store.setView("multi:48", edited);
+    expect(useSoundingStore.getState().views["multi:48"]).toBeUndefined();
+  });
+
   it("lists opened soundings newest first and makes the newest active", () => {
     const { add } = useSoundingStore.getState();
     add(summary("a"));

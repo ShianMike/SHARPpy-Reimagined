@@ -140,3 +140,57 @@ def test_stream_cancellation_stops_before_reading_the_remaining_bytes():
     with pytest.raises(DownloadCancelled):
         _read_body(stream, 200000, lambda: stream.tell() >= 65536)
     assert stream.tell() == 65536
+
+
+@pytest.mark.parametrize("model", ["hrrr", "nam-3km-conus", "rrfs-a", "refs-m1"])
+def test_fresh_consumers_replace_an_abandoned_field_without_losing_their_flight(monkeypatch, model):
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+    from sharpmod.bridge import frame_cache
+
+    abandoned, old_finish, fresh_started, fresh_finish = (Event() for _ in range(4))
+    old_stop = Event()
+    product = SimpleNamespace(key="cancel-rejoin", contour=None, wind=False)
+    calls = []
+
+    def produce(_model, _product, _run, _hour, _target, stopped):
+        calls.append(1)
+        if len(calls) == 1:
+            abandoned.set()
+            assert old_finish.wait(5)
+            assert stopped()
+            raise cancellation.Cancelled()
+        fresh_started.set()
+        assert fresh_finish.wait(5)
+        assert not stopped()
+        return {"fresh": True}, None
+
+    monkeypatch.setattr(fields, "_produce", produce)
+    monkeypatch.setattr(frame_cache, "read", lambda _target: None)
+
+    def acquire(event):
+        with cancellation.scope(event):
+            return fields._acquire(model, product, datetime(2026, 10, 19, tzinfo=UTC), 0)
+
+    with ThreadPoolExecutor(3) as pool:
+        first = pool.submit(acquire, old_stop)
+        try:
+            assert abandoned.wait(5)
+            old_stop.set()
+            second = pool.submit(acquire, Event())
+            assert fresh_started.wait(1), "fresh consumer joined an already abandoned producer"
+            old_finish.set()
+            with pytest.raises(cancellation.Cancelled):
+                first.result(timeout=5)
+            assert len(fields._FLIGHTS) == 1, "old cleanup removed the replacement producer"
+            third = pool.submit(acquire, Event())
+            deadline = time.monotonic() + 5
+            while len(next(iter(fields._FLIGHTS.values()))[1]) < 2:
+                assert time.monotonic() < deadline
+                time.sleep(0.005)
+            fresh_finish.set()
+            assert second.result(timeout=5) == third.result(timeout=5) == ({"fresh": True}, None)
+        finally:
+            old_finish.set()
+            fresh_finish.set()
+    assert len(calls) == 2 and not fields._FLIGHTS

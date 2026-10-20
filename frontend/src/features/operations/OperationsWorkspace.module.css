@@ -66,7 +66,7 @@
 .backendToolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-block: var(--space-4) var(--space-2); }
 .backendFilters { display: flex; gap: var(--space-1); }
 .backendFilters button { display: flex; align-items: center; gap: var(--space-2); border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-secondary); padding: var(--space-1) var(--space-3); min-height: var(--control-h-sm); font-size: var(--font-size-small); }
-.backendFilters button:hover { background: var(--control-fill); }
+.backendFilters button:hover { background: var(--fill-hover); color: var(--accent-bright); }
 .backendFilters button[aria-pressed="true"] { background: var(--accent-subtle); color: var(--accent-bright); }
 .backendFilters button > span { font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }
 .backendProgress { color: var(--text-secondary); font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }
@@ -74,7 +74,7 @@
 .backendList > li { min-width: 0; border-top: var(--hairline) solid var(--border-subtle); }
 .backendModel summary { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-2); border-radius: var(--radius-sm); list-style: none; cursor: pointer; }
 .backendModel summary::-webkit-details-marker { display: none; }
-.backendModel summary:hover { background: var(--control-fill); }
+.backendModel summary:hover { background: var(--fill-hover); color: var(--accent-bright); }
 .backendModel summary > svg { color: var(--text-tertiary); }
 .backendModel[open] summary > svg { transform: rotate(180deg); }
 .backendIdentity { flex: 1; min-width: 0; }

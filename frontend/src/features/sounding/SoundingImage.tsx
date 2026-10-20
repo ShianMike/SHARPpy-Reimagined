@@ -13,7 +13,7 @@ import { useSoundingView } from "./useSoundingView";
 import { replaceValues } from "./viewHistory";
 import styles from "./Viewer.module.css";
 
-export function SoundingImage({ soundingId, choice, title, heading }: { soundingId: string; choice: RenderChoice; title: string; heading: ReactNode }): ReactNode {
+export function SoundingImage({ soundingId, choice, title, heading, timeIndex = 0 }: { soundingId: string; choice: RenderChoice; title: string; heading: ReactNode; timeIndex?: number }): ReactNode {
   const units = useUiStore((state) => state.units);
   const [quality, setQuality] = useState<ImageMode>("uhd");
   const [editing, setEditing] = useState(false);
@@ -25,7 +25,7 @@ export function SoundingImage({ soundingId, choice, title, heading }: { sounding
   const viewport = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
   const gesture = useRef<{ id: string | null; x: number; y: number; left: number; top: number } | null>(null);
-  const { image, edit, state, edits, request, busy, update } = useSoundingView(soundingId, choice, quality);
+  const { image, edit, state, edits, request, busy, update } = useSoundingView(soundingId, choice, quality, timeIndex);
   const data = image.data;
   const pointTitles = useMemo(() => editing ? data?.points.map((point) => `${point.label}: ${point.values.map((v) => {
     const unit = displayUnit(v.unit, units);
@@ -68,7 +68,7 @@ export function SoundingImage({ soundingId, choice, title, heading }: { sounding
         setNotice({ image: data.image, text: "Full-resolution image copied." });
       } else {
         const link = document.createElement("a");
-        link.href = url; link.download = title.replace(/[^a-zA-Z0-9_-]+/g, "-") + "-" + choice + (edits.length ? "-edited" : "") + ".png";
+        link.href = url; link.download = title.replace(/[^a-zA-Z0-9_-]+/g, "-") + "-" + choice + (timeIndex > 0 ? `-time-${String(timeIndex + 1)}` : "") + (edits.length ? "-edited" : "") + ".png";
         link.click(); setNotice({ image: data.image, text: "Full-resolution PNG exported." });
       }
     } catch { setNotice({ image: data.image, text: "Clipboard access was unavailable. Use Export PNG to save the image." }); }

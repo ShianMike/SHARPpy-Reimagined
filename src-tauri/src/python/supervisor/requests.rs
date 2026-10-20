@@ -76,6 +76,15 @@ impl Supervisor {
             .filter(|c| c.generation == generation)?;
         let id = self.shared.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
+        let request_id = params
+            .get("request_id")
+            .and_then(Value::as_str)
+            .filter(|value| {
+                !value.is_empty()
+                    && value.len() <= 64
+                    && value.bytes().all(|c| c.is_ascii_alphanumeric())
+            })
+            .map(str::to_owned);
         let frame = match encode_request(id, method, params) {
             Ok(frame) => frame,
             Err(reason) => {
@@ -93,6 +102,7 @@ impl Supervisor {
                 tx,
                 generation,
                 method: method.to_owned(),
+                request_id,
             },
         );
         Some((id, rx))
@@ -100,7 +110,10 @@ impl Supervisor {
 
     fn on_request_timeout(&self, id: u64, generation: u64, method: &str) {
         let mut inner = self.lock();
-        inner.pending.remove(&id);
+        let request_id = inner
+            .pending
+            .remove(&id)
+            .and_then(|pending| pending.request_id);
         inner.timed_out.push_back((id, method.to_owned()));
         while inner.timed_out.len() > TIMED_OUT_MEMORY {
             inner.timed_out.pop_front();
@@ -113,18 +126,27 @@ impl Supervisor {
         else {
             return;
         };
+        let mut cancel_ack = None;
         if method != "cancel" && method != "hello" {
             let cancel_id = self.shared.next_id.fetch_add(1, Ordering::Relaxed);
             if let Ok(frame) = encode_request(cancel_id, "cancel", json!({"id": id})) {
                 let _ = child.writer.send(frame);
+                cancel_ack = Some(cancel_id);
             }
         }
-        if child.ping_in_flight {
+        let ping_in_flight = child.ping_in_flight;
+        child.ping_in_flight = true;
+        if let Some(cancel_id) = cancel_ack {
+            inner.timed_out.push_back((cancel_id, "cancel".to_owned()));
+            while inner.timed_out.len() > TIMED_OUT_MEMORY {
+                inner.timed_out.pop_front();
+            }
+        }
+        drop(inner);
+        log::warn!("bridge timeout method={method} wire_id={id} generation={generation} request_id={request_id:?} liveness_ping={}", !ping_in_flight);
+        if ping_in_flight {
             return;
         }
-        child.ping_in_flight = true;
-        drop(inner);
-        log::warn!("bridge {method} timed out; sending a liveness ping");
         let this = self.clone();
         self.shared
             .rt
@@ -190,17 +212,34 @@ impl Supervisor {
                 .iter()
                 .find(|(t, _)| *t == id)
                 .map(|(_, m)| m.as_str());
-            log::warn!("bridge reply for unknown id {id} (late reply to {method:?}); dropped");
+            if let Some(method) = method {
+                if let Err(error) = &reply {
+                    log::warn!("bridge late error wire_id={id} method={method}: {error}; dropped");
+                } else {
+                    log::debug!("bridge late reply wire_id={id} method={method}; dropped");
+                }
+            } else {
+                log::warn!("bridge reply for unknown wire_id={id}; dropped");
+            }
             return;
         };
         drop(inner);
         let reply = reply.map_err(|error| match decode_payload::<ErrorPayload>(error) {
-            Ok(p) => BridgeFailure::Python {
-                code: p.code,
-                message: p.message,
-                retryable: p.retryable,
-                details: p.details,
-            },
+            Ok(p) => {
+                let mut details = p.details.unwrap_or_default();
+                details.insert("method".into(), Value::from(pending.method.clone()));
+                details.insert("wire_id".into(), Value::from(id));
+                details.insert("generation".into(), Value::from(generation));
+                if let Some(token) = pending.request_id.as_ref() {
+                    details.insert("request_id".into(), Value::from(token.clone()));
+                }
+                BridgeFailure::Python {
+                    code: p.code,
+                    message: p.message,
+                    retryable: p.retryable,
+                    details: Some(details),
+                }
+            }
             Err(reason) => {
                 log::error!("bridge {}: error frame rejected: {reason}", pending.method);
                 payload_mismatch(&pending.method, reason)

@@ -3,6 +3,7 @@ export interface ViewField { key: string; label: string; value: number; unit: st
 export interface ViewPoint { id: string; label: string; x: number; y: number; values: ViewField[] }
 export interface ViewOptions { chart?: string; panel?: string }
 export interface ViewRequest extends ViewOptions {
+  timeIndex?: number;
   edits: ViewEdit[];
   drag?: { target: string; x: number; y: number };
 }

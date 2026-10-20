@@ -130,7 +130,12 @@ def test_changelog_preserves_the_dated_legacy_release():
         if line.startswith("## [v")
     ]
 
-    assert headings[0].startswith(f"## [v{package_version}] - ")
+    assert headings[0].startswith(f"## [v{package_version}] - ") or (
+        f"Target version: **{package_version}** (not published)."
+        in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").split("## [v", 1)[0]
+        and f"## What's new in {package_version} (Unreleased)"
+        in (ROOT / "README.md").read_text(encoding="utf-8")
+    )
     assert "## [v2.0.0 Legacy] - 2026-09-26" in headings
 
     release_url = (

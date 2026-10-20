@@ -40,7 +40,7 @@ it("follows the system theme and stops following when a theme is chosen", () => 
   expect(listeners.size).toBe(0);
 });
 
-it("keeps startup and release-highlight dismissal usable when storage writes fail", () => {
+it("keeps all UI settings usable in memory after a storage failure, warning only once", () => {
   useUiStore.setState({ lastVersion: "3.0.0", whatsNewOpen: false });
   const save = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("storage full"); });
   const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -49,6 +49,15 @@ it("keeps startup and release-highlight dismissal usable when storage writes fai
     expect(useUiStore.getState()).toMatchObject({ lastVersion: "3.1.0", whatsNewOpen: true });
     expect(() => { useUiStore.getState().setWhatsNewOpen(false); }).not.toThrow();
     expect(useUiStore.getState().whatsNewOpen).toBe(false);
-    expect(warn).toHaveBeenCalledTimes(2);
+    expect(() => {
+      const ui = useUiStore.getState();
+      ui.setTheme("dark"); ui.setSpeed(2); ui.setLoop(false); ui.setSmoothPlayback(true);
+      ui.setCollapsed(true); ui.setNavigationOpen(true); ui.setPopupPosition("model", { x: 12, y: 34 });
+      ui.setUnits({ temperature: "°F", wind: "m/s" });
+    }).not.toThrow();
+    expect(useUiStore.getState()).toMatchObject({ theme: "dark", speed: 2, loop: false,
+      smoothPlayback: true, collapsed: true, navigationOpen: true, popupPositions: { model: { x: 12, y: 34 } } });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(1);
   } finally { save.mockRestore(); warn.mockRestore(); }
 });

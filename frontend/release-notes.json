@@ -48,5 +48,34 @@
         "description": "See a short What’s new popup after a version change, and revisit the highlights anytime in Settings → Updates."
       }
     ]
+  },
+  "3.2.1": {
+    "summary": "More reliable maps and soundings, with clearer recovery and safer saved settings.",
+    "highlights": [
+      {
+        "title": "More reliable forecast changes",
+        "description": "Forecast changes recover while older requests stop. Shared downloads keep running for panels that need them; leaving Model Viewer pauses automatic preloading. Failed downloads stop their remaining transfers, and provider failures report their original cause."
+      },
+      {
+        "title": "Release unused rendering memory",
+        "description": "Switching between globe and flat maps releases unused graphics resources. Completed and failed sounding renders release unused image buffers before the next request. Scientific values, profile edits and lossless HD and UHD exports keep their existing quality."
+      },
+      {
+        "title": "Every sounding time",
+        "description": "Choose any time in an imported forecast file. Each time keeps its own edits and undo history, and exported charts use the selected profile. Typed station IDs survive source-tab changes."
+      },
+      {
+        "title": "Clearer Map Controls And Recovery",
+        "description": "Controls use orange hover feedback throughout both themes. Maps remove the heavy road network for clearer weather and labels. Manage forecast downloads in one panel with animated hour lists; the Fast/Smooth icon sits beside Loop. Drawn maps stay available through recoverable rendering errors. Retry failed maps, imagery and overlays. Pan with arrow keys and press Enter to inspect the map’s centre."
+      },
+      {
+        "title": "Settings stay usable",
+        "description": "If device storage is unavailable or full, workspace settings keep working for the current session. Long release highlights scroll with their close controls in reach. Unchanged map labels reuse their layout during forecast playback."
+      },
+      {
+        "title": "Updated bundled security components",
+        "description": "The Windows app includes a maintained Python and TLS runtime, updated libraries for network access and weather files, and signed installer checks. Downloads include checksums and a detailed component inventory."
+      }
+    ]
   }
 }

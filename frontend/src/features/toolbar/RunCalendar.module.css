@@ -16,4 +16,4 @@
 .year input { width: var(--field-label-w); height: var(--control-h-sm); padding: var(--space-2); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--control-fill); color: var(--text-primary); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
 .footer { display: flex; justify-content: space-between; margin-top: var(--space-2); padding-top: var(--space-2); border-top: var(--hairline) solid var(--border-subtle); }
 .footer button, .back { min-height: var(--control-h-sm); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--accent-bright); font-size: var(--font-size-small); }
-.footer button:hover, .back:hover { background: var(--control-fill); }
+.footer button:hover, .back:hover { background: var(--fill-hover); }

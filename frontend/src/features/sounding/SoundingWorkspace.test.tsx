@@ -63,6 +63,22 @@ afterEach(() => {
 });
 
 describe("SoundingWorkspace", () => {
+  it("selects the last of all 49 file times using the keyboard and requests that profile", async () => {
+    const transport = recordingTransport();
+    renderWithBackend(<SoundingWorkspace />, transport);
+    await userEvent.click(screen.getByRole("tab", { name: "File" }));
+    const file = new File(["fixture"], "forecast.buf");
+    Object.defineProperty(file, "arrayBuffer", { value: () => Promise.resolve(new TextEncoder().encode("fixture").buffer) });
+    await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), file);
+    await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
+    await screen.findByTestId("sounding-image");
+    await userEvent.click(screen.getByRole("combobox", { name: "Sounding time (UTC)" }));
+    expect(screen.getAllByRole("option")).toHaveLength(49);
+    await userEvent.keyboard("{End}{Enter}");
+    await waitFor(() => { expect(transport.calls.some((call) => call.command === "render_sounding_view" && (call.args as { view?: ViewRequest }).view?.timeIndex === 48)).toBe(true); });
+    expect(screen.getByTestId("sounding-viewer").textContent).toContain("time 49 of 49");
+  });
+
   it("edits a level, undoes and redoes it, and retains it across navigation", async () => {
     const formatUnit = vi.spyOn(displayUnits, "displayUnit");
     const transport = recordingTransport();

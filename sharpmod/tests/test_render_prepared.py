@@ -443,3 +443,44 @@ def test_worker_uses_fresh_clone_for_each_request(tmp_path, counted_decode, monk
     assert render_worker.main() == 0
     assert all(reply["ok"] for reply in map(json.loads, outgoing.getvalue().splitlines()))
     assert len(counted_decode) == 1
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_worker_reclaims_unreachable_render_buffers_before_reply(monkeypatch, fails):
+    import gc
+    import weakref
+    from sharpmod.bridge import render_worker, server
+
+    class Buffer:
+        pass
+
+    references = []
+    request = {"id": 1, "infile": "input", "outfile": "output", "parcel": "MU", "image_mode": "hd"}
+    incoming, outgoing = io.BytesIO(json.dumps(request).encode()), io.BytesIO()
+    monkeypatch.setattr(server, "_claim_process_streams", lambda: (incoming, outgoing, None))
+    monkeypatch.setattr(render_worker.logging, "basicConfig", lambda **_kwargs: None)
+    monkeypatch.setattr(render_worker.logging.getLogger("sharpmod.render_worker"), "exception", lambda *_args: None)
+
+    def render(*_args, **_kwargs):
+        buffer = Buffer()
+        buffer.cycle = buffer
+        references.append(weakref.ref(buffer))
+        if fails:
+            raise ValueError("failed render")
+
+    original_reply = render_worker._reply
+    def reply(stream, payload):
+        assert all(reference() is None for reference in references), "render buffers survived the worker reply"
+        original_reply(stream, payload)
+
+    monkeypatch.setattr(cli, "render", render)
+    monkeypatch.setattr(render_worker, "_reply", reply)
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        assert render_worker.main() == 0
+        assert json.loads(outgoing.getvalue())["ok"] is not fails
+    finally:
+        if enabled:
+            gc.enable()
+        gc.collect()

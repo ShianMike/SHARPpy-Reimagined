@@ -190,17 +190,21 @@ describe("startup watch: renderer", () => {
     const { watch, sink } = setup();
     expect(watch.overlayError("shader failed")).toBe(true);
     expect(sink.failures).toEqual([{ kind: "overlay", message: "shader failed" }]);
+    expect(watch.overlayError("shader failed")).toBe(true);
+    expect(sink.failures).toHaveLength(1);
     watch.afterRender();
-    expect(sink.ready).toBe(0);
+    expect(sink.ready).toBe(1);
     vi.advanceTimersByTime(MAP_STARTUP_TIMEOUT_MS);
     expect(sink.failures).toHaveLength(1);
   });
 
-  it("treats a deck error after the first render as a runtime error", () => {
+  it("reports a deck failure after the first render and recovers on a successful render", () => {
     const { watch, sink } = setup();
     watch.afterRender();
-    expect(watch.overlayError("later")).toBe(false);
-    expect(sink.failures).toEqual([]);
+    expect(watch.overlayError("later")).toBe(true);
+    expect(sink.failures).toEqual([{ kind: "overlay", message: "later" }]);
+    watch.afterRender();
+    expect(sink.ready).toBe(2);
   });
 
   it("fails with kind timeout when nothing renders by the deadline", () => {

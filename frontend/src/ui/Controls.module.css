@@ -19,8 +19,8 @@
   background: var(--accent);
   color: var(--accent-text);
 }
-.action:hover:not(:disabled) { border-color: var(--border-strong); background: var(--fill-hover); }
-.action[data-tone="accent"]:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); }
+.action:hover:not(:disabled) { border-color: var(--accent); background: var(--fill-hover); color: var(--accent-bright); }
+.action[data-tone="accent"]:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); color: var(--accent-text); }
 .action:active:not(:disabled) { background: var(--fill-pressed); }
 .action:disabled { background: var(--control-fill); border-color: var(--border-subtle); color: var(--text-disabled); }
 .iconAction {
@@ -37,7 +37,7 @@
   color: var(--text-secondary);
 }
 .iconAction[data-size="sm"] { width: var(--control-h-sm); height: var(--control-h-sm); }
-.iconAction:hover:not(:disabled) { background: var(--fill-hover); color: var(--text-primary); }
+.iconAction:hover:not(:disabled) { background: var(--fill-hover); color: var(--accent-bright); }
 .iconAction[aria-pressed="true"], .iconAction[aria-expanded="true"] { background: var(--accent-subtle); color: var(--accent-bright); }
 .iconAction:disabled { color: var(--text-disabled); }
 .toggle {
@@ -55,7 +55,7 @@
   color: var(--text-primary);
   text-align: left;
 }
-.toggle:hover:not(:disabled) { background: var(--fill-hover); }
+.toggle:hover:not(:disabled) { background: var(--fill-hover); color: var(--accent-bright); }
 .toggle:disabled { color: var(--text-disabled); }
 .toggleLabel { min-width: 0; overflow-wrap: anywhere; }
 .toggleTrack {

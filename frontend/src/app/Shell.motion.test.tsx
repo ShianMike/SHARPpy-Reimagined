@@ -33,7 +33,7 @@ function pendingExit(element: HTMLElement) {
   return finish;
 }
 
-it("shows loading until the first map render and leaves the map mounted when ready", async () => {
+it("keeps a drawn map mounted through recoverable errors and falls back for startup failure", async () => {
   useAppStore.getState().setActiveWorkspace("map");
   const { queryClient } = renderWithBackend(<Shell />, createTransport());
   expect(screen.getByRole("status", { name: "Loading map" }).textContent).toContain("Preparing your weather workspace");
@@ -41,6 +41,14 @@ it("shows loading until the first map render and leaves the map mounted when rea
   expect(screen.getByRole("status", { name: "Loading map" })).toBeTruthy();
   act(() => { useGraphicsStore.getState().setRendererReady(); });
   expect(screen.queryByRole("status", { name: "Loading map" })).toBeNull();
+  expect(screen.getByTestId("map-canvas")).toBe(canvas);
+  expect(mapMounts).toHaveBeenCalledTimes(1);
+  act(() => { useGraphicsStore.getState().setRendererFailed("overlay", "Temporary shader failure"); });
+  expect(useGraphicsStore.getState().panelErrors[0]?.message).toBe("Temporary shader failure");
+  expect(screen.getByTestId("map-canvas")).toBe(canvas);
+  expect(screen.queryByTestId("reduced-rendering")).toBeNull();
+  act(() => { useGraphicsStore.getState().setRendererReady(); });
+  expect(useGraphicsStore.getState().panelErrors[0]).toBeUndefined();
   expect(screen.getByTestId("map-canvas")).toBe(canvas);
   expect(mapMounts).toHaveBeenCalledTimes(1);
   act(() => { useGraphicsStore.getState().beginRendererAttempt(); });

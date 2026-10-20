@@ -49,8 +49,10 @@
   }
 }
 
-button.chip:hover {
-  border-color: var(--border-strong);
+button.chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--fill-hover);
+  color: var(--accent-bright);
 }
 
 button.chip { background: var(--glass-fill); }
@@ -69,4 +71,10 @@ button.chip[aria-pressed="true"] {
 
 .status {
   color: var(--text-secondary);
+}
+
+.notice {
+  position: absolute;
+  inset: auto var(--space-3) var(--space-3);
+  z-index: var(--z-map-chip);
 }

@@ -232,8 +232,8 @@ test.describe("real-backend soundings", () => {
     await shot("desktop-sounding-model.png");
   });
 
-  test("the example BUFKIT file, its first time drawn @soundings", async () => {
-    test.setTimeout(OPEN_FILE_MS + RENDER_MS + 240_000);
+  test("the example BUFKIT file, its last time and return to the first @soundings", async () => {
+    test.setTimeout(OPEN_FILE_MS + 3 * RENDER_MS);
     test.skip(!(await page.evaluate(() => "__TAURI_INTERNALS__" in window)), "not running inside the Tauri app");
     await showWorkspace("Soundings");
     await page.getByRole("tab", { name: "File" }).click();
@@ -242,8 +242,25 @@ test.describe("real-backend soundings", () => {
     expect(outcome.ok, outcome.text).toBe(true);
     const image = await drawn(viewerStage());
     const meta = await page.getByTestId("sounding-viewer").locator("header").innerText();
-    expect(meta).toContain("first of 49 times");
-    results.file = { open: outcome, header: meta.replace(/\s+/gu, " "), firstRender: image };
+    expect(meta).toContain("time 1 of 49");
+    const time = page.getByRole("combobox", { name: "Sounding time (UTC)" });
+    const firstSrc = await viewerStage().getByTestId("sounding-image").getAttribute("src");
+    await time.click();
+    await expect(page.getByRole("listbox", { name: "Sounding time (UTC)" }).getByRole("option")).toHaveCount(49);
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await expect(time).toHaveAttribute("value", "48");
+    const lastRender = await drawn(viewerStage(), firstSrc);
+    const lastHeader = await page.getByTestId("sounding-viewer").locator("header").innerText();
+    expect(lastHeader).toContain("File, 2026-06-27 06Z, Selected profile, time 49 of 49");
+    const lastSrc = await viewerStage().getByTestId("sounding-image").getAttribute("src");
+    await time.click();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Enter");
+    await expect(time).toHaveAttribute("value", "0");
+    const restoredRender = await drawn(viewerStage(), lastSrc);
+    expect(await page.getByTestId("sounding-viewer").locator("header").innerText()).toContain("File, 2026-06-25 06Z, 50 levels, time 1 of 49");
+    results.file = { open: outcome, header: meta.replace(/\s+/gu, " "), firstRender: image, lastHeader: lastHeader.replace(/\s+/gu, " "), lastRender, restoredRender };
     await shot("desktop-sounding-file.png");
 
   });

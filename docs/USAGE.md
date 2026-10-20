@@ -114,6 +114,8 @@ chart images and exports retain their labelled units, and wind barbs use knots.
 2. Pan or zoom to your area. Hover over an enabled model layer for its value.
    Click a map point to inspect the location, value, forecast time, and source,
    then choose **Open sounding** to load the point profile.
+   In 3.2.1 source builds, keyboard users can focus a map, pan with arrow keys,
+   and press **Enter** to inspect the point at its centre.
 3. Use the timeline to step between available hours or play them in sequence.
    Playback speed and looping are controlled beside the timeline.
 4. Use the panel controls for one, two, or four maps. Forecast time and map
@@ -146,6 +148,11 @@ observation for its time, location, measured values, remarks, and source.
 Wind barbs become denser as you zoom in. Borders and land outlines remain
 visible above filled overlays.
 
+In 3.2.1 source builds, an incomplete-layer notice identifies failed imagery
+or wind/contour overlays and offers **Retry layers**. If an earlier image is
+retained, its timestamp is shown in the notice. A failed renderer is reported
+in its own panel with **Reload maps**; the chosen products and camera are kept.
+
 The point inspector separates the selected parameter from **Forecast &
 source** details. Hide or close the inspector when you need more map space.
 
@@ -173,6 +180,13 @@ their cancellation checkpoints; an already-running decoder may need to finish.
 1. Open **Soundings → File** and leave **Import format** on **Point sounding**.
 2. Choose **Browse files**, select a file, then choose **Open sounding**.
 3. Use **Change file** to select another input.
+
+In 3.2.1 source builds, a file containing multiple profiles has a **Sounding
+time (UTC)** selector above the image. Every file time is available, including
+entries with no date. Open it and use arrow keys, Home/End and Enter, or choose
+a time with the pointer. Edits and undo histories belong to each time;
+switching back restores them. Copy and PNG export use the selected profile.
+Closing the file asks before discarding local work on any of its times.
 
 Supported inputs include NPZ point soundings, SPC text, BUFKIT, PECAN, and UWyo
 text or saved HTML. The upload limit is **5 MiB**. A WRF column previously

@@ -99,6 +99,13 @@ datas = []
 binaries = []
 hiddenimports = []
 
+if RELEASE_BUILD and sys.platform.startswith("win"):
+    for _license in (os.path.join(sys.base_prefix, "LICENSE.txt"),
+                     os.path.join(sys.base_prefix, "DLLs", "OPENSSL-LICENSE.txt")):
+        if not os.path.isfile(_license):
+            raise RuntimeError("missing bundled runtime license: " + _license)
+        datas.append((_license, "licenses"))
+
 # --- sharpmod's own bundled resources ---------------------------------------
 # ``sharpmod`` is an editable install, so PyInstaller's ``collect_data_files``
 # reports it as "not a package" and skips its data. Add the resources the app

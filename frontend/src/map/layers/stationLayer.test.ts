@@ -160,6 +160,7 @@ it("spaces whole surface plots, prioritizes fresh observations and reveals more 
   let zoom = 100;
   const map = { getBounds: () => ({ getWest: () => -180, getEast: () => 180, getSouth: () => -90, getNorth: () => 90 }),
     getCanvas: () => ({ clientWidth: 800, clientHeight: 300 }),
+    getZoom: () => zoom, getBearing: () => 0, getPitch: () => 0,
     project: ([lon, lat]: [number, number]) => ({ x: 100 + lon * zoom, y: 100 + lat * zoom }) };
   scene.setData({ surfacePlots: plots });
   const drawn = (): SurfacePlot[] => {

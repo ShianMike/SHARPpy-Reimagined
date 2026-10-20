@@ -10,7 +10,7 @@ import { useMapNoticeStore } from "../notices/mapNoticeStore";
 import { documentVisibility, performanceClock } from "./mapOptions";
 import { createStartupWatch, type StartupWatch } from "./startupWatch";
 
-/** The watch of panels 2 to 4: start-up and basemap health are the primary map's to report. */
+/** Inert watch for test targets that do not own a renderer. */
 export const NO_WATCH: StartupWatch = {
   sourceLoaded: () => undefined,
   sourceError: () => false,
@@ -21,21 +21,22 @@ export const NO_WATCH: StartupWatch = {
 };
 
 /** A start-up watch over the active basemap sources, reporting into the stores. */
-export function createRuntimeWatch(): StartupWatch {
+export function createRuntimeWatch(panel = 0): StartupWatch {
   return createStartupWatch({
-    sourceIds: BASEMAP_SOURCE_IDS,
+    sourceIds: panel === 0 ? BASEMAP_SOURCE_IDS : [],
     visibility: documentVisibility,
     clock: performanceClock,
     sink: {
       basemapIssues: (failed, slow) => {
-        useMapNoticeStore.getState().setBasemapIssues(failed, slow);
+        if (panel === 0) useMapNoticeStore.getState().setBasemapIssues(failed, slow);
       },
       rendererReady: () => {
-        useGraphicsStore.getState().setRendererReady();
+        useGraphicsStore.getState().setRendererReady(panel);
+        if (panel === 0) useGraphicsStore.getState().setContextLost(false);
       },
       rendererFailed: (kind, message) => {
-        console.warn(`[map] the renderer did not start (${kind}): ${message}`);
-        useGraphicsStore.getState().setRendererFailed(kind, message);
+        console.warn(`[map] panel ${String(panel + 1)} renderer failed (${kind}): ${message}`);
+        useGraphicsStore.getState().setRendererFailed(kind, message, panel);
       },
     },
   });

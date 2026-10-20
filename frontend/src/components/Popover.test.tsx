@@ -129,6 +129,22 @@ describe("Popover", () => {
     expect(dialog.style.getPropertyValue("--popover-anchor-w")).toBe("180px");
   });
 
+  it("opens above a bottom toolbar without covering its trigger as content resizes", async () => {
+    const { anchor, dialog } = await openPopover({ initialFocus: "none", side: "top" });
+    dialog.style.setProperty("--chrome-gap", "8px");
+    vi.spyOn(anchor, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 700, 200, 32));
+    const rect = vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 320, 280));
+    fireEvent.resize(window);
+    expect(dialog.style.getPropertyValue("--popover-y")).toBe("412px");
+    const bottom = `${String(window.innerHeight - 700 + 8)}px`;
+    expect(dialog.style.getPropertyValue("--popover-bottom")).toBe(bottom);
+    expect(dialog.style.getPropertyValue("--popover-gap")).toBe("calc(var(--space-1) * 0)");
+    rect.mockReturnValue(new DOMRect(0, 0, 320, 340));
+    fireEvent.resize(window);
+    expect(dialog.style.getPropertyValue("--popover-y")).toBe("352px");
+    expect(dialog.style.getPropertyValue("--popover-bottom")).toBe(bottom);
+  });
+
   it("renders at the end of body with its role and label, and closes when toggled", async () => {
     const { user, anchor, dialog } = await openPopover({ initialFocus: "first" });
     expect(document.body.lastElementChild).toBe(dialog);

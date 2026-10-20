@@ -21,7 +21,7 @@
 .table th:nth-child(2) { width: var(--field-label-w); }
 .table th:nth-child(3) { width: var(--dialog-nav-w); }
 .table th:last-child, .table td:last-child { padding-right: var(--space-6); }
-.table tbody tr:hover { background: var(--control-fill); }
+.table tbody tr:hover { background: var(--fill-hover); }
 .table time { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 .source { color: var(--text-secondary); overflow-wrap: anywhere; }
 .level { color: var(--accent-bright); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); }

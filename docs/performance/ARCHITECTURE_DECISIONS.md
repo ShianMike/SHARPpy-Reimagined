@@ -157,3 +157,25 @@ Research: [Chrome scheduler.yield guidance](https://developer.chrome.com/blog/us
 [Scheduler.yield API](https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/yield),
 and [deck.gl performance](https://deck.gl/docs/developer-guide/performance).
 Feature detection avoids assuming the API exists on every supported WebView.
+
+## D10 — reclaim completed work and preserve existing ownership in v3.2.1
+
+Accept full cyclic collection at the serial render-worker job boundary: real
+paired workers show lower native-buffer retention with identical PNGs, pixels
+and metadata through profile edits/reset and HD/UHD modes. Do not retain more
+chart widgets or cache calibrated geometry without a separate parity and memory
+measurement. Warm rendering is similar; no speedup or hard memory cap is claimed.
+
+Replace only fully abandoned field acquisitions, retain live consumers and guard
+cleanup by flight identity. A failed range group stops only its siblings; the
+original error remains visible. Retain 32 HTTP connections for the existing
+eight-by-four worker topology without adding concurrency or blocking pool waits.
+Automatic frame preparation follows the active workspace and releases only its
+own query observers. Keep strict weather identities and all existing cache limits.
+
+Request token, wire ID, method and generation provide error correlation. Only
+explicit cancellation is expected; genuine failures, late errors and unknown
+replies retain warning diagnostics. Browser error responses carry their operation
+context. See the [patch report](V3_2_1_PERFORMANCE_REPORT.md) for measurements,
+regressions and the browser-only validation boundary. No new protocol, service,
+dependency, renderer or scientific approximation is introduced.

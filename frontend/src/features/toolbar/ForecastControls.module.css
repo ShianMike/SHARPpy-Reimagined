@@ -55,7 +55,7 @@
 .dateButton:hover, .dateButton[aria-expanded="true"] { border-color: var(--accent); background: var(--accent-subtle); }
 .latestRun { display: flex; width: 100%; align-items: center; gap: var(--space-2); margin-top: var(--space-3); padding: var(--space-2); border: 0; border-radius: var(--radius-sm); background: var(--accent-subtle); color: var(--accent-bright); font-size: var(--font-size-caption); }
 .latestRun strong { margin-left: auto; font-variant-numeric: tabular-nums; }
-.latestRun:hover { background: var(--control-selected); }
+.latestRun:hover { background: var(--fill-hover); }
 .selectionSummary { display: flex; flex: none; justify-content: space-between; gap: var(--space-3); margin: 0 var(--space-4) var(--space-3); padding: var(--space-3); background: var(--control-fill); border-radius: var(--radius-sm); }
 .selectionSummary > span { display: flex; flex-direction: column; gap: var(--space-1); }
 .selectionSummary > span:last-child { text-align: right; }

@@ -14,7 +14,7 @@
 .count { display: grid; place-items: center; min-width: var(--space-5); height: var(--space-5); padding: 0 var(--space-1); border-radius: var(--radius-pill); background: var(--control-fill); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .tabs { display: grid; flex: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); padding: var(--space-1); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--control-fill); }
 .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1); min-width: 0; min-height: var(--rail-item-h); padding: var(--space-2) 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); font-size: var(--font-size-caption); }
-.tab:hover { color: var(--text-primary); background: var(--fill-hover); }
+.tab:hover { color: var(--accent-bright); background: var(--fill-hover); }
 .tab[aria-selected="true"] { background: var(--accent-subtle); color: var(--accent-bright); }
 .form { display: flex; flex-direction: column; gap: var(--space-3); }
 .field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; color: var(--text-secondary); font-size: var(--font-size-small); }
@@ -40,13 +40,13 @@
 .item { display: grid; flex: none; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden; }
 .item[data-active="true"] { border-color: var(--accent); background: var(--accent-subtle); }
 .itemButton { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); min-width: 0; padding: var(--space-3); border: 0; background: transparent; color: var(--text-primary); text-align: left; }
-.itemButton:hover { background: var(--fill-hover); }
+.itemButton:hover { background: var(--fill-hover); color: var(--accent-bright); }
 .itemTitle { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); overflow-wrap: anywhere; }
 .itemMeta { line-height: var(--line-height-body); }
 .fieldButton { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: var(--control-h-md); padding: var(--space-2) var(--space-3); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--control-fill); color: var(--text-primary); font-size: var(--font-size-body); text-align: left; }
 .fieldButton span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fieldButton svg { flex: none; color: var(--text-tertiary); }
-.fieldButton:hover { border-color: var(--border-strong); background: var(--fill-hover); }
+.fieldButton:hover { border-color: var(--accent); background: var(--fill-hover); color: var(--accent-bright); }
 .fieldButton[aria-expanded="true"] { border-color: var(--accent); background: var(--accent-subtle); }
 .fieldButton:disabled { color: var(--text-disabled); cursor: default; background: var(--control-fill); border-color: var(--border-subtle); }
 .field[data-compact="true"] { flex: none; }

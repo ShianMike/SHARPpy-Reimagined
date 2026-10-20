@@ -289,7 +289,7 @@ def test_frontend_gate_requires_checks_and_all_browser_shards():
                for step in browser["steps"])
 
 
-def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
+def test_release_builds_installs_and_requires_locked_cp313_rust_wheel():
     workflow = _load_workflow("release.yml")
     job = workflow["jobs"]["build-windows-exe"]
     assert job["env"] == {
@@ -299,6 +299,10 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
     }
 
     steps = job["steps"]
+    python = next(step for step in steps if step.get("name") == "Set up Python")
+    assert python["with"]["python-version"] == "3.13.16"
+    runtime = next(step for step in steps if step.get("name") == "Verify maintained bundled Python and TLS runtime")
+    assert "ssl.OPENSSL_VERSION_INFO >= (3, 5, 0, 9)" in runtime["run"]
     toolchain = next(
         step for step in steps
         if step.get("name") == "Set up Rust 1.88 toolchain"
@@ -325,7 +329,7 @@ def test_release_builds_installs_and_requires_locked_cp311_rust_wheel():
     script = build["run"]
     assert "maturin build --release --locked" in script
     assert "--interpreter python" in script
-    assert "cp311-cp311-win_amd64.whl" in script
+    assert "cp313-cp313-win_amd64.whl" in script
     assert "pip install --force-reinstall --no-deps" in script
 
     install = next(
@@ -477,6 +481,7 @@ def test_release_dispatch_pins_existing_and_new_tag_sources():
 def test_release_write_permission_is_isolated_and_actions_are_immutable():
     workflow = _load_workflow("release.yml")
     assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["jobs"]["test-release"]["permissions"] == {"contents": "read", "actions": "read"}
     assert workflow["jobs"]["build-windows-exe"]["permissions"] == {
         "actions": "read",
         "contents": "read",

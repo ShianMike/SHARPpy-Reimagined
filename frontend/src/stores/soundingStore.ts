@@ -43,6 +43,8 @@ export interface Era5Inputs {
 
 export interface SoundingState {
   views: Record<string, ViewState>;
+  timeIndices: Record<string, number>;
+  setTimeIndex: (id: string, index: number) => void;
   setView: (id: string, view: ViewState) => void;
   open: SoundingSummary[];
   activeId: string | null;
@@ -77,11 +79,15 @@ const INITIAL_MODEL: ModelInputs = {
   longitude: "",
 };
 
+function soundingHasWork(views: Record<string, ViewState>, id: string): boolean {
+  return Object.entries(views).some(([key, state]) => (key === id || key.startsWith(`${id}:`)) && hasLocalWork(state));
+}
+
 function removalCandidate(open: SoundingSummary[], views: Record<string, ViewState>, change: SoundingChange): SoundingSummary | undefined {
   if (change.kind === "close") return open.find((item) => item.soundingId === change.id);
   const others = open.filter((item) => item.soundingId !== change.summary.soundingId);
   if (others.length < MAX_OPEN) return undefined;
-  return others.toReversed().find((item) => !hasLocalWork(views[item.soundingId])) ?? others.at(-1);
+  return others.toReversed().find((item) => !soundingHasWork(views, item.soundingId)) ?? others.at(-1);
 }
 
 export function pendingDiscardSounding(state: SoundingState): SoundingSummary | undefined {
@@ -96,24 +102,28 @@ function applyChanges(state: SoundingState, changes: SoundingChange[], discard =
     const change = changes[0];
     if (change === undefined) break;
     const candidate = removalCandidate(open, views, change);
-    if (candidate !== undefined && hasLocalWork(views[candidate.soundingId]) && !discard) break;
+    if (candidate !== undefined && soundingHasWork(views, candidate.soundingId) && !discard) break;
     if (candidate !== undefined) open = open.filter((item) => item.soundingId !== candidate.soundingId);
     if (change.kind === "open") {
       open = [change.summary, ...open.filter((item) => item.soundingId !== change.summary.soundingId)];
       activeId = change.summary.soundingId;
     } else if (activeId === change.id) activeId = open[0]?.soundingId ?? null;
-    views = Object.fromEntries(Object.entries(views).filter(([id]) => open.some((item) => item.soundingId === id)));
+    views = Object.fromEntries(Object.entries(views).filter(([id]) => open.some((item) => item.soundingId === id || id.startsWith(`${item.soundingId}:`))));
     changes = changes.slice(1);
     discard = false;
   }
-  return { open, activeId, views, pendingChanges: changes };
+  return { open, activeId, views, pendingChanges: changes,
+    timeIndices: Object.fromEntries(Object.entries(state.timeIndices).filter(([id]) => open.some((item) => item.soundingId === id))) };
 }
 
 export const useSoundingStore = create<SoundingState>()(
   subscribeWithSelector((set) => ({
     open: [],
     views: {},
-    setView: (id, view) => { set((state) => state.open.some((item) => item.soundingId === id) ? { views: { ...state.views, [id]: view } } : {}); },
+    timeIndices: {},
+    setTimeIndex: (id, index) => { set((state) => Number.isInteger(index) && index >= 0 && index < (state.open.find((item) => item.soundingId === id)?.timeCount ?? 0)
+      ? { timeIndices: { ...state.timeIndices, [id]: index } } : {}); },
+    setView: (id, view) => { set((state) => state.open.some((item) => item.soundingId === id || id.startsWith(`${item.soundingId}:`)) ? { views: { ...state.views, [id]: view } } : {}); },
     activeId: null,
     choice: "MU",
     source: "observed",

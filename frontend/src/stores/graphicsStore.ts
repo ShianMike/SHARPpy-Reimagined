@@ -23,6 +23,7 @@ export interface GraphicsState {
   effective: GraphicsSelection;
   renderer: RendererState;
   rendererError: RendererError | null;
+  panelErrors: Readonly<Record<number, RendererError>>;
   contextLost: boolean;
   /** Remount counter; WeatherMap is keyed by it. */
   mapAttempt: number;
@@ -30,9 +31,9 @@ export interface GraphicsState {
   setCapabilities(capabilities: GraphicsCapabilities): void;
   setOverride(override: GraphicsOverride): void;
   /** Every new MapRuntime starts here: pending, no error, no lost context. */
-  beginRendererAttempt(): void;
-  setRendererReady(): void;
-  setRendererFailed(kind: RendererErrorKind, message: string): void;
+  beginRendererAttempt(panel?: number): void;
+  setRendererReady(panel?: number): void;
+  setRendererFailed(kind: RendererErrorKind, message: string, panel?: number): void;
   setContextLost(lost: boolean): void;
   /** Reload map and Try the map again: back to pending, and remount the map. */
   retryMap(): void;
@@ -49,6 +50,7 @@ export const useGraphicsStore = create<GraphicsState>()(
     effective: NOT_PROBED,
     renderer: "pending",
     rendererError: null,
+    panelErrors: {},
     contextLost: false,
     mapAttempt: 0,
     setCapabilities: (capabilities) => {
@@ -57,24 +59,28 @@ export const useGraphicsStore = create<GraphicsState>()(
     setOverride: (override) => {
       set({ override, effective: effectiveFor(get().capabilities, override) });
     },
-    beginRendererAttempt: () => {
-      set({ renderer: "pending", rendererError: null, contextLost: false });
+    beginRendererAttempt: (panel = 0) => {
+      const panelErrors = Object.fromEntries(Object.entries(get().panelErrors).filter(([id]) => id !== String(panel)));
+      set({ panelErrors, ...(panel === 0 ? { renderer: "pending", rendererError: null, contextLost: false } as const : {}) });
     },
-    setRendererReady: () => {
-      if (get().renderer !== "ready") {
-        set({ renderer: "ready", rendererError: null });
+    setRendererReady: (panel = 0) => {
+      if (get().panelErrors[panel] !== undefined || panel === 0 && get().renderer !== "ready") {
+        const panelErrors = Object.fromEntries(Object.entries(get().panelErrors).filter(([id]) => id !== String(panel)));
+        set({ panelErrors, ...(panel === 0 ? { renderer: "ready", rendererError: null } as const : {}) });
       }
     },
-    setRendererFailed: (kind, message) => {
-      recordLog("error", "Map renderer", message, kind);
-      set({ renderer: "failed", rendererError: { kind, message } });
+    setRendererFailed: (kind, message, panel = 0) => {
+      recordLog("error", `Map panel ${String(panel + 1)}`, message, kind);
+      const error = { kind, message };
+      // Keep an initialized map mounted so its next draw can clear the panel error.
+      set({ panelErrors: { ...get().panelErrors, [panel]: error }, ...(panel === 0 && get().renderer !== "ready" ? { renderer: "failed", rendererError: error } as const : {}) });
     },
     setContextLost: (lost) => {
       if (lost !== get().contextLost) recordLog(lost ? "warning" : "info", "Map renderer", lost ? "Graphics context lost" : "Graphics context restored");
       set({ contextLost: lost });
     },
     retryMap: () => {
-      set((state) => ({ renderer: "pending", rendererError: null, mapAttempt: state.mapAttempt + 1 }));
+      set((state) => ({ renderer: "pending", rendererError: null, panelErrors: {}, contextLost: false, mapAttempt: state.mapAttempt + 1 }));
     },
   })),
 );

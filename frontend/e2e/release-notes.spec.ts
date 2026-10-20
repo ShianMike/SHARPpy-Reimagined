@@ -21,7 +21,7 @@ test("a fresh install stays on Overview and release highlights can be reopened f
   await trigger.click();
   await expect(notes).toBeFocused();
   await expect(notes).toHaveCSS("opacity", "1");
-  await expect(notes.getByRole("listitem")).toHaveCount(5);
+  await expect(notes.getByRole("listitem")).toHaveCount(releaseNotes[version as keyof typeof releaseNotes].highlights.length);
   expect(isInside(await boxOf(notes), viewportBox(page))).toBe(true);
   await saveScreenshot(page, "whats-new-1920x1080-dark.png");
   await page.keyboard.press("Escape");
@@ -44,6 +44,8 @@ test("a version change shows one popup, fits the minimum window, and does not re
   const notes = page.getByRole("dialog", { name: `What’s new in ${version}` });
   await expect(notes).toBeVisible();
   expect(isInside(await boxOf(notes), viewportBox(page))).toBe(true);
+  expect(isInside(await boxOf(notes.getByRole("button", { name: "Got it" })), await boxOf(notes))).toBe(true);
+  await notes.getByRole("listitem").last().scrollIntoViewIfNeeded();
   expect(isInside(await boxOf(notes.getByRole("button", { name: "Got it" })), await boxOf(notes))).toBe(true);
   await notes.getByRole("button", { name: "Got it" }).click();
   await page.reload();

@@ -148,11 +148,16 @@ it("changes shared playback speed and loop settings", async () => {
   renderWithBackend(<TimelineRegion />, createTransport());
   await userEvent.click(screen.getByRole("button", { name: "Playback speed 1 times" }));
   expect(useUiStore.getState().speed).toBe(1.5);
-  await userEvent.click(screen.getByRole("button", { name: "Loop forecast animation" }));
+  const loop = screen.getByRole("button", { name: "Loop Forecast Animation" });
+  const mode = screen.getByRole("button", { name: "Smooth Playback" });
+  expect(loop.nextElementSibling).toBe(mode);
+  expect(mode.querySelectorAll("svg")).toHaveLength(1);
+  expect(mode.querySelectorAll(":scope > span:not([aria-hidden])")).toHaveLength(0);
+  await userEvent.click(loop);
   expect(useUiStore.getState().loop).toBe(false);
-  await userEvent.click(screen.getByRole("button", { name: "Smooth playback" }));
+  await userEvent.click(mode);
   expect(useUiStore.getState().smoothPlayback).toBe(true);
-  expect(screen.getByRole("button", { name: "Smooth playback" }).getAttribute("aria-pressed")).toBe("true");
+  expect(mode.getAttribute("aria-pressed")).toBe("true");
 });
 
 it.each([mapKeys.field, mapKeys.contours])("only marks the displayed frame as loading", async (key) => {

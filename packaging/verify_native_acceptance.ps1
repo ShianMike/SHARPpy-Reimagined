@@ -150,7 +150,9 @@ try {
     Stop-Desktop
     Start-Desktop
     Run-Phase 'restart'
-    Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like "*$report*" } |
+    $webviews = @(Process-Sample | Where-Object Name -EQ 'msedgewebview2.exe')
+    if ($webviews.Count -eq 0) { throw 'No owned WebView2 processes found after restart' }
+    $webviews |
         Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $report 'webview2.json')
     if ($ProfileMemory) {

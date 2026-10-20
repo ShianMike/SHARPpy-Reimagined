@@ -34,6 +34,13 @@ highlight, preference, panel-count and repeated-restart assertions for the rerun
 This is a harness correction; published application artifacts stay unchanged.
 Native presentation FPS remains unverified, and two-hour stability stays excluded.
 
+The corrected installed job in run 39426442043 passes all four phases: seed,
+public update, upgraded highlights/preferences and repeated normal restart. Saved
+JSON independently verifies 3.2.0 -> 3.2.1, light theme, Celsius, km/h, 2x playback
+and four panels. Review then catches a remaining evidence selector tied to the
+temporary profile path. Reuse the existing ancestry-based Process-Sample helper
+to capture owned WebView2 processes in both modes, and fail on missing evidence.
+
 ## Checkpoint 20 — final UI changes and authorized publication
 
 Forecast Hours now combines the download action and cache details, with saved

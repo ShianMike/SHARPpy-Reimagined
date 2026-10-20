@@ -6,6 +6,65 @@ the verified `456dec3` candidate as historical evidence; the final-acceptance
 continuation changes the bundled Python runtime and requires new artifacts.
 No merge, tag or GitHub Release has been performed.
 
+Latest continuation snapshot (2026-10-20 05:52 UTC): draft PR **#92** is open
+and attached to this chat. Head before this documentation/inventory adjustment
+is **d23ec71**. Its 34 PR checks pass, three opt-in checks skip. Release candidate
+run **39374559150** passes all 27 jobs at exact source
+**1e0312bf64d2f5cf2fa3f9de9dd30e8656171249**, with public publishing off.
+The sole browser failure of earlier run 39373561821 is retained: its four-panel
+fixture download had only three virtual-clock advances in 15 s on hosted
+software rendering. The readiness wait is now bounded at 60 s inside the same
+120 s functional test, with every assertion retained. This does not change a
+scientific, benchmark or hosted NPZ budget. The focused browser check and the
+new complete hosted candidate pass afterward.
+
+Active two-hour native run: **39375787049**, job **118473494576**, harness
+source **d5c63d0**, installed Python 3.13 candidate from build job of
+**39373561821** / source **db9c301**. Its three native preference/restart phases
+pass. Loaded HRRR panel identities and repeated sounding/radar/model cycles are
+running (six cycles / 730 s observed at the last live read). Do not cancel it
+for documentation or inventory-only changes. The first PresentMon sample
+contains **zero displayed frames**, even when targeting the app and all its
+own WebView2 processes. Preserve this as an unavailable native-display
+measurement on Microsoft Hyper-V Video, not a native FPS pass or a zero-FPS
+application benchmark. The memory workload continues independently. On
+completion, download `native-windows-acceptance`, inspect `soak-complete.json`,
+all process samples, raw captures/errors and `native-summary.json`; make a
+post-warmup memory plot. The job may fail solely because actual displayed-frame
+telemetry is unavailable; inspect the independent memory result.
+
+Earlier native **39375124180** passed preference migration/restarts on the
+3.13 candidate and loaded four real HRRR fields, but its GPU-only capture
+created no CSV; that measuring failure is preserved. **39373564738** was
+cancelled deliberately when superseded after its three preference phases
+passed; its partial soak is not a multi-hour result. **39374889523** failed
+checkout because actions/checkout treated an abbreviated SHA as a branch;
+always pass a complete SHA. **39375013557** was superseded before the latest
+trace diagnostics were in place. Preserve every run's separate evidence.
+
+Downloaded earlier 3.13 artifacts are under `artifacts-python313/`; all eight
+SHA256SUMS entries match, including installer
+`de4fa2564756408125705403654aa7238137c380d0c627aab124ac8008a5d8a7`.
+Runtime reports prove Rust 3.2.1, Python 3.13.16, 933 stations, a 39-level
+sounding, 1,228,894 PNG bytes and successful saved-file-preserving installation.
+Metadata from passing candidate 39374559150 is in
+`candidate-metadata-39374559150/`: **5,473 components / 4,981 shipped files /
+5,398 dependency records / 14,171 edges**, source clean. Its official CycloneDX
+schema check passes. The two Windows VEX statements remain. Native DLL versions
+confirm OpenSSL 3.5.9 and Python 3.13.16. The new inventory additionally links
+delvewheel's 32-hex-mangled DLL names to their possible unmodified import names;
+normal names, aliases, owners, missing imports and reparse rejection have five
+focused checks. Semantic static-library coverage is still explicitly bounded.
+
+These builds are **not byte-identical**: 4,964/4,981 shipped files match;
+17 executable, native-wheel, base-library and package-metadata files differ.
+Package versions agree; the source changes between db9c301 and 1e0312b are
+documentation/acceptance tooling, with no scientific/runtime implementation
+change. The in-progress soak applies to its stated installed candidate, not
+silently to a later installer hash. Six release highlights now group the
+background-work summary and include the bundled security update. Any later
+public installer still needs exact final updater/version/runtime verification.
+
 ## Checkpoint 16 — native acceptance and binary inventory continuation (2026-10-20)
 
 Work remains solo. The user cannot manually launch the native app; local

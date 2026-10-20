@@ -66,24 +66,27 @@ def test_windows_vex_checks_build_edges_without_hiding_linux_warnings():
         SBOM["windows_advisories"]([graph], "root")
 
 
-def test_shipped_inventory_hashes_files_links_owners_and_keeps_unknown_imports(tmp_path, monkeypatch):
+@pytest.mark.parametrize("library", ["math.dll", "math-" + "a" * 32 + ".dll"])
+def test_shipped_inventory_hashes_files_links_owners_and_keeps_unknown_imports(tmp_path, monkeypatch, library):
     runtime = tmp_path / "runtime"
     internal = runtime / "backend/_internal"
     internal.mkdir(parents=True)
     (runtime / "app.exe").write_bytes(b"application")
-    (internal / "math.dll").write_bytes(b"library")
+    (internal / library).write_bytes(b"library")
     (internal / "font.ttf").write_bytes(b"font")
     globals_ = INVENTORY["runtime_inventory"].__globals__
     monkeypatch.setitem(globals_, "pe_details", lambda path: ({"FileVersion": "1.2"},
         ["math.dll", "api-ms-win-core-synch-l1-2-0.dll", "missing-sharppy-test.dll"]) if path.name == "app.exe" else ({}, []))
-    monkeypatch.setattr(globals_["metadata"], "distribution", lambda _name: SimpleNamespace(files=["math.dll"]))
+    monkeypatch.setattr(globals_["metadata"], "distribution", lambda _name: SimpleNamespace(files=[library]))
     owner = {"name": "owner", "purl": "pkg:pypi/owner@1", "bom-ref": "pkg:pypi/owner@1", "type": "library"}
     components, edges, assembly = INVENTORY["runtime_inventory"](runtime, [owner])
     files = [c for c in components if c["bom-ref"].startswith("file:")]
     assert len(files) == 3
     assert all(len(c["hashes"][0]["content"]) == 64 for c in files)
     assert next(c for c in files if c["name"] == "app.exe")["version"] == "1.2"
-    assert next(e for e in edges if e["ref"].endswith("math.dll"))["dependsOn"] == [owner["bom-ref"]]
+    assert next(e for e in edges if e["ref"].endswith(library))["dependsOn"] == [owner["bom-ref"]]
+    assert any(ref.endswith(library) for ref in next(e for e in edges if e["ref"].endswith("app.exe"))["dependsOn"])
+    assert not any(c["bom-ref"] == "external:windows-import/math.dll" for c in components)
     unknown = next(c for c in components if c["name"] == "missing-sharppy-test.dll")
     assert {p["name"]: p["value"] for p in unknown["properties"]}["sharppy:provider"] == "unresolved"
     assert unknown["bom-ref"] not in next(e for e in edges if e["ref"] == "external:windows")["dependsOn"]

@@ -80,7 +80,8 @@ Target version: **3.2.1** (not published).
   replacing the old CPython 3.11.9/OpenSSL 3.0.13 binaries found in the candidate.
   Include both runtime license notices and verify the actual TLS version.
   Inventory every shipped file, PE version/import and external Windows/WebView2
-  requirement in the SBOM. Retain the Linux GTK RustSec warnings with explicit
+  requirement in the SBOM, including wheel-mangled native-library aliases.
+  Retain the Linux GTK RustSec warnings with explicit
   Windows non-applicability evidence and a guard against affected Windows edges.
 - Remove unused legacy ZIP updater extraction and its three reported RustSec
   advisories while retaining signed NSIS updates, TLS and system proxy support.

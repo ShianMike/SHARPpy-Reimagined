@@ -21,6 +21,27 @@ Linux GTK advisory packages without suppressing their all-target warnings.
 Native preference/restart, actual displayed frames and two-hour memory results
 are pending; do not interpret added test tooling as passing measurements.
 
+Final-acceptance update: candidate [39374559150](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39374559150)
+passes all 27 jobs at `1e0312b`, including the maintained Windows Python/TLS
+bundle. Its downloaded SBOM has 5,473 components, hashes for all 4,981 shipped
+files, 5,398 dependency records and 14,171 edges. The official CycloneDX 1.6
+structural schema passes; optional internationalized formats retain the earlier
+Ajv 6 limitation. The Windows root remains explicitly incomplete for semantic
+static-library identification; its shipped-file assembly is fully enumerated.
+External Windows/WebView2 requirements are declared separately from bundled
+files. Delvewheel DLL aliases are now related to possible native import names;
+this static inventory does not claim to be a runtime loader trace.
+
+Installed migration of Light theme, Celsius/km/h, 2x playback and four panels
+passes from 3.2.0 to the Python 3.13 candidate and through another normal native
+restart, including correct release-highlight presentation/dismissal. Its actual
+frozen import/render and saved-file upgrade reports pass with Python 3.13.16,
+Rust 3.2.1 and a 39-level sounding. The ongoing two-hour workload is run
+39375787049; raw captures show no displayed native frames on Microsoft Hyper-V
+Video, so native presentation FPS remains unverified. The memory workload and
+its trend review are independent and still pending. See Checkpoint 16 for
+exact installer/source identities; later builds are not assumed byte-identical.
+
 First candidate run: `39366194816`, exact commit
 `6473f4fe7a54ade4e1351caa19512a6e63ff6645`. Its complete offline,
 deterministic/coverage, Python/Rust property, compatibility, Windows WRF and

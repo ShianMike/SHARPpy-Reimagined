@@ -5,6 +5,7 @@ import hashlib
 import importlib.metadata as metadata
 import os
 from pathlib import Path
+import re
 import stat
 from urllib.parse import quote
 
@@ -64,6 +65,9 @@ def runtime_inventory(root, python_components):
     names = {}
     for path, ref in references.items():
         names.setdefault(path.name.lower(), []).append((path, ref))
+        alias = re.sub(r"-[a-f0-9]{32}(?=\.dll$)", "", path.name.lower())
+        if alias != path.name.lower():
+            names.setdefault(alias, []).append((path, ref))
     edges = {assembly: set(references.values())}
     external = {}
     for path in sorted(files):
@@ -88,7 +92,7 @@ def runtime_inventory(root, python_components):
             candidates = names.get(name, [])
             local = [ref for candidate, ref in candidates if candidate.parent == path.parent]
             if candidates:
-                # A static import records possible DLL resolution, not a runtime loader trace.
+                # Include delvewheel-mangled aliases; these are possible links, not a loader trace.
                 edges[references[path]].update(local or [ref for _, ref in candidates])
                 continue
             ref = f"external:windows-import/{quote(name)}"

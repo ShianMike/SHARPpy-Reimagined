@@ -1,7 +1,29 @@
 # v3.2.1 performance and reliability report
 
-Status: v3.2.1 publication is authorized and final release verification is in
-progress. The latest completed candidate is [39396569171](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39396569171),
+Status: **v3.2.1 is published as the latest stable release**, at exact source
+`58df75396dc1a2e249fc7a17450a1738dd7f0fd0`. [Release run 39422411276](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39422411276)
+passes on attempt 2, after a targeted retry of one SwiftShader startup timeout;
+no timing limits were relaxed. All nine downloaded asset digests, eight checksum
+entries, nine verified provenance subjects and 4,991 portable-file hashes match.
+The final offline lane passes 3,793 tests with two Windows-only skips in 212.504
+seconds, and WRF passes 66/66 in 25.533 seconds. Both timing gates pass. Frozen
+rendering, signed updater byte verification and installed upgrade reports pass.
+The public updater endpoint serves the signed v3.2.1 installer and current notes.
+Main Tests run 39422375964 and its public badge pass. Checkpoint 21 and external
+`published-*` evidence preserve the exact artifact identities and raw results.
+
+[Public-updater acceptance 39426442043](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39426442043/job/118640097413)
+passes the actual v3.2.0 download/install/restart, upgrade highlights, retained
+theme/units/playback/four-panel settings, and another normal restart. All four
+saved phase snapshots confirm those settings and the version change. The first
+public-update attempt used a process-only profile override that the NSIS shell
+relaunch did not preserve; the corrected harness seeds the normal profile on a
+disposable runner. A final harness follow-up captures WebView2 evidence through
+the existing process-owner sampler rather than the temporary profile path.
+Published application artifacts are unchanged by this harness-only follow-up.
+Native presentation FPS remains unverified; two-hour stability stays excluded.
+
+The earlier completed candidate is [39396569171](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39396569171),
 exact runtime source `a9d65e9a6d77805027a8729c7cb72c5541cbc02d` on
 `release/v3.2.1`. It passes all 27 hosted jobs and all 34 PR checks.
 This candidate predates the Forecast Hours, map-road and global hover changes;

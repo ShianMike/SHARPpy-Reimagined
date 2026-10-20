@@ -1,9 +1,76 @@
 # v3.2.1 implementation checkpoints
 
-Current status: Checkpoint 15. The authorized candidate implementation and
-hosted verification are complete. Final artifacts are from commit `456dec3`;
-the final documentation-only commit records their results. No merge, tag or
-GitHub Release was authorized or performed. Preserve all earlier evidence.
+Current status: Checkpoint 16. The user requested completion of the outstanding
+native acceptance, live-provider, Cargo warning, SBOM and release work. Preserve
+the verified `456dec3` candidate as historical evidence; the final-acceptance
+continuation changes the bundled Python runtime and requires new artifacts.
+No merge, tag or GitHub Release has been performed.
+
+## Checkpoint 16 — native acceptance and binary inventory continuation (2026-10-20)
+
+Work remains solo. The user cannot manually launch the native app; local
+execution policy rejected launching it, so do not route around that rejection.
+The opt-in hosted job in `tests.yml` exercises the unmodified installed app,
+real preferences, native restarts and a two-hour loaded maps/soundings/radar
+workload. It records child-process memory and PresentMon display telemetry.
+Its public-update mode checks the real signed updater and automatic relaunch
+after the public feed is available. Silent NSIS upgrade is a separate check.
+
+Current commit `db9c301`: candidate Release run **39373561821**, native harness
+run **39373564738** against the earlier signed installer **39367398243**.
+Inspect both jobs before claiming results. The final Python runtime candidate
+must receive its own native acceptance once built. The native host is Microsoft
+Hyper-V Video, not Iris Xe; do not generalize its presentation data.
+
+Live-provider run **39370236498** is complete: all three live ECCC/HRRR
+contracts pass in 36.709 seconds. The one collection skip is an unrelated
+optional native-equivalence module. Raw logs/JUnit/timing are retained in
+`C:\Users\shian\Documents\CodexReports\v3.2.1-final-acceptance`.
+
+The file inventory now includes every shipped file's SHA256/size, available PE
+versions, imports (including delayed imports), Python RECORD ownership, and
+explicit external Windows/WebView2 requirements. Local analysis of the older
+candidate enumerates **4,974 files**, 318 PE DLL/PYD/EXE files, and 5,462 total
+SBOM components; it passes the official CycloneDX 1.6 structural schema.
+This local graph uses the local installed Python metadata, so it is analysis
+evidence, not the new release SBOM. Preserve unresolved static imports and
+unknown statically linked sublibraries explicitly. Do not call OS versions
+fixed or every transitive native library identified.
+
+Both Windows Cargo graph traversals exclude glib/proc-macro-error, including
+build/dev edges. The SBOM retains RUSTSEC-2024-0429 and RUSTSEC-2024-0370 as
+Windows `not_affected` / `code_not_present` VEX statements and fails generation
+if affected packages enter the Windows graph. The all-target Linux GTK warnings
+remain visible; no advisory was suppressed or declared globally fixed.
+
+Binary inspection exposed old CPython 3.11.9/OpenSSL 3.0.13 in the first
+candidate. The release bundle now uses CPython **3.13.16**, its **3.5.9** TLS
+runtime, a cp313 Rust wheel and bundled Python/OpenSSL licenses. Hosted logs
+confirm the new Python's original TLS is already 3.5.9. The first new guard
+incorrectly compared Python's OpenSSL tuple to `(3,5,9)`; OpenSSL 3 uses
+`(3,5,0,9,...)`. This is corrected to `(3,5,0,9)` and the unnecessary direct
+DLL replacement was removed. Source version/metadata stay 3.2.1.
+
+Failed runs retained: native 39371384486 and 39372255979 could not expose CDP
+from an elevated WebView2 host. Standard-token task attempt 39373091836 also
+failed. Run 39373564738 uses Microsoft's documented app-specific HKLM debug
+override on the disposable runner, localhost only, removed in `finally`.
+Do not change local-machine policy or ship debugging hooks. Release 39372253035
+failed workflow startup because the reusable caller needed `actions:read`;
+that permission is fixed and covered by packaging tests. Release 39372387570
+and 39373088420 failed the incorrect TLS tuple guard; retain those logs.
+
+Focused verification: 29 packaging/SBOM/updater tests pass before the report
+addition, two native-report tests pass, TypeScript and acceptance-spec ESLint
+pass, and nine highlights/settings tests pass. New report checks reject short
+soaks and present-only traces with no displayed frames. No new dependency was
+introduced. Changelog and six grouped in-app highlights reflect the changes.
+
+Continue: inspect the active jobs, resolve any actual failures, download/verify
+new artifacts and run the full two-hour workload against those bytes. Validate
+both display captures and the post-warmup memory trend. Then finish protected
+PR/release validation and public updater verification as authorized; preserve
+all evidence and update this checkpoint with actual results.
 
 ## Checkpoint 15 — hosted candidate verified (2026-10-20)
 

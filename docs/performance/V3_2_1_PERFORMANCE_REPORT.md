@@ -7,7 +7,19 @@ validation are complete. The authorized candidate workflow now passes with
 SBOM/checksums and provenance. Final built/tested source is
 `456dec39dd63007014ec3d69bd711954c7b3240b` on `release/v3.2.1`; a later
 documentation-only commit records the results. Public release remains
-unpublished. Checkpoint 15 and the hosted evidence below are authoritative.
+unpublished. Checkpoint 16 now records the requested final native acceptance
+and shipped-binary inventory work; the older candidate results below remain
+historical evidence. The new bundle uses CPython 3.13.16/OpenSSL 3.5.9 instead
+of 3.11.9/3.0.13, and must pass its own packaged/native checks before release.
+
+The current opt-in live-provider contracts pass (run 39370236498): all three
+ECCC/HRRR contracts, 36.709 seconds. The one optional native-equivalence
+collection skip is not a provider-contract skip. The extended SBOM now hashes
+all shipped files and records PE versions/imports, package ownership and external
+Windows/WebView2 requirements. Windows VEX records the absence of the two
+Linux GTK advisory packages without suppressing their all-target warnings.
+Native preference/restart, actual displayed frames and two-hour memory results
+are pending; do not interpret added test tooling as passing measurements.
 
 First candidate run: `39366194816`, exact commit
 `6473f4fe7a54ade4e1351caa19512a6e63ff6645`. Its complete offline,

@@ -1,10 +1,57 @@
 # v3.2.1 implementation checkpoints
 
-Current status: Checkpoint 17. The user requested completion of the outstanding
+Current status: Checkpoint 18. The user requested completion of the outstanding
 native acceptance, live-provider, Cargo warning, SBOM and release work. Preserve
 the verified `456dec3` candidate as historical evidence; the final-acceptance
 continuation changes the bundled Python runtime and requires new artifacts.
 No merge, tag or GitHub Release has been performed.
+
+## Checkpoint 18 — release detached map canvas observers
+
+The separate 15-minute diagnostic **39390340461** completed seven real workload
+cycles / **933.684 seconds**, without page errors, on the maintained installer
+from **39382361268** (runtime source **0d0ae3b**). Preserve artifact **12249604507**
+(61,709,012 bytes; SHA-256
+`98f0ddaa5ddc9b6ca0c21fb1388bd0bc79db0f3fa30793bbd1dbe505c9ec13cd`).
+It is a profiling run, not a second two-hour soak or an acceptance pass.
+
+Initial/final heap snapshots contain **4 -> 28 WebGL2 contexts**,
+**0 -> 24 detached MapLibre canvases**, and **4 -> 28** deck.gl canvas DPR
+listener closures. The retaining path runs from pending MediaQueryList change
+listeners through CanvasObserver and its canvas into the old map and tile data.
+Projection changes recreate each panel; switching from globe forecasts to flat
+Live Tracking and back accumulates eight maps. In the installed deck.gl/luma.gl
+9.4 implementation, overlay removal finalizes layers but does not destroy the
+default CanvasContext and its observers.
+
+`frontend/src/map/runtime/overlay.ts` now captures that public CanvasContext via
+`onDeviceInitialized` and destroys it after the existing `onRemove`, in a finally
+block. Normal removal, repeated removal and failed layer cleanup share this
+path, for both overlay modes. No cache cap, weather-data change, image-quality
+change or dependency was introduced. The changelog and 3.2.1 highlights include
+the delivered cleanup behavior.
+
+Validation: five focused runtime/overlay unit tests pass, including the two new
+cleanup cases; 14 release-highlight/update UI tests and six Python packaging /
+native-report tests pass. TypeScript, focused ESLint and fixture/production/live
+builds pass. All four map-details browser tests pass in **46.7 seconds**. The new
+real-browser regression forces collection only to inspect object lifetime and
+keeps exactly **five resolution queries** (four active canvases plus the shared
+graphics probe) across both projection switches. This is not production memory
+or FPS acceptance. Browser also verifies the rebuilt live four-panel map through
+globe -> Live Tracking -> globe -> flat. Its inspected screenshot is
+`canvas-cleanup-browser-live.png`; logs and snapshots are saved under the external
+final-acceptance evidence directory. No regression was
+observed in these focused checks; complete gates for the new installer remain.
+
+Next: build a signed candidate containing this cleanup with publication off,
+verify its exact source/artifact, and run the **15-minute diagnostic** against
+that candidate. Compare detached canvases, contexts and per-process trends with
+the preserved baseline before scheduling a new clean two-hour acceptance run.
+Do not reuse the earlier installed binary as the fixed candidate. Keep PR #92
+draft and release metadata Unreleased. Native presentation and the public
+interactive updater are still unverified; do not ask the user to launch the
+locally blocked native app or bypass that restriction.
 
 ## Checkpoint 17 — native memory growth blocks release
 

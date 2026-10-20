@@ -11,6 +11,9 @@ Target version: **3.2.1** (not published).
 
 ### Fixed
 
+- Release deck.gl's default canvas observers after map overlay removal, including
+  failed cleanup. Stop display-scaling listeners retaining detached maps when
+  changing projection or switching between Model Viewer and Live Tracking.
 - Recover forecast requests that return to a field while its previous download
   is stopping. Replace fully abandoned acquisitions and preserve shared work
   while another consumer needs it; old cleanup cannot remove a new acquisition.

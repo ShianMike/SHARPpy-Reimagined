@@ -1,11 +1,13 @@
 # v3.2.1 performance and reliability report
 
-Status: the current candidate is [39382361268](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39382361268),
+Status: the last fully verified candidate is [39382361268](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39382361268),
 exact runtime source `0d0ae3b4bcbef6071efc2d2512878cdfb6871567` on
-`release/v3.2.1`. All 27 hosted candidate jobs and all 34 PR checks pass.
+`release/v3.2.1`. That candidate passed all 27 hosted jobs; the preceding
+`3e0ba43` head passed all 34 PR checks.
 Publishing is off; no main merge, tag or public v3.2.1 release has occurred.
 Earlier candidate results below are historical evidence, with their own exact
-artifact identities. Checkpoint 16 records the native acceptance continuation.
+artifact identities. Checkpoint 18 records the subsequent map cleanup; that
+change still needs a new installed candidate and native remeasurement.
 
 **Release blocked by native memory growth.** The completed two-hour workload
 in [39375787049](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39375787049)
@@ -13,11 +15,39 @@ ran 59 cycles / 7,271.891 seconds without recorded page errors, but its 241
 process samples show post-warmup private growth of **2,466.34 MiB**, a fitted
 **2,093.59 MiB/hour** slope and **5,751.04 MiB** peak. The WebView renderer
 accounts for most growth (393.3 -> 3,999.4 MiB); GPU and Python processes are
-comparatively bounded. This is not accepted long-session stability. Heap and
-backing-buffer profiling is the next step; no speculative cache fix or memory
-cap has been applied. PresentMon produced no CSV, so native FPS also remains
-unverified. Checkpoint 17 and the preserved raw artifact 12248600784 record this
-blocker. Public distribution stays on hold and release metadata is Unreleased.
+comparatively bounded. This is not accepted long-session stability. PresentMon
+produced no CSV, so native FPS also remains unverified. Checkpoint 17 and the
+preserved raw artifact 12248600784 record this blocker. Public distribution stays
+on hold and release metadata is Unreleased.
+
+The **15-minute** diagnostic [39390340461](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39390340461)
+completed seven real workload cycles / 933.684 seconds on the maintained
+0d0ae3b installer. Its initial/final heap snapshots show:
+
+| Retained renderer object | Initial | Final |
+|---|---:|---:|
+| WebGL2 contexts | 4 | 28 |
+| Detached MapLibre canvases | 0 | 24 |
+| Canvas DPR listener closures | 4 | 28 |
+| Array-buffer backing bytes | 201,872,880 | 385,272,136 |
+
+Pending MediaQueryList listeners retain CanvasObserver, its old canvas, and the
+map's tile data. Each projection change recreates four panels; globe -> flat
+Live Tracking -> globe repeats that leak. The locked deck.gl/luma.gl 9.4 cleanup
+finalizes layers without destroying the default CanvasContext's observers.
+The shared overlay creation path now captures that public context and destroys
+it after the existing removal, including failures. No arbitrary cap or quality
+reduction is used.
+
+Five focused runtime unit tests, 14 update/highlight UI tests, six Python
+packaging/report tests, TypeScript, focused ESLint and all three build modes
+pass. All four map-details browser tests pass in 46.7 seconds; the lifetime
+regression keeps five resolution queries (four current canvases and the shared
+graphics probe) after both projection changes. Collection in that check tests
+reachability; it does not establish production memory stability. The rebuilt
+live @Browser preview also draws the four maps after projection/workspace
+changes. Native heap snapshots and long-session measurements must be repeated
+on a newly built installer containing the cleanup before accepting the fix.
 
 The current bundle uses CPython 3.13.16/OpenSSL 3.5.9 and NetCDF4 1.7.5 with
 its own OpenSSL 3.6.5/curl 8.23.0. Actual frozen/installed rendering and saved-file
@@ -28,8 +58,8 @@ checksums, nine verified provenance subjects and 4,991 portable file hashes.
 The official CycloneDX 1.6 structural schema passes: 5,478 components, 5,408
 dependency records and 14,337 edges, with explicit semantic coverage limits.
 
-The current opt-in live-provider contracts pass (run 39370236498): all three
-ECCC/HRRR contracts, 36.709 seconds. The one optional native-equivalence
+The latest completed opt-in live-provider contracts pass (run 39386404877): all
+three ECCC/HRRR contracts, 42.002 seconds. The one optional native-equivalence
 collection skip is not a provider-contract skip. The extended SBOM now hashes
 all shipped files and records PE versions/imports, package ownership and external
 Windows/WebView2 requirements. Windows VEX records the absence of the two

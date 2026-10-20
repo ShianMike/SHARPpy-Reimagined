@@ -4,6 +4,42 @@ import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
 import { chooseThroughSearch, layerRow } from "./support/ui";
 
+test("projection changes release the old canvases' display-scaling observers", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
+  await waitForMapDrawn(page);
+  await layerRow(page, "model-domain");
+  const projection = page.getByRole("group", { name: "Map projection" });
+  await projection.getByRole("button", { name: "Flat map", exact: true }).click();
+  await page.getByRole("toolbar", { name: "Map", exact: true }).getByRole("button", { name: "Four synchronized panels", exact: true }).click();
+  await waitForMapDrawn(page);
+  const cdp = await page.context().newCDPSession(page);
+  const observers = async (): Promise<unknown> => {
+    await cdp.send("HeapProfiler.collectGarbage");
+    const { result: prototype } = await cdp.send("Runtime.evaluate", { expression: "MediaQueryList.prototype", objectGroup: "canvas-cleanup" });
+    if (prototype.objectId === undefined) throw new Error("MediaQueryList prototype unavailable");
+    const { objects } = await cdp.send("Runtime.queryObjects", { prototypeObjectId: prototype.objectId, objectGroup: "canvas-cleanup" });
+    if (objects.objectId === undefined) throw new Error("MediaQueryList inventory unavailable");
+    const { result } = await cdp.send("Runtime.callFunctionOn", {
+      objectId: objects.objectId,
+      functionDeclaration: "function() { return this.filter(query => query.media.startsWith('(resolution:')).length; }",
+      returnByValue: true,
+    });
+    await cdp.send("Runtime.releaseObjectGroup", { objectGroup: "canvas-cleanup" });
+    return result.value as unknown;
+  };
+  try {
+    // Four live canvases plus the application's shared device-pixel-ratio probe.
+    await expect.poll(observers).toBe(5);
+    for (const mode of ["Globe", "Flat map"]) {
+      await projection.getByRole("button", { name: mode, exact: true }).click();
+      await waitForMapDrawn(page);
+      await expect.poll(observers).toBe(5);
+    }
+    expect(await mapErrors(page)).toEqual([]);
+  } finally { await cdp.detach(); }
+});
+
 test("map projection survives reload and style changes, and resets with layers", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();

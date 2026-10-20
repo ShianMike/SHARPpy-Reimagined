@@ -171,7 +171,7 @@ try {
                 if ($gpu.Count -ne 1) { throw 'No unique desktop WebView2 GPU process' }
                 $csv = Join-Path $report "presentation-$captures.csv"
                 $present += Start-Process -FilePath $tool -PassThru -WindowStyle Hidden -ArgumentList `
-                    "--process_id $($gpu[0].ProcessId) --output_file $csv --session_name SHARPPyAcceptance-$env:GITHUB_RUN_ID-$captures --timed 120 --terminate_after_timed --no_console_stats --write_display_metadata"
+                    "--process_id $($gpu[0].ProcessId) --output_file $csv --session_name SHARPPyAcceptance-$env:GITHUB_RUN_ID-$captures --timed 120 --terminate_after_timed --no_console_stats --write_display_metadata --v2_metrics"
                 $captures++
             }
             if (-not $firstDisplayVerified -and $present.Count -gt 0 -and $present[0].HasExited) {

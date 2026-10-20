@@ -19,10 +19,11 @@ Initial/final heap snapshots contain **4 -> 28 WebGL2 contexts**,
 **0 -> 24 detached MapLibre canvases**, and **4 -> 28** deck.gl canvas DPR
 listener closures. The retaining path runs from pending MediaQueryList change
 listeners through CanvasObserver and its canvas into the old map and tile data.
-Projection changes recreate each panel; switching from globe forecasts to flat
-Live Tracking and back accumulates eight maps. In the installed deck.gl/luma.gl
-9.4 implementation, overlay removal finalizes layers but does not destroy the
-default CanvasContext and its observers.
+Projection changes recreate each panel; the MapView is also keyed by workspace,
+so switching Model Viewer -> Live Tracking -> Model Viewer accumulates eight
+maps even with both projections flat. In deck.gl 9.4.0/luma.gl 9.4.2, overlay
+removal finalizes layers but does not destroy the default CanvasContext and its
+observers.
 
 `frontend/src/map/runtime/overlay.ts` now captures that public CanvasContext via
 `onDeviceInitialized` and destroys it after the existing `onRemove`, in a finally
@@ -44,14 +45,34 @@ globe -> Live Tracking -> globe -> flat. Its inspected screenshot is
 final-acceptance evidence directory. No regression was
 observed in these focused checks; complete gates for the new installer remain.
 
-Next: build a signed candidate containing this cleanup with publication off,
-verify its exact source/artifact, and run the **15-minute diagnostic** against
-that candidate. Compare detached canvases, contexts and per-process trends with
-the preserved baseline before scheduling a new clean two-hour acceptance run.
-Do not reuse the earlier installed binary as the fixed candidate. Keep PR #92
-draft and release metadata Unreleased. Native presentation and the public
-interactive updater are still unverified; do not ask the user to launch the
-locally blocked native app or bypass that restriction.
+The signed candidate **39396569171**, exact runtime source **a9d65e9**, now passes
+all 27 hosted jobs and all 34 PR checks. Actual downloaded bytes match all eight
+checksums, nine verified provenance subjects and 4,991 portable file hashes.
+The actual updater verifier accepts its signature/version and rejects corruption
+and version substitution. The full offline lane has 3,794 passes / two Windows
+skips in 213.518 seconds; Windows WRF is 66/66 in 26.226 seconds. Both unchanged
+timing gates pass. Installed upgrade/frozen reports also pass. Preserve
+`candidate-validation-39396569171.json` and its raw artifacts/logs externally.
+
+The fixed-installer **15-minute diagnostic 39398050023** completed seven cycles /
+**931.869 seconds**, no page errors. Initial/final snapshots retain **4 -> 4
+WebGL2 contexts**, **0 -> 0 detached map canvases** and **4 -> 4 DPR listener
+closures**, versus 4 -> 28 contexts / 0 -> 24 detached canvases before the fix.
+Backing storage grows 201,867,272 -> 214,595,772 bytes, versus 201,872,880 ->
+385,272,136 previously. The targeted listener/map retention is resolved in this
+short check. This is not a blanket memory-stability pass: process private memory
+still peaks at 1,183.92 MiB and ends at 1,010.46 MiB, and snapshot collection can
+force GC. Preserve the raw `native-diagnostic-39398050023` artifact and log, and
+the derived `fixed-heap-summary.json`, without overwriting either snapshot.
+
+The user's latest "just dont" reply was interpreted as leaving the next
+two-hour test unperformed; they also asked to close out the lengthy validation.
+Do not start another soak, build or test round. Fresh two-hour stability remains
+unverified. Keep PR #92 draft and release metadata Unreleased. Native presentation
+and the public interactive updater are also unverified; do not ask the user to
+launch the locally blocked native app or bypass that restriction. Publication
+stays on hold; do not mark the original goal achieved. Documentation-only
+continuation after a9d65e9 records these results and the user's testing constraint.
 
 ## Checkpoint 17 — native memory growth blocks release
 

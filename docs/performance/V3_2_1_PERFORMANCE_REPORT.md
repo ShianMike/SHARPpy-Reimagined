@@ -1,15 +1,14 @@
 # v3.2.1 performance and reliability report
 
-Status: the last fully verified candidate is [39382361268](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39382361268),
-exact runtime source `0d0ae3b4bcbef6071efc2d2512878cdfb6871567` on
-`release/v3.2.1`. That candidate passed all 27 hosted jobs; the preceding
-`3e0ba43` head passed all 34 PR checks.
+Status: the latest candidate is [39396569171](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39396569171),
+exact runtime source `a9d65e9a6d77805027a8729c7cb72c5541cbc02d` on
+`release/v3.2.1`. It passes all 27 hosted jobs and all 34 PR checks.
 Publishing is off; no main merge, tag or public v3.2.1 release has occurred.
 Earlier candidate results below are historical evidence, with their own exact
-artifact identities. Checkpoint 18 records the subsequent map cleanup; that
-change still needs a new installed candidate and native remeasurement.
+artifact identities. Checkpoint 18 records the map cleanup and completed native
+diagnostic; fresh two-hour stability and presentation remain unverified.
 
-**Release blocked by native memory growth.** The completed two-hour workload
+**Release remains on hold.** The preceding completed two-hour workload
 in [39375787049](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39375787049)
 ran 59 cycles / 7,271.891 seconds without recorded page errors, but its 241
 process samples show post-warmup private growth of **2,466.34 MiB**, a fitted
@@ -32,9 +31,11 @@ completed seven real workload cycles / 933.684 seconds on the maintained
 | Array-buffer backing bytes | 201,872,880 | 385,272,136 |
 
 Pending MediaQueryList listeners retain CanvasObserver, its old canvas, and the
-map's tile data. Each projection change recreates four panels; globe -> flat
-Live Tracking -> globe repeats that leak. The locked deck.gl/luma.gl 9.4 cleanup
-finalizes layers without destroying the default CanvasContext's observers.
+map's tile data. Each projection change recreates four panels; the workspace
+also keys MapView, so Model Viewer -> Live Tracking -> Model Viewer recreates
+eight maps even with both projections flat. The locked deck.gl 9.4.0/luma.gl
+9.4.2 cleanup finalizes layers without destroying the default CanvasContext's
+observers.
 The shared overlay creation path now captures that public context and destroys
 it after the existing removal, including failures. No arbitrary cap or quality
 reduction is used.
@@ -46,10 +47,30 @@ regression keeps five resolution queries (four current canvases and the shared
 graphics probe) after both projection changes. Collection in that check tests
 reachability; it does not establish production memory stability. The rebuilt
 live @Browser preview also draws the four maps after projection/workspace
-changes. Native heap snapshots and long-session measurements must be repeated
-on a newly built installer containing the cleanup before accepting the fix.
+changes.
 
-The current bundle uses CPython 3.13.16/OpenSSL 3.5.9 and NetCDF4 1.7.5 with
+The fixed installer now completes [diagnostic 39398050023](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39398050023):
+seven cycles / **931.869 seconds**, no page errors. Its snapshots show **4 -> 4
+WebGL2 contexts, zero detached map canvases, and 4 -> 4 DPR listener closures**.
+Array-buffer backing bytes are 201,867,272 initially and 214,595,772 finally,
+versus 201,872,880 -> 385,272,136 before the fix. This verifies the targeted
+listener/map retention fix in the short installed workload. It does not establish
+long-session memory stability: renderer private memory still peaks at 1,183.92
+MiB and ends at 1,010.46 MiB, and heap snapshots can force collection. The user
+requested no further lengthy validation; no new two-hour soak was started.
+Native presentation still produces no usable displayed-frame CSV. Keep this
+limitation and the unperformed public-updater restart explicit.
+
+For candidate 39396569171, actual downloaded bytes match all eight checksums,
+all nine cryptographically verified provenance subjects and all 4,991 portable
+file hashes. The SBOM contains 5,478 components / 5,408 dependency records /
+14,337 edges. The updater verifier accepts its exact signed installer/version
+and rejects both tampering and version substitution. The complete offline lane
+passes 3,794 tests with two Windows-only skips in 213.518 seconds; Windows WRF
+passes 66/66, no skips, in 26.226 seconds. Both unchanged timing gates pass;
+the frozen/installed upgrade reports also pass. Publication remains off.
+
+The preceding candidate 39382361268 uses CPython 3.13.16/OpenSSL 3.5.9 and NetCDF4 1.7.5 with
 its own OpenSSL 3.6.5/curl 8.23.0. Actual frozen/installed rendering and saved-file
 upgrade checks pass. The complete offline lane passes 3,794 tests with two
 Windows-only skips in 215.374 s; its unchanged timing gate passes. Windows WRF

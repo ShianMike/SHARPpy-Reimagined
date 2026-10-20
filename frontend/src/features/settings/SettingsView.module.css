@@ -79,7 +79,8 @@
 .releaseHeader > button { flex: none; }
 .releaseHeader h2 { margin-top: var(--space-1); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); }
 .availableNotes { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--font-size-small); color: var(--text-secondary); }
-.whatsNew { width: calc(var(--picker-w) + 4 * var(--space-6)); padding: var(--space-6); display: grid; gap: var(--space-5); }
+.whatsNew { width: calc(var(--picker-w) + 4 * var(--space-6)); padding: var(--space-6); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--space-5); overflow: hidden; }
+.whatsNew > .releaseNotes { overflow-y: auto; }
 .releaseFooter { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); padding-top: var(--space-4); border-top: var(--hairline) solid var(--border-subtle); }
 .releaseFooter p { color: var(--text-tertiary); font-size: var(--font-size-caption); }
 .units, .workspace { display: flex; flex-direction: column; gap: var(--space-4); }

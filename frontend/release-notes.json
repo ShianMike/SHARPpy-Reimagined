@@ -74,7 +74,7 @@
       },
       {
         "title": "Settings stay usable",
-        "description": "If device storage is unavailable or full, workspace settings keep working for the current session. Unchanged map labels also reuse their layout during forecast playback."
+        "description": "If device storage is unavailable or full, workspace settings keep working for the current session. Long release highlights scroll with their close controls in reach. Unchanged map labels reuse their layout during forecast playback."
       }
     ]
   }

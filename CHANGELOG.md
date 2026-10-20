@@ -34,6 +34,9 @@ Target version: **3.2.1** (not published).
   on other times when switching, and include them in discard protection.
 - Inspect arbitrary forecast points with the keyboard: pan a map with arrow keys
   and press Enter to select its centre through the existing point inspector.
+- Keep release-highlight close controls visible in smaller windows while long
+  notes scroll. Exercise all sounding times and the current highlights in the
+  existing browser/desktop acceptance checks.
 
 ### Changed
 

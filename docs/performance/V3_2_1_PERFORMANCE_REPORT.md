@@ -8,6 +8,16 @@ Signed-candidate, installed-upgrade and hosted results must be inspected before
 they can be reported as passed. Checkpoint 13 records this handoff; the earlier
 local handoff does not validate the expanded change set on hosted runners.
 
+First candidate run: `39366194816`, exact commit
+`6473f4fe7a54ade4e1351caa19512a6e63ff6645`. Its complete offline,
+deterministic/coverage, Python/Rust property, compatibility, Windows WRF and
+static quality/audit jobs pass. Two browser shards fail on stale acceptance
+expectations and release-highlight footer overflow at 1280 x 800. The acceptance
+checks now select all sounding times and follow the installed highlight count;
+the popup scrolls its notes while keeping close controls visible. Checkpoint 14
+records the fixes and required new candidate run. These failures are preserved;
+no timeout or scientific/timing assertion is relaxed to make them pass.
+
 ## E12–E22 follow-up measurements and limits
 
 Raw evidence and the current source checkpoint are separate from the original

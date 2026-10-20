@@ -1,9 +1,40 @@
 # v3.2.1 implementation checkpoints
 
-Current continuation: Checkpoint 13. Local E12–E22 implementation and validation
+Current continuation: Checkpoint 14. Local E12–E22 implementation and validation
 are complete; the user has authorized the candidate branch and CI artifact
 uploads with publication disabled. Keep earlier checkpoints and evidence
 snapshots without restarting completed work.
+
+## Checkpoint 14 — candidate CI findings (2026-10-20)
+
+Candidate commit `6473f4fe7a54ade4e1351caa19512a6e63ff6645` was pushed to
+`release/v3.2.1`; candidate-only Release run 39366194816 tests that exact source.
+The full hosted offline gate, deterministic/coverage, Python and Rust properties,
+3.11/3.12 compatibility, Windows WRF and static quality/audit pass. Browser
+shards 1/2 pass. Preserve its run and failing browser screenshots/logs in
+`C:\Users\shian\Documents\CodexReports\v3.2.1-candidate-ci`.
+
+Shard 4 exposed an obsolete acceptance assertion for "first of 49 times";
+both browser and manual desktop sounding checks now select the last time and
+return to the first, checking valid-time headers and completed images. Shard 3
+exposed a hard-coded five-highlight count and a real minimum-window issue:
+six longer highlights scrolled the entire popup, hiding the footer. The count
+now follows the installed notes; the existing popup uses fixed header/footer
+grid rows and a scrollable notes body. Its pre-existing footer-visibility
+regression remains, with an additional check after scrolling the last item.
+No shared popover behavior, scientific calculation or timing threshold changes.
+
+Modified after the first commit: three acceptance specs, the local What's new
+layout rule, matching changelog/highlight copy and these checkpoint documents.
+Focused follow-up checks pass: 23 notes/update/sounding UI cases, six updater/
+SBOM packaging cases, TypeScript, full lint/359-file boundaries, and rebuilt
+browser/fixture assets. @Browser confirms the rebuilt popup's close control is
+inside its bounds; 1280 x 800 scrolling remains an explicit hosted regression.
+Next: commit/push the fixes and run candidate CI against the new exact commit.
+The first Windows build and desktop audit are still live as this checkpoint
+is written; inspect their actual terminal state before replacing a run. Retain
+any produced installed-upgrade evidence even though the first overall run fails.
+Publication, tagging and main-branch merge remain outside this approval.
 
 ## Checkpoint 13 — candidate CI authorized (2026-10-20)
 

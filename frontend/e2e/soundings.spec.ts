@@ -150,7 +150,7 @@ test.describe("at 1440 by 900", () => {
     expectWarnings(consoleMessages, []);
   });
 
-  test("a BUFKIT file: the first time rendered with its time count", async ({ page, consoleMessages }) => {
+  test("a BUFKIT file: all times selectable with the matching valid time", async ({ page, consoleMessages }) => {
     await page.goto("/");
     await waitForMark(page, MARKS.shellPainted);
     await showWorkspace(page, "Soundings");
@@ -159,7 +159,22 @@ test.describe("at 1440 by 900", () => {
     await page.getByTestId("open-file").click();
     await expectImageDrawn(page.getByTestId("sounding-viewer").getByTestId("sounding-stage"));
     await expect(page.getByTestId("sounding-title")).toHaveText("hrrr_kbvo_20260625_06z.buf");
-    await expect(page.getByTestId("sounding-viewer")).toContainText(`first of ${String(BUFKIT_TIMES)} times`);
+    const viewer = page.getByTestId("sounding-viewer");
+    const time = viewer.getByRole("combobox", { name: "Sounding time (UTC)" });
+    await expect(viewer).toContainText(`time 1 of ${String(BUFKIT_TIMES)}`);
+    await time.click();
+    await expect(page.getByRole("listbox", { name: "Sounding time (UTC)" }).getByRole("option")).toHaveCount(BUFKIT_TIMES);
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await expect(time).toHaveAttribute("value", String(BUFKIT_TIMES - 1));
+    await expect(viewer).toContainText("File, 2026-06-27 06Z, Selected profile, time 49 of 49");
+    await expectImageDrawn(viewer.getByTestId("sounding-stage"));
+    await time.click();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Enter");
+    await expect(time).toHaveAttribute("value", "0");
+    await expect(viewer).toContainText("File, 2026-06-25 06Z, 50 levels, time 1 of 49");
+    await expectImageDrawn(viewer.getByTestId("sounding-stage"));
 
     expectWarnings(consoleMessages, []);
   });

@@ -6,6 +6,11 @@ the verified `456dec3` candidate as historical evidence; the final-acceptance
 continuation changes the bundled Python runtime and requires new artifacts.
 No merge, tag or GitHub Release has been performed.
 
+Release metadata is prepared on the release branch: the dated 3.2.1 changelog
+and README download links are ready for publication. Eleven existing version
+and updater-packaging checks pass. This is preparation, not a public-release
+claim; keep publication pending review of the completed native memory evidence.
+
 Latest candidate **39382361268** at exact runtime source
 **0d0ae3b4bcbef6071efc2d2512878cdfb6871567** passes **27 hosted jobs**;
 all **34 PR checks** also pass. The complete offline lane has 3,794 passes,

@@ -13,13 +13,13 @@
 
 </div>
 
-## What's new in 3.2.1 (Unreleased)
+## What's new in 3.2.1
 
 SHARPpy Reimagined brings [SHARPpy](https://github.com/sharppy/SHARPpy) sounding analysis into a map-based desktop workspace. Version **3.0.0** introduces a React/Tauri interface backed by the existing Python and Rust scientific tools. This README describes that interface; the [v2.0.0 Legacy tour and screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/README.md) document the previous GUI.
 
-Version **3.2.1** is being prepared as a maintenance patch. It recovers forecast requests during rapid changes, stops unused automatic preloading outside Model Viewer, preserves original provider errors, and releases unreachable chart buffers between sounding renders. Paired renders preserve exact images and scientific metadata while using less memory in the measured sequence. See the [Unreleased changelog](CHANGELOG.md#unreleased) and [measurements and validation limits](docs/performance/V3_2_1_PERFORMANCE_REPORT.md). **v3.2.0 remains the latest published download** below.
+Version **3.2.1** is a maintenance patch. It recovers forecast requests during rapid changes, stops unused automatic preloading outside Model Viewer, preserves original provider errors, and releases unreachable chart buffers between sounding renders. Paired renders preserve exact images and scientific metadata while using less memory in the measured sequence. See the [v3.2.1 changelog](CHANGELOG.md#v321---2026-10-20) and [measurements and validation limits](docs/performance/V3_2_1_PERFORMANCE_REPORT.md).
 
-The follow-up also makes every imported sounding time selectable with separate edit histories, preserves typed stations and session settings, reports missing layers and renderer recovery per panel, and adds keyboard forecast-point inspection. Dependency audits, a runtime SBOM and final updater/installed-upgrade checks strengthen the release gates; those hosted artifact checks must pass before release readiness is established.
+The patch also makes every imported sounding time selectable with separate edit histories, preserves typed stations and session settings, reports missing layers and renderer recovery per panel, and adds keyboard forecast-point inspection. The Windows bundle includes maintained Python/TLS and NetCDF4 libraries, signed update checks, and a detailed shipped-file inventory. Hosted artifact, scientific and installed-upgrade checks pass; the performance report distinguishes them from hardware measurements that remain unverified.
 
 Version **3.2.0** improves forecast playback, repeated model sounding requests, and weather-cache reliability. The redesigned Overview gives Model Viewer, Live Tracking and Soundings equal prominence. Forecast download details distinguish hours saved to disk from frames ready in memory, and model sounding downloads have a Stop action. A short **What's new** popup appears after an update; its highlights remain in **Settings → Updates**. See the [full v3.2.0 changelog](CHANGELOG.md#v320---2026-10-19).
 
@@ -163,7 +163,7 @@ Use **Inspect** to pan and zoom the sounding, or **Edit profile** to change a se
 
 ### Windows downloads
 
-Download the **v3.2.0 [Windows installer](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.2.0/SHARPpy-Reimagined-v3.2.0-windows-x64-setup.exe)** or the [portable ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.2.0/SHARPpy-Reimagined-v3.2.0-windows-x64.zip). Both include the app and its analysis backend; Python is bundled. Extract the complete portable folder before running the app. The executables are unsigned; [release notes, checksums, and build provenance](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v3.2.0) let you verify the download. Existing installations with in-app updates can use **Settings → Updates**.
+Download the **v3.2.1 [Windows installer](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.2.1/SHARPpy-Reimagined-v3.2.1-windows-x64-setup.exe)** or the [portable ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.2.1/SHARPpy-Reimagined-v3.2.1-windows-x64.zip). Both include the app and its analysis backend; Python is bundled. Extract the complete portable folder before running the app. The executables are unsigned; [release notes, checksums, and build provenance](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v3.2.1) let you verify the download. Existing installations with in-app updates can use **Settings → Updates**.
 
 **v2.0.0 Legacy is the final PySide6/Qt GUI release.** Its [Windows ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64.zip) and [portable executable](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64-portable.exe) remain downloadable from the [legacy release page](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0), including after v3 is released.
 

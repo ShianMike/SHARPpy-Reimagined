@@ -40,6 +40,10 @@ Target version: **3.2.1** (not published).
 
 ### Changed
 
+- Add opt-in installed Windows acceptance for preference retention, repeated
+  restarts, signed interactive updates, two-hour map/sounding/radar workloads,
+  process memory sampling and native presentation traces on disposable runners.
+  Keep hardware identity and incomplete measurements explicit in the evidence.
 - Reclaim unreachable Qt chart buffers between serial sounding renders, including
   failed renders. Fifteen paired worker requests preserve exact PNGs and view
   metadata; measured peak working set falls from 683.3 to 448.4 MiB in that

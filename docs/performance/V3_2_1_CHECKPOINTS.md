@@ -691,3 +691,31 @@ $env:SHARPMOD_REQUIRE_RUST = '1'
 .\.gribenv\Scripts\sharpmod-rust-sync.exe --check
 .\.gribenv\Scripts\python.exe scripts/run_test_lane.py serial-release --workers 2
 ```
+# Final native acceptance continuation — 2026-10-20
+
+The user requested completion of the outstanding updater/preferences, native
+presentation, multi-hour soak, live-provider, Cargo advisory and SBOM work,
+including the remaining release work. Work continues solo. Local native launch
+was rejected by execution policy, and the user cannot launch it manually now;
+do not bypass that restriction. Use the disposable hosted Windows acceptance
+job in `tests.yml`, with the signed candidate from Release run 39367398243
+(runtime source 456dec39, documentation head 72e2fcaf).
+
+Live provider run 39370236498 passed: three current ECCC/HRRR contracts in
+36.709 seconds. Its one collection skip is the optional native-equivalence
+module, not a live-provider contract. Raw logs, timing JSON and JUnit are saved
+under `C:\Users\shian\Documents\CodexReports\v3.2.1-final-acceptance`.
+
+The new native job is opt-in and has not yet run. It checks installed 3.2.0
+preferences across NSIS upgrade and two 3.2.1 starts, then runs a full two-hour
+real workload with process samples and two PresentMon captures. Review actual
+CSV displayed frames, hardware, workload identities and post-warmup memory
+trend before accepting. A second `native_public_update=true` run requires the
+public v3.2.1 feed and must verify the updater itself restarts the desktop.
+Do not count the silent installer run as the interactive updater test.
+
+Next: dispatch this job, finish shipped native/system inventory and target-aware
+Cargo advisory evidence during the soak, then run protected release gates and
+verify the public release and interactive updater. No remaining check is
+declared passed by this checkpoint. Earlier authorization/status text below is
+historical; the current user request governs this continuation.

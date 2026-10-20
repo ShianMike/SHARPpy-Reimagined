@@ -29,7 +29,7 @@ on:
   workflow_dispatch:
     inputs:
       run_native_acceptance:
-        description: Run the two-hour installed Windows acceptance workload
+        description: Verify installed Windows preferences and restarts
         required: false
         default: false
         type: boolean
@@ -39,12 +39,12 @@ on:
         default: "39367398243"
         type: string
       native_public_update:
-        description: Exercise the published interactive v3.2.0 to v3.2.1 updater instead of the soak
+        description: Exercise the published interactive v3.2.0 to v3.2.1 updater
         required: false
         default: false
         type: boolean
       native_memory_diagnostic:
-        description: Run a 15-minute renderer heap diagnostic, not two-hour acceptance
+        description: Include the opt-in 15-minute renderer heap diagnostic
         required: false
         default: false
         type: boolean
@@ -80,7 +80,7 @@ jobs:
     name: ${{ inputs.native_memory_diagnostic && 'Installed Windows memory diagnostic' || 'Installed Windows acceptance' }}
     if: ${{ inputs.run_native_acceptance == true }}
     runs-on: windows-latest
-    timeout-minutes: 180
+    timeout-minutes: 35
     permissions:
       contents: read
       actions: read
@@ -109,10 +109,6 @@ jobs:
           & packaging/verify_native_acceptance.ps1 -Artifacts "$env:RUNNER_TEMP/native-candidate" `
             -ReportDirectory "$env:RUNNER_TEMP/native-acceptance" -PublicUpdate:($env:PUBLIC_UPDATE -eq 'true') `
             -ProfileMemory:($env:MEMORY_DIAGNOSTIC -eq 'true')
-          if ($env:PUBLIC_UPDATE -ne 'true' -and $env:MEMORY_DIAGNOSTIC -ne 'true') {
-            python packaging/report_native_acceptance.py "$env:RUNNER_TEMP/native-acceptance"
-            if ($LASTEXITCODE -ne 0) { throw 'Native evidence is incomplete' }
-          }
       - name: Preserve native acceptance evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

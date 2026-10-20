@@ -1,10 +1,34 @@
 # v3.2.1 implementation checkpoints
 
-Current status: Checkpoint 18. The user requested completion of the outstanding
+Current status: Checkpoint 19. The user requested completion of the outstanding
 native acceptance, live-provider, Cargo warning, SBOM and release work. Preserve
 the verified `456dec3` candidate as historical evidence; the final-acceptance
 continuation changes the bundled Python runtime and requires new artifacts.
 No merge, tag or GitHub Release has been performed.
+
+## Checkpoint 19 — two-hour stability test removed and excluded
+
+The user explicitly instructed: "stop with the two hour stability delete it
+exclude that". The two-hour workload, long timeout, second presentation capture,
+duration-enforcing memory report and associated test are removed. Native
+acceptance now defaults to installed preferences and restarts. The existing
+15-minute heap diagnostic is separate and requires `ProfileMemory`; it is not
+run by default. The native workflow timeout is 35 minutes, with no two-hour path.
+
+Two-hour stability is **excluded from v3.2.1 scope and release requirements**.
+Do not list it as pending or as a release blocker, and do not reintroduce or
+schedule it. Earlier checkpoints and continuation instructions below are
+historical and superseded by this exclusion. Preserve the existing raw runs,
+snapshots and measured leak-fix evidence. Native FPS and public-updater restart
+remain separate checks; this exclusion does not claim that they passed.
+
+The change touches the existing workflow, installed-runner script, desktop
+acceptance spec and report/tests, plus the changelog and current performance
+report. No application behavior or in-app release highlight changes are needed.
+TypeScript, focused ESLint, Ruff, PowerShell/YAML parsing and the retained native
+presentation unit check pass (1 test). Source checks confirm no executable
+two-hour path, and the PowerShell AST confirms the diagnostic workload is wholly
+inside its explicit opt-in branch. No workload or installer rebuild was started.
 
 ## Checkpoint 18 — release detached map canvas observers
 
@@ -65,10 +89,9 @@ still peaks at 1,183.92 MiB and ends at 1,010.46 MiB, and snapshot collection ca
 force GC. Preserve the raw `native-diagnostic-39398050023` artifact and log, and
 the derived `fixed-heap-summary.json`, without overwriting either snapshot.
 
-The user's latest "just dont" reply was interpreted as leaving the next
-two-hour test unperformed; they also asked to close out the lengthy validation.
-Do not start another soak, build or test round. Fresh two-hour stability remains
-unverified. Keep PR #92 draft and release metadata Unreleased. Native presentation
+The subsequent explicit exclusion in Checkpoint 19 removes two-hour stability
+from the task and release requirements. Keep PR #92 draft and release metadata
+Unreleased. Native presentation
 and the public interactive updater are also unverified; do not ask the user to
 launch the locally blocked native app or bypass that restriction. Publication
 stays on hold; do not mark the original goal achieved. Documentation-only

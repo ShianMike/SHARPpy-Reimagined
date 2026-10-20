@@ -44,13 +44,13 @@ Target version: **3.2.1** (not published).
 ### Changed
 
 - Add opt-in installed Windows acceptance for preference retention, repeated
-  restarts, signed interactive updates, two-hour map/sounding/radar workloads,
-  process memory sampling and native presentation traces on disposable runners.
+  restarts and signed interactive updates, with a separately opted-in 15-minute
+  heap diagnostic, process sampling and native presentation traces on disposable
+  runners.
   Keep hardware identity and incomplete measurements explicit in the evidence.
-  Emit each progress update once, label cumulative time against the two-hour
-  duration, and mark unavailable presentation measurements as unverified.
-  Record renderer heap/backing-buffer usage and provide a separate opt-in
-  15-minute heap-snapshot diagnostic that cannot satisfy two-hour acceptance.
+  Emit each progress update once and mark unavailable presentation measurements
+  as unverified. Remove the two-hour stability workload and its acceptance gate;
+  exclude it from v3.2.1 release requirements.
   Give the existing four-panel fixture download its bounded 60-second readiness
   wait on hosted software rendering, retaining every cache/playback assertion,
   the overall test deadline and all scientific/performance timing gates.

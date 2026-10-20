@@ -152,22 +152,22 @@ try {
     Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like "*$report*" } |
         Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $report 'webview2.json')
-    if (-not $PublicUpdate) {
+    if ($ProfileMemory) {
         $tool = Join-Path $report 'PresentMon-2.6.0-x64.exe'
         & gh release download v2.6.0 --repo GameTechDev/PresentMon --pattern 'PresentMon-2.6.0-x64.exe' --dir $report
         if ($LASTEXITCODE -ne 0) { throw 'PresentMon download failed' }
         Get-FileHash -LiteralPath $tool | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'presentmon-sha256.json')
-        $env:SHARPPY_ACCEPTANCE_PHASE = if ($ProfileMemory) { 'profile' } else { 'soak' }
-        $env:SHARPPY_MEASURE_OUT = Join-Path $report $(if ($ProfileMemory) { 'diagnostic.json' } else { 'soak.json' })
+        $env:SHARPPY_ACCEPTANCE_PHASE = 'profile'
+        $env:SHARPPY_MEASURE_OUT = Join-Path $report 'diagnostic.json'
         $workload = Start-Process -FilePath (Join-Path $PWD 'node_modules/.bin/playwright.cmd') -ArgumentList 'test --config playwright.desktop.config.ts acceptance.spec.ts' `
             -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $report 'workload.log') -RedirectStandardError (Join-Path $report 'workload-error.log')
         $started = [DateTime]::UtcNow
         $captures = 0
         $firstCaptureChecked = $false
         $lastWorkloadLine = $null
-        Write-Host $(if ($ProfileMemory) { 'Starting a 15-minute heap diagnostic; this is not two-hour acceptance.' } else { 'Starting 120-minute native memory soak; progress reports cumulative elapsed time.' })
+        Write-Host 'Starting the opt-in 15-minute heap diagnostic.'
         while (-not $workload.HasExited) {
-            if (([DateTime]::UtcNow - $started).TotalMinutes -gt 149) { $workload.Kill(); throw 'Native soak exceeded its deadline' }
+            if (([DateTime]::UtcNow - $started).TotalMinutes -gt 25) { $workload.Kill(); throw 'Native heap diagnostic exceeded its deadline' }
             $owned = @(Process-Sample)
             if (Test-Path -LiteralPath (Join-Path $report 'workload.log')) {
                 $line = Get-Content -LiteralPath (Join-Path $report 'workload.log') -Tail 1
@@ -176,7 +176,7 @@ try {
                     $lastWorkloadLine = $line
                 }
             }
-            if ($captures -lt 2 -and (Test-Path -LiteralPath (Join-Path $report "capture-$captures-ready.json"))) {
+            if ($captures -lt 1 -and (Test-Path -LiteralPath (Join-Path $report "capture-$captures-ready.json"))) {
                 $otherWebviews = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object ProcessId -NotIn $owned.ProcessId)
                 if ($otherWebviews.Count -gt 0) { throw 'Refusing to capture another application WebView2 process' }
                 $csv = Join-Path $report "presentation-$captures.csv"
@@ -216,9 +216,7 @@ try {
         foreach ($capture in $present) {
             if (-not $capture.WaitForExit(180000)) { $capture.Kill(); 'Native capture exceeded its deadline' | Add-Content -LiteralPath (Join-Path $report 'presentation-error.log') }
         }
-        if ($ProfileMemory) {
-            if (-not (Test-Path -LiteralPath (Join-Path $report 'diagnostic-complete.json'))) { throw 'Native memory diagnosis did not complete' }
-        } elseif ($captures -ne 2 -or -not (Test-Path -LiteralPath (Join-Path $report 'soak-complete.json'))) { throw 'Native acceptance did not complete both presentation captures and the workload' }
+        if (-not (Test-Path -LiteralPath (Join-Path $report 'diagnostic-complete.json'))) { throw 'Native memory diagnosis did not complete' }
     }
     Stop-Desktop
 } finally {

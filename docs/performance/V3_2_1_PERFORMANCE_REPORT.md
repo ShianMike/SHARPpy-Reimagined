@@ -6,7 +6,12 @@ exact runtime source `a9d65e9a6d77805027a8729c7cb72c5541cbc02d` on
 Publishing is off; no main merge, tag or public v3.2.1 release has occurred.
 Earlier candidate results below are historical evidence, with their own exact
 artifact identities. Checkpoint 18 records the map cleanup and completed native
-diagnostic; fresh two-hour stability and presentation remain unverified.
+diagnostic. Checkpoint 19 removes two-hour stability from v3.2.1 scope and
+release requirements at the user's explicit request. It is excluded, not pending.
+Its workload, CI path and duration gate are deleted; native acceptance defaults
+to preferences/restarts, with the short heap diagnostic available only by opt-in.
+Historical measurements below are preserved evidence, not instructions to rerun
+the removed test. Native presentation remains unverified.
 
 **Release remains on hold.** The preceding completed two-hour workload
 in [39375787049](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39375787049)
@@ -57,7 +62,8 @@ versus 201,872,880 -> 385,272,136 before the fix. This verifies the targeted
 listener/map retention fix in the short installed workload. It does not establish
 long-session memory stability: renderer private memory still peaks at 1,183.92
 MiB and ends at 1,010.46 MiB, and heap snapshots can force collection. The user
-requested no further lengthy validation; no new two-hour soak was started.
+explicitly excluded two-hour stability; no new soak was started, and it is no
+longer a release requirement or blocker.
 Native presentation still produces no usable displayed-frame CSV. Keep this
 limitation and the unperformed public-updater restart explicit.
 
@@ -86,7 +92,7 @@ all shipped files and records PE versions/imports, package ownership and externa
 Windows/WebView2 requirements. Windows VEX records the absence of the two
 Linux GTK advisory packages without suppressing their all-target warnings.
 Native preference migration and repeated normal restarts pass on the earlier
-recorded installer. The two-hour memory trend, native presentation FPS and
+recorded installer. Native presentation FPS and
 interactive public-updater restart remain pending; added test tooling is not
 passing measurement evidence.
 

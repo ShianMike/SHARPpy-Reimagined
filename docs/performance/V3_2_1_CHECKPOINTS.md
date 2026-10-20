@@ -1,9 +1,82 @@
 # v3.2.1 implementation checkpoints
 
-Current continuation: Checkpoint 14. Local E12–E22 implementation and validation
-are complete; the user has authorized the candidate branch and CI artifact
-uploads with publication disabled. Keep earlier checkpoints and evidence
-snapshots without restarting completed work.
+Current status: Checkpoint 15. The authorized candidate implementation and
+hosted verification are complete. Final artifacts are from commit `456dec3`;
+the final documentation-only commit records their results. No merge, tag or
+GitHub Release was authorized or performed. Preserve all earlier evidence.
+
+## Checkpoint 15 — hosted candidate verified (2026-10-20)
+
+Release run [39367398243](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39367398243)
+passes against exact source `456dec39dd63007014ec3d69bd711954c7b3240b` on
+`release/v3.2.1`: 27 successful jobs, zero failed/cancelled, two intentional
+skips (opt-in live-provider contracts and public release publication).
+This includes all committed E20 boundary/UI gates and the added real sidecar
+cleanup check. No native app UI was opened locally; execution remained solo.
+
+Results inspected from raw job logs/JUnit and actual downloaded artifacts:
+
+- Python 3.13 Linux full offline gate: 3,789 passed, two Windows-only skips
+  (process affinity and junction protection), 106.602 s, timing PASS with the
+  unchanged github-actions budgets. NPZ smoke 3.706 s. The added optional
+  contour-preservation case is included in this complete run.
+- Python 3.11/3.12 compatibility, deterministic/coverage, full Python and Rust
+  property lanes, Windows WRF runtime and correctness/dependency audit pass.
+- Frontend: 831 passed, two opt-in benchmarks skipped; all 77 browser cases
+  pass across four shards (20/19/19/19), including all-time selection and the
+  1280 x 800 release-highlight footer/scroll regression. TypeScript, full lint,
+  359-file boundaries and all three build modes pass.
+- Desktop format/Clippy, 66 ordinary Rust cases, real Python sidecar normal/
+  forced cleanup (2/2), both Cargo audits and frozen backend checks pass.
+  Existing proc-macro-error/glib advisory warnings remain recorded.
+- E21: the final installer passes the real updater-library test, including
+  its exact URL/name/signature/version and rejection of modified bytes and
+  substituted version. Downloaded bytes pass the same no-window verifier
+  locally too. Hosted silent in-place v3.2.0 -> v3.2.1 upgrade passes, with
+  both installed runtime reports showing correct versions, Rust backend,
+  39-level profile and completed PNG rendering. The user-created file and
+  saved sounding hashes survive. This is automated installation/runtime
+  evidence; interactive preference migration and updater restart are not tested.
+- E22: the actual candidate SBOM is uploaded with the other candidate files:
+  417 components (414 runtime plus installer/portable ZIP/wheel), 415 graph
+  records, 1,019 edges, licenses on all 414 runtime components, artifact hashes,
+  clean source identity matching `456dec3` and explicit incomplete binary
+  coverage. Official CycloneDX 1.6 structural and graph integrity checks pass;
+  optional IRI/IDN format checks remain outside Ajv 6's verification.
+- All eight checksummed files match downloaded bytes; all nine files including
+  SHA256SUMS match cryptographically verified provenance subjects. `gh
+  attestation verify` enforces the repository, release workflow, source/ref/
+  signer digests and hosted runner identity. Portable ZIP CRC/content checks
+  pass (5,003 entries); installer hash is
+  `66f185fb9a9a9454eff9bc215dc79cc36d1631893f21997ded607dadcf72fceb`.
+
+Durable local evidence is in
+`C:\Users\shian\Documents\CodexReports\v3.2.1-candidate-ci`: exact completed
+run JSON, all workflow logs, failed first-run diagnostics, raw timing/JUnit,
+both sets of installed-runtime reports, final nine-file artifact directory,
+schema/integrity/provenance reports and candidate/evidence hash manifests.
+GitHub candidate artifact IDs are 12240177926 (Windows files) and 12240003163
+(runtime reports), retained for 14 days; local copies preserve the evidence.
+The first run's browser failures remain historical, not relabeled successful.
+No disposable extraction or installation was made on the user's machine;
+preserve the downloaded candidate and all reports as validation evidence.
+
+The runtime/source changes are exactly those tested at `456dec3`. The final
+documentation-only commit updates this checkpoint, the report and changelog
+status; it does not change code, workflows, locks, highlights or version inputs.
+No full-suite rerun is needed for these status documents. Changelog and release
+highlights remain consistent, version 3.2.1 remains Unreleased, and live latest
+stable remains v3.2.0 at `b2b396df766717b6ecbb0758aa83bc1964ddd7dc`.
+
+Remaining limits: E12 stays conditional after measurement; no binary protocol
+replacement is justified. Native presentation FPS, multi-hour memory soak,
+interactive updater/preference behavior and live-provider runs are unverified.
+Candidate CI/SBOM publication is complete within the user's approval; public
+release publication, main merge and tags require separate authorization. Keep
+the active release branch and preview for review, not branch cleanup. The owned
+preview remains on 5184; the measurement server is stopped. Continue only from
+the relevant recorded evidence if new work is authorized; do not restart the
+completed patch or rerun unchanged gates.
 
 ## Checkpoint 14 — candidate CI findings (2026-10-20)
 

@@ -2,11 +2,12 @@
 
 Status: original local patch preparation completed, then the user authorized
 the E12–E22 follow-up on 2026-10-20. Its local implementation and regression
-validation are complete. Unpublished; the user has now authorized candidate CI
-with `publish_release=false`, including branch push and CI artifact uploads.
-Signed-candidate, installed-upgrade and hosted results must be inspected before
-they can be reported as passed. Checkpoint 13 records this handoff; the earlier
-local handoff does not validate the expanded change set on hosted runners.
+validation are complete. The authorized candidate workflow now passes with
+`publish_release=false`, including signed artifacts, installed upgrade,
+SBOM/checksums and provenance. Final built/tested source is
+`456dec39dd63007014ec3d69bd711954c7b3240b` on `release/v3.2.1`; a later
+documentation-only commit records the results. Public release remains
+unpublished. Checkpoint 15 and the hosted evidence below are authoritative.
 
 First candidate run: `39366194816`, exact commit
 `6473f4fe7a54ade4e1351caa19512a6e63ff6645`. Its complete offline,
@@ -17,6 +18,36 @@ checks now select all sounding times and follow the installed highlight count;
 the popup scrolls its notes while keeping close controls visible. Checkpoint 14
 records the fixes and required new candidate run. These failures are preserved;
 no timeout or scientific/timing assertion is relaxed to make them pass.
+
+## Final hosted candidate verification
+
+[Release run 39367398243](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39367398243)
+completes successfully: 27 jobs pass, none fail or cancel. The opt-in live
+provider and public publication jobs are intentionally skipped. Downloaded
+runtime reports, final bytes and provenance were independently inspected;
+job success alone is not the artifact-verification evidence.
+
+| Gate / artifact | Verified result |
+| --- | --- |
+| Full Linux Python 3.13 offline lane, forced Rust | 3,789 passed, two Windows-only skips (affinity and junction), 106.602 s, unchanged hosted timing gate PASS; NPZ 3.706 s. Includes the final optional-contour preservation regression. |
+| Compatibility / science / WRF | Python 3.11/3.12 compatibility, deterministic coverage, complete Python and Rust property lanes and real Windows WRF all pass. |
+| Frontend | 831 passed, two opt-in benchmark skips; 77 browser cases pass (four shards), including 1280 x 800 highlights and time 49 -> 1 selection. TypeScript/lint/359-file boundaries/all builds pass. |
+| Native boundaries and audits | 66 ordinary tests and both real sidecar cleanup cases pass. Format/Clippy, constrained Python/npm/two Cargo audits and frozen backend pass; recorded Cargo warnings remain. |
+| Final updater bytes | Real updater verification passes against final signature sidecar, URL/name/version; corrupt bytes and substituted version fail. Same downloaded bytes pass the no-window verifier locally. |
+| Installed upgrade | Previous v3.2.0 and upgraded v3.2.1 runtime reports both succeed with correct Rust/version identity, 39-level sounding and completed PNG. Saved sample and user-created file remain intact. Interactive preferences/updater restart are outside this check. |
+| Final SBOM | 417 components: 414 runtime with licenses plus installer, ZIP and wheel. 415 dependency records / 1,019 edges, source SHA `456dec3`, dirty=false, artifact hashes. Official CycloneDX 1.6 structural schema and dependency references pass; optional IRI/IDN formats are not checked by Ajv 6. Explicit incomplete native/system/binary coverage retained. |
+| Checksums and provenance | Eight SHA256SUMS entries match downloaded bytes. All nine files match verified attestation subjects, with repository, workflow, source/ref/signer digest and hosted-runner checks. Portable ZIP integrity/content checks pass. |
+
+The final installer SHA-256 is
+`66f185fb9a9a9454eff9bc215dc79cc36d1631893f21997ded607dadcf72fceb`.
+[Candidate Windows artifacts](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39367398243/artifacts/12240177926)
+and [installed runtime evidence](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39367398243/artifacts/12240003163)
+are uploaded within the authorized candidate scope and kept for 14 days.
+Local copies, all logs, raw JUnit/timing and verification scripts/results are
+preserved in `C:\Users\shian\Documents\CodexReports\v3.2.1-candidate-ci`.
+No public tag, GitHub Release, main merge or updater distribution was performed;
+latest stable is verified still v3.2.0. These are candidate-readiness results,
+not public-release or unmeasured native presentation claims.
 
 ## E12–E22 follow-up measurements and limits
 
@@ -32,9 +63,9 @@ patch evidence: `C:\Users\shian\Documents\CodexReports\v3.2.1-e12-e22`.
 | E17 | Optional ordered file times in summaries; existing reversible view request takes a validated time index. Chart calculations, edits and exports use that profile. Edit histories are separate per time and closing protects all of them. | Real 49-time BUFKIT final profile matches its decoded temperatures; returning to the original preserves it and source SHA-256. Python group 62 passed. @Browser shows final F048 / 2026-06-27 06Z at 4564 x 3077 and keyboard-selects all 49 times. |
 | E18 | Arrow-key map panning plus Enter selects the map centre through the existing forecast point inspector. | @Browser confirms an arbitrary 41.22 N / 78.37 W point, correct HRRR F000 identity and four parameter readings; focused regression preserves Live Tracking behavior. |
 | E19 | Memoized label inputs/view avoid repeated station/observation layouts on contour-only updates; camera zoom/bearing/pitch, selection, labels and source arrays invalidate them. | Four panels, 933 stations, 30 frames: 111,960 projections before vs 3,732 after (96.7% fewer), exact work-count regression. |
-| E20 | CI provisions Python and fails rather than skipping browser process lifecycle tests; native CI explicitly runs ignored normal/forced sidecar cleanup checks. Bridge changes trigger the boundary workflow. | Source gates implemented; hosted execution has not run on this unpublished change set. |
-| E21 | The actual updater library verifies staged installer bytes, signature sidecar, exact destination, signed version, corruption rejection and version-substitution rejection. Release CI installs previous stable then candidate in a disposable runner, verifies frozen import/rendering and preserved saved files. | Verifier compiles. Actual signed-candidate execution, installed upgrade and interactive preference/restart verification remain pending. No claim of installed-upgrade success. |
-| E22 | CycloneDX 1.6 resolved Windows runtime graph: npm production, installed Python runtime extras/SHARPpy/native wheel, and locked Windows Cargo normal edges; available licenses, artifact hashes, source SHA/dirty flag and explicit incomplete binary coverage. Included before release checksums/provenance. | Local graph: 414 components, 415 dependency records, 1,020 edges; official JSON schema structure and graph integrity checks pass. Publication follows authorized release distribution. |
+| E20 | CI provisions Python and fails rather than skipping browser process lifecycle tests; native CI explicitly runs ignored normal/forced sidecar cleanup checks. Bridge changes trigger the boundary workflow. | Committed gates pass on hosted candidate `456dec3`, including both real sidecar cases. |
+| E21 | The actual updater library verifies staged installer bytes, signature sidecar, exact destination, signed version, corruption rejection and version-substitution rejection. Release CI installs previous stable then candidate in a disposable runner, verifies frozen import/rendering and preserved saved files. | Final candidate verifier and actual hosted v3.2.0 -> v3.2.1 installed upgrade pass. Downloaded bytes/reports verify independently. Interactive preference/restart behavior remains untested. |
+| E22 | CycloneDX 1.6 resolved Windows runtime graph: npm production, installed Python runtime extras/SHARPpy/native wheel, and locked Windows Cargo normal edges; available licenses, artifact hashes, source SHA/dirty flag and explicit incomplete binary coverage. Included before release checksums/provenance. | Uploaded candidate graph: 417 components / 1,019 edges, matching artifact hashes and verified provenance. Earlier local 414-component / 1,020-edge graph remains historical environment evidence. |
 
 Actual four-panel playback used the **Intel Iris Xe** ANGLE/D3D11 renderer in
 the visible @Browser development page, HRRR 2026-10-20 01Z, height/wind 500 mb,
@@ -71,9 +102,9 @@ two opt-in benchmarks skipped, four workers, 58.56 s. TypeScript, full ESLint,
 format, all-target Clippy and 66 ordinary Rust tests pass; real sidecar checks
 pass 2/2 separately. The two sidecar cases, SHRF benchmark and final-artifact
 case are ignored by default, not ordinary-test passes. Release packaging/highlights/SBOM checks pass 17/17. Workflow YAML
-and PowerShell verifier syntax validate. Final artifact verification is an
-explicitly ignored native test until the signed installer exists; it is
-required by the release job, not counted as a local pass. Build chunk-size
+and PowerShell verifier syntax validate. At that local checkpoint the final
+artifact test was ignored because no signed installer existed; the actual
+candidate test now passes in CI and on the downloaded bytes. Build chunk-size
 advisories remain. The final SBOM structural check records Ajv 6's optional
 IRI/IDN-format limitation; dependency reference integrity is checked separately.
 
@@ -397,34 +428,41 @@ prepared consistently for 3.2.1. The current validation counts are at the top of
 this report; the original 3,782/821-test tables above are historical evidence.
 The final 49-time production Browser check confirms F048 / 2026-06-27 06Z,
 lossless 4564 x 3077 output and the 3.2.1 label. Changelog/highlights/README,
-USAGE, architecture documents and Checkpoint 12 describe the delivered behavior.
+USAGE, architecture documents and Checkpoint 15 describe the delivered behavior.
 Scientific formulas, numerical tolerances, chart quality and the existing
 architecture remain intact. Dependency changes are limited to the justified
 transport security fixes recorded in the follow-up audit.
 
-Local preparation is ready for review and candidate CI. E21 is incomplete until
-the final signed installer passes the real updater-library test and the hosted
-in-place upgrade produces successful runtime reports. Interactive preference
-migration/updater restart, hosted interpreter/backend/platform and
-browser/software-rendering lanes, and native loaded-playback/hardware checks
-remain release gates. Native GUI interaction stays deferred under the user's
-Browser-only instruction. E22 has a useful local SBOM and release integration;
-published artifact coverage and checksums/provenance await authorized candidate
-and release work. No native FPS improvement or installed-upgrade success is
-claimed. Multi-hour memory behavior and live NAM/RRFS/REFS point-extraction
-performance remain unmeasured. Genuine provider timeouts, timing variability,
-Cargo warnings and documented browser/basemap advisories remain visible.
+The authorized candidate implementation/verification is complete. Committed
+boundary and UI gates execute successfully, the real final updater verifier
+accepts correct bytes and rejects tampering, and actual hosted in-place upgrade
+reports verify frozen rendering and saved-file preservation. The useful SBOM,
+checksums and cryptographically verified provenance are uploaded with candidate
+artifacts. These E20–E22 results close the previously pending automated gates.
+The conditional E12 migration was measured and rejected without an unproven
+protocol rewrite. Scientific, numerical and image parity checks remain intact.
+
+Interactive preference migration/updater restart, native loaded-playback/GPU
+presentation, live-provider checks and multi-hour memory behavior remain outside
+these candidate results. Native GUI interaction stays deferred under the user's
+Browser-only instruction. No native FPS or live NAM/RRFS/REFS extraction speedup
+is claimed. Genuine provider timeouts, timing variability, Cargo warnings and
+documented browser/basemap advisories remain visible. Public release and native
+interactive acceptance require separate authorization; candidate success is not
+approval to distribute an update to installed users.
 
 The exact current working tree and evidence hashes are preserved in the
 follow-up directory's `final-source/`, `source-manifest.json`,
 `working-tree.patch` and `evidence-manifest.json`, separately from the original
-patch snapshot. No source commit, push, tag, installer upload, release dispatch
-or publication was performed. The latest verified published version remains
+patch snapshot. The reviewed source and CI fixes are committed/pushed on
+`release/v3.2.1`; final runtime artifacts are from `456dec3`. The subsequent
+documentation-only commit records results and changes no runtime, workflow,
+lockfile or release-note input. The latest verified published version remains
 v3.2.0 at the baseline commit; no v3.2.1 tag exists. The owned production preview
 on port 5184 and marked @Browser tab remain for review; the measurement server
-is stopped. The next authorized action would be a candidate-branch commit/push
-and Release workflow with `publish_release=false`, which uploads CI artifacts
-but creates no tag or GitHub Release. The user has now explicitly authorized
-that candidate-only remote work; final run/artifact evidence belongs in
-`C:\Users\shian\Documents\CodexReports\v3.2.1-candidate-ci`. Preserve all
-previous evidence, including failed runs and the older native wheel.
+is stopped. No main merge, tag, GitHub Release or public updater distribution
+was authorized or performed. Final run/artifact evidence is preserved in
+`C:\Users\shian\Documents\CodexReports\v3.2.1-candidate-ci`; all candidate
+downloads remain needed validation evidence. No disposable installation or
+extraction was made locally for this CI handoff. Preserve all previous evidence,
+including failed runs and the older native wheel.

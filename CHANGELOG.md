@@ -63,8 +63,9 @@ Target version: **3.2.1** (not published).
   and provenance, including dependency edges, available licenses and graph limits.
 - Require the final staged updater signature and signed version to verify through
   the real updater library, including tampering rejection; add a disposable-runner
-  in-place installer upgrade and frozen rendering check. These release checks
-  remain pending until a signed candidate is built and exercised.
+  in-place installer upgrade and frozen rendering check. Record the verified
+  candidate's hosted test, installed-upgrade, SBOM and provenance evidence in
+  the performance report and recoverable checkpoint.
 
 ### Security
 

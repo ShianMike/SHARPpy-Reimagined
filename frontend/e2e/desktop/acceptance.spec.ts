@@ -69,6 +69,9 @@ test.describe("installed native acceptance", () => {
     test.skip(phase !== "soak");
     test.setTimeout(150 * 60_000);
     await workspaces().getByRole("button", { name: "Settings", exact: true }).click();
+    await sections().getByRole("button", { name: "Device Info", exact: true }).click();
+    results.device = await page.getByTestId("settings-view").innerText();
+    results.window = await page.evaluate(() => ({ outerWidth, outerHeight, innerWidth, innerHeight, devicePixelRatio }));
     await sections().getByRole("button", { name: "Units", exact: true }).click();
     await page.getByRole("radio", { name: "Auto Source units", exact: true }).check();
     await workspaces().getByRole("button", { name: "Model Viewer", exact: true }).click();

@@ -44,6 +44,9 @@ Target version: **3.2.1** (not published).
   restarts, signed interactive updates, two-hour map/sounding/radar workloads,
   process memory sampling and native presentation traces on disposable runners.
   Keep hardware identity and incomplete measurements explicit in the evidence.
+  Give the existing four-panel fixture download its bounded 60-second readiness
+  wait on hosted software rendering, retaining every cache/playback assertion,
+  the overall test deadline and all scientific/performance timing gates.
 - Reclaim unreachable Qt chart buffers between serial sounding renders, including
   failed renders. Fifteen paired worker requests preserve exact PNGs and view
   metadata; measured peak working set falls from 683.3 to 448.4 MiB in that

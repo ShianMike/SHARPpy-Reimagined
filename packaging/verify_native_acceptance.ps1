@@ -23,6 +23,7 @@ $env:E2E_SCREENSHOT_DIR = $report
 $desktop = $null
 $present = @()
 $starts = 0
+$trackedProcesses = @{}
 $debugPolicy = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
 $debugApp = 'sharppy-reimagined.exe'
 if ((Get-ItemProperty -LiteralPath $debugPolicy -Name $debugApp -ErrorAction SilentlyContinue).$debugApp) {
@@ -36,6 +37,8 @@ Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,VideoPr
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'graphics.json')
 [ordered]@{ source = $gitSource; runner = $env:RUNNER_OS; image = $env:ImageVersion; public_update = [bool]$PublicUpdate } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'environment.json')
+Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber,OSArchitecture |
+    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'windows.json')
 
 function Verify-Installer([string] $Directory, [string] $Version) {
     $file = Join-Path $Directory "SHARPpy-Reimagined-v$Version-windows-x64-setup.exe"
@@ -55,6 +58,7 @@ function Start-Desktop {
     $executables = @(Get-ChildItem -LiteralPath $install -Filter '*.exe' -File | Where-Object Name -NotLike '*uninstall*')
     if ($executables.Count -ne 1) { throw 'Installed desktop executable is not unique' }
     $script:starts++
+    $script:trackedProcesses = @{}
     $script:desktop = Start-Process -FilePath $executables[0].FullName -PassThru `
         -RedirectStandardOutput (Join-Path $report "desktop-$starts.log") -RedirectStandardError (Join-Path $report "desktop-$starts-error.log")
     $lastError = ''
@@ -88,12 +92,16 @@ function Run-Phase([string] $Phase) {
 }
 function Process-Sample {
     $all = @(Get-CimInstance Win32_Process)
-    $ids = @([uint32]$script:desktop.Id)
+    # Keep surviving descendants after their parent exits; reject recycled PIDs.
+    $ids = @([uint32]$script:desktop.Id) + @($all | Where-Object {
+        $trackedProcesses.ContainsKey($_.ProcessId) -and $trackedProcesses[$_.ProcessId] -eq $_.CreationDate
+    } | Select-Object -ExpandProperty ProcessId)
     do {
         $children = @($all | Where-Object { $_.ParentProcessId -in $ids -and $_.ProcessId -notin $ids } | Select-Object -ExpandProperty ProcessId)
         $ids += $children
     } while ($children.Count -gt 0)
     $owned = @($all | Where-Object ProcessId -In $ids)
+    foreach ($process in $owned) { $script:trackedProcesses[$process.ProcessId] = $process.CreationDate }
     $processes = @($owned | ForEach-Object {
         $live = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
         if ($null -ne $live) {
@@ -137,6 +145,9 @@ try {
     Stop-Desktop
     Start-Desktop
     Run-Phase 'restart'
+    Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like "*$report*" } |
+        Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine |
+        ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $report 'webview2.json')
     if (-not $PublicUpdate) {
         $tool = Join-Path $report 'PresentMon-2.6.0-x64.exe'
         & gh release download v2.6.0 --repo GameTechDev/PresentMon --pattern 'PresentMon-2.6.0-x64.exe' --dir $report
@@ -151,6 +162,9 @@ try {
         while (-not $workload.HasExited) {
             if (([DateTime]::UtcNow - $started).TotalMinutes -gt 149) { $workload.Kill(); throw 'Native soak exceeded its deadline' }
             $owned = @(Process-Sample)
+            if (Test-Path -LiteralPath (Join-Path $report 'workload.log')) {
+                Get-Content -LiteralPath (Join-Path $report 'workload.log') -Tail 1 | Write-Host
+            }
             $elapsed = ([DateTime]::UtcNow - $started).TotalMinutes
             if (($captures -eq 0 -and $elapsed -gt 5) -or ($captures -eq 1 -and $elapsed -gt 115)) {
                 $gpu = @($owned | Where-Object { $_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -match '--type=gpu-process' })

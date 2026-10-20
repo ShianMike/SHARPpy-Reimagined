@@ -31,7 +31,8 @@ test.describe("forecast playback", () => {
       await expect.poll(async () => {
         await page.clock.fastForward(300);
         return timeline.getByRole("status", { name: "Forecast downloads" }).textContent();
-      }, { intervals: [0] }).toContain("All 19 forecast hours saved to cache");
+      // Hosted software rendering can spend several seconds per clock advance.
+      }, { intervals: [0], timeout: 60_000 }).toContain("All 19 forecast hours saved to cache");
       await expect(timeline.getByRole("button", { name: "Download all forecast hours", exact: true })).toContainText("19/19");
       const detailsButton = timeline.getByRole("button", { name: "Forecast download details", exact: true });
       await detailsButton.press("Enter");

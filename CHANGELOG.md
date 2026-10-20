@@ -7,7 +7,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [v3.2.1] - 2026-10-20
+Target version: **3.2.1** (not published).
 
 ### Fixed
 
@@ -46,6 +46,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Keep hardware identity and incomplete measurements explicit in the evidence.
   Emit each progress update once, label cumulative time against the two-hour
   duration, and mark unavailable presentation measurements as unverified.
+  Record renderer heap/backing-buffer usage and provide a separate opt-in
+  15-minute heap-snapshot diagnostic that cannot satisfy two-hour acceptance.
   Give the existing four-panel fixture download its bounded 60-second readiness
   wait on hosted software rendering, retaining every cache/playback assertion,
   the overall test deadline and all scientific/performance timing gates.

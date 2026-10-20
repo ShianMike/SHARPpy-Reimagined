@@ -19,7 +19,7 @@ test.describe("installed native acceptance", () => {
   test.skip(phase === undefined, "Only run by the opt-in native acceptance workflow");
 
   test("preferences survive installation and repeated native restart", async () => {
-    test.skip(phase === "soak");
+    test.skip(phase === "soak" || phase === "profile");
     if (phase === "update") test.setTimeout(6 * 60_000);
     const version = phase === "seed" || phase === "update" ? "3.2.0" : "3.2.1";
     const notes = page.getByRole("dialog", { name: `What’s new in ${version}` });
@@ -65,9 +65,10 @@ test.describe("installed native acceptance", () => {
     }
   });
 
-  test("two hours of loaded maps, soundings and Live Tracking", async () => {
-    test.skip(phase !== "soak");
-    test.setTimeout(150 * 60_000);
+  test(phase === "profile" ? "diagnose native renderer retention" : "two hours of loaded maps, soundings and Live Tracking", async () => {
+    test.skip(phase !== "soak" && phase !== "profile");
+    const profiling = phase === "profile";
+    test.setTimeout((profiling ? 25 : 150) * 60_000);
     await workspaces().getByRole("button", { name: "Settings", exact: true }).click();
     await sections().getByRole("button", { name: "Device Info", exact: true }).click();
     results.device = await page.getByTestId("settings-view").innerText();
@@ -105,12 +106,23 @@ test.describe("installed native acceptance", () => {
       await loadedField();
     }
     results.initialPanels = await loadedPanels();
+    const cdp = await page.context().newCDPSession(page);
+    const heapSnapshot = async (name: string): Promise<void> => {
+      if (output === undefined) throw new Error("Heap profiling requires an evidence directory");
+      const path = join(output, `${name}.heapsnapshot`);
+      writeFileSync(path, "");
+      const chunk = ({ chunk }: { chunk: string }): void => { appendFileSync(path, chunk); };
+      cdp.on("HeapProfiler.addHeapSnapshotChunk", chunk);
+      try { await cdp.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false }); }
+      finally { cdp.off("HeapProfiler.addHeapSnapshotChunk", chunk); }
+    };
+    if (profiling) await heapSnapshot("renderer-initial");
     const start = Date.now();
     let cycle = 0;
     let capture = 0;
     const errors: string[] = [];
     page.on("pageerror", (error) => { errors.push(String(error)); });
-    while (Date.now() - start < 2 * 60 * 60_000) {
+    while (Date.now() - start < (profiling ? 15 * 60_000 : 2 * 60 * 60_000)) {
       const since = Date.now();
       const before = await forecastIdentity();
       const hour = page.getByRole("slider", { name: "Forecast hour", exact: true });
@@ -166,16 +178,20 @@ test.describe("installed native acceptance", () => {
       await forecast.getByRole("button", { name: "Choose forecast hour", exact: true }).click();
       await page.getByRole("button", { name: `Select forecast hour ${String(cycle % 3)}`, exact: true }).click();
       await loadedPanels();
+      const heap = await cdp.send("Runtime.getHeapUsage") as { usedSize: number; totalSize: number; embedderHeapUsedSize?: number; backingStorageSize?: number };
       const sample = { utc: new Date().toISOString(), elapsedSeconds: (Date.now() - start) / 1_000,
-        cycle: ++cycle, before, panels, errors: [...errors] };
+        cycle: ++cycle, before, panels, errors: [...errors], heap };
       if (output !== undefined) appendFileSync(join(output, "workload.ndjson"), `${JSON.stringify(sample)}\n`);
       expect(errors).toEqual([]);
-      console.log(`Native memory soak: cycle ${String(cycle)} complete; ${String(Math.floor(sample.elapsedSeconds / 60))}m ${String(Math.floor(sample.elapsedSeconds % 60))}s elapsed of 120 minutes`);
+      console.log(`Native ${profiling ? "heap diagnostic" : "memory soak"}: cycle ${String(cycle)} complete; ${String(Math.floor(sample.elapsedSeconds / 60))}m ${String(Math.floor(sample.elapsedSeconds % 60))}s elapsed of ${profiling ? "15" : "120"} minutes; JS heap ${String(Math.round(heap.usedSize / 2**20))} MiB, backing storage ${heap.backingStorageSize === undefined ? "unavailable" : String(Math.round(heap.backingStorageSize / 2**20)) + " MiB"}`);
       if (cycle % 5 === 0) await shot(`soak-${String(cycle)}.png`);
       await page.waitForTimeout(Math.max(0, 120_000 - (Date.now() - since)));
     }
-    results.soak = { elapsedSeconds: (Date.now() - start) / 1_000, cycles: cycle, errors };
-    if (output !== undefined) writeFileSync(join(output, "soak-complete.json"), JSON.stringify(results, null, 2));
-    await shot("soak-complete.png", true);
+    const result = profiling ? "diagnostic" : "soak";
+    results[result] = { elapsedSeconds: (Date.now() - start) / 1_000, cycles: cycle, errors };
+    if (profiling) await heapSnapshot("renderer-final");
+    if (output !== undefined) writeFileSync(join(output, `${result}-complete.json`), JSON.stringify(results, null, 2));
+    await cdp.detach();
+    await shot(`${result}-complete.png`, true);
   });
 });

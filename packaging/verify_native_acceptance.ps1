@@ -2,9 +2,11 @@
 param(
     [Parameter(Mandatory = $true)][string] $Artifacts,
     [Parameter(Mandatory = $true)][string] $ReportDirectory,
-    [switch] $PublicUpdate
+    [switch] $PublicUpdate,
+    [switch] $ProfileMemory
 )
 $ErrorActionPreference = 'Stop'
+if ($PublicUpdate -and $ProfileMemory) { throw 'Choose either the public updater or memory diagnosis' }
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
     throw 'Native acceptance installs software only on a disposable hosted runner'
 }
@@ -35,7 +37,7 @@ New-ItemProperty -LiteralPath $debugPolicy -Name $debugApp -Value '--remote-debu
 $gitSource = (& git rev-parse HEAD).Trim()
 Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,VideoProcessor,AdapterRAM |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'graphics.json')
-[ordered]@{ source = $gitSource; runner = $env:RUNNER_OS; image = $env:ImageVersion; public_update = [bool]$PublicUpdate } |
+[ordered]@{ source = $gitSource; runner = $env:RUNNER_OS; image = $env:ImageVersion; public_update = [bool]$PublicUpdate; memory_diagnostic = [bool]$ProfileMemory } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'environment.json')
 Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber,OSArchitecture |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'windows.json')
@@ -155,15 +157,15 @@ try {
         & gh release download v2.6.0 --repo GameTechDev/PresentMon --pattern 'PresentMon-2.6.0-x64.exe' --dir $report
         if ($LASTEXITCODE -ne 0) { throw 'PresentMon download failed' }
         Get-FileHash -LiteralPath $tool | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'presentmon-sha256.json')
-        $env:SHARPPY_ACCEPTANCE_PHASE = 'soak'
-        $env:SHARPPY_MEASURE_OUT = Join-Path $report 'soak.json'
+        $env:SHARPPY_ACCEPTANCE_PHASE = if ($ProfileMemory) { 'profile' } else { 'soak' }
+        $env:SHARPPY_MEASURE_OUT = Join-Path $report $(if ($ProfileMemory) { 'diagnostic.json' } else { 'soak.json' })
         $workload = Start-Process -FilePath (Join-Path $PWD 'node_modules/.bin/playwright.cmd') -ArgumentList 'test --config playwright.desktop.config.ts acceptance.spec.ts' `
             -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $report 'workload.log') -RedirectStandardError (Join-Path $report 'workload-error.log')
         $started = [DateTime]::UtcNow
         $captures = 0
         $firstCaptureChecked = $false
         $lastWorkloadLine = $null
-        Write-Host 'Starting 120-minute native memory soak; progress reports cumulative elapsed time.'
+        Write-Host $(if ($ProfileMemory) { 'Starting a 15-minute heap diagnostic; this is not two-hour acceptance.' } else { 'Starting 120-minute native memory soak; progress reports cumulative elapsed time.' })
         while (-not $workload.HasExited) {
             if (([DateTime]::UtcNow - $started).TotalMinutes -gt 149) { $workload.Kill(); throw 'Native soak exceeded its deadline' }
             $owned = @(Process-Sample)
@@ -186,7 +188,7 @@ try {
             if (-not $firstCaptureChecked -and $present.Count -gt 0 -and -not $present[0].HasExited -and
                 ([DateTime]::UtcNow - $present[0].StartTime.ToUniversalTime()).TotalSeconds -gt 180) {
                 $present[0].Kill()
-                $captureError = 'UNVERIFIED native presentation: capture timed out; the 120-minute memory soak continues.'
+                $captureError = 'UNVERIFIED native presentation: capture timed out; the memory workload continues.'
                 $captureError | Set-Content -LiteralPath (Join-Path $report 'presentation-error.log')
                 Write-Host $captureError
                 $firstCaptureChecked = $true
@@ -199,7 +201,7 @@ try {
                     })
                 }
                 if ($present[0].ExitCode -ne 0 -or $displayed.Count -lt 100) {
-                    $captureError = "UNVERIFIED native presentation: capture incomplete (exit=$($present[0].ExitCode), displayed frames=$($displayed.Count)); the 120-minute memory soak continues."
+                    $captureError = "UNVERIFIED native presentation: capture incomplete (exit=$($present[0].ExitCode), displayed frames=$($displayed.Count)); the memory workload continues."
                     $captureError | Set-Content -LiteralPath (Join-Path $report 'presentation-error.log')
                     Write-Host $captureError
                 } else {
@@ -210,11 +212,13 @@ try {
             Start-Sleep -Seconds 30
         }
         $workload.WaitForExit()
-        if ($workload.ExitCode -ne 0) { throw "Native soak workload failed: $($workload.ExitCode)" }
+        if ($workload.ExitCode -ne 0) { throw "Native memory workload failed: $($workload.ExitCode)" }
         foreach ($capture in $present) {
             if (-not $capture.WaitForExit(180000)) { $capture.Kill(); 'Native capture exceeded its deadline' | Add-Content -LiteralPath (Join-Path $report 'presentation-error.log') }
         }
-        if ($captures -ne 2 -or -not (Test-Path -LiteralPath (Join-Path $report 'soak-complete.json'))) { throw 'Native acceptance did not complete both presentation captures and the workload' }
+        if ($ProfileMemory) {
+            if (-not (Test-Path -LiteralPath (Join-Path $report 'diagnostic-complete.json'))) { throw 'Native memory diagnosis did not complete' }
+        } elseif ($captures -ne 2 -or -not (Test-Path -LiteralPath (Join-Path $report 'soak-complete.json'))) { throw 'Native acceptance did not complete both presentation captures and the workload' }
     }
     Stop-Desktop
 } finally {

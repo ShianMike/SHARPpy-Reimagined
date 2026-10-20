@@ -43,6 +43,11 @@ on:
         required: false
         default: false
         type: boolean
+      native_memory_diagnostic:
+        description: Run a 15-minute renderer heap diagnostic, not two-hour acceptance
+        required: false
+        default: false
+        type: boolean
       ref:
         description: Commit or ref to test (blank uses the selected ref)
         required: false
@@ -72,7 +77,7 @@ env:
 
 jobs:
   native-acceptance:
-    name: Installed Windows acceptance
+    name: ${{ inputs.native_memory_diagnostic && 'Installed Windows memory diagnostic' || 'Installed Windows acceptance' }}
     if: ${{ inputs.run_native_acceptance == true }}
     runs-on: windows-latest
     timeout-minutes: 180
@@ -99,10 +104,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PUBLIC_UPDATE: ${{ inputs.native_public_update }}
+          MEMORY_DIAGNOSTIC: ${{ inputs.native_memory_diagnostic }}
         run: |
           & packaging/verify_native_acceptance.ps1 -Artifacts "$env:RUNNER_TEMP/native-candidate" `
-            -ReportDirectory "$env:RUNNER_TEMP/native-acceptance" -PublicUpdate:($env:PUBLIC_UPDATE -eq 'true')
-          if ($env:PUBLIC_UPDATE -ne 'true') {
+            -ReportDirectory "$env:RUNNER_TEMP/native-acceptance" -PublicUpdate:($env:PUBLIC_UPDATE -eq 'true') `
+            -ProfileMemory:($env:MEMORY_DIAGNOSTIC -eq 'true')
+          if ($env:PUBLIC_UPDATE -ne 'true' -and $env:MEMORY_DIAGNOSTIC -ne 'true') {
             python packaging/report_native_acceptance.py "$env:RUNNER_TEMP/native-acceptance"
             if ($LASTEXITCODE -ne 0) { throw 'Native evidence is incomplete' }
           }
@@ -117,6 +124,7 @@ jobs:
             ${{ runner.temp }}/native-acceptance/*.csv
             ${{ runner.temp }}/native-acceptance/*.png
             ${{ runner.temp }}/native-acceptance/*.log
+            ${{ runner.temp }}/native-acceptance/*.heapsnapshot
             frontend/test-results/desktop/**
           retention-days: 14
           if-no-files-found: error

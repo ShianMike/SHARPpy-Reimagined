@@ -7,6 +7,18 @@ Publishing is off; no main merge, tag or public v3.2.1 release has occurred.
 Earlier candidate results below are historical evidence, with their own exact
 artifact identities. Checkpoint 16 records the native acceptance continuation.
 
+**Release blocked by native memory growth.** The completed two-hour workload
+in [39375787049](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39375787049)
+ran 59 cycles / 7,271.891 seconds without recorded page errors, but its 241
+process samples show post-warmup private growth of **2,466.34 MiB**, a fitted
+**2,093.59 MiB/hour** slope and **5,751.04 MiB** peak. The WebView renderer
+accounts for most growth (393.3 -> 3,999.4 MiB); GPU and Python processes are
+comparatively bounded. This is not accepted long-session stability. Heap and
+backing-buffer profiling is the next step; no speculative cache fix or memory
+cap has been applied. PresentMon produced no CSV, so native FPS also remains
+unverified. Checkpoint 17 and the preserved raw artifact 12248600784 record this
+blocker. Public distribution stays on hold and release metadata is Unreleased.
+
 The current bundle uses CPython 3.13.16/OpenSSL 3.5.9 and NetCDF4 1.7.5 with
 its own OpenSSL 3.6.5/curl 8.23.0. Actual frozen/installed rendering and saved-file
 upgrade checks pass. The complete offline lane passes 3,794 tests with two

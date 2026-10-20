@@ -1,15 +1,41 @@
 # v3.2.1 implementation checkpoints
 
-Current status: Checkpoint 16. The user requested completion of the outstanding
+Current status: Checkpoint 17. The user requested completion of the outstanding
 native acceptance, live-provider, Cargo warning, SBOM and release work. Preserve
 the verified `456dec3` candidate as historical evidence; the final-acceptance
 continuation changes the bundled Python runtime and requires new artifacts.
 No merge, tag or GitHub Release has been performed.
 
-Release metadata is prepared on the release branch: the dated 3.2.1 changelog
-and README download links are ready for publication. Eleven existing version
-and updater-packaging checks pass. This is preparation, not a public-release
-claim; keep publication pending review of the completed native memory evidence.
+## Checkpoint 17 — native memory growth blocks release
+
+Run **39375787049** completed **59 cycles / 7,271.891 workload seconds**, with
+no recorded page errors. Its **241 process samples / 7,273.829 seconds** show
+post-warmup private growth of **2,466.34 MiB** between first/last-quarter medians,
+a **2,093.59 MiB/hour** fitted slope and **5,751.04 MiB** peak committed private
+memory. The WebView renderer dominates: **393.3 -> 3,999.4 MiB**, peak 4,292.4,
+post-warmup slope 2,049.4 MiB/hour. GPU and Python processes are comparatively
+bounded, and process count/handles remain stable. This is a measured release
+blocker requiring retention diagnosis, not a memory pass. PresentMon also
+created neither CSV, so actual native presentation remains unverified.
+
+Preserve the raw uploaded artifact **12248600784**, downloaded
+`native-complete-39375787049`, `native-complete-39375787049.log`, and generated
+`native-memory-trend.png` / `memory-analysis.json`. The tested installer is
+still the recorded db9c301/NetCDF4 1.7.4 build. Do not blame Python, the GPU or
+NetCDF4 for the renderer trend without further evidence.
+
+The separate **15-minute memory diagnostic** repeats the same loaded workload,
+records CDP heap/backing-storage metrics, and saves initial/final renderer heap
+snapshots. It writes `diagnostic-complete.json`, never `soak-complete.json`;
+ordinary acceptance remains two healthy hours and still requires actual display
+evidence. The release documentation is returned to **Unreleased**. Keep PR #92
+in draft and hold publication while diagnosing this growth.
+
+Current-branch live provider run **39386404877** passes all three ECCC/HRRR
+contracts in **42.002 seconds**, no contract skips, timing PASS. The one optional
+native-equivalence collection skip is unrelated. Preserve its raw log and JUnit.
+
+## Prior candidate verification
 
 Latest candidate **39382361268** at exact runtime source
 **0d0ae3b4bcbef6071efc2d2512878cdfb6871567** passes **27 hosted jobs**;

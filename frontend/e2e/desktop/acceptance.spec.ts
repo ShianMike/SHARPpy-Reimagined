@@ -107,6 +107,7 @@ test.describe("installed native acceptance", () => {
     results.initialPanels = await loadedPanels();
     const start = Date.now();
     let cycle = 0;
+    let capture = 0;
     const errors: string[] = [];
     page.on("pageerror", (error) => { errors.push(String(error)); });
     while (Date.now() - start < 2 * 60 * 60_000) {
@@ -122,8 +123,13 @@ test.describe("installed native acceptance", () => {
       }
       const panels = await loadedPanels();
       const centre = await mapCentre();
+      const measure = capture === 0 || (capture === 1 && Date.now() - start > 115 * 60_000);
+      if (measure && output !== undefined) {
+        writeFileSync(join(output, `capture-${String(capture++)}-ready.json`), JSON.stringify({ utc: new Date().toISOString(), panels, forecast: await forecastIdentity() }));
+      }
       // Continuous native panning gives PresentMon real displayed frames to measure.
-      for (let step = 0; step < 240; step += 1) {
+      const panUntil = Date.now() + (measure ? 180_000 : 30_000);
+      for (let step = 0; Date.now() < panUntil; step += 1) {
         await page.mouse.move(centre.x + (step % 2 === 0 ? -80 : 80), centre.y);
         await page.mouse.down();
         await page.mouse.move(centre.x + (step % 2 === 0 ? 80 : -80), centre.y, { steps: 4 });

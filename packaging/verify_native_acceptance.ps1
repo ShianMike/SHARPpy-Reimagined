@@ -159,20 +159,29 @@ try {
             -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $report 'workload.log') -RedirectStandardError (Join-Path $report 'workload-error.log')
         $started = [DateTime]::UtcNow
         $captures = 0
+        $firstDisplayVerified = $false
         while (-not $workload.HasExited) {
             if (([DateTime]::UtcNow - $started).TotalMinutes -gt 149) { $workload.Kill(); throw 'Native soak exceeded its deadline' }
             $owned = @(Process-Sample)
             if (Test-Path -LiteralPath (Join-Path $report 'workload.log')) {
                 Get-Content -LiteralPath (Join-Path $report 'workload.log') -Tail 1 | Write-Host
             }
-            $elapsed = ([DateTime]::UtcNow - $started).TotalMinutes
-            if (($captures -eq 0 -and $elapsed -gt 5) -or ($captures -eq 1 -and $elapsed -gt 115)) {
+            if ($captures -lt 2 -and (Test-Path -LiteralPath (Join-Path $report "capture-$captures-ready.json"))) {
                 $gpu = @($owned | Where-Object { $_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -match '--type=gpu-process' })
                 if ($gpu.Count -ne 1) { throw 'No unique desktop WebView2 GPU process' }
                 $csv = Join-Path $report "presentation-$captures.csv"
                 $present += Start-Process -FilePath $tool -PassThru -WindowStyle Hidden -ArgumentList `
                     "--process_id $($gpu[0].ProcessId) --output_file $csv --session_name SHARPPyAcceptance-$env:GITHUB_RUN_ID-$captures --timed 120 --terminate_after_timed --no_console_stats --write_display_metadata"
                 $captures++
+            }
+            if (-not $firstDisplayVerified -and $present.Count -gt 0 -and $present[0].HasExited) {
+                if ($present[0].ExitCode -ne 0) { throw 'Initial PresentMon capture failed' }
+                $displayed = @(Import-Csv -LiteralPath (Join-Path $report 'presentation-0.csv') | Where-Object {
+                    $_.DisplayedTime -match '^\d+(\.\d+)?$' -and [double]$_.DisplayedTime -gt 0
+                })
+                if ($displayed.Count -lt 100) { throw 'Hosted runner did not produce sufficient actually displayed native frames' }
+                Write-Host "Initial native capture: $($displayed.Count) displayed frames"
+                $firstDisplayVerified = $true
             }
             Start-Sleep -Seconds 30
         }

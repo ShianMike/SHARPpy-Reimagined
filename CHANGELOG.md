@@ -7,6 +7,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Use the normal WebView profile for public-updater acceptance on its disposable
+  Windows runner. Seed preferences in the same profile the installer relaunches,
+  rather than a process-only override the Windows shell does not preserve.
+  Keep isolated profiles for the other installed acceptance modes. Capture
+  WebView2 evidence by process ownership in either mode and fail if it is missing.
+  Record verified public v3.2.1 downloads, provenance and interactive-updater
+  results in the performance report and continuation checkpoint.
+
 ## [v3.2.1] - 2026-10-20
 
 ### Fixed

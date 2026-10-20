@@ -18,7 +18,8 @@ if (Test-Path -LiteralPath $report) { throw 'Native acceptance report directory 
 New-Item -ItemType Directory -Path $report | Out-Null
 $artifactsRoot = (Resolve-Path -LiteralPath $Artifacts).Path
 $install = Join-Path $report 'installed'
-$env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $report 'webview-profile'
+# NSIS relaunch uses the normal profile; seed that same profile on this disposable runner.
+$env:WEBVIEW2_USER_DATA_FOLDER = if ($PublicUpdate) { $null } else { Join-Path $report 'webview-profile' }
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224'
 $env:SHARPPY_DESKTOP_CDP = 'http://127.0.0.1:9224'
 $env:E2E_SCREENSHOT_DIR = $report
@@ -149,7 +150,9 @@ try {
     Stop-Desktop
     Start-Desktop
     Run-Phase 'restart'
-    Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like "*$report*" } |
+    $webviews = @(Process-Sample | Where-Object Name -EQ 'msedgewebview2.exe')
+    if ($webviews.Count -eq 0) { throw 'No owned WebView2 processes found after restart' }
+    $webviews |
         Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $report 'webview2.json')
     if ($ProfileMemory) {

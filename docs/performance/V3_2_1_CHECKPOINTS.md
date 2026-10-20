@@ -1,9 +1,45 @@
 # v3.2.1 implementation checkpoints
 
-Current status: Checkpoint 20. The user explicitly requested release preparation
-and publication of v3.2.1 with the latest UI changes. Work remains solo; use
-@Browser for local UI verification. Preserve earlier candidates and measurements
-as historical evidence. Final source checks and hosted release gates are required.
+Current status: Checkpoint 21. v3.2.1 is published and its public download bytes,
+tag, updater feed and provenance are verified. The follow-up public-updater
+acceptance needs a test-profile correction. Work remains solo; use @Browser for
+local UI verification. Preserve earlier candidates and measurements as evidence.
+
+## Checkpoint 21 — published release and public-updater profile
+
+PR #92 merges at `58df75396dc1a2e249fc7a17450a1738dd7f0fd0` after all 34 checks
+pass. Release run 39422411276 succeeds on attempt 2: one SwiftShader startup
+timeout in browser shard 2 is preserved, and all 20 cases pass on its targeted
+retry without relaxing any limit or rebuilding the completed installer. The
+public stable release v3.2.1 has nine assets and its tag points to that merge.
+
+Actual downloaded bytes match all nine GitHub digests, eight SHA256SUMS entries,
+nine verified provenance subjects and all 4,991 portable-file hashes. Installer
+SHA256 is `e4e0cdc5470df4ad7d38a7a21251b9b78ebff4cdfbc4aa13463d3285d59d3076`.
+The final SBOM contains 5,478 components, 5,408 dependency records and 14,337
+edges. The public latest updater endpoint serves 3.2.1 with the matching signed
+installer URL. Frozen rendering and in-place 3.2.0 upgrades pass. The exact-source
+offline lane has 3,793 passes / two Windows-only skips in 212.504 seconds; WRF
+passes 66/66 in 25.533 seconds. Both timing gates pass. Main Tests run 39422375964
+and its public badge pass. Raw evidence is saved under the external
+`v3.2.1-final-acceptance/published-*` paths.
+
+Post-publication run 39425620509 passes all three live-provider contracts and
+the public update phase downloads, installs and restarts the real desktop. The
+next phase sees fresh settings and no upgrade highlights. The harness seeded a
+temporary WEBVIEW2_USER_DATA_FOLDER, while the NSIS shell relaunch uses the normal
+profile. Public-update acceptance now seeds the normal profile on the disposable
+runner; the other modes retain their isolated test profiles. Keep all existing
+highlight, preference, panel-count and repeated-restart assertions for the rerun.
+This is a harness correction; published application artifacts stay unchanged.
+Native presentation FPS remains unverified, and two-hour stability stays excluded.
+
+The corrected installed job in run 39426442043 passes all four phases: seed,
+public update, upgraded highlights/preferences and repeated normal restart. Saved
+JSON independently verifies 3.2.0 -> 3.2.1, light theme, Celsius, km/h, 2x playback
+and four panels. Review then catches a remaining evidence selector tied to the
+temporary profile path. Reuse the existing ancestry-based Process-Sample helper
+to capture owned WebView2 processes in both modes, and fail on missing evidence.
 
 ## Checkpoint 20 — final UI changes and authorized publication
 

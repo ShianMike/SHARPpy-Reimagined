@@ -36,8 +36,8 @@ test.describe("forecast playback", () => {
       const missing = details.locator("details");
       await expect(missing).not.toHaveAttribute("open");
       await missing.locator("summary").hover();
-      const accent = await hoursButton.evaluate((button) => getComputedStyle(button).color);
-      await expect(missing.locator("summary")).toHaveCSS("color", accent);
+      await expect.poll(async () => await missing.locator("summary").evaluate((element) => getComputedStyle(element).color)
+        === await hoursButton.evaluate((button) => getComputedStyle(button).color)).toBe(true);
       expect(await missing.evaluate((element) => getComputedStyle(element, "::details-content").transitionProperty)).toContain("block-size");
       await missing.locator("summary").press("Enter");
       await expect(missing.getByText("F018", { exact: true })).toBeVisible();
@@ -123,7 +123,8 @@ test("forecast-hour disclosure animates while its bottom edge stays anchored", a
   const details = page.getByRole("dialog", { name: "Forecast Hours", exact: true });
   const summary = details.locator("details > summary");
   await summary.hover();
-  await expect(summary).toHaveCSS("color", await trigger.evaluate((button) => getComputedStyle(button).color));
+  await expect.poll(async () => await summary.evaluate((element) => getComputedStyle(element).color)
+    === await trigger.evaluate((button) => getComputedStyle(button).color)).toBe(true);
   for (const phase of ["expand", "collapse"]) {
     const frames = await summary.evaluate(async (element) => {
       const panel = element.closest('[role="dialog"]');

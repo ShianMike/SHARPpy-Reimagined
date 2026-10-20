@@ -19,8 +19,16 @@ changes, including light/dark hover and reduced motion. Current screenshots are
 saved under the external final-acceptance evidence directory. The README,
 changelog and six grouped in-app highlights include the delivered behavior.
 
-The final local offline and frontend checks are running. Commit the complete
-change set, pass the normal PR gates, merge normally and publish through the
+The full frontend suite passes 835 tests, with two opt-in performance cases
+skipped; TypeScript, ESLint and architecture boundaries pass. The first local
+offline run passes all 3,795 assertions in 266.78 seconds, but NPZ rendering at
+20.14 seconds exceeds its 16.8-second local ceiling. Preserve that failed timing
+evidence. The documented two-worker configuration is rerunning alone, without
+changing limits. CI also identified a browser assertion capturing the trigger's
+intermediate hover color; both disclosure checks now poll the live colors until
+they match, retaining all motion and playback assertions.
+
+Commit the complete change set, pass the normal PR gates, merge normally and publish through the
 existing protected release workflow. Verify the final tag, assets, checksums,
 provenance, updater feed and standalone Tests badge. Complete the hosted public
 updater acceptance after the feed exists; do not count a silent installer as

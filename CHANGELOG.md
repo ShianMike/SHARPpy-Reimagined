@@ -57,7 +57,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hover/focus feedback and native expand/collapse animation that keeps the panel
   anchored above its trigger.
   Use Title Case for its text, and place the icon-only Fast/Smooth playback
-  toggle beside Loop.
+  toggle beside Loop. Browser checks wait for hover transitions to settle before
+  comparing colors, retaining the animation and playback assertions.
 - Add opt-in installed Windows acceptance for preference retention, repeated
   restarts and signed interactive updates, with a separately opted-in 15-minute
   heap diagnostic, process sampling and native presentation traces on disposable

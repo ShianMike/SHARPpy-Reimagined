@@ -23,20 +23,14 @@ $env:E2E_SCREENSHOT_DIR = $report
 $desktop = $null
 $present = @()
 $starts = 0
-$taskNames = @()
-$scheduler = New-Object -ComObject Schedule.Service
-$scheduler.Connect()
-$taskFolder = $scheduler.GetFolder('\')
-$launcher = Join-Path $report 'start-standard-desktop.ps1'
-@'
-param([string] $Executable, [string] $Profile, [string] $ProcessFile)
-$ErrorActionPreference = 'Stop'
-$env:WEBVIEW2_USER_DATA_FOLDER = $Profile
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224'
-$process = Start-Process -FilePath $Executable -PassThru -RedirectStandardOutput "$ProcessFile.log" -RedirectStandardError "$ProcessFile-error.log"
-$process.Id | Set-Content -LiteralPath $ProcessFile
-$process.WaitForExit()
-'@ | Set-Content -LiteralPath $launcher
+$debugPolicy = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+$debugApp = 'sharppy-reimagined.exe'
+if ((Get-ItemProperty -LiteralPath $debugPolicy -Name $debugApp -ErrorAction SilentlyContinue).$debugApp) {
+    throw 'Refusing to replace an existing app-specific WebView2 test policy'
+}
+# Microsoft-supported app-scoped override for an elevated disposable runner.
+New-Item -Path $debugPolicy -Force | Out-Null
+New-ItemProperty -LiteralPath $debugPolicy -Name $debugApp -Value '--remote-debugging-address=127.0.0.1 --remote-debugging-port=9224' -PropertyType String | Out-Null
 $gitSource = (& git rev-parse HEAD).Trim()
 Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,VideoProcessor,AdapterRAM |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'graphics.json')
@@ -61,24 +55,8 @@ function Start-Desktop {
     $executables = @(Get-ChildItem -LiteralPath $install -Filter '*.exe' -File | Where-Object Name -NotLike '*uninstall*')
     if ($executables.Count -ne 1) { throw 'Installed desktop executable is not unique' }
     $script:starts++
-    # WebView2 150+ ignores debugging env flags in elevated processes. Use a standard-user token.
-    $processFile = Join-Path $report "desktop-$starts.pid"
-    $definition = $scheduler.NewTask(0)
-    $definition.Principal.UserId = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $definition.Principal.LogonType = 3 # InteractiveToken
-    $definition.Principal.RunLevel = 0 # LUA / least privilege
-    $definition.Settings.ExecutionTimeLimit = 'PT3H'
-    $action = $definition.Actions.Create(0)
-    $action.Path = (Get-Command pwsh.exe).Source
-    $action.WorkingDirectory = $report
-    $action.Arguments = "-NoProfile -NonInteractive -File `"$launcher`" `"$($executables[0].FullName)`" `"$env:WEBVIEW2_USER_DATA_FOLDER`" `"$processFile`""
-    $name = "SHARPPyAcceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-$starts"
-    $task = $taskFolder.RegisterTaskDefinition($name, $definition, 2, $null, $null, 3)
-    $script:taskNames += $name
-    $task.Run($null) | Out-Null
-    for ($attempt = 0; $attempt -lt 30 -and -not (Test-Path -LiteralPath $processFile); $attempt++) { Start-Sleep -Seconds 1 }
-    if (-not (Test-Path -LiteralPath $processFile)) { throw "Standard-user launch failed; task result: $($task.LastTaskResult)" }
-    $script:desktop = Get-Process -Id ([int](Get-Content -LiteralPath $processFile))
+    $script:desktop = Start-Process -FilePath $executables[0].FullName -PassThru `
+        -RedirectStandardOutput (Join-Path $report "desktop-$starts.log") -RedirectStandardError (Join-Path $report "desktop-$starts-error.log")
     $lastError = ''
     for ($attempt = 0; $attempt -lt 45; $attempt++) {
         if ($script:desktop.HasExited) { throw 'Desktop exited before its WebView2 started' }
@@ -195,5 +173,5 @@ try {
 } finally {
     Pop-Location
     if ($null -ne $desktop -and -not $desktop.HasExited) { $desktop.CloseMainWindow() | Out-Null }
-    foreach ($name in $taskNames) { $taskFolder.DeleteTask($name, 0) }
+    Remove-ItemProperty -LiteralPath $debugPolicy -Name $debugApp
 }

@@ -302,7 +302,7 @@ def test_release_builds_installs_and_requires_locked_cp313_rust_wheel():
     python = next(step for step in steps if step.get("name") == "Set up Python")
     assert python["with"]["python-version"] == "3.13.16"
     runtime = next(step for step in steps if step.get("name") == "Verify maintained bundled Python and TLS runtime")
-    assert "ssl.OPENSSL_VERSION_INFO >= (3, 5, 9)" in runtime["run"]
+    assert "ssl.OPENSSL_VERSION_INFO >= (3, 5, 0, 9)" in runtime["run"]
     toolchain = next(
         step for step in steps
         if step.get("name") == "Set up Rust 1.88 toolchain"

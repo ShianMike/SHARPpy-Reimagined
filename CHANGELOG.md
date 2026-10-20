@@ -73,6 +73,11 @@ Target version: **3.2.1** (not published).
 
 ### Security
 
+- Build the Windows bundle with CPython 3.13.16 and its OpenSSL 3.5.9 runtime,
+  replacing the old CPython 3.11.9/OpenSSL 3.0.13 binaries found in the candidate.
+  Inventory every shipped file, PE version/import and external Windows/WebView2
+  requirement in the SBOM. Retain the Linux GTK RustSec warnings with explicit
+  Windows non-applicability evidence and a guard against affected Windows edges.
 - Remove unused legacy ZIP updater extraction and its three reported RustSec
   advisories while retaining signed NSIS updates, TLS and system proxy support.
   Constrain aiohttp to 3.14.5 to address three reported Python advisories.

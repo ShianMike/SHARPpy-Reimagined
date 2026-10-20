@@ -223,8 +223,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: "3.11"
+          python-version: "3.13.16"
           cache: pip
+
+      - name: Verify maintained bundled Python and TLS runtime
+        run: >-
+          python -c "import sys, ssl; assert sys.version_info[:3] == (3, 13, 16);
+          assert ssl.OPENSSL_VERSION_INFO >= (3, 5, 9); print(sys.version); print(ssl.OPENSSL_VERSION)"
 
       - name: Set up Rust 1.88 toolchain
         shell: bash
@@ -275,10 +280,10 @@ jobs:
           }
           $wheels = @(
             Get-ChildItem -LiteralPath "rust/sharpmod-rs/dist" `
-              -Filter "sharpmod_rs-*-cp311-cp311-win_amd64.whl" -File
+              -Filter "sharpmod_rs-*-cp313-cp313-win_amd64.whl" -File
           )
           if ($wheels.Count -ne 1) {
-            throw "Expected one CPython 3.11 Windows Rust wheel, found $($wheels.Count)"
+            throw "Expected one CPython 3.13 Windows Rust wheel, found $($wheels.Count)"
           }
           python -m pip install --force-reinstall --no-deps $wheels[0].FullName
           if ($LASTEXITCODE -ne 0) {
@@ -506,7 +511,7 @@ jobs:
         run: |
           Compress-Archive -Path "release-staging/SHARPpy-Reimagined" `
             -DestinationPath "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-windows-x64.zip" -CompressionLevel Fastest -Force
-          python packaging/generate_sbom.py --output "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-sbom.cdx.json" --artifacts release-artifacts
+          python packaging/generate_sbom.py --output "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-sbom.cdx.json" --artifacts release-artifacts --runtime-root release-staging/SHARPpy-Reimagined
           if ($LASTEXITCODE -ne 0) { throw "Runtime SBOM generation failed" }
           Get-ChildItem -LiteralPath "release-artifacts" -File | Where-Object Name -NotLike '*-SHA256SUMS.txt' | Sort-Object Name | ForEach-Object {
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()

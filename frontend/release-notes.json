@@ -75,6 +75,10 @@
       {
         "title": "Settings stay usable",
         "description": "If device storage is unavailable or full, workspace settings keep working for the current session. Long release highlights scroll with their close controls in reach. Unchanged map labels reuse their layout during forecast playback."
+      },
+      {
+        "title": "Updated bundled security components",
+        "description": "The Windows app includes a maintained Python and TLS runtime, updated network dependencies and signed installer checks. Downloads include checksums and a detailed component inventory."
       }
     ]
   }

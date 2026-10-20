@@ -22,6 +22,7 @@ $env:SHARPPY_DESKTOP_CDP = 'http://127.0.0.1:9224'
 $env:E2E_SCREENSHOT_DIR = $report
 $desktop = $null
 $present = @()
+$starts = 0
 $gitSource = (& git rev-parse HEAD).Trim()
 Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,VideoProcessor,AdapterRAM |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'graphics.json')
@@ -45,16 +46,23 @@ function Install-Version([string] $File) {
 function Start-Desktop {
     $executables = @(Get-ChildItem -LiteralPath $install -Filter '*.exe' -File | Where-Object Name -NotLike '*uninstall*')
     if ($executables.Count -ne 1) { throw 'Installed desktop executable is not unique' }
-    $script:desktop = Start-Process -FilePath $executables[0].FullName -PassThru
-    for ($attempt = 0; $attempt -lt 90; $attempt++) {
+    $script:starts++
+    $script:desktop = Start-Process -FilePath $executables[0].FullName -PassThru `
+        -RedirectStandardOutput (Join-Path $report "desktop-$starts.log") -RedirectStandardError (Join-Path $report "desktop-$starts-error.log")
+    $lastError = ''
+    for ($attempt = 0; $attempt -lt 45; $attempt++) {
         if ($script:desktop.HasExited) { throw 'Desktop exited before its WebView2 started' }
         try {
-            $pages = Invoke-RestMethod "$env:SHARPPY_DESKTOP_CDP/json/list"
+            $pages = Invoke-RestMethod "$env:SHARPPY_DESKTOP_CDP/json/list" -TimeoutSec 2 -NoProxy
+            $pages | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $report "startup-pages-$starts.json")
             if (@($pages | Where-Object url -Like 'http*tauri.localhost*').Count -gt 0) { return }
-        } catch { Write-Verbose $_ }
+        } catch { $lastError = $_.ToString() }
         Start-Sleep -Seconds 1
     }
-    throw 'Desktop WebView2 did not expose its test endpoint'
+    Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -eq $script:desktop.Id -or $_.Name -eq 'msedgewebview2.exe' } |
+        Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Depth 5 |
+        Set-Content -LiteralPath (Join-Path $report "startup-processes-$starts.json")
+    throw "Desktop WebView2 did not expose its test endpoint: $lastError"
 }
 function Stop-Desktop {
     if ($null -ne $script:desktop -and -not $script:desktop.HasExited) {

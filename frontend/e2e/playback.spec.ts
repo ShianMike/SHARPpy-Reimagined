@@ -17,21 +17,20 @@ test.describe("forecast playback", () => {
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     await turnOn(page, "model-field");
+    // Jump before the auxiliary renderers start, so their real start-up deadlines are not skipped.
+    if (panels === 4) await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
     if (panels > 1) {
       await page.getByRole("toolbar", { name: "Map" }).getByRole("button", { name: panels === 2 ? "Two synchronized panels" : "Four synchronized panels" }).click();
     }
     const hour = page.getByRole("slider", { name: "Forecast hour", exact: true });
     const timeline = page.getByRole("region", { name: "Forecast timeline" });
     const valid = page.getByLabel("Valid time");
-    await expect(valid).toHaveAttribute("aria-busy", "false");
     if (panels === 4) {
-      await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
       await timeline.getByRole("button", { name: "Download all forecast hours", exact: true }).press("Enter");
-      // Drive paused fixture timers without real-time polling backoff or intervening SwiftShader frames.
+      // Drive paused fixture timers; hosted software rendering can spend seconds per clock advance.
       await expect.poll(async () => {
         await page.clock.fastForward(300);
         return timeline.getByRole("status", { name: "Forecast downloads" }).textContent();
-      // Hosted software rendering can spend several seconds per clock advance.
       }, { intervals: [0], timeout: 60_000 }).toContain("All 19 forecast hours saved to cache");
       await expect(timeline.getByRole("button", { name: "Download all forecast hours", exact: true })).toContainText("19/19");
       const detailsButton = timeline.getByRole("button", { name: "Forecast download details", exact: true });
@@ -44,6 +43,7 @@ test.describe("forecast playback", () => {
       await timeline.getByRole("button", { name: "Smooth playback", exact: true }).press("Enter");
       await expect(timeline.getByRole("button", { name: "Smooth playback", exact: true })).toHaveAttribute("aria-pressed", "true");
     }
+    await expect(valid).toHaveAttribute("aria-busy", "false");
     if (panels === 4) {
       await timeline.getByRole("button", { name: "Play", exact: true }).press("Enter");
       for (let frame = 1; frame <= 3; frame++) {

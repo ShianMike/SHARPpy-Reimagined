@@ -32,6 +32,16 @@ External Windows/WebView2 requirements are declared separately from bundled
 files. Delvewheel DLL aliases are now related to possible native import names;
 this static inventory does not claim to be a runtime loader trace.
 
+The later [39377525097 candidate](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39377525097)
+also passes all 27 jobs at `c65b882`. It includes the DLL-alias inventory fix:
+5,468 components, 4,981 shipped files, 5,398 dependency records and 14,198 edges.
+The remaining external `snappy.dll` import is explicitly unresolved. The full
+offline lane passes 3,794 tests with two Windows-only skips in 214.701 s and
+passes its unchanged hosted timing gate. Downloaded runtime reports, metadata
+checksums, official SBOM structural validation and exact-source hosted SBOM
+provenance pass. Large installer/ZIP bytes from this later run have not been
+downloaded; do not transfer the earlier candidate's byte checks or soak to it.
+
 Installed migration of Light theme, Celsius/km/h, 2x playback and four panels
 passes from 3.2.0 to the Python 3.13 candidate and through another normal native
 restart, including correct release-highlight presentation/dismissal. Its actual

@@ -49,6 +49,8 @@ Target version: **3.2.1** (not published).
   Give the existing four-panel fixture download its bounded 60-second readiness
   wait on hosted software rendering, retaining every cache/playback assertion,
   the overall test deadline and all scientific/performance timing gates.
+  Pause its simulated clock before creating auxiliary renderers so the one-hour
+  clock jump cannot falsely fire their existing 15-second startup deadlines.
 - Reclaim unreachable Qt chart buffers between serial sounding renders, including
   failed renders. Fifteen paired worker requests preserve exact PNGs and view
   metadata; measured peak working set falls from 683.3 to 448.4 MiB in that

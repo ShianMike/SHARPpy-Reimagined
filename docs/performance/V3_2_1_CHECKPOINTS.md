@@ -18,6 +18,26 @@ The later c65b882 PR run 39377462086 has a four-panel browser failure reporting
 renderer startup timeouts; its raw log is retained for diagnosis. It is not a
 passing gate. Candidate 39377525097 is still running.
 
+Subsequent diagnosis: the failing browser trace records all three auxiliary
+startup alarms about 2.4 seconds after panel creation, during the test's
+one-hour virtual-clock jump. Move that jump before auxiliary creation, then
+drive the paused fixture timers before asserting initial field readiness.
+All original assertions and the production 15-second watchdog remain. The
+focused four-panel case passes, followed by all three playback cases (1.3 min);
+TypeScript and focused ESLint pass. Fresh hosted checks are still required.
+
+Candidate **39377525097** has now completed at **c65b882**: **27 jobs pass**,
+public publishing off. Its complete offline lane has **3,794 passes / two
+Windows-only skips**, 214.701 s, with the unchanged hosted timing gate passing.
+Downloaded frozen/installed runtime evidence confirms Python 3.13.16, Rust
+3.2.1, 933 stations and the 39-level sounding/1,228,894-byte PNG. Its SBOM has
+**5,468 components / 4,981 shipped files / 5,398 dependency records / 14,198
+edges**. The DLL-alias links remove five false unresolved components; the
+remaining `snappy.dll` import is explicitly unresolved. Structural schema,
+downloaded metadata checksums and exact-source hosted provenance pass. This
+does not assert that the large installer/ZIP from this run were downloaded or
+that its bytes are identical to the ongoing soak's earlier candidate.
+
 Latest continuation snapshot (2026-10-20 05:52 UTC): draft PR **#92** is open
 and attached to this chat. Head before this documentation/inventory adjustment
 is **d23ec71**. Its 34 PR checks pass, three opt-in checks skip. Release candidate

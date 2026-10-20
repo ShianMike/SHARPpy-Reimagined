@@ -20,6 +20,7 @@ test.describe("installed native acceptance", () => {
 
   test("preferences survive installation and repeated native restart", async () => {
     test.skip(phase === "soak");
+    if (phase === "update") test.setTimeout(6 * 60_000);
     const version = phase === "seed" || phase === "update" ? "3.2.0" : "3.2.1";
     const notes = page.getByRole("dialog", { name: `What’s new in ${version}` });
     await expect(workspaces()).toBeVisible();

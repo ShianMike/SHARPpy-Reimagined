@@ -170,9 +170,15 @@ try {
                 $gpu = @($owned | Where-Object { $_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -match '--type=gpu-process' })
                 if ($gpu.Count -ne 1) { throw 'No unique desktop WebView2 GPU process' }
                 $csv = Join-Path $report "presentation-$captures.csv"
-                $present += Start-Process -FilePath $tool -PassThru -WindowStyle Hidden -ArgumentList `
+                $present += Start-Process -FilePath $tool -PassThru -WindowStyle Hidden `
+                    -RedirectStandardOutput (Join-Path $report "capture-$captures.log") -RedirectStandardError (Join-Path $report "capture-$captures-error.log") -ArgumentList `
                     "--process_id $($gpu[0].ProcessId) --output_file $csv --session_name SHARPPyAcceptance-$env:GITHUB_RUN_ID-$captures --timed 120 --terminate_after_timed --no_console_stats --write_display_metadata --v2_metrics"
                 $captures++
+            }
+            if (-not $firstDisplayVerified -and $present.Count -gt 0 -and -not $present[0].HasExited -and
+                ([DateTime]::UtcNow - $present[0].StartTime.ToUniversalTime()).TotalSeconds -gt 180) {
+                $present[0].Kill()
+                throw 'PresentMon did not finish its bounded display capture; inspect native graphics/trace diagnostics'
             }
             if (-not $firstDisplayVerified -and $present.Count -gt 0 -and $present[0].HasExited) {
                 if ($present[0].ExitCode -ne 0) { throw 'Initial PresentMon capture failed' }

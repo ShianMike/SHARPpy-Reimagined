@@ -6,6 +6,44 @@ the verified `456dec3` candidate as historical evidence; the final-acceptance
 continuation changes the bundled Python runtime and requires new artifacts.
 No merge, tag or GitHub Release has been performed.
 
+The native inventory revealed a second OpenSSL copy in NetCDF4's own wheel:
+1.7.4 bundles crypto 3.6.0/curl 8.17.0. The official 1.7.5 patch, released
+2026-10-15, supports all existing Python lanes and its verified 3.13 Windows
+wheel bundles crypto 3.6.5/curl 8.23.0. Pin this existing dependency to 1.7.5;
+do not replace DLLs by hand. Isolated wheel probes retain the optional codec
+limitation. All 83 focused WRF/decoder/sounding/satellite/packaging checks pass
+against an isolated verified 1.7.5 Windows wheel; four updater packaging checks
+also pass. Fresh hosted release artifacts must still pass. Do not restart the ongoing memory run;
+record its actual earlier installer identity and the dependency difference.
+
+Verified continuation (2026-10-20 06:36 UTC): **34 PR checks pass** at
+**8895eb54a30d8ed84f65531687c29610ab8c1bf7**, including the corrected browser
+clock behavior. Candidate 39377525097 is now fully downloaded: the archive
+digest, all eight checksums, all nine cryptographically verified provenance
+subjects and all 4,981 portable file hashes match. The actual updater library
+accepts that downloaded installer's signature/version and rejects corrupt bytes
+and version substitution. Reports are `artifact-integrity-39377525097.json`,
+`sbom-provenance-39377525097.json` and `downloaded-updater-39377525097.log` in
+the external final-acceptance evidence directory.
+
+The remaining `snappy.dll` import is in the official NetCDF4 1.7.4 Windows
+wheel's `blosc.dll`, not a PyInstaller omission. An isolated verified PyPI wheel
+also cannot load the optional Blosc/Bzip2/Zstandard plugins. This version is
+already pinned in v3.2.0; the packaged core NetCDF4/WRF runtime check passes,
+but it does not establish these optional codecs' availability. Preserve this
+upstream limitation and unresolved import instead of inventing a version or
+bundling an arbitrary DLL. No new compression support is claimed.
+
+The live two-hour run remains active: 27 cycles / 3,250 seconds were observed in
+the browser. Do not restart it. Native presentation is still unverified because
+PresentMon produced no display events. The official v2.6.0 console documentation
+confirms the repeated process-name arguments and v2 metrics are valid. A
+Chromium `FramePresented`/`Display::FrameDisplayed` trace alone is also not
+hardware presentation proof: feedback can represent failure or estimated
+completion. Do not substitute browser/renderer scheduling for this missing
+measurement. Local native launching remains blocked and the user cannot
+manually launch now; public updater acceptance still awaits a public feed.
+
 Progress-log correction (2026-10-20): the native wrapper was repeating the last
 workload line every 30 seconds. Each unchanged line now emits once, cycle logs
 label cumulative elapsed time against 120 minutes, and missing display telemetry

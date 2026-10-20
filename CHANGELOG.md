@@ -83,8 +83,11 @@ Target version: **3.2.1** (not published).
 - Build the Windows bundle with CPython 3.13.16 and its OpenSSL 3.5.9 runtime,
   replacing the old CPython 3.11.9/OpenSSL 3.0.13 binaries found in the candidate.
   Include both runtime license notices and verify the actual TLS version.
+  Update the existing NetCDF4 dependency to 1.7.5 so its official Windows wheel
+  supplies OpenSSL 3.6.5 and curl 8.23.0 instead of 3.6.0 and 8.17.0.
   Inventory every shipped file, PE version/import and external Windows/WebView2
   requirement in the SBOM, including wheel-mangled native-library aliases.
+  Preserve unresolved optional compression imports and static-library limits.
   Retain the Linux GTK RustSec warnings with explicit
   Windows non-applicability evidence and a guard against affected Windows edges.
 - Remove unused legacy ZIP updater extraction and its three reported RustSec

@@ -74,7 +74,7 @@
       },
       {
         "title": "Updated bundled security components",
-        "description": "The Windows app includes a maintained Python and TLS runtime, updated network dependencies and signed installer checks. Downloads include checksums and a detailed component inventory."
+        "description": "The Windows app includes a maintained Python and TLS runtime, updated libraries for network access and weather files, and signed installer checks. Downloads include checksums and a detailed component inventory."
       }
     ]
   }

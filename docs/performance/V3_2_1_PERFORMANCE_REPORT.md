@@ -39,8 +39,31 @@ The remaining external `snappy.dll` import is explicitly unresolved. The full
 offline lane passes 3,794 tests with two Windows-only skips in 214.701 s and
 passes its unchanged hosted timing gate. Downloaded runtime reports, metadata
 checksums, official SBOM structural validation and exact-source hosted SBOM
-provenance pass. Large installer/ZIP bytes from this later run have not been
-downloaded; do not transfer the earlier candidate's byte checks or soak to it.
+provenance pass. Full-download verification also confirms all eight checksums,
+all nine verified provenance subjects and all 4,981
+portable file hashes match candidate 39377525097. The real updater verifier
+passes against its downloaded installer, including corruption and version
+substitution rejection. Its two-hour soak is still not inferred from another
+build. All 34 PR checks pass at `8895eb5`, including corrected virtual-clock
+ordering in the four-panel browser case.
+
+The unresolved `snappy.dll` originates in the official NetCDF4 1.7.4 Windows
+wheel's Blosc library. An isolated verified wheel probe cannot load the optional
+Blosc/Bzip2/Zstandard plugins; this is a pre-existing upstream codec limitation,
+not a file removed by packaging. Core packaged NetCDF4/WRF dependency checks
+pass, but do not establish those optional codecs' availability. The dependency
+inventory keeps the unresolved import visible and does not invent its version.
+
+That wheel also includes OpenSSL 3.6.0 and curl 8.17.0. The official
+[NetCDF4 1.7.5 patch](https://github.com/Unidata/netcdf4-python/releases/tag/v1.7.5rel)
+has Windows wheels for Python 3.11 through 3.15, and the verified 3.13 wheel
+ships OpenSSL 3.6.5/curl 8.23.0. The release constraint is now 1.7.5 to take
+those upstream native security fixes without replacing individual DLLs.
+The [OpenSSL advisory index](https://openssl-library.org/news/vulnerabilities-3.6/)
+records 3.6.5 security fixes; this does not claim every older-library advisory
+was reachable through this application. Isolated 1.7.5 still lacks the optional
+compression dependencies, so that limitation remains. New hosted artifacts and
+scientific/WRF checks are required; earlier candidate evidence stays separate.
 
 Installed migration of Light theme, Celsius/km/h, 2x playback and four panels
 passes from 3.2.0 to the Python 3.13 candidate and through another normal native

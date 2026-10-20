@@ -23,7 +23,7 @@ eccodes==2.49.0
 xarray==2026.9.0
 numcodecs==0.16.5
 pyproj==3.7.2
-netCDF4==1.7.4
+netCDF4==1.7.5
 
 maturin==1.15.0
 pyinstaller==6.22.3

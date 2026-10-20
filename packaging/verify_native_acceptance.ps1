@@ -161,12 +161,18 @@ try {
             -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $report 'workload.log') -RedirectStandardError (Join-Path $report 'workload-error.log')
         $started = [DateTime]::UtcNow
         $captures = 0
-        $firstDisplayVerified = $false
+        $firstCaptureChecked = $false
+        $lastWorkloadLine = $null
+        Write-Host 'Starting 120-minute native memory soak; progress reports cumulative elapsed time.'
         while (-not $workload.HasExited) {
             if (([DateTime]::UtcNow - $started).TotalMinutes -gt 149) { $workload.Kill(); throw 'Native soak exceeded its deadline' }
             $owned = @(Process-Sample)
             if (Test-Path -LiteralPath (Join-Path $report 'workload.log')) {
-                Get-Content -LiteralPath (Join-Path $report 'workload.log') -Tail 1 | Write-Host
+                $line = Get-Content -LiteralPath (Join-Path $report 'workload.log') -Tail 1
+                if ($line -and $line -cne $lastWorkloadLine) {
+                    Write-Host $line
+                    $lastWorkloadLine = $line
+                }
             }
             if ($captures -lt 2 -and (Test-Path -LiteralPath (Join-Path $report "capture-$captures-ready.json"))) {
                 $otherWebviews = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object ProcessId -NotIn $owned.ProcessId)
@@ -177,13 +183,15 @@ try {
                     "--process_name msedgewebview2.exe --process_name sharppy-reimagined.exe --output_file $csv --session_name SHARPPyAcceptance-$env:GITHUB_RUN_ID-$captures --timed 120 --terminate_after_timed --no_console_stats --write_display_metadata --v2_metrics"
                 $captures++
             }
-            if (-not $firstDisplayVerified -and $present.Count -gt 0 -and -not $present[0].HasExited -and
+            if (-not $firstCaptureChecked -and $present.Count -gt 0 -and -not $present[0].HasExited -and
                 ([DateTime]::UtcNow - $present[0].StartTime.ToUniversalTime()).TotalSeconds -gt 180) {
                 $present[0].Kill()
-                'PresentMon exceeded its bounded capture; memory workload continues.' | Set-Content -LiteralPath (Join-Path $report 'presentation-error.log')
-                $firstDisplayVerified = $true
+                $captureError = 'UNVERIFIED native presentation: capture timed out; the 120-minute memory soak continues.'
+                $captureError | Set-Content -LiteralPath (Join-Path $report 'presentation-error.log')
+                Write-Host $captureError
+                $firstCaptureChecked = $true
             }
-            if (-not $firstDisplayVerified -and $present.Count -gt 0 -and $present[0].HasExited) {
+            if (-not $firstCaptureChecked -and $present.Count -gt 0 -and $present[0].HasExited) {
                 $displayed = @()
                 if (Test-Path -LiteralPath (Join-Path $report 'presentation-0.csv')) {
                     $displayed = @(Import-Csv -LiteralPath (Join-Path $report 'presentation-0.csv') | Where-Object {
@@ -191,11 +199,13 @@ try {
                     })
                 }
                 if ($present[0].ExitCode -ne 0 -or $displayed.Count -lt 100) {
-                    "Native displayed-frame capture incomplete (exit=$($present[0].ExitCode), frames=$($displayed.Count)); memory workload continues." |
-                        Set-Content -LiteralPath (Join-Path $report 'presentation-error.log')
+                    $captureError = "UNVERIFIED native presentation: capture incomplete (exit=$($present[0].ExitCode), displayed frames=$($displayed.Count)); the 120-minute memory soak continues."
+                    $captureError | Set-Content -LiteralPath (Join-Path $report 'presentation-error.log')
+                    Write-Host $captureError
+                } else {
+                    Write-Host "Native capture collected $($displayed.Count) displayed frames; final presentation analysis pending."
                 }
-                Write-Host "Initial native capture: $($displayed.Count) displayed frames"
-                $firstDisplayVerified = $true
+                $firstCaptureChecked = $true
             }
             Start-Sleep -Seconds 30
         }

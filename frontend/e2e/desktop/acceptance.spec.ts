@@ -170,7 +170,7 @@ test.describe("installed native acceptance", () => {
         cycle: ++cycle, before, panels, errors: [...errors] };
       if (output !== undefined) appendFileSync(join(output, "workload.ndjson"), `${JSON.stringify(sample)}\n`);
       expect(errors).toEqual([]);
-      console.log(`Native soak cycle ${String(cycle)}: ${String(Math.round(sample.elapsedSeconds))} seconds`);
+      console.log(`Native memory soak: cycle ${String(cycle)} complete; ${String(Math.floor(sample.elapsedSeconds / 60))}m ${String(Math.floor(sample.elapsedSeconds % 60))}s elapsed of 120 minutes`);
       if (cycle % 5 === 0) await shot(`soak-${String(cycle)}.png`);
       await page.waitForTimeout(Math.max(0, 120_000 - (Date.now() - since)));
     }

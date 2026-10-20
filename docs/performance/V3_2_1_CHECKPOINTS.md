@@ -6,6 +6,18 @@ the verified `456dec3` candidate as historical evidence; the final-acceptance
 continuation changes the bundled Python runtime and requires new artifacts.
 No merge, tag or GitHub Release has been performed.
 
+Progress-log correction (2026-10-20): the native wrapper was repeating the last
+workload line every 30 seconds. Each unchanged line now emits once, cycle logs
+label cumulative elapsed time against 120 minutes, and missing display telemetry
+prints **UNVERIFIED** while memory sampling continues. Checking a capture no
+longer uses a variable named as though display verification passed. The actual
+PowerShell branches pass the saved `check-native-progress.ps1` check; the two
+report checks, TypeScript and focused ESLint also pass. This reporting change
+does not restart the active two-hour run, whose older log output is preserved.
+The later c65b882 PR run 39377462086 has a four-panel browser failure reporting
+renderer startup timeouts; its raw log is retained for diagnosis. It is not a
+passing gate. Candidate 39377525097 is still running.
+
 Latest continuation snapshot (2026-10-20 05:52 UTC): draft PR **#92** is open
 and attached to this chat. Head before this documentation/inventory adjustment
 is **d23ec71**. Its 34 PR checks pass, three opt-in checks skip. Release candidate

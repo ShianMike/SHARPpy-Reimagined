@@ -44,6 +44,8 @@ Target version: **3.2.1** (not published).
   restarts, signed interactive updates, two-hour map/sounding/radar workloads,
   process memory sampling and native presentation traces on disposable runners.
   Keep hardware identity and incomplete measurements explicit in the evidence.
+  Emit each progress update once, label cumulative time against the two-hour
+  duration, and mark unavailable presentation measurements as unverified.
   Give the existing four-panel fixture download its bounded 60-second readiness
   wait on hosted software rendering, retaining every cache/playback assertion,
   the overall test deadline and all scientific/performance timing gates.

@@ -21,6 +21,11 @@
 .popover[data-open="false"] { opacity: 0; translate: 0 var(--space-1); pointer-events: none; transition-duration: var(--motion-fast); }
 @starting-style { .popover[data-open="true"] { opacity: 0; translate: 0 var(--space-1); } }
 .popover[data-dragging="true"] { translate: 0; transition: none; }
+.popover[data-side="top"][data-movable="false"] {
+  top: auto;
+  bottom: max(var(--chrome-gap), var(--popover-bottom));
+  max-height: min(calc(100vh - 2 * var(--chrome-gap)), calc(100vh - var(--popover-bottom) - var(--chrome-gap)));
+}
 
 .popover[data-width="popover"] {
   width: var(--popover-w);

@@ -1,9 +1,12 @@
 # v3.2.1 performance and reliability report
 
-Status: the latest candidate is [39396569171](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39396569171),
+Status: v3.2.1 publication is authorized and final release verification is in
+progress. The latest completed candidate is [39396569171](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39396569171),
 exact runtime source `a9d65e9a6d77805027a8729c7cb72c5541cbc02d` on
 `release/v3.2.1`. It passes all 27 hosted jobs and all 34 PR checks.
-Publishing is off; no main merge, tag or public v3.2.1 release has occurred.
+This candidate predates the Forecast Hours, map-road and global hover changes;
+its artifacts are not the final release. The final immutable source must pass
+the hosted release gates before publication.
 Earlier candidate results below are historical evidence, with their own exact
 artifact identities. Checkpoint 18 records the map cleanup and completed native
 diagnostic. Checkpoint 19 removes two-hour stability from v3.2.1 scope and
@@ -13,7 +16,7 @@ to preferences/restarts, with the short heap diagnostic available only by opt-in
 Historical measurements below are preserved evidence, not instructions to rerun
 the removed test. Native presentation remains unverified.
 
-**Release remains on hold.** The preceding completed two-hour workload
+**Historical baseline, superseded by the targeted fix and explicit exclusion:** the preceding completed two-hour workload
 in [39375787049](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39375787049)
 ran 59 cycles / 7,271.891 seconds without recorded page errors, but its 241
 process samples show post-warmup private growth of **2,466.34 MiB**, a fitted
@@ -21,8 +24,8 @@ process samples show post-warmup private growth of **2,466.34 MiB**, a fitted
 accounts for most growth (393.3 -> 3,999.4 MiB); GPU and Python processes are
 comparatively bounded. This is not accepted long-session stability. PresentMon
 produced no CSV, so native FPS also remains unverified. Checkpoint 17 and the
-preserved raw artifact 12248600784 record this blocker. Public distribution stays
-on hold and release metadata is Unreleased.
+preserved raw artifact 12248600784 record the original finding. This run is
+retained evidence; it is no longer a release requirement or blocker.
 
 The **15-minute** diagnostic [39390340461](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39390340461)
 completed seven real workload cycles / 933.684 seconds on the maintained

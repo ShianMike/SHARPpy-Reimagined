@@ -53,6 +53,8 @@ it.each(["light", "dark"])("keeps political borders over weather and inland wate
     { id: "boundary_state", type: "line", source: "openmaptiles", "source-layer": "boundary", filter: ["==", ["get", "admin_level"], 4], paint: { "line-width": 1, "line-color": "#aaa" } },
     { id: "boundary", type: "line", source: "openmaptiles", "source-layer": "boundary", paint: { "line-opacity": borderOpacity } },
     { id: "road-casing", type: "line", source: "openmaptiles", "source-layer": "transportation", paint: { "line-opacity": 1, "line-width": 0.5 } },
+    { id: "highway_motorway_subtle", type: "line", source: "openmaptiles", "source-layer": "transportation", paint: { "line-color": "#181818", "line-width": 2 } },
+    { id: "highway_name_motorway", type: "symbol", source: "openmaptiles", "source-layer": "transportation_name" },
   ];
   const paints = new Map<string, unknown>();
   setLayoutProperty.mockImplementation((id: string, _property: string, value: string) => { layout.set(id, value); });
@@ -72,15 +74,22 @@ it.each(["light", "dark"])("keeps political borders over weather and inland wate
   const map = {
     getSource: () => ({}), getCanvas: () => canvas,
     getStyle: () => ({ layers: structuredClone(layers) }),
-    moveLayer: (id: string) => { const [layer] = layers.splice(layers.findIndex((item) => item.id === id), 1); if (layer !== undefined) layers.push(layer); },
+    moveLayer: (id: string) => {
+      const index = layers.findIndex((item) => item.id === id);
+      if (index < 0) throw new Error(`Cannot move missing layer ${id}`);
+      const [layer] = layers.splice(index, 1); if (layer !== undefined) layers.push(layer);
+    },
     getLayer: (id: string) => layers.find((item) => item.id === id),
+    removeLayer: (id: string) => { layers.splice(layers.findIndex((layer) => layer.id === id), 1); },
     getLayoutProperty: (id: string) => layout.get(id),
     getPaintProperty: (id: string, property: string) => paints.get(`${id}:${property}`) ?? (layers.find((layer) => layer.id === id)?.paint as Record<string, unknown>)[property],
     addLayer, setFilter, setLayoutProperty, setPaintProperty,
   } as unknown as MapLibreMap;
   expect(prepareBasemap(map)).toBe("geography-shoreline");
   const order = layers.map((layer) => layer.id);
-  expect(order.indexOf("road-casing")).toBeLessThan(order.indexOf("geography-boundary_state-halo"));
+  expect(order).not.toContain("road-casing");
+  expect(order).not.toContain("highway_motorway_subtle");
+  expect(order).not.toContain("highway_name_motorway");
   expect(order.indexOf("river")).toBeLessThan(order.indexOf("geography-boundary_state-halo"));
   expect(order.indexOf("geography-boundary-halo")).toBeLessThan(order.indexOf("boundary"));
   expect(order.indexOf("boundary")).toBeLessThan(order.indexOf("city"));
@@ -90,7 +99,6 @@ it.each(["light", "dark"])("keeps political borders over weather and inland wate
     layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": "#aea89c", "line-width": 2.4 },
   });
-  expect(order.indexOf("road-casing")).toBeLessThan(order.indexOf("geography-shoreline"));
   expect(order.indexOf("geography-shoreline")).toBeLessThan(order.indexOf("geography-boundary_state-halo"));
   expect(layers.filter((layer) => layer.type === "line" && layer.id.startsWith("geography-") && ["water", "waterway"].includes(layer["source-layer"] ?? "")).map((layer) => layer.id)).toEqual(["geography-shoreline"]);
   expect(layers.find((layer) => layer.id === "geography-boundary-halo")).toMatchObject({ paint: { "line-color": theme === "dark" ? "#101e2d" : "#fffaf3" } });
@@ -105,7 +113,6 @@ it.each(["light", "dark"])("keeps political borders over weather and inland wate
     expect(layers.find((layer) => layer.id === "geography-relief")).toMatchObject({ type: "raster", source: "ne2_shaded", paint: { "raster-saturation": -1, "raster-brightness-max": 0.3 } });
     expect(order.indexOf("geography-relief")).toBeLessThan(order.indexOf("water"));
   } else expect(order).not.toContain("geography-relief");
-  expect(layers.find((layer) => layer.id === "road-casing")?.paint).toEqual({ "line-opacity": 1, "line-width": 0.5 });
   expect(order.some((id) => id.includes("road") && id.endsWith("-halo"))).toBe(false);
   prepareBasemap(map);
   expect(setFilter).toHaveBeenCalledTimes(2);
@@ -126,6 +133,7 @@ it.each(["light", "dark"])("keeps political borders over weather and inland wate
   expect(setPaintProperty).toHaveBeenCalledTimes(changes);
   expect(setLayoutProperty).toHaveBeenLastCalledWith("park", "visibility", "none");
   expect(setLayoutProperty).toHaveBeenCalledTimes(1);
+  expect(layers.some((layer) => "source-layer" in layer && ["transportation", "transportation_name"].includes(layer["source-layer"] ?? ""))).toBe(false);
 });
 
 it("toggles native labels without changing weather or the style's label opacity", () => {

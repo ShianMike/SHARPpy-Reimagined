@@ -13,7 +13,7 @@
 .option { position: relative; min-width: var(--control-h-sm); height: var(--control-h-sm); gap: var(--space-2); padding-inline: var(--space-3); background: var(--control-fill); color: var(--text-secondary); font-size: var(--font-size-small); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .option:hover:not(:disabled), .option[aria-pressed="true"], .option[data-active="true"] { background: var(--accent-subtle); border-color: var(--accent-subtle); color: var(--accent-bright); }
 .download { margin-inline: var(--space-1); }
-.mode { min-width: calc(3 * var(--control-h-sm)); justify-content: flex-start; }
+.mode { width: var(--control-h-sm); min-width: var(--control-h-sm); padding: 0; border: 0; background: transparent; }
 .count { display: inline-flex; align-items: center; gap: var(--space-0-5); padding: var(--space-0-5) var(--space-1); border-radius: var(--radius-pill); background: var(--control-fill); font-size: var(--font-size-caption); line-height: 1.25; }
 .count > span { opacity: 0.5; }
 .progress { position: absolute; left: var(--space-3); right: var(--space-3); bottom: var(--space-0-5); width: calc(100% - 2 * var(--space-3)); height: var(--space-0-5); border: 0; border-radius: var(--radius-pill); overflow: hidden; appearance: none; background: var(--track-fill); color: var(--accent-bright); }
@@ -43,4 +43,4 @@
   .scrubber { grid-column: 1 / -1; grid-row: 2; }
   .valid { display: none; }
 }
-@media (max-width: 800px) { .downloadLabel, .model { display: none; } .option { padding-inline: var(--space-2); } .mode { min-width: auto; } }
+@media (max-width: 800px) { .downloadLabel, .model { display: none; } .option { padding-inline: var(--space-2); } .mode { padding: 0; } }

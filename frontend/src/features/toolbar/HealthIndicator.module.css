@@ -15,7 +15,7 @@
 
 .indicator:hover {
   background: var(--fill-hover);
-  color: var(--text-primary);
+  color: var(--accent-bright);
 }
 
 .indicator[aria-expanded="true"] {

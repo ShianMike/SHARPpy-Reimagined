@@ -1,10 +1,32 @@
 # v3.2.1 implementation checkpoints
 
-Current status: Checkpoint 19. The user requested completion of the outstanding
-native acceptance, live-provider, Cargo warning, SBOM and release work. Preserve
-the verified `456dec3` candidate as historical evidence; the final-acceptance
-continuation changes the bundled Python runtime and requires new artifacts.
-No merge, tag or GitHub Release has been performed.
+Current status: Checkpoint 20. The user explicitly requested release preparation
+and publication of v3.2.1 with the latest UI changes. Work remains solo; use
+@Browser for local UI verification. Preserve earlier candidates and measurements
+as historical evidence. Final source checks and hosted release gates are required.
+
+## Checkpoint 20 — final UI changes and authorized publication
+
+Forecast Hours now combines the download action and cache details, with saved
+and memory counts, expandable missing/failed hours, keyboard controls, orange
+hover feedback and native disclosure animation. The panel stays anchored above
+its trigger while its height changes. The icon-only Fast/Smooth toggle sits
+beside Loop. Both map themes remove transportation artwork and road labels;
+global hover fills and local overrides use the existing orange tokens.
+
+The actual Browser preview and focused unit/browser regressions verify these
+changes, including light/dark hover and reduced motion. Current screenshots are
+saved under the external final-acceptance evidence directory. The README,
+changelog and six grouped in-app highlights include the delivered behavior.
+
+The final local offline and frontend checks are running. Commit the complete
+change set, pass the normal PR gates, merge normally and publish through the
+existing protected release workflow. Verify the final tag, assets, checksums,
+provenance, updater feed and standalone Tests badge. Complete the hosted public
+updater acceptance after the feed exists; do not count a silent installer as
+that test. Native presentation FPS remains unverified on hosted Hyper-V Video.
+Two-hour stability stays deleted and excluded. Do not run the separate opt-in
+15-minute heap diagnostic again as part of this release.
 
 ## Checkpoint 19 — two-hour stability test removed and excluded
 

@@ -28,8 +28,8 @@ export interface PopoverProps {
   initialFocus: "first" | "container" | "none";
   /** Which anchor edge the popover lines up with. */
   align?: "start" | "end";
-  /** Right opens alongside its anchor and flips left when there is no room. */
-  side?: "bottom" | "right";
+  /** Top opens above its anchor; right opens alongside it and flips left when there is no room. */
+  side?: "top" | "bottom" | "right";
   /** "anchor": match the trigger; other widths use tokens or the content's own width. */
   width?: "popover" | "search" | "content" | "anchor";
   id?: string;
@@ -104,9 +104,10 @@ export function Popover({
       const beside = target.right + gap + box.width > window.innerWidth - gap && target.left >= box.width + 2 * gap
         ? target.left - box.width - gap : target.right + gap;
       const x = moved.current?.x ?? (movable ? (window.innerWidth - box.width) / 2 : side === "right" ? beside : align === "end" ? target.right - box.width : target.left);
-      const y = moved.current?.y ?? (movable ? (window.innerHeight - box.height) / 2 : side === "right" ? target.top : target.bottom);
+      const y = moved.current?.y ?? (movable ? (window.innerHeight - box.height) / 2 : side === "top" ? target.top - box.height - gap : side === "right" ? target.top : target.bottom);
       element.style.setProperty("--popover-x", `${String(x)}px`);
       element.style.setProperty("--popover-y", `${String(y)}px`);
+      element.style.setProperty("--popover-bottom", `${String(window.innerHeight - target.top + gap)}px`);
       element.style.setProperty("--popover-gap", !movable && side === "bottom" ? "var(--space-1)" : `calc(var(--space-1) * 0)`);
       element.style.setProperty("--popover-measured-w", `${String(box.width)}px`);
       element.style.setProperty("--popover-measured-h", `${String(box.height)}px`);
@@ -239,6 +240,7 @@ export function Popover({
         tabIndex={initialFocus === "none" ? undefined : -1}
         className={cx(styles.popover, className)}
         data-width={width}
+        data-side={side}
         data-testid={testId}
         onKeyDown={onKeyDown}
         data-movable={movable}

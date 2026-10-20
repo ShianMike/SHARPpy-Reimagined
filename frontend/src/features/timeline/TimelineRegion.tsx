@@ -66,13 +66,13 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
         const current = PLAYBACK_SPEEDS.findIndex((item) => item === speed);
         useUiStore.getState().setSpeed(PLAYBACK_SPEEDS[(current + 1) % PLAYBACK_SPEEDS.length] ?? 1);
       }}>{speed}×<span className={hints.hint} data-side="top" aria-hidden="true">Change playback speed · {speed}×</span></button>
-      <IconAction icon={Repeat} size="sm" label="Loop forecast animation" hintSide="top" aria-pressed={loop} onClick={() => { useUiStore.getState().setLoop(!loop); }} />
-      <ForecastDownloads download={download} />
-      <Action className={cx(styles.option, styles.mode, hints.target)} aria-label="Smooth playback" aria-pressed={smooth}
+      <IconAction icon={Repeat} size="sm" label="Loop Forecast Animation" hintSide="top" aria-pressed={loop} onClick={() => { useUiStore.getState().setLoop(!loop); }} />
+      <Action className={cx(styles.option, styles.mode, hints.target)} aria-label="Smooth Playback" aria-pressed={smooth}
         onClick={() => { useUiStore.getState().setSmoothPlayback(!smooth); }}>
-        {smooth ? <Blend className="icon" aria-hidden="true" /> : <Zap className="icon" aria-hidden="true" />}<span>{smooth ? "Smooth" : "Fast"}</span>
-        <span className={hints.hint} data-side="top" aria-hidden="true">{smooth ? "Smooth · blend between frames" : "Fast · switch frames instantly"}</span>
+        {smooth ? <Blend className="icon" aria-hidden="true" /> : <Zap className="icon" aria-hidden="true" />}
+        <span className={hints.hint} data-side="top" aria-hidden="true">{smooth ? "Smooth · Blend Between Frames" : "Fast · Switch Frames Instantly"}</span>
       </Action>
+      <ForecastDownloads download={download} />
     </div>
     <span className={styles.announcement} role="status" aria-label="Forecast downloads">{download.started ? download.message : ""}</span>
   </Surface>;

@@ -54,7 +54,7 @@
   --focus-ring-offset: 2px;
 
   /* State fills: translucent, so they read on glass and on opaque surfaces */
-  --fill-hover: #2a2d30;
+  --fill-hover: var(--workspace-orange-subtle);
   --fill-pressed: var(--workspace-orange-subtle);
   --fill-selected: var(--workspace-orange-subtle);
   --selection-indicator: var(--brand-orange);
@@ -184,7 +184,7 @@
   --workspace-orange-subtle: rgb(244 129 32 / 0.13);
   --scrollbar-size: 10px;
   --scrollbar-thumb: color-mix(in srgb, var(--text-secondary) 48%, transparent);
-  --scrollbar-thumb-hover: color-mix(in srgb, var(--text-primary) 65%, transparent);
+  --scrollbar-thumb-hover: var(--workspace-orange-text);
 
   /* Motion (theme.py MOTION_MS); --motion-camera is the map flyTo duration */
   --motion-fast: 120ms;
@@ -319,7 +319,6 @@
   --text-disabled: #858a90;
   --border-subtle: #d7d9dc;
   --border-strong: #a9adb2;
-  --fill-hover: #eceef0;
   --brand-orange-soft: #fff3e7;
   --warning: #936900;
   --danger: #ba2525;
@@ -330,6 +329,5 @@
   --control-fill: rgb(255 255 255 / 0.45);
   --control-selected: rgb(255 255 255 / 0.85);
   --track-fill: rgb(30 45 60 / 0.2);
-  --fill-hover: rgb(255 255 255 / 0.58);
   --border-subtle: rgb(30 45 60 / 0.12);
 }

@@ -76,9 +76,9 @@ export function useFrameDownload() {
       if (!job.signal.aborted) setStatus((value) => value?.key === key ? { ...value, running: false } : value);
     });
   };
-  const message = running ? `Downloading forecast hours: ${String(loaded)} of ${String(total)} processed. Click to stop.`
+  const message = running ? `Downloading forecast hours: ${String(loaded)} of ${String(total)} processed.`
     : complete ? `All ${String(total)} forecast hours saved to cache. ${String(ready)} ready in memory.`
-    : (current?.failed.length ?? 0) > 0 ? `${String(current?.failed.length)} forecast hours could not load. Click to retry.`
+    : (current?.failed.length ?? 0) > 0 ? `${String(current?.failed.length)} forecast hours could not load.`
     : `${String(cached.length)} of ${String(total)} hours saved to cache; ${String(ready)} ready in memory.`;
   return { toggle, running, complete, loaded, total, message,
     started: current !== null || cached.length > 0, failed: (current?.failed.length ?? 0) > 0,

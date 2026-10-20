@@ -41,7 +41,7 @@
 }
 
 .maplibregl-ctrl-attrib a:hover {
-  color: var(--text-primary);
+  color: var(--accent-bright);
 }
 
 .maplibregl-ctrl-attrib.maplibregl-compact {
@@ -66,6 +66,7 @@
   background-size: var(--attribution-size);
   background-position: center;
 }
+.maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button:hover { background-color: var(--fill-hover); }
 
 /* The smaller visible icon keeps a pointer target at the desktop minimum. */
 .maplibregl-ctrl-attrib-button::after {

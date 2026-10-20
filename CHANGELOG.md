@@ -7,7 +7,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Target version: **3.2.1** (not published).
+## [v3.2.1] - 2026-10-20
 
 ### Fixed
 
@@ -43,6 +43,21 @@ Target version: **3.2.1** (not published).
 
 ### Changed
 
+- Replace grey hover fills with the orange accent across shared controls,
+  navigation, Settings, lists, calendars, map controls and scrollbars in both
+  light and dark themes. Keep primary-action text readable and disabled controls
+  inactive.
+- Remove native transport linework and road labels from the map, including the
+  thick black road network. Keep coastlines, political borders, rivers, place
+  labels and weather overlays, including after theme changes and style reloads.
+- Combine forecast-hour loading and download details into one Forecast Hours
+  control, with saved-on-device and memory counts, progress, cache checks and
+  a full-width load/stop/retry action in one panel. Put memory readiness beneath
+  the saved-hour progress and make missing/failed hours expandable, with orange
+  hover/focus feedback and native expand/collapse animation that keeps the panel
+  anchored above its trigger.
+  Use Title Case for its text, and place the icon-only Fast/Smooth playback
+  toggle beside Loop.
 - Add opt-in installed Windows acceptance for preference retention, repeated
   restarts and signed interactive updates, with a separately opted-in 15-minute
   heap diagnostic, process sampling and native presentation traces on disposable

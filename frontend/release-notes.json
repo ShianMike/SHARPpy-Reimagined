@@ -65,8 +65,8 @@
         "description": "Choose any time in an imported forecast file. Each time keeps its own edits and undo history, and exported charts use the selected profile. Typed station IDs survive source-tab changes."
       },
       {
-        "title": "Clearer map recovery",
-        "description": "Every map panel reports rendering failures. Missing wind or contour overlays and unreadable imagery offer recovery controls. Pan with the keyboard and press Enter to inspect the point at the centre of a forecast map."
+        "title": "Clearer Map Controls And Recovery",
+        "description": "Controls use orange hover feedback throughout both themes. Maps remove the heavy road network for clearer weather and labels. Manage forecast downloads in one panel with animated hour lists; the Fast/Smooth icon sits beside Loop. Recover failed maps, imagery and overlays. Pan with arrow keys and press Enter to inspect the map’s centre."
       },
       {
         "title": "Settings stay usable",

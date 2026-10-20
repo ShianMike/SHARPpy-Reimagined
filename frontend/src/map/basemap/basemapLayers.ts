@@ -21,10 +21,15 @@ export const BASEMAP_LINE_LAYER_IDS: readonly string[] = BASEMAP_FAMILIES.map(ba
 
 const nativeStyles = new WeakMap<MapLibreMap, { layers: LayerSpecification[]; opacity: number | undefined }>();
 
-/** Land edges and political borders stay above weather; roads and inland water keep their native order. */
+/** Remove transport artwork; land edges and political borders stay above weather. */
 export function prepareBasemap(map: MapLibreMap): string | undefined {
   const dark = document.documentElement.dataset.theme === "dark";
   const read = documentTokenReader();
+  for (const layer of map.getStyle().layers) {
+    if ("source-layer" in layer && ["transportation", "transportation_name"].includes(layer["source-layer"] ?? "")) {
+      map.removeLayer(layer.id);
+    }
+  }
   const layers = map.getStyle().layers.filter((layer) => !layer.id.startsWith("geography-"));
   for (const layer of layers) {
     if (dark && layer.type === "background") map.setPaintProperty(layer.id, "background-color", read("--basemap-background").trim());
@@ -177,7 +182,7 @@ export function applyBasemapState(map: MapLibreMap, state: LayerState): void {
   }
 }
 
-/** Native city, road, and water labels keep the original style's typography and zoom rules. */
+/** Remaining native labels keep the original style's typography and zoom rules. */
 export function applyBasemapLabels(map: MapLibreMap, state: LayerState): void {
   for (const layer of map.getStyle().layers) {
     if (layer.type !== "symbol" || layer.source !== "openmaptiles") continue;

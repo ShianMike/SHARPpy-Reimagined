@@ -1,16 +1,20 @@
 # v3.2.1 performance and reliability report
 
-Status: original local patch preparation completed, then the user authorized
-the E12–E22 follow-up on 2026-10-20. Its local implementation and regression
-validation are complete. The authorized candidate workflow now passes with
-`publish_release=false`, including signed artifacts, installed upgrade,
-SBOM/checksums and provenance. Final built/tested source is
-`456dec39dd63007014ec3d69bd711954c7b3240b` on `release/v3.2.1`; a later
-documentation-only commit records the results. Public release remains
-unpublished. Checkpoint 16 now records the requested final native acceptance
-and shipped-binary inventory work; the older candidate results below remain
-historical evidence. The new bundle uses CPython 3.13.16/OpenSSL 3.5.9 instead
-of 3.11.9/3.0.13, and must pass its own packaged/native checks before release.
+Status: the current candidate is [39382361268](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39382361268),
+exact runtime source `0d0ae3b4bcbef6071efc2d2512878cdfb6871567` on
+`release/v3.2.1`. All 27 hosted candidate jobs and all 34 PR checks pass.
+Publishing is off; no main merge, tag or public v3.2.1 release has occurred.
+Earlier candidate results below are historical evidence, with their own exact
+artifact identities. Checkpoint 16 records the native acceptance continuation.
+
+The current bundle uses CPython 3.13.16/OpenSSL 3.5.9 and NetCDF4 1.7.5 with
+its own OpenSSL 3.6.5/curl 8.23.0. Actual frozen/installed rendering and saved-file
+upgrade checks pass. The complete offline lane passes 3,794 tests with two
+Windows-only skips in 215.374 s; its unchanged timing gate passes. Windows WRF
+passes 66/66 with no skips in 29.554 s. Downloaded artifacts match all eight
+checksums, nine verified provenance subjects and 4,991 portable file hashes.
+The official CycloneDX 1.6 structural schema passes: 5,478 components, 5,408
+dependency records and 14,337 edges, with explicit semantic coverage limits.
 
 The current opt-in live-provider contracts pass (run 39370236498): all three
 ECCC/HRRR contracts, 36.709 seconds. The one optional native-equivalence
@@ -18,8 +22,10 @@ collection skip is not a provider-contract skip. The extended SBOM now hashes
 all shipped files and records PE versions/imports, package ownership and external
 Windows/WebView2 requirements. Windows VEX records the absence of the two
 Linux GTK advisory packages without suppressing their all-target warnings.
-Native preference/restart, actual displayed frames and two-hour memory results
-are pending; do not interpret added test tooling as passing measurements.
+Native preference migration and repeated normal restarts pass on the earlier
+recorded installer. The two-hour memory trend, native presentation FPS and
+interactive public-updater restart remain pending; added test tooling is not
+passing measurement evidence.
 
 Final-acceptance update: candidate [39374559150](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39374559150)
 passes all 27 jobs at `1e0312b`, including the maintained Windows Python/TLS
@@ -85,7 +91,7 @@ the popup scrolls its notes while keeping close controls visible. Checkpoint 14
 records the fixes and required new candidate run. These failures are preserved;
 no timeout or scientific/timing assertion is relaxed to make them pass.
 
-## Final hosted candidate verification
+## Earlier hosted candidate verification
 
 [Release run 39367398243](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39367398243)
 completes successfully: 27 jobs pass, none fail or cancel. The opt-in live

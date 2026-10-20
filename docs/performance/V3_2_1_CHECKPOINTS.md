@@ -6,6 +6,17 @@ the verified `456dec3` candidate as historical evidence; the final-acceptance
 continuation changes the bundled Python runtime and requires new artifacts.
 No merge, tag or GitHub Release has been performed.
 
+Latest candidate **39382361268** at exact runtime source
+**0d0ae3b4bcbef6071efc2d2512878cdfb6871567** passes **27 hosted jobs**;
+all **34 PR checks** also pass. The complete offline lane has 3,794 passes,
+two Windows-only skips and a passing timing gate (215.374 s). Windows WRF is
+66/66 with no skips (29.554 s). Downloaded archive, eight checksums, nine
+verified provenance subjects and all **4,991** portable file hashes match.
+The schema-valid SBOM has **5,478 components / 5,408 dependency records /
+14,337 edges** and confirms NetCDF4 1.7.5, crypto 3.6.5 and curl 8.23.0.
+Frozen/installed runtime and saved-file preservation reports pass. Preserve the
+separate `*-39382361268*` reports and artifact directory in final acceptance.
+
 The native inventory revealed a second OpenSSL copy in NetCDF4's own wheel:
 1.7.4 bundles crypto 3.6.0/curl 8.17.0. The official 1.7.5 patch, released
 2026-10-15, supports all existing Python lanes and its verified 3.13 Windows
@@ -13,7 +24,8 @@ wheel bundles crypto 3.6.5/curl 8.23.0. Pin this existing dependency to 1.7.5;
 do not replace DLLs by hand. Isolated wheel probes retain the optional codec
 limitation. All 83 focused WRF/decoder/sounding/satellite/packaging checks pass
 against an isolated verified 1.7.5 Windows wheel; four updater packaging checks
-also pass. Fresh hosted release artifacts must still pass. Do not restart the ongoing memory run;
+also pass. Fresh hosted release artifacts now pass as recorded above.
+Do not restart the ongoing memory run;
 record its actual earlier installer identity and the dependency difference.
 
 Verified continuation (2026-10-20 06:36 UTC): **34 PR checks pass** at

@@ -93,6 +93,33 @@ def targets(sw):
     return points
 
 
+def inspection(sw):
+    """Link pressure levels to native wind positions, including undrawn winds."""
+    prof, sound, hodo = sw.default_prof, sw.sound, sw.hodo
+    left, top = _position(sound, sw, sound.lpad, sound.tpad)
+    right, bottom = _position(sound, sw, sound.brx, sound.bry)
+    levels = []
+    for index, pressure in enumerate(prof.pres):
+        pressure = num(pressure)
+        if pressure is None or not sound.pmin <= pressure <= sound.pmax:
+            continue
+        y = _position(sound, sw, 0, sound.originy + sound.pres_to_pix(pressure) / sound.scale)[1]
+        if top <= y <= bottom:
+            wind = None
+            u, v = num(prof.u[index]), num(prof.v[index])
+            if u is not None and v is not None:
+                x, wind_y = hodo.uv_to_pix(u, v)
+                if 0 <= x <= hodo.width() and 0 <= wind_y <= hodo.height():
+                    x, wind_y = _position(hodo, sw, x, wind_y)
+                    wind = {"x": x, "y": wind_y}
+            levels.append({"index": index, "pressure": pressure, "y": y,
+                           "height": num(prof.hght[index]), "tmpc": num(prof.tmpc[index]),
+                           "dwpc": num(prof.dwpc[index]), "windDirection": num(prof.wdir[index]),
+                           "windSpeed": num(prof.wspd[index]), "hodograph": wind})
+    return {"bounds": {"left": left, "top": top, "right": right, "bottom": bottom},
+            "levels": sorted(levels, key=lambda level: level["y"], reverse=True)}
+
+
 def _drag(sw, drag, edits):
     point = next((item for item in targets(sw) if item["id"] == drag["target"]), None)
     if point is None:
@@ -127,25 +154,42 @@ def _drag(sw, drag, edits):
         sw.modifyProf(index, values)
 
 
-def configure_view(win, view, app):
+def original_values(prof):
+    values = {key: [num(value) for value in getattr(prof, key)]
+              for key in ("tmpc", "dwpc", "u", "v")}
+    values["storm"] = [num(value) for value in prof.srwind]
+    return values
+
+
+def configure_view(win, view, app, original):
     sw = win.spc_widget
     edits = deepcopy(view["edits"])
     if view.get("drag") is not None:
         _drag(sw, view["drag"], edits)
-    if sw.right_inset != view["panel"] and not show_sounding_panel(win, view["panel"]):
-        raise ValueError("The selected diagnostic panel is unavailable.")
     if not sw.streamwiseness.setChart(view["chart"]):
         raise ValueError("The selected height chart is unavailable.")
+    if view["panel"] == "HEIGHT CHARTS":
+        sw.right_inset_ob.hide()
+        sw.grid3.addWidget(sw.streamwiseness.companionCharts(sw.text), 0, 4)
+    elif sw.right_inset != view["panel"] and not show_sounding_panel(win, view["panel"]):
+        raise ValueError("The selected diagnostic panel is unavailable.")
     for _ in range(3):
         app.processEvents()
-    return {"edits": edits, "points": targets(sw),
+    points = targets(sw)
+    for point in points:
+        kind, index = point["id"].split(":")
+        index = int(index)
+        for field in point["values"]:
+            field["original"] = (original["storm"][(0 if index == -1 else 2) + (field["key"] == "v")]
+                                 if kind == "storm" else original[field["key"]][index])
+    return {"edits": edits, "points": points, "inspection": inspection(sw),
             "selection": {"chart": view["chart"], "panel": view["panel"]}, "options": [
         {"key": "chart", "label": "Height chart", "choices": [
             {"key": key, "label": label.replace("&&", "&")}
             for key, label in sw.streamwiseness.availableCharts()]},
         {"key": "panel", "label": "Diagnostic panel", "choices": [
             {"key": key, "label": label} for key, label in sw.inset_names.items()
-            if key != sw.left_inset]},
+            if key != sw.left_inset] + [{"key": "HEIGHT CHARTS", "label": "All height charts"}]},
     ]}
 
 

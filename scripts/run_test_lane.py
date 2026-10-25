@@ -141,10 +141,11 @@ def build_pytest_command(
     command.extend(("--durations=25", "--durations-min=0.20"))
     command.append(f"--junitxml={junit}")
     if lane.parallel:
+        # -n 0 avoids worker startup and overrides inherited PYTEST_ADDOPTS.
         command.extend(
             (
                 "-n",
-                str(workers),
+                str(workers if workers > 1 else 0),
                 f"--dist={lane.distribution}",
                 "--max-worker-restart=0",
             )

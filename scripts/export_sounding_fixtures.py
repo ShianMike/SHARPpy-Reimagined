@@ -129,6 +129,8 @@ def main() -> int:
         summary = soundings.open_file(_upload(EXAMPLE))
         analysis = soundings.analysis({"sounding_id": summary["sounding_id"]})
         image = soundings.render({"sounding_id": summary["sounding_id"]})
+        view = soundings.render_view({"sounding_id": summary["sounding_id"],
+                                     "image_mode": "hd", "view": {"edits": []}})
         sounding_cache.SoundingCache.new_id = staticmethod(lambda: TREND_ID)
         trend_summary = soundings.open_file(_upload(TREND_EXAMPLE))
         trend = soundings.trends({"sounding_id": trend_summary["sounding_id"]})
@@ -154,6 +156,8 @@ def main() -> int:
     write("public/soundings/models.catalog.json", camel(catalog))
     write("public/soundings/summary.example.json", camel(summary))
     write("public/soundings/analysis.example.json", camel(analysis))
+    write("public/soundings/view.example.json", {key: value for key, value in view.items()
+                                               if key not in ("image", "width", "height")})
     write("bridge/soundings/open.result.multi-time.json", trend_summary)
     write("bridge/soundings/trends.result.example.json", trend)
     write("public/soundings/summary.multi-time.json", camel(trend_summary))

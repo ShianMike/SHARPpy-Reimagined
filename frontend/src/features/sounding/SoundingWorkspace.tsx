@@ -1,7 +1,7 @@
 // Sounding sources and the interactive view drawn by sharpmod's native renderer.
-import { Activity, PanelLeft } from "lucide-react";
+import { Activity, PanelLeft, PanelLeftClose, RadioTower } from "lucide-react";
 import { useRef, useState, type ReactNode, type Ref, type RefObject } from "react";
-import { Action, EmptyPanel } from "../../ui/Controls";
+import { Action, EmptyPanel, IconAction } from "../../ui/Controls";
 import { Popover } from "../../components/Popover";
 import { MAX_OPEN, pendingDiscardSounding, useActiveSounding, useSoundingStore } from "../../stores/soundingStore";
 import { OpenSoundings, soundingMeta } from "./OpenSoundings";
@@ -12,7 +12,7 @@ import viewer from "./Viewer.module.css";
 import { SourceSelect } from "./SourceFields";
 import { formatUtc } from "./soundingTime";
 
-function SoundingViewer({ sources, onShow, showRef }: { sources: boolean; onShow: () => void; showRef: Ref<HTMLButtonElement> }): ReactNode {
+function SoundingViewer({ sources, onShow, showRef, controlsTarget, infoTarget, controls }: { sources: boolean; onShow: () => void; showRef: Ref<HTMLButtonElement>; controlsTarget: HTMLDivElement | null; infoTarget: HTMLDivElement | null; controls: boolean }): ReactNode {
   const active = useActiveSounding();
   const choice = useSoundingStore((state) => state.choice);
   const timeIndex = useSoundingStore((state) => active === null ? 0 : state.timeIndices[active.soundingId] ?? 0);
@@ -34,8 +34,8 @@ function SoundingViewer({ sources, onShow, showRef }: { sources: boolean; onShow
   const current = { ...active, validTime: active.times === undefined ? active.validTime : active.times[timeIndex] ?? null };
   return (
     <section data-material="panel" className={viewer.viewer} aria-label="Sounding" data-testid="sounding-viewer">
-      <SoundingImage key={`${active.soundingId}:${String(timeIndex)}`} soundingId={active.soundingId} timeIndex={timeIndex} choice={choice} title={active.title} heading={<>
-        {sources ? null : <Action ref={showRef} onClick={onShow} aria-expanded={false} aria-controls="sounding-sources"><PanelLeft className="icon-sm" />Show sources</Action>}
+      <SoundingImage key={`${active.soundingId}:${String(timeIndex)}`} soundingId={active.soundingId} timeIndex={timeIndex} choice={choice} title={active.title} controlsTarget={controlsTarget} infoTarget={infoTarget}
+        navigation={sources ? null : <IconAction ref={showRef} icon={PanelLeft} label={controls ? "Show controls" : "Show sources"} aria-expanded={false} aria-controls="sounding-sources" onClick={onShow} />} heading={<>
         <div className={viewer.heading}>
           <p className={viewer.title} data-testid="sounding-title">
             {active.title}
@@ -81,19 +81,45 @@ function DiscardSoundingChanges({ fallback }: { fallback: RefObject<HTMLDivEleme
 
 export function SoundingWorkspace(): ReactNode {
   const [sources, setSources] = useState(true);
+  const [controls, setControls] = useState(false);
+  const [controlsTarget, setControlsTarget] = useState<HTMLDivElement | null>(null);
+  const [infoTarget, setInfoTarget] = useState<HTMLDivElement | null>(null);
+  const active = useActiveSounding();
   const workspaceRef = useRef<HTMLDivElement>(null);
   const pending = useSoundingStore((state) => state.pendingChanges[0]);
   const showRef = useRef<HTMLButtonElement>(null);
   const hide = (): void => { setSources(false); requestAnimationFrame(() => { showRef.current?.focus(); }); };
-  const show = (): void => { setSources(true); requestAnimationFrame(() => { document.getElementById(`sounding-source-${useSoundingStore.getState().source}`)?.focus(); }); };
+  const selectPanel = (next: boolean): void => { setControls(next); requestAnimationFrame(() => { document.getElementById(next ? "sounding-controls" : `sounding-source-${useSoundingStore.getState().source}`)?.focus(); }); };
+  const show = (): void => { setSources(true); selectPanel(controls); };
   return (
     <div ref={workspaceRef} tabIndex={-1} className={styles.workspace} data-testid="sounding-workspace">
       <div className={styles.layout} data-sources={sources}>
         <div className={styles.side} id="sounding-sources" data-motion="fade" inert={!sources} hidden={!sources}>
-          <SourcePanel onHide={hide} />
-          <OpenSoundings />
+          <div className={styles.sideContent} hidden={controls} inert={controls}>
+            <SourcePanel onHide={hide} onControls={() => { selectPanel(true); }} />
+            <OpenSoundings />
+          </div>
+          <div className={styles.sideContent} hidden={!controls} inert={!controls}>
+            <header className={styles.controlsHeader}><div><h1>Sounding controls</h1><p>Inspect, edit and export</p></div><div className={styles.sideActions}>
+              <IconAction icon={RadioTower} size="sm" label="Show sounding sources" onClick={() => { selectPanel(false); }} aria-controls="sounding-sources" />
+              <IconAction icon={PanelLeftClose} size="sm" label="Hide controls" onClick={hide} aria-expanded={true} aria-controls="sounding-sources" />
+            </div></header>
+            <div ref={setControlsTarget} className={styles.controlsSlot} id="sounding-controls" tabIndex={-1}>
+              {active === null ? <section className={styles.controlsGuide} aria-label="Sounding quick start">
+                <div><h2>Start with a sounding</h2><p>Open an observed, model or ERA5 sounding, or import a file.</p></div>
+                <Action tone="accent" onClick={() => { selectPanel(false); }}><RadioTower className="icon-sm" />Choose a source</Action>
+                <ol className={styles.guideSteps}>
+                  <li><strong>Inspect a level</strong><p>Hover either chart to link a level. Focus a chart and use ↑ / ↓ to move between levels.</p></li>
+                  <li><strong>Edit your profile</strong><p>Choose Edit profile, then drag a point or select a level. Compare Before / After values and use Undo history to step back.</p></li>
+                  <li><strong>Arrange and export</strong><p>Fit width or Fit all to resize. Use Chart panels for diagnostics or all four height charts, then Copy or Export PNG.</p></li>
+                </ol>
+                <p className={styles.guideNote}>Your original data stays unchanged.</p>
+              </section> : null}
+            </div>
+          </div>
+          <div ref={setInfoTarget} className={styles.sideInfo} />
         </div>
-        <SoundingViewer sources={sources} onShow={show} showRef={showRef} />
+        <SoundingViewer sources={sources} onShow={show} showRef={showRef} controlsTarget={controlsTarget} infoTarget={infoTarget} controls={controls} />
       </div>
       {pending === undefined ? null : <DiscardSoundingChanges key={pending.kind === "open" ? `open:${pending.summary.soundingId}` : `close:${pending.id}`} fallback={workspaceRef} />}
     </div>

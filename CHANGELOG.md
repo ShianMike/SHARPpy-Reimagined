@@ -7,8 +7,135 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Target version: **3.3.0** (not published).
+
+### Added
+
+- Add a minimal Download History graph to the README, with measured UTC dates
+  and one application-download series. Start with the verified 1,849-download
+  baseline; collect daily measurements on a separate statistics branch. Exclude
+  updater metadata and support assets, retain auditable executable/ZIP counts,
+  and explain that earlier history and unique-user counts cannot be inferred.
+- Explain model-sounding download, decoding and calculation stages using real
+  backend progress, with a separate rendering message for the image. Retain
+  received-byte totals and show transfer speed only while downloading.
+- Add inline coordinate and model-coverage validation messages, plus a clear
+  cancellation confirmation that keeps request inputs and open soundings.
+- Add searchable radar-site IDs in a separate Radar sites section of station
+  search. Enable it only in Live Tracking; keep it disabled in Model Viewer and
+  return to Stations when leaving Live Tracking. Selecting a radar site pins it
+  in the active live panel and centers the map on its coordinates, preserving
+  the selected sounding point and existing single-site product choices.
+- Add a Hide all weather layers action that retains opacity and order.
+  Add a legend view with enabled layers' color keys in the matching stack order,
+  aligned warning/watch labels, source palettes, SPC hatching, report symbols
+  and scan times. Keep map details and legends in separate views and save the
+  selected view.
+- Add a Radar scans picker before Site Tilt, matching the forecast-hour popup's
+  movable layout and time-card grid. Show per-frame availability, distinguishing
+  loaded scans, downloads, confirmed provider gaps, delayed scans and load failures.
+  Keep unrequested frames marked Not loaded. Show actual scan times on hover or
+  focus, combine the visible radar panels, and select a frame to load or retry it.
+- Show simultaneous transparent glass readouts beside the Skew-T and hodograph,
+  with chart-specific values. Link the native profile levels and chart coordinates
+  in both directions at every zoom, support keyboard inspection, and show
+  missing values explicitly.
+- Add an All height charts diagnostic-panel option. Replace the Effective Layer
+  STP panel with the three other native height charts, beside the selected chart.
+  Disable the height selector in this mode and restore it when another diagnostic
+  panel is chosen. Reuse the native charts and refresh all four after edits.
+- Guide an empty sounding-controls sidebar with source selection, inspection,
+  editing and export steps, plus a Choose a source action that focuses the
+  selected source.
+- Show original before values beside editable after values in the sounding
+  editor, in the selected display units. Mark edited levels on the chart and
+  in the level picker. Add a full-width undo-history selector to jump between
+  retained edits, including reset, while keeping the existing undo/redo actions.
+- Select a failed forecast hour to retry its field and wind/contour data without
+  closing the forecast-hour picker. Reuse successful requests and stop retries
+  on forecast changes.
+
+### Changed
+
+- Integrate dependency PRs #94–#99 into the 3.3.0 release branch: memmap2
+  0.9.11 → 0.9.12, setuptools 84.0.0 → 84.2.1, pip 26.2.1 → 26.2.2,
+  ecCodes 2.49.0 → 2.50.0, certifi 2026.7.22 → 2026.10.19 and numcodecs
+  0.16.5 → 0.16.6. Retain the existing dependency ranges and constrain release
+  builds to the updated versions.
+- Permit Pillow 13 and pin release builds to 13.0.0, updating the installation
+  reference and dependency contract together to clear the image-library audit.
+- Avoid starting an xdist worker subprocess for single-worker test lanes,
+  retaining their selection, coverage and performance checks.
+- Update browser and desktop test selectors for movable Layers controls,
+  sidebar sounding details and the separate legend view, retaining the existing
+  rendering, map-picking and metadata assertions.
+- Limit automatic update checks to the UTC windows starting at 00:00 and 12:00.
+  Persist attempted checks across restarts, including failed checks. Catch up
+  once after an offline start or resume, and keep manual checks available anytime.
+- Group coordinate validation below the latitude/longitude pair in one compact
+  notice with aligned allowed ranges, degree-unit labels and a short sign hint.
+- Use Cancel request throughout model-sounding retrieval and profile preparation,
+  replacing the download-only action label.
+- Prepare the application, native-backend and desktop metadata for version 3.3.0,
+  retaining published 3.2.1 downloads and historical release highlights.
+- Lighten map hover cards in dark and light themes with a shared 32% glass tint
+  and a softer shadow. Replace the nearly opaque alert/report-card fill while
+  retaining full text opacity and the low-graphics/reduced-transparency fallbacks.
+- Replace the small station-search dropdown with a centered, movable glass popup.
+  Show sounding-station results immediately.
+- Redesign Layers as a centered, movable glass popup, with keyboard movement,
+  remembered position and independent scrolling for active and available layers.
+  Use compact rows with visibility/add buttons and draw-order arrows. Keep 1%
+  opacity adjustments and provider options inside each row's settings disclosure.
+- Show HD/UHD PNG size, dimensions and a plain Ready to export label in a compact
+  sounding Export section. Align size beside resolution and make Export PNG the
+  primary action, with Copy beside it. Reuse completed native views, including
+  concurrent requests and resolved drag edits, with a bounded session cache for
+  recent images.
+- Swap the sounding sidebar between source forms and image controls. Keep
+  profile information at the bottom of the sidebar and the level editor beside
+  the chart. Group profile, view and export controls with readable action labels.
+  Default to fitting the image's width and retain whole-image fit. Preserve
+  source inputs and draft edits when switching.
+- Move radar scan status, loading and refresh controls from the playback bar
+  into the Radar scans picker.
+- Merge forecast-download status and controls into the top-bar forecast-hour
+  picker. Outline cached hours in green, downloading hours in blue and failed
+  downloads in red.
+
 ### Fixed
 
+- Update the desktop certificate dependencies to rustls-webpki 0.103.16 and
+  webpki-root-certs 1.0.10, addressing RUSTSEC-2026-0382 and RUSTSEC-2026-0383
+  without suppressing the dependency audit.
+- Reject non-decimal or out-of-range sounding coordinates and points outside
+  published model bounds before sending a model request. Choose an offered
+  forecast hour when the selected cycle cannot supply the default hour.
+- Keep cancellation ownership with the current sounding request, and discard a
+  model profile cancelled during calculations before it enters the open cache.
+- Keep sounding Copy and Export unavailable while a new image is rendering or
+  an edit has failed.
+- Move weather overlays past only the active workspace's visible layers, so saved
+  layers from another workspace cannot intercept the draw-order arrows. Keep
+  provider menus usable inside the Layers popup and retain keyboard focus when
+  a visibility switch moves between its active and available lists.
+- Center incomplete-layer and map-rendering recovery notices in the affected map
+  panel, keeping their retry actions clear of the bottom playback controls.
+- Remove the duplicate yellow FRZ annotation from the Skew-T on every panel,
+  including Winter. Retain the blue 0 °C freezing-level marker, wet-bulb zero,
+  growth zone and lapse-rate annotations.
+- Keep the linked hodograph inspection marker moving through valid wind levels
+  above the visible 12 km trace, using native wind coordinates independently of
+  editable points. Keep both chart popups visible above that height. Retain
+  missing-wind and out-of-chart handling.
+- Use the circular hodograph marker for keyboard focus instead of drawing the
+  global rectangular focus outline around the wind inspection control.
+- Save the exact current map centre and zoom before rebuilding the map, including
+  workspace and projection changes during a gesture or before the camera snapshot
+  delay expires. Keep the inspector's source disclosure expanded or collapsed
+  through model-catalogue loading and workspace changes. Verify that model,
+  parameter, layout and workspace changes retain the selected point and inspector
+  visibility, alongside the existing synchronized camera.
 - Use the normal WebView profile for public-updater acceptance on its disposable
   Windows runner. Seed preferences in the same profile the installer relaunches,
   rather than a process-only override the Windows shell does not preserve.
@@ -16,6 +143,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   WebView2 evidence by process ownership in either mode and fail if it is missing.
   Record verified public v3.2.1 downloads, provenance and interactive-updater
   results in the performance report and continuation checkpoint.
+
+### Removed
+
+- Remove the stacked sounding chart toolbars, bottom readout strip and repeated
+  interaction hint in the Info footer, plus the export-readiness checkmark.
+- Remove the separate forecast-download popup and timeline button.
 
 ## [v3.2.1] - 2026-10-20
 

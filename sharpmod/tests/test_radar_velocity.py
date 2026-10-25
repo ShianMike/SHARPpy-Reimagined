@@ -16,6 +16,12 @@ NOW = datetime(2026, 10, 17, 12, tzinfo=UTC)
 PNG = b"\x89PNG\r\n\x1a\n" + bytes(64)
 
 
+def test_an_empty_scan_inventory_is_a_confirmed_gap(monkeypatch):
+    monkeypatch.setattr(velocity, "directory_scans", lambda *_: [])
+    with pytest.raises(radar_site.RadarScanMissing, match="no recent velocity scans"):
+        velocity.fetch_frame("KTLX", product="velocity", now=NOW)
+
+
 def test_unpublished_cut_closes_the_http_response(monkeypatch):
     body = io.BytesIO(b"Not found")
     error = HTTPError(velocity.BASE, 404, "Not found", {}, body)

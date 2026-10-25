@@ -44,6 +44,10 @@
 .choice:is(:hover, :focus-visible):not(:disabled), .product:is(:hover, :focus-visible), .modelChoice:is(:hover, :focus-visible) { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-bright); }
 .choice[aria-pressed="true"], .product[aria-pressed="true"], .modelChoice[aria-pressed="true"] { background: var(--accent-subtle); border-color: var(--accent); }
 .choice:disabled { opacity: 0.4; cursor: default; }
+.hourChoices .choice[data-hour-state="cached"] { border-color: var(--success); }
+.hourChoices .choice[data-hour-state="loading"] { border-color: var(--forecast-loading); }
+.hourChoices .choice[data-hour-state="failed"] { border-color: var(--danger); }
+.announcement { position: absolute; width: var(--hairline); height: var(--hairline); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .search { display: flex; flex: none; align-items: center; gap: var(--space-2); margin: 0 var(--space-4) var(--space-2); padding: var(--space-1) var(--space-3); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--control-fill); color: var(--text-secondary); }
 .search:focus-within { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .search input { flex: 1; width: 100%; min-width: 0; border: 0; background: transparent; outline: none; height: var(--control-h-xs); color: var(--text-primary); }

@@ -664,11 +664,6 @@ def _refresh_mounted_products(sw):
 #: route drew it.
 _DGZ_TICK_COLOR = "#F5D800"
 
-#: Colour of the freezing-level label. The wet-bulb-zero label borrows the
-#: widget's dewpoint colour, as the vendored code does, because the wet bulb is a
-#: moisture quantity and the two levels then read as a matched pair.
-_FRZ_LABEL_COLOR = "#FFA500"
-
 
 
 

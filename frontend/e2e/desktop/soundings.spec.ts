@@ -177,17 +177,18 @@ test.describe("real-backend soundings", () => {
     expect(outcome.text).toContain("72357");
 
     const first = await drawn(viewerStage());
-    const meta = await page.getByTestId("sounding-viewer").locator("header").innerText();
+    const meta = await page.getByLabel("Sounding details", { exact: true }).innerText();
     results.observed = { title: outcome.text, header: meta.replace(/\s+/gu, " "), firstRender: first };
     expect(first.width).toBeGreaterThan(1000);
     await shot("desktop-sounding-observed.png");
 
+    await page.getByRole("button", { name: "Show sounding controls", exact: true }).click();
     await page.getByText("Chart panels", { exact: true }).filter({ visible: true }).click();
     const parcel = page.getByRole("group", { name: "Parcel" });
     const before = await viewerStage().getByTestId("sounding-image").getAttribute("src");
     await parcel.getByRole("button", { name: "ML" }).click();
     results.observedRedrawMl = await drawn(viewerStage(), before);
-
+    await page.getByRole("button", { name: "Show sounding sources", exact: true }).click();
   });
 
   test("a model sounding at the selected station @soundings", async () => {
@@ -227,7 +228,7 @@ test.describe("real-backend soundings", () => {
     results.modelAttempts = attempts;
     expect(outcome.ok, `a model sounding opened: ${JSON.stringify(attempts)}`).toBe(true);
     const image = await drawn(viewerStage());
-    const meta = await page.getByTestId("sounding-viewer").locator("header").innerText();
+    const meta = await page.getByLabel("Sounding details", { exact: true }).innerText();
     results.model = { title: outcome.text, header: meta.replace(/\s+/gu, " "), firstRender: image };
     await shot("desktop-sounding-model.png");
   });
@@ -241,7 +242,7 @@ test.describe("real-backend soundings", () => {
     const outcome = await open(page.getByTestId("open-file"), page.getByTestId("file-error"), OPEN_FILE_MS);
     expect(outcome.ok, outcome.text).toBe(true);
     const image = await drawn(viewerStage());
-    const meta = await page.getByTestId("sounding-viewer").locator("header").innerText();
+    const meta = await page.getByLabel("Sounding details", { exact: true }).innerText();
     expect(meta).toContain("time 1 of 49");
     const time = page.getByRole("combobox", { name: "Sounding time (UTC)" });
     const firstSrc = await viewerStage().getByTestId("sounding-image").getAttribute("src");
@@ -251,7 +252,7 @@ test.describe("real-backend soundings", () => {
     await page.keyboard.press("Enter");
     await expect(time).toHaveAttribute("value", "48");
     const lastRender = await drawn(viewerStage(), firstSrc);
-    const lastHeader = await page.getByTestId("sounding-viewer").locator("header").innerText();
+    const lastHeader = await page.getByLabel("Sounding details", { exact: true }).innerText();
     expect(lastHeader).toContain("File, 2026-06-27 06Z, Selected profile, time 49 of 49");
     const lastSrc = await viewerStage().getByTestId("sounding-image").getAttribute("src");
     await time.click();
@@ -259,7 +260,7 @@ test.describe("real-backend soundings", () => {
     await page.keyboard.press("Enter");
     await expect(time).toHaveAttribute("value", "0");
     const restoredRender = await drawn(viewerStage(), lastSrc);
-    expect(await page.getByTestId("sounding-viewer").locator("header").innerText()).toContain("File, 2026-06-25 06Z, 50 levels, time 1 of 49");
+    expect(await page.getByLabel("Sounding details", { exact: true }).innerText()).toContain("File, 2026-06-25 06Z, 50 levels, time 1 of 49");
     results.file = { open: outcome, header: meta.replace(/\s+/gu, " "), firstRender: image, lastHeader: lastHeader.replace(/\s+/gu, " "), lastRender, restoredRender };
     await shot("desktop-sounding-file.png");
 

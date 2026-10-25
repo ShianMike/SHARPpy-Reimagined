@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../lib/backend/fixtureTransport";
 import { useAppStore } from "../stores/appStore";
 import { useForecastStore } from "../stores/forecastStore";
 import { useGraphicsStore } from "../stores/graphicsStore";
+import { useMapStore } from "../stores/mapStore";
+import { useUiStore } from "../stores/uiStore";
 import { renderWithBackend } from "../test/backendHarness";
 import { Shell } from "./Shell";
 
@@ -18,9 +21,11 @@ vi.mock("../map/WeatherMap", async () => {
 });
 
 const app = useAppStore.getState(), forecast = useForecastStore.getState(), graphics = useGraphicsStore.getState();
+const map = useMapStore.getState(), ui = useUiStore.getState();
 beforeEach(() => {
   useAppStore.setState(app, true); useForecastStore.setState(forecast, true);
   useGraphicsStore.setState(graphics, true);
+  useMapStore.setState(map, true); useUiStore.setState(ui, true);
   mapMounts.mockClear();
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
 });
@@ -117,4 +122,61 @@ it("ignores an old exit when another workspace opens before it finishes", async 
   expect(screen.queryByTestId("workspace-panel")).toBeNull();
   expect(mapMounts).toHaveBeenCalledTimes(1);
   queryClient.clear();
+});
+
+it("keeps the selected point and inspector state across model, parameter, layout and workspace changes", async () => {
+  useAppStore.getState().setActiveWorkspace("map");
+  const snapshot = { center: [-97.4567890123, 35.2345678901] as [number, number], zoom: 6.375 };
+  useMapStore.getState().setCameraSnapshot(snapshot);
+  const fixture = createTransport("field-error");
+  let release!: () => void;
+  const pendingCatalog = new Promise<void>((resolve) => { release = resolve; });
+  const { view, queryClient } = renderWithBackend(<Shell />, { ...fixture, call: (command, args) =>
+    command === "get_map_catalog" && args?.model === "rap" ? pendingCatalog.then(() => fixture.call(command, args)) : fixture.call(command, args),
+  });
+  try {
+    await screen.findByTestId("map-canvas");
+    act(() => { useAppStore.getState().selectPoint({ latitude: 35.2345678901, longitude: -97.4567890123 }); });
+    const selected = useAppStore.getState().selectedPoint;
+    const user = userEvent.setup();
+    await user.click(await screen.findByText("Forecast & source"));
+    expect(screen.getByText("Forecast & source").closest("details")?.open).toBe(true);
+    act(() => { useForecastStore.getState().setModel("rap"); });
+    expect(screen.queryByText("Forecast & source")).toBeNull();
+    release();
+    await waitFor(() => { expect(screen.getByText("Forecast & source").closest("details")?.open).toBe(true); });
+    for (const layout of [2, 4, 1] as const) {
+      act(() => { useMapStore.getState().setProduct("tmp-2m"); useMapStore.getState().setPanelLayout(layout); });
+      expect(screen.getByText("Forecast & source").closest("details")?.open).toBe(true);
+    }
+    for (const workspace of ["overview", "settings", "status", "sounding", "live", "map"] as const) {
+      act(() => { useAppStore.getState().setActiveWorkspace(workspace); });
+      expect(useAppStore.getState().selectedPoint).toBe(selected);
+      expect(useMapStore.getState().cameraSnapshot).toEqual(snapshot);
+    }
+    await waitFor(() => { expect(screen.getByText("Forecast & source").closest("details")?.open).toBe(true); });
+    expect(screen.getByRole("button", { name: "Point details" }).getAttribute("aria-expanded")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "Close map details" }));
+    act(() => {
+      useForecastStore.getState().setModel("hrrr"); useMapStore.getState().setProduct("dpt-2m"); useMapStore.getState().setPanelLayout(2);
+      useAppStore.getState().setActiveWorkspace("settings");
+    });
+    act(() => { useAppStore.getState().setActiveWorkspace("map"); });
+    expect(screen.getByRole("button", { name: "Point details" }).getAttribute("aria-expanded")).toBe("false");
+    await user.click(screen.getByRole("button", { name: "Layers" }));
+    act(() => { useAppStore.getState().setActiveWorkspace("sounding"); });
+    act(() => { useAppStore.getState().setActiveWorkspace("map"); });
+    expect(screen.getByRole("button", { name: "Layers" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("heading", { name: "Layers" })).toBeTruthy();
+    expect(useAppStore.getState().selectedPoint).toBe(selected);
+    expect(screen.getByRole("dialog", { name: "Layers" }).getAttribute("data-movable")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "Close layers" }));
+    await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Layers" })).toBeNull(); });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Layers" }));
+    await user.click(screen.getByRole("button", { name: "Layers" }));
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Layers" }), { key: "Escape" });
+    await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Layers" })).toBeNull(); });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Layers" }));
+    expect(useAppStore.getState().selectedPoint).toBe(selected);
+  } finally { view.unmount(); queryClient.clear(); }
 });

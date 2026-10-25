@@ -26,6 +26,7 @@
 .sideHeader h2 { display: flex; align-items: center; flex: 1; gap: var(--space-2); font-size: var(--font-size-subhead); font-weight: var(--font-weight-semibold); }
 .sideHeader h2 svg { color: var(--accent-bright); }
 .point, .rightEnd { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.layersPopup { display: flex; flex-direction: column; width: var(--parameter-picker-w); height: min(80dvh, var(--floating-panel-h)); min-height: 0; overflow: hidden; padding: 0; pointer-events: auto; }
 .point { justify-content: center; }
 .point > :not([data-testid="inspector"]) { min-height: var(--side-panel-min-h); }
 .timeline { position: absolute; bottom: max(var(--chrome-inset), env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(var(--player-w), calc(100% - 2 * var(--dock-offset))); z-index: var(--z-floating); pointer-events: auto; }

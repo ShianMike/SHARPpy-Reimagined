@@ -5,7 +5,7 @@ import "./maplibreWorker";
 import * as maplibregl from "maplibre-gl";
 import type { MapLibreOverlay } from "@deck.gl/maplibre";
 import { useGraphicsStore } from "../../stores/graphicsStore";
-import { mapProjection, panelLayers, useMapStore } from "../../stores/mapStore";
+import { mapProjection, panelLayers, useMapStore, type FocusRequest } from "../../stores/mapStore";
 import type { Station } from "../../types/contracts";
 import { documentTokenReader, readCameraDurationMs, readCanvasTokens, type CanvasTokens } from "../canvasTokens";
 import { applyBasemapLabels, prepareBasemap } from "../basemap/basemapLayers";
@@ -121,6 +121,8 @@ export class MapRuntime implements RuntimeEventTarget {
     if (this.disposed) {
       return;
     }
+    // A workspace or renderer change can rebuild the map before moveend's delay.
+    this.saveSnapshot();
     // First: every callback this runtime registered becomes a no-op, so a context
     // loss that map.remove() causes, delivered after the next map exists, is ignored.
     this.disposed = true;
@@ -230,8 +232,8 @@ export class MapRuntime implements RuntimeEventTarget {
           if (labelsChanged) this.redraw();
           else this.scene?.render();
         },
-        focus: (stationId) => {
-          this.focus(stationId);
+        focus: (request) => {
+          this.focus(request);
         },
         profileChanged: () => {
           applyPixelRatio();
@@ -265,8 +267,8 @@ export class MapRuntime implements RuntimeEventTarget {
     }
   }
 
-  private focus(stationId: string): void {
-    const station = this.scene?.station(stationId);
+  private focus(request: FocusRequest): void {
+    const station = request.position ?? this.scene?.station(request.stationId);
     if (this.disposed || !this.primary || this.map === null || station === undefined) {
       return;
     }
@@ -279,19 +281,19 @@ export class MapRuntime implements RuntimeEventTarget {
   }
 
   private scheduleSnapshot(): void {
-    if (!this.primary) {
-      return;
-    }
-    if (this.snapshotTimer !== null) {
-      clearTimeout(this.snapshotTimer);
-    }
+    if (!this.primary) return;
+    if (this.snapshotTimer !== null) clearTimeout(this.snapshotTimer);
     this.snapshotTimer = setTimeout(() => {
       this.snapshotTimer = null;
-      const map = this.map;
-      if (!this.disposed && map !== null) {
-        const center = map.getCenter();
-        useMapStore.getState().setCameraSnapshot({ center: [center.lng, center.lat], zoom: map.getZoom() });
-      }
+      this.saveSnapshot();
     }, CAMERA_SNAPSHOT_DEBOUNCE_MS);
+  }
+
+  private saveSnapshot(): void {
+    const map = this.map;
+    if (this.primary && !this.disposed && map !== null) {
+      const center = map.getCenter();
+      useMapStore.getState().setCameraSnapshot({ center: [center.lng, center.lat], zoom: map.getZoom() });
+    }
   }
 }

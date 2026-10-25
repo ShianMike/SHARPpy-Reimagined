@@ -27,8 +27,12 @@
   gap: var(--space-4);
   min-width: 0;
   margin-right: auto;
+  flex: 1;
+  overflow: hidden;
 }
 .title {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   color: var(--text-primary);
   font-size: var(--font-size-subhead);
@@ -111,7 +115,8 @@
   color: var(--text-secondary);
   font-size: var(--font-size-small);
 }
-.imageViewer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.imageViewer { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.showSidebar { position: absolute; left: var(--space-2); top: var(--space-2); z-index: var(--z-floating); }
 .tools, .toolGroup, .exportTools { display: flex; align-items: center; gap: var(--space-2); }
 .tools { flex-wrap: wrap; flex: none; padding: var(--space-2) var(--space-3); gap: var(--space-4); border-bottom: var(--hairline) solid var(--border-subtle); background: var(--surface-1); }
 .toolGroup:first-child { margin-inline-end: auto; }
@@ -126,13 +131,27 @@
 .panelPicker summary > svg { flex: none; color: var(--text-tertiary); }
 .panelPicker[open] summary { color: var(--accent-bright); background: var(--accent-subtle); }
 .options { position: absolute; right: 0; top: calc(100% + var(--space-2)); z-index: var(--z-popover); width: var(--popover-w); display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); background: var(--surface-1); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); box-shadow: var(--shadow-floating); }
-.viewport { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; }
+.viewport { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .canvasSpace { display: flex; align-items: center; justify-content: center; width: max-content; min-width: 100%; min-height: 100%; padding: var(--space-3); }
 .imageFrame { position: relative; flex: none; width: var(--image-width); height: var(--image-height); cursor: grab; touch-action: none; }
 .imageFrame:active { cursor: grabbing; }
 .imageFrame[data-editing="true"] { cursor: crosshair; }
-.editOverlay { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+.editOverlay, .inspectionOverlay { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+.inspectionOverlay { pointer-events: none; }
+.inspectionOverlay rect { fill: transparent; pointer-events: all; }
+.inspectionOverlay line, .inspectionOverlay circle { stroke: var(--workspace-orange-text); stroke-width: var(--focus-ring-width); vector-effect: non-scaling-stroke; }
+.inspectionOverlay line { stroke-dasharray: var(--space-1) var(--space-1); }
+.inspectionOverlay circle { fill: none; }
+.inspectionOverlay .windCursor { fill: transparent; stroke: none; pointer-events: all; }
+.inspectionOverlay .windCursor:focus-visible { outline: none; stroke: var(--workspace-orange-text); }
+.levelReadout[data-sounding-level] { --glass-fill: color-mix(in srgb, var(--surface-1) 45%, transparent); position: fixed; width: var(--sounding-side-w); max-width: calc(100vw - 2 * var(--chrome-gap)); pointer-events: auto; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
+.levelReadout > strong { color: var(--workspace-orange-text); font-size: var(--font-size-small); }
+.levelReadout dl { display: grid; gap: var(--space-1); margin: 0; }
+.levelReadout dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.levelReadout dt, .levelReadout small { color: var(--text-secondary); font-size: var(--font-size-caption); }
+.levelReadout dd { margin: 0; color: var(--text-primary); font-size: var(--font-size-small); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
 .editOverlay circle { fill: var(--map-background); stroke: var(--workspace-orange-text); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.editOverlay circle[data-edited="true"] { fill: var(--accent-subtle); stroke-width: var(--focus-ring-width); stroke-dasharray: var(--space-1) var(--hairline); }
 .editOverlay circle:hover, .editOverlay circle[data-selected="true"] { fill: var(--workspace-orange-text); stroke: var(--slider-thumb); }
 .editBar { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); font-size: var(--font-size-small); background: var(--accent-subtle); color: var(--text-secondary); }
 .editBar > span { flex: 1; }
@@ -142,8 +161,48 @@
 .editFields { display: flex; gap: var(--space-2); }
 .editFields label { display: flex; flex-direction: column; gap: var(--space-1); flex: 1; min-width: 0; font-size: var(--font-size-small); color: var(--text-secondary); }
 .editFields span { display: flex; align-items: center; gap: var(--space-1); }
+.editFields .beforeValue { justify-content: space-between; padding-block: var(--space-1); font-size: var(--font-size-caption); }
+.beforeValue output { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.editFields label[data-edited="true"] input { border-color: var(--workspace-orange-text); }
 .editFields input { width: 100%; min-width: 0; height: var(--control-h-sm); padding: var(--space-2); border: var(--hairline) solid var(--border-strong); border-radius: var(--radius-sm); background: var(--control-fill); color: var(--text-primary); }
 .editor small { color: var(--text-tertiary); }
 .rendering { position: absolute; left: 50%; top: var(--space-3); transform: translateX(-50%); padding: var(--space-2) var(--space-4); background: var(--surface-1); box-shadow: var(--shadow-floating); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--font-size-small); }
 .failure { position: absolute; bottom: var(--space-4); left: var(--space-4); right: var(--space-4); max-width: var(--notice-max-w); }
 .imageMeta { display: flex; align-items: center; gap: var(--space-4); color: var(--text-tertiary); font-size: var(--font-size-caption); }
+.header[data-docked="true"] { flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 0; background: transparent; white-space: normal; overflow: visible; }
+.header[data-docked="true"] .heading { flex-direction: column; align-items: stretch; gap: var(--space-1); margin: 0; overflow: visible; }
+.header[data-docked="true"] .title { flex: none; font-size: var(--font-size-small); white-space: normal; overflow-wrap: anywhere; }
+.header[data-docked="true"] .meta { font-size: var(--font-size-caption); color: var(--text-secondary); }
+.header[data-docked="true"] .imageMeta { flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.tools[data-docked="true"] { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--space-4); padding: 0; border: 0; background: transparent; }
+.tools[data-docked="true"] .toolGroup { display: grid; gap: var(--space-2); margin: 0; padding-bottom: var(--space-4); border-bottom: var(--hairline) solid var(--border-subtle); }
+.tools[data-docked="true"] .groupLabel { font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); color: var(--text-secondary); }
+.tools[data-docked="true"] label { font-size: var(--font-size-caption); color: var(--text-tertiary); }
+.tools[data-docked="true"] button { border-radius: var(--radius-sm); font-size: var(--font-size-small); }
+.profileMode, .fitControls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); }
+.profileMode { padding: var(--space-1); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-sunken); }
+.profileMode > button { border-color: transparent; background: transparent; }
+.profileMode > button[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--hairline) var(--accent); }
+.historyActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); }
+.historyActions > button { padding-inline: var(--space-1); gap: var(--space-1); }
+.zoomControls { display: grid; grid-template-columns: var(--control-h-sm) minmax(0, 1fr) var(--control-h-sm); align-items: center; padding: var(--space-1); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--control-fill); }
+.zoomControls .zoomLabel { font-weight: var(--font-weight-semibold); }
+.tools[data-docked="true"] .exportTools { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); margin: 0; }
+.exportStatus { display: grid; min-width: 0; gap: var(--space-3); color: var(--text-secondary); font-size: var(--font-size-caption); line-height: var(--line-height-tight); font-variant-numeric: tabular-nums; }
+.exportHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.exportState { display: flex; align-items: center; gap: var(--space-1); }
+.exportDetails { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--space-2); }
+.exportDetails > div { display: grid; gap: var(--space-1); }
+.exportDetails strong, .exportSize { color: var(--text-primary); font-size: var(--font-size-small); }
+.exportSize { white-space: nowrap; }
+.exportButtons { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); }
+.exportButtons > button { min-width: 0; }
+.exportNotice { color: var(--text-secondary); font-size: var(--font-size-caption); line-height: var(--line-height-tight); }
+.tools[data-docked="true"] .panelPicker { width: 100%; margin-bottom: var(--space-2); }
+.tools[data-docked="true"] .panelPicker summary { min-height: var(--control-h-md); border-radius: var(--radius-sm); background: var(--control-fill); }
+.tools[data-docked="true"] .options { position: static; width: auto; margin-top: var(--space-2); padding: var(--space-3); box-shadow: none; }
+.tools[data-docked="true"] .segment { min-width: 0; padding-inline: var(--space-1); }
+.editBar[data-docked="true"] { flex-wrap: wrap; padding: var(--space-3) 0; background: transparent; border-top: var(--hairline) solid var(--border-subtle); }
+.editBar[data-docked="true"] > [data-compact] { width: 100%; max-width: none; }
+.editBar[data-docked="true"] > button { width: 100%; }
+.dockedEditor .editor { position: static; width: auto; padding: var(--space-3) 0; border: 0; border-top: var(--hairline) solid var(--border-subtle); background: transparent; box-shadow: none; }

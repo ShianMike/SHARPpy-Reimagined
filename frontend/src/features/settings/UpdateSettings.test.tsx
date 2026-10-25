@@ -58,6 +58,7 @@ it("shows a newer version and downloads only after an explicit install click, pr
   // Navigation must not cancel the download or allow a second installation.
   view.unmount();
   render(<UpdateSettings />);
+  expect(screen.getByText(/Automatic checks run at 00:00 and 12:00 UTC/u)).toBeTruthy();
   expect(screen.getByText("25%")).toBeTruthy();
   await useUpdateStore.getState().check();
   await useUpdateStore.getState().install();

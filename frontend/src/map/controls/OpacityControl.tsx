@@ -1,4 +1,4 @@
-// A layer's opacity slider, 0 to 100 percent in 5 percent steps.
+// A layer's opacity slider, 0 to 100 percent in 1 percent steps.
 
 import type { ReactNode } from "react";
 import { RangeControl } from "../../ui/Controls";
@@ -20,7 +20,7 @@ export function OpacityControl({ label, value, onChange, disabled = false }: Opa
       value={value}
       min={0}
       max={1}
-      step={0.05}
+      step={0.01}
       onChange={onChange}
       formatValue={percent}
       disabled={disabled}

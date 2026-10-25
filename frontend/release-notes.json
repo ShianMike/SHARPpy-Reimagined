@@ -77,5 +77,34 @@
         "description": "The Windows app includes a maintained Python and TLS runtime, updated libraries for network access and weather files, and signed installer checks. Downloads include checksums and a detailed component inventory."
       }
     ]
+  },
+  "3.3.0": {
+    "summary": "Clearer forecast and radar playback, larger sounding views, and simpler map controls.",
+    "highlights": [
+      {
+        "title": "Forecast hours and radar scans",
+        "description": "Forecast hours show green outlines for cached images, blue for downloads and red for failures, with direct retries. Radar scans has a matching movable picker before Site Tilt, distinguishing available, loading, missing, delayed and failed frames while keeping playback compact."
+      },
+      {
+        "title": "Simpler map controls",
+        "description": "Manage layer order, visibility and legends in a centered, movable glass popup. Opacity and provider options appear inside each layer’s settings. Search stations or radar sites in a larger popup; radar-site selection is available only in Live Tracking. Lighter hover cards and centered recovery notices keep the map readable."
+      },
+      {
+        "title": "Keep your place",
+        "description": "Keep the exact map position, zoom, selected point and inspector state when changing models, parameters, panel layouts or workspaces, including changes made immediately after moving the map."
+      },
+      {
+        "title": "More room for sounding inspection",
+        "description": "Swap the sidebar between sources and controls to give the chart more room. Inspect linked Skew-T and hodograph levels with separate transparent readouts, including levels above the visible hodograph trace. Compare original and edited values, identify edited levels and jump through undo history. Display all four height charts together."
+      },
+      {
+        "title": "Clear requests and exports",
+        "description": "Check coordinate ranges and model coverage before requesting a sounding. Follow download, decoding, calculation and rendering stages, and cancel with your inputs and open profiles retained. HD/UHD exports show PNG size, dimensions and a reliable ready state; unchanged images reuse completed renders."
+      },
+      {
+        "title": "Updates and maintenance",
+        "description": "Automatic update checks run once per UTC window starting at 00:00 and 12:00, remembered across restarts. Missed checks catch up when the app is open and online; manual checks remain available anytime. Weather-file, image, certificate, native and build dependencies are updated. The README has a simple download-history graph built from measured application-package counts."
+      }
+    ]
   }
 }

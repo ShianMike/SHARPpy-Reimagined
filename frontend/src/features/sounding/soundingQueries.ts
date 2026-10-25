@@ -64,24 +64,29 @@ export function useModelCatalog(): UseQueryResult<ModelCatalog> {
  * Opens a sounding. On success it joins the open list, becomes the active
  * sounding, and the Sounding workspace comes forward.
  */
-export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, OpenSoundingRequest> & { progress: SoundingProgress | undefined; cancel: () => void } {
+export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, OpenSoundingRequest> & { progress: SoundingProgress | undefined; cancelled: boolean; cancel: () => void } {
   const client = useBackendClient();
   const [progressId, setProgressId] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
   const controller = useRef<AbortController | null>(null);
-  useEffect(() => () => { controller.current?.abort(); }, []);
+  useEffect(() => () => { controller.current?.abort(); controller.current = null; }, []);
   const mutation = useMutation({
-    mutationFn: (request: OpenSoundingRequest) => {
+    mutationFn: async (request: OpenSoundingRequest) => {
       const id = request.kind === "model" ? crypto.randomUUID().replaceAll("-", "") : undefined;
       setProgressId(id ?? null);
+      setCancelled(false);
       const job = new AbortController();
       controller.current = job;
-      return client.openSounding(request, id, request.kind === "model" ? job.signal : undefined);
+      try {
+        const summary = await client.openSounding(request, id, request.kind === "model" ? job.signal : undefined);
+        if (request.kind === "model") job.signal.throwIfAborted();
+        useSoundingStore.getState().add(summary);
+        useAppStore.getState().setActiveWorkspace("sounding");
+        return summary;
+      } finally {
+        if (controller.current === job) { setProgressId(null); controller.current = null; }
+      }
     },
-    onSuccess: (summary) => {
-      useSoundingStore.getState().add(summary);
-      useAppStore.getState().setActiveWorkspace("sounding");
-    },
-    onSettled: () => { setProgressId(null); controller.current = null; },
   });
   const progress = useQuery({
     queryKey: ["soundings", "progress", progressId],
@@ -92,8 +97,13 @@ export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, Ope
     retry: false,
     gcTime: 0,
   });
-  return { ...mutation, progress: mutation.isPending ? progress.data : undefined,
-    cancel: () => { controller.current?.abort(); mutation.reset(); setProgressId(null); } };
+  return { ...mutation, cancelled, progress: mutation.isPending ? progress.data : undefined,
+    reset: () => { mutation.reset(); setCancelled(false); },
+    cancel: () => {
+      if (controller.current === null) return;
+      controller.current.abort(); controller.current = null;
+      mutation.reset(); setProgressId(null); setCancelled(true);
+    } };
 }
 
 export function useSoundingImage(soundingId: string | null, choice: RenderChoice): UseQueryResult<Blob> {

@@ -40,7 +40,7 @@ const optionalNumber = (value: unknown, path: string): number | null => expectNu
 export function parseSoundingProgress(value: unknown): SoundingProgress {
   const obj = expectObject(value, "progress");
   expectExactKeys(obj, "progress", ["stage", "downloadedBytes", "bytesPerSecond"]);
-  const stage = expectOneOf(obj.stage, "progress.stage", ["waiting", "downloading", "processing"] as const);
+  const stage = expectOneOf(obj.stage, "progress.stage", ["waiting", "downloading", "decoding", "calculating", "processing"] as const);
   const downloadedBytes = expectInteger(obj.downloadedBytes, "progress.downloadedBytes", { min: 0, max: Number.MAX_SAFE_INTEGER });
   const bytesPerSecond = expectFiniteNumber(obj.bytesPerSecond, "progress.bytesPerSecond", { min: 0, max: Number.MAX_SAFE_INTEGER });
   if (stage !== "downloading" && bytesPerSecond !== 0) throw new ContractError("progress.bytesPerSecond", "speed must be zero outside a download");

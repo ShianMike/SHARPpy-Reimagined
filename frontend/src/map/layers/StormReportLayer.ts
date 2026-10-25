@@ -8,7 +8,7 @@ import { svgIconAtlas } from "./iconAtlas";
 
 export const REPORTS_LAYER_ID = "storm-reports";
 const CAPTION_SPAN_DEG = 16;
-const SYMBOL_PATHS: Readonly<Record<string, string>> = {
+export const SYMBOL_PATHS: Readonly<Record<string, string>> = {
   triangle: "M12 4L20 19H4Z",
   circle: "M12 5a7 7 0 1 0 0 14a7 7 0 1 0 0-14Z",
   square: "M5 5H19V19H5Z",

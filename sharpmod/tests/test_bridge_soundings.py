@@ -438,6 +438,7 @@ def test_open_era5_keeps_the_actionable_provider_error(monkeypatch):
 
 
 def test_open_model_extracts_to_the_cache_and_maps_errors(monkeypatch):
+    from sharpmod.bridge import sounding_open
     from sharpmod.tools import era5_extract
     from sharpmod.tools import model_extract as mx
 
@@ -455,11 +456,20 @@ def test_open_model_extracts_to_the_cache_and_maps_errors(monkeypatch):
         assert progress["downloaded_bytes"] == 500_000
         assert progress["stage"] == "downloading"
         progress_callback("decoding", 9_000_000)
+        assert soundings.get_progress({"progress_id": "download1"})["stage"] == "decoding"
         assert soundings.get_progress({"progress_id": "download1"})["bytes_per_second"] == 0
         shutil.copyfile(NPZ, out_path)
         return out_path
 
     monkeypatch.setattr(mx, "extract", extract)
+    original_decode = sounding_open.decode
+
+    def calculate(path):
+        state = soundings.get_progress({"progress_id": "download1"})
+        assert state["stage"] == "calculating" and state["bytes_per_second"] == 0
+        return original_decode(path)
+
+    monkeypatch.setattr(sounding_open, "decode", calculate)
     summary = soundings.open_model(
         {
             "model": "hrrr",
@@ -539,6 +549,32 @@ def test_failed_model_open_removes_only_its_namespace(monkeypatch, failure):
     assert paths[36.0].is_file()
     assert (root / (paths[36.0].stem + "-grib") / "partial.grib2").is_file()
     assert sounding_cache.cache().get(result["sounding_id"]).path == paths[36.0]
+
+
+def test_model_cancelled_during_calculation_is_not_registered(monkeypatch):
+    from threading import Event
+    from sharpmod.bridge import cancellation, sounding_open
+    from sharpmod.tools import model_extract
+
+    stop = Event()
+    original_decode = sounding_open.decode
+
+    def extract(*_args, out_path, **_kwargs):
+        shutil.copyfile(NPZ, out_path)
+        return out_path
+
+    def calculate(path):
+        result = original_decode(path)
+        stop.set()
+        return result
+
+    monkeypatch.setattr(model_extract, "extract", extract)
+    monkeypatch.setattr(sounding_open, "decode", calculate)
+    before = set(sounding_cache.cache().root.iterdir())
+    with cancellation.scope(stop), pytest.raises(cancellation.Cancelled):
+        soundings.open_model({"model": "hrrr", "forecast_hour": 0,
+                              "latitude": 35.0, "longitude": -97.0})
+    assert set(sounding_cache.cache().root.iterdir()) == before
 
 
 def test_cache_eviction_removes_model_downloads_and_metadata(tmp_path):

@@ -1,1 +1,2737 @@
-{"edits": [], "points": [{"id": "tmpc:0", "label": "Temperature · 986 hPa", "x": 0.3692546351035461, "y": 0.6327620280286479, "values": [{"key": "tmpc", "label": "Temperature", "value": 27.166253662109398, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:0", "label": "Dewpoint · 986 hPa", "x": 0.3532930968004283, "y": 0.6327620280286479, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 23.465356445312523, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:0", "label": "Wind · 986 hPa", "x": 0.7308320909797983, "y": 0.2854656041193421, "values": [{"key": "u", "label": "U wind", "value": -4.7474937296966555, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 1.237137218265018, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:1", "label": "Temperature · 975 hPa", "x": 0.36873593707482033, "y": 0.6298078378971924, "values": [{"key": "tmpc", "label": "Temperature", "value": 26.73785400390625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:1", "label": "Dewpoint · 975 hPa", "x": 0.3509346317837088, "y": 0.6298078378971924, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 22.610382080078125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:1", "label": "Wind · 975 hPa", "x": 0.7245665747520531, "y": 0.25972286849417636, "values": [{"key": "u", "label": "U wind", "value": -7.257550000350941, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 8.190443873148476, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:2", "label": "Temperature · 950 hPa", "x": 0.370074393035922, "y": 0.6228419370736754, "values": [{"key": "tmpc", "label": "Temperature", "value": 26.321624755859375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:2", "label": "Dewpoint · 950 hPa", "x": 0.34839151897653736, "y": 0.6228419370736754, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 21.294158935546875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:2", "label": "Wind · 950 hPa", "x": 0.7280539834549574, "y": 0.21293050584941303, "values": [{"key": "u", "label": "U wind", "value": -5.8604437181429265, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 20.8294132240781, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:3", "label": "Temperature · 925 hPa", "x": 0.3662795804920742, "y": 0.6156902571618001, "values": [{"key": "tmpc", "label": "Temperature", "value": 24.69580078125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:3", "label": "Dewpoint · 925 hPa", "x": 0.3470973312005313, "y": 0.6156902571618001, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 20.248138427734375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:3", "label": "Wind · 925 hPa", "x": 0.732924833064035, "y": 0.1898674986705578, "values": [{"key": "u", "label": "U wind", "value": -3.9091110329701877, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 27.058905055614048, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:4", "label": "Temperature · 900 hPa", "x": 0.36196115667485773, "y": 0.608342616624969, "values": [{"key": "tmpc", "label": "Temperature", "value": 22.928131103515625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:4", "label": "Dewpoint · 900 hPa", "x": 0.345456296142062, "y": 0.608342616624969, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 19.10125732421875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:4", "label": "Wind · 900 hPa", "x": 0.7391959543143494, "y": 0.18144067430475425, "values": [{"key": "u", "label": "U wind", "value": -1.3968093093419318, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 29.335053744527873, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:5", "label": "Temperature · 875 hPa", "x": 0.357286243201857, "y": 0.6007879732964468, "values": [{"key": "tmpc", "label": "Temperature", "value": 21.05621337890625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:5", "label": "Dewpoint · 875 hPa", "x": 0.3458833205539946, "y": 0.6007879732964468, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 18.41229248046875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:5", "label": "Wind · 875 hPa", "x": 0.7474569803668848, "y": 0.18263262598761398, "values": [{"key": "u", "label": "U wind", "value": 1.9126770109364302, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 29.013098623308125, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:6", "label": "Temperature · 850 hPa", "x": 0.3526810246044839, "y": 0.593014324563087, "values": [{"key": "tmpc", "label": "Temperature", "value": 19.1776123046875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:6", "label": "Dewpoint · 850 hPa", "x": 0.34614562683500055, "y": 0.593014324563087, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 17.66229248046875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:6", "label": "Wind · 850 hPa", "x": 0.7557761368168561, "y": 0.1870343059641269, "values": [{"key": "u", "label": "U wind", "value": 5.245451207791268, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 27.824171730727432, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:7", "label": "Temperature · 825 hPa", "x": 0.3492667212586676, "y": 0.5850085926449087, "values": [{"key": "tmpc", "label": "Temperature", "value": 17.550933837890625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:7", "label": "Dewpoint · 825 hPa", "x": 0.3440456683984777, "y": 0.5850085926449087, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 16.340362548828125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:7", "label": "Wind · 825 hPa", "x": 0.7650139404940768, "y": 0.19258623585091827, "values": [{"key": "u", "label": "U wind", "value": 8.94624874852734, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 26.324553679585502, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:8", "label": "Temperature · 800 hPa", "x": 0.3461923948203052, "y": 0.5767564922176066, "values": [{"key": "tmpc", "label": "Temperature", "value": 15.977386474609375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:8", "label": "Dewpoint · 800 hPa", "x": 0.34079010293146567, "y": 0.5767564922176066, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 14.72479248046875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:8", "label": "Wind · 800 hPa", "x": 0.7754618486569039, "y": 0.20001099122175514, "values": [{"key": "u", "label": "U wind", "value": 13.131831619288201, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 24.31907136866698, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:9", "label": "Temperature · 775 hPa", "x": 0.34313814275617605, "y": 0.5682423770129202, "values": [{"key": "tmpc", "label": "Temperature", "value": 14.38116455078125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:9", "label": "Dewpoint · 775 hPa", "x": 0.3378587827865513, "y": 0.5682423770129202, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 13.157073974609375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:9", "label": "Wind · 775 hPa", "x": 0.7861048581249616, "y": 0.21084933349004986, "values": [{"key": "u", "label": "U wind", "value": 17.39557489005537, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 21.391553543080278, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:10", "label": "Temperature · 750 hPa", "x": 0.33969841317264315, "y": 0.5594490612589954, "values": [{"key": "tmpc", "label": "Temperature", "value": 12.66644287109375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:10", "label": "Dewpoint · 750 hPa", "x": 0.3359610985622496, "y": 0.5594490612589954, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 11.799896240234375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:10", "label": "Wind · 750 hPa", "x": 0.7925082540789256, "y": 0.22352427353368043, "values": [{"key": "u", "label": "U wind", "value": 19.960867769922995, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 17.96795683452114, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:11", "label": "Temperature · 725 hPa", "x": 0.33602058135329216, "y": 0.5503576108403233, "values": [{"key": "tmpc", "label": "Temperature", "value": 10.86541748046875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:11", "label": "Dewpoint · 725 hPa", "x": 0.33242146643794757, "y": 0.5503576108403233, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 10.030914306640625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:11", "label": "Wind · 725 hPa", "x": 0.7951745058881521, "y": 0.23530269657703518, "values": [{"key": "u", "label": "U wind", "value": 21.029006743573195, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 14.786516115713932, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:12", "label": "Temperature · 700 hPa", "x": 0.33260302540436204, "y": 0.5409470977982676, "values": [{"key": "tmpc", "label": "Temperature", "value": 9.091461181640625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:12", "label": "Dewpoint · 700 hPa", "x": 0.3271708560576404, "y": 0.5409470977982676, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 7.831939697265625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:12", "label": "Wind · 700 hPa", "x": 0.7949343850218246, "y": 0.24668431543443262, "values": [{"key": "u", "label": "U wind", "value": 20.932810857339323, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 11.712255194231954, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:13", "label": "Temperature · 675 hPa", "x": 0.32821607527693514, "y": 0.5311943101681785, "values": [{"key": "tmpc", "label": "Temperature", "value": 7.057037353515625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:13", "label": "Dewpoint · 675 hPa", "x": 0.3204093719317592, "y": 0.5311943101681785, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 5.2469482421875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:13", "label": "Wind · 675 hPa", "x": 0.7890492702288439, "y": 0.2511161189622872, "values": [{"key": "u", "label": "U wind", "value": 18.5751488941913, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 10.515191703697463, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:14", "label": "Temperature · 650 hPa", "x": 0.3233979621316939, "y": 0.5210734070330396, "values": [{"key": "tmpc", "label": "Temperature", "value": 4.884246826171875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:14", "label": "Dewpoint · 650 hPa", "x": 0.31508202581495215, "y": 0.5210734070330396, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 2.956085205078125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:14", "label": "Wind · 650 hPa", "x": 0.7869319830462634, "y": 0.2565015270755214, "values": [{"key": "u", "label": "U wind", "value": 17.726933076653744, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 9.060552436983022, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:15", "label": "Temperature · 625 hPa", "x": 0.317683376171459, "y": 0.5105555058930219, "values": [{"key": "tmpc", "label": "Temperature", "value": 2.462188720703125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:15", "label": "Dewpoint · 625 hPa", "x": 0.3142335169267672, "y": 0.5105555058930219, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 1.66229248046875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:15", "label": "Wind · 625 hPa", "x": 0.7936250859465197, "y": 0.26394317169630543, "values": [{"key": "u", "label": "U wind", "value": 20.408286742378486, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 7.050508212530393, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:16", "label": "Temperature · 600 hPa", "x": 0.3140859669493909, "y": 0.49960818576081617, "values": [{"key": "tmpc", "label": "Temperature", "value": 0.486236572265625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:16", "label": "Dewpoint · 600 hPa", "x": 0.3121497234123774, "y": 0.49960818576081617, "values": [{"key": "dwpc", "label": "Dewpoint", "value": 0.03729248046875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:16", "label": "Wind · 600 hPa", "x": 0.8062835858033487, "y": 0.2721030306352437, "values": [{"key": "u", "label": "U wind", "value": 25.479464565206502, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 4.846468894830083, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:17", "label": "Temperature · 575 hPa", "x": 0.3117237522973933, "y": 0.48819488444564846, "values": [{"key": "tmpc", "label": "Temperature", "value": -1.251922607421875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:17", "label": "Dewpoint · 575 hPa", "x": 0.30865821982369457, "y": 0.48819488444564846, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -1.96270751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:17", "label": "Wind · 575 hPa", "x": 0.8235523282333559, "y": 0.28167996320671834, "values": [{"key": "u", "label": "U wind", "value": 32.397572131636394, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 2.259667322836063, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:18", "label": "Temperature · 550 hPa", "x": 0.3095066176264714, "y": 0.4762741617807558, "values": [{"key": "tmpc", "label": "Temperature", "value": -3.009368896484375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:18", "label": "Dewpoint · 550 hPa", "x": 0.3021603166939441, "y": 0.4762741617807558, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -4.71270751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:18", "label": "Wind · 550 hPa", "x": 0.8341681333242537, "y": 0.29190522616200415, "values": [{"key": "u", "label": "U wind", "value": 36.6504169361005, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -0.5022531657314595, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:19", "label": "Temperature · 525 hPa", "x": 0.30685760044965504, "y": 0.4637987913414771, "values": [{"key": "tmpc", "label": "Temperature", "value": -4.9248046875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:19", "label": "Dewpoint · 525 hPa", "x": 0.2921381483581338, "y": 0.4637987913414771, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -8.33770751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:19", "label": "Wind · 525 hPa", "x": 0.8420617589688988, "y": 0.3031348331997416, "values": [{"key": "u", "label": "U wind", "value": 39.81271734796448, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -3.5354545505482933, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:20", "label": "Temperature · 500 hPa", "x": 0.30277443052036457, "y": 0.4507146303948426, "values": [{"key": "tmpc", "label": "Temperature", "value": -7.23626708984375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:20", "label": "Dewpoint · 500 hPa", "x": 0.2834680647407921, "y": 0.4507146303948426, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -11.71270751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:20", "label": "Wind · 500 hPa", "x": 0.8450885199458019, "y": 0.3093196457190005, "values": [{"key": "u", "label": "U wind", "value": 41.02528149969468, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -5.206018964352418, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:21", "label": "Temperature · 475 hPa", "x": 0.29805097197424174, "y": 0.43695919975273206, "values": [{"key": "tmpc", "label": "Temperature", "value": -9.766204833984375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:21", "label": "Dewpoint · 475 hPa", "x": 0.27402173033044147, "y": 0.43695919975273206, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -15.33770751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:21", "label": "Wind · 475 hPa", "x": 0.8480284041629685, "y": 0.3123300014635671, "values": [{"key": "u", "label": "U wind", "value": 42.20304156703273, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -6.019138709551476, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:22", "label": "Temperature · 450 hPa", "x": 0.29312685809987704, "y": 0.42245987930402573, "values": [{"key": "tmpc", "label": "Temperature", "value": -12.420257568359375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:22", "label": "Dewpoint · 450 hPa", "x": 0.2665273653656818, "y": 0.42245987930402573, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -18.58770751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:22", "label": "Wind · 450 hPa", "x": 0.8524489281752754, "y": 0.30727642421785656, "values": [{"key": "u", "label": "U wind", "value": 43.97396731574177, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -4.65412945780687, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:23", "label": "Temperature · 425 hPa", "x": 0.28849326301456124, "y": 0.4071315872421437, "values": [{"key": "tmpc", "label": "Temperature", "value": -15.093414306640625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:23", "label": "Dewpoint · 425 hPa", "x": 0.25266703216387343, "y": 0.4071315872421437, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -23.40020751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:23", "label": "Wind · 425 hPa", "x": 0.8577407798004216, "y": 0.2969819729343646, "values": [{"key": "u", "label": "U wind", "value": 46.09395948753619, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -1.873520681018502, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:24", "label": "Temperature · 400 hPa", "x": 0.28336267556706296, "y": 0.3908737548966634, "values": [{"key": "tmpc", "label": "Temperature", "value": -17.978759765625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:24", "label": "Dewpoint · 400 hPa", "x": 0.23625974445665748, "y": 0.3908737548966634, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -28.90020751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:24", "label": "Wind · 400 hPa", "x": 0.8620893661191891, "y": 0.2863798018182283, "values": [{"key": "u", "label": "U wind", "value": 47.83606595748169, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 0.9902055387378921, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:25", "label": "Temperature · 375 hPa", "x": 0.2775283671304342, "y": 0.37356632393805217, "values": [{"key": "tmpc", "label": "Temperature", "value": -21.136749267578125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:25", "label": "Dewpoint · 375 hPa", "x": 0.232454602399618, "y": 0.37356632393805217, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -31.58770751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:25", "label": "Wind · 375 hPa", "x": 0.8641075076970286, "y": 0.28126652469914354, "values": [{"key": "u", "label": "U wind", "value": 48.64456261416461, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 2.3713401756347574, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:26", "label": "Temperature · 350 hPa", "x": 0.27096972065397157, "y": 0.3550643604773243, "values": [{"key": "tmpc", "label": "Temperature", "value": -24.5872802734375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:26", "label": "Dewpoint · 350 hPa", "x": 0.2510207921018004, "y": 0.3550643604773243, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -29.21270751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:26", "label": "Wind · 350 hPa", "x": 0.8649260883928077, "y": 0.28597996708579543, "values": [{"key": "u", "label": "U wind", "value": 48.97249786064567, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 1.0982039094767388, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:27", "label": "Temperature · 325 hPa", "x": 0.26412905673545417, "y": 0.3351906697120963, "values": [{"key": "tmpc", "label": "Temperature", "value": -28.24627685546875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:27", "label": "Dewpoint · 325 hPa", "x": 0.24971785577327046, "y": 0.3351906697120963, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -31.58770751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:27", "label": "Wind · 325 hPa", "x": 0.8645096576716014, "y": 0.2959148885096641, "values": [{"key": "u", "label": "U wind", "value": 48.80566970075226, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -1.5852931460886308, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:28", "label": "Temperature · 300 hPa", "x": 0.2576254109753017, "y": 0.31372544843987293, "values": [{"key": "tmpc", "label": "Temperature", "value": -31.993133544921875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:28", "label": "Dewpoint · 300 hPa", "x": 0.24427887414002328, "y": 0.31372544843987293, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -35.08770751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:28", "label": "Wind · 300 hPa", "x": 0.8595116580863654, "y": 0.3167156377704925, "values": [{"key": "u", "label": "U wind", "value": 46.80339889917074, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -7.203732086217778, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:29", "label": "Temperature · 275 hPa", "x": 0.24977046564220914, "y": 0.29039142445981275, "values": [{"key": "tmpc", "label": "Temperature", "value": -36.24822998046875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:29", "label": "Dewpoint · 275 hPa", "x": 0.23455902263631384, "y": 0.29039142445981275, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -39.77520751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:29", "label": "Wind · 275 hPa", "x": 0.8466694162592651, "y": 0.3543621795810213, "values": [{"key": "u", "label": "U wind", "value": 41.658611389942244, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -17.372346390308994, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:30", "label": "Temperature · 250 hPa", "x": 0.23982724152633075, "y": 0.2648318930738993, "values": [{"key": "tmpc", "label": "Temperature", "value": -41.21965026855469, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:30", "label": "Dewpoint · 250 hPa", "x": 0.2217969854070883, "y": 0.2648318930738993, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -45.40020751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:30", "label": "Wind · 250 hPa", "x": 0.8274266604035165, "y": 0.4013080624832209, "values": [{"key": "u", "label": "U wind", "value": 33.949685541740706, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -30.05278271830098, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:31", "label": "Temperature · 225 hPa", "x": 0.2308004489741271, "y": 0.23657714198308247, "values": [{"key": "tmpc", "label": "Temperature", "value": -46.25970458984375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:31", "label": "Dewpoint · 225 hPa", "x": 0.21402116333259144, "y": 0.23657714198308247, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -50.15020751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "wind:31", "label": "Wind · 225 hPa", "x": 0.7969585062562512, "y": 0.4211941079854123, "values": [{"key": "u", "label": "U wind", "value": 21.743703050793215, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -35.42415328835525, "unit": "kt", "min": -350, "max": 350}]}, {"id": "tmpc:32", "label": "Temperature · 200 hPa", "x": 0.2183132059738212, "y": 0.20499101757572005, "values": [{"key": "tmpc", "label": "Temperature", "value": -52.4495849609375, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:32", "label": "Dewpoint · 200 hPa", "x": 0.17027578168737084, "y": 0.20499101757572005, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -63.58770751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "tmpc:33", "label": "Temperature · 175 hPa", "x": 0.20511579721678797, "y": 0.16918162315638127, "values": [{"key": "tmpc", "label": "Temperature", "value": -59.24462890625, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:33", "label": "Dewpoint · 175 hPa", "x": 0.14002110847361787, "y": 0.16918162315638127, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -74.33770751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "tmpc:34", "label": "Temperature · 150 hPa", "x": 0.1931146569552362, "y": 0.12784271111892967, "values": [{"key": "tmpc", "label": "Temperature", "value": -66.33905029296875, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:34", "label": "Dewpoint · 150 hPa", "x": 0.13920940523576728, "y": 0.12784271111892967, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -78.83770751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "tmpc:35", "label": "Temperature · 125 hPa", "x": 0.210619533797125, "y": 0.07894915575295632, "values": [{"key": "tmpc", "label": "Temperature", "value": -67.38008117675781, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:35", "label": "Dewpoint · 125 hPa", "x": 0.1574303539261451, "y": 0.07894915575295632, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -79.71270751953125, "unit": "°C", "min": -150, "max": 65}]}, {"id": "tmpc:36", "label": "Temperature · 100 hPa", "x": 0.24588609333364442, "y": 0.01910828025477707, "values": [{"key": "tmpc", "label": "Temperature", "value": -65.44467163085938, "unit": "°C", "min": -150, "max": 65}]}, {"id": "dwpc:36", "label": "Dewpoint · 100 hPa", "x": 0.17865437663936837, "y": 0.01910828025477707, "values": [{"key": "dwpc", "label": "Dewpoint", "value": -81.03324890136719, "unit": "°C", "min": -150, "max": 65}]}, {"id": "storm:-1", "label": "Right mover", "x": 0.7853218132311169, "y": 0.2955130046893545, "values": [{"key": "u", "label": "U wind", "value": 17.081875798942182, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": -1.4767413012910442, "unit": "kt", "min": -350, "max": 350}]}, {"id": "storm:-2", "label": "Left mover", "x": 0.7939583167553302, "y": 0.188327321727965, "values": [{"key": "u", "label": "U wind", "value": 20.54178381601567, "unit": "kt", "min": -350, "max": 350}, {"key": "v", "label": "V wind", "value": 27.47491844053804, "unit": "kt", "min": -350, "max": 350}]}], "selection": {"chart": "streamwiseness", "panel": "STP STATS"}, "options": [{"key": "chart", "label": "Height chart", "choices": [{"key": "streamwiseness", "label": "Streamwiseness"}, {"key": "srw", "label": "Storm-Relative Wind"}, {"key": "theta", "label": "θ / θe Profile"}, {"key": "cape", "label": "Stepwise CIN & CAPE"}]}, {"key": "panel", "label": "Diagnostic panel", "choices": [{"key": "STP STATS", "label": "Sig-Tor Stats"}, {"key": "COND STP", "label": "EF-Scale Probs (Sig-Tor)"}, {"key": "WINTER", "label": "Winter Weather"}, {"key": "FIRE", "label": "Fire Weather"}, {"key": "SHIP", "label": "Sig-Hail Stats"}, {"key": "VROT", "label": "EF-Scale Probs (V-Rot)"}]}]}
+{
+  "edits": [],
+  "points": [
+    {
+      "id": "tmpc:0",
+      "label": "Temperature · 986 hPa",
+      "x": 0.3692546351035461,
+      "y": 0.6327620280286479,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 27.166253662109398,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 27.166253662109398
+        }
+      ]
+    },
+    {
+      "id": "dwpc:0",
+      "label": "Dewpoint · 986 hPa",
+      "x": 0.3532930968004283,
+      "y": 0.6327620280286479,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 23.465356445312523,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 23.465356445312523
+        }
+      ]
+    },
+    {
+      "id": "wind:0",
+      "label": "Wind · 986 hPa",
+      "x": 0.7308320909797983,
+      "y": 0.2854656041193421,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": -4.7474937296966555,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -4.7474937296966555
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 1.237137218265018,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 1.237137218265018
+        }
+      ]
+    },
+    {
+      "id": "tmpc:1",
+      "label": "Temperature · 975 hPa",
+      "x": 0.36873593707482033,
+      "y": 0.6298078378971924,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 26.73785400390625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 26.73785400390625
+        }
+      ]
+    },
+    {
+      "id": "dwpc:1",
+      "label": "Dewpoint · 975 hPa",
+      "x": 0.3509346317837088,
+      "y": 0.6298078378971924,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 22.610382080078125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 22.610382080078125
+        }
+      ]
+    },
+    {
+      "id": "wind:1",
+      "label": "Wind · 975 hPa",
+      "x": 0.7245665747520531,
+      "y": 0.25972286849417636,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": -7.257550000350941,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -7.257550000350941
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 8.190443873148476,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 8.190443873148476
+        }
+      ]
+    },
+    {
+      "id": "tmpc:2",
+      "label": "Temperature · 950 hPa",
+      "x": 0.370074393035922,
+      "y": 0.6228419370736754,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 26.321624755859375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 26.321624755859375
+        }
+      ]
+    },
+    {
+      "id": "dwpc:2",
+      "label": "Dewpoint · 950 hPa",
+      "x": 0.34839151897653736,
+      "y": 0.6228419370736754,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 21.294158935546875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 21.294158935546875
+        }
+      ]
+    },
+    {
+      "id": "wind:2",
+      "label": "Wind · 950 hPa",
+      "x": 0.7280539834549574,
+      "y": 0.21293050584941303,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": -5.8604437181429265,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -5.8604437181429265
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 20.8294132240781,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 20.8294132240781
+        }
+      ]
+    },
+    {
+      "id": "tmpc:3",
+      "label": "Temperature · 925 hPa",
+      "x": 0.3662795804920742,
+      "y": 0.6156902571618001,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 24.69580078125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 24.69580078125
+        }
+      ]
+    },
+    {
+      "id": "dwpc:3",
+      "label": "Dewpoint · 925 hPa",
+      "x": 0.3470973312005313,
+      "y": 0.6156902571618001,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 20.248138427734375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 20.248138427734375
+        }
+      ]
+    },
+    {
+      "id": "wind:3",
+      "label": "Wind · 925 hPa",
+      "x": 0.732924833064035,
+      "y": 0.1898674986705578,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": -3.9091110329701877,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -3.9091110329701877
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 27.058905055614048,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 27.058905055614048
+        }
+      ]
+    },
+    {
+      "id": "tmpc:4",
+      "label": "Temperature · 900 hPa",
+      "x": 0.36196115667485773,
+      "y": 0.608342616624969,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 22.928131103515625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 22.928131103515625
+        }
+      ]
+    },
+    {
+      "id": "dwpc:4",
+      "label": "Dewpoint · 900 hPa",
+      "x": 0.345456296142062,
+      "y": 0.608342616624969,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 19.10125732421875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 19.10125732421875
+        }
+      ]
+    },
+    {
+      "id": "wind:4",
+      "label": "Wind · 900 hPa",
+      "x": 0.7391959543143494,
+      "y": 0.18144067430475425,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": -1.3968093093419318,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -1.3968093093419318
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 29.335053744527873,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 29.335053744527873
+        }
+      ]
+    },
+    {
+      "id": "tmpc:5",
+      "label": "Temperature · 875 hPa",
+      "x": 0.357286243201857,
+      "y": 0.6007879732964468,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 21.05621337890625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 21.05621337890625
+        }
+      ]
+    },
+    {
+      "id": "dwpc:5",
+      "label": "Dewpoint · 875 hPa",
+      "x": 0.3458833205539946,
+      "y": 0.6007879732964468,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 18.41229248046875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 18.41229248046875
+        }
+      ]
+    },
+    {
+      "id": "wind:5",
+      "label": "Wind · 875 hPa",
+      "x": 0.7474569803668848,
+      "y": 0.18263262598761398,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 1.9126770109364302,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 1.9126770109364302
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 29.013098623308125,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 29.013098623308125
+        }
+      ]
+    },
+    {
+      "id": "tmpc:6",
+      "label": "Temperature · 850 hPa",
+      "x": 0.3526810246044839,
+      "y": 0.593014324563087,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 19.1776123046875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 19.1776123046875
+        }
+      ]
+    },
+    {
+      "id": "dwpc:6",
+      "label": "Dewpoint · 850 hPa",
+      "x": 0.34614562683500055,
+      "y": 0.593014324563087,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 17.66229248046875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 17.66229248046875
+        }
+      ]
+    },
+    {
+      "id": "wind:6",
+      "label": "Wind · 850 hPa",
+      "x": 0.7557761368168561,
+      "y": 0.1870343059641269,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 5.245451207791268,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 5.245451207791268
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 27.824171730727432,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 27.824171730727432
+        }
+      ]
+    },
+    {
+      "id": "tmpc:7",
+      "label": "Temperature · 825 hPa",
+      "x": 0.3492667212586676,
+      "y": 0.5850085926449087,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 17.550933837890625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 17.550933837890625
+        }
+      ]
+    },
+    {
+      "id": "dwpc:7",
+      "label": "Dewpoint · 825 hPa",
+      "x": 0.3440456683984777,
+      "y": 0.5850085926449087,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 16.340362548828125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 16.340362548828125
+        }
+      ]
+    },
+    {
+      "id": "wind:7",
+      "label": "Wind · 825 hPa",
+      "x": 0.7650139404940768,
+      "y": 0.19258623585091827,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 8.94624874852734,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 8.94624874852734
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 26.324553679585502,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 26.324553679585502
+        }
+      ]
+    },
+    {
+      "id": "tmpc:8",
+      "label": "Temperature · 800 hPa",
+      "x": 0.3461923948203052,
+      "y": 0.5767564922176066,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 15.977386474609375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 15.977386474609375
+        }
+      ]
+    },
+    {
+      "id": "dwpc:8",
+      "label": "Dewpoint · 800 hPa",
+      "x": 0.34079010293146567,
+      "y": 0.5767564922176066,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 14.72479248046875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 14.72479248046875
+        }
+      ]
+    },
+    {
+      "id": "wind:8",
+      "label": "Wind · 800 hPa",
+      "x": 0.7754618486569039,
+      "y": 0.20001099122175514,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 13.131831619288201,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 13.131831619288201
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 24.31907136866698,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 24.31907136866698
+        }
+      ]
+    },
+    {
+      "id": "tmpc:9",
+      "label": "Temperature · 775 hPa",
+      "x": 0.34313814275617605,
+      "y": 0.5682423770129202,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 14.38116455078125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 14.38116455078125
+        }
+      ]
+    },
+    {
+      "id": "dwpc:9",
+      "label": "Dewpoint · 775 hPa",
+      "x": 0.3378587827865513,
+      "y": 0.5682423770129202,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 13.157073974609375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 13.157073974609375
+        }
+      ]
+    },
+    {
+      "id": "wind:9",
+      "label": "Wind · 775 hPa",
+      "x": 0.7861048581249616,
+      "y": 0.21084933349004986,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 17.39557489005537,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 17.39557489005537
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 21.391553543080278,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 21.391553543080278
+        }
+      ]
+    },
+    {
+      "id": "tmpc:10",
+      "label": "Temperature · 750 hPa",
+      "x": 0.33969841317264315,
+      "y": 0.5594490612589954,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 12.66644287109375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 12.66644287109375
+        }
+      ]
+    },
+    {
+      "id": "dwpc:10",
+      "label": "Dewpoint · 750 hPa",
+      "x": 0.3359610985622496,
+      "y": 0.5594490612589954,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 11.799896240234375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 11.799896240234375
+        }
+      ]
+    },
+    {
+      "id": "wind:10",
+      "label": "Wind · 750 hPa",
+      "x": 0.7925082540789256,
+      "y": 0.22352427353368043,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 19.960867769922995,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 19.960867769922995
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 17.96795683452114,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 17.96795683452114
+        }
+      ]
+    },
+    {
+      "id": "tmpc:11",
+      "label": "Temperature · 725 hPa",
+      "x": 0.33602058135329216,
+      "y": 0.5503576108403233,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 10.86541748046875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 10.86541748046875
+        }
+      ]
+    },
+    {
+      "id": "dwpc:11",
+      "label": "Dewpoint · 725 hPa",
+      "x": 0.33242146643794757,
+      "y": 0.5503576108403233,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 10.030914306640625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 10.030914306640625
+        }
+      ]
+    },
+    {
+      "id": "wind:11",
+      "label": "Wind · 725 hPa",
+      "x": 0.7951745058881521,
+      "y": 0.23530269657703518,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 21.029006743573195,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 21.029006743573195
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 14.786516115713932,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 14.786516115713932
+        }
+      ]
+    },
+    {
+      "id": "tmpc:12",
+      "label": "Temperature · 700 hPa",
+      "x": 0.33260302540436204,
+      "y": 0.5409470977982676,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 9.091461181640625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 9.091461181640625
+        }
+      ]
+    },
+    {
+      "id": "dwpc:12",
+      "label": "Dewpoint · 700 hPa",
+      "x": 0.3271708560576404,
+      "y": 0.5409470977982676,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 7.831939697265625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 7.831939697265625
+        }
+      ]
+    },
+    {
+      "id": "wind:12",
+      "label": "Wind · 700 hPa",
+      "x": 0.7949343850218246,
+      "y": 0.24668431543443262,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 20.932810857339323,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 20.932810857339323
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 11.712255194231954,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 11.712255194231954
+        }
+      ]
+    },
+    {
+      "id": "tmpc:13",
+      "label": "Temperature · 675 hPa",
+      "x": 0.32821607527693514,
+      "y": 0.5311943101681785,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 7.057037353515625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 7.057037353515625
+        }
+      ]
+    },
+    {
+      "id": "dwpc:13",
+      "label": "Dewpoint · 675 hPa",
+      "x": 0.3204093719317592,
+      "y": 0.5311943101681785,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 5.2469482421875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 5.2469482421875
+        }
+      ]
+    },
+    {
+      "id": "wind:13",
+      "label": "Wind · 675 hPa",
+      "x": 0.7890492702288439,
+      "y": 0.2511161189622872,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 18.5751488941913,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 18.5751488941913
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 10.515191703697463,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 10.515191703697463
+        }
+      ]
+    },
+    {
+      "id": "tmpc:14",
+      "label": "Temperature · 650 hPa",
+      "x": 0.3233979621316939,
+      "y": 0.5210734070330396,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 4.884246826171875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 4.884246826171875
+        }
+      ]
+    },
+    {
+      "id": "dwpc:14",
+      "label": "Dewpoint · 650 hPa",
+      "x": 0.31508202581495215,
+      "y": 0.5210734070330396,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 2.956085205078125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 2.956085205078125
+        }
+      ]
+    },
+    {
+      "id": "wind:14",
+      "label": "Wind · 650 hPa",
+      "x": 0.7869319830462634,
+      "y": 0.2565015270755214,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 17.726933076653744,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 17.726933076653744
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 9.060552436983022,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 9.060552436983022
+        }
+      ]
+    },
+    {
+      "id": "tmpc:15",
+      "label": "Temperature · 625 hPa",
+      "x": 0.317683376171459,
+      "y": 0.5105555058930219,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 2.462188720703125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 2.462188720703125
+        }
+      ]
+    },
+    {
+      "id": "dwpc:15",
+      "label": "Dewpoint · 625 hPa",
+      "x": 0.3142335169267672,
+      "y": 0.5105555058930219,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 1.66229248046875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 1.66229248046875
+        }
+      ]
+    },
+    {
+      "id": "wind:15",
+      "label": "Wind · 625 hPa",
+      "x": 0.7936250859465197,
+      "y": 0.26394317169630543,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 20.408286742378486,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 20.408286742378486
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 7.050508212530393,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 7.050508212530393
+        }
+      ]
+    },
+    {
+      "id": "tmpc:16",
+      "label": "Temperature · 600 hPa",
+      "x": 0.3140859669493909,
+      "y": 0.49960818576081617,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": 0.486236572265625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 0.486236572265625
+        }
+      ]
+    },
+    {
+      "id": "dwpc:16",
+      "label": "Dewpoint · 600 hPa",
+      "x": 0.3121497234123774,
+      "y": 0.49960818576081617,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": 0.03729248046875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": 0.03729248046875
+        }
+      ]
+    },
+    {
+      "id": "wind:16",
+      "label": "Wind · 600 hPa",
+      "x": 0.8062835858033487,
+      "y": 0.2721030306352437,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 25.479464565206502,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 25.479464565206502
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 4.846468894830083,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 4.846468894830083
+        }
+      ]
+    },
+    {
+      "id": "tmpc:17",
+      "label": "Temperature · 575 hPa",
+      "x": 0.3117237522973933,
+      "y": 0.48819488444564846,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -1.251922607421875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -1.251922607421875
+        }
+      ]
+    },
+    {
+      "id": "dwpc:17",
+      "label": "Dewpoint · 575 hPa",
+      "x": 0.30865821982369457,
+      "y": 0.48819488444564846,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -1.96270751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -1.96270751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:17",
+      "label": "Wind · 575 hPa",
+      "x": 0.8235523282333559,
+      "y": 0.28167996320671834,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 32.397572131636394,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 32.397572131636394
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 2.259667322836063,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 2.259667322836063
+        }
+      ]
+    },
+    {
+      "id": "tmpc:18",
+      "label": "Temperature · 550 hPa",
+      "x": 0.3095066176264714,
+      "y": 0.4762741617807558,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -3.009368896484375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -3.009368896484375
+        }
+      ]
+    },
+    {
+      "id": "dwpc:18",
+      "label": "Dewpoint · 550 hPa",
+      "x": 0.3021603166939441,
+      "y": 0.4762741617807558,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -4.71270751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -4.71270751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:18",
+      "label": "Wind · 550 hPa",
+      "x": 0.8341681333242537,
+      "y": 0.29190522616200415,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 36.6504169361005,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 36.6504169361005
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -0.5022531657314595,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -0.5022531657314595
+        }
+      ]
+    },
+    {
+      "id": "tmpc:19",
+      "label": "Temperature · 525 hPa",
+      "x": 0.30685760044965504,
+      "y": 0.4637987913414771,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -4.9248046875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -4.9248046875
+        }
+      ]
+    },
+    {
+      "id": "dwpc:19",
+      "label": "Dewpoint · 525 hPa",
+      "x": 0.2921381483581338,
+      "y": 0.4637987913414771,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -8.33770751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -8.33770751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:19",
+      "label": "Wind · 525 hPa",
+      "x": 0.8420617589688988,
+      "y": 0.3031348331997416,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 39.81271734796448,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 39.81271734796448
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -3.5354545505482933,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -3.5354545505482933
+        }
+      ]
+    },
+    {
+      "id": "tmpc:20",
+      "label": "Temperature · 500 hPa",
+      "x": 0.30277443052036457,
+      "y": 0.4507146303948426,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -7.23626708984375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -7.23626708984375
+        }
+      ]
+    },
+    {
+      "id": "dwpc:20",
+      "label": "Dewpoint · 500 hPa",
+      "x": 0.2834680647407921,
+      "y": 0.4507146303948426,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -11.71270751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -11.71270751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:20",
+      "label": "Wind · 500 hPa",
+      "x": 0.8450885199458019,
+      "y": 0.3093196457190005,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 41.02528149969468,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 41.02528149969468
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -5.206018964352418,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -5.206018964352418
+        }
+      ]
+    },
+    {
+      "id": "tmpc:21",
+      "label": "Temperature · 475 hPa",
+      "x": 0.29805097197424174,
+      "y": 0.43695919975273206,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -9.766204833984375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -9.766204833984375
+        }
+      ]
+    },
+    {
+      "id": "dwpc:21",
+      "label": "Dewpoint · 475 hPa",
+      "x": 0.27402173033044147,
+      "y": 0.43695919975273206,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -15.33770751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -15.33770751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:21",
+      "label": "Wind · 475 hPa",
+      "x": 0.8480284041629685,
+      "y": 0.3123300014635671,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 42.20304156703273,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 42.20304156703273
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -6.019138709551476,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -6.019138709551476
+        }
+      ]
+    },
+    {
+      "id": "tmpc:22",
+      "label": "Temperature · 450 hPa",
+      "x": 0.29312685809987704,
+      "y": 0.42245987930402573,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -12.420257568359375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -12.420257568359375
+        }
+      ]
+    },
+    {
+      "id": "dwpc:22",
+      "label": "Dewpoint · 450 hPa",
+      "x": 0.2665273653656818,
+      "y": 0.42245987930402573,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -18.58770751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -18.58770751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:22",
+      "label": "Wind · 450 hPa",
+      "x": 0.8524489281752754,
+      "y": 0.30727642421785656,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 43.97396731574177,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 43.97396731574177
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -4.65412945780687,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -4.65412945780687
+        }
+      ]
+    },
+    {
+      "id": "tmpc:23",
+      "label": "Temperature · 425 hPa",
+      "x": 0.28849326301456124,
+      "y": 0.4071315872421437,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -15.093414306640625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -15.093414306640625
+        }
+      ]
+    },
+    {
+      "id": "dwpc:23",
+      "label": "Dewpoint · 425 hPa",
+      "x": 0.25266703216387343,
+      "y": 0.4071315872421437,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -23.40020751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -23.40020751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:23",
+      "label": "Wind · 425 hPa",
+      "x": 0.8577407798004216,
+      "y": 0.2969819729343646,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 46.09395948753619,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 46.09395948753619
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -1.873520681018502,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -1.873520681018502
+        }
+      ]
+    },
+    {
+      "id": "tmpc:24",
+      "label": "Temperature · 400 hPa",
+      "x": 0.28336267556706296,
+      "y": 0.3908737548966634,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -17.978759765625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -17.978759765625
+        }
+      ]
+    },
+    {
+      "id": "dwpc:24",
+      "label": "Dewpoint · 400 hPa",
+      "x": 0.23625974445665748,
+      "y": 0.3908737548966634,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -28.90020751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -28.90020751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:24",
+      "label": "Wind · 400 hPa",
+      "x": 0.8620893661191891,
+      "y": 0.2863798018182283,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 47.83606595748169,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 47.83606595748169
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 0.9902055387378921,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 0.9902055387378921
+        }
+      ]
+    },
+    {
+      "id": "tmpc:25",
+      "label": "Temperature · 375 hPa",
+      "x": 0.2775283671304342,
+      "y": 0.37356632393805217,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -21.136749267578125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -21.136749267578125
+        }
+      ]
+    },
+    {
+      "id": "dwpc:25",
+      "label": "Dewpoint · 375 hPa",
+      "x": 0.232454602399618,
+      "y": 0.37356632393805217,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -31.58770751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -31.58770751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:25",
+      "label": "Wind · 375 hPa",
+      "x": 0.8641075076970286,
+      "y": 0.28126652469914354,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 48.64456261416461,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 48.64456261416461
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 2.3713401756347574,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 2.3713401756347574
+        }
+      ]
+    },
+    {
+      "id": "tmpc:26",
+      "label": "Temperature · 350 hPa",
+      "x": 0.27096972065397157,
+      "y": 0.3550643604773243,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -24.5872802734375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -24.5872802734375
+        }
+      ]
+    },
+    {
+      "id": "dwpc:26",
+      "label": "Dewpoint · 350 hPa",
+      "x": 0.2510207921018004,
+      "y": 0.3550643604773243,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -29.21270751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -29.21270751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:26",
+      "label": "Wind · 350 hPa",
+      "x": 0.8649260883928077,
+      "y": 0.28597996708579543,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 48.97249786064567,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 48.97249786064567
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 1.0982039094767388,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 1.0982039094767388
+        }
+      ]
+    },
+    {
+      "id": "tmpc:27",
+      "label": "Temperature · 325 hPa",
+      "x": 0.26412905673545417,
+      "y": 0.3351906697120963,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -28.24627685546875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -28.24627685546875
+        }
+      ]
+    },
+    {
+      "id": "dwpc:27",
+      "label": "Dewpoint · 325 hPa",
+      "x": 0.24971785577327046,
+      "y": 0.3351906697120963,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -31.58770751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -31.58770751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:27",
+      "label": "Wind · 325 hPa",
+      "x": 0.8645096576716014,
+      "y": 0.2959148885096641,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 48.80566970075226,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 48.80566970075226
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -1.5852931460886308,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -1.5852931460886308
+        }
+      ]
+    },
+    {
+      "id": "tmpc:28",
+      "label": "Temperature · 300 hPa",
+      "x": 0.2576254109753017,
+      "y": 0.31372544843987293,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -31.993133544921875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -31.993133544921875
+        }
+      ]
+    },
+    {
+      "id": "dwpc:28",
+      "label": "Dewpoint · 300 hPa",
+      "x": 0.24427887414002328,
+      "y": 0.31372544843987293,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -35.08770751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -35.08770751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:28",
+      "label": "Wind · 300 hPa",
+      "x": 0.8595116580863654,
+      "y": 0.3167156377704925,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 46.80339889917074,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 46.80339889917074
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -7.203732086217778,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -7.203732086217778
+        }
+      ]
+    },
+    {
+      "id": "tmpc:29",
+      "label": "Temperature · 275 hPa",
+      "x": 0.24977046564220914,
+      "y": 0.29039142445981275,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -36.24822998046875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -36.24822998046875
+        }
+      ]
+    },
+    {
+      "id": "dwpc:29",
+      "label": "Dewpoint · 275 hPa",
+      "x": 0.23455902263631384,
+      "y": 0.29039142445981275,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -39.77520751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -39.77520751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:29",
+      "label": "Wind · 275 hPa",
+      "x": 0.8466694162592651,
+      "y": 0.3543621795810213,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 41.658611389942244,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 41.658611389942244
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -17.372346390308994,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -17.372346390308994
+        }
+      ]
+    },
+    {
+      "id": "tmpc:30",
+      "label": "Temperature · 250 hPa",
+      "x": 0.23982724152633075,
+      "y": 0.2648318930738993,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -41.21965026855469,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -41.21965026855469
+        }
+      ]
+    },
+    {
+      "id": "dwpc:30",
+      "label": "Dewpoint · 250 hPa",
+      "x": 0.2217969854070883,
+      "y": 0.2648318930738993,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -45.40020751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -45.40020751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:30",
+      "label": "Wind · 250 hPa",
+      "x": 0.8274266604035165,
+      "y": 0.4013080624832209,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 33.949685541740706,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 33.949685541740706
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -30.05278271830098,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -30.05278271830098
+        }
+      ]
+    },
+    {
+      "id": "tmpc:31",
+      "label": "Temperature · 225 hPa",
+      "x": 0.2308004489741271,
+      "y": 0.23657714198308247,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -46.25970458984375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -46.25970458984375
+        }
+      ]
+    },
+    {
+      "id": "dwpc:31",
+      "label": "Dewpoint · 225 hPa",
+      "x": 0.21402116333259144,
+      "y": 0.23657714198308247,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -50.15020751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -50.15020751953125
+        }
+      ]
+    },
+    {
+      "id": "wind:31",
+      "label": "Wind · 225 hPa",
+      "x": 0.7969585062562512,
+      "y": 0.4211941079854123,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 21.743703050793215,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 21.743703050793215
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -35.42415328835525,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -35.42415328835525
+        }
+      ]
+    },
+    {
+      "id": "tmpc:32",
+      "label": "Temperature · 200 hPa",
+      "x": 0.2183132059738212,
+      "y": 0.20499101757572005,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -52.4495849609375,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -52.4495849609375
+        }
+      ]
+    },
+    {
+      "id": "dwpc:32",
+      "label": "Dewpoint · 200 hPa",
+      "x": 0.17027578168737084,
+      "y": 0.20499101757572005,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -63.58770751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -63.58770751953125
+        }
+      ]
+    },
+    {
+      "id": "tmpc:33",
+      "label": "Temperature · 175 hPa",
+      "x": 0.20511579721678797,
+      "y": 0.16918162315638127,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -59.24462890625,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -59.24462890625
+        }
+      ]
+    },
+    {
+      "id": "dwpc:33",
+      "label": "Dewpoint · 175 hPa",
+      "x": 0.14002110847361787,
+      "y": 0.16918162315638127,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -74.33770751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -74.33770751953125
+        }
+      ]
+    },
+    {
+      "id": "tmpc:34",
+      "label": "Temperature · 150 hPa",
+      "x": 0.1931146569552362,
+      "y": 0.12784271111892967,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -66.33905029296875,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -66.33905029296875
+        }
+      ]
+    },
+    {
+      "id": "dwpc:34",
+      "label": "Dewpoint · 150 hPa",
+      "x": 0.13920940523576728,
+      "y": 0.12784271111892967,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -78.83770751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -78.83770751953125
+        }
+      ]
+    },
+    {
+      "id": "tmpc:35",
+      "label": "Temperature · 125 hPa",
+      "x": 0.210619533797125,
+      "y": 0.07894915575295632,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -67.38008117675781,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -67.38008117675781
+        }
+      ]
+    },
+    {
+      "id": "dwpc:35",
+      "label": "Dewpoint · 125 hPa",
+      "x": 0.1574303539261451,
+      "y": 0.07894915575295632,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -79.71270751953125,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -79.71270751953125
+        }
+      ]
+    },
+    {
+      "id": "tmpc:36",
+      "label": "Temperature · 100 hPa",
+      "x": 0.24588609333364442,
+      "y": 0.01910828025477707,
+      "values": [
+        {
+          "key": "tmpc",
+          "label": "Temperature",
+          "value": -65.44467163085938,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -65.44467163085938
+        }
+      ]
+    },
+    {
+      "id": "dwpc:36",
+      "label": "Dewpoint · 100 hPa",
+      "x": 0.17865437663936837,
+      "y": 0.01910828025477707,
+      "values": [
+        {
+          "key": "dwpc",
+          "label": "Dewpoint",
+          "value": -81.03324890136719,
+          "unit": "°C",
+          "min": -150,
+          "max": 65,
+          "original": -81.03324890136719
+        }
+      ]
+    },
+    {
+      "id": "storm:-1",
+      "label": "Right mover",
+      "x": 0.7853218132311169,
+      "y": 0.2955130046893545,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 17.081875798942182,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 17.081875798942182
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": -1.4767413012910442,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": -1.4767413012910442
+        }
+      ]
+    },
+    {
+      "id": "storm:-2",
+      "label": "Left mover",
+      "x": 0.7939583167553302,
+      "y": 0.188327321727965,
+      "values": [
+        {
+          "key": "u",
+          "label": "U wind",
+          "value": 20.54178381601567,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 20.54178381601567
+        },
+        {
+          "key": "v",
+          "label": "V wind",
+          "value": 27.47491844053804,
+          "unit": "kt",
+          "min": -350,
+          "max": 350,
+          "original": 27.47491844053804
+        }
+      ]
+    }
+  ],
+  "inspection": {
+    "bounds": {
+      "left": 0.02883435582822086,
+      "top": 0.01910828025477707,
+      "right": 0.4601226993865031,
+      "bottom": 0.6496815286624203
+    },
+    "levels": [
+      {
+        "index": 0,
+        "pressure": 985.8,
+        "y": 0.6327620280286479,
+        "height": 213.51339721679688,
+        "tmpc": 27.166253662109398,
+        "dwpc": 23.465356445312523,
+        "windDirection": 104.60573810089315,
+        "windSpeed": 4.906037628303065,
+        "hodograph": {
+          "x": 0.7308320909797983,
+          "y": 0.2854656041193421
+        }
+      },
+      {
+        "index": 1,
+        "pressure": 975.0,
+        "y": 0.6298078378971924,
+        "height": 310.502197265625,
+        "tmpc": 26.73785400390625,
+        "dwpc": 22.610382080078125,
+        "windDirection": 138.4558563232422,
+        "windSpeed": 10.943281173706055,
+        "hodograph": {
+          "x": 0.7245665747520531,
+          "y": 0.25972286849417636
+        }
+      },
+      {
+        "index": 2,
+        "pressure": 950.0,
+        "y": 0.6228419370736754,
+        "height": 540.55712890625,
+        "tmpc": 26.321624755859375,
+        "dwpc": 21.294158935546875,
+        "windDirection": 164.28582763671875,
+        "windSpeed": 21.63814353942871,
+        "hodograph": {
+          "x": 0.7280539834549574,
+          "y": 0.21293050584941303
+        }
+      },
+      {
+        "index": 3,
+        "pressure": 925.0,
+        "y": 0.6156902571618001,
+        "height": 775.928466796875,
+        "tmpc": 24.69580078125,
+        "dwpc": 20.248138427734375,
+        "windDirection": 171.779541015625,
+        "windSpeed": 27.339815139770508,
+        "hodograph": {
+          "x": 0.732924833064035,
+          "y": 0.1898674986705578
+        }
+      },
+      {
+        "index": 4,
+        "pressure": 900.0,
+        "y": 0.608342616624969,
+        "height": 1016.1875610351562,
+        "tmpc": 22.928131103515625,
+        "dwpc": 19.10125732421875,
+        "windDirection": 177.2738800048828,
+        "windSpeed": 29.368289947509766,
+        "hodograph": {
+          "x": 0.7391959543143494,
+          "y": 0.18144067430475425
+        }
+      },
+      {
+        "index": 5,
+        "pressure": 875.0,
+        "y": 0.6007879732964468,
+        "height": 1261.655517578125,
+        "tmpc": 21.05621337890625,
+        "dwpc": 18.41229248046875,
+        "windDirection": 183.77174377441406,
+        "windSpeed": 29.07607650756836,
+        "hodograph": {
+          "x": 0.7474569803668848,
+          "y": 0.18263262598761398
+        }
+      },
+      {
+        "index": 6,
+        "pressure": 850.0,
+        "y": 0.593014324563087,
+        "height": 1512.6800537109375,
+        "tmpc": 19.1776123046875,
+        "dwpc": 17.66229248046875,
+        "windDirection": 190.67617797851562,
+        "windSpeed": 28.314294815063477,
+        "hodograph": {
+          "x": 0.7557761368168561,
+          "y": 0.1870343059641269
+        }
+      },
+      {
+        "index": 7,
+        "pressure": 825.0,
+        "y": 0.5850085926449087,
+        "height": 1769.573486328125,
+        "tmpc": 17.550933837890625,
+        "dwpc": 16.340362548828125,
+        "windDirection": 198.77003479003906,
+        "windSpeed": 27.803192138671875,
+        "hodograph": {
+          "x": 0.7650139404940768,
+          "y": 0.19258623585091827
+        }
+      },
+      {
+        "index": 8,
+        "pressure": 800.0,
+        "y": 0.5767564922176066,
+        "height": 2032.5953369140625,
+        "tmpc": 15.977386474609375,
+        "dwpc": 14.72479248046875,
+        "windDirection": 208.36819458007812,
+        "windSpeed": 27.638057708740234,
+        "hodograph": {
+          "x": 0.7754618486569039,
+          "y": 0.20001099122175514
+        }
+      },
+      {
+        "index": 9,
+        "pressure": 775.0,
+        "y": 0.5682423770129202,
+        "height": 2302.38818359375,
+        "tmpc": 14.38116455078125,
+        "dwpc": 13.157073974609375,
+        "windDirection": 219.11795043945312,
+        "windSpeed": 27.571807861328125,
+        "hodograph": {
+          "x": 0.7861048581249616,
+          "y": 0.21084933349004986
+        }
+      },
+      {
+        "index": 10,
+        "pressure": 750.0,
+        "y": 0.5594490612589954,
+        "height": 2579.57421875,
+        "tmpc": 12.66644287109375,
+        "dwpc": 11.799896240234375,
+        "windDirection": 228.00775146484375,
+        "windSpeed": 26.856725692749023,
+        "hodograph": {
+          "x": 0.7925082540789256,
+          "y": 0.22352427353368043
+        }
+      },
+      {
+        "index": 11,
+        "pressure": 725.0,
+        "y": 0.5503576108403233,
+        "height": 2864.239501953125,
+        "tmpc": 10.86541748046875,
+        "dwpc": 10.030914306640625,
+        "windDirection": 234.8870849609375,
+        "windSpeed": 25.70720100402832,
+        "hodograph": {
+          "x": 0.7951745058881521,
+          "y": 0.23530269657703518
+        }
+      },
+      {
+        "index": 12,
+        "pressure": 700.0,
+        "y": 0.5409470977982676,
+        "height": 3156.391845703125,
+        "tmpc": 9.091461181640625,
+        "dwpc": 7.831939697265625,
+        "windDirection": 240.7722625732422,
+        "windSpeed": 23.986652374267578,
+        "hodograph": {
+          "x": 0.7949343850218246,
+          "y": 0.24668431543443262
+        }
+      },
+      {
+        "index": 13,
+        "pressure": 675.0,
+        "y": 0.5311943101681785,
+        "height": 3457.74072265625,
+        "tmpc": 7.057037353515625,
+        "dwpc": 5.2469482421875,
+        "windDirection": 240.48626708984375,
+        "windSpeed": 21.34491539001465,
+        "hodograph": {
+          "x": 0.7890492702288439,
+          "y": 0.2511161189622872
+        }
+      },
+      {
+        "index": 14,
+        "pressure": 650.0,
+        "y": 0.5210734070330396,
+        "height": 3767.03076171875,
+        "tmpc": 4.884246826171875,
+        "dwpc": 2.956085205078125,
+        "windDirection": 242.9276123046875,
+        "windSpeed": 19.908233642578125,
+        "hodograph": {
+          "x": 0.7869319830462634,
+          "y": 0.2565015270755214
+        }
+      },
+      {
+        "index": 15,
+        "pressure": 625.0,
+        "y": 0.5105555058930219,
+        "height": 4086.14111328125,
+        "tmpc": 2.462188720703125,
+        "dwpc": 1.66229248046875,
+        "windDirection": 250.9413604736328,
+        "windSpeed": 21.591846466064453,
+        "hodograph": {
+          "x": 0.7936250859465197,
+          "y": 0.26394317169630543
+        }
+      },
+      {
+        "index": 16,
+        "pressure": 600.0,
+        "y": 0.49960818576081617,
+        "height": 4415.43603515625,
+        "tmpc": 0.486236572265625,
+        "dwpc": 0.03729248046875,
+        "windDirection": 259.2303771972656,
+        "windSpeed": 25.936294555664062,
+        "hodograph": {
+          "x": 0.8062835858033487,
+          "y": 0.2721030306352437
+        }
+      },
+      {
+        "index": 17,
+        "pressure": 575.0,
+        "y": 0.48819488444564846,
+        "height": 4756.08935546875,
+        "tmpc": -1.251922607421875,
+        "dwpc": -1.96270751953125,
+        "windDirection": 266.01019287109375,
+        "windSpeed": 32.476280212402344,
+        "hodograph": {
+          "x": 0.8235523282333559,
+          "y": 0.28167996320671834
+        }
+      },
+      {
+        "index": 18,
+        "pressure": 550.0,
+        "y": 0.4762741617807558,
+        "height": 5110.24853515625,
+        "tmpc": -3.009368896484375,
+        "dwpc": -4.71270751953125,
+        "windDirection": 270.7851257324219,
+        "windSpeed": 36.65385818481445,
+        "hodograph": {
+          "x": 0.8341681333242537,
+          "y": 0.29190522616200415
+        }
+      },
+      {
+        "index": 19,
+        "pressure": 525.0,
+        "y": 0.4637987913414771,
+        "height": 5476.9296875,
+        "tmpc": -4.9248046875,
+        "dwpc": -8.33770751953125,
+        "windDirection": 275.0746765136719,
+        "windSpeed": 39.96938705444336,
+        "hodograph": {
+          "x": 0.8420617589688988,
+          "y": 0.3031348331997416
+        }
+      },
+      {
+        "index": 20,
+        "pressure": 500.0,
+        "y": 0.4507146303948426,
+        "height": 5860.0302734375,
+        "tmpc": -7.23626708984375,
+        "dwpc": -11.71270751953125,
+        "windDirection": 277.2320556640625,
+        "windSpeed": 41.354278564453125,
+        "hodograph": {
+          "x": 0.8450885199458019,
+          "y": 0.3093196457190005
+        }
+      },
+      {
+        "index": 21,
+        "pressure": 475.0,
+        "y": 0.43695919975273206,
+        "height": 6256.8681640625,
+        "tmpc": -9.766204833984375,
+        "dwpc": -15.33770751953125,
+        "windDirection": 278.1169738769531,
+        "windSpeed": 42.6301155090332,
+        "hodograph": {
+          "x": 0.8480284041629685,
+          "y": 0.3123300014635671
+        }
+      },
+      {
+        "index": 22,
+        "pressure": 450.0,
+        "y": 0.42245987930402573,
+        "height": 6671.98388671875,
+        "tmpc": -12.420257568359375,
+        "dwpc": -18.58770751953125,
+        "windDirection": 276.0415954589844,
+        "windSpeed": 44.219573974609375,
+        "hodograph": {
+          "x": 0.8524489281752754,
+          "y": 0.30727642421785656
+        }
+      },
+      {
+        "index": 23,
+        "pressure": 425.0,
+        "y": 0.4071315872421437,
+        "height": 7106.837890625,
+        "tmpc": -15.093414306640625,
+        "dwpc": -23.40020751953125,
+        "windDirection": 272.3275451660156,
+        "windSpeed": 46.13201904296875,
+        "hodograph": {
+          "x": 0.8577407798004216,
+          "y": 0.2969819729343646
+        }
+      },
+      {
+        "index": 24,
+        "pressure": 400.0,
+        "y": 0.3908737548966634,
+        "height": 7562.14111328125,
+        "tmpc": -17.978759765625,
+        "dwpc": -28.90020751953125,
+        "windDirection": 268.81414794921875,
+        "windSpeed": 47.8463134765625,
+        "hodograph": {
+          "x": 0.8620893661191891,
+          "y": 0.2863798018182283
+        }
+      },
+      {
+        "index": 25,
+        "pressure": 375.0,
+        "y": 0.37356632393805217,
+        "height": 8040.9287109375,
+        "tmpc": -21.136749267578125,
+        "dwpc": -31.58770751953125,
+        "windDirection": 267.2091369628906,
+        "windSpeed": 48.702327728271484,
+        "hodograph": {
+          "x": 0.8641075076970286,
+          "y": 0.28126652469914354
+        }
+      },
+      {
+        "index": 26,
+        "pressure": 350.0,
+        "y": 0.3550643604773243,
+        "height": 8546.40234375,
+        "tmpc": -24.5872802734375,
+        "dwpc": -29.21270751953125,
+        "windDirection": 268.7153625488281,
+        "windSpeed": 48.98480987548828,
+        "hodograph": {
+          "x": 0.8649260883928077,
+          "y": 0.28597996708579543
+        }
+      },
+      {
+        "index": 27,
+        "pressure": 325.0,
+        "y": 0.3351906697120963,
+        "height": 9081.7255859375,
+        "tmpc": -28.24627685546875,
+        "dwpc": -31.58770751953125,
+        "windDirection": 271.86041259765625,
+        "windSpeed": 48.8314094543457,
+        "hodograph": {
+          "x": 0.8645096576716014,
+          "y": 0.2959148885096641
+        }
+      },
+      {
+        "index": 28,
+        "pressure": 300.0,
+        "y": 0.31372544843987293,
+        "height": 9651.3251953125,
+        "tmpc": -31.993133544921875,
+        "dwpc": -35.08770751953125,
+        "windDirection": 278.75,
+        "windSpeed": 47.35453414916992,
+        "hodograph": {
+          "x": 0.8595116580863654,
+          "y": 0.3167156377704925
+        }
+      },
+      {
+        "index": 29,
+        "pressure": 275.0,
+        "y": 0.29039142445981275,
+        "height": 10260.05078125,
+        "tmpc": -36.24822998046875,
+        "dwpc": -39.77520751953125,
+        "windDirection": 292.636962890625,
+        "windSpeed": 45.13577651977539,
+        "hodograph": {
+          "x": 0.8466694162592651,
+          "y": 0.3543621795810213
+        }
+      },
+      {
+        "index": 30,
+        "pressure": 250.0,
+        "y": 0.2648318930738993,
+        "height": 10913.732421875,
+        "tmpc": -41.21965026855469,
+        "dwpc": -45.40020751953125,
+        "windDirection": 311.5157470703125,
+        "windSpeed": 45.340389251708984,
+        "hodograph": {
+          "x": 0.8274266604035165,
+          "y": 0.4013080624832209
+        }
+      },
+      {
+        "index": 31,
+        "pressure": 225.0,
+        "y": 0.23657714198308247,
+        "height": 11621.001953125,
+        "tmpc": -46.25970458984375,
+        "dwpc": -50.15020751953125,
+        "windDirection": 328.4579772949219,
+        "windSpeed": 41.565120697021484,
+        "hodograph": {
+          "x": 0.7969585062562512,
+          "y": 0.4211941079854123
+        }
+      },
+      {
+        "index": 32,
+        "pressure": 200.0,
+        "y": 0.20499101757572005,
+        "height": 12392.541015625,
+        "tmpc": -52.4495849609375,
+        "dwpc": -63.58770751953125,
+        "windDirection": 337.0023193359375,
+        "windSpeed": 36.321983337402344,
+        "hodograph": {
+          "x": 0.7781051494739466,
+          "y": 0.4138303114577081
+        }
+      },
+      {
+        "index": 33,
+        "pressure": 175.0,
+        "y": 0.16918162315638127,
+        "height": 13242.4150390625,
+        "tmpc": -59.24462890625,
+        "dwpc": -74.33770751953125,
+        "windDirection": 329.3992614746094,
+        "windSpeed": 39.186214447021484,
+        "hodograph": {
+          "x": 0.7924757366987354,
+          "y": 0.41491813051428944
+        }
+      },
+      {
+        "index": 34,
+        "pressure": 150.0,
+        "y": 0.12784271111892967,
+        "height": 14188.244140625,
+        "tmpc": -66.33905029296875,
+        "dwpc": -78.83770751953125,
+        "windDirection": 314.789306640625,
+        "windSpeed": 52.992671966552734,
+        "hodograph": {
+          "x": 0.8365609594507649,
+          "y": 0.428262692097701
+        }
+      },
+      {
+        "index": 35,
+        "pressure": 125.0,
+        "y": 0.07894915575295632,
+        "height": 15284.6171875,
+        "tmpc": -67.38008117675781,
+        "dwpc": -79.71270751953125,
+        "windDirection": 296.55194091796875,
+        "windSpeed": 44.226234436035156,
+        "hodograph": {
+          "x": 0.8414351063915744,
+          "y": 0.3632370713035986
+        }
+      },
+      {
+        "index": 36,
+        "pressure": 100.0,
+        "y": 0.01910828025477707,
+        "height": 16634.470703125,
+        "tmpc": -65.44467163085938,
+        "dwpc": -81.03324890136719,
+        "windDirection": 293.8990173339844,
+        "windSpeed": 29.563827514648438,
+        "hodograph": {
+          "x": 0.8101516118644606,
+          "y": 0.3343876382234698
+        }
+      }
+    ]
+  },
+  "selection": {
+    "chart": "streamwiseness",
+    "panel": "STP STATS"
+  },
+  "options": [
+    {
+      "key": "chart",
+      "label": "Height chart",
+      "choices": [
+        {
+          "key": "streamwiseness",
+          "label": "Streamwiseness"
+        },
+        {
+          "key": "srw",
+          "label": "Storm-Relative Wind"
+        },
+        {
+          "key": "theta",
+          "label": "θ / θe Profile"
+        },
+        {
+          "key": "cape",
+          "label": "Stepwise CIN & CAPE"
+        }
+      ]
+    },
+    {
+      "key": "panel",
+      "label": "Diagnostic panel",
+      "choices": [
+        {
+          "key": "STP STATS",
+          "label": "Sig-Tor Stats"
+        },
+        {
+          "key": "COND STP",
+          "label": "EF-Scale Probs (Sig-Tor)"
+        },
+        {
+          "key": "WINTER",
+          "label": "Winter Weather"
+        },
+        {
+          "key": "FIRE",
+          "label": "Fire Weather"
+        },
+        {
+          "key": "SHIP",
+          "label": "Sig-Hail Stats"
+        },
+        {
+          "key": "VROT",
+          "label": "EF-Scale Probs (V-Rot)"
+        },
+        {
+          "key": "HEIGHT CHARTS",
+          "label": "All height charts"
+        }
+      ]
+    }
+  ]
+}

@@ -95,6 +95,7 @@ export async function forecastIdentity() {
 
 /** Waits for the model field row to show its frame or an error; returns which and how long. */
 export async function fieldOutcome() {
+  await setLayer("model-field", true);
   const started = Date.now();
   const shown = row("model-field").getByTestId("field-shown");
   const failed = row("model-field").getByTestId("field-error");
@@ -161,7 +162,7 @@ export async function loadedPanels() {
       scaleValue });
   }
   await expect(page.getByLabel("Valid time", { exact: true })).toHaveAttribute("aria-busy", "false");
-  await page.getByRole("button", { name: "Close map details", exact: true }).click();
+  await page.getByRole("button", { name: "Close layers", exact: true }).click();
   return panels;
 }
 

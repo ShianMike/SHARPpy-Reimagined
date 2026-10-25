@@ -1,6 +1,6 @@
 import { presetPreferences, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
-import { saveScreenshot, screenshotPath } from "./support/screenshots";
+import { saveScreenshot } from "./support/screenshots";
 import { turnOn } from "./support/ui";
 import { expect, test } from "./support/test";
 import appManifest from "../package.json" with { type: "json" };
@@ -30,27 +30,21 @@ test.describe("forecast playback", () => {
     const timeline = page.getByRole("region", { name: "Forecast timeline" });
     const valid = page.getByLabel("Valid time");
     if (panels === 4) {
-      const hoursButton = timeline.getByRole("button", { name: "Forecast Hours", exact: true });
+      const hoursButton = page.getByRole("button", { name: "Choose forecast hour", exact: true });
       await hoursButton.press("Enter");
-      const details = page.getByRole("dialog", { name: "Forecast Hours", exact: true });
-      const missing = details.locator("details");
-      await expect(missing).not.toHaveAttribute("open");
-      await missing.locator("summary").hover();
-      await expect.poll(async () => await missing.locator("summary").evaluate((element) => getComputedStyle(element).color)
-        === await hoursButton.evaluate((button) => getComputedStyle(button).color)).toBe(true);
-      expect(await missing.evaluate((element) => getComputedStyle(element, "::details-content").transitionProperty)).toContain("block-size");
-      await missing.locator("summary").press("Enter");
-      await expect(missing.getByText("F018", { exact: true })).toBeVisible();
-      await missing.locator("summary").press("Enter");
+      const details = page.getByRole("dialog", { name: "Forecast hour", exact: true });
+      await expect(timeline.getByRole("button", { name: "Forecast Hours", exact: true })).toHaveCount(0);
+      await expect(details.getByRole("button", { name: "Select forecast hour 18", exact: true })).toBeVisible();
       await details.getByRole("button", { name: "Load Hours", exact: true }).press("Enter");
+      await expect(details.locator('[data-hour-state="loading"]').first()).toHaveCSS("border-color", "rgb(88, 166, 255)");
       // Drive paused fixture timers; hosted software rendering can spend seconds per clock advance.
       await expect.poll(async () => {
         await page.clock.fastForward(300);
-        return timeline.getByRole("status", { name: "Forecast downloads" }).textContent();
+        return page.getByRole("status", { name: "Forecast downloads" }).textContent();
       }, { intervals: [0], timeout: 60_000 }).toContain("All 19 forecast hours saved to cache");
-      await expect(hoursButton).toContainText("19/19");
-      await expect(details.getByText("Saved On Device", { exact: true }).locator("..")).toContainText("19 / 19");
-      await expect(details.getByText("Ready In Memory", { exact: true })).toBeVisible();
+      await expect(details.getByLabel("Forecast cache summary")).toContainText("19 saved");
+      await expect(details.getByLabel("Forecast cache summary")).toContainText("ready");
+      await expect(details.getByRole("button", { name: "Select forecast hour 0", exact: true })).toHaveCSS("border-color", "rgb(63, 185, 80)");
       await expect(details.getByRole("button", { name: "Load Hours", exact: true })).toHaveCount(0);
       await details.press("Escape");
       await expect(hoursButton).toBeFocused();
@@ -83,16 +77,16 @@ test.describe("forecast playback", () => {
       await page.clock.resume();
       await saveScreenshot(page, "browser-four-panel-playback.png");
       await page.setViewportSize({ width: 1920, height: 1080 });
-      const hoursButton = timeline.getByRole("button", { name: "Forecast Hours", exact: true });
+      const hoursButton = page.getByRole("button", { name: "Choose forecast hour", exact: true });
       await hoursButton.press("Enter");
-      const details = page.getByRole("dialog", { name: "Forecast Hours", exact: true });
+      const details = page.getByRole("dialog", { name: "Forecast hour", exact: true });
       await expect(details).toBeVisible();
-      expect(await details.evaluate((panel) => panel.getBoundingClientRect().bottom)).toBeLessThan((await hoursButton.boundingBox())?.y ?? 0);
+      expect(await details.evaluate((panel) => Math.abs(panel.getBoundingClientRect().x - (innerWidth - panel.getBoundingClientRect().width) / 2))).toBeLessThan(1);
       await saveScreenshot(page, "browser-forecast-hours-desktop.png");
       await details.press("Escape");
       await page.setViewportSize({ width: 720, height: 800 });
       await expect(valid).toBeHidden();
-      expect(await hoursButton.evaluate((button) => button.getBoundingClientRect().right <= (button.closest("section")?.getBoundingClientRect().right ?? 0))).toBe(true);
+      expect(await hoursButton.evaluate((button) => button.getBoundingClientRect().right <= innerWidth)).toBe(true);
       await saveScreenshot(page, "browser-playback-narrow.png");
       await hoursButton.press("Enter");
       await expect(details.getByRole("button", { name: "Check Cache", exact: true })).toBeVisible();
@@ -107,8 +101,7 @@ test.describe("forecast playback", () => {
 
 });
 
-test("forecast-hour disclosure animates while its bottom edge stays anchored", async ({ page, consoleMessages }) => {
-  await page.emulateMedia({ reducedMotion: "no-preference" });
+test("forecast-hour picker keeps one popup with a fixed footer and scrollable hour list", async ({ page, consoleMessages }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await presetPreferences(page, { graphicsOverride: "low", productKey: "tmp-2m",
     layers: { "model-field": { visible: true, opacity: 0.5, smoothing: false } } });
@@ -118,43 +111,19 @@ test("forecast-hour disclosure animates while its bottom edge stays anchored", a
   await page.goto("/");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
-  const trigger = page.getByRole("button", { name: "Forecast Hours", exact: true });
+  const trigger = page.getByRole("button", { name: "Choose forecast hour", exact: true });
   await trigger.click();
-  const details = page.getByRole("dialog", { name: "Forecast Hours", exact: true });
-  const summary = details.locator("details > summary");
-  await summary.hover();
-  await expect.poll(async () => await summary.evaluate((element) => getComputedStyle(element).color)
-    === await trigger.evaluate((button) => getComputedStyle(button).color)).toBe(true);
-  for (const phase of ["expand", "collapse"]) {
-    const frames = await summary.evaluate(async (element) => {
-      const panel = element.closest('[role="dialog"]');
-      if (panel === null) throw new Error("Missing download panel");
-      const before = panel.getBoundingClientRect();
-      const samples = [{ height: before.height, bottom: before.bottom }];
-      (element as HTMLElement).click();
-      for (let frame = 0; frame < 20; frame++) {
-        await new Promise<void>((resolve) => { requestAnimationFrame(() => { resolve(); }); });
-        const box = panel.getBoundingClientRect();
-        samples.push({ height: box.height, bottom: box.bottom });
-      }
-      return samples;
-    });
-    const start = frames[0]?.height ?? 0, end = frames.at(-1)?.height ?? 0;
-    expect(Math.abs(end - start), phase).toBeGreaterThan(20);
-    expect(frames.some(({ height }) => height > Math.min(start, end) + 1 && height < Math.max(start, end) - 1), phase).toBe(true);
-    expect(Math.max(...frames.map(({ bottom }) => Math.abs(bottom - (frames[0]?.bottom ?? 0)))), phase).toBeLessThan(1);
-    if (phase === "expand") {
-      await details.screenshot({ path: screenshotPath("forecast-hours-panel-expanded.png"), animations: "disabled" });
-      await saveScreenshot(page, "forecast-hours-motion-1920x1080.png");
-    }
-  }
-  await summary.press("Enter");
-  await summary.press("Enter");
-  await expect(details.locator("details")).not.toHaveAttribute("open");
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await summary.press("Enter");
-  expect(await summary.evaluate((element) => getComputedStyle(element.parentElement as HTMLElement, "::details-content").transitionDuration)).toBe("0s, 0s, 0s");
-  await details.press("Escape");
+  const dialog = page.getByRole("dialog", { name: "Forecast hour", exact: true });
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Forecast Hours", exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Load Hours", exact: true })).toBeVisible();
+  expect(await dialog.evaluate((panel) => panel.scrollHeight <= panel.clientHeight)).toBe(true);
+  const before = await dialog.getByRole("button", { name: "Load Hours", exact: true }).boundingBox();
+  await dialog.getByRole("button", { name: "Select forecast hour 18", exact: true }).evaluate((hour) => { hour.scrollIntoView({ block: "nearest" }); });
+  const after = await dialog.getByRole("button", { name: "Load Hours", exact: true }).boundingBox();
+  expect(after?.y).toBe(before?.y);
+  await saveScreenshot(page, "browser-forecast-hour-cache-status.png");
+  await dialog.press("Escape");
   await expect(trigger).toBeFocused();
   expectWarnings(consoleMessages, []);
 });

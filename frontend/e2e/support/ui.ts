@@ -17,9 +17,8 @@ export async function layerRow(page: Page, id: string) {
     await page.clock.setFixedTime(new Date("2026-10-04T21:00:00Z"));
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Live Tracking", exact: true }).click();
   }
-  if (!(await page.getByTestId("layer-panel").isVisible())) {
-    await page.getByRole("group", { name: "Map detail views" }).getByRole("button", { name: "Layers", exact: true }).click();
-  }
+  const layers = page.getByRole("group", { name: "Map detail views" }).getByRole("button", { name: "Layers", exact: true });
+  if (await layers.getAttribute("aria-expanded") !== "true") await layers.click();
   const mapDetail = ["stations", "station-labels", "model-domain", "place-labels", "boundaries"].includes(id);
   await page.getByRole("group", { name: "Layer categories" }).getByRole("button", { name: mapDetail ? "Map details" : "Weather", exact: true }).click();
   const row = page.getByTestId(`layer-row-${id}`);
@@ -37,10 +36,14 @@ export async function turnOn(page: Page, id: string): Promise<void> {
   const toggle = row.getByRole("switch").first();
   if (await toggle.getAttribute("aria-checked") !== "true") await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
+  const settings = row.getByRole("button", { name: /settings$/u });
+  if (await settings.count() > 0 && await settings.getAttribute("aria-expanded") === "false") await settings.click();
 }
 
 /** Moves the pointer to a map position; no-op when the point is off the map. */
 export async function hoverAt(page: Page, longitude: number, latitude: number): Promise<void> {
+  const layers = page.getByRole("group", { name: "Map detail views" }).getByRole("button", { name: "Layers", exact: true });
+  if (await layers.getAttribute("aria-expanded") === "true") await layers.click();
   const point = await projectPoint(page, longitude, latitude);
   expect(point, `(${String(longitude)}, ${String(latitude)}) projects onto the map`).not.toBeNull();
   if (point !== null) {

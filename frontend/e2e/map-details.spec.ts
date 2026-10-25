@@ -32,6 +32,7 @@ test("projection changes release the old canvases' display-scaling observers", a
     // Four live canvases plus the application's shared device-pixel-ratio probe.
     await expect.poll(observers).toBe(5);
     for (const mode of ["Globe", "Flat map"]) {
+      await layerRow(page, "model-domain");
       await projection.getByRole("button", { name: mode, exact: true }).click();
       await waitForMapDrawn(page);
       await expect.poll(observers).toBe(5);
@@ -92,7 +93,7 @@ test("theta-e renders its fixed Kelvin palette and wind barbs in both projection
     await scale.getByRole("slider").focus();
     await page.keyboard.press("Home");
     await expect(scale.getByRole("slider")).toHaveAttribute("aria-valuetext", "229 K");
-    await page.getByRole("button", { name: "Close map details", exact: true }).click();
+    await page.getByRole("button", { name: "Close layers", exact: true }).click();
     await nextFrames(page);
     const clip = { x: 180, y: 200, width: 600, height: 400 };
     const shown = await regionStats(page, await page.screenshot({ clip }));

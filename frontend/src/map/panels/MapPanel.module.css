@@ -75,6 +75,8 @@ button.chip[aria-pressed="true"] {
 
 .notice {
   position: absolute;
-  inset: auto var(--space-3) var(--space-3);
+  inset: 50% auto auto 50%;
+  width: min(var(--notice-max-w), calc(100% - 2 * var(--space-3)));
+  transform: translate(-50%, -50%);
   z-index: var(--z-map-chip);
 }

@@ -24,7 +24,7 @@ const BASE_REFLECTIVITY = parsePalette(baseReflectivityPalette, "baseReflectivit
 const CORRELATION = parsePalette(correlationPalette, "radarCorrelation");
 const ECHO_TOPS = parsePalette(echoTopsPalette, "radarEchoTops");
 
-export function RadarScale({ panel }: { panel: number }): ReactNode {
+export function RadarScale({ panel, horizontal = false }: { panel: number; horizontal?: boolean }): ReactNode {
   const visible = useMapStore((state) => panelLayers(state, panel).radar.visible);
   const { radarProduct: product, radarTilt: tilt, radarScope: scope } = useMapStore((state) => panelWeather(state, panel));
   const time = useWeatherTime();
@@ -44,12 +44,20 @@ export function RadarScale({ panel }: { panel: number }): ReactNode {
     ? "Correlation Coefficient (ρHV), a unitless ratio. Lower values indicate less similar targets. Values above 1 can occur from measurement noise; values outside the scale use its end colors."
     : selected?.key === "echo-tops" ? "Enhanced Echo Tops: height of the 18 dBZ echo in thousands of feet above sea level. Some heights are lower bounds where echoes extend above the highest scan. Values outside the scale use its end colors."
     : units === "dBZ" ? scope === "site" ? "Base Reflectivity in dBZ · BR HiRes color table. Values outside the scale use the end colors." : "Radar reflectivity in dBZ, following NOAA's labelled color key."
-    : "Negative values move toward the radar; positive values move away. Values outside the scale use the end colors. Purple means range folded. This color table does not undo velocity aliasing.";
+    : selected?.key === "velocity" ? "Negative values move toward the radar; positive values move away. Values outside the scale use the end colors. Purple means range folded. This color table does not undo velocity aliasing."
+    : selected?.key === "hydrometeor" ? "Hydrometeor categories use the provider's labelled color key."
+    : "Precipitation accumulations use the provider's labelled color key and units.";
   const scan = frame?.validTime == null ? "" : `Scan ${formatUtc(frame.validTime)} UTC`;
   const age = Date.parse(time ?? "") - Date.parse(frame?.validTime ?? "");
   const delay = age > 10 * 60_000 ? `Radar scan is ${String(Math.floor(age / 60_000))} minutes behind the selected time` : null;
   const status = !visible ? null : query.isError ? "Unavailable" : query.isFetching ? "Loading…" : delay;
   const StatusIcon = query.isError || !query.isFetching ? TriangleAlert : LoaderCircle;
+  if (horizontal) return <div className={styles.inline} aria-label="Radar color key">
+    <strong>{label}{units ? ` · ${units}` : ""}</strong>
+    {palette !== null ? <FieldLegend palette={palette} description={description} /> : frame?.legendPng
+      ? <img src={frame.legendPng} alt={`${label} · NOAA color scale`} /> : <p>Provider color key unavailable.</p>}
+    {palette === null ? <p>{description}</p> : null}{scan === "" ? null : <p>{scan}</p>}{status === null ? null : <p>{status}</p>}
+  </div>;
   return <Surface as="aside" data-motion="fade" className={scaleStyles.panel} aria-label="Radar scale" aria-description={`${label} · ${units || (palette === null ? "Categories" : "Unitless")} · Panel ${String(panel + 1)}${scan === "" ? "" : ` · ${scan}`}`} data-testid="radar-scale">
     {palette === null ? <div className={cx(styles.provider, hints.target)} tabIndex={0} role="img" aria-label={`${label} color scale, ${units || "categories"}`} aria-description="Focus or hover to see the provider's labelled color key.">
       <div className={styles.ramp} aria-hidden="true">{frame?.legendPng === undefined || frame.legendPng === null ? null : <img src={frame.legendPng} alt="" />}</div>

@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Notice } from "../../components/Notice";
-import { useUpdateStore } from "../../stores/updateStore";
+import { AUTOMATIC_UPDATE_INTERVAL_MS, useUpdateStore } from "../../stores/updateStore";
 import { Action } from "../../ui/Controls";
 
 export function UpdateNotice(): ReactNode {
@@ -9,10 +9,16 @@ export function UpdateNotice(): ReactNode {
   useEffect(() => {
     if (!desktop) return;
     const checkAutomatically = (): void => { if (navigator.onLine) void check(true); };
-    checkAutomatically();
-    const timer = window.setInterval(checkAutomatically, 60 * 60 * 1000);
+    let timer: number;
+    const schedule = (): void => {
+      checkAutomatically();
+      timer = window.setTimeout(schedule, AUTOMATIC_UPDATE_INTERVAL_MS - Date.now() % AUTOMATIC_UPDATE_INTERVAL_MS);
+    };
+    const visible = (): void => { if (document.visibilityState === "visible") checkAutomatically(); };
+    schedule();
     window.addEventListener("online", checkAutomatically);
-    return () => { window.clearInterval(timer); window.removeEventListener("online", checkAutomatically); };
+    document.addEventListener("visibilitychange", visible);
+    return () => { window.clearTimeout(timer); window.removeEventListener("online", checkAutomatically); document.removeEventListener("visibilitychange", visible); };
   }, [check, desktop]);
 
   if (!desktop || update === null || update.version === dismissedVersion) return null;

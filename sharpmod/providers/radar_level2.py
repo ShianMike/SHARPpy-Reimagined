@@ -415,7 +415,7 @@ def fetch_frame(
         raise radar_site.RadarSiteError("unknown radar tilt")
     site, reference, selected, call, timeout = _select(site_id, valid_time, now, opener)
     if selected is None:
-        raise radar_site.RadarSiteError(
+        raise radar_site.RadarScanMissing(
             f"{site.id} has no recent Level II volume for this time"
         )
     key = ("level2", product, selected[1], tilt, pixels)
@@ -425,7 +425,7 @@ def fetch_frame(
         return cached[1]
     sweep = _volume(site, selected, call, timeout).get((product, tilt))
     if sweep is None:
-        raise radar_site.RadarSiteError(
+        raise radar_site.RadarScanMissing(
             f"{site.id} does not have this {radar_site.get_product(product).label} tilt in the selected volume"
         )
     if (

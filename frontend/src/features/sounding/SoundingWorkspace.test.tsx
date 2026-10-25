@@ -76,7 +76,7 @@ describe("SoundingWorkspace", () => {
     expect(screen.getAllByRole("option")).toHaveLength(49);
     await userEvent.keyboard("{End}{Enter}");
     await waitFor(() => { expect(transport.calls.some((call) => call.command === "render_sounding_view" && (call.args as { view?: ViewRequest }).view?.timeIndex === 48)).toBe(true); });
-    expect(screen.getByTestId("sounding-viewer").textContent).toContain("time 49 of 49");
+    expect(screen.getByLabelText("Sounding details").textContent).toContain("time 49 of 49");
   });
 
   it("edits a level, undoes and redoes it, and retains it across navigation", async () => {
@@ -86,6 +86,7 @@ describe("SoundingWorkspace", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Station" }), "72357");
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     await screen.findByTestId("sounding-image");
+    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
     await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
     const formatted = formatUnit.mock.calls.length;
     expect(formatted).toBeGreaterThan(0);
@@ -105,6 +106,7 @@ describe("SoundingWorkspace", () => {
     await userEvent.click(screen.getByRole("button", { name: "Apply & recalculate" }));
     await waitFor(() => { expect(useSoundingStore.getState().views[useSoundingStore.getState().activeId ?? ""]?.cursor).toBe(1); });
     expect(screen.getByTestId("sounding-stage").querySelector("svg title")?.textContent).toContain("30.0");
+    expect(screen.getByLabelText("Temperature before").textContent).toContain(before);
     await userEvent.click(screen.getByRole("button", { name: "Undo edit" }));
     await waitFor(() => { expect(screen.getByRole<HTMLInputElement>("spinbutton", { name: /Temperature/u }).value).toBe(before); });
     await userEvent.click(screen.getByRole("button", { name: "Redo edit" }));
@@ -112,7 +114,7 @@ describe("SoundingWorkspace", () => {
     workspace.view.unmount();
     renderWithBackend(<SoundingWorkspace />, transport);
     await screen.findByTestId("sounding-image");
-    expect(screen.getByText(/1 edited levels/u).closest("header")).not.toBeNull();
+    expect(screen.getByText(/1 edited level · Original retained/u).closest("header")).not.toBeNull();
     expect(transport.calls.filter((call) => call.command === "render_sounding_view").every((call) => (call.args as Record<string, unknown>).imageMode === "uhd")).toBe(true);
   });
   it("opens an hourly ERA5 reanalysis at a typed point without a forecast hour", async () => {
@@ -168,10 +170,10 @@ describe("SoundingWorkspace", () => {
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     const image = await screen.findByTestId("sounding-image", {}, { timeout: 3000 });
     expect(image.getAttribute("src")).toBe("blob:fixture");
-    const header = screen.getByTestId("sounding-title").closest("header");
-    expect(screen.getByText("Original profile · Zoom for detail · Drag to pan").closest("header")).toBe(header);
+    const header = screen.getByLabelText("Sounding details");
+    expect(within(header).getByText("Original profile")).toBeTruthy();
     expect(screen.getByText("3260 × 2198 · lossless PNG").closest("header")).toBe(header);
-    expect(screen.getByTestId("sounding-viewer").querySelector("footer")).toBeNull();
+    expect(header.textContent).not.toContain("Hover Skew-T or hodograph");
     const request = transport.calls.find((call) => call.command === "open_sounding")?.args as {
       request: Record<string, unknown>;
     };
@@ -179,6 +181,7 @@ describe("SoundingWorkspace", () => {
     expect(String(request.request.time)).toMatch(/^\d{4}-\d\d-\d\dT(00|12):00:00Z$/u);
     expect(screen.getByTestId("sounding-title").textContent).toBe("72357 (example data)");
     expect(within(screen.getByTestId("open-soundings")).getAllByRole("listitem")).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
     expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")?.open).toBe(false);
     await userEvent.click(screen.getByText("Chart panels", { selector: "summary" }));
     expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")?.open).toBe(true);

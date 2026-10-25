@@ -36,6 +36,7 @@ export function UpdateSettings(): ReactNode {
         {update === null ? null : <Action tone="accent" disabled={busy} onClick={() => { void install(); }}>Install update</Action>}
       </div>
     </div>
+    <p className={styles.updateSchedule}>Automatic checks run at 00:00 and 12:00 UTC, once per window on this device. If the app is closed or offline, it checks when next available. You can check manually anytime and choose when to install.</p>
     {status === "downloading" ? <div className={styles.updateProgress}>
       <progress aria-label="Update download" value={total === undefined ? undefined : downloaded} max={total ?? 1} />
       {total === undefined ? null : <span>{Math.min(100, Math.floor(downloaded / total * 100))}%</span>}
@@ -45,6 +46,5 @@ export function UpdateSettings(): ReactNode {
       <div className={styles.releaseHeader}><h3 id="installed-release-title">What’s new in {version}</h3><Action aria-haspopup="dialog" onClick={() => { useUiStore.getState().setWhatsNewOpen(true); }}>View highlights</Action></div>
       <ReleaseNotes version={version} />
     </section>
-    <p className={styles.updateSchedule}>The Windows app checks on launch, hourly, and when your connection returns. You choose when to install.</p>
   </div>;
 }

@@ -43,6 +43,8 @@ export interface PopoverProps {
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+const POPOVER_ANCHORS = new WeakMap<Element, HTMLElement>();
+
 function focusables(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((item) => item.tabIndex >= 0);
 }
@@ -93,6 +95,7 @@ export function Popover({
       return;
     }
     moved.current = movable && id !== undefined ? useUiStore.getState().popupPositions[id] ?? null : null;
+    POPOVER_ANCHORS.set(element, anchor);
     drag.current = null;
     const place = (): void => {
       const target = anchor.getBoundingClientRect();
@@ -147,12 +150,13 @@ export function Popover({
       return;
     }
     const onPointerDown = (event: PointerEvent): void => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-      if (ref.current?.contains(target) === true || anchor?.contains(target) === true) {
-        return;
+      let target = event.target instanceof Node ? event.target : null;
+      const visited = new Set<Node>();
+      while (target !== null && !visited.has(target)) {
+        visited.add(target);
+        if (ref.current?.contains(target) === true || anchor?.contains(target) === true) return;
+        const popup = (target instanceof Element ? target : target.parentElement)?.closest("[data-popover]");
+        target = popup == null ? null : POPOVER_ANCHORS.get(popup) ?? null;
       }
       onCloseRef.current("outside");
     };
@@ -237,6 +241,7 @@ export function Popover({
         aria-hidden={open ? undefined : true}
         inert={!open}
         data-open={open}
+        data-popover
         tabIndex={initialFocus === "none" ? undefined : -1}
         className={cx(styles.popover, className)}
         data-width={width}

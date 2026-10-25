@@ -20,6 +20,10 @@ class RadarTimeError(ValueError):
     """The advertised service cannot supply a recent scan near this time."""
 
 
+class RadarScanMissing(RadarTimeError):
+    """The provider listing was read successfully but contains no matching scan."""
+
+
 def _utc(value: datetime) -> datetime:
     return (
         value.replace(tzinfo=timezone.utc)
@@ -40,6 +44,8 @@ def parse_capabilities(payload: bytes) -> dict[str, tuple[datetime, ...]]:
         root = ElementTree.fromstring(payload)
     except ElementTree.ParseError as exc:
         raise RadarTimeError("radar service returned invalid capabilities") from exc
+    if root.tag.rsplit("}", 1)[-1] not in {"WMS_Capabilities", "WMT_MS_Capabilities"}:
+        raise RadarTimeError("radar service returned invalid capabilities")
     result = {}
 
     def visit(element, inherited=()):
@@ -113,13 +119,13 @@ def select_time(
     times = layers.get(layer.split(":")[-1], ())
     candidates = [scan for scan in times if reference - HISTORY <= scan <= reference]
     if not candidates:
-        raise RadarTimeError(
+        raise RadarScanMissing(
             f"{layer} advertises no historical scans in the past 60 minutes"
         )
     selected = min(candidates, key=lambda scan: (abs(scan - requested), scan))
     current = abs(reference - requested) <= timedelta(minutes=2)
     if not current and abs(selected - requested) > TOLERANCE:
-        raise RadarTimeError(
+        raise RadarScanMissing(
             f"{layer} has no advertised scan within 10 minutes of the requested time"
         )
     return selected

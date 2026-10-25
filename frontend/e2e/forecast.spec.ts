@@ -192,6 +192,7 @@ test.describe("the forecast map", () => {
     await waitForMapDrawn(page);
     await turnOn(page, "model-field");
     await expect(page.getByTestId("field-shown")).toContainText("F000");
+    await page.getByRole("button", { name: "Close layers", exact: true }).click();
     const point = await projectPoint(page, -108, 36);
     expect(point).not.toBeNull();
     if (point !== null) {
@@ -252,6 +253,7 @@ test.describe("the forecast map", () => {
     await expect(page.getByTestId("panel-chip-3")).toHaveAttribute("aria-pressed", "true");
     // The shared time moves every panel.
     await page.getByRole("region", { name: "Forecast timeline" }).getByRole("button", { name: "Next frame" }).click();
+    await layerRow(page, "model-field");
     for (const n of [2, 3, 4]) {
       await page.getByRole("group", { name: "Active map panel" }).getByRole("button", { name: `Panel ${String(n)}`, exact: true }).click();
       const row = await layerRow(page, "model-field");
@@ -263,9 +265,11 @@ test.describe("the forecast map", () => {
     await expect(page.getByTestId("map-panel-3")).toHaveCount(0);
     await expect(page.getByTestId("map-panel-2").locator(".maplibregl-ctrl-attrib")).toBeVisible();
     // Panel 3 is gone, so the layer panel edits panel 1 again.
+    await layerRow(page, "model-field");
     await expect(page.getByRole("region", { name: "Layers, panel 1", exact: true })).toBeVisible();
     await mapToolbar.getByRole("button", { name: "One map" }).click();
     await expect(page.getByTestId("map-panel-2")).toHaveCount(0);
+    await layerRow(page, "model-field");
     await expect(page.getByRole("region", { name: "Layers", exact: true })).toBeVisible();
     expectWarnings(consoleMessages, []);
   });
@@ -283,7 +287,9 @@ test.describe("the forecast map", () => {
     expect(release).not.toBeNull();
     await option.click();
     await expect(row.getByTestId("availability-shown")).toContainText("UWyo lists 2 bundled stations and 1 others");
+    await page.getByRole("button", { name: "Legend", exact: true }).click();
     await expect(page.getByRole("list", { name: "Legend" })).toContainText("Station, not reported");
+    await layerRow(page, "stations");
     await select.click();
     await page.getByRole("option", { name: "Automatic · observed launch", exact: true }).click();
     await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");

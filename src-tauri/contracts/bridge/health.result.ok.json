@@ -4,7 +4,7 @@
     "requested_backend": "auto",
     "active_backend": "rust",
     "rust_installed": true,
-    "rust_version": "3.2.1",
+    "rust_version": "3.3.0",
     "fallback_reason": null
   }
 }

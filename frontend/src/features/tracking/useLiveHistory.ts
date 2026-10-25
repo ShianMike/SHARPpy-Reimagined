@@ -1,5 +1,5 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useBackendClient } from "../../lib/backend/BackendProvider";
 import { BASE_QUERY_OPTIONS } from "../../lib/backend/queryOptions";
 import { useRadarSites } from "../../map/mapQueries";
@@ -11,6 +11,7 @@ import { liveHistoryTimes, liveTimestamp, useLiveTrackingStore } from "../../sto
 import { useUiStore } from "../../stores/uiStore";
 import { decodePng } from "../../map/pngImages";
 import { isLiveQuery, liveRequests, preloadRadarTilts, trimLiveCache } from "./liveRequests";
+import { radarPlaybackFrame } from "./radarPlayback";
 
 const IDLE_PROGRESS = { running: false, done: 0, total: 0, failed: 0, stopped: false };
 
@@ -33,6 +34,11 @@ export function useLiveHistory() {
   const preloading = useRef(Promise.resolve());
   const [storedProgress, setProgress] = useState({ ...IDLE_PROGRESS, selection });
   const progress = storedProgress.selection === selection ? storedProgress : IDLE_PROGRESS;
+  const radarFrames = liveHistoryTimes(now).map((time) => ({ time, keys: liveRequests(client, useMapStore.getState(), site, anchor, liveTimestamp(time))
+    .filter(({ queryKey }) => queryKey[0] === "radar" || queryKey[0] === "radar-site").map(({ queryKey }) => queryKey) })).filter(({ keys }) => keys.length > 0);
+  useSyncExternalStore((changed) => queryClient.getQueryCache().subscribe(changed), () =>
+    radarFrames.map(({ time, keys }) => { const frame = radarPlaybackFrame(queryClient, keys, time); return `${frame.state}:${frame.detail}`; }).join("\n"));
+  const frames = radarFrames.map(({ time, keys }) => radarPlaybackFrame(queryClient, keys, time));
   useEffect(() => () => {
     generation.current++;
     setProgress((state) => state.running ? { ...state, running: false, stopped: true } : state);
@@ -106,5 +112,5 @@ export function useLiveHistory() {
     trimLiveCache(queryClient);
   };
   const stop = (): void => { generation.current++; setProgress((state) => ({ ...state, running: false, stopped: true })); };
-  return { progress, waiting: playing && pending > 0, cacheHour, refresh, stop };
+  return { progress, frames, loadFrame: load, waiting: playing && pending > 0, cacheHour, refresh, stop };
 }

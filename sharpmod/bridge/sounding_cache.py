@@ -52,6 +52,7 @@ class Entry:
     #: Guards image renders, which never touch the collection, so a slow first
     #: render never holds up the parameters of the same sounding.
     render_lock: threading.Lock = field(default_factory=threading.Lock)
+    view_renders: OrderedDict[str, tuple[Path, dict[str, Any]]] = field(default_factory=OrderedDict)
 
 
 def default_root() -> Path:

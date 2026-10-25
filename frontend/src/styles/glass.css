@@ -33,6 +33,7 @@
 @supports not ((backdrop-filter: none) or (-webkit-backdrop-filter: none)) {
   :root[data-graphics-profile] {
     --glass-fill: var(--surface-1);
+    --tooltip-glass-fill: var(--surface-1);
     --glass-filter: none;
   }
 }

@@ -360,3 +360,25 @@ def test_slot_honors_a_requested_starting_chart(qt_app):
 
     assert slot.currentChart() == "theta"
     assert isinstance(slot.chart, plotThetaProfile)
+
+
+def test_companion_charts_reuse_the_other_insets_and_refresh_together(qt_app):
+    slot = SwappableHeightChart(chart="theta")
+    first = _wind_profile()
+    slot.setProf(first)
+    companions = slot.companionCharts(None)
+    assert companions.layout().count() == 3
+    assert {companions.layout().itemAt(i).widget() for i in range(3)} == {
+        widget for key, (_label, widget) in slot._charts.items() if key != "theta"}
+    assert slot._stack.count() == 1 and slot._stack.currentWidget() is slot.chart
+    assert slot._populated == set(slot._order)
+    second = _wind_profile()
+    slot.setProf(second)
+    slot.setDeviant("left")
+    for _label, widget in slot._charts.values():
+        assert widget.prof is second and widget.use_left
+    slot.setChart("srw")
+    assert companions.layout().count() == 3
+    assert slot._stack.currentWidget() is slot.chart
+    assert slot.chart is slot._charts["srw"][1]
+    assert slot.companionCharts(None) is companions

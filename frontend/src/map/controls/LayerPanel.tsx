@@ -1,22 +1,22 @@
 // Enabled weather layers lead in their draw order; the remaining layers can
 // be added below. Settings and live provider controls edit the active panel.
 
-import { CloudSun, Map as MapIcon } from "lucide-react";
-import { Fragment, useState, type ReactNode } from "react";
+import { CloudSun, EyeOff, List, Map as MapIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { useForecastContext } from "../../features/forecast/useForecast";
 import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { compactUtc, formatUtc, forecastLabel } from "../../features/sounding/soundingTime";
 import { mapProjection, panelLayers, useMapStore } from "../../stores/mapStore";
 import { resetLayerSettings } from "../../stores/preferences";
 import type { StationAvailability } from "../../types/contracts";
-import { Action } from "../../ui/Controls";
+import { Action, IconAction } from "../../ui/Controls";
 import { LAYER_REGISTRY } from "../layers/descriptors";
 import { layerInView, ORDERABLE_LAYER_IDS, type LayerDescriptor, type OrderableLayerId } from "../layers/registry";
 import { WeatherAlertStatus } from "./WeatherAlertStatus";
 import { AvailabilityControl } from "./AvailabilityControl";
 import { FieldControls } from "./FieldControls";
 import { LayerRow } from "./LayerRow";
-import { Legend } from "./Legend";
+import { WeatherLegend } from "./WeatherLegend";
 import { DomainStatus, OutlookStatus, PlaceStatus, RadarControls, SatelliteControls } from "./OverlayControls";
 import { ReportControls } from "./ReportControls";
 import { SurfacePlotControls } from "./SurfacePlotControls";
@@ -36,7 +36,6 @@ const MAP_LAYERS = ["model-domain", "place-labels", "radar-site-labels", "statio
 /** The map layers' own controls and status, shown while the layer is on. */
 const MAP_EXTRA: Readonly<Partial<Record<string, ReactNode>>> = {
   stations: <AvailabilityControl />,
-  "place-labels": <PlaceStatus />,
   "model-domain": <DomainStatus />,
 };
 
@@ -95,47 +94,59 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
           <button type="button" aria-pressed={group === "weather"} onClick={() => { useMapStore.getState().setLayerPanelGroup("weather"); }}>
             <CloudSun className="icon" aria-hidden="true" /> Weather
           </button>
-          <button type="button" aria-pressed={group === "map"} onClick={() => { useMapStore.getState().setLayerPanelGroup("map"); }}>
-            <MapIcon className="icon" aria-hidden="true" /> Map details
+          <button type="button" aria-pressed={group === "legend"} onClick={() => { useMapStore.getState().setLayerPanelGroup("legend"); }}>
+            <List className="icon" aria-hidden="true" /> Legend
+          </button>
+          <button type="button" aria-label="Map details" aria-pressed={group === "map"} onClick={() => { useMapStore.getState().setLayerPanelGroup("map"); }}>
+            <MapIcon className="icon" aria-hidden="true" /> Map
           </button>
         </div>
       </div>
       <div className={styles.body}>
-        <div data-motion="fade" inert={group !== "weather"} hidden={group !== "weather"}>
-          <h3 className={styles.group}>On map <span>{active.length} · top first</span></h3>
-          {active.length === 0 ? <p className={styles.hint}>Turn on a weather layer below.</p> : null}
-          {[...active, ...available].map((id, index) => {
+        {group !== "weather" ? null : <div className={styles.weatherLayout}>
+          <section className={styles.layerColumn} aria-label="Active weather layers">
+          <div className={styles.stackHeading}><h3 className={styles.group}>On map <span>{active.length} · top first</span></h3>
+            <IconAction icon={EyeOff} size="sm" label="Hide all weather layers" disabled={active.length === 0}
+              onClick={() => { for (const id of active) useMapStore.getState().setLayerVisible(id, false); }} />
+          </div>
+          <div className={styles.layerList}>
+          {active.length === 0 ? <p className={styles.hint}>Choose a layer from Add layers.</p> : null}
+          {active.map((id, index) => {
             const layer = descriptor(id);
             return layer === undefined ? null : (
-              <Fragment key={id}>
-                {index === active.length ? <h3 className={styles.group}>Add weather layer <span>{available.length} available</span></h3> : null}
-                <LayerRow layer={layer} state={states[id]} order={states[id].visible ? { id, fromTop: index, count: active.length } : undefined}>
+                <LayerRow key={id} layer={layer} state={states[id]} order={{ id, fromTop: index, count: active.length }}>
                   <WeatherExtra id={id} panel={panel} />
                 </LayerRow>
-              </Fragment>
             );
           })}
-        </div>
-        <div data-motion="fade" inert={group !== "map"} hidden={group !== "map"}>
+          </div></section>
+          <section className={styles.layerColumn} aria-label="Available weather layers">
+            <h3 className={styles.group}>Add layers <span>{available.length} available</span></h3>
+            <div className={styles.layerList}>{available.map((id) => {
+              const layer = descriptor(id);
+              return layer === undefined ? null : <LayerRow key={id} layer={layer} state={states[id]} />;
+            })}{available.length === 0 ? <p className={styles.hint}>All weather layers are on the map.</p> : null}</div>
+          </section>
+        </div>}
+        {group !== "legend" ? null : <div className={styles.scrollBody}><WeatherLegend active={active} panel={panel} availabilities={availabilities} /></div>}
+        {group !== "map" ? null : <div className={styles.scrollBody}>
           <div className={styles.projection}>
-            <h3 className={styles.group}>Map view <span>{live ? "Live Tracking" : "All panels"}</span></h3>
-            <div className={styles.panelPicker} role="group" aria-label="Map projection">
-              {(["mercator", "globe"] as const).map((value) => <button key={value} type="button" aria-pressed={projection === value} disabled={live && value === "globe"}
+            <h3 className={styles.group}>Projection <span>{live ? "Flat map" : "All panels"}</span></h3>
+            {live ? null : <div className={styles.panelPicker} role="group" aria-label="Map projection">
+              {(["mercator", "globe"] as const).map((value) => <button key={value} type="button" aria-pressed={projection === value}
                 onClick={() => { useMapStore.getState().setProjection(value); }}>{value === "globe" ? "Globe" : "Flat map"}</button>)}
-            </div>
-            <p className={styles.hint}>{live ? "Live Tracking uses a flat map. Globe is available in Model Viewer." : "Layers and model boundaries adapt to this view."}</p>
+            </div>}
           </div>
           <h3 className={styles.group}>Map details</h3>
-          {MAP_LAYERS.filter((layer) => layerInView(layer.id, live ? "live" : "map") && (!live || layer.id !== "model-domain")).map((layer) => (
+          <div>{MAP_LAYERS.filter((layer) => layerInView(layer.id, live ? "live" : "map") && (!live || layer.id !== "model-domain")).map((layer) => (
             <LayerRow key={layer.id} layer={layer} state={states[layer.id]}>
               {MAP_EXTRA[layer.id] ?? null}
             </LayerRow>
-          ))}
-          <Legend availabilities={availabilities} />
-        </div>
+          ))}{states["place-labels"].visible ? <PlaceStatus /> : null}</div>
+        </div>}
       </div>
       <footer className={styles.footer}>
-        <span role="status">{reset ? live ? "Live layers reset" : "Layers reset · all panels" : "Saves automatically"}</span>
+        <span role="status" aria-label="Layer settings status">{reset ? live ? "Live layers reset" : "Layers reset · all panels" : "Saves automatically"}</span>
         <Action title={live ? "Reset live layers and weather options." : "Reset layers, projection and weather options in all panels. Keep the layout, parameters and map location."}
           onClick={() => { resetLayerSettings(); setReset(true); }}>Reset layers</Action>
       </footer>

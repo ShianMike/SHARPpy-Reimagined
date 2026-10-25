@@ -72,8 +72,8 @@ test("shared controls and local overrides use orange hover in both themes", asyn
     await disabled.hover();
     await expect(disabled).toBeDisabled();
     await expect(disabled).toHaveCSS("color", await resolved(page, "--text-disabled", "color"));
-    await page.getByRole("button", { name: "Forecast Hours", exact: true }).click();
-    const downloads = page.getByRole("dialog", { name: "Forecast Hours", exact: true });
+    await page.getByRole("button", { name: "Choose forecast hour", exact: true }).click();
+    const downloads = page.getByRole("dialog", { name: "Forecast hour", exact: true });
     const load = downloads.getByRole("button", { name: "Load Hours", exact: true });
     await expect(load).toBeEnabled();
     await load.hover();

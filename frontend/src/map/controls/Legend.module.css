@@ -46,3 +46,25 @@
   border-color: var(--map-selected-edge);
   box-shadow: 0 0 0 var(--space-1) var(--map-selected-halo);
 }
+.weather { display: grid; gap: var(--space-3); color: var(--text-secondary); font-size: var(--font-size-small); line-height: var(--line-height-body); }
+.weather h3, .weather h4 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--text-primary); font-size: var(--font-size-small); font-weight: var(--font-weight-semibold); }
+.weather h3 > span, .weather h4 small { color: var(--text-tertiary); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); }
+.weather h3 > span { margin-inline-start: auto; }
+.stack { display: grid; list-style: none; }
+.card, .stationKey { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); min-width: 0; gap: var(--space-5); padding: var(--space-4) 0; border-top: var(--hairline) solid var(--border-subtle); align-items: start; }
+.card h4 { flex-wrap: nowrap; align-items: flex-start; }
+.card h4 > span:first-child { flex: none; color: var(--text-tertiary); font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }
+.card h4 small { display: block; margin-top: var(--space-1); }
+.keyBody { display: grid; min-width: 0; gap: var(--space-2); }
+.keyBody p, .keyBody figcaption { font-size: var(--font-size-caption); color: var(--text-secondary); }
+.keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-4); list-style: none; }
+.keys > li { display: flex; align-items: flex-start; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
+.colourSwatch { flex: none; width: var(--space-4); height: var(--space-3); margin-top: var(--space-1); border: var(--focus-ring-width) solid var(--key-stroke); border-radius: var(--space-0-5); background: var(--key-fill); }
+.colourSwatch[data-hatched="true"] { background-image: repeating-linear-gradient(135deg, transparent, transparent var(--space-1), var(--key-stroke) var(--space-1), var(--key-stroke) calc(var(--space-1) + var(--hairline))); }
+.symbol { flex: none; width: var(--icon-size-md); height: var(--icon-size-md); }
+.stationKey .legend { display: flex; flex-flow: row wrap; gap: var(--space-3) var(--space-4); padding: 0; border: 0; font-size: var(--font-size-caption); }
+@media (max-width: 640px) {
+  .card, .stationKey { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  .card h4 > span:last-child { display: flex; flex: 1; justify-content: space-between; gap: var(--space-3); }
+  .card h4 small { flex: none; margin: 0; }
+}

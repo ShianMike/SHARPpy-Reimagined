@@ -152,6 +152,10 @@ class RadarError(Exception):
     """Raised when a radar frame cannot be fetched or is not an image."""
 
 
+class RadarScanMissing(RadarError):
+    """A published inventory confirms that no matching scan is available."""
+
+
 @dataclass(frozen=True)
 class RadarProduct:
     """One selectable MRMS raster product.
@@ -503,6 +507,8 @@ def fetch_frame(
                 WMS_URL, resolved.layer, valid_time, opener=opener or _default_opener,
                 timeout=_remote_timeout(), now=now,
             )
+        except radar_time.RadarScanMissing as exc:
+            raise RadarScanMissing(f"{resolved.label} history is unavailable: {exc}") from exc
         except (radar_time.RadarTimeError, urllib.error.URLError, OSError) as exc:
             raise RadarError(f"{resolved.label} history is unavailable: {exc}") from exc
     frame_size = HISTORY_FRAME_SIZE if size is None and selected is not None else _frame_size(size)

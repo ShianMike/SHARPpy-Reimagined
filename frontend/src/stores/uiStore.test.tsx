@@ -3,7 +3,7 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useTheme, useUiStore } from "./uiStore";
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); useUiStore.setState({ lastVersion: null, whatsNewOpen: false, theme: "system", speed: 1, loop: true, smoothPlayback: false, collapsed: false, popupPositions: {} }); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); useUiStore.setState({ lastVersion: null, lastUpdateCheckWindow: null, whatsNewOpen: false, theme: "system", speed: 1, loop: true, smoothPlayback: false, collapsed: false, popupPositions: {} }); });
 
 it("validates persisted workspace settings and ignores transient navigation state", () => {
   const state = useUiStore.getState();
@@ -16,6 +16,8 @@ it("validates persisted workspace settings and ignores transient navigation stat
   expect(merge({ lastVersion: "3.1.0", whatsNewOpen: true }, state)).toMatchObject({ lastVersion: "3.1.0", whatsNewOpen: false });
   expect(merge({ lastVersion: { invalid: true } }, state)).toMatchObject({ lastVersion: null });
   expect(merge({ lastVersion: "corrupted" }, state)).toMatchObject({ lastVersion: null });
+  for (const value of [-1, 1.5, "corrupted", Infinity]) expect(merge({ lastUpdateCheckWindow: value }, state)).toMatchObject({ lastUpdateCheckWindow: null });
+  expect(merge({ lastUpdateCheckWindow: Date.parse("2026-10-25T12:00:00Z") }, state)).toMatchObject({ lastUpdateCheckWindow: Date.parse("2026-10-25T12:00:00Z") });
   useUiStore.getState().setSmoothPlayback(true);
   expect(useUiStore.persist.getOptions().partialize?.(useUiStore.getState())).toMatchObject({ smoothPlayback: true });
   expect(merge({ popupPositions: { model: { x: 150, y: 230 }, parameter: { x: 80, y: 90 }, run: { x: Infinity, y: "12" }, hour: null } }, state)).toMatchObject({ popupPositions: { model: { x: 150, y: 230 }, parameter: { x: 80, y: 90 } } });

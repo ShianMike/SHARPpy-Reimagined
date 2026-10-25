@@ -208,6 +208,17 @@ fn sounding_progress_rejects_invalid_counters() {
         "public/soundings/progress.json",
     );
     progress.validate().unwrap();
+    for stage in [DownloadStage::Decoding, DownloadStage::Calculating] {
+        let mut phase = progress.clone();
+        phase.stage = stage;
+        phase.bytes_per_second = 0.0;
+        phase.validate().unwrap();
+        let public = serde_json::to_value(&phase).unwrap();
+        assert!(matches!(
+            public["stage"].as_str(),
+            Some("decoding" | "calculating")
+        ));
+    }
     for speed in [-1.0, f64::NAN, f64::INFINITY] {
         let mut bad = progress.clone();
         bad.bytes_per_second = speed;

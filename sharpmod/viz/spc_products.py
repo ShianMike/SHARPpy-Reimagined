@@ -186,27 +186,12 @@ def attach_hgz_overlay(
 
 
 def attach_thermal_levels(skewt):
-    """Draw the freezing level, wet-bulb zero, and growth zone at all times.
+    """Keep temperature levels, wet-bulb zero and growth zone on every panel.
 
-    The vendored skew-T makes these mutually exclusive with the maximum
-    lapse-rate layer and the parcel's 0/-20/-30 degree levels, through a single
-    ``if self.plotdgz ... else ...`` in ``plotData``. Because ``plotdgz`` is
-    turned on only while the winter panel is the one on display, the effect is
-    that choosing a panel silently changes *which thermodynamic levels the
-    Skew-T is willing to label* -- pick the winter panel and the freezing level
-    and wet-bulb zero appear while the lapse-rate layer vanishes; pick any other
-    and the reverse happens.
-
-    None of that follows from the physics. The freezing level and the wet-bulb
-    zero are read for hail size, precipitation type, and icing whatever else is
-    being looked at, and the growth zone is where it is regardless of which
-    numbers are in the corner. So this draws whichever set the vendored branch
-    skipped, leaving the sounding annotated the same way every time.
-
-    Safe to overlay because the two label families are placed on opposite sides
-    of their shared tick column -- ``draw_sig_levels`` right-aligns its text to
-    the left of the tick and ``draw_temp_levels`` left-aligns to the right -- so
-    drawing both cannot make them collide.
+    Use the native non-winter pass for the blue 0/-20/-30 degree markers and
+    lapse-rate layer, then add the growth zone and wet-bulb zero. The blue 0 C
+    marker already labels the freezing level, so skip the winter branch's
+    duplicate FRZ label.
 
     Returns whether the pass was installed.
     """
@@ -218,16 +203,8 @@ def attach_thermal_levels(skewt):
     if not callable(original_plot_data):
         return False
 
-    def _dgz_drawn_by_vendor(prof):
-        """Did the vendored branch already draw the growth zone and the levels?"""
-        if getattr(skewt, "plotdgz", False) is not True:
-            return False
-        bot = getattr(prof, "dgz_pbot", None)
-        top = getattr(prof, "dgz_ptop", None)
-        return bot is not None and top is not None and bot != top
-
     def _draw_growth_zone_and_levels(qp, prof):
-        """The vendored ``if`` branch's annotations, minus its panel condition."""
+        """Draw the growth zone and wet-bulb zero without a duplicate FRZ."""
         import numpy as np
 
         import sharppy.sharptab as tab
@@ -253,25 +230,19 @@ def attach_thermal_levels(skewt):
 
         # Drawn even when there is no growth zone, which is the other half of the
         # repair: the vendored code skipped the whole block in that case, so a
-        # sounding with no -12 to -17 layer lost its freezing level as well.
+        # sounding with no -12 to -17 layer lost its wet-bulb zero as well.
         with suppress(Exception):
             skewt.draw_sig_levels(
                 qp, plevel=tab.params.temp_lvl(prof, 0, wetbulb=True),
                 color=QtGui.QColor(skewt.dewp_color), var_id="WBZ=")
-        with suppress(Exception):
-            skewt.draw_sig_levels(
-                qp, plevel=tab.params.temp_lvl(prof, 0),
-                color=QtGui.QColor(_api._FRZ_LABEL_COLOR), var_id="FRZ=")
-
-    def _draw_lapse_rate_and_parcel_levels(qp):
-        """The vendored ``else`` branch's annotations."""
-        with suppress(Exception):
-            skewt.draw_max_lapse_rate_layer(qp)
-        with suppress(Exception):
-            skewt.draw_temp_levels(qp)
 
     def _wrapped_plot_data(*args, **kwargs):
-        result = original_plot_data(*args, **kwargs)
+        plotdgz = getattr(skewt, "plotdgz", False)
+        try:
+            skewt.plotdgz = False
+            result = original_plot_data(*args, **kwargs)
+        finally:
+            skewt.plotdgz = plotdgz
         try:
             prof = getattr(skewt, "prof", None)
             bitmap = getattr(skewt, "plotBitMap", None)
@@ -285,10 +256,7 @@ def attach_thermal_levels(skewt):
                     qp.setClipRect(clip)
                 qp.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
                 qp.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing)
-                if _dgz_drawn_by_vendor(prof):
-                    _draw_lapse_rate_and_parcel_levels(qp)
-                else:
-                    _draw_growth_zone_and_levels(qp, prof)
+                _draw_growth_zone_and_levels(qp, prof)
             finally:
                 qp.end()
         except Exception:

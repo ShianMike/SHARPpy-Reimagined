@@ -87,6 +87,7 @@ export function openModelSounding(context: ForecastContext, point: MapPoint): vo
 }
 
 export function PointDetails({ point }: { point: MapPoint }): ReactNode {
+  const sourceOpen = useUiStore((state) => state.inspectorSourceOpen);
   const context = useForecastContext();
   const layout = useMapStore((state) => state.panelLayout);
   const activePanel = useMapStore((state) => state.activePanel);
@@ -99,7 +100,8 @@ export function PointDetails({ point }: { point: MapPoint }): ReactNode {
         ))}
         {context === null ? null : <OutlookAreas point={point} validTime={context.validTime} />}
       </dl>
-      {context === null ? null : <details className={styles.disclosure}>
+      {context === null ? null : <details className={styles.disclosure} open={sourceOpen}
+        onToggle={(event) => { useUiStore.getState().setInspectorSourceOpen(event.currentTarget.open); }}>
         <summary>Forecast &amp; source <ChevronDown className="icon icon-sm" aria-hidden="true" /></summary>
         <dl className={styles.metadata}>
           <dt>Model</dt><dd>{context.model.label}</dd>

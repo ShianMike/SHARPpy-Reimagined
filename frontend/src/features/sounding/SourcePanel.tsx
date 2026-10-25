@@ -1,6 +1,6 @@
 // The sounding source as a tab list over one form.
 import type { KeyboardEvent, ReactNode } from "react";
-import { RadioTower, CloudSun, History, FileUp, PanelLeftClose } from "lucide-react";
+import { RadioTower, CloudSun, History, FileUp, PanelLeftClose, SlidersHorizontal } from "lucide-react";
 import { IconAction } from "../../ui/Controls";
 import { useSoundingStore, type SoundingSource } from "../../stores/soundingStore";
 import { FileForm } from "./FileForm";
@@ -16,7 +16,7 @@ const SOURCES: readonly { id: SoundingSource; label: string }[] = [
   { id: "file", label: "File" },
 ];
 
-export function SourcePanel({ onHide }: { onHide: () => void }): ReactNode {
+export function SourcePanel({ onHide, onControls }: { onHide: () => void; onControls?: () => void }): ReactNode {
   const source = useSoundingStore((state) => state.source);
   const setSource = useSoundingStore((state) => state.setSource);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
@@ -34,7 +34,10 @@ export function SourcePanel({ onHide }: { onHide: () => void }): ReactNode {
   };
   return (
     <section className={styles.section} aria-label="Open a sounding">
-      <header className={styles.sideHeader}><div><h1>Soundings</h1><p>Choose a source</p></div><IconAction icon={PanelLeftClose} size="sm" label="Hide sources" aria-expanded={true} aria-controls="sounding-sources" onClick={onHide} /></header>
+      <header className={styles.sideHeader}><div><h1>Soundings</h1><p>Choose a source</p></div><div className={styles.sideActions}>
+        {onControls === undefined ? null : <IconAction icon={SlidersHorizontal} size="sm" label="Show sounding controls" aria-controls="sounding-controls" onClick={onControls} />}
+        <IconAction icon={PanelLeftClose} size="sm" label="Hide sources" aria-expanded={true} aria-controls="sounding-sources" onClick={onHide} />
+      </div></header>
       <div className={styles.tabs} role="tablist" aria-label="Source" onKeyDown={onKeyDown}>
         {SOURCES.map((item) => (
           <button

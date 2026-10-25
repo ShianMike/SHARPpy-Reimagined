@@ -16,8 +16,11 @@ import { StationSearch } from "./StationSearch";
 const appInitial = useAppStore.getState();
 const mapInitial = useMapStore.getState();
 const golden = parseStationCatalog(catalogFull).stations;
+const scrollIntoView = vi.fn();
 
 beforeEach(() => {
+  scrollIntoView.mockClear();
+  Element.prototype.scrollIntoView = scrollIntoView;
   useAppStore.setState(appInitial, true);
   useMapStore.setState(mapInitial, true);
   document.addEventListener("keydown", handleGlobalKey);
@@ -45,14 +48,16 @@ async function setup(scenario: string | null = null) {
 const options = (): HTMLElement[] => screen.queryAllByRole("option");
 
 describe("StationSearch", () => {
-  it("has the combobox attributes and opens a listbox while typing", async () => {
+  it("shows stations on open and filters them with the combobox", async () => {
     const { user, input } = await setup();
     const trigger = screen.getByRole("button", { name: "Search stations" });
     expect(trigger.getAttribute("title")).toBeNull();
     expect(trigger.querySelector('[data-side="bottom-end"]')?.textContent).toBe("Search stations");
     expect(input.getAttribute("aria-autocomplete")).toBe("list");
-    expect(input.getAttribute("aria-expanded")).toBe("false");
-    expect(input.getAttribute("aria-controls")).toBeNull();
+    expect(input.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("dialog", { name: "Station search" }).getAttribute("data-movable")).toBe("true");
+    expect(options()).toHaveLength(8);
+    expect(document.activeElement).toBe(input);
     expect(input.maxLength).toBe(64);
     await user.type(input, "norman");
     const listbox = screen.getByRole("listbox", { name: "Station results" });
@@ -73,10 +78,74 @@ describe("StationSearch", () => {
     );
   });
 
+  it("finds radar IDs without case sensitivity and opens the active live panel at that site", async () => {
+    useAppStore.getState().setActiveWorkspace("live");
+    useAppStore.getState().selectPoint({ latitude: 36, longitude: -98 });
+    useMapStore.getState().setPanelLayout(2); useMapStore.getState().setActivePanel(1);
+    const layers = useMapStore.getState().layers;
+    const { user } = await setup();
+    await user.click(screen.getByRole("button", { name: "Radar sites" }));
+    const input = screen.getByRole<HTMLInputElement>("combobox", { name: "Search radar sites" });
+    await waitFor(() => { expect(input.disabled).toBe(false); });
+    expect(document.activeElement).toBe(input);
+    await user.type(input, "ktlx");
+    expect(options()).toHaveLength(1);
+    expect(options()[0]?.textContent).toContain("KTLX");
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(useAppStore.getState()).toMatchObject({ activeWorkspace: "live", selectedPoint: { latitude: 36, longitude: -98 } });
+    const state = useMapStore.getState();
+    expect(state.livePanels[1]).toMatchObject({ radarScope: "site", radarSite: "KTLX", layers: { radar: { visible: true } } });
+    expect(state.livePanels[0]?.radarSite).toBeNull();
+    expect(state.layers).toBe(layers);
+    expect(state.focusRequest).toMatchObject({ stationId: "KTLX", position: { latitude: 35.3333, longitude: -97.2783 } });
+    expect(screen.queryByRole("dialog", { name: "Station search" })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Search stations" }));
+  });
+
+  it("keeps single-site product choices and clears queries between sections", async () => {
+    useAppStore.getState().setActiveWorkspace("live");
+    useMapStore.getState().setRadarScope("site"); useMapStore.getState().setRadarProduct("velocity");
+    const { user, input } = await setup();
+    await user.type(input, "norman");
+    await user.click(screen.getByRole("button", { name: "Radar sites" }));
+    const radarInput = screen.getByRole<HTMLInputElement>("combobox", { name: "Search radar sites" });
+    await waitFor(() => { expect(radarInput.disabled).toBe(false); });
+    expect(radarInput.value).toBe("");
+    await user.type(radarInput, "zzqx");
+    expect(screen.getByRole("listbox").textContent).toBe('No radar sites match "zzqx"');
+    await user.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(document.activeElement).toBe(radarInput);
+    await user.type(radarInput, "KTLX");
+    await user.click(screen.getByRole("option", { name: "KTLX WSR-88D radar" }));
+    expect(useMapStore.getState().livePanels[0]?.radarProduct).toBe("velocity");
+    expect(useAppStore.getState().selectedStationId).toBeNull();
+  });
+
+  it("disables radar-site search in Model Viewer and clears it when leaving Live Tracking", async () => {
+    useAppStore.getState().setActiveWorkspace("map");
+    const { user, input } = await setup();
+    const radarSection = screen.getByRole("button", { name: "Radar sites" });
+    expect(radarSection.hasAttribute("disabled")).toBe(true);
+    await user.click(radarSection);
+    expect(screen.queryByRole("combobox", { name: "Search radar sites" })).toBeNull();
+    expect(input.disabled).toBe(false);
+    act(() => { useAppStore.getState().setActiveWorkspace("live"); });
+    expect(radarSection.hasAttribute("disabled")).toBe(false);
+    await user.click(radarSection);
+    const radarInput = screen.getByRole<HTMLInputElement>("combobox", { name: "Search radar sites" });
+    await waitFor(() => { expect(radarInput.disabled).toBe(false); });
+    await user.type(radarInput, "KTLX");
+    act(() => { useAppStore.getState().setActiveWorkspace("map"); });
+    expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Search stations" }).value).toBe("");
+    expect(radarSection.hasAttribute("disabled")).toBe(true);
+    expect(useAppStore.getState().selectedStationId).toBeNull();
+  });
+
   it("moves the active option with the arrow keys", async () => {
     const { user, input } = await setup();
     await user.type(input, "norman");
     await user.keyboard("{ArrowDown}");
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "nearest" });
     const [first, second] = options();
     expect(input.getAttribute("aria-activedescendant")).toBe(first?.id);
     expect(first?.getAttribute("aria-selected")).toBe("true");
@@ -120,10 +189,12 @@ describe("StationSearch", () => {
     expect(useAppStore.getState().selectedStationId).toBeNull();
   });
 
-  it("Tab closes the list", async () => {
+  it("Tab reaches the clear action, then exits the popup", async () => {
     const { user, input } = await setup();
     await user.type(input, "norman");
     expect(screen.getByRole("listbox")).toBeTruthy();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Clear search" }));
     await user.tab();
     expect(screen.queryByRole("listbox")).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Station search" })).toBeNull();

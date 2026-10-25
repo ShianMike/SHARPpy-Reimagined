@@ -115,6 +115,23 @@ def test_release_lane_is_complete_parallel_without_repeating_property_depth(tmp_
     assert environment["SHARPMOD_HYPOTHESIS_PROFILE"] == "fast"
 
 
+@pytest.mark.parametrize("lane", ["fast", "compatibility", "property", "serial-release"])
+def test_single_worker_avoids_worker_startup_and_keeps_lane_policy(lane, tmp_path):
+    command, environment = runner.build_pytest_command(
+        lane,
+        junit=tmp_path / f"{lane}.xml",
+        workers=1,
+        coverage=lane == "fast",
+    )
+
+    assert command[command.index("-n") + 1] == "0"
+    assert _marker(command) == runner.LANES[lane].marker
+    assert environment["SHARPMOD_HYPOTHESIS_PROFILE"] == (
+        runner.LANES[lane].hypothesis_profile
+    )
+    assert ("--cov=sharpmod" in command) == (lane == "fast")
+
+
 @pytest.mark.parametrize("filename,fixtures,grouped", [
     ("test_viz_light_theme.py", [], True),
     ("test_sounding_view.py", ["qt_app"], True),

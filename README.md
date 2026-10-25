@@ -199,15 +199,15 @@ Download the **v3.3.0 [Windows installer](https://github.com/ShianMike/SHARPpy-R
 
 **1,849 downloads of Windows application packages** across **27 published releases** as of **25 October 2026, 05:22 UTC**: **1,606 `.exe` downloads** and **243 ZIP downloads**.
 
-[![Download history by UTC date](https://raw.githubusercontent.com/ShianMike/SHARPpy-Reimagined/download-history/docs/images/download-history.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/blob/download-history/docs/images/download-history.svg)
+[![Download history by UTC date](docs/images/download-history.svg)](docs/images/download-history.svg)
 
 **History starts 25 October 2026**, with a real measurement at **05:22:24 UTC**. A line will appear as daily measurements accumulate. GitHub exposes current asset counters, so earlier download history cannot be reconstructed from release dates.
 
 The total includes installers, standalone executables, and portable ZIPs from current, legacy, and beta releases. It excludes updater metadata (`latest.json`), signatures, checksums, manifests, dependency lists, SBOMs, and Python wheels. Repeat or automated downloads may count; this does not measure unique users or installations. Removing or replacing release assets can reduce later totals.
 
-Source: [GitHub Releases API](https://api.github.com/repos/ShianMike/SHARPpy-Reimagined/releases?per_page=100), using each asset's `download_count`. The [original baseline and inclusion criteria](docs/images/release-downloads.json) and [measured history](https://github.com/ShianMike/SHARPpy-Reimagined/blob/download-history/docs/images/download-history.json) remain available for inspection.
+Source: [GitHub Releases API](https://api.github.com/repos/ShianMike/SHARPpy-Reimagined/releases?per_page=100), using each asset's `download_count`. The [original baseline and inclusion criteria](docs/images/release-downloads.json) and [measured history](docs/images/download-history.json) remain available for inspection.
 
-The [daily workflow](.github/workflows/download-history.yml) records measurements at **00:17 UTC** and updates the chart on the separate `download-history` branch. The total above remains the dated baseline; the chart shows the latest recorded measurement. No extra account, service, or personal access token is required.
+The chart and measurements are stored on `main`. Automatic daily collection is disabled to keep `main` as the repository's only branch. Run `python scripts/download_history.py` to record a new UTC date and regenerate the chart, then commit the updated JSON and SVG. The total above remains the dated baseline; the chart shows the latest recorded measurement.
 
 ### Run v3 from source
 

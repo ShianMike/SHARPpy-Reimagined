@@ -66,6 +66,9 @@ Target version: **3.3.0** (not published).
   reference and dependency contract together to clear the image-library audit.
 - Avoid starting an xdist worker subprocess for single-worker test lanes,
   retaining their selection, coverage and performance checks.
+- Run the existing complete offline release gate on release pull requests,
+  alongside the normal hosted checks, avoiding a separate workflow dispatch
+  that repeats the other lanes. Keep release-dispatch validation unchanged.
 - Update browser and desktop test selectors for movable Layers controls,
   sidebar sounding details and the separate legend view, retaining the existing
   rendering, map-picking and metadata assertions.

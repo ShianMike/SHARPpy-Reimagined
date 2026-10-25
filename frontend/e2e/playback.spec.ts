@@ -1,7 +1,7 @@
 import { presetPreferences, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
-import { turnOn } from "./support/ui";
+import { layerRow, turnOn } from "./support/ui";
 import { expect, test } from "./support/test";
 import appManifest from "../package.json" with { type: "json" };
 
@@ -72,7 +72,9 @@ test.describe("forecast playback", () => {
     if (panels === 4) await page.clock.fastForward(1500);
     else await page.waitForTimeout(1500);
     expect(await hour.inputValue()).toBe(stopped);
-    await expect(page.getByTestId("field-shown")).toContainText(`F${stopped.padStart(3, "0")}`);
+    const field = await layerRow(page, "model-field");
+    await expect(field.getByTestId("field-shown")).toContainText(`F${stopped.padStart(3, "0")}`);
+    await page.getByRole("button", { name: "Close layers", exact: true }).click();
     if (panels === 4) {
       await page.clock.resume();
       await saveScreenshot(page, "browser-four-panel-playback.png");
@@ -117,6 +119,7 @@ test("forecast-hour picker keeps one popup with a fixed footer and scrollable ho
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Forecast Hours", exact: true })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Load Hours", exact: true })).toBeVisible();
+  await dialog.evaluate(async (panel) => { await Promise.allSettled(panel.getAnimations().map((animation) => animation.finished)); });
   expect(await dialog.evaluate((panel) => panel.scrollHeight <= panel.clientHeight)).toBe(true);
   const before = await dialog.getByRole("button", { name: "Load Hours", exact: true }).boundingBox();
   await dialog.getByRole("button", { name: "Select forecast hour 18", exact: true }).evaluate((hour) => { hour.scrollIntoView({ block: "nearest" }); });

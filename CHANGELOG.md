@@ -71,7 +71,9 @@ Target version: **3.3.0** (not published).
   that repeats the other lanes. Keep release-dispatch validation unchanged.
 - Update browser and desktop test selectors for movable Layers controls,
   sidebar sounding details and the separate legend view, retaining the existing
-  rendering, map-picking and metadata assertions.
+  rendering, map-picking and metadata assertions. Reopen Layers before checking
+  a paused forecast, and wait for popup animations before measuring the fixed
+  footer, keeping its exact position assertion.
 - Limit automatic update checks to the UTC windows starting at 00:00 and 12:00.
   Persist attempted checks across restarts, including failed checks. Catch up
   once after an offline start or resume, and keep manual checks available anytime.

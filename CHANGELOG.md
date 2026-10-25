@@ -7,6 +7,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Point the README Windows downloads and release-verification links at the
+  published v3.3.0 installer, portable ZIP and release page.
+
 ## [v3.3.0] - 2026-10-25
 
 ### Added

@@ -13,15 +13,15 @@
 
 </div>
 
-## What's new in 3.3.0 (Unreleased)
+## What's new in 3.3.0
 
-Version **3.3.0** is the current development version and is not published. See the [Unreleased changelog](CHANGELOG.md#unreleased) and the matching in-app release highlights for pending changes.
+Version **3.3.0** improves forecast and radar playback, sounding inspection and exports, and map controls. See the [v3.3.0 changelog](CHANGELOG.md#v330---2026-10-25) and the matching in-app release highlights in **Settings → Updates**.
 
 SHARPpy Reimagined brings [SHARPpy](https://github.com/sharppy/SHARPpy) sounding analysis into a map-based desktop workspace. Version **3.0.0** introduces a React/Tauri interface backed by the existing Python and Rust scientific tools. This README describes that interface; the [v2.0.0 Legacy tour and screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/README.md) document the previous GUI.
 
 Version **3.2.1** was a maintenance patch. It recovers forecast requests during rapid changes, stops unused automatic preloading outside Model Viewer, preserves original provider errors, and releases unreachable chart buffers between sounding renders. Paired renders preserve exact images and scientific metadata while using less memory in the measured sequence. See the [v3.2.1 changelog](CHANGELOG.md#v321---2026-10-20) and [measurements and validation limits](docs/performance/V3_2_1_PERFORMANCE_REPORT.md).
 
-The current **3.3.0** source also makes every imported sounding time selectable with separate edit histories, preserves typed stations and session settings, reports missing layers and renderer recovery per panel, and adds keyboard forecast-point inspection. The top-bar forecast-hour picker combines downloads and cache checks with green outlines for cached hours, blue for downloading and red for failures. Select a failed hour to retry it. The Fast/Smooth icon sits beside Loop, hover feedback uses orange in both themes, and maps remove the heavy road network. Dependency audits, a runtime SBOM and final updater/installed-upgrade checks remain required release gates.
+Version **3.3.0** also makes every imported sounding time selectable with separate edit histories, preserves typed stations and session settings, reports missing layers and renderer recovery per panel, and adds keyboard forecast-point inspection. The top-bar forecast-hour picker combines downloads and cache checks with green outlines for cached hours, blue for downloading and red for failures. Select a failed hour to retry it. The Fast/Smooth icon sits beside Loop, hover feedback uses orange in both themes, and maps remove the heavy road network. Dependency audits, a runtime SBOM and final updater/installed-upgrade checks remain required release gates.
 
 Version **3.2.0** improves forecast playback, repeated model sounding requests, and weather-cache reliability. The redesigned Overview gives Model Viewer, Live Tracking and Soundings equal prominence. Forecast download details distinguish hours saved to disk from frames ready in memory, and model sounding downloads have a Stop action. A short **What's new** popup appears after an update; its highlights remain in **Settings → Updates**. See the [full v3.2.0 changelog](CHANGELOG.md#v320---2026-10-19).
 
@@ -207,7 +207,7 @@ The total includes installers, standalone executables, and portable ZIPs from cu
 
 Source: [GitHub Releases API](https://api.github.com/repos/ShianMike/SHARPpy-Reimagined/releases?per_page=100), using each asset's `download_count`. The [original baseline and inclusion criteria](docs/images/release-downloads.json) and [measured history](https://github.com/ShianMike/SHARPpy-Reimagined/blob/download-history/docs/images/download-history.json) remain available for inspection.
 
-The [daily workflow](.github/workflows/download-history.yml) records measurements at **00:17 UTC** and updates the chart on the separate `download-history` branch. Its schedule starts when the workflow reaches `main`. The total above remains the dated baseline; the chart shows the latest recorded measurement. No extra account, service, or personal access token is required.
+The [daily workflow](.github/workflows/download-history.yml) records measurements at **00:17 UTC** and updates the chart on the separate `download-history` branch. The total above remains the dated baseline; the chart shows the latest recorded measurement. No extra account, service, or personal access token is required.
 
 ### Run v3 from source
 

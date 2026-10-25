@@ -7,7 +7,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Target version: **3.3.0** (not published).
+## [v3.3.0] - 2026-10-25
 
 ### Added
 
@@ -81,8 +81,9 @@ Target version: **3.3.0** (not published).
   notice with aligned allowed ranges, degree-unit labels and a short sign hint.
 - Use Cancel request throughout model-sounding retrieval and profile preparation,
   replacing the download-only action label.
-- Prepare the application, native-backend and desktop metadata for version 3.3.0,
-  retaining published 3.2.1 downloads and historical release highlights.
+- Align the application, native-backend and desktop metadata for version 3.3.0
+  and finalize its dated release documentation, retaining published 3.2.1
+  downloads and historical release highlights.
 - Lighten map hover cards in dark and light themes with a shared 32% glass tint
   and a softer shadow. Replace the nearly opaque alert/report-card fill while
   retaining full text opacity and the low-graphics/reduced-transparency fallbacks.

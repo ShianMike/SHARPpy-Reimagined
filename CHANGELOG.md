@@ -11,6 +11,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Point the README Windows downloads and release-verification links at the
   published v3.3.0 installer, portable ZIP and release page.
+- Replace the README download-history graph with a compact Shields.io badge
+  showing total release-asset downloads, including updater metadata.
+
+### Removed
+
+- Remove the download-history graph, snapshots, collector, associated tests and
+  branch-backed publishing workflow, allowing `main` to remain the only branch.
 
 ## [v3.3.0] - 2026-10-25
 

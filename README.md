@@ -5,6 +5,7 @@
 **Severe-weather soundings, forecast fields, and live radar in one desktop workspace.**
 
 [![Tests](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml/badge.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml)
+[![GitHub release asset downloads](https://img.shields.io/github/downloads/ShianMike/SHARPpy-Reimagined/total?color=F59E0B)](https://github.com/ShianMike/SHARPpy-Reimagined/releases "Downloads of all release assets, including updater metadata")
 ![Tauri 2 + React 19](https://img.shields.io/badge/Desktop-Tauri_2_+_React_19-F59E0B)
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
@@ -194,20 +195,6 @@ Use **Inspect** to pan and zoom the sounding, or **Edit profile** to change a se
 Download the **v3.3.0 [Windows installer](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.3.0/SHARPpy-Reimagined-v3.3.0-windows-x64-setup.exe)** or the [portable ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.3.0/SHARPpy-Reimagined-v3.3.0-windows-x64.zip). Both include the app and its analysis backend; Python is bundled. Extract the complete portable folder before running the app. The executables are unsigned; [release notes, checksums, and build provenance](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v3.3.0) let you verify the download. Existing installations with in-app updates can use **Settings → Updates**.
 
 **v2.0.0 Legacy is the final PySide6/Qt GUI release.** Its [Windows ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64.zip) and [portable executable](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64-portable.exe) remain downloadable from the [legacy release page](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0), including after v3 is released.
-
-### Download history
-
-**1,849 downloads of Windows application packages** across **27 published releases** as of **25 October 2026, 05:22 UTC**: **1,606 `.exe` downloads** and **243 ZIP downloads**.
-
-[![Download history by UTC date](https://raw.githubusercontent.com/ShianMike/SHARPpy-Reimagined/download-history/docs/images/download-history.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/blob/download-history/docs/images/download-history.svg)
-
-**History starts 25 October 2026**, with a real measurement at **05:22:24 UTC**. A line will appear as daily measurements accumulate. GitHub exposes current asset counters, so earlier download history cannot be reconstructed from release dates.
-
-The total includes installers, standalone executables, and portable ZIPs from current, legacy, and beta releases. It excludes updater metadata (`latest.json`), signatures, checksums, manifests, dependency lists, SBOMs, and Python wheels. Repeat or automated downloads may count; this does not measure unique users or installations. Removing or replacing release assets can reduce later totals.
-
-Source: [GitHub Releases API](https://api.github.com/repos/ShianMike/SHARPpy-Reimagined/releases?per_page=100), using each asset's `download_count`. The [original baseline and inclusion criteria](docs/images/release-downloads.json) and [measured history](https://github.com/ShianMike/SHARPpy-Reimagined/blob/download-history/docs/images/download-history.json) remain available for inspection.
-
-The [daily workflow](.github/workflows/download-history.yml) records measurements at **00:17 UTC** and updates the chart on the separate `download-history` branch. The total above remains the dated baseline; the chart shows the latest recorded measurement. No extra account, service, or personal access token is required.
 
 ### Run v3 from source
 

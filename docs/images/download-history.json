@@ -1,0 +1,14 @@
+{
+  "repository": "ShianMike/SHARPpy-Reimagined",
+  "source_url": "https://api.github.com/repos/ShianMike/SHARPpy-Reimagined/releases",
+  "metric": "Sum of current download_count for SHARPpy-Reimagined-*.exe and SHARPpy-Reimagined-*.zip assets on published releases, including legacy and beta releases. Excludes latest.json, signatures, checksums, manifests, dependency lists, SBOMs and Python wheels. Repeat and automated requests may count; these are not unique users or installs. Removed or replaced assets can reduce later totals.",
+  "baseline_source": "release-downloads.json",
+  "samples": [
+    {
+      "collected_at": "2026-10-25T05:22:24Z",
+      "exe": 1606,
+      "zip": 243,
+      "total": 1849
+    }
+  ]
+}

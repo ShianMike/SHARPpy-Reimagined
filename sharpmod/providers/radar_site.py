@@ -95,6 +95,10 @@ class RadarSiteError(RuntimeError):
     """A site frame could not be fetched. Cancellation is not one of these."""
 
 
+class RadarScanMissing(RadarSiteError):
+    """A published inventory confirms that this scan or elevation is absent."""
+
+
 # --------------------------------------------------------------------------- #
 # Products
 # --------------------------------------------------------------------------- #
@@ -450,6 +454,8 @@ def fetch_frame(product_key: str | None, *, site_id: str | None = None,
                 f"{BASE}/{site.id.lower()}/ows", product.layer(site.id), valid_time,
                 opener=call, timeout=timeout, now=now,
             )
+        except radar_time.RadarScanMissing as exc:
+            raise RadarScanMissing(f"{site.id} history is unavailable: {exc}") from exc
         except (radar_time.RadarTimeError, urllib.error.URLError, OSError) as exc:
             raise RadarSiteError(f"{site.id} history is unavailable: {exc}") from exc
     if selected is not None and pixels == DEFAULT_FRAME_PIXELS:

@@ -200,7 +200,7 @@ export function parsePreferences(raw: string | null): Preferences {
     satelliteChannel: field(data, "satelliteChannel", (value): value is MapState["satelliteChannel"] => value === "infrared" || value === "visible", "infrared"),
     reportWindowS: field(data, "reportWindowS", (value): value is number => [7200, 21600, 43200, 86400].includes(value as number), DEFAULT_PREFERENCES.reportWindowS),
     reportFilter: field(data, "reportFilter", (value): value is string => ["all", "tornado", "hail", "wind", "significant"].includes(value as string), "all"),
-    layerPanelGroup: field(data, "layerPanelGroup", (value): value is MapState["layerPanelGroup"] => value === "weather" || value === "map", "weather"),
+    layerPanelGroup: field(data, "layerPanelGroup", (value): value is MapState["layerPanelGroup"] => value === "weather" || value === "legend" || value === "map", "weather"),
     layers: parseLayers(data.layers),
     livePanels: parseLivePanels(data.livePanels),
     productKey: field(data, "productKey", isProductKey, null),

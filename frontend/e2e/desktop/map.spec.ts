@@ -79,7 +79,7 @@ test.describe("real-backend forecast map", () => {
     await expect(scale).toHaveAccessibleDescription(/dBZ/u);
     await expect(page.getByTestId("panel-chip-1")).toHaveCount(0);
     results.scale = { description: await scale.getAttribute("aria-description"), value: await scale.getByRole("slider").getAttribute("aria-valuetext") };
-    await page.getByRole("button", { name: "Close map details", exact: true }).click();
+    await page.getByRole("button", { name: "Close layers", exact: true }).click();
     results.value = await pointerValue(1, "Composite Reflectivity", "dBZ");
     await shot("desktop-map-field.png");
 
@@ -88,7 +88,7 @@ test.describe("real-backend forecast map", () => {
     results.secondProduct = await loadedField();
     await expect(scale).toHaveAccessibleDescription(/°F/u);
     results.secondScale = { description: await scale.getAttribute("aria-description"), value: await scale.getByRole("slider").getAttribute("aria-valuetext") };
-    await page.getByRole("button", { name: "Close map details", exact: true }).click();
+    await page.getByRole("button", { name: "Close layers", exact: true }).click();
     results.secondValue = await pointerValue(1, "2 m AGL Temperature", "°F");
 
     const timeline = page.getByRole("region", { name: "Forecast timeline" });
@@ -108,7 +108,7 @@ test.describe("real-backend forecast map", () => {
     expect(prefetchedHour.forecast.valid).not.toBe(nextHour.forecast.valid);
     results.prefetchedHour = prefetchedHour;
     results.timeline = await text(timeline);
-    await page.getByRole("button", { name: "Close map details", exact: true }).click();
+    await page.getByRole("button", { name: "Close layers", exact: true }).click();
     await shot("desktop-map-field-next.png");
   });
 
@@ -192,7 +192,7 @@ test.describe("real-backend forecast map", () => {
     await expect(scale).toHaveAccessibleDescription(/dBZ · Panel 1 · Scan \d{4}-\d\d-\d\d/u);
     results.radar = { seconds: seconds(started), text: await text(radar), scale: await scale.getAttribute("aria-description"),
       viewing: await text(page.getByLabel("Live viewing time", { exact: true })) };
-    await page.getByRole("button", { name: "Close map details", exact: true }).click();
+    await page.getByRole("button", { name: "Close layers", exact: true }).click();
     await shot("desktop-live-radar.png");
     await rail.getByRole("button", { name: "Model Viewer", exact: true }).click();
   });
@@ -202,7 +202,7 @@ test.describe("real-backend forecast map", () => {
     await setLayer("stations", false);
     await setLayer("model-field", true);
     const pointField = await loadedField();
-    await page.getByRole("button", { name: "Close map details", exact: true }).click();
+    await page.getByRole("button", { name: "Close layers", exact: true }).click();
     const centre = await mapCentre();
     await page.mouse.click(centre.x, centre.y);
     const inspector = page.getByRole("complementary", { name: "Inspector" });

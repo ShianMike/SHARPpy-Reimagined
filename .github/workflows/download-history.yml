@@ -1,0 +1,52 @@
+name: Download history
+
+on:
+  schedule:
+    - cron: "17 0 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: download-history
+  cancel-in-progress: false
+
+jobs:
+  record:
+    if: github.repository == 'ShianMike/SHARPpy-Reimagined' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Check download history logic
+        run: python scripts/test_download_history.py
+      - name: Open the generated statistics branch
+        shell: bash
+        run: |
+          git ls-remote --heads origin refs/heads/download-history > "$RUNNER_TEMP/download-history-ref"
+          if test -s "$RUNNER_TEMP/download-history-ref"; then
+            git fetch --no-tags origin refs/heads/download-history
+            git worktree add --detach "$RUNNER_TEMP/download-history" FETCH_HEAD
+          else
+            git worktree add --detach "$RUNNER_TEMP/download-history" HEAD
+          fi
+      - name: Record today's measured downloads and render SVG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/download_history.py --history "$RUNNER_TEMP/download-history/docs/images/download-history.json"
+      - name: Publish only generated history and chart
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/download-history"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- docs/images/download-history.json docs/images/download-history.svg
+          if ! git diff --cached --quiet; then
+            git commit -m "Update measured download history"
+          fi
+          git push origin HEAD:refs/heads/download-history

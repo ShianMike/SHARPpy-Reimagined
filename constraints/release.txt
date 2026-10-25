@@ -1,27 +1,27 @@
 # Reproducible direct runtime and build inputs for the official Windows release.
 # Transitive requirements remain constrained by their parent distributions.
-pip==26.2.1
-setuptools==84.0.0
+pip==26.2.2
+setuptools==84.2.1
 wheel==0.48.0
 
 numpy==2.4.6
 PySide6==6.11.2
 QtPy==2.4.3
 python-dateutil==2.9.0.post0
-certifi==2026.7.22
+certifi==2026.10.19
 requests==2.34.2
 # Runtime transport pulled in by remote dataset access; includes current security fixes.
 aiohttp==3.14.5
-Pillow==12.3.0
+Pillow==13.0.0
 MetPy==1.7.1
 ecape==0.1.1
 
 cdsapi==0.7.7
 herbie-data==2026.9.2
 cfgrib==0.9.15.1
-eccodes==2.49.0
+eccodes==2.50.0
 xarray==2026.9.0
-numcodecs==0.16.5
+numcodecs==0.16.6
 pyproj==3.7.2
 netCDF4==1.7.5
 

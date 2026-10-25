@@ -2,6 +2,9 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { create } from "zustand";
 import { recordLog } from "./logStore";
 import { createPreferencesRepository, currentPreferences } from "./preferences";
+import { useUiStore } from "./uiStore";
+
+export const AUTOMATIC_UPDATE_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
 interface UpdateState {
   status: "idle" | "checking" | "current" | "available" | "downloading" | "installing" | "error";
@@ -23,6 +26,11 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
   dismiss: () => { set({ dismissedVersion: get().update?.version ?? null }); },
   check: async (automatic = false) => {
     if (busy(get().status)) return;
+    if (automatic && !navigator.onLine) return;
+    const windowStart = Math.floor(Date.now() / AUTOMATIC_UPDATE_INTERVAL_MS) * AUTOMATIC_UPDATE_INTERVAL_MS;
+    if (automatic && useUiStore.getState().lastUpdateCheckWindow === windowStart) return;
+    // Record attempts before the request so failures and restarts cannot repeat this window.
+    useUiStore.getState().setLastUpdateCheckWindow(windowStart);
     const previous = get().update;
     set({ status: "checking", error: null, downloaded: 0, total: undefined });
     try {

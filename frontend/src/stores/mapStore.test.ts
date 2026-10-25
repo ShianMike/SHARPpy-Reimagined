@@ -84,18 +84,34 @@ describe("mapStore", () => {
     expect(useMapStore.getState().activePanel).toBe(0);
   });
 
-  it("moves enabled weather layers past hidden layers and respects stack boundaries", () => {
+  it("moves enabled weather layers past hidden and other-workspace layers, respecting stack boundaries", () => {
     useMapStore.getState().setLayerVisible("model-field", true);
     useMapStore.getState().setLayerVisible("radar", true);
+    useMapStore.getState().setLayerVisible("spc-cat", true);
     useMapStore.getState().moveLayer("model-field", 1);
-    expect(useMapStore.getState().layerOrder.slice(0, 3)).toEqual(["radar", "satellite", "model-field"]);
+    expect(useMapStore.getState().layerOrder.slice(0, 5)).toEqual(["spc-cat", "satellite", "radar", "storm-reports", "model-field"]);
     const top = useMapStore.getState().layerOrder;
     useMapStore.getState().moveLayer("model-field", 1);
     expect(useMapStore.getState().layerOrder).toEqual(top);
     useMapStore.getState().moveLayer("satellite", -1);
     expect(useMapStore.getState().layerOrder).toEqual(top);
     useMapStore.getState().moveLayer("model-field", -1);
-    expect(useMapStore.getState().layerOrder.slice(0, 3)).toEqual(["model-field", "satellite", "radar"]);
+    expect(useMapStore.getState().layerOrder.slice(0, 5)).toEqual(["model-field", "satellite", "radar", "storm-reports", "spc-cat"]);
+  });
+
+  it("moves only the active live panel's visible overlays", () => {
+    useMapStore.setState({ view: "live" });
+    const store = useMapStore.getState();
+    store.setPanelLayout(2); store.setActivePanel(1);
+    store.setLayerVisible("model-field", true);
+    store.setLayerVisible("satellite", true);
+    const firstPanel = panelLayers(useMapStore.getState(), 0);
+    store.moveLayer("radar", -1);
+    expect(useMapStore.getState().layerOrder.slice(0, 3)).toEqual(["model-field", "radar", "satellite"]);
+    const bottom = useMapStore.getState().layerOrder;
+    store.moveLayer("radar", -1);
+    expect(useMapStore.getState().layerOrder).toEqual(bottom);
+    expect(panelLayers(useMapStore.getState(), 0)).toBe(firstPanel);
   });
 
   it("stores the camera snapshot and the panel state", () => {

@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
+import { createPortal } from "react-dom";
+import { Popover } from "../../components/Popover";
+import { SourceSelect } from "../../features/sounding/SourceFields";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { panelLayers, useMapStore } from "../../stores/mapStore";
 import { LAYER_REGISTRY } from "../layers/descriptors";
@@ -17,9 +21,33 @@ const initial = useMapStore.getState();
 beforeEach(() => { useMapStore.setState(initial, true); });
 afterEach(cleanup);
 
+it("keeps the Layers popup open when choosing or dismissing a provider menu", async () => {
+  function Popup() {
+    const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null), [target, setTarget] = useState<HTMLDivElement | null>(null);
+    const [open, setOpen] = useState(false), [channel, setChannel] = useState("infrared");
+    return <><button ref={setAnchor} onClick={() => { setOpen(true); }}>Layers</button><button>Outside</button>
+      <Popover open={open} anchor={anchor} role="dialog" label="Layers" initialFocus="first" movable onClose={() => { setOpen(false); }}><div ref={setTarget} /></Popover>
+      {target === null ? null : createPortal(<SourceSelect label="Channel" value={channel} options={[{ value: "infrared", label: "Infrared" }, { value: "visible", label: "Visible" }]} onChange={setChannel} />, target)}</>;
+  }
+  render(<Popup />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Layers" }));
+  await user.click(screen.getByRole("combobox", { name: "Channel" }));
+  await user.click(screen.getByRole("option", { name: "Visible" }));
+  expect(screen.getByRole("dialog", { name: "Layers" })).toBeTruthy();
+  expect(screen.getByRole("combobox", { name: "Channel" }).textContent).toBe("Visible");
+  await user.click(screen.getByRole("combobox", { name: "Channel" }));
+  await user.keyboard("{Escape}");
+  expect(screen.getByRole("dialog", { name: "Layers" })).toBeTruthy();
+  expect(screen.queryByRole("listbox")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Outside" }));
+  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Layers" })).toBeNull(); });
+});
+
 it("changes the shared projection from Map details and resets it with layers", async () => {
   renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
   await userEvent.click(screen.getByRole("button", { name: "Map details" }));
+  expect(screen.queryByRole("button", { name: "Place names settings" })).toBeNull();
   const curved = screen.getByRole("button", { name: "Globe" });
   const flat = screen.getByRole("button", { name: "Flat map" });
   expect(flat.getAttribute("aria-pressed")).toBe("true");
@@ -30,24 +58,21 @@ it("changes the shared projection from Map details and resets it with layers", a
   expect(useMapStore.getState().projection).toBe("mercator");
 });
 
-it("disables Globe in Live Tracking without changing the Model Viewer setting", async () => {
+it("shows the fixed live projection and keeps the Model Viewer projection choice", () => {
   useMapStore.setState({ projection: "globe", view: "live", layerPanelGroup: "map" });
   renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
-  const globe = screen.getByRole("button", { name: "Globe" });
-  const flat = screen.getByRole("button", { name: "Flat map" });
-  expect(globe.hasAttribute("disabled")).toBe(true);
-  expect(globe.getAttribute("aria-pressed")).toBe("false");
-  expect(flat.getAttribute("aria-pressed")).toBe("true");
-  await userEvent.click(flat);
+  expect(screen.queryByRole("group", { name: "Map projection" })).toBeNull();
+  expect(screen.getByText("Flat map")).toBeTruthy();
   act(() => { useMapStore.setState({ view: "map" }); });
-  expect(globe.hasAttribute("disabled")).toBe(false);
-  expect(globe.getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("button", { name: "Globe" }).getAttribute("aria-pressed")).toBe("true");
 });
 
-it("opens settings when enabled, keeps them independent of visibility, and edits the active panel", async () => {
+it("keeps opacity inside settings, with independent visibility and the active panel's values", async () => {
+  useMapStore.setState({ view: "live" });
   useMapStore.getState().setPanelLayout(2);
   useMapStore.getState().setActivePanel(1);
-  useMapStore.getState().setLayerVisible("model-field", true);
+  useMapStore.getState().setLayerVisible("radar", false);
+  useMapStore.getState().setLayerVisible("satellite", true);
   const layer = LAYER_REGISTRY.find((item) => item.id === "radar");
   if (layer === undefined) throw new Error("Missing radar descriptor");
   function Row() {
@@ -59,19 +84,26 @@ it("opens settings when enabled, keeps them independent of visibility, and edits
   expect(screen.queryByRole("button", { name: "Radar mosaic settings" })).toBeNull();
   await userEvent.click(screen.getByRole("switch", { name: "Radar mosaic" }));
   const settings = screen.getByRole("button", { name: "Radar mosaic settings" });
-  expect(settings.getAttribute("aria-expanded")).toBe("true");
+  expect(settings.getAttribute("aria-expanded")).toBe("false");
   expect(panelLayers(useMapStore.getState(), 1).radar.visible).toBe(true);
-  expect(panelLayers(useMapStore.getState(), 0).radar.visible).toBe(false);
+  expect(panelLayers(useMapStore.getState(), 0).radar.visible).toBe(true);
   const details = document.getElementById(settings.getAttribute("aria-controls") ?? "");
+  expect(details?.hidden).toBe(true);
+  expect(screen.queryByRole("slider", { name: "Radar mosaic opacity" })).toBeNull();
+  await userEvent.click(settings);
   expect(details?.hidden).toBe(false);
+  fireEvent.change(screen.getByRole("slider", { name: "Radar mosaic opacity" }), { target: { value: "0.35" } });
+  expect(panelLayers(useMapStore.getState(), 1).radar.opacity).toBe(0.35);
+  expect(panelLayers(useMapStore.getState(), 0).radar.opacity).toBe(0.8);
   await userEvent.click(screen.getByRole("button", { name: "Move Radar mosaic down" }));
-  expect(useMapStore.getState().layerOrder.indexOf("radar")).toBe(ORDERABLE_LAYER_IDS.indexOf("model-field"));
+  expect(useMapStore.getState().layerOrder.indexOf("radar")).toBe(ORDERABLE_LAYER_IDS.indexOf("satellite"));
   await userEvent.click(settings);
   expect(details?.hidden).toBe(true);
+  expect(screen.queryByRole("slider", { name: "Radar mosaic opacity" })).toBeNull();
   expect(panelLayers(useMapStore.getState(), 1).radar.visible).toBe(true);
 });
 
-it("leads with enabled layers and keeps newly enabled provider settings open after regrouping", async () => {
+it("leads with enabled layers and opens provider settings only when requested", async () => {
   useMapStore.setState({ view: "live" });
   useMapStore.getState().setLayerVisible("radar", false);
   useMapStore.getState().setLayerVisible("watches", true);
@@ -79,14 +111,17 @@ it("leads with enabled layers and keeps newly enabled provider settings open aft
   renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport("overlay-error"));
   const panel = screen.getByRole("region", { name: "Layers" });
   const switches = within(panel).getAllByRole("switch");
-  expect(switches.slice(0, 2).map((toggle) => toggle.textContent)).toEqual(["NWS warnings", "NWS watches"]);
+  expect(switches.slice(0, 2).map((toggle) => toggle.getAttribute("aria-label"))).toEqual(["NWS warnings", "NWS watches"]);
   expect(screen.queryByRole("button", { name: "Radar mosaic settings" })).toBeNull();
   await userEvent.click(within(panel).getByRole("switch", { name: "Radar mosaic" }));
-  expect(screen.getByRole("button", { name: "Radar mosaic settings" }).getAttribute("aria-expanded")).toBe("true");
+  await waitFor(() => { expect(document.activeElement).toBe(within(panel).getByRole("switch", { name: "Radar mosaic" })); });
+  expect(screen.getByRole("button", { name: "Radar mosaic settings" }).getAttribute("aria-expanded")).toBe("false");
+  await userEvent.click(screen.getByRole("button", { name: "Radar mosaic settings" }));
   expect(screen.getByRole("combobox", { name: "Radar" })).toBeTruthy();
   await waitFor(() => { expect(screen.getByTestId("radar-error").textContent).toBeTruthy(); }, { timeout: 4000 });
-  expect(within(panel).getAllByRole("switch").slice(0, 3).map((toggle) => toggle.textContent)).toEqual(["NWS warnings", "NWS watches", "Radar mosaic"]);
+  expect(within(panel).getAllByRole("switch").slice(0, 3).map((toggle) => toggle.getAttribute("aria-label"))).toEqual(["NWS warnings", "NWS watches", "Radar mosaic"]);
   await userEvent.click(within(panel).getByRole("switch", { name: "Radar mosaic" }));
+  await waitFor(() => { expect(document.activeElement).toBe(within(panel).getByRole("switch", { name: "Radar mosaic" })); });
   expect(screen.queryByRole("button", { name: "Radar mosaic settings" })).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Map details" }));
   expect(within(panel).getByRole("switch", { name: "Station labels" })).toBeTruthy();
@@ -105,7 +140,7 @@ it("remembers its category after reopening and resets layers in every panel", as
   renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
   expect(screen.getByRole("button", { name: "Map details" }).getAttribute("aria-pressed")).toBe("true");
   await userEvent.click(screen.getByRole("button", { name: "Reset layers" }));
-  expect(screen.getByRole("status").textContent).toBe("Layers reset · all panels");
+  expect(screen.getByRole("status", { name: "Layer settings status" }).textContent).toBe("Layers reset · all panels");
   expect(screen.getByRole("button", { name: "Weather" }).getAttribute("aria-pressed")).toBe("true");
   expect(useMapStore.getState()).toMatchObject({ panelLayout: 4, activePanel: 2 });
   expect(useMapStore.getState().panels[1]?.productKey).toBe("tmp-2m");

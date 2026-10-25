@@ -87,7 +87,7 @@ def test_missing_history_never_falls_back_to_latest(single_site, times):
         return capabilities(layer, times)
 
     with pytest.raises(
-        (radar_site.RadarSiteError, radar_mosaic.RadarError),
+        (radar_site.RadarScanMissing, radar_mosaic.RadarScanMissing),
         match="no historical scans",
     ):
         if single_site:
@@ -211,6 +211,39 @@ def test_bridge_rejects_a_provider_frame_without_actual_time(
     with pytest.raises(BridgeError, match="actual time"):
         handler({**arguments, "valid_time": params.iso(REQUESTED)})
     assert handler(arguments)["valid_time"] is None
+
+
+@pytest.mark.parametrize("missing", [False, True])
+@pytest.mark.parametrize(
+    "handler,provider,arguments",
+    [
+        (map_layers.radar_mosaic, radar_mosaic, {}),
+        (map_layers.radar_site, radar_site, {"site_id": "KTLX"}),
+    ],
+)
+def test_bridge_distinguishes_a_confirmed_gap_from_a_loading_failure(
+    monkeypatch, missing, handler, provider, arguments
+):
+    error_type = provider.RadarScanMissing if missing else (
+        provider.RadarSiteError if provider is radar_site else provider.RadarError
+    )
+
+    def fetch(*_args, **_kwargs):
+        raise error_type("provider result")
+
+    monkeypatch.setattr(provider, "fetch_frame", fetch)
+    with pytest.raises(BridgeError) as error:
+        handler(arguments)
+    assert error.value.details == ({"reason": "scanMissing"} if missing else None)
+    assert error.value.code == "OVERLAY_FETCH_FAILED"
+    assert error.value.retryable
+
+
+@pytest.mark.parametrize("payload", [b"<html>Service unavailable</html>", b"<ServiceExceptionReport/>"])
+def test_service_error_documents_are_not_confirmed_scan_gaps(payload):
+    with pytest.raises(radar_time.RadarTimeError, match="invalid capabilities") as error:
+        radar_time.parse_capabilities(payload)
+    assert not isinstance(error.value, radar_time.RadarScanMissing)
 
 
 @pytest.mark.parametrize(

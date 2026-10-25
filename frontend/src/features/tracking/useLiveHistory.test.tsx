@@ -2,10 +2,13 @@
 import radar from "@contracts/public/map/radar.shrf?url&inline";
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { createTransport } from "../../lib/backend/fixtureTransport";
+import { encodeShrf, parseShrf } from "../../lib/contracts/frames";
+import type { Transport } from "../../lib/backend/transport";
 import { useAppStore } from "../../stores/appStore";
 import { useForecastStore } from "../../stores/forecastStore";
-import { LIVE_MINUTE, liveHistoryTimes, useLiveTrackingStore } from "../../stores/liveTrackingStore";
+import { LIVE_MINUTE, liveHistoryTimes, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
 import { useMapStore } from "../../stores/mapStore";
 import { useUiStore } from "../../stores/uiStore";
 import { renderWithBackend } from "../../test/backendHarness";
@@ -15,7 +18,17 @@ import { isLiveQuery } from "./liveRequests";
 const map = useMapStore.getState(), app = useAppStore.getState(), clock = useLiveTrackingStore.getState(), ui = useUiStore.getState();
 const now = Date.parse("2026-10-17T08:00:00Z");
 const forecast = useForecastStore.getState();
-const frame = () => Uint8Array.from(atob(radar.split(",")[1] ?? ""), (character) => character.charCodeAt(0)).buffer;
+const raster = parseShrf(Uint8Array.from(atob(radar.split(",")[1] ?? ""), (character) => character.charCodeAt(0)).buffer);
+const frame = (time = now) => encodeShrf({ ...raster.header, validTime: liveTimestamp(time) }, raster.body);
+function Playback() {
+  const [target, setTarget] = useState<HTMLDivElement | null>(null);
+  return <><div ref={setTarget} /><LiveTimeline scanTarget={target} /></>;
+}
+function renderTimeline(transport: Transport) {
+  const result = renderWithBackend(<Playback />, transport);
+  fireEvent.click(screen.getByRole("button", { name: "Choose radar scan" }));
+  return result;
+}
 beforeEach(() => {
   useMapStore.setState(map, true); useAppStore.setState(app, true); useUiStore.setState({ ...ui, speed: 1, loop: false }, true);
   useLiveTrackingStore.setState({ ...clock, now, selectedTime: null }, true);
@@ -28,7 +41,7 @@ it("caches thirteen full-resolution steps, scrubs without changing the forecast,
   vi.spyOn(Date, "now").mockReturnValue(now);
   const transport = createTransport(), original = transport.call.bind(transport);
   const call = vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame" ? Promise.resolve(frame()) : original(command, args));
-  const { queryClient, view } = renderWithBackend(<LiveTimeline />, transport);
+  const { queryClient, view } = renderTimeline(transport);
   fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
   await waitFor(() => { expect(screen.getByRole("status", { name: "Live data status" }).textContent).toContain("13 cached"); });
   const radarCalls = call.mock.calls.filter(([command]) => command === "get_radar_frame");
@@ -49,8 +62,8 @@ it("retains the whole compressed hour across four matching panels and plays it w
   vi.useFakeTimers(); vi.setSystemTime(now);
   useMapStore.getState().setPanelLayout(4);
   const transport = createTransport(), call = transport.call.bind(transport);
-  const fetch = vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame" ? Promise.resolve(frame()) : call(command, args));
-  const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
+  const fetch = vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame" ? Promise.resolve(frame(Date.parse(String(args?.validTime)))) : call(command, args));
+  const { view, queryClient } = renderTimeline(transport);
   fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
   await act(async () => { await vi.advanceTimersByTimeAsync(0); });
   expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("13 cached");
@@ -77,7 +90,7 @@ it("reuses downloaded five-minute steps after the minute clock advances", async 
   vi.useFakeTimers(); vi.setSystemTime(now + LIVE_MINUTE);
   const transport = createTransport(), call = transport.call.bind(transport);
   const fetch = vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame" ? Promise.resolve(frame()) : call(command, args));
-  const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
+  const { view, queryClient } = renderTimeline(transport);
   fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
   await act(async () => { await vi.advanceTimersByTimeAsync(0); });
   expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("13 cached");
@@ -102,7 +115,7 @@ it("continues downloading behind a slow frame, reports each completion, and retr
     peak = Math.max(peak, ++pending);
     return (index === 0 ? slow : index === 5 ? Promise.reject(new Error("Provider timeout")) : Promise.resolve(frame())).finally(() => { pending--; });
   });
-  const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
+  const { view, queryClient } = renderTimeline(transport);
   fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
   await waitFor(() => { expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("Caching 12 / 13"); });
   expect(screen.getByRole("button", { name: "Stop caching" }).textContent).toContain("Loading");
@@ -122,7 +135,7 @@ it("waits for PNG decoding before advancing the playback time", async () => {
   vi.stubGlobal("createImageBitmap", vi.fn().mockImplementation(() => new Promise((resolve) => { ready = resolve; })));
   const transport = createTransport(), call = transport.call.bind(transport);
   vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame" ? Promise.resolve(frame()) : call(command, args));
-  const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
+  const { view, queryClient } = renderTimeline(transport);
   fireEvent.click(screen.getByRole("button", { name: "Play" }));
   await act(async () => { await vi.advanceTimersByTimeAsync(751); });
   expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 60 * LIVE_MINUTE);
@@ -140,7 +153,7 @@ it.each([false, true])("stops queuing downloads while allowing in-flight frames 
     count++;
     return new Promise<ArrayBuffer>((resolve) => { releases.push(resolve); });
   });
-  const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
+  const { view, queryClient } = renderTimeline(transport);
   fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
   await waitFor(() => { expect(count).toBe(2); });
   if (changeSources) {

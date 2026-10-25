@@ -613,8 +613,8 @@ jobs:
 
   serial-release:
     name: Complete offline release gate (Python 3.13)
-    # Release-only exact-source coverage; Qt stays together on one worker.
-    if: ${{ inputs.run_serial_release == true }}
+    # Release PRs run this gate here instead of repeating the other lanes via dispatch.
+    if: ${{ inputs.run_serial_release == true || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')) }}
     runs-on: ubuntu-latest
     # The pre-optimization v1.1.0 lane completed in 34.6 minutes. Keep bounded
     # headroom while preventing a regression from consuming the former 75-minute

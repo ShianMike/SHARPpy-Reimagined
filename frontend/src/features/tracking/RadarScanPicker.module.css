@@ -1,0 +1,9 @@
+.scan[aria-pressed][data-scan-state="available"] { border-color: var(--success); }
+.scan[aria-pressed][data-scan-state="loading"] { border-color: var(--forecast-loading); }
+.scan[aria-pressed][data-scan-state="failed"] { border-color: var(--danger); }
+.scan[aria-pressed][data-scan-state="delayed"] { border-color: var(--warning); }
+.scan[aria-pressed][data-scan-state="missing"] { border-color: var(--text-secondary); border-style: dashed; }
+.scan small { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.downloads { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
+.downloads > span { flex: 1; }
+.progress { width: 100%; height: var(--track-h); margin-top: var(--space-3); accent-color: var(--accent-bright); }

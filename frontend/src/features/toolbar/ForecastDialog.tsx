@@ -2,6 +2,8 @@ import { CalendarDays, ChevronLeft, ChevronRight, GripHorizontal, Search, X } fr
 import { useState, type ReactNode } from "react";
 import { useForecastStore } from "../../stores/forecastStore";
 import { Action, IconAction } from "../../ui/Controls";
+import type { useFrameDownload } from "../../map/useFrameDownload";
+import { ForecastDownloads } from "../timeline/ForecastDownloads";
 import type { ForecastContext } from "../forecast/useForecast";
 import { addHours, compactUtc, forecastLabel, formatUtc, releaseTime, resolveModelRun, utcDate } from "../sounding/soundingTime";
 import styles from "./ForecastControls.module.css";
@@ -10,8 +12,8 @@ import { RunCalendar } from "./RunCalendar";
 export type ForecastStep = "model" | "run" | "hour";
 export const FORECAST_TITLES = { model: "Forecast model", run: "Model run", hour: "Forecast hour" } as const;
 
-export function ForecastDialog({ context, step, anchor, onClose }: {
-  context: ForecastContext; step: ForecastStep; anchor: HTMLElement | null; onClose: () => void;
+export function ForecastDialog({ context, step, anchor, download, onClose }: {
+  context: ForecastContext; step: ForecastStep; anchor: HTMLElement | null; download: ReturnType<typeof useFrameDownload>; onClose: () => void;
 }): ReactNode {
   const [query, setQuery] = useState("");
   const [date, setDate] = useState(context.run.slice(0, 10));
@@ -22,6 +24,7 @@ export function ForecastDialog({ context, step, anchor, onClose }: {
   const validDate = day !== null && date >= "0001-01-01" && date <= newestDate;
   const models = context.models.filter((model) => `${model.label} ${model.domain}`.toLowerCase().includes(query.trim().toLowerCase()));
   const days = new Map<string, number[]>();
+  const hourStates = new Map(download.hourStates.map(({ hour, state }) => [hour, state] as const));
   for (const hour of context.hours) {
     const validDate = utcDate(new Date(addHours(context.run, hour)));
     const hours = days.get(validDate) ?? [];
@@ -72,12 +75,21 @@ export function ForecastDialog({ context, step, anchor, onClose }: {
       <div className={styles.selectionSummary}><span><strong>{forecastLabel(context.hour)}</strong><small>Selected hour</small></span><span><strong>{formatUtc(context.validTime)}</strong><small>Valid · UTC</small></span></div>
       <div className={styles.dialogBody}>{[...days].map(([validDate, hours]) => <section className={styles.hourDay} key={validDate} aria-label={`Valid ${validDate}`}>
         <h3>{validDate}<span>Valid · UTC</span></h3><div className={styles.hourChoices}>
-          {hours.map((hour) => <button type="button" key={hour} data-autofocus={hour === context.hour ? true : undefined} aria-label={`Select forecast hour ${String(hour)}`} title={formatUtc(addHours(context.run, hour))} className={styles.choice} aria-pressed={hour === context.hour} onClick={() => {
-            useForecastStore.getState().setPlaying(false); useForecastStore.getState().setHour(hour); done();
-          }}><strong>{forecastLabel(hour)}</strong><small>{addHours(context.run, hour).slice(11, 13)}Z</small></button>)}
+          {hours.map((hour) => {
+            const state = hourStates.get(hour) ?? "unknown";
+            const status = state === "cached" ? "Downloaded or cached" : state === "loading" ? "Downloading" : state === "failed" ? "Download failed. Select to retry" : state === "missing" ? "Not cached or unavailable for this run" : "Cache status unknown";
+            return <button type="button" key={hour} data-autofocus={hour === context.hour ? true : undefined} data-hour-state={state}
+              aria-label={`${state === "failed" ? "Retry" : "Select"} forecast hour ${String(hour)}`} aria-description={status}
+              title={`${formatUtc(addHours(context.run, hour))} · ${status}`} className={styles.choice} aria-pressed={hour === context.hour} onClick={() => {
+                useForecastStore.getState().setPlaying(false); useForecastStore.getState().setHour(hour);
+                if (state === "failed") void download.retryHour(hour);
+                else done();
+              }}><strong>{forecastLabel(hour)}</strong><small>{addHours(context.run, hour).slice(11, 13)}Z</small></button>;
+          })}
         </div>
       </section>)}</div>
       <footer className={styles.pickerFooter}>{compactUtc(context.run)} run · {context.hours.length} frames · {forecastLabel(context.hours[0] ?? 0)}–{forecastLabel(context.hours.at(-1) ?? 0)}</footer>
+      <ForecastDownloads download={download} />
     </>}
   </>;
 }

@@ -692,12 +692,13 @@ def render(infile: str, outfile: str | None = None,
         prof_col, stn_id = decode(infile) if decoded is None else decoded
         prof_col.setMeta("show_locator", show_locator)
         if view is not None:
-            from sharpmod.rendering.interactive import apply_edits
+            from sharpmod.rendering.interactive import apply_edits, original_values
             time_index = view.get("timeIndex", 0)
             if not 0 <= time_index < max(1, len(prof_col._dates)):
                 raise ValueError("The selected sounding time does not exist.")
             # Index selection also supports duplicate or undated file times.
             prof_col._prof_idx = time_index
+            original = original_values(prof_col.getHighlightedProf())
             apply_edits(prof_col, view["edits"])
 
         if model is not None:
@@ -777,7 +778,7 @@ def render(infile: str, outfile: str | None = None,
 
         if view is not None:
             from sharpmod.rendering.interactive import configure_view
-            metadata = configure_view(win, view, app)
+            metadata = configure_view(win, view, app, original)
             _apply_render_parcel(win, parcel)
             for _ in range(3):
                 app.processEvents()

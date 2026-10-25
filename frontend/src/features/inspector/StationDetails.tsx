@@ -9,6 +9,7 @@ import { cx } from "../../lib/cx";
 import { useAppStore } from "../../stores/appStore";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { useMapStore } from "../../stores/mapStore";
+import { useUiStore } from "../../stores/uiStore";
 import { useStationAvailability } from "../../map/mapQueries";
 import { formatUtc } from "../sounding/soundingTime";
 import { Action } from "../../ui/Controls";
@@ -35,6 +36,7 @@ export interface StationDetailsProps {
 }
 
 export function StationDetails({ station, origin, stationCount }: StationDetailsProps): ReactNode {
+  const sourceOpen = useUiStore((state) => state.inspectorSourceOpen);
   const report = useStationAvailability(useMapStore((state) => state.availabilityTime));
   let status = availabilityText(station.availability);
   let explanation = availabilityExplanation(station.availability);
@@ -66,7 +68,8 @@ export function StationDetails({ station, origin, stationCount }: StationDetails
           {report.isError ? <Action onClick={() => { void report.refetch(); }} disabled={report.isFetching} aria-label="Retry station availability check">Retry check</Action> : null}
         </dd>
       </dl>
-      <details className={styles.disclosure}>
+      <details className={styles.disclosure} open={sourceOpen}
+        onToggle={(event) => { useUiStore.getState().setInspectorSourceOpen(event.currentTarget.open); }}>
         <summary>Station &amp; source <ChevronDown className="icon icon-sm" aria-hidden="true" /></summary>
         <dl className={styles.metadata}>
           <dt>Source</dt>

@@ -20,6 +20,7 @@ from PIL.PngImagePlugin import PngInfo
 from sharpmod.maps.map_overlays import OverlayRaster
 from sharpmod.providers.radar_site import (
     OVERLAY_KEY,
+    RadarScanMissing,
     RadarSiteError,
     _CACHE,
     _CACHE_LOCK,
@@ -529,12 +530,12 @@ def fetch_frame(
         if reference - timedelta(minutes=65) <= date <= reference
     ]
     if not recent:
-        raise RadarSiteError(f"{site.id} has no recent {product} scans at tilt {tilt}")
+        raise RadarScanMissing(f"{site.id} has no recent {product} scans at tilt {tilt}")
     modified, name = min(recent, key=lambda scan: abs(scan[0] - target))
     if target < reference - timedelta(minutes=2) and abs(modified - target) > timedelta(
         minutes=10
     ):
-        raise RadarSiteError("no radar scan within 10 minutes of the requested time")
+        raise RadarScanMissing("no radar scan within 10 minutes of the requested time")
     url = directory + name
     cache_key = ("numeric-radar", site.id, product, tilt, name, modified, pixels)
     with _CACHE_LOCK:

@@ -1,1 +1,2 @@
-.fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.scanSlot { display: contents; }
+.scanSlot > button, .scanSlot + button, .scanSlot + * > button { border-inline-start: var(--hairline) solid var(--border-subtle); }

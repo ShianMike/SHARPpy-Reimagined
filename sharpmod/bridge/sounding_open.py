@@ -181,7 +181,9 @@ def _open_model(params, progress, entry_id):
         ) from None
     data_path = Path(written) if written else path
     cancellation.check()
+    progress.stage("calculating")
     collection, _ = decode(data_path)
+    cancellation.check()
     north, east = ("N" if lat >= 0 else "S"), ("E" if lon >= 0 else "W")
     point = f"{abs(lat):.2f}{north} {abs(lon):.2f}{east}"
     return register(
@@ -193,13 +195,11 @@ def _open_model(params, progress, entry_id):
             collection,
             title=f"{config.label} {location or point}",
             location=location or point,
-            latitude=lat,
-            longitude=lon,
+            latitude=lat, longitude=lon,
             run_time=p.iso(meta(collection, "run") or meta(collection, "base_time")),
             forecast_hour=fxx,
             model=config.label,
-            provider=config.key,
-            provider_name=config.label,
+            provider=config.key, provider_name=config.label,
         ),
         collection,
     )

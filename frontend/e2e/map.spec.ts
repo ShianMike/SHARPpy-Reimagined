@@ -35,6 +35,7 @@ test("MapLibre draws the offline basemap", async ({ page }) => {
   await labels.setChecked(false);
   await expect(stations).toHaveAttribute("aria-checked", "false");
   await expect(labels).toHaveAttribute("aria-checked", "false");
+  await page.getByRole("button", { name: "Close layers", exact: true }).click();
   await nextFrames(page);
   await page.screenshot({ path: screenshotPath("browser-basemap-only.png") });
   const region = await page.screenshot({ clip: MAP_REGION });

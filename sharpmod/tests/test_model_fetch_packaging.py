@@ -41,7 +41,7 @@ def test_supported_python_and_map_wrf_dependencies_are_bounded():
     for minor in ("3.11", "3.12", "3.13"):
         assert f"Programming Language :: Python :: {minor}" in classifiers
     assert {
-        "Pillow>=10,<13",
+        "Pillow>=10,<14",
         "netCDF4>=1.7,<2.0",
         "pyproj>=3.5,<4.0",
     } <= set(project["dependencies"])
@@ -146,7 +146,8 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         for step in jobs["compatibility"]["steps"]
     ), "the compatibility matrix must keep covering the Python fallback"
     assert jobs["serial-release"]["if"] == (
-        "${{ inputs.run_serial_release == true }}"
+        "${{ inputs.run_serial_release == true || "
+        "(github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')) }}"
     )
     assert jobs["serial-release"]["timeout-minutes"] == "45"
     assert "test-timing" in str(workflow)

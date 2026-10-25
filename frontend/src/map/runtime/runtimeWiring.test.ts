@@ -39,3 +39,17 @@ it("keeps label geometry on opacity and weather changes, refreshing it for label
     useMapStore.setState(saved);
   }
 });
+
+it("passes station and coordinate focus requests through without changing selection", () => {
+  const saved = useMapStore.getState(), focus = vi.fn();
+  const unsubscribers = subscribeToStores(0, {
+    selectionChanged: vi.fn(), layersChanged: vi.fn(), focus, profileChanged: vi.fn(), pixelRatioChanged: vi.fn(),
+  });
+  try {
+    useMapStore.getState().requestFocus("72357");
+    expect(focus).toHaveBeenLastCalledWith({ stationId: "72357", seq: (saved.focusRequest?.seq ?? 0) + 1 });
+    const position = { latitude: 35.3333, longitude: -97.2783 };
+    useMapStore.getState().requestFocus("KTLX", position);
+    expect(focus).toHaveBeenLastCalledWith({ stationId: "KTLX", position, seq: (saved.focusRequest?.seq ?? 0) + 2 });
+  } finally { unsubscribers.forEach((unsubscribe) => { unsubscribe(); }); useMapStore.setState(saved); }
+});

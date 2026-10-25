@@ -160,7 +160,7 @@ test.describe("installed native acceptance", () => {
         await page.keyboard.press("End");
         await page.keyboard.press("Enter");
         await expect(time).toHaveAttribute("value", "48");
-        await expect(page.getByTestId("sounding-viewer").locator("header")).toContainText("time 49 of 49");
+        await expect(page.getByLabel("Sounding details", { exact: true })).toContainText("time 49 of 49");
         await page.getByTestId("open-soundings").getByRole("button", { name: /^Close /u }).first().click();
         await expect(page.getByTestId("open-soundings").getByRole("listitem")).toHaveCount(0);
         await workspaces().getByRole("button", { name: "Live Tracking", exact: true }).click();

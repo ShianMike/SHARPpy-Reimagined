@@ -12,7 +12,8 @@ export function PointEditor({ point, busy, onApply, onClose }: {
   const units = useUiStore((state) => state.units);
   const fields = point.values.map((field) => {
     const unit = displayUnit(field.unit, units);
-    return { ...field, displayUnit: unit, text: String(Number(convertUnit(field.value, field.unit, unit).toFixed(2))) };
+    return { ...field, displayUnit: unit, text: String(Number(convertUnit(field.value, field.unit, unit).toFixed(2))),
+      before: field.original === null ? "Unavailable" : `${String(Number(convertUnit(field.original, field.unit, unit).toFixed(2)))} ${unit}` };
   });
   const [values, setValues] = useState(Object.fromEntries(fields.map((field) => [field.key, field.text])));
   const applied = Object.fromEntries(fields.map((field) => [field.key, values[field.key] === field.text
@@ -25,11 +26,12 @@ export function PointEditor({ point, busy, onApply, onClose }: {
     event.preventDefault(); if (valid && !busy) onApply(applied);
   }}>
     <header><strong>{point.label}</strong><IconAction icon={X} label="Close level editor" size="sm" onClick={onClose} /></header>
-    <div className={styles.editFields}>{fields.map((field) => <label key={field.key}>{field.label}<span>
+    <div className={styles.editFields}>{fields.map((field) => <label key={field.key} data-edited={field.original !== null && applied[field.key] !== field.original}>
+      <strong>{field.label}</strong><span className={styles.beforeValue}>Before <output aria-label={`${field.label} before`}>{field.before}</output></span><span>After
       <input type="number" aria-label={`${field.label} ${field.displayUnit}`} step="any" min={Math.floor(convertUnit(field.min, field.unit, field.displayUnit) * 100) / 100} max={Math.ceil(convertUnit(field.max, field.unit, field.displayUnit) * 100) / 100} value={values[field.key] ?? ""} disabled={busy}
         onChange={(event) => { setValues({ ...values, [field.key]: event.target.value }); }} />{field.displayUnit}
     </span></label>)}</div>
     <Action type="submit" tone="accent" disabled={!valid || busy}>Apply & recalculate</Action>
-    <small>The original sounding is kept. Undo any edit.</small>
+    <small>Before shows the original profile. Apply to recalculate; undo any edit.</small>
   </form>;
 }

@@ -26,10 +26,22 @@ def test_speed_uses_received_bytes_and_decays_when_stalled(monkeypatch):
         clock[0] = 6
         assert download.snapshot()["bytes_per_second"] == 0
         download.stage("decoding")
-        assert download.snapshot()["stage"] == "processing"
+        assert download.snapshot()["stage"] == "decoding"
+        download.stage("calculating")
+        assert download.snapshot()["stage"] == "calculating"
         download.stage("complete")
         assert download.snapshot()["bytes_per_second"] == 0
     assert "download1" not in progress._active
+
+
+@pytest.mark.parametrize("stage", ["decoding", "opening", "extracting", "cached"])
+def test_decode_stages_preserve_received_bytes_without_transfer_speed(stage):
+    with progress.track("decode1") as download:
+        download.receive(500)
+        download.stage(stage)
+        assert download.snapshot() == {
+            "stage": "decoding", "downloaded_bytes": 500, "bytes_per_second": 0,
+        }
 
 
 def test_parallel_chunks_are_isolated_and_failures_release_counters():

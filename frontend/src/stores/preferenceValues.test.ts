@@ -23,6 +23,13 @@ const VALID = {
 };
 
 describe("parsePreferences", () => {
+  it("restores the legend category with the existing layer preferences", () => {
+    useMapStore.getState().setLayerPanelGroup("legend");
+    const saved = JSON.stringify(currentPreferences());
+    useMapStore.setState(mapInitial, true);
+    applyPreferences(parsePreferences(saved));
+    expect(useMapStore.getState().layerPanelGroup).toBe("legend");
+  });
   it("restores removed radar tilts to the default while preserving supported cuts", () => {
     for (const radarTilt of ["x", "y", "z", "0", "1"]) {
       const parsed = parsePreferences(JSON.stringify({ ...VALID, radarTilt, livePanels: [{ radarTilt }] }));

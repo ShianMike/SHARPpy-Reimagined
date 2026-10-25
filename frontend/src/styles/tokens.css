@@ -44,6 +44,7 @@
 
   /* Status */
   --success: #3fb950;
+  --forecast-loading: #58a6ff;
   --warning: #d29922;
   --danger: #f85149;
   --info: var(--workspace-orange-text);
@@ -147,6 +148,7 @@
 
   /* Glass: fill and filter live only in the profile blocks and overrides below */
   --glass-tint: 25 31 40;
+  --tooltip-glass-fill: var(--surface-1);
   --glass-border: rgb(255 255 255 / 0.28);
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -1px 0 rgb(255 255 255 / 0.07);
   --glass-sheen: linear-gradient(145deg, rgb(255 255 255 / 0.07), transparent 45%, rgb(255 255 255 / 0.015));
@@ -274,16 +276,19 @@
 /* Light diffusion retains the backdrop's detail; low and accessibility profiles stay opaque. */
 [data-graphics-profile="high"] {
   --glass-fill: rgb(var(--glass-tint) / 0.62);
+  --tooltip-glass-fill: rgb(var(--glass-tint) / 0.32);
   --glass-filter: blur(6px) saturate(112%);
 }
 
 [data-graphics-profile="balanced"] {
   --glass-fill: rgb(var(--glass-tint) / 0.68);
+  --tooltip-glass-fill: rgb(var(--glass-tint) / 0.32);
   --glass-filter: blur(4px) saturate(108%);
 }
 
 [data-graphics-profile="low"] {
   --glass-fill: rgb(var(--glass-tint) / 0.97);
+  --tooltip-glass-fill: rgb(var(--glass-tint) / 0.97);
   --glass-filter: none;
 }
 
@@ -291,6 +296,7 @@
 @media (prefers-reduced-transparency: reduce) {
   :root[data-graphics-profile] {
     --glass-fill: var(--surface-1);
+    --tooltip-glass-fill: var(--surface-1);
     --glass-filter: none;
   }
 }
@@ -323,6 +329,7 @@
   --warning: #936900;
   --danger: #ba2525;
   --success: #187531;
+  --forecast-loading: #0969da;
   --glass-tint: 246 249 253;
   --glass-border: rgb(255 255 255 / 0.65);
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.8), inset 0 -1px 0 rgb(255 255 255 / 0.2);

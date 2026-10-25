@@ -5,7 +5,6 @@ import { Action, IconAction } from "../../ui/Controls";
 import { Surface } from "../../ui/Surface";
 import { cx } from "../../lib/cx";
 import { hourAfter } from "../../map/usePlayback";
-import { useFrameDownload } from "../../map/useFrameDownload";
 import { useForecastStore } from "../../stores/forecastStore";
 import { PLAYBACK_SPEEDS, useUiStore } from "../../stores/uiStore";
 import { useForecast } from "../forecast/useForecast";
@@ -13,7 +12,6 @@ import { compactUtc, forecastLabel } from "../sounding/soundingTime";
 import { FORECAST_RANGE_ID } from "../toolbar/ForecastControls";
 import styles from "./TimelineRegion.module.css";
 import hints from "../../ui/HoverHint.module.css";
-import { ForecastDownloads } from "./ForecastDownloads";
 
 export { FORECAST_RANGE_ID } from "../toolbar/ForecastControls";
 export interface TimelineRegionProps { className?: string | undefined; }
@@ -23,7 +21,6 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
   const speed = useUiStore((state) => state.speed);
   const loop = useUiStore((state) => state.loop);
   const smooth = useUiStore((state) => state.smoothPlayback);
-  const download = useFrameDownload();
   const context = forecast.status === "ready" ? forecast.context : null;
   const loading = useIsFetching({ predicate: ({ queryKey: key }) =>
     (key[0] === "fields" || key[0] === "contours") && key[2] === context?.run && key[3] === context?.hour && key[4] === context?.model.key,
@@ -72,8 +69,6 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
         {smooth ? <Blend className="icon" aria-hidden="true" /> : <Zap className="icon" aria-hidden="true" />}
         <span className={hints.hint} data-side="top" aria-hidden="true">{smooth ? "Smooth · Blend Between Frames" : "Fast · Switch Frames Instantly"}</span>
       </Action>
-      <ForecastDownloads download={download} />
     </div>
-    <span className={styles.announcement} role="status" aria-label="Forecast downloads">{download.started ? download.message : ""}</span>
   </Surface>;
 }

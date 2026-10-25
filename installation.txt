@@ -8,7 +8,7 @@ qtpy>=2.3,<3.0
 python-dateutil>=2.8,<3.0
 certifi>=2023.7.22
 requests>=2.28,<3.0
-Pillow>=10,<13
+Pillow>=10,<14
 netCDF4>=1.7,<2.0
 pyproj>=3.5,<4.0
 metpy>=1.5,<2.0
@@ -108,7 +108,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   python-dateutil   >=2.8,<3.0        flexible date/time parsing
   certifi           >=2023.7.22       CA bundle for verified HTTPS fetches
   requests          >=2.28,<3.0       HTTP (UWyo + SHARPpy datasources)
-  Pillow            >=10,<13          self-contained GIF animation exports
+  Pillow            >=10,<14          self-contained GIF animation exports
   netCDF4           >=1.7,<2.0        GOES ABI fixed-grid file reader
   pyproj            >=3.5,<4.0        GOES geostationary geolocation
   metpy             >=1.5,<2.0        meteorological calcs (ECAPE reference)

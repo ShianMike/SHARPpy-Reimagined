@@ -112,7 +112,7 @@ def radar_mosaic(params: dict[str, Any]) -> dict[str, Any]:
         raise BridgeError(
             "OVERLAY_FETCH_FAILED",
             f"The radar mosaic could not be loaded: {_short(exc)}.",
-            True,
+            True, {"reason": "scanMissing"} if isinstance(exc, radar.RadarScanMissing) else None,
         ) from None
     data = _radar_bytes(raster, when)
     west, east, south, north = (float(value) for value in raster.bounds)
@@ -175,7 +175,7 @@ def radar_site(params: dict[str, Any]) -> dict[str, Any]:
         raise BridgeError(
             "OVERLAY_FETCH_FAILED",
             f"The single-site radar could not be loaded: {_short(exc)}.",
-            True,
+            True, {"reason": "scanMissing"} if isinstance(exc, site.RadarScanMissing) else None,
         ) from None
     data = _radar_bytes(raster, when)
     palette = None

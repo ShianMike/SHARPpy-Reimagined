@@ -5,6 +5,7 @@ import { Popover } from "../../components/Popover";
 import { cx } from "../../lib/cx";
 import { useMapStore } from "../../stores/mapStore";
 import { usePanelField } from "../../map/panelField";
+import { useFrameDownload } from "../../map/useFrameDownload";
 import { useForecast } from "../forecast/useForecast";
 import { compactUtc, forecastLabel, formatUtc } from "../sounding/soundingTime";
 import { FORECAST_TITLES, ForecastDialog, type ForecastStep } from "./ForecastDialog";
@@ -18,6 +19,7 @@ export interface ForecastControlsProps { className?: string | undefined; }
 
 export function ForecastControls({ className }: ForecastControlsProps): ReactNode {
   const forecast = useForecast();
+  const download = useFrameDownload();
   const context = forecast.status === "ready" ? forecast.context : null;
   const panel = useMapStore((state) => state.activePanel);
   const field = usePanelField(panel);
@@ -56,8 +58,9 @@ export function ForecastControls({ className }: ForecastControlsProps): ReactNod
     <Popover key={picker} id={`forecast-${picker}-picker`} open={pickerOpen && context !== null} movable anchor={anchor} onClose={() => { setPickerOpen(false); }} role="dialog"
       label={picker === "parameter" ? "Parameters" : FORECAST_TITLES[picker]} initialFocus="first" align={picker === "parameter" ? "end" : "start"} width="content"
       className={picker === "parameter" ? styles.parameterPicker : cx(styles.picker, picker === "hour" && styles.hourPicker)}>
-      {picker !== "parameter" && context !== null ? <ForecastDialog context={context} step={picker} anchor={anchor} onClose={() => { setPickerOpen(false); }} /> : null}
+      {picker !== "parameter" && context !== null ? <ForecastDialog context={context} step={picker} anchor={anchor} download={download} onClose={() => { setPickerOpen(false); }} /> : null}
       {picker === "parameter" && field.catalog.data !== undefined ? <ParameterPicker products={field.catalog.data.products} selected={field.product?.key ?? null} anchor={anchor} onClose={() => { setPickerOpen(false); }} /> : null}
     </Popover>
+    <span className={styles.announcement} role="status" aria-label="Forecast downloads">{download.started ? download.message : ""}</span>
   </Surface>;
 }

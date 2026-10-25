@@ -48,8 +48,12 @@ describe("Sounding local work protection", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Model" }));
     for (let attempt = 1; attempt <= 2; attempt++) {
       await userEvent.click(await screen.findByRole("button", { name: "Open sounding" }));
-      await userEvent.click(await screen.findByRole("button", { name: "Stop download" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Cancel request" }));
       await waitFor(() => { expect(queryClient.isMutating()).toBe(0); });
+      expect(screen.getByRole("status").textContent).toBe("Request cancelled. Your inputs and open soundings have been kept.");
+      expect(screen.getByRole<HTMLButtonElement>("button", { name: "Open sounding" }).disabled).toBe(false);
+      expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Longitude, degrees east" }).value).toBe("-97");
+      expect(screen.queryByTestId("model-error")).toBeNull();
       expect(call.mock.calls.filter(([command]) => command === "cancel_request")).toHaveLength(attempt);
       expect(useSoundingStore.getState().open).toHaveLength(0);
     }
@@ -129,6 +133,7 @@ describe("Sounding local work protection", () => {
     if (hasEdits) useSoundingStore.getState().setView(summary.soundingId, edited);
     const { queryClient } = renderWithBackend(<SoundingWorkspace />, transport);
     await screen.findByTestId("sounding-image");
+    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
     await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
     await userEvent.keyboard("{ArrowDown}{Enter}");
@@ -138,6 +143,7 @@ describe("Sounding local work protection", () => {
     await userEvent.click(screen.getByRole("button", { name: "Apply & recalculate" }));
     await waitFor(() => { expect(finish).toBeTypeOf("function"); });
     const cached = queryClient.getQueriesData({ queryKey: ["soundings", summary.soundingId, "view"] });
+    await userEvent.click(screen.getByRole("button", { name: "Show sounding sources" }));
     await userEvent.click(screen.getByRole("button", { name: `Close ${summary.title}` }));
     if (hasEdits) await userEvent.click(screen.getByRole("button", { name: "Discard & close" }));
     await act(async () => { await finish?.(); });

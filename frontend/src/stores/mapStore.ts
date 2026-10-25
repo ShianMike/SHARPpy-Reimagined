@@ -13,6 +13,7 @@ import type { CameraSnapshot } from "../map/runtime/camera";
 import {
   clampOpacity,
   defaultLayerStates,
+  layerInView,
   moveInOrder,
   ORDERABLE_LAYER_IDS,
   type LayerId,
@@ -24,6 +25,7 @@ import {
 export interface FocusRequest {
   stationId: string;
   seq: number;
+  position?: { latitude: number; longitude: number };
 }
 
 export const PANEL_LAYOUTS = [1, 2, 4] as const;
@@ -76,7 +78,7 @@ export interface MapState {
   /** Explicit UWyo launch, or null to follow the observed sounding form. */
   availabilityTime: string | null;
   layerPanelCollapsed: boolean;
-  layerPanelGroup: "weather" | "map";
+  layerPanelGroup: "weather" | "legend" | "map";
   /** For persistence only; written on moveend. */
   cameraSnapshot: CameraSnapshot | null;
   focusRequest: FocusRequest | null;
@@ -100,9 +102,9 @@ export interface MapState {
   setReportFilter: (filter: string) => void;
   setAvailabilityTime: (time: string | null) => void;
   setLayerPanelCollapsed: (collapsed: boolean) => void;
-  setLayerPanelGroup: (group: "weather" | "map") => void;
+  setLayerPanelGroup: (group: MapState["layerPanelGroup"]) => void;
   setCameraSnapshot: (snapshot: CameraSnapshot) => void;
-  requestFocus: (stationId: string) => void;
+  requestFocus: (stationId: string, position?: FocusRequest["position"]) => void;
 }
 
 function extraPanel(): PanelState {
@@ -207,9 +209,10 @@ export const useMapStore = create<MapState>()(
     moveLayer: (id, direction) => {
       set((state) => {
         const layers = panelLayers(state, state.activePanel);
-        const moved = moveInOrder(state.layerOrder.filter((layer) => layers[layer].visible), id, direction);
+        const visible = new Set(state.layerOrder.filter((layer) => layers[layer].visible && layerInView(layer, state.view)));
+        const moved = moveInOrder([...visible], id, direction);
         let index = 0;
-        return { layerOrder: state.layerOrder.map((layer) => layers[layer].visible ? moved[index++] ?? layer : layer) };
+        return { layerOrder: state.layerOrder.map((layer) => visible.has(layer) ? moved[index++] ?? layer : layer) };
       });
     },
     setRadarProduct: (key) => {
@@ -245,8 +248,8 @@ export const useMapStore = create<MapState>()(
     setCameraSnapshot: (snapshot) => {
       set({ cameraSnapshot: { center: [snapshot.center[0], snapshot.center[1]], zoom: snapshot.zoom } });
     },
-    requestFocus: (stationId) => {
-      set((state) => ({ focusRequest: { stationId, seq: (state.focusRequest?.seq ?? 0) + 1 } }));
+    requestFocus: (stationId, position) => {
+      set((state) => ({ focusRequest: { stationId, seq: (state.focusRequest?.seq ?? 0) + 1, ...(position === undefined ? {} : { position }) } }));
     },
   })),
 );

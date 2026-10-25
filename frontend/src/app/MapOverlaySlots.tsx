@@ -10,7 +10,7 @@ export interface MapOverlaySlots {
   left: HTMLElement | null;
   /** Centre column: the map notices. */
   centre: HTMLElement | null;
-  /** End of the right column: the layer panel. */
+  /** The movable Layers popup's content. */
   rightEnd: HTMLElement | null;
 }
 

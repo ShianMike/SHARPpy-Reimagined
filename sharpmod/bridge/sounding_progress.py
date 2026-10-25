@@ -29,6 +29,8 @@ class DownloadProgress:
             self.phase = (
                 "waiting" if stage in ("locating", "queued", "validating") else
                 "downloading" if stage in ("downloading", "retrieving") else
+                "decoding" if stage in ("decoding", "opening", "extracting", "cached") else
+                "calculating" if stage == "calculating" else
                 "processing"
             )
 

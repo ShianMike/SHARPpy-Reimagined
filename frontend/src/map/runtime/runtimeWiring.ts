@@ -4,7 +4,7 @@
 
 import { useAppStore } from "../../stores/appStore";
 import { useGraphicsStore } from "../../stores/graphicsStore";
-import { panelLayers, useMapStore } from "../../stores/mapStore";
+import { panelLayers, useMapStore, type FocusRequest } from "../../stores/mapStore";
 import { BASEMAP_SOURCE_IDS } from "../basemap/basemapStyle";
 import { useMapNoticeStore } from "../notices/mapNoticeStore";
 import { documentVisibility, performanceClock } from "./mapOptions";
@@ -47,7 +47,7 @@ export interface StoreReactions {
   selectionChanged: () => void;
   /** This panel's layer visibility or opacity, or the weather layers' order, changed. */
   layersChanged: (labelsChanged: boolean) => void;
-  focus: (stationId: string) => void;
+  focus: (request: FocusRequest) => void;
   /** The effective profile changed: pixel ratio, labels. */
   profileChanged: () => void;
   /** The device pixel ratio changed under the same profile. */
@@ -69,7 +69,7 @@ export function subscribeToStores(panel: number, reactions: StoreReactions): (()
       (state) => state.focusRequest,
       (request) => {
         if (request !== null) {
-          reactions.focus(request.stationId);
+          reactions.focus(request);
         }
       },
     ),

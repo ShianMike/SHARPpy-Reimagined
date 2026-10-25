@@ -30,6 +30,7 @@ export function useSoundingView(id: string, choice: RenderChoice, quality: Image
     },
   });
   return { image, edit, state, edits, request,
+    ready: image.isSuccess && !image.isPlaceholderData && !image.isFetching && !edit.isPending && !edit.isError && image.data.image.size > 0,
     busy: image.isFetching || edit.isPending,
     update: (next: typeof state) => { edit.reset(); setView(viewId, next); },
   };

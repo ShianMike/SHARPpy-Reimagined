@@ -10,7 +10,7 @@ export interface Bounds {
 }
 
 export interface SoundingProgress {
-  stage: "waiting" | "downloading" | "processing";
+  stage: "waiting" | "downloading" | "decoding" | "calculating" | "processing";
   downloadedBytes: number;
   bytesPerSecond: number;
 }

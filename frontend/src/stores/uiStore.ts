@@ -6,12 +6,16 @@ import { DEFAULT_UNITS, parseUnitPreferences, type UnitPreferences } from "../li
 export type Theme = "system" | "light" | "dark";
 type PopupPosition = { x: number; y: number } | null;
 interface UiState {
+  lastUpdateCheckWindow: number | null;
+  setLastUpdateCheckWindow(value: number): void;
   lastVersion: string | null;
   whatsNewOpen: boolean;
   prepareReleaseNotes(version: string, returning: boolean): void;
   setWhatsNewOpen(value: boolean): void;
   navigationOpen: boolean;
   setNavigationOpen(value: boolean): void;
+  inspectorSourceOpen: boolean;
+  setInspectorSourceOpen(value: boolean): void;
   collapsed: boolean;
   theme: Theme;
   speed: number;
@@ -29,6 +33,8 @@ interface UiState {
 }
 export const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2] as const;
 export const useUiStore = create<UiState>()(persist((set, get) => ({
+  lastUpdateCheckWindow: null,
+  setLastUpdateCheckWindow: (lastUpdateCheckWindow) => { set({ lastUpdateCheckWindow }); },
   lastVersion: null,
   whatsNewOpen: false,
   prepareReleaseNotes: (version, returning) => {
@@ -41,6 +47,8 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
   },
   navigationOpen: false,
   setNavigationOpen: (navigationOpen) => { set({ navigationOpen }); },
+  inspectorSourceOpen: false,
+  setInspectorSourceOpen: (inspectorSourceOpen) => { set({ inspectorSourceOpen }); },
   collapsed: false,
   theme: "system",
   speed: 1,
@@ -74,11 +82,12 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
       removeItem: (name) => { memory = null; access(() => { localStorage.removeItem(name); }); },
     };
   }),
-  partialize: ({ lastVersion, collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }) => ({ lastVersion, collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }),
+  partialize: ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }) => ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }),
   merge: (saved, current) => {
     const value = saved !== null && typeof saved === "object" ? saved as Record<string, unknown> : {};
     const positions = value.popupPositions !== null && typeof value.popupPositions === "object" ? value.popupPositions as Record<string, unknown> : {};
     return { ...current,
+      lastUpdateCheckWindow: typeof value.lastUpdateCheckWindow === "number" && Number.isSafeInteger(value.lastUpdateCheckWindow) && value.lastUpdateCheckWindow >= 0 ? value.lastUpdateCheckWindow : null,
       lastVersion: typeof value.lastVersion === "string" && /^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/u.test(value.lastVersion) ? value.lastVersion : null,
       collapsed: typeof value.collapsed === "boolean" ? value.collapsed : current.collapsed,
       theme: value.theme === "light" || value.theme === "dark" ? value.theme : "system",

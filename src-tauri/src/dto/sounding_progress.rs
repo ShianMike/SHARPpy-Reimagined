@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 pub enum DownloadStage {
     Waiting,
     Downloading,
+    Decoding,
+    Calculating,
     Processing,
 }
 

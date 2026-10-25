@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Layers, LoaderCircle, Map, MapPin, Maximize, Minimize, X } from "lucide-react";
+import { GripHorizontal, Layers, LoaderCircle, Map, MapPin, Maximize, Minimize, X } from "lucide-react";
+import { Popover } from "../components/Popover";
 import { VisuallyHidden } from "../components/VisuallyHidden";
 import { useBackendHealth } from "../lib/backend/BackendProvider";
 import { ReducedRenderingView } from "../features/fallback/ReducedRenderingView";
@@ -27,6 +28,7 @@ import { useGlobalShortcuts } from "./shortcuts";
 import { useFullscreen } from "./useFullscreen";
 import { workspaceDefinition, type WorkspaceDefinition } from "./workspaces";
 import styles from "./Shell.module.css";
+import pickerStyles from "../features/toolbar/ForecastControls.module.css";
 
 const WeatherMap = lazy(() => import("../map/WeatherMap"));
 
@@ -64,6 +66,8 @@ export function Shell(): ReactNode {
   const hasSelection = useAppStore((state) => state.selectedStationId !== null || (state.activeWorkspace !== "live" && state.selectedPoint !== null));
   const [sideTab, setSideTab] = useState<"point" | "layers">("point");
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [layersAnchor, setLayersAnchor] = useState<HTMLButtonElement | null>(null);
+  const [radarScanTarget, attachRadarScans] = useState<HTMLDivElement | null>(null);
   const toggleDetails = (tab: "point" | "layers"): void => {
     setSideTab(tab); setDetailsOpen(!(detailsOpen && sideTab === tab));
   };
@@ -97,9 +101,9 @@ export function Shell(): ReactNode {
   return (
     <MapOverlaySlotsProvider slots={slots}>
       <div className={styles.shell} data-live={isLive}>
-        <Toolbar className={styles.toolbar} isMap={isMap} live={isLive}>
+        <Toolbar className={styles.toolbar} isMap={isMap} live={isLive} radarScansRef={attachRadarScans}>
           <div ref={detailTools} className={styles.detailTools} role="group" aria-label="Map detail views" hidden={!isMap}>
-            <IconAction icon={Layers} label="Layers" hintSide="bottom-end" aria-expanded={detailsOpen && sideTab === "layers"} aria-controls="map-details"
+            <IconAction ref={setLayersAnchor} icon={Layers} label="Layers" hintSide="bottom-end" aria-haspopup="dialog" aria-expanded={detailsOpen && sideTab === "layers"} aria-controls="map-layers-popup"
               onClick={() => { toggleDetails("layers"); }} />
             {isLive ? null : <IconAction icon={MapPin} label="Point details" hintSide="bottom-end" aria-expanded={detailsOpen && sideTab === "point"} aria-controls="map-details"
               onClick={() => { toggleDetails("point"); }} />}
@@ -126,22 +130,27 @@ export function Shell(): ReactNode {
             <div className={styles.overlay} data-testid="map-overlay">
               <div ref={attachCentre} className={styles.centre} />
             </div>
-            <Surface as="aside" id="map-details" className={styles.sidePanel} data-motion="panel" data-view={sideTab} aria-label="Map details" inert={!detailsOpen} hidden={!detailsOpen}
+            <Surface as="aside" id="map-details" className={styles.sidePanel} data-motion="panel" data-view="point" aria-label="Map details" inert={!detailsOpen || sideTab !== "point"} hidden={!detailsOpen || sideTab !== "point"}
               onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeDetails(); } }}>
               <div className={styles.sideHeader} role="group" aria-label="Detail panel">
-                <h2>{sideTab === "layers" ? <Layers className="icon" aria-hidden="true" /> : <MapPin className="icon" aria-hidden="true" />}{sideTab === "layers" ? "Layers" : "Point"}</h2>
-                {isLive && sideTab === "layers" ? null : <IconAction icon={sideTab === "layers" ? MapPin : Layers} size="sm"
-                  label={sideTab === "layers" ? "Show point details" : "Show layers"}
-                  onClick={() => { setSideTab(sideTab === "layers" ? "point" : "layers"); }} />}
+                <h2><MapPin className="icon" aria-hidden="true" />Point</h2>
+                <IconAction icon={Layers} size="sm" label="Show layers" onClick={() => { setSideTab("layers"); }} />
                 <IconAction icon={X} size="sm" label="Close map details" onClick={closeDetails} />
               </div>
-              <div className={styles.point} data-motion="fade" hidden={sideTab !== "point"}>
+              <div className={styles.point} data-motion="fade">
                 {hasSelection ? <Inspector /> : <EmptyPanel icon={MapPin} title={isLive ? "Explore live weather" : "Explore a forecast point"}
                   message={isLive ? "Hover over weather layers for details, or choose a station to open its sounding." : "Choose a location on the map to see its weather values and open a sounding."} />}
               </div>
-              <div ref={attachRightEnd} className={styles.rightEnd} data-motion="fade" hidden={sideTab !== "layers"} />
             </Surface>
-            {isLive ? <LiveTimeline className={styles.timeline} /> : <TimelineRegion className={styles.timeline} />}
+            <Popover id="map-layers-popup" open={isMap && detailsOpen && sideTab === "layers"} anchor={layersAnchor} role="dialog" label="Layers"
+              initialFocus="first" movable width="content" className={styles.layersPopup} onClose={() => { setDetailsOpen(false); }}>
+              <header className={pickerStyles.dialogHeader} data-popover-drag>
+                <IconAction icon={GripHorizontal} size="sm" label="Move popup" data-popover-move aria-description="Drag to move. Arrow keys move the popup; Home centers it on the screen." />
+                <h2>Layers</h2><IconAction icon={X} size="sm" label="Close layers" onClick={closeDetails} />
+              </header>
+              <div ref={attachRightEnd} className={styles.rightEnd} />
+            </Popover>
+            {isLive ? <LiveTimeline className={styles.timeline} scanTarget={radarScanTarget} /> : <TimelineRegion className={styles.timeline} />}
           </div>
           {panelWorkspace === null ? null : <Surface key={panelWorkspace.id} ref={workspacePanel} as="section" className={styles.workspace} data-motion="panel" data-workspace={panelWorkspace.id} data-testid="workspace-panel" aria-label={panelWorkspace.label} inert={isMap} aria-hidden={isMap} hidden={isMap}>
             <WorkspaceView workspace={panelWorkspace} />

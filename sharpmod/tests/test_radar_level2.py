@@ -328,7 +328,7 @@ def test_correlation_uses_its_own_calibration_geometry_and_cuts_in_one_shared_vo
         row["tilt"] for row in inventory["tilts"] if row["status"] == "available"
     ] == ["0"]
     with pytest.raises(
-        radar_site.RadarSiteError,
+        radar_site.RadarScanMissing,
         match="does not have this Correlation Coefficient tilt",
     ):
         radar.fetch_frame(
@@ -336,3 +336,8 @@ def test_correlation_uses_its_own_calibration_geometry_and_cuts_in_one_shared_vo
         )
     with pytest.raises(radar_site.RadarSiteError, match="unknown Level II product"):
         radar.fetch_frame("KTLX", product="invalid", now=NOW, opener=opener)
+
+
+def test_an_empty_volume_inventory_is_a_confirmed_gap():
+    with pytest.raises(radar_site.RadarScanMissing, match="no recent Level II volume"):
+        radar.fetch_frame("KTLX", now=NOW, opener=lambda *_: listing())

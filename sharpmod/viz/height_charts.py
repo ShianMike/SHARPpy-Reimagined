@@ -486,6 +486,7 @@ class SwappableHeightChart(QtWidgets.QFrame):
         self._deviant = "right"
         self._prefs = {}
         self._populated = set()
+        self._companions = None
         # The slot is a real painted surface as far as the theme controller is
         # concerned: it inspects every mounted widget for this palette pair to
         # verify a light/dark switch reached everything. Holding it here also
@@ -530,6 +531,30 @@ class SwappableHeightChart(QtWidgets.QFrame):
     def currentChart(self):
         return self._current
 
+    def companionCharts(self, parent):
+        """Show the three other native charts beside the active height slot."""
+        if self._companions is None:
+            self._companions = QtWidgets.QFrame(parent)
+            self._companions.setObjectName("sharpmod_height_companions")
+            self._companions.setStyleSheet("QFrame { border: 0px; margin: 0px; }")
+            layout = QtWidgets.QHBoxLayout(self._companions)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+        layout = self._companions.layout()
+        for key in self._order:
+            if key == self._current:
+                continue
+            widget = self._charts[key][1]
+            self._stack.removeWidget(widget)
+            if layout.indexOf(widget) < 0:
+                layout.addWidget(widget, 1)
+            widget.show()
+            if key not in self._populated:
+                self._apply_state(widget)
+                self._populated.add(key)
+        self._companions.show()
+        return self._companions
+
     def setChart(self, key):
         """Show the chart named ``key``, populating it on first display."""
         if key is None or key not in self._charts:
@@ -538,10 +563,14 @@ class SwappableHeightChart(QtWidgets.QFrame):
         if key not in self._populated:
             self._apply_state(widget)
             self._populated.add(key)
+        if self._stack.indexOf(widget) < 0:
+            self._stack.addWidget(widget)
         self._stack.setCurrentWidget(widget)
         if key != self._current:
             self._current = key
             self.chartChanged.emit(key)
+        if self._companions is not None:
+            self.companionCharts(self._companions.parentWidget())
         return True
 
     def _show_menu(self, position):
@@ -579,10 +608,10 @@ class SwappableHeightChart(QtWidgets.QFrame):
     def _invalidate(self):
         """Drop populated state so charts refresh lazily on next display."""
         self._populated.clear()
-        current = self._current
-        if current is not None and current in self._charts:
-            self._apply_state(self._charts[current][1])
-            self._populated.add(current)
+        for key in self._order if self._companions is not None else (self._current,):
+            if key in self._charts:
+                self._apply_state(self._charts[key][1])
+                self._populated.add(key)
 
     def setProf(self, prof):
         self._prof = prof
@@ -624,9 +653,9 @@ class SwappableHeightChart(QtWidgets.QFrame):
                 _LOGGER.debug("height_charts.prefs_failed", exc_info=True)
 
     def plotData(self):
-        current = self._current
-        if current is not None and current in self._charts:
-            self._charts[current][1].plotData()
+        for key in self._order if self._companions is not None else (self._current,):
+            if key in self._charts:
+                self._charts[key][1].plotData()
 
     def clearData(self):
         for _label, widget in self._charts.values():

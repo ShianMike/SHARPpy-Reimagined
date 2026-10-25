@@ -3,6 +3,23 @@
 .layout[data-sources="false"] { grid-template-columns: minmax(0, 1fr); }
 .side[hidden] { display: none; }
 .side { display: flex; flex-direction: column; min-height: 0; overflow: hidden; border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface-1); }
+.sideContent { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.sideContent[hidden] { display: none; }
+.sideActions { display: flex; gap: var(--space-1); }
+.controlsHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-4); border-bottom: var(--hairline) solid var(--border-subtle); }
+.controlsHeader h1 { font-size: var(--font-size-subhead); }
+.controlsHeader p { margin-top: var(--space-1); color: var(--text-tertiary); font-size: var(--font-size-caption); }
+.controlsSlot { display: flex; flex: 1; flex-direction: column; min-height: 0; gap: var(--space-3); overflow-y: auto; overscroll-behavior: contain; padding: var(--space-3); }
+.controlsGuide { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-1); }
+.controlsGuide h2 { font-size: var(--font-size-subhead); color: var(--text-primary); }
+.controlsGuide p { margin-top: var(--space-1); font-size: var(--font-size-small); line-height: 1.5; color: var(--text-secondary); }
+.guideSteps { display: grid; gap: var(--space-4); padding-left: var(--space-5); list-style: decimal; }
+.guideSteps li { padding-left: var(--space-1); }
+.guideSteps li::marker { color: var(--workspace-orange-text); font-weight: var(--font-weight-semibold); }
+.guideSteps strong { font-size: var(--font-size-small); }
+.controlsGuide .guideNote { padding-top: var(--space-3); border-top: var(--hairline) solid var(--border-subtle); font-size: var(--font-size-caption); color: var(--text-tertiary); }
+.sideInfo { flex: none; margin-top: auto; border-top: var(--hairline) solid var(--border-subtle); background: var(--surface-sunken); }
+.sideInfo:empty { display: none; }
 .section, .openSection { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4); }
 .section { flex: 0 1 auto; min-height: 0; }
 .section > [role="tabpanel"] { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
@@ -20,9 +37,17 @@
 .field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; color: var(--text-secondary); font-size: var(--font-size-small); }
 .input { width: 100%; min-width: 0; height: var(--control-h-md); padding: 0 var(--space-3); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--control-fill); color: var(--text-primary); font-size: var(--font-size-body); }
 .input:disabled { border-color: var(--border-subtle); color: var(--text-disabled); }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.coordinateLabel { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-1); }
+.coordinateLabel small { color: var(--text-tertiary); font-size: var(--font-size-caption); }
+.coordinateRanges { display: grid; gap: var(--space-1); font-size: var(--font-size-small); }
+.coordinateRanges > div { display: flex; justify-content: space-between; gap: var(--space-3); }
+.coordinateRanges dt { color: var(--text-secondary); }
+.coordinateRanges dd { color: var(--text-primary); font-weight: var(--font-weight-medium); font-variant-numeric: tabular-nums; }
 .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); }
 .hint, .busy, .itemMeta, .empty { color: var(--text-tertiary); font-size: var(--font-size-small); }
 .busy { display: flex; flex-direction: column; gap: var(--space-2); overflow-wrap: anywhere; }
+.busy strong { color: var(--text-primary); font-weight: var(--font-weight-medium); }
 .transfer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-2); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .busy::before { content: ""; flex: none; height: var(--space-1); border-radius: var(--radius-pill); background: linear-gradient(var(--accent-bright), var(--accent-bright)) left / 40% 100% no-repeat var(--control-fill); }
 @media (prefers-reduced-motion: no-preference) {

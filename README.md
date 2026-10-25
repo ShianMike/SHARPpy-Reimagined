@@ -13,13 +13,15 @@
 
 </div>
 
-## What's new in 3.2.1
+## What's new in 3.3.0
+
+Version **3.3.0** improves forecast and radar playback, sounding inspection and exports, and map controls. See the [v3.3.0 changelog](CHANGELOG.md#v330---2026-10-25) and the matching in-app release highlights in **Settings → Updates**.
 
 SHARPpy Reimagined brings [SHARPpy](https://github.com/sharppy/SHARPpy) sounding analysis into a map-based desktop workspace. Version **3.0.0** introduces a React/Tauri interface backed by the existing Python and Rust scientific tools. This README describes that interface; the [v2.0.0 Legacy tour and screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/README.md) document the previous GUI.
 
-Version **3.2.1** is a maintenance patch. It recovers forecast requests during rapid changes, stops unused automatic preloading outside Model Viewer, preserves original provider errors, and releases unreachable chart buffers between sounding renders. Paired renders preserve exact images and scientific metadata while using less memory in the measured sequence. See the [v3.2.1 changelog](CHANGELOG.md#v321---2026-10-20) and [measurements and validation limits](docs/performance/V3_2_1_PERFORMANCE_REPORT.md).
+Version **3.2.1** was a maintenance patch. It recovers forecast requests during rapid changes, stops unused automatic preloading outside Model Viewer, preserves original provider errors, and releases unreachable chart buffers between sounding renders. Paired renders preserve exact images and scientific metadata while using less memory in the measured sequence. See the [v3.2.1 changelog](CHANGELOG.md#v321---2026-10-20) and [measurements and validation limits](docs/performance/V3_2_1_PERFORMANCE_REPORT.md).
 
-The patch also makes every imported sounding time selectable with separate edit histories, preserves typed stations and session settings, reports missing layers and renderer recovery per panel, and adds keyboard forecast-point inspection. Forecast Hours combines loading, cache checks and saved-hour details in one panel with an animated hour list. The Fast/Smooth icon sits beside Loop, hover feedback uses orange in both themes, and maps remove the heavy road network. Dependency audits, a runtime SBOM and final updater/installed-upgrade checks remain required release gates.
+Version **3.3.0** also makes every imported sounding time selectable with separate edit histories, preserves typed stations and session settings, reports missing layers and renderer recovery per panel, and adds keyboard forecast-point inspection. The top-bar forecast-hour picker combines downloads and cache checks with green outlines for cached hours, blue for downloading and red for failures. Select a failed hour to retry it. The Fast/Smooth icon sits beside Loop, hover feedback uses orange in both themes, and maps remove the heavy road network. Dependency audits, a runtime SBOM and final updater/installed-upgrade checks remain required release gates.
 
 Version **3.2.0** improves forecast playback, repeated model sounding requests, and weather-cache reliability. The redesigned Overview gives Model Viewer, Live Tracking and Soundings equal prominence. Forecast download details distinguish hours saved to disk from frames ready in memory, and model sounding downloads have a Stop action. A short **What's new** popup appears after an update; its highlights remain in **Settings → Updates**. See the [full v3.2.0 changelog](CHANGELOG.md#v320---2026-10-19).
 
@@ -112,6 +114,30 @@ where the provider has data, then play the cached frames.
 
 The NPZ was imported through the File form and rendered at UHD resolution.
 Inspect or edit the profile, then copy or export the image.
+Use the sidebar's **Show sounding controls** button to swap source forms for
+inspection, editing, zoom and export controls. **Show sounding sources** switches
+back without clearing your inputs. Profile information stays at the bottom of
+the sidebar. Images fill the available width by default; use **Fit sounding to
+view** to see the whole chart at once, or hide the sidebar for more space.
+Before a profile is open, the controls sidebar provides a quick-start guide and
+a **Choose a source** button. Under **Chart panels**, choose **All height charts**
+in the Diagnostic panel menu to replace Effective Layer STP with the three other
+height charts. The selected height chart stays beside them; its selector is
+disabled until you choose another diagnostic panel.
+Hover over a Skew-T level or near a hodograph wind point to highlight the same
+level in both charts. Linked inspection continues through valid wind levels
+above the visible 12 km hodograph trace, with both popups remaining available.
+Two transparent glass readouts show pressure, height
+(metres MSL), temperature and dewpoint beside the Skew-T, and pressure, height
+and wind beside the hodograph. Keyboard users can focus either chart and use
+Up/Down to step through levels, Home/End to reach the first or last level, and
+Escape to clear the readouts. Display-unit preferences apply to
+temperature and wind.
+The level editor compares the original **Before** value with the editable
+**After** value. Edited levels have larger dashed chart markers and an **Edited**
+label in the level picker. Use **Undo history** to jump to a retained state,
+or use Undo/Redo and Ctrl+Z/Ctrl+Y. The history retains up to 32 undo steps per
+profile time; resetting the profile is also undoable. Source files stay intact.
 
 </details>
 
@@ -139,7 +165,9 @@ Settings → Updates; the full technical history stays in the changelog.
 
 ### Weather maps
 
-Choose a model, UTC run, forecast hour, and parameter from the floating toolbar. The timeline steps through available forecast hours, with playback speed and looping controls. **Forecast Hours** opens the selected run's saved-hour and memory counts, cache checks, and load/stop/retry action for visible panels, including wind barbs and contours. The icon beside Loop switches between **Fast**, which changes frames instantly, and **Smooth**, which briefly blends their colours while point readings keep the actual hourly values. The playback choice is saved and respects reduced motion.
+Choose a model, UTC run, forecast hour, and parameter from the floating toolbar. The timeline steps through available forecast hours, with playback speed and looping controls. The top-bar **Forecast hour** picker also shows saved-hour and memory counts, cache checks, and load/stop/retry actions for visible panels, including wind barbs and contours. Cached hours have green outlines, downloading hours have blue outlines, and failed downloads have red outlines. Select a failed hour to retry it without closing the picker. The icon beside Loop switches between **Fast**, which changes frames instantly, and **Smooth**, which briefly blends their colours while point readings keep the actual hourly values. The playback choice is saved and respects reduced motion.
+
+Changing models, parameters, panel layouts or workspaces keeps the map centre and zoom, selected location, and inspector visibility and source disclosure. Switching immediately after moving the map also retains its latest position.
 
 Two- and four-panel layouts share the map view and forecast time while keeping each panel's parameter, layers, and colour range. The layout, active panel, layer choices and model selection return between sessions, with the model opening on its latest suggested run. Hover over a model field to read its value; select a point for details and **Open sounding**.
 
@@ -166,6 +194,20 @@ Use **Inspect** to pan and zoom the sounding, or **Edit profile** to change a se
 Download the **v3.2.1 [Windows installer](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.2.1/SHARPpy-Reimagined-v3.2.1-windows-x64-setup.exe)** or the [portable ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v3.2.1/SHARPpy-Reimagined-v3.2.1-windows-x64.zip). Both include the app and its analysis backend; Python is bundled. Extract the complete portable folder before running the app. The executables are unsigned; [release notes, checksums, and build provenance](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v3.2.1) let you verify the download. Existing installations with in-app updates can use **Settings → Updates**.
 
 **v2.0.0 Legacy is the final PySide6/Qt GUI release.** Its [Windows ZIP](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64.zip) and [portable executable](https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/v2.0.0/SHARPpy-Reimagined-v2.0.0-windows-x64-portable.exe) remain downloadable from the [legacy release page](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0), including after v3 is released.
+
+### Download history
+
+**1,849 downloads of Windows application packages** across **27 published releases** as of **25 October 2026, 05:22 UTC**: **1,606 `.exe` downloads** and **243 ZIP downloads**.
+
+[![Download history by UTC date](https://raw.githubusercontent.com/ShianMike/SHARPpy-Reimagined/download-history/docs/images/download-history.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/blob/download-history/docs/images/download-history.svg)
+
+**History starts 25 October 2026**, with a real measurement at **05:22:24 UTC**. A line will appear as daily measurements accumulate. GitHub exposes current asset counters, so earlier download history cannot be reconstructed from release dates.
+
+The total includes installers, standalone executables, and portable ZIPs from current, legacy, and beta releases. It excludes updater metadata (`latest.json`), signatures, checksums, manifests, dependency lists, SBOMs, and Python wheels. Repeat or automated downloads may count; this does not measure unique users or installations. Removing or replacing release assets can reduce later totals.
+
+Source: [GitHub Releases API](https://api.github.com/repos/ShianMike/SHARPpy-Reimagined/releases?per_page=100), using each asset's `download_count`. The [original baseline and inclusion criteria](docs/images/release-downloads.json) and [measured history](https://github.com/ShianMike/SHARPpy-Reimagined/blob/download-history/docs/images/download-history.json) remain available for inspection.
+
+The [daily workflow](.github/workflows/download-history.yml) records measurements at **00:17 UTC** and updates the chart on the separate `download-history` branch. The total above remains the dated baseline; the chart shows the latest recorded measurement. No extra account, service, or personal access token is required.
 
 ### Run v3 from source
 

@@ -5,3 +5,5 @@
 .ramp img { position: absolute; top: 100%; left: 0; width: 100cqh; max-width: none; height: calc(3 * var(--parameter-ramp-w)); transform: rotate(-90deg); transform-origin: top left; }
 .provider > .key { display: flex; flex-direction: column; gap: var(--space-2); width: min(var(--radar-legend-w), calc(100vw - var(--dock-offset) - 3 * var(--chrome-inset))); max-width: none; white-space: normal; }
 .key img { width: 100%; height: auto; }
+.inline { display: grid; min-width: 0; gap: var(--space-2); }
+.inline > img { max-width: 100%; height: auto; }

@@ -114,7 +114,7 @@ test("the SPC hover readout uses the report heading and separated validity", asy
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
   await turnOn(page, "spc-cat");
-  await page.getByRole("button", { name: "Close map details", exact: true }).click();
+  await page.getByRole("button", { name: "Close layers", exact: true }).click();
   await expect.poll(() => deckLayers(page)).toContain("spc-cat-fill");
   await nextFrames(page);
   await hoverAt(page, -96.5, 34.5);
@@ -165,7 +165,8 @@ test("other workspaces leave the map inert and returning preserves the selected 
   await page.getByRole("group", { name: "Map detail views" }).getByRole("button", { name: "Layers", exact: true }).click();
   await expect(page.getByTestId("layer-panel")).toBeVisible();
   await expect(inspector).toBeHidden();
-  await page.getByRole("button", { name: "Close map details" }).press("Escape");
+  await page.getByRole("button", { name: "Close layers" }).press("Escape");
+  await expect(page.getByRole("dialog", { name: "Layers", exact: true })).toBeHidden();
   await expect(page.getByRole("complementary", { name: "Map details" })).toBeHidden();
   await expect(page.getByRole("group", { name: "Map detail views" }).getByRole("button", { name: "Layers", exact: true })).toBeFocused();
   await page.getByRole("button", { name: "Point details", exact: true }).click();

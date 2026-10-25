@@ -11,6 +11,7 @@ import { useAppStore } from "../../stores/appStore";
 import { useForecastStore } from "../../stores/forecastStore";
 import { useMapStore } from "../../stores/mapStore";
 import { useSoundingStore } from "../../stores/soundingStore";
+import { useUiStore } from "../../stores/uiStore";
 import { renderWithBackend, scriptedTransport } from "../../test/backendHarness";
 import { Inspector } from "./Inspector";
 import { catalogueText } from "./StationDetails";
@@ -28,6 +29,7 @@ beforeEach(() => {
   useMapStore.setState(mapInitial, true);
   useSoundingStore.setState(soundingInitial, true);
   useForecastStore.setState(forecastInitial, true);
+  useUiStore.setState({ inspectorSourceOpen: false });
   useHoverStore.getState().clear();
 });
 

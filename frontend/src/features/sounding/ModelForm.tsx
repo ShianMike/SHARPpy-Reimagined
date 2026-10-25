@@ -2,8 +2,9 @@
 // and a point (the selected station, or typed coordinates). Models, runs, and
 // hours all come from the backend's model list; the valid time shown is the
 // run plus the forecast hour.
-import { useId, type ReactNode, type SyntheticEvent } from "react";
+import { useId, useState, type ReactNode, type SyntheticEvent } from "react";
 import { Action, Toggle } from "../../ui/Controls";
+import { Notice } from "../../components/Notice";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { useSelectedStation } from "../../stations/stationIndex";
 import type { ForecastModel } from "../../types/soundings";
@@ -16,7 +17,7 @@ import styles from "./Sounding.module.css";
 
 export function parseCoordinate(text: string, limit: number): number | null {
   const value = Number(text.trim());
-  return text.trim() === "" || !Number.isFinite(value) || Math.abs(value) > limit ? null : value;
+  return !/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(text.trim()) || !Number.isFinite(value) || Math.abs(value) > limit ? null : value;
 }
 
 function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNode {
@@ -26,9 +27,10 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
   const open = useOpenSounding();
   const request = open.isPending && open.variables.kind === "model" ? open.variables : null;
   const ids = { lat: useId(), lon: useId() };
+  const [touched, setTouched] = useState({ lat: false, lon: false });
   /** An edit clears a failure notice: it described the request before the edit. */
   const edit = (patch: Parameters<typeof setModel>[0]): void => {
-    if (open.isError) {
+    if (open.isError || open.cancelled) {
       open.reset();
     }
     setModel(patch);
@@ -43,15 +45,20 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
   const hour =
     inputs.forecastHour !== null && hours.includes(inputs.forecastHour)
       ? inputs.forecastHour
-      : model.defaultForecastHour;
+      : hours.includes(model.defaultForecastHour) ? model.defaultForecastHour : hours[0] ?? 0;
   const station = selected.state === "found" ? selected.station : null;
   const atStation = inputs.atStation && station !== null;
   const latitude = atStation ? station.latitude : parseCoordinate(inputs.latitude, 90);
   const longitude = atStation ? station.longitude : parseCoordinate(inputs.longitude, 180);
-  const valid = latitude !== null && longitude !== null;
+  const latInvalid = !atStation && latitude === null && (touched.lat || inputs.latitude.trim() !== "");
+  const lonInvalid = !atStation && longitude === null && (touched.lon || inputs.longitude.trim() !== "");
+  const bounds = model.bounds;
+  const outside = latitude !== null && longitude !== null && (latitude < bounds.south || latitude > bounds.north ||
+    (bounds.west <= bounds.east ? longitude < bounds.west || longitude > bounds.east : longitude < bounds.west && longitude > bounds.east));
+  const valid = latitude !== null && longitude !== null && !outside && hours.includes(hour);
   const submit = (event?: SyntheticEvent): void => {
     event?.preventDefault();
-    if (latitude !== null && longitude !== null && !open.isPending) {
+    if (valid && !open.isPending) {
       open.mutate({
         kind: "model",
         model: model.key,
@@ -76,35 +83,51 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
       {atStation ? null : (
         <div className={styles.pair}>
           <label className={styles.field} htmlFor={ids.lat}>
-            Latitude
+            <span className={styles.coordinateLabel}>Latitude<small>°N</small></span>
             <input
               id={ids.lat}
               className={styles.input}
               inputMode="decimal"
               aria-label="Latitude, degrees north"
-              placeholder="Latitude"
+              aria-required="true"
+              aria-invalid={latInvalid}
+              aria-describedby={latInvalid ? `${ids.lat}-error` : undefined}
+              placeholder="35.2"
               value={inputs.latitude}
               onChange={(event) => {
                 edit({ latitude: event.target.value });
               }}
+              onBlur={() => { setTouched((state) => ({ ...state, lat: true })); }}
             />
           </label>
           <label className={styles.field} htmlFor={ids.lon}>
-            Longitude
+            <span className={styles.coordinateLabel}>Longitude<small>°E</small></span>
             <input
               id={ids.lon}
               className={styles.input}
               inputMode="decimal"
               aria-label="Longitude, degrees east"
-              placeholder="Longitude"
+              aria-required="true"
+              aria-invalid={lonInvalid}
+              aria-describedby={lonInvalid ? `${ids.lon}-error` : undefined}
+              placeholder="-97.4"
               value={inputs.longitude}
               onChange={(event) => {
                 edit({ longitude: event.target.value });
               }}
+              onBlur={() => { setTouched((state) => ({ ...state, lon: true })); }}
             />
           </label>
         </div>
       )}
+      {!latInvalid && !lonInvalid ? null : <Notice tone="danger" title="Check coordinates" detail="Enter decimal degrees." role="alert">
+        <dl className={styles.coordinateRanges}>
+          {!latInvalid ? null : <div id={`${ids.lat}-error`}><dt>Latitude</dt><dd>−90° to 90°</dd></div>}
+          {!lonInvalid ? null : <div id={`${ids.lon}-error`}><dt>Longitude</dt><dd>−180° to 180°</dd></div>}
+        </dl>
+      </Notice>}
+      {atStation ? null : <p className={styles.hint}>Negative = south / west</p>}
+      {outside ? <Notice tone="warning" title="Outside model coverage" message={`${model.label} covers ${model.domain}. Choose a point inside its map outline.`} role="alert" /> : null}
       <div className={styles.actions}>
         <Action
           tone="accent"
@@ -116,13 +139,13 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
         >
           Open sounding
         </Action>
-        {open.isPending ? <Action onClick={open.cancel}>Stop download</Action> : null}
+        {open.isPending ? <Action onClick={open.cancel}>Cancel request</Action> : null}
         {request !== null ? <DownloadStatus
           label={`${models.find((item) => item.key === request.model)?.label ?? model.label} ${forecastLabel(request.forecastHour)}`}
           progress={open.progress}
         /> : null}
       </div>
-      {open.isPending ? <p className={styles.hint}>Model data downloads can take a minute or more.</p> : null}
+      {open.cancelled ? <p className={styles.hint} role="status">Request cancelled. Your inputs and open soundings have been kept.</p> : null}
       {open.isError ? (
         <SoundingErrorNotice
           error={open.error}

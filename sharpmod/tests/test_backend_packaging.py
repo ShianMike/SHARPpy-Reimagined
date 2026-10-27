@@ -250,12 +250,14 @@ def test_release_workflow_gates_tag_and_source_versions():
         "test-release",
         "test-desktop",
         "build-windows-exe",
+        "native-windows-acceptance",
     }
     assert set(jobs["publish"]["needs"]) == {
         "resolve-release",
         "test-release",
         "test-desktop",
         "build-windows-exe",
+        "native-windows-acceptance",
         "attest-windows-release",
     }
     checkout = next(

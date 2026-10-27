@@ -7,7 +7,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Target version: **3.4.0** (not published).
+### Upcoming
+
+- Expand the available weather-model parameters, offering only fields supported
+  by each model and the selected run.
+- Add isobars with numeric pressure labels on weather maps.
+
+## [v3.4.0] - 2026-10-27
 
 ### Added
 
@@ -69,12 +75,13 @@ Target version: **3.4.0** (not published).
 
 - Derive installed Windows acceptance from the candidate source version and the
   newest preceding stable release. Verify the selected candidate artifact and
-  preserve saved preferences through installation and repeated restarts.
+  preserve saved preferences through installation and repeated restarts. Require
+  these installed-app checks before release attestation and publication.
 - Present release highlights in a wider, compact layout with concise descriptions,
   keeping the full technical detail in this changelog.
 - Align the Python package, scientific extension, frontend, desktop manifests
   and lockfiles with v3.4.0, and use v3.4.0 as the release workflow's default
-  target. Keep the release unreleased while validation is in progress.
+  target.
 - Simplify the README around v3.4.0's capabilities, setup and documentation,
   removing older-version summaries, the old screenshot tour and download counts.
 - Update browser acceptance checks for model-region selection, converted radar
@@ -164,12 +171,6 @@ Target version: **3.4.0** (not published).
   Tracking toolbars. Keep unit preferences in Settings and sounding view tools.
 - Remove the download-history graph, snapshots, collector, associated tests and
   branch-backed publishing workflow, allowing `main` to remain the only branch.
-
-### Upcoming
-
-- Expand the available weather-model parameters, offering only fields supported
-  by each model and the selected run.
-- Add isobars with numeric pressure labels on weather maps.
 
 ## [v3.3.0] - 2026-10-25
 

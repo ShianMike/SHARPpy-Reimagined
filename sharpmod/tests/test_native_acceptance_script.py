@@ -96,6 +96,25 @@ def test_workflow_forwards_both_versions_to_the_script_and_desktop_test(native_j
     assert "Verify-Installer $artifactsRoot $ExpectedVersion" in script
 
 
+def test_release_requires_installed_acceptance_before_attestation_and_publication():
+    yaml = pytest.importorskip("yaml")
+    jobs = yaml.load((ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8"),
+                     Loader=yaml.BaseLoader)["jobs"]
+    job = jobs["native-windows-acceptance"]
+    assert set(job["needs"]) == {"resolve-release", "build-windows-exe"}
+    assert job["runs-on"] == "windows-latest"
+    checkout = next(step for step in job["steps"] if step.get("uses", "").startswith("actions/checkout@"))
+    assert checkout["with"]["ref"] == "${{ needs.resolve-release.outputs.source_sha }}"
+    download = next(step for step in job["steps"] if step.get("uses", "").startswith("actions/download-artifact@"))
+    assert download["with"]["name"] == "windows-release-${{ needs.resolve-release.outputs.tag }}"
+    exercise = next(step["run"] for step in job["steps"] if step.get("name") == "Exercise installed preferences and repeated restarts")
+    assert "verify_native_acceptance.ps1" in exercise
+    assert "-PreviousVersion" in exercise and "-ExpectedVersion" in exercise
+    assert "-PublicUpdate" not in exercise
+    for name in ("attest-windows-release", "publish"):
+        assert "native-windows-acceptance" in jobs[name]["needs"]
+
+
 @pytest.mark.parametrize(("versions", "error"), [
     ([], "only on a disposable hosted runner"),
     (["3.3.0", "3.4.0"], "only on a disposable hosted runner"),

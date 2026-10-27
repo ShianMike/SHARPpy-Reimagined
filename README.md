@@ -7,13 +7,13 @@
 [![Tests](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml/badge.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#unreleased)
+[Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v340---2026-10-27)
 
 </div>
 
-## What's new in 3.4.0 (Unreleased)
+## What's new in 3.4.0
 
-**v3.4.0 is being prepared for release.** This version expands model coverage,
+**v3.4.0** expands model coverage,
 makes map and sounding controls easier to use, and adds clearer diagnostics and
 update safeguards.
 

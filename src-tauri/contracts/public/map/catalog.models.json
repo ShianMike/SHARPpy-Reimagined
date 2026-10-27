@@ -11758,10 +11758,10 @@
   "nam": {
     "fieldModel": "nam",
     "fieldBounds": {
-      "west": -152.87862250405016,
-      "east": -49.41598658564436,
-      "south": 12.190000000000005,
-      "north": 61.30917328500873
+      "west": -152.8786225,
+      "east": -49.41598659,
+      "south": 12.19,
+      "north": 61.30917329
     },
     "maxForecastHours": [
       84,
@@ -99446,10 +99446,10 @@
   "hrw-wrf-arw": {
     "fieldModel": "hrw-wrf-arw",
     "fieldBounds": {
-      "west": -152.85299694606235,
-      "east": -49.395503243275556,
-      "south": 12.190000000000005,
-      "north": 61.27653969858246
+      "west": -152.85299695,
+      "east": -49.39550324,
+      "south": 12.19,
+      "north": 61.2765397
     },
     "maxForecastHours": [
       48,
@@ -109033,10 +109033,10 @@
   "hrw-wrf-nssl": {
     "fieldModel": "hrw-wrf-nssl",
     "fieldBounds": {
-      "west": -152.85299694606235,
-      "east": -49.395503243275556,
-      "south": 12.190000000000005,
-      "north": 61.27653969858246
+      "west": -152.85299695,
+      "east": -49.39550324,
+      "south": 12.19,
+      "north": 61.2765397
     },
     "maxForecastHours": [
       48,
@@ -118620,10 +118620,10 @@
   "hrw-fv3": {
     "fieldModel": "hrw-fv3",
     "fieldBounds": {
-      "west": -152.85299694606235,
-      "east": -49.395503243275556,
-      "south": 12.190000000000005,
-      "north": 61.27653969858246
+      "west": -152.85299695,
+      "east": -49.39550324,
+      "south": 12.19,
+      "north": 61.2765397
     },
     "maxForecastHours": [
       60,

@@ -222,10 +222,11 @@ def test_release_installs_model_fetch_dependencies():
     # Attestation and publication wait for every test lane.
     assert (
         "needs: [resolve-release, test-release, test-desktop, build-windows-exe, "
-        "attest-windows-release]"
+        "native-windows-acceptance, attest-windows-release]"
     ) in workflow
     assert (
-        "needs: [resolve-release, test-release, test-desktop, build-windows-exe]"
+        "needs: [resolve-release, test-release, test-desktop, build-windows-exe, "
+        "native-windows-acceptance]"
     ) in workflow
     assert workflow.count("contents: write") == 1
 

@@ -122,6 +122,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Keep transported map bounds stable across projection-library platforms, and
+  update release checks for mandatory installed Windows acceptance and completed
+  popup animations before measuring highlight layout.
 - Keep Units settings within the 1280 × 800 desktop viewport by tightening the
   two unit cards' vertical padding, retaining all controls and descriptions.
 - Require another update review for unapplied sounding inputs, drag edits and

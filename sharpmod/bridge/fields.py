@@ -26,7 +26,8 @@ _FLIGHTS: dict[tuple, tuple[Future, list]] = {}
 
 
 def _bounds(bounds: tuple[float, float, float, float]) -> dict[str, float]:
-    west, east, south, north = (float(value) for value in bounds)
+    # Sub-centimetre precision keeps projected bounds stable across PROJ platforms.
+    west, east, south, north = (round(float(value), 8) for value in bounds)
     return {"west": west, "east": east, "south": south, "north": north}
 
 

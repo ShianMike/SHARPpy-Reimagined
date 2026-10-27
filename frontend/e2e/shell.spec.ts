@@ -151,6 +151,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1920, height: 108
     const dialog = page.getByRole("dialog", { name: /^What’s new in /u });
     const highlights = dialog.getByRole("listitem");
     await expect(highlights).toHaveCount(6);
+    await dialog.evaluate(async (panel) => { await Promise.allSettled(panel.getAnimations().map((animation) => animation.finished)); });
     const box = await boxOf(dialog);
     expect(isInside(box, viewportBox(page))).toBe(true);
     expect(box.width).toBeGreaterThan(box.height);

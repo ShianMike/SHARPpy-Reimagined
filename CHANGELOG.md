@@ -13,6 +13,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   by each model and the selected run.
 - Add isobars with numeric pressure labels on weather maps.
 
+### Fixed
+
+- Allow `python -m sharpmod.tools.model_extract` to use the same command-line
+  entry point as `model-extract`, avoiding a circular import during startup.
+  Cover help, model listing, invalid arguments and the canonical library facade.
+
 ## [v3.4.0] - 2026-10-27
 
 ### Added

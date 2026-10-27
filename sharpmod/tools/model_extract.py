@@ -7,6 +7,12 @@ ERA5, IFS, HRRR, UWyo, and WRF paths.
 
 from __future__ import annotations
 
+if __name__ == "__main__":  # pragma: no cover
+    # Use the canonical facade so helper imports cannot initialize a second copy.
+    from sharpmod.tools.model_extract import main
+
+    raise SystemExit(main())
+
 import importlib.util
 import io
 import logging
@@ -992,7 +998,3 @@ from sharpmod.tools.model_extract_cli import (  # noqa: E402
     _planned_model_search,
     main
 )
-
-
-if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(main())

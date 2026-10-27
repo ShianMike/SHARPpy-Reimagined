@@ -47,7 +47,8 @@ def test_eccodes_inventory_preserves_levels_ranges_and_accumulations():
 
 
 @pytest.mark.parametrize("model", hp.ECMWF_MODELS)
-def test_catalog_hides_missing_ingredients_for_the_exact_run_and_hour(monkeypatch, model):
+def test_catalog_hides_missing_ingredients_for_the_exact_run_and_hour(monkeypatch, tmp_path, model):
+    monkeypatch.setenv("SHARPMOD_HRRR_FIELD_CACHE", str(tmp_path))
     specs = {spec for product in ec.products() for spec in product.all_fields}
     rows = tuple(hf.InventoryRow(i, i * 100, 100, spec.variable, spec.level,
                                 spec.forecast.replace("*", "12")) for i, spec in enumerate(specs))

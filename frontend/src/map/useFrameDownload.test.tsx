@@ -41,8 +41,39 @@ function setup() {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
   );
-  return { queryClient, fields, winds, saved, storedFields, wrapper };
+  return { queryClient, client, fields, winds, saved, storedFields, wrapper };
 }
+
+it.each([
+  ...["gfs", "aigfs", "openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3"].map((modelKey) => ({ modelKey, individual: false })),
+  { modelKey: "gfs", individual: true },
+])("keeps $modelKey downloads running while another hour's catalogue loads (individual: $individual)", async ({ modelKey, individual }) => {
+  const { queryClient, client, fields, storedFields, wrapper } = setup();
+  const parsed = parseModelCatalog(models);
+  const model = parsed.models.find((item) => item.key === modelKey);
+  if (model === undefined) throw new Error("Model fixture missing");
+  queryClient.setQueryData(QUERY_KEYS.models, { ...parsed, models: parsed.models.map((item) => item.key === modelKey ? { ...item, forecastHours: [0, 6, 12] } : item) });
+  const available = { ...parseMapCatalog(catalog), fieldModel: modelKey };
+  queryClient.setQueryData(mapKeys.catalog(modelKey, model.suggestedRun, 0), available);
+  useForecastStore.setState({ modelKey, runTime: model.suggestedRun, forecastHour: 0 });
+  let finishCatalog!: (value: typeof available) => void;
+  const check = vi.spyOn(client, "getMapCatalog").mockImplementation(() => new Promise((resolve) => { finishCatalog = resolve; }));
+  let finishFrame!: () => void;
+  fields.mockImplementationOnce((_product, _run, hour) => new Promise((resolve) => { finishFrame = () => { storedFields.add(hour); resolve(frame); }; }));
+  const hook = renderHook(useFrameDownload, { wrapper });
+  try {
+    act(() => { if (individual) void hook.result.current.retryHour(0); else hook.result.current.toggle(); });
+    await waitFor(() => { expect(fields).toHaveBeenCalledTimes(individual ? 1 : 3); });
+    act(() => { useForecastStore.getState().setHour(6); });
+    await waitFor(() => { expect(check).toHaveBeenCalledWith(modelKey, model.suggestedRun, 6); });
+    expect(fields.mock.calls[0]?.[4]?.aborted).toBe(false);
+    act(() => { finishCatalog(available); });
+    await waitFor(() => { expect(hook.result.current.disabled).toBe(false); });
+    expect(hook.result.current.running).toBe(!individual);
+    act(() => { finishFrame(); });
+    await waitFor(() => { expect(hook.result.current.cached).toBe(individual ? 1 : 3); expect(hook.result.current.running).toBe(false); });
+  } finally { hook.unmount(); queryClient.clear(); }
+});
 
 it("downloads every hour and winds once across four matching panels, keeps the selected hour, and reuses ready queries", async () => {
   const { queryClient, fields, winds, wrapper } = setup();
@@ -219,5 +250,7 @@ it.each(["stop", "change model"])("bounds the queue to two hours and cancels que
     expect(fields).toHaveBeenCalledTimes(2);
     expect(hook.result.current.running).toBe(false);
     expect(hook.result.current.complete).toBe(false);
+    act(() => { useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T12:00:00Z", forecastHour: 1 }); });
+    expect(hook.result.current.running).toBe(false);
   } finally { hook.unmount(); queryClient.clear(); }
 });

@@ -99,7 +99,7 @@
       },
       {
         "title": "Clearer controls",
-        "description": "Find parameters with readable search and all categories in view. Preview descriptions separately, navigate without hover readouts and retry failed requests from clear popups."
+        "description": "Find parameters with readable search and separate descriptions. Navigate without hover readouts, retry from clear popups and browse hours while downloads continue. Saved maps reopen offline."
       },
       {
         "title": "Review work before updating",

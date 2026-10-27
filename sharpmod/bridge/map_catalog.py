@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from typing import Any
 from sharpmod.bridge import params as p
 from sharpmod.bridge.errors import BridgeError
@@ -17,6 +18,23 @@ def _palette(palette: Any) -> dict[str, Any]:
         "ceiling": None if palette.ceiling is None else float(palette.ceiling),
         "ticks": [float(tick) for tick in palette.tick_values()],
     }
+
+
+def _saved_product(model, product, run, hour):
+    """A decodable current-version raster proves this exact product was produced."""
+    from sharpmod.bridge import fields, frame_cache
+
+    saved = frame_cache.read(frame_cache.path("grid", model, product.key, run, hour, fields.FRAME))
+    if saved is None:
+        return False
+    try:
+        return (saved["product"] == product.key and saved["run_time"] == p.iso(run)
+                and saved["forecast_hour"] == hour
+                and (saved["width"], saved["height"]) == fields.FRAME
+                and len(base64.b64decode(saved["data_base64"], validate=True))
+                == fields.FRAME[0] * fields.FRAME[1] * 2)
+    except (KeyError, TypeError, ValueError):
+        return False
 
 
 def catalog(params: dict[str, Any]) -> dict[str, Any]:
@@ -36,6 +54,7 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
     model_label = "ECMWF 9km" if model == "ecmwf-ifs-9km" else "ECMWF" if is_ecmwf else model.upper()
     if (is_global or is_hrw) and ("run_time" in params or "forecast_hour" in params):
         run, hour = _request({**params, "product": "tmp-2m"})[-2:]
+        supported, failure = products, None
         try:
             if is_global:
                 from sharpmod.providers.ecmwf_fields import available_products
@@ -45,11 +64,15 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
                 products = tuple(product for product in products if all(
                     any(spec.matches(row.variable, row.level, row.forecast) for row in rows)
                     for spec in product.all_fields))
-        except hrrr_field.HrrrFieldUnavailable as exc:
-            raise _field_error("FIELD_UNAVAILABLE", f"{model_label} map fields are not published for this run and hour", exc, False) from None
         except hrrr_field.HrrrFieldError as exc:
-            raise _field_error("FIELD_FETCH_FAILED", f"{model_label} field availability could not be checked", exc, True) from None
+            products, failure = (), exc
+        products = tuple(product for product in supported
+                         if product in products or _saved_product(model, product, run, hour))
         if not products:
+            if isinstance(failure, hrrr_field.HrrrFieldUnavailable):
+                raise _field_error("FIELD_UNAVAILABLE", f"{model_label} map fields are not published for this run and hour", failure, False) from None
+            if failure is not None:
+                raise _field_error("FIELD_FETCH_FAILED", f"{model_label} field availability could not be checked", failure, True) from None
             raise BridgeError("FIELD_UNAVAILABLE", f"No supported {model_label} fields are published for this run and hour. Choose an earlier run or retry later.", False)
     if is_global or is_hrw:
         from sharpmod.tools.model_extract import forecast_hours

@@ -40,7 +40,8 @@ def test_hrw_supported_parameters_and_native_cycles(model):
 
 
 @pytest.mark.parametrize("model", hp.HRW_MODELS)
-def test_picker_checks_every_ingredient_at_the_selected_hour(model, monkeypatch):
+def test_picker_checks_every_ingredient_at_the_selected_hour(model, monkeypatch, tmp_path):
+    monkeypatch.setenv("SHARPMOD_HRRR_FIELD_CACHE", str(tmp_path))
     # Native NOAA inventory spellings; maxima have no analysis record.
     inventory = "\n".join((
         "1:0:d=2026102700:TMP:2 m above ground:6 hour fcst:",

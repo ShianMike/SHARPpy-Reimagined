@@ -30,7 +30,8 @@ def test_only_native_products_and_six_hour_steps_to_f384():
             fields._request({**REQUEST, "product": "tmp-2m", **change})
 
 
-def test_exact_run_inventory_hides_unpublished_ingredients_and_uses_run_total(monkeypatch):
+def test_exact_run_inventory_hides_unpublished_ingredients_and_uses_run_total(monkeypatch, tmp_path):
+    monkeypatch.setenv("SHARPMOD_HRRR_FIELD_CACHE", str(tmp_path))
     products = hp.available_products("aigfs")
     specs = {spec for product in products for spec in product.all_fields}
     rows = tuple(hf.InventoryRow(i, i * 100, 100, spec.variable, spec.level,

@@ -34,7 +34,8 @@ def test_native_forecast_cadence_is_hourly_to_f120_then_three_hourly():
             fields._request({**REQUEST, "product": "tmp-2m", **change})
 
 
-def test_selected_run_inventory_hides_missing_fields_and_f000_precipitation(monkeypatch):
+def test_selected_run_inventory_hides_missing_fields_and_f000_precipitation(monkeypatch, tmp_path):
+    monkeypatch.setenv("SHARPMOD_HRRR_FIELD_CACHE", str(tmp_path))
     specs = {spec for product in hp.available_products("gfs") for spec in product.all_fields}
     rows = tuple(hf.InventoryRow(i, i * 100, 100, spec.variable, spec.level,
                                 spec.forecast.replace("*", "6 hour")) for i, spec in enumerate(specs))

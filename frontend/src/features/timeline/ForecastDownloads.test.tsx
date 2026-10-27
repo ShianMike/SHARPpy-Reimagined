@@ -43,7 +43,7 @@ it("shows loading, stopping, completion and cache errors in the inline controls"
   const { rerender } = render(<ForecastDownloads download={download} />);
   await user.click(screen.getByRole("button", { name: "Load Hours" }));
   expect(download.toggle).toHaveBeenCalledOnce();
-  rerender(<ForecastDownloads download={{ ...download, running: true, started: true, loaded: 3, cached: 2 }} />);
+  rerender(<ForecastDownloads download={{ ...download, running: true, started: true, loaded: 3, cached: 2, disabled: true }} />);
   expect(screen.getByRole("progressbar", { name: "Downloaded Forecast Hours" }).getAttribute("value")).toBe("3");
   await user.click(screen.getByRole("button", { name: "Stop Download" }));
   expect(download.toggle).toHaveBeenCalledTimes(2);

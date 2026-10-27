@@ -124,8 +124,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Keep active forecast downloads and individual retries running while another
   hour's product availability is checked. Cancel work when its model, run or
-  verified product selection changes, and clear stopped jobs before returning
-  to an earlier selection.
+  verified product selection changes, keep Stop Download available during checks,
+  and clear stopped jobs before returning to an earlier selection.
 - Reuse readable saved frames to verify product availability when provider
   inventories fail, keeping previously downloaded maps accessible after restart
   without offering unsaved or corrupt fields.

@@ -16,7 +16,7 @@ export function ForecastDownloads({ download }: { download: ReturnType<typeof us
       </p>
       <div className={styles.actions}>
         <IconAction icon={RotateCw} size="sm" label="Check Cache" hintSide="top" disabled={download.disabled} onClick={download.refresh} />
-        {!download.complete || download.running ? <Action className={styles.primary} tone={download.running ? "quiet" : "accent"} disabled={download.disabled} onClick={download.toggle}>
+        {!download.complete || download.running ? <Action className={styles.primary} tone={download.running ? "quiet" : "accent"} disabled={download.disabled && !download.running} onClick={download.toggle}>
           <Icon className="icon-sm" aria-hidden="true" />{download.running ? "Stop Download" : failed ? "Retry Missing Hours" : "Load Hours"}
         </Action> : null}
       </div>

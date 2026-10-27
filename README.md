@@ -5,9 +5,12 @@
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
 [![Tests](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml/badge.svg)](https://github.com/ShianMike/SHARPpy-Reimagined/actions/workflows/tests.yml)
+[![GitHub release asset downloads](https://img.shields.io/github/downloads/ShianMike/SHARPpy-Reimagined/total?color=F59E0B)](https://github.com/ShianMike/SHARPpy-Reimagined/releases "Downloads of all release assets, including updater metadata")
+![Tauri 2 + React 19](https://img.shields.io/badge/Desktop-Tauri_2_+_React_19-F59E0B)
+![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v340---2026-10-27)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v340---2026-10-27)
 
 </div>
 
@@ -42,6 +45,76 @@ Logs can copy a diagnostic summary with the operation, provider, time, error
 category and recovery action, excluding credentials and raw request details.
 Before an update installs, review which preferences and caches remain and which
 open soundings, edits and history will be lost.
+
+## Screenshots
+
+Explore the app's main workflows below. Some toolbar and sidebar details have
+since been refined.
+
+<details open>
+<summary><strong>Overview · forecast, live weather and sounding workflows</strong></summary>
+
+[![Overview with direct entry points to Model Viewer, Live Tracking and sounding sources](docs/images/v3.2.0/overview.jpg)](docs/images/v3.2.0/overview.jpg)
+
+</details>
+
+<details>
+<summary><strong>Model Viewer · forecast fields and playback</strong></summary>
+
+[![Model Viewer with HRRR surface theta-e, wind barbs and forecast playback](docs/images/v3.2.0/model-viewer.jpg)](docs/images/v3.2.0/model-viewer.jpg)
+
+</details>
+
+<details>
+<summary><strong>Two panels · synchronized forecast comparison</strong></summary>
+
+[![Two synchronized forecast panels showing surface theta-e and dewpoint](docs/images/v3.2.0/two-panels.jpg)](docs/images/v3.2.0/two-panels.jpg)
+
+</details>
+
+<details>
+<summary><strong>Four panels · independent products and scales</strong></summary>
+
+[![Four forecast panels showing theta-e, dewpoint, temperature and relative humidity](docs/images/v3.2.0/four-panels.jpg)](docs/images/v3.2.0/four-panels.jpg)
+
+</details>
+
+<details>
+<summary><strong>Forecast downloads · saved hours and playback readiness</strong></summary>
+
+[![Forecast download controls with saved hours, memory readiness and cache status](docs/images/v3.2.0/download-details.jpg)](docs/images/v3.2.0/download-details.jpg)
+
+</details>
+
+<details>
+<summary><strong>Live Tracking · radar products and measured values</strong></summary>
+
+[![Live Tracking with Base Reflectivity and Velocity in synchronized radar panels](docs/images/v3.2.0/live-tracking.jpg)](docs/images/v3.2.0/live-tracking.jpg)
+
+</details>
+
+<details>
+<summary><strong>Soundings · Skew-T, hodograph and profile editing</strong></summary>
+
+[![Imported HRRR sounding with linked Skew-T, hodograph, editing and export controls](docs/images/v3.2.0/sounding.jpg)](docs/images/v3.2.0/sounding.jpg)
+
+</details>
+
+<details>
+<summary><strong>Settings · preferences and weather cache management</strong></summary>
+
+[![Storage settings with forecast and live-weather cache usage and clearing controls](docs/images/v3.2.0/settings.jpg)](docs/images/v3.2.0/settings.jpg)
+
+</details>
+
+<details>
+<summary><strong>Updates · release highlights</strong></summary>
+
+[![Updates settings with the installed version and release highlights](docs/images/v3.2.0/updates.jpg)](docs/images/v3.2.0/updates.jpg)
+
+[![What's new popup introducing the installed release](docs/images/v3.2.0/whats-new.jpg)](docs/images/v3.2.0/whats-new.jpg)
+
+</details>
 
 ## Get started
 

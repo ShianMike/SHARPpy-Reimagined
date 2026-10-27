@@ -15,6 +15,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Restore the README's release-download, desktop and analysis badges and its
+  screenshot tour, while keeping the description focused on v3.4.0.
 - Allow `python -m sharpmod.tools.model_extract` to use the same command-line
   entry point as `model-extract`, avoiding a circular import during startup.
   Cover help, model listing, invalid arguments and the canonical library facade.

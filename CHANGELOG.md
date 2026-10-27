@@ -126,6 +126,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hour's product availability is checked. Cancel work when its model, run or
   verified product selection changes, keep Stop Download available during checks,
   and clear stopped jobs before returning to an earlier selection.
+  Keep the download-control test focused on its four required hour states to
+  avoid full-run rendering causing timeouts on hosted test machines.
 - Reuse readable saved frames to verify product availability when provider
   inventories fail, keeping previously downloaded maps accessible after restart
   without offering unsaved or corrupt fields.

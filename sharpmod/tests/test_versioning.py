@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import importlib.util
 import os
+import re
 import tomllib
 from pathlib import Path
 
@@ -159,6 +160,8 @@ def test_readme_feature_summary_names_the_current_version():
         f"## What's new in {package_version}",
     ]
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    # Existing screenshot paths retain the version when they were captured.
+    readme = re.sub(r"\]\([^)]*\)", "]", readme)
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     released_versions = [
         line.split("[v", 1)[1].split("]", 1)[0].removesuffix(" Legacy")

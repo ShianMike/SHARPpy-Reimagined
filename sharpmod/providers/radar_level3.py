@@ -275,7 +275,7 @@ def palette(product="velocity") -> dict:
         if mosaic
         else REFLECTIVITY_STOPS,
         "units": "mph" if velocity else "dBZ",
-        "display": "fixed",
+        "display": "auto" if velocity else "fixed",
         "stepped": False,
         "floor": None,
         "ceiling": None,

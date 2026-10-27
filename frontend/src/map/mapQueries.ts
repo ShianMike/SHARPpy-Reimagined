@@ -8,11 +8,10 @@ import { BASE_QUERY_OPTIONS, mapKeys, QUERY_KEYS } from "../lib/backend/queryOpt
 import { profileSettings } from "../lib/graphics/profileSettings";
 import { useGraphicsStore } from "../stores/graphicsStore";
 import { panelWeather, useMapStore } from "../stores/mapStore";
-import { useForecastStore } from "../stores/forecastStore";
 import { useAppStore } from "../stores/appStore";
 import { useSoundingStore } from "../stores/soundingStore";
 import { releaseTime } from "../features/sounding/soundingTime";
-import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type MapCatalog, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
+import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
 import { nearestRadarSite } from "./nearestSite";
 
 const OUTLOOK_STALE_MS = 10 * 60_000;
@@ -20,16 +19,7 @@ const AVAILABILITY_STALE_MS = 10 * 60_000;
 /** Used until the first radar frame states its own update interval. */
 const RADAR_DEFAULT_REFRESH_MS = 120_000;
 
-export function useMapCatalog(): UseQueryResult<MapCatalog> {
-  const client = useBackendClient();
-  const model = useForecastStore((state) => state.modelKey) ?? "hrrr";
-  return useQuery({
-    ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.catalog(model),
-    queryFn: () => client.getMapCatalog(model),
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-}
+export { useMapCatalog } from "./catalogQuery";
 
 export interface FrameRequest {
   model: string;

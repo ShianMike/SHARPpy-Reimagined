@@ -6,6 +6,8 @@ import { FIELD_MS, FOUR_PRODUCTS, page, results, setupMapHarness, chooseProduct,
   loadedField, loadedPanels, forecastIdentity, mapCentre, fieldOutcome, shot } from "./mapSupport";
 
 const phase = process.env.SHARPPY_ACCEPTANCE_PHASE;
+const previousVersion = process.env.SHARPPY_ACCEPTANCE_PREVIOUS_VERSION;
+const expectedVersion = process.env.SHARPPY_ACCEPTANCE_EXPECTED_VERSION;
 const output = process.env.E2E_SCREENSHOT_DIR;
 const workspaces = () => page.getByRole("navigation", { name: "Workspaces" });
 const sections = () => page.getByRole("navigation", { name: "Settings sections" });
@@ -21,7 +23,9 @@ test.describe("installed native acceptance", () => {
   test("preferences survive installation and repeated native restart", async () => {
     test.skip(phase === "profile");
     if (phase === "update") test.setTimeout(6 * 60_000);
-    const version = phase === "seed" || phase === "update" ? "3.2.0" : "3.2.1";
+    if (previousVersion === undefined || expectedVersion === undefined) throw new Error("The native acceptance script must provide both versions");
+    const version = phase === "seed" || phase === "update" ? previousVersion : expectedVersion;
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/u);
     const notes = page.getByRole("dialog", { name: `What’s new in ${version}` });
     await expect(workspaces()).toBeVisible();
     if (phase === "upgrade") {
@@ -34,6 +38,9 @@ test.describe("installed native acceptance", () => {
       await notes.getByRole("button", { name: "Got it", exact: true }).click();
     }
     await workspaces().getByRole("button", { name: "Settings", exact: true }).click();
+    await sections().getByRole("button", { name: "Updates", exact: true }).click();
+    await expect(page.getByText(`Current version: ${version}`, { exact: true })).toBeVisible();
+    results.version = version;
     await sections().getByRole("button", { name: "Appearance", exact: true }).click();
     if (phase === "seed") await page.getByRole("radio", { name: /Light/u }).check();
     await expect(page.getByRole("radio", { name: /Light/u })).toBeChecked();
@@ -57,7 +64,7 @@ test.describe("installed native acceptance", () => {
       await workspaces().getByRole("button", { name: "Settings", exact: true }).click();
       await sections().getByRole("button", { name: "Updates", exact: true }).click();
       await page.getByRole("button", { name: "Check for updates", exact: true }).click();
-      await expect(page.getByText("Version 3.2.1 is available", { exact: true })).toBeVisible({ timeout: 40_000 });
+      await expect(page.getByText(`Version ${expectedVersion} is available`, { exact: true })).toBeVisible({ timeout: 40_000 });
       await shot("interactive-update-available.png", true);
       // The real signed updater exits this process after launching NSIS.
       await page.getByRole("button", { name: "Install update", exact: true }).click();

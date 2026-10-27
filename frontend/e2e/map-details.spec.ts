@@ -2,7 +2,7 @@ import { camera, deckLayers, mapErrors, nextFrames, waitForMapDrawn } from "./su
 import { regionStats } from "./support/pixels";
 import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
-import { chooseThroughSearch, layerRow } from "./support/ui";
+import { chooseThroughSearch, layerRow, resolved } from "./support/ui";
 
 test("projection changes release the old canvases' display-scaling observers", async ({ page }) => {
   await page.goto("/");
@@ -119,12 +119,15 @@ test("Point buttons and source disclosure use the accent on hover and keyboard f
   await waitForMapDrawn(page);
   await chooseThroughSearch(page, "72357");
   const point = page.getByRole("complementary", { name: "Map details", exact: true });
+  const heading = point.getByRole("heading", { name: "Point", exact: true });
+  await expect(heading).toBeVisible();
+  await expect(heading.locator("svg")).toHaveCount(0);
   const summary = point.locator("summary");
   const zoom = point.getByRole("button", { name: "Zoom to station", exact: true });
   for (const colorScheme of ["dark", "light"] as const) {
     await page.emulateMedia({ colorScheme });
     await expect(page.locator("html")).toHaveAttribute("data-theme", colorScheme);
-    const accent = await point.getByRole("heading", { name: "Point", exact: true }).locator("svg").evaluate((element) => getComputedStyle(element).color);
+    const accent = await resolved(page, "--accent-bright", "color");
     await summary.hover();
     await expect(summary).toHaveCSS("color", accent);
     await zoom.hover();

@@ -7,8 +7,6 @@ acquisition and overlay lifecycle are coordinated by ``hrrr_field_fetch`` and
 from __future__ import annotations
 
 from sharpmod.providers.hrrr_products import Palette
-from sharpmod.models.lambert_grid import HRRR_GRID
-from sharpmod.models.lambert_grid import HRRR_PROJ4
 from sharpmod.maps.map_overlays import MAX_RASTER_BYTES
 import io
 import numpy as np
@@ -16,14 +14,16 @@ from sharpmod.providers import hrrr_field as _api
 
 
 def index_map(size: tuple[int, int],
-              bounds: tuple[float, float, float, float]) -> _api._IndexMap:
-    """Return the cached output-frame to HRRR-grid index map.
+              bounds: tuple[float, float, float, float], *,
+              model: str = "hrrr") -> _api._IndexMap:
+    """Return the cached output-frame to native-model-grid index map.
 
     This is the expensive part of a first render -- a projection of every output
     pixel -- and it depends only on the frame geometry, so it is computed once
     and then shared by every product, every run and every forecast hour.
     """
-    key = (int(size[0]), int(size[1]), tuple(round(value, 6) for value in bounds))
+    grid = _api.field_grid(model)
+    key = (model, grid.shape, int(size[0]), int(size[1]), tuple(round(value, 6) for value in bounds))
     with _api._INDEX_LOCK:
         cached = _api._INDEX_CACHE.get(key)
         if cached is not None:
@@ -46,14 +46,21 @@ def index_map(size: tuple[int, int],
             lat1 - lat0) / height
         lon_grid, lat_grid = np.meshgrid(lons, lats)
 
-        transformer = Transformer.from_crs(
-            CRS.from_epsg(4326), CRS.from_proj4(HRRR_PROJ4), always_xy=True)
-        xs, ys = transformer.transform(lon_grid.ravel(), lat_grid.ravel())
-        col = np.rint((np.asarray(xs) - _api.HRRR_X0) / _api.HRRR_SPACING).astype(np.int32)
-        row = np.rint((np.asarray(ys) - _api.HRRR_Y0) / _api.HRRR_SPACING).astype(np.int32)
-        inside = ((col >= 0) & (col < _api.HRRR_SHAPE[1])
-                  & (row >= 0) & (row < _api.HRRR_SHAPE[0]))
-        flat = np.where(inside, row.astype(np.int64) * _api.HRRR_SHAPE[1] + col,
+        if model in _api.GLOBAL_MODELS:
+            # Stabilize half-cell ties against decimal grid-spacing roundoff.
+            col = np.floor(np.round((lon_grid.ravel() + 180) / grid.spacing + 0.5, 8)).astype(np.int32) % grid.shape[1]
+            row = np.floor(np.round((90 - lat_grid.ravel()) / grid.spacing + 0.5, 8)).astype(np.int32)
+        else:
+            transformer = Transformer.from_crs(
+                CRS.from_epsg(4326),
+                CRS.from_proj4(_api.NAM_PROJ4 if model == "nam" or model in _api.HRW_MODELS else _api.HRRR_PROJ4),
+                always_xy=True)
+            xs, ys = transformer.transform(lon_grid.ravel(), lat_grid.ravel())
+            col = np.rint((np.asarray(xs) - grid.x0) / grid.spacing).astype(np.int32)
+            row = np.rint((np.asarray(ys) - grid.y0) / grid.spacing).astype(np.int32)
+        inside = ((col >= 0) & (col < grid.shape[1])
+                  & (row >= 0) & (row < grid.shape[0]))
+        flat = np.where(inside, row.astype(np.int64) * grid.shape[1] + col,
                         0).astype(np.int32)
 
         resolved = _api._IndexMap(width, height, tuple(bounds), flat, inside)

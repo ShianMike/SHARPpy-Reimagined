@@ -5,6 +5,7 @@ import { afterEach, expect, it } from "vitest";
 import { DEFAULT_UNITS } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
 import { SettingsView } from "./SettingsView";
+import { UnitSettings } from "./UnitSettings";
 
 const initial = useUiStore.getState();
 afterEach(() => { cleanup(); useUiStore.setState(initial, true); });
@@ -30,4 +31,13 @@ it("shows live examples, saves choices, restores them and resets only units", as
   await user.click(screen.getByRole("button", { name: "Reset units" }));
   expect(useUiStore.getState()).toMatchObject({ units: DEFAULT_UNITS, theme: "dark" });
   expect(screen.getByText("Map: 68 °F · Observations: 20 °C", { exact: true })).toBeTruthy();
+});
+
+it("keeps shortcut and Settings radio groups independent while sharing their saved value", async () => {
+  render(<><UnitSettings /><UnitSettings /></>);
+  const choices = screen.getAllByRole<HTMLInputElement>("radio", { name: "°F Fahrenheit" });
+  expect(choices[0]?.name).not.toBe(choices[1]?.name);
+  if (choices[0] === undefined) throw new Error("Missing unit choice");
+  await userEvent.click(choices[0]);
+  expect(choices.every((choice) => choice.checked)).toBe(true);
 });

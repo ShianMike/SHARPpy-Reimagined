@@ -16,7 +16,7 @@ it("edits in selected units, validates the canonical range and keeps untouched p
     { key: "temp", label: "Temperature", value: 21.123456, original: 20, unit: "°C", min: -150, max: 65 },
     { key: "u", label: "U wind", value: 350, original: 350, unit: "kt", min: -350, max: 350 },
   ] };
-  render(<PointEditor point={point} busy={false} onApply={onApply} onClose={() => undefined} />);
+  render(<PointEditor point={point} busy={false} onApply={onApply} />);
   const user = userEvent.setup();
   const temperature = screen.getByRole<HTMLInputElement>("spinbutton", { name: "Temperature °F" });
   const wind = screen.getByRole<HTMLInputElement>("spinbutton", { name: "U wind m/s" });
@@ -26,23 +26,23 @@ it("edits in selected units, validates the canonical range and keeps untouched p
   expect(screen.getByLabelText("U wind before").textContent).toBe("180.06 m/s");
   expect(temperature.closest("label")?.getAttribute("data-edited")).toBe("true");
   expect(wind.closest("label")?.getAttribute("data-edited")).toBe("false");
-  await user.click(screen.getByRole("button", { name: "Apply & recalculate" }));
+  await user.click(screen.getByRole("button", { name: "Apply changes" }));
   expect(onApply).toHaveBeenLastCalledWith({ temp: 21.123456, u: 350 });
   await user.clear(temperature);
   await user.type(temperature, "86");
   expect(screen.getByLabelText("Temperature before").textContent).toBe("68 °F");
-  await user.click(screen.getByRole("button", { name: "Apply & recalculate" }));
+  await user.click(screen.getByRole("button", { name: "Apply changes" }));
   expect(onApply).toHaveBeenLastCalledWith({ temp: 30, u: 350 });
   await user.clear(temperature);
   await user.type(temperature, "150");
-  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Apply & recalculate" }).disabled).toBe(true);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Apply changes" }).disabled).toBe(true);
   await user.clear(temperature);
-  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Apply & recalculate" }).disabled).toBe(true);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Apply changes" }).disabled).toBe(true);
 });
 
 it("keeps an unavailable original value explicit", () => {
   render(<PointEditor point={{ id: "wind:0", label: "Wind", x: 0.5, y: 0.5,
     values: [{ key: "u", label: "U wind", value: 10, original: null, unit: "kt", min: -350, max: 350 }] }}
-    busy={false} onApply={() => undefined} onClose={() => undefined} />);
+    busy={false} onApply={() => undefined} />);
   expect(screen.getByLabelText("U wind before").textContent).toBe("Unavailable");
 });

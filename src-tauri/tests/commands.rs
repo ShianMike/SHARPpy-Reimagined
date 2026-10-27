@@ -88,6 +88,40 @@ fn parse<T: DeserializeOwned>(value: Value) -> T {
 }
 
 #[test]
+fn global_forecast_cache_accepts_f384_and_rejects_later_hours() {
+    let launcher = FakeLauncher::with(vec![script(|mut io| async move {
+        for (model, count) in [("aigfs", 4), ("gfs", 209)] {
+            let request = io.expect("fields.cached").await.unwrap();
+            assert_eq!(request["params"]["model"], model);
+            assert_eq!(request["params"]["hours"].as_array().unwrap().len(), count);
+            io.reply(&request["id"], serde_json::json!([384])).await;
+        }
+        io.expect("shutdown").await;
+        0
+    })]);
+    let (_app, webview) = window(launcher);
+    let args = serde_json::json!({"model": "aigfs", "products": ["tmp-2m"],
+        "runTime": "2026-10-26T00:00:00Z", "hours": [0, 144, 360, 384]});
+    assert_eq!(
+        invoke_args(&webview, "get_cached_forecast_hours", args.clone()).unwrap(),
+        serde_json::json!([384])
+    );
+    let hours: Vec<u32> = (0..=120).chain((123..=384).step_by(3)).collect();
+    let mut gfs = args.clone();
+    gfs["model"] = serde_json::json!("gfs");
+    gfs["hours"] = serde_json::json!(hours);
+    assert_eq!(
+        invoke_args(&webview, "get_cached_forecast_hours", gfs).unwrap(),
+        serde_json::json!([384])
+    );
+    let mut invalid = args;
+    invalid["hours"] = serde_json::json!([385]);
+    let error: BackendError =
+        parse(invoke_args(&webview, "get_cached_forecast_hours", invalid).unwrap_err());
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
+}
+
+#[test]
 fn storage_commands_return_validated_usage_and_reject_arbitrary_paths() {
     let (_app, webview) = window(FakeLauncher::with(vec![]));
     assert_eq!(
@@ -313,6 +347,93 @@ fn every_raster_route_rejects_invalid_base64_padding_size_and_png_signatures() {
                 .unwrap()
         );
     }
+}
+
+#[test]
+fn ecmwf_catalogues_keep_run_hour_availability_and_validate_before_cache() {
+    let launcher = FakeLauncher::with(vec![script(|mut io| async move {
+        for hour in [None, Some(12), Some(360)] {
+            let request = io.expect("map.catalog").await.unwrap();
+            assert_eq!(request["params"]["model"], "ecmwf-ifs-9km");
+            assert_eq!(request["params"]["forecast_hour"], serde_json::json!(hour));
+            if hour.is_some() {
+                assert_eq!(request["params"]["run_time"], "2026-10-26T12:00:00Z");
+            }
+            let mut result = fixture("bridge/map/catalog.models.json")["ecmwf-ifs-9km"].clone();
+            if hour == Some(360) {
+                result["products"]
+                    .as_array_mut()
+                    .unwrap()
+                    .retain(|product| product["key"] != "snod");
+            }
+            io.reply(&request["id"], result).await;
+        }
+        io.expect("shutdown").await;
+        0
+    })]);
+    let (_app, webview) = window(launcher);
+    let initial = invoke_args(
+        &webview,
+        "get_map_catalog",
+        serde_json::json!({"model": "ecmwf-ifs-9km"}),
+    )
+    .unwrap();
+    assert_eq!(initial["products"].as_array().unwrap().len(), 20);
+    let error: BackendError = parse(
+        invoke_args(
+            &webview,
+            "get_map_catalog",
+            serde_json::json!({
+                "model": "ecmwf-ifs-9km", "forecastHour": 12
+            }),
+        )
+        .unwrap_err(),
+    );
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
+    for (hour, count) in [(12, 20), (360, 19)] {
+        let result = invoke_args(
+            &webview,
+            "get_map_catalog",
+            serde_json::json!({
+                "model": "ecmwf-ifs-9km", "runTime": "2026-10-26T12:00:00Z", "forecastHour": hour
+            }),
+        )
+        .unwrap();
+        assert_eq!(result["products"].as_array().unwrap().len(), count);
+    }
+}
+
+#[test]
+fn aigfs_accepts_f384_for_catalogues_fields_and_contours() {
+    let launcher = FakeLauncher::with(vec![script(|mut io| async move {
+        for (method, file) in [
+            ("map.catalog", "catalog.models.json"),
+            ("fields.grid", "field.result.json"),
+            ("fields.contours", "contours.result.json"),
+        ] {
+            let request = io.expect(method).await.unwrap();
+            assert_eq!(request["params"]["model"], "aigfs");
+            assert_eq!(request["params"]["forecast_hour"], 384);
+            let mut result = fixture(&format!("bridge/map/{file}"));
+            if method == "map.catalog" {
+                result = result["aigfs"].clone();
+            } else {
+                result["forecast_hour"] = serde_json::json!(384);
+            }
+            io.reply(&request["id"], result).await;
+        }
+        io.expect("shutdown").await;
+        0
+    })]);
+    let (_app, webview) = window(launcher);
+    let args = serde_json::json!({"model": "aigfs", "product": "hgt-wind-500",
+        "runTime": "2026-10-27T00:00:00Z", "forecastHour": 384});
+    let catalog = invoke_args(&webview, "get_map_catalog", args.clone()).unwrap();
+    assert_eq!(catalog["products"].as_array().unwrap().len(), 9);
+    let frame: Vec<u8> = parse(invoke_args(&webview, "get_weather_field", args.clone()).unwrap());
+    assert!(!frame.is_empty());
+    let contours = invoke_args(&webview, "get_field_contours", args).unwrap();
+    assert_eq!(contours["forecastHour"], 384);
 }
 
 #[test]

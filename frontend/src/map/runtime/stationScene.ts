@@ -240,6 +240,7 @@ function pickedOutlook(info: PickingInfo): AreaFill | undefined {
 
 /** deck.gl onHover: only the hover store changes. `origin` is the panel's viewport offset. */
 export function hoverFromPick(info: PickingInfo, panel: number, origin: { left: number; top: number }): void {
+  if (!useHoverStore.getState().inspecting) return;
   const x = origin.left + info.x;
   const y = origin.top + info.y;
   const station = pickedStation(info);

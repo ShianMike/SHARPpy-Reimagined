@@ -81,7 +81,8 @@ function MapView(): ReactNode {
       </div>
       <VisuallyHidden id={MAP_HINT_ID}>
         Arrow keys pan the map and plus and minus zoom. Select stations with the station search.
-        {live ? " Hover over weather layers for details." : " Click to pick a forecast point, or pan with the arrow keys and press Enter to inspect the point at the centre of the map."}
+        {" Inspect shows map hover readouts; Navigate hides them."}
+        {live ? null : " Click to pick a forecast point, or pan with the arrow keys and press Enter to inspect the point at the centre of the map."}
       </VisuallyHidden>
       <StationTooltip />
       <OutlookTooltip />

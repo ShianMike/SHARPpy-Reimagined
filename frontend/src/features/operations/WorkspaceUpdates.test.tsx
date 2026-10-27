@@ -196,7 +196,7 @@ it("keeps appearance, playback and graphics settings functional across sections"
   await user.click(screen.getByRole("switch", { name: "Loop forecast animation" }));
   expect(useUiStore.getState()).toMatchObject({ speed: 2, loop: !wasLooping });
   await user.click(screen.getByRole("button", { name: "Map rendering" }));
-  await user.click(screen.getByRole("radio", { name: /^Low/u }));
+  await user.click(screen.getByRole("button", { name: "Low" }));
   expect(useGraphicsStore.getState().override).toBe("low");
   await user.click(screen.getByRole("button", { name: "Device Info" }));
   expect(screen.getByTestId("capability-table")).toBeTruthy();

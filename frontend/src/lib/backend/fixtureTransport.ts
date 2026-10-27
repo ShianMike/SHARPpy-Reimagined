@@ -56,6 +56,7 @@ export const SCENARIOS = [
   "basemap-missing",
   // Soundings: opening one fails as no provider has data.
   "sounding-error",
+  "render-disconnected",
   // Map data: every field frame is unpublished; outlooks, radar, and the UWyo list fail.
   "field-error",
   "overlay-error",
@@ -182,8 +183,7 @@ function rejectWith(fixture: unknown): Promise<never> {
 
 export function createTransport(scenarioParam: string | null = scenarioFromLocation()): Transport {
   const scenario = resolveScenario(scenarioParam);
-  let catalogCalls = 0;
-  let opened = 0;
+  let catalogCalls = 0, opened = 0, renderAttempts = 0;
   let storage = structuredClone(storageFixture);
   const frames = fixtureFrameCache();
 
@@ -248,6 +248,7 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
     export_threshold_csv: () => Promise.resolve(copy(thresholdCsvFixture)),
     render_sounding: () => fetch(renderExampleUrl).then((response) => response.arrayBuffer()),
     render_sounding_view: async () => {
+      if (scenario === "render-disconnected" && renderAttempts++ === 0) throw new Error("Simulated connection loss");
       const response = await fetch(renderExampleUrl);
       const buffer = await response.arrayBuffer();
       const bytes = new Uint8Array(buffer);
@@ -256,7 +257,11 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
       for (const byte of bytes) binary += String.fromCharCode(byte);
       return { ...copy(viewExample) as object, image: btoa(binary), width: dimensions.getUint32(16), height: dimensions.getUint32(20) };
     },
-    get_map_catalog: (args) => Promise.resolve(copy((modelMapCatalogs as Readonly<Record<string, unknown>>)[String(args?.model)] ?? mapCatalog)),
+    get_map_catalog: (args) => {
+      const catalog = copy((modelMapCatalogs as Readonly<Record<string, unknown>>)[String(args?.model)] ?? mapCatalog) as typeof mapCatalog;
+      if (String(args?.model).startsWith("hrw-") && args?.forecastHour === 0) catalog.products = catalog.products.filter((product) => product.key !== "uh-0-3km" && product.key !== "maxuvv");
+      return Promise.resolve(catalog);
+    },
     get_weather_field: (args) => (scenario === "field-error" ? rejectWith(fieldUnavailable) : fieldFor(args)),
     get_weather_alerts: (args) => scenario === "overlay-error" ? rejectWith(overlayFailed) : Promise.resolve({ ...copy(weatherAlerts) as Record<string, unknown>, validTime: args?.validTime }),
     get_spc_outlook: (args) =>

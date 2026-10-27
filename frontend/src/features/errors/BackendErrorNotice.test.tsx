@@ -51,7 +51,7 @@ const EXPECTED: Readonly<Record<AnyBackendError["code"], string>> = {
   FIELD_FETCH_FAILED: "retry",
   OVERLAY_FETCH_FAILED: "retry",
   CONTRACT_VIOLATION: "log",
-  TRANSPORT_FAILED: "none",
+  TRANSPORT_FAILED: "retry",
 };
 
 afterEach(() => {
@@ -122,7 +122,7 @@ describe("BackendErrorNotice", () => {
     ["get_sounding_progress", "Sounding download progress could not be checked"],
     ["inspect_wrf", "The WRF file could not be inspected"],
     ["get_sounding_trends", "Sounding trends could not be loaded"],
-    ["render_sounding_view", "The sounding view could not be drawn"],
+    ["render_sounding_view", "Sounding image unavailable"],
     ["get_radar_sites", "Radar sites could not be loaded"],
     ["get_radar_site_frame", "The radar site image could not be loaded"],
     ["get_satellite_frame", "The satellite image could not be loaded"],

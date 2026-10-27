@@ -4,11 +4,14 @@ import { useEffectiveRadarSite, useRadarSiteFrame } from "../mapQueries";
 import { radarValues } from "../pngImages";
 import { radarCodeAt, type RadarValues } from "../radarValues";
 import { formatValue } from "../field/colourize";
+import { convertUnit, displayUnit } from "../../lib/displayUnits";
+import { useUiStore } from "../../stores/uiStore";
 import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { PointerValue } from "./FieldTooltip";
 import { useHoverStore } from "./hoverStore";
 
 export function RadarTooltip({ panel }: { panel: number }): ReactNode {
+  const units = useUiStore((state) => state.units);
   const visible = useMapStore((state) => panelLayers(state, panel).radar.visible);
   const { radarProduct, radarTilt, radarScope } = useMapStore((state) => panelWeather(state, panel));
   const site = useEffectiveRadarSite(panel);
@@ -30,7 +33,8 @@ export function RadarTooltip({ panel }: { panel: number }): ReactNode {
   if (pointer === null || frame === undefined || samples == null) return null;
   const code = radarCodeAt(samples, frame.bounds, pointer.longitude, pointer.latitude);
   const value = samples.values[code];
+  const unit = displayUnit(frame.units, units, frame.palette?.display);
   const text = code === samples.folded ? "Range folded" : value == null ? "No data here"
-    : `${samples.lowerBounds.has(code) ? "≥ " : ""}${frame.product === "correlation-coefficient" ? value.toFixed(3) : formatValue(value)}${frame.units === "" ? "" : ` ${frame.units}`}`;
+    : `${samples.lowerBounds.has(code) ? "≥ " : ""}${frame.product === "correlation-coefficient" ? value.toFixed(3) : formatValue(convertUnit(value, frame.units, unit, frame.palette?.display))}${unit === "" ? "" : ` ${unit}`}`;
   return <PointerValue pointer={pointer} label={`${frame.siteId} · ${frame.label}`} text={text} />;
 }

@@ -5,7 +5,7 @@ import { useBackendClient } from "../lib/backend/BackendProvider";
 import { failureOf } from "../lib/backend/errors";
 import { useForecastStore } from "../stores/forecastStore";
 import { contourQueryOptions } from "./contourQueries";
-import { fieldQueryOptions } from "./mapQueries";
+import { fieldQueryOptions, useMapCatalog } from "./mapQueries";
 import { useDrawnProducts } from "./panelField";
 import { queryFrame } from "./queryFrame";
 import { mapKeys } from "../lib/backend/queryOptions";
@@ -17,12 +17,18 @@ export type ForecastHourState = "cached" | "loading" | "missing" | "failed" | "u
 export function useFrameDownload() {
   const context = useForecastContext();
   const products = useDrawnProducts();
+  const checkingProducts = useMapCatalog().isPending;
   const client = useBackendClient();
   const queryClient = useQueryClient();
   const controller = useRef<AbortController | null>(null);
   const retries = useRef(new Map<number, AbortController>());
   const [status, setStatus] = useState<DownloadStatus | null>(null);
-  const key = JSON.stringify([context?.model.key, context?.run, context?.hours, products.map((p) => p.key).sort()]);
+  const scope = JSON.stringify([context?.model.key, context?.run, context?.hours]);
+  const nextKey = JSON.stringify([scope, products.map((p) => p.key).sort()]);
+  const [selection, setSelection] = useState({ scope, key: nextKey });
+  if (selection.scope !== scope || !checkingProducts && selection.key !== nextKey) setSelection({ scope, key: nextKey });
+  // Checking another hour must not replace the active queue's verified selection.
+  const key = checkingProducts && selection.scope === scope ? selection.key : nextKey;
   const current = status?.key === key ? status : null;
   const total = context?.hours.length ?? 0;
   const loaded = (current?.done ?? 0) - (current?.failed.length ?? 0);
@@ -116,7 +122,7 @@ export function useFrameDownload() {
     };
     // Bound the queue to two hours; a long run must not flood providers or RAM.
     void Promise.all([worker(), worker()]).then(() => {
-      if (!job.signal.aborted) setStatus((value) => value?.key === key ? { ...value, running: false } : value);
+      if (controller.current === job) setStatus((value) => value?.key === key ? { ...value, running: false } : value);
     });
   };
   const message = running ? `Downloading forecast hours: ${String(loaded)} of ${String(total)} processed.`

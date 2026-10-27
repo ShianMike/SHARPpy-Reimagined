@@ -60,9 +60,12 @@ from sharpmod.providers.hrrr_products import (
     SOURCE_SURFACE,
     HrrrProduct,
     Palette,
+    ECMWF_MODELS,
+    GLOBAL_MODELS,
     get_product,
 )
-from sharpmod.models.lambert_grid import HRRR_GRID, HRRR_PROJ4
+from sharpmod.models.lambert_grid import HRRR_GRID, HRRR_PROJ4, NAM_GRID, NAM_PROJ4, HRW_GRID
+from sharpmod.providers.hrrr_products import HRW_MODELS
 from sharpmod.models.model_transport import DownloadCancelled
 from sharpmod.maps.map_overlays import MAX_RASTER_BYTES, OverlayRaster
 
@@ -112,6 +115,22 @@ HRRR_Y0 = HRRR_GRID.y0
 #: so an axis-aligned box necessarily includes corners outside the model -- those
 #: come back transparent.
 COVERAGE_BOUNDS = (-134.5, -60.5, 20.5, 53.0)
+NAM_COVERAGE_BOUNDS = NAM_GRID.bounds()
+
+
+def field_grid(model: str = "hrrr"):
+    """Return the grid encoded by this model's native field products."""
+    if model in GLOBAL_MODELS:
+        from sharpmod.providers.ecmwf_fields import grid
+        return grid(model)
+    return HRW_GRID if model in HRW_MODELS else NAM_GRID if model == "nam" else HRRR_GRID
+
+
+def field_bounds(model: str = "hrrr"):
+    if model in GLOBAL_MODELS:
+        from sharpmod.providers.ecmwf_fields import BOUNDS
+        return BOUNDS
+    return HRW_GRID.bounds() if model in HRW_MODELS else NAM_COVERAGE_BOUNDS if model == "nam" else COVERAGE_BOUNDS
 
 #: Output frame size. Chosen at roughly the native 3 km resolution of the source:
 #: coarser would throw away model detail the user asked to see, finer would only
@@ -231,6 +250,25 @@ def pin_request(run: datetime, fxx: int | None = None) -> tuple[datetime, int]:
 
 
 def grib_url(run: datetime, fxx: int, source: str, model: str = "hrrr", *, release=None) -> str:
+    if model == "gfs":
+        return (f"https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.{run:%Y%m%d}/{run:%H}/atmos/"
+                f"gfs.t{run:%H}z.pgrb2.0p25.f{int(fxx):03d}")
+    if model == "aigfs":
+        product = "sfc" if source == SOURCE_SURFACE else "pres"
+        return (f"https://nomads.ncep.noaa.gov/pub/data/nccf/com/aigfs/prod/aigfs.{run:%Y%m%d}/"
+                f"{run:%H}/model/atmos/grib2/aigfs.t{run:%H}z.{product}.f{int(fxx):03d}.grib2")
+    if model in HRW_MODELS:
+        core = "fv3" if model == "hrw-fv3" else "arw"
+        domain = "conusmem2" if model == "hrw-wrf-nssl" else "conus"
+        return (f"https://nomads.ncep.noaa.gov/pub/data/nccf/com/hiresw/prod/hiresw.{run:%Y%m%d}/"
+                f"hiresw.t{run:%H}z.{core}_5km.f{int(fxx):02d}.{domain}.grib2")
+    if model in ECMWF_MODELS:
+        from sharpmod.providers.ecmwf_fields import grib_url as ecmwf_url
+        return ecmwf_url(run, fxx, source, model)
+    if model == "nam":
+        product = "awip12" if source == SOURCE_SURFACE else "awphys"
+        return (f"https://noaa-nam-pds.s3.amazonaws.com/nam.{run:%Y%m%d}/"
+                f"nam.t{run:%H}z.{product}{int(fxx):02d}.tm00.grib2")
     if model == "nam-3km-conus":
         return (f"https://noaa-nam-pds.s3.amazonaws.com/nam.{run:%Y%m%d}/"
                 f"nam.t{run:%H}z.conusnest.hiresf{int(fxx):02d}.tm00.grib2")
@@ -450,8 +488,14 @@ def fetch_inventory(url: str, *, opener=None, timeout=None,
 
     limit_timeout, _limit_bytes = _remote_limits()
     call = opener or _default_opener
-    payload = call(url + ".idx", timeout or limit_timeout, 4 * 1024 * 1024)
-    rows = parse_inventory(payload.decode("utf-8", errors="replace"))
+    is_ecmwf = "/ifs/" in url
+    index_url = url.removesuffix(".grib2") + ".index" if is_ecmwf else url + ".idx"
+    payload = call(index_url, timeout or limit_timeout, 4 * 1024 * 1024)
+    if is_ecmwf:
+        from sharpmod.providers.ecmwf_fields import parse_inventory as parse_ecmwf
+        rows = parse_ecmwf(payload.decode("utf-8", errors="replace"))
+    else:
+        rows = parse_inventory(payload.decode("utf-8", errors="replace"))
     if not rows:
         raise HrrrFieldUnavailable("model inventory was empty or unreadable")
 
@@ -512,8 +556,9 @@ def _load_eccodes():
             "'era5' extra to enable them") from error
 
 
-def decode_message(payload: bytes, eccodes=None, *, field_index: int = 0) -> np.ndarray:
-    """Decode one GRIB message into the full HRRR grid.
+def decode_message(payload: bytes, eccodes=None, *, field_index: int = 0,
+                   model: str = "hrrr") -> np.ndarray:
+    """Decode one GRIB message into the selected model's native grid.
 
     Takes exactly one message. The caller slices it out of a downloaded span
     using the byte offset and length the inventory already gave us, which is
@@ -561,7 +606,19 @@ def decode_message(payload: bytes, eccodes=None, *, field_index: int = 0) -> np.
         try:
             ni = int(api.codes_get(handle, "Ni"))
             nj = int(api.codes_get(handle, "Nj"))
+            if model in GLOBAL_MODELS:
+                native = field_grid(model)
+                expected_header = {
+                    "gridType": "regular_ll", "Ni": native.shape[1], "Nj": native.shape[0],
+                    "latitudeOfFirstGridPointInDegrees": 90.0, "longitudeOfFirstGridPointInDegrees": 180.0 if model in ECMWF_MODELS else 0.0,
+                    "iDirectionIncrementInDegrees": native.spacing, "jDirectionIncrementInDegrees": native.spacing,
+                    "jScansPositively": 0, "iScansNegatively": 0, "uvRelativeToGrid": 0,
+                    "jPointsAreConsecutive": 0, "alternativeRowScanning": 0,
+                }
+                if any(api.codes_get(handle, key) != value for key, value in expected_header.items()):
+                    raise HrrrFieldError(f"{model} field does not match its published latitude/longitude grid")
             values = np.asarray(api.codes_get_values(handle), dtype=np.float32)
+            scale = 1000 if model in ECMWF_MODELS and api.codes_get(handle, "shortName") == "tp" else 1
             try:
                 missing = float(api.codes_get(handle, "missingValue"))
             except Exception:  # noqa: BLE001 - not every message declares one
@@ -569,10 +626,13 @@ def decode_message(payload: bytes, eccodes=None, *, field_index: int = 0) -> np.
         finally:
             api.codes_release(handle)
     grid = values.reshape(nj, ni)
-    if grid.shape != HRRR_SHAPE:
+    expected = field_grid(model).shape
+    if grid.shape != expected:
         raise HrrrFieldError(
-            f"unexpected model grid {grid.shape}, wanted {HRRR_SHAPE}")
-    return np.where(grid == missing, MISSING, grid)
+            f"unexpected model grid {grid.shape}, wanted {expected}")
+    if model in {"aigfs", "gfs"}:
+        grid = np.roll(grid, ni // 2, axis=1)  # Match the map's -180 to 180 longitude order.
+    return np.where(grid == missing, MISSING, grid) * scale
 
 
 # --------------------------------------------------------------------------- #

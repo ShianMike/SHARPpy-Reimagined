@@ -217,7 +217,9 @@ _CONFIGS = (
         notes="13-km RAP AWIPS pressure-level forecast grids"),
     ModelConfig(
         "nam", "NAM", "nam", "awphys",
-        fxx_values=_hours(84, 3), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        fxx_values=_hours(84, 3), domain="CONUS",
+        domain_bounds=lambert_grid.NAM_GRID.bounds(),
+        domain_outline=lambert_grid.NAM_GRID.outline(),
         grid_spacing_km=12.0,
         notes="12-km NAM CONUS pressure-level forecast grids"),
     ModelConfig(
@@ -321,6 +323,13 @@ _CONFIGS = (
         grid_spacing_km=27.8,
         notes="ECMWF open-data deterministic IFS pressure levels"),
     ModelConfig(
+        "ecmwf-ifs-9km", "ECMWF 9km", "ifs", "oper",
+        search=IFS_PRESSURE_SEARCH, fxx_values=_ifs_hours(),
+        kwargs={"resolution": "0p1"}, grid_spacing_km=11.1,
+        notes="ECMWF IFS 9 km forecast on the 0.1-degree open-data grid. "
+              "All published pressure levels and a verified surface row. "
+              "Published about two hours after the 0.25-degree feed"),
+    ModelConfig(
         "ecmwf-aifs", "ECMWF-AIFS", "aifs", "oper",
         search=IFS_PRESSURE_SEARCH, fxx_values=_aifs_hours(),
         grid_spacing_km=27.8,
@@ -405,6 +414,7 @@ _ALIASES = {
     "ecmwf": "ecmwf-ifs",
     "ifs": "ecmwf-ifs",
     "ecmwf-ifs": "ecmwf-ifs",
+    "ecmwf-9km": "ecmwf-ifs-9km",
     "aifs": "ecmwf-aifs",
     # Bare "icon" is claimed here, unlike "ecmwf" above. Nothing resolved it
     # before -- it raised with "the installed Herbie has no ICON loader" -- so
@@ -652,10 +662,13 @@ def _run_datetime(run_time, config):
     return _floor_to_cycle(run_time, config.cycles)
 
 
-def _herbie_kwargs(config, member=None):
+def _herbie_kwargs(config, member=None, *, surface=False):
     kwargs = dict(config.kwargs)
     if member is not None:
         kwargs["member"] = member
+    if surface and config.herbie_model == "ifs" \
+            and kwargs.get("resolution") == "0p1":
+        kwargs["levtype"] = "sfc"
     return kwargs
 
 
@@ -679,6 +692,19 @@ def _load_herbie_class():
 
 def _create_herbie(Herbie, *args, **kwargs):
     """Construct Herbie without leaking its pandas-3 deprecation warning."""
+    if kwargs.get("model") == "ifs" and kwargs.get("resolution") == "0p1":
+        class SplitIFS(Herbie):
+            def find_grib(self):
+                # The installed IFS template predates the 0.1-degree file split.
+                suffix = f"-fc-{getattr(self, 'levtype', 'pl')}.grib2"
+                self.SOURCES = {
+                    name: str(url).replace("-fc.grib2", suffix)
+                    for name, url in self.SOURCES.items()
+                }
+                self.LOCALFILE = self.get_remoteFileName
+                return super().find_grib()
+
+        Herbie = SplitIFS
     with known_herbie_deprecations():
         return Herbie(*args, **kwargs)
 
@@ -924,7 +950,7 @@ def _parse_time(value):
 
 from sharpmod.tools.model_extract_retrieval import (  # noqa: E402
     _combine_grib_payloads,
-    _cfs_surface_companion,
+    _surface_companion,
     _f000_publishes_surface_height,
     _surface_height_companion,
     _retrieve_rrfs_dataset,

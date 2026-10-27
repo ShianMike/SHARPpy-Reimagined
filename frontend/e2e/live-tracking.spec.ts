@@ -188,8 +188,15 @@ test("single-site radar controls follow the active live panel and its scale", as
   await expect(liveRadar.getByRole("combobox", { name: "Site Tilt" })).toContainText("1.3°");
   const scale = firstScale;
   await expect(scale).toHaveCount(1);
-  await expect(scale.getByRole("slider")).toHaveAttribute("aria-valuemin", "-200");
-  await expect(scale.getByRole("slider")).toHaveAttribute("aria-valuemax", "200");
+  await expect(scale).toHaveAccessibleDescription(/Velocity · kt · Panel 1/u);
+  const velocity = scale.getByRole("slider");
+  // The source color table spans ±200 mph; the default display unit is knots.
+  await expect.poll(async () => Number(await velocity.getAttribute("aria-valuemin"))).toBeCloseTo(-173.7952484, 6);
+  await expect.poll(async () => Number(await velocity.getAttribute("aria-valuemax"))).toBeCloseTo(173.7952484, 6);
+  await velocity.press("Home");
+  await expect(scale.getByRole("tooltip")).toHaveText("-173.8 kt");
+  await velocity.press("End");
+  await expect(scale.getByRole("tooltip")).toHaveText("173.8 kt");
   await expect(scale.getByRole("button", { name: "Radar layer" })).toHaveAttribute("aria-pressed", "true");
   await scale.getByRole("button", { name: "Radar layer" }).click();
   await layerRow(page, "radar");

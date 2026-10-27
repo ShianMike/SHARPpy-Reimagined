@@ -2,6 +2,7 @@
 import { Blob as NodeBlob } from "node:buffer";
 import { crc32, deflateSync } from "node:zlib";
 import radar from "@contracts/public/map/radar.shrf?url&inline";
+import velocityPalette from "@contracts/public/map/radar-velocity.palette.json";
 import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
@@ -10,6 +11,7 @@ import { renderWithBackend } from "../../test/backendHarness";
 import { useAppStore } from "../../stores/appStore";
 import { useMapStore } from "../../stores/mapStore";
 import { useLiveTrackingStore } from "../../stores/liveTrackingStore";
+import { useUiStore } from "../../stores/uiStore";
 import { RadarScale } from "../../features/tracking/RadarScale";
 import { decodeRadarValues, radarCodeAt } from "../radarValues";
 import { useHoverStore } from "./hoverStore";
@@ -18,6 +20,7 @@ import { RadarTooltip } from "./RadarTooltip";
 const codes = [[0, 1, 2, 136], [2, 6, 4, 8], [130, 2, 6, 240], [255, 128, 7, 33], [44, 5, 1, 0]];
 const bounds = { west: -100, east: -96, south: 30, north: 35 };
 const initial = useMapStore.getState(), app = useAppStore.getState();
+const ui = useUiStore.getState();
 const clock = useLiveTrackingStore.getState(), now = Date.parse("2026-10-17T08:00:00Z");
 const hover = { panel: 0, longitude: -96.5, latitude: 34.5, x: 100, y: 150 };
 
@@ -52,10 +55,11 @@ beforeEach(() => {
   vi.stubGlobal("Blob", NodeBlob);
   vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 4, height: 5 }));
   useMapStore.setState(initial, true); useAppStore.setState(app, true); useHoverStore.getState().clear();
+  useUiStore.setState(ui, true);
   useLiveTrackingStore.setState({ ...clock, now, selectedTime: null }, true);
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 });
-afterEach(() => { cleanup(); useMapStore.setState(initial, true); useAppStore.setState(app, true); useLiveTrackingStore.setState(clock, true); useHoverStore.getState().clear(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); useMapStore.setState(initial, true); useAppStore.setState(app, true); useLiveTrackingStore.setState(clock, true); useUiStore.setState(ui, true); useHoverStore.getState().clear(); vi.unstubAllGlobals(); });
 
 it("decodes every PNG filter without losing native codes or values beyond the colour scale", async () => {
   const samples = await decodeRadarValues(new Blob([scan()]));
@@ -81,7 +85,7 @@ it("ignores images without native values and rejects malformed calibration or ov
 
 it.each([
   ["reflectivity", "Base Reflectivity", "dBZ", 35, "35.0 dBZ", 12],
-  ["velocity", "Velocity", "mph", -100, "-100 mph", 10],
+  ["velocity", "Velocity", "mph", -100, "-86.9 kt", 10],
   ["correlation-coefficient", "Correlation Coefficient", "", 0.987, "0.987", 12],
   ["echo-tops", "Enhanced Echo Tops", "kft", 40, "40.0 kft", 0],
 ])("shows %s from the hovered panel and scan without requesting on pointer moves", async (product, label, units, value, text, delay) => {
@@ -93,13 +97,24 @@ it.each([
   const source = parseShrf(Uint8Array.from(atob(radar.split(",")[1] ?? ""), (char) => char.charCodeAt(0)).buffer);
   const transport = createTransport(), call = transport.call.bind(transport);
   const request = vi.fn<typeof transport.call>((command, args) => command === "get_radar_site_frame"
-    ? Promise.resolve(encodeShrf({ ...source.header, kind: "radar-site", siteId: "KTLX", product, label, units, bounds, validTime: new Date(now - delay * 60_000).toISOString().replace(".000Z", "Z") }, png)) : call(command, args));
+    ? Promise.resolve(encodeShrf({ ...source.header, ...(product === "velocity" ? { palette: velocityPalette } : {}), kind: "radar-site", siteId: "KTLX", product, label, units, bounds, validTime: new Date(now - delay * 60_000).toISOString().replace(".000Z", "Z") }, png)) : call(command, args));
   transport.call = request;
   const { queryClient, view } = renderWithBackend(<><RadarTooltip panel={0} /><RadarScale panel={0} /></>, transport);
   act(() => { useHoverStore.getState().setPointer(hover); });
   await waitFor(() => { expect(screen.getByTestId("pointer-value").textContent).toContain(text); });
   expect(screen.getByTestId("pointer-value").textContent).toContain(`KTLX · ${label}`);
   expect(screen.getByTestId("radar-scale").getAttribute("aria-description")).toContain("Scan 2026-10-17");
+  if (product === "velocity") {
+    const count = request.mock.calls.length;
+    expect(screen.getByTestId("radar-scale").getAttribute("aria-description")).toContain("Velocity · kt");
+    act(() => { useUiStore.getState().setUnits({ temperature: "°F", wind: "mph" }); });
+    expect(screen.getByTestId("pointer-value").textContent).toContain("-100 mph");
+    expect(screen.getByTestId("radar-scale").getAttribute("aria-description")).toContain("Velocity · mph");
+    act(() => { useUiStore.getState().setUnits({ temperature: "°C", wind: "m/s" }); });
+    expect(screen.getByTestId("pointer-value").textContent).toContain("-44.7 m/s");
+    expect(request).toHaveBeenCalledTimes(count);
+    act(() => { useUiStore.getState().setUnits(ui.units); });
+  }
   await waitFor(() => { expect(screen.queryByRole("img", { name: "Radar scan is 12 minutes behind the selected time" }) !== null).toBe(delay > 10); });
   act(() => { useHoverStore.getState().setOutlook({ label: "Tornado Warning", description: "", title: "NWS", subtitle: "", x: 100, y: 150 }); });
   expect(screen.getByTestId("pointer-value").textContent).toContain(text);

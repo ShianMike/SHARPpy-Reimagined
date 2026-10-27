@@ -104,6 +104,13 @@ def test_the_committed_map_fixtures_are_current():
         )
 
 
+@pytest.mark.parametrize("south", [12.190000000000005, 12.190000000000017])
+def test_transported_bounds_ignore_platform_projection_roundoff(south):
+    assert fields._bounds((-152.87862250405016, -49.41598658564436, south, 61.30917328500873)) == {
+        "west": -152.8786225, "east": -49.41598659, "south": 12.19, "north": 61.30917329,
+    }
+
+
 def test_cold_raster_and_geometry_share_one_acquisition(offline, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
@@ -138,6 +145,22 @@ def test_cold_raster_and_geometry_share_one_acquisition(offline, monkeypatch):
     model, product, run, hour = fields._request(request)
     path("contours", model, product.key, run, hour, fields.FRAME).unlink()
     assert cached_hours(cache_request) == []
+
+
+@pytest.mark.parametrize("model", ("ecmwf-ifs-9km", "openmeteo-ecmwf-ifs025"))
+def test_global_forecast_cache_uses_native_steps_through_f360(model):
+    from sharpmod.bridge.frame_cache import cached_hours, path, write
+    from sharpmod.tools.model_extract import forecast_hours
+
+    request = {"model": model, "products": ["tmp-2m"],
+               "run_time": "2026-10-26T00:00:00Z", "hours": list(forecast_hours(model, cycle_hour=0))}
+    write(path("grid", model, "tmp-2m", datetime(2026, 10, 26, tzinfo=UTC), 360, fields.FRAME),
+          {"product": "tmp-2m", "forecast_hour": 360})
+    assert len(request["hours"]) == 85
+    assert cached_hours(request) == [360]
+    for invalid in ({"hours": [147]}, {"run_time": "2026-10-26T18:00:00Z", "hours": [150]}):
+        with pytest.raises(BridgeError, match="ECMWF publishes"):
+            cached_hours({**request, **invalid})
 
 
 def test_auxiliary_failure_keeps_the_raster_and_can_retry(offline, monkeypatch):

@@ -1,13 +1,14 @@
-import { X } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Action, IconAction } from "../../ui/Controls";
+import { Action } from "../../ui/Controls";
 import type { ViewPoint } from "../../types/soundingView";
 import { convertUnit, displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
+import { useUpdateStore } from "../../stores/updateStore";
 import styles from "./Viewer.module.css";
 
-export function PointEditor({ point, busy, onApply, onClose }: {
-  point: ViewPoint; busy: boolean; onApply: (values: Record<string, number>) => void; onClose: () => void;
+export function PointEditor({ point, busy, onApply }: {
+  point: ViewPoint; busy: boolean; onApply: (values: Record<string, number>) => void;
 }): ReactNode {
   const units = useUiStore((state) => state.units);
   const fields = point.values.map((field) => {
@@ -22,16 +23,16 @@ export function PointEditor({ point, busy, onApply, onClose }: {
     const value = applied[field.key] ?? NaN;
     return values[field.key]?.trim() !== "" && Number.isFinite(value) && value >= field.min && value <= field.max;
   });
-  return <form className={styles.editor} data-motion="enter" aria-label="Edit selected level" onSubmit={(event) => {
+  return <form className={styles.editor} aria-label="Edit selected level" aria-busy={busy} onSubmit={(event) => {
     event.preventDefault(); if (valid && !busy) onApply(applied);
   }}>
-    <header><strong>{point.label}</strong><IconAction icon={X} label="Close level editor" size="sm" onClick={onClose} /></header>
+    <div className={styles.comparisonLabels} aria-hidden="true"><span>Original</span><span>New</span></div>
     <div className={styles.editFields}>{fields.map((field) => <label key={field.key} data-edited={field.original !== null && applied[field.key] !== field.original}>
-      <strong>{field.label}</strong><span className={styles.beforeValue}>Before <output aria-label={`${field.label} before`}>{field.before}</output></span><span>After
+      {fields.length > 1 ? <strong>{field.label}</strong> : null}
+      <div className={styles.valueComparison}><output aria-label={`${field.label} before`}>{field.before}</output><span className={styles.afterValue}>
       <input type="number" aria-label={`${field.label} ${field.displayUnit}`} step="any" min={Math.floor(convertUnit(field.min, field.unit, field.displayUnit) * 100) / 100} max={Math.ceil(convertUnit(field.max, field.unit, field.displayUnit) * 100) / 100} value={values[field.key] ?? ""} disabled={busy}
-        onChange={(event) => { setValues({ ...values, [field.key]: event.target.value }); }} />{field.displayUnit}
-    </span></label>)}</div>
-    <Action type="submit" tone="accent" disabled={!valid || busy}>Apply & recalculate</Action>
-    <small>Before shows the original profile. Apply to recalculate; undo any edit.</small>
+        onChange={(event) => { setValues({ ...values, [field.key]: event.target.value }); useUpdateStore.getState().noteSoundingWork(); }} /><span aria-hidden="true">{field.displayUnit}</span>
+    </span></div></label>)}</div>
+    <Action type="submit" tone="accent" disabled={!valid || busy} aria-label="Apply changes" aria-description="Recalculates the profile. Use Undo to revert.">{busy ? <LoaderCircle className="icon-sm" data-loading="true" aria-hidden="true" /> : null}{busy ? "Applying…" : "Apply"}</Action>
   </form>;
 }

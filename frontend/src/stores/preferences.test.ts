@@ -65,7 +65,7 @@ describe("the repository", () => {
     };
     const repository = createPreferencesRepository(() => broken);
     expect(repository.load()).toEqual(DEFAULT_PREFERENCES);
-    repository.save({ ...DEFAULT_PREFERENCES, graphicsOverride: "high" });
+    expect(repository.save({ ...DEFAULT_PREFERENCES, graphicsOverride: "high" })).toBe(false);
     expect(repository.load().graphicsOverride).toBe("high");
     expect(warn).toHaveBeenCalledTimes(1);
   });
@@ -76,11 +76,18 @@ describe("the repository", () => {
       throw new Error("QuotaExceededError");
     });
     const repository = createPreferencesRepository(() => storage);
-    repository.save({ ...DEFAULT_PREFERENCES, layerPanelCollapsed: true });
-    repository.save({ ...DEFAULT_PREFERENCES, layerPanelCollapsed: true, graphicsOverride: "low" });
+    expect(repository.save({ ...DEFAULT_PREFERENCES, layerPanelCollapsed: true })).toBe(false);
+    expect(repository.save({ ...DEFAULT_PREFERENCES, layerPanelCollapsed: true, graphicsOverride: "low" })).toBe(false);
     expect(repository.load()).toMatchObject({ layerPanelCollapsed: true, graphicsOverride: "low" });
     expect(storage.setItem).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports successful writes as persistent", () => {
+    const storage = memoryStorage();
+    const repository = createPreferencesRepository(() => storage);
+    expect(repository.save({ ...DEFAULT_PREFERENCES, graphicsOverride: "high" })).toBe(true);
+    expect(repository.load().graphicsOverride).toBe("high");
   });
 });
 

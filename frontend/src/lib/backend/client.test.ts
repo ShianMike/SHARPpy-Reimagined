@@ -1,7 +1,9 @@
 import catalogUnavailable from "@contracts/public/errors/CATALOG_UNAVAILABLE.json";
 import healthOk from "@contracts/public/health.ok.json";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnyBackendError } from "../../types/contracts";
+import { useLogStore } from "../../stores/logStore";
+import { formatDiagnosticSummary } from "../diagnostics";
 import { BackendClient } from "./client";
 import { BackendFailure } from "./errors";
 import { CATALOG_ERROR_FAILURES, SLOW_CATALOG_MS, createTransport } from "./fixtureTransport";
@@ -41,8 +43,51 @@ async function failureOf(promise: Promise<unknown>): Promise<AnyBackendError> {
 afterEach(() => {
   vi.useRealTimers();
 });
+beforeEach(() => { useLogStore.setState({ entries: [], nextId: 1 }); });
 
 describe("BackendClient error mapping", () => {
+  it("retains safe structured error context and excludes sensitive resource, details and message from summaries", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const client = new BackendClient(scripted(rejecting({
+      ...catalogUnavailable,
+      message: "password=private-message",
+      context: { operation: "get_station_catalog", provider: "python-bridge", resource: "C:/Users/private-user/stations?token=secret" },
+      details: { credentials: "private-key", url: "https://user:password@example.test" },
+    })).transport);
+    await failureOf(client.getStationCatalog());
+    const entry = useLogStore.getState().entries[0];
+    expect(entry?.diagnostic).toEqual({ operation: "get_station_catalog", provider: "python-bridge", code: "CATALOG_UNAVAILABLE" });
+    const summary = formatDiagnosticSummary(entry?.time ?? "", entry?.diagnostic);
+    expect(summary).toContain("Error category: Data availability");
+    expect(summary).not.toMatch(/private|secret|password|https:|C:\//u);
+  });
+
+  it("uses the trusted command when backend context is absent or contains an unrecognized operation", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    for (const context of [undefined, { operation: "IDENTIFIER_SHAPED_SECRET", provider: "https://user:password@example.test" }]) {
+      const client = new BackendClient(scripted(rejecting({ ...catalogUnavailable, context })).transport);
+      await failureOf(client.getStationCatalog());
+      expect(useLogStore.getState().entries[0]?.diagnostic).toEqual({ operation: "get_station_catalog", provider: "Not recorded", code: "CATALOG_UNAVAILABLE" });
+    }
+  });
+
+  it("adds diagnostic metadata to transport, contract and bridge status failures", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await failureOf(new BackendClient(scripted(rejecting(new Error("private connection details"))).transport).getStationCatalog());
+    expect(useLogStore.getState().entries[0]?.diagnostic).toMatchObject({ operation: "get_station_catalog", code: "TRANSPORT_FAILED" });
+    await failureOf(new BackendClient(scripted(() => Promise.resolve({})).transport).getStationCatalog());
+    expect(useLogStore.getState().entries[0]?.diagnostic).toMatchObject({ operation: "get_station_catalog", code: "CONTRACT_VIOLATION" });
+    const { transport, emit } = scripted(() => Promise.resolve(null));
+    await new BackendClient(transport).onBridgeStatus(() => undefined);
+    const error = { ...catalogUnavailable, context: { operation: "start_backend", provider: "python-bridge" } };
+    emit({ status: "restarting", attempt: 1, retryInMs: 1000, lastError: error });
+    expect(useLogStore.getState().entries[0]).toMatchObject({ level: "warning", diagnostic: { operation: "start_backend", provider: "python-bridge", code: "CATALOG_UNAVAILABLE" } });
+    emit({ status: "unavailable", error });
+    expect(useLogStore.getState().entries[0]).toMatchObject({ level: "error", diagnostic: { operation: "start_backend", provider: "python-bridge", code: "CATALOG_UNAVAILABLE" } });
+    emit({ status: "up", pid: 1 });
+    expect(useLogStore.getState().entries[0]?.diagnostic).toMatchObject({ operation: "bridge-status-changed", code: "CONTRACT_VIOLATION" });
+  });
+
   it("passes a BackendError rejection through as BackendFailure with one warning", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const client = new BackendClient(scripted(rejecting(catalogUnavailable)).transport);

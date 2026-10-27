@@ -3,7 +3,7 @@ import { nextFrames, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
-import { boxOf, isInside, viewportBox } from "./support/ui";
+import { boxOf, isInside, overlapArea, viewportBox } from "./support/ui";
 
 test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -63,7 +63,7 @@ test("unit choices fit at 1280 × 800, survive reload and reach the parameter pi
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await nextFrames(page);
-    expect(await content.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
+    expect(await content.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(0);
     expect(await content.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await expect(content.getByRole("button", { name: "Reset units" })).toBeVisible();
     await saveScreenshot(page, `browser-settings-units-${colorScheme}.png`);
@@ -139,6 +139,10 @@ test("panel titles open their parameter picker and selected categories stay on o
   expect((await boxOf(categories)).width).toBe(sidebarWidth);
   const [label, count] = await Promise.all([boxOf(category.locator("span")), boxOf(category.locator("small"))]);
   expect(count.x - label.x - label.width).toBeGreaterThanOrEqual(12);
+  const main = picker.getByRole("region", { name: "Parameter browser", exact: true });
+  const mainBox = await boxOf(main);
+  const results = picker.getByRole("region", { name: "Parameter results" });
+  const resultsBox = await boxOf(results);
   await picker.getByRole("button", { name: "Significant Tornado Parameter, Index", exact: true }).focus();
   const detail = picker.locator("#parameter-description");
   await expect(detail).toContainText("Significant Tornado Parameter");
@@ -147,18 +151,20 @@ test("panel titles open their parameter picker and selected categories stay on o
     await page.emulateMedia({ colorScheme });
     await nextFrames(page);
     expect(await categories.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    expect((await boxOf(detail)).height).toBeLessThanOrEqual(120);
+    expect(isInside(await boxOf(detail), viewportBox(page))).toBe(true);
+    expect(overlapArea(await boxOf(detail), await boxOf(main))).toBe(0);
+    expect(await boxOf(main)).toEqual(mainBox);
+    expect(await boxOf(results)).toEqual(resultsBox);
     await detail.press("End");
     await expect.poll(() => detail.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
     expect(isInside(await boxOf(picker), viewportBox(page))).toBe(true);
     await saveScreenshot(page, `browser-panel-parameters-${colorScheme}.png`);
   }
   await categories.getByRole("button", { name: /^All/u }).click();
-  const results = picker.getByRole("region", { name: "Parameter results" });
   for (const [label, unit] of [
-    ["Updraft Helicity: 0-3 km AGL (run max)", "m^2/s^2"],
+    ["Updraft Helicity: 0-3 km AGL (run max)", "m²/s²"],
     ["Significant Tornado Parameter", "Index"],
-    ["Effective Storm Relative Helicity", "m^2/s^2"],
+    ["Effective Storm Relative Helicity", "m²/s²"],
     ["Energy Helicity Index: 0-1 km AGL", "Index"],
     ["Energy Helicity Index: 0-3 km AGL", "Index"],
   ] as const) {

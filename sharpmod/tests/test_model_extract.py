@@ -1042,7 +1042,7 @@ def test_cfs_surface_companion_uses_flux_product_and_complete_contract(
 
     monkeypatch.setattr(model_extract, "download_herbie_subset", fake_download)
 
-    result, size, url, fields = model_extract._cfs_surface_companion(
+    result, size, url, fields = model_extract._surface_companion(
         FakeHerbie,
         model_extract.get_config("cfs"),
         datetime(2026, 7, 8, 0, tzinfo=timezone.utc),

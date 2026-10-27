@@ -114,8 +114,8 @@ impl Router {
         if !time_ok(run_time) {
             return Err(invalid(&context, "runTime must be an RFC 3339 time"));
         }
-        if forecast_hour > 84 {
-            return Err(invalid(&context, "forecastHour must be 0 to 84"));
+        if forecast_hour > 384 {
+            return Err(invalid(&context, "forecastHour must be 0 to 384"));
         }
         let mut params = json!({ "model": model, "product": product, "run_time": run_time, "forecast_hour": forecast_hour });
         if let Some(id) = request_id {

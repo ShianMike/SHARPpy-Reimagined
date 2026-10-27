@@ -80,7 +80,7 @@ export function parseContourLines(value: unknown, path = ""): ContourLines {
   return {
     product: expectString(obj.product, at(path, "product"), { minLength: 1, maxLength: 40 }),
     runTime: expectTimestamp(obj.runTime, at(path, "runTime")),
-    forecastHour: expectInteger(obj.forecastHour, at(path, "forecastHour"), { min: 0, max: 84 }),
+    forecastHour: expectInteger(obj.forecastHour, at(path, "forecastHour"), { min: 0, max: 384 }),
     unit: expectString(obj.unit, at(path, "unit"), { maxLength: 40 }),
     interval,
     segments,

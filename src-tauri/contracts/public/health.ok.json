@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "SHARPpy Reimagined",
-    "version": "3.3.0",
+    "version": "3.4.0",
     "tauriVersion": "2.12.1",
     "buildProfile": "debug",
     "logFile": "C:\\Users\\example\\AppData\\Local\\io.github.shianmike.sharppy-reimagined\\logs\\sharppy-reimagined.log"
@@ -16,14 +16,14 @@
   "python": {
     "version": "3.11.14",
     "executable": "C:\\repo\\.gribenv\\Scripts\\python.exe",
-    "sharpmodVersion": "3.3.0"
+    "sharpmodVersion": "3.4.0"
   },
   "scientificBackend": {
     "status": "ok",
     "requestedBackend": "auto",
     "activeBackend": "rust",
     "rustInstalled": true,
-    "rustVersion": "3.3.0",
+    "rustVersion": "3.4.0",
     "fallbackReason": null
   },
   "checkedAt": "2026-10-04T01:02:05Z"

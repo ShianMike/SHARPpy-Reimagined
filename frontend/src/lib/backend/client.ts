@@ -42,7 +42,7 @@ import { callWithSignal, type CommandName, type Transport } from "./transport";
 import { recordLog } from "../../stores/logStore";
 import { parseSoundingView } from "../contracts/soundingView";
 import type { SoundingView, ViewRequest } from "../../types/soundingView";
-function warnFailure(failure: BackendFailure, extra?: unknown): void {
+function warnFailure(failure: BackendFailure, operation: string, extra?: unknown): void {
   const { code, context, details } = failure.error;
   const parts: unknown[] = [`[backend] ${code} in ${context?.operation ?? "unknown operation"}: ${failure.error.message}`];
   if (details !== undefined) {
@@ -52,7 +52,7 @@ function warnFailure(failure: BackendFailure, extra?: unknown): void {
     parts.push(extra);
   }
   console.warn(...parts);
-  recordLog("error", context?.operation ?? "Backend", failure.error.message, `${code}${context?.provider === undefined ? "" : ` · ${context.provider}`}`);
+  recordLog("error", operation, failure.error.message, `${code}${context?.provider === undefined ? "" : ` · ${context.provider}`}`, { operation: context?.operation ?? operation, provider: context?.provider, code });
 }
 export function failureFromRejection(reason: unknown, operation: string): BackendFailure {
   try {
@@ -79,7 +79,7 @@ export class BackendClient {
     if (key === this.lastBridgeStatus) return;
     this.lastBridgeStatus = key;
     const error = status.status === "unavailable" ? status.error : status.status === "restarting" ? status.lastError : null;
-    recordLog(status.status === "unavailable" ? "error" : status.status === "restarting" ? "warning" : "info", "Backend", `Backend ${status.status}`, error === null ? "" : `${error.code} · ${error.message}`);
+    recordLog(status.status === "unavailable" ? "error" : status.status === "restarting" ? "warning" : "info", "Backend", `Backend ${status.status}`, error === null ? "" : `${error.code} · ${error.message}`, error === null ? undefined : { operation: error.context?.operation ?? "start_backend", provider: error.context?.provider, code: error.code });
   }
   async getStationCatalog(): Promise<StationCatalog> {
     markOnce(MARKS.catalogRequested);
@@ -142,8 +142,8 @@ export class BackendClient {
     return this.request("render_sounding_view", parseSoundingView, { soundingId, ascent, imageMode, view });
   }
 
-  getMapCatalog(model = "hrrr"): Promise<MapCatalog> {
-    return this.request("get_map_catalog", parseMapCatalog, { model });
+  getMapCatalog(model = "hrrr", runTime?: string, forecastHour?: number): Promise<MapCatalog> {
+    return this.request("get_map_catalog", parseMapCatalog, { model, ...(runTime === undefined ? {} : { runTime, forecastHour }) });
   }
 
   getWeatherField(product: string, runTime: string, forecastHour: number, model = "hrrr", signal?: AbortSignal): Promise<FieldFrame> {
@@ -249,7 +249,7 @@ export class BackendClient {
           status = parseBridgeStatus(payload, "");
         } catch (error) {
           if (error instanceof ContractError) {
-            warnFailure(new BackendFailure(contractViolation(operation, error)));
+            warnFailure(new BackendFailure(contractViolation(operation, error)), operation);
             return;
           }
           throw error;
@@ -275,7 +275,7 @@ export class BackendClient {
     } catch (reason) {
       if (signal?.aborted === true) throw reason;
       const failure = failureFromRejection(reason, command);
-      warnFailure(failure, failure.error.code === "TRANSPORT_FAILED" ? reason : undefined);
+      warnFailure(failure, command, failure.error.code === "TRANSPORT_FAILED" ? reason : undefined);
       throw failure;
     }
     try {
@@ -288,7 +288,7 @@ export class BackendClient {
     } catch (error) {
       if (error instanceof ContractError) {
         const failure = new BackendFailure(contractViolation(command, error));
-        warnFailure(failure);
+        warnFailure(failure, command);
         throw failure;
       }
       throw error;

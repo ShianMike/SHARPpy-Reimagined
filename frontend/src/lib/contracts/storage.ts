@@ -27,7 +27,7 @@ export function parseCacheClearResult(value: unknown): CacheClearResult {
 }
 
 export function parseCachedHours(value: unknown): number[] {
-  const hours = expectArray(value, "cachedHours", (hour, path) => expectInteger(hour, path, { min: 0, max: 84 }));
-  if (hours.length > 85 || hours.some((hour, index) => index > 0 && hour <= (hours[index - 1] ?? -1))) throw new ContractError("cachedHours", "hours must be unique and sorted");
+  const hours = expectArray(value, "cachedHours", (hour, path) => expectInteger(hour, path, { min: 0, max: 384 }));
+  if (hours.length > 385 || hours.some((hour, index) => index > 0 && hour <= (hours[index - 1] ?? -1))) throw new ContractError("cachedHours", "hours must be unique and sorted");
   return hours;
 }

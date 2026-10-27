@@ -37,30 +37,60 @@ it("offers exactly the requested models in both selectors and resolves a removed
     },
   });
   const model = await screen.findByRole("combobox", { name: "Model" });
-  const names = ["HRRR", "RAP", "NAM", "NAM 3km CONUS", "RDPS", "HRW WRF-ARW", "HRW WRF-NSSL", "HRW FV3", "RRFS", "REFSm1", "REFSm2", "REFSm3", "REFSm4", "REFSm5", "GFS", "ECMWF"].toSorted();
+  const names = ["HRRR", "RAP", "NAM", "NAM 3km CONUS", "RDPS", "HRW WRF-ARW", "HRW WRF-NSSL", "HRW FV3", "RRFS", "REFSm1", "REFSm2", "REFSm3", "REFSm4", "REFSm5", "GFS", "GDPS", "ECMWF", "ECMWF 9km"].toSorted();
   await userEvent.click(model);
   expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label")).toSorted()).toEqual(names);
+  const soundingModels = screen.getByRole("listbox", { name: "Model" });
+  expect(within(soundingModels).getByRole("group", { name: "CONUS" }).querySelectorAll('[role="option"]')).toHaveLength(11);
+  expect(within(within(soundingModels).getByRole("group", { name: "Global" })).getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["GFS", "ECMWF 9km", "ECMWF", "GDPS"]);
+  expect(within(within(soundingModels).getByRole("group", { name: "Regional" })).getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["RAP", "NAM", "RDPS"]);
+  await userEvent.keyboard("{End}");
+  expect(document.activeElement).toBe(screen.getByRole("option", { name: "RDPS" }));
+  await userEvent.keyboard("{ArrowUp}");
+  expect(document.activeElement).toBe(screen.getByRole("option", { name: "NAM" }));
+  await userEvent.keyboard("g");
+  expect(document.activeElement).toBe(screen.getByRole("option", { name: "GFS" }));
   expect((model as HTMLButtonElement).value).toBe("hrrr");
   await userEvent.keyboard("{Escape}");
   await userEvent.click(screen.getByRole("button", { name: "Choose model" }));
   const dialog = screen.getByRole("dialog", { name: "Forecast model" });
   expect(document.activeElement).toBe(screen.getByRole("searchbox", { name: "Search models" }));
-  expect(within(dialog).getAllByRole("button", { name: /^Choose /u }).map((button) => button.getAttribute("aria-label")?.replace("Choose ", "")).toSorted()).toEqual(names);
+  expect(within(dialog).getByRole<HTMLInputElement>("radio", { name: "CONUS" }).checked).toBe(true);
+  expect(within(within(dialog).getByRole("group", { name: "CONUS" })).getAllByRole("button")).toHaveLength(11);
+  expect(within(dialog).queryByRole("button", { name: "Choose ECMWF" })).toBeNull();
+  await userEvent.click(within(dialog).getByRole("radio", { name: "Global" }));
+  expect(within(within(dialog).getByRole("group", { name: "Global" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Choose GFS", "Choose ECMWF 9km", "Choose ECMWF", "Choose GDPS", "Choose AIGFS"]);
+  await userEvent.click(within(dialog).getByRole("radio", { name: "Regional" }));
+  expect(within(within(dialog).getByRole("group", { name: "Regional" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Choose RAP", "Choose NAM", "Choose RDPS"]);
   await userEvent.click(screen.getByRole("button", { name: "Close forecast setup" }));
   await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
   await waitFor(() => { expect(request).toMatchObject({ request: { kind: "model", model: "hrrr" } }); });
 });
 
-it("shares ECMWF run limits between the timeline and sounding form and requests Open-Meteo", async () => {
-  const model = modelCatalog.models.find((item) => item.key === "openmeteo-ecmwf-ifs025");
+it("keeps AIGFS in maps and safely falls back to HRRR in the sounding form", async () => {
+  useForecastStore.getState().setModel("aigfs");
+  useSoundingStore.getState().setModel({ modelKey: "aigfs", atStation: false, latitude: "35", longitude: "-97" });
+  renderWithBackend(<><ForecastControls /><TimelineRegion /><ModelForm /></>, createTransport());
+  const model = await screen.findByRole<HTMLButtonElement>("combobox", { name: "Model" });
+  expect(model.value).toBe("hrrr");
+  await userEvent.click(model);
+  expect(screen.queryByRole("option", { name: "AIGFS" })).toBeNull();
+  expect(screen.getByRole("option", { name: "GDPS" })).toBeTruthy();
+  await userEvent.keyboard("{Escape}");
+  await waitFor(() => { expect(screen.getByRole("button", { name: "Choose model" }).textContent).toContain("AIGFS"); });
+  expect(screen.getByRole("slider", { name: "Forecast hour" }).getAttribute("max")).toBe("64");
+});
+
+it.each(["openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km"])("shares %s run limits between the timeline and sounding form and requests the selected model", async (modelKey) => {
+  const model = modelCatalog.models.find((item) => item.key === modelKey);
   const fullRun = model?.recentRuns.find((run) => new Date(run).getUTCHours() === 0);
   const shortRun = model?.recentRuns.find((run) => new Date(run).getUTCHours() === 6);
   expect(fullRun).toBeDefined();
   expect(shortRun).toBeDefined();
-  useForecastStore.getState().setModel("openmeteo-ecmwf-ifs025");
+  useForecastStore.getState().setModel(modelKey);
   useForecastStore.getState().setRun(fullRun ?? "");
   useForecastStore.getState().setHour(360);
-  useSoundingStore.getState().setModel({ modelKey: "openmeteo-ecmwf-ifs025", runTime: shortRun ?? null, forecastHour: 360, atStation: false, latitude: "35", longitude: "-97" });
+  useSoundingStore.getState().setModel({ modelKey, runTime: shortRun ?? null, forecastHour: 360, atStation: false, latitude: "35", longitude: "-97" });
   const base = createTransport();
   let request: unknown;
   renderWithBackend(<><ForecastControls /><TimelineRegion /><ModelForm /></>, {
@@ -82,7 +112,7 @@ it("shares ECMWF run limits between the timeline and sounding form and requests 
   await userEvent.click(hours);
   await userEvent.click(screen.getByRole("option", { name: "F144" }));
   await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
-  await waitFor(() => { expect(request).toMatchObject({ request: { model: "openmeteo-ecmwf-ifs025", runTime: shortRun, forecastHour: 144 } }); });
+  await waitFor(() => { expect(request).toMatchObject({ request: { model: modelKey, runTime: shortRun, forecastHour: 144 } }); });
 });
 
 it("links forecast setup and timeline to the same run limits and valid time", async () => {
@@ -91,6 +121,8 @@ it("links forecast setup and timeline to the same run limits and valid time", as
   await waitFor(() => { expect(slider.getAttribute("max")).toBe("18"); });
   const controls = screen.getByRole("group", { name: "Forecast" });
   const timeline = screen.getByRole("region", { name: "Forecast timeline" });
+  expect(within(timeline).queryByText("HRRR", { exact: true })).toBeNull();
+  expect(within(timeline).getByText("F000", { exact: true })).not.toBeNull();
   expect(controls.querySelector("[title]")).toBeNull();
   expect(timeline.querySelector("[title]")).toBeNull();
   for (const button of within(controls).getAllByRole("button")) {
@@ -123,8 +155,15 @@ it("searches models, returns to the map, and scrubs sparse hours while pausing p
   renderWithBackend(<><ForecastControls /><TimelineRegion /></>, createTransport());
   await waitFor(() => { expect(screen.getByRole<HTMLButtonElement>("button", { name: "Choose model" }).disabled).toBe(false); });
   await userEvent.click(screen.getByRole("button", { name: "Choose model" }));
+  await userEvent.type(screen.getByRole("searchbox", { name: "Search models" }), "Regional");
+  expect(screen.getByRole("button", { name: "Choose RDPS" })).toBeTruthy();
+  expect(screen.queryByRole("group", { name: "Global" })).toBeNull();
+  await userEvent.clear(screen.getByRole("searchbox", { name: "Search models" }));
   await userEvent.type(screen.getByRole("searchbox", { name: "Search models" }), "GFS");
   expect(screen.queryByRole("button", { name: "Choose HRRR" })).toBeNull();
+  expect(screen.queryByRole("group", { name: "CONUS" })).toBeNull();
+  expect(screen.queryByRole("group", { name: "Regional" })).toBeNull();
+  expect(within(screen.getByRole("group", { name: "Global" })).getAllByRole("button")).toHaveLength(2);
   await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Choose GFS" }));
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(document.activeElement).toBe(screen.getByRole("button", { name: "Choose model" }));

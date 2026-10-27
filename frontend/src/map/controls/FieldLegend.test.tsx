@@ -58,8 +58,10 @@ it("chooses round converted labels at their true positions without changing sour
   expect(dense.every((tick, index) => index === 0 || tick.at - (dense[index - 1]?.at ?? 0) >= 0.16)).toBe(true);
   expect(convertedTicks(0.01, 0.06).map((tick) => Number(tick.value.toFixed(2)))).toEqual([0.01, 0.02, 0.03, 0.04, 0.05, 0.06]);
   useUiStore.getState().setUnits({ temperature: "°C", wind: "m/s" });
-  render(<FieldLegend palette={{ ...palette, units: "°F", stops: [[-61, "#113355"], [122, "#abcdef"]], ceiling: null }} />);
+  const view = render(<FieldLegend palette={{ ...palette, units: "°F", stops: [[-61, "#113355"], [122, "#abcdef"]], ceiling: null }} />);
   expect(screen.getAllByRole("listitem").map((tick) => tick.textContent)).toEqual(["-40", "-20", "0", "20", "40"]);
+  view.rerender(<FieldLegend palette={{ ...palette, units: "m^2/s^2" }} />);
+  expect(within(screen.getByRole("list", { name: "Scale ticks, m²/s²" })).getAllByRole("listitem").map((tick) => tick.textContent)).toEqual(["-800", "-500", "-250", "-25"]);
 });
 
 it.each([

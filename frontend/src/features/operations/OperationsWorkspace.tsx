@@ -40,7 +40,7 @@ export function OperationsWorkspace(): ReactNode {
       <section className={styles.workflow} aria-labelledby="continue-title">
         <header className={styles.workflowHeading}><h2 id="continue-title">Model Viewer</h2><p>Explore forecast guidance.</p></header>
         {context === null ? <div className={styles.forecastCopy}><h3>{forecast.status === "loading" ? "Preparing your forecast…" : "Forecast unavailable"}</h3><p>{forecast.status === "error" ? forecast.error.message : forecast.status === "empty" ? "No forecast models are available from the backend." : "Loading models and parameters."}</p></div> : <>
-          <div className={styles.forecastCopy}><h3>{context.model.label} <span>{forecastLabel(context.hour)}</span></h3><p>{context.fieldsAvailable ? product?.label ?? "Model guidance" : "Point soundings available for this model"}</p></div>
+          <div className={styles.forecastCopy}><h3>{context.model.label} <span>{forecastLabel(context.hour)}</span></h3><p>{context.fieldsAvailable ? product?.label ?? "Model guidance" : context.model.soundingsAvailable ? "Point soundings available for this model" : "Maps only"}</p></div>
           <dl className={styles.facts}>
             <div><dt>Valid · UTC</dt><dd><time dateTime={context.validTime} title={formatUtc(context.validTime)}>{compactUtc(context.validTime)}</time></dd></div>
             <div><dt>Run · UTC</dt><dd><time dateTime={context.run} title={formatUtc(context.run)}>{compactUtc(context.run)}</time></dd></div>

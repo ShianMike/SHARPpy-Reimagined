@@ -46,6 +46,8 @@ export interface PointerPosition {
 }
 
 export interface HoverState {
+  inspecting: boolean;
+  setInspecting: (inspecting: boolean) => void;
   hovered: HoveredStation | null;
   outlook: HoveredOutlook | null;
   report: HoveredReport | null;
@@ -63,6 +65,10 @@ const sameStation = (a: HoveredStation | null, b: HoveredStation | null): boolea
 
 export const useHoverStore = create<HoverState>()(
   subscribeWithSelector((set, get) => ({
+    inspecting: true,
+    setInspecting: (inspecting) => {
+      set({ inspecting, hovered: null, outlook: null, report: null, pointer: null });
+    },
     hovered: null,
     outlook: null,
     report: null,

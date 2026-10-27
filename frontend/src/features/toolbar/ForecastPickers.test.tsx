@@ -27,6 +27,31 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("keeps Winter Weather last and separates the description into a second glass card", async () => {
+  renderWithBackend(<ForecastControls />, createTransport("field-error"));
+  const trigger = screen.getByRole<HTMLButtonElement>("button", { name: "Choose parameter" });
+  await waitFor(() => { expect(trigger.disabled).toBe(false); });
+  await userEvent.click(trigger);
+  const dialog = screen.getByRole("dialog", { name: "Parameters" });
+  const browser = within(dialog).getByRole("region", { name: "Parameter browser" });
+  const description = within(dialog).getByRole("region", { name: "Parameter description" });
+  const categories = within(browser).getByRole("navigation", { name: "Parameter categories" });
+  const buttons = within(categories).getAllByRole("button");
+  expect(buttons).toHaveLength(10);
+  expect(buttons.at(-1)?.textContent).toBe("Winter Weather4");
+  expect(browser.contains(description)).toBe(false);
+  expect(browser.parentElement).toBe(description.parentElement);
+  expect(browser.getAttribute("data-surface")).toBe("glass");
+  expect(description.getAttribute("data-surface")).toBe("glass");
+  await userEvent.click(within(categories).getByRole("button", { name: /^Winter Weather/u }));
+  expect(within(browser).getByRole("region", { name: "Parameter results" }).querySelectorAll("button")).toHaveLength(4);
+  await userEvent.click(description);
+  expect(screen.getByRole("dialog", { name: "Parameters" })).toBe(dialog);
+  await userEvent.keyboard("{Escape}");
+  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Parameters" })).toBeNull(); });
+  expect(document.activeElement).toBe(trigger);
+});
+
 it("reports an incompatible map catalogue and recovers after the backend is updated", async () => {
   const incompatible = structuredClone(mapCatalog);
   for (const product of incompatible.products) Reflect.deleteProperty(product.palette, "display");
@@ -36,16 +61,23 @@ it("reports an incompatible map catalogue and recovers after the backend is upda
     ...base, call: (command, args) => command === "get_map_catalog" && staleBackend
       ? Promise.resolve(incompatible) : base.call(command, args),
   });
-  const retry = await screen.findByRole("button", { name: "Retry parameters" });
+  const dialog = await screen.findByRole("dialog", { name: "Parameters unavailable" });
+  expect(dialog.parentElement).toBe(document.body);
+  expect(within(screen.getByRole("group", { name: "Forecast" })).queryByRole("button", { name: "Retry" })).toBeNull();
   const parameter = screen.getByRole<HTMLButtonElement>("button", { name: "Choose parameter" });
   expect(parameter.textContent).toContain("Unavailable");
   expect(parameter.getAttribute("aria-description")).toContain("versions may not match");
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Choose model" }).disabled).toBe(false);
+  await userEvent.click(within(dialog).getByRole("button", { name: "Dismiss" }));
+  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Parameters unavailable" })).toBeNull(); });
+  expect(document.activeElement).toBe(parameter);
+  await userEvent.click(parameter);
+  const reopened = screen.getByRole("dialog", { name: "Parameters unavailable" });
   staleBackend = false;
-  await userEvent.click(retry);
+  await userEvent.click(within(reopened).getByRole("button", { name: "Retry" }));
   await waitFor(() => { expect(parameter.disabled).toBe(false); });
   expect(parameter.textContent).toContain("Composite Reflectivity");
-  expect(screen.queryByRole("button", { name: "Retry parameters" })).toBeNull();
+  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Parameters unavailable" })).toBeNull(); });
 });
 
 async function chooseDate(date: string): Promise<void> {
@@ -120,7 +152,8 @@ it("disables future dates and cycles, crosses day boundaries, and returns to the
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
-it.each(["tmp-2m", "rh-2m", "ltng"])("filters %s, previews keyboard-focused descriptions, and changes only the active panel", async (key) => {
+const exponentProducts = parseMapCatalog(mapCatalog).products.filter((product) => product.palette.units.includes("^"));
+it.each(["tmp-2m", "rh-2m", "ltng", ...exponentProducts.map((product) => product.key)])("filters %s, previews keyboard-focused descriptions, and changes only the active panel", async (key) => {
   const product = parseMapCatalog(mapCatalog).products.find((item) => item.key === key);
   if (product === undefined) throw new Error("Missing parameter fixture");
   useMapStore.setState({ panelLayout: 2, activePanel: 1 });
@@ -133,9 +166,12 @@ it.each(["tmp-2m", "rh-2m", "ltng"])("filters %s, previews keyboard-focused desc
   await userEvent.type(search, "no-such-parameter");
   await userEvent.click(screen.getByRole("button", { name: "Reset filters" }));
   await userEvent.click(within(screen.getByRole("navigation", { name: "Parameter categories" })).getByText(product.category, { exact: true }));
-  const choice = screen.getByRole("button", { name: `${product.label}, ${product.palette.units}` });
+  const unit = product.palette.units === "m^2/s^2" ? "m²/s²" : product.palette.units;
+  const choice = screen.getByRole("button", { name: `${product.label}, ${unit}` });
+  expect(choice.textContent).toContain(unit);
   act(() => { choice.focus(); });
   expect(document.getElementById("parameter-description")?.textContent).toContain(product.description);
+  expect(document.getElementById("parameter-description")?.textContent).toContain(unit);
   await userEvent.keyboard("{Enter}");
   expect(panelProduct(useMapStore.getState(), 1)).toBe(product.key);
   expect(panelProduct(useMapStore.getState(), 0)).toBe(firstPanel);

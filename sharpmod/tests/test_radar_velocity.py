@@ -39,7 +39,7 @@ def test_reference_colours_cover_signed_200_mph_and_keep_missing_values_transpar
     assert velocity.STOPS[0] == (-200, "#ffdadc")
     assert velocity.STOPS[-1] == (200, "#2d0000")
     palette = velocity.palette()
-    assert palette["units"] == "mph" and palette["display"] == "fixed"
+    assert palette["units"] == "mph" and palette["display"] == "auto"
     assert len(palette["stops"]) == 81
     values = np.ma.array(
         [-201, -200, 0, 200, 201, np.nan, 5], mask=[0, 0, 0, 0, 0, 0, 1]

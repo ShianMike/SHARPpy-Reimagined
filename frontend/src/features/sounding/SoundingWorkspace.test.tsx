@@ -103,7 +103,7 @@ describe("SoundingWorkspace", () => {
     const input = screen.getByRole("spinbutton", { name: /Temperature/u });
     const before = (input as HTMLInputElement).value;
     await userEvent.clear(input); await userEvent.type(input, "30");
-    await userEvent.click(screen.getByRole("button", { name: "Apply & recalculate" }));
+    await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
     await waitFor(() => { expect(useSoundingStore.getState().views[useSoundingStore.getState().activeId ?? ""]?.cursor).toBe(1); });
     expect(screen.getByTestId("sounding-stage").querySelector("svg title")?.textContent).toContain("30.0");
     expect(screen.getByLabelText("Temperature before").textContent).toContain(before);

@@ -1356,7 +1356,11 @@ PRODUCTS: MappingProxyType = MappingProxyType(
 DEFAULT_PRODUCT = "refc"
 
 
-FIELD_MODELS = ("hrrr", "rrfs-a", "nam-3km-conus", *(f"refs-m{i}" for i in range(1, 6)))
+ECMWF_MODELS = ("openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km")
+GLOBAL_MODELS = (*ECMWF_MODELS, "aigfs", "gfs")
+HRW_MODELS = ("hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3")
+FIELD_MODELS = ("hrrr", "rrfs-a", "nam", "nam-3km-conus", *(f"refs-m{i}" for i in range(1, 6)), *GLOBAL_MODELS, *HRW_MODELS)
+_HRW_UNSUPPORTED = frozenset({"ltng", "efhl", "prate", "prate-frzr", "prate-sleet", "prate-snow", "snod", "mucape", "scp", "stp"})
 # The reduced REFS member stream omits these products' ingredients.
 _REFS_UNSUPPORTED = frozenset({
     "hgt-wind-200", "mlcape", "mlcin", "mucape", "lapse-0-3km",
@@ -1367,7 +1371,7 @@ _SHEAR_LEVELS = (925, 850, 750, 650, 550, 450)
 
 
 def _shear_0_1km(fields: dict[str, np.ndarray]) -> np.ndarray:
-    """NAM has no 0-1 km shear record; interpolate winds above its own terrain."""
+    """Interpolate 1 km winds above the model's own terrain when no shear record exists."""
     surface = fields["sfchgt"]
     heights = np.stack([surface + 10, *(fields[f"hgt{p}"] for p in _SHEAR_LEVELS)])
     top = [
@@ -1388,29 +1392,48 @@ def available_products(model: str = "hrrr") -> tuple[HrrrProduct, ...]:
         raise ValueError(f"{model!r} has no map field catalogue")
     if model == "hrrr":
         return tuple(PRODUCTS.values())
+    if model == "aigfs":
+        keys = {*(f"hgt-wind-{level}" for level in (200, 300, 500, 700, 850)),
+                "tmp-2m", "wind-10m", "apcp", "lapse-700-500"}
+        return tuple(product for product in PRODUCTS.values() if product.key in keys)
+    if model in ECMWF_MODELS or model == "gfs":
+        from sharpmod.providers.ecmwf_fields import products
+        return tuple(PRODUCTS[product.key] for product in products()) if model == "gfs" else products()
+    is_nam = model in {"nam", "nam-3km-conus"}
+    is_hrw = model in HRW_MODELS
 
     def mapped(spec: FieldSpec) -> FieldSpec:
+        source = SOURCE_SURFACE if is_nam or is_hrw else spec.source
+        if model == "nam" and (spec.source == SOURCE_PRESSURE
+                               or spec.variable in {"VUCSH", "VVCSH"}):
+            source = SOURCE_PRESSURE
         return replace(
             spec,
-            source=SOURCE_SURFACE if model == "nam-3km-conus" else spec.source,
+            source=source,
             level=("entire atmosphere (considered as a single layer)" if spec.variable == "REFC"
                    else "100-1000 mb" if spec.variable == "MAXUVV" else spec.level),
             forecast=("max fcst" if spec.variable == "LTNG" else "* acc fcst"
-                      if model == "nam-3km-conus" and spec.variable == "APCP" else spec.forecast),
+                      if is_nam and spec.variable == "APCP" else spec.forecast),
         )
 
     products = []
     for product in PRODUCTS.values():
-        if model == "nam-3km-conus" and product.key in {"ltng", "efhl"}:
+        if is_nam and product.key in {"ltng", "efhl"}:
+            continue
+        if is_hrw and product.key in _HRW_UNSUPPORTED:
+            continue
+        if model == "nam" and product.key in {"uh-0-3km", "maxuvv"}:
             continue
         if model.startswith("refs-") and product.key in _REFS_UNSUPPORTED:
             continue
         if product.key == "lftx":
-            # NAM/RRFS encode this index with a Kelvin offset; HRRR does not.
+            # NAM/RRFS/HRW encode this index with a Kelvin offset; HRRR does not.
             product = replace(product, derive=_single("lftx", kelvin_to_celsius))
         if product.key == "maxuvv":
             product = replace(product, caveat="Native MAXUVV layer: 100-1000 mb. Hourly maxima are published from F001.")
-        if model == "nam-3km-conus" and product.key == "shear-0-1km":
+        if is_hrw and product.key == "uh-0-3km":
+            product = replace(product, label="Updraft Helicity: 0-3 km AGL (1 h max)")
+        if (is_nam or is_hrw) and product.key == "shear-0-1km":
             product = replace(
                 product,
                 fields=(F_SFC_HGT, _sfc("ugrd10", "UGRD", "10 m above ground"),

@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Eye, EyeOff, LoaderCircle, TriangleAlert } from "lucide-react";
 import { cx } from "../../lib/cx";
+import { displayUnit } from "../../lib/displayUnits";
+import { useUiStore } from "../../stores/uiStore";
 import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
 import { Surface } from "../../ui/Surface";
 import { IconAction } from "../../ui/Controls";
@@ -25,6 +27,7 @@ const CORRELATION = parsePalette(correlationPalette, "radarCorrelation");
 const ECHO_TOPS = parsePalette(echoTopsPalette, "radarEchoTops");
 
 export function RadarScale({ panel, horizontal = false }: { panel: number; horizontal?: boolean }): ReactNode {
+  const preferences = useUiStore((state) => state.units);
   const visible = useMapStore((state) => panelLayers(state, panel).radar.visible);
   const { radarProduct: product, radarTilt: tilt, radarScope: scope } = useMapStore((state) => panelWeather(state, panel));
   const time = useWeatherTime();
@@ -40,6 +43,7 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
   const units = frame?.units ?? selected?.units ?? "";
   const palette = frame?.palette ?? (scope === "site" && selected?.key === "correlation-coefficient" ? CORRELATION
     : scope === "site" && selected?.key === "echo-tops" ? ECHO_TOPS : units === "dBZ" ? scope === "site" ? BASE_REFLECTIVITY : REFLECTIVITY : null);
+  const shownUnits = palette === null ? units : displayUnit(palette.units, preferences, palette.display);
   const description = selected?.key === "correlation-coefficient"
     ? "Correlation Coefficient (ρHV), a unitless ratio. Lower values indicate less similar targets. Values above 1 can occur from measurement noise; values outside the scale use its end colors."
     : selected?.key === "echo-tops" ? "Enhanced Echo Tops: height of the 18 dBZ echo in thousands of feet above sea level. Some heights are lower bounds where echoes extend above the highest scan. Values outside the scale use its end colors."
@@ -53,12 +57,12 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
   const status = !visible ? null : query.isError ? "Unavailable" : query.isFetching ? "Loading…" : delay;
   const StatusIcon = query.isError || !query.isFetching ? TriangleAlert : LoaderCircle;
   if (horizontal) return <div className={styles.inline} aria-label="Radar color key">
-    <strong>{label}{units ? ` · ${units}` : ""}</strong>
+    <strong>{label}{shownUnits ? ` · ${shownUnits}` : ""}</strong>
     {palette !== null ? <FieldLegend palette={palette} description={description} /> : frame?.legendPng
       ? <img src={frame.legendPng} alt={`${label} · NOAA color scale`} /> : <p>Provider color key unavailable.</p>}
     {palette === null ? <p>{description}</p> : null}{scan === "" ? null : <p>{scan}</p>}{status === null ? null : <p>{status}</p>}
   </div>;
-  return <Surface as="aside" data-motion="fade" className={scaleStyles.panel} aria-label="Radar scale" aria-description={`${label} · ${units || (palette === null ? "Categories" : "Unitless")} · Panel ${String(panel + 1)}${scan === "" ? "" : ` · ${scan}`}`} data-testid="radar-scale">
+  return <Surface as="aside" data-motion="fade" className={scaleStyles.panel} aria-label="Radar scale" aria-description={`${label} · ${shownUnits || (palette === null ? "Categories" : "Unitless")} · Panel ${String(panel + 1)}${scan === "" ? "" : ` · ${scan}`}`} data-testid="radar-scale">
     {palette === null ? <div className={cx(styles.provider, hints.target)} tabIndex={0} role="img" aria-label={`${label} color scale, ${units || "categories"}`} aria-description="Focus or hover to see the provider's labelled color key.">
       <div className={styles.ramp} aria-hidden="true">{frame?.legendPng === undefined || frame.legendPng === null ? null : <img src={frame.legendPng} alt="" />}</div>
       <span className={cx(hints.hint, styles.key)} data-side="left" role="tooltip"><strong>{label}{units ? ` · ${units}` : ""}</strong>{frame?.legendPng ? <img src={frame.legendPng} alt={`${label} · NOAA color scale`} /> : <span>{status ?? (visible ? "Provider color key unavailable." : "Enable the layer to load its color key.")}</span>}</span>

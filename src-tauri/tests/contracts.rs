@@ -155,6 +155,14 @@ fn sounding_fixtures_convert_from_bridge_to_public_form() {
         "public/soundings/models.catalog.json",
     );
     catalog.validate().unwrap();
+    let maps_only: Vec<_> = catalog
+        .models
+        .iter()
+        .filter(|model| !model.soundings_available)
+        .collect();
+    assert_eq!(maps_only.len(), 1);
+    assert_eq!(maps_only[0].key, "aigfs");
+    assert_eq!(maps_only[0].domain, "Global");
     let ecmwf = catalog
         .models
         .iter()
@@ -409,6 +417,17 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                 22
             } else if model == "nam-3km-conus" {
                 36
+            } else if model == "nam" {
+                34
+            } else if model.starts_with("hrw-") {
+                28
+            } else if model == "gfs"
+                || model == "ecmwf-ifs-9km"
+                || model == "openmeteo-ecmwf-ifs025"
+            {
+                20
+            } else if model == "aigfs" {
+                9
             } else {
                 38
             }

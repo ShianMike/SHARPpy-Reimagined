@@ -85,7 +85,7 @@ function parseModel(value: unknown, path: string): ForecastModel {
   const obj = expectObject(value, path);
   expectExactKeys(obj, path, [
     "key", "label", "domain", "bounds", "outline", "cycles", "forecastHours", "maxForecastHours", "defaultForecastHour",
-    "gridSpacingKm", "notes", "members", "recentRuns", "suggestedRun",
+    "gridSpacingKm", "notes", "members", "recentRuns", "suggestedRun", "soundingsAvailable",
   ]);
   const hours = expectArray(obj.forecastHours, at(path, "forecastHours"), (v, p) => expectInteger(v, p, { min: 0 }));
   const limits = expectArray(obj.maxForecastHours, at(path, "maxForecastHours"), (v, p) => expectInteger(v, p, { min: 0 }));
@@ -105,6 +105,7 @@ function parseModel(value: unknown, path: string): ForecastModel {
   return {
     key: expectString(obj.key, at(path, "key"), { minLength: 1, maxLength: 40 }),
     label: label(obj.label, at(path, "label")),
+    soundingsAvailable: expectBoolean(obj.soundingsAvailable, at(path, "soundingsAvailable")),
     domain: expectString(obj.domain, at(path, "domain"), { maxLength: 120 }),
     bounds: parseBounds(obj.bounds, at(path, "bounds")),
     outline: expectArray(obj.outline, at(path, "outline"), parsePoint),

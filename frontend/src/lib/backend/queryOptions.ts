@@ -16,7 +16,7 @@ export const QUERY_KEYS = {
 
 /** Map data queries; a field frame for one run and hour never changes. */
 export const mapKeys = {
-  catalog: (model: string) => [...QUERY_KEYS.mapCatalog, model] as const,
+  catalog: (model: string, runTime?: string, forecastHour?: number) => [...QUERY_KEYS.mapCatalog, model, ...(runTime === undefined ? [] : [runTime, forecastHour])] as const,
   field: (product: string, runTime: string, hour: number, model = "hrrr") => ["fields", product, runTime, hour, model] as const,
   outlook: (product: string, validTime: string) => ["outlooks", product, validTime] as const,
   alerts: (validTime: string) => ["weather-alerts", validTime] as const,

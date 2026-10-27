@@ -46,6 +46,15 @@ async function showStation(id: string, scenario: string | null = null): Promise<
 }
 
 describe("Inspector", () => {
+  it("shows an AIGFS map point without offering a sounding", async () => {
+    useForecastStore.getState().setModel("aigfs");
+    useAppStore.getState().selectPoint({ latitude: 35.18, longitude: -97.44 });
+    renderWithBackend(<Inspector />, createTransport());
+    await waitFor(() => { expect(screen.getByTestId("point-forecast").textContent).toContain("AIGFS"); });
+    expect(screen.queryByTestId("open-model-here")).toBeNull();
+    expect(useSoundingStore.getState().model).toEqual(soundingInitial.model);
+  });
+
   it("shows an unavailable point field honestly and opens a sounding at the selected forecast time", async () => {
     useMapStore.getState().setLayerVisible("model-field", true);
     useForecastStore.getState().setHour(6);

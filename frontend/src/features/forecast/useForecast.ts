@@ -83,7 +83,7 @@ export function useForecast(): ForecastResolution {
       retrying: models.isFetching,
     };
   }
-  if (models.data === undefined || (catalog.data === undefined && !catalog.isError)) {
+  if (models.data === undefined) {
     return { status: "loading" };
   }
   return resolved === null ? { status: "empty" } : { status: "ready", context: resolved };

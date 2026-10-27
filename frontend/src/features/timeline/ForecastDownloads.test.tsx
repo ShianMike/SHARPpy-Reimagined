@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import fieldBytes from "@contracts/public/map/field.shrf?url&inline";
+import models from "@contracts/public/soundings/models.catalog.json";
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
@@ -43,7 +44,7 @@ it("shows loading, stopping, completion and cache errors in the inline controls"
   const { rerender } = render(<ForecastDownloads download={download} />);
   await user.click(screen.getByRole("button", { name: "Load Hours" }));
   expect(download.toggle).toHaveBeenCalledOnce();
-  rerender(<ForecastDownloads download={{ ...download, running: true, started: true, loaded: 3, cached: 2 }} />);
+  rerender(<ForecastDownloads download={{ ...download, running: true, started: true, loaded: 3, cached: 2, disabled: true }} />);
   expect(screen.getByRole("progressbar", { name: "Downloaded Forecast Hours" }).getAttribute("value")).toBe("3");
   await user.click(screen.getByRole("button", { name: "Stop Download" }));
   expect(download.toggle).toHaveBeenCalledTimes(2);
@@ -69,6 +70,8 @@ it("marks cached, downloading and failed hours in the top-bar picker, retries on
   const bytes = Uint8Array.from(atob(fieldBytes.split(",")[1] ?? ""), (c) => c.charCodeAt(0)).buffer;
   const { view, queryClient } = renderWithBackend(<><ForecastControls /><TimelineRegion /></>, {
     ...base, call: (command, args) => {
+      // Four hours cover every state without rendering an unrelated full run in JSDOM.
+      if (command === "get_model_catalog") return Promise.resolve({ ...models, models: models.models.map((model) => model.key === "hrrr" ? { ...model, forecastHours: [0, 1, 2, 3], maxForecastHours: model.maxForecastHours.map((hour) => Math.min(hour, 3)) } : model) });
       if (command === "get_weather_field") { requests.push(args); return Promise.resolve(bytes); }
       return base.call(command, args);
     },

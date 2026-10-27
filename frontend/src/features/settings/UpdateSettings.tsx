@@ -10,9 +10,10 @@ import { ReleaseNotes } from "./ReleaseNotes";
 export function UpdateSettings(): ReactNode {
   const { status, update, downloaded, total, error, check, install } = useUpdateStore();
   const desktop = "__TAURI_INTERNALS__" in window;
-  const busy = status === "checking" || status === "downloading" || status === "installing";
+  const busy = status === "checking" || status === "reviewing" || status === "downloading" || status === "installing";
   const title = !desktop ? "Windows app required" : error !== null ? "Update failed"
     : status === "checking" ? "Checking for updates…"
+    : status === "reviewing" ? "Review your work before updating"
     : status === "downloading" ? `Downloading version ${update?.version ?? ""}…`
     : status === "installing" ? "Installing update…"
     : update !== null ? `Version ${update.version} is available`
@@ -29,11 +30,11 @@ export function UpdateSettings(): ReactNode {
         <p className={styles.updateTitle}>{title}</p>
         <p>{!desktop ? "Check for updates in the installed Windows app." : error ?? (update === null
           ? "New releases are installed only when you choose."
-          : "Finish your work first. The app restarts to install this update; saved preferences are kept.")}</p>
+          : "Updating keeps saved preferences and disk caches. Open soundings, profile edits and undo/redo history are lost when the app closes. Review your work before installing.")}</p>
       </div>
       <div className={styles.updateActions}>
         <Action tone={update === null ? "accent" : "quiet"} disabled={!desktop || busy} onClick={() => { void check(); }}>{status === "checking" ? "Checking…" : "Check for updates"}</Action>
-        {update === null ? null : <Action tone="accent" disabled={busy} onClick={() => { void install(); }}>Install update</Action>}
+        {update === null ? null : <Action tone="accent" disabled={!desktop || busy} onClick={install}>Install update</Action>}
       </div>
     </div>
     <p className={styles.updateSchedule}>Automatic checks run at 00:00 and 12:00 UTC, once per window on this device. If the app is closed or offline, it checks when next available. You can check manually anytime and choose when to install.</p>

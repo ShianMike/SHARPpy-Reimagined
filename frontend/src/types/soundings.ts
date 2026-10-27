@@ -18,6 +18,7 @@ export interface SoundingProgress {
 export interface ForecastModel {
   key: string;
   label: string;
+  soundingsAvailable: boolean;
   domain: string;
   bounds: Bounds;
   /** The real grid perimeter as [lon, lat] points; empty when only bounds are known. */

@@ -157,14 +157,14 @@ class BrowserHandler(BaseHTTPRequestHandler):
         self._reply(status, encode_frame(payload), "application/json")
 
     def _reply(self, status: int, data: bytes, content_type: str) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
         try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
             self.wfile.write(data)
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass  # The browser may close while a provider finishes.
 
     def log_message(self, format: str, *args: Any) -> None:

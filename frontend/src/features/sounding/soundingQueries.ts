@@ -13,6 +13,7 @@ import { useAppStore } from "../../stores/appStore";
 import { useSoundingStore } from "../../stores/soundingStore";
 import type {
   ModelCatalog,
+  ForecastModel,
   OpenSoundingRequest,
   RenderChoice,
   SoundingSummary,
@@ -39,14 +40,23 @@ const MODEL_LABELS: Readonly<Record<string, string>> = {
   "refs-m4": "REFSm4",
   "refs-m5": "REFSm5",
   gfs: "GFS",
+  gdps: "GDPS",
+  aigfs: "AIGFS",
   "openmeteo-ecmwf-ifs025": "ECMWF",
+  "ecmwf-ifs-9km": "ECMWF 9km",
 };
+
+export const MODEL_REGIONS = ["CONUS", "Global", "Regional"] as const;
+export const modelRegion = (model: Pick<ForecastModel, "key" | "domain">): (typeof MODEL_REGIONS)[number] =>
+  model.key === "nam" || model.key === "rap" ? "Regional"
+    : model.domain === "CONUS" ? "CONUS" : model.domain === "Global" ? "Global" : "Regional";
 
 const requestedModels = (catalog: ModelCatalog): ModelCatalog => ({
   ...catalog,
   models: catalog.models
     .filter((model) => Object.hasOwn(MODEL_LABELS, model.key))
-    .map((model) => ({ ...model, label: MODEL_LABELS[model.key] ?? model.label })),
+    .map((model) => ({ ...model, label: MODEL_LABELS[model.key] ?? model.label }))
+    .toSorted((left, right) => MODEL_REGIONS.indexOf(modelRegion(left)) - MODEL_REGIONS.indexOf(modelRegion(right))),
 });
 
 export function useModelCatalog(): UseQueryResult<ModelCatalog> {

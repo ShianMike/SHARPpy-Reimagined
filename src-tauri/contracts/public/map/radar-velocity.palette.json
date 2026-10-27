@@ -326,7 +326,7 @@
     ]
   ],
   "units": "mph",
-  "display": "fixed",
+  "display": "auto",
   "stepped": false,
   "floor": null,
   "ceiling": null,

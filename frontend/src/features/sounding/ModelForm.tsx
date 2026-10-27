@@ -9,7 +9,7 @@ import { useSoundingStore } from "../../stores/soundingStore";
 import { useSelectedStation } from "../../stations/stationIndex";
 import type { ForecastModel } from "../../types/soundings";
 import { SoundingErrorNotice } from "./SoundingErrorNotice";
-import { useModelCatalog, useOpenSounding } from "./soundingQueries";
+import { modelRegion, useModelCatalog, useOpenSounding } from "./soundingQueries";
 import { addHours, forecastLabel, formatUtc, resolveModelRun } from "./soundingTime";
 import { SourceSelect } from "./SourceFields";
 import { DownloadStatus } from "./DownloadStatus";
@@ -74,7 +74,7 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
 
   return (
     <form className={styles.form} onSubmit={submit} aria-label="Model sounding">
-      <SourceSelect label="Model" value={model.key} options={models.map((item) => ({ value: item.key, label: item.label, detail: `${item.domain}${item.gridSpacingKm === null ? "" : ` · ${String(item.gridSpacingKm)} km`}` }))} onChange={(modelKey) => { edit({ modelKey, runTime: null, forecastHour: null }); }} />
+      <SourceSelect label="Model" value={model.key} options={models.map((item) => ({ value: item.key, label: item.label, group: modelRegion(item), detail: `${item.domain}${item.gridSpacingKm === null ? "" : ` · ${String(item.gridSpacingKm)} km`}` }))} onChange={(modelKey) => { edit({ modelKey, runTime: null, forecastHour: null }); }} />
       <p className={styles.hint}>{`${model.domain}${model.gridSpacingKm === null ? "" : `, ${String(model.gridSpacingKm)} km grid`}`}</p>
       <SourceSelect label="Run" value={run} options={newestFirst.map((item) => ({ value: item, label: formatUtc(item), detail: item > model.suggestedRun ? "May still be publishing" : item === model.suggestedRun ? "Latest suggested" : "Earlier cycle" }))} onChange={(runTime) => { edit({ modelKey: model.key, runTime }); }} />
       <SourceSelect label="Forecast" value={hour} options={hours.map((item) => ({ value: item, label: forecastLabel(item), detail: `Valid ${formatUtc(addHours(run, item))}` }))} onChange={(forecastHour) => { edit({ forecastHour }); }} />
@@ -179,5 +179,5 @@ export function ModelForm(): ReactNode {
   if (catalog.data === undefined) {
     return <p className={styles.empty}>Loading the forecast models</p>;
   }
-  return <ModelFields models={catalog.data.models} />;
+  return <ModelFields models={catalog.data.models.filter((model) => model.soundingsAvailable)} />;
 }

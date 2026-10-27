@@ -142,7 +142,7 @@ it.each(Object.keys(payloads) as Kind[])("clears %s data when its selection chan
   }
 });
 
-it.each(["rrfs-a", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5"])(
+it.each(["rrfs-a", "nam", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5"])(
   "keeps %s field and wind/contour requests separate from HRRR at the same run and hour", async (model) => {
     const call = vi.fn((command: string, args?: Readonly<Record<string, unknown>>) =>
       args?.model === "hrrr" ? Promise.resolve(command === "get_weather_field" ? payloads.field : contours)
@@ -168,8 +168,8 @@ it.each(["rrfs-a", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "refs-m4", 
       }
       const catalogue = parseMapCatalog((modelCatalogs as Readonly<Record<string, unknown>>)[model]);
       expect(catalogue.fieldModel).toBe(model);
-      expect(catalogue.products).toHaveLength(model.startsWith("refs-") ? 22 : model === "nam-3km-conus" ? 36 : 38);
-      expect(catalogue.products.some(({ key }) => key === "ltng")).toBe(model !== "nam-3km-conus");
+      expect(catalogue.products).toHaveLength(model.startsWith("refs-") ? 22 : model === "nam" ? 34 : model === "nam-3km-conus" ? 36 : 38);
+      expect(catalogue.products.some(({ key }) => key === "ltng")).toBe(!["nam", "nam-3km-conus"].includes(model));
       const secondaryProduct = defaultProductFor(parseMapCatalog(catalog), 1)?.key;
       expect(catalogue.products.some(({ key }) => key === secondaryProduct)).toBe(!model.startsWith("refs-"));
     } finally { hook.unmount(); queryClient.clear(); }

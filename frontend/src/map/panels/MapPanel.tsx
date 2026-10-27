@@ -84,7 +84,7 @@ function PanelChip({ panel, layout, field }: { panel: number; layout: PanelLayou
     >
       {body}
     </button>
-      <Popover id={`panel-${String(panel)}-parameters`} open={anchor !== null} movable anchor={anchor} onClose={() => { setAnchor(null); }} role="dialog" label="Parameters" initialFocus="first" align="start" width="content" className={pickerStyles.parameterPicker}>
+      <Popover id={`panel-${String(panel)}-parameters`} open={anchor !== null} movable unframed anchor={anchor} onClose={() => { setAnchor(null); }} role="dialog" label="Parameters" initialFocus="first" align="start" width="content" className={pickerStyles.parameterPicker}>
         {field.catalog.data === undefined ? null : <ParameterPicker products={field.catalog.data.products} selected={field.product?.key ?? null} anchor={anchor} onClose={() => { setAnchor(null); }} />}
       </Popover>
     </>

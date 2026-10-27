@@ -8,6 +8,7 @@ import { createTransport } from "../../lib/backend/fixtureTransport";
 import { parseSoundingSummary } from "../../lib/contracts/soundings";
 import { useUiStore } from "../../stores/uiStore";
 import { useSoundingStore } from "../../stores/soundingStore";
+import { useUpdateStore } from "../../stores/updateStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import type { InspectionLevel } from "../../types/soundingView";
 import { SoundingImage } from "./SoundingImage";
@@ -23,12 +24,13 @@ const selectedY = selected.y;
 beforeEach(() => {
   useUiStore.setState(initial, true);
   useSoundingStore.setState(soundingInitial, true);
+  useUpdateStore.setState(useUpdateStore.getInitialState(), true);
   vi.stubGlobal("ResizeObserver", class { constructor(callback: () => undefined) { resizeViewer = callback; } observe() {} disconnect() {} });
   vi.stubGlobal("PointerEvent", MouseEvent);
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:fixture") });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
 });
-afterEach(() => { cleanup(); useUiStore.setState(initial, true); useSoundingStore.setState(soundingInitial, true); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); useUiStore.setState(initial, true); useSoundingStore.setState(soundingInitial, true); useUpdateStore.setState(useUpdateStore.getInitialState(), true); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 async function open(next = response()) {
   const base = createTransport();
@@ -48,6 +50,55 @@ async function open(next = response()) {
     },
   };
 }
+
+it("shows a recoverable connection message without an icon and retries the same view", async () => {
+  const base = createTransport();
+  const render = vi.fn(() => Promise.resolve(response())).mockRejectedValueOnce(new Error("Connection lost"));
+  renderWithBackend(<SoundingImage soundingId="fixture" choice="MU" title="Test sounding" heading="Test sounding" />, {
+    ...base, call: (command, args) => command === "render_sounding_view" ? render() : base.call(command, args),
+  });
+  const notice = await screen.findByTestId("render-error");
+  expect(notice.textContent).toContain("Sounding image unavailable");
+  expect(notice.textContent).toContain("Try again to reconnect");
+  expect(notice.querySelector("svg")).toBeNull();
+  expect(notice.textContent).not.toContain("Retrying will not help");
+  expect(notice.parentElement?.parentElement?.getAttribute("data-retained")).toBe("false");
+  expect(screen.getByTestId("sounding-stage").contains(notice)).toBe(true);
+  await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await screen.findByTestId("sounding-image");
+  expect(screen.queryByTestId("render-error")).toBeNull();
+  expect(render).toHaveBeenCalledTimes(2);
+});
+
+it("keeps the chart and pending edit when recalculation loses its connection", async () => {
+  const { render } = await open();
+  const image = screen.getByTestId("sounding-image");
+  await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
+  await userEvent.keyboard("{ArrowDown}{Enter}");
+  const input = screen.getByRole("spinbutton", { name: "Temperature °C" });
+  await userEvent.clear(input); await userEvent.type(input, "30");
+  render.mockRejectedValueOnce(new Error("Connection lost"));
+  await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+  const notice = await screen.findByTestId("render-error");
+  expect(notice.parentElement?.parentElement?.getAttribute("data-retained")).toBe("true");
+  expect(screen.getByTestId("sounding-image")).toBe(image);
+  expect((input as HTMLInputElement).value).toBe("30");
+  expect(notice.querySelector("svg")).toBeNull();
+});
+
+it("marks a recalculation started during an update download before the new profile is ready", async () => {
+  const { render } = await open();
+  await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
+  await userEvent.keyboard("{ArrowDown}{Enter}");
+  useUpdateStore.setState({ status: "downloading", soundingWorkChanged: false });
+  render.mockImplementation(() => new Promise(() => undefined));
+  await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+  expect(screen.getByText("Recalculating profile…").getAttribute("role")).toBe("status");
+  expect(useUpdateStore.getState().soundingWorkChanged).toBe(true);
+  expect(useSoundingStore.getState().views).toEqual({});
+});
 
 it("links a hovered Skew-T row to its wind point and full readout at any zoom without rendering again", async () => {
   const { hover, resize, render, frame } = await open();

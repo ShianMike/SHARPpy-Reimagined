@@ -35,30 +35,32 @@ it("exports the current HD/UHD bytes, blocks stale previews, and reuses an uncha
     ...base, call: (command, args) => command === "render_sounding_view" ? render() : base.call(command, args),
   });
   const status = screen.getByRole("status", { name: "Sounding export status" });
-  expect(status.textContent).toContain("Preparing UHD PNG");
+  expect(status.textContent).toContain("Preparing…");
   expect(screen.getByRole("button", { name: "Export PNG" }).hasAttribute("disabled")).toBe(true);
   await waitFor(() => { expect(render).toHaveBeenCalledOnce(); });
   await act(async () => { pending[0]?.(response()); await Promise.resolve(); });
-  await waitFor(() => { expect(status.textContent).toContain("Ready to export"); });
-  expect(status.querySelector("svg")).toBeNull();
+  await waitFor(() => { expect(status.textContent).toContain("Ready"); });
+  expect(status.querySelector('svg[data-loading="true"]')).toBeNull();
   expect(status.textContent).toContain("~1.00 MiB");
   expect(status.textContent).toContain("4564 × 3077");
   fireEvent.click(screen.getByRole("button", { name: "Export PNG" }));
   expect(downloads.at(-1)?.href).toBe("blob:1048576");
+  expect(status.textContent).toContain("Exported");
+  expect(screen.getAllByText("Exported")).toHaveLength(1);
   expect(downloads.at(-1)?.filename).toBe("Test-sounding-MU.png");
   expect(render).toHaveBeenCalledOnce();
   await userEvent.click(screen.getByRole("combobox", { name: "Image resolution" }));
   await userEvent.click(screen.getByRole("option", { name: "HD · lossless" }));
   await waitFor(() => { expect(render).toHaveBeenCalledTimes(2); });
   expect(screen.getByTestId("sounding-image")).toBeTruthy();
-  expect(status.textContent).toContain("Preparing HD PNG");
-  expect(status.textContent).toContain("Size pending");
-  expect(status.textContent).not.toContain("Ready to export");
-  expect(screen.queryByText("Full-resolution PNG exported.")).toBeNull();
+  expect(status.textContent).toContain("Preparing…");
+  expect(status.textContent).toContain("—");
+  expect(status.textContent).not.toContain("Ready");
+  expect(screen.queryByText("Exported")).toBeNull();
   expect(screen.getByRole("button", { name: "Export PNG" }).hasAttribute("disabled")).toBe(true);
   expect(screen.getByRole("button", { name: "Copy sounding image" }).hasAttribute("disabled")).toBe(true);
   await act(async () => { pending[1]?.(response(true)); await Promise.resolve(); });
-  await waitFor(() => { expect(status.textContent).toContain("Ready to export"); });
+  await waitFor(() => { expect(status.textContent).toContain("Ready"); });
   expect(status.textContent).toContain("~0.50 MiB");
   fireEvent.click(screen.getByRole("button", { name: "Export PNG" }));
   expect(downloads.at(-1)?.href).toBe("blob:524288");
@@ -79,17 +81,20 @@ it("copies the prepared PNG once, disables concurrent exports, and keeps downloa
   vi.stubGlobal("navigator", { clipboard: { write } });
   vi.stubGlobal("ClipboardItem", TestClipboardItem);
   const image = parseSoundingView(response());
-  render(<SoundingExport view={image} quality="uhd" ready busy={false} filename="test.png" />);
+  render(<SoundingExport view={image} quality="uhd" onQualityChange={() => undefined} ready busy={false} filename="test.png" />);
   fireEvent.click(screen.getByRole("button", { name: "Copy sounding image" }));
   expect(write).toHaveBeenCalledOnce();
   expect(write.mock.calls[0]?.[0][0]?.data["image/png"]).toBe(image.image);
+  expect(screen.getByRole("combobox", { name: "Image resolution" }).hasAttribute("disabled")).toBe(true);
   expect(screen.getByRole("button", { name: "Copy sounding image" }).hasAttribute("disabled")).toBe(true);
   expect(screen.getByRole("button", { name: "Export PNG" }).hasAttribute("disabled")).toBe(true);
   await act(async () => { finish(); await pending; });
-  expect(screen.getByText("Full-resolution image copied.")).toBeTruthy();
+  expect(screen.getByText("Copied")).toBeTruthy();
+  expect(screen.getByRole("combobox", { name: "Image resolution" }).hasAttribute("disabled")).toBe(false);
   write.mockRejectedValueOnce(new Error("Clipboard denied"));
   fireEvent.click(screen.getByRole("button", { name: "Copy sounding image" }));
-  await screen.findByText("Clipboard access was unavailable. Use Export PNG to save the image.");
+  await screen.findByRole("alert");
+  expect(screen.getByRole("alert").textContent).toBe("Copy unavailable. Use Export PNG.");
   expect(screen.getByRole("button", { name: "Export PNG" }).hasAttribute("disabled")).toBe(false);
 });
 
@@ -99,19 +104,19 @@ it("clears readiness after an edit fails and restores it after a cached undo", a
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   function Probe() {
     const { image, edit, request, ready, busy, state, update } = useSoundingView(summary.soundingId, "MU", "uhd");
-    return <><SoundingExport view={image.data} quality="uhd" ready={ready} busy={busy} filename="test.png" />
+    return <><SoundingExport view={image.data} quality="uhd" onQualityChange={() => undefined} ready={ready} busy={busy} filename="test.png" />
       <button onClick={() => { edit.mutate({ ...request, edits: [{ index: 0, values: { tmpc: 30 } }] }); }}>Apply edit</button>
       <button onClick={() => { update(state); }}>Undo failed edit</button></>;
   }
   const { view, queryClient } = renderWithBackend(<Probe />, { ...base, call: (command, args) => command !== "render_sounding_view" ? base.call(command, args)
     : ++calls === 1 ? Promise.resolve(response()) : Promise.reject(new Error("Render failed")) });
   const status = screen.getByRole("status", { name: "Sounding export status" });
-  await waitFor(() => { expect(status.textContent).toContain("Ready to export"); });
+  await waitFor(() => { expect(status.textContent).toContain("Ready"); });
   fireEvent.click(screen.getByRole("button", { name: "Apply edit" }));
-  await waitFor(() => { expect(status.textContent).toContain("PNG unavailable"); });
+  await waitFor(() => { expect(status.textContent).toContain("Unavailable"); });
   expect(screen.getByRole("button", { name: "Export PNG" }).hasAttribute("disabled")).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Undo failed edit" }));
-  await waitFor(() => { expect(status.textContent).toContain("Ready to export"); });
+  await waitFor(() => { expect(status.textContent).toContain("Ready"); });
   expect(calls).toBe(2);
   view.unmount(); queryClient.clear();
 });

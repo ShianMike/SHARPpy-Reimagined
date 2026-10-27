@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { diagnosticMetadata, type DiagnosticInput, type DiagnosticMetadata } from "../lib/diagnostics";
 
 export type LogLevel = "info" | "warning" | "error";
 export interface LogEntry {
@@ -8,6 +9,7 @@ export interface LogEntry {
   source: string;
   message: string;
   detail: string;
+  diagnostic?: DiagnosticMetadata;
 }
 
 export const MAX_LOG_ENTRIES = 500;
@@ -17,10 +19,10 @@ export const useLogStore = create<{ entries: readonly LogEntry[]; nextId: number
   clear: () => { set({ entries: [] }); },
 }));
 
-export function recordLog(level: LogLevel, source: string, message: string, detail = ""): void {
+export function recordLog(level: LogLevel, source: string, message: string, detail = "", diagnostic?: DiagnosticInput): void {
   useLogStore.setState((state) => ({
     nextId: state.nextId + 1,
-    entries: [{ id: state.nextId, time: new Date().toISOString(), level, source, message: message.slice(0, 4000), detail: detail.slice(0, 8000) }, ...state.entries].slice(0, MAX_LOG_ENTRIES),
+    entries: [{ id: state.nextId, time: new Date().toISOString(), level, source, message: message.slice(0, 4000), detail: detail.slice(0, 8000), ...(level === "info" ? {} : { diagnostic: diagnosticMetadata(source, diagnostic) }) }, ...state.entries].slice(0, MAX_LOG_ENTRIES),
   }));
 }
 

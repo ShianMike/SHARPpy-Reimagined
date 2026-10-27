@@ -15,8 +15,10 @@ from sharpmod.providers import rrfs_nomads
 from sharpmod.providers.hrrr_zarr import ZarrBackendUnavailable
 from sharpmod.providers.hrrr_zarr import fetch_hrrr_zarr_point
 from sharpmod.models.model_fields import CFS_SURFACE_SEARCH
+from sharpmod.models.model_fields import IFS_SURFACE_SEARCH
 from sharpmod.models.model_fields import build_noaa_search
 from sharpmod.models.model_fields import supports_noaa_surface_merge
+from sharpmod.models.model_fields import variable_column
 from sharpmod.models.model_sources import SourceRoutingUnavailable
 from sharpmod.models.model_sources import download_nomads_subset
 from sharpmod.models.model_sources import nomads_supported
@@ -62,7 +64,7 @@ def _combine_grib_payloads(paths, output_path):
     return output.resolve()
 
 
-def _cfs_surface_companion(
+def _surface_companion(
     Herbie,
     config,
     run_dt,
@@ -72,9 +74,11 @@ def _cfs_surface_companion(
     cancelled,
     on_bytes=None,
 ):
-    """Download CFS ground fields from its separate flux product."""
-    kwargs = dict(_api._herbie_kwargs(config, member=member))
-    kwargs["kind"] = "flxf"
+    """Download the separate CFS or IFS ground product, including terrain."""
+    is_ifs = config.key == "ecmwf-ifs-9km"
+    kwargs = _api._herbie_kwargs(config, member=member, surface=True)
+    if not is_ifs:
+        kwargs["kind"] = "flxf"
     companion = _api._create_herbie(
         Herbie,
         run_dt.strftime("%Y-%m-%d %H:%M"),
@@ -85,29 +89,51 @@ def _cfs_surface_companion(
         **kwargs,
     )
     if companion.grib is None:
-        raise RetrievalError("CFS surface companion product is unavailable")
-    inventory = companion.inventory(CFS_SURFACE_SEARCH).copy()
-    if not _api._inventory_has_surface_contract(inventory):
+        raise RetrievalError("%s surface companion product is unavailable" % config.label)
+    search = IFS_SURFACE_SEARCH if is_ifs else CFS_SURFACE_SEARCH
+    inventory = companion.inventory(search).copy()
+    contract = _api.surface_contract_status(inventory)
+    needs_height = is_ifs and int(fxx) != 0 \
+        and tuple(contract["missing"]) == ("surface_height",)
+    if not contract["complete"] and not needs_height:
         raise RetrievalError(
-            "CFS surface companion does not expose the verified ground fields"
+            "%s surface companion does not expose the verified ground fields"
+            % config.label
         )
-    path, transferred = _api.download_herbie_subset(
-        companion,
-        CFS_SURFACE_SEARCH,
-        inventory=inventory,
-        save_dir=download_dir,
-        cancelled=cancelled,
-        workers=range_worker_count(default=4),
-        on_bytes=on_bytes,
-    )
+    try:
+        path, transferred = _api.download_herbie_subset(
+            companion, search, inventory=inventory, save_dir=download_dir,
+            cancelled=cancelled, workers=range_worker_count(default=4),
+            on_bytes=on_bytes,
+        )
+    except OptimizedTransportUnavailable:
+        path, transferred = download_herbie_subset_fallback(
+            companion, search, inventory=inventory, save_dir=download_dir,
+            cancelled=cancelled, on_bytes=on_bytes,
+        )
     local_path = _api._local_grib_path(path)
     if local_path is None:
-        raise RetrievalError("CFS surface companion download is incomplete")
+        raise RetrievalError("%s surface companion download is incomplete" % config.label)
     fields = tuple(dict.fromkeys(
-        str(value).upper()
-        for value in inventory.get("variable", ())
+        str(value) for value in inventory.get(variable_column(inventory), ())
     ))
-    return local_path, int(transferred or 0), str(companion.grib), fields
+    transferred = int(transferred or 0)
+    source_url = str(companion.grib)
+    if needs_height:
+        height_path, height_bytes, height_url, height_fields = \
+            _api._surface_height_companion(
+                Herbie, config, run_dt, member, download_dir, cancelled,
+                on_bytes=on_bytes,
+            )
+        local_path = _api._combine_grib_payloads(
+            (local_path, height_path), local_path.with_name(
+                f"{config.key}-{run_dt:%Y%m%d%H}-f{int(fxx):03d}-surface.grib2"
+            ),
+        )
+        transferred += height_bytes
+        source_url += ";" + height_url
+        fields = tuple(dict.fromkeys((*fields, *height_fields)))
+    return local_path, transferred, source_url, fields
 
 
 def _f000_publishes_surface_height(
@@ -129,7 +155,7 @@ def _f000_publishes_surface_height(
             product=config.product,
             fxx=0,
             verbose=False,
-            **_api._herbie_kwargs(config, member=member),
+            **_api._herbie_kwargs(config, member=member, surface=True),
         )
         _api._probe_cancel_if_requested(cancelled)
         if companion.grib is None:
@@ -167,7 +193,7 @@ def _surface_height_companion(
         product=config.product,
         fxx=0,
         verbose=False,
-        **_api._herbie_kwargs(config, member=member),
+        **_api._herbie_kwargs(config, member=member, surface=True),
     )
     if companion.grib is None:
         raise RetrievalError(
@@ -451,8 +477,8 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
             and int(fxx) != 0
             and missing_surface == ("surface_height",)
         )
-        needs_cfs_surface = not contract_complete and not needs_invariant_height
-        if needs_cfs_surface and config.key != "cfs":
+        needs_surface_companion = not contract_complete and not needs_invariant_height
+        if needs_surface_companion and config.key not in {"cfs", "ecmwf-ifs-9km"}:
             raise RetrievalError(
                 "%s currently publishes no complete verified-surface "
                 "contract (surface pressure/height, 2-m thermodynamics, and "
@@ -546,13 +572,13 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
             except Exception:
                 pass
         companion_fields = ()
-        if needs_cfs_surface:
+        if needs_surface_companion:
             (
                 companion_path,
                 companion_bytes,
                 companion_url,
                 companion_fields,
-            ) = _api._cfs_surface_companion(
+            ) = _api._surface_companion(
                 Herbie,
                 config,
                 run_dt,
@@ -563,9 +589,9 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                 on_bytes=on_bytes,
             )
             if local_path is None:
-                raise RetrievalError("CFS pressure-level download is incomplete")
+                raise RetrievalError("%s pressure-level download is incomplete" % config.label)
             combined_name = (
-                f"cfs-f{int(fxx):03d}-verified-surface.grib2"
+                f"{config.key}-{run_dt:%Y%m%d%H}-f{int(fxx):03d}-verified-surface.grib2"
             )
             combined_dir = Path(download_dir or local_path.parent)
             local_path = _api._combine_grib_payloads(
@@ -617,7 +643,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
 
         if local_path is not None and (
             _api._direct_grib_enabled()
-            or needs_cfs_surface
+            or needs_surface_companion
             or needs_invariant_height
         ):
             return _api._LocalGribDataset(local_path), H

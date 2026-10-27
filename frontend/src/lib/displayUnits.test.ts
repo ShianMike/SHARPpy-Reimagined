@@ -1,5 +1,16 @@
 import { expect, it } from "vitest";
-import { convertUnit, DEFAULT_UNITS, displayReading, displayUnit, parseUnitPreferences } from "./displayUnits";
+import { convertUnit, DEFAULT_UNITS, displayReading, displayUnit, formatUnit, parseUnitPreferences } from "./displayUnits";
+
+it.each([
+  ["m^2/s^2", "m²/s²"], ["m^3/s^3", "m³/s³"], ["kg m^-2 s^-1", "kg m⁻² s⁻¹"],
+  ["m^10 s^+2", "m¹⁰ s⁺²"], ["m²/s²", "m²/s²"], ["m^0.5", "m^0.5"],
+  ["°C/km", "°C/km"], ["J/kg", "J/kg"], ["", ""],
+])("formats %s as %s without changing its value", (source, expected) => {
+  expect(formatUnit(source)).toBe(expected);
+  expect(displayUnit(source, DEFAULT_UNITS)).toBe(expected);
+  expect(displayUnit(source, DEFAULT_UNITS, "fixed")).toBe(expected);
+  expect(convertUnit(125, source, expected)).toBe(125);
+});
 
 it("honours fixed quantities and scales temperature differences without an offset", () => {
   const preferences = { temperature: "°F", wind: "mph" } as const;
@@ -23,7 +34,7 @@ it("validates saved fields independently, defaults old preferences, and leaves o
   for (const saved of [undefined, null, {}, [], "°C"]) expect(parseUnitPreferences(saved)).toEqual(DEFAULT_UNITS);
   expect(parseUnitPreferences({ temperature: "°C", wind: "unknown" })).toEqual({ temperature: "°C", wind: "kt" });
   expect(parseUnitPreferences({ temperature: "invalid", wind: "mph" })).toEqual({ temperature: "source", wind: "mph" });
-  for (const source of ["J/kg", "°C/km", "m^2/s^2", "%", "dBZ", "", "__proto__"]) {
+  for (const source of ["J/kg", "°C/km", "%", "dBZ", "", "__proto__"]) {
     expect(displayUnit(source, { temperature: "°F", wind: "mph" })).toBe(source);
     expect(convertUnit(12, source, "mph")).toBe(12);
   }

@@ -247,6 +247,7 @@ export interface SoundingTrends {         // ProfileMetricsEngine.timeline(DEFAU
 }
 export interface ModelCatalog {
   models: { key: string; label: string; domain: string;
+            soundingsAvailable: boolean; // false for map-only AIGFS
             bounds: { west: number; east: number; south: number; north: number };
             outline: [number, number][];  // [lon, lat], the grid perimeter
             cycles: number[]; forecastHours: number[]; defaultForecastHour: number;
@@ -465,7 +466,7 @@ provider `python-bridge`, resources `bundled UWyo station catalogue` and
 | `FIELD_FETCH_FAILED` | Python: the model data could not be downloaded (retryable) or read (not retryable) | Either | Retry when retryable |
 | `OVERLAY_FETCH_FAILED` | Python: an SPC outlook or the radar mosaic could not be loaded, or the service sent no usable frame | Yes | Retry |
 | `CONTRACT_VIOLATION` | TS client: a reply or event fails its parser, or an error-shaped rejection fails `parseBackendError` | No | Log path |
-| `TRANSPORT_FAILED` | TS client: `invoke` rejected with a value that is not error-shaped (an ACL denial string, a missing command) | No | None |
+| `TRANSPORT_FAILED` | TS client: `invoke` rejected with a value that is not error-shaped (an ACL denial string, a missing command) | No | Retry manually after checking the connection; no automatic retry |
 
 The UI action per code lives in `frontend/src/features/errors/errorPresentation.ts`
 and is rendered by `BackendErrorNotice.tsx`: the title comes from
@@ -521,7 +522,7 @@ three outcomes:
 | `stations.catalog` | `{}` | `{"stations": [{"id", "name", "lat", "lon", "src"}], "origin": "bundled" \| "seed_fallback", "dropped_count"}` |
 | `shutdown` | `{}` | `{"ok": true}`, then the bridge stops reading and exits 0 |
 | `cancel` | `request_id` (1 to 64 ASCII letters/digits), or numeric wire `id` for a supervisor timeout | `{"ok": true}`; cooperative stop for the target |
-| `models.catalog` | `{}` | `{"models": [...], "generated_at"}`, from `tools.model_extract.available_models()` |
+| `models.catalog` | `{}` | `{"models": [...], "generated_at"}`, from `tools.model_extract.available_models()` plus map-only AIGFS; `soundings_available` gates sounding entry points |
 | `soundings.open_observed` | `station_id`, `time`, optional `provider` (`auto`, `uwyo`, `iem`, `igra`) | the sounding summary (snake_case `SoundingSummary`) |
 | `soundings.open_model` | `model`, `forecast_hour`, `latitude`, `longitude`, optional `run_time`, `location` and `progress_id` | the sounding summary |
 | `soundings.progress` | `progress_id` | `stage`, `downloaded_bytes`, `bytes_per_second`; active requests only, zero counters otherwise |
@@ -532,9 +533,9 @@ three outcomes:
 | `thresholds.evaluate` | `model`, `latitude`, `longitude`, `forecast_hour`, `members` (2 to 32 labels), optional `run_time` and `location`, plus `definition` (`name` and 1 to 3 `conditions` of `metric`, `operator`, `value`, optional `upper`) | the evaluator's own `as_dict`: the definition with its registry units, the counts and their denominators, and one `members` row per requested member (`sharpmod/bridge/thresholds.py`) |
 | `thresholds.export_csv` | the `thresholds.evaluate` fields | `file_name` and `csv`, the rows `analysis.ensemble_thresholds.export_threshold_csv` writes |
 | `soundings.render` | `sounding_id`, optional `parcel` (`SFC`, `ML`, `FCST`, `MU`, `EFF`) and `image_mode` (`hd`, `uhd`) | `sounding_id`, `parcel`, `image_mode`, `width`, `height`, `byte_length`, `png_base64` |
-| `map.catalog` | optional `model` (HRRR by default) | the snake_case `MapCatalog` (`sharpmod/bridge/fields.py`) |
-| `fields.grid` | `product`, `run_time` (a whole hour), `forecast_hour` (0 to 84), optional `model` | the field header in snake_case plus `data_base64`, the uint16 cells |
-| `fields.cached` | `model`, `products` (1 to 4 keys), `run_time`, `hours` (1 to 85 values from 0 to 84) | sorted unique hours with every requested field and required auxiliary file saved on disk |
+| `map.catalog` | optional `model` (HRRR by default), `run_time` and `forecast_hour` pair | the snake_case `MapCatalog`, with selected-run ingredient checks for global and HRW fields (`sharpmod/bridge/map_catalog.py`) |
+| `fields.grid` | `product`, `run_time` (a whole-hour model cycle), `forecast_hour` (0 to 384, validated against the model cadence), optional `model` | the field header in snake_case plus `data_base64`, the uint16 cells |
+| `fields.cached` | `model`, `products` (1 to 4 keys), `run_time`, `hours` (1 to 385 values from 0 to 384, validated against the model cadence) | sorted unique hours with every requested field and required auxiliary file saved on disk; supports all 209 GFS hours |
 | `outlooks.spc` | `product` (`cat`, `torn`, `wind`, `hail`), `valid_time` | `product`, `valid_time`, `outlook` (null, or the snake_case outlook) (`sharpmod/bridge/map_layers.py`) |
 | `radar.mosaic` | optional `product` | the radar header in snake_case plus `byte_length` and `png_base64` |
 | `radar.site` | optional `product`, `site_id` (a WSR-88D id) or `latitude` + `longitude` | the single-site header in snake_case plus `site_id`, `byte_length`, and `png_base64` (`sharpmod/bridge/map_layers.py`) |

@@ -7,15 +7,180 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Upcoming
+
+- Expand the available weather-model parameters, offering only fields supported
+  by each model and the selected run.
+- Add isobars with numeric pressure labels on weather maps.
+
+## [v3.4.0] - 2026-10-27
+
+### Added
+
+- Add all 20 ECMWF-style map parameters to GFS using its own 0.25-degree
+  fields and native units, precipitation-type flags, snow depth and CAPE.
+  Filter products against the selected run/hour, including hiding total
+  precipitation at F000. Select the native run-total precipitation record
+  rather than a preceding interval, and support GFS's full 209-hour forecast
+  selection: hourly through F120, then three-hourly through F384. Retain GFS
+  sounding support and extend cache reporting across the full run.
+- Expose the existing GDPS 15 km point-sounding provider in the Global group
+  of both model selectors. Retain its native 00Z/12Z cycles and three-hour
+  steps through F240. Add AIGFS to Global for map analysis only, with up to
+  nine supported products on its native 0.25-degree grid and six-hour steps
+  through F384. Check the selected run/hour's published ingredients, hide
+  precipitation at F000, preserve cumulative precipitation, and exclude AIGFS
+  from sounding selectors and point-sounding actions. Its feed lacks the
+  surface pressure, terrain and 2 m moisture needed for a complete sounding.
+  Cap contour sampling at native grid dimensions and use consistent nearest-cell
+  ties on global grids to avoid duplicated columns and excess contour segments.
+  Accept the full range through F384 in frontend, desktop and bridge contour
+  and cache contracts.
+- Add hand and cursor controls for Navigate and Inspect before playback in Model Viewer
+  and Live Tracking. Navigate clears all map hover cards and numeric readouts
+  while Inspect restores the existing readouts. Share the
+  choice across panels and both timelines for the current session.
+- Add up to 28 HRRR-style map products to HRW WRF-ARW, WRF-NSSL and FV3,
+  using their native 5 km grids, winds and 00Z/12Z cycles. Check every ingredient
+  against the selected run/hour's inventory; omit unsupported products and hide
+  updraft helicity and maximum updraft velocity at F000. WRF members stop at
+  F048 and FV3 at F060; interpolate 1 km shear from the model's pressure levels.
+- Add 20 supported map products to both ECMWF choices using the direct 0.25-
+  and 0.1-degree global grids. Reuse the existing palettes for height/wind,
+  surface conditions, precipitation, winter weather, MUCAPE and mid-level
+  lapse rates. Filter the picker against the selected run/hour's published
+  ingredients, preserve native forecast steps, convert snow water equivalent
+  with snow density, and retain ECMWF's own gust and parcel definitions.
+- Add 34 published NAM 12 km map parameters from the NAM 3km catalogue,
+  using NAM's own surface and pressure-level files, projection, coverage,
+  wind rotation and three-hour steps through F084. Omit updraft helicity
+  and maximum updraft velocity, which NAM does not publish, and sum native
+  precipitation intervals to preserve run totals after accumulation resets.
+- Add ECMWF 9km alongside the existing ECMWF choice, using ECMWF's direct
+  0.1-degree open-data feed. Join all published pressure levels with surface
+  fields and same-run analysis terrain, retain cycle-specific forecast limits,
+  and allow for its two-hour publication delay relative to the 0.25-degree feed.
+- Add a one-click diagnostic summary beside warnings and failures in Logs,
+  containing the failed operation, provider, UTC time, error category and
+  suggested recovery. Copy only allowlisted metadata and fixed recovery text,
+  excluding raw errors, credentials, URLs, file paths and request details.
+- Add direct display-unit controls to the sounding view tools,
+  reusing the saved temperature and wind choices from Settings. Keep the
+  navigation bar dedicated to its existing workspaces.
+- Add edited-level annotations to copied and exported sounding PNGs in the
+  selected display units, retaining the original chart and its scientific axes.
+  Preserve the prepared PNG bytes when no annotations are needed.
+
 ### Changed
 
-- Point the README Windows downloads and release-verification links at the
-  published v3.3.0 installer, portable ZIP and release page.
-- Replace the README download-history graph with a compact Shields.io badge
-  showing total release-asset downloads, including updater metadata.
+- Derive installed Windows acceptance from the candidate source version and the
+  newest preceding stable release. Verify the selected candidate artifact and
+  preserve saved preferences through installation and repeated restarts. Require
+  these installed-app checks before release attestation and publication.
+- Present release highlights in a wider, compact layout with concise descriptions,
+  keeping the full technical detail in this changelog.
+- Align the Python package, scientific extension, frontend, desktop manifests
+  and lockfiles with v3.4.0, and use v3.4.0 as the release workflow's default
+  target.
+- Simplify the README around v3.4.0's capabilities, setup and documentation,
+  removing older-version summaries, the old screenshot tour and download counts.
+- Update browser acceptance checks for model-region selection, converted radar
+  scales, plain Point headings and independent parameter descriptions. Verify
+  the release popup fits without scrolling at 1280 × 800 and 1920 × 1080.
+- Remove the model name from forecast playback while keeping the selected
+  forecast hour visible. The forecast toolbar still identifies the model.
+- Keep every parameter category visible in the left column, with Winter Weather
+  last. Give the description a separate glass card below the main picker;
+  size it to its text and available screen space. Both cards move and close
+  together in toolbar and multi-panel selectors. Reserve room for descriptions
+  so preview changes preserve the main list's height, position and scroll offset.
+- Remove the decorative pins beside the Point panel title and above its
+  empty-state message, keeping its Layers and close controls.
+- Keep the projection setting compact, with equal-width Flat map and Globe
+  choices, single-line labels and the all-panels scope under its heading.
+- Separate the forecast model picker into always-visible CONUS, Global and
+  Regional controls. Group NAM and RAP under Regional in both map and sounding
+  selectors; keep NAM 3km CONUS under CONUS. Open the selected model's region,
+  search across regions, align grid spacing in clearer rows, and keep the current selection visible
+  with readable glass and the original drag/close icons. Preserve the chosen run and hour
+  when reselecting the current model. Keep regional grouping in the sounding selector.
+- Simplify the sounding sidebar with one integrated level editor beside the
+  profile controls, side-by-side original/new values and a compact Apply action.
+  Group zoom, fit and unit controls, move image quality into Export and hide
+  empty undo controls until edits create history. Fold View while editing to
+  reduce scrolling. Combine PNG dimensions and size, and replace repeated
+  instructions and success paragraphs with one status.
+- Show Automatic, Low, Balanced and High as selectable buttons in one row,
+  with an always-visible comparison table for density, smoothing, labels,
+  memory and blur. Show the active profile, selection reason and automatic
+  quality reduction in one summary, and keep map-recovery guidance visible.
+- Review app-update installation before downloading, with an explicit account
+  of saved preferences and disk caches retained and the open soundings, edits,
+  chart changes and undo/redo history lost. Allow a return to Soundings to
+  export a picture, explaining that PNGs cannot restore editable work. Require
+  another review when local sounding work changes during the download.
+
+### Fixed
+
+- Keep active forecast downloads and individual retries running while another
+  hour's product availability is checked. Cancel work when its model, run or
+  verified product selection changes, keep Stop Download available during checks,
+  and clear stopped jobs before returning to an earlier selection.
+  Keep the download-control test focused on its four required hour states to
+  avoid full-run rendering causing timeouts on hosted test machines.
+- Reuse readable saved frames to verify product availability when provider
+  inventories fail, keeping previously downloaded maps accessible after restart
+  without offering unsaved or corrupt fields.
+- Keep transported map bounds stable across projection-library platforms, and
+  update release checks for mandatory installed Windows acceptance and completed
+  popup animations before measuring highlight layout.
+- Keep Units settings within the 1280 × 800 desktop viewport by tightening the
+  two unit cards' vertical padding, retaining all controls and descriptions.
+- Require another update review for unapplied sounding inputs, drag edits and
+  recalculations made during the download. Keep the editor mounted when cancelling
+  installation, and stop installation if preferences cannot be saved to disk.
+- Handle browser disconnects during response headers and bodies, including Windows
+  connection-aborted errors, without logging an internal provider failure or
+  attempting a second response to a closed connection.
+- Use theme-aware, full-opacity text for the parameter and model search
+  placeholders so the prompts remain readable on glass in dark and light modes.
+- Center sounding-render errors in an empty chart area and use a compact card
+  near the bottom when a chart is retained. Remove their decorative error icon,
+  explain lost connections plainly and offer Retry instead of a dead-end message.
+  Preserve the current chart and pending edit after a failed recalculation.
+- Use the same glass fill and blur for the forecast model, run and hour pickers,
+  removing the model picker's extra opaque tint.
+- Render scientific unit exponents as superscripts in parameter badges,
+  descriptions, scales, hover values and point readouts, including m²/s².
+  Retain source units for calculations and preserve the palette's native ticks.
+- Allow ten hours after an ECMWF 9km cycle before recommending it, replacing
+  the seven-hour estimate that selected runs before their split files arrived.
+  Keep exact-run availability checks and advise choosing an earlier run when files are missing.
+  Accept ECMWF cache queries through F360 in desktop and browser paths while
+  validating each model's native forecast steps and cycle limits.
+- Show parameter-load failures in a centered, dismissible popup with a retry
+  action and selected forecast context. Remove the retry overlay from the toolbar;
+  its Parameter control reopens a dismissed failure.
+- Reduce the vertical inset around forecast toolbar buttons so the orange
+  highlight sits closer to the toolbar's top and bottom edges.
+- Keep Skew-T and hodograph readouts glass in light mode, with a stronger white
+  tint that preserves readable labels and values over the chart.
+- Apply selected wind units consistently to radar velocity hover values and
+  numeric scale labels while retaining native calibration and color thresholds.
+- Give each instance of the unit controls an independent radio-group name so
+  the shortcut and Settings remain synchronized when both are mounted.
+
+### Security
+
+- Update Vite to 8.3.5 and the development dependency lock to Undici 7.30.1
+  and Zod 4.6.7 to clear the reported frontend advisories. Retain the supported
+  Node.js range and existing runtime dependencies.
+- Require Tokio 1.53.3 in the desktop to include the upstream I/O-safety fix.
 
 ### Removed
 
+- Remove the display-units shortcut and popup from the Model Viewer and Live
+  Tracking toolbars. Keep unit preferences in Settings and sounding view tools.
 - Remove the download-history graph, snapshots, collector, associated tests and
   branch-backed publishing workflow, allowing `main` to remain the only branch.
 

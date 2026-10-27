@@ -15,7 +15,7 @@ import math
 import shutil
 import sys
 import textwrap
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -292,24 +292,48 @@ def test_unknown_or_malformed_ids_are_structured_errors():
     assert info.value.code == "INVALID_ARGUMENT"
 
 
-def test_models_catalog_lists_every_selectable_model():
+def test_models_catalog_lists_every_selectable_model(monkeypatch):
     from sharpmod.tools import model_extract
+    from sharpmod.bridge import params
 
+    now = datetime(2026, 10, 27, 6, 30, tzinfo=UTC)
+    monkeypatch.setattr(params, "now", lambda: now)
     catalog = soundings.models_catalog({})
     models = {m["key"]: m for m in catalog["models"]}
-    assert set(models) == {c.key for c in model_extract.available_models()}
+    assert set(models) == {c.key for c in model_extract.available_models()} | {"aigfs"}
+    assert {key for key, model in models.items() if not model["soundings_available"]} == {"aigfs"}
+    assert models["aigfs"]["domain"] == "Global"
+    assert models["aigfs"]["forecast_hours"] == list(range(0, 385, 6))
     hrrr = models["hrrr"]
     assert len(hrrr["outline"]) > 100 and hrrr["cycles"] == list(range(24))
     assert hrrr["max_forecast_hours"][5] == 18
     assert hrrr["max_forecast_hours"][6] == 48
     ecmwf = models["openmeteo-ecmwf-ifs025"]
     assert [ecmwf["max_forecast_hours"][h] for h in (0, 6, 12, 18)] == [360, 144, 360, 144]
+    high_res = models["ecmwf-ifs-9km"]
+    assert high_res["label"] == "ECMWF 9km"
+    assert [high_res["max_forecast_hours"][h] for h in (0, 6, 12, 18)] == [360, 144, 360, 144]
+    assert high_res["suggested_run"] == "2026-10-26T18:00:00Z"
+    assert ecmwf["suggested_run"] == "2026-10-27T00:00:00Z"
     for model in catalog["models"]:
         assert model["suggested_run"] in model["recent_runs"]
         assert model["recent_runs"] == sorted(model["recent_runs"], reverse=True)
         assert model["forecast_hours"]
         assert len(model["max_forecast_hours"]) == 24
         assert set(model["max_forecast_hours"]) <= set(model["forecast_hours"])
+
+
+@pytest.mark.parametrize("cycle_hour", (0, 6, 12, 18))
+def test_9km_suggested_run_waits_for_its_split_files(monkeypatch, cycle_hour):
+    from sharpmod.bridge import params
+
+    cycle = datetime(2026, 10, 26, cycle_hour, tzinfo=UTC)
+    for delay, expected in ((timedelta(hours=9, minutes=59), cycle - timedelta(hours=6)),
+                            (timedelta(hours=10), cycle)):
+        monkeypatch.setattr(params, "now", lambda: cycle + delay)
+        models = soundings.models_catalog({})["models"]
+        high_res = next(model for model in models if model["key"] == "ecmwf-ifs-9km")
+        assert high_res["suggested_run"] == params.iso(expected)
 
 
 def test_open_observed_writes_and_decodes_the_provider_result(monkeypatch):

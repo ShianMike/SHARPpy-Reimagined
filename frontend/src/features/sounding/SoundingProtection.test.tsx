@@ -140,7 +140,7 @@ describe("Sounding local work protection", () => {
     const input = screen.getByRole("spinbutton", { name: /Temperature/u });
     await userEvent.clear(input);
     await userEvent.type(input, "35");
-    await userEvent.click(screen.getByRole("button", { name: "Apply & recalculate" }));
+    await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
     await waitFor(() => { expect(finish).toBeTypeOf("function"); });
     const cached = queryClient.getQueriesData({ queryKey: ["soundings", summary.soundingId, "view"] });
     await userEvent.click(screen.getByRole("button", { name: "Show sounding sources" }));

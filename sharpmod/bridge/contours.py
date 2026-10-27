@@ -33,11 +33,12 @@ POINT_DECIMALS = 5
 MAX_SEGMENTS = 100_000
 
 
-def wind_grid(product, decoded, mapping):
+def wind_grid(product, decoded, mapping, *, model="hrrr"):
     """Packed display winds: low 9 bits are wind-from degrees, high 7 are 5 kt."""
-    from sharpmod.models.lambert_grid import HRRR_GRID
+    from sharpmod.providers.hrrr_field import field_grid
     from sharpmod.providers.hrrr_products import ms_to_kt
     from sharpmod.providers.hrrr_field import HrrrFieldError
+    grid = field_grid(model)
 
     names = {field.variable: field.name for field in product.fields}
     if not {"UGRD", "VGRD"} <= names.keys():
@@ -49,10 +50,10 @@ def wind_grid(product, decoded, mapping):
     u, v = (
         np.asarray(decoded[names[key]], dtype=np.float32) for key in ("UGRD", "VGRD")
     )
-    if u.shape != HRRR_GRID.shape or v.shape != u.shape:
+    if u.shape != grid.shape or v.shape != u.shape:
         from sharpmod.providers.hrrr_field import HrrrFieldError
 
-        raise HrrrFieldError("wind components do not match the HRRR grid")
+        raise HrrrFieldError("wind components do not match the model grid")
     u, v = u.ravel()[mapping.flat], v.ravel()[mapping.flat]
     valid = mapping.inside & np.isfinite(u) & np.isfinite(v)
     steps = np.floor(ms_to_kt(np.hypot(u, v)) / 5 + 0.5)
@@ -62,9 +63,12 @@ def wind_grid(product, decoded, mapping):
         raise HrrrFieldError("wind exceeds the display encoding range")
     # These CONUS models use grid-relative winds. Lambert convergence rotates them
     # to true north before reprojection (NCAR's uvmet convention).
-    x = HRRR_GRID.x0 + mapping.flat % HRRR_GRID.shape[1] * HRRR_GRID.spacing
-    y = HRRR_GRID.y0 + mapping.flat // HRRR_GRID.shape[1] * HRRR_GRID.spacing
-    convergence = np.degrees(np.arctan2(x, HRRR_GRID._rho0 - y))
+    from sharpmod.providers.hrrr_products import GLOBAL_MODELS
+    convergence = 0
+    if model not in GLOBAL_MODELS:
+        x = grid.x0 + mapping.flat % grid.shape[1] * grid.spacing
+        y = grid.y0 + mapping.flat // grid.shape[1] * grid.spacing
+        convergence = np.degrees(np.arctan2(x, grid._rho0 - y))
     direction = np.rint((270 - np.degrees(np.arctan2(v, u)) + convergence) % 360) % 360
     packed = np.full(u.shape, 65535, dtype="<u2")
     packed[valid] = (steps[valid].astype(np.uint16) << 9) | direction[valid].astype(
@@ -200,6 +204,11 @@ def contours(params: dict[str, Any]) -> dict[str, Any]:
 def _from_decoded(model, product, run, hour, decoded):
     from sharpmod.bridge import fields as bridge_fields, frame_cache
     from sharpmod.providers import hrrr_field
+    bounds = hrrr_field.field_bounds(model)
+    native = hrrr_field.field_grid(model)
+    # Oversampling a coarse native grid adds staircase segments, not contour detail.
+    width, height = (min(bridge_fields.FRAME[0], native.shape[1]),
+                     min(bridge_fields.FRAME[1], native.shape[0]))
 
     target = frame_cache.path("contours", model, product.key, run, hour, bridge_fields.FRAME)
     spec = product.contour
@@ -211,9 +220,9 @@ def _from_decoded(model, product, run, hour, decoded):
             if spec.name not in decoded:
                 raise hrrr_field.HrrrFieldError("decoded contour field is missing")
             raw = np.asarray(convert(decoded[spec.name]), dtype=np.float32)
-            if raw.shape != hrrr_field.HRRR_SHAPE:
+            if raw.shape != hrrr_field.field_grid(model).shape:
                 raise hrrr_field.HrrrFieldError(f"contour field is a {raw.shape} grid")
-            mapping = hrrr_field.index_map(bridge_fields.FRAME, hrrr_field.COVERAGE_BOUNDS)
+            mapping = hrrr_field.index_map((width, height), bounds, model=model)
             grid = hrrr_field.reproject(raw, mapping)
         # shortcut: half-size winds already exceed the 64-pixel barb density at
         # map MAX_ZOOM 9; enlarge this frame if that maximum zoom is raised.
@@ -221,7 +230,8 @@ def _from_decoded(model, product, run, hour, decoded):
         wind = wind_grid(
             product,
             decoded,
-            hrrr_field.index_map(wind_size, hrrr_field.COVERAGE_BOUNDS),
+            hrrr_field.index_map(wind_size, bounds, model=model),
+            model=model,
         )
     except hrrr_field.HrrrFieldUnavailable:
         raise BridgeError(
@@ -235,8 +245,7 @@ def _from_decoded(model, product, run, hour, decoded):
         raise BridgeError(
             "FIELD_FETCH_FAILED", f"{product.label} could not be read.", False
         ) from None
-    width, height = bridge_fields.FRAME
-    lon0, lon1, lat0, lat1 = hrrr_field.COVERAGE_BOUNDS
+    lon0, lon1, lat0, lat1 = bounds
 
     def to_lon(x: float) -> float:
         return lon0 + (x + 0.5) * (lon1 - lon0) / width

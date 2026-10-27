@@ -6,6 +6,7 @@ import threading
 import time
 import tracemalloc
 from collections import OrderedDict
+from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -35,7 +36,7 @@ def test_nam_multipart_winds_share_a_range_but_decode_distinct_components(monkey
                  f"2:{len(payload)}:d=2026090412:HGT:300 mb:1 hour fcst:\n")
     rows = hrrr_field.parse_inventory(inventory)
     assert [(row.length, row.field_index) for row in rows[:2]] == [(len(payload), 0), (len(payload), 1)]
-    monkeypatch.setattr(hrrr_field, "HRRR_SHAPE", (2, 3))
+    monkeypatch.setattr(hrrr_field, "HRRR_GRID", replace(hrrr_field.HRRR_GRID, shape=(2, 3)))
     monkeypatch.setattr(hrrr_field, "_INVENTORY_CACHE", {})
     requests = []
 
@@ -56,7 +57,7 @@ def test_nam_multipart_winds_share_a_range_but_decode_distinct_components(monkey
 
 def test_parallel_field_requests_do_not_overlap_native_decoding(monkeypatch):
     """Independent browser tabs must not enter ecCodes' global parser together."""
-    monkeypatch.setattr(hrrr_field, "HRRR_SHAPE", (1, 1))
+    monkeypatch.setattr(hrrr_field, "HRRR_GRID", replace(hrrr_field.HRRR_GRID, shape=(1, 1)))
     start = threading.Barrier(2)
     active = 0
     peak = 0

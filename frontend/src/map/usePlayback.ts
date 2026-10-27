@@ -14,9 +14,7 @@ import { useForecastStore } from "../stores/forecastStore";
 import { useGraphicsStore } from "../stores/graphicsStore";
 import { useUiStore } from "../stores/uiStore";
 import { panelLayers, panelProduct, useMapStore } from "../stores/mapStore";
-import { mapKeys } from "../lib/backend/queryOptions";
-import type { MapCatalog } from "../types/map";
-import { fieldQueryOptions, useFieldFrames } from "./mapQueries";
+import { fieldQueryOptions, useFieldFrames, useMapCatalog } from "./mapQueries";
 import { productOf, useDrawnProducts } from "./panelField";
 import { contourQueryOptions } from "./contourQueries";
 import { queryFrame } from "./queryFrame";
@@ -50,7 +48,9 @@ export function usePlayback(): void {
   const queryClient = useQueryClient();
   const run = context?.run ?? null;
   const model = context?.model.key ?? "hrrr";
-  const catalog = queryClient.getQueryData<MapCatalog>(mapKeys.catalog(model));
+  const catalogQuery = useMapCatalog();
+  const catalog = catalogQuery.data;
+  const checkingProducts = catalogQuery.isPending;
   const sampling = useMapStore((state) => Array.from({ length: state.panelLayout }, (_, panel) => {
     const layer = panelLayers(state, panel)["model-field"];
     const product = productOf(catalog, panelProduct(state, panel), panel);
@@ -66,7 +66,7 @@ export function usePlayback(): void {
   const ahead = Math.max(1, frameWindow.next + (playing ? frameWindow.prefetched : 0));
 
   useEffect(() => {
-    if (!active || run === null || hour === null || hours === null || !settled) {
+    if (!active || run === null || hour === null || hours === null || !settled || checkingProducts) {
       return;
     }
     let stopped = false;
@@ -101,5 +101,5 @@ export function usePlayback(): void {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [active, model, run, hour, hours, products, sampling, settled, ahead, playing, loop, speed, client, queryClient]);
+  }, [active, model, run, hour, hours, products, sampling, settled, checkingProducts, ahead, playing, loop, speed, client, queryClient]);
 }

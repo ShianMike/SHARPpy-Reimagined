@@ -110,7 +110,7 @@ export function SoundingWorkspace(): ReactNode {
                 <Action tone="accent" onClick={() => { selectPanel(false); }}><RadioTower className="icon-sm" />Choose a source</Action>
                 <ol className={styles.guideSteps}>
                   <li><strong>Inspect a level</strong><p>Hover either chart to link a level. Focus a chart and use ↑ / ↓ to move between levels.</p></li>
-                  <li><strong>Edit your profile</strong><p>Choose Edit profile, then drag a point or select a level. Compare Before / After values and use Undo history to step back.</p></li>
+                  <li><strong>Edit your profile</strong><p>Choose Edit profile, then drag a point or select a level. Compare Original / New values and use Undo history to step back.</p></li>
                   <li><strong>Arrange and export</strong><p>Fit width or Fit all to resize. Use Chart panels for diagnostics or all four height charts, then Copy or Export PNG.</p></li>
                 </ol>
                 <p className={styles.guideNote}>Your original data stays unchanged.</p>

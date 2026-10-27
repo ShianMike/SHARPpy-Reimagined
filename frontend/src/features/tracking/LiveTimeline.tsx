@@ -13,6 +13,7 @@ import { useLiveHistory } from "./useLiveHistory";
 import { RadarScanPicker } from "./RadarScanPicker";
 import styles from "../timeline/TimelineRegion.module.css";
 import hints from "../../ui/HoverHint.module.css";
+import { MapInteractionControls } from "../timeline/MapInteractionControls";
 
 export function LiveTimeline({ className, scanTarget }: { className?: string | undefined; scanTarget?: HTMLDivElement | null }): ReactNode {
   const { now, selectedTime, playing, selectTime, setPlaying } = useLiveTrackingStore();
@@ -46,6 +47,7 @@ export function LiveTimeline({ className, scanTarget }: { className?: string | u
   return <Surface as="section" className={cx(styles.timeline, className)} aria-label="Live Tracking timeline" data-testid="live-timeline">
     {scanTarget == null ? null : createPortal(<RadarScanPicker history={history} status={status} fetching={fetching > 0}
       onSelect={(frame) => { choose(frame === now ? null : frame); void history.loadFrame(frame); }} />, scanTarget)}
+    <MapInteractionControls />
     <div className={styles.transport} role="group" aria-label="Playback">
       <IconAction icon={StepBack} size="sm" label="Previous frame" hintSide="top" disabled={previous === undefined} onClick={() => { if (previous !== undefined) choose(previous); }} />
       <IconAction className={styles.play} icon={playing ? Pause : Play} label={playing ? "Pause" : "Play"} hintSide="top" onClick={toggle} />

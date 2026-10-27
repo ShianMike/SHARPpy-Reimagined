@@ -10,6 +10,10 @@ function edit(value: unknown, change: (copy: Record<string, unknown>) => void): 
 }
 
 describe("contour contracts", () => {
+  it.each([0, 84, 144, 360, 384])("accepts global contour and wind frames at F%s", (forecastHour) => {
+    expect(parseContourLines({ ...contours, forecastHour }).forecastHour).toBe(forecastHour);
+  });
+
   it("parses the exported fixture unchanged", () => {
     const lines = parseContourLines(contours);
     expect(lines.segments).toEqual(contours.segments);
@@ -24,6 +28,7 @@ describe("contour contracts", () => {
   });
 
   it.each([
+    ["a forecast beyond F384", () => parseContourLines({ ...contours, forecastHour: 385 })],
     ["a segment with three points", () =>
       parseContourLines(edit(contours, (c) => (c.segments as unknown[][][])[0]?.push([1, 2])))],
     ["a point off the globe", () =>

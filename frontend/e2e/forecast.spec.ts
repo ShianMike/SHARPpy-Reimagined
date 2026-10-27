@@ -1,8 +1,4 @@
-// The forecast map against the fixture backend (MIGRATION phases 2 to 8): the
-// central forecast time in the toolbar and the timeline, the model field with
-// its legend, state, and pointer value, SPC outlooks, the radar mosaic, the
-// stacking order, a forecast point that opens a model sounding, playback,
-// two and four synchronized panels, and station availability.
+// Fixture forecasts: shared time, fields, overlays, point soundings, panels and station availability.
 import { deckLayers, labels, nextFrames, presetPreferences, projectPoint, waitForMapDrawn } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
@@ -31,9 +27,15 @@ test.describe("the forecast map", () => {
     await expect(hours).toHaveAttribute("max", "18");
     await expect(hours).toHaveValue("18");
     await page.getByRole("button", { name: "Choose model" }).click();
+    await page.getByRole("dialog", { name: "Forecast model" }).getByRole("radio", { name: "Global", exact: true }).check();
     await page.getByRole("button", { name: "Choose GFS", exact: true }).click();
     await expect(page.getByRole("button", { name: "Choose model" })).toContainText("GFS");
+    await expect(page.getByRole("button", { name: "Choose parameter" })).toBeEnabled();
+    await page.getByRole("button", { name: "Choose model" }).click();
+    await page.getByRole("button", { name: "Choose GDPS", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("GDPS");
     await expect(page.getByRole("button", { name: "Choose parameter" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Choose parameter" })).toContainText("Soundings only");
     expectWarnings(consoleMessages, []);
   });
 

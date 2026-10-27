@@ -111,6 +111,9 @@ chart images and exports retain their labelled units, and wind barbs use knots.
 1. Choose the **Model**, **Run · UTC**, **Forecast hour**, and **Parameter** in
    the top toolbar. The available products depend on the model's published
    fields; a product supported by HRRR may be absent from another model.
+   All parameter categories stay visible, with **Winter Weather** last. Hover
+   over or focus a product to preview its description in the separate card below;
+   the cards adjust to the available window space and description length.
 2. Pan or zoom to your area. Hover over an enabled model layer for its value.
    Click a map point to inspect the location, value, forecast time, and source,
    then choose **Open sounding** to load the point profile.
@@ -118,6 +121,9 @@ chart images and exports retain their labelled units, and wind barbs use knots.
    and press **Enter** to inspect the point at its centre.
 3. Use the timeline to step between available hours or play them in sequence.
    Playback speed and looping are controlled beside the timeline.
+   On the left, choose **Navigate** to pan and zoom without hover descriptions
+   or **Inspect** to show station, weather and numeric readouts. The choice is
+   shared with Live Tracking and all map panels for the current session.
 4. Use the panel controls for one, two, or four maps. Forecast time and map
    movement stay synchronized. Click a panel's title to edit its layers and
    choose its parameter; each panel has its own colour range on the right.
@@ -127,6 +133,30 @@ chart images and exports retain their labelled units, and wind barbs use knots.
    You can enable them through the map's layer controls.
 6. Use the small eye control beneath a panel's colour range to switch its
    model layer on or off. Other overlay visibility is controlled separately.
+
+Original **NAM** offers 34 map parameters on its native 12 km grid, with
+three-hour steps through F084. It shares the supported NAM 3km choices;
+updraft helicity and maximum updraft velocity are omitted because its files
+do not publish them. Pressure contours and wind barbs use NAM's own projection,
+and accumulated precipitation sums non-overlapping native intervals.
+
+**HRW WRF-ARW**, **HRW WRF-NSSL** and **HRW FV3** each offer up to 28 map
+products from their native 5 km files. Choices include height/wind, surface
+conditions, accumulated precipitation, CAPE, lapse rates, shear and helicity.
+The picker checks every required ingredient at the selected run and hour;
+forecast maxima start at F001. WRF members run to F048 and FV3 to F060, from
+00Z and 12Z cycles. Unsupported precipitation rates, snow depth, lightning,
+MUCAPE, SCP and STP are omitted. The 1 km shear uses interpolated model winds.
+
+Both **ECMWF** and **ECMWF 9km** offer up to 20 global map products: five
+height/wind levels, surface temperature, dewpoint, humidity, theta-e and winds,
+precipitation and winter-weather fields, most-unstable CAPE and the 700–500 mb
+lapse rate. The picker checks the selected run and hour and omits products with
+missing ingredients. Maps use ECMWF's direct 0.25° and 0.1° open-data grids;
+the existing ECMWF point-sounding source remains Open-Meteo. Older archived
+soundings can remain available after their direct map files expire.
+Snow depth uses snow density to convert water equivalent to physical depth;
+gusts and MUCAPE retain ECMWF's own interval and parcel definitions.
 
 In v3.2.0 source builds, **Load hours** saves the selected panels' forecast
 frames and required contours or winds to disk. Its details button separates
@@ -400,6 +430,7 @@ models and their forecast ranges.
 model-extract gfs 35.18 -97.44 --run "2024-05-20 00:00" --fxx 6
 model-extract hrrr 35.18 -97.44 --run "2024-05-20 00:00" --fxx 18 --render hrrr.png
 model-extract gdps 45.50 -73.60 --run "2026-07-22 00:00" --fxx 6
+model-extract ecmwf-9km 35.18 -97.44 --run "2026-10-26 12:00" --fxx 12
 
 # Provider-contract monitoring across recent completed cycles
 model-extract aigfs --probe --lookback-cycles 8 --require-surface-contract
@@ -415,6 +446,15 @@ The contract probe reports every present and missing ground component.
 `--require-surface-contract` returns a failing exit status until all six
 components are published, while `--lookback-cycles` avoids mistaking a
 not-yet-published wall-clock cycle for provider schema drift.
+
+**ECMWF 9km** (`ecmwf-ifs-9km`, alias `ecmwf-9km`) uses the IFS forecast
+distributed on ECMWF's new 0.1-degree grid. It downloads indexed pressure and
+surface subsets and uses the same run's F000 terrain height to complete the
+ground row. The 00Z/12Z runs extend to F360; 06Z/18Z stop at F144, with three-hour
+steps through F144 and six-hour steps thereafter. This feed is published about
+two hours after the 0.25-degree data. The existing ECMWF choice keeps its
+Open-Meteo 0.25-degree route. See the
+[ECMWF 0.1-degree feed documentation](https://confluence.ecmwf.int/spaces/DAC/pages/738041087/ECMWF+open+data+what+s+new+at+0.1%C2%B0).
 
 Every forecast request must include surface pressure/height, 2-m
 temperature/moisture, and both 10-m wind components. The extractor drops every

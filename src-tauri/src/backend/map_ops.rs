@@ -70,33 +70,51 @@ fn cached<T>(slot: &Mutex<Option<Arc<T>>>) -> Option<Arc<T>> {
 }
 
 impl Router {
-    /// What the map can draw; static for the life of the bridge.
-    pub async fn map_catalog(&self, model: &str) -> Result<Arc<MapCatalog>, BackendError> {
-        if let Some(catalog) =
-            cached(&self.map_catalog).filter(|catalog| catalog.field_model == model)
+    /// What the selected run can draw; untimed catalogues remain cached.
+    pub async fn map_catalog(
+        &self,
+        model: &str,
+        run_time: Option<&str>,
+        forecast_hour: Option<u32>,
+    ) -> Result<Arc<MapCatalog>, BackendError> {
+        let context = context(OP_MAP_CATALOG, "map catalogue");
+        if !key_ok(model)
+            || run_time.is_some() != forecast_hour.is_some()
+            || run_time.is_some_and(|time| !time_ok(time))
+            || forecast_hour.is_some_and(|hour| hour > 384)
+        {
+            return Err(invalid(
+                &context,
+                "model must be a key; runTime and forecastHour must name one valid run and hour",
+            ));
+        }
+        if let Some(catalog) = cached(&self.map_catalog)
+            .filter(|catalog| run_time.is_none() && catalog.field_model == model)
         {
             return Ok(catalog);
         }
-        let context = context(OP_MAP_CATALOG, "map catalogue");
-        if !key_ok(model) {
-            return Err(invalid(&context, "model must be a key"));
+        let mut params = json!({ "model": model });
+        if let Some(time) = run_time {
+            params["run_time"] = json!(time);
+            params["forecast_hour"] = json!(forecast_hour);
         }
-        let catalog: MapCatalog = self
-            .call(
-                &context,
-                "map.catalog",
-                json!({ "model": model }),
-                CATALOG_TIMEOUT,
-            )
-            .await?;
+        let timeout = if run_time.is_some() {
+            FIELD_TIMEOUT
+        } else {
+            CATALOG_TIMEOUT
+        };
+        let catalog: MapCatalog = self.call(&context, "map.catalog", params, timeout).await?;
         catalog
             .validate()
             .map_err(|reason| rejected(&context, "map.catalog", reason))?;
         let catalog = Arc::new(catalog);
-        *self
-            .map_catalog
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&catalog));
+        if run_time.is_none() {
+            let mut slot = self
+                .map_catalog
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            *slot = Some(Arc::clone(&catalog));
+        }
         Ok(catalog)
     }
 
@@ -111,10 +129,10 @@ impl Router {
     ) -> Result<Vec<u8>, BackendError> {
         let resource = format!("{model} {product} {run_time} F{forecast_hour:03}");
         let context = context(OP_FIELD, &resource);
-        if !key_ok(model) || !key_ok(product) || !time_ok(run_time) || forecast_hour > 84 {
+        if !key_ok(model) || !key_ok(product) || !time_ok(run_time) || forecast_hour > 384 {
             return Err(invalid(
                 &context,
-                "model and product must be keys, runTime an RFC 3339 time, forecastHour 0 to 84",
+                "model and product must be keys, runTime an RFC 3339 time, forecastHour 0 to 384",
             ));
         }
         let mut params = json!({ "model": model, "product": product, "run_time": run_time, "forecast_hour": forecast_hour });

@@ -84,14 +84,16 @@ def _recent_runs(cycles: tuple[int, ...], now: datetime, count: int) -> list[dat
 
 
 def model_status(params: dict[str, Any]) -> dict[str, Any]:
-    """Reuse the sounding provider's bounded inventory probe, without decoding data."""
+    """Check provider inventories without decoding map or sounding data."""
     p.keys(params, ("model", "run_time", "forecast_hour"))
     from sharpmod.tools import model_extract as mx
 
     key = p.text(params, "model", 1, 40)
     config = next((cfg for cfg in mx.available_models() if cfg.key == key), None)
+    if key == "aigfs":
+        config = mx.get_config(key)
     if config is None:
-        raise p.invalid("model is not in the sounding catalogue")
+        raise p.invalid("model is not in the forecast catalogue")
     run = p.time(params, "run_time")
     hour = p.integer(params, "forecast_hour", 0, 1000)
     if run.minute or run.second or run.microsecond or run.hour not in config.cycles:
@@ -99,7 +101,18 @@ def model_status(params: dict[str, Any]) -> dict[str, Any]:
     if hour not in mx.forecast_hours(config, cycle_hour=run.hour):
         raise p.invalid("forecast_hour is not published by this cycle")
     provider = mx.provider_capability(config, cycle_hour=run.hour).provider
-    if key in mx.OPENMETEO_POINT_KEYS:
+    if key == "aigfs":
+        from sharpmod.providers import hrrr_field as hf
+        provider = "NOAA/NCEP NOMADS"
+        try:
+            rows = hf.fetch_inventory(hf.grib_url(run, hour, "sfc", key), timeout=2.0)
+            state = "available" if rows else "unavailable"
+            message = "Surface map inventory found. Maps only; soundings are unavailable." if rows else "No surface map inventory found for this run and hour."
+        except hf.HrrrFieldUnavailable:
+            state, message = "unavailable", "Map fields are not published for this run and hour."
+        except hf.HrrrFieldError:
+            state, message = "unknown", "Map availability could not be confirmed."
+    elif key in mx.OPENMETEO_POINT_KEYS:
         state = "configured"
         message = "Provider configured. Live data is confirmed when you fetch a sounding."
     else:
@@ -126,7 +139,7 @@ def model_status(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def models_catalog(params: dict[str, Any]) -> dict[str, Any]:
-    """The forecast models that can produce a point sounding, with recent runs."""
+    """Forecast models and their sounding capability, with recent runs."""
     p.keys(params, ())
     from sharpmod.tools import model_extract as mx
 
@@ -134,17 +147,21 @@ def models_catalog(params: dict[str, Any]) -> dict[str, Any]:
     from sharpmod.analysis.ensemble_members import member_labels
 
     models: list[dict[str, Any]] = []
-    for config in mx.available_models():
+    for config in (*mx.available_models(), mx.get_config("aigfs")):
         runs = _recent_runs(config.cycles, now, RECENT_RUN_COUNT)
         # Publication lags the cycle: hourly models by about two hours, the others
         # by about five. The suggestion is the newest run older than that.
         lag = timedelta(hours=2 if len(set(config.cycles)) >= 8 else 5)
+        if config.key == "ecmwf-ifs-9km":
+            # shortcut: conservative 10 h estimate; probe publication if the schedule changes.
+            lag = timedelta(hours=10)
         suggested = next((run for run in runs if run <= now - lag), runs[-1])
         west, east, south, north = (float(v) for v in config.domain_bounds)
         models.append(
             {
                 "key": config.key,
                 "label": config.label,
+                "soundings_available": not bool(config.unavailable_reason),
                 "domain": config.domain,
                 "bounds": {"west": west, "east": east, "south": south, "north": north},
                 "outline": [
@@ -159,7 +176,7 @@ def models_catalog(params: dict[str, Any]) -> dict[str, Any]:
                 ],
                 "default_forecast_hour": int(config.default_fxx),
                 "grid_spacing_km": float(config.grid_spacing_km) or None,
-                "notes": str(config.notes or ""),
+                "notes": "Maps only. Point soundings are unavailable." if config.key == "aigfs" else str(config.notes or ""),
                 "members": list(member_labels(config.key) or ()),
                 "recent_runs": [p.iso(run) for run in runs],
                 "suggested_run": p.iso(suggested),

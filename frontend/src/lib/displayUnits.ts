@@ -8,6 +8,12 @@ export interface UnitPreferences {
 }
 export const DEFAULT_UNITS: UnitPreferences = { temperature: "source", wind: "kt" };
 
+const SUPERSCRIPTS: Readonly<Record<string, string>> = { "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹", "+": "⁺", "-": "⁻" };
+
+export function formatUnit(unit: string): string {
+  return unit.replace(/\^([+-]?\d+)(?![\d.])/gu, (_token: string, exponent: string) => Array.from(exponent, (character) => SUPERSCRIPTS[character]).join(""));
+}
+
 export function parseUnitPreferences(saved: unknown): UnitPreferences {
   const value = saved !== null && typeof saved === "object" ? saved as Record<string, unknown> : {};
   return {
@@ -17,9 +23,9 @@ export function parseUnitPreferences(saved: unknown): UnitPreferences {
 }
 
 export function displayUnit(source: string, preferences: UnitPreferences, display: Palette["display"] = "auto"): string {
-  if (display === "fixed") return source;
+  if (display === "fixed") return formatUnit(source);
   if (source === "°C" || source === "°F") return preferences.temperature === "source" ? source : preferences.temperature;
-  return WIND_UNITS.some((unit) => unit === source) ? preferences.wind : source;
+  return WIND_UNITS.some((unit) => unit === source) ? preferences.wind : formatUnit(source);
 }
 
 const WIND_IN_MS = new Map<string, number>([["kt", 1852 / 3600], ["km/h", 1 / 3.6], ["mph", 0.44704], ["m/s", 1]]);

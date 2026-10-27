@@ -22,7 +22,8 @@ export type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 
 export interface PreferencesRepository {
   load: () => Preferences;
-  save: (preferences: Preferences) => void;
+  /** True only when the preferences were written to persistent storage. */
+  save: (preferences: Preferences) => boolean;
 }
 
 /** localStorage behind a memory fallback: the first throw switches to memory, with one warning. */
@@ -57,6 +58,7 @@ export function createPreferencesRepository(getStorage: () => PreferenceStorage)
           fallBack(error);
         }
       }
+      return !useMemory;
     },
   };
 }

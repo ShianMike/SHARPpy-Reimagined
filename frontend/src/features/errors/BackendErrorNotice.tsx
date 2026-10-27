@@ -21,6 +21,7 @@ export interface BackendErrorNoticeProps {
   logFile: string | null;
   surface?: "floating" | "flat";
   testId?: string;
+  showIcon?: boolean;
 }
 
 export function BackendErrorNotice({
@@ -31,6 +32,7 @@ export function BackendErrorNotice({
   logFile,
   surface = "floating",
   testId = "backend-error",
+  showIcon = true,
 }: BackendErrorNoticeProps): ReactNode {
   const actions = errorActions(error.code);
   const source = errorSourceLine(error.context);
@@ -60,6 +62,7 @@ export function BackendErrorNotice({
       {...(source === null ? {} : { detail: source })}
       {...(buttons === undefined ? {} : { actions: buttons })}
       testId={testId}
+      showIcon={showIcon}
     >
       {hint === null ? null : (
         <p className={styles.hint} data-testid="error-no-retry">

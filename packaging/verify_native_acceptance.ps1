@@ -2,11 +2,14 @@
 param(
     [Parameter(Mandatory = $true)][string] $Artifacts,
     [Parameter(Mandatory = $true)][string] $ReportDirectory,
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string] $PreviousVersion = '3.2.0',
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string] $ExpectedVersion = '3.2.1',
     [switch] $PublicUpdate,
     [switch] $ProfileMemory
 )
 $ErrorActionPreference = 'Stop'
 if ($PublicUpdate -and $ProfileMemory) { throw 'Choose either the public updater or memory diagnosis' }
+if ([version]$ExpectedVersion -le [version]$PreviousVersion) { throw 'ExpectedVersion must be newer than PreviousVersion' }
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
     throw 'Native acceptance installs software only on a disposable hosted runner'
 }
@@ -22,6 +25,8 @@ $install = Join-Path $report 'installed'
 $env:WEBVIEW2_USER_DATA_FOLDER = if ($PublicUpdate) { $null } else { Join-Path $report 'webview-profile' }
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224'
 $env:SHARPPY_DESKTOP_CDP = 'http://127.0.0.1:9224'
+$env:SHARPPY_ACCEPTANCE_PREVIOUS_VERSION = $PreviousVersion
+$env:SHARPPY_ACCEPTANCE_EXPECTED_VERSION = $ExpectedVersion
 $env:E2E_SCREENSHOT_DIR = $report
 $desktop = $null
 $present = @()
@@ -38,7 +43,7 @@ New-ItemProperty -LiteralPath $debugPolicy -Name $debugApp -Value '--remote-debu
 $gitSource = (& git rev-parse HEAD).Trim()
 Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,VideoProcessor,AdapterRAM |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'graphics.json')
-[ordered]@{ source = $gitSource; runner = $env:RUNNER_OS; image = $env:ImageVersion; public_update = [bool]$PublicUpdate; memory_diagnostic = [bool]$ProfileMemory } |
+[ordered]@{ source = $gitSource; runner = $env:RUNNER_OS; image = $env:ImageVersion; previous_version = $PreviousVersion; expected_version = $ExpectedVersion; public_update = [bool]$PublicUpdate; memory_diagnostic = [bool]$ProfileMemory } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'environment.json')
 Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber,OSArchitecture |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $report 'windows.json')
@@ -90,6 +95,11 @@ function Stop-Desktop {
     Start-Sleep -Seconds 3
 }
 function Run-Phase([string] $Phase) {
+    $version = if ($Phase -in 'seed', 'update') { $PreviousVersion } else { $ExpectedVersion }
+    $versionInfo = (Get-Item -LiteralPath $desktop.Path).VersionInfo
+    if ($versionInfo.FileVersion -ne $version -or $versionInfo.ProductVersion -ne $version) {
+        throw "Installed desktop version does not match $version during $Phase"
+    }
     $env:SHARPPY_ACCEPTANCE_PHASE = $Phase
     $env:SHARPPY_MEASURE_OUT = Join-Path $report "$Phase.json"
     & ./node_modules/.bin/playwright.cmd test --config playwright.desktop.config.ts acceptance.spec.ts
@@ -123,10 +133,10 @@ Push-Location (Join-Path $PSScriptRoot '../frontend')
 try {
     $previous = Join-Path $report 'previous'
     New-Item -ItemType Directory -Path $previous | Out-Null
-    & gh release download v3.2.0 --repo $env:GITHUB_REPOSITORY --pattern '*-setup.exe' --pattern '*-SHA256SUMS.txt' --dir $previous
+    & gh release download "v$PreviousVersion" --repo $env:GITHUB_REPOSITORY --pattern '*-setup.exe' --pattern '*-SHA256SUMS.txt' --dir $previous
     if ($LASTEXITCODE -ne 0) { throw 'Previous stable release download failed' }
-    $baseline = Verify-Installer $previous '3.2.0'
-    $candidate = Verify-Installer $artifactsRoot '3.2.1'
+    $baseline = Verify-Installer $previous $PreviousVersion
+    $candidate = Verify-Installer $artifactsRoot $ExpectedVersion
     Install-Version $baseline
     Start-Desktop
     Run-Phase 'seed'

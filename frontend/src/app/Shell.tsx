@@ -133,12 +133,12 @@ export function Shell(): ReactNode {
             <Surface as="aside" id="map-details" className={styles.sidePanel} data-motion="panel" data-view="point" aria-label="Map details" inert={!detailsOpen || sideTab !== "point"} hidden={!detailsOpen || sideTab !== "point"}
               onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeDetails(); } }}>
               <div className={styles.sideHeader} role="group" aria-label="Detail panel">
-                <h2><MapPin className="icon" aria-hidden="true" />Point</h2>
+                <h2>Point</h2>
                 <IconAction icon={Layers} size="sm" label="Show layers" onClick={() => { setSideTab("layers"); }} />
                 <IconAction icon={X} size="sm" label="Close map details" onClick={closeDetails} />
               </div>
               <div className={styles.point} data-motion="fade">
-                {hasSelection ? <Inspector /> : <EmptyPanel icon={MapPin} title={isLive ? "Explore live weather" : "Explore a forecast point"}
+                {hasSelection ? <Inspector /> : <EmptyPanel title={isLive ? "Explore live weather" : "Explore a forecast point"}
                   message={isLive ? "Hover over weather layers for details, or choose a station to open its sounding." : "Choose a location on the map to see its weather values and open a sounding."} />}
               </div>
             </Surface>

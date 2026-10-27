@@ -5,12 +5,14 @@ import { Action, IconAction } from "../../ui/Controls";
 import type { ImageMode, RenderChoice } from "../../types/soundings";
 import { convertUnit, displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
+import { useUpdateStore } from "../../stores/updateStore";
 import { AscentPicker } from "./AscentPicker";
 import { SoundingErrorNotice } from "./SoundingErrorNotice";
 import { SoundingExport } from "./SoundingExport";
 import { useObjectUrl } from "./soundingQueries";
 import { PointEditor } from "./PointEditor";
 import { LevelReadout } from "./LevelReadout";
+import { QuickUnits } from "../settings/QuickUnits";
 import { SourceSelect } from "./SourceFields";
 import { useSoundingView } from "./useSoundingView";
 import { replaceValues } from "./viewHistory";
@@ -28,6 +30,7 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
   const [inspected, setInspected] = useState<{ image: Blob; index: number; x: number; y: number; chart: "skew" | "hodograph"; box: DOMRect } | null>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
+  const inspectButton = useRef<HTMLButtonElement>(null);
   const gesture = useRef<{ id: string | null; x: number; y: number; left: number; top: number } | null>(null);
   const { image, edit, state, edits, request, busy, ready, update } = useSoundingView(soundingId, choice, quality, timeIndex);
   const data = image.data;
@@ -144,6 +147,7 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
       viewport.current.scrollTop = active.top - event.clientY + active.y;
     } else {
       const rect = frame.current?.getBoundingClientRect();
+      if (Math.hypot(event.clientX - active.x, event.clientY - active.y) > 3) useUpdateStore.getState().noteSoundingWork();
       if (rect !== undefined) setPreview({ id: active.id, x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)) });
     }
   };
@@ -154,7 +158,7 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
       edit.mutate({ ...request, drag: { target: active.id, x: preview.x, y: preview.y } });
     }
   };
-  const editor = editing && point !== undefined ? <PointEditor key={point.id + JSON.stringify(point.values) + JSON.stringify(units)} point={point} busy={unavailable} onClose={() => { setSelected(null); }} onApply={(values) => { edit.mutate({ ...request, edits: replaceValues(edits, Number(point.id.split(":")[1]), values) }); }} /> : null;
+  const editor = editing && point !== undefined ? <PointEditor key={point.id + JSON.stringify(point.values) + JSON.stringify(units)} point={point} busy={unavailable} onApply={(values) => { edit.mutate({ ...request, edits: replaceValues(edits, Number(point.id.split(":")[1]), values) }); }} /> : null;
   const info = <header className={styles.header} data-docked={infoTarget !== undefined} tabIndex={0} aria-label="Sounding details">
     {infoTarget === undefined ? null : <strong className={styles.groupLabel}>Info</strong>}
     {heading}
@@ -168,10 +172,10 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
       <div className={styles.toolGroup} role="group" aria-label="Profile controls">
         <span className={styles.groupLabel}>Profile</span>
         <div className={styles.profileMode}>
-          <Action aria-pressed={!editing} onClick={() => { setEditing(false); setSelected(null); }}><Hand className="icon-sm" />Inspect</Action>
+          <Action ref={inspectButton} aria-pressed={!editing} onClick={() => { setEditing(false); setSelected(null); }}><Hand className="icon-sm" />Inspect</Action>
           <Action aria-pressed={editing} onClick={() => { setEditing(true); }} disabled={data === undefined || unavailable}><Pencil className="icon-sm" />Edit profile</Action>
         </div>
-        <SourceSelect label="Undo history" value={state.cursor} disabled={busy || state.history.length < 2}
+        {state.history.length < 2 ? null : <><SourceSelect label="Undo history" value={state.cursor} disabled={busy}
           options={state.history.map((snapshot, index) => ({ value: index, label: snapshot.length === 0 ? index === 0 ? "Original profile" : `${String(index)} · Reset profile`
             : `${String(index)} · ${String(snapshot.length)} edited ${snapshot.length === 1 ? "level" : "levels"}` }))}
           onChange={(cursor) => { update({ ...state, cursor }); }} />
@@ -179,22 +183,25 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
           <Action aria-label="Undo edit" disabled={busy || state.cursor === 0} onClick={undo}><Undo2 className="icon-sm" />Undo</Action>
           <Action aria-label="Redo edit" disabled={busy || state.cursor >= state.history.length - 1} onClick={redo}><Redo2 className="icon-sm" />Redo</Action>
           <Action aria-label="Reset profile" disabled={busy || edits.length === 0} onClick={() => { edit.mutate({ ...request, edits: [] }); }}><RotateCcw className="icon-sm" />Reset</Action>
-        </div>
+        </div></>}
       </div>
-      <div className={styles.toolGroup} role="group" aria-label="View controls">
-        <span className={styles.groupLabel}>View</span>
-        <div className={styles.zoomControls}>
+      {editing ? <section className={styles.levelEditor} aria-label="Level editor">
+        <header><strong>Edit level</strong><Action aria-label="Finish editing" onClick={() => { setEditing(false); setSelected(null); inspectButton.current?.focus(); }}>Done</Action></header>
+        <SourceSelect label="Profile level" value={selected ?? ""} disabled={busy} compact options={[{ value: "", label: "Choose a level…" }, ...(data?.points.map((point) => ({ value: point.id, label: point.label + (editedLevels.has(point.id.split(":")[1]) ? " · Edited" : "") })) ?? [])]} onChange={(value) => { setSelected(value || null); }} />
+        {editor ?? <p>Choose a level or drag a point.</p>}
+      </section> : null}
+      <details className={styles.viewControls} aria-label="View controls" open={!editing}>
+        <summary>View<ChevronDown className="icon-sm" aria-hidden="true" /></summary>
+        <div className={styles.viewBody}>
+        <div className={styles.viewActions}><div className={styles.zoomControls}>
           <IconAction icon={ZoomOut} label="Zoom out" size="sm" onClick={() => { zoomTo(scale / 1.25); }} />
           <button className={styles.zoomLabel} type="button" onClick={() => { zoomTo(1 / ratio); }} aria-label="Actual pixels (100%)" title="Actual pixels (100%)">{Math.round(scale * ratio * 100)}%</button>
           <IconAction icon={ZoomIn} label="Zoom in" size="sm" onClick={() => { zoomTo(scale * 1.25); }} />
-        </div>
+        </div><QuickUnits /></div>
         <div className={styles.fitControls}>
           <Action aria-label="Fit sounding to width" aria-pressed={zoom === null && fitWidth} onClick={() => { setFitWidth(true); setZoom(null); }}><MoveHorizontal className="icon-sm" />Fit width</Action>
           <Action aria-label="Fit sounding to view" aria-pressed={zoom === null && !fitWidth} onClick={() => { setFitWidth(false); setZoom(null); }}><Maximize className="icon-sm" />Fit all</Action>
         </div>
-        <SourceSelect<ImageMode> label="Image resolution" value={quality} disabled={busy} options={[{ value: "uhd", label: "UHD · lossless" }, { value: "hd", label: "HD · lossless" }]} onChange={setQuality} />
-      </div>
-      <div className={styles.exportTools}>
         {data === undefined ? null : <details className={styles.panelPicker}>
           <summary>Chart panels<ChevronDown className="icon-sm" aria-hidden="true" /></summary>
           <div className={styles.options} data-motion="enter">
@@ -204,15 +211,13 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
               onChange={(value) => { update({ ...state, options: { ...state.options, [group.key]: value } }); }} />)}
           </div>
         </details>}
-        <SoundingExport view={data} quality={quality} ready={ready} busy={busy}
+        </div>
+      </details>
+      <div className={styles.exportTools}>
+        <SoundingExport view={data} quality={quality} onQualityChange={setQuality} ready={ready} busy={busy}
           filename={title.replace(/[^a-zA-Z0-9_-]+/g, "-") + "-" + choice + (timeIndex > 0 ? `-time-${String(timeIndex + 1)}` : "") + (edits.length ? "-edited" : "") + ".png"} />
       </div>
     </div>
-    {editing ? <div className={styles.editBar} data-docked={controlsTarget !== undefined} data-motion="fade"><Pencil className="icon-sm" /><span>Drag a highlighted point, or choose a level to enter values.</span>
-      <SourceSelect label="Profile level" value={selected ?? ""} disabled={busy} compact options={[{ value: "", label: "Choose a level…" }, ...(data?.points.map((point) => ({ value: point.id, label: point.label + (editedLevels.has(point.id.split(":")[1]) ? " · Edited" : "") })) ?? [])]} onChange={(value) => { setSelected(value || null); }} />
-      <Action onClick={() => { setEditing(false); setSelected(null); }}>Done</Action>
-    </div> : null}
-    {controlsTarget === undefined || editor === null ? null : <div className={styles.dockedEditor}>{editor}</div>}
   </>;
   return <div className={styles.imageViewer} onKeyDown={(event) => {
     if ((event.target as HTMLElement).closest("input,select,textarea,[role=combobox],[role=listbox]")) return;
@@ -263,9 +268,8 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
           </div> : null}
         </div>
       </div>
-      {controlsTarget === undefined ? editor : null}
       {busy ? <div className={styles.rendering} data-motion="fade" role="status">{data === undefined ? "Rendering sounding image…" : edit.isPending ? "Recalculating profile…" : "Rendering updated sounding…"}</div> : null}
-      {image.isError || edit.isError ? <div className={styles.failure}><SoundingErrorNotice error={edit.error ?? image.error} operation="render_sounding" onRetry={() => { if (edit.variables) edit.mutate(edit.variables); else void image.refetch(); }} busy={busy} testId="render-error" /></div> : null}
+      {image.isError || edit.isError ? <div className={styles.failure} data-retained={data !== undefined}><div className={styles.failureCard}><SoundingErrorNotice error={edit.error ?? image.error} operation="render_sounding_view" onRetry={() => { if (edit.variables) edit.mutate(edit.variables); else void image.refetch(); }} busy={busy} testId="render-error" /></div></div> : null}
     </div>
     {!inspecting ? null : <>
       <LevelReadout chart="skew" position={linkedPosition("skew")} readings={readings.slice(0, 4)} onLeave={() => { setInspected(null); }} />

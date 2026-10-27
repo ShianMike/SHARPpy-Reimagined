@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useBackendClient } from "../../lib/backend/BackendProvider";
 import { BASE_QUERY_OPTIONS } from "../../lib/backend/queryOptions";
 import { useSoundingStore } from "../../stores/soundingStore";
+import { useUpdateStore } from "../../stores/updateStore";
 import type { ImageMode, RenderChoice } from "../../types/soundings";
 import type { ViewRequest } from "../../types/soundingView";
 import { appendEdit, INITIAL_VIEW } from "./viewHistory";
@@ -22,7 +23,10 @@ export function useSoundingView(id: string, choice: RenderChoice, quality: Image
   });
   const edit = useMutation({
     mutationKey: ["sounding-edit", id],
-    mutationFn: (next: ViewRequest) => client.renderSoundingView(id, choice, quality, next),
+    mutationFn: (next: ViewRequest) => {
+      useUpdateStore.getState().noteSoundingWork();
+      return client.renderSoundingView(id, choice, quality, next);
+    },
     onSuccess: (result) => {
       if (!useSoundingStore.getState().open.some((item) => item.soundingId === id)) return;
       cache.setQueryData(key({ ...request, edits: result.edits }), result);

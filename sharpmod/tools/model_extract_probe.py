@@ -297,7 +297,25 @@ def probe(
             result["available"] = (
                 H.grib is not None and inv is not None and len(inv) > 0
             )
-            contract = _api.surface_contract_status(inv)
+            if config.key == "ecmwf-ifs-9km":
+                pressure_available = result["available"]
+                result["available"] = False
+                surface = _api._create_herbie(
+                    Herbie, run_dt.strftime("%Y-%m-%d %H:%M"),
+                    model=config.herbie_model, product=config.product,
+                    fxx=int(fxx), verbose=False,
+                    **_api._herbie_kwargs(config, member=member, surface=True),
+                )
+                _api._probe_cancel_if_requested(cancelled)
+                result["surface_grib"] = str(surface.grib)
+                surface_inv = surface.inventory()
+                _api._probe_cancel_if_requested(cancelled)
+                result["inventory_rows"] += len(surface_inv)
+                result["available"] = pressure_available \
+                    and surface.grib is not None and len(surface_inv) > 0
+                contract = _api.surface_contract_status(surface_inv)
+            else:
+                contract = _api.surface_contract_status(inv)
             result["surface_contract_complete"] = contract["complete"]
             result["surface_contract_present"] = list(contract["present"])
             result["surface_contract_missing"] = list(contract["missing"])
@@ -324,12 +342,27 @@ def probe(
                 result["surface_contract_missing"] = []
             if open_subset and result["available"]:
                 _api._probe_cancel_if_requested(cancelled)
-                ds = H.xarray(config.search, remove_grib=False)
-                _api._probe_cancel_if_requested(cancelled)
-                if isinstance(ds, list):
-                    ds = _merge_datasets(ds)
+                if config.key == "ecmwf-ifs-9km":
+                    with tempfile.TemporaryDirectory(prefix="sharpmod-probe-") as directory:
+                        ds, _source = _api._retrieve_dataset(
+                            config, run_dt, fxx, download_dir=directory,
+                            cancelled=cancelled,
+                        )
+                        try:
+                            variables = {
+                                str(name) for group in ds._open_fallback_sources()
+                                for name in group.data_vars
+                            }
+                        finally:
+                            ds.close()
+                else:
+                    ds = H.xarray(config.search, remove_grib=False)
+                    _api._probe_cancel_if_requested(cancelled)
+                    if isinstance(ds, list):
+                        ds = _merge_datasets(ds)
+                    variables = {str(name) for name in ds.data_vars}
                 result["subset_opened"] = True
-                result["data_vars"] = sorted(str(v) for v in ds.data_vars)
+                result["data_vars"] = sorted(variables)
     except DownloadCancelled:
         raise
     except Exception as exc:

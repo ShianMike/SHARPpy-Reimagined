@@ -71,7 +71,7 @@ def test_thetae_model_ingredients_and_catalogue_keep_kelvin_and_wind(model):
 def test_thetae_wind_only_endpoint_encodes_winds_without_contour_segments(model, monkeypatch, tmp_path):
     monkeypatch.setenv("SHARPMOD_HRRR_FIELD_CACHE", str(tmp_path / "maps"))
     grid = replace(lambert_grid.HRRR_GRID, shape=(2, 3), x0=0, y0=0)
-    monkeypatch.setattr(lambert_grid, "HRRR_GRID", grid)
+    monkeypatch.setattr(hf, "HRRR_GRID", grid)
     monkeypatch.setattr(hf, "HRRR_SHAPE", grid.shape)
     monkeypatch.setattr(fields, "FRAME", (6, 4))
     mapping = hf._IndexMap(3, 2, hf.COVERAGE_BOUNDS, np.arange(6),
@@ -89,7 +89,7 @@ def test_thetae_wind_only_endpoint_encodes_winds_without_contour_segments(model,
         calls.append((product.key, run.isoformat(), hour, kwargs["model"]))
         return decoded
 
-    def index_map(size, bounds):
+    def index_map(size, bounds, **_kwargs):
         assert bounds == hf.COVERAGE_BOUNDS
         if size == (3, 2):
             return mapping

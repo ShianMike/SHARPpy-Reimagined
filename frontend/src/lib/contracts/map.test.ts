@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import { encodeShrf, parseFieldFrame, parseRadarFrame, parseRadarSiteFrame, parseSatelliteFrame, parseShrf } from "./frames";
 import { ContractError } from "./guards";
 import { parseAvailabilityReport, parseMapCatalog, parsePlaceLabels, parseRadarSiteCatalog, parseSpcOutlook } from "./map";
+import { parseCachedHours } from "./storage";
 
 /** The bytes of a `?url&inline` data URL. */
 function bytes(dataUrl: string): Uint8Array {
@@ -26,6 +27,15 @@ function edit(value: unknown, change: (copy: Record<string, unknown>) => void): 
 }
 
 describe("map contracts", () => {
+  it("accepts global cache hours through F384 and rejects invalid or unordered hours", () => {
+    expect(parseCachedHours([0, 144, 360, 384])).toEqual([0, 144, 360, 384]);
+    const gfs = [...Array.from({ length: 121 }, (_, hour) => hour), ...Array.from({ length: 88 }, (_, index) => 123 + index * 3)];
+    expect(parseCachedHours(gfs)).toHaveLength(209);
+    for (const invalid of [[385], [-1], [NaN], [1.5], [6, 0], [0, 0]]) {
+      expect(() => parseCachedHours(invalid)).toThrow(ContractError);
+    }
+  });
+
   it("parses the exported JSON fixtures without changing them", () => {
     expect(parseMapCatalog(catalog)).toEqual(catalog);
     for (const outlook of [outlookCat, outlookTorn, outlookWind]) {

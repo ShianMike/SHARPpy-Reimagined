@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 import re
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -214,7 +215,11 @@ def test_hazard_products_follow_each_models_published_inventory(model):
     additions = {"apcp", "efhl",
                  "gust", "lftx", "maxuvv", "prate", "pwat", "snod", "wind-10m",
                  "prate-frzr", "prate-sleet", "prate-snow"}
-    expected = ({"apcp", "gust", "maxuvv", "pwat", "wind-10m"} if model.startswith("refs-")
+    expected = (additions - {"efhl", "lftx", "maxuvv"} if model in hp.ECMWF_MODELS or model == "gfs"
+                else {"apcp", "wind-10m"} if model == "aigfs"
+                else {"apcp", "gust", "lftx", "maxuvv", "pwat", "wind-10m"} if model in hp.HRW_MODELS
+                else {"apcp", "gust", "maxuvv", "pwat", "wind-10m"} if model.startswith("refs-")
+                else additions - {"efhl", "maxuvv"} if model == "nam"
                 else additions - {"efhl"} if model == "nam-3km-conus" else additions)
     products = {product.key: product for product in hp.available_products(model)}
     assert additions & products.keys() == expected
@@ -222,22 +227,24 @@ def test_hazard_products_follow_each_models_published_inventory(model):
         product = products[key]
         assert product.palette is hp.PRODUCTS[key].palette
         assert product.category in hp.CATEGORIES
-    maximum, = products["maxuvv"].fields
-    assert maximum.level == ("100-1000 mb above ground" if model == "hrrr" else "100-1000 mb")
-    assert maximum.forecast == "max fcst"
+    if "maxuvv" in products:
+        maximum, = products["maxuvv"].fields
+        assert maximum.level == ("100-1000 mb above ground" if model == "hrrr" else "100-1000 mb")
+        assert maximum.forecast == "max fcst"
 
 
 @pytest.mark.parametrize("hour", [0, 1, 2, 3, 4, 6, 7, 12, 60])
-def test_nam_total_precipitation_sums_disjoint_intervals_and_keeps_missing(hour, monkeypatch):
-    product = next(p for p in hp.available_products("nam-3km-conus") if p.key == "apcp")
-    monkeypatch.setattr(hf, "HRRR_SHAPE", (1, 2))
+@pytest.mark.parametrize("model", ["nam", "nam-3km-conus"])
+def test_nam_total_precipitation_sums_disjoint_intervals_and_keeps_missing(hour, model, monkeypatch):
+    product = next(p for p in hp.available_products(model) if p.key == "apcp")
+    monkeypatch.setattr(hf, "field_grid", lambda _model: replace(hf.HRRR_GRID, shape=(1, 2)))
     monkeypatch.setattr(hf, "_INVENTORY_CACHE", {})
     monkeypatch.setattr(hf, "_load_eccodes", lambda: None)
     monkeypatch.setattr(hf, "decode_message", lambda data, *_args, **_kwargs: np.array([[float(data.strip()), np.nan]]))
     downloaded = []
 
     def opener(url, _timeout, _limit, byte_range=None):
-        end = int(re.search(r"hiresf(\d+)", url)[1])
+        end = int(re.search(r"(?:hiresf|awip12)(\d+)", url)[1])
         start = (end - 1) // 3 * 3
         starts = list(dict.fromkeys((0, end - 1, start)))
         if byte_range is None:
@@ -251,7 +258,7 @@ def test_nam_total_precipitation_sums_disjoint_intervals_and_keeps_missing(hour,
         return data[byte_range[0]:byte_range[1] + 1]
 
     decoded = hf._download_fields(product, datetime(2026, 10, 16, tzinfo=timezone.utc), hour,
-                                  opener=opener, timeout=1, should_cancel=None, model="nam-3km-conus")
+                                  opener=opener, timeout=1, should_cancel=None, model=model)
     assert decoded["apcp"][0, 0] == hour
     assert product.derive(decoded)[0, 0] == pytest.approx(hour / 25.4)
     assert sorted(downloaded) == ([*range(3, hour, 3), hour] if hour else [])
@@ -284,7 +291,7 @@ def test_nam_total_precipitation_never_returns_a_partial_total(missing, monkeypa
 @pytest.mark.parametrize("model", hp.FIELD_MODELS)
 def test_initial_run_precipitation_is_zero_without_downloading(model, monkeypatch):
     product = next(p for p in hp.available_products(model) if p.key == "apcp")
-    monkeypatch.setattr(hf, "HRRR_SHAPE", (1, 2))
+    monkeypatch.setattr(hf, "field_grid", lambda _model: replace(hf.HRRR_GRID, shape=(1, 2)))
     run = datetime(2026, 10, 16, tzinfo=timezone.utc)
     np.testing.assert_array_equal(hf._download_fields(product, run, 0, opener=None, timeout=1,
                                                     should_cancel=None, model=model)["apcp"], [[0, 0]])

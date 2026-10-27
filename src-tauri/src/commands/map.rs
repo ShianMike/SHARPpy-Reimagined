@@ -28,8 +28,8 @@ pub async fn get_cached_forecast_hours(
             .iter()
             .any(|key| !crate::backend::map_ops::key_ok(key))
         || hours.is_empty()
-        || hours.len() > 85
-        || hours.iter().any(|hour| *hour > 84)
+        || hours.len() > 385
+        || hours.iter().any(|hour| *hour > 384)
     {
         return Err(crate::backend::sounding_ops::invalid(
             &context,
@@ -62,11 +62,17 @@ pub async fn get_weather_alerts(
 pub async fn get_map_catalog(
     state: tauri::State<'_, AppState>,
     model: Option<String>,
+    run_time: Option<String>,
+    forecast_hour: Option<u32>,
 ) -> Result<MapCatalog, BackendError> {
     Ok(MapCatalog::clone(
         &*state
             .router
-            .map_catalog(model.as_deref().unwrap_or("hrrr"))
+            .map_catalog(
+                model.as_deref().unwrap_or("hrrr"),
+                run_time.as_deref(),
+                forecast_hour,
+            )
             .await?,
     ))
 }

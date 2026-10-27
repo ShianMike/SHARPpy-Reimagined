@@ -42,7 +42,7 @@ const ACTIONS: Readonly<Record<AnyBackendError["code"], ErrorActions>> = {
   FIELD_FETCH_FAILED: { ...NONE, retry: true },
   OVERLAY_FETCH_FAILED: { ...NONE, retry: true },
   CONTRACT_VIOLATION: { ...NONE, logPath: true },
-  TRANSPORT_FAILED: NONE,
+  TRANSPORT_FAILED: { ...NONE, retry: true },
 };
 
 export function errorActions(code: AnyBackendError["code"]): ErrorActions {
@@ -80,8 +80,8 @@ const TITLES: Readonly<Record<string, string>> = {
   get_threshold_metrics: "The threshold diagnostics could not be loaded",
   evaluate_threshold: "The threshold could not be evaluated",
   export_threshold_csv: "The threshold results could not be exported",
-  render_sounding: "The sounding image could not be drawn",
-  render_sounding_view: "The sounding view could not be drawn",
+  render_sounding: "Sounding image unavailable",
+  render_sounding_view: "Sounding image unavailable",
   get_map_catalog: "Map products could not be loaded",
   get_weather_field: "The model field could not be loaded",
   get_spc_outlook: "The SPC outlook could not be loaded",

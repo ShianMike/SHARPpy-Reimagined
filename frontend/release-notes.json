@@ -78,6 +78,35 @@
       }
     ]
   },
+  "3.4.0": {
+    "summary": "More global and regional forecast maps, clearer sounding controls and safer app updates.",
+    "highlights": [
+      {
+        "title": "More forecast choices",
+        "description": "Browse CONUS, Global and Regional models with more supported GFS, ECMWF, NAM and HRW fields. Open ECMWF 9km and GDPS soundings, or explore AIGFS maps. Unavailable parameters stay hidden; AIGFS is maps only."
+      },
+      {
+        "title": "Copy a useful diagnostic",
+        "description": "Copy a failed operation's provider, time, error category and recovery action from Logs. Credentials, raw errors and request details stay out."
+      },
+      {
+        "title": "Understand graphics quality",
+        "description": "Compare Automatic, Low, Balanced and High in one view. See the active profile and when Automatic reduces rendering quality."
+      },
+      {
+        "title": "Clearer sounding readouts",
+        "description": "Read glass tooltips in both themes, edit levels in a compact sidebar and export annotations in your chosen units. Failed recalculations keep your chart and pending edit."
+      },
+      {
+        "title": "Clearer controls",
+        "description": "Find parameters with readable search and all categories in view. Preview descriptions separately, navigate without hover readouts and retry failed requests from clear popups."
+      },
+      {
+        "title": "Review work before updating",
+        "description": "Review work before installing. Preferences and disk caches stay; open soundings, edits and history are lost. New or unfinished edits trigger another review, and failed preference saves stop installation. Exported PNGs cannot restore editable work."
+      }
+    ]
+  },
   "3.3.0": {
     "summary": "Clearer forecast and radar playback, larger sounding views, and simpler map controls.",
     "highlights": [

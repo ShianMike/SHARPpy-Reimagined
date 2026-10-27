@@ -48,12 +48,14 @@ def cached_hours(params):
     products, hours = params["products"], params["hours"]
     if not isinstance(products, list) or not 1 <= len(products) <= 4:
         raise p.invalid("products must contain 1 to 4 product keys")
-    if not isinstance(hours, list) or not 1 <= len(hours) <= 85:
-        raise p.invalid("hours must contain 1 to 85 forecast hours")
+    if not isinstance(hours, list) or not 1 <= len(hours) <= 385:
+        raise p.invalid("hours must contain 1 to 385 forecast hours")
     selections = [fields._request({"model": params["model"], "product": product,
                                    "run_time": params["run_time"], "forecast_hour": 0})
                   for product in products]
-    hours = [p.integer({"hour": hour}, "hour", 0, 84) for hour in hours]
+    hours = [fields._request({"model": params["model"], "product": products[0],
+                              "run_time": params["run_time"], "forecast_hour": hour})[-1]
+             for hour in hours]
     hrrr_field._prune_disk_cache()
     present = {target for target, size, ready in storage._files(hrrr_field.disk_cache_root(), "*.json.gz") if size > 0 and ready}
     result = []

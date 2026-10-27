@@ -12,11 +12,19 @@ The interface keeps SHARPpy Reimagined branding and its current data services.
 The five workspaces are Overview, Model Viewer, Soundings, Data Status, and
 Settings. Analysis, Compare, and Ensemble were removed at the user's request.
 The shared model catalogue offers HRRR, RAP, NAM, NAM 3km CONUS, RDPS,
-HRW WRF-ARW, HRW WRF-NSSL, HRW FV3, RRFS, REFSm1 through REFSm5, GFS, and ECMWF.
+HRW WRF-ARW, HRW WRF-NSSL, HRW FV3, RRFS, REFSm1 through REFSm5, GFS, ECMWF,
+and ECMWF 9km.
 REFS choices fetch fixed individual members without an ensemble workspace.
+Original NAM offers its 34 supported map products on the native 12 km grid,
+with three-hour forecast steps through F084 and its own coverage outline.
 ECMWF uses the Open-Meteo Single Runs IFS 0.25-degree adapter. The backend's
 per-cycle limits constrain both forecast selectors and the hour rail.
+ECMWF 9km uses the direct IFS 0.1-degree open-data feed, combining pressure,
+surface and same-run analysis terrain files. Its suggested run allows for the
+additional two-hour publication delay.
 Choices outside this list resolve through the selectors' normal fallback.
+Both model selectors group CONUS and Global models, with RDPS under Regional.
+Search keeps these groups and hides sections with no matching models.
 
 Soundings has a separate ERA5 source with a UTC date, all 24 analysis hours,
 and a station or typed point. It calls the existing CDS pressure-level and

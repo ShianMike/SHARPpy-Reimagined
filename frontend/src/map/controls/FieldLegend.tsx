@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode 
 import type { Palette } from "../../types/map";
 import { VisuallyHidden } from "../../components/VisuallyHidden";
 import { cx } from "../../lib/cx";
-import { convertUnit, displayUnit } from "../../lib/displayUnits";
+import { convertUnit, displayUnit, formatUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
 import { buildLut, LUT_SIZE, paletteRange } from "../field/colourize";
 import styles from "./LayerPanel.module.css";
@@ -86,7 +86,7 @@ export function FieldLegend({ palette, vertical = false, description }: { palett
         {active ? <><span className={styles.scalePointer} aria-hidden="true" /><span className={cx(hints.hint, "tabular")} role="tooltip" data-side="left" data-open="true">{valueText}</span></> : null}
         <VisuallyHidden id={descriptionId}>{hidden} Use arrow keys to explore values; Home and End show the limits.</VisuallyHidden>
       </div> : <ol className={cx(styles.ticks, "tabular")} aria-label={`Scale ticks, ${unit || "unitless"}`}>
-        {(unit === palette.units ? spacedTicks(palette.ticks, low, high) : convertedTicks(shown(low), shown(high))).map((tick) => (
+        {(unit === formatUnit(palette.units) ? spacedTicks(palette.ticks, low, high) : convertedTicks(shown(low), shown(high))).map((tick) => (
           <li
             key={tick.value}
             data-edge={tick.at < 0.08 ? "start" : tick.at > 0.92 ? "end" : undefined}

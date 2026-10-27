@@ -19,6 +19,7 @@ export interface NoticeProps {
   /** Status for quiet updates; alert only for failures that need attention now. */
   role?: "status" | "alert";
   testId?: string;
+  showIcon?: boolean;
   /** Extra content after the detail line, such as a log path. */
   children?: ReactNode;
 }
@@ -32,13 +33,14 @@ export function Notice({
   surface = "flat",
   role = "status",
   testId,
+  showIcon = true,
   children,
 }: NoticeProps): ReactNode {
   const Icon = tone === "danger" ? CircleAlert : tone === "warning" ? TriangleAlert : Info;
   const body = (
     <>
       <div className={styles.heading}>
-        <span className={styles.icon} aria-hidden="true"><Icon /></span>
+        {showIcon ? <span className={styles.icon} aria-hidden="true"><Icon /></span> : null}
         <p className={styles.title}>{title}</p>
       </div>
       {message === undefined && detail === undefined && children === undefined ? null : <div className={styles.body}>

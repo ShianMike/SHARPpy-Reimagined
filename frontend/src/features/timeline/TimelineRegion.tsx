@@ -12,6 +12,7 @@ import { compactUtc, forecastLabel } from "../sounding/soundingTime";
 import { FORECAST_RANGE_ID } from "../toolbar/ForecastControls";
 import styles from "./TimelineRegion.module.css";
 import hints from "../../ui/HoverHint.module.css";
+import { MapInteractionControls } from "./MapInteractionControls";
 
 export { FORECAST_RANGE_ID } from "../toolbar/ForecastControls";
 export interface TimelineRegionProps { className?: string | undefined; }
@@ -37,13 +38,14 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
     if (next !== null) choose(next);
   };
   return <Surface as="section" data-motion="fade" aria-label="Forecast timeline" className={cx(styles.timeline, className)} data-testid="timeline">
+    <MapInteractionControls />
     <div className={styles.transport} role="group" aria-label="Playback">
       <IconAction icon={StepBack} size="sm" label="Previous frame" hintSide="top" disabled={context === null || index === 0} onClick={() => { step(-1); }} />
       <IconAction className={styles.play} icon={playing ? Pause : Play} label={playing ? "Pause" : "Play"} hintSide="top" disabled={hours.length < 2} onClick={() => { useForecastStore.getState().setPlaying(!playing); }} />
       <IconAction icon={StepForward} size="sm" label="Next frame" hintSide="top" disabled={context === null || index === last} onClick={() => { step(1); }} />
     </div>
     <strong className={cx(styles.selection, hints.target)} tabIndex={0} aria-description={selectionHint}>
-      <span className={styles.model}>{context?.model.label ?? "Forecast"}</span><span className={styles.hour}>{context === null ? "—" : forecastLabel(context.hour)}</span>
+      <span className={styles.hour}>{context === null ? "—" : forecastLabel(context.hour)}</span>
       <span className={hints.hint} data-side="top" aria-hidden="true">{selectionHint}</span>
     </strong>
     <div className={cx(styles.scrubber, hints.target)}>

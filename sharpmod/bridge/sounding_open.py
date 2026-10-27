@@ -143,7 +143,7 @@ def _open_model(params, progress, entry_id):
     from sharpmod.tools import model_extract as mx
 
     try:
-        config = mx.get_config(key)
+        config = mx._require_selectable(mx.get_config(key))
     except (KeyError, era5_extract.ERA5ExtractionError) as exc:
         raise BridgeError(
             "INVALID_ARGUMENT",

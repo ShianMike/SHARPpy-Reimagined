@@ -107,14 +107,14 @@ export function wireOverlayEvents(map: MapLibreMap, overlay: MapLibreOverlay, ta
     useHoverStore.getState().clear();
   };
   const move = target.live((event: MapMouseEvent) => {
-    if (target.dragging || map.isMoving()) return;
+    if (target.dragging || map.isMoving() || !useHoverStore.getState().inspecting) return;
     pending = event;
     if (frame !== null) return;
     frame = requestAnimationFrame(target.live(() => {
       frame = null;
       const latest = pending;
       pending = null;
-      if (latest === null || target.dragging || map.isMoving()) return;
+      if (latest === null || target.dragging || map.isMoving() || !useHoverStore.getState().inspecting) return;
       hoverFromPick(pick(latest), target.panel, target.container.getBoundingClientRect());
     }));
   });

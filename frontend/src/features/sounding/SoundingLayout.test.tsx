@@ -47,6 +47,9 @@ it("swaps sources and controls without losing a file or draft, and keeps info of
   expect(screen.queryByRole("tablist", { name: "Source" })).toBeNull();
   const sidebar = document.getElementById("sounding-sources");
   expect(sidebar?.contains(screen.getByRole("toolbar", { name: "Sounding image controls" }))).toBe(true);
+  expect(screen.queryByRole("combobox", { name: "Undo history" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Undo edit" })).toBeNull();
+  expect(screen.getByRole("group", { name: "View controls" }).hasAttribute("open")).toBe(true);
   expect(sidebar?.contains(info)).toBe(true);
   expect(info.textContent).toContain("39 levels");
   expect(screen.getByTestId("sounding-viewer").querySelector("header, [role=toolbar]")).toBeNull();
@@ -54,6 +57,11 @@ it("swaps sources and controls without losing a file or draft, and keeps info of
   await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
   await userEvent.keyboard("{ArrowDown}{Enter}");
   const input = screen.getByRole<HTMLInputElement>("spinbutton", { name: "Temperature °C" });
+  const editor = screen.getByRole("region", { name: "Level editor" });
+  expect(screen.getByRole("group", { name: "View controls" }).hasAttribute("open")).toBe(false);
+  expect(within(editor).getByRole("combobox", { name: "Profile level" })).toBeTruthy();
+  expect(within(editor).getByRole("form", { name: "Edit selected level" }).contains(input)).toBe(true);
+  expect(editor.compareDocumentPosition(screen.getByRole("button", { name: "Export PNG" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   await userEvent.clear(input); await userEvent.type(input, "32");
   expect(sidebar?.contains(input)).toBe(true);
   await userEvent.click(screen.getByRole("button", { name: "Show sounding sources" }));
@@ -69,4 +77,9 @@ it("swaps sources and controls without losing a file or draft, and keeps info of
   expect(input.value).toBe("32");
   expect(screen.getByTestId("sounding-image")).toBe(image);
   expect(render).toHaveBeenCalledOnce();
+  await userEvent.click(screen.getByRole("button", { name: "Finish editing" }));
+  expect(screen.queryByRole("region", { name: "Level editor" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Inspect" }).getAttribute("aria-pressed")).toBe("true");
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Inspect" }));
+  expect(screen.getByRole("group", { name: "View controls" }).hasAttribute("open")).toBe(true);
 });

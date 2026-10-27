@@ -7,23 +7,7 @@ import { expectWarnings } from "./support/console";
 import { toolbarGlass } from "./support/glass";
 import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
-import { chooseThroughSearch } from "./support/ui";
-
-/** A token resolved through a real property, so the minifier's spelling does not matter. */
-async function resolved(page: Page, token: string, property: "color" | "width" | "z-index"): Promise<string> {
-  return page.evaluate(
-    ({ name, prop }) => {
-      const probe = document.createElement("div");
-      probe.style.setProperty("position", "absolute");
-      probe.style.setProperty(prop, `var(${name})`);
-      document.body.append(probe);
-      const value = getComputedStyle(probe).getPropertyValue(prop);
-      probe.remove();
-      return value;
-    },
-    { name: token, prop: property },
-  );
-}
+import { chooseThroughSearch, resolved } from "./support/ui";
 
 test("the :root tokens resolve to the design values", async ({ page, consoleMessages }) => {
   await page.goto("/");

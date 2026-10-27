@@ -9,12 +9,20 @@ import { PREFERENCES_KEY } from "../../stores/preferences";
 import { useUpdateStore } from "../../stores/updateStore";
 import { useUiStore } from "../../stores/uiStore";
 import { UpdateSettings } from "./UpdateSettings";
+import { UpdateInstallReview } from "./UpdateInstallReview";
+import { useSoundingStore } from "../../stores/soundingStore";
+import { PointEditor } from "../sounding/PointEditor";
 
 const check = vi.hoisted(() => vi.fn<() => Promise<Update | null>>());
 vi.mock("../../lib/backend/tauriTransport", () => ({ checkForUpdates: check }));
 
+function SettingsWithReview() {
+  const review = useUpdateStore((state) => state.installReview);
+  return <><UpdateSettings />{review === null ? null : <UpdateInstallReview />}</>;
+}
+
 function availableUpdate() {
-  const update = new Update({ rid: 1, currentVersion: version, version: "3.3.0", body: "New map tools", rawJson: {} });
+  const update = new Update({ rid: 1, currentVersion: version, version: "3.4.1", body: "New map tools", rawJson: {} });
   return { update,
     close: vi.spyOn(update, "close").mockResolvedValue(),
     download: vi.spyOn(update, "download").mockResolvedValue(),
@@ -23,7 +31,8 @@ function availableUpdate() {
 }
 
 beforeEach(() => {
-  useUpdateStore.setState({ status: "idle", update: null, downloaded: 0, total: undefined, error: null, dismissedVersion: null });
+  useUpdateStore.setState(useUpdateStore.getInitialState(), true);
+  useSoundingStore.setState(useSoundingStore.getInitialState(), true);
   useLogStore.getState().clear();
   useUiStore.setState({ whatsNewOpen: false });
   localStorage.removeItem(PREFERENCES_KEY);
@@ -41,13 +50,16 @@ it("shows a newer version and downloads only after an explicit install click, pr
     return new Promise<void>((resolve) => { finish = resolve; });
   });
   check.mockResolvedValue(update);
-  const view = render(<UpdateSettings />);
+  const view = render(<SettingsWithReview />);
   expect(screen.getByText(`Current version: ${version}`)).toBeTruthy();
   expect(check).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-  await screen.findByText("Version 3.3.0 is available");
+  await screen.findByText("Version 3.4.1 is available");
   expect(download).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Install update" }));
+  expect(screen.getByRole("dialog", { name: "Install app update?" })).toBeTruthy();
+  expect(download).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Install update & restart" }));
   act(() => {
     progress?.({ event: "Started", data: { contentLength: 100 } });
     progress?.({ event: "Progress", data: { chunkLength: 25 } });
@@ -57,11 +69,11 @@ it("shows a newer version and downloads only after an explicit install click, pr
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Check for updates" }).disabled).toBe(true);
   // Navigation must not cancel the download or allow a second installation.
   view.unmount();
-  render(<UpdateSettings />);
+  render(<SettingsWithReview />);
   expect(screen.getByText(/Automatic checks run at 00:00 and 12:00 UTC/u)).toBeTruthy();
   expect(screen.getByText("25%")).toBeTruthy();
   await useUpdateStore.getState().check();
-  await useUpdateStore.getState().install();
+  useUpdateStore.getState().install();
   expect(check).toHaveBeenCalledTimes(1);
   expect(download).toHaveBeenCalledTimes(1);
   expect(install).not.toHaveBeenCalled();
@@ -74,13 +86,13 @@ it("shows a newer version and downloads only after an explicit install click, pr
 it("reports up to date, closes an unused update on recheck, and allows retry after a failed check", async () => {
   const { update, close } = availableUpdate();
   check.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(update).mockResolvedValueOnce(null);
-  render(<UpdateSettings />);
+  render(<SettingsWithReview />);
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
   await screen.findByRole("alert");
   expect(screen.queryByText("You’re up to date")).toBeNull();
   expect(useLogStore.getState().entries[0]?.detail).toContain("offline");
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-  await screen.findByText("Version 3.3.0 is available");
+  await screen.findByText("Version 3.4.1 is available");
   close.mockRejectedValueOnce(new Error("resource already closed"));
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
   await screen.findByText("You’re up to date");
@@ -92,10 +104,11 @@ it("does not install a failed or unverified download and can retry with an unkno
   const { update, download, install } = availableUpdate();
   download.mockRejectedValueOnce(new Error("signature verification failed"));
   check.mockResolvedValue(update);
-  render(<UpdateSettings />);
+  render(<SettingsWithReview />);
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-  await screen.findByText("Version 3.3.0 is available");
+  await screen.findByText("Version 3.4.1 is available");
   fireEvent.click(screen.getByRole("button", { name: "Install update" }));
+  fireEvent.click(screen.getByRole("button", { name: "Install update & restart" }));
   await screen.findByRole("alert");
   expect(install).not.toHaveBeenCalled();
   expect(localStorage.getItem(PREFERENCES_KEY)).toBeNull();
@@ -105,9 +118,31 @@ it("does not install a failed or unverified download and can retry with an unkno
     return new Promise<void>((resolve) => { finish = resolve; });
   });
   fireEvent.click(screen.getByRole("button", { name: "Install update" }));
+  fireEvent.click(screen.getByRole("button", { name: "Install update & restart" }));
   expect(screen.getByRole("progressbar").hasAttribute("value")).toBe(false);
   await act(async () => { finish?.(); await Promise.resolve(); });
   await waitFor(() => { expect(install).toHaveBeenCalledOnce(); });
+});
+
+it("reviews inputs typed during download before installation even when they have not been applied", async () => {
+  const { update, download, install } = availableUpdate();
+  useUpdateStore.setState({ status: "available", update });
+  let finish: (() => void) | undefined;
+  download.mockReturnValue(new Promise<void>((resolve) => { finish = resolve; }));
+  render(<><PointEditor point={{ id: "tmpc:0", label: "Temperature", x: 0.5, y: 0.5,
+    values: [{ key: "tmpc", label: "Temperature", value: 20, original: 20, unit: "°C", min: -100, max: 60 }] }}
+    busy={false} onApply={() => undefined} /><SettingsWithReview /></>);
+  fireEvent.click(screen.getByRole("button", { name: "Install update" }));
+  fireEvent.click(screen.getByRole("button", { name: "Install update & restart" }));
+  const input = screen.getByRole<HTMLInputElement>("spinbutton", { name: "Temperature °C" });
+  fireEvent.change(input, { target: { value: "27" } });
+  await act(async () => { finish?.(); await Promise.resolve(); });
+  expect(install).not.toHaveBeenCalled();
+  expect(screen.getByRole("dialog", { name: "Discard sounding work and update?" })).toBeTruthy();
+  expect(screen.getByText(/Local sounding work changed during the download/u)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(input.value).toBe("27");
+  expect(useSoundingStore.getState().views).toEqual({});
 });
 
 it("explains the desktop requirement in the browser without contacting an update server", () => {

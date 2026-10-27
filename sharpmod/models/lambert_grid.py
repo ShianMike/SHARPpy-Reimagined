@@ -32,6 +32,8 @@ from dataclasses import dataclass
 __all__ = [
     "LambertConformalGrid",
     "HRRR_GRID",
+    "NAM_GRID",
+    "HRW_GRID",
 ]
 
 #: Latitude the transform clamps to, so a pole cannot divide by zero. The models
@@ -233,3 +235,19 @@ HRRR_GRID = LambertConformalGrid(
 #: PROJ string for the same grid, for the NumPy/pyproj reprojection path.
 HRRR_PROJ4 = ("+proj=lcc +lat_0=38.5 +lon_0=262.5 +lat_1=38.5 "
               "+lat_2=38.5 +R=6371229 +units=m +no_defs")
+
+# NAM grid 218, verified against the awphys/awip12 GRIB headers and coordinates.
+NAM_GRID = LambertConformalGrid(
+    lat_origin=25.0, lon_origin=-95.0, lat_1=25.0, lat_2=25.0,
+    radius=6371229.0, shape=(428, 614), spacing=12191.0,
+    x0=-4226106.99691547, y0=-832698.2610175647,
+)
+NAM_PROJ4 = ("+proj=lcc +lat_0=25 +lon_0=265 +lat_1=25 "
+             "+lat_2=25 +R=6371229 +units=m +no_defs")
+
+# HiResW's 5 km CONUS stream shares grid 218's origin and cone, with its own cells.
+HRW_GRID = LambertConformalGrid(
+    lat_origin=25.0, lon_origin=-95.0, lat_1=25.0, lat_2=25.0,
+    radius=6371229.0, shape=(1025, 1473), spacing=5079.0,
+    x0=NAM_GRID.x0, y0=NAM_GRID.y0,
+)

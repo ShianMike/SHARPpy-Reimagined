@@ -91,6 +91,8 @@
 .discardActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); padding-top: var(--space-4); border-top: var(--hairline) solid var(--border-subtle); }
 .discardActions > button { flex: 1; min-width: max-content; min-height: var(--control-h-md); border-radius: var(--radius-sm); }
 .sourceOption { display: flex; align-items: center; width: 100%; min-height: var(--control-h-lg); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-primary); text-align: left; }
+.sourceGroup + .sourceGroup { margin-top: var(--space-2); padding-top: var(--space-2); border-top: var(--hairline) solid var(--border-subtle); }
+.sourceGroupHeading { padding: var(--space-2) var(--space-3); color: var(--text-secondary); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .sourceOption > span { flex: 1; min-width: 0; }
 .sourceOption small { display: block; margin-top: var(--space-0-5); color: var(--text-tertiary); font-size: var(--font-size-caption); }
 .sourceOption:is(:hover, :focus-visible):not(:disabled) { background: var(--accent-subtle); color: var(--accent-bright); box-shadow: inset 0 0 0 var(--hairline) var(--accent); }

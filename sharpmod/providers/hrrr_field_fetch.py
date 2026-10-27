@@ -40,15 +40,15 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
         def opener(url, timeout, limit, byte_range=None):
             return _api._default_opener(url, timeout, limit, byte_range, should_cancel=stopped)
     if product.key == "apcp" and fxx == 0:
-        return {"apcp": np.zeros(_api.HRRR_SHAPE, dtype=np.float32)}
+        return {"apcp": np.zeros(_api.field_grid(model).shape, dtype=np.float32)}
     eccodes = _api._load_eccodes()
     decoded: dict[str, np.ndarray] = {}
-    nam_total = model == "nam-3km-conus" and product.key == "apcp"
+    nam_total = model in {"nam", "nam-3km-conus"} and product.key == "apcp"
 
     # Plan every range across both files first, so they can all go out together
     # rather than one file's requests waiting on the other's.
     jobs: list[tuple[str, int, int, tuple[_api.InventoryRow, ...], dict[_api.InventoryRow, str]]] = []
-    # NAM resets APCP every three hours; sum disjoint intervals from the run start.
+    # NAM products reset their accumulated totals; sum disjoint three-hour intervals.
     sources = (tuple((SOURCE_SURFACE, hour) for hour in (*range(3, fxx, 3), fxx))
                if nam_total else ((SOURCE_SURFACE, fxx), (SOURCE_PRESSURE, fxx)))
     for source, hour in sources:
@@ -127,7 +127,8 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
             finish = (begin + row.length) if row.length else len(payload)
             if begin < 0 or begin >= len(payload):
                 raise _api.HrrrFieldUnavailable(f"{model} returned an incomplete GRIB byte range")
-            values = _api.decode_message(payload[begin:finish], eccodes, field_index=row.field_index)
+            values = _api.decode_message(payload[begin:finish], eccodes,
+                                         field_index=row.field_index, model=model)
             if nam_total and name in decoded:
                 decoded[name] += values
             else:

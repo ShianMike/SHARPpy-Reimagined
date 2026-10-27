@@ -34,12 +34,12 @@ on:
         default: false
         type: boolean
       native_candidate_run:
-        description: Successful Release run containing the signed v3.2.1 candidate
+        description: Successful candidate-only Release run containing the signed installer for this source version
         required: false
-        default: "39367398243"
+        default: ""
         type: string
       native_public_update:
-        description: Exercise the published interactive v3.2.0 to v3.2.1 updater
+        description: Exercise the interactive updater after the candidate version is published
         required: false
         default: false
         type: boolean
@@ -93,9 +93,33 @@ jobs:
         with: { node-version: "24.12.0", cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
         working-directory: frontend
+      - name: Resolve native acceptance versions
+        id: candidate
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN: ${{ inputs.native_candidate_run }}
+        run: |
+          if ($env:CANDIDATE_RUN -notmatch '^\d+$') { throw 'A successful candidate Release run ID is required' }
+          $candidate = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:CANDIDATE_RUN" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate run lookup failed' }
+          $source = (& git rev-parse HEAD).Trim()
+          if ($candidate.status -ne 'completed' -or $candidate.conclusion -ne 'success' -or
+              $candidate.path -ne '.github/workflows/release.yml' -or $candidate.head_sha -ne $source) {
+            throw 'Native acceptance requires a successful Release run for the exact checked-out source'
+          }
+          $version = (Get-Content -LiteralPath 'frontend/package.json' -Raw | ConvertFrom-Json).version
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Native acceptance requires a stable source version' }
+          $tags = @(gh api "repos/$env:GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')
+          if ($LASTEXITCODE -ne 0) { throw 'Previous stable release lookup failed' }
+          $previous = @($tags | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' -and [version]$_.Substring(1) -lt [version]$version } |
+            Sort-Object { [version]$_.Substring(1) } -Descending | Select-Object -First 1)
+          if ($previous.Count -ne 1) { throw 'No stable release precedes the candidate' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "previous=$($previous[0].Substring(1))" >> $env:GITHUB_OUTPUT
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: windows-release-v3.2.1
+          name: windows-release-v${{ steps.candidate.outputs.version }}
           run-id: ${{ inputs.native_candidate_run }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/native-candidate
@@ -105,8 +129,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PUBLIC_UPDATE: ${{ inputs.native_public_update }}
           MEMORY_DIAGNOSTIC: ${{ inputs.native_memory_diagnostic }}
+          PREVIOUS_VERSION: ${{ steps.candidate.outputs.previous }}
+          EXPECTED_VERSION: ${{ steps.candidate.outputs.version }}
         run: |
           & packaging/verify_native_acceptance.ps1 -Artifacts "$env:RUNNER_TEMP/native-candidate" `
+            -PreviousVersion $env:PREVIOUS_VERSION -ExpectedVersion $env:EXPECTED_VERSION `
             -ReportDirectory "$env:RUNNER_TEMP/native-acceptance" -PublicUpdate:($env:PUBLIC_UPDATE -eq 'true') `
             -ProfileMemory:($env:MEMORY_DIAGNOSTIC -eq 'true')
       - name: Preserve native acceptance evidence

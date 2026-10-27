@@ -264,7 +264,7 @@ def forecast_hours(model, cycle_hour=None):
     if cfg.key == "hrrr" and cycle_hour is not None \
             and int(cycle_hour) not in (0, 6, 12, 18):
         return tuple(v for v in values if int(v) <= 18)
-    if cfg.key == "ecmwf-ifs" and cycle_hour is not None \
+    if cfg.key in {"ecmwf-ifs", "ecmwf-ifs-9km"} and cycle_hour is not None \
             and int(cycle_hour) in _api.IFS_SHORT_CUTOFF_CYCLES:
         return tuple(
             v for v in values if int(v) <= _api.IFS_SHORT_CUTOFF_MAX_FXX

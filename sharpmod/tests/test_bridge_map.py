@@ -140,6 +140,22 @@ def test_cold_raster_and_geometry_share_one_acquisition(offline, monkeypatch):
     assert cached_hours(cache_request) == []
 
 
+@pytest.mark.parametrize("model", ("ecmwf-ifs-9km", "openmeteo-ecmwf-ifs025"))
+def test_global_forecast_cache_uses_native_steps_through_f360(model):
+    from sharpmod.bridge.frame_cache import cached_hours, path, write
+    from sharpmod.tools.model_extract import forecast_hours
+
+    request = {"model": model, "products": ["tmp-2m"],
+               "run_time": "2026-10-26T00:00:00Z", "hours": list(forecast_hours(model, cycle_hour=0))}
+    write(path("grid", model, "tmp-2m", datetime(2026, 10, 26, tzinfo=UTC), 360, fields.FRAME),
+          {"product": "tmp-2m", "forecast_hour": 360})
+    assert len(request["hours"]) == 85
+    assert cached_hours(request) == [360]
+    for invalid in ({"hours": [147]}, {"run_time": "2026-10-26T18:00:00Z", "hours": [150]}):
+        with pytest.raises(BridgeError, match="ECMWF publishes"):
+            cached_hours({**request, **invalid})
+
+
 def test_auxiliary_failure_keeps_the_raster_and_can_retry(offline, monkeypatch):
     from sharpmod.bridge import contours
     original = contours._from_decoded

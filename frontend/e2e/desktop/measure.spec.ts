@@ -258,7 +258,7 @@ test.describe("desktop measurements", () => {
     await rail.getByRole("button", { name: "Settings" }).click();
     await page.getByRole("button", { name: "Map rendering", exact: true }).click();
     const effective = await page.getByTestId("effective-profile").innerText();
-    const reasons = await page.getByRole("list", { name: "Reasons" }).getByRole("listitem").allInnerTexts();
+    const reasons = await page.getByRole("status", { name: "Current rendering" }).locator("p").allInnerTexts();
     await page.getByRole("button", { name: "Device Info", exact: true }).click();
     results.profile = {
       attribute: await page.evaluate(() => document.documentElement.dataset.graphicsProfile ?? null),

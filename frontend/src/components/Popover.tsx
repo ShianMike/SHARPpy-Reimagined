@@ -37,6 +37,8 @@ export interface PopoverProps {
   testId?: string;
   /** Header marked data-popover-drag; a data-popover-move button supports keyboard movement. */
   movable?: boolean;
+  /** Group separate surfaces under the same positioning and focus boundary. */
+  unframed?: boolean;
   children: ReactNode;
 }
 
@@ -64,6 +66,7 @@ export function Popover({
   className,
   testId,
   movable = false,
+  unframed = false,
   children,
 }: PopoverProps): ReactNode {
   const [present, setPresent] = useState(open);
@@ -108,6 +111,8 @@ export function Popover({
         ? target.left - box.width - gap : target.right + gap;
       const x = moved.current?.x ?? (movable ? (window.innerWidth - box.width) / 2 : side === "right" ? beside : align === "end" ? target.right - box.width : target.left);
       const y = moved.current?.y ?? (movable ? (window.innerHeight - box.height) / 2 : side === "top" ? target.top - box.height - gap : side === "right" ? target.top : target.bottom);
+      // Keep grouped cards steady when the description changes size.
+      if (movable && unframed) moved.current = { x, y };
       element.style.setProperty("--popover-x", `${String(x)}px`);
       element.style.setProperty("--popover-y", `${String(y)}px`);
       element.style.setProperty("--popover-bottom", `${String(window.innerHeight - target.top + gap)}px`);
@@ -132,7 +137,7 @@ export function Popover({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open, anchor, align, side, width, movable, id]);
+  }, [open, anchor, align, side, width, movable, unframed, id]);
 
   // Initial focus when it opens.
   useEffect(() => {
@@ -142,7 +147,7 @@ export function Popover({
     }
     const first = initialFocus === "first" ? element.querySelector<HTMLElement>("[data-autofocus]") ?? focusables(element)[0] : undefined;
     (first ?? element).focus();
-  }, [open, initialFocus]);
+  }, [open, initialFocus, unframed]);
 
   // A press outside closes it; focus stays wherever the press put it.
   useEffect(() => {
@@ -229,12 +234,13 @@ export function Popover({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
+  const Container = unframed ? "section" : Surface;
   return createPortal(
     <GlassContextBoundary>
-    <Surface
+    <Container
         ref={ref}
         id={id}
-        elevation="popover"
+        {...(unframed ? {} : { elevation: "popover" as const })}
         role={role}
         aria-label={label}
         aria-labelledby={labelledBy}
@@ -260,7 +266,7 @@ export function Popover({
         onLostPointerCapture={(event) => { drag.current = null; delete event.currentTarget.dataset.dragging; }}
       >
         {children}
-    </Surface>
+    </Container>
     </GlassContextBoundary>,
     document.body,
   );

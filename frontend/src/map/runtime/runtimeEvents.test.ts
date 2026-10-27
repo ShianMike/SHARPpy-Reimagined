@@ -7,7 +7,7 @@ import { useHoverStore } from "../hover/hoverStore";
 import { wireOverlayEvents, type RuntimeEventTarget } from "./runtimeEvents";
 import { NO_WATCH } from "./runtimeWiring";
 
-afterEach(() => { vi.unstubAllGlobals(); useHoverStore.getState().clear(); });
+afterEach(() => { vi.unstubAllGlobals(); useHoverStore.setState(useHoverStore.getInitialState(), true); });
 
 it("coalesces map movement into one atomic pick, selects points without a pick, and cancels on leaving, moving and disposal", () => {
   const saved = useAppStore.getState();
@@ -54,6 +54,17 @@ it("coalesces map movement into one atomic pick, selects points without a pick, 
     expect(useHoverStore.getState().pointer).toEqual({ panel: 2, longitude: -97, latitude: 35, x: 99, y: 30 });
     emit("click");
     expect(useAppStore.getState().selectedPoint).toEqual({ longitude: -97, latitude: 35 });
+    emit("mousemove");
+    useHoverStore.getState().setInspecting(false);
+    overlay.pickObject.mockClear();
+    writes = 0;
+    flush();
+    emit("mousemove");
+    expect(frames.size).toBe(0);
+    expect(overlay.pickObject).not.toHaveBeenCalled();
+    expect(useHoverStore.getState().pointer).toBeNull();
+    expect(writes).toBe(0);
+    useHoverStore.getState().setInspecting(true);
     for (const exit of ["mouseout", "movestart"]) {
       emit("mousemove"); emit(exit);
       expect(frames.size).toBe(0);

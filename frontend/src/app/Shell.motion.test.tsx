@@ -69,6 +69,9 @@ it("hides Point controls only in Live Tracking and returns focus to Layers after
   const { queryClient } = renderWithBackend(<Shell />, createTransport());
   await screen.findByTestId("map-canvas");
   expect(screen.getByRole("button", { name: "Point details" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Point details" }));
+  expect(document.getElementById("map-details")?.querySelector(".lucide-map-pin")).toBeNull();
+  expect(screen.getByRole("heading", { name: "Explore a forecast point" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Live Tracking" }));
   expect(screen.queryByRole("button", { name: "Point details" })).toBeNull();
   const layers = screen.getByRole("button", { name: "Layers" });
@@ -142,7 +145,8 @@ it("keeps the selected point and inspector state across model, parameter, layout
     await user.click(await screen.findByText("Forecast & source"));
     expect(screen.getByText("Forecast & source").closest("details")?.open).toBe(true);
     act(() => { useForecastStore.getState().setModel("rap"); });
-    expect(screen.queryByText("Forecast & source")).toBeNull();
+    expect(screen.getByText("Forecast & source").closest("details")?.open).toBe(true);
+    expect(screen.getByText("Forecast & source").closest("details")?.textContent).toContain("RAP");
     release();
     await waitFor(() => { expect(screen.getByText("Forecast & source").closest("details")?.open).toBe(true); });
     for (const layout of [2, 4, 1] as const) {

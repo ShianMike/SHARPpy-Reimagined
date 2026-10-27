@@ -53,7 +53,7 @@ function PointInspector({ point, className }: { point: MapPoint; className?: str
       <div className={styles.body}>
         {live ? <SurfacePlotControls /> : <PointDetails point={point} />}
       </div>
-      {live ? null : <div className={styles.footer}>
+      {live || context?.model.soundingsAvailable === false ? null : <div className={styles.footer}>
         <Action
           tone="accent"
           disabled={context === null}

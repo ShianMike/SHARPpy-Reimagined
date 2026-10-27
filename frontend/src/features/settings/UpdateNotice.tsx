@@ -2,9 +2,10 @@ import { useEffect, type ReactNode } from "react";
 import { Notice } from "../../components/Notice";
 import { AUTOMATIC_UPDATE_INTERVAL_MS, useUpdateStore } from "../../stores/updateStore";
 import { Action } from "../../ui/Controls";
+import { UpdateInstallReview } from "./UpdateInstallReview";
 
 export function UpdateNotice(): ReactNode {
-  const { status, update, downloaded, total, error, dismissedVersion, dismiss, check, install } = useUpdateStore();
+  const { status, installReview, update, downloaded, total, error, dismissedVersion, dismiss, check, install } = useUpdateStore();
   const desktop = "__TAURI_INTERNALS__" in window;
   useEffect(() => {
     if (!desktop) return;
@@ -21,17 +22,20 @@ export function UpdateNotice(): ReactNode {
     return () => { window.clearTimeout(timer); window.removeEventListener("online", checkAutomatically); document.removeEventListener("visibilitychange", visible); };
   }, [check, desktop]);
 
-  if (!desktop || update === null || update.version === dismissedVersion) return null;
-  const busy = status === "checking" || status === "downloading" || status === "installing";
+  if (!desktop) return null;
+  // This global host also reviews installs requested from Settings, even after Later.
+  const review = installReview === null ? null : <UpdateInstallReview />;
+  if (update === null || update.version === dismissedVersion) return review;
+  const busy = status === "checking" || status === "reviewing" || status === "downloading" || status === "installing";
   const title = error !== null ? "Update failed"
     : status === "downloading" ? `Downloading update${total === undefined ? "…" : `: ${String(Math.min(100, Math.floor(downloaded / total * 100)))}%`}`
     : status === "installing" ? "Installing update…" : `Version ${update.version} is available`;
-  return <Notice surface="floating" tone={error === null ? "info" : "danger"} role={error === null ? "status" : "alert"}
+  return <>{review}<Notice surface="floating" tone={error === null ? "info" : "danger"} role={error === null ? "status" : "alert"}
     testId="app-update-notice" title={title}
-    message={error ?? "The app restarts to finish updating. Your saved preferences are kept."}
-    {...(error === null ? { detail: "Finish your work before updating." } : {})}
+    message={error ?? "Updating keeps saved preferences and disk caches, but closes open soundings and discards their edits and history."}
+    {...(error === null ? { detail: "Review your work before installing." } : {})}
     actions={<>
       <Action disabled={busy} onClick={dismiss}>Later</Action>
-      <Action tone="accent" disabled={busy} onClick={() => { void install(); }}>Update now</Action>
-    </>} />;
+      <Action tone="accent" disabled={busy} onClick={install}>Update now</Action>
+    </>} /></>;
 }

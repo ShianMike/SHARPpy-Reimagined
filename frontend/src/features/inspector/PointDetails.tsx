@@ -73,6 +73,7 @@ function OutlookAreas({ point, validTime }: { point: MapPoint; validTime: string
 
 /** The Sounding workspace, on its Model form, with the forecast time and this point filled in. */
 export function openModelSounding(context: ForecastContext, point: MapPoint): void {
+  if (!context.model.soundingsAvailable) return;
   const sounding = useSoundingStore.getState();
   sounding.setSource("model");
   sounding.setModel({

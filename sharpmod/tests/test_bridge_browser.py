@@ -3,12 +3,13 @@
 import json
 from pathlib import Path
 from threading import Thread
+from types import SimpleNamespace
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
 
-from sharpmod.bridge.browser import BrowserServer
+from sharpmod.bridge.browser import BrowserHandler, BrowserServer
 from sharpmod.bridge.handlers import HANDLERS
 from sharpmod.bridge.public import bridge_request, public_result
 
@@ -120,6 +121,25 @@ def post(url, method, params=None, origin="http://127.0.0.1:5174"):
         ),
         timeout=5,
     )
+
+
+@pytest.mark.parametrize("error", [BrokenPipeError, ConnectionResetError, ConnectionAbortedError])
+@pytest.mark.parametrize("stage", ["headers", "body"])
+def test_reply_tolerates_a_browser_closing_during_response(monkeypatch, error, stage):
+    handler = BrowserHandler.__new__(BrowserHandler)
+    monkeypatch.setattr(handler, "send_response", lambda *_: None)
+    monkeypatch.setattr(handler, "send_header", lambda *_: None)
+    monkeypatch.setattr(handler, "end_headers", lambda: None)
+    handler.wfile = SimpleNamespace(write=lambda _: None)
+
+    def disconnected(*_):
+        raise error("browser disconnected")
+
+    if stage == "headers":
+        monkeypatch.setattr(handler, "end_headers", disconnected)
+    else:
+        monkeypatch.setattr(handler.wfile, "write", disconnected)
+    handler._reply(200, b"{}", "application/json")
 
 
 def test_http_calls_real_handler_with_snake_case_args(browser, monkeypatch):

@@ -11,6 +11,22 @@ export interface Box {
   height: number;
 }
 
+/** A token resolved through a real property, so the minifier's spelling does not matter. */
+export async function resolved(page: Page, token: string, property: "color" | "width" | "z-index"): Promise<string> {
+  return page.evaluate(
+    ({ name, prop }) => {
+      const probe = document.createElement("div");
+      probe.style.setProperty("position", "absolute");
+      probe.style.setProperty(prop, `var(${name})`);
+      document.body.append(probe);
+      const value = getComputedStyle(probe).getPropertyValue(prop);
+      probe.remove();
+      return value;
+    },
+    { name: token, prop: property },
+  );
+}
+
 /** The layer panel's row for one layer id, with its settings exposed. */
 export async function layerRow(page: Page, id: string) {
   if (["radar", "satellite", "surface-plots", "warnings", "watches"].includes(id)) {

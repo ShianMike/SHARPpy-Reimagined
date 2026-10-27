@@ -141,12 +141,12 @@ def test_changelog_preserves_the_dated_legacy_release():
     release_url = (
         "https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0"
     )
-    for name in ("CHANGELOG.md", "README.md", ".github/workflows/release.yml"):
+    for name in ("CHANGELOG.md", ".github/workflows/release.yml"):
         assert release_url in (ROOT / name).read_text(encoding="utf-8"), name
 
 
 def test_readme_feature_summary_names_the_current_version():
-    """Keep the current feature summary distinct from the legacy screenshots."""
+    """Keep the README focused on the current release."""
 
     from sharpmod._version import __version__ as package_version
 
@@ -158,3 +158,12 @@ def test_readme_feature_summary_names_the_current_version():
     assert [heading.removesuffix(" (Unreleased)") for heading in headings] == [
         f"## What's new in {package_version}",
     ]
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    released_versions = [
+        line.split("[v", 1)[1].split("]", 1)[0].removesuffix(" Legacy")
+        for line in changelog.splitlines() if line.startswith("## [v")
+    ]
+    for released in released_versions:
+        if released != package_version:
+            assert f"v{released}" not in readme, released

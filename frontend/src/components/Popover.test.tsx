@@ -11,6 +11,7 @@ beforeEach(() => { useUiStore.setState({ popupPositions: {} }); });
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 interface HarnessProps {
@@ -19,27 +20,19 @@ interface HarnessProps {
   withButtons?: boolean;
   onClose?: (reason: PopoverCloseReason) => void;
   movable?: boolean;
+  unframed?: boolean;
   side?: PopoverProps["side"];
   width?: PopoverProps["width"];
 }
 
 /** A toolbar-like anchor button that toggles a non-modal dialog, plus an outside target. */
-function Harness({ initialFocus, withButtons = true, onClose, movable = false, side = "bottom", width = "content", id = "test-popup" }: HarnessProps): ReactNode {
+function Harness({ initialFocus, withButtons = true, onClose, movable = false, unframed = false, side = "bottom", width = "content", id = "test-popup" }: HarnessProps): ReactNode {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   return (
     <div>
-      <button
-        ref={setAnchor}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => {
-          setOpen((value) => !value);
-        }}
-      >
-        Backend ready
-      </button>
+      <button ref={setAnchor} type="button" aria-haspopup="dialog" aria-expanded={open}
+        onClick={() => { setOpen((value) => !value); }}>Backend ready</button>
       <input aria-label="Elsewhere" />
       <Popover
         id={id}
@@ -49,6 +42,7 @@ function Harness({ initialFocus, withButtons = true, onClose, movable = false, s
         label="Backend status"
         initialFocus={initialFocus}
         movable={movable}
+        unframed={unframed}
         side={side}
         width={width}
         onClose={(reason) => {
@@ -58,12 +52,7 @@ function Harness({ initialFocus, withButtons = true, onClose, movable = false, s
       >
         {movable ? <header data-popover-drag><button type="button" data-popover-move>Move popup</button><button type="button">Other header action</button></header> : null}
         <p>Python 3.11.14</p>
-        {withButtons ? (
-          <>
-            <button type="button">Restart backend</button>
-            <button type="button">Copy log path</button>
-          </>
-        ) : null}
+        {withButtons ? <><button type="button">Restart backend</button><button type="button">Copy log path</button></> : null}
       </Popover>
     </div>
   );
@@ -78,6 +67,23 @@ async function openPopover(props: HarnessProps) {
 }
 
 describe("Popover", () => {
+  it("keeps grouped cards anchored as content shrinks and clamps growth inside the viewport", async () => {
+    let height = 300;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return this.getAttribute("role") === "dialog" ? new DOMRect(0, 0, 400, height) : new DOMRect(100, 40, 120, 40);
+    });
+    const { dialog } = await openPopover({ initialFocus: "first", movable: true, unframed: true });
+    const top = dialog.style.getPropertyValue("--popover-y");
+    expect(dialog.hasAttribute("data-material")).toBe(false);
+    height = 160;
+    fireEvent.resize(window);
+    expect(dialog.style.getPropertyValue("--popover-y")).toBe(top);
+    dialog.style.setProperty("--chrome-gap", "8px");
+    height = window.innerHeight - 20;
+    fireEvent.resize(window);
+    expect(parseFloat(dialog.style.getPropertyValue("--popover-y")) + height).toBeLessThanOrEqual(window.innerHeight - 8);
+  });
+
   it("coalesces resize notifications after delivery and cancels positioning when closed", async () => {
     let resized = (): void => undefined;
     const disconnect = vi.fn();

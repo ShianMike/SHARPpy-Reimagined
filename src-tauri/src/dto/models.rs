@@ -1,5 +1,5 @@
-//! `get_model_catalog` DTOs: the forecast models that can produce a point
-//! sounding. Read from the bridge in snake_case, written to the webview in
+//! `get_model_catalog` DTOs: forecast models and their sounding capability.
+//! Read from the bridge in snake_case, written to the webview in
 //! camelCase.
 
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,7 @@ pub struct Bounds {
 pub struct ForecastModel {
     pub key: String,
     pub label: String,
+    pub soundings_available: bool,
     pub domain: String,
     pub bounds: Bounds,
     /// The real grid perimeter as `[lon, lat]` points; empty when only bounds are known.

@@ -12,8 +12,8 @@ request therefore goes through :class:`IGRACache`, so the cost is paid once per
 station rather than once per sounding.
 
 This module is deliberately free of NumPy-dependent profile machinery and of
-Qt. It parses the published fixed-width formats into plain values in the units
-the rest of the project uses, and leaves :class:`~sharpmod.io.uwyo_decoder`
+Qt. Rust parses sounding records into the existing plain objects and units.
+The reader leaves :class:`~sharpmod.io.uwyo_decoder`
 ``from_intermediate`` conversion to the provider adapter in
 :mod:`sharpmod.providers.observations`.
 
@@ -352,34 +352,9 @@ def _decode_header(line: str, line_index: int) -> IGRAHeader:
     plausible latitude near the equator, and a missing position would then be
     indistinguishable from a real one.
     """
-    padded = line.ljust(71)
-    raw_lat = _int_or(padded[55:62], RAW_MISSING)
-    raw_lon = _int_or(padded[63:71], RAW_MISSING)
-    lat = raw_lat / 10000.0 if _usable(raw_lat) else float("nan")
-    lon = raw_lon / 10000.0 if _usable(raw_lon) else float("nan")
-    if math.isclose(lat, MOBILE_LAT, abs_tol=1e-4):
-        lat = float("nan")
-    if math.isclose(lon, MOBILE_LON, abs_tol=1e-4):
-        lon = float("nan")
-    return IGRAHeader(
-        station_id=padded[1:12].strip().upper(),
-        year=_int_or(padded[13:17], 0),
-        month=_int_or(padded[18:20], 0),
-        day=_int_or(padded[21:23], 0),
-        hour=_int_or(padded[24:26], UNKNOWN_HOUR),
-        reltime=_int_or(padded[27:31], UNKNOWN_RELTIME),
-        n_levels=_int_or(padded[32:36], 0),
-        pressure_source=padded[37:45].strip(),
-        nonpressure_source=padded[46:54].strip(),
-        lat=lat,
-        lon=lon,
-        line_index=line_index,
-    )
+    import sharpmod_rs
 
-
-def _usable(raw: int) -> bool:
-    """True when a raw IGRA integer carries a real measurement."""
-    return raw not in (RAW_MISSING, RAW_REMOVED)
+    return sharpmod_rs.igra_header(line, line_index)
 
 
 def dewpoint_from_relative_humidity(tmpc: float, rh_percent: float) -> float:
@@ -391,21 +366,9 @@ def dewpoint_from_relative_humidity(tmpc: float, rh_percent: float) -> float:
     interpolation between levels, and every level it fills is counted in the
     sounding metadata so the substitution stays visible.
     """
-    if not math.isfinite(tmpc) or not math.isfinite(rh_percent):
-        return MISSING
-    humidity = min(max(float(rh_percent), 0.0), 100.0)
-    if humidity <= 0.0:
-        return MISSING
-    ratio = (17.625 * tmpc) / (tmpc + 243.04)
-    saturation = 6.1094 * math.exp(ratio)
-    vapour = saturation * humidity / 100.0
-    if vapour <= 0.0:
-        return MISSING
-    log_term = math.log(vapour / 6.1094)
-    denominator = 17.625 - log_term
-    if abs(denominator) < 1e-12:
-        return MISSING
-    return (243.04 * log_term) / denominator
+    import sharpmod_rs
+
+    return sharpmod_rs.igra_dewpoint_from_relative_humidity(tmpc, rh_percent)
 
 
 @dataclass(frozen=True)
@@ -434,43 +397,9 @@ def _decode_level(line: str) -> IGRALevel | None:
     pressure is the vertical coordinate downstream, so such a level cannot be
     placed on a profile.
     """
-    padded = line.ljust(51)
-    raw_pressure = _int_or(padded[9:15], RAW_MISSING)
-    if not _usable(raw_pressure) or raw_pressure <= 0:
-        return None
+    import sharpmod_rs
 
-    raw_height = _int_or(padded[16:21], RAW_MISSING)
-    raw_temp = _int_or(padded[22:27], RAW_MISSING)
-    raw_rh = _int_or(padded[28:33], RAW_MISSING)
-    raw_dpdp = _int_or(padded[34:39], RAW_MISSING)
-    raw_wdir = _int_or(padded[40:45], RAW_MISSING)
-    raw_wspd = _int_or(padded[46:51], RAW_MISSING)
-
-    tmpc = raw_temp / 10.0 if _usable(raw_temp) else MISSING
-    dwpc = MISSING
-    from_rh = False
-    if _usable(raw_dpdp) and tmpc != MISSING:
-        # DPDP is a dewpoint *depression* in tenths of a degree.
-        dwpc = tmpc - (raw_dpdp / 10.0)
-    elif _usable(raw_rh) and tmpc != MISSING:
-        dwpc = dewpoint_from_relative_humidity(tmpc, raw_rh / 10.0)
-        from_rh = dwpc != MISSING
-
-    wspd = raw_wspd / 10.0 * MS_TO_KNOTS if _usable(raw_wspd) else MISSING
-    wdir = float(raw_wdir) if _usable(raw_wdir) else MISSING
-    if wdir != MISSING and not (0.0 <= wdir <= 360.0):
-        wdir = MISSING
-
-    return IGRALevel(
-        pres=raw_pressure / 100.0,
-        hght=float(raw_height) if _usable(raw_height) else MISSING,
-        tmpc=tmpc,
-        dwpc=dwpc,
-        wdir=wdir,
-        wspd=wspd,
-        is_surface=padded[1:2] == "1",
-        dewpoint_from_rh=from_rh,
-    )
+    return sharpmod_rs.igra_level(line)
 
 
 @dataclass(frozen=True)
@@ -504,9 +433,9 @@ class IGRASounding:
 
 def iter_headers(text: str) -> Iterator[IGRAHeader]:
     """Yield every sounding header in one station archive, in file order."""
-    for index, line in enumerate(text.splitlines()):
-        if line.startswith("#"):
-            yield _decode_header(line, index)
+    import sharpmod_rs
+
+    yield from sharpmod_rs.igra_headers(text)
 
 
 def parse_sounding(text: str, header: IGRAHeader) -> IGRASounding:
@@ -517,40 +446,11 @@ def parse_sounding(text: str, header: IGRAHeader) -> IGRASounding:
     pressure across a surface/standard pair; downstream interpolation assumes a
     monotonic vertical coordinate.
     """
-    lines = text.splitlines()
-    start = header.line_index + 1
-    end = start + max(int(header.n_levels), 0)
-    if start > len(lines):
-        raise IGRASoundingParseError(
-            f"IGRA header for {header.station_id} points past end of file"
-        )
+    import sharpmod_rs
 
-    pres: list[float] = []
-    hght: list[float] = []
-    tmpc: list[float] = []
-    dwpc: list[float] = []
-    wdir: list[float] = []
-    wspd: list[float] = []
-    from_rh = 0
-    dropped = 0
-    last_pressure = math.inf
-
-    for line in lines[start:end]:
-        if line.startswith("#"):
-            break
-        level = _decode_level(line)
-        if level is None or level.pres >= last_pressure:
-            dropped += 1
-            continue
-        last_pressure = level.pres
-        pres.append(level.pres)
-        hght.append(level.hght)
-        tmpc.append(level.tmpc)
-        dwpc.append(level.dwpc)
-        wdir.append(level.wdir)
-        wspd.append(level.wspd)
-        if level.dewpoint_from_rh:
-            from_rh += 1
+    (pres, hght, tmpc, dwpc, wdir, wspd), from_rh, dropped = sharpmod_rs.igra_sounding_rows(
+        text, header.line_index, header.n_levels, header.station_id,
+    )
 
     if not pres:
         raise IGRASoundingParseError(

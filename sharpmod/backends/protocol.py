@@ -61,6 +61,11 @@ REQUIRED_RUST_CAPABILITIES = (
     "fetch_model_bytes",
     "interpolate_height_grid",
     "parcel_maximum_level",
+    "igra_header",
+    "igra_headers",
+    "igra_level",
+    "igra_sounding_rows",
+    "igra_dewpoint_from_relative_humidity",
 )
 
 

@@ -32,6 +32,10 @@ with bounded, owned batches instead of full-grid interpolation temporaries.
 Maximum parcel levels for accelerated sounding displays reuse the native lift
 and pressure interpolation routines, retaining reported-level energy integration
 and the existing 1 hPa refinement before restoring public SHARPpy parcel fields.
+IGRA header scans, level parsing, humidity-derived dewpoints and pressure filtering
+also run in Rust, borrowing immutable archive text while detached from Python.
+Existing IGRA objects, timestamps, provenance and archive/cache ownership remain
+at the compatibility boundary.
 
 The SHARPpy widget stack, renderer and model-retrieval orchestration remain in
 Python. The native workspace kernels own their small

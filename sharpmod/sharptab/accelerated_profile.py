@@ -1,6 +1,6 @@
 """Backend-accelerated SHARPpy convective-profile compatibility layer.
 
-Only the expensive parcel and DCAPE integrations cross the backend boundary.
+Parcel, DCAPE and maximum-parcel-level integrations cross the native boundary.
 The surrounding SHARPpy ``ConvectiveProfile`` orchestration, public parcel
 objects, widgets, and severe-weather formulas retain their existing API.
 """
@@ -76,133 +76,16 @@ def _maximum_parcel_level(prof, pcl):
         or pcl.ptrace is ma.masked
     ):
         return ma.masked, ma.masked
-    start_pressure = float(pcl.pres)
-    lcl_pressure, lcl_temperature = sp_thermo.drylift(
-        start_pressure,
-        float(pcl.tmpc),
-        float(pcl.dwpc),
-    )
-    bottom = min(
-        float(prof.pres[prof.sfc]),
-        start_pressure,
-        float(lcl_pressure),
-    )
-    previous_pressure = bottom
-    previous_height = float(sp_interp.hght(prof, bottom))
-    previous_environment = float(sp_interp.vtmp(prof, bottom))
-    previous_temperature = float(
-        sp_thermo.wetlift(lcl_pressure, lcl_temperature, bottom),
-    )
-    previous_energy = 0.0
-    cumulative = 0.0
-    el_found = False
+    import sharpmod_rs
+    from sharpmod.backends._common import prepare_1d
 
-    indices = np.flatnonzero(np.asarray(prof.pres, dtype=float) <= bottom)
-    for index in indices:
-        if not sp_utils.QC(prof.tmpc[index]):
-            continue
-        pressure = float(prof.pres[index])
-        height = float(prof.hght[index])
-        environment = float(prof.vtmp[index])
-        temperature = float(
-            sp_thermo.wetlift(
-                previous_pressure,
-                previous_temperature,
-                pressure,
-            ),
-        )
-        previous_virtual = float(
-            sp_thermo.virtemp(
-                previous_pressure,
-                previous_temperature,
-                previous_temperature,
-            ),
-        )
-        virtual = float(sp_thermo.virtemp(pressure, temperature, temperature))
-        def1 = (
-            (previous_virtual - previous_environment)
-            / (previous_environment + 273.15)
-        )
-        def2 = (virtual - environment) / (environment + 273.15)
-        layer_energy = (
-            9.80665 * (def1 + def2) / 2.0 * (height - previous_height)
-        )
-        cumulative += layer_energy
-
-        if layer_energy >= 0.0 and previous_energy <= 0.0:
-            if previous_virtual <= previous_environment:
-                cumulative = 0.0
-        if (
-            layer_energy <= 0.0
-            and previous_energy >= 0.0
-            and pressure <= float(pcl.elpres)
-        ):
-            el_found = True
-        if cumulative < 0.0 and el_found:
-            running = cumulative - layer_energy
-            refine_pressure = previous_pressure
-            refine_temperature = previous_temperature
-            refine_environment = previous_environment
-            refine_height = previous_height
-            while running > 0.0 and refine_pressure > float(prof.pres[-1]):
-                target_pressure = refine_pressure - 1.0
-                target_environment = float(
-                    sp_interp.vtmp(prof, target_pressure),
-                )
-                target_temperature = float(
-                    sp_thermo.wetlift(
-                        refine_pressure,
-                        refine_temperature,
-                        target_pressure,
-                    ),
-                )
-                target_height = float(
-                    sp_interp.hght(prof, target_pressure),
-                )
-                refine_virtual = float(
-                    sp_thermo.virtemp(
-                        refine_pressure,
-                        refine_temperature,
-                        refine_temperature,
-                    ),
-                )
-                target_virtual = float(
-                    sp_thermo.virtemp(
-                        target_pressure,
-                        target_temperature,
-                        target_temperature,
-                    ),
-                )
-                refine_def = (
-                    (refine_virtual - refine_environment)
-                    / (refine_environment + 273.15)
-                )
-                target_def = (
-                    (target_virtual - target_environment)
-                    / (target_environment + 273.15)
-                )
-                running += (
-                    9.80665
-                    * (refine_def + target_def)
-                    / 2.0
-                    * (target_height - refine_height)
-                )
-                refine_pressure = target_pressure
-                refine_temperature = target_temperature
-                refine_environment = target_environment
-                refine_height = target_height
-            height_agl = sp_interp.to_agl(
-                prof,
-                sp_interp.hght(prof, refine_pressure),
-            )
-            return _value(refine_pressure), _value(height_agl)
-
-        previous_pressure = pressure
-        previous_height = height
-        previous_environment = environment
-        previous_temperature = temperature
-        previous_energy = layer_energy
-    return ma.masked, ma.masked
+    columns = tuple(prepare_1d(getattr(prof, name), name=name)
+                    for name in ("pres", "hght", "tmpc", "vtmp"))
+    pressure, height = sharpmod_rs.parcel_maximum_level(
+        *columns, (float(pcl.pres), float(pcl.tmpc), float(pcl.dwpc)),
+        float(pcl.elpres), int(prof.sfc), float(prof.missing),
+    )
+    return _value(pressure), _value(height)
 
 
 def parcel_from_ascent(prof, ascent, *, kind="user"):

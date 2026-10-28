@@ -29,6 +29,9 @@ current owners.
 Height-stack interpolation for terrain-relative lapse-rate and low-level shear
 maps also runs in Rust, preserving source rounding and missing brackets
 with bounded, owned batches instead of full-grid interpolation temporaries.
+Maximum parcel levels for accelerated sounding displays reuse the native lift
+and pressure interpolation routines, retaining reported-level energy integration
+and the existing 1 hPa refinement before restoring public SHARPpy parcel fields.
 
 The SHARPpy widget stack, renderer and model-retrieval orchestration remain in
 Python. The native workspace kernels own their small

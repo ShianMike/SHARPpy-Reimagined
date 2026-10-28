@@ -209,6 +209,13 @@ another cache. Normalized CAPE/CIN, EHI and VGP retain their cached workspace
 path, finite/missing guards and layer-depth rules. An explicitly selected
 Python-science backend still supplies these terms through its existing adapter.
 
+The accelerated sounding profile also uses `parcel_maximum_level` for its
+display parcels. It snapshots reported pressure, height, temperature and virtual
+temperature, then integrates the legacy maximum-level energy and 1 hPa
+refinement with the existing native lift/interpolation routines. Results retain
+pressure and AGL height fields and their missing-value guards; the surrounding
+SHARPpy parcel objects and explicitly selected Python profile remain intact.
+
 The wind and interpolation operations default to no explicit sentinel. The QC,
 pressure ordering, and row-parser operations default to `-9999`; passing
 `missing=None` disables explicit-sentinel matching. Parser blanks and

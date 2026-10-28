@@ -64,7 +64,7 @@ def spc_outlook(params: dict[str, Any]) -> dict[str, Any]:
         "valid_time": p.iso(when),
         "outlook": None,
     }
-    if not layer:
+    if layer is None:
         return result
     round_to = VERTEX_DECIMALS
     result["outlook"] = {

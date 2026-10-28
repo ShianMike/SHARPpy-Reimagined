@@ -1,4 +1,6 @@
 // Desktop workspace navigation, linked forecast controls, and floating panel geometry.
+import appManifest from "../package.json" with { type: "json" };
+import releaseNotes from "../release-notes.json" with { type: "json" };
 import { MARKS, deckLayers, nextFrames, waitForMapDrawn, waitForMark } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
@@ -150,7 +152,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1920, height: 108
     await page.getByRole("button", { name: "View highlights", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: /^What’s new in /u });
     const highlights = dialog.getByRole("listitem");
-    await expect(highlights).toHaveCount(6);
+    await expect(highlights).toHaveCount(releaseNotes[appManifest.version as keyof typeof releaseNotes].highlights.length);
     await dialog.evaluate(async (panel) => { await Promise.allSettled(panel.getAnimations().map((animation) => animation.finished)); });
     const box = await boxOf(dialog);
     expect(isInside(box, viewportBox(page))).toBe(true);
@@ -213,7 +215,7 @@ test.describe("at the 1280 by 800 minimum window", () => {
       Object.defineProperty(window, "__TAURI_INTERNALS__", { value: {
         metadata: { currentWindow: { label: "main" } },
         invoke: (command: string) => {
-          if (command === "plugin:updater|check") return Promise.resolve({ rid: 1, currentVersion: "3.4.0", version: "3.4.1", rawJson: {} });
+          if (command === "plugin:updater|check") return Promise.resolve({ rid: 1, currentVersion: "3.4.1", version: "3.4.2", rawJson: {} });
           if (command === "plugin:resources|close") return Promise.resolve();
           if (command === "plugin:window|is_fullscreen") return Promise.resolve(false);
           return Promise.reject(new Error(`Unexpected native command: ${command}`));
@@ -224,7 +226,7 @@ test.describe("at the 1280 by 800 minimum window", () => {
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     const notice = page.getByTestId("app-update-notice");
-    await expect(notice).toContainText("Version 3.4.1 is available");
+    await expect(notice).toContainText("Version 3.4.2 is available");
     await expect(notice.getByRole("button", { name: "Update now" })).toBeEnabled();
     const box = await boxOf(notice);
     expect(isInside(box, viewportBox(page))).toBe(true);
@@ -234,7 +236,7 @@ test.describe("at the 1280 by 800 minimum window", () => {
     await expect(notice).toHaveCount(0);
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Updates", exact: true }).click();
-    await expect(page.getByText("Version 3.4.1 is available")).toBeVisible();
+    await expect(page.getByText("Version 3.4.2 is available")).toBeVisible();
     await expect(page.getByRole("button", { name: "Install update" })).toBeEnabled();
     expectWarnings(consoleMessages, []);
   });

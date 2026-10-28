@@ -121,11 +121,11 @@ def test_current_day_prefers_the_live_day1_endpoint():
     assert got[0].url.endswith("day1otlk_cat.nolyr.geojson")
 
 
-def test_live_endpoint_only_offered_for_the_current_day():
-    """Before 12Z the live Day 2/3 endpoints sit two convective days ahead."""
+def test_future_days_prefer_their_live_endpoint():
     for days in (1, 2):
         got = spc.candidates_for(NOW + timedelta(days=days), NOW)
-        assert not any(c.live for c in got), f"day+{days} must not use live"
+        assert got[0].live
+        assert got[0].day == days + 1
 
 
 def test_unissued_products_are_not_requested():
@@ -134,7 +134,7 @@ def test_unissued_products_are_not_requested():
     assert got, "expected at least one candidate"
     assert 1 not in {c.day for c in got}
     assert got[0].day == 2
-    assert all(c.issued <= NOW for c in got)
+    assert all(c.issued is None or c.issued <= NOW for c in got)
 
 
 def test_the_outlook_in_force_at_the_target_hour_is_tried_first():
@@ -361,6 +361,115 @@ def test_fetch_caches_and_reuses_the_same_layer():
 
     second = spc.fetch_layer(target, now=NOW, opener=explode)
     assert second is first, "the decoded layer should be reused as-is"
+
+
+@pytest.mark.parametrize("day", [1, 2, 3])
+def test_morning_forecast_uses_the_latest_live_outlook(day):
+    now = datetime(2026, 10, 28, 9, tzinfo=UTC)
+    target = datetime(2026, 10, 28, 18, tzinfo=UTC) + timedelta(days=day - 1)
+    url = f"https://www.spc.noaa.gov/products/outlook/day{day}otlk_cat.nolyr.geojson"
+    calls = []
+    layer = spc.fetch_layer(
+        target, now=now, disk_cache=False,
+        opener=_opener({url: _payload(
+            valid=target.strftime("%Y%m%d1200"),
+            expire=(target + timedelta(days=1)).strftime("%Y%m%d1200"),
+        )}, calls),
+    )
+    assert layer is not None
+    assert layer.covers(target)
+    assert layer.source_url == url
+    assert calls == [url], "already published outlooks must not walk the archive"
+
+
+def test_morning_live_rollover_keeps_the_overnight_outlook():
+    now = target = datetime(2026, 10, 28, 9, tzinfo=UTC)
+    live = "https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson"
+    archive = ("https://www.spc.noaa.gov/products/outlook/archive/2026/"
+               "day1otlk_20261028_0100_cat.nolyr.geojson")
+    calls = []
+    layer = spc.fetch_layer(
+        target, now=now, disk_cache=False,
+        opener=_opener({
+            live: _payload(valid="202610281200", expire="202610291200"),
+            archive: _payload(valid="202610280100", expire="202610281200"),
+        }, calls),
+    )
+    assert layer is not None
+    assert layer.covers(target)
+    assert layer.source_url == archive
+    assert calls == [live, archive]
+
+
+@pytest.mark.parametrize("label", ["", "Less Than 5% All Areas"])
+def test_empty_current_outlook_does_not_revive_an_older_risk(label):
+    target = datetime(2025, 5, 14, 18, tzinfo=UTC)
+    candidates = spc.candidates_for(target, NOW, "torn")
+    document = json.loads(_payload(valid="202505141200", expire="202505151200"))
+    document["features"] = [document["features"][0]]
+    document["features"][0]["geometry"] = None
+    document["features"][0]["properties"].update(DN=0, LABEL=label)
+    calls = []
+    layer = spc.fetch_layer(
+        target, now=NOW, product="torn", disk_cache=False,
+        opener=_opener({
+            candidates[0].url: json.dumps(document).encode(),
+            candidates[1].url: _payload(valid="202505141200", expire="202505151200"),
+        }, calls),
+    )
+    assert layer is not None
+    assert layer.shapes == ()
+    assert layer.covers(target)
+    assert calls == [candidates[0].url], "no areas is a published answer"
+    calls.clear()
+    assert spc.fetch_layer(
+        target, now=NOW, product="torn", disk_cache=False,
+        opener=_opener({}, calls),
+    ) is layer
+    assert calls == []
+
+
+@pytest.mark.parametrize("missing", ["VALID", "EXPIRE", "JSON"])
+def test_fetched_outlook_requires_a_complete_validity_window(missing):
+    target = datetime(2023, 3, 31, 18, tzinfo=UTC)
+    payload = _payload(valid="202303311630", expire="202304011200")
+    document = json.loads(payload)
+    for feature in document["features"]:
+        feature["properties"].pop(missing, None)
+    invalid = b"{" if missing == "JSON" else json.dumps(document).encode()
+    responses = {request.url: invalid
+                 for request in spc.candidates_for(target, NOW)}
+    assert spc.fetch_layer(
+        target, now=NOW, disk_cache=False, opener=_opener(responses, []),
+    ) is None
+    assert not spc._DAY_MISS, "an invalid response must remain retryable"
+    layer = spc.fetch_layer(
+        target, now=NOW, disk_cache=False,
+        opener=_opener(dict.fromkeys(responses, payload), []),
+    )
+    assert layer is not None, "cached invalid data must not become a settled miss"
+    assert layer.covers(target)
+
+
+def test_recent_publication_miss_is_retried_after_the_live_cache_interval(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(spc.time, "monotonic", lambda: clock[0])
+    target = datetime(2025, 5, 14, 18, tzinfo=UTC)
+    calls = []
+    assert spc.fetch_layer(
+        target, now=NOW, disk_cache=False, opener=_opener({}, calls),
+    ) is None
+    clock[0] += spc.LIVE_CACHE_TTL_S + 1
+    url = spc.candidates_for(target, NOW)[0].url
+    calls.clear()
+    layer = spc.fetch_layer(
+        target, now=NOW, disk_cache=False,
+        opener=_opener({url: _payload(
+            valid="202505141200", expire="202505151200",
+        )}, calls),
+    )
+    assert layer is not None, "publication delays must not hide outlooks for six hours"
+    assert calls == [url]
 
 
 def test_404_is_remembered_so_a_quiet_period_is_not_re_probed():
@@ -929,8 +1038,11 @@ def test_the_signature_changes_when_a_better_outlook_exists():
         )
     ]
     assert len(set(signatures)) == 3, "each step must be distinguishable"
-    # Products only accumulate, so each basis contains the one before it.
-    assert set(signatures[0]) < set(signatures[1]) < set(signatures[2])
+    # The best current endpoint advances from Day 3 to Day 2 to Day 1.
+    assert [signature[0].rsplit("/", 1)[1] for signature in signatures] == [
+        "day3otlk_cat.nolyr.geojson", "day2otlk_cat.nolyr.geojson",
+        "day1otlk_cat.nolyr.geojson",
+    ]
 
 
 def test_the_signature_changes_on_a_new_issuance_within_a_day():

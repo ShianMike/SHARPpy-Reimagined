@@ -5,7 +5,7 @@ time; shared product definitions and the provider-facing API remain in ``spc_out
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from datetime import timezone
 from sharpmod.maps.map_overlays import OverlayLayer
 from typing import Callable
@@ -44,6 +44,11 @@ def fetch_layer(
         # This exact candidate set has already been walked to exhaustion.
         return None
 
+    recent = any(
+        request.live or (request.issued is not None
+                         and request.issued > now - timedelta(days=1))
+        for request in candidates)
+    miss_ttl = _api.LIVE_CACHE_TTL_S if recent else _api.MISS_CACHE_TTL_S
     fallback: OverlayLayer | None = None
     exhausted = True
     for request in candidates:
@@ -56,7 +61,7 @@ def fetch_layer(
                 continue
             if cached.covers(valid_time):
                 return cached
-            fallback = fallback or cached
+            fallback = cached if fallback is None else fallback
             continue
 
         # An archived issuance is immutable, so a previous session's copy is
@@ -69,11 +74,12 @@ def fetch_layer(
                     label=request.label, product=product)
             except _api.OutlookError:
                 layer = None
-            if layer:
+            if (layer is not None and layer.valid_from is not None
+                    and layer.valid_to is not None):
                 _api._cache_put(request.url, layer, _api.ARCHIVE_CACHE_TTL_S)
                 if layer.covers(valid_time):
                     return layer
-                fallback = fallback or layer
+                fallback = layer if fallback is None else fallback
                 continue
 
         try:
@@ -81,7 +87,7 @@ def fetch_layer(
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 # Not yet issued, or never existed. Remember it and move on.
-                _api._cache_put(request.url, None, _api.MISS_CACHE_TTL_S)
+                _api._cache_put(request.url, None, miss_ttl)
                 continue
             # A server-side error says nothing about whether the product
             # exists, so this walk must not be recorded as a settled "nothing
@@ -107,21 +113,23 @@ def fetch_layer(
         except _api.OutlookError as exc:
             _api.logger.debug("spc_outlook.decode_failed url=%s err=%s",
                          request.url, exc)
-            _api._cache_put(request.url, None, _api.MISS_CACHE_TTL_S)
+            exhausted = False
+            continue
+
+        if layer.valid_from is None or layer.valid_to is None:
+            exhausted = False
             continue
 
         ttl = _api.LIVE_CACHE_TTL_S if request.live else _api.ARCHIVE_CACHE_TTL_S
-        _api._cache_put(request.url, layer if layer else None, ttl)
-        if layer and not request.live and disk_cache:
+        _api._cache_put(request.url, layer, ttl)
+        if not request.live and disk_cache:
             _api._disk_write(request.url, payload)
 
-        if not layer:
-            continue
         if layer.covers(valid_time):
             return layer
         # A real product that does not cover the target: keep it only as a last
         # resort and keep looking for one that does.
-        fallback = fallback or layer
+        fallback = layer if fallback is None else fallback
 
     if fallback is not None:
         _api.logger.debug(
@@ -132,5 +140,6 @@ def fetch_layer(
         # Every candidate was reachable and none of them held an outlook, so
         # record the verdict once for the whole set instead of relying on the
         # individual 404 tombstones surviving in the per-URL cache.
-        _api._remember_day_miss(candidates)
+        _api._remember_day_miss(
+            candidates, ttl=miss_ttl if recent else _api.DAY_MISS_CACHE_TTL_S)
     return None

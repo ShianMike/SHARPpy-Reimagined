@@ -1,4 +1,21 @@
 {
+  "3.4.1": {
+    "summary": "SPC outlooks follow the selected forecast time, clear outdated risk areas and refresh every five minutes.",
+    "highlights": [
+      {
+        "title": "Current outlooks for the selected time",
+        "description": "Changing the selected hour loads its own outlook issuance. Current Day 1, Day 2 and Day 3 forecasts are checked by their valid windows, including morning issuances before 12Z."
+      },
+      {
+        "title": "Respect outlooks with no plotted risk areas",
+        "description": "Valid outlooks with no plotted risk areas clear older polygons instead of bringing back an earlier forecast."
+      },
+      {
+        "title": "Five-minute refresh and recovery",
+        "description": "Enabled SPC layers refresh every five minutes in Model Viewer. Missing recent products are retried within five minutes, so a temporary gap does not hide an outlook for six hours."
+      }
+    ]
+  },
   "3.1.0": {
     "summary": "Live weather joins forecasts and soundings in one workspace.",
     "highlights": [

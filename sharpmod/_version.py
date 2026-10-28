@@ -18,4 +18,4 @@
 #: frontend and Tauri package manifests and locks in lockstep, along with the
 #: default tag in ``.github/workflows/release.yml``. Versioning tests check these
 #: surfaces; release validation requires the tag to equal ``v`` + this value.
-__version__ = "3.4.0"
+__version__ = "3.4.1"

@@ -13,10 +13,25 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   by each model and the selected run.
 - Add isobars with numeric pressure labels on weather maps.
 
+## [v3.4.1] - 2026-10-28
+
 ### Fixed
 
+- Check current SPC Day 1, Day 2 and Day 3 outlook payloads against their valid
+  forecast windows, including morning issuances before 12Z, so an older Day 2
+  outlook does not replace the outlook for the selected time.
+- Keep valid SPC outlooks with no risk areas, clearing older risk polygons
+  instead of falling back to a previous issuance.
+- Request SPC outlooks for the exact selected time instead of reusing an
+  overlapping forecast window that can contain a different issuance.
+- Refresh enabled SPC layers every five minutes in Model Viewer, replacing a
+  Live Tracking-only refresh path where SPC layers are disabled.
+- Retry missing recent SPC products within five minutes instead of retaining
+  a six-hour negative cache entry; keep longer caching for historical misses.
+- Align Python, Rust, frontend and desktop version metadata, lockfiles,
+  health/hello fixtures and updater tests with v3.4.1.
 - Restore the README's release-download, desktop and analysis badges and its
-  screenshot tour, while keeping the description focused on v3.4.0.
+  screenshot tour, while keeping the description focused on the current version.
   Check visible version text without rejecting existing screenshot paths.
 - Allow `python -m sharpmod.tools.model_extract` to use the same command-line
   entry point as `model-extract`, avoiding a circular import during startup.

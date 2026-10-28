@@ -198,7 +198,7 @@ height stacks in Rust. The boundary validates grid layouts and keeps
 float32/float64 source precision; the kernel chooses the first finite bracket
 without clamping targets outside the supplied levels. Owned batches of at most
 131,072 columns release the interpreter. Contiguous model inputs avoid full-stack
-copies and full-grid masks and weight arrays; strided inputs are normalized at
+copies and full-grid masks and weight arrays; Fortran and strided inputs are normalized at
 the boundary. Product formulas, the lapse-rate CAPE screen and the model's
 surface height retain their existing owners.
 

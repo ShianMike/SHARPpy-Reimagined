@@ -1,7 +1,7 @@
 //! Validate NumPy layouts once and detach owned, bounded interpolation batches.
 
 use numpy::{
-    ndarray::{ArrayD, IxDyn},
+    ndarray::{ArrayD, ArrayViewD, IxDyn},
     AllowTypeChange, IntoPyArray, PyArrayDyn, PyArrayLikeDyn, PyReadonlyArrayDyn,
     PyUntypedArrayMethods,
 };
@@ -21,6 +21,13 @@ enum Buffer<'a> {
     Double(Cow<'a, [f64]>),
 }
 
+fn logical_values<T: Copy>(array: ArrayViewD<'_, T>) -> Cow<'_, [T]> {
+    match array.to_slice() {
+        Some(values) => Cow::Borrowed(values),
+        None => Cow::Owned(array.iter().copied().collect()),
+    }
+}
+
 impl<'py> Grid<'py> {
     fn shape(&self) -> &[usize] {
         match self {
@@ -31,14 +38,8 @@ impl<'py> Grid<'py> {
 
     fn buffer(&self) -> Buffer<'_> {
         match self {
-            Self::Single(array) => Buffer::Single(match array.as_slice() {
-                Ok(values) => Cow::Borrowed(values),
-                Err(_) => Cow::Owned(array.as_array().iter().copied().collect()),
-            }),
-            Self::Double(array) => Buffer::Double(match array.as_slice() {
-                Ok(values) => Cow::Borrowed(values),
-                Err(_) => Cow::Owned(array.as_array().iter().copied().collect()),
-            }),
+            Self::Single(array) => Buffer::Single(logical_values(array.as_array())),
+            Self::Double(array) => Buffer::Double(logical_values(array.as_array())),
         }
     }
 }
@@ -113,4 +114,37 @@ fn interpolate_height_grid<'py>(
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(interpolate_height_grid, module)?)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use numpy::ndarray::{array, s, Array2, ShapeBuilder};
+
+    #[test]
+    fn c_fortran_transposed_and_strided_grids_keep_logical_cell_order() {
+        let c = array![[1_f32, 2., 3.], [4., 5., 6.]];
+        assert!(matches!(
+            logical_values(c.view().into_dyn()),
+            Cow::Borrowed(_)
+        ));
+        let fortran = Array2::from_shape_vec((2, 3).f(), vec![1_f32, 4., 2., 5., 3., 6.]).unwrap();
+        assert_eq!(
+            logical_values(fortran.view().into_dyn()).as_ref(),
+            &[1., 2., 3., 4., 5., 6.]
+        );
+        assert_eq!(
+            logical_values(c.t().into_dyn()).as_ref(),
+            &[1., 4., 2., 5., 3., 6.]
+        );
+        assert_eq!(
+            logical_values(c.slice(s![.., ..;-1]).into_dyn()).as_ref(),
+            &[3., 2., 1., 6., 5., 4.]
+        );
+        let double = fortran.mapv(f64::from);
+        assert_eq!(
+            logical_values(double.view().into_dyn()).as_ref(),
+            &[1., 2., 3., 4., 5., 6.]
+        );
+    }
 }

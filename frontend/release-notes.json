@@ -3,16 +3,12 @@
     "summary": "Track 2-5 km updraft helicity with a shared colour scale and load weather overlays with less processing time.",
     "highlights": [
       {
-        "title": "Hourly 2-5 km updraft helicity",
-        "description": "Replace the updraft-velocity entry with 1-hour maximum updraft helicity for the 2-5 km AGL layer on HRRR and other models that publish the hourly field."
+        "title": "2-5 km updraft helicity",
+        "description": "Replace the updraft-velocity entry with 1-hour maximum updraft helicity for the 2-5 km AGL layer on HRRR and other models that publish the hourly field. Both 1-hour and 3-hour products share the supplied stepped 0-400 m²/s² colour scale."
       },
       {
         "title": "Three-hour updraft tracks",
         "description": "View the maximum across three consecutive hourly fields from the same model run. This product starts at forecast hour 3 and requires the complete interval. Load Hours and cache counts use only the supported hours."
-      },
-      {
-        "title": "Matching colours across models",
-        "description": "Both 2-5 km products use the same stepped 0-400 m²/s² scale, making their intensity easier to compare across supported models."
       },
       {
         "title": "Faster radar checks and display",
@@ -24,7 +20,11 @@
       },
       {
         "title": "More responsive forecast maps",
-        "description": "Forecast contours and wind barbs take less time to prepare, preserving their geometry, true-north directions and missing-data gaps. Model map downloads reuse connections and retain retries, byte limits and cancellation."
+        "description": "Forecast contours, wind barbs and terrain-relative lapse-rate and shear maps take less time to prepare, preserving their geometry, true-north directions and missing-data gaps. Model map downloads reuse connections and retain retries, byte limits and cancellation."
+      },
+      {
+        "title": "Less repeated sounding work",
+        "description": "Derecho and parcel-based sounding calculations reuse the shared calculation backend, reducing repeated profile preparation while retaining missing-data and layer-depth checks."
       }
     ]
   },

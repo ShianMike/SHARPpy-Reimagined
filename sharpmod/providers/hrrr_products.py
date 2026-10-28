@@ -901,8 +901,8 @@ def _lapse_0_3km(fields: dict[str, np.ndarray]) -> np.ndarray:
     surface = fields["sfchgt"]
     target = surface + 3000.0
     # Pressure-level stack, ordered from the ground upward.
-    heights = np.stack([fields[f"hgt{level}"] for level in _LAPSE_LEVELS])
-    temps = np.stack([fields[f"tmp{level}"] for level in _LAPSE_LEVELS])
+    heights = [fields[f"hgt{level}"] for level in _LAPSE_LEVELS]
+    temps = [fields[f"tmp{level}"] for level in _LAPSE_LEVELS]
     top = _interpolate_to_height(heights, temps, target)
     with np.errstate(invalid="ignore"):
         rate = (fields["tmp2m"] - top) / 3.0
@@ -923,34 +923,19 @@ def _lapse_0_3km(fields: dict[str, np.ndarray]) -> np.ndarray:
 _LAPSE_LEVELS = (750, 700, 650, 550, 450)
 
 
-def _interpolate_to_height(heights: np.ndarray, values: np.ndarray,
+def _interpolate_to_height(heights: np.ndarray | list[np.ndarray],
+                           values: np.ndarray | list[np.ndarray],
                            target: np.ndarray) -> np.ndarray:
     """Linearly interpolate ``values`` to ``target`` height, per grid point.
 
-    ``heights`` and ``values`` are ``(level, row, col)`` with level ascending in
+    ``heights`` and ``values`` contain grids with level ascending in
     height. Points where the target falls outside the stack come back MISSING
     rather than being clamped, because a clamped value would look like a real
     lapse rate computed over the wrong depth.
     """
-    result = np.full(target.shape, MISSING, dtype=np.float32)
-    # Track assignment independently of the missing-value representation.  At
-    # present MISSING is NaN, but interpolation must remain correct if a GRIB
-    # boundary supplies (or a future writer adopts) a finite sentinel.
-    filled = np.zeros(target.shape, dtype=bool)
-    for index in range(heights.shape[0] - 1):
-        lower_h = heights[index]
-        upper_h = heights[index + 1]
-        inside = (lower_h <= target) & (target <= upper_h) & (upper_h > lower_h)
-        if not inside.any():
-            continue
-        weight = np.zeros_like(target, dtype=np.float64)
-        np.divide(target - lower_h, upper_h - lower_h,
-                  out=weight, where=inside)
-        candidate = values[index] + (values[index + 1] - values[index]) * weight
-        assign = inside & ~filled & np.isfinite(candidate)
-        result = np.where(assign, candidate, result)
-        filled |= assign
-    return result
+    import sharpmod_rs
+
+    return sharpmod_rs.interpolate_height_grid(heights, values, target, MISSING)
 
 
 def _supercell_composite(fields: dict[str, np.ndarray]) -> np.ndarray:
@@ -1375,11 +1360,11 @@ _SHEAR_LEVELS = (925, 850, 750, 650, 550, 450)
 def _shear_0_1km(fields: dict[str, np.ndarray]) -> np.ndarray:
     """Interpolate 1 km winds above the model's own terrain when no shear record exists."""
     surface = fields["sfchgt"]
-    heights = np.stack([surface + 10, *(fields[f"hgt{p}"] for p in _SHEAR_LEVELS)])
+    heights = [surface + 10, *(fields[f"hgt{p}"] for p in _SHEAR_LEVELS)]
     top = [
         _interpolate_to_height(
             heights,
-            np.stack([fields[f"{component}10"], *(fields[f"{component}{p}"] for p in _SHEAR_LEVELS)]),
+            [fields[f"{component}10"], *(fields[f"{component}{p}"] for p in _SHEAR_LEVELS)],
             surface + 1000,
         ) - fields[f"{component}10"]
         for component in ("ugrd", "vgrd")

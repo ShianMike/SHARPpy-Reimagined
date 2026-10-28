@@ -147,7 +147,8 @@ Native-only map/weather operations are `contour_segments`, `pack_wind_grid`,
 `radar_sites`, `radar_velocity_tilts`, `clear_weather_cache`, `weather_alerts`,
 `fetch_storm_reports`, `parse_storm_reports`, `parse_surface_stations`,
 `parse_surface_observations`, `select_surface_observation`,
-`fetch_surface_observations`, `sample_radar_radials`, and `fetch_model_bytes`. Their PyO3 bindings live in
+`fetch_surface_observations`, `sample_radar_radials`, `fetch_model_bytes`, and
+`interpolate_height_grid`. Their PyO3 bindings live in
 focused map, wind, weather and report modules. Blocking
 native work releases the interpreter with `Python::detach`, following the
 [PyO3 performance guidance](https://pyo3.rs/main/performance.html).
@@ -191,6 +192,22 @@ deadline. Cancellation is checked while headers, chunks or retry delays are
 pending. Range scheduling, decoding and cache ownership remain with their
 existing callers. The separate resumable sounding download transport retains
 its Python implementation.
+
+Terrain-relative lapse-rate and derived low-level shear maps interpolate their
+height stacks in Rust. The boundary validates grid layouts and keeps
+float32/float64 source precision; the kernel chooses the first finite bracket
+without clamping targets outside the supplied levels. Owned batches of at most
+131,072 columns release the interpreter. Contiguous model inputs avoid full-stack
+copies and full-grid masks and weight arrays; Fortran and strided inputs are normalized at
+the boundary. Product formulas, the lapse-rate CAPE screen and the model's
+surface height retain their existing owners.
+
+DCP's downdraft energy and the uncached surface/most-unstable parcel helpers
+also delegate to the existing parcel backend. This removes duplicate SHARPpy
+profile construction from derived parameters without adding new kernels or
+another cache. Normalized CAPE/CIN, EHI and VGP retain their cached workspace
+path, finite/missing guards and layer-depth rules. An explicitly selected
+Python-science backend still supplies these terms through its existing adapter.
 
 The wind and interpolation operations default to no explicit sentinel. The QC,
 pressure ordering, and row-parser operations default to `-9999`; passing

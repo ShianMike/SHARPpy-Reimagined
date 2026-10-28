@@ -258,9 +258,12 @@ class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
     """Convective profile using backend parcel and DCAPE workspaces."""
 
     def get_sars(self):
-        import sharpmod_rs
+        try:
+            from sharpmod_rs import profile_sars
+        except ImportError:
+            return super().get_sars()
 
-        self.__dict__.update(sharpmod_rs.profile_sars(self))
+        self.__dict__.update(profile_sars(self))
 
     def get_kinematics(self):
         super().get_kinematics()

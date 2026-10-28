@@ -40,6 +40,8 @@ SARS analogue matching also uses native loops and parsed-table reuse, preserving
 the pinned hail/supercell criteria, result order and public NumPy tuple shapes.
 The accelerated profile supplies its existing inputs and SHIP calculation;
 upstream scientific reference functions remain available for comparisons.
+Source environments without the native operation keep the existing SHARPpy
+SARS compatibility call.
 
 The SHARPpy widget stack, renderer and model-retrieval orchestration remain in
 Python. The native workspace kernels own their small

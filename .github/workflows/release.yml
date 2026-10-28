@@ -273,20 +273,15 @@ jobs:
           --require-external-metadata
 
       - name: Build and install locked Rust wheel
+        working-directory: rust/sharpmod-rs
         shell: pwsh
         run: |
-          Push-Location "rust/sharpmod-rs"
-          try {
-            python -m maturin build --release --locked --interpreter python --out dist
-            if ($LASTEXITCODE -ne 0) {
-              throw "Locked Rust wheel build failed"
-            }
-          }
-          finally {
-            Pop-Location
+          python -m maturin build --release --locked --interpreter python --out dist
+          if ($LASTEXITCODE -ne 0) {
+            throw "Locked Rust wheel build failed"
           }
           $wheels = @(
-            Get-ChildItem -LiteralPath "rust/sharpmod-rs/dist" `
+            Get-ChildItem -LiteralPath "dist" `
               -Filter "sharpmod_rs-*-cp313-cp313-win_amd64.whl" -File
           )
           if ($wheels.Count -ne 1) {
@@ -471,7 +466,7 @@ jobs:
         env:
           SHARPPY_UPDATER_ARTIFACT_DIR: ${{ github.workspace }}/release-artifacts
         run: |
-          cargo test --locked --test updater_artifacts -- --ignored --nocapture
+          cargo test --release --locked --test updater_artifacts -- --ignored --nocapture
           if ($LASTEXITCODE -ne 0) { throw "Final updater artifact verification failed" }
 
       - name: Verify installed upgrade from the previous stable release

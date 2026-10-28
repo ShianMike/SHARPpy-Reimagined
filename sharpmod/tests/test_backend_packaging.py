@@ -329,6 +329,7 @@ def test_release_builds_installs_and_requires_locked_cp313_rust_wheel():
         "Build and install locked Rust wheel"
     )
     script = build["run"]
+    assert build["working-directory"] == "rust/sharpmod-rs"
     assert "maturin build --release --locked" in script
     assert "--interpreter python" in script
     assert "cp313-cp313-win_amd64.whl" in script
@@ -389,6 +390,9 @@ def test_release_workflow_caches_dependencies_without_reusing_the_app():
     assert steps.index(toolchain) < steps.index(cache) < steps.index(build)
     cleanup = "cargo clean --manifest-path ../src-tauri/Cargo.toml --release -p sharppy-reimagined"
     assert build["run"].index(cleanup) < build["run"].index("npm run tauri -- build")
+    updater = by_name["Verify final updater artifacts"]
+    assert updater["working-directory"] == "src-tauri"
+    assert "cargo test --release --locked --test updater_artifacts -- --ignored --nocapture" in updater["run"]
 
 
 def test_release_requires_rust_runtime_reports_and_uploads_wheel():

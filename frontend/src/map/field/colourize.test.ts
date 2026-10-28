@@ -1,8 +1,8 @@
 import catalog from "@contracts/public/map/catalog.json";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseMapCatalog } from "../../lib/contracts/map";
 import type { FieldFrame, Palette } from "../../types/map";
-import { buildLut, colourize, drawnRangeNote, formatValue, LUT_SIZE, sampleAt } from "./colourize";
+import { buildLut, cellColours, colourize, drawnRangeNote, formatValue, LUT_SIZE, sampleAt } from "./colourize";
 
 const products = parseMapCatalog(catalog).products;
 const palette = (key: string): Palette => {
@@ -69,6 +69,20 @@ describe("field colouring", () => {
     expect(rgba(pixels, 1)).toEqual([63, 0, 0, 255]);
     expect(rgba(pixels, 2)).toEqual([127, 0, 0, 255]);
     expect(rgba(pixels, 3)[3]).toBe(0);
+  });
+
+  it.each([true, false])("copies packed colours without per-cell byte copies or views (stepped=%s)", (stepped) => {
+    const ramp: Palette = { display: "auto", stops: [[0, "#123456"], [65534, "#abcdef"]], units: "", stepped, floor: null, ceiling: null, ticks: [] };
+    const copies = vi.spyOn(Uint8Array.prototype, "set");
+    const views = vi.spyOn(Uint8Array.prototype, "subarray");
+    const colours = cellColours({ scale: 1, offset: 0, nodata: 65535 }, ramp);
+    // Only palette preparation may copy bytes; none of the 65535 visible cells may do so.
+    expect(copies).toHaveBeenCalledTimes(stepped ? 0 : LUT_SIZE);
+    expect(views).not.toHaveBeenCalled();
+    const bytes = new Uint8ClampedArray(colours.buffer);
+    expect(rgba(bytes, 0)).toEqual([18, 52, 86, 255]);
+    expect(rgba(bytes, 65534)).toEqual([171, 205, 239, 255]);
+    expect(rgba(bytes, 65535)).toEqual([0, 0, 0, 0]);
   });
 
   it.each(["wind-10m", "gust"])("uses the supplied 1 kt bands for %s", (key) => {

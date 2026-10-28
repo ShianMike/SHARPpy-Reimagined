@@ -7,6 +7,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Build map cell-colour tables with packed RGBA copies, avoiding per-cell byte
+  copies and temporary array views while preserving palette and no-data output.
+- Cache the pinned cargo-audit executable and restore compatible desktop build
+  dependencies across lockfile changes. Continue both dependency audits and
+  every existing frontend, browser, scientific and sidecar check.
+- Run staged updater verification with the release Cargo profile, and use the
+  workflow working directory directly for the native-wheel build.
+
 ### Upcoming
 
 - Expand the available weather-model parameters, offering only fields supported

@@ -31,6 +31,12 @@ For the v3 React/Tauri interface, follow the
 Use `npm run tauri -- dev` in `frontend/` for the current desktop. The retired
 Qt interface is available in the [v2.0.0 Legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0).
 
+Desktop CI caches the pinned `cargo-audit` executable and compiled Cargo
+dependencies. Both lockfile audits still refresh advisory data and run on every
+check. Cache misses build the tool normally. Release updater verification uses
+`cargo test --release --locked --test updater_artifacts -- --ignored --nocapture`
+to use the release build profile while checking the staged installer.
+
 ```powershell
 # Fast deterministic feedback (grouped across four bounded workers).
 python scripts/run_test_lane.py fast --workers 4

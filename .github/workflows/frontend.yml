@@ -101,17 +101,32 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src-tauri/target
-          key: tauri-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+            src-tauri/target/debug/.fingerprint
+            src-tauri/target/debug/build
+            src-tauri/target/debug/deps
+          key: tauri-checks-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            tauri-checks-v1-${{ runner.os }}-${{ runner.arch }}-
       - run: rustup update stable --no-self-update && rustup default stable
       - run: rustup component add rustfmt clippy
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
-      - name: Audit locked desktop and scientific dependencies
+      - name: Cache cargo-audit
+        id: cargo-audit
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-audit.exe
+          key: cargo-audit-${{ runner.os }}-${{ runner.arch }}-0.22.2
+      - name: Install cargo-audit on cache miss
+        if: steps.cargo-audit.outputs.cache-hit != 'true'
         run: |
           cargo install cargo-audit --version 0.22.2 --locked
           if ($LASTEXITCODE -ne 0) { throw "Dependency audit tool install failed" }
+      - name: Audit locked desktop and scientific dependencies
+        run: |
+          $auditVersion = cargo audit --version
+          if ($LASTEXITCODE -ne 0 -or $auditVersion -ne "cargo-audit 0.22.2") { throw "Dependency audit tool version mismatch" }
           cargo audit --file Cargo.lock
           if ($LASTEXITCODE -ne 0) { throw "Desktop dependency audit failed" }
           cargo audit --file ../rust/sharpmod-rs/Cargo.lock

@@ -4,6 +4,8 @@
 //! tauri-build at compile time and by the real app (DESIGN-bridge B8).
 
 mod common;
+#[path = "commands/radar.rs"]
+mod radar;
 
 use std::sync::Arc;
 
@@ -581,43 +583,4 @@ fn weather_alerts_validate_requests_and_return_the_public_snapshot() {
         .unwrap(),
         fixture("public/map/alerts.json")
     );
-}
-
-#[test]
-fn radar_tilts_validate_requests_and_expose_all_checked_cuts() {
-    for product in ["velocity", "correlation-coefficient"] {
-        let launcher = FakeLauncher::with(vec![script(move |mut io| async move {
-            let request = io.expect("radar.tilts").await.unwrap();
-            assert_eq!(
-                request["params"],
-                serde_json::json!({"site_id": "KTLX", "product": product, "valid_time": "2026-10-17T08:00:00Z"})
-            );
-            let mut result = fixture("bridge/map/radar-tilts.result.json");
-            result["product"] = serde_json::json!(product);
-            io.reply(&request["id"], result).await;
-            io.expect("shutdown").await;
-            0
-        })]);
-        let (_app, webview) = window(launcher);
-        for args in [
-            serde_json::json!({"site": "../bad", "product": "velocity"}),
-            serde_json::json!({"site": "KTLX", "product": "echo-tops"}),
-            serde_json::json!({"site": "KTLX", "product": "velocity", "validTime": "bad"}),
-        ] {
-            let error: BackendError =
-                parse(invoke_args(&webview, "get_radar_tilts", args).unwrap_err());
-            assert_eq!(error.code, ErrorCode::InvalidArgument);
-        }
-        let mut expected = fixture("public/map/radar-tilts.json");
-        expected["product"] = serde_json::json!(product);
-        assert_eq!(invoke_args(&webview, "get_radar_tilts", serde_json::json!({"site": "KTLX", "product": product, "validTime": "2026-10-17T08:00:00Z"})).unwrap(), expected);
-        let mut invalid = fixture("bridge/map/radar-tilts.result.json");
-        invalid["tilts"][0]["tilt"] = serde_json::json!("0");
-        assert!(
-            serde_json::from_value::<sharppy_reimagined_lib::dto::radar::RadarTilts>(invalid)
-                .unwrap()
-                .validate()
-                .is_err()
-        );
-    }
 }

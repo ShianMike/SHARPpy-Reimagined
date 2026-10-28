@@ -162,6 +162,8 @@ def clear(params: dict[str, Any]) -> dict[str, Any]:
                 from sharpmod.providers import spc_outlook
                 spc_outlook.clear_cache()
             if "radar" in selected:
+                import sharpmod_rs
+                sharpmod_rs.clear_weather_cache()
                 from sharpmod.providers import radar_level2, radar_mosaic, radar_site
                 for provider in (radar_level2, radar_mosaic, radar_site):
                     provider.clear_cache()

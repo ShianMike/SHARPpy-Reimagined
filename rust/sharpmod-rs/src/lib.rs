@@ -2,13 +2,16 @@
 //! GRIB point-decoding backend.
 
 pub mod batch_analysis;
+pub mod contours;
 pub mod grib;
 pub mod interpolation;
 pub mod kinematics;
+mod map_geometry;
 pub mod parcels;
 pub mod parsing;
 pub mod quality_control;
 pub mod records;
+mod weather;
 pub mod wind;
 
 use numpy::ndarray::Array2;
@@ -784,6 +787,8 @@ fn py_grib_inventory_cache_info() -> (bool, usize, usize, u64, u64, u64, u64) {
 fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     module.add("__backend_api_version__", BACKEND_API_VERSION)?;
+    weather::register(module)?;
+    map_geometry::register(module)?;
     module.add_function(wrap_pyfunction!(py_wind_to_components, module)?)?;
     module.add_function(wrap_pyfunction!(py_components_to_wind, module)?)?;
     module.add_function(wrap_pyfunction!(py_interpolate_1d, module)?)?;

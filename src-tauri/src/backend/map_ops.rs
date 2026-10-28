@@ -10,7 +10,7 @@ use crate::backend::router::Router;
 use crate::backend::sounding_ops::{invalid, rejected};
 use crate::dto::map::{
     AvailabilityReport, AvailabilityResult, FieldGridResult, MapCatalog, PlaceLabels, RadarResult,
-    RadarSiteCatalog, RadarSiteCatalogPublic, RadarSiteResult, SpcOutlook,
+    RadarSiteCatalogPublic, RadarSiteResult, SpcOutlook,
 };
 use crate::error::{BackendError, ErrorContext, PYTHON_PROVIDER};
 
@@ -343,14 +343,16 @@ impl Router {
         if let Some(sites) = cached(&self.radar_sites) {
             return Ok(sites);
         }
-        let context = context(OP_RADAR_SITES, "radar site catalogue");
-        let catalog: RadarSiteCatalog = self
-            .call(&context, "radar.sites", json!({}), PLACES_TIMEOUT)
-            .await?;
-        catalog
-            .validate()
-            .map_err(|reason| rejected(&context, "radar.sites", reason))?;
-        let catalog = Arc::new(catalog.into_public());
+        let catalog = Arc::new(RadarSiteCatalogPublic {
+            sites: sharpmod_weather::radar_sites::sites()
+                .iter()
+                .map(|site| crate::dto::radar::RadarSite {
+                    id: site.id.clone(),
+                    latitude: site.lat,
+                    longitude: site.lon,
+                })
+                .collect(),
+        });
         *self
             .radar_sites
             .lock()

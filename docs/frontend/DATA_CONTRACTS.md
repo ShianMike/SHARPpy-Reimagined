@@ -411,7 +411,8 @@ export interface AvailabilityReport {
   incorporated place per quarter degree of the bundled Census index (tier 2,
   largest first); availability is `uwyo_catalog.fetch_stations_for_datetime`,
   the extras filtered by the record rule; the site catalogue is the bundled
-  `radar_sites.json` through `radar_site.sites()`.
+  `rust/weather-core/resources/radar_sites.json`, embedded by the shared Rust
+  weather core; the remaining image providers read it through `sharpmod_rs`.
 - **Field and radar frames** are binary ([Binary frames](#binary-frames)).
   A single-site frame carries `kind: "radar-site"` and the serving `siteId`.
 

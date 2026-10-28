@@ -11,9 +11,13 @@ explicit user-parcel ascents, DCAPE, memory-mapped GRIB input, and ecCodes to
 minimize allocations and Python/Rust boundary crossings. The independently
 optimized Python implementation remains the portable fallback.
 
-This crate does not contain the PySide6 GUI, SHARPpy widget stack, renderer,
-download clients, or model-retrieval orchestration; those shared application
-layers continue to run in Python. The native workspace kernels own their small
+The shared `../weather-core` crate owns velocity directory fetching, radar site
+data, and NWS warning/watch downloads and polygon processing. The map geometry
+module extracts and projects contour segments. Their Python adapters only wire
+the existing calls to Rust; the replaced Python implementations are removed.
+
+The SHARPpy widget stack, renderer and model-retrieval orchestration remain in
+Python. The native workspace kernels own their small
 profile columns and release the GIL. Kinematics returns Bunkers motion plus all
 requested surface layers in one call. Parcels returns the standard
 surface-based, lowest-300-hPa most-unstable, and 100-hPa mixed-layer summaries

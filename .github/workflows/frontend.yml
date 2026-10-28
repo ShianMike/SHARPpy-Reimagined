@@ -2,10 +2,10 @@ name: Frontend and desktop bridge
 on:
   push:
     branches: [main]
-    paths: ["frontend/**", "src-tauri/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
+    paths: ["frontend/**", "src-tauri/**", "rust/weather-core/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
   pull_request:
     branches: [main]
-    paths: ["frontend/**", "src-tauri/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
+    paths: ["frontend/**", "src-tauri/**", "rust/weather-core/**", "sharpmod/bridge/**", "sharpmod/resources/basemap.json", "pyproject.toml", "constraints/release.txt", "scripts/install_sharppy_compat.py", ".github/workflows/frontend.yml"]
   workflow_dispatch:
   workflow_call:
     inputs:

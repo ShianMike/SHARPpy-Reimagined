@@ -45,6 +45,11 @@ REQUIRED_RUST_CAPABILITIES = (
     "clear_grib_inventory_cache",
     "grib_inventory_cache_info",
     "profile_batch_analysis",
+    "radar_velocity_tilts",
+    "radar_sites",
+    "clear_weather_cache",
+    "weather_alerts",
+    "contour_segments",
 )
 
 

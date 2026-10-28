@@ -147,11 +147,15 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     )
     assert rust_build["if"] == "${{ matrix.backend == 'rust' }}"
 
-    # The fallback keeps whole-suite coverage on both older interpreters.
-    assert not any(
+    # Weather operations are native; numerical compatibility still selects Python.
+    assert any(
         "maturin build" in step.get("run", "")
         for step in jobs["compatibility"]["steps"]
-    ), "the compatibility matrix must keep covering the Python fallback"
+    )
+    assert any(
+        step.get("env", {}).get("SHARPMOD_BACKEND") == "python"
+        for step in jobs["compatibility"]["steps"]
+    ), "the compatibility matrix must keep covering the Python scientific backend"
     assert jobs["serial-release"]["if"] == (
         "${{ inputs.run_serial_release == true || "
         "(github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')) }}"

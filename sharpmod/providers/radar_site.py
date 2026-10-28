@@ -227,10 +227,8 @@ def sites() -> tuple[RadarSite, ...]:
     overlay, not prevent the map from drawing.
     """
     try:
-        from importlib.resources import files
-        payload = files("sharpmod.resources").joinpath(
-            "radar_sites.json").read_text(encoding="utf-8")
-        data = json.loads(payload)
+        import sharpmod_rs
+        data = json.loads(sharpmod_rs.radar_sites())
     except Exception:  # noqa: BLE001
         _LOGGER.debug("radar_site.catalogue_unreadable", exc_info=True)
         return ()

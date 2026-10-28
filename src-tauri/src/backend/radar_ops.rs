@@ -1,11 +1,10 @@
 //! Radar volume/directory checks shared by both tilt pickers and preloading.
 
-use crate::backend::map_ops::context;
 use crate::backend::router::Router;
 use crate::backend::sounding_ops::{invalid, rejected};
 use crate::dto::radar::RadarTilts;
 use crate::dto::weather_alerts::alert_time;
-use crate::error::BackendError;
+use crate::error::{BackendError, ErrorCode, ErrorContext, PYTHON_PROVIDER};
 use serde_json::json;
 use std::time::Duration;
 
@@ -16,26 +15,56 @@ impl Router {
         product: &str,
         valid_time: Option<&str>,
     ) -> Result<RadarTilts, BackendError> {
-        let context = context("get_radar_tilts", &format!("radar tilts for {site}"));
+        let context = ErrorContext::new(
+            "get_radar_tilts",
+            Some(if product == "velocity" {
+                "noaa-radar"
+            } else {
+                PYTHON_PROVIDER
+            }),
+            Some(&format!("radar tilts for {site}")),
+        );
         if site.len() != 4
             || !site.bytes().all(|c| c.is_ascii_alphanumeric())
             || !matches!(
                 product,
                 "reflectivity" | "velocity" | "correlation-coefficient"
             )
-            || valid_time.is_some_and(|time| alert_time(time).is_err())
         {
             return Err(invalid(
                 &context,
                 "a radar site, tiltable product and valid time are required",
             ));
         }
+        let time = valid_time
+            .map(alert_time)
+            .transpose()
+            .map_err(|_| invalid(&context, "a valid radar time is required"))?;
+        if product == "velocity" {
+            let site = sharpmod_weather::radar_sites::sites()
+                .iter()
+                .find(|candidate| candidate.id.eq_ignore_ascii_case(site))
+                .ok_or_else(|| invalid(&context, "unknown radar site"))?;
+            return self
+                .velocity_inventory
+                .availability(site, time, time::OffsetDateTime::now_utc())
+                .await
+                .map(RadarTilts::from)
+                .map_err(|message| BackendError {
+                    code: ErrorCode::OverlayFetchFailed,
+                    message: format!("Radar tilts could not be checked: {message}"),
+                    retryable: true,
+                    context: Some(Box::new(context)),
+                    details: None,
+                });
+        }
         let mut params = json!({"site_id": site, "product": product});
         if let Some(time) = valid_time {
             params["valid_time"] = json!(time);
         }
-        let timeout = Duration::from_secs(if product == "velocity" { 60 } else { 120 });
-        let result: RadarTilts = self.call(&context, "radar.tilts", params, timeout).await?;
+        let result: RadarTilts = self
+            .call(&context, "radar.tilts", params, Duration::from_secs(120))
+            .await?;
         result
             .validate()
             .map_err(|reason| rejected(&context, "radar.tilts", reason))?;

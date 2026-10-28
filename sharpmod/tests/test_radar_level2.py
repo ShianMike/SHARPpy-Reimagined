@@ -11,7 +11,6 @@ import pytest
 from PIL import Image
 
 from sharpmod.providers import (
-    radar_inventory,
     radar_level2 as radar,
     radar_level3,
     radar_site,
@@ -164,7 +163,7 @@ def test_panels_tilts_inventory_and_disk_reuse_one_volume_download(reader, sessi
     assert calibration["values"][:3] == [None, None, -32.0]
     assert calibration["values"][136] == 35.0 and calibration["folded"] == 1
     assert sum(url.endswith("_V06") for url in calls) == reader.reads == 1
-    tilts = radar_inventory.availability("KTLX", "reflectivity", now=NOW, opener=opener)
+    tilts = radar.availability("KTLX", product="reflectivity", now=NOW, opener=opener)
     assert [row["tilt"] for row in tilts["tilts"] if row["status"] == "available"] == [
         "0",
         "1",
@@ -320,8 +319,8 @@ def test_correlation_uses_its_own_calibration_geometry_and_cuts_in_one_shared_vo
     assert sweep.rgba[0, 3] == sweep.rgba[1, 3] == 0
     expected = radar_level3.colours(values, "correlation-coefficient")
     np.testing.assert_array_equal(sweep.rgba[[90, 240]], expected[[1, 2]])
-    inventory = radar_inventory.availability(
-        "KTLX", "correlation-coefficient", now=NOW, opener=opener
+    inventory = radar.availability(
+        "KTLX", product="correlation-coefficient", now=NOW, opener=opener
     )
     assert inventory["product"] == "correlation-coefficient"
     assert [

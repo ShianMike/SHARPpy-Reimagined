@@ -23,6 +23,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Resample Level II/III radar gates in parallel Rust, retaining native codes,
+  gate edges, missing sectors, range-folded velocity, echo-top flags and PNG
+  hover calibration. Remove the Python sampling loop; keep the existing WGS84
+  lookup, sort order, palettes and lossless image encoding.
 - Move NWS surface-station discovery, bounded observation downloads, parsing,
   unit conversion, distance ordering and nearest-time matching into Rust.
   Keep the existing station limit and six-request concurrency ceiling; retain

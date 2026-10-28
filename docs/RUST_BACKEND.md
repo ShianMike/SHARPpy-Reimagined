@@ -15,7 +15,7 @@ progressive modernization. Native kernels, decoder time, network retrieval,
 rendering and IPC are measured separately before selecting a migration.
 
 The Python numerical backend remains available for scientific compatibility.
-Map contours and wind barbs, velocity tilt availability, the radar site catalogue,
+Map contours and wind barbs, radial radar sampling, velocity tilt availability, the radar site catalogue,
 NWS warning/watch processing, nearby surface observations, and IEM report fetching/parsing require the native extension
 in browser mode. The desktop calls the shared Rust weather core directly for
 radar inventory. These migrated operations have no Python implementation.
@@ -146,8 +146,8 @@ otherwise.
 Native-only map/weather operations are `contour_segments`, `pack_wind_grid`,
 `radar_sites`, `radar_velocity_tilts`, `clear_weather_cache`, `weather_alerts`,
 `fetch_storm_reports`, `parse_storm_reports`, `parse_surface_stations`,
-`parse_surface_observations`, `select_surface_observation`, and
-`fetch_surface_observations`. Their PyO3 bindings live in
+`parse_surface_observations`, `select_surface_observation`,
+`fetch_surface_observations`, and `sample_radar_radials`. Their PyO3 bindings live in
 focused map, wind, weather and report modules. Blocking
 native work releases the interpreter with `Python::detach`, following the
 [PyO3 performance guidance](https://pyo3.rs/main/performance.html).
@@ -173,6 +173,14 @@ failed stations stay distinct, older observations win equal-distance time ties,
 and cancellation aborts pending native requests. Supplied Python openers remain
 supported at the compatibility boundary. Live data retains the documented
 [NWS observation availability and latency limits](https://www.weather.gov/documentation/services-web-api).
+
+Radar sampling uses sorted native radials and the existing cached WGS84 bearing
+and range arrays. The Rust loop retains native codes and gate/sector boundaries;
+the existing palette and PNG encoding keep calibration metadata and transparency.
+Owned snapshots release the interpreter safely, copying only 64 projection rows
+at a time (at most 2.1 MB at the 4096-pixel width), plus native radial codes and
+the output. The existing single-entry projection cache retains its previous
+lifetime.
 
 The wind and interpolation operations default to no explicit sentinel. The QC,
 pressure ordering, and row-parser operations default to `-9999`; passing

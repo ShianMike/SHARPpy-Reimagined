@@ -10,6 +10,8 @@ mod map_geometry;
 pub mod parcels;
 pub mod parsing;
 pub mod quality_control;
+pub mod radar_sampling;
+mod radar_sampling_bindings;
 pub mod records;
 mod report_bindings;
 mod surface_bindings;
@@ -795,6 +797,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     map_geometry::register(module)?;
     report_bindings::register(module)?;
     surface_bindings::register(module)?;
+    radar_sampling_bindings::register(module)?;
     wind_grid_bindings::register(module)?;
     module.add_function(wrap_pyfunction!(py_wind_to_components, module)?)?;
     module.add_function(wrap_pyfunction!(py_components_to_wind, module)?)?;

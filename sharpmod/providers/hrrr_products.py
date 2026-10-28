@@ -151,6 +151,7 @@ F_USHR06 = _sfc("ushr06", "VUCSH", "0-6000 m above ground")
 F_VSHR06 = _sfc("vshr06", "VVCSH", "0-6000 m above ground")
 F_LCL = _sfc("lcl", "HGT", "level of adiabatic condensation from sfc")
 F_UH03 = _sfc("uh03", "MXUPHL", "3000-0 m above ground", forecast="max fcst")
+F_UH25 = _sfc("uh25", "MXUPHL", "5000-2000 m above ground", forecast="max fcst")
 F_SFC_HGT = _sfc("sfchgt", "HGT", "surface")
 F_APCP = _sfc("apcp", "APCP", "surface", forecast="0-* acc fcst")
 F_CFRZR = _sfc("cfrzr", "CFRZR", "surface")
@@ -159,7 +160,6 @@ F_CICEP = _sfc("cicep", "CICEP", "surface")
 F_EFHL = _sfc("efhl", "EFHL", "surface")
 F_GUST = _sfc("gust", "GUST", "surface")
 F_LFTX = _sfc("lftx", "LFTX", "500-1000 mb")
-F_MAXUVV = _sfc("maxuvv", "MAXUVV", "100-1000 mb above ground", forecast="max fcst")
 F_PRATE = _sfc("prate", "PRATE", "surface")
 F_PWAT = _sfc("pwat", "PWAT", "entire atmosphere (considered as a single layer)")
 F_SNOD = _sfc("snod", "SNOD", "surface")
@@ -603,6 +603,11 @@ PALETTE_UPDRAFT_HELICITY = Palette(
     units="m^2/s^2", stepped=True, floor=5.0,
     ticks=(0.0, *range(5, 101, 5), *range(110, 201, 10)),
 )
+PALETTE_UPDRAFT_HELICITY_2_5KM = replace(
+    PALETTE_UPDRAFT_HELICITY,
+    stops=tuple((value * 2, colour) for value, colour in PALETTE_UPDRAFT_HELICITY.stops),
+    floor=10.0, ticks=(0, *range(10, 201, 10), *range(220, 401, 20)),
+)
 
 
 #: Supplied height/wind table, sampled at each 1 kt band.
@@ -749,17 +754,6 @@ PALETTE_LIFTED_INDEX = Palette(
     + ((0, "#ffffff"),),
     units="\u00b0C", display="fixed", stepped=True, ceiling=0,
     ticks=(-20, -18, -14, -10, -8, -6, -4, -2, 0),
-)
-# Updraft RGB table adapted from NOAA-GSL pygraf
-# specs.py/default_specs.yml (MIT; see NOTICE). No Matplotlib runtime dependency.
-PALETTE_MAX_UPDRAFT = Palette(
-    stops=tuple(zip(
-        (0.5, 1, 1.5, 2, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 30, 35, 40),
-        ("#0000c4", "#0000ff", "#0034ff", "#0070ff", "#00acff", "#02e8f4",
-         "#33ffc4", "#63ff94", "#94ff63", "#c4ff33", "#f4f802", "#ffc100",
-         "#ff8900", "#ff5200", "#ff1a00", "#c40000", "#800000"), strict=True)),
-    units="m/s", display="fixed", stepped=True, floor=0.5,
-    ticks=(0.5, 5, 10, 20, 30, 40),
 )
 # Surface wind and gusts: 1 kt colour bands sampled from the supplied knot table.
 PALETTE_SURFACE_WIND = Palette(
@@ -1068,6 +1062,8 @@ class HrrrProduct:
     #: where the key is a slug rather than a name: ``srh-0-3km`` is not how
     #: anybody writes 0-3 km SRH.
     chip: str = ""
+    #: Complete trailing interval of hourly maxima, within the selected run.
+    max_hours: int = 0
 
     @property
     def short_label(self) -> str:
@@ -1333,17 +1329,23 @@ def _build_catalogue() -> tuple[HrrrProduct, ...]:
 
     # -- Explicit Convective ------------------------------------------------ #
     products.append(HrrrProduct(
-        key="uh-0-3km", label="Updraft Helicity: 0-3 km AGL (run max)",
+        key="uh-0-3km", label="Updraft Helicity: 0-3 km AGL (1 h max)",
         chip="0-3 km UH",
         category="Explicit Convective", fields=(F_UH03,),
-        derive=_single("uh03"), palette=PALETTE_UPDRAFT_HELICITY,
+        derive=_single("uh03"), palette=PALETTE_UPDRAFT_HELICITY, max_hours=1,
         description=("Largest 0-3 km updraft helicity the model produced during "
                      "the hour ending at this forecast time.")))
-    products.append(HrrrProduct(
-        key="maxuvv", label="Maximum Updraft Velocity (1 h)", category="Explicit Convective",
-        fields=(F_MAXUVV,), derive=_single("maxuvv"), palette=PALETTE_MAX_UPDRAFT,
-        description="Maximum upward vertical velocity during the hour ending at the selected forecast time.",
-        caveat="Native MAXUVV layer: 100-1000 mb above ground. F000 is the zero-length initial interval."))
+    for hours in (1, 3):
+        products.append(HrrrProduct(
+            key=f"uh-2-5km-{hours}h",
+            label=f"{hours}-hr Maximum Updraft Helicity: 2-5 km AGL",
+            chip=f"2-5km UH {hours}h", category="Explicit Convective",
+            fields=(F_UH25,), derive=_single("uh25"),
+            palette=PALETTE_UPDRAFT_HELICITY_2_5KM, max_hours=hours,
+            description=(f"Maximum 2-5 km AGL updraft helicity over the {hours} hour"
+                         f"{'s' if hours > 1 else ''} ending at the selected forecast time, in m\u00b2/s\u00b2."),
+            caveat=("Uses native hourly MXUPHL maxima from the same run. "
+                    f"Available from F{hours:03d}; a complete interval is required.")))
 
     return tuple(products)
 
@@ -1411,7 +1413,7 @@ def available_products(model: str = "hrrr") -> tuple[HrrrProduct, ...]:
             spec,
             source=source,
             level=("entire atmosphere (considered as a single layer)" if spec.variable == "REFC"
-                   else "100-1000 mb" if spec.variable == "MAXUVV" else spec.level),
+                   else spec.level),
             forecast=("max fcst" if spec.variable == "LTNG" else "* acc fcst"
                       if is_nam and spec.variable == "APCP" else spec.forecast),
         )
@@ -1422,17 +1424,13 @@ def available_products(model: str = "hrrr") -> tuple[HrrrProduct, ...]:
             continue
         if is_hrw and product.key in _HRW_UNSUPPORTED:
             continue
-        if model == "nam" and product.key in {"uh-0-3km", "maxuvv"}:
+        if model == "nam" and product.max_hours:
             continue
         if model.startswith("refs-") and product.key in _REFS_UNSUPPORTED:
             continue
         if product.key == "lftx":
             # NAM/RRFS/HRW encode this index with a Kelvin offset; HRRR does not.
             product = replace(product, derive=_single("lftx", kelvin_to_celsius))
-        if product.key == "maxuvv":
-            product = replace(product, caveat="Native MAXUVV layer: 100-1000 mb. Hourly maxima are published from F001.")
-        if is_hrw and product.key == "uh-0-3km":
-            product = replace(product, label="Updraft Helicity: 0-3 km AGL (1 h max)")
         if (is_nam or is_hrw) and product.key == "shear-0-1km":
             product = replace(
                 product,

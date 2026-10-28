@@ -7,6 +7,29 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Add 1-hour and 3-hour maximum updraft helicity for the 2-5 km AGL layer
+  to HRRR and supporting convection-allowing models, using the supplied
+  0-400 m²/s² colour table. The three-hour field takes the cell-wise maximum
+  of three native hourly maxima from the same run and requires the full interval.
+
+### Changed
+
+- Replace Maximum Updraft Velocity with the requested 1-hour 2-5 km updraft
+  helicity product. Hide hourly maxima before F001 and three-hour maxima before
+  F003; retain the distinct 0-3 km UH layer with an accurate hourly label.
+- Simplify routine pull-request checks: report test categories inside the fast
+  job instead of nine separate jobs, and reserve Python compatibility/property
+  and Rust NumPy/wheel matrices for full validation runs. Retain core tests,
+  coverage, browser checks, static analysis and dependency audits on routine PRs.
+- Build map cell-colour tables with packed RGBA copies, avoiding per-cell byte
+  copies and temporary array views while preserving palette and no-data output.
+- Cache the pinned cargo-audit executable while continuing both lockfile audits
+  with current advisory data.
+- Run staged updater verification with the release Cargo profile, and use the
+  workflow working directory directly for the native-wheel build.
+
 ### Upcoming
 
 - Expand the available weather-model parameters, offering only fields supported

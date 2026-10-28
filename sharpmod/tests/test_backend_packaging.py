@@ -134,6 +134,12 @@ def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
 
     jobs = workflow["jobs"]
     assert "windows-frozen" not in jobs
+    assert "if" not in jobs["rust-checks"]
+    for lane in ("numpy-compat", "wheels"):
+        assert jobs[lane]["if"] == (
+            "${{ github.event_name != 'pull_request' || "
+            "startsWith(github.head_ref, 'release/') }}"
+        )
     rust_steps = "\n".join(
         step.get("run", "") for step in jobs["rust-checks"]["steps"]
     )
@@ -291,6 +297,22 @@ def test_frontend_gate_requires_checks_and_all_browser_shards():
                for step in browser["steps"])
 
 
+def test_desktop_caches_the_pinned_audit_tool_but_always_audits():
+    steps = _load_workflow("frontend.yml")["jobs"]["desktop-bridge"]["steps"]
+    cache = next(step for step in steps if step.get("id") == "cargo-audit")
+    assert cache["with"] == {
+        "path": "~/.cargo/bin/cargo-audit.exe",
+        "key": "cargo-audit-${{ runner.os }}-${{ runner.arch }}-0.22.2",
+    }
+    install = next(step for step in steps if step.get("name") == "Install cargo-audit on cache miss")
+    assert install["if"] == "steps.cargo-audit.outputs.cache-hit != 'true'"
+    assert "cargo install cargo-audit --version 0.22.2 --locked" in install["run"]
+    audit = next(step for step in steps if step.get("name") == "Audit locked desktop and scientific dependencies")
+    assert "if" not in audit and "continue-on-error" not in audit
+    assert "cargo audit --file Cargo.lock" in audit["run"]
+    assert "cargo audit --file ../rust/sharpmod-rs/Cargo.lock" in audit["run"]
+
+
 def test_release_builds_installs_and_requires_locked_cp313_rust_wheel():
     workflow = _load_workflow("release.yml")
     job = workflow["jobs"]["build-windows-exe"]
@@ -329,6 +351,7 @@ def test_release_builds_installs_and_requires_locked_cp313_rust_wheel():
         "Build and install locked Rust wheel"
     )
     script = build["run"]
+    assert build["working-directory"] == "rust/sharpmod-rs"
     assert "maturin build --release --locked" in script
     assert "--interpreter python" in script
     assert "cp313-cp313-win_amd64.whl" in script
@@ -389,6 +412,9 @@ def test_release_workflow_caches_dependencies_without_reusing_the_app():
     assert steps.index(toolchain) < steps.index(cache) < steps.index(build)
     cleanup = "cargo clean --manifest-path ../src-tauri/Cargo.toml --release -p sharppy-reimagined"
     assert build["run"].index(cleanup) < build["run"].index("npm run tauri -- build")
+    updater = by_name["Verify final updater artifacts"]
+    assert updater["working-directory"] == "src-tauri"
+    assert "cargo test --release --locked --test updater_artifacts -- --ignored --nocapture" in updater["run"]
 
 
 def test_release_requires_rust_runtime_reports_and_uploads_wheel():

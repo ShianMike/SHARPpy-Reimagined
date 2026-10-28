@@ -52,8 +52,11 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
     is_global = model in hrrr_products.GLOBAL_MODELS
     is_hrw = model in hrrr_products.HRW_MODELS
     model_label = "ECMWF 9km" if model == "ecmwf-ifs-9km" else "ECMWF" if is_ecmwf else model.upper()
-    if (is_global or is_hrw) and ("run_time" in params or "forecast_hour" in params):
-        run, hour = _request({**params, "product": "tmp-2m"})[-2:]
+    selected = "run_time" in params or "forecast_hour" in params
+    if selected:
+        run, hour = _request({**params, "model": model, "product": "tmp-2m"})[-2:]
+        products = tuple(product for product in products if hour >= product.max_hours)
+    if (is_global or is_hrw) and selected:
         supported, failure = products, None
         try:
             if is_global:

@@ -1,4 +1,21 @@
 {
+  "3.4.2": {
+    "summary": "Track 2-5 km updraft helicity over one or three hours with a shared colour scale.",
+    "highlights": [
+      {
+        "title": "Hourly 2-5 km updraft helicity",
+        "description": "Replace the updraft-velocity entry with 1-hour maximum updraft helicity for the 2-5 km AGL layer on HRRR and other models that publish the hourly field."
+      },
+      {
+        "title": "Three-hour updraft tracks",
+        "description": "View the maximum across three consecutive hourly fields from the same model run. This product starts at forecast hour 3 and requires the complete interval."
+      },
+      {
+        "title": "Matching colours across models",
+        "description": "Both 2-5 km products use the same stepped 0-400 m²/s² scale, making their intensity easier to compare across supported models."
+      }
+    ]
+  },
   "3.4.1": {
     "summary": "SPC outlooks follow the selected forecast time, clear outdated risk areas and refresh every five minutes.",
     "highlights": [

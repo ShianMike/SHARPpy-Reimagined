@@ -71,6 +71,13 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         "default"
     ] == "false"
     jobs = workflow["jobs"]
+    for lane in ("fast", "quality", "windows-wrf"):
+        assert "if" not in jobs[lane]
+    for lane in ("compatibility", "property"):
+        assert jobs[lane]["if"] == (
+            "${{ github.event_name != 'pull_request' || "
+            "startsWith(github.head_ref, 'release/') }}"
+        )
     assert jobs["compatibility"]["strategy"]["matrix"][
         "python-version"
     ] == ["3.11", "3.12"]
@@ -157,7 +164,6 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         for step in job["steps"]
         if ".test-results" in str(step.get("with", {}).get("path", ""))
         and "download-artifact" not in str(step.get("uses", ""))
-        and "fast-junit" not in str(step.get("with", {}).get("name", ""))
     ]
     assert len(timing_uploads) == 6
     assert all(

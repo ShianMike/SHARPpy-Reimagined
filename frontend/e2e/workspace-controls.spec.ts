@@ -115,6 +115,8 @@ test("panel titles open their parameter picker and selected categories stay on o
   await page.goto("/");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await waitForMapDrawn(page);
+  await page.getByRole("button", { name: "Choose forecast hour", exact: true }).click();
+  await page.getByRole("button", { name: "Select forecast hour 3", exact: true }).click();
   await page.getByRole("toolbar", { name: "Map", exact: true }).getByRole("button", { name: "Four synchronized panels" }).click();
   const first = page.getByTestId("panel-chip-1");
   const firstTitle = await first.locator("span").first().textContent();
@@ -162,7 +164,9 @@ test("panel titles open their parameter picker and selected categories stay on o
   }
   await categories.getByRole("button", { name: /^All/u }).click();
   for (const [label, unit] of [
-    ["Updraft Helicity: 0-3 km AGL (run max)", "m²/s²"],
+    ["Updraft Helicity: 0-3 km AGL (1 h max)", "m²/s²"],
+    ["1-hr Maximum Updraft Helicity: 2-5 km AGL", "m²/s²"],
+    ["3-hr Maximum Updraft Helicity: 2-5 km AGL", "m²/s²"],
     ["Significant Tornado Parameter", "Index"],
     ["Effective Storm Relative Helicity", "m²/s²"],
     ["Energy Helicity Index: 0-1 km AGL", "Index"],

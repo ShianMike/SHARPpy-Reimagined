@@ -12,7 +12,7 @@ export function useMapCatalog(): UseQueryResult<MapCatalog> {
   const models = useModelCatalog().data;
   const runChoice = useForecastStore((state) => state.runTime);
   const hourChoice = useForecastStore((state) => state.forecastHour);
-  const dynamic = model === "gfs" || model === "aigfs" || model === "openmeteo-ecmwf-ifs025" || model === "ecmwf-ifs-9km" || model.startsWith("hrw-");
+  const dynamic = model === "hrrr" || model === "rrfs-a" || model.startsWith("refs-") || model === "nam-3km-conus" || model === "gfs" || model === "aigfs" || model === "openmeteo-ecmwf-ifs025" || model === "ecmwf-ifs-9km" || model.startsWith("hrw-");
   const selected = models?.models.find((item) => item.key === model);
   const run = dynamic && selected !== undefined ? resolveModelRun(selected, runChoice) : undefined;
   const limit = run === undefined ? 0 : selected?.maxForecastHours[new Date(run).getUTCHours()] ?? 0;

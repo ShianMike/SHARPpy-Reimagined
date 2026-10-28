@@ -31,6 +31,11 @@ For the v3 React/Tauri interface, follow the
 Use `npm run tauri -- dev` in `frontend/` for the current desktop. The retired
 Qt interface is available in the [v2.0.0 Legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0).
 
+Desktop CI caches the pinned `cargo-audit` executable. Both lockfile audits
+still refresh advisory data and run on every check. Release verification uses
+`cargo test --release --locked --test updater_artifacts -- --ignored --nocapture`
+to use the release build profile while checking the staged installer.
+
 ```powershell
 # Fast deterministic feedback (grouped across four bounded workers).
 python scripts/run_test_lane.py fast --workers 4
@@ -72,14 +77,10 @@ durations have separate baselines because CPU contention changes individual
 test time. Do not raise a budget merely to make a regression pass: reproduce
 the lane, explain the change, and update the checked value in the same review.
 
-The GitHub **Tests** workflow displays a test tree: the fast lane branches into
-data visualization, workspace workflows, scientific calculations, data providers, and
-backends/packaging. Data visualization branches again into charts, maps,
-analysis/animation, and exports/rendering. Each status job reads the Python 3.13
-fast lane's JUnit report and shows a per-module breakdown, failed tests, and
-the five slowest cases. These jobs do not repeat tests; the fast lane remains
-the owner of coverage and timing budgets. If it fails a coverage or timing
-gate, inspect the fast job as well as the category summaries.
+The GitHub **Tests** workflow summarizes all nine test categories inside the
+Python 3.13 fast job, using its JUnit report. The summaries show per-module
+results, failed tests and slow cases without separate reporting jobs. The fast
+job owns coverage and timing budgets as well as these summaries.
 
 For v2.0.0, the local fast baseline was measured at 308.18 seconds with
 4,670 passing tests, one skip, and coverage enabled on Rust; the compatibility
@@ -104,9 +105,12 @@ lane while iterating.
 
 Every test has a 180-second safety timeout by default; the deliberately
 expensive full-property and complete-release lanes raise that guard to 900 seconds
-per test. Pull requests run 3.11/3.12 compatibility smoke, Python 3.13
-deterministic coverage, and full Python 3.13 properties on both Rust and the
-Python fallback. Official releases run every offline test against the exact
+per test. Routine pull requests run Python 3.13 deterministic coverage, Windows
+WRF tests, static checks, frontend/browser tests and desktop/Rust source checks.
+Python 3.11/3.12 compatibility and full properties run after merge, on the
+schedule, on manual/reusable runs and on `release/*` PRs. Rust NumPy and wheel
+matrices run on `release/*` PRs and manual runs. Official releases run every
+offline test against the exact
 immutable commit that is packaged, across four workers with Qt tests grouped on
 one worker. This checks all tests without checking whole-suite interactions in a
 single process. A weekly scheduled

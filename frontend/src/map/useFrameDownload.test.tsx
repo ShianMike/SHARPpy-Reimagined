@@ -32,7 +32,7 @@ function setup() {
   useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T12:00:00Z", forecastHour: 1, playing: true });
   const queryClient = createQueryClient();
   queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
-  queryClient.setQueryData(mapKeys.catalog("hrrr"), parseMapCatalog(catalog));
+  queryClient.setQueryData(mapKeys.catalog("hrrr", "2026-10-04T12:00:00Z", 1), parseMapCatalog(catalog));
   const client = new BackendClient({ call: () => new Promise(() => undefined), listen: () => Promise.resolve(() => undefined) });
   const storedFields = new Set<number>(), storedWinds = new Set<number>();
   const fields = vi.spyOn(client, "getWeatherField").mockImplementation((_product, _run, hour) => { storedFields.add(hour); return Promise.resolve(frame); });

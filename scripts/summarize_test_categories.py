@@ -2,7 +2,7 @@
 """Show independently checked test areas from a completed pytest run.
 
 The fast lane remains the sole owner of these tests and of coverage/timing
-budgets. This script turns its JUnit report into focused GitHub Actions jobs
+budgets. This script turns its JUnit report into inline GitHub Actions summaries
 without rerunning Qt tests or changing pytest's fixture/process behavior.
 """
 
@@ -35,7 +35,7 @@ CHILDREN = {
 
 
 def descendants(group: str) -> set[str]:
-    """Return leaf groups belonging to a branch of the Actions test tree."""
+    """Return leaf groups belonging to a summary category."""
 
     children = CHILDREN.get(group)
     return {group} if children is None else set().union(*(descendants(child) for child in children))

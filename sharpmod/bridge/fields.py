@@ -68,6 +68,8 @@ def _request(params: dict[str, Any]):
     if run.minute or run.second or run.microsecond:
         raise p.invalid("run_time must be on a whole hour")
     hour = p.integer(params, "forecast_hour", 0, 384)
+    if hour < product.max_hours:
+        raise BridgeError("FIELD_UNAVAILABLE", f"{product.label} starts at F{product.max_hours:03d}.", False)
     if model != "hrrr" and run.hour % 6:
         raise BridgeError("FIELD_UNAVAILABLE", f"{model} publishes 00, 06, 12 and 18Z runs.", False)
     if model in hrrr_products.HRW_MODELS and run.hour not in (0, 12):

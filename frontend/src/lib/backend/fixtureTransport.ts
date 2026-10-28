@@ -96,7 +96,6 @@ const catalogPythonNotFound = {
   ...pythonNotFound,
   context: { operation: "get_station_catalog", provider: "python-bridge", resource: "bundled UWyo station catalogue" },
 };
-
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -259,7 +258,8 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
     },
     get_map_catalog: (args) => {
       const catalog = copy((modelMapCatalogs as Readonly<Record<string, unknown>>)[String(args?.model)] ?? mapCatalog) as typeof mapCatalog;
-      if (String(args?.model).startsWith("hrw-") && args?.forecastHour === 0) catalog.products = catalog.products.filter((product) => product.key !== "uh-0-3km" && product.key !== "maxuvv");
+      const hour = Number(args?.forecastHour ?? Infinity);
+      catalog.products = catalog.products.filter(({ key }) => (!["uh-0-3km", "uh-2-5km-1h"].includes(key) || hour >= 1) && (key !== "uh-2-5km-3h" || hour >= 3));
       return Promise.resolve(catalog);
     },
     get_weather_field: (args) => (scenario === "field-error" ? rejectWith(fieldUnavailable) : fieldFor(args)),

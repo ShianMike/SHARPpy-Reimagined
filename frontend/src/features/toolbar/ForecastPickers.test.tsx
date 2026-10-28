@@ -28,6 +28,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 it("keeps Winter Weather last and separates the description into a second glass card", async () => {
+  useForecastStore.getState().setHour(3);
   renderWithBackend(<ForecastControls />, createTransport("field-error"));
   const trigger = screen.getByRole<HTMLButtonElement>("button", { name: "Choose parameter" });
   await waitFor(() => { expect(trigger.disabled).toBe(false); });
@@ -156,6 +157,7 @@ const exponentProducts = parseMapCatalog(mapCatalog).products.filter((product) =
 it.each(["tmp-2m", "rh-2m", "ltng", ...exponentProducts.map((product) => product.key)])("filters %s, previews keyboard-focused descriptions, and changes only the active panel", async (key) => {
   const product = parseMapCatalog(mapCatalog).products.find((item) => item.key === key);
   if (product === undefined) throw new Error("Missing parameter fixture");
+  useForecastStore.getState().setHour(3);
   useMapStore.setState({ panelLayout: 2, activePanel: 1 });
   const firstPanel = panelProduct(useMapStore.getState(), 0);
   renderWithBackend(<ForecastControls />, createTransport("field-error"));

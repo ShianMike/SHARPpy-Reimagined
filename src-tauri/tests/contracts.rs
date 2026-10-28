@@ -414,13 +414,13 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
         assert_eq!(
             catalog.products.len(),
             if model.starts_with("refs-") {
-                22
+                23
             } else if model == "nam-3km-conus" {
-                36
+                37
             } else if model == "nam" {
                 34
             } else if model.starts_with("hrw-") {
-                28
+                29
             } else if model == "gfs"
                 || model == "ecmwf-ifs-9km"
                 || model == "openmeteo-ecmwf-ifs025"
@@ -429,7 +429,7 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
             } else if model == "aigfs" {
                 9
             } else {
-                38
+                39
             }
         );
         assert_eq!(

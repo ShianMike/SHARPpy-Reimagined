@@ -21,7 +21,7 @@ def test_cancelled_field_opener_does_not_start_a_connection(monkeypatch):
 def test_failed_range_stops_siblings_and_preserves_the_provider_error(monkeypatch):
     specs = tuple(FieldSpec(f"t{i}", "prs", "TMP", f"{300 + i} mb") for i in range(8))
     rows = tuple(fields.InventoryRow(i + 1, i * 1048576, 16, "TMP", spec.level, "1 hour fcst") for i, spec in enumerate(specs))
-    product = SimpleNamespace(key="test", all_fields=specs)
+    product = SimpleNamespace(key="test", all_fields=specs, max_hours=0)
     monkeypatch.setattr(fields, "fetch_inventory", lambda *_args, **_kwargs: rows)
     monkeypatch.setattr(fields, "_load_eccodes", lambda: object())
     monkeypatch.setattr(fields, "_RANGE_WORKERS", 2)

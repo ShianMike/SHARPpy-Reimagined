@@ -55,15 +55,14 @@ export function buildLut(palette: Palette): Uint8Array {
 
 /** One packed RGBA colour per possible cell value of a frame; 0 is transparent. */
 export function cellColours(frame: Pick<FieldFrame, "scale" | "offset" | "nodata">, palette: Palette): Uint32Array {
-  const lut = palette.stepped ? null : buildLut(palette);
-  const colours = palette.stops.map(([, colour]) => [...hexChannels(colour), 255]);
+  // Matching Uint32 views preserve RGBA byte order on either endianness.
+  const lut = palette.stepped ? null : new Uint32Array(buildLut(palette).buffer);
+  const colours = new Uint32Array(Uint8Array.from(palette.stops.flatMap(([, colour]) => [...hexChannels(colour), 255])).buffer);
   const { low, high } = paletteRange(palette);
   const span = high > low ? high - low : 1;
   const floor = palette.floor ?? low;
   const ceiling = palette.ceiling ?? Number.POSITIVE_INFINITY;
   const table = new Uint32Array(CELL_VALUES);
-  // Written byte by byte through a view, so the packing never depends on endianness.
-  const bytes = new Uint8Array(table.buffer);
   let band = 0;
   for (let cell = 0; cell < CELL_VALUES; cell += 1) {
     const value = cell * frame.scale + frame.offset;
@@ -72,10 +71,10 @@ export function cellColours(frame: Pick<FieldFrame, "scale" | "offset" | "nodata
     }
     if (lut === null) {
       while (band + 1 < palette.stops.length && (palette.stops[band + 1]?.[0] ?? Infinity) <= value) band += 1;
-      bytes.set(colours[band] ?? [], cell * 4);
+      table[cell] = colours[band] ?? 0;
     } else {
-      const slot = Math.trunc(Math.min(1, Math.max(0, (value - low) / span)) * (LUT_SIZE - 1)) * 4;
-      bytes.set(lut.subarray(slot, slot + 4), cell * 4);
+      const slot = Math.trunc(Math.min(1, Math.max(0, (value - low) / span)) * (LUT_SIZE - 1));
+      table[cell] = lut[slot] ?? 0;
     }
   }
   return table;

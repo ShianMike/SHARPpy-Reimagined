@@ -41,6 +41,9 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
             return _api._default_opener(url, timeout, limit, byte_range, should_cancel=stopped)
     if product.key == "apcp" and fxx == 0:
         return {"apcp": np.zeros(_api.field_grid(model).shape, dtype=np.float32)}
+    if fxx < product.max_hours:
+        raise _api.HrrrFieldUnavailable(
+            f"{product.label} needs {product.max_hours} complete forecast hours")
     eccodes = _api._load_eccodes()
     decoded: dict[str, np.ndarray] = {}
     nam_total = model in {"nam", "nam-3km-conus"} and product.key == "apcp"
@@ -49,12 +52,18 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     # rather than one file's requests waiting on the other's.
     jobs: list[tuple[str, int, int, tuple[_api.InventoryRow, ...], dict[_api.InventoryRow, str]]] = []
     # NAM products reset their accumulated totals; sum disjoint three-hour intervals.
-    sources = (tuple((SOURCE_SURFACE, hour) for hour in (*range(3, fxx, 3), fxx))
-               if nam_total else ((SOURCE_SURFACE, fxx), (SOURCE_PRESSURE, fxx)))
+    if nam_total:
+        sources = tuple((SOURCE_SURFACE, hour) for hour in (*range(3, fxx, 3), fxx))
+    elif product.max_hours:
+        sources = tuple((SOURCE_SURFACE, hour) for hour in range(fxx - product.max_hours + 1, fxx + 1))
+    else:
+        sources = ((SOURCE_SURFACE, fxx), (SOURCE_PRESSURE, fxx))
     for source, hour in sources:
         specs = [spec for spec in product.all_fields if spec.source == source]
         if nam_total:
             specs = [replace(spec, forecast=f"{(hour - 1) // 3 * 3}-{hour} hour acc fcst") for spec in specs]
+        if product.max_hours:
+            specs = [replace(spec, forecast=f"{hour - 1}-{hour} hour max fcst") for spec in specs]
         if not specs:
             continue
         if should_cancel and should_cancel():
@@ -131,6 +140,8 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
                                          field_index=row.field_index, model=model)
             if nam_total and name in decoded:
                 decoded[name] += values
+            elif product.max_hours and name in decoded:
+                np.maximum(decoded[name], values, out=decoded[name])
             else:
                 decoded[name] = values
 

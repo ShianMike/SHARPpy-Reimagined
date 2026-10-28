@@ -184,7 +184,7 @@ def test_model_catalogues_reuse_scales_and_only_offer_published_products(model):
 
     catalog = fields.catalog({"model": model})
     assert catalog["field_model"] == model
-    assert len(catalog["products"]) == (22 if model.startswith("refs-") else 36 if model == "nam-3km-conus" else 38)
+    assert len(catalog["products"]) == (23 if model.startswith("refs-") else 37 if model == "nam-3km-conus" else 39)
     assert any(item["key"] == "ltng" for item in catalog["products"]) == (model != "nam-3km-conus")
     if model == "nam-3km-conus":
         with pytest.raises(BridgeError, match="not a nam-3km-conus field product"):

@@ -8,7 +8,6 @@ never converts a missing wind or dewpoint into zero.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -19,7 +18,6 @@ from pathlib import Path
 import tempfile
 from types import MappingProxyType
 from typing import Mapping
-from urllib.parse import urlencode
 
 from sharpmod.maps.map_overlays import OverlayShape, build_layer
 
@@ -68,64 +66,6 @@ def _finite(value) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
-
-
-def _cancelled(cancel) -> bool:
-    if cancel is None:
-        return False
-    if callable(cancel):
-        return bool(cancel())
-    checker = getattr(cancel, "is_set", None)
-    return bool(checker()) if callable(checker) else bool(cancel)
-
-
-def _distance_km(lat1, lon1, lat2, lon2) -> float:
-    radius = 6371.0088
-    p1 = math.radians(lat1)
-    p2 = math.radians(lat2)
-    dlat = p2 - p1
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2.0) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(
-        dlon / 2.0
-    ) ** 2
-    return 2.0 * radius * math.asin(min(1.0, math.sqrt(a)))
-
-
-def _quantity(value, target: str) -> float | None:
-    """Convert an NWS ``QuantitativeValue`` to the requested display unit."""
-
-    if not isinstance(value, Mapping):
-        return None
-    number = _finite(value.get("value"))
-    if number is None:
-        return None
-    unit = str(value.get("unitCode") or "").rsplit(":", 1)[-1]
-    unit = unit.replace("_", "").lower()
-    if target == "degC":
-        if "degc" in unit or unit in {"c", "celsius"}:
-            return number
-        if "degf" in unit or unit in {"f", "fahrenheit"}:
-            return (number - 32.0) * 5.0 / 9.0
-        if unit in {"k", "kelvin"}:
-            return number - 273.15
-    elif target == "kt":
-        if "m/s" in unit or "ms-1" in unit or "ms-1" in unit.replace("^", ""):
-            return number * 1.9438444924406
-        if "kmh-1" in unit or "km/h" in unit:
-            return number * 0.539956803
-        if "kt" in unit or "knot" in unit:
-            return number
-        if "mih-1" in unit or "mph" in unit:
-            return number * 0.868976242
-    elif target == "deg":
-        if "degree" in unit or unit in {"deg", "degree(angle)"}:
-            return number % 360.0
-    elif target == "m":
-        if unit in {"m", "meter", "metre"}:
-            return number
-        if "ft" in unit or "foot" in unit:
-            return number * 0.3048
-    return None
 
 
 @dataclass(frozen=True)
@@ -374,132 +314,28 @@ class SurfaceObservationSet:
 
 
 def parse_stations(payload: Mapping[str, object]) -> tuple[SurfaceStation, ...]:
-    stations = []
-    for feature in payload.get("features", ()) if isinstance(payload, Mapping) else ():
-        if not isinstance(feature, Mapping):
-            continue
-        geometry = feature.get("geometry")
-        properties = feature.get("properties")
-        if not isinstance(geometry, Mapping) or not isinstance(properties, Mapping):
-            continue
-        coordinates = geometry.get("coordinates")
-        if not isinstance(coordinates, (list, tuple)) or len(coordinates) < 2:
-            continue
-        station_id = properties.get("stationIdentifier")
-        if not station_id:
-            continue
-        elevation = _quantity(properties.get("elevation"), "m")
-        try:
-            stations.append(
-                SurfaceStation(
-                    str(station_id),
-                    str(properties.get("name") or station_id),
-                    float(coordinates[1]),
-                    float(coordinates[0]),
-                    elevation,
-                    str(feature.get("id") or ""),
-                )
-            )
-        except (SurfaceObservationError, TypeError, ValueError):
-            continue
-    return tuple(stations)
+    """Use the native NWS station parser, retaining the public station objects."""
+    import sharpmod_rs
+
+    return tuple(sharpmod_rs.parse_surface_stations(payload))
 
 
 def parse_observations(
     payload: Mapping[str, object], station: SurfaceStation
 ) -> tuple[SurfaceObservation, ...]:
-    observations = []
-    for feature in payload.get("features", ()) if isinstance(payload, Mapping) else ():
-        if not isinstance(feature, Mapping):
-            continue
-        properties = feature.get("properties")
-        if not isinstance(properties, Mapping):
-            continue
-        try:
-            when = _utc(properties.get("timestamp"))
-        except SurfaceObservationError:
-            continue
-        if when is None:
-            continue
-        observations.append(
-            SurfaceObservation(
-                station,
-                when,
-                _quantity(properties.get("temperature"), "degC"),
-                _quantity(properties.get("dewpoint"), "degC"),
-                _quantity(properties.get("windDirection"), "deg"),
-                _quantity(properties.get("windSpeed"), "kt"),
-                _quantity(properties.get("windGust"), "kt"),
-                str(properties.get("textDescription") or ""),
-                str(feature.get("id") or ""),
-            )
-        )
-    return tuple(sorted(observations, key=lambda item: item.observed_at))
+    """Use native row parsing and unit conversion with the existing objects."""
+    import sharpmod_rs
+
+    return tuple(sharpmod_rs.parse_surface_observations(payload, station))
 
 
 def select_observation(observations, when, *, tolerance=DEFAULT_TOLERANCE):
-    requested = _utc(when)
-    values = tuple(observations)
-    if requested is None or not values:
-        return None
-    selected = min(
-        values,
-        key=lambda item: (
-            abs((item.observed_at - requested).total_seconds()),
-            item.observed_at,
-        ),
+    """Use native nearest-time matching, including the older-on-ties rule."""
+    import sharpmod_rs
+
+    return sharpmod_rs.select_surface_observation(
+        tuple(observations), _utc(when), tolerance.total_seconds()
     )
-    return (
-        selected
-        if abs(selected.observed_at - requested) <= tolerance
-        else None
-    )
-
-
-def _response_json(response) -> Mapping[str, object]:
-    if isinstance(response, Mapping):
-        return response
-    raise_for_status = getattr(response, "raise_for_status", None)
-    if callable(raise_for_status):
-        raise_for_status()
-    if isinstance(response, (bytes, bytearray)):
-        raw = bytes(response)
-    else:
-        raw = getattr(response, "content", None)
-        if raw is None:
-            reader = getattr(response, "read", None)
-            raw = reader() if callable(reader) else None
-    if raw is not None:
-        raw = bytes(raw)
-        if len(raw) > MAX_RESPONSE_BYTES:
-            raise SurfaceObservationError("NWS API response exceeds the safety limit")
-        try:
-            value = json.loads(raw.decode("utf-8"))
-        except (UnicodeError, json.JSONDecodeError) as exc:
-            raise SurfaceObservationError(f"NWS API returned invalid JSON: {exc}") from exc
-    else:
-        decoder = getattr(response, "json", None)
-        value = decoder() if callable(decoder) else None
-    if not isinstance(value, Mapping):
-        raise SurfaceObservationError("NWS API response root is not an object")
-    return value
-
-
-def _open_json(url: str, *, timeout: float, opener=None):
-    if opener is None:
-        import requests
-
-        response = requests.get(
-            url,
-            headers={"User-Agent": "SHARPpy-Reimagined/1.2"},
-            timeout=timeout,
-        )
-    else:
-        try:
-            response = opener(url, timeout=timeout)
-        except TypeError:
-            response = opener(url)
-    return _response_json(response)
 
 
 def fetch_surface_observations(
@@ -514,106 +350,15 @@ def fetch_surface_observations(
     opener=None,
     cancel=None,
 ) -> SurfaceObservationSet:
-    """Fetch nearby stations and match each to the explicit requested time."""
+    """Native NWS discovery, bounded downloads, parsing and time matching."""
+    import sharpmod_rs
 
-    lat = _finite(latitude)
-    lon = _finite(longitude)
-    requested = _utc(when)
+    lat, lon, requested = _finite(latitude), _finite(longitude), _utc(when)
     if lat is None or lon is None or requested is None:
         raise SurfaceObservationError("surface context needs a location and UTC time")
-    if not -90.0 <= lat <= 90.0 or not -180.0 <= lon <= 180.0:
-        raise SurfaceObservationError("surface context location is out of range")
-    if _cancelled(cancel):
-        raise SurfaceObservationCancelled("surface-observation request cancelled")
-    point_url = f"{NWS_API}/points/{lat:.4f},{lon:.4f}"
-    point = _open_json(point_url, timeout=timeout, opener=opener)
-    properties = point.get("properties")
-    stations_url = (
-        properties.get("observationStations")
-        if isinstance(properties, Mapping)
-        else None
-    )
-    if not isinstance(stations_url, str) or not stations_url.startswith(NWS_API):
-        raise SurfaceObservationError(
-            "NWS does not publish an observation-station collection for this point"
-        )
-    station_payload = _open_json(stations_url, timeout=timeout, opener=opener)
-    discovered = parse_stations(station_payload)
-    ordered = sorted(
-        discovered,
-        key=lambda item: _distance_km(
-            lat, lon, item.latitude, item.longitude
-        ),
-    )[: min(MAX_STATIONS, max(1, int(max_stations)))]
-    start = requested - tolerance
-    end = requested + tolerance
-    query = urlencode({"start": _iso(start), "end": _iso(end), "limit": 50})
-
-    def load(station):
-        if _cancelled(cancel):
-            raise SurfaceObservationCancelled(
-                "surface-observation request cancelled"
-            )
-        url = f"{NWS_API}/stations/{station.station_id}/observations?{query}"
-        payload = _open_json(url, timeout=timeout, opener=opener)
-        return station, select_observation(
-            parse_observations(payload, station), requested, tolerance=tolerance
-        )
-
-    matched = []
-    unmatched = []
-    failed_ids = []
-    failures = []
-    with ThreadPoolExecutor(max_workers=max(1, min(MAX_WORKERS, int(workers)))) as pool:
-        futures = {pool.submit(load, station): station for station in ordered}
-        for future in as_completed(futures):
-            station = futures[future]
-            if _cancelled(cancel):
-                for pending in futures:
-                    pending.cancel()
-                raise SurfaceObservationCancelled(
-                    "surface-observation request cancelled"
-                )
-            try:
-                _station, observation = future.result()
-            except SurfaceObservationCancelled:
-                raise
-            except Exception as exc:  # one station does not blank all neighbours
-                failures.append(f"{station.station_id}: {exc}")
-                unmatched.append(station.station_id)
-                failed_ids.append(station.station_id)
-                continue
-            if observation is None:
-                unmatched.append(station.station_id)
-            else:
-                matched.append(observation)
-    matched.sort(
-        key=lambda item: _distance_km(
-            lat,
-            lon,
-            item.station.latitude,
-            item.station.longitude,
-        )
-    )
-    if ordered and len(failed_ids) == len(ordered):
-        raise SurfaceObservationError(
-            "nearby surface observations were unavailable: " + failures[0]
-        )
-    unmatched_set = set(unmatched)
-    failed_set = set(failed_ids)
-    ordered_ids = tuple(station.station_id for station in ordered)
-    return SurfaceObservationSet(
-        requested,
-        lat,
-        lon,
-        tuple(matched),
-        len(discovered),
-        tuple(station_id for station_id in ordered_ids if station_id in unmatched_set),
-        datetime.now(timezone.utc),
-        stations_url,
-        ordered_ids,
-        tuple(discovered),
-        tuple(station_id for station_id in ordered_ids if station_id in failed_set),
+    return sharpmod_rs.fetch_surface_observations(
+        lat, lon, requested, tolerance.total_seconds(), int(max_stations),
+        int(workers), timeout, opener, cancel,
     )
 
 

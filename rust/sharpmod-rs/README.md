@@ -13,10 +13,13 @@ optimized Python implementation remains the portable fallback.
 
 The shared `../weather-core` crate owns velocity directory fetching, radar site
 data, NWS warning/watch downloads and polygon processing, and IEM storm-report
-downloads and CSV parsing. Native map modules extract/project contour segments
+downloads and CSV parsing. It also owns NWS surface-station discovery, concurrent
+observation fetching, unit conversion, parsing and time matching. Native map modules extract/project contour segments
 and sample, rotate and pack wind barbs. Their Python adapters wire the existing
 calls to Rust; the replaced Python implementations are removed. Storm-report
 objects, filtering and memory/disk caching keep their existing Python owner.
+Surface station/report objects, presentation and exports also retain their
+existing interfaces; only selected observations are restored after a native fetch.
 
 The SHARPpy widget stack, renderer and model-retrieval orchestration remain in
 Python. The native workspace kernels own their small

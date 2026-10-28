@@ -12,6 +12,7 @@ pub mod parsing;
 pub mod quality_control;
 pub mod records;
 mod report_bindings;
+mod surface_bindings;
 mod weather;
 pub mod wind;
 pub mod wind_grid;
@@ -793,6 +794,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     weather::register(module)?;
     map_geometry::register(module)?;
     report_bindings::register(module)?;
+    surface_bindings::register(module)?;
     wind_grid_bindings::register(module)?;
     module.add_function(wrap_pyfunction!(py_wind_to_components, module)?)?;
     module.add_function(wrap_pyfunction!(py_components_to_wind, module)?)?;

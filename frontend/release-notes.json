@@ -20,7 +20,7 @@
       },
       {
         "title": "More responsive live overlays",
-        "description": "Load independent warning sources together and parse storm reports with less processing time. Preserve official colours, precise boundaries, report units and cached history; incomplete warning updates remain distinct from an all-clear."
+        "description": "Load independent warning sources together and process storm reports and nearby surface observations with less overhead. Preserve official colours, report units, actual observation times and missing-wind states; incomplete updates remain distinct from an all-clear or a calm observation."
       },
       {
         "title": "Faster forecast overlays",

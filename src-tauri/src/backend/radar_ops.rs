@@ -2,13 +2,42 @@
 
 use crate::backend::router::Router;
 use crate::backend::sounding_ops::{invalid, rejected};
+use crate::dto::map::RadarSiteCatalogPublic;
 use crate::dto::radar::RadarTilts;
 use crate::dto::weather_alerts::alert_time;
 use crate::error::{BackendError, ErrorCode, ErrorContext, PYTHON_PROVIDER};
 use serde_json::json;
+use std::sync::{Arc, PoisonError};
 use std::time::Duration;
 
 impl Router {
+    /// The bundled WSR-88D catalogue backing the single-site picker.
+    pub async fn radar_sites(&self) -> Result<Arc<RadarSiteCatalogPublic>, BackendError> {
+        if let Some(sites) = self
+            .radar_sites
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+        {
+            return Ok(sites);
+        }
+        let catalog = Arc::new(RadarSiteCatalogPublic {
+            sites: sharpmod_weather::radar_sites::sites()
+                .iter()
+                .map(|site| crate::dto::radar::RadarSite {
+                    id: site.id.clone(),
+                    latitude: site.lat,
+                    longitude: site.lon,
+                })
+                .collect(),
+        });
+        *self
+            .radar_sites
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&catalog));
+        Ok(catalog)
+    }
+
     pub async fn radar_tilts(
         &self,
         site: &str,

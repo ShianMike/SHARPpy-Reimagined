@@ -15,8 +15,8 @@
         "description": "Both 2-5 km products use the same stepped 0-400 m²/s² scale, making their intensity easier to compare across supported models."
       },
       {
-        "title": "Independent velocity tilt checks",
-        "description": "Velocity tilt availability loads separately from the scientific backend's data requests. Recent scan listings are reused, and connection problems remain distinct from missing scans."
+        "title": "Faster radar checks and display",
+        "description": "Radar images take less processing time to display, keeping their original colours, missing sectors and hover values. Velocity tilt checks load separately and reuse recent scan listings; connection problems remain distinct from missing scans."
       },
       {
         "title": "More responsive live overlays",

@@ -439,26 +439,23 @@ def render_radials(
     values=None, folded=None, lower_bounds=None,
 ):
     """Shared lossless polar renderer; distances and gate edges are in metres."""
+    import sharpmod_rs
+
     order = np.argsort(starts)
     starts, ends, raw = starts[order], ends[order], raw[order]
     with _PROJECTION_LOCK:
         bearings, ranges = _projection(lat, lon, tuple(bounds), pixels)
-    output = np.zeros((pixels, pixels), dtype=np.uint8)
-    # Keep temporary coordinate arrays to 64 rows even for native-resolution scans.
-    for first in range(0, pixels, 64):
-        rows = np.arange(first, min(first + 64, pixels))
-        azimuth = bearings[first : first + len(rows)] % 360
-        distance = ranges[first : first + len(rows)]
-        radial = (np.searchsorted(starts, azimuth, side="right") - 1) % len(starts)
-        gate = np.floor((distance - gate_start) / gate_width).astype(int)
-        covered = (
-            ((azimuth - starts[radial]) % 360 < (ends[radial] - starts[radial]) % 360)
-            & (gate >= 0)
-            & (gate < raw.shape[1])
+    try:
+        output = sharpmod_rs.sample_radar_radials(
+            np.ascontiguousarray(raw, dtype=np.uint8),
+            np.ascontiguousarray(starts, dtype=np.float64),
+            np.ascontiguousarray(ends, dtype=np.float64),
+            np.ascontiguousarray(bearings, dtype=np.float32),
+            np.ascontiguousarray(ranges, dtype=np.float32),
+            float(gate_width), float(gate_start),
         )
-        output[first : first + len(rows)] = np.where(
-            covered, raw[radial, np.clip(gate, 0, raw.shape[1] - 1)], 0
-        )
+    except ValueError as error:
+        raise RadarSiteError(str(error)) from None
     out = io.BytesIO()
     # Native gates have only 256 codes; a palette preserves every RGBA value losslessly.
     image = Image.fromarray(output)

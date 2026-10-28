@@ -57,6 +57,7 @@ REQUIRED_RUST_CAPABILITIES = (
     "parse_surface_observations",
     "select_surface_observation",
     "fetch_surface_observations",
+    "sample_radar_radials",
 )
 
 

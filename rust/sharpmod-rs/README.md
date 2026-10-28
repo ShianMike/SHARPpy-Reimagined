@@ -18,8 +18,10 @@ observation fetching, unit conversion, parsing and time matching. Native map mod
 and sample, rotate and pack wind barbs. Their Python adapters wire the existing
 calls to Rust; the replaced Python implementations are removed. Storm-report
 objects, filtering and memory/disk caching keep their existing Python owner.
-Surface station/report objects, presentation and exports also retain their
+Surface station/observation objects, presentation and exports also retain their
 existing interfaces; only selected observations are restored after a native fetch.
+The radar sampler processes the shared Level II/III radial-to-pixel loop in
+Rust, retaining WGS84 projection, native gate codes, palettes and PNG calibration.
 
 The SHARPpy widget stack, renderer and model-retrieval orchestration remain in
 Python. The native workspace kernels own their small

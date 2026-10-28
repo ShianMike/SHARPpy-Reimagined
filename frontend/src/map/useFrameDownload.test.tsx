@@ -91,6 +91,41 @@ it("downloads every hour and winds once across four matching panels, keeps the s
   } finally { hook.unmount(); queryClient.clear(); }
 });
 
+it("downloads only complete intervals for mixed 1-hour and 3-hour products, including during a catalogue refresh", async () => {
+  const { queryClient, client, fields, winds, saved, storedFields, wrapper } = setup();
+  const run = "2026-10-04T12:00:00Z", eligible = [3, 4, 5];
+  const parsed = parseModelCatalog(models), available = parseMapCatalog(catalog);
+  queryClient.setQueryData(QUERY_KEYS.models, { ...parsed, models: parsed.models.map((model) => model.key === "hrrr" ? { ...model, forecastHours: [0, 1, 2, 3, 4, 5] } : model) });
+  queryClient.setQueryData(mapKeys.catalog("hrrr", run, 3), available);
+  useForecastStore.setState({ forecastHour: 3 });
+  useMapStore.setState({ productKey: "tmp-2m", panels: ["uh-2-5km-1h", "uh-2-5km-3h", "tmp-2m"].map((productKey) => ({ productKey, layers: useMapStore.getState().layers })) });
+  saved.mockImplementation((_model, _products, _run, hours) => Promise.resolve(hours.filter((hour) => storedFields.has(hour))));
+  let finishFrame!: () => void;
+  fields.mockImplementationOnce((_product, _run, hour) => new Promise((resolve) => { finishFrame = () => { storedFields.add(hour); resolve(frame); }; }));
+  let finishCatalog!: (value: typeof available) => void;
+  vi.spyOn(client, "getMapCatalog").mockImplementation(() => new Promise((resolve) => { finishCatalog = resolve; }));
+  const hook = renderHook(useFrameDownload, { wrapper });
+  try {
+    expect(hook.result.current.total).toBe(3);
+    expect(hook.result.current.missing).toEqual(eligible);
+    act(() => { hook.result.current.toggle(); });
+    await waitFor(() => { expect(fields).toHaveBeenCalledTimes(9); });
+    act(() => { useForecastStore.getState().setHour(4); });
+    await waitFor(() => { expect(finishCatalog).toBeDefined(); });
+    expect(hook.result.current).toMatchObject({ total: 3, running: true });
+    act(() => { hook.result.current.refresh(); finishFrame(); });
+    await waitFor(() => { expect(hook.result.current.complete).toBe(true); });
+    expect(saved).toHaveBeenLastCalledWith("hrrr", ["tmp-2m", "uh-2-5km-1h", "uh-2-5km-3h"], run, eligible);
+    expect([...new Set(fields.mock.calls.map((call) => call[2]))]).toEqual(eligible);
+    expect(winds).not.toHaveBeenCalled();
+    expect(hook.result.current).toMatchObject({ total: 3, loaded: 3, cached: 3, ready: 3, missing: [], running: false });
+    expect(hook.result.current.hourStates).toEqual([0, 1, 2, 3, 4, 5].map((hour) => ({ hour, state: hour < 3 ? "missing" : "cached" })));
+    await act(async () => { await hook.result.current.retryHour(0); });
+    expect(fields).toHaveBeenCalledTimes(9);
+    act(() => { finishCatalog(available); });
+  } finally { hook.unmount(); queryClient.clear(); }
+});
+
 it("keeps saved hours separate from memory readiness after eviction and reconciles a clear", async () => {
   const { queryClient, wrapper, saved } = setup();
   const hook = renderHook(useFrameDownload, { wrapper });

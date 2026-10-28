@@ -36,14 +36,30 @@ describe("map contracts", () => {
     }
   });
 
-  it("parses the exported JSON fixtures without changing them", () => {
-    expect(parseMapCatalog(catalog)).toEqual(catalog);
+  it("parses the exported JSON fixtures and defaults omitted product start hours", () => {
+    expect(parseMapCatalog(catalog)).toEqual({ ...catalog, products: catalog.products.map((product) => ({ ...product, minimumForecastHour: product.minimumForecastHour ?? 0 })) });
     for (const outlook of [outlookCat, outlookTorn, outlookWind]) {
       expect(parseSpcOutlook(outlook)).toEqual(outlook);
     }
     expect(parseSpcOutlook(outlookWind).outlook).toBeNull();
     expect(parsePlaceLabels(places)).toEqual(places);
     expect(parseAvailabilityReport(availability)).toEqual(availability);
+  });
+
+  it("accepts optional product start hours only as integers from F000 to F384", () => {
+    const legacy = structuredClone(catalog);
+    for (const product of legacy.products) Reflect.deleteProperty(product, "minimumForecastHour");
+    expect(parseMapCatalog(legacy).products.every((product) => product.minimumForecastHour === 0)).toBe(true);
+    const product = legacy.products[0];
+    if (product === undefined) throw new Error("Missing field product fixture");
+    for (const hour of [0, 1, 3, 384]) {
+      Reflect.set(product, "minimumForecastHour", hour);
+      expect(parseMapCatalog(legacy).products[0]?.minimumForecastHour).toBe(hour);
+    }
+    for (const hour of [-1, 385, 1.5, "3", null, NaN]) {
+      Reflect.set(product, "minimumForecastHour", hour);
+      expect(() => parseMapCatalog(legacy)).toThrow("products[0].minimumForecastHour");
+    }
   });
 
   it("reads the field frame: header, cells, and the value rule", () => {

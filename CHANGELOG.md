@@ -14,6 +14,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   0-400 m²/s² colour table. The three-hour field takes the cell-wise maximum
   of three native hourly maxima from the same run and requires the full interval.
 
+### Fixed
+
+- Let cache inspection include a run's early hours without treating them as
+  field requests. Skip incomplete updraft-helicity intervals when listing saved
+  frames and loading forecast hours, so the 3-hour product can finish caching
+  all supported hours without reporting F000-F002 as failed downloads.
+
 ### Changed
 
 - Replace Maximum Updraft Velocity with the requested 1-hour 2-5 km updraft

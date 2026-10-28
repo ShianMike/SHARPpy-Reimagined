@@ -101,6 +101,7 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
                 "category": product.category,
                 "description": product.description,
                 "caveat": product.caveat,
+                **({"minimum_forecast_hour": product.max_hours} if product.max_hours else {}),
                 "palette": _palette(product.palette),
                 "wind": product.wind,
                 "contour": (

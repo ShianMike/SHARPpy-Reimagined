@@ -16,7 +16,7 @@ export type ForecastHourState = "cached" | "loading" | "missing" | "failed" | "u
 /** Load the entire selected run through the normal field and disk caches. */
 export function useFrameDownload() {
   const context = useForecastContext();
-  const products = useDrawnProducts();
+  const drawnProducts = useDrawnProducts();
   const checkingProducts = useMapCatalog().isPending;
   const client = useBackendClient();
   const queryClient = useQueryClient();
@@ -24,21 +24,25 @@ export function useFrameDownload() {
   const retries = useRef(new Map<number, AbortController>());
   const [status, setStatus] = useState<DownloadStatus | null>(null);
   const scope = JSON.stringify([context?.model.key, context?.run, context?.hours]);
-  const nextKey = JSON.stringify([scope, products.map((p) => p.key).sort()]);
-  const [selection, setSelection] = useState({ scope, key: nextKey });
-  if (selection.scope !== scope || !checkingProducts && selection.key !== nextKey) setSelection({ scope, key: nextKey });
+  const nextKey = JSON.stringify([scope, drawnProducts.map((p) => `${p.key}/${String(p.minimumForecastHour)}`).sort()]);
+  const [selection, setSelection] = useState({ scope, key: nextKey, products: drawnProducts });
+  if (selection.scope !== scope || !checkingProducts && selection.key !== nextKey) setSelection({ scope, key: nextKey, products: drawnProducts });
   // Checking another hour must not replace the active queue's verified selection.
   const key = checkingProducts && selection.scope === scope ? selection.key : nextKey;
+  const products = checkingProducts && selection.scope === scope ? selection.products : drawnProducts;
+  const minimumForecastHour = Math.max(0, ...products.map((product) => product.minimumForecastHour));
+  const hours = context?.hours.filter((hour) => hour >= minimumForecastHour) ?? [];
   const current = status?.key === key ? status : null;
-  const total = context?.hours.length ?? 0;
+  const total = hours.length;
   const loaded = (current?.done ?? 0) - (current?.failed.length ?? 0);
   const running = current?.running === true;
   const saved = useQuery({ queryKey: ["forecast-cache", key],
-    queryFn: () => client.getCachedForecastHours(context?.model.key ?? "hrrr", products.map((product) => product.key), context?.run ?? "", context?.hours ?? []),
+    queryFn: () => client.getCachedForecastHours(context?.model.key ?? "hrrr", products.map((product) => product.key), context?.run ?? "", hours),
     enabled: context !== null && products.length > 0, retry: false, refetchInterval: running ? 1500 : 30_000 });
   const cached = saved.data ?? [];
   const memory = useSyncExternalStore((changed) => queryClient.getQueryCache().subscribe(changed), () =>
     context === null ? "" : context.hours.map((hour) => {
+      if (hour < minimumForecastHour) return "unavailable";
       const states = products.flatMap((product) => {
         const keys = [mapKeys.field(product.key, context.run, hour, context.model.key),
           ...(product.contour !== null || product.wind ? [mapKeys.contours(product.key, context.run, hour, context.model.key)] : [])];
@@ -60,7 +64,7 @@ export function useFrameDownload() {
       : saved.isSuccess && products.length > 0 ? "missing" : "unknown" };
   }) ?? [];
   const complete = total > 0 && cached.length === total;
-  const missing = context?.hours.filter((hour) => !cached.includes(hour)) ?? [];
+  const missing = hours.filter((hour) => !cached.includes(hour));
   useEffect(() => {
     const jobs = retries.current;
     return () => { controller.current?.abort(); jobs.forEach((job) => { job.abort(); }); jobs.clear(); };
@@ -78,7 +82,7 @@ export function useFrameDownload() {
   }));
 
   const retryHour = async (hour: number): Promise<void> => {
-    if (context === null || products.length === 0 || !context.hours.includes(hour) || retries.current.has(hour)) return;
+    if (context === null || products.length === 0 || !hours.includes(hour) || retries.current.has(hour)) return;
     useForecastStore.getState().setPlaying(false);
     const job = new AbortController();
     retries.current.set(hour, job);
@@ -111,7 +115,7 @@ export function useFrameDownload() {
     let index = 0;
     const worker = async (): Promise<void> => {
       while (!job.signal.aborted) {
-        const hour = context.hours[index++];
+        const hour = hours[index++];
         if (hour === undefined) return;
         const staleTime = cached.includes(hour) ? Number.POSITIVE_INFINITY : 0;
         const results = await loadHour(hour, staleTime, job.signal);

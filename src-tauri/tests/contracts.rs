@@ -397,6 +397,41 @@ fn split_frame(frame: &[u8]) -> (Value, &[u8]) {
 }
 
 #[test]
+fn field_product_start_hours_are_optional_and_bounded() {
+    use serde_json::json;
+    use sharppy_reimagined_lib::dto::map::MapCatalog;
+    let mut data = value("bridge/map/catalog.result.json");
+    data["products"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("minimum_forecast_hour");
+    let catalog: MapCatalog = serde_json::from_value(data.clone()).unwrap();
+    assert_eq!(catalog.products[0].minimum_forecast_hour, None);
+    assert!(serde_json::to_value(&catalog).unwrap()["products"][0]
+        .get("minimumForecastHour")
+        .is_none());
+    for hour in [0, 1, 3, 384] {
+        data["products"][0]["minimum_forecast_hour"] = json!(hour);
+        let catalog: MapCatalog = serde_json::from_value(data.clone()).unwrap();
+        catalog.validate().unwrap();
+        assert_eq!(catalog.products[0].minimum_forecast_hour, Some(hour));
+        assert_eq!(
+            serde_json::to_value(catalog).unwrap()["products"][0]["minimumForecastHour"],
+            json!(hour)
+        );
+    }
+    data["products"][0]["minimum_forecast_hour"] = json!(385);
+    assert!(serde_json::from_value::<MapCatalog>(data.clone())
+        .unwrap()
+        .validate()
+        .is_err());
+    for hour in [json!(-1), json!(1.5), json!("3")] {
+        data["products"][0]["minimum_forecast_hour"] = hour;
+        assert!(serde_json::from_value::<MapCatalog>(data.clone()).is_err());
+    }
+}
+
+#[test]
 fn map_fixtures_convert_from_bridge_to_public_form() {
     use sharppy_reimagined_lib::backend::map_ops::shrf_frame;
     use sharppy_reimagined_lib::dto::map::{

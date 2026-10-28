@@ -57,6 +57,8 @@ pub struct FieldProduct {
     pub category: String,
     pub description: String,
     pub caveat: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minimum_forecast_hour: Option<u32>,
     pub palette: Palette,
     pub contour: Option<ProductContour>,
     pub wind: bool,
@@ -146,6 +148,11 @@ impl MapCatalog {
             check_text("category", &product.category, 1, 80)?;
             check_text("description", &product.description, 0, 2000)?;
             check_text("caveat", &product.caveat, 0, 2000)?;
+            if product.minimum_forecast_hour.is_some_and(|hour| hour > 384) {
+                return Err(format!(
+                    "products[{i}]: minimum forecast hour is out of range"
+                ));
+            }
             product
                 .palette
                 .validate()

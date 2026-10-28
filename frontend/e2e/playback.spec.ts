@@ -57,6 +57,12 @@ test.describe("forecast playback", () => {
       for (let frame = 1; frame <= 3; frame++) {
         await page.clock.fastForward(750);
         await expect(hour).toHaveValue(String(frame));
+        // Flush the new hour's catalog notification before its next playback interval.
+        await expect.poll(async () => {
+          await page.clock.fastForward(1);
+          return page.getByRole("button", { name: "Choose parameter", exact: true }).isEnabled();
+        }, { intervals: [0] }).toBe(true);
+        await expect(valid).toHaveAttribute("aria-busy", "false");
       }
     } else {
       await timeline.getByRole("button", { name: "Play", exact: true }).click();

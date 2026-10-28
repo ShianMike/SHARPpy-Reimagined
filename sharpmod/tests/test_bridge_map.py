@@ -434,6 +434,25 @@ def test_outlook_areas_keep_spc_colours_and_holes(offline):
     assert none["outlook"] is None
 
 
+def test_published_outlook_with_no_risk_keeps_its_validity(monkeypatch):
+    from sharpmod.maps.map_overlays import build_layer
+    from sharpmod.providers import spc_outlook_fetch
+
+    valid = datetime(2026, 10, 28, 12, tzinfo=UTC)
+    expiry = datetime(2026, 10, 29, 12, tzinfo=UTC)
+    layer = build_layer("spc_outlook", "SPC outlook", [],
+                        valid_from=valid, valid_to=expiry)
+    monkeypatch.setattr(spc_outlook_fetch, "fetch_layer", lambda *a, **kw: layer)
+    result = map_layers.spc_outlook({
+        "product": "wind", "valid_time": "2026-10-28T18:00:00Z",
+    })["outlook"]
+    assert result is not None
+    assert result["covers"] is True
+    assert result["areas"] == []
+    assert result["valid_from"] == "2026-10-28T12:00:00Z"
+    assert result["valid_to"] == "2026-10-29T12:00:00Z"
+
+
 def test_outlook_and_radar_failures_are_retryable(offline, monkeypatch):
     from sharpmod.providers import radar_mosaic, spc_outlook, spc_outlook_fetch
 

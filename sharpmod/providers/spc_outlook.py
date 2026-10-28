@@ -427,26 +427,19 @@ def candidates_for(
     spec = resolve_product(product)
     requests: list[OutlookRequest] = []
 
-    # The live Day 1 endpoint is the freshest view of the convective day in
-    # progress, and using it avoids having to guess which issuance is out yet.
-    #
-    # Only Day 1 qualifies. Between 00Z and 12Z the live Day 2 and Day 3
-    # endpoints have already rolled forward to the next issuance cycle while
-    # Day 1 still describes the convective day that began at the previous 12Z,
-    # so they sit two convective days ahead of Day 1 rather than one. Offering
-    # them here produced a request whose window never matched the target.
-    if offset == 0 and 1 in spec.days:
-        requests.append(OutlookRequest(
-            url=_live_url(1, spec.key),
-            day=1,
-            issued=None,
-            label="Day 1 (current)",
-            live=True,
-        ))
-
     for day in SUPPORTED_DAYS:
         if day not in spec.days:
             continue
+        # Morning outlooks roll forward before 12Z; their payload windows,
+        # rather than the clock alone, decide which convective day they cover.
+        if offset == day - 1 or (offset == day and now.astimezone(timezone.utc).hour < 12):
+            requests.append(OutlookRequest(
+                url=_live_url(day, spec.key),
+                day=day,
+                issued=None,
+                label=f"Day {day} (current)",
+                live=True,
+            ))
         issuances = [
             issued for issued in _issuances_for(day, day_start)
             if issued <= now and issued.year >= ARCHIVE_FIRST_YEAR
@@ -643,14 +636,16 @@ def parse_outlook(
         properties = feature.get("properties")
         properties = properties if isinstance(properties, dict) else {}
 
+        valid_from = valid_from or _parse_stamp(properties.get("VALID"))
+        valid_to = valid_to or _parse_stamp(properties.get("EXPIRE"))
+        issued = issued or _parse_stamp(properties.get("ISSUE"))
+
         raw_dn = properties.get("DN")
         dn = raw_dn if isinstance(raw_dn, int) else None
 
         code = str(properties.get("LABEL") or "").strip()
-        # A product with no areas is published as a single placeholder feature
-        # carrying DN 0, an empty label, and no colours -- not as a 404. Drawing
-        # it would put a white shape of nothing on the map.
-        if not code and not dn:
+        # DN 0 carries the validity of a published outlook with no risk areas.
+        if dn == 0 or (not code and dn is None):
             continue
 
         (default_name, rank, default_stroke, default_fill,
@@ -658,10 +653,6 @@ def parse_outlook(
         name = str(properties.get("LABEL2") or default_name).strip()
         stroke = _colour(properties.get("stroke"), default_stroke)
         fill = _colour(properties.get("fill"), default_fill)
-
-        valid_from = valid_from or _parse_stamp(properties.get("VALID"))
-        valid_to = valid_to or _parse_stamp(properties.get("EXPIRE"))
-        issued = issued or _parse_stamp(properties.get("ISSUE"))
 
         for rings in rings_from_geometry(feature.get("geometry")):
             bounds = bounds_of(rings)
@@ -759,14 +750,17 @@ def _day_miss_cached(candidates: tuple[OutlookRequest, ...]) -> bool:
         return True
 
 
-def _remember_day_miss(candidates: tuple[OutlookRequest, ...]) -> None:
+def _remember_day_miss(
+        candidates: tuple[OutlookRequest, ...],
+        ttl: float = DAY_MISS_CACHE_TTL_S,
+) -> None:
     key = frozenset(request.url for request in candidates)
     with _CACHE_LOCK:
         if len(_DAY_MISS) >= _DAY_MISS_MAX_ENTRIES:
             _prune_locked(_DAY_MISS)
         if len(_DAY_MISS) >= _DAY_MISS_MAX_ENTRIES:
             _DAY_MISS.pop(min(_DAY_MISS, key=_DAY_MISS.get), None)
-        _DAY_MISS[key] = time.monotonic() + DAY_MISS_CACHE_TTL_S
+        _DAY_MISS[key] = time.monotonic() + ttl
 
 
 def _cache_get(url: str) -> tuple[bool, OverlayLayer | None]:

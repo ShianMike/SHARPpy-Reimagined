@@ -1,6 +1,6 @@
 [package]
 name = "sharppy-reimagined"
-version = "3.4.0"
+version = "3.4.1"
 edition = "2021"
 rust-version = "1.90"          # rust-version of tauri 2.12.1, tauri-build 2.7.1, tauri-plugin-log 2.10.0
 publish = false

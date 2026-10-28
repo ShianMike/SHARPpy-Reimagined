@@ -8,13 +8,13 @@ import { BASE_QUERY_OPTIONS, mapKeys, QUERY_KEYS } from "../lib/backend/queryOpt
 import { profileSettings } from "../lib/graphics/profileSettings";
 import { useGraphicsStore } from "../stores/graphicsStore";
 import { panelWeather, useMapStore } from "../stores/mapStore";
-import { useAppStore } from "../stores/appStore";
 import { useSoundingStore } from "../stores/soundingStore";
 import { releaseTime } from "../features/sounding/soundingTime";
 import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
 import { nearestRadarSite } from "./nearestSite";
 
 const OUTLOOK_STALE_MS = 10 * 60_000;
+const SPC_REFRESH_MS = 5 * 60_000;
 const AVAILABILITY_STALE_MS = 10 * 60_000;
 /** Used until the first radar frame states its own update interval. */
 const RADAR_DEFAULT_REFRESH_MS = 120_000;
@@ -85,47 +85,21 @@ export function useFieldFrames(requests: readonly FrameRequest[]): UseQueryResul
   return useQueries({ queries: requests.map((request) => fieldQueryOptions(client, queryClient, request)) });
 }
 
-/** Reuse an outlook's request time while it still covers `validTime`. */
-export function coveringTime(
-  cached: readonly (readonly [readonly unknown[], SpcOutlook | undefined])[],
-  validTime: string,
-): string {
-  const t = Date.parse(validTime);
-  for (const [queryKey, data] of cached) {
-    const outlook = data?.outlook;
-    const asked = queryKey[2];
-    if (
-      outlook?.covers === true &&
-      outlook.validFrom !== null &&
-      outlook.validTo !== null &&
-      Date.parse(outlook.validFrom) <= t &&
-      t < Date.parse(outlook.validTo) &&
-      typeof asked === "string"
-    ) {
-      return asked;
-    }
-  }
-  return validTime;
-}
-
 /** The four outlook products in OUTLOOK_KEYS order; `enabled[i]` turns each on. */
 export function useSpcOutlooks(enabled: readonly boolean[], validTime: string | null): UseQueryResult<SpcOutlook>[] {
   const client = useBackendClient();
-  const live = useAppStore((state) => state.activeWorkspace === "live");
-  const queryClient = useQueryClient();
+  const time = validTime ?? "";
   return useQueries({
-    queries: OUTLOOK_KEYS.map((key, i) => {
-      const time = validTime === null ? "" : coveringTime(queryClient.getQueriesData<SpcOutlook>({ queryKey: ["outlooks", key] }), validTime);
-      return {
-        ...BASE_QUERY_OPTIONS,
-        queryKey: mapKeys.outlook(key, time),
-        queryFn: () => client.getSpcOutlook(key, time),
-        enabled: enabled[i] === true && time !== "",
-        staleTime: OUTLOOK_STALE_MS,
-        gcTime: Number.POSITIVE_INFINITY,
-        refetchInterval: live ? OUTLOOK_STALE_MS : false,
-      };
-    }),
+    queries: OUTLOOK_KEYS.map((key, i) => ({
+      ...BASE_QUERY_OPTIONS,
+      // Overlapping validity windows can contain different issuances for each selected hour.
+      queryKey: mapKeys.outlook(key, time),
+      queryFn: () => client.getSpcOutlook(key, time),
+      enabled: enabled[i] === true && time !== "",
+      staleTime: SPC_REFRESH_MS,
+      gcTime: Number.POSITIVE_INFINITY,
+      refetchInterval: SPC_REFRESH_MS,
+    })),
   });
 }
 

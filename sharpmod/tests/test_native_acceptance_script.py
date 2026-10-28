@@ -32,6 +32,7 @@ def native_job():
 
 
 @pytest.mark.parametrize(("candidate", "previous"), [
+    ("3.4.1", "3.4.0"),
     ("3.4.0", "3.3.0"), ("3.2.1", "3.2.0"), ("3.11.0", "3.10.0"),
 ])
 def test_workflow_selects_the_latest_preceding_stable_release(pwsh, native_job, tmp_path, candidate, previous):
@@ -40,7 +41,7 @@ def test_workflow_selects_the_latest_preceding_stable_release(pwsh, native_job, 
     assert output.read_text(encoding="utf-8").splitlines() == [f"version={candidate}", f"previous={previous}"]
 
 
-def _resolve_versions(pwsh, native_job, tmp_path, candidate="3.4.0", **run_changes):
+def _resolve_versions(pwsh, native_job, tmp_path, candidate="3.4.1", **run_changes):
     (tmp_path / "frontend").mkdir()
     (tmp_path / "frontend/package.json").write_text(json.dumps({"version": candidate}), encoding="utf-8")
     output = tmp_path / "outputs.txt"

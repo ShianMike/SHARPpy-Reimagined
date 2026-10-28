@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "SHARPpy Reimagined",
-    "version": "3.4.0",
+    "version": "3.4.1",
     "tauriVersion": "2.12.1",
     "buildProfile": "debug",
     "logFile": "C:\\Users\\example\\AppData\\Local\\io.github.shianmike.sharppy-reimagined\\logs\\sharppy-reimagined.log"

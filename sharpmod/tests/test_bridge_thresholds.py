@@ -64,7 +64,7 @@ def test_threshold_evaluation_matches_the_exported_fixture():
     # Match numbers below 1/100 of their display step; keep all other fields exact.
     for member in expected["members"]:
         member["values"] = {
-            key: pytest.approx(value, rel=0, abs=10 ** (-decimals[key] - 2))
+            key: None if value is None else pytest.approx(value, rel=0, abs=10 ** (-decimals[key] - 2))
             for key, value in member["values"].items()
         }
     assert _evaluate() == expected
@@ -87,7 +87,7 @@ def test_threshold_csv_matches_the_exported_fixture():
         values = json.loads(row.pop("diagnostic_values"))
         reference_values = json.loads(reference.pop("diagnostic_values"))
         assert values == {
-            key: pytest.approx(value, rel=0, abs=10 ** (-decimals[key] - 2))
+            key: None if value is None else pytest.approx(value, rel=0, abs=10 ** (-decimals[key] - 2))
             for key, value in reference_values.items()
         }
         assert row == reference

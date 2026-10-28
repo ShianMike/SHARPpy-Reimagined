@@ -152,7 +152,7 @@ it("keeps radar visible during decoding and refresh failure, and clears it on pr
   }
 });
 
-it.each([true, false])("draws the SPC outlook only when it covers the selected time (%s)", async (covers) => {
+it.each([true, false])("respects SPC coverage (%s) and accepts a valid empty outlook on refresh", async (covers) => {
   const layers = defaultLayerStates();
   layers["spc-cat"].visible = true;
   useMapStore.setState({ view: "map", activePanel: 0, layers });
@@ -180,6 +180,11 @@ it.each([true, false])("draws the SPC outlook only when it covers the selected t
     await waitFor(() => { expect(queryClient.getQueryData(["outlooks", "cat", "2026-10-04T21:00:00Z"])).toBeDefined(); });
     await waitFor(() => { expect(scene.outlooks?.cat !== undefined).toBe(covers); });
     expect(scene.outlooks).toBeDefined();
+    replies.get_spc_outlook = {
+      ...outlook, outlook: { ...outlook.outlook, covers: true, areas: [], issued: "2026-10-04T20:00:00Z" },
+    };
+    await act(async () => { await queryClient.refetchQueries({ queryKey: mapKeys.outlook("cat", "2026-10-04T21:00:00Z"), exact: true }); });
+    await waitFor(() => { expect(scene.outlooks?.cat).toMatchObject({ covers: true, areas: [], issued: "2026-10-04T20:00:00Z" }); });
   } finally {
     hook.unmount();
     queryClient.clear();

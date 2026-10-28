@@ -6,7 +6,7 @@ import { resolveForecast } from "../features/forecast/useForecast";
 import { parseMapCatalog } from "../lib/contracts/map";
 import { parseModelCatalog } from "../lib/contracts/soundings";
 import type { FieldFrame, SpcOutlook } from "../types/map";
-import { coveringTime, trimFieldCache } from "./mapQueries";
+import { trimFieldCache } from "./mapQueries";
 import { defaultProductFor, productOf } from "./panelField";
 import { hourAfter } from "./usePlayback";
 
@@ -79,14 +79,6 @@ describe("map query helpers", () => {
     product: "cat",
     validTime: validFrom,
     outlook: { title: "", subtitle: "", validFrom, validTo, issued: null, covers, sourceUrl: "", attribution: "", areas: [] },
-  });
-
-  it("reuses a loaded outlook's query time while the valid time stays in its window", () => {
-    const cached = [[["outlooks", "cat", "2026-10-04T16:00:00Z"], outlook("2026-10-04T13:00:00Z", "2026-10-05T12:00:00Z")]] as const;
-    expect(coveringTime(cached, "2026-10-04T21:00:00Z")).toBe("2026-10-04T16:00:00Z");
-    expect(coveringTime(cached, "2026-10-05T12:00:00Z")).toBe("2026-10-05T12:00:00Z");
-    const fallback = [[["outlooks", "cat", "x"], outlook("2026-10-04T13:00:00Z", "2026-10-05T12:00:00Z", false)]] as const;
-    expect(coveringTime(fallback, "2026-10-04T21:00:00Z")).toBe("2026-10-04T21:00:00Z");
   });
 
   it("budgets raw cells and both render modes, dropping the oldest unobserved field frames", () => {

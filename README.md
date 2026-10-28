@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.4.0
+# SHARPpy Reimagined · v3.4.1
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,15 +10,16 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v340---2026-10-27)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v341---2026-10-28)
 
 </div>
 
-## What's new in 3.4.0
+## What's new in 3.4.1
 
-**v3.4.0** expands model coverage,
-makes map and sounding controls easier to use, and adds clearer diagnostics and
-update safeguards.
+**v3.4.1** fixes SPC outlooks: select current outlooks for the chosen
+forecast hour, keep outlooks with no plotted risk areas without restoring older polygons,
+and refresh enabled SPC layers every five minutes in Model Viewer. Missing
+recent products are retried within five minutes.
 
 ## Weather analysis
 

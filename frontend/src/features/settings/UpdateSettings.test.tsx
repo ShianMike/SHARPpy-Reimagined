@@ -22,7 +22,7 @@ function SettingsWithReview() {
 }
 
 function availableUpdate() {
-  const update = new Update({ rid: 1, currentVersion: version, version: "3.4.1", body: "New map tools", rawJson: {} });
+  const update = new Update({ rid: 1, currentVersion: version, version: "3.4.2", body: "New map tools", rawJson: {} });
   return { update,
     close: vi.spyOn(update, "close").mockResolvedValue(),
     download: vi.spyOn(update, "download").mockResolvedValue(),
@@ -54,7 +54,7 @@ it("shows a newer version and downloads only after an explicit install click, pr
   expect(screen.getByText(`Current version: ${version}`)).toBeTruthy();
   expect(check).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-  await screen.findByText("Version 3.4.1 is available");
+  await screen.findByText("Version 3.4.2 is available");
   expect(download).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Install update" }));
   expect(screen.getByRole("dialog", { name: "Install app update?" })).toBeTruthy();
@@ -92,7 +92,7 @@ it("reports up to date, closes an unused update on recheck, and allows retry aft
   expect(screen.queryByText("You’re up to date")).toBeNull();
   expect(useLogStore.getState().entries[0]?.detail).toContain("offline");
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-  await screen.findByText("Version 3.4.1 is available");
+  await screen.findByText("Version 3.4.2 is available");
   close.mockRejectedValueOnce(new Error("resource already closed"));
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
   await screen.findByText("You’re up to date");
@@ -106,7 +106,7 @@ it("does not install a failed or unverified download and can retry with an unkno
   check.mockResolvedValue(update);
   render(<SettingsWithReview />);
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-  await screen.findByText("Version 3.4.1 is available");
+  await screen.findByText("Version 3.4.2 is available");
   fireEvent.click(screen.getByRole("button", { name: "Install update" }));
   fireEvent.click(screen.getByRole("button", { name: "Install update & restart" }));
   await screen.findByRole("alert");

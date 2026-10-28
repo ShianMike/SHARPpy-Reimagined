@@ -18,7 +18,7 @@ import { UpdateNotice } from "./UpdateNotice";
 const check = vi.hoisted(() => vi.fn<() => Promise<Update | null>>());
 vi.mock("../../lib/backend/tauriTransport", () => ({ checkForUpdates: check }));
 
-function availableUpdate(targetVersion = "3.4.1") {
+function availableUpdate(targetVersion = "3.4.2") {
   const update = new Update({ rid: 1, currentVersion: version, version: targetVersion, rawJson: {} });
   return { update,
     close: vi.spyOn(update, "close").mockResolvedValue(),
@@ -46,7 +46,7 @@ it("checks once on startup in StrictMode and installs only after Update now", as
   render(<StrictMode><UpdateNotice /></StrictMode>);
   await waitFor(() => { expect(check).toHaveBeenCalledOnce(); });
   await act(async () => { announce?.(update); await Promise.resolve(); });
-  expect(screen.getByText("Version 3.4.1 is available")).toBeTruthy();
+  expect(screen.getByText("Version 3.4.2 is available")).toBeTruthy();
   expect(download).not.toHaveBeenCalled();
   expect(install).not.toHaveBeenCalled();
   let finish: (() => void) | undefined;
@@ -159,7 +159,7 @@ it("shows a final discard confirmation for new work during download and Cancel k
 it("Later hides the same version across UTC windows but announces a newer version", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-25T00:00:00Z"));
-  const first = availableUpdate(), repeat = availableUpdate(), newer = availableUpdate("3.4.2");
+  const first = availableUpdate(), repeat = availableUpdate(), newer = availableUpdate("3.4.3");
   check.mockResolvedValueOnce(first.update).mockResolvedValueOnce(repeat.update).mockResolvedValueOnce(newer.update);
   await act(async () => { render(<UpdateNotice />); await vi.dynamicImportSettled(); });
   fireEvent.click(screen.getByRole("button", { name: "Later" }));
@@ -171,7 +171,7 @@ it("Later hides the same version across UTC windows but announces a newer versio
   expect(screen.queryByRole("status")).toBeNull();
   expect(first.close).toHaveBeenCalledOnce();
   await act(async () => { await vi.advanceTimersByTimeAsync(12 * 60 * 60 * 1000); });
-  expect(screen.getByText("Version 3.4.2 is available")).toBeTruthy();
+  expect(screen.getByText("Version 3.4.3 is available")).toBeTruthy();
   expect(first.download).not.toHaveBeenCalled();
   expect(repeat.download).not.toHaveBeenCalled();
   expect(newer.download).not.toHaveBeenCalled();
@@ -206,7 +206,7 @@ it("keeps background failures quiet and preserves a known update for installatio
   await act(async () => { fireEvent(window, new Event("online")); await vi.dynamicImportSettled(); });
   expect(check).toHaveBeenCalledOnce();
   await act(async () => { await vi.advanceTimersByTimeAsync(12 * 60 * 60 * 1000); });
-  expect(screen.getByText("Version 3.4.1 is available")).toBeTruthy();
+  expect(screen.getByText("Version 3.4.2 is available")).toBeTruthy();
   await act(async () => { await vi.advanceTimersByTimeAsync(12 * 60 * 60 * 1000); });
   expect(screen.queryByRole("alert")).toBeNull();
   expect(useUpdateStore.getState().update).toBe(update);

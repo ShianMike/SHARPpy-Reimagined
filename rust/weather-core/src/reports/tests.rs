@@ -39,6 +39,8 @@ fn discards_only_rows_with_bad_position_time_or_hazard() {
         concat!(
             "bad,35,-97,,OUN,H\n",
             "202602300500,35,-97,,OUN,H\n",
+            "000009070500,35,-97,,OUN,H\n",
+            "-000109070500,35,-97,,OUN,H\n",
             "202609070500,NaN,-97,,OUN,H\n",
             "202609070500,91,-97,,OUN,H\n",
             "202609070500,35,-181,,OUN,H\n",

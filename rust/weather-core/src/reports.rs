@@ -63,7 +63,7 @@ pub fn parse(text: &str) -> Vec<Report> {
         ) else {
             continue;
         };
-        if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
+        if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) || valid.year() < 1 {
             continue;
         }
         let [mag, city, county, ugc, state, wfo, source, remark] =

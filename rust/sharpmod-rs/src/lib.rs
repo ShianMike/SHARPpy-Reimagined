@@ -11,8 +11,11 @@ pub mod parcels;
 pub mod parsing;
 pub mod quality_control;
 pub mod records;
+mod report_bindings;
 mod weather;
 pub mod wind;
+pub mod wind_grid;
+mod wind_grid_bindings;
 
 use numpy::ndarray::Array2;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1};
@@ -789,6 +792,8 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("__backend_api_version__", BACKEND_API_VERSION)?;
     weather::register(module)?;
     map_geometry::register(module)?;
+    report_bindings::register(module)?;
+    wind_grid_bindings::register(module)?;
     module.add_function(wrap_pyfunction!(py_wind_to_components, module)?)?;
     module.add_function(wrap_pyfunction!(py_components_to_wind, module)?)?;
     module.add_function(wrap_pyfunction!(py_interpolate_1d, module)?)?;

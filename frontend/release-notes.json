@@ -1,6 +1,6 @@
 {
   "3.4.2": {
-    "summary": "Track 2-5 km updraft helicity over one or three hours with a shared colour scale.",
+    "summary": "Track 2-5 km updraft helicity with a shared colour scale and load weather overlays with less processing time.",
     "highlights": [
       {
         "title": "Hourly 2-5 km updraft helicity",
@@ -19,12 +19,12 @@
         "description": "Velocity tilt availability loads separately from the scientific backend's data requests. Recent scan listings are reused, and connection problems remain distinct from missing scans."
       },
       {
-        "title": "Parallel warning and watch downloads",
-        "description": "Load independent NWS sources together while preserving precise warning boundaries, official colours, complete watch areas and cached history. Incomplete updates remain distinct from an all-clear."
+        "title": "More responsive live overlays",
+        "description": "Load independent warning sources together and parse storm reports with less processing time. Preserve official colours, precise boundaries, report units and cached history; incomplete warning updates remain distinct from an all-clear."
       },
       {
-        "title": "Faster forecast contours",
-        "description": "Contour extraction and map-coordinate conversion now run together, preserving the same isolines, missing-data gaps and displayed precision."
+        "title": "Faster forecast overlays",
+        "description": "Contour extraction, map-coordinate conversion and wind-barb processing run in the native backend. Preserve the same isolines, true-north wind directions, speed encoding and missing-data gaps."
       }
     ]
   },

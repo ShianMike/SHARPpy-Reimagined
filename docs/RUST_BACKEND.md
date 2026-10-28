@@ -15,8 +15,8 @@ progressive modernization. Native kernels, decoder time, network retrieval,
 rendering and IPC are measured separately before selecting a migration.
 
 The Python numerical backend remains available for scientific compatibility.
-Map contours, velocity tilt availability, the radar site catalogue, and NWS
-warning/watch fetching and polygon processing now require the native extension
+Map contours and wind barbs, velocity tilt availability, the radar site catalogue,
+NWS warning/watch processing, and IEM report fetching/parsing require the native extension
 in browser mode. The desktop calls the shared Rust weather core directly for
 radar inventory. These migrated operations have no Python implementation.
 Build/install `sharpmod_rs` before running the complete source application.
@@ -143,9 +143,10 @@ equivalence tests use explicit floating-point tolerances. Unit conversions
 remain the caller's responsibility unless an operation's contract says
 otherwise.
 
-Native-only map/weather operations are `contour_segments`, `radar_sites`,
-`radar_velocity_tilts`, `clear_weather_cache`, and `weather_alerts`. Their PyO3
-bindings live in focused `map_geometry.rs` and `weather.rs` modules. Blocking
+Native-only map/weather operations are `contour_segments`, `pack_wind_grid`,
+`radar_sites`, `radar_velocity_tilts`, `clear_weather_cache`, `weather_alerts`,
+`fetch_storm_reports`, and `parse_storm_reports`. Their PyO3 bindings live in
+focused map, wind, weather and report modules. Blocking
 native work releases the interpreter with `Python::detach`, following the
 [PyO3 performance guidance](https://pyo3.rs/main/performance.html).
 The HTTP and alert-processing implementation is shared with Tauri in
@@ -154,6 +155,13 @@ catalogue. NWS requests preserve the official service's
 [4000-record limit and current-only semantics](https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer),
 including CAP confirmation before accepting an all-clear. Snapshot history
 remains under the existing session cache owner.
+
+IEM parsing preserves quoted/multiline CSV fields, UTC report times, natural
+units and row-wise rejection of invalid coordinates, dates or hazard codes.
+The binding returns the existing `StormReport` objects; filtering, layer
+construction and report memory/disk caches retain their Python owner. Wind
+packing copies only selected display samples before detaching and uses the existing Rayon pool,
+retaining five-knot bins, one-degree directions and the missing-cell sentinel.
 
 The wind and interpolation operations default to no explicit sentinel. The QC,
 pressure ordering, and row-parser operations default to `-9999`; passing

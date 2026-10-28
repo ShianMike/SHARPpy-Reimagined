@@ -9,7 +9,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 static INVENTORY: OnceLock<VelocityInventory> = OnceLock::new();
 pyo3::create_exception!(sharpmod_rs, WeatherHistoryUnavailable, PyValueError);
 
-fn runtime() -> PyResult<&'static tokio::runtime::Runtime> {
+pub(crate) fn runtime() -> PyResult<&'static tokio::runtime::Runtime> {
     static RUNTIME: OnceLock<Result<tokio::runtime::Runtime, String>> = OnceLock::new();
     RUNTIME
         .get_or_init(|| {

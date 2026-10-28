@@ -4,6 +4,7 @@ pub mod alerts;
 mod http;
 pub mod radar;
 pub mod radar_sites;
+pub mod reports;
 
 use time::{OffsetDateTime, UtcOffset};
 

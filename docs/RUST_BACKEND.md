@@ -202,6 +202,13 @@ copies and full-grid masks and weight arrays; strided inputs are normalized at
 the boundary. Product formulas, the lapse-rate CAPE screen and the model's
 surface height retain their existing owners.
 
+DCP's downdraft energy and the uncached surface/most-unstable parcel helpers
+also delegate to the existing parcel backend. This removes duplicate SHARPpy
+profile construction from derived parameters without adding new kernels or
+another cache. Normalized CAPE/CIN, EHI and VGP retain their cached workspace
+path, finite/missing guards and layer-depth rules. An explicitly selected
+Python-science backend still supplies these terms through its existing adapter.
+
 The wind and interpolation operations default to no explicit sentinel. The QC,
 pressure ordering, and row-parser operations default to `-9999`; passing
 `missing=None` disables explicit-sentinel matching. Parser blanks and

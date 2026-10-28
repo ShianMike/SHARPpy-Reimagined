@@ -10,46 +10,19 @@ from . import winds
 from .constants import MISSING
 from .constants import is_missing
 import numpy as np
+from sharpmod import backends
 from sharpmod.sharptab import derived as _api
 
 
 def _dcape_mucape(pres, hght, tmpc, dwpc, wdir, wspd, *, mucape=None):
-    """Return ``(dcape, mucape)`` (J/kg) for the profile via ``sharppy``.
-
-    DCAPE comes from ``sharppy.sharptab.params.dcape`` and MUCAPE from the
-    most-unstable parcel ascent (``parcelx`` ``flag=3``), both computed from the
-    *same* profile so the DCP terms are internally consistent (Requirement 2.2).
-
-    Returns ``None`` on any failure or if either quantity is masked/non-finite.
-    """
+    """Return finite DCAPE/MUCAPE through the shared parcel backend."""
     try:
-        from sharppy.sharptab import profile as sp_profile
-        from sharppy.sharptab import params as sp_params
-    except Exception:
-        return None
-
-    try:
-        prof = sp_profile.create_profile(
-            profile="default",
-            pres=np.asarray(pres, dtype=float),
-            hght=np.asarray(hght, dtype=float),
-            tmpc=np.asarray(tmpc, dtype=float),
-            dwpc=np.asarray(dwpc, dtype=float),
-            wdir=np.asarray(wdir, dtype=float),
-            wspd=np.asarray(wspd, dtype=float),
-            missing=-9999.0,
-            strictQC=False,
-        )
-
         if mucape is None:
-            mupcl = sp_params.parcelx(prof, flag=3)  # most-unstable parcel
-            mucape = getattr(mupcl, "bplus", None)
+            mucape = backends.get_backend().profile_parcels(pres, hght, tmpc, dwpc).most_unstable.cape
         if mucape is None or is_missing(mucape) or not np.isfinite(mucape):
             return None
 
-        dres = sp_params.dcape(prof)
-        # sharppy's dcape returns (dcape, ttrace, ptrace); accept a bare scalar too.
-        dcape = dres[0] if isinstance(dres, (tuple, list)) else dres
+        dcape = backends.profile_dcape(pres, hght, tmpc, dwpc).cape
         if dcape is None or is_missing(dcape) or not np.isfinite(dcape):
             return None
 
@@ -99,10 +72,7 @@ def _dcp_impl(prof):
     if not (np.isfinite(shear06) and np.isfinite(mnwind06)):
         return MISSING
 
-    # --- DCAPE + MUCAPE via the shared, layer-scoped column oracle ----------
-    # ``_profile_columns`` carries masked levels as the -9999 sentinel to the
-    # sharppy parcel-ascent oracle, so a missing datum outside the parcel path
-    # (e.g. a missing top-of-sounding wind) no longer disqualifies DCP.
+    # The backend resolves parcel paths from valid levels, preserving layer-scoped masks.
     arrays = _api._profile_columns(prof)
     if arrays is None:
         return MISSING
@@ -129,64 +99,16 @@ def _dcp_impl(prof):
 
 
 def _mu_parcel_terms(pres, hght, tmpc, dwpc, wdir, wspd):
-    """Return most-unstable parcel terms for NCAPE/NCIN via the sharppy oracle.
-
-    Returns a 5-tuple ``(mucape, cin, lfc_agl, el_agl, mu_start_agl)`` where any
-    element that ``sharppy`` cannot resolve is ``None`` (heights are metres AGL;
-    energies are J/kg with ``cin <= 0``). Returns ``None`` outright only when the
-    parcel ascent itself cannot be run (``sharppy`` missing / unexpected error);
-    this routine never raises.
-    """
+    """Return MU CAPE/CIN and AGL heights through the shared parcel backend."""
     try:
-        from sharppy.sharptab import profile as sp_profile
-        from sharppy.sharptab import params as sp_params
-        from sharppy.sharptab import interp as sp_interp
-    except Exception:
-        return None
-
-    def _num(value):
-        """Coerce a sharppy attribute to a finite float, or ``None``."""
-        if value is None or is_missing(value):
-            return None
-        try:
-            fval = float(value)
-        except (TypeError, ValueError):
-            return None
-        return fval if np.isfinite(fval) else None
-
-    try:
-        sp_prof = sp_profile.create_profile(
-            profile="default",
-            pres=np.asarray(pres, dtype=float),
-            hght=np.asarray(hght, dtype=float),
-            tmpc=np.asarray(tmpc, dtype=float),
-            dwpc=np.asarray(dwpc, dtype=float),
-            wdir=np.asarray(wdir, dtype=float),
-            wspd=np.asarray(wspd, dtype=float),
-            missing=-9999.0,
-            strictQC=False,
+        parcel = backends.get_backend().profile_parcels(pres, hght, tmpc, dwpc).most_unstable
+        return (
+            _api._finite_or_none(parcel.cape),
+            _api._finite_or_none(parcel.cin),
+            _api._finite_or_none(parcel.lfc_height),
+            _api._finite_or_none(parcel.el_height),
+            _api._finite_or_none(parcel.start_height),
         )
-        mupcl = sp_params.parcelx(sp_prof, flag=3)  # most-unstable parcel
-
-        mucape = _num(getattr(mupcl, "bplus", None))
-        cin = _num(getattr(mupcl, "bminus", None))
-        lfc_agl = _num(getattr(mupcl, "lfchght", None))
-        el_agl = _num(getattr(mupcl, "elhght", None))
-
-        # MU-parcel starting level height, converted to metres AGL to match the
-        # sharppy LFC/EL convention. ``mupcl.pres`` is the lifted-parcel-level
-        # pressure of the most-unstable parcel.
-        mu_start_agl = None
-        lpl_pres = _num(getattr(mupcl, "pres", None))
-        if lpl_pres is not None:
-            try:
-                mu_start_agl = _num(
-                    sp_interp.to_agl(sp_prof, sp_interp.hght(sp_prof, lpl_pres))
-                )
-            except Exception:
-                mu_start_agl = None
-
-        return mucape, cin, lfc_agl, el_agl, mu_start_agl
     except Exception:
         return None
 
@@ -262,34 +184,9 @@ def _normalized_cape_cin_impl(prof):
 
 
 def _sfc_cape(pres, hght, tmpc, dwpc, wdir, wspd):
-    """Return surface-based CAPE (J/kg) via ``sharppy`` (``parcelx`` ``flag=1``).
-
-    Returns ``None`` when ``sharppy`` is unavailable or the CAPE is masked /
-    non-finite; never raises.
-    """
+    """Return finite surface-based CAPE through the shared parcel backend."""
     try:
-        from sharppy.sharptab import profile as sp_profile
-        from sharppy.sharptab import params as sp_params
-    except Exception:
-        return None
-
-    try:
-        sp_prof = sp_profile.create_profile(
-            profile="default",
-            pres=np.asarray(pres, dtype=float),
-            hght=np.asarray(hght, dtype=float),
-            tmpc=np.asarray(tmpc, dtype=float),
-            dwpc=np.asarray(dwpc, dtype=float),
-            wdir=np.asarray(wdir, dtype=float),
-            wspd=np.asarray(wspd, dtype=float),
-            missing=-9999.0,
-            strictQC=False,
-        )
-        sbpcl = sp_params.parcelx(sp_prof, flag=1)  # surface-based parcel
-        cape = getattr(sbpcl, "bplus", None)
-        if cape is None or is_missing(cape) or not np.isfinite(cape):
-            return None
-        return float(cape)
+        return _api._finite_or_none(backends.get_backend().profile_parcels(pres, hght, tmpc, dwpc).surface.cape)
     except Exception:
         return None
 

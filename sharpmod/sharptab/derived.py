@@ -21,12 +21,10 @@ Mesoanalysis definition::
 
 All four terms are derived from the *same* analyzed Profile (Requirement 2.2):
 
-* **DCAPE** and **MUCAPE** come from a parcel ascent. As with
-  :mod:`sharpmod.sharptab.ecape`, the parcel routines of the installed
-  ``sharppy.sharptab.params`` package are used as the sanctioned oracle -- the
-  most-unstable parcel (``parcelx`` ``flag=3``) supplies MUCAPE and
-  ``params.dcape`` supplies DCAPE. ``sharppy`` is imported lazily; if it is
-  unavailable the function degrades to :data:`MISSING` rather than raising.
+* **DCAPE** and **MUCAPE** use the shared parcel backend, with Rust kernels by
+  default. An explicitly selected Python science backend retains its existing
+  implementation. Missing or non-finite parcel results degrade to
+  :data:`MISSING` rather than raising.
 * **0-6 km bulk shear** is the magnitude of the vector wind difference between
   the surface and 6 km AGL, ``|V(6 km) - V(sfc)|`` (kt), via
   :func:`sharpmod.sharptab.winds.wind_shear` using the surface pressure and the
@@ -201,9 +199,8 @@ def _mean_wind_0_6km(prof):
 # MUCAPE, CIN, the LFC/EL heights, and the MU-parcel starting level all come
 # from the *same* most-unstable parcel ascent (``parcelx`` ``flag=3``) so the two
 # normalizations are internally consistent (Requirement 4.3). As with
-# :func:`dcp` and :mod:`sharpmod.sharptab.ecape`, the installed ``sharppy``
-# package is the sanctioned parcel-ascent oracle and is imported lazily; if it is
-# unavailable both variants degrade to :data:`MISSING` rather than raising.
+# :func:`dcp`, the shared parcel backend supplies the ascent terms; unavailable
+# terms degrade to :data:`MISSING` rather than raising.
 #
 # Division-by-zero / degenerate-layer guards (Requirements 4.4, 4.5): each
 # variant returns :data:`MISSING` when its layer depth is <= 0 or undefined, or

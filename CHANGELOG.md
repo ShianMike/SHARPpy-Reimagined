@@ -23,6 +23,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Reuse the existing parcel backend for DCP downdraft energy and the surface/
+  most-unstable CAPE fallbacks used by EHI, VGP and normalized CAPE/CIN.
+  Remove duplicate Python SHARPpy profile construction and parcel-oracle calls.
+  Keep cached workspaces, finite/missing guards, independent layer depths and
+  explicitly selected Python-science compatibility.
 - Interpolate terrain-relative model-grid heights in Rust for the
   0–3 km lapse-rate and derived 0–1 km shear maps. Remove the Python layer loop
   and full-grid stack copies, interpolation masks and weights; retain the first

@@ -1,8 +1,8 @@
 """Shared types for the Rust-primary and portable Python backends.
 
-The protocol contains isolated numerical, row-processing, and point-GRIB
-operations. GUI objects, SHARPpy widgets, downloads, and profile construction
-stay in Python and remain outside this boundary.
+The protocol contains numerical, row-processing, point-GRIB and migrated
+map/weather operations. GUI objects, SHARPpy widgets and profile construction
+remain outside this boundary.
 """
 
 from __future__ import annotations
@@ -50,6 +50,13 @@ REQUIRED_RUST_CAPABILITIES = (
     "clear_weather_cache",
     "weather_alerts",
     "contour_segments",
+    "pack_wind_grid",
+    "fetch_storm_reports",
+    "parse_storm_reports",
+    "parse_surface_stations",
+    "parse_surface_observations",
+    "select_surface_observation",
+    "fetch_surface_observations",
 )
 
 

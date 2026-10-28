@@ -23,6 +23,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Move NWS surface-station discovery, bounded observation downloads, parsing,
+  unit conversion, distance ordering and nearest-time matching into Rust.
+  Keep the existing station limit and six-request concurrency ceiling; retain
+  actual observation times, calm/missing distinctions, partial station failures,
+  cancellation and the public objects used by maps, locators and saved exports.
+  Remove the replaced Python parser, HTTP and thread-pool orchestration.
 - Move wind-barb sampling, Lambert rotation and speed/direction packing into
   parallel Rust processing, copying only displayed samples. Preserve calm,
   missing and masked cells, true-north directions, the five-knot speed encoding

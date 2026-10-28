@@ -5,6 +5,7 @@ mod http;
 pub mod radar;
 pub mod radar_sites;
 pub mod reports;
+pub mod surface;
 
 use time::{OffsetDateTime, UtcOffset};
 

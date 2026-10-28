@@ -16,7 +16,7 @@ rendering and IPC are measured separately before selecting a migration.
 
 The Python numerical backend remains available for scientific compatibility.
 Map contours and wind barbs, velocity tilt availability, the radar site catalogue,
-NWS warning/watch processing, and IEM report fetching/parsing require the native extension
+NWS warning/watch processing, nearby surface observations, and IEM report fetching/parsing require the native extension
 in browser mode. The desktop calls the shared Rust weather core directly for
 radar inventory. These migrated operations have no Python implementation.
 Build/install `sharpmod_rs` before running the complete source application.
@@ -145,7 +145,9 @@ otherwise.
 
 Native-only map/weather operations are `contour_segments`, `pack_wind_grid`,
 `radar_sites`, `radar_velocity_tilts`, `clear_weather_cache`, `weather_alerts`,
-`fetch_storm_reports`, and `parse_storm_reports`. Their PyO3 bindings live in
+`fetch_storm_reports`, `parse_storm_reports`, `parse_surface_stations`,
+`parse_surface_observations`, `select_surface_observation`, and
+`fetch_surface_observations`. Their PyO3 bindings live in
 focused map, wind, weather and report modules. Blocking
 native work releases the interpreter with `Python::detach`, following the
 [PyO3 performance guidance](https://pyo3.rs/main/performance.html).
@@ -162,6 +164,15 @@ The binding returns the existing `StormReport` objects; filtering, layer
 construction and report memory/disk caches retain their Python owner. Wind
 packing copies only selected display samples before detaching and uses the existing Rayon pool,
 retaining five-knot bins, one-degree directions and the missing-cell sentinel.
+
+Surface fetching follows the NWS point-to-station links, limits queries to the
+nearest 32 stations (24 by default), and runs at most six station requests at a
+time. Parsing and unit conversion occur before nearest-time selection, so only
+matched observations cross back into the existing Python objects. Missing and
+failed stations stay distinct, older observations win equal-distance time ties,
+and cancellation aborts pending native requests. Supplied Python openers remain
+supported at the compatibility boundary. Live data retains the documented
+[NWS observation availability and latency limits](https://www.weather.gov/documentation/services-web-api).
 
 The wind and interpolation operations default to no explicit sentinel. The QC,
 pressure ordering, and row-parser operations default to `-9999`; passing

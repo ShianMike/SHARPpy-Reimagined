@@ -1,6 +1,6 @@
 """Backend-accelerated SHARPpy convective-profile compatibility layer.
 
-Parcel, DCAPE and maximum-parcel-level integrations cross the native boundary.
+Parcel, DCAPE, maximum-parcel-level and analogue processing cross the native boundary.
 The surrounding SHARPpy ``ConvectiveProfile`` orchestration, public parcel
 objects, widgets, and severe-weather formulas retain their existing API.
 """
@@ -256,6 +256,14 @@ def _microburst(prof):
 
 class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
     """Convective profile using backend parcel and DCAPE workspaces."""
+
+    def get_sars(self):
+        try:
+            from sharpmod_rs import profile_sars
+        except ImportError:
+            return super().get_sars()
+
+        self.__dict__.update(profile_sars(self))
 
     def get_kinematics(self):
         super().get_kinematics()

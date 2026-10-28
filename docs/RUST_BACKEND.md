@@ -29,6 +29,16 @@ records without materializing every line; unusual Python line boundaries retain
 their existing interpretation. Archive selection, ZIP retrieval and disk-cache
 ownership remain in the existing reader.
 
+Accelerated sounding profiles use Rust for SARS hail/supercell analogue
+matching when the native operation is available. Without it, they retain the
+existing SHARPpy compatibility call. Parsed tables are reused until their source
+path, size or modification time changes; unavailable or malformed tables retain
+the empty-match behavior.
+The compatibility boundary preserves tuple and NumPy array types, match order,
+the original loose/quality thresholds, signed helicity, hemisphere aliases and
+the hail display limit. SHIP and the existing profile inputs retain their
+current scientific helpers; the reference SARS functions are not patched.
+
 ## Backend selection
 
 Set `SHARPMOD_BACKEND` before starting Python. This selects the numerical

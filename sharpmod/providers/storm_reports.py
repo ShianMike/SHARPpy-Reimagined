@@ -32,9 +32,7 @@ point symbol at a fixed size as the view zooms.
 
 from __future__ import annotations
 
-import csv
 import hashlib
-import io
 import logging
 import math
 import os
@@ -274,59 +272,11 @@ class StormReport:
         return "\n".join(lines)
 
 
-def _float(value: str) -> float | None:
-    try:
-        number = float(str(value).strip())
-    except (TypeError, ValueError):
-        return None
-    return number if math.isfinite(number) else None
-
-
-def _valid_time(value: str) -> datetime | None:
-    """Parse the service's ``YYYYMMDDHHMM`` stamp, which is UTC."""
-    text = str(value).strip()
-    try:
-        return datetime.strptime(text, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-
-
 def parse_reports(text: str) -> tuple[StormReport, ...]:
-    """Parse the service's CSV into reports, discarding what cannot be drawn.
+    """Use the native CSV parser while retaining the existing report objects."""
+    import sharpmod_rs
 
-    Tolerant by row rather than by file: a single malformed record, an unknown
-    hazard code, or a report with no usable position is skipped, because one bad
-    row in a live feed should cost that row and not the whole overlay.
-    """
-    if not text or not text.strip():
-        return ()
-    reader = csv.DictReader(io.StringIO(text))
-    reports: list[StormReport] = []
-    for row in reader:
-        hazard = HAZARDS.get(str(row.get("TYPECODE", "")).strip().upper())
-        if hazard is None:
-            continue
-        latitude = _float(row.get("LAT", ""))
-        longitude = _float(row.get("LON", ""))
-        when = _valid_time(row.get("VALID", ""))
-        if (latitude is None or longitude is None or when is None
-                or not -90.0 <= latitude <= 90.0
-                or not -180.0 <= longitude <= 180.0):
-            continue
-        reports.append(StormReport(
-            hazard=hazard,
-            valid=when,
-            lat=latitude,
-            lon=longitude,
-            magnitude=_float(row.get("MAG", "")),
-            city=str(row.get("CITY", "") or "").strip(),
-            county=str(row.get("UGCNAME", "") or row.get("COUNTY", "")).strip(),
-            state=str(row.get("STATE", "") or "").strip(),
-            wfo=str(row.get("WFO", "") or "").strip(),
-            source=str(row.get("SOURCE", "") or "").strip(),
-            remark=str(row.get("REMARK", "") or "").strip(),
-        ))
-    return tuple(reports)
+    return tuple(sharpmod_rs.parse_storm_reports(text))
 
 
 def normalise_report_filter(value: str | None) -> str:
@@ -797,20 +747,7 @@ def fetch_layer(*, window: timedelta = DEFAULT_WINDOW, view=None,
 
 
 def _default_opener(url: str, timeout: float, limit: int) -> bytes:
-    """Fetch ``url`` over verified HTTPS with a bounded response body.
+    """Use the shared native client for bounded, verified IEM downloads."""
+    import sharpmod_rs
 
-    Mirrors :mod:`sharpmod.providers.spc_outlook`: the body is capped because this is an
-    external service and a redirect to something enormous must not be able to
-    exhaust memory.
-    """
-    import ssl
-    import urllib.request
-
-    import certifi
-
-    context = ssl.create_default_context(cafile=certifi.where())
-    request = urllib.request.Request(
-        url, headers={"User-Agent": "sharpmod storm reports"})
-    with urllib.request.urlopen(request, timeout=timeout,
-                                context=context) as response:
-        return response.read(limit)
+    return sharpmod_rs.fetch_storm_reports(url, timeout, limit)

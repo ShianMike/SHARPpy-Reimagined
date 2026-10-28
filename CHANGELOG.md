@@ -23,6 +23,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Move wind-barb sampling, Lambert rotation and speed/direction packing into
+  parallel Rust processing, copying only displayed samples. Preserve calm,
+  missing and masked cells, true-north directions, the five-knot speed encoding
+  and the existing binary map format.
+- Parse IEM storm-report CSV rows and fetch their data in Rust with a reused
+  HTTPS client and a bounded response. Remove the Python CSV/date/numeric parser
+  and HTTP implementation while preserving report objects, units, filtering,
+  cache ownership and locator/map callers.
 - Extract map contours and project their vertices to longitude/latitude in
   Rust, retaining the existing marching-squares pairing, output order and
   five-decimal coordinates. Remove the Python extraction and projection loops.

@@ -32,9 +32,10 @@ MAX_SEGMENTS = 100_000
 
 def wind_grid(product, decoded, mapping, *, model="hrrr"):
     """Packed display winds: low 9 bits are wind-from degrees, high 7 are 5 kt."""
-    from sharpmod.providers.hrrr_field import field_grid
-    from sharpmod.providers.hrrr_products import ms_to_kt
-    from sharpmod.providers.hrrr_field import HrrrFieldError
+    import sharpmod_rs
+
+    from sharpmod.providers.hrrr_field import HrrrFieldError, field_grid
+    from sharpmod.providers.hrrr_products import GLOBAL_MODELS
     grid = field_grid(model)
 
     names = {field.variable: field.name for field in product.fields}
@@ -45,39 +46,27 @@ def wind_grid(product, decoded, mapping, *, model="hrrr"):
     if any(names[key] not in decoded for key in ("UGRD", "VGRD")):
         raise HrrrFieldError("decoded wind is missing a required component")
     u, v = (
-        np.asarray(decoded[names[key]], dtype=np.float32) for key in ("UGRD", "VGRD")
+        np.ascontiguousarray(decoded[names[key]], dtype=np.float32) for key in ("UGRD", "VGRD")
     )
     if u.shape != grid.shape or v.shape != u.shape:
-        from sharpmod.providers.hrrr_field import HrrrFieldError
-
         raise HrrrFieldError("wind components do not match the model grid")
-    u, v = u.ravel()[mapping.flat], v.ravel()[mapping.flat]
-    valid = mapping.inside & np.isfinite(u) & np.isfinite(v)
-    steps = np.floor(ms_to_kt(np.hypot(u, v)) / 5 + 0.5)
-    if np.any(valid & (steps > 127)):
-        from sharpmod.providers.hrrr_field import HrrrFieldError
-
-        raise HrrrFieldError("wind exceeds the display encoding range")
-    # These CONUS models use grid-relative winds. Lambert convergence rotates them
-    # to true north before reprojection (NCAR's uvmet convention).
-    from sharpmod.providers.hrrr_products import GLOBAL_MODELS
-    convergence = 0
-    if model not in GLOBAL_MODELS:
-        x = grid.x0 + mapping.flat % grid.shape[1] * grid.spacing
-        y = grid.y0 + mapping.flat // grid.shape[1] * grid.spacing
-        convergence = np.degrees(np.arctan2(x, grid._rho0 - y))
-    direction = np.rint((270 - np.degrees(np.arctan2(v, u)) + convergence) % 360) % 360
-    packed = np.full(u.shape, 65535, dtype="<u2")
-    packed[valid] = (steps[valid].astype(np.uint16) << 9) | direction[valid].astype(
-        np.uint16
+    lambert = None if model in GLOBAL_MODELS else (
+        grid.shape[1], grid.x0, grid.y0, grid.spacing, grid._rho0
     )
+    try:
+        packed = sharpmod_rs.pack_wind_grid(
+            u, v, np.ascontiguousarray(mapping.flat, dtype=np.int64),
+            np.ascontiguousarray(mapping.inside, dtype=np.bool_), lambert,
+        )
+    except ValueError as exc:
+        raise HrrrFieldError(str(exc)) from None
     from sharpmod.bridge.fields import _bounds
 
     return {
         "width": mapping.width,
         "height": mapping.height,
         "bounds": _bounds(mapping.bounds),
-        "data_base64": base64.b64encode(packed.tobytes()).decode("ascii"),
+        "data_base64": base64.b64encode(packed.astype("<u2", copy=False).tobytes()).decode("ascii"),
     }
 
 

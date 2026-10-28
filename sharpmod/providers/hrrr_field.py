@@ -39,13 +39,10 @@ import json
 import logging
 import os
 import re
-import ssl
 import stat
 import tempfile
 import threading
 import time
-import urllib.error
-import urllib.request
 from collections import OrderedDict
 from contextlib import suppress
 from dataclasses import dataclass
@@ -289,125 +286,16 @@ def grib_url(run: datetime, fxx: int, source: str, model: str = "hrrr", *, relea
 # --------------------------------------------------------------------------- #
 
 
-def _ssl_context() -> ssl.SSLContext:
-    try:
-        import certifi
-        return ssl.create_default_context(cafile=certifi.where())
-    except Exception:  # noqa: BLE001 - fall back to the system trust store
-        return ssl.create_default_context()
-
-
-#: How many range requests may be in flight at once.
-#:
-#: A product's records are spread through a 135-400 MiB object, so they rarely
-#: coalesce into one range: the 0-3 km lapse rate needs thirteen records across
-#: two files. Those requests are independent and latency-bound, so issuing a few
-#: together converts a serial chain of round trips into one. Four rather than
-#: thirteen because the bucket is a shared public resource and the gain flattens
-#: once the link is busy.
+#: Retain the existing per-product concurrency limit for range orchestration.
 _RANGE_WORKERS = 4
-
-_SESSION_LOCK = threading.Lock()
-_SESSION = None
-
-
-def _session():
-    """Return a shared pooled HTTP session, or ``None`` to fall back to urllib.
-
-    Connection reuse is the single biggest win in this module's IO: without it
-    every range request pays a fresh TCP and TLS handshake to the same host, and
-    a product needing a dozen records pays it a dozen times.
-    """
-    global _SESSION
-    with _SESSION_LOCK:
-        if _SESSION is not None:
-            return _SESSION
-        try:
-            import requests
-            from requests.adapters import HTTPAdapter
-            from urllib3.util.retry import Retry
-
-            session = requests.Session()
-            retry = Retry(total=2, connect=2, read=2, backoff_factor=0.3,
-                          status_forcelist=(429, 500, 502, 503, 504),
-                          allowed_methods=frozenset({"GET"}))
-            adapter = HTTPAdapter(pool_connections=4,
-                                  # Retain the ranges of all eight bridge workers.
-                                  pool_maxsize=_RANGE_WORKERS * 8,
-                                  max_retries=retry)
-            session.mount("https://", adapter)
-            session.headers.update({"User-Agent": "sharpmod",
-                                    "Accept-Encoding": "identity"})
-            _SESSION = session
-        except Exception:  # noqa: BLE001 - urllib still works, just slower
-            _SESSION = False
-        return _SESSION
 
 
 def _default_opener(url: str, timeout: float, limit: int,
                     byte_range: tuple[int, int] | None = None, *, should_cancel=None) -> bytes:
-    """Fetch ``url``, optionally one byte range, capped at ``limit`` bytes."""
-    if should_cancel and should_cancel():
-        raise DownloadCancelled("field download cancelled")
-    headers = {}
-    if byte_range is not None:
-        headers["Range"] = "bytes=%d-%d" % byte_range
+    """Use native pooled HTTP, byte budgets, retries and cancellation."""
+    import sharpmod_rs
 
-    session = _session()
-    if session:
-        try:
-            response = session.get(url, headers=headers, timeout=timeout,
-                                   stream=True)
-        except Exception as error:  # noqa: BLE001 - requests' own exceptions
-            raise HrrrFieldOffline(f"HRRR connection failed: {error}") from error
-        with response:
-            if response.status_code in (403, 404):
-                raise HrrrFieldUnavailable(
-                    f"HRRR object is not published yet "
-                    f"({response.status_code})")
-            if response.status_code >= 400:
-                raise HrrrFieldError(
-                    f"HRRR request failed: HTTP {response.status_code}")
-            try:
-                payload = _read_body(response.raw, limit, should_cancel)
-            except DownloadCancelled:
-                raise
-            except Exception as error:  # noqa: BLE001 - transport's read errors
-                raise HrrrFieldOffline(
-                    f"HRRR connection failed while reading: {error}") from error
-        if len(payload) > limit:
-            raise HrrrFieldError("HRRR response exceeded the byte budget")
-        return payload
-
-    request = urllib.request.Request(
-        url, headers={"User-Agent": "sharpmod",
-                      "Accept-Encoding": "identity", **headers})
-    try:
-        with urllib.request.urlopen(request, timeout=timeout,
-                                    context=_ssl_context()) as response:
-            payload = _read_body(response, limit, should_cancel)
-    except urllib.error.HTTPError as error:
-        if error.code in (403, 404):
-            raise HrrrFieldUnavailable(
-                f"HRRR object is not published yet ({error.code})") from error
-        raise HrrrFieldError(f"HRRR request failed: HTTP {error.code}") from error
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
-        raise HrrrFieldOffline(f"HRRR connection failed: {error}") from error
-    if len(payload) > limit:
-        raise HrrrFieldError("HRRR response exceeded the byte budget")
-    return payload
-
-
-def _read_body(stream, limit, should_cancel):
-    payload = bytearray()
-    while len(payload) <= limit:
-        if should_cancel and should_cancel():
-            raise DownloadCancelled("field download cancelled")
-        chunk = stream.read(min(64 * 1024, limit + 1 - len(payload)))
-        if not chunk:
-            break
-        payload.extend(chunk)
-    return bytes(payload)
+    return sharpmod_rs.fetch_model_bytes(url, timeout, limit, byte_range, should_cancel)
 
 
 def _remote_limits() -> tuple[float, int]:

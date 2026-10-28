@@ -147,7 +147,7 @@ Native-only map/weather operations are `contour_segments`, `pack_wind_grid`,
 `radar_sites`, `radar_velocity_tilts`, `clear_weather_cache`, `weather_alerts`,
 `fetch_storm_reports`, `parse_storm_reports`, `parse_surface_stations`,
 `parse_surface_observations`, `select_surface_observation`,
-`fetch_surface_observations`, and `sample_radar_radials`. Their PyO3 bindings live in
+`fetch_surface_observations`, `sample_radar_radials`, and `fetch_model_bytes`. Their PyO3 bindings live in
 focused map, wind, weather and report modules. Blocking
 native work releases the interpreter with `Python::detach`, following the
 [PyO3 performance guidance](https://pyo3.rs/main/performance.html).
@@ -181,6 +181,16 @@ Owned snapshots release the interpreter safely, copying only 64 projection rows
 at a time (at most 2.1 MB at the 4096-pixel width), plus native radial codes and
 the output. The existing single-entry projection cache retains its previous
 lifetime.
+
+Forecast-map inventories and GRIB byte ranges use the shared native model HTTP
+client. It retains 32 idle connections per host, the existing identity encoding
+and Range headers, two transient retries, Retry-After handling, response byte
+budgets and the provider's exception classes. Timeouts apply to pending headers
+and individual reads; active large transfers are not cut off by a whole-request
+deadline. Cancellation is checked while headers, chunks or retry delays are
+pending. Range scheduling, decoding and cache ownership remain with their
+existing callers. The separate resumable sounding download transport retains
+its Python implementation.
 
 The wind and interpolation operations default to no explicit sentinel. The QC,
 pressure ordering, and row-parser operations default to `-9999`; passing

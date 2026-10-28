@@ -23,8 +23,8 @@
         "description": "Load independent warning sources together and process storm reports and nearby surface observations with less overhead. Preserve official colours, report units, actual observation times and missing-wind states; incomplete updates remain distinct from an all-clear or a calm observation."
       },
       {
-        "title": "Faster forecast overlays",
-        "description": "Contour extraction, map-coordinate conversion and wind-barb processing run in the native backend. Preserve the same isolines, true-north wind directions, speed encoding and missing-data gaps."
+        "title": "More responsive forecast maps",
+        "description": "Forecast contours and wind barbs take less time to prepare, preserving their geometry, true-north directions and missing-data gaps. Model map downloads reuse connections and retain retries, byte limits and cancellation."
       }
     ]
   },

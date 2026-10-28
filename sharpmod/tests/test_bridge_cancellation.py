@@ -132,16 +132,6 @@ def test_cancelling_one_shared_acquisition_preserves_another_consumer(monkeypatc
     assert calls == [1] and not fields._FLIGHTS
 
 
-def test_stream_cancellation_stops_before_reading_the_remaining_bytes():
-    from sharpmod.models.model_transport import DownloadCancelled
-    from sharpmod.providers.hrrr_field import _read_body
-
-    stream = io.BytesIO(b"x" * 200000)
-    with pytest.raises(DownloadCancelled):
-        _read_body(stream, 200000, lambda: stream.tell() >= 65536)
-    assert stream.tell() == 65536
-
-
 @pytest.mark.parametrize("model", ["hrrr", "nam-3km-conus", "rrfs-a", "refs-m1"])
 def test_fresh_consumers_replace_an_abandoned_field_without_losing_their_flight(monkeypatch, model):
     from datetime import UTC, datetime

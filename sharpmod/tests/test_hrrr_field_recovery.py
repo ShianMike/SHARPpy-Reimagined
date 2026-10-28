@@ -36,16 +36,6 @@ def _raster(product="refc", run=RUN, hour=6):
         retrieved_at=RUN + timedelta(hours=hour + 1))
 
 
-def test_transport_failure_is_distinct_from_unpublished_data(monkeypatch):
-    class BrokenSession:
-        def get(self, *_args, **_kwargs):
-            raise TimeoutError("connection timed out")
-
-    monkeypatch.setattr(hrrr_field, "_session", lambda: BrokenSession())
-    with pytest.raises(hrrr_field.HrrrFieldOffline):
-        hrrr_field._default_opener("https://example.invalid", 0.1, 100)
-
-
 def test_unpublished_negative_cache_keeps_its_no_data_type(monkeypatch):
     calls = []
     hrrr_field.clear_cache()

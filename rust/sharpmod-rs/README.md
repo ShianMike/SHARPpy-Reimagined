@@ -22,6 +22,10 @@ Surface station/observation objects, presentation and exports also retain their
 existing interfaces; only selected observations are restored after a native fetch.
 The radar sampler processes the shared Level II/III radial-to-pixel loop in
 Rust, retaining WGS84 projection, native gate codes, palettes and PNG calibration.
+Forecast-map inventory and byte-range HTTP downloads also run in the shared
+Rust core, retaining pooled connections, retries, per-read timeouts, budgets and
+cancellation. Existing range scheduling, decoding and field caches keep their
+current owners.
 
 The SHARPpy widget stack, renderer and model-retrieval orchestration remain in
 Python. The native workspace kernels own their small

@@ -23,6 +23,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Route forecast-map inventory and GRIB byte-range HTTP downloads through Rust.
+  Reuse up to 32 idle connections per host, retain two transient retries and
+  Retry-After handling, enforce byte budgets, and cancel pending headers, reads
+  and retry waits. Preserve per-read timeouts and the distinction between
+  unpublished data, offline failures and HTTP errors. Remove the Python HTTP
+  session, TLS fallback and streaming read loop; retain range scheduling and
+  decoded-field/cache ownership.
 - Resample Level II/III radar gates in parallel Rust, retaining native codes,
   gate edges, missing sectors, range-folded velocity, echo-top flags and PNG
   hover calibration. Remove the Python sampling loop; keep the existing WGS84

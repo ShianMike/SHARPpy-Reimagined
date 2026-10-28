@@ -20,6 +20,8 @@ pub mod radar_sampling;
 mod radar_sampling_bindings;
 pub mod records;
 mod report_bindings;
+mod sars;
+mod sars_bindings;
 mod surface_bindings;
 mod weather;
 pub mod wind;
@@ -804,6 +806,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     height_grid_bindings::register(module)?;
     igra_bindings::register(module)?;
     report_bindings::register(module)?;
+    sars_bindings::register(module)?;
     surface_bindings::register(module)?;
     radar_sampling_bindings::register(module)?;
     model_http_bindings::register(module)?;

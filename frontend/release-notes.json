@@ -24,7 +24,7 @@
       },
       {
         "title": "Less repeated sounding work",
-        "description": "Derecho and parcel-based sounding calculations reuse the shared calculation backend, reducing repeated profile preparation and maximum parcel level processing. Historical IGRA soundings also take less time to decode while retaining their units, source information and missing-data checks."
+        "description": "Derecho and parcel calculations reuse shared work, and historical analogue searches reuse their databases to reduce sounding preparation time. IGRA archives also decode with less overhead while retaining units, source information and missing-data checks."
       }
     ]
   },

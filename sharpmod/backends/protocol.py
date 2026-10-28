@@ -66,6 +66,9 @@ REQUIRED_RUST_CAPABILITIES = (
     "igra_level",
     "igra_sounding_rows",
     "igra_dewpoint_from_relative_humidity",
+    "match_sars_hail",
+    "match_sars_supercell",
+    "profile_sars",
 )
 
 

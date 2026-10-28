@@ -23,6 +23,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Match SARS hail and supercell analogues in Rust and reuse parsed databases
+  while their files are unchanged. Route accelerated sounding profiles through
+  the native matcher, retaining the existing SHIP calculation, thresholds,
+  signed helicity, database order, probabilities, public tuple/array types,
+  hemisphere selection, empty-match behavior and 15-result hail display limit.
 - Decode IGRA sounding headers, fixed-width levels and humidity-derived
   dewpoints in Rust, scanning canonical archives without a Python list of every
   line. Remove the replaced parsing and column-assembly loops. Keep the

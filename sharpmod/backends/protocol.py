@@ -60,6 +60,7 @@ REQUIRED_RUST_CAPABILITIES = (
     "sample_radar_radials",
     "fetch_model_bytes",
     "interpolate_height_grid",
+    "parcel_maximum_level",
 )
 
 

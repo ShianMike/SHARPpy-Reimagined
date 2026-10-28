@@ -10,6 +10,7 @@ pub mod interpolation;
 pub mod kinematics;
 mod map_geometry;
 mod model_http_bindings;
+mod parcel_display_bindings;
 pub mod parcels;
 pub mod parsing;
 pub mod quality_control;
@@ -803,6 +804,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     surface_bindings::register(module)?;
     radar_sampling_bindings::register(module)?;
     model_http_bindings::register(module)?;
+    parcel_display_bindings::register(module)?;
     wind_grid_bindings::register(module)?;
     module.add_function(wrap_pyfunction!(py_wind_to_components, module)?)?;
     module.add_function(wrap_pyfunction!(py_components_to_wind, module)?)?;

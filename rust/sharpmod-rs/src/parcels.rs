@@ -8,6 +8,9 @@
 
 use std::cmp::Ordering;
 
+mod maximum;
+pub use maximum::maximum_parcel_level;
+
 pub const PARCEL_COUNT: usize = 3;
 pub const CONVECTIVE_PARCEL_COUNT: usize = 5;
 pub const PARCEL_WIDTH: usize = 14;

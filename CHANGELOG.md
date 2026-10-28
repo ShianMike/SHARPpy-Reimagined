@@ -29,8 +29,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Compute maximum parcel levels in Rust using the existing thermodynamic lift
   and pressure interpolation routines. Remove the Python energy/refinement
   loops used when constructing native sounding parcels. Preserve reported
-  levels, the 1 hPa refinement, AGL heights, unavailable-EL masks and public
-  SHARPpy parcel fields.
+  levels, the 1 hPa refinement, AGL heights, independently missing pressure
+  and height values, unavailable-EL masks and public SHARPpy parcel fields.
 - Reuse the existing parcel backend for DCP downdraft energy and the surface/
   most-unstable CAPE fallbacks used by EHI, VGP and normalized CAPE/CIN.
   Remove duplicate Python SHARPpy profile construction and parcel-oracle calls.

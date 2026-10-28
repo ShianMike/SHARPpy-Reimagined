@@ -60,6 +60,39 @@ fn native_maximum_levels_match_the_existing_python_example() {
         .unwrap();
         assert_eq!(raised_result.0, result.0);
         assert!((raised_result.1 - result.1).abs() < 1e-6);
+        let top = result.0 + 0.01;
+        let clipped: Vec<Vec<f64>> = columns
+            .iter()
+            .enumerate()
+            .map(|(field, values)| {
+                let mut column: Vec<_> = columns[0]
+                    .iter()
+                    .zip(values)
+                    .filter(|(pressure, _)| **pressure > top)
+                    .map(|(_, value)| *value)
+                    .collect();
+                column.push(if field == 0 {
+                    top
+                } else {
+                    PressureSeries::new(&columns[0], values, None).at(top)
+                });
+                column
+            })
+            .collect();
+        let edge = maximum_parcel_level(
+            [&clipped[0], &clipped[1], &clipped[2], &clipped[3]],
+            (
+                start[0].as_f64().unwrap(),
+                start[1].as_f64().unwrap(),
+                start[2].as_f64().unwrap(),
+            ),
+            parcel["el"].as_f64().unwrap(),
+            0,
+            None,
+        )
+        .unwrap();
+        assert_eq!(edge.0, result.0);
+        assert!(edge.1.is_nan());
     }
 }
 

@@ -105,11 +105,7 @@ pub fn maximum_parcel_level(
                 refine_height = target_height;
             }
             let agl = heights.at(refine_pressure) - height[sfc];
-            return Ok(if refine_pressure.is_finite() && agl.is_finite() {
-                (refine_pressure, agl)
-            } else {
-                absent
-            });
+            return Ok((refine_pressure, agl));
         }
         previous_pressure = next_pressure;
         previous_height = next_height;

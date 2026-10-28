@@ -59,6 +59,7 @@ REQUIRED_RUST_CAPABILITIES = (
     "fetch_surface_observations",
     "sample_radar_radials",
     "fetch_model_bytes",
+    "interpolate_height_grid",
 )
 
 

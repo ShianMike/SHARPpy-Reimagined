@@ -23,6 +23,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Interpolate terrain-relative model-grid heights in Rust for the
+  0–3 km lapse-rate and derived 0–1 km shear maps. Remove the Python layer loop
+  and full-grid stack copies, interpolation masks and weights; retain the first
+  finite bracket, missing-data gaps, CAPE screen and float32/float64 arithmetic.
+  Snapshot bounded batches before releasing the interpreter.
 - Route forecast-map inventory and GRIB byte-range HTTP downloads through Rust.
   Reuse up to 32 idle connections per host, retain two transient retries and
   Retry-After handling, enforce byte budgets, and cancel pending headers, reads

@@ -24,7 +24,7 @@
       },
       {
         "title": "More responsive forecast maps",
-        "description": "Forecast contours and wind barbs take less time to prepare, preserving their geometry, true-north directions and missing-data gaps. Model map downloads reuse connections and retain retries, byte limits and cancellation."
+        "description": "Forecast contours, wind barbs and terrain-relative lapse-rate and shear maps take less time to prepare, preserving their geometry, true-north directions and missing-data gaps. Model map downloads reuse connections and retain retries, byte limits and cancellation."
       }
     ]
   },

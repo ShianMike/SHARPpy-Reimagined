@@ -26,6 +26,9 @@ Forecast-map inventory and byte-range HTTP downloads also run in the shared
 Rust core, retaining pooled connections, retries, per-read timeouts, budgets and
 cancellation. Existing range scheduling, decoding and field caches keep their
 current owners.
+Height-stack interpolation for terrain-relative lapse-rate and low-level shear
+maps also runs in Rust, preserving source rounding and missing brackets
+with bounded, owned batches instead of full-grid interpolation temporaries.
 
 The SHARPpy widget stack, renderer and model-retrieval orchestration remain in
 Python. The native workspace kernels own their small

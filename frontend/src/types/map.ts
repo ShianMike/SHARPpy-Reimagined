@@ -25,6 +25,8 @@ export interface FieldProduct {
   category: string;
   description: string;
   caveat: string;
+  /** First forecast hour with a complete product interval. */
+  minimumForecastHour: number;
   palette: Palette;
   /** The product's contour-line spec; null for products drawn as colour only. */
   contour: ProductContour | null;

@@ -6,7 +6,7 @@ import re
 import numpy as np
 import pytest
 
-from sharpmod.bridge import fields
+from sharpmod.bridge import fields, frame_cache
 from sharpmod.bridge.errors import BridgeError
 from sharpmod.providers import hrrr_field as hf, hrrr_products as hp
 
@@ -100,3 +100,22 @@ def test_three_hour_maximum_rejects_a_gap_instead_of_returning_partial_data(monk
     with pytest.raises(hf.HrrrFieldUnavailable, match="missing F005"):
         hf._download_fields(hp.PRODUCTS["uh-2-5km-3h"], RUN, 6,
                             opener=opener, timeout=1, should_cancel=None)
+
+
+@pytest.mark.parametrize("hours", [1, 3])
+def test_cache_listing_skips_incomplete_intervals_without_rejecting_the_run(hours, tmp_path, monkeypatch):
+    monkeypatch.setenv("SHARPMOD_HRRR_FIELD_CACHE", str(tmp_path))
+    keys = ["tmp-2m", f"uh-2-5km-{hours}h"]
+    for hour in range(7):
+        for key in keys:
+            frame_cache.write(frame_cache.path("grid", "hrrr", key, RUN, hour, fields.FRAME), {"saved": True})
+    request = {"model": "hrrr", "run_time": RUN.isoformat(), "products": keys, "hours": list(range(7))}
+    assert frame_cache.cached_hours(request) == list(range(hours, 7))
+    assert frame_cache.cached_hours({**request, "hours": [0]}) == []
+    with pytest.raises(BridgeError, match="not a hrrr field product"):
+        frame_cache.cached_hours({**request, "products": ["unknown"]})
+    with pytest.raises(BridgeError):
+        frame_cache.cached_hours({**request, "hours": [999]})
+    catalog = fields.catalog({"model": "hrrr"})
+    product = next(p for p in catalog["products"] if p["key"] == keys[1])
+    assert product["minimum_forecast_hour"] == hours

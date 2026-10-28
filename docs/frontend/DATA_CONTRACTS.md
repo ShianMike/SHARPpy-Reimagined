@@ -566,6 +566,9 @@ The 1-hour and 3-hour 2-5 km AGL updraft-helicity products use native hourly
 MAXUVV and share the supplied stepped 0-400 m²/s² scale. Three-hour maxima
 require all three hourly intervals; missing data stays missing. Catalogues hide
 1-hour maxima before F001 and 3-hour maxima before F003. These products are
+labelled with `minimum_forecast_hour` (`minimumForecastHour` in the public
+catalogue); omitted values mean zero. Cache listing ignores earlier hours, and
+Load Hours only queues hours supported by every selected product. Products are
 offered for HRRR, NAM CONUS nest, RRFS/REFS and HiResW, where the fields are
 published; the original NAM and global-model catalogues do not offer them.
 RRFS runs end at F084; NAM and REFS at F060; HRRR retains

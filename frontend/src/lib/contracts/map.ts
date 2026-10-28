@@ -81,7 +81,7 @@ function parseContour(value: unknown, path: string): ProductContour {
 
 function parseProduct(value: unknown, path: string): FieldProduct {
   const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["key", "label", "shortLabel", "category", "description", "caveat", "palette", "contour", "wind"]);
+  expectExactKeys(obj, path, ["key", "label", "shortLabel", "category", "description", "caveat", "palette", "contour", "wind"], ["minimumForecastHour"]);
   return {
     key: key(obj.key, at(path, "key")),
     label: label(obj.label, at(path, "label")),
@@ -89,6 +89,7 @@ function parseProduct(value: unknown, path: string): FieldProduct {
     category: expectString(obj.category, at(path, "category"), { minLength: 1, maxLength: 80 }),
     description: prose(obj.description, at(path, "description")),
     caveat: prose(obj.caveat, at(path, "caveat")),
+    minimumForecastHour: obj.minimumForecastHour === undefined ? 0 : expectInteger(obj.minimumForecastHour, at(path, "minimumForecastHour"), { min: 0, max: 384 }),
     palette: parsePalette(obj.palette, at(path, "palette")),
     contour: expectNullable(obj.contour, at(path, "contour"), parseContour),
     wind: expectBoolean(obj.wind, at(path, "wind")),

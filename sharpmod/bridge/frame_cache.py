@@ -51,15 +51,18 @@ def cached_hours(params):
     if not isinstance(hours, list) or not 1 <= len(hours) <= 385:
         raise p.invalid("hours must contain 1 to 385 forecast hours")
     selections = [fields._request({"model": params["model"], "product": product,
-                                   "run_time": params["run_time"], "forecast_hour": 0})
+                                   "run_time": params["run_time"], "forecast_hour": 0}, require_interval=False)
                   for product in products]
     hours = [fields._request({"model": params["model"], "product": products[0],
-                              "run_time": params["run_time"], "forecast_hour": hour})[-1]
+                              "run_time": params["run_time"], "forecast_hour": hour}, require_interval=False)[-1]
              for hour in hours]
+    first_hour = max(product.max_hours for _, product, _, _ in selections)
     hrrr_field._prune_disk_cache()
     present = {target for target, size, ready in storage._files(hrrr_field.disk_cache_root(), "*.json.gz") if size > 0 and ready}
     result = []
     for hour in sorted(set(hours)):
+        if hour < first_hour:
+            continue
         needed = [path(kind, model, product.key, run, hour, fields.FRAME)
                   for model, product, run, _ in selections
                   for kind in (["grid", "contours"] if product.contour is not None or product.wind else ["grid"])]

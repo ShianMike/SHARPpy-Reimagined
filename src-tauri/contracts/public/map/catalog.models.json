@@ -11287,6 +11287,7 @@
         "category": "Explicit Convective",
         "description": "Largest 0-3 km updraft helicity the model produced during the hour ending at this forecast time.",
         "caveat": "",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -11583,6 +11584,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 1 hour ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F001; a complete interval is required.",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -11879,6 +11881,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 3 hours ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F003; a complete interval is required.",
+        "minimumForecastHour": 3,
         "palette": {
           "stops": [
             [
@@ -33728,6 +33731,7 @@
         "category": "Explicit Convective",
         "description": "Largest 0-3 km updraft helicity the model produced during the hour ending at this forecast time.",
         "caveat": "",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -34024,6 +34028,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 1 hour ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F001; a complete interval is required.",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -34320,6 +34325,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 3 hours ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F003; a complete interval is required.",
+        "minimumForecastHour": 3,
         "palette": {
           "stops": [
             [
@@ -42224,6 +42230,7 @@
         "category": "Explicit Convective",
         "description": "Largest 0-3 km updraft helicity the model produced during the hour ending at this forecast time.",
         "caveat": "",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -42520,6 +42527,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 1 hour ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F001; a complete interval is required.",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -42816,6 +42824,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 3 hours ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F003; a complete interval is required.",
+        "minimumForecastHour": 3,
         "palette": {
           "stops": [
             [
@@ -50720,6 +50729,7 @@
         "category": "Explicit Convective",
         "description": "Largest 0-3 km updraft helicity the model produced during the hour ending at this forecast time.",
         "caveat": "",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -51016,6 +51026,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 1 hour ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F001; a complete interval is required.",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -51312,6 +51323,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 3 hours ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F003; a complete interval is required.",
+        "minimumForecastHour": 3,
         "palette": {
           "stops": [
             [
@@ -59216,6 +59228,7 @@
         "category": "Explicit Convective",
         "description": "Largest 0-3 km updraft helicity the model produced during the hour ending at this forecast time.",
         "caveat": "",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -59512,6 +59525,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 1 hour ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F001; a complete interval is required.",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -59808,6 +59822,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 3 hours ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F003; a complete interval is required.",
+        "minimumForecastHour": 3,
         "palette": {
           "stops": [
             [
@@ -67712,6 +67727,7 @@
         "category": "Explicit Convective",
         "description": "Largest 0-3 km updraft helicity the model produced during the hour ending at this forecast time.",
         "caveat": "",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -68008,6 +68024,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 1 hour ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F001; a complete interval is required.",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -68304,6 +68321,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 3 hours ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F003; a complete interval is required.",
+        "minimumForecastHour": 3,
         "palette": {
           "stops": [
             [
@@ -76208,6 +76226,7 @@
         "category": "Explicit Convective",
         "description": "Largest 0-3 km updraft helicity the model produced during the hour ending at this forecast time.",
         "caveat": "",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -76504,6 +76523,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 1 hour ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F001; a complete interval is required.",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -76800,6 +76820,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 3 hours ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F003; a complete interval is required.",
+        "minimumForecastHour": 3,
         "palette": {
           "stops": [
             [
@@ -112041,6 +112062,7 @@
         "category": "Explicit Convective",
         "description": "Largest 0-3 km updraft helicity the model produced during the hour ending at this forecast time.",
         "caveat": "",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -112337,6 +112359,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 1 hour ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F001; a complete interval is required.",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -112633,6 +112656,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 3 hours ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F003; a complete interval is required.",
+        "minimumForecastHour": 3,
         "palette": {
           "stops": [
             [
@@ -122125,6 +122149,7 @@
         "category": "Explicit Convective",
         "description": "Largest 0-3 km updraft helicity the model produced during the hour ending at this forecast time.",
         "caveat": "",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -122421,6 +122446,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 1 hour ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F001; a complete interval is required.",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -122717,6 +122743,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 3 hours ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F003; a complete interval is required.",
+        "minimumForecastHour": 3,
         "palette": {
           "stops": [
             [
@@ -132209,6 +132236,7 @@
         "category": "Explicit Convective",
         "description": "Largest 0-3 km updraft helicity the model produced during the hour ending at this forecast time.",
         "caveat": "",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -132505,6 +132533,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 1 hour ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F001; a complete interval is required.",
+        "minimumForecastHour": 1,
         "palette": {
           "stops": [
             [
@@ -132801,6 +132830,7 @@
         "category": "Explicit Convective",
         "description": "Maximum 2-5 km AGL updraft helicity over the 3 hours ending at the selected forecast time, in m\u00b2/s\u00b2.",
         "caveat": "Uses native hourly MXUPHL maxima from the same run. Available from F003; a complete interval is required.",
+        "minimumForecastHour": 3,
         "palette": {
           "stops": [
             [

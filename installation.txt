@@ -29,7 +29,7 @@ xarray>=2024.7,<2027.0
 requests>=2.28,<3.0
 
 [dev]
-pytest>=7.0,<10.0
+pytest>=7.0,<9.2
 hypothesis>=6.0,<7.0
 pytest-xdist>=3.6,<4.0
 pytest-timeout>=2.4,<3.0
@@ -163,7 +163,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   [render]  HTTP for the render path
               requests>=2.28,<3.0
   [dev]   test tooling
-              pytest>=7.0,<10.0, hypothesis>=6.0,<7.0,
+              pytest>=7.0,<9.2, hypothesis>=6.0,<7.0,
               pytest-xdist>=3.6,<4.0 (the -n/--workers parallel lanes),
               pytest-timeout>=2.4,<3.0 (the per-test safety timeout),
               PyYAML>=6.0,<7.0

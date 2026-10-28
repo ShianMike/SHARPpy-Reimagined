@@ -30,6 +30,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a six-hour negative cache entry; keep longer caching for historical misses.
 - Align Python, Rust, frontend and desktop version metadata, lockfiles,
   health/hello fixtures and updater tests with v3.4.1.
+- Keep missing threshold-fixture values exact under pytest 9.2 while retaining
+  the existing tolerances for numeric values.
+- Keep test tooling below pytest 9.2 while the released pytest-xdist 3.8 cannot
+  preserve shared Qt worker groups ([upstream issue #1386](https://github.com/pytest-dev/pytest-xdist/issues/1386)).
 - Restore the README's release-download, desktop and analysis badges and its
   screenshot tour, while keeping the description focused on the current version.
   Check visible version text without rejecting existing screenshot paths.

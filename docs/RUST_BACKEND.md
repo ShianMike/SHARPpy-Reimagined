@@ -14,19 +14,22 @@ The [Rust-first performance plan](performance/RUST_MIGRATION_PLAN.md) and
 progressive modernization. Native kernels, decoder time, network retrieval,
 rendering and IPC are measured separately before selecting a migration.
 
-The independently optimized Python backend remains fully functional and is the
-portable fallback. Source and Python-only installations therefore do not need
-Rust, Cargo, or maturin, and a missing or unloadable extension does not prevent
-the application from starting in default `auto` mode.
+The Python numerical backend remains available for scientific compatibility.
+Map contours, velocity tilt availability, the radar site catalogue, and NWS
+warning/watch fetching and polygon processing now require the native extension
+in browser mode. The desktop calls the shared Rust weather core directly for
+radar inventory. These migrated operations have no Python implementation.
+Build/install `sharpmod_rs` before running the complete source application.
 
 ## Backend selection
 
-Set `SHARPMOD_BACKEND` before starting Python:
+Set `SHARPMOD_BACKEND` before starting Python. This selects the numerical
+backend; the migrated weather and map operations always use Rust:
 
 | Value | Behavior |
 | --- | --- |
 | `auto` | Default. Use Rust when the extension loads successfully; otherwise use Python and retain the fallback reason for diagnostics. |
-| `python` | Always use the optimized Python implementation. The Rust extension is not required. |
+| `python` | Use the Python scientific implementation. Native weather and contour operations still require `sharpmod_rs`. |
 | `rust` | Require the Rust implementation. Missing or unloadable native code produces a clear error instead of silently falling back. |
 
 PowerShell examples:
@@ -61,13 +64,13 @@ The diagnostic reports the requested and active backends, whether
 reason when `auto` selected Python. In forced `python` mode the selector does
 not import the native module, so `rust_installed` can be true while
 `rust_version` remains `None`. Application code should import through
-`sharpmod.backends`; direct `sharpmod_rs` imports are reserved for extension
-development and benchmark verification.
+`sharpmod.backends` for numerical work. Thin weather/map compatibility adapters
+call the native-only operations directly.
 
 An importable native module is not accepted on import success alone. Before
 activation, the selector requires its package version to match `sharpmod`
 exactly, its integer backend API version to equal the Python contract (currently
-`7`), and all 18 required operations listed below to be callable. In `auto` mode an old
+`7`), and all required operations in `backends/protocol.py` to be callable. In `auto` mode an old
 or incomplete extension falls back to Python and records the compatibility
 failure in `fallback_reason`; in forced `rust` mode the same mismatch raises
 `BackendUnavailableError` instead of reaching an operation with stale native
@@ -139,6 +142,18 @@ boundary results, error conditions, units, and output types. Python/Rust
 equivalence tests use explicit floating-point tolerances. Unit conversions
 remain the caller's responsibility unless an operation's contract says
 otherwise.
+
+Native-only map/weather operations are `contour_segments`, `radar_sites`,
+`radar_velocity_tilts`, `clear_weather_cache`, and `weather_alerts`. Their PyO3
+bindings live in focused `map_geometry.rs` and `weather.rs` modules. Blocking
+native work releases the interpreter with `Python::detach`, following the
+[PyO3 performance guidance](https://pyo3.rs/main/performance.html).
+The HTTP and alert-processing implementation is shared with Tauri in
+`rust/weather-core`; the source distribution includes that crate and its radar
+catalogue. NWS requests preserve the official service's
+[4000-record limit and current-only semantics](https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer),
+including CAP confirmation before accepting an all-clear. Snapshot history
+remains under the existing session cache owner.
 
 The wind and interpolation operations default to no explicit sentinel. The QC,
 pressure ordering, and row-parser operations default to `-9999`; passing

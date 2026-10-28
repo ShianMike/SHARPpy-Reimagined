@@ -15,7 +15,7 @@ Run this only when the catalogue needs refreshing; the result is committed:
 
     python -m sharpmod.tools.build_radar_sites
 
-Writes ``sharpmod/resources/radar_sites.json``.
+Writes ``rust/weather-core/resources/radar_sites.json``.
 """
 
 from __future__ import annotations
@@ -145,8 +145,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args(argv)
 
-    destination = args.out or (Path(__file__).resolve().parents[1]
-                               / "resources" / "radar_sites.json")
+    destination = args.out or (Path(__file__).resolve().parents[2]
+                               / "rust" / "weather-core" / "resources" / "radar_sites.json")
     catalogue = build(workers=max(1, args.workers))
     if not catalogue["sites"]:
         print("no sites answered; refusing to write an empty catalogue",

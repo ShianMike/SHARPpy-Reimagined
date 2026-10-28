@@ -24,6 +24,7 @@ use crate::dto::stations::StationCatalog;
 use crate::error::{BackendError, ErrorContext, PYTHON_PROVIDER};
 use crate::python::protocol::{CatalogResult, HealthResult};
 use crate::python::supervisor::Supervisor;
+use sharpmod_weather::radar::VelocityInventory;
 
 pub const OP_HEALTH: &str = "get_backend_health";
 pub const OP_CATALOG: &str = "get_station_catalog";
@@ -43,6 +44,7 @@ pub struct Router {
     pub(crate) places: Mutex<Option<Arc<PlaceLabels>>>,
     /// The radar site catalogue, static per bridge (backend/map_ops.rs).
     pub(crate) radar_sites: Mutex<Option<Arc<RadarSiteCatalogPublic>>>,
+    pub(crate) velocity_inventory: VelocityInventory,
     /// The storm report options, static per bridge (backend/reports_ops.rs).
     pub(crate) report_options: Mutex<Option<Arc<ReportOptions>>>,
 }
@@ -59,6 +61,7 @@ impl Router {
             map_catalog: Mutex::new(None),
             places: Mutex::new(None),
             radar_sites: Mutex::new(None),
+            velocity_inventory: VelocityInventory::new(),
             report_options: Mutex::new(None),
         }
     }
@@ -163,6 +166,7 @@ impl Router {
             .report_options
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = None;
+        self.velocity_inventory.clear();
         log::info!("{OP_RESTART}: restarting the Python backend");
         Ok(self.supervisor.restart().await)
     }

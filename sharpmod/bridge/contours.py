@@ -10,13 +10,12 @@ The extraction is marching squares: for every grid edge whose endpoints
 straddle a level, the crossing is linearly interpolated between the two
 samples, and the crossings of each cell are paired into segments. Levels are
 the multiples of the product's interval, the same level set ``draw_contours``
-bands between. Cells with a non-finite corner contribute nothing, so holes and
+bands between. Edges with a non-finite endpoint contribute no crossings, so holes and
 below-ground stay empty instead of drawing a line along the domain edge.
 """
 
 from __future__ import annotations
 
-import math
 import base64
 from typing import Any
 
@@ -25,8 +24,6 @@ import numpy as np
 from sharpmod.bridge import params as p
 from sharpmod.bridge.errors import BridgeError
 
-#: Decimal places kept for line vertices: about a metre, finer than the frame.
-POINT_DECIMALS = 5
 #: Ceiling on the segments of one request. A level set denser than this would
 #: be a hairball on screen and would approach the protocol's frame cap; the
 #: honest answer is that the product is too dense to draw at this interval.
@@ -84,102 +81,14 @@ def wind_grid(product, decoded, mapping, *, model="hrrr"):
     }
 
 
-#: Cell edge crossings, keyed by the edge bitmask (T*1 + R*2 + B*4 + L*8).
-#: The number of crossed edges in a cell is always even, so only these seven
-#: codes occur; 15 is the saddle (all four corners alternate), paired T-R with
-#: B-L by fixed convention so neighbouring cells still share their edge points
-#: exactly and line segments meet.
-_EDGE_PAIRS: dict[int, tuple[tuple[str, str], ...]] = {
-    3: (("T", "R"),),
-    5: (("T", "B"),),
-    6: (("R", "B"),),
-    9: (("T", "L"),),
-    10: (("R", "L"),),
-    12: (("B", "L"),),
-    15: (("T", "R"), ("B", "L")),
-}
+def contour_segments(field: np.ndarray, interval: float, *, bounds=None):
+    """Compatibility wiring; native extraction and projection release the interpreter."""
+    import sharpmod_rs
 
-
-def _crossings(values: np.ndarray, level: float) -> tuple[np.ndarray, np.ndarray]:
-    """Return per-edge interpolation fractions (NaN where no crossing).
-
-    ``horizontal[r, c]`` sits between samples ``(r, c)`` and ``(r, c + 1)``;
-    ``vertical[r, c]`` between ``(r, c)`` and ``(r + 1, c)``. Both are NaN at
-    edges whose endpoints are not both finite, so a crossing needs a real value
-    on either side -- the rule ``draw_contours`` applies.
-    """
-    both = np.isfinite(values)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        horizontal = (values[:, :-1] - level) / (values[:, :-1] - values[:, 1:])
-        vertical = (values[:-1, :] - level) / (values[:-1, :] - values[1:, :])
-    edge = (values[:, :-1] < level) != (values[:, 1:] < level)
-    horizontal = np.where(edge & both[:, :-1] & both[:, 1:], horizontal, np.nan)
-    edge = (values[:-1, :] < level) != (values[1:, :] < level)
-    vertical = np.where(edge & both[:-1, :] & both[1:, :], vertical, np.nan)
-    return horizontal, vertical
-
-
-def _edge_xy(
-    edge: str, row: int, col: int, horizontal: np.ndarray, vertical: np.ndarray
-) -> tuple[float, float]:
-    """The crossing point of one cell edge, in sample coordinates.
-
-    Sample ``(row, col)`` is ``(col, row)`` and a crossing interpolates
-    between the two samples of its edge, so a shared edge computes one point
-    for both of its cells and segments meet exactly.
-    """
-    if edge == "T":
-        return col + float(horizontal[row, col]), float(row)
-    if edge == "B":
-        return col + float(horizontal[row + 1, col]), float(row + 1)
-    if edge == "L":
-        return float(col), row + float(vertical[row, col])
-    return float(col + 1), row + float(vertical[row, col + 1])
-
-
-def contour_segments(
-    field: np.ndarray, interval: float
-) -> list[tuple[tuple[float, float], tuple[float, float]]]:
-    """Return the isoline segments of ``field`` at every multiple of ``interval``."""
-    values = np.asarray(field, dtype=np.float64)
-    if values.ndim != 2 or not math.isfinite(interval) or interval <= 0:
-        return []
-    finite = values[np.isfinite(values)]
-    if finite.size == 0:
-        return []
-    first = math.floor(float(finite.min()) / interval) + 1
-    last = math.floor(float(finite.max()) / interval)
-    out: list[tuple[tuple[float, float], tuple[float, float]]] = []
-    for step in range(first, last + 1):
-        horizontal, vertical = _crossings(values, step * interval)
-        present = {
-            "T": np.isfinite(horizontal[:-1, :]),
-            "R": np.isfinite(vertical[:, 1:]),
-            "B": np.isfinite(horizontal[1:, :]),
-            "L": np.isfinite(vertical[:, :-1]),
-        }
-        code = (
-            present["T"].astype(np.uint8)
-            + 2 * present["R"].astype(np.uint8)
-            + 4 * present["B"].astype(np.uint8)
-            + 8 * present["L"].astype(np.uint8)
-        )
-        for case, pairs in _EDGE_PAIRS.items():
-            for row, col in np.argwhere(code == case):
-                for first_edge, second_edge in pairs:
-                    out.append(
-                        (
-                            _edge_xy(first_edge, row, col, horizontal, vertical),
-                            _edge_xy(second_edge, row, col, horizontal, vertical),
-                        )
-                    )
-                    if len(out) > MAX_SEGMENTS:
-                        raise BridgeError(
-                            "FIELD_FETCH_FAILED",
-                            "The contour lines of this product are too dense to draw.",
-                            False,
-                        )
-    return out
+    try:
+        return sharpmod_rs.contour_segments(np.asarray(field, dtype=np.float64), interval, MAX_SEGMENTS, bounds)
+    except ValueError as exc:
+        raise BridgeError("FIELD_FETCH_FAILED", str(exc), False) from None
 
 
 def contours(params: dict[str, Any]) -> dict[str, Any]:
@@ -245,21 +154,7 @@ def _from_decoded(model, product, run, hour, decoded):
         raise BridgeError(
             "FIELD_FETCH_FAILED", f"{product.label} could not be read.", False
         ) from None
-    lon0, lon1, lat0, lat1 = bounds
-
-    def to_lon(x: float) -> float:
-        return lon0 + (x + 0.5) * (lon1 - lon0) / width
-
-    def to_lat(y: float) -> float:
-        return lat1 - (y + 0.5) * (lat1 - lat0) / height
-
-    segments = [
-        [
-            [round(to_lon(ax), POINT_DECIMALS), round(to_lat(ay), POINT_DECIMALS)],
-            [round(to_lon(bx), POINT_DECIMALS), round(to_lat(by), POINT_DECIMALS)],
-        ]
-        for (ax, ay), (bx, by) in (contour_segments(grid, float(spec.interval)) if spec is not None else [])
-    ]
+    segments = contour_segments(grid, float(spec.interval), bounds=bounds) if spec is not None else []
     return frame_cache.write(target, {
         "product": product.key,
         "run_time": p.iso(run),

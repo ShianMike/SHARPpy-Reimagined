@@ -23,6 +23,20 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Extract map contours and project their vertices to longitude/latitude in
+  Rust, retaining the existing marching-squares pairing, output order and
+  five-decimal coordinates. Remove the Python extraction and projection loops.
+- Move NWS warning/watch downloads, official colour parsing, polygon validation,
+  duplicate merging and all-clear checks into the shared Rust weather core.
+  Fetch independent source requests concurrently, reuse the HTTP client and
+  parsed styles, and release the Python interpreter during native work. Remove
+  the replaced Python provider; retain session-cached history and the public DTO.
+- Fetch NOAA Level III velocity-tilt availability directly in the desktop Rust
+  backend and browser extension, with a reused HTTP client, bounded requests
+  and 45-second directory caching. Preserve all seven cuts, historical matching and the distinction
+  between missing scans and failed checks. Reflectivity/correlation checks and
+  radar image decoding keep their existing providers. Embed the shared 155-site
+  catalogue in Rust and remove the replaced Python inventory implementation.
 - Replace Maximum Updraft Velocity with the requested 1-hour 2-5 km updraft
   helicity product. Hide hourly maxima before F001 and three-hour maxima before
   F003; retain the distinct 0-3 km UH layer with an accurate hourly label.

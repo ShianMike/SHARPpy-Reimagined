@@ -3087,6 +3087,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sharpmod-weather"
+version = "3.4.1"
+dependencies = [
+ "log",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "time",
+ "tokio",
+]
+
+[[package]]
 name = "sharppy-reimagined"
 version = "3.4.1"
 dependencies = [
@@ -3094,6 +3107,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "sharpmod-weather",
  "tauri",
  "tauri-build",
  "tauri-plugin-log",

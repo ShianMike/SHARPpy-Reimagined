@@ -199,8 +199,18 @@ jobs:
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip check
 
+      - &install_rust_backend
+        name: Build and install the Rust backend
+        # Weather providers are native; the compatibility lane still selects Python science kernels.
+        run: |
+          python -m pip install "maturin>=1.15,<2"
+          (cd rust/sharpmod-rs && python -m maturin build --release --locked --interpreter python --out dist)
+          python -m pip install --force-reinstall --no-deps rust/sharpmod-rs/dist/*.whl
+          python -c "from sharpmod.backends import backend_info; info = backend_info(); assert info['active_backend'] == 'rust', info; assert info['rust_installed'] is True, info; print('backend:', info)"
+
       - name: Run bounded all-offline compatibility smoke
         env:
+          SHARPMOD_BACKEND: python
           PYTHONFAULTHANDLER: "1"
           PYTEST_ADDOPTS: "--capture=sys"
         # A standard hosted runner has two cores. Four CPU-heavy workers made
@@ -245,23 +255,7 @@ jobs:
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip check
 
-      - &install_rust_backend
-        name: Build and install the Rust backend
-        # Hosted runners used to test only the pure-Python fallback, which costs
-        # roughly 6.7x on the parcel/kinematics kernels and made the serial gate
-        # the whole release's critical path. The three heavy lanes now exercise
-        # the accelerated backend that actually ships; the compatibility matrix
-        # deliberately stays on the fallback, so that path keeps full-suite
-        # coverage on 3.11 and 3.12.
-        #
-        # SHARPMOD_BACKEND is set per lane step rather than on the job, because
-        # forcing it here would make the dependency install above fail while the
-        # extension is still absent.
-        run: |
-          python -m pip install "maturin>=1.15,<2"
-          (cd rust/sharpmod-rs && python -m maturin build --release --locked --interpreter python --out dist)
-          python -m pip install --force-reinstall --no-deps rust/sharpmod-rs/dist/*.whl
-          python -c "from sharpmod.backends import backend_info; info = backend_info(); assert info['active_backend'] == 'rust', info; assert info['rust_installed'] is True, info; print('backend:', info)"
+      - *install_rust_backend
 
       - name: Run grouped deterministic lane with coverage
         id: fast_tests

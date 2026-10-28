@@ -1,4 +1,4 @@
-//! Storage operations use the cache owners in Python, including their active-file leases.
+//! Storage operations clear each cache through its owner, preserving active-file leases.
 
 use crate::backend::map_ops::context;
 use crate::backend::router::Router;
@@ -44,6 +44,9 @@ impl Router {
         result
             .validate()
             .map_err(|reason| rejected(&context, "storage.clear", reason))?;
+        if matches!(cache, "radar" | "all") {
+            self.velocity_inventory.clear();
+        }
         Ok(result)
     }
 }

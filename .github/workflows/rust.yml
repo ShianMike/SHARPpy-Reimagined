@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "rust/sharpmod-rs/**"
+      - "rust/weather-core/**"
       - "sharpmod/_version.py"
       - "sharpmod/backends/**"
       - "sharpmod/models/model_transport.py"
@@ -72,15 +73,21 @@ jobs:
 
       - name: Check Rust formatting on stable
         working-directory: rust/sharpmod-rs
-        run: cargo +stable fmt --all -- --check
+        run: |
+          cargo +stable fmt --all -- --check
+          cargo +stable fmt --manifest-path ../weather-core/Cargo.toml -- --check
 
       - name: Lint all Rust targets on stable
         working-directory: rust/sharpmod-rs
-        run: cargo +stable clippy --locked --all-targets --all-features -- -D warnings
+        run: |
+          cargo +stable clippy --locked --all-targets --all-features -- -D warnings
+          cargo +stable clippy --manifest-path ../weather-core/Cargo.toml --target-dir target --locked --all-targets -- -D warnings
 
       - name: Test all Rust targets on stable
         working-directory: rust/sharpmod-rs
-        run: cargo +stable test --locked --all-targets
+        run: |
+          cargo +stable test --locked --all-targets
+          cargo +stable test --manifest-path ../weather-core/Cargo.toml --target-dir target --locked
 
       - name: Test all Rust targets on the 1.88 MSRV
         working-directory: rust/sharpmod-rs

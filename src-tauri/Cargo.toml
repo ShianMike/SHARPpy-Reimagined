@@ -14,6 +14,7 @@ tauri-build = { version = "=2.7.1", features = [] }
 
 [dependencies]
 base64 = "=0.22.1"             # sounding PNGs arrive base64 in bridge frames; already in the graph
+sharpmod-weather = { path = "../rust/weather-core" }
 tauri = { version = "=2.12.1", features = [] }
 tauri-plugin-log = "=2.10.0"
 # Windows updates use signed NSIS executables; legacy v1 ZIP extraction is unused.

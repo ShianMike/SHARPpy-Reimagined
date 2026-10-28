@@ -151,6 +151,8 @@ The frontend never learns which one answered.
 | Open a sounding, its parameters, its Trends, its image | Python bridge `soundings.*` (`src-tauri/src/backend/sounding_ops.rs`); the image is returned as raw PNG bytes |
 | Map catalogue, place names | In-memory cache for the session, else Python bridge `map.catalog`, `places.labels` (`src-tauri/src/backend/map_ops.rs`) |
 | Field grid, SPC outlook, radar mosaic, station availability | Python bridge `fields.grid`, `outlooks.spc`, `radar.mosaic`, `stations.availability`; Rust turns grids and radar images into `SHRF` frames |
+| Radar sites and tilt availability | The shared Rust `weather-core` embeds the 155-site catalogue and checks NOAA velocity directories, three requests at a time with a 45-second cache. Browser mode calls the same Rust code through `sharpmod_rs`. Reflectivity/correlation: Python `radar.tilts` |
+| NWS warnings and watches | The bridge retains session snapshots; `sharpmod_rs` calls the shared Rust `weather-core` for concurrent downloads, official styles, polygon validation, duplicate merging and CAP confirmation of an all-clear |
 
 **Moving an operation from Python to Rust.** Implement it in Rust behind the
 router (for a numerical kernel, through `sharpmod-rs`: AUDIT §7 option 3, a

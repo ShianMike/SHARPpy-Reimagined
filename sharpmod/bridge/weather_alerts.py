@@ -1,27 +1,23 @@
 """Validated NWS warning/watch snapshot requests."""
 
+import json
+
 from sharpmod.bridge import params as p
 from sharpmod.bridge.errors import BridgeError
-from sharpmod.providers import weather_alerts
 
 
 def current(params):
+    import sharpmod_rs
+
     p.keys(params, ("valid_time",))
     when = p.time(params, "valid_time")
     try:
-        return weather_alerts.fetch(when)
-    except (
-        weather_alerts.AlertError,
-        KeyError,
-        TypeError,
-        ValueError,
-        OverflowError,
-        AttributeError,
-    ) as exc:
+        return json.loads(sharpmod_rs.weather_alerts(p.iso(when)))
+    except ValueError as exc:
         raise BridgeError(
             "OVERLAY_FETCH_FAILED",
             f"NWS warnings and watches could not be loaded: {str(exc)[:250]}",
-            not isinstance(exc, weather_alerts.HistoryUnavailable),
+            not isinstance(exc, sharpmod_rs.WeatherHistoryUnavailable),
         ) from None
 
 

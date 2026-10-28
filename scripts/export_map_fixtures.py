@@ -452,9 +452,9 @@ def _build() -> dict[str, bytes]:
     )
 
     sites = map_layers.radar_sites({})
-    from sharpmod.providers import radar_inventory
-    cuts = radar_inventory.availability("KTLX", "velocity", now=FIXED_NOW, opener=lambda url, *_:
-        b'<a href="sn.0123">scan</a>04-Oct-2026 18:28' if any(f"DS.p99v{cut}/" in url for cut in "0123") else b"<title>Index of /</title>")
+    cuts = {"site_id": "KTLX", "product": "velocity", "checked_at": FIXED_NOW.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "tilts": [{"tilt": cut, "status": "available" if cut in "0123" else "unavailable"}
+                      for cut in ("z", "0", "a", "1", "b", "2", "3")]}
     out["bridge/map/radar-tilts.result.json"] = _json(cuts)
     out["public/map/radar-tilts.json"] = _json(_camel(cuts))
     out["bridge/map/radar-sites.result.json"] = _json(sites)

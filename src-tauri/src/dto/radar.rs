@@ -54,6 +54,24 @@ impl RadarTilts {
     }
 }
 
+impl From<sharpmod_weather::radar::RadarTilts> for RadarTilts {
+    fn from(result: sharpmod_weather::radar::RadarTilts) -> Self {
+        Self {
+            site_id: result.site_id,
+            product: result.product,
+            checked_at: result.checked_at,
+            tilts: result
+                .tilts
+                .into_iter()
+                .map(|cut| RadarTiltStatus {
+                    tilt: cut.tilt,
+                    status: cut.status,
+                })
+                .collect(),
+        }
+    }
+}
+
 /// `radar.site` as the bridge sends it: the mosaic's shape, plus the serving site.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]

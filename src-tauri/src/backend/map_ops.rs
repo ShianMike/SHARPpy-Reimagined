@@ -10,7 +10,7 @@ use crate::backend::router::Router;
 use crate::backend::sounding_ops::{invalid, rejected};
 use crate::dto::map::{
     AvailabilityReport, AvailabilityResult, FieldGridResult, MapCatalog, PlaceLabels, RadarResult,
-    RadarSiteCatalog, RadarSiteCatalogPublic, RadarSiteResult, SpcOutlook,
+    RadarSiteResult, SpcOutlook,
 };
 use crate::error::{BackendError, ErrorContext, PYTHON_PROVIDER};
 
@@ -19,7 +19,6 @@ pub const OP_FIELD: &str = "get_weather_field";
 pub const OP_OUTLOOK: &str = "get_spc_outlook";
 pub const OP_RADAR: &str = "get_radar_frame";
 pub const OP_RADAR_SITE: &str = "get_radar_site_frame";
-pub const OP_RADAR_SITES: &str = "get_radar_sites";
 pub const OP_PLACES: &str = "get_place_labels";
 pub const OP_AVAILABILITY: &str = "get_station_availability";
 
@@ -336,26 +335,6 @@ impl Router {
             ));
         }
         Ok(bytes)
-    }
-
-    /// The bundled WSR-88D catalogue backing the single-site picker.
-    pub async fn radar_sites(&self) -> Result<Arc<RadarSiteCatalogPublic>, BackendError> {
-        if let Some(sites) = cached(&self.radar_sites) {
-            return Ok(sites);
-        }
-        let context = context(OP_RADAR_SITES, "radar site catalogue");
-        let catalog: RadarSiteCatalog = self
-            .call(&context, "radar.sites", json!({}), PLACES_TIMEOUT)
-            .await?;
-        catalog
-            .validate()
-            .map_err(|reason| rejected(&context, "radar.sites", reason))?;
-        let catalog = Arc::new(catalog.into_public());
-        *self
-            .radar_sites
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&catalog));
-        Ok(catalog)
     }
 
     /// Map place names; static for the life of the bridge.

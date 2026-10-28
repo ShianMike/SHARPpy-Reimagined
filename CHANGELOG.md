@@ -23,6 +23,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Allow the existing browser-check job 12 minutes so slow software-rendering
+  runners can finish the playback check and cleanup without a full rerun.
+  Keep the same test set, jobs and four shards.
 - Compute maximum parcel levels in Rust using the existing thermodynamic lift
   and pressure interpolation routines. Remove the Python energy/refinement
   loops used when constructing native sounding parcels. Preserve reported

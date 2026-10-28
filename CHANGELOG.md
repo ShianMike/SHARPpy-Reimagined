@@ -23,6 +23,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Decode IGRA sounding headers, fixed-width levels and humidity-derived
+  dewpoints in Rust, scanning canonical archives without a Python list of every
+  line. Remove the replaced parsing and column-assembly loops. Keep the
+  existing sounding objects, units, missing sentinels, decreasing-pressure
+  filtering, source codes and counts of dropped or reconstructed levels.
 - Allow the existing browser-check job 12 minutes so slow software-rendering
   runners can finish the playback check and cleanup without a full rerun.
   Keep the same test set, jobs and four shards.

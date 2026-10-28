@@ -21,15 +21,23 @@ in browser mode. The desktop calls the shared Rust weather core directly for
 radar inventory. These migrated operations have no Python implementation.
 Build/install `sharpmod_rs` before running the complete source application.
 
+IGRA sounding header scans, fixed-width level decoding, humidity-derived
+dewpoints and decreasing-pressure assembly also require Rust. Their thin
+adapters retain the public IGRA objects, timestamps, units and provenance counts.
+The native parser borrows immutable archive text and scans canonical LF/CRLF
+records without materializing every line; unusual Python line boundaries retain
+their existing interpretation. Archive selection, ZIP retrieval and disk-cache
+ownership remain in the existing reader.
+
 ## Backend selection
 
 Set `SHARPMOD_BACKEND` before starting Python. This selects the numerical
-backend; the migrated weather and map operations always use Rust:
+backend; the migrated weather, map and IGRA operations always use Rust:
 
 | Value | Behavior |
 | --- | --- |
 | `auto` | Default. Use Rust when the extension loads successfully; otherwise use Python and retain the fallback reason for diagnostics. |
-| `python` | Use the Python scientific implementation. Native weather and contour operations still require `sharpmod_rs`. |
+| `python` | Use the Python scientific implementation. Migrated weather, map and IGRA operations still require `sharpmod_rs`. |
 | `rust` | Require the Rust implementation. Missing or unloadable native code produces a clear error instead of silently falling back. |
 
 PowerShell examples:

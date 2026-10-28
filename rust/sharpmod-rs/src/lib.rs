@@ -6,6 +6,8 @@ pub mod contours;
 pub mod grib;
 mod height_grid;
 mod height_grid_bindings;
+mod igra;
+mod igra_bindings;
 pub mod interpolation;
 pub mod kinematics;
 mod map_geometry;
@@ -800,6 +802,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     weather::register(module)?;
     map_geometry::register(module)?;
     height_grid_bindings::register(module)?;
+    igra_bindings::register(module)?;
     report_bindings::register(module)?;
     surface_bindings::register(module)?;
     radar_sampling_bindings::register(module)?;

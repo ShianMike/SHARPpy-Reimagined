@@ -89,7 +89,7 @@ fn is_python_line_boundary(character: char) -> bool {
 
 /// Split text like Python's `str.splitlines()`, including its Unicode line
 /// boundaries and its treatment of CRLF as one separator.
-fn python_splitlines(text: &str) -> Vec<&str> {
+pub(crate) fn python_splitlines(text: &str) -> Vec<&str> {
     let mut lines = Vec::new();
     let mut start = 0;
     let mut characters = text.char_indices().peekable();
@@ -136,7 +136,7 @@ fn explicit_nonfinite(token: &str) -> bool {
     )
 }
 
-fn python_float_literal(token: &str) -> Result<Cow<'_, str>, ()> {
+pub(crate) fn python_float_literal(token: &str) -> Result<Cow<'_, str>, ()> {
     let characters: Vec<char> = token.chars().collect();
     let has_non_ascii_decimal = characters
         .iter()

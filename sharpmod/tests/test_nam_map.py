@@ -20,7 +20,7 @@ REQUEST = {"model": "nam", "run_time": "2026-10-27T00:00:00Z", "forecast_hour": 
 def test_nam_only_offers_supported_nest_parameters_with_native_record_addresses():
     products = {product.key: product for product in hp.available_products("nam")}
     nest = {product.key for product in hp.available_products("nam-3km-conus")}
-    assert products.keys() == nest - {"uh-0-3km", "maxuvv"}
+    assert products.keys() == nest - {"uh-0-3km", "uh-2-5km-1h", "uh-2-5km-3h"}
     assert len(products) == 34
     catalog = fields.catalog({"model": "nam"})
     assert catalog["field_model"] == "nam"
@@ -41,7 +41,7 @@ def test_nam_map_limits_and_unavailable_parameters_are_rejected():
     assert fields._request({**REQUEST, "product": "refc", "forecast_hour": 84})[-1] == 84
     for change in ({"forecast_hour": 1}, {"forecast_hour": 85},
                    {"run_time": "2026-10-27T01:00:00Z"},
-                   {"product": "uh-0-3km"}, {"product": "maxuvv"}):
+                   {"product": "uh-0-3km"}, {"product": "uh-2-5km-1h"}, {"product": "uh-2-5km-3h"}):
         with pytest.raises(BridgeError):
             fields._request({**REQUEST, "product": "refc", **change})
 

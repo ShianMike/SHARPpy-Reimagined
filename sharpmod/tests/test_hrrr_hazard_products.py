@@ -15,7 +15,7 @@ from sharpmod.providers import hrrr_field as hf, hrrr_products as hp
     ("efhl", "EFHL", "surface", 250, 250, "m^2/s^2"),
     ("gust", "GUST", "surface", 10, 10 * hp.MS_TO_KT, "kt"),
     ("lftx", "LFTX", "500-1000 mb", -8, -8, "\u00b0C"),
-    ("maxuvv", "MAXUVV", "100-1000 mb above ground", 20, 20, "m/s"),
+    ("uh-2-5km-1h", "MXUPHL", "5000-2000 m above ground", 150, 150, "m^2/s^2"),
     ("prate", "PRATE", "surface", 25.4 / 3600, 1, "in/h"),
     ("pwat", "PWAT", "entire atmosphere (considered as a single layer)", 25.4, 1, "in"),
     ("snod", "SNOD", "surface", 0.254, 10, "in"),
@@ -30,7 +30,7 @@ def test_native_hazard_fields_keep_the_published_quantity_and_missing_cells(
     assert result[0, 0] == pytest.approx(expected)
     assert np.isnan(result[0, 1])
     assert product.palette.units == units
-    assert product.palette.display == ("fixed" if key in {"maxuvv", "lftx"} else "auto")
+    assert product.palette.display == ("fixed" if key == "lftx" else "auto")
 
 
 def test_surface_lifted_index_matches_the_supplied_celsius_bands():
@@ -195,16 +195,16 @@ def test_winter_rate_palettes_match_the_reference_and_hide_dry_cells(key, colour
 
 
 def test_instantaneous_and_hourly_maximum_addressing_still_stay_separate():
-    assert hp.F_MAXUVV.matches("MAXUVV", hp.F_MAXUVV.level, "47-48 hour max fcst")
-    assert hp.F_MAXUVV.matches("MAXUVV", hp.F_MAXUVV.level, "0-0 day max fcst")
-    assert not hp.F_MAXUVV.matches("MAXUVV", hp.F_MAXUVV.level, "48 hour fcst")
+    assert hp.F_UH25.matches("MXUPHL", hp.F_UH25.level, "47-48 hour max fcst")
+    assert not hp.F_UH25.matches("MXUPHL", hp.F_UH25.level, "48 hour fcst")
+    assert not hp.F_UH25.matches("MAXUVV", hp.F_UH25.level, "47-48 hour max fcst")
     assert hp.F_PRATE.matches("PRATE", "surface", "anl")
     assert not hp.F_PRATE.matches("PRATE", "surface", "5-6 hour ave fcst")
     assert not hp.F_APCP.matches("APCP", "surface", "6 hour fcst")
 
 
 def test_removed_products_are_absent_from_every_model_catalogue():
-    removed = {"snowc", "cfrzr", "csnow", "asnow", "frzr", "4lftx"}
+    removed = {"snowc", "cfrzr", "csnow", "asnow", "frzr", "4lftx", "maxuvv"}
     assert removed.isdisjoint(hp.PRODUCTS)
     for model in hp.FIELD_MODELS:
         assert removed.isdisjoint(product.key for product in hp.available_products(model))
@@ -212,14 +212,15 @@ def test_removed_products_are_absent_from_every_model_catalogue():
 
 @pytest.mark.parametrize("model", hp.FIELD_MODELS)
 def test_hazard_products_follow_each_models_published_inventory(model):
-    additions = {"apcp", "efhl",
-                 "gust", "lftx", "maxuvv", "prate", "pwat", "snod", "wind-10m",
+    uh = {"uh-2-5km-1h", "uh-2-5km-3h"}
+    additions = uh | {"apcp", "efhl",
+                 "gust", "lftx", "prate", "pwat", "snod", "wind-10m",
                  "prate-frzr", "prate-sleet", "prate-snow"}
-    expected = (additions - {"efhl", "lftx", "maxuvv"} if model in hp.ECMWF_MODELS or model == "gfs"
+    expected = (additions - {"efhl", "lftx"} - uh if model in hp.ECMWF_MODELS or model == "gfs"
                 else {"apcp", "wind-10m"} if model == "aigfs"
-                else {"apcp", "gust", "lftx", "maxuvv", "pwat", "wind-10m"} if model in hp.HRW_MODELS
-                else {"apcp", "gust", "maxuvv", "pwat", "wind-10m"} if model.startswith("refs-")
-                else additions - {"efhl", "maxuvv"} if model == "nam"
+                else uh | {"apcp", "gust", "lftx", "pwat", "wind-10m"} if model in hp.HRW_MODELS
+                else uh | {"apcp", "gust", "pwat", "wind-10m"} if model.startswith("refs-")
+                else additions - {"efhl"} - uh if model == "nam"
                 else additions - {"efhl"} if model == "nam-3km-conus" else additions)
     products = {product.key: product for product in hp.available_products(model)}
     assert additions & products.keys() == expected
@@ -227,9 +228,9 @@ def test_hazard_products_follow_each_models_published_inventory(model):
         product = products[key]
         assert product.palette is hp.PRODUCTS[key].palette
         assert product.category in hp.CATEGORIES
-    if "maxuvv" in products:
-        maximum, = products["maxuvv"].fields
-        assert maximum.level == ("100-1000 mb above ground" if model == "hrrr" else "100-1000 mb")
+    if "uh-2-5km-1h" in products:
+        maximum, = products["uh-2-5km-1h"].fields
+        assert maximum.level == "5000-2000 m above ground"
         assert maximum.forecast == "max fcst"
 
 

@@ -549,11 +549,11 @@ three outcomes:
 | `stations.availability` | `observation_time` (a whole hour, at most one hour ahead) | `observation_time`, `listed_ids`, `extra_stations` (station records), `dropped_count` |
 
 Fields support `hrrr`, `rrfs-a`, `nam-3km-conus`, and `refs-m1` through `refs-m5`.
-The selected catalogue lists only supported products: 38 for HRRR and RRFS,
-36 for NAM (without lightning or effective-layer helicity), and 22 for each
+The selected catalogue lists only supported products: 39 for HRRR and RRFS,
+37 for NAM nest (without lightning or effective-layer helicity), and 23 for each
 REFS member. The same palettes and display units apply across models. REFS adds
-total precipitation, gusts, 10 m wind, precipitable water, and maximum updraft
-velocity; its reduced stream lacks effective-layer helicity, surface lifted index,
+total precipitation, gusts, 10 m wind, precipitable water, and updraft-helicity
+maxima; its reduced stream lacks effective-layer helicity, surface lifted index,
 instantaneous precipitation rates, and snow depth. Surface-based lifted index uses
 native LFTX temperature differences, shown in fixed Celsius with the supplied
 negative-index colour bands and values above zero hidden. NAM/RRFS encode LFTX
@@ -561,7 +561,13 @@ with a Kelvin offset; their catalogue derivation removes it, while HRRR's
 already unshifted index is preserved. NAM total precipitation sums
 non-overlapping accumulation intervals from the run start; each native APCP
 record resets every three hours. Run-total precipitation starts at zero at F000.
-NAM/RRFS/REFS MAXUVV uses the published 100-1000 mb layer and starts at F001.
+The 1-hour and 3-hour 2-5 km AGL updraft-helicity products use native hourly
+`MXUPHL:5000-2000 m above ground` maxima from the selected run. They replace
+MAXUVV and share the supplied stepped 0-400 m²/s² scale. Three-hour maxima
+require all three hourly intervals; missing data stays missing. Catalogues hide
+1-hour maxima before F001 and 3-hour maxima before F003. These products are
+offered for HRRR, NAM CONUS nest, RRFS/REFS and HiResW, where the fields are
+published; the original NAM and global-model catalogues do not offer them.
 RRFS runs end at F084; NAM and REFS at F060; HRRR retains
 its 18/48-hour cycle limits. Model/member identity is part of field, contour,
 catalogue and playback cache keys. `catalog.models.json` fixtures cover the added

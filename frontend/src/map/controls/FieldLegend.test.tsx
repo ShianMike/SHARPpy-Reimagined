@@ -11,14 +11,13 @@ import { useAppStore } from "../../stores/appStore";
 import { panelLayers, panelProduct, useMapStore } from "../../stores/mapStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import type { Palette } from "../../types/map";
-import { LUT_SIZE } from "../field/colourize";
+import { formatValue, LUT_SIZE } from "../field/colourize";
 import { convertedTicks, FieldLegend, spacedTicks } from "./FieldLegend";
 import { MapPanel } from "../panels/MapPanel";
 import { useHoverStore } from "../hover/hoverStore";
 import { FieldControls } from "./FieldControls";
 import { useUiStore } from "../../stores/uiStore";
 import { DEFAULT_UNITS, convertUnit } from "../../lib/displayUnits";
-import { formatValue } from "../field/colourize";
 import { PointDetails } from "../../features/inspector/PointDetails";
 
 const initialMap = useMapStore.getState();
@@ -65,7 +64,7 @@ it("chooses round converted labels at their true positions without changing sour
 });
 
 it.each([
-  ["maxuvv", 0.5, 40, "m/s"], ["lftx", -20, 0, "\u00b0C"],
+  ["uh-2-5km-1h", 0, 400, "m²/s²"], ["uh-2-5km-3h", 0, 400, "m²/s²"], ["lftx", -20, 0, "\u00b0C"],
   ["thetae-2m", 229, 370, "K"],
 ] as const)("keeps %s in its fixed units when preferences change", (key, minimum, maximum, units) => {
   useUiStore.getState().setUnits({ temperature: "\u00b0F", wind: "mph" });
@@ -173,8 +172,8 @@ it.each([2, 4] as const)("gives all %i panels independent scales, compact titles
   useMapStore.getState().setPanelLayout(layout);
   useMapStore.getState().setLayerVisible("model-field", true);
   renderWithBackend(<div data-layout={layout}>{Array.from({ length: layout }, (_, panel) => <MapPanel key={panel} panel={panel} layout={layout} />)}</div>, createTransport());
-  const scales = await screen.findAllByRole("complementary", { name: "Parameter scale" });
-  expect(scales).toHaveLength(layout);
+  await waitFor(() => { expect(screen.getAllByRole("complementary", { name: "Parameter scale" })).toHaveLength(layout); });
+  const scales = screen.getAllByRole("complementary", { name: "Parameter scale" });
   const scale = scales[0];
   const second = scales[1];
   if (scale === undefined || second === undefined) throw new Error("Missing panel scale");
@@ -249,6 +248,7 @@ it.each([
 });
 
 it("keeps product categories in the custom menu and changes only the active panel", async () => {
+  useForecastStore.getState().setHour(3);
   useMapStore.getState().setPanelLayout(2);
   useMapStore.getState().setActivePanel(1);
   renderWithBackend(<FieldControls panel={1} />, createTransport("field-error"));

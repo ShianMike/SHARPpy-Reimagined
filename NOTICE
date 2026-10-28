@@ -13,8 +13,8 @@ See LICENSE for the complete BSD 3-Clause terms.
 
 NOAA-GSL pygraf colour tables
 ----------------------------
-The maximum-updraft colour table in
-sharpmod/providers/hrrr_products.py is adapted from the RGB recipes and
+Earlier releases included a maximum-updraft colour table in
+sharpmod/providers/hrrr_products.py adapted from the RGB recipes and
 thresholds in adb_graphics/specs.py and adb_graphics/default_specs.yml:
 https://github.com/NOAA-GSL/pygraf
 No NOAA endorsement is implied.

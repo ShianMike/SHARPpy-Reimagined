@@ -1,4 +1,4 @@
-"""Category jobs preserve fast-lane coverage and report real test failures."""
+"""Inline categories preserve fast-lane coverage and report real test failures."""
 
 from __future__ import annotations
 
@@ -64,27 +64,27 @@ def test_workflow_displays_every_test_group():
         Loader=yaml.BaseLoader,
     )
     jobs = workflow["jobs"]
-    assert jobs["visualization"]["needs"] == "fast"
-    categories = {
-        "interface-area": ("fast", "interface"),
-        "science-area": ("fast", "science"),
-        "providers-area": ("fast", "providers"),
-        "platform-area": ("fast", "platform"),
-        "charts-area": ("visualization", "charts"),
-        "maps-area": ("visualization", "maps"),
-        "analysis-area": ("visualization", "analysis"),
-        "exports-area": ("visualization", "exports"),
-    }
-    for name, (parent, group) in categories.items():
-        job = jobs[name]
-        assert job["needs"] == parent
-        assert f"--group {group}" in job["steps"][-1]["run"]
-    for job in (jobs["visualization"], *(jobs[name] for name in categories)):
-        assert "junit_artifact_id" in job["if"]
-        assert any(
-            "fast-junit-python-3.13" == step.get("with", {}).get("name")
-            for step in job["steps"]
-        )
-    assert jobs["visualization"]["outputs"]["junit_artifact_id"] == (
-        "${{ steps.forward_report.outputs.junit_artifact_id }}"
+    fast = jobs["fast"]
+    assert "outputs" not in fast
+    reports = [
+        (name, step)
+        for name, job in jobs.items()
+        for step in job["steps"]
+        if "scripts/summarize_test_categories.py" in step.get("run", "")
+    ]
+    assert len(reports) == 1
+    owner, report = reports[0]
+    assert owner == "fast"
+    assert report["if"] == (
+        "${{ always() && !cancelled() && hashFiles('.test-results/fast.xml') != '' }}"
     )
+    assert report["env"]["SOURCE_RESULT"] == "${{ steps.fast_tests.outcome }}"
+    assert any(step.get("id") == "fast_tests" for step in fast["steps"])
+    loop = next(line.strip() for line in report["run"].splitlines() if "for group in" in line)
+    assert set(loop.removeprefix("for group in ").removesuffix("; do").split()) == set(summary.GROUPS)
+    assert '--group "$group" --source-result "$SOURCE_RESULT" || status=1' in report["run"]
+    assert 'exit "$status"' in report["run"]
+    assert not any(name == "visualization" or name.endswith("-area") for name in jobs)
+    uploads = [step for step in fast["steps"] if "upload-artifact@" in step.get("uses", "")]
+    assert len(uploads) == 1
+    assert ".test-results/fast*" in uploads[0]["with"]["path"]

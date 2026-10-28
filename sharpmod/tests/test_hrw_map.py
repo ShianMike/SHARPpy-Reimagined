@@ -18,12 +18,12 @@ REQUEST = {"run_time": "2026-10-27T00:00:00Z", "forecast_hour": 6}
 @pytest.mark.parametrize("model", hp.HRW_MODELS)
 def test_hrw_supported_parameters_and_native_cycles(model):
     products = {p.key: p for p in hp.available_products(model)}
-    assert len(products) == 28
-    assert {"refc", "tmp-2m", "hgt-wind-200", "apcp", "shear-0-1km", "uh-0-3km", "maxuvv"} <= products.keys()
+    assert len(products) == 29
+    assert {"refc", "tmp-2m", "hgt-wind-200", "apcp", "shear-0-1km", "uh-0-3km", "uh-2-5km-1h", "uh-2-5km-3h"} <= products.keys()
     assert not products.keys() & {"ltng", "efhl", "snod", "prate", "prate-frzr", "prate-sleet", "prate-snow", "mucape", "scp", "stp"}
     assert all(p.sources == ("sfc",) for p in products.values())
     assert products["refc"].fields[0].level == "entire atmosphere (considered as a single layer)"
-    assert products["maxuvv"].fields[0].level == "100-1000 mb"
+    assert products["uh-2-5km-1h"].fields[0].level == "5000-2000 m above ground"
     assert products["uh-0-3km"].label.endswith("(1 h max)")
     assert products["lftx"].derive({"lftx": np.array([273.15, 268.15])}) == pytest.approx([0, -5])
     limit = 60 if model == "hrw-fv3" else 48
@@ -46,7 +46,7 @@ def test_picker_checks_every_ingredient_at_the_selected_hour(model, monkeypatch,
     inventory = "\n".join((
         "1:0:d=2026102700:TMP:2 m above ground:6 hour fcst:",
         "2:100:d=2026102700:REFC:entire atmosphere (considered as a single layer):6 hour fcst:",
-        "3:200:d=2026102700:MAXUVV:100-1000 mb:5-6 hour max fcst:",
+        "3:200:d=2026102700:MXUPHL:5000-2000 m above ground:5-6 hour max fcst:",
         "4:300:d=2026102700:MXUPHL:3000-0 m above ground:5-6 hour max fcst:",
         "5:400:d=2026102700:UGRD:500 mb:6 hour fcst:",
         "6:500:d=2026102700:HGT:500 mb:6 hour fcst:",
@@ -58,7 +58,7 @@ def test_picker_checks_every_ingredient_at_the_selected_hour(model, monkeypatch,
         return rows[:2] if ".f00." in url else rows
     monkeypatch.setattr(hf, "fetch_inventory", published)
     catalog = fields.catalog({**REQUEST, "model": model})
-    assert {p["key"] for p in catalog["products"]} == {"tmp-2m", "refc", "maxuvv", "uh-0-3km"}
+    assert {p["key"] for p in catalog["products"]} == {"tmp-2m", "refc", "uh-2-5km-1h", "uh-2-5km-3h", "uh-0-3km"}
     assert len(calls) == 1
     analysis = fields.catalog({**REQUEST, "model": model, "forecast_hour": 0})
     assert {p["key"] for p in analysis["products"]} == {"tmp-2m", "refc"}

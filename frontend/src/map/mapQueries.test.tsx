@@ -80,11 +80,12 @@ it.each([2, 4] as const)("keeps %i panels on the loaded hour until the next fram
     call: (_command, args) => new Promise((resolve) => { pendingLines.push({ hour: Number(args?.forecastHour), resolve }); }),
     listen: () => Promise.resolve(() => undefined),
   });
+  vi.spyOn(client, "getMapCatalog").mockResolvedValue(mapCatalog);
   const pending: { hour: number; resolve: (frame: FieldFrame) => void }[] = [];
   vi.spyOn(client, "getWeatherField").mockImplementation((_product, _run, hour) => new Promise((resolve) => { pending.push({ hour, resolve }); }));
   const queryClient = createQueryClient();
   queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
-  queryClient.setQueryData(mapKeys.catalog("hrrr"), mapCatalog);
+  queryClient.setQueryData(mapKeys.catalog("hrrr", runTime, 0), mapCatalog);
   for (let panel = 0; panel < panelLayout; panel++) {
     queryClient.setQueryData(mapKeys.field(panel === 0 ? "hgt-wind-500" : defaultProductFor(mapCatalog, panel)?.key ?? "", runTime, 0), frame);
   }
@@ -168,7 +169,7 @@ it.each(["rrfs-a", "nam", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "ref
       }
       const catalogue = parseMapCatalog((modelCatalogs as Readonly<Record<string, unknown>>)[model]);
       expect(catalogue.fieldModel).toBe(model);
-      expect(catalogue.products).toHaveLength(model.startsWith("refs-") ? 22 : model === "nam" ? 34 : model === "nam-3km-conus" ? 36 : 38);
+      expect(catalogue.products).toHaveLength(model.startsWith("refs-") ? 23 : model === "nam" ? 34 : model === "nam-3km-conus" ? 37 : 39);
       expect(catalogue.products.some(({ key }) => key === "ltng")).toBe(!["nam", "nam-3km-conus"].includes(model));
       const secondaryProduct = defaultProductFor(parseMapCatalog(catalog), 1)?.key;
       expect(catalogue.products.some(({ key }) => key === secondaryProduct)).toBe(!model.startsWith("refs-"));
@@ -194,7 +195,7 @@ it.each([2, 4] as const)("prefetches %i panels and the configured future hours c
   vi.spyOn(client, "getWeatherField").mockImplementation((product, _run, hour) => new Promise((resolve) => { pending.push({ product, hour, resolve }); }));
   const queryClient = createQueryClient();
   queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
-  queryClient.setQueryData(mapKeys.catalog("hrrr"), mapCatalog);
+  queryClient.setQueryData(mapKeys.catalog("hrrr", runTime, 0), mapCatalog);
   products.forEach((product) => { queryClient.setQueryData(mapKeys.field(product, runTime, 0), frame); });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
@@ -230,10 +231,11 @@ it("prepares both active modes once across four matching panels, waits on cached
   useGraphicsStore.setState({ effective: { ...savedGraphics.effective, profile: "balanced" } });
   const queryClient = createQueryClient();
   queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
-  queryClient.setQueryData(mapKeys.catalog("hrrr"), parseMapCatalog(catalog));
+  queryClient.setQueryData(mapKeys.catalog("hrrr", run, 0), parseMapCatalog(catalog));
   const frame = parseFieldFrame(payloads.field);
   for (const hour of [0, 1, 2]) queryClient.setQueryData(mapKeys.field("refc", run, hour, "hrrr"), { ...frame, forecastHour: hour });
   const client = new BackendClient({ call: () => new Promise(() => undefined), listen: () => Promise.resolve(() => undefined) });
+  vi.spyOn(client, "getMapCatalog").mockResolvedValue(parseMapCatalog(catalog));
   const fetch = vi.spyOn(client, "getWeatherField");
   const prepare = fieldImages.prepareFieldImage;
   const pending: { hour: number; smooth: boolean; signal: AbortSignal; finish: () => void }[] = [];

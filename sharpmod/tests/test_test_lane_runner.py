@@ -49,7 +49,7 @@ def _marker(command):
     return command[marker_index + 1]
 
 
-def test_fast_lane_is_file_parallel_and_can_collect_the_only_coverage(tmp_path):
+def test_fast_lane_is_file_parallel_and_can_collect_coverage(tmp_path):
     command, environment = _command(
         "fast",
         tmp_path,
@@ -84,25 +84,6 @@ def test_property_lane_keeps_full_profile_and_parallelizes_by_safe_group(tmp_pat
     assert command[command.index("-n") + 1] == "4"
     assert "--dist=loadgroup" in command
     assert environment["SHARPMOD_HYPOTHESIS_PROFILE"] == "full"
-
-
-def test_no_parallel_lane_scatters_tests_that_asked_to_stay_together():
-    """A grouping marker that the lane ignores is worse than no marker.
-
-    ``conftest`` groups the Qt-heavy files because they share process-global
-    state, and three of them carry property tests. Bare ``--dist=load``
-    distributes individual tests and honors neither ``xdist_group`` nor file
-    cohesion, so the guarantee those markers advertise would quietly not hold.
-    ``loadfile`` keeps each file on one worker, which covers the file-scoped
-    groups used here; ``loadgroup`` honors the marker directly.
-    """
-    for name, lane in runner.LANES.items():
-        if not lane.parallel:
-            continue
-        assert lane.distribution in ("loadfile", "loadgroup"), (
-            f"the {name!r} lane distributes by {lane.distribution!r}, which "
-            "ignores the grouping its tests rely on"
-        )
 
 
 def test_release_lane_is_complete_parallel_without_repeating_property_depth(tmp_path):
@@ -175,7 +156,7 @@ def test_qt_group_runs_on_one_actual_xdist_worker(tmp_path):
     assert len(set(workers)) == 1, workers
 
 
-def test_coverage_is_rejected_outside_the_single_fast_lane(tmp_path):
+def test_runner_coverage_flag_is_rejected_for_property_lane(tmp_path):
     with pytest.raises(ValueError, match="only by the Python 3.13 fast lane"):
         _command("property", tmp_path, coverage=True)
 

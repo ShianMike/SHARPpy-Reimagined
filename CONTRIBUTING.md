@@ -77,23 +77,13 @@ durations have separate baselines because CPU contention changes individual
 test time. Do not raise a budget merely to make a regression pass: reproduce
 the lane, explain the change, and update the checked value in the same review.
 
-The GitHub **Tests** workflow summarizes all nine test categories inside the
-Python 3.13 fast job, using its JUnit report. The summaries show per-module
-results, failed tests and slow cases without separate reporting jobs. The fast
-job owns coverage and timing budgets as well as these summaries.
-
-For v2.0.0, the local fast baseline was measured at 308.18 seconds with
-4,670 passing tests, one skip, and coverage enabled on Rust; the compatibility
-baseline was 318.72 seconds with 4,716 passing tests and one skip on the Python
-fallback. Both runs used this 12-core Windows/Python 3.11 checkout. The new
-370/380-second local limits were set for that legacy suite;
-the separate GitHub Actions limits are unchanged. Compare timing reports only
-under matching worker, backend, coverage, and host conditions.
-
-The complete offline release gate measured 172.98 seconds on GitHub Actions
-with four workers, Python 3.13.16, and Rust, with all 4,614 tests included.
-Its hosted wall-time limit is 300 seconds; per-test limits allow twice the
-measured duration plus two seconds for runner variation.
+The GitHub **Tests** workflow retains pytest logs, JUnit reports, coverage and
+enforced timing budgets. Routine runs collect coverage in the Python 3.13 fast
+job. When the complete offline release gate is requested, it collects coverage
+instead and the overlapping fast job is skipped. The same 35% coverage threshold
+applies in either case. Compare timing reports only under matching worker,
+backend, coverage and host conditions; the checked JSON retains the reviewed
+baselines and separate local and hosted limits.
 
 For a final integrated/release-readiness check, first run
 `sharpmod-rust-sync --check`, finish focused diagnosis, and checkpoint the exact
@@ -111,15 +101,15 @@ checks. The full browser matrix runs after merge, on manual runs and
 on `release/*` PRs. The frontend gate requires the expected browser result for
 each event; failed or cancelled browser runs cannot pass that gate.
 Reusable calls inherit the caller's event and follow the same rule.
-Python 3.11/3.12 compatibility and full properties run after merge, on the
-schedule, on manual/reusable runs and on `release/*` PRs. Rust NumPy and wheel
-matrices run on `release/*` PRs and manual runs. Official releases run every
-offline test against the exact
-immutable commit that is packaged, across four workers with Qt tests grouped on
-one worker. This checks all tests without checking whole-suite interactions in a
-single process. A weekly scheduled
-lane runs the live-provider checks, including the multi-region CONUS HRRR
-surface regression.
+Python 3.11/3.12 compatibility and full properties run after merge, on
+manual/reusable runs and on `release/*` PRs. Rust MSRV checks, NumPy compatibility
+and wheel matrices run on `release/*` PRs and manual runs; routine Rust PRs retain
+stable formatting, Clippy, native tests and Python/Rust equivalence checks.
+Official releases run every offline test against the exact immutable commit
+that is packaged, across two workers with Qt tests grouped on one worker. This
+checks all tests without checking whole-suite interactions in a single process.
+The weekly schedule runs live-provider checks, including the multi-region CONUS
+HRRR surface regression, and dependency audits.
 
 ## Project Conventions
 

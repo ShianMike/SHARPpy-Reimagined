@@ -149,6 +149,11 @@ def test_rust_workflow_covers_versions_and_numpy_without_frozen_apps():
         "-- -D warnings"
     ) in rust_steps
     assert "cargo +1.88.0 test --locked --all-targets" in rust_steps
+    msrv = next(
+        step for step in jobs["rust-checks"]["steps"]
+        if step.get("name") == "Test all Rust targets on the 1.88 MSRV"
+    )
+    assert msrv["if"] == jobs["wheels"]["if"]
     assert '"pytest-timeout>=2.4,<3"' in rust_steps
     assert (
         "scripts/install_sharppy_compat.py --sharppy-only --skip-pip-check"

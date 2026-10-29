@@ -72,8 +72,13 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     ] == "false"
     jobs = workflow["jobs"]
     assert "if" not in jobs["quality"]
-    for lane in ("fast", "windows-wrf"):
-        assert jobs[lane]["if"] == "${{ github.event_name != 'schedule' }}"
+    assert jobs["windows-wrf"]["if"] == "${{ github.event_name != 'schedule' }}"
+    assert jobs["fast"]["if"] == (
+        "${{ github.event_name != 'schedule' && "
+        "!(inputs.run_serial_release == true || "
+        "(github.event_name == 'pull_request' && "
+        "startsWith(github.head_ref, 'release/'))) }}"
+    )
     for lane in ("compatibility", "property"):
         assert jobs[lane]["if"] == (
             "${{ github.event_name != 'schedule' && "
@@ -115,6 +120,8 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         step.get("run", "") for step in jobs["serial-release"]["steps"]
     )
     assert "run_test_lane.py serial-release --workers 2" in offline_scripts
+    assert "--cov=sharpmod" in offline_scripts
+    assert "--cov-report=xml:coverage.xml" in offline_scripts
 
     # The deterministic and offline lanes run the accelerated backend that ships
     # to users, because the pure-Python fallback costs roughly 6.7x on the

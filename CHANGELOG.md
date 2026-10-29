@@ -31,6 +31,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Improve sounding-sidebar helper text, placeholders, unit labels and profile
+  details on glass. Give the sidebar more contrast over bright maps and keep
+  disabled-control labels readable without enabling their actions.
 - Use the same temperature, dewpoint and wind styling for fresh and stale
   surface observations. Replace the oversized yellow warning ring with a small
   neutral dashed ring, retaining observation times, stale warnings on hover,

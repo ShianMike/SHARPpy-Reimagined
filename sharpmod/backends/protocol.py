@@ -63,6 +63,7 @@ REQUIRED_RUST_CAPABILITIES = (
     "fetch_iem_json",
     "iem_sounding_columns",
     "draw_locator_lines",
+    "acquire_ensemble_members",
     "parse_ecmwf_inventory",
     "interpolate_height_grid",
     "parcel_maximum_level",

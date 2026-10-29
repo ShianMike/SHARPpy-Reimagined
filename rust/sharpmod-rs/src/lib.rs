@@ -4,6 +4,8 @@
 pub mod batch_analysis;
 pub mod contours;
 mod ecmwf_inventory;
+mod ensemble;
+mod ensemble_bindings;
 pub mod grib;
 mod height_grid;
 mod height_grid_bindings;
@@ -818,6 +820,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     radar_sampling_bindings::register(module)?;
     model_http_bindings::register(module)?;
     iem_bindings::register(module)?;
+    ensemble_bindings::register(module)?;
     locator_paths::register(module)?;
     satellite_bindings::register(module)?;
     parcel_display_bindings::register(module)?;

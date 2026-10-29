@@ -6,7 +6,6 @@ Imports stay lazy so loading the bridge does not load Qt.
 from __future__ import annotations
 
 import tempfile
-from pathlib import Path
 from typing import Any
 
 from sharpmod.bridge import params as p
@@ -16,11 +15,6 @@ MAX_MEMBERS = 32
 MIN_MEMBERS = 2
 MAX_MEMBER_LABEL = 16
 MAX_REASON = 300
-
-
-def _short(exc: Exception) -> str:
-    text = str(exc).strip().splitlines()
-    return (text[0] if text else type(exc).__name__)[:MAX_REASON]
 
 
 def _native_members(model_key: str) -> dict[str, object]:
@@ -64,9 +58,9 @@ def acquire(params: dict[str, Any]):
     run = p.time(params, "run_time") if params.get("run_time") is not None else None
     location = p.optional_text(params, "location", 64)
 
-    from sharpmod.analysis.ensemble_members import EnsembleAcquisition, MemberFailure
+    from sharpmod.analysis.ensemble_members import EnsembleAcquisition
     from sharpmod.analysis.profile_timeline import combine_ensemble_collections
-    from sharpmod.bridge.sounding_cache import SoundingDecodeError, cache, decode_collection
+    from sharpmod.bridge.sounding_cache import cache
     from sharpmod.tools import era5_extract
     from sharpmod.tools import model_extract as mx
 
@@ -87,39 +81,12 @@ def acquire(params: dict[str, Any]):
         ) from None
     members = _requested_members(params.get("members"), allowed)
 
-    collections = []
-    labels: list[str] = []
-    failures: list[MemberFailure] = []
+    from sharpmod_rs import acquire_ensemble_members
+
     with tempfile.TemporaryDirectory(prefix="sharpmod-ensemble", dir=cache().root) as tmp:
-        for member in members:
-            path = Path(tmp) / f"{member}.npz"
-            try:
-                written = mx.extract(
-                    config.key,
-                    lat,
-                    lon,
-                    run_time=run,
-                    fxx=fxx,
-                    out_path=str(path),
-                    loc=location,
-                    member=allowed[member],
-                    download_dir=str(Path(tmp) / f"{member}-grib"),
-                )
-                collection, _ = decode_collection(Path(written) if written else path)
-            except era5_extract.ParameterRangeError as exc:
-                raise BridgeError("INVALID_ARGUMENT", str(exc), False) from None
-            except (
-                era5_extract.ERA5ExtractionError,
-                SoundingDecodeError,
-                OSError,
-                ValueError,
-            ) as exc:
-                # Any reason one member did not load is that member's ledger
-                # row; the other members still evaluate (failure isolation).
-                failures.append(MemberFailure(member, "failed", _short(exc)))
-                continue
-            collections.append(collection)
-            labels.append(member)
+        collections, labels, failures = acquire_ensemble_members(
+            config.key, lat, lon, run, fxx, location, members, allowed, tmp,
+        )
 
     if not collections:
         reason = failures[0].reason if failures else "no member was requested"

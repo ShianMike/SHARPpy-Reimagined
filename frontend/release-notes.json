@@ -1,6 +1,6 @@
 {
   "3.4.2": {
-    "summary": "Track 2-5 km updraft helicity with a shared colour scale and load weather overlays with less processing time.",
+    "summary": "Track 2-5 km updraft helicity with a shared colour scale, read OpenStreetMap roads and load weather overlays with less processing time.",
     "highlights": [
       {
         "title": "2-5 km updraft helicity",
@@ -20,7 +20,7 @@
       },
       {
         "title": "More responsive forecast maps",
-        "description": "Forecast contours, wind barbs and terrain-relative lapse-rate and shear maps take less time to prepare, preserving their geometry, true-north directions and missing-data gaps. Model map downloads reuse connections and retain retries, byte limits and cancellation. ECMWF map inventories also take less time to process while retaining field levels and precipitation intervals."
+        "description": "Forecast contours, wind barbs and terrain-relative lapse-rate and shear maps take less time to prepare, preserving their geometry, true-north directions and missing-data gaps. OpenStreetMap roads and road names return on the basemap, with muted outlines in dark mode. Model map downloads reuse connections and retain retries, byte limits and cancellation. ECMWF map inventories also take less time to process while retaining field levels and precipitation intervals."
       },
       {
         "title": "Faster startup and sounding preparation",

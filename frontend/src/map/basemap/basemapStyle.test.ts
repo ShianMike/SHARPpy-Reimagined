@@ -82,14 +82,19 @@ it.each(["light", "dark"])("keeps political borders over weather and inland wate
     getLayer: (id: string) => layers.find((item) => item.id === id),
     removeLayer: (id: string) => { layers.splice(layers.findIndex((layer) => layer.id === id), 1); },
     getLayoutProperty: (id: string) => layout.get(id),
-    getPaintProperty: (id: string, property: string) => paints.get(`${id}:${property}`) ?? (layers.find((layer) => layer.id === id)?.paint as Record<string, unknown>)[property],
+    getPaintProperty: (id: string, property: string) => paints.get(`${id}:${property}`) ?? (layers.find((layer) => layer.id === id)?.paint as Record<string, unknown> | undefined)?.[property],
     addLayer, setFilter, setLayoutProperty, setPaintProperty,
   } as unknown as MapLibreMap;
   expect(prepareBasemap(map)).toBe("geography-shoreline");
   const order = layers.map((layer) => layer.id);
-  expect(order).not.toContain("road-casing");
-  expect(order).not.toContain("highway_motorway_subtle");
-  expect(order).not.toContain("highway_name_motorway");
+  expect(order).toContain("road-casing");
+  expect(order).toContain("highway_motorway_subtle");
+  expect(order).toContain("highway_name_motorway");
+  expect(order.indexOf("highway_motorway_subtle")).toBeLessThan(order.indexOf("geography-shoreline"));
+  expect(layers.find((layer) => layer.id === "highway_motorway_subtle")).toMatchObject({
+    paint: { "line-color": theme === "dark" ? "#607584" : "#181818", "line-width": 2 },
+  });
+  expect(paints.get("road-casing:line-color")).toBe(theme === "dark" ? "#2c3b48" : undefined);
   expect(order.indexOf("river")).toBeLessThan(order.indexOf("geography-boundary_state-halo"));
   expect(order.indexOf("geography-boundary-halo")).toBeLessThan(order.indexOf("boundary"));
   expect(order.indexOf("boundary")).toBeLessThan(order.indexOf("city"));
@@ -133,7 +138,8 @@ it.each(["light", "dark"])("keeps political borders over weather and inland wate
   expect(setPaintProperty).toHaveBeenCalledTimes(changes);
   expect(setLayoutProperty).toHaveBeenLastCalledWith("park", "visibility", "none");
   expect(setLayoutProperty).toHaveBeenCalledTimes(1);
-  expect(layers.some((layer) => "source-layer" in layer && ["transportation", "transportation_name"].includes(layer["source-layer"] ?? ""))).toBe(false);
+  expect(layers.filter((layer) => "source-layer" in layer && ["transportation", "transportation_name"].includes(layer["source-layer"] ?? ""))).toHaveLength(3);
+  expect(paints.get("road-casing:line-opacity")).toBe(1);
 });
 
 it("toggles native labels without changing weather or the style's label opacity", () => {

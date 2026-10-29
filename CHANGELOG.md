@@ -29,6 +29,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Restore OpenStreetMap roads and road names in the online basemap. Keep the
+  provider's road widths, zoom rules and label placement, use muted road colours
+  and land-coloured casings in dark mode, and keep road artwork beneath weather
+  layers without adding border halos to it.
 - Collect coverage in the complete offline release gate when it runs, skipping
   the overlapping deterministic job while retaining the coverage threshold,
   timing budgets, Python compatibility and full scientific-property lanes.

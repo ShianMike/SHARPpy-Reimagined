@@ -51,6 +51,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Simplify display-unit controls to unit symbols, a short chart-units note and
+  a Reset action. Remove repeated names and examples while preserving accessible
+  labels, saved choices and conversion behavior.
 - Restyle sounding sources, controls and the chart frame with the workspace glass,
   translucent fields and shared transparency fallbacks, without stacking blur.
   Keep rendered sounding images and exported PNGs unchanged.

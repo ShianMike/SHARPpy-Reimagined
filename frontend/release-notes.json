@@ -24,7 +24,7 @@
       },
       {
         "title": "Less repeated sounding work",
-        "description": "Derecho, parcel and Storm Slinky calculations reuse shared work, and historical analogue searches reuse their databases to reduce sounding preparation time. IGRA archives also decode with less overhead while retaining units, source information and missing-data checks."
+        "description": "Convective temperature searches, derecho, parcel and Storm Slinky calculations reuse shared work, and historical analogue searches reuse their databases to reduce sounding preparation time. IGRA archives also decode with less overhead while retaining units, source information and missing-data checks."
       }
     ]
   },

@@ -46,19 +46,9 @@ def _draw_global_lines(
         bounds: tuple[float, float, float, float],
         qtcore: Any,
         qtgui: Any) -> None:
-    pen = qtgui.QPen(qtgui.QColor(color), width)
-    pen.setCosmetic(True)
-    painter.setPen(pen)
-    painter.setBrush(qtcore.Qt.NoBrush)
-    for line in lines:
-        path = qtgui.QPainterPath()
-        for index, (lon, lat) in enumerate(line):
-            x, y = _api._map_point(rect, bounds, lat, lon)
-            if index:
-                path.lineTo(x, y)
-            else:
-                path.moveTo(x, y)
-        painter.drawPath(path)
+    from sharpmod_rs import draw_locator_lines
+
+    draw_locator_lines(painter, lines, color, width, rect, bounds, qtcore, qtgui)
 
 
 def _draw_box_outline(

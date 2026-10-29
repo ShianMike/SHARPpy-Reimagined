@@ -114,7 +114,6 @@ test("health-error: Backend status unknown with the INTERNAL message, and the st
     "Something went wrong in get_backend_health. Details are in the log.",
   );
   await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
-  await waitForMark(page, MARKS.stationsRendered);
   expectWarnings(consoleMessages, [{ pattern: /^\[backend\] INTERNAL in get_backend_health/u }]);
 });
 

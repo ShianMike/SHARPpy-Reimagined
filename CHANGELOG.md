@@ -16,6 +16,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Wait for the visible station catalogue in Overview browser checks instead of
+  map-render signals, and verify that Overview does not create a WebGL canvas.
+  Keep map rendering and hover checks in workspaces that actually show the map.
 - Let cache inspection include a run's early hours without treating them as
   field requests. Skip incomplete updraft-helicity intervals when listing saved
   frames and loading forecast hours, so the 3-hour product can finish caching
@@ -23,6 +26,17 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Project sounding-locator borders and build their Qt paths in Rust, reusing
+  immutable paths across paint passes. Bound reuse by both entry and vertex
+  counts and distinguish linework, view bounds, pixel geometry and Qt path type.
+  Preserve individual path order, clipping, colours, cosmetic pens, dateline
+  copies and county boundaries; remove the Python projection and path loop.
+- Fetch IEM sounding catalogues and profiles through the pooled Rust HTTP
+  client, retaining single-attempt status handling and timeouts while enforcing
+  an 8 MiB response limit. Assemble the six sounding columns in Rust and remove the
+  Python HTTP/TLS/body handling and numeric row loops. Preserve standard JSON
+  object decoding, custom loaders, station aliases, exact station/time selection,
+  missing values, provider errors and provenance.
 - Defer Settings, Soundings, Overview and Logs code until each workspace opens.
   Initialize the WebGL map only when Model Viewer or Live Tracking is first
   visited, then retain it across workspace changes. Keep an accessible loading

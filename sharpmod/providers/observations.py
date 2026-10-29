@@ -11,23 +11,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-import json
 import math
-import socket
-import ssl
 from typing import Callable, Mapping, Protocol, Sequence, runtime_checkable
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
 
 import numpy as np
-
-try:
-    import certifi
-
-    _CA_FILE = certifi.where()
-except Exception:  # pragma: no cover - certifi is a runtime dependency
-    _CA_FILE = None
 
 from sharpmod.io.uwyo_decoder import (
     RetrievalError as UWyoRetrievalError,
@@ -215,42 +203,9 @@ class IEMObservedProvider:
     def _http_json(self, url: str):
         if self._http_json_override is not None:
             return self._http_json_override(url)
-        context = ssl.create_default_context(cafile=_CA_FILE)
-        request = Request(
-            url,
-            headers={"User-Agent": "SHARPpy-Reimagined/observed-sounding"},
-        )
-        try:
-            with urlopen(
-                request, timeout=self.FETCH_TIMEOUT, context=context
-            ) as response:
-                payload = response.read()
-        except HTTPError as exc:
-            if exc.code in {404, 422}:
-                raise ObservedUnavailableError(
-                    f"IEM has no sounding matching this request ({exc.code})"
-                ) from exc
-            raise ObservedRetrievalError(
-                f"IEM request failed with HTTP {exc.code}: {url}"
-            ) from exc
-        except (socket.timeout, TimeoutError) as exc:
-            raise ObservedRetrievalError(
-                f"IEM request timed out after {self.FETCH_TIMEOUT}s: {url}"
-            ) from exc
-        except URLError as exc:
-            raise ObservedRetrievalError(
-                f"IEM service could not be reached ({exc.reason}): {url}"
-            ) from exc
-        except OSError as exc:
-            raise ObservedRetrievalError(
-                f"IEM service could not be reached ({exc}): {url}"
-            ) from exc
-        try:
-            return json.loads(payload.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise ObservedParseError(
-                f"IEM returned invalid JSON for {url}: {exc}"
-            ) from exc
+        import sharpmod_rs
+
+        return sharpmod_rs.fetch_iem_json(url, self.FETCH_TIMEOUT)
 
     def _station_catalog(self) -> tuple[dict, ...]:
         if self._stations is not None:
@@ -356,40 +311,9 @@ class IEMObservedProvider:
             raise ObservedUnavailableError(
                 f"IEM sounding for {station_id} contains no levels"
             )
-        fields = {
-            "pres": "pres",
-            "hght": "hght",
-            "tmpc": "tmpc",
-            "dwpc": "dwpc",
-            "wdir": "drct",
-            "wspd": "sknt",
-        }
-        columns = {name: [] for name in fields}
-        for index, row in enumerate(rows):
-            if not isinstance(row, dict):
-                raise ObservedParseError(
-                    f"IEM sounding level {index} is not an object"
-                )
-            pressure = row.get("pres")
-            if pressure is None:
-                continue
-            try:
-                float(pressure)
-            except (TypeError, ValueError) as exc:
-                raise ObservedParseError(
-                    f"IEM sounding level {index} has invalid pressure"
-                ) from exc
-            for output_name, input_name in fields.items():
-                value = row.get(input_name)
-                try:
-                    parsed = MISSING if value is None else float(value)
-                except (TypeError, ValueError) as exc:
-                    raise ObservedParseError(
-                        f"IEM sounding level {index} has invalid {input_name}"
-                    ) from exc
-                columns[output_name].append(parsed)
-        if not columns["pres"]:
-            raise ObservedParseError("IEM sounding contains no pressure levels")
+        import sharpmod_rs
+
+        intermediate = sharpmod_rs.iem_sounding_columns(rows, MISSING)
 
         valid = self._parse_valid(selected.get("valid"))
         lat = station_meta.get("latitude", float("nan"))
@@ -414,10 +338,6 @@ class IEMObservedProvider:
             "requested_station": requested,
             "source_url": source_url,
             "station_name": station_name,
-        }
-        intermediate = {
-            name: np.asarray(values, dtype=float)
-            for name, values in columns.items()
         }
         intermediate["omeg"] = None
         intermediate["meta"] = metadata

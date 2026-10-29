@@ -100,6 +100,29 @@ impl ModelClient {
         byte_range: Option<(u64, u64)>,
         cancel: impl Fn() -> Result<bool, String>,
     ) -> Result<Vec<u8>, Error> {
+        self.fetch_attempts(url, timeout, limit, byte_range, 2, cancel)
+            .await
+    }
+
+    pub async fn fetch_once(
+        &self,
+        url: &str,
+        timeout: f64,
+        limit: usize,
+    ) -> Result<Vec<u8>, Error> {
+        self.fetch_attempts(url, timeout, limit, None, 0, || Ok(false))
+            .await
+    }
+
+    async fn fetch_attempts(
+        &self,
+        url: &str,
+        timeout: f64,
+        limit: usize,
+        byte_range: Option<(u64, u64)>,
+        retries: u8,
+        cancel: impl Fn() -> Result<bool, String>,
+    ) -> Result<Vec<u8>, Error> {
         cancelled(&cancel)?;
         let url = Url::parse(url).map_err(|error| Error::Invalid(error.to_string()))?;
         if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
@@ -117,7 +140,7 @@ impl ModelClient {
             .as_ref()
             .map_err(|error| Error::Offline(error.clone()))?;
         let mut response = None;
-        for attempt in 0..=2 {
+        for attempt in 0..=retries {
             let mut request = client
                 .get(url.clone())
                 .header(header::ACCEPT_ENCODING, "identity");
@@ -135,7 +158,7 @@ impl ModelClient {
                         Err(Error::Offline(message)) => message,
                         _ => unreachable!("send returned only transport errors"),
                     };
-                    if attempt == 2 {
+                    if attempt == retries {
                         return Err(Error::Offline(message));
                     }
                     backoff(
@@ -157,7 +180,10 @@ impl ModelClient {
             let retry = matches!(status, 429 | 500 | 502 | 503 | 504)
                 || (status == 413 && reply.headers().contains_key(header::RETRY_AFTER));
             if retry {
-                if attempt == 2 {
+                if retries == 0 {
+                    return Err(Error::Http(status));
+                }
+                if attempt == retries {
                     return Err(Error::Offline(format!("HTTP {status} after two retries")));
                 }
                 let delay = retry_after(reply.headers().get(header::RETRY_AFTER)).unwrap_or(

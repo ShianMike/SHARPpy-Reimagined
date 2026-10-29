@@ -97,7 +97,7 @@ Open an image to view it at its original size.
 <details>
 <summary><strong>Live Tracking · radar products and measured values</strong></summary>
 
-[![Live Tracking with Base Reflectivity and Velocity in synchronized radar panels](docs/images/v3.5.0/live-tracking.jpg)](docs/images/v3.5.0/live-tracking.jpg)
+[![Live Tracking with current CONUS radar imagery and scan times](docs/images/v3.5.0/live-tracking.jpg)](docs/images/v3.5.0/live-tracking.jpg)
 
 </details>
 
@@ -121,6 +121,13 @@ Open an image to view it at its original size.
 [![Updates settings with the installed version and release highlights](docs/images/v3.5.0/updates.jpg)](docs/images/v3.5.0/updates.jpg)
 
 [![What's new popup introducing the installed release](docs/images/v3.5.0/whats-new.jpg)](docs/images/v3.5.0/whats-new.jpg)
+
+</details>
+
+<details>
+<summary><strong>Australian radar · native velocity and site selection</strong></summary>
+
+[![Australian Doppler velocity from Broadmeadows with the shared velocity palette](docs/images/v3.5.0/australian-radar.jpg)](docs/images/v3.5.0/australian-radar.jpg)
 
 </details>
 

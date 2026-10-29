@@ -76,7 +76,7 @@ test("shared controls and local overrides use orange hover in both themes", asyn
     await expect(loop).toHaveCSS("background-color", fill);
     await expect(loop).toHaveCSS("color", ink);
     await sections.getByRole("button", { name: "Units", exact: true }).click();
-    const unit = page.getByText("Fahrenheit", { exact: true }).locator("..");
+    const unit = page.getByRole("radio", { name: "°F Fahrenheit", exact: true }).locator("..");
     await unit.hover();
     await expect(unit).toHaveCSS("background-color", fill);
     await expect(unit).toHaveCSS("color", ink);

@@ -79,7 +79,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and undo/redo. Move level-selection UI and styles into a focused module.
 - Simplify display-unit controls to unit symbols, a short chart-units note and
   a Reset action. Remove repeated names and examples while preserving accessible
-  labels, saved choices and conversion behavior.
+  labels, saved choices and conversion behavior. Target those accessible labels
+  in browser hover and persistence checks instead of removed explanatory text.
 - Restyle sounding sources, controls and the chart frame with the workspace glass,
   translucent fields and shared transparency fallbacks, without stacking blur.
   Keep rendered sounding images and exported PNGs unchanged.

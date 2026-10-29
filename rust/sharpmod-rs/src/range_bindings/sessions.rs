@@ -93,33 +93,27 @@ impl Transport for Sessions {
         chunk_size: usize,
     ) -> Result<Response, Error> {
         Python::attach(|py| {
-            let session = if worker == 0 || self.shared.factory.is_none() {
-                self.shared.coordinator.clone_ref(py)
-            } else {
-                let existing = self
-                    .shared
-                    .sessions
-                    .lock()
-                    .unwrap()
-                    .get(&worker)
-                    .map(|session| session.clone_ref(py));
-                if let Some(session) = existing {
-                    session
-                } else {
-                    let session = self
+            let session = match (worker, self.shared.factory.as_ref()) {
+                (0, _) | (_, None) => self.shared.coordinator.clone_ref(py),
+                (_, Some(factory)) => {
+                    let existing = self
                         .shared
-                        .factory
-                        .as_ref()
-                        .unwrap()
-                        .bind(py)
-                        .call0()?
-                        .unbind();
-                    self.shared
                         .sessions
                         .lock()
                         .unwrap()
-                        .insert(worker, session.clone_ref(py));
-                    session
+                        .get(&worker)
+                        .map(|session| session.clone_ref(py));
+                    if let Some(session) = existing {
+                        session
+                    } else {
+                        let session = factory.bind(py).call0()?.unbind();
+                        self.shared
+                            .sessions
+                            .lock()
+                            .unwrap()
+                            .insert(worker, session.clone_ref(py));
+                        session
+                    }
                 }
             };
             let kwargs = PyDict::new(py);

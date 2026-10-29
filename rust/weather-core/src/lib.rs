@@ -6,6 +6,7 @@ mod http;
 pub mod model_http;
 pub mod radar;
 pub mod radar_sites;
+pub mod range_http;
 pub mod reports;
 pub mod surface;
 

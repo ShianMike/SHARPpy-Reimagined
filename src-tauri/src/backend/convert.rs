@@ -170,3 +170,30 @@ mod tests {
         assert_eq!(catalog(result).stations.len(), 1);
     }
 }
+
+const SHRF_FIXED: usize = 12;
+
+/// Decode into one binary frame; return its body offset for the caller's validation.
+pub fn shrf_frame<H: serde::Serialize>(
+    header: &H,
+    encoded: &str,
+) -> Result<(Vec<u8>, usize), String> {
+    use base64::Engine as _;
+    let mut json = serde_json::to_vec(header).unwrap_or_default();
+    while !(SHRF_FIXED + json.len()).is_multiple_of(8) {
+        json.push(b' ');
+    }
+    let length = u32::try_from(json.len()).unwrap_or(u32::MAX);
+    let mut out =
+        Vec::with_capacity(SHRF_FIXED + json.len() + base64::decoded_len_estimate(encoded.len()));
+    out.extend_from_slice(b"SHRF");
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes());
+    out.extend_from_slice(&length.to_le_bytes());
+    out.extend_from_slice(&json);
+    let body_offset = out.len();
+    base64::engine::general_purpose::STANDARD
+        .decode_vec(encoded, &mut out)
+        .map_err(|e| format!("base64: {e}"))?;
+    Ok((out, body_offset))
+}

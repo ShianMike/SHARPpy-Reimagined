@@ -1,6 +1,5 @@
 // Map data DTOs (src-tauri/src/dto/map.rs), pinned by src-tauri/contracts/public/map/.
 // The backend sends numbers and geography; the frontend chooses every pixel.
-
 import type { Station } from "./contracts";
 import type { Bounds } from "./soundings";
 

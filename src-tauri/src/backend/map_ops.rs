@@ -2,8 +2,7 @@
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use base64::Engine as _;
-use serde::Serialize;
+pub use super::convert::shrf_frame;
 use serde_json::json;
 
 use crate::backend::router::Router;
@@ -29,28 +28,6 @@ const RADAR_TIMEOUT: Duration = Duration::from_secs(60);
 const PLACES_TIMEOUT: Duration = Duration::from_secs(30);
 const AVAILABILITY_TIMEOUT: Duration = Duration::from_secs(35);
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
-const SHRF_FIXED: usize = 12;
-
-/// Decode into one binary frame; return its body offset for the caller's validation.
-pub fn shrf_frame<H: Serialize>(header: &H, encoded: &str) -> Result<(Vec<u8>, usize), String> {
-    let mut json = serde_json::to_vec(header).unwrap_or_default();
-    while !(SHRF_FIXED + json.len()).is_multiple_of(8) {
-        json.push(b' ');
-    }
-    let length = u32::try_from(json.len()).unwrap_or(u32::MAX);
-    let mut out =
-        Vec::with_capacity(SHRF_FIXED + json.len() + base64::decoded_len_estimate(encoded.len()));
-    out.extend_from_slice(b"SHRF");
-    out.extend_from_slice(&1u16.to_le_bytes());
-    out.extend_from_slice(&0u16.to_le_bytes());
-    out.extend_from_slice(&length.to_le_bytes());
-    out.extend_from_slice(&json);
-    let body_offset = out.len();
-    base64::engine::general_purpose::STANDARD
-        .decode_vec(encoded, &mut out)
-        .map_err(|e| format!("base64: {e}"))?;
-    Ok((out, body_offset))
-}
 
 pub(crate) fn key_ok(key: &str) -> bool {
     (1..=40).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')

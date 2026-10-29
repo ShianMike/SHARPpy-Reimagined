@@ -44,7 +44,7 @@ it("offers exactly the requested models in both selectors and resolves a removed
   expect(within(soundingModels).getByRole("group", { name: "CONUS" }).querySelectorAll('[role="option"]')).toHaveLength(11);
   expect(within(within(soundingModels).getByRole("group", { name: "Global" })).getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["GFS", "ECMWF 9km", "ECMWF", "GDPS"]);
   expect(within(within(soundingModels).getByRole("group", { name: "Regional" })).getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["RAP", "NAM", "RDPS"]);
-  await userEvent.keyboard("{End}");
+  await userEvent.keyboard("{ArrowDown}{End}");
   expect(document.activeElement).toBe(screen.getByRole("option", { name: "RDPS" }));
   await userEvent.keyboard("{ArrowUp}");
   expect(document.activeElement).toBe(screen.getByRole("option", { name: "NAM" }));

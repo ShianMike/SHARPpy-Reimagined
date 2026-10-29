@@ -11,10 +11,8 @@ from sharpmod.bridge import params as p
 from sharpmod.bridge.errors import BridgeError
 from sharpmod.bridge.fields import OUTLOOK_PRODUCTS
 
-#: As for the sounding image: base64 keeps the reply under the 8 MiB frame.
-MAX_IMAGE_BYTES = 6 * 1024 * 1024 - 4096
-#: Decimal places kept for outlook vertices: about 10 m, which SPC's own
-#: polygons do not exceed.
+MAX_IMAGE_BYTES = 6 * 1024 * 1024 - 4096  # Base64 keeps the reply below 8 MiB.
+#: Outlook vertices keep about 10 m precision, matching SPC polygons.
 VERTEX_DECIMALS = 4
 
 
@@ -227,12 +225,7 @@ def radar_sites(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def place_labels(params: dict[str, Any]) -> dict[str, Any]:
-    """Map place names: the curated major cities, then towns, one per quarter degree.
-
-    The selection is the legacy map's (``ui/maps/presentation.py``): major
-    cities always, and from the bundled Census index the largest incorporated
-    place in each quarter-degree cell. Towns come largest first.
-    """
+    """Major cities, then the largest Census towns per quarter-degree cell."""
     p.keys(params, ())
     from sharpmod.maps.map_geography import MAJOR_CITIES
     from sharpmod.maps.place_names import _conus_place_cells

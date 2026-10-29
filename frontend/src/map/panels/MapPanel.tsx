@@ -10,7 +10,7 @@ import { useGraphicsStore } from "../../stores/graphicsStore";
 import { useAppStore } from "../../stores/appStore";
 import { mapProjection, panelLayers, panelWeather, useMapStore, type PanelLayout } from "../../stores/mapStore";
 import { RadarScale } from "../../features/tracking/RadarScale";
-import { useMapCatalog } from "../mapQueries";
+import { useMapCatalog, usePanelRadar } from "../mapQueries";
 import { forecastLabel } from "../../features/sounding/soundingTime";
 import { useForecastContext } from "../../features/forecast/useForecast";
 import { ParameterPicker } from "../../features/toolbar/ParameterPicker";
@@ -102,9 +102,10 @@ function LivePanelChip({ panel, layout }: { panel: number; layout: PanelLayout }
   const active = useMapStore((state) => state.activePanel === panel);
   const layers = useMapStore((state) => panelLayers(state, panel));
   const options = useMapStore((state) => panelWeather(state, panel));
+  const radar = usePanelRadar(panel);
   const catalog = useMapCatalog().data;
   const products = options.radarScope === "site" ? catalog?.siteProducts : catalog?.radarProducts;
-  const product = products?.find((item) => item.key === options.radarProduct) ?? products?.[0];
+  const product = products?.find((item) => item.key === radar.product) ?? products?.[0];
   const title = layers.radar.visible ? product?.label ?? "Radar" : layers.satellite.visible ? `GOES ${options.satelliteChannel}` : "Live layers";
   if (layout === 1) return null;
   return <button type="button" className={styles.chip} aria-pressed={active} aria-label={`Panel ${String(panel + 1)}: ${title}. Select panel.`} data-testid={`panel-chip-${String(panel + 1)}`} onClick={() => {

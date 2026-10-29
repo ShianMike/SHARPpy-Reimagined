@@ -27,7 +27,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 from unittest.mock import patch
 
-from sharpmod.bridge.public import camel as _camel, shrf
+from sharpmod.bridge.public import camel as _camel, public_result, shrf
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = ROOT / "src-tauri" / "contracts"
@@ -458,18 +458,7 @@ def _build() -> dict[str, bytes]:
     out["bridge/map/radar-tilts.result.json"] = _json(cuts)
     out["public/map/radar-tilts.json"] = _json(_camel(cuts))
     out["bridge/map/radar-sites.result.json"] = _json(sites)
-    out["public/map/radar-sites.json"] = _json(
-        {
-            "sites": [
-                {
-                    "id": site["id"],
-                    "latitude": site["lat"],
-                    "longitude": site["lon"],
-                }
-                for site in sites["sites"]
-            ]
-        }
-    )
+    out["public/map/radar-sites.json"] = _json(public_result("get_radar_sites", sites))
 
     from sharpmod.bridge import satellite as satellite_bridge
 

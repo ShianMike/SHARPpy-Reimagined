@@ -302,6 +302,50 @@ impl Router {
             }
             params["tilt"] = json!(cut);
         }
+        let native_request = serde_json::from_value(params.clone())
+            .map_err(|reason| invalid(&context, &format!("Invalid radar request: {reason}")))?;
+        match sharpmod_weather::australian_radar::client()
+            .fetch(native_request, time::OffsetDateTime::now_utc())
+            .await
+        {
+            Ok(Some(frame)) => {
+                let frame: RadarSiteResult = serde_json::from_value(
+                    serde_json::to_value(frame.as_ref())
+                        .map_err(|reason| rejected(&context, "radar.site", reason.to_string()))?,
+                )
+                .map_err(|reason| rejected(&context, "radar.site", reason.to_string()))?;
+                return shrf_frame(&frame.header(), &frame.png_base64)
+                    .map(|(bytes, _)| bytes)
+                    .map_err(|reason| rejected(&context, "radar.site", reason));
+            }
+            Ok(None) => {}
+            Err(error) => {
+                return Err(BackendError {
+                    code: if matches!(error, sharpmod_weather::australian_radar::Error::Invalid(_))
+                    {
+                        crate::error::ErrorCode::InvalidArgument
+                    } else {
+                        crate::error::ErrorCode::OverlayFetchFailed
+                    },
+                    message: error.to_string(),
+                    retryable: !matches!(
+                        error,
+                        sharpmod_weather::australian_radar::Error::Invalid(_)
+                    ),
+                    context: Some(Box::new(context)),
+                    details: matches!(
+                        error,
+                        sharpmod_weather::australian_radar::Error::ScanMissing
+                    )
+                    .then(|| {
+                        json!({"reason": "scanMissing"})
+                            .as_object()
+                            .expect("object")
+                            .clone()
+                    }),
+                });
+            }
+        }
         // A cold Level II request downloads and decodes a complete volume.
         let timeout = if matches!(
             product.unwrap_or("reflectivity"),

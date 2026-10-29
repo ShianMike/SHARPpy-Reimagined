@@ -227,11 +227,14 @@ export function parseAvailabilityReport(value: unknown, path = ""): Availability
 
 function parseSite(value: unknown, path: string): RadarSite {
   const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["id", "latitude", "longitude"]);
+  expectExactKeys(obj, path, ["id", "latitude", "longitude"], ["name", "country", "products"]);
   return {
     id: expectString(obj.id, at(path, "id"), { minLength: 1, maxLength: 16 }),
     latitude: expectFiniteNumber(obj.latitude, at(path, "latitude"), { min: -90, max: 90 }),
     longitude: expectFiniteNumber(obj.longitude, at(path, "longitude"), { min: -180, max: 180 }),
+    ...(obj.name === undefined ? {} : { name: label(obj.name, at(path, "name")) }),
+    ...(obj.country === undefined ? {} : { country: expectString(obj.country, at(path, "country"), { minLength: 2, maxLength: 2 }) }),
+    ...(obj.products === undefined ? {} : { products: expectArray(obj.products, at(path, "products"), key) }),
   };
 }
 

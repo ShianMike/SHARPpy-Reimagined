@@ -11,7 +11,7 @@ use std::sync::{Arc, PoisonError};
 use std::time::Duration;
 
 impl Router {
-    /// The bundled WSR-88D catalogue backing the single-site picker.
+    /// The bundled US and Australian catalogue backing the single-site picker.
     pub async fn radar_sites(&self) -> Result<Arc<RadarSiteCatalogPublic>, BackendError> {
         if let Some(sites) = self
             .radar_sites
@@ -24,11 +24,7 @@ impl Router {
         let catalog = Arc::new(RadarSiteCatalogPublic {
             sites: sharpmod_weather::radar_sites::sites()
                 .iter()
-                .map(|site| crate::dto::radar::RadarSite {
-                    id: site.id.clone(),
-                    latitude: site.lat,
-                    longitude: site.lon,
-                })
+                .map(crate::dto::radar::RadarSite::from)
                 .collect(),
         });
         *self
@@ -69,6 +65,18 @@ impl Router {
             .map(alert_time)
             .transpose()
             .map_err(|_| invalid(&context, "a valid radar time is required"))?;
+        if sharpmod_weather::radar_sites::sites()
+            .iter()
+            .any(|candidate| {
+                candidate.id.eq_ignore_ascii_case(site)
+                    && candidate.country.as_deref() == Some("AU")
+            })
+        {
+            return Err(invalid(
+                &context,
+                "Australian radar uses its lowest available elevation.",
+            ));
+        }
         if product == "velocity" {
             let site = sharpmod_weather::radar_sites::sites()
                 .iter()

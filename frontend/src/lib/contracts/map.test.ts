@@ -104,6 +104,18 @@ describe("map contracts", () => {
     }
   });
 
+  it("preserves optional radar names and capabilities without changing legacy US sites", () => {
+    const legacy = { id: "KTLX", latitude: 35.3333, longitude: -97.2783 };
+    const australian = { id: "ABRD", latitude: -27.717, longitude: 153.24, name: "Broadmeadows", country: "AU", products: ["reflectivity"] };
+    const parsed = parseRadarSiteCatalog({ sites: [legacy, australian] });
+    expect(parsed.sites).toEqual([legacy, australian]);
+    australian.products.push("velocity");
+    expect(parsed.sites[1]?.products).toEqual(["reflectivity"]);
+    for (const metadata of [{ name: 42 }, { country: "Australia" }, { products: "reflectivity" }, { products: [null] }]) {
+      expect(() => parseRadarSiteCatalog({ sites: [{ ...legacy, ...metadata }] })).toThrow(ContractError);
+    }
+  });
+
   it("reads the satellite frame and its scan provenance", () => {
     const frame = parseSatelliteFrame(bytes(satelliteShrf).buffer);
     expect(frame).toMatchObject({

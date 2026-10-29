@@ -11,10 +11,11 @@ import { compactUtc, formatUtc } from "../../features/sounding/soundingTime";
 import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice";
 import { SourceSelect } from "../../features/sounding/SourceFields";
 import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
-import { OUTLOOK_KEYS, RADAR_TILTABLE_PRODUCTS, SATELLITE_CHANNELS, type OutlookKey } from "../../types/map";
+import { OUTLOOK_KEYS, SATELLITE_CHANNELS, type OutlookKey } from "../../types/map";
 import { RadarTiltSelect } from "../../features/tracking/RadarTiltSelect";
-import { useMapCatalog, useEffectiveRadarSite, usePlaceLabels, useRadarFrame, useRadarSiteFrame, useRadarSites, useSatelliteFrame, useSpcOutlooks } from "../mapQueries";
+import { useMapCatalog, usePanelRadar, usePlaceLabels, useRadarFrame, useRadarSiteFrame, useRadarSites, useSatelliteFrame, useSpcOutlooks } from "../mapQueries";
 import { domainPath } from "../panelScene";
+import { isAustralianRadarSite } from "../panelRadar";
 import styles from "./LayerPanel.module.css";
 
 /** The satellite row's own controls: the channel, and the scan's own provenance. */
@@ -64,13 +65,14 @@ export function SatelliteControls(): ReactNode {
 export function RadarControls(): ReactNode {
   const validTime = useWeatherTime();
   const catalog = useMapCatalog().data;
-  const { radarScope: scope, radarTilt: tilt, radarSite: pinnedSite, radarProduct: product } = useMapStore((state) => panelWeather(state));
+  const { radarScope: scope, radarSite: pinnedSite } = useMapStore((state) => panelWeather(state));
   const sites = useRadarSites(true);
-  const effectiveSite = useEffectiveRadarSite();
+  const { site: effectiveSite, product, tilt, tiltable, supportedProducts } = usePanelRadar();
   const mosaic = useRadarFrame(product, scope === "mosaic", validTime);
   const siteFrame = useRadarSiteFrame(product, effectiveSite, scope === "site", validTime, tilt);
   const radar = scope === "site" ? siteFrame : mosaic;
-  const products = scope === "site" ? (catalog?.siteProducts ?? []) : (catalog?.radarProducts ?? []);
+  const products = (scope === "site" ? (catalog?.siteProducts ?? []) : (catalog?.radarProducts ?? []))
+    .filter((item) => scope !== "site" || supportedProducts === undefined || supportedProducts.includes(item.key));
   const value = product ?? radar.data?.product ?? products[0]?.key ?? "";
   const shownSite: string =
     scope === "site" && radar.data !== undefined && "siteId" in radar.data && typeof radar.data.siteId === "string"
@@ -92,8 +94,13 @@ export function RadarControls(): ReactNode {
           <p className={styles.hint}>Loading the radar sites</p>
         ) : (
           <SourceSelect label="Site" value={pinnedSite ?? ""}
-            options={[{ value: "", label: "Nearest to map centre" }, ...sites.data.sites.map((site) => ({ value: site.id, label: site.id }))]}
-            onChange={(value) => { useMapStore.getState().setRadarSite(value === "" ? null : value); }} />
+            options={[{ value: "", label: "Nearest to map centre" }, ...sites.data.sites.map((site) => ({ value: site.id, label: site.name === undefined ? site.id : `${site.id} · ${site.name}`, ...(site.country === "AU" ? { detail: "Australia" } : {}) }))]}
+            onChange={(value) => {
+              const state = useMapStore.getState();
+              state.setRadarSite(value === "" ? null : value);
+              const selectedSite = sites.data.sites.find((site) => site.id === value);
+              if (selectedSite !== undefined) state.requestFocus(selectedSite.id, { latitude: selectedSite.latitude, longitude: selectedSite.longitude });
+            }} />
         )
       ) : null}
       {products.length === 0 ? null : (
@@ -101,7 +108,8 @@ export function RadarControls(): ReactNode {
           options={products.map((item) => ({ value: item.key, label: item.label }))}
           onChange={useMapStore.getState().setRadarProduct} />
       )}
-      {scope === "site" && RADAR_TILTABLE_PRODUCTS.some((key) => key === value) ? <RadarTiltSelect label="Tilt" site={effectiveSite} product={value} tilt={tilt} angle={siteFrame.data?.elevationAngle} /> : null}
+      {scope === "site" && (tiltable ? <RadarTiltSelect label="Tilt" site={effectiveSite} product={value} tilt={tilt} angle={siteFrame.data?.elevationAngle} />
+        : isAustralianRadarSite(effectiveSite) ? <SourceSelect label="Tilt" value="0" options={[{ value: "0", label: "Lowest available" }]} disabled onChange={useMapStore.getState().setRadarTilt} /> : null)}
       {radar.isError ? (
         <>
           <SoundingErrorNotice

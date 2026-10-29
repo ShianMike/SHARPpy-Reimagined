@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from datetime import timedelta
 from typing import Any
 
@@ -135,6 +136,18 @@ def radar_mosaic(params: dict[str, Any]) -> dict[str, Any]:
 def radar_site(params: dict[str, Any]) -> dict[str, Any]:
     """A pinned or nearest antenna's frame, optionally at a specific elevation."""
     p.keys(params, (), ("product", "site_id", "latitude", "longitude", "valid_time", "tilt"))
+    import sharpmod_rs
+
+    try:
+        native = sharpmod_rs.australian_radar_frame(json.dumps(params))
+    except ValueError as exc:
+        raise p.invalid(str(exc)) from None
+    except sharpmod_rs.WeatherRadarScanMissing as exc:
+        raise BridgeError("OVERLAY_FETCH_FAILED", str(exc), True, {"reason": "scanMissing"}) from None
+    except RuntimeError as exc:
+        raise BridgeError("OVERLAY_FETCH_FAILED", str(exc), True) from None
+    if native is not None:
+        return json.loads(native)
     when = p.time(params, "valid_time") if params.get("valid_time") is not None else None
     from sharpmod.providers import radar_site as site
 
@@ -206,16 +219,11 @@ def radar_site(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def radar_sites(params: dict[str, Any]) -> dict[str, Any]:
-    """The bundled WSR-88D catalogue backing the single-site picker."""
+    """The native radar catalogue backing the single-site picker."""
     p.keys(params, ())
-    from sharpmod.providers import radar_site as site
+    import sharpmod_rs
 
-    return {
-        "sites": [
-            {"id": entry.id, "lat": float(entry.lat), "lon": float(entry.lon)}
-            for entry in site.sites()
-        ]
-    }
+    return json.loads(sharpmod_rs.radar_sites(public=True))
 
 
 def place_labels(params: dict[str, Any]) -> dict[str, Any]:

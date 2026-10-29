@@ -69,6 +69,21 @@ it("rejects duplicate, incomplete and invalid availability replies", () => {
   for (const tilts of [fixture.tilts.slice(1), [...fixture.tilts.slice(1), fixture.tilts[1]], fixture.tilts.map((cut) => ({ ...cut, status: "maybe" }))]) expect(() => parseRadarTilts({ ...fixture, tilts })).toThrow();
 });
 
+it("shows lowest available for Australian sites without checking NOAA tilts", async () => {
+  useMapStore.getState().setRadarSite("ABRD");
+  const transport = createTransport(), call = vi.spyOn(transport, "call");
+  const { view, queryClient } = renderWithBackend(<Picker />, transport);
+  for (const name of ["Site Tilt", "Tilt"]) {
+    const control = screen.getByRole<HTMLButtonElement>("combobox", { name });
+    expect(control.textContent).toBe("Lowest available");
+    expect(control.disabled).toBe(true);
+    fireEvent.click(control);
+  }
+  await act(async () => { await Promise.resolve(); });
+  expect(call).not.toHaveBeenCalled();
+  view.unmount(); queryClient.clear();
+});
+
 it("stops offering previously verified cuts if refreshing their check fails", async () => {
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   const transport = createTransport(), original = transport.call.bind(transport);

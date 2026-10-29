@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
-import { useEffectiveRadarSite, useRadarSiteFrame } from "../mapQueries";
+import { usePanelRadar, useRadarSiteFrame } from "../mapQueries";
 import { radarValues } from "../pngImages";
 import { radarCodeAt, type RadarValues } from "../radarValues";
 import { formatValue } from "../field/colourize";
@@ -13,8 +13,8 @@ import { useHoverStore } from "./hoverStore";
 export function RadarTooltip({ panel }: { panel: number }): ReactNode {
   const units = useUiStore((state) => state.units);
   const visible = useMapStore((state) => panelLayers(state, panel).radar.visible);
-  const { radarProduct, radarTilt, radarScope } = useMapStore((state) => panelWeather(state, panel));
-  const site = useEffectiveRadarSite(panel);
+  const { radarScope } = useMapStore((state) => panelWeather(state, panel));
+  const { site, product: radarProduct, tilt: radarTilt } = usePanelRadar(panel);
   const time = useWeatherTime();
   const query = useRadarSiteFrame(radarProduct, site, visible && radarScope === "site", time, radarTilt);
   const frame = visible && radarScope === "site" ? query.data : undefined;

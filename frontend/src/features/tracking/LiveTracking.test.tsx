@@ -9,7 +9,8 @@ import { encodeShrf, parseShrf } from "../../lib/contracts/frames";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import { mapKeys } from "../../lib/backend/queryOptions";
 import { LayerPanel } from "../../map/controls/LayerPanel";
-import { useRadarSiteFrame } from "../../map/mapQueries";
+import { RadarControls } from "../../map/controls/OverlayControls";
+import { usePanelRadar, useRadarSiteFrame } from "../../map/mapQueries";
 import { useAppStore } from "../../stores/appStore";
 import { useForecastStore } from "../../stores/forecastStore";
 import { LIVE_MINUTE, useLiveTrackingStore } from "../../stores/liveTrackingStore";
@@ -107,6 +108,57 @@ it("keeps radar toolbar choices in the active live panel and reports the source'
   expect(screen.getByRole("combobox", { name: "Site Tilt" }).textContent).toContain("1.3° / 1.5°");
   act(() => { useMapStore.getState().setActivePanel(0); useMapStore.getState().setRadarProduct("one-hour"); });
   expect(screen.getByRole("button", { name: "Site Tilt" }).textContent).toContain("Not applicable");
+  view.unmount(); queryClient.clear();
+});
+
+it.each(["toolbar", "layer"])("filters %s products to Australian capabilities and disables elevation checks", async (controls) => {
+  useAppStore.getState().setActiveWorkspace("live");
+  const state = useMapStore.getState();
+  state.setPanelLayout(2);
+  state.setRadarScope("site"); state.setRadarSite("KTLX"); state.setRadarProduct("velocity"); state.setRadarTilt("1");
+  const otherPanel = useMapStore.getState().livePanels[0];
+  state.setActivePanel(1); state.setRadarScope("site"); state.setRadarSite("KTLX"); state.setRadarProduct("velocity"); state.setRadarTilt("2");
+  const transport = createTransport(), original = transport.call.bind(transport);
+  transport.call = (command, args) => command === "get_radar_sites" ? Promise.resolve({ sites: [
+    { id: "KTLX", latitude: 35.3333, longitude: -97.2783 },
+    { id: "ABRD", name: "Broadmeadows", country: "AU", products: ["reflectivity"], latitude: -37.85, longitude: 144.75 },
+  ] }) : command === "get_radar_site_frame" ? new Promise<unknown>(() => undefined) : original(command, args);
+  const call = vi.spyOn(transport, "call");
+  function Imagery() {
+    const { site, product, tilt } = usePanelRadar();
+    useRadarSiteFrame(product, site, true, "2026-10-17T08:00:00Z", tilt);
+    return null;
+  }
+  const productLabel = controls === "toolbar" ? "Site Product · 2" : "Product";
+  const { view, queryClient } = renderWithBackend(<>{controls === "toolbar" ? <LiveRadarControls /> : <RadarControls />}<Imagery /></>, transport);
+  await waitFor(() => { expect(screen.getByRole("combobox", { name: productLabel }).textContent).toContain("Velocity"); });
+  fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
+  const australian = await screen.findByRole("option", { name: "ABRD · Broadmeadows" });
+  expect(australian.getAttribute("aria-description")).toContain("Australia");
+  fireEvent.click(australian);
+  expect(useMapStore.getState().focusRequest).toMatchObject({ stationId: "ABRD", position: { latitude: -37.85, longitude: 144.75 } });
+  expect(screen.getByRole("combobox", { name: productLabel }).textContent).toContain("Base Reflectivity");
+  fireEvent.click(screen.getByRole("combobox", { name: productLabel }));
+  expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["Base Reflectivity"]);
+  fireEvent.click(screen.getByRole("option", { name: "Base Reflectivity" }));
+  const tilt = controls === "toolbar" ? screen.getByRole<HTMLButtonElement>("button", { name: "Site Tilt" })
+    : screen.getByRole<HTMLButtonElement>("combobox", { name: "Tilt" });
+  expect(tilt.textContent).toContain("Lowest available");
+  expect(tilt.disabled).toBe(true);
+  await waitFor(() => { expect(call).toHaveBeenCalledWith("get_radar_site_frame", { site: "ABRD", product: "reflectivity", validTime: "2026-10-17T08:00:00Z", tilt: "0" }); });
+  const australianCalls = call.mock.calls.filter(([, args]) => args?.site === "ABRD");
+  expect(australianCalls.length).toBeGreaterThan(0);
+  expect(australianCalls.every(([command, args]) => command === "get_radar_site_frame" && args?.product === "reflectivity" && args.tilt === "0")).toBe(true);
+  expect(useMapStore.getState().livePanels[0]).toBe(otherPanel);
+  const focus = useMapStore.getState().focusRequest;
+  fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
+  fireEvent.click(screen.getByRole("option", { name: controls === "toolbar" ? "Nearest site" : "Nearest to map centre" }));
+  expect(useMapStore.getState().focusRequest).toBe(focus);
+  if (controls === "toolbar") {
+    fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
+    fireEvent.click(screen.getByRole("option", { name: "CONUS mosaic" }));
+    expect(useMapStore.getState().focusRequest).toBe(focus);
+  }
   view.unmount(); queryClient.clear();
 });
 

@@ -4,8 +4,9 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type R
 import { Popover } from "../../components/Popover";
 import { cx } from "../../lib/cx";
 import { useRadarSites } from "../../map/mapQueries";
+import { panelRadar } from "../../map/panelRadar";
 import { useAppStore } from "../../stores/appStore";
-import { useMapStore } from "../../stores/mapStore";
+import { panelWeather, useMapStore } from "../../stores/mapStore";
 import { displayName, formatCoordinates } from "../../stations/stationFormat";
 import { useStationCatalog } from "../../stations/stationQueries";
 import { fold, MAX_QUERY_LENGTH, pythonStrip, SEARCH_LIMIT, searchStations } from "../../stations/stationSearch";
@@ -37,11 +38,11 @@ export function StationSearch(): ReactNode {
   const trimmed = pythonStrip(query.slice(0, MAX_QUERY_LENGTH));
   const results: readonly (Station | RadarSite)[] = useMemo(() => section === "stations"
     ? trimmed === "" ? stations.slice(0, SEARCH_LIMIT) : searchStations(stations, query)
-    : sites.filter((site) => fold(site.id).includes(fold(trimmed))).slice(0, SEARCH_LIMIT), [section, stations, sites, query, trimmed]);
+    : sites.filter((site) => fold(`${site.id} ${site.name ?? ""} ${site.country === "AU" ? "Australia" : site.country ?? ""}`).includes(fold(trimmed))).slice(0, SEARCH_LIMIT), [section, stations, sites, query, trimmed]);
   const showList = !disabled;
   const label = section === "stations" ? "Search stations" : "Search radar sites";
   const placeholder = disabled ? source.status === "pending" ? section === "stations" ? "Loading stations" : "Loading radar sites"
-    : section === "stations" ? "Stations unavailable" : "Radar sites unavailable" : section === "stations" ? "Station name or ID…" : "Radar site ID, e.g. KTLX…";
+    : section === "stations" ? "Stations unavailable" : "Radar sites unavailable" : section === "stations" ? "Station name or ID…" : "Radar name or ID…";
   const optionId = (index: number): string => `${listId}-option-${String(index)}`;
   const activeId = showList && results[active] !== undefined ? optionId(active) : undefined;
   useEffect(() => { if (activeId !== undefined) document.getElementById(activeId)?.scrollIntoView({ block: "nearest" }); }, [activeId]);
@@ -50,13 +51,17 @@ export function StationSearch(): ReactNode {
   const close = (): void => { setOpen(false); };
   const done = (): void => { close(); anchor?.focus(); };
   const choose = (location: Station | RadarSite): void => {
-    if ("name" in location) {
+    if ("source" in location) {
       useAppStore.getState().selectStation(location.id);
       useMapStore.getState().requestFocus(location.id);
     } else if (useAppStore.getState().activeWorkspace === "live") {
       const map = useMapStore.getState();
       if (map.livePanels[map.activePanel]?.radarScope !== "site") map.setRadarScope("site");
       map.setRadarSite(location.id);
+      const weather = panelWeather(useMapStore.getState());
+      const selection = panelRadar(weather, null, sites);
+      if (selection.product !== weather.radarProduct) map.setRadarProduct(selection.product);
+      if (selection.tilt !== weather.radarTilt) map.setRadarTilt(selection.tilt);
       map.setLayerVisible("radar", true);
       map.requestFocus(location.id, { latitude: location.latitude, longitude: location.longitude });
     }
@@ -98,12 +103,13 @@ export function StationSearch(): ReactNode {
           onChange={(event) => { setQuery(event.target.value); setActive(-1); }} onKeyDown={onKeyDown} />
         {query === "" ? null : <IconAction icon={X} size="sm" label="Clear search" onClick={() => { setQuery(""); setActive(-1); input.current?.focus(); }} />}
       </div>
-      <div className={styles.listHeading}><span>{section === "stations" ? "Sounding stations" : "WSR-88D radar sites"}</span><span>{results.length} shown</span></div>
+      <div className={styles.listHeading}><span>{section === "stations" ? "Sounding stations" : "Radar sites"}</span><span>{results.length} shown</span></div>
       {showList ? <div role="listbox" aria-label={section === "stations" ? "Station results" : "Radar site results"} id={listId} className={styles.results} data-testid="station-results">
         {results.length === 0 ? <div className={styles.empty} role="option" aria-selected="false" aria-disabled="true">
           {`No ${section === "stations" ? "stations" : "radar sites"} match "${trimmed}"`}
         </div> : results.map((location, index) => {
-          const name = "name" in location ? displayName(location.name) : "WSR-88D radar";
+          const name = "source" in location ? displayName(location.name)
+            : `${location.name ?? "WSR-88D radar"}${location.country === "AU" ? " · Australia" : ""}`;
           const text = `${location.id} ${name}`;
           return <div key={location.id} id={optionId(index)} role="option" aria-selected={index === active}
             className={styles.option} title={text} aria-label={text} onMouseDown={(event) => { event.preventDefault(); }} onClick={() => { choose(location); }}>

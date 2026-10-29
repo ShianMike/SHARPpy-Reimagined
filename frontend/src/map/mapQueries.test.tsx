@@ -21,7 +21,7 @@ import { parseFieldFrame } from "../lib/contracts/frames";
 import { parseMapCatalog } from "../lib/contracts/map";
 import { parseModelCatalog } from "../lib/contracts/soundings";
 import type { Transport } from "../lib/backend/transport";
-import { useFieldFrame, useRadarFrame, useRadarSiteFrame, useSatelliteFrame, useSpcOutlooks, useStormReports } from "./mapQueries";
+import { useFieldFrame, usePanelRadar, useRadarFrame, useRadarSiteFrame, useSatelliteFrame, useSpcOutlooks, useStormReports } from "./mapQueries";
 import { useSurfacePlots } from "./surfaceQueries";
 import { useFieldContours } from "./contourQueries";
 import { defaultLayerStates } from "./layers/registry";
@@ -141,6 +141,52 @@ it.each(Object.keys(payloads) as Kind[])("clears %s data when its selection chan
     hook.unmount();
     queryClient.clear();
   }
+});
+
+it.each(["pinned", "nearest"])("falls back from US velocity to Australian reflectivity for a %s site without changing other panels", async (mode) => {
+  useAppStore.getState().setActiveWorkspace("live");
+  const state = useMapStore.getState();
+  state.setPanelLayout(2);
+  const otherPanel = useMapStore.getState().livePanels[0];
+  state.setActivePanel(1); state.setRadarScope("site"); state.setRadarProduct("velocity"); state.setRadarTilt("2");
+  state.setRadarSite(mode === "pinned" ? "KTLX" : null);
+  state.setCameraSnapshot({ center: [-97.2783, 35.3333], zoom: 7 });
+  const sites = [
+    { id: "KTLX", latitude: 35.3333, longitude: -97.2783 },
+    { id: "ABRD", name: "Broadmeadows", country: "AU", products: ["reflectivity"], latitude: -37.85, longitude: 144.75 },
+  ];
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(mapKeys.radarSites, { sites });
+  const call = vi.fn<Transport["call"]>(() => new Promise<unknown>(() => undefined));
+  const client = new BackendClient({ call, listen: () => Promise.resolve(() => undefined) });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
+  );
+  const hook = renderHook(() => {
+    const selection = usePanelRadar(1);
+    useRadarSiteFrame(selection.product, selection.site, true, null, selection.tilt);
+    return selection;
+  }, { wrapper });
+  expect(hook.result.current).toMatchObject({ site: "KTLX", product: "velocity", tilt: "2", tiltable: true });
+  act(() => {
+    if (mode === "pinned") state.setRadarSite("ABRD");
+    else state.setCameraSnapshot({ center: [144.75, -37.85], zoom: 7 });
+  });
+  await waitFor(() => { expect(call).toHaveBeenCalledWith("get_radar_site_frame", { site: "ABRD", product: "reflectivity", tilt: "0" }); });
+  expect(hook.result.current).toMatchObject({ site: "ABRD", product: "reflectivity", tilt: "0", tiltable: false });
+  expect(call.mock.calls.filter(([command, args]) => command === "get_radar_site_frame" && args?.site === "ABRD")).toEqual([
+    ["get_radar_site_frame", { site: "ABRD", product: "reflectivity", tilt: "0" }],
+  ]);
+  expect(useMapStore.getState().livePanels[0]).toBe(otherPanel);
+  act(() => { state.setActivePanel(0); });
+  expect(hook.result.current.site).toBe("ABRD");
+  act(() => {
+    state.setActivePanel(1);
+    if (mode === "pinned") state.setRadarSite("KTLX");
+    else state.setCameraSnapshot({ center: [-97.2783, 35.3333], zoom: 7 });
+  });
+  expect(hook.result.current).toMatchObject({ site: "KTLX", product: "velocity", tilt: "2", tiltable: true });
+  hook.unmount(); queryClient.clear();
 });
 
 it.each(["rrfs-a", "nam", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5"])(

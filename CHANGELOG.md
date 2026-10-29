@@ -9,6 +9,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add 67 Australian radar sites from the supplied MRRL catalogue to Live
+  Tracking, with searchable site names, Base Reflectivity and Doppler Velocity
+  at the lowest available elevation. Use the existing velocity colour table
+  and unit preferences, keeping missing gates and range folding distinct.
+  Fetch, decode, WGS84 sampling and calibrated PNG generation run in Rust.
+  Preserve actual scan times, missing sectors and exact source gate values;
+  unsupported products and elevations remain unavailable, and feed delays do
+  not substitute an old scan for the requested time.
 - Add 1-hour and 3-hour maximum updraft helicity for the 2-5 km AGL layer
   to HRRR and supporting convection-allowing models, using the supplied
   0-400 m²/s² colour table. The three-hour field takes the cell-wise maximum

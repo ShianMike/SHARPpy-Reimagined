@@ -1,6 +1,6 @@
 {
   "3.4.2": {
-    "summary": "Track 2-5 km updraft helicity with a shared colour scale, read OpenStreetMap roads and load weather overlays with less processing time.",
+    "summary": "View Australian radar, track 2-5 km updraft helicity, read OpenStreetMap roads and load weather overlays with less processing time.",
     "highlights": [
       {
         "title": "2-5 km updraft helicity",
@@ -11,8 +11,8 @@
         "description": "View the maximum across three consecutive hourly fields from the same model run. This product starts at forecast hour 3 and requires the complete interval. Load Hours and cache counts use only the supported hours."
       },
       {
-        "title": "Faster radar checks and display",
-        "description": "Radar images take less processing time to display, keeping their original colours, missing sectors and hover values. Velocity tilt checks load separately and reuse recent scan listings; connection problems remain distinct from missing scans."
+        "title": "Australian radar and faster display",
+        "description": "Find 67 Australian radar sites by name or ID in Live Tracking and view Base Reflectivity and Doppler Velocity from the MRRL feed at the lowest available elevation. Velocity uses your existing colour table and unit preferences, with range folding distinct from missing coverage. Actual scan times remain visible. Radar images take less processing time to display, keeping their colours and hover values. US velocity tilt checks load separately and reuse recent scan listings; connection problems remain distinct from missing scans."
       },
       {
         "title": "More responsive live overlays",

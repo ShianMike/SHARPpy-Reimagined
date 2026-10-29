@@ -6,17 +6,13 @@ import { useBackendHealth } from "../lib/backend/BackendProvider";
 import { ReducedRenderingView } from "../features/fallback/ReducedRenderingView";
 import { Inspector } from "../features/inspector/Inspector";
 import { NavigationRail } from "../features/rail/NavigationRail";
-import { SettingsView } from "../features/settings/SettingsView";
 import { UpdateNotice } from "../features/settings/UpdateNotice";
 import { WhatsNew } from "../features/settings/WhatsNew";
-import { SoundingWorkspace } from "../features/sounding/SoundingWorkspace";
 import { TimelineRegion } from "../features/timeline/TimelineRegion";
 import { LiveTimeline } from "../features/tracking/LiveTimeline";
 import { useTheme, useUiStore } from "../stores/uiStore";
 import { EmptyPanel, IconAction } from "../ui/Controls";
 import { Surface } from "../ui/Surface";
-import { OperationsWorkspace } from "../features/operations/OperationsWorkspace";
-import { LogsWorkspace } from "../features/operations/LogsWorkspace";
 import { Toolbar } from "../features/toolbar/Toolbar";
 import { useAppStore } from "../stores/appStore";
 import { useGraphicsStore } from "../stores/graphicsStore";
@@ -31,6 +27,10 @@ import styles from "./Shell.module.css";
 import pickerStyles from "../features/toolbar/ForecastControls.module.css";
 
 const WeatherMap = lazy(() => import("../map/WeatherMap"));
+const SettingsView = lazy(() => import("../features/settings/SettingsView").then((module) => ({ default: module.SettingsView })));
+const SoundingWorkspace = lazy(() => import("../features/sounding/SoundingWorkspace").then((module) => ({ default: module.SoundingWorkspace })));
+const OperationsWorkspace = lazy(() => import("../features/operations/OperationsWorkspace").then((module) => ({ default: module.OperationsWorkspace })));
+const LogsWorkspace = lazy(() => import("../features/operations/LogsWorkspace").then((module) => ({ default: module.LogsWorkspace })));
 
 function useCatalogueEffects(): string {
   const stations = useStationCatalog().data?.stations;
@@ -80,6 +80,8 @@ export function Shell(): ReactNode {
   const liveText = useCatalogueEffects();
   const isLive = workspace.id === "live";
   const isMap = workspace.id === "map" || isLive;
+  const [mapOpened, setMapOpened] = useState(isMap);
+  if (isMap && !mapOpened) setMapOpened(true);
   const [panelWorkspace, setPanelWorkspace] = useState<WorkspaceDefinition | null>(isMap ? null : workspace);
   const workspacePanel = useRef<HTMLElement>(null);
   if (!isMap && panelWorkspace?.id !== workspace.id) setPanelWorkspace(workspace);
@@ -117,7 +119,7 @@ export function Shell(): ReactNode {
         </div>
         <main className={styles.main}>
           <section className={styles.mapSurface} aria-label={isLive ? "Live tracking map" : "Model map"} inert={!isMap}>
-            {mode === "full" && renderer !== "failed"
+            {!mapOpened && !isMap ? null : mode === "full" && renderer !== "failed"
               ? <Suspense fallback={null}><WeatherMap /></Suspense>
               : <ReducedRenderingView />}
             {mode === "full" && renderer === "pending" ? <Surface className={styles.mapLoading} role="status" aria-label="Loading map" data-motion="enter" hidden={!isMap}>
@@ -153,7 +155,9 @@ export function Shell(): ReactNode {
             {isLive ? <LiveTimeline className={styles.timeline} scanTarget={radarScanTarget} /> : <TimelineRegion className={styles.timeline} />}
           </div>
           {panelWorkspace === null ? null : <Surface key={panelWorkspace.id} ref={workspacePanel} as="section" className={styles.workspace} data-motion="panel" data-workspace={panelWorkspace.id} data-testid="workspace-panel" aria-label={panelWorkspace.label} inert={isMap} aria-hidden={isMap} hidden={isMap}>
-            <WorkspaceView workspace={panelWorkspace} />
+            <Suspense fallback={<p role="status">Loading {panelWorkspace.label}…</p>}>
+              <WorkspaceView workspace={panelWorkspace} />
+            </Suspense>
           </Surface>}
         </main>
         <div className={styles.updateNotice}><UpdateNotice /></div>

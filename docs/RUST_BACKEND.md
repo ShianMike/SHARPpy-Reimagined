@@ -39,6 +39,14 @@ the original loose/quality thresholds, signed helicity, hemisphere aliases and
 the hail display limit. SHIP and the existing profile inputs retain their
 current scientific helpers; the reference SARS functions are not patched.
 
+Accelerated display profiles also share prepared Rust interpolation for fixed-height
+winds, pressure-weighted layer means and endpoint shears. The same layer mean is
+reused for right/left storm-relative winds, preserving one-hPa sampling, fractional
+layer bounds and separate masks for each component. Bunkers motion, helicity,
+Corfidi motion and critical angle retain the existing SHARPpy formulas. Profile
+construction and storm-motion edits use this path; source environments without
+the native operation keep the reference implementation.
+
 ## Backend selection
 
 Set `SHARPMOD_BACKEND` before starting Python. This selects the numerical

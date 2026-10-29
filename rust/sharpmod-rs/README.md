@@ -43,6 +43,11 @@ thermodynamics, preserving the stripped CAPE/CIN routine's reported levels and
 fractional final layer. The default 100 hPa mean mixing ratio is shared with the
 displayed profile value. Other thermodynamic indices retain their existing
 SHARPpy formulas at the compatibility boundary.
+Display wind layers prepare owned interpolation series once and share each
+one-hPa pressure-weighted mean between the right and left storm-relative winds.
+Endpoint shears and fixed-height wind values use the same prepared series.
+The compatibility boundary retains the reference Bunkers, SRH, Corfidi and
+critical-angle calculations, public tuple/list shapes and missing-wind guards.
 IGRA header scans, level parsing, humidity-derived dewpoints and pressure filtering
 also run in Rust, borrowing immutable archive text while detached from Python.
 Existing IGRA objects, timestamps, provenance and archive/cache ownership remain

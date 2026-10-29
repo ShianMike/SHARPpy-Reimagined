@@ -23,6 +23,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Defer Settings, Soundings, Overview and Logs code until each workspace opens.
+  Initialize the WebGL map only when Model Viewer or Live Tracking is first
+  visited, then retain it across workspace changes. Keep an accessible loading
+  message while a workspace's code loads.
+- Prepare sounding wind interpolation once in Rust and reuse pressure-weighted
+  layer means for the right/left storm-relative winds and endpoint shears.
+  Retain one-hPa sampling, fractional layer bounds, duplicate-pressure order, component
+  masks, missing-wind guards, public profile fields and storm-motion edits.
+  Keep the existing storm-motion, helicity and critical-angle formulas at the
+  compatibility boundary; source environments without Rust retain SHARPpy.
 - Fetch GOES listings and imagery through the existing pooled Rust HTTP client,
   retaining response byte limits and custom openers while adding cancellation
   during pending requests and retry waits. Remove the replaced Python requests

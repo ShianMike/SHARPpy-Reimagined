@@ -15,12 +15,14 @@ test("opens Overview first, including after reopening from either viewer", async
   await expect(overview).toHaveAttribute("aria-current", "page");
   await expect(panel).toHaveAttribute("aria-label", "Overview");
   await expect(panel).toBeVisible();
+  await expect(page.locator("canvas")).toHaveCount(0);
   for (const name of ["Model Viewer", "Live Tracking"]) {
     await rail.getByRole("button", { name, exact: true }).click();
     await page.reload();
     await expect(overview).toHaveAttribute("aria-current", "page");
     await expect(panel).toHaveAttribute("aria-label", "Overview");
     await expect(panel).toBeVisible();
+    await expect(page.locator("canvas")).toHaveCount(0);
   }
   expectWarnings(consoleMessages, []);
 });

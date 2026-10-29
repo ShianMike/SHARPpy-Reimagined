@@ -283,9 +283,14 @@ class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
         self.__dict__.update(profile_sars(self))
 
     def get_kinematics(self):
-        super().get_kinematics()
-        # Undefined motion must use the missing-value contract before widgets read it.
-        self.srwind = tuple(_value(component) for component in self.srwind)
+        try:
+            from sharpmod_rs import profile_wind_layers
+        except ImportError:
+            super().get_kinematics()
+            self.srwind = tuple(_value(component) for component in self.srwind)
+            return
+
+        self.__dict__.update(profile_wind_layers(self))
 
     @classmethod
     def copy(cls, prof, strictQC=False, **kwargs):

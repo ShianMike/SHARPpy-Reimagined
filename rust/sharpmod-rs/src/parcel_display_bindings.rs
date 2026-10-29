@@ -1,29 +1,12 @@
 //! Small compatibility boundary for parcel display calculations.
 
+use crate::profile_input::{column, masked_number};
 use numpy::PyReadonlyArray1;
 use pyo3::{
     exceptions::PyValueError,
     prelude::*,
     types::{PyDict, PyList, PyTuple},
 };
-
-fn masked_number(value: &Bound<'_, PyAny>, masked: &Bound<'_, PyModule>) -> PyResult<Option<f64>> {
-    if masked.call_method1("is_masked", (value,))?.is_truthy()? {
-        Ok(None)
-    } else {
-        value.extract().map(Some)
-    }
-}
-
-fn column(prepare: &Bound<'_, PyAny>, value: &Bound<'_, PyAny>, name: &str) -> PyResult<Vec<f64>> {
-    let keywords = PyDict::new(prepare.py());
-    keywords.set_item("name", name)?;
-    let array = prepare.call((value,), Some(&keywords))?;
-    Ok(array
-        .extract::<PyReadonlyArray1<'_, f64>>()?
-        .as_slice()?
-        .to_vec())
-}
 
 #[pyfunction]
 fn profile_thermo<'py>(py: Python<'py>, prof: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {

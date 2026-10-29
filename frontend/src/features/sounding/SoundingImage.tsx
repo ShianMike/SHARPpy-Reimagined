@@ -189,27 +189,18 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
       {data === undefined ? null : <section className={styles.panelPicker} aria-label="Chart panels">
         <h2 className={styles.panelHeading}>Chart panels</h2>
         <div className={styles.options}>
-          {data.options.map((group) => <fieldset key={group.key} className={styles.panelGroup}
-            aria-description={group.key === "chart" && allHeightCharts ? "All four height charts are shown together." : undefined}>
-            <legend>{group.label}</legend>
-            <div className={styles.panelChoices}>
-              {group.choices.filter((option) => option.key !== "HEIGHT CHARTS").map((option) => <Action key={option.key} className={styles.panelChoice}
-                aria-pressed={!(group.key === "chart" && allHeightCharts) && (state.options[group.key] ?? data.selection[group.key]) === option.key}
-                disabled={busy}
-                onClick={() => {
-                  const options = { ...state.options, [group.key]: option.key };
-                  if (group.key === "chart" && allHeightCharts) delete options.panel;
-                  update({ ...state, options });
-                }}>
-                {option.label}
-              </Action>)}
-              {group.key !== "chart" || allHeightChoice === undefined ? null : <Action className={styles.panelChoice}
-                aria-pressed={allHeightCharts} disabled={busy} data-all-height="true"
-                onClick={() => { update({ ...state, options: { ...state.options, panel: allHeightChoice.key } }); }}>
-                {allHeightChoice.label}
-              </Action>}
-            </div>
-          </fieldset>)}
+          {data.options.map((group) => <SourceSelect key={group.key} label={group.label} disabled={busy}
+            value={group.key === "chart" && allHeightCharts ? "HEIGHT CHARTS" : state.options[group.key] ?? data.selection[group.key]}
+            options={[
+              ...(group.key === "panel" && allHeightCharts ? [{ value: "HEIGHT CHARTS", label: "All height charts shown" }] : []),
+              ...group.choices.filter((option) => option.key !== "HEIGHT CHARTS").map((option) => ({ value: option.key, label: option.label })),
+              ...(group.key === "chart" && allHeightChoice !== undefined ? [{ value: allHeightChoice.key, label: allHeightChoice.label }] : []),
+            ]}
+            onChange={(value) => {
+              const options = { ...state.options, [group.key === "chart" && value === "HEIGHT CHARTS" ? "panel" : group.key]: value };
+              if (group.key === "chart" && value !== "HEIGHT CHARTS" && allHeightCharts) delete options.panel;
+              update({ ...state, options });
+            }} />)}
         </div>
       </section>}
       <details className={styles.viewControls} aria-label="View controls" open={!editing}>

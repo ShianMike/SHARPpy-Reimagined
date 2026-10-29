@@ -50,12 +50,17 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Redesign sounding controls with bordered, text-only chart selectors. Mark the
-  selected choices with an outline and a muted fill, without checkmarks or radio
-  buttons. Keep every chart choice visible above View, group
-  All height charts with the height charts, and switch directly from that layout
-  to an individual chart. Use flat profile and parcel controls and a wider
-  controls sidebar with a separate export section.
+- Restyle sounding sources, controls and the chart frame with the workspace glass,
+  translucent fields and shared transparency fallbacks, without stacking blur.
+  Keep rendered sounding images and exported PNGs unchanged.
+  Use Height chart and Diagnostic panel dropdowns without checkmarks or radio
+  buttons. Keep All height charts in the height selector and allow direct
+  switching to an individual chart or diagnostic. Keep parcel selection beside
+  profile controls and export in a separate section.
+- Use the shared soft hover fill for quiet buttons, sounding dropdown options
+  and parcel controls without adding an outline on pointer hover. Remove square
+  corner overrides from profile and parcel controls and round fallback station
+  rows; preserve selected-state indicators, accent actions and keyboard focus.
 - Restore OpenStreetMap roads and road names in the online basemap. Keep the
   provider's road widths, zoom rules and label placement, use muted road colours
   and land-coloured casings in dark mode, and keep road artwork beneath weather

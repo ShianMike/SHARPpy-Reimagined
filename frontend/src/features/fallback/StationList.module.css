@@ -14,6 +14,7 @@
 .option {
   height: var(--control-h-sm);
   padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
   overflow: hidden;
   color: var(--text-secondary);
   line-height: var(--control-h-sm);

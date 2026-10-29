@@ -175,38 +175,40 @@ it("keeps both popups and the linked marker moving beyond the visible hodograph 
   expect(render).toHaveBeenCalledOnce();
 });
 
-it("shows every chart choice without checkmarks and switches directly between all and individual height charts", async () => {
-  const chart = viewExample.options.find((group) => group.key === "chart")?.choices[1]?.key;
-  if (chart === undefined) throw new Error("The fixture needs another height chart");
+it("selects charts through dropdowns without checkmarks and switches directly between all and individual height charts", async () => {
   useSoundingStore.getState().add(parseSoundingSummary({ ...summaryExample, soundingId: "fixture" }));
-  useSoundingStore.getState().setView("fixture", { history: [[]], cursor: 0, options: { chart } });
+  useSoundingStore.getState().setView("fixture", { history: [[]], cursor: 0, options: { chart: "srw" } });
   await open();
   const panels = screen.getByRole("region", { name: "Chart panels" });
-  expect(panels.closest("details")).toBeNull();
-  expect(panels.querySelector("svg")).toBeNull();
   for (const group of viewExample.options) {
-    const buttons = within(screen.getByRole("group", { name: group.label })).getAllByRole("button");
+    await userEvent.click(within(panels).getByRole("combobox", { name: group.label }));
+    const menu = screen.getByRole("listbox", { name: group.label });
     const labels = group.choices.filter((choice) => choice.key !== "HEIGHT CHARTS").map((choice) => choice.label);
-    expect(buttons.map((button) => button.textContent)).toEqual(group.key === "chart" ? [...labels, "All height charts"] : labels);
+    expect(within(menu).getAllByRole("option").map((option) => option.textContent)).toEqual(group.key === "chart" ? [...labels, "All height charts"] : labels);
+    expect(menu.querySelector("svg")).toBeNull();
+    await userEvent.keyboard("{Escape}");
   }
-  const height = screen.getByRole("group", { name: "Height chart" });
-  expect(within(height).getAllByRole<HTMLButtonElement>("button").every((button) => !button.disabled)).toBe(true);
-  const all = screen.getByRole<HTMLButtonElement>("button", { name: "All height charts" });
-  await userEvent.click(all);
-  for (const button of within(height).getAllByRole<HTMLButtonElement>("button")) {
-    expect(button.getAttribute("aria-pressed")).toBe(String(button === all));
-  }
-  expect(useSoundingStore.getState().views.fixture?.options).toEqual({ chart, panel: "HEIGHT CHARTS" });
-  await waitFor(() => { expect(all.disabled).toBe(false); });
-  await userEvent.click(within(height).getByRole("button", { name: "Streamwiseness" }));
-  await waitFor(() => { expect(all.disabled).toBe(false); });
+  const height = within(panels).getByRole<HTMLButtonElement>("combobox", { name: "Height chart" });
+  const diagnostic = within(panels).getByRole<HTMLButtonElement>("combobox", { name: "Diagnostic panel" });
+  await userEvent.click(height);
+  await userEvent.keyboard("{End}{Enter}");
+  expect(document.activeElement).toBe(height);
+  expect(useSoundingStore.getState().views.fixture?.options).toEqual({ chart: "srw", panel: "HEIGHT CHARTS" });
+  await waitFor(() => { expect(height.disabled).toBe(false); });
+  expect(height.textContent).toBe("All height charts");
+  expect(diagnostic.textContent).toBe("All height charts shown");
+  await userEvent.click(height);
+  await userEvent.keyboard("{Home}{Enter}");
+  await waitFor(() => { expect(height.disabled).toBe(false); });
   expect(useSoundingStore.getState().views.fixture?.options).toEqual({ chart: "streamwiseness" });
-  expect(within(height).getByRole("button", { pressed: true }).textContent).toBe("Streamwiseness");
-  await userEvent.click(all);
-  await waitFor(() => { expect(all.disabled).toBe(false); });
-  await userEvent.click(screen.getByRole("button", { name: "Sig-Tor Stats" }));
-  await waitFor(() => { expect(within(height).getAllByRole<HTMLButtonElement>("button").every((button) => !button.disabled)).toBe(true); });
-  expect(within(height).getByRole("button", { pressed: true }).textContent).toBe("Streamwiseness");
+  await userEvent.click(height);
+  await userEvent.click(screen.getByRole("option", { name: "All height charts" }));
+  await waitFor(() => { expect(diagnostic.disabled).toBe(false); });
+  await userEvent.click(diagnostic);
+  await userEvent.click(screen.getByRole("option", { name: "Sig-Tor Stats" }));
+  await waitFor(() => { expect(diagnostic.disabled).toBe(false); });
+  expect(diagnostic.textContent).toBe("Sig-Tor Stats");
+  expect(height.textContent).toBe("Streamwiseness");
 });
 
 it("defaults to width fit, retains whole-chart fit, and follows viewport resizing", async () => {

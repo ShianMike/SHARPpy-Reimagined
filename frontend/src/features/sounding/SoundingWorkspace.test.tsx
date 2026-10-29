@@ -172,8 +172,6 @@ describe("SoundingWorkspace", () => {
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     const image = await screen.findByTestId("sounding-image", {}, { timeout: 3000 });
     expect(image.getAttribute("src")).toBe("blob:fixture");
-    expect(screen.queryByLabelText("Sounding details")).toBeNull();
-    expect(screen.queryByText("3260 × 2198 · lossless PNG")).toBeNull();
     const request = transport.calls.find((call) => call.command === "open_sounding")?.args as {
       request: Record<string, unknown>;
     };
@@ -183,7 +181,6 @@ describe("SoundingWorkspace", () => {
     expect(within(screen.getByTestId("open-soundings")).getAllByRole("listitem")).toHaveLength(1);
     await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
     expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")).toBeNull();
-    expect(screen.getByRole("region", { name: "Chart panels" }).closest("details")).toBeNull();
     expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("header")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "ML" }));
     await waitFor(() => {
@@ -202,14 +199,15 @@ describe("SoundingWorkspace", () => {
       expect(last?.args).toMatchObject({ imageMode: "hd" });
     });
     for (const group of viewExample.options) {
-      const buttons = within(screen.getByRole("group", { name: group.label })).getAllByRole<HTMLButtonElement>("button");
+      const selector = screen.getByRole("combobox", { name: group.label });
+      await userEvent.click(selector);
+      const menu = screen.getByRole("listbox", { name: group.label });
       const choices = group.choices.filter((choice) => choice.key !== "HEIGHT CHARTS");
-      expect(buttons).toHaveLength(choices.length + (group.key === "chart" ? 1 : 0));
+      expect(within(menu).getAllByRole("option")).toHaveLength(choices.length + (group.key === "chart" ? 1 : 0));
       const choice = choices.at(-1);
       if (choice === undefined) throw new Error("Missing chart choice");
-      const lastChoice = within(screen.getByRole("group", { name: group.label })).getByRole("button", { name: choice.label });
-      await userEvent.click(lastChoice);
-      expect(lastChoice.getAttribute("aria-pressed")).toBe("true");
+      await userEvent.click(within(menu).getByRole("option", { name: choice.label }));
+      expect(selector.textContent).toBe(choice.label);
       await waitFor(() => {
         const last = transport.calls.filter((call) => call.command === "render_sounding_view").at(-1);
         expect(last?.args).toMatchObject({ view: { [group.key]: choice.key } });

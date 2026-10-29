@@ -8,6 +8,7 @@ import { createTransport } from "../../lib/backend/fixtureTransport";
 import { parseSoundingSummary } from "../../lib/contracts/soundings";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { renderWithBackend } from "../../test/backendHarness";
+import { Surface } from "../../ui/Surface";
 import { SoundingWorkspace } from "./SoundingWorkspace";
 
 afterEach(() => { cleanup(); useSoundingStore.setState(useSoundingStore.getInitialState(), true); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -36,7 +37,7 @@ it("swaps sources and controls without losing a file or draft, with no Info pane
   const base = createTransport();
   const render = vi.fn(() => Promise.resolve({ ...viewExample, width: 3260, height: 2198,
     image: btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13)) }));
-  renderWithBackend(<SoundingWorkspace />, { ...base,
+  renderWithBackend(<Surface><SoundingWorkspace /></Surface>, { ...base,
     call: (command, args) => command === "render_sounding_view" ? render() : base.call(command, args) });
   await screen.findByTestId("sounding-image");
   await userEvent.click(screen.getByRole("tab", { name: "File" }));
@@ -46,11 +47,14 @@ it("swaps sources and controls without losing a file or draft, with no Info pane
   await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
   expect(screen.queryByRole("tablist", { name: "Source" })).toBeNull();
   const sidebar = document.getElementById("sounding-sources");
+  expect(sidebar?.dataset.surface).toBe("flat");
+  expect(sidebar?.querySelector('[data-material="glass"]')).toBeNull();
   expect(sidebar?.contains(screen.getByRole("toolbar", { name: "Sounding image controls" }))).toBe(true);
   expect(screen.queryByRole("combobox", { name: "Undo history" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Undo edit" })).toBeNull();
   expect(screen.getByRole("group", { name: "View controls" }).hasAttribute("open")).toBe(true);
   expect(screen.getByTestId("sounding-viewer").getAttribute("aria-description")).toContain("39 levels");
+  expect(screen.getByTestId("sounding-viewer").dataset.surface).toBe("flat");
   expect(screen.getByTestId("sounding-viewer").querySelector("header, [role=toolbar]")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));

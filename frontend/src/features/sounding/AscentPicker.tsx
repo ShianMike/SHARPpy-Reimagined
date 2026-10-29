@@ -3,6 +3,7 @@
 // the frontend only names the choices.
 import type { ReactNode } from "react";
 import { useIsMutating } from "@tanstack/react-query";
+import { Action } from "../../ui/Controls";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { RENDER_CHOICES } from "../../types/soundings";
 import styles from "./Viewer.module.css";
@@ -21,9 +22,8 @@ export function AscentPicker(): ReactNode {
       </span>
       <div className={styles.segmented} role="group" aria-labelledby="ascent-picker-label">
         {RENDER_CHOICES.map((item) => (
-          <button
+          <Action
             key={item}
-            type="button"
             className={styles.segment}
             aria-pressed={choice === item}
             disabled={editing}
@@ -32,7 +32,7 @@ export function AscentPicker(): ReactNode {
             }}
           >
             {item}
-          </button>
+          </Action>
         ))}
       </div>
     </div>

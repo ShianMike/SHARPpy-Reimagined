@@ -19,7 +19,7 @@
   background: var(--accent);
   color: var(--accent-text);
 }
-.action:hover:not(:disabled) { border-color: var(--accent); background: var(--fill-hover); color: var(--accent-bright); }
+.action:hover:not(:disabled) { background: var(--fill-hover); color: var(--accent-bright); }
 .action[data-tone="accent"]:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); color: var(--accent-text); }
 .action:active:not(:disabled) { background: var(--fill-pressed); }
 .action:disabled { background: var(--control-fill); border-color: var(--border-subtle); color: var(--text-disabled); }

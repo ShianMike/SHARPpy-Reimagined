@@ -62,6 +62,7 @@ REQUIRED_RUST_CAPABILITIES = (
     "interpolate_height_grid",
     "parcel_maximum_level",
     "parcel_trajectory",
+    "profile_thermo",
     "igra_header",
     "igra_headers",
     "igra_level",

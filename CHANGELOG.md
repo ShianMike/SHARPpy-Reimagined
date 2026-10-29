@@ -23,6 +23,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Search for convective temperatures and compute the default 100 hPa mean
+  mixing ratio in Rust, sharing prepared interpolation fields and the existing
+  thermodynamic lift routines. Preserve the stripped CAPE/CIN calculation's
+  dry sampling, reported moist levels, truncated/fractional final layer,
+  25-degree screening and 0.5/2-degree heating increments. Route accelerated
+  thermodynamic profiles through the native search, retaining the remaining
+  SHARPpy index formulas and source-only compatibility.
 - Integrate storm-relative parcel trajectories in Rust, preparing interpolation
   series once instead of rebuilding them on every 25-second step. Route profile
   preparation and Storm Slinky parcel, preference and left/right-motion updates

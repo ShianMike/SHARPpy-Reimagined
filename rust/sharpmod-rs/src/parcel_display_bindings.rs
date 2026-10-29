@@ -25,6 +25,86 @@ fn column(prepare: &Bound<'_, PyAny>, value: &Bound<'_, PyAny>, name: &str) -> P
         .to_vec())
 }
 
+#[pyfunction]
+fn profile_thermo<'py>(py: Python<'py>, prof: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
+    let prepare = PyModule::import(py, "sharpmod.backends._common")?.getattr("prepare_1d")?;
+    let columns = ["pres", "hght", "tmpc", "dwpc", "vtmp"]
+        .iter()
+        .map(|name| column(&prepare, &prof.getattr(*name)?, name))
+        .collect::<PyResult<Vec<_>>>()?;
+    let sfc: usize = prof.getattr("sfc")?.extract()?;
+    let sentinel = prof.getattr("missing")?.extract()?;
+    let (mean_ratio, convective, surface_pressure) = py
+        .detach(move || {
+            let profile = crate::parcels::convective_temperature::TemperatureSearch::new(
+                [0, 1, 2, 3, 4].map(|i| columns[i].as_slice()),
+                sfc,
+                Some(sentinel),
+            )?;
+            let ratio = profile.mean_mixing_ratio();
+            Ok::<_, String>((
+                ratio,
+                profile.convective_temperature(ratio),
+                columns[0][sfc],
+            ))
+        })
+        .map_err(PyValueError::new_err)?;
+    let result = PyDict::new(py);
+    let missing = PyModule::import(py, "numpy.ma")?.getattr("masked")?;
+    for (name, value) in [
+        ("mean_mixr", mean_ratio),
+        (
+            "convT",
+            convective.map(|t| t * 1.8 + 32.).unwrap_or(f64::NAN),
+        ),
+    ] {
+        match value.is_finite() {
+            true => result.set_item(name, value)?,
+            false => result.set_item(name, &missing)?,
+        }
+    }
+    let params = PyModule::import(py, "sharppy.sharptab.params")?;
+    for (name, function) in [
+        ("k_idx", "k_index"),
+        ("pwat", "precip_water"),
+        ("max_lapse_rate_2_6", "max_lapse_rate"),
+        ("low_rh", "mean_relh"),
+        ("totals_totals", "t_totals"),
+    ] {
+        result.set_item(name, params.call_method1(function, (prof,))?)?;
+    }
+    for (name, lower, upper, pressure) in [
+        ("lapserate_3km", 0., 3000., false),
+        ("lapserate_3_6km", 3000., 6000., false),
+        ("lapserate_850_500", 850., 500., true),
+        ("lapserate_700_500", 700., 500., true),
+    ] {
+        result.set_item(
+            name,
+            params.call_method1("lapse_rate", (prof, lower, upper, pressure))?,
+        )?;
+    }
+    let thermo = PyModule::import(py, "sharppy.sharptab.thermo")?;
+    result.set_item(
+        "maxT",
+        thermo.call_method1("ctof", (params.call_method1("max_temp", (prof,))?,))?,
+    )?;
+    result.set_item(
+        "mid_rh",
+        params.call_method1(
+            "mean_relh",
+            (prof, surface_pressure - 150., surface_pressure - 350.),
+        )?,
+    )?;
+    let keywords = PyDict::new(py);
+    keywords.set_item("lat", prof.getattr("latitude")?)?;
+    result.set_item(
+        "inf_temp_adv",
+        params.call_method("inferred_temp_adv", (prof,), Some(&keywords))?,
+    )?;
+    Ok(result)
+}
+
 #[pyfunction(signature=(prof, parcel, smu=None, smv=None))]
 fn parcel_trajectory<'py>(
     py: Python<'py>,
@@ -142,6 +222,7 @@ fn parcel_maximum_level(
 }
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(profile_thermo, module)?)?;
     module.add_function(wrap_pyfunction!(parcel_maximum_level, module)?)?;
     module.add_function(wrap_pyfunction!(parcel_trajectory, module)?)?;
     Ok(())

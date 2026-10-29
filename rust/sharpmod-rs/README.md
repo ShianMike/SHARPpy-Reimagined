@@ -32,6 +32,11 @@ with bounded, owned batches instead of full-grid interpolation temporaries.
 Maximum parcel levels for accelerated sounding displays reuse the native lift
 and pressure interpolation routines, retaining reported-level energy integration
 and the existing 1 hPa refinement before restoring public SHARPpy parcel fields.
+Convective-temperature searches reuse prepared interpolation fields and native
+thermodynamics, preserving the stripped CAPE/CIN routine's reported levels and
+fractional final layer. The default 100 hPa mean mixing ratio is shared with the
+displayed profile value. Other thermodynamic indices retain their existing
+SHARPpy formulas at the compatibility boundary.
 IGRA header scans, level parsing, humidity-derived dewpoints and pressure filtering
 also run in Rust, borrowing immutable archive text while detached from Python.
 Existing IGRA objects, timestamps, provenance and archive/cache ownership remain

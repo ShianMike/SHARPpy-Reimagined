@@ -40,7 +40,7 @@ it("exports the current HD/UHD bytes, blocks stale previews, and reuses an uncha
   await waitFor(() => { expect(render).toHaveBeenCalledOnce(); });
   await act(async () => { pending[0]?.(response()); await Promise.resolve(); });
   await waitFor(() => { expect(status.textContent).toContain("Ready"); });
-  expect(status.querySelector('svg[data-loading="true"]')).toBeNull();
+  expect(status.querySelector("svg")).toBeNull();
   expect(status.textContent).toContain("~1.00 MiB");
   expect(status.textContent).toContain("4564 × 3077");
   fireEvent.click(screen.getByRole("button", { name: "Export PNG" }));

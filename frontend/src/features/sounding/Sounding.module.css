@@ -1,5 +1,6 @@
 .workspace { display: flex; width: 100%; height: 100%; min-height: 0; }
 .layout { display: grid; grid-template-columns: var(--sounding-side-w) minmax(0, 1fr); gap: var(--space-3); flex: 1; min-height: 0; }
+.layout[data-sources="true"][data-controls="true"] { grid-template-columns: calc(var(--sounding-side-w) + var(--space-8)) minmax(0, 1fr); }
 .layout[data-sources="false"] { grid-template-columns: minmax(0, 1fr); }
 .side[hidden] { display: none; }
 .side { display: flex; flex-direction: column; min-height: 0; overflow: hidden; border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface-1); }

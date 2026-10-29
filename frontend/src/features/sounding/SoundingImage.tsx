@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Hand, Maximize, MoveHorizontal, Pencil, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, Hand, Maximize, MoveHorizontal, Pencil, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Action, IconAction } from "../../ui/Controls";
@@ -44,6 +44,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
   }).join(", ")}`) : [], [data?.points, units, editing]);
   const unavailable = busy || image.isError;
   const allHeightCharts = (state.options.panel ?? data?.selection.panel) === "HEIGHT CHARTS";
+  const allHeightChoice = data?.options.find((group) => group.key === "panel")?.choices.find((option) => option.key === "HEIGHT CHARTS");
   const levelIndex = inspected?.image === data?.image ? inspected?.index ?? 0 : 0;
   const level = data?.inspection.levels[levelIndex];
   const windLevels = useMemo(() => data?.inspection.levels.filter((level) => level.hodograph !== null) ?? [], [data?.inspection.levels]);
@@ -185,6 +186,32 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
         <SourceSelect label="Profile level" value={selected ?? ""} disabled={busy} compact options={[{ value: "", label: "Choose a level…" }, ...(data?.points.map((point) => ({ value: point.id, label: point.label + (editedLevels.has(point.id.split(":")[1]) ? " · Edited" : "") })) ?? [])]} onChange={(value) => { setSelected(value || null); }} />
         {editor ?? <p>Choose a level or drag a point.</p>}
       </section> : null}
+      {data === undefined ? null : <section className={styles.panelPicker} aria-label="Chart panels">
+        <h2 className={styles.panelHeading}>Chart panels</h2>
+        <div className={styles.options}>
+          {data.options.map((group) => <fieldset key={group.key} className={styles.panelGroup}
+            aria-description={group.key === "chart" && allHeightCharts ? "All four height charts are shown together." : undefined}>
+            <legend>{group.label}</legend>
+            <div className={styles.panelChoices}>
+              {group.choices.filter((option) => option.key !== "HEIGHT CHARTS").map((option) => <Action key={option.key} className={styles.panelChoice}
+                aria-pressed={!(group.key === "chart" && allHeightCharts) && (state.options[group.key] ?? data.selection[group.key]) === option.key}
+                disabled={busy}
+                onClick={() => {
+                  const options = { ...state.options, [group.key]: option.key };
+                  if (group.key === "chart" && allHeightCharts) delete options.panel;
+                  update({ ...state, options });
+                }}>
+                {option.label}
+              </Action>)}
+              {group.key !== "chart" || allHeightChoice === undefined ? null : <Action className={styles.panelChoice}
+                aria-pressed={allHeightCharts} disabled={busy} data-all-height="true"
+                onClick={() => { update({ ...state, options: { ...state.options, panel: allHeightChoice.key } }); }}>
+                {allHeightChoice.label}
+              </Action>}
+            </div>
+          </fieldset>)}
+        </div>
+      </section>}
       <details className={styles.viewControls} aria-label="View controls" open={!editing}>
         <summary>View<ChevronDown className="icon-sm" aria-hidden="true" /></summary>
         <div className={styles.viewBody}>
@@ -199,23 +226,6 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
         </div>
         </div>
       </details>
-      {data === undefined ? null : <section className={styles.panelPicker} aria-label="Chart panels">
-        <h2 className={styles.panelHeading}>Chart panels</h2>
-        <div className={styles.options}>
-          {data.options.map((group) => <fieldset key={group.key} className={styles.panelGroup}
-            aria-description={group.key === "chart" && allHeightCharts ? "All four height charts are shown together." : undefined}>
-            <legend>{group.label}</legend>
-            <div className={styles.panelChoices}>
-              {group.choices.map((option) => <Action key={option.key} className={styles.panelChoice}
-                aria-pressed={group.key === "chart" && allHeightCharts || (state.options[group.key] ?? data.selection[group.key]) === option.key}
-                disabled={busy || group.key === "chart" && allHeightCharts} data-wide={option.key === "HEIGHT CHARTS"}
-                onClick={() => { update({ ...state, options: { ...state.options, [group.key]: option.key } }); }}>
-                <span>{option.label}</span><Check className="icon-sm" aria-hidden="true" />
-              </Action>)}
-            </div>
-          </fieldset>)}
-        </div>
-      </section>}
       <div className={styles.exportTools}>
         <SoundingExport view={data} quality={quality} onQualityChange={setQuality} ready={ready} busy={busy}
           filename={title.replace(/[^a-zA-Z0-9_-]+/g, "-") + "-" + choice + (timeIndex > 0 ? `-time-${String(timeIndex + 1)}` : "") + (edits.length ? "-edited" : "") + ".png"} />

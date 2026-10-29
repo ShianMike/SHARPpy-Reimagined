@@ -203,14 +203,16 @@ describe("SoundingWorkspace", () => {
     });
     for (const group of viewExample.options) {
       const buttons = within(screen.getByRole("group", { name: group.label })).getAllByRole<HTMLButtonElement>("button");
-      expect(buttons).toHaveLength(group.choices.length);
-      const lastChoice = buttons.at(-1);
-      if (lastChoice === undefined) throw new Error("Missing chart choice");
+      const choices = group.choices.filter((choice) => choice.key !== "HEIGHT CHARTS");
+      expect(buttons).toHaveLength(choices.length + (group.key === "chart" ? 1 : 0));
+      const choice = choices.at(-1);
+      if (choice === undefined) throw new Error("Missing chart choice");
+      const lastChoice = within(screen.getByRole("group", { name: group.label })).getByRole("button", { name: choice.label });
       await userEvent.click(lastChoice);
       expect(lastChoice.getAttribute("aria-pressed")).toBe("true");
       await waitFor(() => {
         const last = transport.calls.filter((call) => call.command === "render_sounding_view").at(-1);
-        expect(last?.args).toMatchObject({ view: { [group.key]: group.choices.at(-1)?.key } });
+        expect(last?.args).toMatchObject({ view: { [group.key]: choice.key } });
       });
     }
   });

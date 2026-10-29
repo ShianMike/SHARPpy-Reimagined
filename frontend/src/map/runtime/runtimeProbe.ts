@@ -48,7 +48,8 @@ export function createRuntimeProbe(source: () => ProbeSource): E2eTarget {
       return counts;
     },
     projection: () => {
-      const type = source().map?.getProjection().type;
+      const projection = source().map?.getProjection();
+      const type = projection?.type;
       return typeof type === "string" ? type : null;
     },
     mapErrors: () => [...source().errors],

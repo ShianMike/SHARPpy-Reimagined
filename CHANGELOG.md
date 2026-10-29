@@ -16,6 +16,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Let fixture map probes report an unavailable projection while a style is
+  being replaced. Keep browser projection polling active through theme changes
+  instead of throwing before the selected projection is restored.
 - Wait for the visible station catalogue in Overview browser checks instead of
   map-render signals, and verify that Overview does not create a WebGL canvas.
   Keep map rendering and hover checks in workspaces that actually show the map.

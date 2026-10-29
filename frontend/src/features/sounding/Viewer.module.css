@@ -84,16 +84,17 @@
 .tools button { min-height: var(--control-h-sm); }
 .tools button[aria-pressed="true"] { color: var(--accent-bright); background: var(--accent-subtle); }
 .zoomLabel { border: 0; background: transparent; color: var(--text-secondary); font-variant-numeric: tabular-nums; padding: var(--space-1); min-width: var(--control-h-lg); font-size: var(--font-size-small); }
-.panelPicker { flex: 1 0 100%; display: grid; min-width: 0; gap: var(--space-2); font-size: var(--font-size-small); }
+.panelPicker { flex: 1 0 100%; display: grid; min-width: 0; gap: var(--space-1); font-size: var(--font-size-small); }
 .panelHeading { margin: 0; color: var(--text-primary); font-size: var(--font-size-small); font-weight: var(--font-weight-semibold); }
-.options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); }
 .panelGroup { min-width: 0; margin: 0; padding: 0; border: 0; }
-.panelGroup > legend { margin-bottom: var(--space-1); padding: 0; color: var(--text-tertiary); font-size: var(--font-size-caption); }
-.panelChoices { display: grid; grid-template-columns: minmax(0, 1fr); }
-.panelChoices > .panelChoice { justify-content: flex-start; min-width: 0; min-height: var(--control-h-xs); padding: var(--space-1) var(--space-3); border-color: transparent; background: transparent; color: var(--text-secondary); text-align: left; font-weight: var(--font-weight-medium); line-height: var(--line-height-tight); }
-.panelChoices > .panelChoice:hover:not(:disabled) { border-color: transparent; background: var(--fill-hover); color: var(--text-primary); }
-.panelChoices > .panelChoice[aria-pressed="true"] { background: var(--accent-subtle); color: var(--accent-bright); font-weight: var(--font-weight-semibold); box-shadow: inset var(--space-0-5) 0 0 var(--accent-bright); }
-.panelChoice[data-all-height="true"] { margin-top: var(--space-1); }
+.panelGroup > legend { margin-bottom: var(--space-0-5); padding: 0; color: var(--text-secondary); font-size: var(--font-size-caption); }
+.panelChoices { display: grid; grid-template-columns: minmax(0, 1fr); padding: var(--space-0-5); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-sunken); }
+.panelChoices > .panelChoice { justify-content: flex-start; min-width: 0; min-height: var(--control-h-xs); gap: var(--space-2); padding: var(--space-1) var(--space-2); border-color: transparent; background: transparent; color: var(--text-secondary); text-align: left; font-weight: var(--font-weight-medium); line-height: var(--line-height-tight); }
+.panelChoices > .panelChoice:hover:not(:disabled) { border-color: transparent; background: var(--surface-2); color: var(--text-primary); }
+.panelChoices > .panelChoice[aria-pressed="true"] { border-color: var(--accent-bright); background: var(--surface-2); color: var(--text-primary); font-weight: var(--font-weight-semibold); }
+.panelChoices > .panelChoice:disabled { color: var(--text-disabled); }
+.panelChoice[data-all-height="true"] { border-top-color: var(--border-subtle); }
 .viewport { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .canvasSpace { display: flex; align-items: center; justify-content: center; width: max-content; min-width: 100%; min-height: 100%; padding: var(--space-3); }
 .imageFrame { position: relative; flex: none; width: var(--image-width); height: var(--image-height); cursor: grab; touch-action: none; }
@@ -173,6 +174,6 @@
 .exportButtons { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); }
 .exportButtons > button { min-width: 0; }
 .exportNotice { color: var(--danger); font-size: var(--font-size-caption); line-height: var(--line-height-tight); }
-.tools[data-docked="true"] .panelPicker { flex: none; padding-bottom: var(--space-3); border-bottom: var(--hairline) solid var(--border-subtle); }
+.tools[data-docked="true"] .panelPicker { flex: none; }
 .tools[data-docked="true"] .options { grid-template-columns: minmax(0, 1fr); }
 .tools[data-docked="true"] .segment { min-width: 0; padding-inline: var(--space-1); border-radius: 0; }

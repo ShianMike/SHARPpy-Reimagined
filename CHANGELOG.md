@@ -50,8 +50,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Redesign sounding controls with full-width chart choices, subtle selection
-  accents and no checkmarks. Keep every chart choice visible above View, group
+- Redesign sounding controls with bordered, text-only chart selectors. Mark the
+  selected choices with an outline and a muted fill, without checkmarks or radio
+  buttons. Keep every chart choice visible above View, group
   All height charts with the height charts, and switch directly from that layout
   to an individual chart. Use flat profile and parcel controls and a wider
   controls sidebar with a separate export section.

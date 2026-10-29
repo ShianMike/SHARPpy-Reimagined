@@ -67,6 +67,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Keep radar-capability and playback tests in their existing focused modules,
   move binary frame assembly into the existing conversion layer, and trim stale
   bridge documentation so the module-size checks pass without raising limits.
+  Use fixed-size radar pixel rows to satisfy current stable Rust lint rules
+  while retaining Rust 1.88 compatibility.
 - Open sounding Model, Run, Forecast and observed Launch selectors in compact
   glass popups beside the sidebar. Add model search and grouped UTC cycle/hour
   tiles with concise Pending/Latest labels, preserving sounding availability,

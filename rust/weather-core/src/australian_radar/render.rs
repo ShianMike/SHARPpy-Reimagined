@@ -106,7 +106,7 @@ pub(super) fn render(
         .collect::<Vec<_>>();
     azimuths.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
     let mut pixels = vec![0_u8; PIXELS * PIXELS];
-    for (row, output) in pixels.chunks_exact_mut(PIXELS).enumerate() {
+    for (row, output) in pixels.as_chunks_mut::<PIXELS>().0.iter_mut().enumerate() {
         let latitude =
             bounds.north - (row as f64 + 0.5) / PIXELS as f64 * (bounds.north - bounds.south);
         for (column, output) in output.iter_mut().enumerate() {

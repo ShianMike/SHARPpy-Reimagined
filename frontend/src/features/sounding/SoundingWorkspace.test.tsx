@@ -72,11 +72,12 @@ describe("SoundingWorkspace", () => {
     await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), file);
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     await screen.findByTestId("sounding-image");
+    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Sounding time (UTC)" }));
     expect(screen.getAllByRole("option")).toHaveLength(49);
     await userEvent.keyboard("{End}{Enter}");
     await waitFor(() => { expect(transport.calls.some((call) => call.command === "render_sounding_view" && (call.args as { view?: ViewRequest }).view?.timeIndex === 48)).toBe(true); });
-    expect(screen.getByLabelText("Sounding details").textContent).toContain("time 49 of 49");
+    expect(screen.getByTestId("sounding-viewer").getAttribute("aria-description")).toContain("time 49 of 49");
   });
 
   it("edits a level, undoes and redoes it, and retains it across navigation", async () => {
@@ -114,7 +115,8 @@ describe("SoundingWorkspace", () => {
     workspace.view.unmount();
     renderWithBackend(<SoundingWorkspace />, transport);
     await screen.findByTestId("sounding-image");
-    expect(screen.getByText(/1 edited level · Original retained/u).closest("header")).not.toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
+    expect(screen.getByRole("combobox", { name: "Undo history" }).textContent).toContain("1 edited level");
     expect(transport.calls.filter((call) => call.command === "render_sounding_view").every((call) => (call.args as Record<string, unknown>).imageMode === "uhd")).toBe(true);
   });
   it("opens an hourly ERA5 reanalysis at a typed point without a forecast hour", async () => {
@@ -170,10 +172,8 @@ describe("SoundingWorkspace", () => {
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     const image = await screen.findByTestId("sounding-image", {}, { timeout: 3000 });
     expect(image.getAttribute("src")).toBe("blob:fixture");
-    const header = screen.getByLabelText("Sounding details");
-    expect(within(header).getByText("Original profile")).toBeTruthy();
-    expect(screen.getByText("3260 × 2198 · lossless PNG").closest("header")).toBe(header);
-    expect(header.textContent).not.toContain("Hover Skew-T or hodograph");
+    expect(screen.queryByLabelText("Sounding details")).toBeNull();
+    expect(screen.queryByText("3260 × 2198 · lossless PNG")).toBeNull();
     const request = transport.calls.find((call) => call.command === "open_sounding")?.args as {
       request: Record<string, unknown>;
     };

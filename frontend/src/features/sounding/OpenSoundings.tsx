@@ -50,7 +50,7 @@ export function OpenSoundings(): ReactNode {
                   setActive(summary.soundingId);
                 }}
               >
-                <span className={styles.itemTitle} title={summary.title}>{summary.title}</span>
+                <span className={styles.itemTitle} title={summary.title} data-testid={summary.soundingId === activeId ? "sounding-title" : undefined}>{summary.title}</span>
                 <span className={styles.itemMeta}>{soundingMeta(summary)}</span>
               </button>
               <IconAction

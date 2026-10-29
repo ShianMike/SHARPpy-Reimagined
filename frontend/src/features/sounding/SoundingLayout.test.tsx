@@ -28,7 +28,7 @@ it("guides an empty controls sidebar back to the selected source", async () => {
   expect(screen.queryByRole("region", { name: "Sounding quick start" })).toBeNull();
 });
 
-it("swaps sources and controls without losing a file or draft, and keeps info off the chart", async () => {
+it("swaps sources and controls without losing a file or draft, with no Info panel", async () => {
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: () => "blob:fixture" });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: () => undefined });
@@ -41,7 +41,7 @@ it("swaps sources and controls without losing a file or draft, and keeps info of
   await screen.findByTestId("sounding-image");
   await userEvent.click(screen.getByRole("tab", { name: "File" }));
   await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), new File(["profile"], "retained.npz"));
-  const info = screen.getByLabelText("Sounding details");
+  expect(screen.queryByLabelText("Sounding details")).toBeNull();
   const image = screen.getByTestId("sounding-image");
   await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
   expect(screen.queryByRole("tablist", { name: "Source" })).toBeNull();
@@ -50,8 +50,7 @@ it("swaps sources and controls without losing a file or draft, and keeps info of
   expect(screen.queryByRole("combobox", { name: "Undo history" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Undo edit" })).toBeNull();
   expect(screen.getByRole("group", { name: "View controls" }).hasAttribute("open")).toBe(true);
-  expect(sidebar?.contains(info)).toBe(true);
-  expect(info.textContent).toContain("39 levels");
+  expect(screen.getByTestId("sounding-viewer").getAttribute("aria-description")).toContain("39 levels");
   expect(screen.getByTestId("sounding-viewer").querySelector("header, [role=toolbar]")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
@@ -66,7 +65,7 @@ it("swaps sources and controls without losing a file or draft, and keeps info of
   expect(sidebar?.contains(input)).toBe(true);
   await userEvent.click(screen.getByRole("button", { name: "Show sounding sources" }));
   expect(screen.getByText("retained.npz")).toBeTruthy();
-  expect(screen.getByLabelText("Sounding details")).toBe(info);
+  expect(screen.queryByLabelText("Sounding details")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
   expect(screen.getByRole("spinbutton", { name: "Temperature °C" })).toBe(input);
   expect(input.value).toBe("32");

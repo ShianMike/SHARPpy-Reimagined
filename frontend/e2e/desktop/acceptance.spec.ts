@@ -162,12 +162,14 @@ test.describe("installed native acceptance", () => {
         const image = page.getByTestId("sounding-viewer").getByTestId("sounding-image");
         await expect(image).toBeVisible({ timeout: 240_000 });
         await expect.poll(async () => image.evaluate((element) => (element as HTMLImageElement).naturalWidth), { timeout: 240_000 }).toBeGreaterThan(0);
+        await page.getByRole("button", { name: "Show sounding controls", exact: true }).click();
         const time = page.getByRole("combobox", { name: "Sounding time (UTC)" });
         await time.click();
         await page.keyboard.press("End");
         await page.keyboard.press("Enter");
         await expect(time).toHaveAttribute("value", "48");
-        await expect(page.getByLabel("Sounding details", { exact: true })).toContainText("time 49 of 49");
+        await expect(page.getByTestId("sounding-viewer")).toHaveAttribute("aria-description", /time 49 of 49/u);
+        await page.getByRole("button", { name: "Show sounding sources", exact: true }).click();
         await page.getByTestId("open-soundings").getByRole("button", { name: /^Close /u }).first().click();
         await expect(page.getByTestId("open-soundings").getByRole("listitem")).toHaveCount(0);
         await workspaces().getByRole("button", { name: "Live Tracking", exact: true }).click();

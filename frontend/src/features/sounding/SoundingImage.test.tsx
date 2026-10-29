@@ -35,7 +35,7 @@ afterEach(() => { cleanup(); useUiStore.setState(initial, true); useSoundingStor
 async function open(next = response()) {
   const base = createTransport();
   const render = vi.fn(() => Promise.resolve(next));
-  const result = renderWithBackend(<SoundingImage soundingId="fixture" choice="MU" title="Test sounding" heading="Test sounding" />, {
+  const result = renderWithBackend(<SoundingImage soundingId="fixture" choice="MU" title="Test sounding" />, {
     ...base, call: (command, args) => command === "render_sounding_view" ? render() : base.call(command, args),
   });
   const image = await screen.findByTestId("sounding-image");
@@ -54,7 +54,7 @@ async function open(next = response()) {
 it("shows a recoverable connection message without an icon and retries the same view", async () => {
   const base = createTransport();
   const render = vi.fn(() => Promise.resolve(response())).mockRejectedValueOnce(new Error("Connection lost"));
-  renderWithBackend(<SoundingImage soundingId="fixture" choice="MU" title="Test sounding" heading="Test sounding" />, {
+  renderWithBackend(<SoundingImage soundingId="fixture" choice="MU" title="Test sounding" />, {
     ...base, call: (command, args) => command === "render_sounding_view" ? render() : base.call(command, args),
   });
   const notice = await screen.findByTestId("render-error");

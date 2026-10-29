@@ -18,7 +18,7 @@ import { useSoundingView } from "./useSoundingView";
 import { replaceValues } from "./viewHistory";
 import styles from "./Viewer.module.css";
 
-export function SoundingImage({ soundingId, choice, title, heading, navigation, controlsTarget, infoTarget, timeIndex = 0 }: { soundingId: string; choice: RenderChoice; title: string; heading: ReactNode; navigation?: ReactNode; controlsTarget?: HTMLDivElement | null; infoTarget?: HTMLDivElement | null; timeIndex?: number }): ReactNode {
+export function SoundingImage({ soundingId, choice, title, timeControl, navigation, controlsTarget, timeIndex = 0 }: { soundingId: string; choice: RenderChoice; title: string; timeControl?: ReactNode; navigation?: ReactNode; controlsTarget?: HTMLDivElement | null; timeIndex?: number }): ReactNode {
   const units = useUiStore((state) => state.units);
   const [quality, setQuality] = useState<ImageMode>("uhd");
   const [editing, setEditing] = useState(false);
@@ -159,18 +159,11 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
     }
   };
   const editor = editing && point !== undefined ? <PointEditor key={point.id + JSON.stringify(point.values) + JSON.stringify(units)} point={point} busy={unavailable} onApply={(values) => { edit.mutate({ ...request, edits: replaceValues(edits, Number(point.id.split(":")[1]), values) }); }} /> : null;
-  const info = <header className={styles.header} data-docked={infoTarget !== undefined} tabIndex={0} aria-label="Sounding details">
-    {infoTarget === undefined ? null : <strong className={styles.groupLabel}>Info</strong>}
-    {heading}
-    <div className={styles.imageMeta}>
-      <span>{edits.length ? `${String(edits.length)} edited ${edits.length === 1 ? "level" : "levels"} · Original retained` : "Original profile"}</span>
-      <span role="status">{data === undefined ? "" : String(data.width) + " × " + String(data.height) + " · lossless PNG"}</span>
-    </div>
-  </header>;
   const controls = <>
     <div className={styles.tools} data-docked={controlsTarget !== undefined} role="toolbar" aria-label="Sounding image controls">
       <div className={styles.toolGroup} role="group" aria-label="Profile controls">
         <span className={styles.groupLabel}>Profile</span>
+        {timeControl}
         <div className={styles.profileMode}>
           <Action ref={inspectButton} aria-pressed={!editing} onClick={() => { setEditing(false); setSelected(null); }}><Hand className="icon-sm" />Inspect</Action>
           <Action aria-pressed={editing} onClick={() => { setEditing(true); }} disabled={data === undefined || unavailable}><Pencil className="icon-sm" />Edit profile</Action>
@@ -226,7 +219,6 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
       event.preventDefault(); if (event.shiftKey || event.key.toLowerCase() === "y") redo(); else undo();
     }
   }}>
-    {infoTarget === undefined ? info : infoTarget === null ? null : createPortal(info, infoTarget)}
     {navigation == null ? null : <div className={styles.showSidebar}>{navigation}</div>}
     {controlsTarget === undefined ? controls : controlsTarget === null ? null : createPortal(controls, controlsTarget)}
     <div className={styles.stage} data-testid="sounding-stage" aria-busy={busy}>

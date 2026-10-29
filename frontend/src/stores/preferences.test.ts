@@ -94,7 +94,10 @@ describe("the repository", () => {
 describe("applying and saving", () => {
   it("starts fresh panels without labels", () => {
     applyPreferences(DEFAULT_PREFERENCES);
-    for (let panel = 0; panel < 4; panel++) expect(panelLayers(useMapStore.getState(), panel)["station-labels"].visible).toBe(false);
+    for (let panel = 0; panel < 4; panel++) {
+      expect(panelLayers(useMapStore.getState(), panel)["station-labels"].visible).toBe(false);
+      expect(panelLayers(useMapStore.getState(), panel).roads.visible).toBe(true);
+    }
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -109,6 +112,7 @@ describe("applying and saving", () => {
       store.setActivePanel(panel);
       store.setProduct(product);
       store.setLayerVisible("station-labels", panel % 2 === 0);
+      store.setLayerVisible("roads", panel % 2 === 0);
       store.setLayerVisible("radar", panel % 2 === 1);
       store.setLayerOpacity("model-field", (panel + 1) / 5);
       store.setFieldSmoothing(panel % 2 === 0);

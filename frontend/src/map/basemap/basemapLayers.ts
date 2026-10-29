@@ -180,10 +180,22 @@ export function applyBasemapState(map: MapLibreMap, state: LayerState): void {
   }
 }
 
-/** Remaining native labels keep the original style's typography and zoom rules. */
+/** Native road lines, shields and names keep their provider styling. */
+export function applyRoadNetworkState(map: MapLibreMap, state: LayerState): void {
+  const layers = nativeStyles.get(map)?.layers ?? map.getStyle().layers;
+  for (const layer of layers) {
+    if (!("source-layer" in layer) || layer.source !== "openmaptiles"
+      || !["transportation", "transportation_name"].includes(layer["source-layer"] ?? "")) continue;
+    const visibility = state.visible ? layer.layout?.visibility ?? "visible" : "none";
+    if ((map.getLayoutProperty(layer.id, "visibility") ?? "visible") !== visibility) map.setLayoutProperty(layer.id, "visibility", visibility);
+  }
+}
+
+/** Place labels are independent of the road network's own names and shields. */
 export function applyBasemapLabels(map: MapLibreMap, state: LayerState): void {
   for (const layer of map.getStyle().layers) {
-    if (layer.type !== "symbol" || layer.source !== "openmaptiles") continue;
+    if (layer.type !== "symbol" || layer.source !== "openmaptiles"
+      || ["transportation", "transportation_name"].includes(layer["source-layer"] ?? "")) continue;
     const visibility = state.visible ? "visible" : "none";
     if ((map.getLayoutProperty(layer.id, "visibility") ?? "visible") !== visibility) map.setLayoutProperty(layer.id, "visibility", visibility);
   }

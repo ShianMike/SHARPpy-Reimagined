@@ -29,7 +29,7 @@ export interface LayerPanelProps {
 const ORDERABLE = new Set<string>(ORDERABLE_LAYER_IDS);
 const descriptor = (id: string): LayerDescriptor | undefined => LAYER_REGISTRY.find((item) => item.id === id);
 /** The map layers, in the order the panel lists them. */
-const MAP_LAYERS = ["model-domain", "place-labels", "radar-site-labels", "stations", "station-labels", "basemap"]
+const MAP_LAYERS = ["model-domain", "place-labels", "roads", "radar-site-labels", "stations", "station-labels", "basemap"]
   .map(descriptor)
   .filter((item): item is LayerDescriptor => item !== undefined && item.userControllable);
 

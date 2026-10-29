@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import tokensCss from "../../styles/tokens.css?raw";
 import { cssTokenReader } from "../../test/cssTokens";
 import { readCanvasTokens } from "../canvasTokens";
-import { applyBasemapLabels, applyBasemapState, prepareBasemap } from "./basemapLayers";
+import { applyBasemapLabels, applyBasemapState, applyRoadNetworkState, prepareBasemap } from "./basemapLayers";
 import { basemapSourceUrl, basemapStyle, MAP_STYLE_URLS } from "./basemapStyle";
 
 const tokens = readCanvasTokens(cssTokenReader(tokensCss));
@@ -160,10 +160,45 @@ it("toggles native labels without changing weather or the style's label opacity"
   expect(setLayoutProperty).not.toHaveBeenCalled();
   setLayoutProperty.mockClear();
   applyBasemapLabels(map, { visible: false, opacity: 1 });
-  expect(setLayoutProperty.mock.calls).toEqual([["city", "visibility", "none"], ["road", "visibility", "none"]]);
+  expect(setLayoutProperty.mock.calls).toEqual([["city", "visibility", "none"]]);
   applyBasemapLabels(map, { visible: false, opacity: 0.5 });
-  expect(setLayoutProperty).toHaveBeenCalledTimes(2);
+  expect(setLayoutProperty).toHaveBeenCalledTimes(1);
   applyBasemapLabels(map, { visible: true, opacity: 1 });
-  expect(setLayoutProperty.mock.calls.slice(2)).toEqual([["city", "visibility", "visible"], ["road", "visibility", "visible"]]);
+  expect(setLayoutProperty.mock.calls.slice(1)).toEqual([["city", "visibility", "visible"]]);
+  expect(setPaintProperty).not.toHaveBeenCalled();
+});
+
+it("toggles native road lines and names independently of place names and preserves provider-hidden layers", () => {
+  const layers: LayerSpecification[] = [
+    { id: "road", type: "line", source: "openmaptiles", "source-layer": "transportation" },
+    { id: "road-name", type: "symbol", source: "openmaptiles", "source-layer": "transportation_name" },
+    { id: "road-direction", type: "symbol", source: "openmaptiles", "source-layer": "transportation" },
+    { id: "hidden-road", type: "line", source: "openmaptiles", "source-layer": "transportation", layout: { visibility: "none" } },
+    { id: "city", type: "symbol", source: "openmaptiles", "source-layer": "place" },
+    { id: "water", type: "fill", source: "openmaptiles", "source-layer": "water" },
+    { id: "weather-road", type: "line", source: "weather", "source-layer": "transportation" },
+  ];
+  const layout = new Map<string, string>([["hidden-road", "none"]]);
+  const setLayoutProperty = vi.fn((id: string, _property: string, value: string) => { layout.set(id, value); });
+  const setPaintProperty = vi.fn();
+  const map = {
+    getStyle: () => ({ layers }), getLayoutProperty: (id: string) => layout.get(id),
+    setLayoutProperty, setPaintProperty,
+  } as unknown as MapLibreMap;
+  applyRoadNetworkState(map, { visible: false, opacity: 1 });
+  expect(setLayoutProperty.mock.calls).toEqual(["road", "road-name", "road-direction"].map((id) => [id, "visibility", "none"]));
+  applyRoadNetworkState(map, { visible: false, opacity: 1 });
+  expect(setLayoutProperty).toHaveBeenCalledTimes(3);
+  applyBasemapLabels(map, { visible: false, opacity: 1 });
+  applyRoadNetworkState(map, { visible: true, opacity: 1 });
+  for (const id of ["road", "road-name", "road-direction"]) expect(layout.get(id)).toBe("visible");
+  expect(layout.get("hidden-road")).toBe("none");
+  expect(layout.get("city")).toBe("none");
+  applyBasemapLabels(map, { visible: true, opacity: 1 });
+  applyRoadNetworkState(map, { visible: false, opacity: 1 });
+  expect(layout.get("road-name")).toBe("none");
+  expect(layout.get("city")).toBe("visible");
+  expect(layout.has("water")).toBe(false);
+  expect(layout.has("weather-road")).toBe(false);
   expect(setPaintProperty).not.toHaveBeenCalled();
 });

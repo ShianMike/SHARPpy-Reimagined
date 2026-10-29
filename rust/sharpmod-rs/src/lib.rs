@@ -16,6 +16,7 @@ mod model_http_bindings;
 mod parcel_display_bindings;
 pub mod parcels;
 pub mod parsing;
+mod profile_input;
 pub mod quality_control;
 pub mod radar_sampling;
 mod radar_sampling_bindings;
@@ -29,6 +30,8 @@ mod weather;
 pub mod wind;
 pub mod wind_grid;
 mod wind_grid_bindings;
+mod wind_layer_bindings;
+mod wind_layers;
 
 use numpy::ndarray::Array2;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1};
@@ -814,6 +817,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     model_http_bindings::register(module)?;
     satellite_bindings::register(module)?;
     parcel_display_bindings::register(module)?;
+    wind_layer_bindings::register(module)?;
     wind_grid_bindings::register(module)?;
     module.add_function(wrap_pyfunction!(py_wind_to_components, module)?)?;
     module.add_function(wrap_pyfunction!(py_components_to_wind, module)?)?;

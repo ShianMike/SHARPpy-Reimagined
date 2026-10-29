@@ -65,6 +65,7 @@ REQUIRED_RUST_CAPABILITIES = (
     "parcel_maximum_level",
     "parcel_trajectory",
     "profile_thermo",
+    "profile_wind_layers",
     "igra_header",
     "igra_headers",
     "igra_level",

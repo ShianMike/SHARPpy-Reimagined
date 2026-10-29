@@ -23,8 +23,8 @@
         "description": "Forecast contours, wind barbs and terrain-relative lapse-rate and shear maps take less time to prepare, preserving their geometry, true-north directions and missing-data gaps. Model map downloads reuse connections and retain retries, byte limits and cancellation. ECMWF map inventories also take less time to process while retaining field levels and precipitation intervals."
       },
       {
-        "title": "Less repeated sounding work",
-        "description": "Convective temperature searches, derecho, parcel and Storm Slinky calculations reuse shared work, and historical analogue searches reuse their databases to reduce sounding preparation time. IGRA archives also decode with less overhead while retaining units, source information and missing-data checks."
+        "title": "Faster startup and sounding preparation",
+        "description": "Open Overview without starting a hidden map, and load other workspaces when needed. The map stays ready after its first visit. Wind-layer calculations, convective temperatures, parcels, Storm Slinky and analogue searches reuse shared work to reduce sounding preparation time. IGRA decoding retains units, source information and missing-data checks."
       }
     ]
   },

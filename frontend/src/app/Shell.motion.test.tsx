@@ -10,6 +10,7 @@ import { useMapStore } from "../stores/mapStore";
 import { useUiStore } from "../stores/uiStore";
 import { renderWithBackend } from "../test/backendHarness";
 import { Shell } from "./Shell";
+import { workspaceDefinition } from "./workspaces";
 
 const { mapMounts } = vi.hoisted(() => ({ mapMounts: vi.fn() }));
 vi.mock("../map/WeatherMap", async () => {
@@ -90,7 +91,11 @@ it("hides Point controls only in Live Tracking and returns focus to Layers after
 it.each(["overview", "settings", "status", "sounding"] as const)("transitions from %s to Model Viewer without rebuilding the map", async (workspace) => {
   useAppStore.getState().setActiveWorkspace(workspace);
   const { queryClient } = renderWithBackend(<Shell />, createTransport());
+  expect(screen.queryByTestId("map-canvas")).toBeNull();
+  expect(mapMounts).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Model Viewer" }));
   const canvas = await screen.findByTestId("map-canvas");
+  fireEvent.click(screen.getByRole("button", { name: workspaceDefinition(workspace).label }));
   const panel = screen.getByTestId("workspace-panel");
   const finish = pendingExit(panel);
 
@@ -113,7 +118,9 @@ it.each(["overview", "settings", "status", "sounding"] as const)("transitions fr
 it("ignores an old exit when another workspace opens before it finishes", async () => {
   useAppStore.getState().setActiveWorkspace("overview");
   const { queryClient } = renderWithBackend(<Shell />, createTransport());
+  fireEvent.click(screen.getByRole("button", { name: "Model Viewer" }));
   await screen.findByTestId("map-canvas");
+  fireEvent.click(screen.getByRole("button", { name: "Overview" }));
   const finish = pendingExit(screen.getByTestId("workspace-panel"));
   fireEvent.click(screen.getByRole("button", { name: "Model Viewer" }));
   fireEvent.click(screen.getByRole("button", { name: "Settings" }));

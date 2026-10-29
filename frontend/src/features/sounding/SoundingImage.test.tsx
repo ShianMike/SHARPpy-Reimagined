@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import viewExample from "@contracts/public/soundings/view.example.json";
 import summaryExample from "@contracts/public/soundings/summary.example.json";
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
@@ -175,26 +175,31 @@ it("keeps both popups and the linked marker moving beyond the visible hodograph 
   expect(render).toHaveBeenCalledOnce();
 });
 
-it("disables the height selector only while all height charts replace the diagnostic panel", async () => {
+it("shows every chart choice and retains the individual chart while all height charts are displayed", async () => {
   const chart = viewExample.options.find((group) => group.key === "chart")?.choices[1]?.key;
   if (chart === undefined) throw new Error("The fixture needs another height chart");
   useSoundingStore.getState().add(parseSoundingSummary({ ...summaryExample, soundingId: "fixture" }));
   useSoundingStore.getState().setView("fixture", { history: [[]], cursor: 0, options: { chart } });
   await open();
-  await userEvent.click(screen.getByText("Chart panels", { selector: "summary" }));
-  const height = screen.getByRole<HTMLButtonElement>("combobox", { name: "Height chart" });
-  const panel = screen.getByRole<HTMLButtonElement>("combobox", { name: "Diagnostic panel" });
-  expect(height.disabled).toBe(false);
-  await userEvent.click(panel);
-  await userEvent.click(screen.getByRole("option", { name: "All height charts" }));
-  expect(height.disabled).toBe(true);
-  expect(height.getAttribute("value")).toBe(chart);
+  const panels = screen.getByRole("region", { name: "Chart panels" });
+  expect(panels.closest("details")).toBeNull();
+  for (const group of viewExample.options) {
+    const buttons = within(screen.getByRole("group", { name: group.label })).getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual(group.choices.map((choice) => choice.label));
+  }
+  const height = screen.getByRole("group", { name: "Height chart" });
+  expect(within(height).getAllByRole<HTMLButtonElement>("button").every((button) => !button.disabled)).toBe(true);
+  const all = screen.getByRole<HTMLButtonElement>("button", { name: "All height charts" });
+  await userEvent.click(all);
+  for (const button of within(height).getAllByRole<HTMLButtonElement>("button")) {
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+  }
   expect(useSoundingStore.getState().views.fixture?.options).toEqual({ chart, panel: "HEIGHT CHARTS" });
-  await waitFor(() => { expect(panel.disabled).toBe(false); });
-  await userEvent.click(panel);
-  await userEvent.click(screen.getByRole("option", { name: "Sig-Tor Stats" }));
-  await waitFor(() => { expect(height.disabled).toBe(false); });
-  expect(height.getAttribute("value")).toBe(chart);
+  await waitFor(() => { expect(all.disabled).toBe(false); });
+  await userEvent.click(screen.getByRole("button", { name: "Sig-Tor Stats" }));
+  await waitFor(() => { expect(within(height).getAllByRole<HTMLButtonElement>("button").every((button) => !button.disabled)).toBe(true); });
+  expect(within(height).getByRole("button", { pressed: true }).textContent).toBe(viewExample.options.find((group) => group.key === "chart")?.choices[1]?.label);
 });
 
 it("defaults to width fit, retains whole-chart fit, and follows viewport resizing", async () => {

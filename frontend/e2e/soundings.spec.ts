@@ -142,7 +142,7 @@ test.describe("at 1440 by 900", () => {
     await expect(page.getByTestId("sounding-title")).toHaveText("72357 (example data)");
     await expect(page.getByTestId("open-soundings").getByRole("listitem")).toHaveCount(1);
     await page.getByRole("button", { name: "Show sounding controls", exact: true }).click();
-    await page.getByText("Chart panels", { exact: true }).filter({ visible: true }).click();
+    await expect(page.getByRole("region", { name: "Chart panels", exact: true })).toBeVisible();
     const parcel = page.getByRole("group", { name: "Parcel" });
     await expect(parcel.getByRole("button", { name: "MU" })).toHaveAttribute("aria-pressed", "true");
     await nextFrames(page);

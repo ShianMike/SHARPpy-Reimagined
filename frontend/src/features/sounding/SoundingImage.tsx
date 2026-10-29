@@ -1,4 +1,4 @@
-import { ChevronDown, Hand, Maximize, MoveHorizontal, Pencil, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { Check, ChevronDown, Hand, Maximize, MoveHorizontal, Pencil, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Action, IconAction } from "../../ui/Controls";
@@ -43,6 +43,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
     return convertUnit(v.value, v.unit, unit).toFixed(1) + " " + unit;
   }).join(", ")}`) : [], [data?.points, units, editing]);
   const unavailable = busy || image.isError;
+  const allHeightCharts = (state.options.panel ?? data?.selection.panel) === "HEIGHT CHARTS";
   const levelIndex = inspected?.image === data?.image ? inspected?.index ?? 0 : 0;
   const level = data?.inspection.levels[levelIndex];
   const windLevels = useMemo(() => data?.inspection.levels.filter((level) => level.hodograph !== null) ?? [], [data?.inspection.levels]);
@@ -168,6 +169,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
           <Action ref={inspectButton} aria-pressed={!editing} onClick={() => { setEditing(false); setSelected(null); }}><Hand className="icon-sm" />Inspect</Action>
           <Action aria-pressed={editing} onClick={() => { setEditing(true); }} disabled={data === undefined || unavailable}><Pencil className="icon-sm" />Edit profile</Action>
         </div>
+        <AscentPicker />
         {state.history.length < 2 ? null : <><SourceSelect label="Undo history" value={state.cursor} disabled={busy}
           options={state.history.map((snapshot, index) => ({ value: index, label: snapshot.length === 0 ? index === 0 ? "Original profile" : `${String(index)} · Reset profile`
             : `${String(index)} · ${String(snapshot.length)} edited ${snapshot.length === 1 ? "level" : "levels"}` }))}
@@ -195,17 +197,25 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
           <Action aria-label="Fit sounding to width" aria-pressed={zoom === null && fitWidth} onClick={() => { setFitWidth(true); setZoom(null); }}><MoveHorizontal className="icon-sm" />Fit width</Action>
           <Action aria-label="Fit sounding to view" aria-pressed={zoom === null && !fitWidth} onClick={() => { setFitWidth(false); setZoom(null); }}><Maximize className="icon-sm" />Fit all</Action>
         </div>
-        {data === undefined ? null : <details className={styles.panelPicker}>
-          <summary>Chart panels<ChevronDown className="icon-sm" aria-hidden="true" /></summary>
-          <div className={styles.options} data-motion="enter">
-            <AscentPicker />
-            {data.options.map((group) => <SourceSelect key={group.key} label={group.label} value={state.options[group.key] ?? data.selection[group.key]} disabled={busy || (group.key === "chart" && (state.options.panel ?? data.selection.panel) === "HEIGHT CHARTS")}
-              options={group.choices.map((option) => ({ value: option.key, label: option.label }))}
-              onChange={(value) => { update({ ...state, options: { ...state.options, [group.key]: value } }); }} />)}
-          </div>
-        </details>}
         </div>
       </details>
+      {data === undefined ? null : <section className={styles.panelPicker} aria-label="Chart panels">
+        <h2 className={styles.panelHeading}>Chart panels</h2>
+        <div className={styles.options}>
+          {data.options.map((group) => <fieldset key={group.key} className={styles.panelGroup}
+            aria-description={group.key === "chart" && allHeightCharts ? "All four height charts are shown together." : undefined}>
+            <legend>{group.label}</legend>
+            <div className={styles.panelChoices}>
+              {group.choices.map((option) => <Action key={option.key} className={styles.panelChoice}
+                aria-pressed={group.key === "chart" && allHeightCharts || (state.options[group.key] ?? data.selection[group.key]) === option.key}
+                disabled={busy || group.key === "chart" && allHeightCharts} data-wide={option.key === "HEIGHT CHARTS"}
+                onClick={() => { update({ ...state, options: { ...state.options, [group.key]: option.key } }); }}>
+                <span>{option.label}</span><Check className="icon-sm" aria-hidden="true" />
+              </Action>)}
+            </div>
+          </fieldset>)}
+        </div>
+      </section>}
       <div className={styles.exportTools}>
         <SoundingExport view={data} quality={quality} onQualityChange={setQuality} ready={ready} busy={busy}
           filename={title.replace(/[^a-zA-Z0-9_-]+/g, "-") + "-" + choice + (timeIndex > 0 ? `-time-${String(timeIndex + 1)}` : "") + (edits.length ? "-edited" : "") + ".png"} />

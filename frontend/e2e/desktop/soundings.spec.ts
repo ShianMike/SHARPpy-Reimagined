@@ -183,7 +183,7 @@ test.describe("real-backend soundings", () => {
     await shot("desktop-sounding-observed.png");
 
     await page.getByRole("button", { name: "Show sounding controls", exact: true }).click();
-    await page.getByText("Chart panels", { exact: true }).filter({ visible: true }).click();
+    await expect(page.getByRole("region", { name: "Chart panels", exact: true })).toBeVisible();
     const parcel = page.getByRole("group", { name: "Parcel" });
     const before = await viewerStage().getByTestId("sounding-image").getAttribute("src");
     await parcel.getByRole("button", { name: "ML" }).click();

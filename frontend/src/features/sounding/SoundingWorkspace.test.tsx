@@ -182,9 +182,8 @@ describe("SoundingWorkspace", () => {
     expect(screen.getByTestId("sounding-title").textContent).toBe("72357 (example data)");
     expect(within(screen.getByTestId("open-soundings")).getAllByRole("listitem")).toHaveLength(1);
     await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
-    expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")?.open).toBe(false);
-    await userEvent.click(screen.getByText("Chart panels", { selector: "summary" }));
-    expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")?.open).toBe(true);
+    expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")).toBeNull();
+    expect(screen.getByRole("region", { name: "Chart panels" }).closest("details")).toBeNull();
     expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("header")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "ML" }));
     await waitFor(() => {
@@ -203,11 +202,12 @@ describe("SoundingWorkspace", () => {
       expect(last?.args).toMatchObject({ imageMode: "hd" });
     });
     for (const group of viewExample.options) {
-      const dropdown = screen.getByRole("combobox", { name: group.label });
-      await userEvent.click(dropdown);
-      expect(within(screen.getByRole("listbox", { name: group.label })).getAllByRole("option")).toHaveLength(group.choices.length);
-      await userEvent.keyboard("{End}{Enter}");
-      expect(dropdown.getAttribute("value")).toBe(group.choices.at(-1)?.key);
+      const buttons = within(screen.getByRole("group", { name: group.label })).getAllByRole<HTMLButtonElement>("button");
+      expect(buttons).toHaveLength(group.choices.length);
+      const lastChoice = buttons.at(-1);
+      if (lastChoice === undefined) throw new Error("Missing chart choice");
+      await userEvent.click(lastChoice);
+      expect(lastChoice.getAttribute("aria-pressed")).toBe("true");
       await waitFor(() => {
         const last = transport.calls.filter((call) => call.command === "render_sounding_view").at(-1);
         expect(last?.args).toMatchObject({ view: { [group.key]: group.choices.at(-1)?.key } });

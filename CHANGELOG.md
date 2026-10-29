@@ -50,6 +50,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Show every sounding height-chart and diagnostic-panel choice directly in the
+  controls sidebar, with selected-state checkmarks and an All height charts
+  action. Move parcel selection alongside profile controls and keep chart
+  choices visible when View is collapsed or profile editing is active.
 - Restore OpenStreetMap roads and road names in the online basemap. Keep the
   provider's road widths, zoom rules and label placement, use muted road colours
   and land-coloured casings in dark mode, and keep road artwork beneath weather

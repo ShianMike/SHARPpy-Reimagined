@@ -16,6 +16,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Show full hazard names in storm-report legends instead of internal category
+  codes. Distinguish significant hail and wind reports while preserving report
+  details, symbols, colours and the selected time window.
 - Let fixture map probes report an unavailable projection while a style is
   being replaced. Keep browser projection polling active through theme changes
   instead of throwing before the selected projection is restored.

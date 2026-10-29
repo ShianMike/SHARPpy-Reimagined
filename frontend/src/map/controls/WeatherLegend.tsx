@@ -16,6 +16,13 @@ import { Legend } from "./Legend";
 import { SurfacePlotControls } from "./SurfacePlotControls";
 import styles from "./Legend.module.css";
 
+const REPORT_TYPES = [
+  { category: "h", symbol: "diamond", label: "Hail" },
+  { category: "g", symbol: "circle", label: "Wind gust" },
+  { category: "d", symbol: "square", label: "Wind damage" },
+  { category: "t", symbol: "triangle", label: "Tornado" },
+] as const;
+
 function ColourKeys({ entries }: { entries: readonly { label: string; fill: string | null; stroke: string; hatch?: boolean }[] }) {
   const unique = [...new Map(entries.map((entry) => [JSON.stringify(entry), entry])).values()];
   return <ul className={styles.keys}>
@@ -67,10 +74,14 @@ function ReportKey() {
   const symbols = [...new Map(query.data?.reports.map((report) => [JSON.stringify([report.category, report.symbol, report.fill, report.stroke]), report])).values()];
   return time === null ? <p>Choose a forecast time to view reports.</p> : query.isError ? <p>Reports unavailable. Open layer settings to retry.</p>
     : query.data === undefined ? <p>Loading report symbols…</p> : <>
-      <ul className={styles.keys}>{symbols.map((report) => <li key={JSON.stringify([report.category, report.symbol, report.fill, report.stroke])}>
-        <svg className={styles.symbol} viewBox="0 0 24 24" aria-hidden="true"><path d={SYMBOL_PATHS[report.symbol] ?? SYMBOL_PATHS.circle} fill={report.fill ?? "none"} stroke={report.stroke} /></svg>
-        {report.category}
-      </li>)}</ul>
+      <ul className={styles.keys}>{symbols.map((report) => {
+        const type = REPORT_TYPES.find((item) => report.category === "significant" ? item.symbol === report.symbol : item.category === report.category);
+        const label = type === undefined ? report.label : report.significant ? `Significant ${type.label.toLowerCase()}` : type.label;
+        return <li key={JSON.stringify([report.category, report.symbol, report.fill, report.stroke])}>
+          <svg className={styles.symbol} viewBox="0 0 24 24" aria-hidden="true"><path d={SYMBOL_PATHS[report.symbol] ?? SYMBOL_PATHS.circle} fill={report.fill ?? "none"} stroke={report.stroke} /></svg>
+          {label}
+        </li>;
+      })}</ul>
       <p>{query.data.shownCount === 0 ? "No matching reports." : `${String(query.data.shownCount)} reports · ${query.data.windowLabel}`}</p>
     </>;
 }

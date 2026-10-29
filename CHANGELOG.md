@@ -23,6 +23,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fetch GOES listings and imagery through the existing pooled Rust HTTP client,
+  retaining response byte limits and custom openers while adding cancellation
+  during pending requests and retry waits. Remove the replaced Python requests
+  and response-body loops; keep scan-time selection and image rendering in
+  their existing provider. Parse ECMWF regular-grid and 9 km JSON-line inventories
+  in Rust, preserving record line numbers, byte addresses, pressure levels,
+  accumulated-precipitation intervals and the most-unstable CAPE layer label.
+  Remove the Python JSON loop and duplicated parameter maps.
 - Search for convective temperatures and compute the default 100 hPa mean
   mixing ratio in Rust, sharing prepared interpolation fields and the existing
   thermodynamic lift routines. Preserve the stripped CAPE/CIN calculation's

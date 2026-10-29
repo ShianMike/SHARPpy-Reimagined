@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import replace
 from functools import lru_cache
 from types import SimpleNamespace
@@ -12,22 +11,6 @@ import numpy as np
 from sharpmod.providers import hrrr_products as hp
 
 BOUNDS = (-180.0, 180.0, -85.05112878, 85.05112878)
-_SURFACE = {
-    "2t": ("TMP", "2 m above ground"),
-    "2d": ("DPT", "2 m above ground"),
-    "sp": ("PRES", "surface"),
-    "10u": ("UGRD", "10 m above ground"),
-    "10v": ("VGRD", "10 m above ground"),
-    "10fg": ("GUST", "surface"),
-    "tp": ("APCP", "surface"),
-    "tprate": ("PRATE", "surface"),
-    "tcwv": ("PWAT", hp.F_PWAT.level),
-    "mucape": ("CAPE", hp.F_MUCAPE.level),
-    "sd": ("sd", "surface"),
-    "rsn": ("rsn", "surface"),
-    "ptype": ("ptype", "surface"),
-}
-_PRESSURE = {"gh": "HGT", "t": "TMP", "u": "UGRD", "v": "VGRD"}
 _PRODUCTS = frozenset({
     *(f"hgt-wind-{level}" for level in (200, 300, 500, 700, 850)),
     "tmp-2m", "dpt-2m", "thetae-2m", "rh-2m", "gust", "wind-10m",
@@ -54,29 +37,11 @@ def grib_url(run, hour, source, model):
 
 def parse_inventory(text):
     """Translate ECMWF record addresses without changing the shared product names."""
-    from sharpmod.providers.hrrr_field import HrrrFieldError, InventoryRow
+    import sharpmod_rs
 
-    rows = []
-    try:
-        for index, line in enumerate(text.splitlines(), 1):
-            if not line.strip():
-                continue
-            item = json.loads(line)
-            param, levtype = item["param"], item["levtype"]
-            if levtype == "sfc" and param in _SURFACE:
-                variable, level = _SURFACE[param]
-            elif levtype == "pl" and param in _PRESSURE:
-                variable, level = _PRESSURE[param], f"{int(item['levelist'])} mb"
-            else:
-                continue
-            offset, length = int(item["_offset"]), int(item["_length"])
-            if offset < 0 or length <= 0:
-                raise ValueError("invalid record byte range")
-            forecast = f"0-{int(item['step'])} hour acc fcst" if param == "tp" else ""
-            rows.append(InventoryRow(index, offset, length, variable, level, forecast))
-    except (KeyError, TypeError, ValueError) as error:
-        raise HrrrFieldError("ECMWF inventory contains an invalid record") from error
-    return tuple(rows)
+    from sharpmod.providers.hrrr_field import InventoryRow
+
+    return tuple(InventoryRow(*row) for row in sharpmod_rs.parse_ecmwf_inventory(text))
 
 
 def _rh(fields):

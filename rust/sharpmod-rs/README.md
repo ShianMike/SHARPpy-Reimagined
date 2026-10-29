@@ -26,6 +26,12 @@ Forecast-map inventory and byte-range HTTP downloads also run in the shared
 Rust core, retaining pooled connections, retries, per-read timeouts, budgets and
 cancellation. Existing range scheduling, decoding and field caches keep their
 current owners.
+GOES listing/image downloads share that client and retain bounded response bodies,
+caller-supplied openers and cancellation. Listing XML, scan selection, NetCDF
+decoding and image projection retain their existing provider. ECMWF JSON-line
+inventories for both regular-grid and 9 km fields are parsed in Rust, retaining
+record addresses, shared field names, pressure levels and accumulation intervals;
+the Python adapter restores the public inventory rows.
 Height-stack interpolation for terrain-relative lapse-rate and low-level shear
 maps also runs in Rust, preserving source rounding and missing brackets
 with bounded, owned batches instead of full-grid interpolation temporaries.

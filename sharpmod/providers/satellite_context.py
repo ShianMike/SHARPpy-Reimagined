@@ -127,56 +127,10 @@ def choose_satellite(bounds) -> str:
     return "G18" if centre < -114.0 else "G19"
 
 
-def _response_bytes(response, *, limit: int, cancel=None) -> bytes:
-    if isinstance(response, (bytes, bytearray)):
-        payload = bytes(response)
-    elif hasattr(response, "iter_content"):
-        raise_for_status = getattr(response, "raise_for_status", None)
-        if callable(raise_for_status):
-            raise_for_status()
-        chunks = []
-        total = 0
-        for chunk in response.iter_content(chunk_size=256 * 1024):
-            if _cancelled(cancel):
-                raise SatelliteCancelled("satellite request cancelled")
-            if not chunk:
-                continue
-            total += len(chunk)
-            if total > limit:
-                raise SatelliteContextError("GOES response exceeds the safety limit")
-            chunks.append(bytes(chunk))
-        payload = b"".join(chunks)
-    else:
-        content = getattr(response, "content", None)
-        if content is None:
-            reader = getattr(response, "read", None)
-            content = reader() if callable(reader) else None
-        if content is None:
-            raise SatelliteContextError("GOES provider returned no readable body")
-        payload = bytes(content)
-    if len(payload) > limit:
-        raise SatelliteContextError("GOES response exceeds the safety limit")
-    return payload
-
-
 def _open(url: str, *, timeout: float, opener=None, limit: int, cancel=None) -> bytes:
-    if _cancelled(cancel):
-        raise SatelliteCancelled("satellite request cancelled")
-    if opener is None:
-        import requests
+    import sharpmod_rs
 
-        response = requests.get(
-            url,
-            headers={"User-Agent": "SHARPpy-Reimagined/1.2"},
-            timeout=timeout,
-            stream=True,
-        )
-    else:
-        try:
-            response = opener(url, timeout=timeout)
-        except TypeError:
-            response = opener(url)
-    return _response_bytes(response, limit=limit, cancel=cancel)
+    return sharpmod_rs.fetch_satellite_bytes(url, timeout, limit, opener, cancel)
 
 
 def parse_listing(

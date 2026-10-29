@@ -75,7 +75,7 @@
 .fieldButton:disabled { color: var(--text-disabled); cursor: default; background: var(--control-fill); border-color: var(--border-subtle); }
 .field[data-compact="true"] { flex: none; }
 .field[data-compact="true"] .fieldButton { min-height: var(--control-h-sm); padding: var(--space-1) var(--space-3); font-size: var(--font-size-small); }
-.sourceMenu, .sourceCalendar, .discardDialog {
+.sourceMenu, .sourceCalendar, .sourcePicker, .discardDialog {
   --accent: var(--workspace-orange); --accent-hover: var(--workspace-orange-hover); --accent-bright: var(--workspace-orange-text); --accent-subtle: var(--workspace-orange-subtle); --focus-ring: var(--workspace-orange-text);
   padding: var(--space-2);
 }
@@ -96,3 +96,15 @@
 .sourceOption small { display: block; margin-top: var(--space-0-5); color: var(--text-tertiary); font-size: var(--font-size-caption); }
 .sourceOption:is(:hover, :focus-visible):not(:disabled) { background: var(--fill-hover); color: var(--accent-bright); }
 .sourceOption[aria-selected="true"] { background: var(--accent-subtle); color: var(--accent-bright); }
+.sourcePicker { display: flex; flex-direction: column; width: var(--popover-w); max-height: calc(100dvh - 2 * var(--chrome-gap)); padding: var(--space-3); gap: var(--space-2); }
+.pickerHeader { display: flex; flex: none; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.pickerHeader h2 { font-size: var(--font-size-subhead); font-weight: var(--font-weight-semibold); }
+.pickerSearch { display: flex; flex: none; align-items: center; gap: var(--space-2); min-height: var(--control-h-sm); padding: 0 var(--space-3); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--control-fill); color: var(--text-secondary); }
+.pickerSearch:focus-within { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.pickerSearch input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text-primary); font: inherit; font-size: var(--font-size-small); }
+.pickerBody { min-height: 0; max-height: calc(7 * var(--control-h-lg)); overflow-y: auto; overscroll-behavior: contain; padding: var(--space-0-5); }
+.pickerGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); }
+.pickerGrid > .sourceOption { justify-content: center; min-width: 0; padding: var(--space-2) var(--space-1); border: var(--hairline) solid transparent; background: var(--control-fill); text-align: center; font-size: var(--font-size-small); font-variant-numeric: tabular-nums; }
+.pickerGrid > .sourceOption:is(:hover, :focus-visible):not(:disabled) { background: var(--fill-hover); }
+.pickerGrid > .sourceOption[aria-selected="true"] { border-color: var(--accent); background: var(--accent-subtle); }
+.pickerEmpty { padding: var(--space-4); color: var(--text-secondary); font-size: var(--font-size-small); }

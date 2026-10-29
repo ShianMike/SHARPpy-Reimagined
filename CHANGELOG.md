@@ -51,6 +51,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Open sounding Model, Run, Forecast and observed Launch selectors in compact
+  glass popups beside the sidebar. Add model search and grouped UTC cycle/hour
+  tiles with concise Pending/Latest labels, preserving sounding availability,
+  exact run times and cycle limits.
 - Group sounding edit targets into one pressure-level choice with separate
   variable buttons and previous/next navigation. Open the first editable level
   immediately, retain the variable when moving between levels, and keep duplicate

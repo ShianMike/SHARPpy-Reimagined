@@ -70,7 +70,7 @@ export function ObservedForm(): ReactNode {
             : "Not in the bundled list; the providers may still know it."}
       </p>
       <SourceDate value={inputs.date} onChange={(date) => { edit({ date }); }} />
-      <SourceSelect label="Launch" value={inputs.hour} options={RELEASE_HOURS.map((hour) => ({ value: hour, label: `${String(hour).padStart(2, "0")}Z`, detail: hour === 0 || hour === 12 ? "Standard launch" : "Additional launch" }))} onChange={(hour) => { edit({ hour }); }} />
+      <SourceSelect label="Launch" value={inputs.hour} popup="grid" options={RELEASE_HOURS.map((hour) => ({ value: hour, label: `${String(hour).padStart(2, "0")}Z`, group: "UTC" }))} onChange={(hour) => { edit({ hour }); }} />
       <SourceSelect label="Provider" value={inputs.provider} options={OBSERVED_PROVIDERS.map((provider) => ({ value: provider, label: PROVIDER_LABELS[provider] }))} onChange={(provider) => { edit({ provider }); }} />
       <div className={styles.actions}>
         <Action

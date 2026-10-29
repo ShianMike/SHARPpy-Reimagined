@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
 import modelCatalog from "@contracts/public/soundings/models.catalog.json";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import type { Transport } from "../../lib/backend/transport";
 import { useAppStore } from "../../stores/appStore";
+import { useForecastStore } from "../../stores/forecastStore";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import { ModelForm, parseCoordinate } from "./ModelForm";
+import { formatUtc } from "./soundingTime";
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true);
@@ -88,7 +90,57 @@ it("falls back to an offered hour when the default exceeds the selected cycle's 
   useSoundingStore.getState().setModel({ forecastHour: 2 });
   const { user, latitude, longitude, submit, call } = await setup(catalog);
   expect(screen.getByRole("combobox", { name: "Forecast" }).textContent).toContain("F000");
+  await user.click(screen.getByRole("combobox", { name: "Forecast" }));
+  const popup = screen.getByRole("dialog", { name: "Forecast" });
+  expect(within(popup).getAllByRole("option")).toHaveLength(2);
+  expect(within(popup).queryByRole("option", { name: "F002" })).toBeNull();
+  await user.keyboard("{ArrowRight}{Enter}");
+  expect(useSoundingStore.getState().model.forecastHour).toBe(1);
+  await user.click(screen.getByRole("combobox", { name: "Forecast" }));
+  await user.click(screen.getByRole("option", { name: "F000" }));
   await user.type(latitude, "35"); await user.type(longitude, "-97");
   await user.click(submit);
   await waitFor(() => { expect(call.mock.calls.find(([command]) => command === "open_sounding")?.[1]?.request).toMatchObject({ forecastHour: 0 }); });
+});
+
+it("searches sounding models without changing the selected value or the map forecast", async () => {
+  const { user } = await setup({ ...modelCatalog, models: modelCatalog.models.filter((model) => ["hrrr", "rap", "aigfs"].includes(model.key)) });
+  const mapForecast = useForecastStore.getState();
+  const trigger = screen.getByRole("combobox", { name: "Model" });
+  await user.click(trigger);
+  const popup = screen.getByRole("dialog", { name: "Model" });
+  expect(within(popup).getAllByRole("option").map((option) => option.getAttribute("value"))).toEqual(["hrrr", "rap"]);
+  expect(within(popup).getByRole("group", { name: "Regional" })).toBeTruthy();
+  expect(within(popup).queryByRole("option", { name: "AIGFS" })).toBeNull();
+  const search = within(popup).getByRole("searchbox", { name: "Search models" });
+  expect(document.activeElement).toBe(search);
+  await user.type(search, "no matching model");
+  expect(within(popup).getByRole("status").textContent).toBe("No matches.");
+  expect(trigger.textContent).toBe("HRRR");
+  expect(useSoundingStore.getState().model.modelKey).toBe("hrrr");
+  await user.keyboard("{Escape}");
+  expect(document.activeElement).toBe(trigger);
+  await user.click(trigger);
+  expect(screen.getByRole<HTMLInputElement>("searchbox").value).toBe("");
+  await user.type(screen.getByRole("searchbox"), "RAP");
+  await user.keyboard("{ArrowDown}{Enter}");
+  expect(useSoundingStore.getState().model).toMatchObject({ modelKey: "rap", runTime: null, forecastHour: null });
+  expect(useForecastStore.getState()).toBe(mapForecast);
+  expect(document.activeElement).toBe(trigger);
+});
+
+it("keeps exact run timestamps behind the compact UTC cycle tiles", async () => {
+  const run = modelCatalog.models.find((model) => model.key === "hrrr")?.recentRuns[1];
+  if (run === undefined) throw new Error("Missing HRRR run fixture");
+  const { user } = await setup();
+  const trigger = screen.getByRole("combobox", { name: "Run" });
+  await user.click(trigger);
+  const popup = screen.getByRole("dialog", { name: "Run" });
+  const choice = within(popup).getByRole("option", { name: formatUtc(run) });
+  expect(choice.textContent).toContain(`${run.slice(11, 13)}Z`);
+  expect(within(popup).getByRole("group", { name: `${run.slice(0, 10)} · UTC` })).toBeTruthy();
+  await user.click(choice);
+  expect(useSoundingStore.getState().model.runTime).toBe(run);
+  expect(trigger.textContent).toBe(formatUtc(run));
+  expect(document.activeElement).toBe(trigger);
 });

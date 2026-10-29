@@ -1,6 +1,6 @@
 """Backend-accelerated SHARPpy convective-profile compatibility layer.
 
-Parcel, DCAPE, maximum-parcel-level and analogue processing cross the native boundary.
+Parcel, DCAPE, maximum-level, trajectory and analogue processing cross the native boundary.
 The surrounding SHARPpy ``ConvectiveProfile`` orchestration, public parcel
 objects, widgets, and severe-weather formulas retain their existing API.
 """
@@ -257,6 +257,14 @@ def _microburst(prof):
 class AcceleratedConvectiveProfile(sp_profile.ConvectiveProfile):
     """Convective profile using backend parcel and DCAPE workspaces."""
 
+    def get_traj(self):
+        try:
+            from sharpmod_rs import parcel_trajectory
+        except ImportError:
+            return super().get_traj()
+
+        self.slinky_traj, self.updraft_tilt = parcel_trajectory(self, self.mupcl)
+
     def get_sars(self):
         try:
             from sharpmod_rs import profile_sars
@@ -438,8 +446,15 @@ def accelerate_profile_collection(prof_collection):
 
 
 def install_user_parcel_acceleration():
-    """Install the backend explicit-ascent path on SHARPpy's Skew-T widget."""
+    """Install native parcel calculations used by Skew-T and Storm Slinky."""
     import sharppy.viz.skew as skew_module
+
+    try:
+        from sharpmod_rs import parcel_trajectory
+    except ImportError:
+        pass
+    else:
+        sp_params.parcelTraj = parcel_trajectory
 
     widget_type = skew_module.plotSkewT
     if getattr(widget_type, "_sharpmod_user_parcel_accelerated", False):

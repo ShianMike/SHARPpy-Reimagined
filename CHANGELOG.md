@@ -23,6 +23,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Integrate storm-relative parcel trajectories in Rust, preparing interpolation
+  series once instead of rebuilding them on every 25-second step. Route profile
+  preparation and Storm Slinky parcel, preference and left/right-motion updates
+  through the same routine. Preserve the 5 m/s nudge, wind conversion, endpoint
+  tolerance, AGL heights, masked coordinates and public trajectory fields.
+  Bound nonconvergent traces and retain source-only SHARPpy compatibility when
+  the native operation cannot be imported.
 - Match SARS hail and supercell analogues in Rust and reuse parsed databases
   while their files are unchanged. Route accelerated sounding profiles through
   the native matcher, retaining the existing SHIP calculation, thresholds,

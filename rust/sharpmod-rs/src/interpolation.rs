@@ -109,6 +109,20 @@ impl PreparedInterpolation {
         finish_value(value_from_upper(&self.pairs, target, upper), log_output)
     }
 
+    /// SHARPpy clamps near either endpoint, including a single usable level.
+    pub(crate) fn scalar_sharppy(&self, target: f64, log_output: bool) -> f64 {
+        if is_missing(target, self.missing) || self.pairs.is_empty() {
+            return f64::NAN;
+        }
+        // The last endpoint wins when both NumPy isclose checks match.
+        for &(coordinate, value) in [self.pairs.last().unwrap(), &self.pairs[0]] {
+            if (target - coordinate).abs() <= 1.0e-8 + 1.0e-5 * coordinate.abs() {
+                return finish_value(value, log_output);
+            }
+        }
+        self.scalar(target, log_output)
+    }
+
     pub(crate) fn interpolate(&self, targets: &[f64], log_output: bool) -> Vec<f64> {
         if self.pairs.len() < 2 {
             return vec![f64::NAN; targets.len()];
@@ -211,6 +225,16 @@ mod tests {
     use super::{interpolate_1d, PreparedInterpolation};
 
     const EPSILON: f64 = 1.0e-12;
+
+    #[test]
+    fn sharppy_endpoint_tolerance_preserves_last_endpoint_and_single_levels() {
+        let pairs = PreparedInterpolation::new(&[1., 1.000001], &[10., 20.], None).unwrap();
+        assert_eq!(pairs.scalar_sharppy(1., false), 20.);
+        assert!(pairs.scalar_sharppy(1.1, false).is_nan());
+        let single = PreparedInterpolation::new(&[3.], &[2.], None).unwrap();
+        assert_eq!(single.scalar_sharppy(3.00002, true), 100.);
+        assert!(single.scalar_sharppy(f64::NAN, false).is_nan());
+    }
 
     fn assert_close(actual: f64, expected: f64) {
         assert!(

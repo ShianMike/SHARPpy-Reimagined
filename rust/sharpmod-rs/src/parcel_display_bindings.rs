@@ -1,7 +1,114 @@
 //! Small compatibility boundary for parcel display calculations.
 
 use numpy::PyReadonlyArray1;
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::{
+    exceptions::PyValueError,
+    prelude::*,
+    types::{PyDict, PyList, PyTuple},
+};
+
+fn masked_number(value: &Bound<'_, PyAny>, masked: &Bound<'_, PyModule>) -> PyResult<Option<f64>> {
+    if masked.call_method1("is_masked", (value,))?.is_truthy()? {
+        Ok(None)
+    } else {
+        value.extract().map(Some)
+    }
+}
+
+fn column(prepare: &Bound<'_, PyAny>, value: &Bound<'_, PyAny>, name: &str) -> PyResult<Vec<f64>> {
+    let keywords = PyDict::new(prepare.py());
+    keywords.set_item("name", name)?;
+    let array = prepare.call((value,), Some(&keywords))?;
+    Ok(array
+        .extract::<PyReadonlyArray1<'_, f64>>()?
+        .as_slice()?
+        .to_vec())
+}
+
+#[pyfunction(signature=(prof, parcel, smu=None, smv=None))]
+fn parcel_trajectory<'py>(
+    py: Python<'py>,
+    prof: &Bound<'py, PyAny>,
+    parcel: &Bound<'py, PyAny>,
+    smu: Option<&Bound<'py, PyAny>>,
+    smv: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyTuple>> {
+    use crate::parcels::trajectory::{parcel_trajectory, TrajectoryState};
+
+    let masked = PyModule::import(py, "numpy.ma")?;
+    let missing = masked.getattr("masked")?;
+    let storm = match (smu, smv) {
+        (Some(u), Some(v)) => [masked_number(u, &masked)?, masked_number(v, &masked)?],
+        _ => {
+            let storm = prof.getattr("srwind")?;
+            [
+                masked_number(&storm.get_item(0)?, &masked)?,
+                masked_number(&storm.get_item(1)?, &masked)?,
+            ]
+        }
+    };
+    let cape = masked_number(&parcel.getattr("bplus")?, &masked)?.unwrap_or(f64::NAN);
+    if cape < 1.0e-3 {
+        return (missing, f64::NAN).into_pyobject(py);
+    }
+    let state = TrajectoryState {
+        cape,
+        lfc_pressure: masked_number(&parcel.getattr("lfcpres")?, &masked)?.unwrap_or(f64::NAN),
+        lfc_height: masked_number(&parcel.getattr("lfchght")?, &masked)?,
+        el_height: masked_number(&parcel.getattr("elhght")?, &masked)?,
+        storm_motion: storm,
+    };
+    let prepare = PyModule::import(py, "sharpmod.backends._common")?.getattr("prepare_1d")?;
+    let columns = ["pres", "hght", "vtmp", "u", "v"]
+        .iter()
+        .map(|name| column(&prepare, &prof.getattr(*name)?, name))
+        .collect::<PyResult<Vec<_>>>()?;
+    let el = state
+        .el_height
+        .unwrap_or(*columns[1].last().unwrap_or(&f64::NAN));
+    let trace = if state.lfc_height.is_some_and(|z| z < el) {
+        [
+            column(&prepare, &parcel.getattr("ptrace")?, "ptrace")?,
+            column(&prepare, &parcel.getattr("ttrace")?, "ttrace")?,
+        ]
+    } else {
+        [Vec::new(), Vec::new()]
+    };
+    let sfc = prof.getattr("sfc")?.extract()?;
+    let sentinel = prof.getattr("missing")?.extract()?;
+    let result = py
+        .detach(move || {
+            parcel_trajectory(
+                [0, 1, 2, 3, 4].map(|i| columns[i].as_slice()),
+                trace.each_ref().map(Vec::as_slice),
+                state,
+                sfc,
+                Some(sentinel),
+            )
+        })
+        .map_err(PyValueError::new_err)?;
+    let Some(result) = result else {
+        return (missing, f64::NAN).into_pyobject(py);
+    };
+    let positions = PyList::empty(py);
+    for (i, point) in result.positions.into_iter().enumerate() {
+        let values: Vec<_> = point
+            .into_iter()
+            .enumerate()
+            .map(|(axis, value)| match value {
+                Some(_) if i == 0 && axis < 2 => 0_i32.into_pyobject(py).unwrap().into_any(),
+                Some(value) => value.into_pyobject(py).unwrap().into_any(),
+                None => missing.clone(),
+            })
+            .collect();
+        positions.append(PyTuple::new(py, values)?)?;
+    }
+    let tilt = match result.tilt {
+        Some(value) => value.into_pyobject(py)?.into_any(),
+        None => missing,
+    };
+    (positions, tilt).into_pyobject(py)
+}
 
 #[pyfunction(signature=(pressure,height,temperature,environment,start,el,sfc=0,missing=Some(-9999.)))]
 #[allow(clippy::too_many_arguments)] // Four reported columns and one parcel's state.
@@ -36,5 +143,6 @@ fn parcel_maximum_level(
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(parcel_maximum_level, module)?)?;
+    module.add_function(wrap_pyfunction!(parcel_trajectory, module)?)?;
     Ok(())
 }

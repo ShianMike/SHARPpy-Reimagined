@@ -10,6 +10,7 @@ use std::cmp::Ordering;
 
 mod maximum;
 pub use maximum::maximum_parcel_level;
+pub mod trajectory;
 
 pub const PARCEL_COUNT: usize = 3;
 pub const CONVECTIVE_PARCEL_COUNT: usize = 5;

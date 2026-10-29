@@ -39,12 +39,11 @@ jobs:
           python scripts/install_sharppy_compat.py --sharppy-only
           if ($LASTEXITCODE -ne 0) { throw "SHARPpy compatibility install failed" }
           "SHARPPY_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
-      - run: npm run typecheck
+      - run: npm run build
       - run: npm run lint
       - name: Audit production frontend dependencies
         run: npm audit --omit=dev
       - run: npm test
-      - run: npm run build
       - run: npm run build:browser
       - run: npm run build:fixture
   browser:

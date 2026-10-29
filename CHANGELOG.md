@@ -29,6 +29,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Remove the custom test-category reporter and its tests while retaining pytest
+  logs, JUnit, coverage, and enforced timing budgets. Keep weekly live-provider
+  contracts and dependency audits without repeating the deterministic test matrix;
+  retain correctness and release gates on their existing push, pull-request,
+  manual, and release paths. Type-check the frontend through
+  its existing production build once per job, move the SHRF timing benchmark out
+  of routine discovery, and keep map label-cache assertions without repeated
+  timing samples or benchmark output.
 - Acquire ensemble members through a shared four-worker Rust scheduler instead
   of a sequential Python loop. Preserve requested member order, GEFS/CFS member
   arguments, exact source profiles, individual failure reasons and temporary-file

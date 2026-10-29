@@ -45,7 +45,9 @@ export default defineConfig(({ command, isPreview, mode }) => ({
     pool: "threads",
     // shortcut: cap at eight workers measured locally; retune for larger runners.
     maxWorkers: Math.min(8, availableParallelism()),
-    include: ["src/**/*.test.{ts,tsx}", "tooling/**/*.test.ts"],
+    include: mode === "performance"
+      ? ["src/**/*.benchmark.{ts,tsx}"]
+      : ["src/**/*.test.{ts,tsx}", "tooling/**/*.test.ts"],
     restoreMocks: true,
     // Vitest replaces CSS with an empty module unless a file is included here;
     // canvasTokens.test.ts and the layer tests read the real tokens.css (?raw).

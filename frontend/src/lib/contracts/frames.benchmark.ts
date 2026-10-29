@@ -1,5 +1,5 @@
-// Opt-in body-to-Blob benchmark; functional parser coverage lives in map.test.ts.
-// SHARPPY_SHRF_BENCHMARK=1 npm exec -- vitest run src/lib/contracts/frames.performance.test.ts --maxWorkers=1
+// Manual body-to-Blob benchmark; functional parser coverage lives in map.test.ts.
+// From frontend/: npm run test:performance
 import { env, versions } from "node:process";
 import radar from "@contracts/public/map/radar.shrf?url&inline";
 import site from "@contracts/public/map/radar-site.shrf?url&inline";
@@ -7,7 +7,7 @@ import satellite from "@contracts/public/map/satellite.shrf?url&inline";
 import { expect, it } from "vitest";
 import { encodeShrf, parseRadarFrame, parseRadarSiteFrame, parseSatelliteFrame, parseShrf } from "./frames";
 
-it.skipIf(env.SHARPPY_SHRF_BENCHMARK !== "1")("compares PNG Blob copies with identical parser bodies", async () => {
+it("compares PNG Blob copies with identical parser bodies", async () => {
   const iterations = Number(env.SHARPPY_SHRF_ITERS ?? 20);
   if (!Number.isInteger(iterations) || iterations < 2 || iterations > 1000) throw new Error("SHARPPY_SHRF_ITERS must be 2 to 1000");
   const results: object[] = [];

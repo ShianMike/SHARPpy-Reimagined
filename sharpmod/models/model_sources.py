@@ -8,7 +8,6 @@ import re
 import tempfile
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import suppress
 from pathlib import Path
 from urllib.parse import quote, unquote, urlencode, urlparse
@@ -33,13 +32,6 @@ NOMADS_ENDPOINTS = {
     "gefs": "filter_gefs_atmos_0p50a.pl",
 }
 
-_MIRROR_NAMES = {"aws", "google", "azure", "ecmwf"}
-_PROVIDER_CACHE_MAX_ENTRIES = 256
-_PROVIDER_CACHE: dict[
-    tuple[str, str, tuple[tuple[str, str], ...]],
-    tuple[float, str, int],
-] = {}
-_PROVIDER_LOCK = threading.RLock()
 _NOMADS_LOCK = threading.RLock()
 _LAST_NOMADS_REQUEST = 0.0
 
@@ -147,133 +139,11 @@ def build_nomads_subset_url(
     )
 
 
-def choose_provider(candidates, probe, *, reference_url=None):
-    """Choose the fastest candidate whose content length matches the reference."""
-    candidates = dict(candidates)
-    if not candidates:
-        return None
-    reference_name = next(
-        (name for name, url in candidates.items() if url == reference_url),
-        next(iter(candidates)),
-    )
-    results = {}
-    for name, url in candidates.items():
-        try:
-            ok, size, elapsed = probe(url)
-            if ok and int(size) > 0:
-                results[name] = (int(size), float(elapsed))
-        except Exception:
-            pass
-    if not results:
-        return reference_name, candidates[reference_name]
-
-    reference = results.get(reference_name)
-    if reference is not None:
-        expected_size = reference[0]
-    else:
-        counts = {}
-        for size, _elapsed in results.values():
-            counts[size] = counts.get(size, 0) + 1
-        expected_size = max(counts, key=lambda size: (counts[size], size))
-    compatible = [
-        (elapsed, name)
-        for name, (size, elapsed) in results.items()
-        if size == expected_size
-    ]
-    if not compatible:
-        return reference_name, candidates[reference_name]
-    _elapsed, selected_name = min(compatible)
-    return selected_name, candidates[selected_name]
-
-
-def _probe_http_range(url: str) -> tuple[bool, int, float]:
-    try:
-        import requests
-        started = time.monotonic()
-        with requests.get(
-            url,
-            headers={"Range": "bytes=0-65535"},
-            stream=True,
-            timeout=(2.5, 6),
-        ) as response:
-            if response.status_code != 206:
-                return False, 0, 99.0
-            value = response.headers.get("Content-Range", "")
-            total = int(value.rsplit("/", 1)[1])
-            # Consume the small probe so elapsed time includes data transfer.
-            for _chunk in response.iter_content(chunk_size=65536):
-                break
-        return True, total, time.monotonic() - started
-    except Exception:
-        return False, 0, 99.0
-
-
 def select_herbie_provider(herbie, *, ttl_seconds: float = 6 * 3600):
     """Select the fastest compatible mirror for this exact source object."""
-    if os.environ.get("SHARPMOD_PROVIDER_RACING", "1").strip().lower() \
-            in {"0", "false", "no", "off"}:
-        return getattr(herbie, "grib_source", None)
-    sources = {
-        name: str(url)
-        for name, url in getattr(herbie, "SOURCES", {}).items()
-        if name in _MIRROR_NAMES
-        and str(url).startswith(("http://", "https://"))
-    }
-    if len(sources) < 2:
-        return getattr(herbie, "grib_source", None)
-    source_identity = tuple(sorted(sources.items()))
-    cache_key = (
-        str(getattr(herbie, "model", "")),
-        str(getattr(herbie, "product", "")),
-        source_identity,
-    )
-    now = time.time()
-    with _PROVIDER_LOCK:
-        expired = [
-            key for key, value in _PROVIDER_CACHE.items() if value[0] <= now
-        ]
-        for key in expired:
-            _PROVIDER_CACHE.pop(key, None)
-        cached = _PROVIDER_CACHE.get(cache_key)
-    selected_name = None
-    selected_size = 0
-    if cached is not None and cached[1] in sources:
-        cached_name, cached_size = cached[1], cached[2]
-        ok, current_size, _elapsed = _probe_http_range(sources[cached_name])
-        if ok and int(current_size) == int(cached_size):
-            selected_name = cached_name
-            selected_size = int(current_size)
-    if selected_name is None:
-        results = {}
-        with ThreadPoolExecutor(max_workers=min(4, len(sources))) as executor:
-            futures = {
-                executor.submit(_probe_http_range, url): url
-                for url in sources.values()
-            }
-            for future in as_completed(futures):
-                results[futures[future]] = future.result()
-        selected_name, _selected_url = choose_provider(
-            sources,
-            lambda url: results[url],
-            reference_url=str(getattr(herbie, "grib", "")),
-        )
-        selected_result = results.get(sources[selected_name], (False, 0, 99.0))
-        selected_size = int(selected_result[1]) if selected_result[0] else 0
-        with _PROVIDER_LOCK:
-            _PROVIDER_CACHE[cache_key] = (
-                now + max(0.0, float(ttl_seconds)),
-                selected_name,
-                selected_size,
-            )
-            if len(_PROVIDER_CACHE) > _PROVIDER_CACHE_MAX_ENTRIES:
-                oldest = min(
-                    _PROVIDER_CACHE,
-                    key=lambda key: _PROVIDER_CACHE[key][0],
-                )
-                _PROVIDER_CACHE.pop(oldest, None)
-    herbie.grib_source = selected_name
-    herbie.grib = sources[selected_name]
-    return selected_name
+    from sharpmod_rs import select_model_provider
+
+    return select_model_provider(herbie, ttl_seconds)
 
 
 def _wait_for_nomads_slot(cancelled=None) -> None:

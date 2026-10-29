@@ -17,6 +17,8 @@ pub mod kinematics;
 mod locator_paths;
 mod map_geometry;
 mod model_http_bindings;
+mod model_source_bindings;
+mod model_sources;
 mod parcel_display_bindings;
 pub mod parcels;
 pub mod parsing;
@@ -819,6 +821,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     surface_bindings::register(module)?;
     radar_sampling_bindings::register(module)?;
     model_http_bindings::register(module)?;
+    model_source_bindings::register(module)?;
     iem_bindings::register(module)?;
     ensemble_bindings::register(module)?;
     locator_paths::register(module)?;

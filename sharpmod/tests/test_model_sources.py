@@ -3,19 +3,12 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from sharpmod import model_sources
-from sharpmod.model_sources import (
-    build_nomads_subset_url,
-    choose_provider,
-    nomads_supported,
-    select_herbie_provider,
-)
+from sharpmod.model_sources import build_nomads_subset_url, nomads_supported
 
 
 def test_nomads_query_contains_fields_all_levels_and_small_region():
@@ -193,105 +186,3 @@ def test_nomads_support_is_capability_checked():
     assert nomads_supported(SimpleNamespace(key="hrw-fv3"))
     assert nomads_supported(SimpleNamespace(key="cfs"))
     assert not nomads_supported(SimpleNamespace(key="ecmwf-ifs"))
-
-
-def test_fastest_compatible_provider_wins():
-    candidates = {
-        "aws": "https://aws/file",
-        "google": "https://google/file",
-        "azure": "https://azure/file",
-    }
-    results = {
-        "https://aws/file": (True, 4000, 0.4),
-        "https://google/file": (True, 4000, 0.2),
-        "https://azure/file": (True, 5000, 0.1),
-    }
-
-    selected = choose_provider(
-        candidates,
-        lambda url: results[url],
-        reference_url="https://aws/file",
-    )
-
-    assert selected == ("google", "https://google/file")
-
-
-def test_provider_selection_retains_reference_when_probes_fail():
-    candidates = {"aws": "https://aws/file", "google": "https://google/file"}
-
-    selected = choose_provider(
-        candidates,
-        lambda _url: (False, 0, 99.0),
-        reference_url="https://aws/file",
-    )
-
-    assert selected == ("aws", "https://aws/file")
-
-
-def test_provider_cache_is_scoped_to_exact_source_object(monkeypatch):
-    model_sources._PROVIDER_CACHE.clear()
-    calls = []
-
-    def probe(url):
-        calls.append(url)
-        return True, 100, 0.1 if "aws" in url else 0.2
-
-    monkeypatch.setattr(model_sources, "_probe_http_range", probe)
-    first = SimpleNamespace(
-        model="hrrr",
-        product="prs",
-        SOURCES={
-            "aws": "https://aws/old-object",
-            "google": "https://google/old-object",
-        },
-        grib="https://aws/old-object",
-        grib_source="aws",
-    )
-    assert select_herbie_provider(first, ttl_seconds=3600) == "aws"
-    first_call_count = len(calls)
-
-    second = SimpleNamespace(
-        model="hrrr",
-        product="prs",
-        SOURCES={
-            "aws": "https://aws/new-object",
-            "google": "https://google/new-object",
-        },
-        grib="https://google/new-object",
-        grib_source="google",
-    )
-    assert select_herbie_provider(second, ttl_seconds=3600) == "aws"
-
-    assert len(calls) - first_call_count == 2
-    assert any("new-object" in url for url in calls[first_call_count:])
-
-
-def test_cached_provider_is_revalidated_and_reraced_on_failure(monkeypatch):
-    model_sources._PROVIDER_CACHE.clear()
-    phase = {"value": "warm"}
-
-    def probe(url):
-        if phase["value"] == "warm":
-            return True, 100, 0.1 if "aws" in url else 0.2
-        if "aws" in url:
-            return False, 0, 99.0
-        return True, 100, 0.1
-
-    monkeypatch.setattr(model_sources, "_probe_http_range", probe)
-    herbie = SimpleNamespace(
-        model="hrrr",
-        product="prs",
-        SOURCES={
-            "aws": "https://aws/object",
-            "google": "https://google/object",
-        },
-        grib="https://aws/object",
-        grib_source="aws",
-    )
-    assert select_herbie_provider(herbie, ttl_seconds=3600) == "aws"
-
-    phase["value"] = "failed"
-    herbie.grib = "https://google/object"
-
-    assert select_herbie_provider(herbie, ttl_seconds=3600) == "google"
-    assert herbie.grib == "https://google/object"

@@ -29,6 +29,15 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Race model-download mirrors and maintain their bounded exact-object cache in
+  Rust, removing the Python HTTP probe, worker-pool, selection, and cache loops.
+  Preserve the four-probe ceiling, 2.5-second connection and 6-second read
+  deadlines, single-attempt 64 KiB ranges, reference-file size matching,
+  deterministic tie-breaking, six-hour/256-entry cache, revalidation, and source
+  failover. Measure new connections for each race to match the current download
+  sessions; warm probe connections must not bias selection toward a slower full
+  transfer. Keep the public Herbie source fields; retire private Python probe
+  helpers and four duplicate Python policy tests now covered in Rust.
 - Remove the custom test-category reporter and its tests while retaining pytest
   logs, JUnit, coverage, and enforced timing budgets. Keep weekly live-provider
   contracts and dependency audits without repeating the deterministic test matrix;

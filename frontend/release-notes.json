@@ -24,7 +24,7 @@
       },
       {
         "title": "Faster startup and sounding preparation",
-        "description": "Open workspaces when needed and keep the map ready after its first visit. Locator borders reuse prepared paths, while wind layers, convective temperatures, parcels, Storm Slinky and analogue searches share calculations. Ensemble requests fetch independent members together while keeping each member's order and failure details. IEM downloads reuse connections and retain the requested station and time; IGRA decoding preserves units, source information and missing-data checks."
+        "description": "Open workspaces when needed and keep the map ready after its first visit. Locator borders reuse prepared paths, while wind layers, convective temperatures, parcels, Storm Slinky and analogue searches share calculations. Ensemble requests fetch independent members together while keeping each member's order and failure details. Forecast downloads check compatible sources with less overhead and keep source failover. IEM downloads reuse connections and retain the requested station and time; IGRA decoding preserves units, source information and missing-data checks."
       }
     ]
   },

@@ -284,12 +284,20 @@ def test_frontend_gate_requires_checks_and_all_browser_shards():
     assert step["env"] == {
         "CHECKS_RESULT": "${{ needs.frontend-checks.result }}",
         "BROWSER_RESULT": "${{ needs.browser.result }}",
+        "EXPECTED_BROWSER_RESULT": (
+            "${{ github.event_name == 'pull_request' && "
+            "!startsWith(github.head_ref, 'release/') && 'skipped' || 'success' }}"
+        ),
     }
     assert step["run"].splitlines() == [
         'test "$CHECKS_RESULT" = success',
-        'test "$BROWSER_RESULT" = success',
+        'test "$BROWSER_RESULT" = "$EXPECTED_BROWSER_RESULT"',
     ]
     browser = jobs["browser"]
+    assert browser["if"] == (
+        "${{ github.event_name != 'pull_request' || "
+        "startsWith(github.head_ref, 'release/') }}"
+    )
     assert browser["strategy"] == {
         "fail-fast": "false", "matrix": {"shard": ["1", "2", "3", "4"]},
     }

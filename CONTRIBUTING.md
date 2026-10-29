@@ -107,9 +107,10 @@ Every test has a 180-second safety timeout by default; the deliberately
 expensive full-property and complete-release lanes raise that guard to 900 seconds
 per test. Routine pull requests run Python 3.13 deterministic coverage, Windows
 WRF tests, static checks, frontend unit/type/build checks and desktop/Rust source
-checks. The full browser matrix runs after merge, on manual/reusable runs and
+checks. The full browser matrix runs after merge, on manual runs and
 on `release/*` PRs. The frontend gate requires the expected browser result for
 each event; failed or cancelled browser runs cannot pass that gate.
+Reusable calls inherit the caller's event and follow the same rule.
 Python 3.11/3.12 compatibility and full properties run after merge, on the
 schedule, on manual/reusable runs and on `release/*` PRs. Rust NumPy and wheel
 matrices run on `release/*` PRs and manual runs. Official releases run every

@@ -108,7 +108,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and Rust NumPy/wheel matrices for full validation runs. Retain core tests,
   coverage, frontend unit/type/build checks, desktop/Rust checks, static analysis
   and dependency audits on routine PRs. Run the full browser matrix after merge,
-  on manual/reusable runs and on release PRs. Keep the frontend gate and require
+  on manual runs and on release PRs. Keep the frontend gate and require
   a browser success for full runs or an intentional skip for an ordinary PR;
   failures, cancellations and unexpected skips still fail the gate.
 - Build map cell-colour tables with packed RGBA copies, avoiding per-cell byte

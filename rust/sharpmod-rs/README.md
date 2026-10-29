@@ -36,6 +36,14 @@ IEM RAOB catalogue/profile requests also use the shared client, keeping one
 attempt per request, the 8 MiB limit and existing provider errors. Rust assembles
 the six numeric columns; standard JSON object decoding, exact station/time
 selection and profile provenance keep their existing interfaces.
+Ensemble member acquisition shares a four-worker Rust pool across requests,
+overlapping independent GEFS/CFS transfers while restoring results and failure
+ledgers in requested order. Started workers finish before their temporary
+directory is removed; fatal errors retain the first failing requested member's
+precedence. Existing extraction, direct decoding and collection interfaces are
+called at the compatibility boundary. Explicit xarray decoding stays serial
+because that legacy route redirects process-wide Python streams. The existing
+Herbie warning scope is restored after overlapping native requests have joined.
 Sounding locators project boundary points and construct their Qt paths in Rust.
 A module-owned cache retains up to 32 immutable path groups and 262,144 vertices,
 keyed by linework, map bounds, pixel geometry and Qt path type. Painting retains

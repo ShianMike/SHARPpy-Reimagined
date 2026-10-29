@@ -29,6 +29,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Acquire ensemble members through a shared four-worker Rust scheduler instead
+  of a sequential Python loop. Preserve requested member order, GEFS/CFS member
+  arguments, exact source profiles, individual failure reasons and temporary-file
+  cleanup after started transfers join. Retain serial acquisition when xarray
+  decoding is explicitly selected and restore the existing warning-filter scope
+  after overlapping native requests. Remove the replaced Python acquisition loop
+  and error-formatting helper; model extraction and collection APIs stay shared.
 - Project sounding-locator borders and build their Qt paths in Rust, reusing
   immutable paths across paint passes. Bound reuse by both entry and vertex
   counts and distinguish linework, view bounds, pixel geometry and Qt path type.

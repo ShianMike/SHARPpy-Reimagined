@@ -36,10 +36,9 @@ fn profile_wind_layers<'py>(
     let params = PyModule::import(py, "sharppy.sharptab.params")?;
     let utils = PyModule::import(py, "sharppy.sharptab.utils")?;
     let prepare = PyModule::import(py, "sharpmod.backends._common")?.getattr("prepare_1d")?;
-    let columns = ["hght", "logp", "u", "v"]
-        .iter()
-        .map(|name| column(&prepare, &prof.getattr(*name)?, name))
-        .collect::<PyResult<Vec<_>>>()?;
+    let [height, logp, u, v] =
+        ["hght", "logp", "u", "v"].map(|name| column(&prepare, &prof.getattr(name)?, name));
+    let columns = [height?, logp?, u?, v?];
     let has_wind = prof
         .getattr("wdir")?
         .call_method0("count")?
@@ -98,7 +97,7 @@ fn profile_wind_layers<'py>(
     )?;
     let (components, layers) = py
         .detach(move || {
-            let profile = WindProfile::new([0, 1, 2, 3].map(|i| columns[i].as_slice()), has_wind)?;
+            let profile = WindProfile::new(columns, has_wind)?;
             let pressures = [
                 1000., 3000., 4000., 5000., 6000., 8000., 9000., 2000., 11000.,
             ]

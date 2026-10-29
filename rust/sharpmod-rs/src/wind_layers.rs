@@ -17,12 +17,17 @@ pub(crate) struct WindProfile {
 }
 
 impl WindProfile {
-    pub fn new(columns: [&[f64]; 4], has_wind: bool) -> Result<Self, String> {
-        let [height, logp, u, v] = columns;
+    pub fn new(columns: [Vec<f64>; 4], has_wind: bool) -> Result<Self, String> {
+        let [height, mut logp, mut u, mut v] = columns;
+        let height_to_logp = PreparedInterpolation::new(&height, &logp, None)?;
+        // SHARPpy reverses pressure columns, including the order of equal levels.
+        logp.reverse();
+        u.reverse();
+        v.reverse();
         Ok(Self {
-            height_to_logp: PreparedInterpolation::new(height, logp, None)?,
-            logp_to_u: PreparedInterpolation::new(logp, u, None)?,
-            logp_to_v: PreparedInterpolation::new(logp, v, None)?,
+            height_to_logp,
+            logp_to_u: PreparedInterpolation::new(&logp, &u, None)?,
+            logp_to_v: PreparedInterpolation::new(&logp, &v, None)?,
             has_wind,
         })
     }
@@ -91,8 +96,11 @@ mod tests {
 
     #[test]
     fn single_pressure_means_calm_and_missing_winds_keep_their_meanings() {
-        let profile =
-            WindProfile::new([&[0., 6000.], &[3., 2.], &[0., 0.], &[0., 0.]], true).unwrap();
+        let profile = WindProfile::new(
+            [&[0., 6000.][..], &[3., 2.], &[0., 0.], &[0., 0.]].map(Vec::from),
+            true,
+        )
+        .unwrap();
         let layer = profile.layer(Some(1000.), Some(1000.)).unwrap();
         assert_eq!(layer.mean, [Some(0.), Some(0.)]);
         assert_eq!(layer.shear, [Some(0.), Some(0.)]);
@@ -103,8 +111,11 @@ mod tests {
             .into_iter()
             .all(|value| value.unwrap().is_nan()));
         assert_eq!(profile.layer(None, Some(500.)).unwrap().mean, [None; 2]);
-        let missing =
-            WindProfile::new([&[0., 6000.], &[3., 2.], &[0., 0.], &[0., 0.]], false).unwrap();
+        let missing = WindProfile::new(
+            [&[0., 6000.][..], &[3., 2.], &[0., 0.], &[0., 0.]].map(Vec::from),
+            false,
+        )
+        .unwrap();
         assert_eq!(
             missing.layer(Some(1000.), Some(500.)).unwrap().mean,
             [None; 2]
@@ -120,7 +131,8 @@ mod tests {
                 &[3., 2.7, 2.4],
                 &[0., f64::NAN, 60.],
                 &[10., 20., 30.],
-            ],
+            ]
+            .map(Vec::from),
             true,
         )
         .unwrap();
@@ -132,7 +144,9 @@ mod tests {
         assert_eq!(beyond.shear, [None; 2]);
         assert!(profile.layer(Some(f64::NAN), Some(500.)).is_err());
         assert!(profile.layer(Some(1e20), Some(1.)).is_err());
-        assert!(WindProfile::new([&[0.], &[3., 2.], &[0.], &[0.]], true).is_err());
+        assert!(
+            WindProfile::new([&[0.][..], &[3., 2.], &[0.], &[0.]].map(Vec::from), true).is_err()
+        );
     }
 
     #[test]
@@ -148,7 +162,7 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         let columns = ["hght", "logp", "u", "v"].map(column);
-        let profile = WindProfile::new([0, 1, 2, 3].map(|i| columns[i].as_slice()), true).unwrap();
+        let profile = WindProfile::new(columns, true).unwrap();
         for row in fixture["layers"].as_array().unwrap() {
             let bounds = row["bounds"].as_array().unwrap();
             let actual = profile
@@ -167,5 +181,25 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn repeated_pressure_levels_keep_the_reversed_reference_tie_order() {
+        let profile = WindProfile::new(
+            [
+                &[0., 2000., 2000., 6000.][..],
+                &[3., 2.8, 2.8, 2.4],
+                &[10., 20., 99., 40.],
+                &[0., 0., 0., 0.],
+            ]
+            .map(Vec::from),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            profile.components(Some(10.0f64.powf(2.8))),
+            [Some(20.), Some(0.)]
+        );
+        assert!((profile.components(Some(10.0f64.powf(2.6)))[0].unwrap() - 69.5).abs() < 1e-10);
     }
 }

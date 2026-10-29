@@ -29,7 +29,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   message while a workspace's code loads.
 - Prepare sounding wind interpolation once in Rust and reuse pressure-weighted
   layer means for the right/left storm-relative winds and endpoint shears.
-  Retain one-hPa sampling, fractional layer bounds, independent component
+  Retain one-hPa sampling, fractional layer bounds, duplicate-pressure order, component
   masks, missing-wind guards, public profile fields and storm-motion edits.
   Keep the existing storm-motion, helicity and critical-angle formulas at the
   compatibility boundary; source environments without Rust retain SHARPpy.

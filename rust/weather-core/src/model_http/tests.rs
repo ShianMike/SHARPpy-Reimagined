@@ -184,6 +184,24 @@ fn client() -> ModelClient {
 }
 
 #[tokio::test]
+async fn a_single_attempt_does_not_retry_provider_statuses_or_transport_failures() {
+    for status in [429, 500, 503, 422] {
+        let server = Server::new(move |_| Reply::new(status, b""));
+        assert_eq!(
+            client().fetch_once(&server.url, 1., 100).await,
+            Err(Error::Http(status))
+        );
+        assert_eq!(server.count(), 1);
+    }
+    let server = Server::new(|_| Reply::new(0, b""));
+    assert!(matches!(
+        client().fetch_once(&server.url, 1., 100).await,
+        Err(Error::Offline(_))
+    ));
+    assert_eq!(server.count(), 1);
+}
+
+#[tokio::test]
 async fn ranges_keep_exact_headers_bytes_and_connection_reuse() {
     let server = Server::new(|request| {
         assert_eq!(request.headers.get("range").unwrap(), "bytes=10-13");

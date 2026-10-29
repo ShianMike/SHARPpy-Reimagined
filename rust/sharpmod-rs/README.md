@@ -32,6 +32,15 @@ decoding and image projection retain their existing provider. ECMWF JSON-line
 inventories for both regular-grid and 9 km fields are parsed in Rust, retaining
 record addresses, shared field names, pressure levels and accumulation intervals;
 the Python adapter restores the public inventory rows.
+IEM RAOB catalogue/profile requests also use the shared client, keeping one
+attempt per request, the 8 MiB limit and existing provider errors. Rust assembles
+the six numeric columns; standard JSON object decoding, exact station/time
+selection and profile provenance keep their existing interfaces.
+Sounding locators project boundary points and construct their Qt paths in Rust.
+A module-owned cache retains up to 32 immutable path groups and 262,144 vertices,
+keyed by linework, map bounds, pixel geometry and Qt path type. Painting retains
+the original path order, clipping and cosmetic pens; Qt objects stay under the
+interpreter and are never shared through a global native cache.
 Height-stack interpolation for terrain-relative lapse-rate and low-level shear
 maps also runs in Rust, preserving source rounding and missing brackets
 with bounded, owned batches instead of full-grid interpolation temporaries.

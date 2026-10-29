@@ -24,7 +24,7 @@
       },
       {
         "title": "Faster startup and sounding preparation",
-        "description": "Open Overview without starting a hidden map, and load other workspaces when needed. The map stays ready after its first visit. Wind-layer calculations, convective temperatures, parcels, Storm Slinky and analogue searches reuse shared work to reduce sounding preparation time. IGRA decoding retains units, source information and missing-data checks."
+        "description": "Open Overview without starting a hidden map; load other workspaces when needed and keep the map ready after its first visit. Sounding locator borders reuse prepared paths, while wind layers, convective temperatures, parcels, Storm Slinky and analogue searches share their calculations. IEM sounding downloads reuse connections and retain the exact requested station and time. IGRA decoding preserves units, source information and missing-data checks."
       }
     ]
   },

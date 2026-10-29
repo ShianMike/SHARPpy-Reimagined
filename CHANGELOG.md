@@ -7,6 +7,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Performance
+
+- Move ECAPE's reference thermodynamics, parcel ascent, CAPE/NCAPE and
+  storm-relative inflow workspace to Rust. Avoid importing MetPy's unit and
+  array stack on the default sounding-render path while preserving the
+  portable Python reference, missing-value behavior and SHARPpy CAPE bound.
+  Alternating local UHD runs measured a 5.15 s to 3.37 s first-render median
+  with identical pixels and about 160 MiB less initial peak working set;
+  repeated-render timings were essentially unchanged.
+
 ### Fixed
 
 - Confirm the existing install review in the public-updater acceptance test.

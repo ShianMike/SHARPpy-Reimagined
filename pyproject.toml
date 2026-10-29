@@ -57,9 +57,8 @@ dependencies = [
     # performs the documented geostationary projection before display.
     "netCDF4>=1.7,<2.0",
     "pyproj>=3.5,<4.0",
-    # Reference-consistent ECAPE (Peters et al. 2023) building blocks are
-    # computed via MetPy to agree with the authors' ECAPE_FUNCTIONS oracle
-    # (Requirement 5.7); the ECAPE parameter degrades to MISSING without it.
+    # Portable Python ECAPE and independent scientific reference validation.
+    # The default Rust ECAPE workspace does not import this dependency.
     "metpy>=1.5,<2.0",
     # Analytic ECAPE implementation (Peters et al.) used by sharptab.ecape.
     "ecape>=0.1,<1.0",

@@ -106,7 +106,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Simplify routine pull-request checks: report test categories inside the fast
   job instead of nine separate jobs, and reserve Python compatibility/property
   and Rust NumPy/wheel matrices for full validation runs. Retain core tests,
-  coverage, browser checks, static analysis and dependency audits on routine PRs.
+  coverage, frontend unit/type/build checks, desktop/Rust checks, static analysis
+  and dependency audits on routine PRs. Run the full browser matrix after merge,
+  on manual runs and on release PRs. Keep the frontend gate and require
+  a browser success for full runs or an intentional skip for an ordinary PR;
+  failures, cancellations and unexpected skips still fail the gate.
 - Build map cell-colour tables with packed RGBA copies, avoiding per-cell byte
   copies and temporary array views while preserving palette and no-data output.
 - Cache the pinned cargo-audit executable while continuing both lockfile audits

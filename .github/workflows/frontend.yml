@@ -48,6 +48,7 @@ jobs:
       - run: npm run build:browser
       - run: npm run build:fixture
   browser:
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'release/') }}
     runs-on: windows-latest
     timeout-minutes: 12
     strategy:
@@ -86,9 +87,10 @@ jobs:
         env:
           CHECKS_RESULT: ${{ needs.frontend-checks.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
+          EXPECTED_BROWSER_RESULT: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release/') && 'skipped' || 'success' }}
         run: |
           test "$CHECKS_RESULT" = success
-          test "$BROWSER_RESULT" = success
+          test "$BROWSER_RESULT" = "$EXPECTED_BROWSER_RESULT"
   desktop-bridge:
     runs-on: windows-latest
     timeout-minutes: 30

@@ -7,6 +7,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Confirm the existing install review in the public-updater acceptance test.
+  Bind that opt-in check to the published version's tag so test-only maintenance
+  can verify released installers; candidate checks still require the exact checkout.
+
 ### Upcoming
 
 - Expand the available weather-model parameters, offering only fields supported

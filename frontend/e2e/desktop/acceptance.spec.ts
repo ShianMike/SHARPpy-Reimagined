@@ -68,6 +68,9 @@ test.describe("installed native acceptance", () => {
       await shot("interactive-update-available.png", true);
       // The real signed updater exits this process after launching NSIS.
       await page.getByRole("button", { name: "Install update", exact: true }).click();
+      const review = page.getByRole("dialog", { name: "Install app update?", exact: true });
+      await expect(review).toBeVisible();
+      await review.getByRole("button", { name: "Install update & restart", exact: true }).click();
       await expect.poll(() => page.isClosed(), { timeout: 300_000, intervals: [1_000] }).toBe(true);
     }
   });

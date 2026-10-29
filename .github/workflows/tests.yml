@@ -99,17 +99,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CANDIDATE_RUN: ${{ inputs.native_candidate_run }}
+          PUBLIC_UPDATE: ${{ inputs.native_public_update }}
         run: |
           if ($env:CANDIDATE_RUN -notmatch '^\d+$') { throw 'A successful candidate Release run ID is required' }
           $candidate = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:CANDIDATE_RUN" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Candidate run lookup failed' }
-          $source = (& git rev-parse HEAD).Trim()
-          if ($candidate.status -ne 'completed' -or $candidate.conclusion -ne 'success' -or
-              $candidate.path -ne '.github/workflows/release.yml' -or $candidate.head_sha -ne $source) {
-            throw 'Native acceptance requires a successful Release run for the exact checked-out source'
-          }
           $version = (Get-Content -LiteralPath 'frontend/package.json' -Raw | ConvertFrom-Json).version
           if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Native acceptance requires a stable source version' }
+          $source = (& git rev-parse HEAD).Trim()
+          if ($env:PUBLIC_UPDATE -eq 'true') {
+            # The public updater installs the published tag; its test harness can advance.
+            $tag = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/v$version" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or $tag.object.type -ne 'commit') { throw 'Published release source lookup failed' }
+            $source = $tag.object.sha
+          }
+          if ($candidate.status -ne 'completed' -or $candidate.conclusion -ne 'success' -or
+              $candidate.path -ne '.github/workflows/release.yml' -or $candidate.head_sha -ne $source) {
+            throw 'Native acceptance requires a successful Release run for the exact checked-out source or published tag'
+          }
           $tags = @(gh api "repos/$env:GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')
           if ($LASTEXITCODE -ne 0) { throw 'Previous stable release lookup failed' }
           $previous = @($tags | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' -and [version]$_.Substring(1) -lt [version]$version } |

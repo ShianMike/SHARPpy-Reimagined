@@ -71,12 +71,14 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
         "default"
     ] == "false"
     jobs = workflow["jobs"]
-    for lane in ("fast", "quality", "windows-wrf"):
-        assert "if" not in jobs[lane]
+    assert "if" not in jobs["quality"]
+    for lane in ("fast", "windows-wrf"):
+        assert jobs[lane]["if"] == "${{ github.event_name != 'schedule' }}"
     for lane in ("compatibility", "property"):
         assert jobs[lane]["if"] == (
-            "${{ github.event_name != 'pull_request' || "
-            "startsWith(github.head_ref, 'release/') }}"
+            "${{ github.event_name != 'schedule' && "
+            "(github.event_name != 'pull_request' || "
+            "startsWith(github.head_ref, 'release/')) }}"
         )
     assert jobs["compatibility"]["strategy"]["matrix"][
         "python-version"

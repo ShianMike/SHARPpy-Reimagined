@@ -1,0 +1,204 @@
+{
+  "date": "2026-10-30",
+  "base_revision": "b9d6148d6f7a04c882f80e1235baa88cf4df9ee4",
+  "hardware": "Intel Core i5-1235U, 10 cores / 12 threads, Windows 11, Balanced power",
+  "method": "Three fresh processes per variant, alternating before1/after1/after2/before2/before3/after3; existing UHD benchmark, two renders per process. Before restores only the unchanged HEAD ECAPE workspace; both variants use the same Rust extension for other calculations. No simultaneous test/build jobs. OS file cache is warm; these are application-cold, not reboot-cold timings.",
+  "input_sha256": "a0067c6e19b9608160c7786170102d8ff98298fb2df32a4b61731ad26cfe302c",
+  "environment": {
+    "python": "3.11.14 (main, Feb 12 2026, 00:37:49) [MSC v.1944 64 bit (AMD64)]",
+    "numpy": "2.4.6",
+    "qt": "6.11.2",
+    "backend": {
+      "requested_backend": "rust",
+      "active_backend": "rust",
+      "rust_installed": true,
+      "rust_version": "3.5.0",
+      "fallback_reason": null
+    }
+  },
+  "variants": {
+    "before": {
+      "samples": [
+        [
+          {
+            "index": 0,
+            "elapsed_s": 5.195226200004981,
+            "cpu_s": 4.671875,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 550617088,
+            "working_set_bytes": 487231488,
+            "private_bytes": 1178619904
+          },
+          {
+            "index": 1,
+            "elapsed_s": 2.6974545999983093,
+            "cpu_s": 2.640625,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 720465920,
+            "working_set_bytes": 656986112,
+            "private_bytes": 1349451776
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "elapsed_s": 5.000588699993386,
+            "cpu_s": 4.390625,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 550273024,
+            "working_set_bytes": 486887424,
+            "private_bytes": 1178714112
+          },
+          {
+            "index": 1,
+            "elapsed_s": 2.7555670000001555,
+            "cpu_s": 2.640625,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 720666624,
+            "working_set_bytes": 657186816,
+            "private_bytes": 1349214208
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "elapsed_s": 5.147947799996473,
+            "cpu_s": 4.546875,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 550649856,
+            "working_set_bytes": 487264256,
+            "private_bytes": 1178705920
+          },
+          {
+            "index": 1,
+            "elapsed_s": 2.7264853000015137,
+            "cpu_s": 2.65625,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 719466496,
+            "working_set_bytes": 655986688,
+            "private_bytes": 1347706880
+          }
+        ]
+      ],
+      "first_render_median_s": 5.147947799996473,
+      "warm_render_median_s": 2.7264853000015137,
+      "first_peak_working_set_median_bytes": 550617088,
+      "first_private_median_bytes": 1178705920
+    },
+    "after": {
+      "samples": [
+        [
+          {
+            "index": 0,
+            "elapsed_s": 3.286669699999038,
+            "cpu_s": 3.09375,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 383291392,
+            "working_set_bytes": 319946752,
+            "private_bytes": 656891904
+          },
+          {
+            "index": 1,
+            "elapsed_s": 2.7039204000029713,
+            "cpu_s": 2.671875,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 552583168,
+            "working_set_bytes": 489103360,
+            "private_bytes": 825765888
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "elapsed_s": 3.479064400002244,
+            "cpu_s": 3.453125,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 383176704,
+            "working_set_bytes": 319844352,
+            "private_bytes": 656654336
+          },
+          {
+            "index": 1,
+            "elapsed_s": 2.787333699998271,
+            "cpu_s": 2.71875,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 552656896,
+            "working_set_bytes": 489177088,
+            "private_bytes": 825815040
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "elapsed_s": 3.3673746999993455,
+            "cpu_s": 3.3125,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 383209472,
+            "working_set_bytes": 319877120,
+            "private_bytes": 656609280
+          },
+          {
+            "index": 1,
+            "elapsed_s": 2.6981579000057536,
+            "cpu_s": 2.671875,
+            "width": 4564,
+            "height": 3077,
+            "png_bytes": 1919434,
+            "pixels_sha256": "bd1cd1098a3c535f0ee25f7534b11efe48c5be4bcaec21b80123b559c81dd535",
+            "peak_working_set_bytes": 552902656,
+            "working_set_bytes": 489422848,
+            "private_bytes": 826019840
+          }
+        ]
+      ],
+      "first_render_median_s": 3.3673746999993455,
+      "warm_render_median_s": 2.7039204000029713,
+      "first_peak_working_set_median_bytes": 383209472,
+      "first_private_median_bytes": 656654336
+    }
+  },
+  "improvement": {
+    "first_render_s": 1.7805730999971274,
+    "first_render_percent": 34.588017772797684,
+    "first_peak_working_set_mib": 159.65234375
+  },
+  "differential": {
+    "seed": 350,
+    "max_error": 0.023532777613581857,
+    "all_missing_match": true,
+    "profile_count": 134
+  }
+}

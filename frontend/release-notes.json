@@ -1,4 +1,13 @@
 {
+  "Unreleased": {
+    "summary": "Faster first sounding display with the same scientific results.",
+    "highlights": [
+      {
+        "title": "Faster sounding startup",
+        "description": "ECAPE now uses a native Rust workspace, reducing first-render delay and memory use. Scientific reference checks, missing-data handling and the CAPE bound stay intact."
+      }
+    ]
+  },
   "3.5.0": {
     "summary": "Australian radar, 2–5 km updraft tracks and clearer sounding controls.",
     "highlights": [

@@ -39,6 +39,7 @@ REQUIRED_RUST_CAPABILITIES = (
     "lift_parcel",
     "profile_dcape",
     "profile_thermodynamics",
+    "ecape_building_blocks",
     "decode_grib_point",
     "decode_grib_points",
     "set_grib_inventory_cache_enabled",

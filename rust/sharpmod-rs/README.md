@@ -93,6 +93,14 @@ those typed results back to SHARPpy's public objects and falls back to the
 pinned oracle on failure. ECAPE also rechecks that oracle for its exact
 upper-bound contract.
 
+ECAPE's reference workspace now runs in Rust: MetPy-compatible liquid-water
+thermodynamics, parcel ascent, LFC/EL selection, CAPE, NCAPE and Bunkers inflow
+share one owned-buffer call that releases the GIL. It retains the distinct
+MetPy 1.7.1 convention rather than substituting the SHARPpy parcel workspace.
+The portable Python reference and exact SHARPpy upper bound remain available.
+See [the measured migration report](../../docs/performance/ECAPE_RUST_MIGRATION.md)
+for first-render, memory and numerical validation results.
+
 The direct GRIB decoder also recognizes the HRRR surface pressure/terrain,
 2-m temperature/dewpoint, and 10-m wind records. It removes every isobar below
 the selected terrain and inserts that verified surface row before returning

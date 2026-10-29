@@ -37,10 +37,11 @@ height (used for ``psi``) from ``mpcalc.lfc`` / ``mpcalc.el`` off a most-unstabl
 parcel profile, the ``NCAPE`` dilution integral from ``mpcalc.moist_static_energy``
 / ``mpcalc.saturation_mixing_ratio``, and the 0-1 km storm-relative inflow from
 ``mpcalc.bunkers_storm_motion``. The analytic ``psi`` / ``ecape_a`` core is
-identical regardless of source, so to agree with the oracle within tolerance we
-compute *all* building blocks from MetPy here, exactly as ``ECAPE_FUNCTIONS``
-does. MetPy is imported lazily; if it is unavailable the function degrades to
-``MISSING`` rather than raising.
+identical regardless of source. The default Rust backend evaluates these
+building blocks with MetPy 1.7.1's liquid-water, parcel and interpolation
+conventions without importing its unit/array stack. The portable Python
+backend retains the lazy MetPy reference path; when that dependency is
+unavailable it degrades to ``MISSING`` rather than raising.
 
 * **Constants.** Physical constants used in the analytic ``psi`` / ``ecape_a``
   core come from :mod:`sharpmod.sharptab.constants`; the ``NCAPE`` integral uses
@@ -68,6 +69,7 @@ from __future__ import annotations
 import numpy as np
 import numpy.ma as ma
 
+from sharpmod import backends
 from sharpmod.upstream.upstream_warnings import (
     known_metpy_bounds_warning,
     known_sharppy_numerical_warnings,
@@ -151,13 +153,19 @@ def _ecape_a(sr_wind, psi, ncape, cape):
 
 @known_metpy_bounds_warning()
 def _building_blocks(pres_f, hght_f, tmpc_f, dwpc_f, u_kt, v_kt):
-    """Compute ``(cape, ncape, sr_wind, el_z)`` via MetPy, mirroring calc_ecape.
+    """Compute the reference workspace through the selected backend.
 
     Returns a dict with keys ``cape`` (J/kg), ``ncape`` (J/kg), ``sr_wind``
-    (m/s) and ``el_z`` (m MSL), or ``None`` when MetPy is unavailable or the
-    ascent / storm motion cannot be resolved. ``cape`` is always resolved when
-    this returns non-``None`` so the caller can honour the zero-CAPE contract.
+    (m/s) and ``el_z`` (m MSL), or ``None`` when the reference dependency is
+    unavailable or ascent / storm motion cannot be resolved. ``cape`` is always
+    resolved when this returns non-``None`` so the caller can honour the
+    zero-CAPE contract.
     """
+    if backends.get_backend().name == "rust":
+        from sharpmod_rs import ecape_building_blocks
+
+        return ecape_building_blocks(pres_f, hght_f, tmpc_f, dwpc_f, u_kt, v_kt)
+
     try:
         from metpy.units import units
         import metpy.calc as mpcalc

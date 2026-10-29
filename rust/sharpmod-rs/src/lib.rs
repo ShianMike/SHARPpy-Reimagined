@@ -3,6 +3,8 @@
 
 pub mod batch_analysis;
 pub mod contours;
+mod ecape;
+mod ecape_bindings;
 mod ecmwf_inventory;
 mod ensemble;
 mod ensemble_bindings;
@@ -832,6 +834,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     parcel_display_bindings::register(module)?;
     wind_layer_bindings::register(module)?;
     wind_grid_bindings::register(module)?;
+    ecape_bindings::register(module)?;
     module.add_function(wrap_pyfunction!(py_wind_to_components, module)?)?;
     module.add_function(wrap_pyfunction!(py_components_to_wind, module)?)?;
     module.add_function(wrap_pyfunction!(py_interpolate_1d, module)?)?;

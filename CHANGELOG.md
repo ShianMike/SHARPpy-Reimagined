@@ -22,6 +22,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Use the same temperature, dewpoint and wind styling for fresh and stale
+  surface observations. Replace the oversized yellow warning ring with a small
+  neutral dashed ring, retaining observation times, stale warnings on hover,
+  missing-wind symbols and unavailable-report states.
 - Show full hazard names in storm-report legends instead of internal category
   codes. Distinguish significant hail and wind reports while preserving report
   details, symbols, colours and the selected time window.

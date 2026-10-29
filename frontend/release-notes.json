@@ -16,7 +16,7 @@
       },
       {
         "title": "More responsive live overlays",
-        "description": "Load independent warning sources together and process storm reports and nearby surface observations with less overhead. Storm-report legends show full hazard names and distinguish significant hail and wind reports. GOES downloads reuse connections and can cancel pending requests while preserving the selected scan time. Official colours, units, actual observation times and missing-wind states stay intact; incomplete updates remain distinct from an all-clear or calm observation."
+        "description": "Load independent warning sources together and process storm reports and nearby surface observations with less overhead. Storm-report legends show full hazard names and distinguish significant hail and wind reports. Surface stations share the same clear temperature, dewpoint and wind styling; older reports use a small neutral dashed ring and retain the time warning on hover. GOES downloads reuse connections and can cancel pending requests while preserving the selected scan time. Official colours, units, actual observation times and missing-wind states stay intact; incomplete updates remain distinct from an all-clear or calm observation."
       },
       {
         "title": "More responsive forecast maps",

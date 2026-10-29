@@ -65,7 +65,6 @@ export function markPlacement(mark: PlotMark): MarkPlacement {
  * Shapes carry the state distinctions (T22), never hue alone.
  */
 export function plotMarks(plot: SurfacePlot): PlotMark[] {
-  const tone = plot.stale ? "warn" : "ink";
   const marks: PlotMark[] = [];
   if (plot.availability !== "available") {
     // Checked without a match rings solid and crosses; a failed query rings
@@ -76,22 +75,21 @@ export function plotMarks(plot: SurfacePlot): PlotMark[] {
     return marks;
   }
   if (plot.stale) {
-    marks.push(piece(DASHED_RING, 0, 0, 54, "warn"));
+    marks.push(piece(DASHED_RING, 0, 0, 12, "dim"));
   }
   if (plot.staff !== null) {
     const { angleDeg, pennants, barbs, halves } = plot.staff;
-    marks.push({ ...piece(String(pennants * 50 + barbs * 10 + halves * 5), angleDeg, 0, 24, tone), kind: "wind" });
+    marks.push({ ...piece(String(pennants * 50 + barbs * 10 + halves * 5), angleDeg, 0, 24, "ink"), kind: "wind" });
   } else if (plot.windState === "calm") {
-    marks.push({ ...piece("0", 0, 0, 24, tone), kind: "wind" });
+    marks.push({ ...piece("0", 0, 0, 24, "ink"), kind: "wind" });
   } else if (plot.windState === "missing") {
-    marks.push(piece(CROSS, 0, 0, 8, tone));
+    marks.push(piece(CROSS, 0, 0, 8, "ink"));
   } else {
-    marks.push(piece(SQUARE, 0, 0, 8, tone));
-    marks.push({ ...piece(QUESTION, 0, 0, 8, tone), dx: 5, dy: -5 });
+    marks.push(piece(SQUARE, 0, 0, 8, "ink"));
+    marks.push({ ...piece(QUESTION, 0, 0, 8, "ink"), dx: 5, dy: -5 });
   }
-  const readingTone = plot.stale ? "warn" : "upper";
-  marks.push(label(plot.upperText, -28, -4, 15, readingTone));
-  marks.push(label(plot.lowerText, -28, 17, 15, plot.stale ? "warn" : "lower"));
-  marks.push(label(plot.id, 7, 17, 13, plot.stale ? "warn" : "dim"));
+  marks.push(label(plot.upperText, -28, -4, 15, "upper"));
+  marks.push(label(plot.lowerText, -28, 17, 15, "lower"));
+  marks.push(label(plot.id, 7, 17, 13, "dim"));
   return marks;
 }

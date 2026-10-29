@@ -44,7 +44,7 @@ export function SurfacePlotControls(): ReactNode {
           <p className={styles.hint}>{`NOAA/NWS · ${compactUtc(plots.data.validTime)} UTC`}</p>
           <p className={styles.hint}>{`Near ${formatLatitude(anchor.latitude)}, ${formatLongitude(anchor.longitude)}`}</p>
           <p className={styles.hint}>{`${String(plots.data.counts.matched)} observations · ${String(plots.data.counts.queried)} of ${String(plots.data.counts.nearby)} stations checked`}</p>
-          {plots.data.counts.stale === 0 ? null : <p className={styles.warning}>{`${String(plots.data.counts.stale)} stale observations · shown with a dashed ring`}</p>}
+          {plots.data.counts.stale === 0 ? null : <p className={styles.warning}>{`${String(plots.data.counts.stale)} stale observations · shown with a small dashed ring`}</p>}
           {plots.data.counts.noObservation + plots.data.counts.failed === 0 ? null : <p className={styles.hint}>{`${String(plots.data.counts.noObservation)} without a report · ${String(plots.data.counts.failed)} could not be checked`}</p>}
         </div>
       )}

@@ -61,6 +61,7 @@ REQUIRED_RUST_CAPABILITIES = (
     "fetch_model_bytes",
     "interpolate_height_grid",
     "parcel_maximum_level",
+    "parcel_trajectory",
     "igra_header",
     "igra_headers",
     "igra_level",

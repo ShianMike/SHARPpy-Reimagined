@@ -42,6 +42,12 @@ The accelerated profile supplies its existing inputs and SHIP calculation;
 upstream scientific reference functions remain available for comparisons.
 Source environments without the native operation keep the existing SHARPpy
 SARS compatibility call.
+Storm Slinky trajectories prepare their environmental, wind, height and parcel
+interpolation series once in Rust, then integrate the existing 25-second steps
+without Python calls. The profile and widget paths share this kernel, retaining
+the 5 m/s nudge, knot conversion, endpoint tolerance, AGL coordinates and masks.
+Nonconvergent traces stop after 4095 steps and remain unavailable. Source-only
+environments keep the existing SHARPpy trajectory call.
 
 The SHARPpy widget stack, renderer and model-retrieval orchestration remain in
 Python. The native workspace kernels own their small

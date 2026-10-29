@@ -24,6 +24,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Remove the introductory subtitle beneath the Settings sidebar heading.
 - Remove the sounding sidebar Info panel and its unused docking styles. Keep
   multi-profile time selection in Sounding controls and retain accessible
   profile identity, valid time and level-count context on the chart region.

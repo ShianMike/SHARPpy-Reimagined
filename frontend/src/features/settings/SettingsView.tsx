@@ -24,7 +24,7 @@ export function SettingsView(): ReactNode {
   const [section, setSection] = useState<(typeof SECTIONS)[number]["id"]>("appearance");
   const current = SECTIONS.find((item) => item.id === section) ?? SECTIONS[0];
   return <div className={styles.view} data-testid="settings-view">
-    <aside className={styles.sidebar}><header><h1>Settings</h1><p>Make this workspace yours.</p></header>
+    <aside className={styles.sidebar}><header><h1>Settings</h1></header>
       <nav className={styles.navigation} aria-label="Settings sections">{SECTIONS.map((item) => <button key={item.id} type="button" aria-current={section === item.id ? "true" : undefined} aria-controls="settings-content" onClick={() => { setSection(item.id); }}><item.icon className="icon" aria-hidden="true" />{item.label}</button>)}</nav>
       <p className={styles.saved}>Changes save automatically on this device.</p>
     </aside>

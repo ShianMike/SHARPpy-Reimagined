@@ -3,6 +3,7 @@
 
 pub mod batch_analysis;
 pub mod contours;
+mod ecmwf_inventory;
 pub mod grib;
 mod height_grid;
 mod height_grid_bindings;
@@ -22,6 +23,7 @@ pub mod records;
 mod report_bindings;
 mod sars;
 mod sars_bindings;
+mod satellite_bindings;
 mod surface_bindings;
 mod weather;
 pub mod wind;
@@ -810,6 +812,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     surface_bindings::register(module)?;
     radar_sampling_bindings::register(module)?;
     model_http_bindings::register(module)?;
+    satellite_bindings::register(module)?;
     parcel_display_bindings::register(module)?;
     wind_grid_bindings::register(module)?;
     module.add_function(wrap_pyfunction!(py_wind_to_components, module)?)?;

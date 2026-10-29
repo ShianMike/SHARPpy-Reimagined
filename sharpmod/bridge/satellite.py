@@ -12,7 +12,7 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from sharpmod.bridge import params as p
+from sharpmod.bridge import cancellation, params as p
 from sharpmod.bridge.errors import BridgeError
 
 #: The render window: HRRR's coverage bounds, the map's own fixed extent. The
@@ -42,8 +42,10 @@ def goes_frame(params: dict[str, Any]) -> dict[str, Any]:
             when,
             bounds=FRAME_BOUNDS,
             channel=channel,
+            cancel=cancellation.event(),
         )
     except sat.SatelliteContextError as exc:
+        cancellation.check()
         raise BridgeError(
             "OVERLAY_FETCH_FAILED",
             f"The GOES satellite frame could not be loaded: {_short(exc)}.",

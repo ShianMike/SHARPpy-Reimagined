@@ -16,11 +16,11 @@
       },
       {
         "title": "More responsive live overlays",
-        "description": "Load independent warning sources together and process storm reports and nearby surface observations with less overhead. Preserve official colours, report units, actual observation times and missing-wind states; incomplete updates remain distinct from an all-clear or a calm observation."
+        "description": "Load independent warning sources together and process storm reports and nearby surface observations with less overhead. GOES downloads reuse connections and can cancel pending requests while preserving the selected scan time. Official colours, units, actual observation times and missing-wind states stay intact; incomplete updates remain distinct from an all-clear or calm observation."
       },
       {
         "title": "More responsive forecast maps",
-        "description": "Forecast contours, wind barbs and terrain-relative lapse-rate and shear maps take less time to prepare, preserving their geometry, true-north directions and missing-data gaps. Model map downloads reuse connections and retain retries, byte limits and cancellation."
+        "description": "Forecast contours, wind barbs and terrain-relative lapse-rate and shear maps take less time to prepare, preserving their geometry, true-north directions and missing-data gaps. Model map downloads reuse connections and retain retries, byte limits and cancellation. ECMWF map inventories also take less time to process while retaining field levels and precipitation intervals."
       },
       {
         "title": "Less repeated sounding work",

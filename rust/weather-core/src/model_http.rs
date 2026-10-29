@@ -1,7 +1,7 @@
 //! Pooled GRIB/index transfers with per-read timeouts, retries and cancellation.
 
 use reqwest::{header, Client, Url};
-use std::{future::Future, time::Duration};
+use std::{future::Future, sync::OnceLock, time::Duration};
 use time::{format_description::well_known::Rfc2822, OffsetDateTime};
 
 #[derive(Debug, PartialEq)]
@@ -87,6 +87,11 @@ async fn backoff(
 }
 
 impl ModelClient {
+    pub fn shared() -> &'static Self {
+        static CLIENT: OnceLock<ModelClient> = OnceLock::new();
+        CLIENT.get_or_init(Self::default)
+    }
+
     pub async fn fetch(
         &self,
         url: &str,

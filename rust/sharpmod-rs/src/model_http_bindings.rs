@@ -2,7 +2,35 @@
 
 use pyo3::{prelude::*, types::PyBytes};
 use sharpmod_weather::model_http::{Error, ModelClient};
-use std::sync::OnceLock;
+
+type InventoryTuple = (usize, u64, u64, &'static str, String, String);
+
+#[pyfunction]
+fn parse_ecmwf_inventory(py: Python<'_>, text: &str) -> PyResult<Vec<InventoryTuple>> {
+    let rows = match py.detach(|| crate::ecmwf_inventory::parse_inventory(text)) {
+        Ok(rows) => rows,
+        Err(()) => {
+            let kind =
+                PyModule::import(py, "sharpmod.providers.hrrr_field")?.getattr("HrrrFieldError")?;
+            return Err(PyErr::from_value(
+                kind.call1(("ECMWF inventory contains an invalid record",))?,
+            ));
+        }
+    };
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            (
+                row.index,
+                row.offset,
+                row.length,
+                row.variable,
+                row.level,
+                row.forecast,
+            )
+        })
+        .collect())
+}
 
 #[pyfunction(signature=(url,timeout,limit,byte_range=None,should_cancel=None))]
 fn fetch_model_bytes(
@@ -15,17 +43,12 @@ fn fetch_model_bytes(
 ) -> PyResult<Py<PyBytes>> {
     let runtime = crate::weather::runtime()?;
     let result = py.detach(move || {
-        static CLIENT: OnceLock<ModelClient> = OnceLock::new();
         let cancel = || match &should_cancel {
             None => Ok(false),
             Some(callback) => Python::attach(|py| callback.bind(py).call0()?.is_truthy())
                 .map_err(|error: PyErr| error.to_string()),
         };
-        runtime.block_on(
-            CLIENT
-                .get_or_init(Default::default)
-                .fetch(&url, timeout, limit, byte_range, cancel),
-        )
+        runtime.block_on(ModelClient::shared().fetch(&url, timeout, limit, byte_range, cancel))
     });
     match result {
         Ok(bytes) => Ok(PyBytes::new(py, &bytes).unbind()),
@@ -64,6 +87,7 @@ fn fetch_model_bytes(
 }
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(parse_ecmwf_inventory, module)?)?;
     module.add_function(wrap_pyfunction!(fetch_model_bytes, module)?)?;
     Ok(())
 }

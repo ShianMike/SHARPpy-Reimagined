@@ -59,6 +59,8 @@ REQUIRED_RUST_CAPABILITIES = (
     "fetch_surface_observations",
     "sample_radar_radials",
     "fetch_model_bytes",
+    "fetch_satellite_bytes",
+    "parse_ecmwf_inventory",
     "interpolate_height_grid",
     "parcel_maximum_level",
     "parcel_trajectory",

@@ -53,12 +53,13 @@ describe("plot marks", () => {
     expect(find(failed, "?")).toBeDefined();
   });
 
-  it("keeps one warning colour throughout a stale plot", () => {
-    const marks = plotMarks({ ...plot({ stale: true }) });
-    expect(find(marks, "\u25cc").size).toBe(54);
-    for (const mark of marks) {
-      expect(mark.tone).toBe("warn");
-    }
+  it.each(["available", "calm", "missing", "direction-missing"] as const)("keeps modern readings and %s wind on stale observations", (windState) => {
+    const observation = plot({ windState, ...(windState === "available" ? {} : { staff: null }) });
+    const fresh = plotMarks(observation);
+    const stale = plotMarks({ ...observation, stale: true });
+    const age = find(stale, "\u25cc");
+    expect(age).toMatchObject({ size: 12, tone: "dim", dx: 0, dy: 0 });
+    expect(stale.filter((mark) => mark !== age)).toEqual(fresh);
   });
 
   it("places the reading pair and the identifier like the station model stands", () => {

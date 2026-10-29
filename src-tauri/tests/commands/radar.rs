@@ -76,6 +76,45 @@ fn velocity_tilts_validate_site_and_history_before_fetching() {
 }
 
 #[test]
+fn australian_radar_uses_native_capabilities_and_rejects_unsupported_requests() {
+    let (_app, webview) = window(no_radar_bridge_launcher());
+    let catalogue = invoke_args(&webview, "get_radar_sites", serde_json::json!({})).unwrap();
+    let broadmeadows = catalogue["sites"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|site| site["id"] == "ABRD")
+        .unwrap();
+    assert_eq!(broadmeadows["name"], "Broadmeadows");
+    assert_eq!(broadmeadows["country"], "AU");
+    assert_eq!(
+        broadmeadows["products"],
+        serde_json::json!(["reflectivity", "velocity"])
+    );
+    for (command, args) in [
+        (
+            "get_radar_site_frame",
+            serde_json::json!({"site": "ABRD", "product": "correlation-coefficient"}),
+        ),
+        (
+            "get_radar_site_frame",
+            serde_json::json!({"site": "ABRD", "product": "reflectivity", "tilt": "3"}),
+        ),
+        (
+            "get_radar_site_frame",
+            serde_json::json!({"site": "ABRD", "validTime": "2000-01-01T00:00:00Z"}),
+        ),
+        (
+            "get_radar_tilts",
+            serde_json::json!({"site": "ABRD", "product": "velocity"}),
+        ),
+    ] {
+        let error: BackendError = parse(invoke_args(&webview, command, args).unwrap_err());
+        assert_eq!(error.code, ErrorCode::InvalidArgument);
+    }
+}
+
+#[test]
 #[ignore = "live NOAA directory fetch; run explicitly with --ignored --nocapture"]
 fn velocity_tilts_fetch_live_without_python_inventory() {
     let (_app, webview) = window(no_radar_bridge_launcher());

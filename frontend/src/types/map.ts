@@ -1,6 +1,5 @@
 // Map data DTOs (src-tauri/src/dto/map.rs), pinned by src-tauri/contracts/public/map/.
 // The backend sends numbers and geography; the frontend chooses every pixel.
-
 import type { Station } from "./contracts";
 import type { Bounds } from "./soundings";
 
@@ -167,11 +166,14 @@ export interface RadarTilts {
   tilts: readonly { tilt: RadarTilt; status: "available" | "unavailable" | "unknown" }[];
 }
 
-/** One WSR-88D: identifier and position, for the single-site picker. */
+/** One radar antenna, with optional provider capabilities for the site picker. */
 export interface RadarSite {
   id: string;
   latitude: number;
   longitude: number;
+  name?: string;
+  country?: string;
+  products?: readonly string[];
 }
 
 export interface RadarSiteCatalog {

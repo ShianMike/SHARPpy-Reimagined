@@ -8,6 +8,7 @@ import { createTransport } from "../../lib/backend/fixtureTransport";
 import { parseSoundingSummary } from "../../lib/contracts/soundings";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { renderWithBackend } from "../../test/backendHarness";
+import { Surface } from "../../ui/Surface";
 import { SoundingWorkspace } from "./SoundingWorkspace";
 
 afterEach(() => { cleanup(); useSoundingStore.setState(useSoundingStore.getInitialState(), true); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -28,7 +29,7 @@ it("guides an empty controls sidebar back to the selected source", async () => {
   expect(screen.queryByRole("region", { name: "Sounding quick start" })).toBeNull();
 });
 
-it("swaps sources and controls without losing a file or draft, and keeps info off the chart", async () => {
+it("swaps sources and controls without losing a file or draft, with no Info panel", async () => {
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: () => "blob:fixture" });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: () => undefined });
@@ -36,26 +37,28 @@ it("swaps sources and controls without losing a file or draft, and keeps info of
   const base = createTransport();
   const render = vi.fn(() => Promise.resolve({ ...viewExample, width: 3260, height: 2198,
     image: btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13)) }));
-  renderWithBackend(<SoundingWorkspace />, { ...base,
+  renderWithBackend(<Surface><SoundingWorkspace /></Surface>, { ...base,
     call: (command, args) => command === "render_sounding_view" ? render() : base.call(command, args) });
   await screen.findByTestId("sounding-image");
   await userEvent.click(screen.getByRole("tab", { name: "File" }));
   await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), new File(["profile"], "retained.npz"));
-  const info = screen.getByLabelText("Sounding details");
+  expect(screen.queryByLabelText("Sounding details")).toBeNull();
   const image = screen.getByTestId("sounding-image");
   await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
   expect(screen.queryByRole("tablist", { name: "Source" })).toBeNull();
   const sidebar = document.getElementById("sounding-sources");
+  expect(sidebar?.dataset.surface).toBe("flat");
+  expect(sidebar?.querySelector('[data-material="glass"]')).toBeNull();
   expect(sidebar?.contains(screen.getByRole("toolbar", { name: "Sounding image controls" }))).toBe(true);
   expect(screen.queryByRole("combobox", { name: "Undo history" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Undo edit" })).toBeNull();
   expect(screen.getByRole("group", { name: "View controls" }).hasAttribute("open")).toBe(true);
-  expect(sidebar?.contains(info)).toBe(true);
-  expect(info.textContent).toContain("39 levels");
+  expect(screen.getByTestId("sounding-viewer").getAttribute("aria-description")).toContain("39 levels");
+  expect(screen.getByTestId("sounding-viewer").dataset.surface).toBe("flat");
   expect(screen.getByTestId("sounding-viewer").querySelector("header, [role=toolbar]")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
-  await userEvent.keyboard("{ArrowDown}{Enter}");
+  await userEvent.keyboard("{Home}{Enter}");
   const input = screen.getByRole<HTMLInputElement>("spinbutton", { name: "Temperature °C" });
   const editor = screen.getByRole("region", { name: "Level editor" });
   expect(screen.getByRole("group", { name: "View controls" }).hasAttribute("open")).toBe(false);
@@ -66,7 +69,7 @@ it("swaps sources and controls without losing a file or draft, and keeps info of
   expect(sidebar?.contains(input)).toBe(true);
   await userEvent.click(screen.getByRole("button", { name: "Show sounding sources" }));
   expect(screen.getByText("retained.npz")).toBeTruthy();
-  expect(screen.getByLabelText("Sounding details")).toBe(info);
+  expect(screen.queryByLabelText("Sounding details")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
   expect(screen.getByRole("spinbutton", { name: "Temperature °C" })).toBe(input);
   expect(input.value).toBe("32");

@@ -21,15 +21,10 @@ export const BASEMAP_LINE_LAYER_IDS: readonly string[] = BASEMAP_FAMILIES.map(ba
 
 const nativeStyles = new WeakMap<MapLibreMap, { layers: LayerSpecification[]; opacity: number | undefined }>();
 
-/** Remove transport artwork; land edges and political borders stay above weather. */
+/** Keep native roads; land edges and political borders stay above weather. */
 export function prepareBasemap(map: MapLibreMap): string | undefined {
   const dark = document.documentElement.dataset.theme === "dark";
   const read = documentTokenReader();
-  for (const layer of map.getStyle().layers) {
-    if ("source-layer" in layer && ["transportation", "transportation_name"].includes(layer["source-layer"] ?? "")) {
-      map.removeLayer(layer.id);
-    }
-  }
   const layers = map.getStyle().layers.filter((layer) => !layer.id.startsWith("geography-"));
   for (const layer of layers) {
     if (dark && layer.type === "background") map.setPaintProperty(layer.id, "background-color", read("--basemap-background").trim());
@@ -41,6 +36,9 @@ export function prepareBasemap(map: MapLibreMap): string | undefined {
         map.setPaintProperty(layer.id, "fill-outline-color", read("--basemap-building-edge").trim());
       }
     }
+    if (dark && layer.type === "line" && layer["source-layer"] === "transportation") {
+      map.setPaintProperty(layer.id, "line-color", read(layer.id.includes("casing") ? "--basemap-land" : "--basemap-road").trim());
+    }
     if (layer.type === "line" && layer["source-layer"] === "boundary") {
       const state = layer.id === "boundary_3" || layer.id.includes("state");
       map.setPaintProperty(layer.id, "line-width", ["interpolate", ["linear"], ["zoom"], 3, state ? 1.25 : 1.55, 8, state ? 1.6 : 2, 14, state ? 2 : 2.5]);
@@ -48,7 +46,7 @@ export function prepareBasemap(map: MapLibreMap): string | undefined {
       if (dark) map.setPaintProperty(layer.id, "line-color", read(state ? "--basemap-state" : "--basemap-country").trim());
     }
     if (dark && layer.type === "line" && layer["source-layer"] === "waterway") map.setPaintProperty(layer.id, "line-color", read("--basemap-waterway").trim());
-    if (dark && layer.type === "symbol" && ["place", "water_name"].includes(layer["source-layer"] ?? "")) {
+    if (dark && layer.type === "symbol" && ["place", "water_name", "transportation_name"].includes(layer["source-layer"] ?? "")) {
       map.setPaintProperty(layer.id, "text-color", read("--basemap-label").trim());
       map.setPaintProperty(layer.id, "text-halo-color", read("--basemap-label-halo").trim());
       map.setPaintProperty(layer.id, "text-halo-blur", 0);
@@ -182,10 +180,22 @@ export function applyBasemapState(map: MapLibreMap, state: LayerState): void {
   }
 }
 
-/** Remaining native labels keep the original style's typography and zoom rules. */
+/** Native road lines, shields and names keep their provider styling. */
+export function applyRoadNetworkState(map: MapLibreMap, state: LayerState): void {
+  const layers = nativeStyles.get(map)?.layers ?? map.getStyle().layers;
+  for (const layer of layers) {
+    if (!("source-layer" in layer) || layer.source !== "openmaptiles"
+      || !["transportation", "transportation_name"].includes(layer["source-layer"] ?? "")) continue;
+    const visibility = state.visible ? layer.layout?.visibility ?? "visible" : "none";
+    if ((map.getLayoutProperty(layer.id, "visibility") ?? "visible") !== visibility) map.setLayoutProperty(layer.id, "visibility", visibility);
+  }
+}
+
+/** Place labels are independent of the road network's own names and shields. */
 export function applyBasemapLabels(map: MapLibreMap, state: LayerState): void {
   for (const layer of map.getStyle().layers) {
-    if (layer.type !== "symbol" || layer.source !== "openmaptiles") continue;
+    if (layer.type !== "symbol" || layer.source !== "openmaptiles"
+      || ["transportation", "transportation_name"].includes(layer["source-layer"] ?? "")) continue;
     const visibility = state.visible ? "visible" : "none";
     if ((map.getLayoutProperty(layer.id, "visibility") ?? "visible") !== visibility) map.setLayoutProperty(layer.id, "visibility", visibility);
   }

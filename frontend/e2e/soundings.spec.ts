@@ -142,7 +142,7 @@ test.describe("at 1440 by 900", () => {
     await expect(page.getByTestId("sounding-title")).toHaveText("72357 (example data)");
     await expect(page.getByTestId("open-soundings").getByRole("listitem")).toHaveCount(1);
     await page.getByRole("button", { name: "Show sounding controls", exact: true }).click();
-    await page.getByText("Chart panels", { exact: true }).filter({ visible: true }).click();
+    await expect(page.getByRole("region", { name: "Chart panels", exact: true })).toBeVisible();
     const parcel = page.getByRole("group", { name: "Parcel" });
     await expect(parcel.getByRole("button", { name: "MU" })).toHaveAttribute("aria-pressed", "true");
     await nextFrames(page);
@@ -166,21 +166,22 @@ test.describe("at 1440 by 900", () => {
     await expectImageDrawn(page.getByTestId("sounding-viewer").getByTestId("sounding-stage"));
     await expect(page.getByTestId("sounding-title")).toHaveText("hrrr_kbvo_20260625_06z.buf");
     const viewer = page.getByTestId("sounding-viewer");
-    const info = page.getByLabel("Sounding details", { exact: true });
-    const time = info.getByRole("combobox", { name: "Sounding time (UTC)" });
-    await expect(info).toContainText(`time 1 of ${String(BUFKIT_TIMES)}`);
+    await expect(page.getByLabel("Sounding details", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Show sounding controls", exact: true }).click();
+    const time = page.getByRole("combobox", { name: "Sounding time (UTC)" });
+    await expect(viewer).toHaveAttribute("aria-description", new RegExp(`time 1 of ${String(BUFKIT_TIMES)}`));
     await time.click();
     await expect(page.getByRole("listbox", { name: "Sounding time (UTC)" }).getByRole("option")).toHaveCount(BUFKIT_TIMES);
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
     await expect(time).toHaveAttribute("value", String(BUFKIT_TIMES - 1));
-    await expect(info).toContainText("File, 2026-06-27 06Z, Selected profile, time 49 of 49");
+    await expect(viewer).toHaveAttribute("aria-description", /File, 2026-06-27 06Z, Selected profile, time 49 of 49/u);
     await expectImageDrawn(viewer.getByTestId("sounding-stage"));
     await time.click();
     await page.keyboard.press("Home");
     await page.keyboard.press("Enter");
     await expect(time).toHaveAttribute("value", "0");
-    await expect(info).toContainText("File, 2026-06-25 06Z, 50 levels, time 1 of 49");
+    await expect(viewer).toHaveAttribute("aria-description", /File, 2026-06-25 06Z, 50 levels, time 1 of 49/u);
     await expectImageDrawn(viewer.getByTestId("sounding-stage"));
 
     expectWarnings(consoleMessages, []);

@@ -2,6 +2,7 @@
 import radar from "@contracts/public/map/radar.shrf?url&inline";
 import alerts from "@contracts/public/map/alerts.json";
 import outlook from "@contracts/public/map/outlook.cat.json";
+import reports from "@contracts/public/map/reports.json";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
@@ -21,6 +22,32 @@ beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+it("names report hazards and significant symbols without listing individual magnitudes in the key", async () => {
+  useAppStore.getState().setActiveWorkspace("map");
+  useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T12:00:00Z", forecastHour: 9 });
+  useMapStore.getState().setLayerVisible("storm-reports", true);
+  useMapStore.getState().setLayerPanelGroup("legend");
+  const records = [...structuredClone(reports.reports),
+    { ...reports.reports[2], category: "h", significant: false, label: "Hail 1.00 in", fill: "#26B14E", stroke: "#004D1A" },
+    { ...reports.reports[0], category: "significant", significant: true, label: "Sig Wind 90 mph", fill: "#FFFFFF", stroke: "#101010" },
+    { ...reports.reports[0], label: "Wind 60 mph" },
+  ];
+  const transport = createTransport(), original = transport.call.bind(transport);
+  vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_storm_reports"
+    ? Promise.resolve({ ...structuredClone(reports), shownCount: records.length, totalCount: records.length, reports: records }) : original(command, args));
+  const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, transport);
+  const key = within(screen.getByTestId("legend-storm-reports"));
+  await waitFor(() => { expect(key.getByText("Hail", { exact: true })).toBeTruthy(); });
+  for (const name of ["Wind gust", "Wind damage", "Tornado", "Significant hail", "Significant wind gust"]) {
+    expect(key.getByText(name, { exact: true })).toBeTruthy();
+  }
+  expect(key.getAllByRole("listitem")).toHaveLength(6);
+  for (const code of ["h", "g", "d", "t", "significant"]) expect(key.queryByText(code, { exact: true })).toBeNull();
+  expect(key.getByText("7 reports · ±3 hours")).toBeTruthy();
+  expect(key.getByText("Hail", { exact: true }).querySelector("svg path")?.getAttribute("fill")).toBe("#26B14E");
+  view.unmount(); queryClient.clear();
+});
 
 it("collects only enabled layers, deduplicates provider keys, and follows opacity and order changes", async () => {
   useAppStore.getState().setActiveWorkspace("live");

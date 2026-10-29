@@ -26,6 +26,8 @@ mod profile_input;
 pub mod quality_control;
 pub mod radar_sampling;
 mod radar_sampling_bindings;
+mod range_bindings;
+mod range_transfer;
 pub mod records;
 mod report_bindings;
 mod sars;
@@ -822,6 +824,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     radar_sampling_bindings::register(module)?;
     model_http_bindings::register(module)?;
     model_source_bindings::register(module)?;
+    range_bindings::register(module)?;
     iem_bindings::register(module)?;
     ensemble_bindings::register(module)?;
     locator_paths::register(module)?;

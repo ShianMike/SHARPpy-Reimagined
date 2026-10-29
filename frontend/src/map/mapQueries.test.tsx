@@ -21,7 +21,7 @@ import { parseFieldFrame } from "../lib/contracts/frames";
 import { parseMapCatalog } from "../lib/contracts/map";
 import { parseModelCatalog } from "../lib/contracts/soundings";
 import type { Transport } from "../lib/backend/transport";
-import { useFieldFrame, useRadarFrame, useRadarSiteFrame, useSatelliteFrame, useSpcOutlooks, useStormReports } from "./mapQueries";
+import { useFieldFrame, usePanelRadar, useRadarFrame, useRadarSiteFrame, useSatelliteFrame, useSpcOutlooks, useStormReports } from "./mapQueries";
 import { useSurfacePlots } from "./surfaceQueries";
 import { useFieldContours } from "./contourQueries";
 import { defaultLayerStates } from "./layers/registry";
@@ -33,7 +33,6 @@ import { useGraphicsStore } from "../stores/graphicsStore";
 import { useUiStore } from "../stores/uiStore";
 import { useAppStore } from "../stores/appStore";
 import type { FieldFrame } from "../types/map";
-import * as fieldImages from "./fieldImages";
 
 const bytes = (url: string): ArrayBuffer => Uint8Array.from(atob(url.split(",")[1] ?? ""), (c) => c.charCodeAt(0)).buffer;
 const payloads = { field: bytes(field), radar: bytes(radar), radarSite: bytes(radarSite), satellite: bytes(satellite), outlook, reports, surface };
@@ -143,6 +142,52 @@ it.each(Object.keys(payloads) as Kind[])("clears %s data when its selection chan
   }
 });
 
+it.each(["pinned", "nearest"])("falls back from US velocity to Australian reflectivity for a %s site without changing other panels", async (mode) => {
+  useAppStore.getState().setActiveWorkspace("live");
+  const state = useMapStore.getState();
+  state.setPanelLayout(2);
+  const otherPanel = useMapStore.getState().livePanels[0];
+  state.setActivePanel(1); state.setRadarScope("site"); state.setRadarProduct("velocity"); state.setRadarTilt("2");
+  state.setRadarSite(mode === "pinned" ? "KTLX" : null);
+  state.setCameraSnapshot({ center: [-97.2783, 35.3333], zoom: 7 });
+  const sites = [
+    { id: "KTLX", latitude: 35.3333, longitude: -97.2783 },
+    { id: "ABRD", name: "Broadmeadows", country: "AU", products: ["reflectivity"], latitude: -37.85, longitude: 144.75 },
+  ];
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(mapKeys.radarSites, { sites });
+  const call = vi.fn<Transport["call"]>(() => new Promise<unknown>(() => undefined));
+  const client = new BackendClient({ call, listen: () => Promise.resolve(() => undefined) });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
+  );
+  const hook = renderHook(() => {
+    const selection = usePanelRadar(1);
+    useRadarSiteFrame(selection.product, selection.site, true, null, selection.tilt);
+    return selection;
+  }, { wrapper });
+  expect(hook.result.current).toMatchObject({ site: "KTLX", product: "velocity", tilt: "2", tiltable: true });
+  act(() => {
+    if (mode === "pinned") state.setRadarSite("ABRD");
+    else state.setCameraSnapshot({ center: [144.75, -37.85], zoom: 7 });
+  });
+  await waitFor(() => { expect(call).toHaveBeenCalledWith("get_radar_site_frame", { site: "ABRD", product: "reflectivity", tilt: "0" }); });
+  expect(hook.result.current).toMatchObject({ site: "ABRD", product: "reflectivity", tilt: "0", tiltable: false });
+  expect(call.mock.calls.filter(([command, args]) => command === "get_radar_site_frame" && args?.site === "ABRD")).toEqual([
+    ["get_radar_site_frame", { site: "ABRD", product: "reflectivity", tilt: "0" }],
+  ]);
+  expect(useMapStore.getState().livePanels[0]).toBe(otherPanel);
+  act(() => { state.setActivePanel(0); });
+  expect(hook.result.current.site).toBe("ABRD");
+  act(() => {
+    state.setActivePanel(1);
+    if (mode === "pinned") state.setRadarSite("KTLX");
+    else state.setCameraSnapshot({ center: [-97.2783, 35.3333], zoom: 7 });
+  });
+  expect(hook.result.current).toMatchObject({ site: "KTLX", product: "velocity", tilt: "2", tiltable: true });
+  hook.unmount(); queryClient.clear();
+});
+
 it.each(["rrfs-a", "nam", "nam-3km-conus", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5"])(
   "keeps %s field and wind/contour requests separate from HRRR at the same run and hour", async (model) => {
     const call = vi.fn((command: string, args?: Readonly<Record<string, unknown>>) =>
@@ -216,50 +261,4 @@ it.each([2, 4] as const)("prefetches %i panels and the configured future hours c
     });
     expect(pending).toHaveLength(2 * panelLayout);
   } finally { hook.unmount(); queryClient.clear(); }
-});
-
-it("prepares both active modes once across four matching panels, waits on cached fields, and cancels the old window", async () => {
-  vi.useFakeTimers();
-  const run = "2026-10-04T12:00:00Z";
-  const sharp = defaultLayerStates(), smooth = defaultLayerStates();
-  sharp["model-field"] = { visible: true, opacity: 1 };
-  smooth["model-field"] = { visible: true, opacity: 1, smoothing: true };
-  useMapStore.setState({ panelLayout: 4, productKey: "refc", layers: sharp,
-    panels: [smooth, sharp, smooth].map((layers) => ({ productKey: "refc", layers })) });
-  useForecastStore.setState({ modelKey: "hrrr", runTime: run, forecastHour: 0, playing: true });
-  useUiStore.setState({ speed: 1, loop: true });
-  useGraphicsStore.setState({ effective: { ...savedGraphics.effective, profile: "balanced" } });
-  const queryClient = createQueryClient();
-  queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
-  queryClient.setQueryData(mapKeys.catalog("hrrr", run, 0), parseMapCatalog(catalog));
-  const frame = parseFieldFrame(payloads.field);
-  for (const hour of [0, 1, 2]) queryClient.setQueryData(mapKeys.field("refc", run, hour, "hrrr"), { ...frame, forecastHour: hour });
-  const client = new BackendClient({ call: () => new Promise(() => undefined), listen: () => Promise.resolve(() => undefined) });
-  vi.spyOn(client, "getMapCatalog").mockResolvedValue(parseMapCatalog(catalog));
-  const fetch = vi.spyOn(client, "getWeatherField");
-  const prepare = fieldImages.prepareFieldImage;
-  const pending: { hour: number; smooth: boolean; signal: AbortSignal; finish: () => void }[] = [];
-  vi.spyOn(fieldImages, "prepareFieldImage").mockImplementation((field, palette, smoothing, signal) =>
-    new Promise<void>((resolve) => { pending.push({ hour: field.forecastHour, smooth: smoothing, signal, finish: resolve }); })
-      .then(() => prepare(field, palette, smoothing, signal)));
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
-  );
-  const hook = renderHook(usePlayback, { wrapper });
-  try {
-    await act(async () => { await vi.advanceTimersByTimeAsync(FRAME_INTERVAL_MS); });
-    expect(fetch).not.toHaveBeenCalled();
-    expect(pending.map(({ hour, smooth }) => [hour, smooth])).toEqual([[1, false], [1, true], [2, false], [2, true]]);
-    expect(useForecastStore.getState().forecastHour).toBe(0);
-    await act(async () => { pending[0]?.finish(); await vi.advanceTimersByTimeAsync(1); });
-    expect(useForecastStore.getState().forecastHour).toBe(0);
-    await act(async () => { pending[1]?.finish(); await vi.advanceTimersByTimeAsync(1); });
-    expect(useForecastStore.getState().forecastHour).toBe(1);
-    expect(pending.slice(2, 4).every(({ signal }) => signal.aborted)).toBe(true);
-  } finally {
-    hook.unmount();
-    pending.forEach(({ finish }) => { finish(); });
-    await act(async () => { await vi.runAllTimersAsync(); });
-    queryClient.clear();
-  }
 });

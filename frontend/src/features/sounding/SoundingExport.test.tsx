@@ -31,7 +31,7 @@ it("exports the current HD/UHD bytes, blocks stale previews, and reuses an uncha
   const render = vi.fn(() => new Promise<ReturnType<typeof response>>((resolve) => { pending.push(resolve); }));
   const downloads: { href: string; filename: string }[] = [];
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloads.push({ href: this.href, filename: this.download }); });
-  const { view, queryClient } = renderWithBackend(<SoundingImage soundingId={summary.soundingId} choice="MU" title="Test sounding" heading="Test sounding" />, {
+  const { view, queryClient } = renderWithBackend(<SoundingImage soundingId={summary.soundingId} choice="MU" title="Test sounding" />, {
     ...base, call: (command, args) => command === "render_sounding_view" ? render() : base.call(command, args),
   });
   const status = screen.getByRole("status", { name: "Sounding export status" });
@@ -40,7 +40,7 @@ it("exports the current HD/UHD bytes, blocks stale previews, and reuses an uncha
   await waitFor(() => { expect(render).toHaveBeenCalledOnce(); });
   await act(async () => { pending[0]?.(response()); await Promise.resolve(); });
   await waitFor(() => { expect(status.textContent).toContain("Ready"); });
-  expect(status.querySelector('svg[data-loading="true"]')).toBeNull();
+  expect(status.querySelector("svg")).toBeNull();
   expect(status.textContent).toContain("~1.00 MiB");
   expect(status.textContent).toContain("4564 × 3077");
   fireEvent.click(screen.getByRole("button", { name: "Export PNG" }));

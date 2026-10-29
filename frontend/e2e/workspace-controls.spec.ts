@@ -56,10 +56,10 @@ test("unit choices fit at 1280 × 800, survive reload and reach the parameter pi
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Units", exact: true }).click();
   const content = page.locator("#settings-content");
   await expect(content.getByRole("radio")).toHaveCount(7);
-  await content.getByText("Celsius", { exact: true }).click();
-  await content.getByText("Kilometres/h", { exact: true }).click();
+  await content.getByRole("radio", { name: "°C Celsius", exact: true }).click();
+  await content.getByRole("radio", { name: "km/h Kilometres/h", exact: true }).click();
   await expect(content.getByRole("radio", { name: "°C Celsius" })).toBeChecked();
-  await expect(content.getByText("37 km/h", { exact: true })).toBeVisible();
+  await expect(content.getByRole("radio", { name: "km/h Kilometres/h" })).toBeChecked();
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await nextFrames(page);

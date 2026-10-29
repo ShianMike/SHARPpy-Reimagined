@@ -74,10 +74,10 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
 
   return (
     <form className={styles.form} onSubmit={submit} aria-label="Model sounding">
-      <SourceSelect label="Model" value={model.key} options={models.map((item) => ({ value: item.key, label: item.label, group: modelRegion(item), detail: `${item.domain}${item.gridSpacingKm === null ? "" : ` · ${String(item.gridSpacingKm)} km`}` }))} onChange={(modelKey) => { edit({ modelKey, runTime: null, forecastHour: null }); }} />
+      <SourceSelect label="Model" value={model.key} popup="list" searchLabel="Search models" options={models.map((item) => ({ value: item.key, label: item.label, group: modelRegion(item), detail: `${item.domain}${item.gridSpacingKm === null ? "" : ` · ${String(item.gridSpacingKm)} km`}` }))} onChange={(modelKey) => { edit({ modelKey, runTime: null, forecastHour: null }); }} />
       <p className={styles.hint}>{`${model.domain}${model.gridSpacingKm === null ? "" : `, ${String(model.gridSpacingKm)} km grid`}`}</p>
-      <SourceSelect label="Run" value={run} options={newestFirst.map((item) => ({ value: item, label: formatUtc(item), detail: item > model.suggestedRun ? "May still be publishing" : item === model.suggestedRun ? "Latest suggested" : "Earlier cycle" }))} onChange={(runTime) => { edit({ modelKey: model.key, runTime }); }} />
-      <SourceSelect label="Forecast" value={hour} options={hours.map((item) => ({ value: item, label: forecastLabel(item), detail: `Valid ${formatUtc(addHours(run, item))}` }))} onChange={(forecastHour) => { edit({ forecastHour }); }} />
+      <SourceSelect label="Run" value={run} popup="grid" options={newestFirst.map((item) => ({ value: item, label: formatUtc(item), shortLabel: `${item.slice(11, 13)}Z`, group: `${item.slice(0, 10)} · UTC`, detail: item > model.suggestedRun ? "Pending" : item === model.suggestedRun ? "Latest" : undefined }))} onChange={(runTime) => { edit({ modelKey: model.key, runTime }); }} />
+      <SourceSelect label="Forecast" value={hour} popup="grid" options={hours.map((item) => ({ value: item, label: forecastLabel(item), group: `Valid ${addHours(run, item).slice(0, 10)} · UTC`, detail: `${addHours(run, item).slice(11, 13)}Z` }))} onChange={(forecastHour) => { edit({ forecastHour }); }} />
       <p className={styles.hint}>Valid {formatUtc(addHours(run, hour))}</p>
       <Toggle label={station === null ? "Use selected station" : `At station ${station.id}`} checked={atStation} disabled={station === null} onChange={(atStation) => { edit({ atStation }); }} />
       {atStation ? null : (

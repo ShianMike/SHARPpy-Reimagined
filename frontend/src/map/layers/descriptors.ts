@@ -2,7 +2,7 @@
 // a descriptor here and its module; WeatherMap.tsx does not change. The weather
 // layers (zOrder 10 to 15) stack in the user's order (mapStore.layerOrder).
 
-import { applyBasemapState } from "../basemap/basemapLayers";
+import { applyBasemapState, applyRoadNetworkState } from "../basemap/basemapLayers";
 import { buildBoundaryLayers, buildDomainLayers, buildPlaceLabels } from "./geographyLayers";
 import { buildFieldLayers, buildRadarLayers, buildSatelliteLayers } from "./rasterLayers";
 import { LAYER_DEFAULTS, type LayerDescriptor } from "./registry";
@@ -38,6 +38,16 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
     opacityControl: true,
     defaults: LAYER_DEFAULTS.basemap,
     apply: applyBasemapState,
+  },
+  {
+    id: "roads",
+    label: "Road networks",
+    kind: "maplibre-style",
+    zOrder: 1,
+    userControllable: true,
+    opacityControl: false,
+    defaults: LAYER_DEFAULTS.roads,
+    apply: applyRoadNetworkState,
   },
   {
     id: "model-field",

@@ -2,6 +2,7 @@
 import { Activity, PanelLeft, PanelLeftClose, RadioTower } from "lucide-react";
 import { useRef, useState, type ReactNode, type Ref, type RefObject } from "react";
 import { Action, EmptyPanel, IconAction } from "../../ui/Controls";
+import { Surface } from "../../ui/Surface";
 import { Popover } from "../../components/Popover";
 import { MAX_OPEN, pendingDiscardSounding, useActiveSounding, useSoundingStore } from "../../stores/soundingStore";
 import { OpenSoundings, soundingMeta } from "./OpenSoundings";
@@ -12,13 +13,13 @@ import viewer from "./Viewer.module.css";
 import { SourceSelect } from "./SourceFields";
 import { formatUtc } from "./soundingTime";
 
-function SoundingViewer({ sources, onShow, showRef, controlsTarget, infoTarget, controls }: { sources: boolean; onShow: () => void; showRef: Ref<HTMLButtonElement>; controlsTarget: HTMLDivElement | null; infoTarget: HTMLDivElement | null; controls: boolean }): ReactNode {
+function SoundingViewer({ sources, onShow, showRef, controlsTarget, controls }: { sources: boolean; onShow: () => void; showRef: Ref<HTMLButtonElement>; controlsTarget: HTMLDivElement | null; controls: boolean }): ReactNode {
   const active = useActiveSounding();
   const choice = useSoundingStore((state) => state.choice);
   const timeIndex = useSoundingStore((state) => active === null ? 0 : state.timeIndices[active.soundingId] ?? 0);
   if (active === null) {
     return (
-      <section data-material="panel" className={viewer.viewer} aria-label="Sounding">
+      <Surface as="section" className={viewer.viewer} aria-label="Sounding">
         <div className={viewer.stage}>
           <EmptyPanel
             icon={Activity}
@@ -26,27 +27,20 @@ function SoundingViewer({ sources, onShow, showRef, controlsTarget, infoTarget, 
             message="Choose a source to open a profile, then explore the sounding and hodograph."
           >{sources ? null : <Action ref={showRef} onClick={onShow} aria-expanded={false} aria-controls="sounding-sources"><PanelLeft className="icon-sm" />Show sources</Action>}</EmptyPanel>
         </div>
-      </section>
+      </Surface>
     );
   }
   const levels = timeIndex === 0 ? `${String(active.levelCount)} levels` : "Selected profile";
   const times = active.timeCount > 1 ? `, time ${String(timeIndex + 1)} of ${String(active.timeCount)}` : "";
   const current = { ...active, validTime: active.times === undefined ? active.validTime : active.times[timeIndex] ?? null };
   return (
-    <section data-material="panel" className={viewer.viewer} aria-label="Sounding" data-testid="sounding-viewer">
-      <SoundingImage key={`${active.soundingId}:${String(timeIndex)}`} soundingId={active.soundingId} timeIndex={timeIndex} choice={choice} title={active.title} controlsTarget={controlsTarget} infoTarget={infoTarget}
-        navigation={sources ? null : <IconAction ref={showRef} icon={PanelLeft} label={controls ? "Show controls" : "Show sources"} aria-expanded={false} aria-controls="sounding-sources" onClick={onShow} />} heading={<>
-        <div className={viewer.heading}>
-          <p className={viewer.title} data-testid="sounding-title">
-            {active.title}
-          </p>
-          <p className={viewer.meta}>{`${soundingMeta(current)}, ${levels}${times}`}</p>
-          {active.timeCount < 2 ? null : <SourceSelect label="Sounding time (UTC)" value={timeIndex} compact
+    <Surface as="section" className={viewer.viewer} aria-label="Sounding" aria-description={`${active.title}, ${soundingMeta(current)}, ${levels}${times}`} data-testid="sounding-viewer">
+      <SoundingImage key={`${active.soundingId}:${String(timeIndex)}`} soundingId={active.soundingId} timeIndex={timeIndex} choice={choice} title={active.title} controlsTarget={controlsTarget}
+        navigation={sources ? null : <IconAction ref={showRef} icon={PanelLeft} label={controls ? "Show controls" : "Show sources"} aria-expanded={false} aria-controls="sounding-sources" onClick={onShow} />}
+        timeControl={active.timeCount < 2 ? null : <SourceSelect label="Sounding time (UTC)" value={timeIndex} compact
             options={Array.from({ length: active.timeCount }, (_, index) => ({ value: index, label: `${String(index + 1)} · ${formatUtc(active.times?.[index] ?? null)}` }))}
-            onChange={(index) => { useSoundingStore.getState().setTimeIndex(active.soundingId, index); }} />}
-        </div>
-      </>} />
-    </section>
+            onChange={(index) => { useSoundingStore.getState().setTimeIndex(active.soundingId, index); }} />} />
+    </Surface>
   );
 }
 
@@ -83,7 +77,6 @@ export function SoundingWorkspace(): ReactNode {
   const [sources, setSources] = useState(true);
   const [controls, setControls] = useState(false);
   const [controlsTarget, setControlsTarget] = useState<HTMLDivElement | null>(null);
-  const [infoTarget, setInfoTarget] = useState<HTMLDivElement | null>(null);
   const active = useActiveSounding();
   const workspaceRef = useRef<HTMLDivElement>(null);
   const pending = useSoundingStore((state) => state.pendingChanges[0]);
@@ -93,8 +86,8 @@ export function SoundingWorkspace(): ReactNode {
   const show = (): void => { setSources(true); selectPanel(controls); };
   return (
     <div ref={workspaceRef} tabIndex={-1} className={styles.workspace} data-testid="sounding-workspace">
-      <div className={styles.layout} data-sources={sources}>
-        <div className={styles.side} id="sounding-sources" data-motion="fade" inert={!sources} hidden={!sources}>
+      <div className={styles.layout} data-sources={sources} data-controls={controls}>
+        <Surface className={styles.side} id="sounding-sources" data-motion="fade" inert={!sources} hidden={!sources}>
           <div className={styles.sideContent} hidden={controls} inert={controls}>
             <SourcePanel onHide={hide} onControls={() => { selectPanel(true); }} />
             <OpenSoundings />
@@ -117,9 +110,8 @@ export function SoundingWorkspace(): ReactNode {
               </section> : null}
             </div>
           </div>
-          <div ref={setInfoTarget} className={styles.sideInfo} />
-        </div>
-        <SoundingViewer sources={sources} onShow={show} showRef={showRef} controlsTarget={controlsTarget} infoTarget={infoTarget} controls={controls} />
+        </Surface>
+        <SoundingViewer sources={sources} onShow={show} showRef={showRef} controlsTarget={controlsTarget} controls={controls} />
       </div>
       {pending === undefined ? null : <DiscardSoundingChanges key={pending.kind === "open" ? `open:${pending.summary.soundingId}` : `close:${pending.id}`} fallback={workspaceRef} />}
     </div>

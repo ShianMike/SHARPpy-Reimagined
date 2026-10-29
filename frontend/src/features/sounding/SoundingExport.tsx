@@ -1,4 +1,4 @@
-import { Check, Copy, Download, LoaderCircle, TriangleAlert } from "lucide-react";
+import { Copy, Download, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { useUiStore } from "../../stores/uiStore";
 import { Action } from "../../ui/Controls";
@@ -20,7 +20,7 @@ export function SoundingExport({ view, quality, onQualityChange, ready, busy, fi
   const exporting = notice?.pending === true;
   const enabled = ready && url !== null && view !== undefined && !exporting;
   const currentNotice = ready && notice?.image === view?.image ? notice : null;
-  const StatusIcon = busy || exporting ? LoaderCircle : ready && !currentNotice?.failed ? Check : TriangleAlert;
+  const StatusIcon = busy || exporting ? LoaderCircle : ready && !currentNotice?.failed ? null : TriangleAlert;
   const description = annotations.length === 0 ? "Lossless PNG" : "Lossless PNG with edited levels in your display units";
   const exportImage = async (copy: boolean): Promise<void> => {
     if (!enabled) return;
@@ -43,7 +43,7 @@ export function SoundingExport({ view, quality, onQualityChange, ready, busy, fi
   return <>
     <div className={styles.exportStatus} role="status" aria-label="Sounding export status" aria-busy={busy || exporting} data-ready={ready} data-error={currentNotice?.failed === true}>
       <div className={styles.exportHeading}><span className={styles.groupLabel}>Export</span>
-        <span className={styles.exportState}><StatusIcon className="icon-sm" data-loading={busy || exporting} aria-hidden="true" />{exporting ? notice.text : currentNotice?.failed ? "Try again" : currentNotice?.text ?? (ready ? "Ready" : busy ? "Preparing…" : "Unavailable")}</span>
+        <span className={styles.exportState}>{StatusIcon === null ? null : <StatusIcon className="icon-sm" data-loading={busy || exporting} aria-hidden="true" />}{exporting ? notice.text : currentNotice?.failed ? "Try again" : currentNotice?.text ?? (ready ? "Ready" : busy ? "Preparing…" : "Unavailable")}</span>
       </div>
       <div className={styles.exportDetails}>
         <span title={description}>{ready && view !== undefined ? `${String(view.width)} × ${String(view.height)}` : "Dimensions pending"}</span>

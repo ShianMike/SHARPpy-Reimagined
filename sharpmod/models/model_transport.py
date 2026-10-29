@@ -2,19 +2,12 @@
 
 from __future__ import annotations
 
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
-import json
 import logging
 import math
 import os
 from pathlib import Path
-import random
-import shutil
-import tempfile
-import threading
-import time
-from typing import Callable, Iterable
+from typing import Iterable
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,14 +25,6 @@ class DownloadCancelled(RuntimeError):
 
 class _ObjectChanged(OptimizedTransportUnavailable):
     """The remote object no longer matches the pinned transfer identity."""
-
-
-class _TransientRangeFailure(RuntimeError):
-    """One range attempt may succeed when retried."""
-
-    def __init__(self, message: str, retry_after: float = 0.0):
-        super().__init__(message)
-        self.retry_after = max(0.0, float(retry_after or 0.0))
 
 
 @dataclass(frozen=True, order=True)
@@ -251,34 +236,6 @@ def _valid_grib(path: Path) -> bool:
         return False
 
 
-def _load_manifest(path: Path) -> dict:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
-    except (OSError, ValueError, TypeError):
-        return {}
-
-
-def _write_manifest(path: Path, payload: dict) -> None:
-    fd, temporary = tempfile.mkstemp(
-        prefix=path.name + ".", suffix=".tmp", dir=path.parent
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, sort_keys=True)
-        os.replace(temporary, path)
-    except BaseException:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-        try:
-            os.remove(temporary)
-        except OSError:
-            pass
-        raise
-
-
 def _parse_content_range_details(value: str) -> tuple[int, int, int] | None:
     try:
         unit, remainder = value.split(" ", 1)
@@ -296,11 +253,6 @@ def _parse_content_range_details(value: str) -> tuple[int, int, int] | None:
         return None
 
 
-def _parse_content_range(value: str) -> tuple[int, int] | None:
-    details = _parse_content_range_details(value)
-    return details[:2] if details is not None else None
-
-
 def range_worker_count(value=None, *, default: int = 1) -> int:
     """Return a validated HTTP-range worker count, bounded independently.
 
@@ -316,208 +268,11 @@ def range_worker_count(value=None, *, default: int = 1) -> int:
     return min(_MAX_RANGE_WORKERS, max(1, parsed))
 
 
-def _header(headers, name: str):
-    try:
-        value = headers.get(name)
-    except AttributeError:
-        return None
-    if value is not None:
-        return value
-    lowered = name.lower()
-    try:
-        return next(
-            value for key, value in headers.items()
-            if str(key).lower() == lowered
-        )
-    except (AttributeError, StopIteration):
-        return None
-
-
-def _response_identity(headers, total_size: int) -> dict:
-    identity = {"size": int(total_size)}
-    etag = _header(headers, "ETag")
-    last_modified = _header(headers, "Last-Modified")
-    if etag:
-        identity["etag"] = str(etag)
-    if last_modified:
-        identity["last_modified"] = str(last_modified)
-    return identity
-
-
-def _manifest_identity(manifest: dict) -> dict:
-    value = manifest.get("identity")
-    if isinstance(value, dict):
-        result = {}
-        try:
-            if value.get("size") is not None:
-                result["size"] = int(value["size"])
-        except (TypeError, ValueError):
-            pass
-        for key in ("etag", "last_modified"):
-            if value.get(key):
-                result[key] = str(value[key])
-        return result
-    # Migrate resumable manifests written by the original sequential transport.
-    return {"etag": str(manifest["etag"])} if manifest.get("etag") else {}
-
-
-def _identity_matches(expected: dict, actual: dict) -> bool:
-    if not expected:
-        return False
-    for key, value in expected.items():
-        if key not in actual or actual[key] != value:
-            return False
-    return True
-
-
-def _if_range_value(identity: dict) -> str | None:
-    etag = str(identity.get("etag") or "")
-    # RFC 9110 requires a strong entity tag for If-Range.
-    if etag and not etag.startswith("W/"):
-        return etag
-    modified = identity.get("last_modified")
-    return str(modified) if modified else None
-
-
-def _retry_after_seconds(headers) -> float:
-    value = _header(headers, "Retry-After")
-    try:
-        return min(30.0, max(0.0, float(value)))
-    except (TypeError, ValueError):
-        return 0.0
-
-
 def _check_cancelled(cancelled, stop_event=None) -> None:
     if cancelled is not None and cancelled():
         raise DownloadCancelled("forecast-model download cancelled")
     if stop_event is not None and stop_event.is_set():
         raise DownloadCancelled("forecast-model range workers stopped")
-
-
-def _retry_wait(
-    attempt: int,
-    retry_after: float,
-    retry_backoff: float,
-    cancelled,
-    stop_event=None,
-) -> None:
-    base = max(0.0, float(retry_backoff)) * (2 ** max(0, int(attempt)))
-    jittered = base * (0.75 + random.random() * 0.5)
-    remaining = min(30.0, max(float(retry_after or 0.0), jittered))
-    while remaining > 0.0:
-        _check_cancelled(cancelled, stop_event)
-        interval = min(0.1, remaining)
-        time.sleep(interval)
-        remaining -= interval
-
-
-def _probe_source_identity(
-    session,
-    url: str,
-    *,
-    timeout,
-    retries: int,
-    retry_backoff: float,
-    cancelled,
-    request_started: Callable[[], None] | None = None,
-    bytes_received: Callable[[int], None] | None = None,
-    retrying: Callable[[], None] | None = None,
-) -> dict:
-    """Pin an object identity with a one-byte conditional-range precursor."""
-    for attempt in range(max(0, int(retries)) + 1):
-        _check_cancelled(cancelled)
-        probe_done = threading.Event()
-        probe_response = []
-        probe_monitor = None
-        if cancelled is not None:
-            def monitor_probe():
-                while not probe_done.wait(0.05):
-                    try:
-                        requested = bool(cancelled())
-                    except Exception:
-                        return
-                    if not requested:
-                        continue
-                    for value in list(probe_response):
-                        close = getattr(value, "close", None)
-                        if callable(close):
-                            try:
-                                close()
-                            except Exception:
-                                pass
-                    close = getattr(session, "close", None)
-                    if callable(close):
-                        try:
-                            close()
-                        except Exception:
-                            pass
-                    # Keep watching until the attempt exits: ``session.get``
-                    # may return a response just after the session was closed.
-
-            probe_monitor = threading.Thread(
-                target=monitor_probe,
-                name="sharpmod-range-probe-cancel",
-                daemon=True,
-            )
-            probe_monitor.start()
-        try:
-            if request_started is not None:
-                request_started()
-            response_context = session.get(
-                str(url), headers={"Range": "bytes=0-0"}, stream=True,
-                timeout=timeout,
-            )
-            with response_context as response:
-                probe_response.append(response)
-                status = int(getattr(response, "status_code", 0))
-                if status == 429 or 500 <= status <= 599:
-                    raise _TransientRangeFailure(
-                        "source identity probe returned HTTP %d" % status,
-                        _retry_after_seconds(getattr(response, "headers", {})),
-                    )
-                if status != 206:
-                    raise OptimizedTransportUnavailable(
-                        "source did not honor the HTTP identity range request"
-                    )
-                headers = getattr(response, "headers", {})
-                details = _parse_content_range_details(
-                    _header(headers, "Content-Range") or ""
-                )
-                if details is None or details[:2] != (0, 0):
-                    raise OptimizedTransportUnavailable(
-                        "source returned a mismatched identity range"
-                    )
-                received = 0
-                for chunk in response.iter_content(chunk_size=1):
-                    if not chunk:
-                        continue
-                    received += len(chunk)
-                    if bytes_received is not None:
-                        bytes_received(len(chunk))
-                if received != 1:
-                    raise OptimizedTransportUnavailable(
-                        "source returned an incomplete identity range"
-                    )
-                return _response_identity(headers, details[2])
-        except (DownloadCancelled, OptimizedTransportUnavailable):
-            raise
-        except _TransientRangeFailure as exc:
-            failure = exc
-        except Exception as exc:
-            failure = _TransientRangeFailure(str(exc))
-        finally:
-            probe_done.set()
-            if probe_monitor is not None:
-                probe_monitor.join(timeout=0.2)
-        if attempt >= max(0, int(retries)):
-            raise OptimizedTransportUnavailable(
-                "optimized HTTP identity probe failed: %s" % failure
-            ) from failure
-        if retrying is not None:
-            retrying()
-        _retry_wait(
-            attempt, failure.retry_after, retry_backoff, cancelled
-        )
 
 
 from sharpmod.models.model_transfer import (  # noqa: E402

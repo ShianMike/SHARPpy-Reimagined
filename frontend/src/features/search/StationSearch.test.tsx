@@ -31,9 +31,9 @@ afterEach(() => {
   cleanup();
 });
 
-async function setup(scenario: string | null = null) {
+async function setup(scenario: string | null = null, transport = createTransport(scenario)) {
   const user = userEvent.setup();
-  renderWithBackend(<StationSearch />, createTransport(scenario));
+  renderWithBackend(<StationSearch />, transport);
   expect(screen.queryByRole("combobox")).toBeNull();
   await user.click(screen.getByRole("button", { name: "Search stations" }));
   const input = screen.getByRole("combobox", { name: "Search stations" });
@@ -118,6 +118,31 @@ describe("StationSearch", () => {
     await user.type(radarInput, "KTLX");
     await user.click(screen.getByRole("option", { name: "KTLX WSR-88D radar" }));
     expect(useMapStore.getState().livePanels[0]?.radarProduct).toBe("velocity");
+    expect(useAppStore.getState().selectedStationId).toBeNull();
+  });
+
+  it.each(["abrd", "BROADmeadows", "Australia"])("finds Australian radars by %s and selects radar imagery in the active panel", async (query) => {
+    useAppStore.getState().setActiveWorkspace("live");
+    const map = useMapStore.getState();
+    map.setPanelLayout(2);
+    map.setRadarScope("site"); map.setRadarSite("KTLX"); map.setRadarProduct("velocity"); map.setRadarTilt("1");
+    const otherPanel = useMapStore.getState().livePanels[0];
+    map.setActivePanel(1); map.setRadarScope("site"); map.setRadarProduct("velocity"); map.setRadarTilt("2");
+    const transport = createTransport(), original = transport.call.bind(transport);
+    transport.call = (command, args) => command === "get_radar_sites" ? Promise.resolve({ sites: [
+      { id: "ABRD", name: "Broadmeadows", country: "AU", products: ["reflectivity"], latitude: -37.85, longitude: 144.75 },
+    ] }) : original(command, args);
+    const { user } = await setup(null, transport);
+    await user.click(screen.getByRole("button", { name: "Radar sites" }));
+    const input = screen.getByRole<HTMLInputElement>("combobox", { name: "Search radar sites" });
+    await waitFor(() => { expect(input.disabled).toBe(false); });
+    await user.type(input, query);
+    expect(screen.getByRole("option", { name: "ABRD Broadmeadows · Australia" }).textContent).toContain("Australia");
+    await user.keyboard("{ArrowDown}{Enter}");
+    const state = useMapStore.getState();
+    expect(state.livePanels[1]).toMatchObject({ radarScope: "site", radarSite: "ABRD", radarProduct: "reflectivity", radarTilt: "0", layers: { radar: { visible: true } } });
+    expect(state.livePanels[0]).toBe(otherPanel);
+    expect(state.focusRequest).toMatchObject({ stationId: "ABRD", position: { latitude: -37.85, longitude: 144.75 } });
     expect(useAppStore.getState().selectedStationId).toBeNull();
   });
 

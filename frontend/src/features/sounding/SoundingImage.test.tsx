@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import viewExample from "@contracts/public/soundings/view.example.json";
 import summaryExample from "@contracts/public/soundings/summary.example.json";
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTransport } from "../../lib/backend/fixtureTransport";
@@ -35,7 +35,7 @@ afterEach(() => { cleanup(); useUiStore.setState(initial, true); useSoundingStor
 async function open(next = response()) {
   const base = createTransport();
   const render = vi.fn(() => Promise.resolve(next));
-  const result = renderWithBackend(<SoundingImage soundingId="fixture" choice="MU" title="Test sounding" heading="Test sounding" />, {
+  const result = renderWithBackend(<SoundingImage soundingId="fixture" choice="MU" title="Test sounding" />, {
     ...base, call: (command, args) => command === "render_sounding_view" ? render() : base.call(command, args),
   });
   const image = await screen.findByTestId("sounding-image");
@@ -54,7 +54,7 @@ async function open(next = response()) {
 it("shows a recoverable connection message without an icon and retries the same view", async () => {
   const base = createTransport();
   const render = vi.fn(() => Promise.resolve(response())).mockRejectedValueOnce(new Error("Connection lost"));
-  renderWithBackend(<SoundingImage soundingId="fixture" choice="MU" title="Test sounding" heading="Test sounding" />, {
+  renderWithBackend(<SoundingImage soundingId="fixture" choice="MU" title="Test sounding" />, {
     ...base, call: (command, args) => command === "render_sounding_view" ? render() : base.call(command, args),
   });
   const notice = await screen.findByTestId("render-error");
@@ -75,7 +75,7 @@ it("keeps the chart and pending edit when recalculation loses its connection", a
   const image = screen.getByTestId("sounding-image");
   await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
-  await userEvent.keyboard("{ArrowDown}{Enter}");
+  await userEvent.keyboard("{Home}{Enter}");
   const input = screen.getByRole("spinbutton", { name: "Temperature °C" });
   await userEvent.clear(input); await userEvent.type(input, "30");
   render.mockRejectedValueOnce(new Error("Connection lost"));
@@ -91,7 +91,7 @@ it("marks a recalculation started during an update download before the new profi
   const { render } = await open();
   await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
-  await userEvent.keyboard("{ArrowDown}{Enter}");
+  await userEvent.keyboard("{Home}{Enter}");
   useUpdateStore.setState({ status: "downloading", soundingWorkChanged: false });
   render.mockImplementation(() => new Promise(() => undefined));
   await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
@@ -175,26 +175,40 @@ it("keeps both popups and the linked marker moving beyond the visible hodograph 
   expect(render).toHaveBeenCalledOnce();
 });
 
-it("disables the height selector only while all height charts replace the diagnostic panel", async () => {
-  const chart = viewExample.options.find((group) => group.key === "chart")?.choices[1]?.key;
-  if (chart === undefined) throw new Error("The fixture needs another height chart");
+it("selects charts through dropdowns without checkmarks and switches directly between all and individual height charts", async () => {
   useSoundingStore.getState().add(parseSoundingSummary({ ...summaryExample, soundingId: "fixture" }));
-  useSoundingStore.getState().setView("fixture", { history: [[]], cursor: 0, options: { chart } });
+  useSoundingStore.getState().setView("fixture", { history: [[]], cursor: 0, options: { chart: "srw" } });
   await open();
-  await userEvent.click(screen.getByText("Chart panels", { selector: "summary" }));
-  const height = screen.getByRole<HTMLButtonElement>("combobox", { name: "Height chart" });
-  const panel = screen.getByRole<HTMLButtonElement>("combobox", { name: "Diagnostic panel" });
-  expect(height.disabled).toBe(false);
-  await userEvent.click(panel);
-  await userEvent.click(screen.getByRole("option", { name: "All height charts" }));
-  expect(height.disabled).toBe(true);
-  expect(height.getAttribute("value")).toBe(chart);
-  expect(useSoundingStore.getState().views.fixture?.options).toEqual({ chart, panel: "HEIGHT CHARTS" });
-  await waitFor(() => { expect(panel.disabled).toBe(false); });
-  await userEvent.click(panel);
-  await userEvent.click(screen.getByRole("option", { name: "Sig-Tor Stats" }));
+  const panels = screen.getByRole("region", { name: "Chart panels" });
+  for (const group of viewExample.options) {
+    await userEvent.click(within(panels).getByRole("combobox", { name: group.label }));
+    const menu = screen.getByRole("listbox", { name: group.label });
+    const labels = group.choices.filter((choice) => choice.key !== "HEIGHT CHARTS").map((choice) => choice.label);
+    expect(within(menu).getAllByRole("option").map((option) => option.textContent)).toEqual(group.key === "chart" ? [...labels, "All height charts"] : labels);
+    expect(menu.querySelector("svg")).toBeNull();
+    await userEvent.keyboard("{Escape}");
+  }
+  const height = within(panels).getByRole<HTMLButtonElement>("combobox", { name: "Height chart" });
+  const diagnostic = within(panels).getByRole<HTMLButtonElement>("combobox", { name: "Diagnostic panel" });
+  await userEvent.click(height);
+  await userEvent.keyboard("{End}{Enter}");
+  expect(document.activeElement).toBe(height);
+  expect(useSoundingStore.getState().views.fixture?.options).toEqual({ chart: "srw", panel: "HEIGHT CHARTS" });
   await waitFor(() => { expect(height.disabled).toBe(false); });
-  expect(height.getAttribute("value")).toBe(chart);
+  expect(height.textContent).toBe("All height charts");
+  expect(diagnostic.textContent).toBe("All height charts shown");
+  await userEvent.click(height);
+  await userEvent.keyboard("{Home}{Enter}");
+  await waitFor(() => { expect(height.disabled).toBe(false); });
+  expect(useSoundingStore.getState().views.fixture?.options).toEqual({ chart: "streamwiseness" });
+  await userEvent.click(height);
+  await userEvent.click(screen.getByRole("option", { name: "All height charts" }));
+  await waitFor(() => { expect(diagnostic.disabled).toBe(false); });
+  await userEvent.click(diagnostic);
+  await userEvent.click(screen.getByRole("option", { name: "Sig-Tor Stats" }));
+  await waitFor(() => { expect(diagnostic.disabled).toBe(false); });
+  expect(diagnostic.textContent).toBe("Sig-Tor Stats");
+  expect(height.textContent).toBe("Streamwiseness");
 });
 
 it("defaults to width fit, retains whole-chart fit, and follows viewport resizing", async () => {
@@ -267,7 +281,7 @@ it("marks only edited levels and jumps through undo history, including reset and
   await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   const level = screen.getByRole("combobox", { name: "Profile level" });
   await userEvent.click(level);
-  await userEvent.keyboard("{ArrowDown}{Enter}");
+  await userEvent.keyboard("{Home}{Enter}");
   expect(level.textContent).toContain("Edited");
   expect(screen.getByTestId("sounding-stage").querySelectorAll('circle[data-edited="true"]')).toHaveLength(3);
   expect(screen.getByLabelText("Temperature before").textContent).not.toContain("30");

@@ -136,7 +136,7 @@ describe("Sounding local work protection", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
     await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
-    await userEvent.keyboard("{ArrowDown}{Enter}");
+    await userEvent.keyboard("{Home}{Enter}");
     const input = screen.getByRole("spinbutton", { name: /Temperature/u });
     await userEvent.clear(input);
     await userEvent.type(input, "35");

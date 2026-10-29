@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import tokensCss from "../../styles/tokens.css?raw";
 import { cssTokenReader } from "../../test/cssTokens";
 import { readCanvasTokens } from "../canvasTokens";
-import { applyBasemapLabels, applyBasemapState, prepareBasemap } from "./basemapLayers";
+import { applyBasemapLabels, applyBasemapState, applyRoadNetworkState, prepareBasemap } from "./basemapLayers";
 import { basemapSourceUrl, basemapStyle, MAP_STYLE_URLS } from "./basemapStyle";
 
 const tokens = readCanvasTokens(cssTokenReader(tokensCss));
@@ -82,14 +82,19 @@ it.each(["light", "dark"])("keeps political borders over weather and inland wate
     getLayer: (id: string) => layers.find((item) => item.id === id),
     removeLayer: (id: string) => { layers.splice(layers.findIndex((layer) => layer.id === id), 1); },
     getLayoutProperty: (id: string) => layout.get(id),
-    getPaintProperty: (id: string, property: string) => paints.get(`${id}:${property}`) ?? (layers.find((layer) => layer.id === id)?.paint as Record<string, unknown>)[property],
+    getPaintProperty: (id: string, property: string) => paints.get(`${id}:${property}`) ?? (layers.find((layer) => layer.id === id)?.paint as Record<string, unknown> | undefined)?.[property],
     addLayer, setFilter, setLayoutProperty, setPaintProperty,
   } as unknown as MapLibreMap;
   expect(prepareBasemap(map)).toBe("geography-shoreline");
   const order = layers.map((layer) => layer.id);
-  expect(order).not.toContain("road-casing");
-  expect(order).not.toContain("highway_motorway_subtle");
-  expect(order).not.toContain("highway_name_motorway");
+  expect(order).toContain("road-casing");
+  expect(order).toContain("highway_motorway_subtle");
+  expect(order).toContain("highway_name_motorway");
+  expect(order.indexOf("highway_motorway_subtle")).toBeLessThan(order.indexOf("geography-shoreline"));
+  expect(layers.find((layer) => layer.id === "highway_motorway_subtle")).toMatchObject({
+    paint: { "line-color": theme === "dark" ? "#607584" : "#181818", "line-width": 2 },
+  });
+  expect(paints.get("road-casing:line-color")).toBe(theme === "dark" ? "#2c3b48" : undefined);
   expect(order.indexOf("river")).toBeLessThan(order.indexOf("geography-boundary_state-halo"));
   expect(order.indexOf("geography-boundary-halo")).toBeLessThan(order.indexOf("boundary"));
   expect(order.indexOf("boundary")).toBeLessThan(order.indexOf("city"));
@@ -133,7 +138,8 @@ it.each(["light", "dark"])("keeps political borders over weather and inland wate
   expect(setPaintProperty).toHaveBeenCalledTimes(changes);
   expect(setLayoutProperty).toHaveBeenLastCalledWith("park", "visibility", "none");
   expect(setLayoutProperty).toHaveBeenCalledTimes(1);
-  expect(layers.some((layer) => "source-layer" in layer && ["transportation", "transportation_name"].includes(layer["source-layer"] ?? ""))).toBe(false);
+  expect(layers.filter((layer) => "source-layer" in layer && ["transportation", "transportation_name"].includes(layer["source-layer"] ?? ""))).toHaveLength(3);
+  expect(paints.get("road-casing:line-opacity")).toBe(1);
 });
 
 it("toggles native labels without changing weather or the style's label opacity", () => {
@@ -154,10 +160,45 @@ it("toggles native labels without changing weather or the style's label opacity"
   expect(setLayoutProperty).not.toHaveBeenCalled();
   setLayoutProperty.mockClear();
   applyBasemapLabels(map, { visible: false, opacity: 1 });
-  expect(setLayoutProperty.mock.calls).toEqual([["city", "visibility", "none"], ["road", "visibility", "none"]]);
+  expect(setLayoutProperty.mock.calls).toEqual([["city", "visibility", "none"]]);
   applyBasemapLabels(map, { visible: false, opacity: 0.5 });
-  expect(setLayoutProperty).toHaveBeenCalledTimes(2);
+  expect(setLayoutProperty).toHaveBeenCalledTimes(1);
   applyBasemapLabels(map, { visible: true, opacity: 1 });
-  expect(setLayoutProperty.mock.calls.slice(2)).toEqual([["city", "visibility", "visible"], ["road", "visibility", "visible"]]);
+  expect(setLayoutProperty.mock.calls.slice(1)).toEqual([["city", "visibility", "visible"]]);
+  expect(setPaintProperty).not.toHaveBeenCalled();
+});
+
+it("toggles native road lines and names independently of place names and preserves provider-hidden layers", () => {
+  const layers: LayerSpecification[] = [
+    { id: "road", type: "line", source: "openmaptiles", "source-layer": "transportation" },
+    { id: "road-name", type: "symbol", source: "openmaptiles", "source-layer": "transportation_name" },
+    { id: "road-direction", type: "symbol", source: "openmaptiles", "source-layer": "transportation" },
+    { id: "hidden-road", type: "line", source: "openmaptiles", "source-layer": "transportation", layout: { visibility: "none" } },
+    { id: "city", type: "symbol", source: "openmaptiles", "source-layer": "place" },
+    { id: "water", type: "fill", source: "openmaptiles", "source-layer": "water" },
+    { id: "weather-road", type: "line", source: "weather", "source-layer": "transportation" },
+  ];
+  const layout = new Map<string, string>([["hidden-road", "none"]]);
+  const setLayoutProperty = vi.fn((id: string, _property: string, value: string) => { layout.set(id, value); });
+  const setPaintProperty = vi.fn();
+  const map = {
+    getStyle: () => ({ layers }), getLayoutProperty: (id: string) => layout.get(id),
+    setLayoutProperty, setPaintProperty,
+  } as unknown as MapLibreMap;
+  applyRoadNetworkState(map, { visible: false, opacity: 1 });
+  expect(setLayoutProperty.mock.calls).toEqual(["road", "road-name", "road-direction"].map((id) => [id, "visibility", "none"]));
+  applyRoadNetworkState(map, { visible: false, opacity: 1 });
+  expect(setLayoutProperty).toHaveBeenCalledTimes(3);
+  applyBasemapLabels(map, { visible: false, opacity: 1 });
+  applyRoadNetworkState(map, { visible: true, opacity: 1 });
+  for (const id of ["road", "road-name", "road-direction"]) expect(layout.get(id)).toBe("visible");
+  expect(layout.get("hidden-road")).toBe("none");
+  expect(layout.get("city")).toBe("none");
+  applyBasemapLabels(map, { visible: true, opacity: 1 });
+  applyRoadNetworkState(map, { visible: false, opacity: 1 });
+  expect(layout.get("road-name")).toBe("none");
+  expect(layout.get("city")).toBe("visible");
+  expect(layout.has("water")).toBe(false);
+  expect(layout.has("weather-road")).toBe(false);
   expect(setPaintProperty).not.toHaveBeenCalled();
 });

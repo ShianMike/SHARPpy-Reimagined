@@ -58,6 +58,23 @@ it("changes the shared projection from Map details and resets it with layers", a
   expect(useMapStore.getState().projection).toBe("mercator");
 });
 
+it("toggles road networks in Map details for the active panel without hiding the basemap or place names", async () => {
+  useMapStore.getState().setPanelLayout(2);
+  useMapStore.getState().setActivePanel(1);
+  const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
+  await userEvent.click(screen.getByRole("button", { name: "Map details" }));
+  const roads = screen.getByRole("switch", { name: "Road networks" });
+  expect(roads.getAttribute("aria-checked")).toBe("true");
+  await userEvent.click(roads);
+  expect(panelLayers(useMapStore.getState(), 1).roads.visible).toBe(false);
+  expect(panelLayers(useMapStore.getState(), 0).roads.visible).toBe(true);
+  expect(panelLayers(useMapStore.getState(), 1).basemap.visible).toBe(true);
+  expect(panelLayers(useMapStore.getState(), 1)["place-labels"].visible).toBe(true);
+  await userEvent.click(roads);
+  expect(panelLayers(useMapStore.getState(), 1).roads.visible).toBe(true);
+  view.unmount(); queryClient.clear();
+});
+
 it("shows the fixed live projection and keeps the Model Viewer projection choice", () => {
   useMapStore.setState({ projection: "globe", view: "live", layerPanelGroup: "map" });
   renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());

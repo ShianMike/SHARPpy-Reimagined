@@ -10,7 +10,7 @@ import { AscentPicker } from "./AscentPicker";
 import { SoundingErrorNotice } from "./SoundingErrorNotice";
 import { SoundingExport } from "./SoundingExport";
 import { useObjectUrl } from "./soundingQueries";
-import { PointEditor } from "./PointEditor";
+import { LevelEditor } from "./LevelEditor";
 import { LevelReadout } from "./LevelReadout";
 import { QuickUnits } from "../settings/QuickUnits";
 import { SourceSelect } from "./SourceFields";
@@ -18,7 +18,7 @@ import { useSoundingView } from "./useSoundingView";
 import { replaceValues } from "./viewHistory";
 import styles from "./Viewer.module.css";
 
-export function SoundingImage({ soundingId, choice, title, heading, navigation, controlsTarget, infoTarget, timeIndex = 0 }: { soundingId: string; choice: RenderChoice; title: string; heading: ReactNode; navigation?: ReactNode; controlsTarget?: HTMLDivElement | null; infoTarget?: HTMLDivElement | null; timeIndex?: number }): ReactNode {
+export function SoundingImage({ soundingId, choice, title, timeControl, navigation, controlsTarget, timeIndex = 0 }: { soundingId: string; choice: RenderChoice; title: string; timeControl?: ReactNode; navigation?: ReactNode; controlsTarget?: HTMLDivElement | null; timeIndex?: number }): ReactNode {
   const units = useUiStore((state) => state.units);
   const [quality, setQuality] = useState<ImageMode>("uhd");
   const [editing, setEditing] = useState(false);
@@ -43,6 +43,8 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
     return convertUnit(v.value, v.unit, unit).toFixed(1) + " " + unit;
   }).join(", ")}`) : [], [data?.points, units, editing]);
   const unavailable = busy || image.isError;
+  const allHeightCharts = (state.options.panel ?? data?.selection.panel) === "HEIGHT CHARTS";
+  const allHeightChoice = data?.options.find((group) => group.key === "panel")?.choices.find((option) => option.key === "HEIGHT CHARTS");
   const levelIndex = inspected?.image === data?.image ? inspected?.index ?? 0 : 0;
   const level = data?.inspection.levels[levelIndex];
   const windLevels = useMemo(() => data?.inspection.levels.filter((level) => level.hodograph !== null) ?? [], [data?.inspection.levels]);
@@ -71,7 +73,6 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
     setInspected((previous) => previous?.image === data.image && previous.index === index && previous.x === x && previous.y === y && previous.chart === chart ? previous : { image: data.image, index, x, y, chart, box: rect });
   };
   const url = useObjectUrl(data?.image);
-  const point = data?.points.find((point) => point.id === selected);
   const ratio = window.devicePixelRatio || 1;
   const fit = data === undefined ? 1 : Math.min(1 / ratio, Math.max(1, size.width - 24) / data.width, fitWidth ? Infinity : Math.max(1, size.height - 24) / data.height);
   const scale = zoom ?? fit;
@@ -158,23 +159,16 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
       edit.mutate({ ...request, drag: { target: active.id, x: preview.x, y: preview.y } });
     }
   };
-  const editor = editing && point !== undefined ? <PointEditor key={point.id + JSON.stringify(point.values) + JSON.stringify(units)} point={point} busy={unavailable} onApply={(values) => { edit.mutate({ ...request, edits: replaceValues(edits, Number(point.id.split(":")[1]), values) }); }} /> : null;
-  const info = <header className={styles.header} data-docked={infoTarget !== undefined} tabIndex={0} aria-label="Sounding details">
-    {infoTarget === undefined ? null : <strong className={styles.groupLabel}>Info</strong>}
-    {heading}
-    <div className={styles.imageMeta}>
-      <span>{edits.length ? `${String(edits.length)} edited ${edits.length === 1 ? "level" : "levels"} · Original retained` : "Original profile"}</span>
-      <span role="status">{data === undefined ? "" : String(data.width) + " × " + String(data.height) + " · lossless PNG"}</span>
-    </div>
-  </header>;
   const controls = <>
     <div className={styles.tools} data-docked={controlsTarget !== undefined} role="toolbar" aria-label="Sounding image controls">
       <div className={styles.toolGroup} role="group" aria-label="Profile controls">
         <span className={styles.groupLabel}>Profile</span>
+        {timeControl}
         <div className={styles.profileMode}>
           <Action ref={inspectButton} aria-pressed={!editing} onClick={() => { setEditing(false); setSelected(null); }}><Hand className="icon-sm" />Inspect</Action>
-          <Action aria-pressed={editing} onClick={() => { setEditing(true); }} disabled={data === undefined || unavailable}><Pencil className="icon-sm" />Edit profile</Action>
+          <Action aria-pressed={editing} onClick={() => { setEditing(true); setSelected((current) => current ?? data?.points[0]?.id ?? null); }} disabled={data === undefined || unavailable}><Pencil className="icon-sm" />Edit profile</Action>
         </div>
+        <AscentPicker />
         {state.history.length < 2 ? null : <><SourceSelect label="Undo history" value={state.cursor} disabled={busy}
           options={state.history.map((snapshot, index) => ({ value: index, label: snapshot.length === 0 ? index === 0 ? "Original profile" : `${String(index)} · Reset profile`
             : `${String(index)} · ${String(snapshot.length)} edited ${snapshot.length === 1 ? "level" : "levels"}` }))}
@@ -185,11 +179,26 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
           <Action aria-label="Reset profile" disabled={busy || edits.length === 0} onClick={() => { edit.mutate({ ...request, edits: [] }); }}><RotateCcw className="icon-sm" />Reset</Action>
         </div></>}
       </div>
-      {editing ? <section className={styles.levelEditor} aria-label="Level editor">
-        <header><strong>Edit level</strong><Action aria-label="Finish editing" onClick={() => { setEditing(false); setSelected(null); inspectButton.current?.focus(); }}>Done</Action></header>
-        <SourceSelect label="Profile level" value={selected ?? ""} disabled={busy} compact options={[{ value: "", label: "Choose a level…" }, ...(data?.points.map((point) => ({ value: point.id, label: point.label + (editedLevels.has(point.id.split(":")[1]) ? " · Edited" : "") })) ?? [])]} onChange={(value) => { setSelected(value || null); }} />
-        {editor ?? <p>Choose a level or drag a point.</p>}
-      </section> : null}
+      {!editing || data === undefined ? null : <LevelEditor points={data.points} selected={selected} edited={editedLevels} busy={unavailable} onSelect={setSelected}
+        onApply={(point, values) => { edit.mutate({ ...request, edits: replaceValues(edits, Number(point.id.split(":")[1]), values) }); }}
+        onDone={() => { setEditing(false); setSelected(null); inspectButton.current?.focus(); }} />}
+      {data === undefined ? null : <section className={styles.panelPicker} aria-label="Chart panels">
+        <h2 className={styles.panelHeading}>Chart panels</h2>
+        <div className={styles.options}>
+          {data.options.map((group) => <SourceSelect key={group.key} label={group.label} disabled={busy}
+            value={group.key === "chart" && allHeightCharts ? "HEIGHT CHARTS" : state.options[group.key] ?? data.selection[group.key]}
+            options={[
+              ...(group.key === "panel" && allHeightCharts ? [{ value: "HEIGHT CHARTS", label: "All height charts shown" }] : []),
+              ...group.choices.filter((option) => option.key !== "HEIGHT CHARTS").map((option) => ({ value: option.key, label: option.label })),
+              ...(group.key === "chart" && allHeightChoice !== undefined ? [{ value: allHeightChoice.key, label: allHeightChoice.label }] : []),
+            ]}
+            onChange={(value) => {
+              const options = { ...state.options, [group.key === "chart" && value === "HEIGHT CHARTS" ? "panel" : group.key]: value };
+              if (group.key === "chart" && value !== "HEIGHT CHARTS" && allHeightCharts) delete options.panel;
+              update({ ...state, options });
+            }} />)}
+        </div>
+      </section>}
       <details className={styles.viewControls} aria-label="View controls" open={!editing}>
         <summary>View<ChevronDown className="icon-sm" aria-hidden="true" /></summary>
         <div className={styles.viewBody}>
@@ -202,15 +211,6 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
           <Action aria-label="Fit sounding to width" aria-pressed={zoom === null && fitWidth} onClick={() => { setFitWidth(true); setZoom(null); }}><MoveHorizontal className="icon-sm" />Fit width</Action>
           <Action aria-label="Fit sounding to view" aria-pressed={zoom === null && !fitWidth} onClick={() => { setFitWidth(false); setZoom(null); }}><Maximize className="icon-sm" />Fit all</Action>
         </div>
-        {data === undefined ? null : <details className={styles.panelPicker}>
-          <summary>Chart panels<ChevronDown className="icon-sm" aria-hidden="true" /></summary>
-          <div className={styles.options} data-motion="enter">
-            <AscentPicker />
-            {data.options.map((group) => <SourceSelect key={group.key} label={group.label} value={state.options[group.key] ?? data.selection[group.key]} disabled={busy || (group.key === "chart" && (state.options.panel ?? data.selection.panel) === "HEIGHT CHARTS")}
-              options={group.choices.map((option) => ({ value: option.key, label: option.label }))}
-              onChange={(value) => { update({ ...state, options: { ...state.options, [group.key]: value } }); }} />)}
-          </div>
-        </details>}
         </div>
       </details>
       <div className={styles.exportTools}>
@@ -226,7 +226,6 @@ export function SoundingImage({ soundingId, choice, title, heading, navigation, 
       event.preventDefault(); if (event.shiftKey || event.key.toLowerCase() === "y") redo(); else undo();
     }
   }}>
-    {infoTarget === undefined ? info : infoTarget === null ? null : createPortal(info, infoTarget)}
     {navigation == null ? null : <div className={styles.showSidebar}>{navigation}</div>}
     {controlsTarget === undefined ? controls : controlsTarget === null ? null : createPortal(controls, controlsTarget)}
     <div className={styles.stage} data-testid="sounding-stage" aria-busy={busy}>

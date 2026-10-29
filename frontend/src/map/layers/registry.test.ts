@@ -277,7 +277,7 @@ describe("layer registry", () => {
 
   it("lists only the user-controllable layers for the panel, in zOrder", () => {
     expect(controllableLayers(LAYER_REGISTRY).map((d) => d.id)).toEqual([
-      "basemap", "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "surface-plots", "watches", "warnings", "model-domain", "place-labels",
+      "basemap", "roads", "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "surface-plots", "watches", "warnings", "model-domain", "place-labels",
       "stations", "radar-site-labels", "station-labels",
     ]);
   });

@@ -17,7 +17,7 @@ import type { WindBarb } from "./WindBarbLayer";
 import type { ScreenPoint, Viewport } from "../labels/declutter";
 
 export const LAYER_IDS = [
-  "basemap", "stations", "station-labels", "selection", "model-field", "satellite", "radar",
+  "basemap", "roads", "stations", "station-labels", "selection", "model-field", "satellite", "radar",
   "storm-reports", "surface-plots", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "boundaries",
   "model-domain", "place-labels", "watches", "warnings", "radar-site-labels",
 ] as const;
@@ -50,6 +50,7 @@ export interface LayerState {
 /** Initial state of each layer; the descriptors take their defaults from here. */
 export const LAYER_DEFAULTS: Readonly<Record<LayerId, LayerState>> = {
   basemap: { visible: true, opacity: 1 },
+  roads: { visible: true, opacity: 1 },
   stations: { visible: true, opacity: 1 },
   "station-labels": { visible: false, opacity: 1 },
   "radar-site-labels": { visible: true, opacity: 1 },

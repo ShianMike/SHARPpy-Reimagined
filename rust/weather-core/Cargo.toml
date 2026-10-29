@@ -1,6 +1,6 @@
 [package]
 name = "sharpmod-weather"
-version = "3.4.1"
+version = "3.5.0"
 edition = "2021"
 rust-version = "1.88"
 publish = false
@@ -9,8 +9,12 @@ license = "BSD-3-Clause"
 repository = "https://github.com/ShianMike/SHARPpy-Reimagined"
 
 [dependencies]
+base64 = "=0.22.1"
+bzip2 = "=0.6.1"
 csv = "=1.4.0"
+geographiclib-rs = { version = "=0.2.7", default-features = false }
 log = "0.4.34"
+png = "=0.18.1"
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider", "system-proxy"] }
 rustls = { version = "=0.23.46", default-features = false, features = ["ring"] }
 serde = { version = "1.0.229", features = ["derive"] }

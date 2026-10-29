@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from datetime import timedelta
 from typing import Any
 
@@ -10,10 +11,8 @@ from sharpmod.bridge import params as p
 from sharpmod.bridge.errors import BridgeError
 from sharpmod.bridge.fields import OUTLOOK_PRODUCTS
 
-#: As for the sounding image: base64 keeps the reply under the 8 MiB frame.
-MAX_IMAGE_BYTES = 6 * 1024 * 1024 - 4096
-#: Decimal places kept for outlook vertices: about 10 m, which SPC's own
-#: polygons do not exceed.
+MAX_IMAGE_BYTES = 6 * 1024 * 1024 - 4096  # Base64 keeps the reply below 8 MiB.
+#: Outlook vertices keep about 10 m precision, matching SPC polygons.
 VERTEX_DECIMALS = 4
 
 
@@ -135,6 +134,18 @@ def radar_mosaic(params: dict[str, Any]) -> dict[str, Any]:
 def radar_site(params: dict[str, Any]) -> dict[str, Any]:
     """A pinned or nearest antenna's frame, optionally at a specific elevation."""
     p.keys(params, (), ("product", "site_id", "latitude", "longitude", "valid_time", "tilt"))
+    import sharpmod_rs
+
+    try:
+        native = sharpmod_rs.australian_radar_frame(json.dumps(params))
+    except ValueError as exc:
+        raise p.invalid(str(exc)) from None
+    except sharpmod_rs.WeatherRadarScanMissing as exc:
+        raise BridgeError("OVERLAY_FETCH_FAILED", str(exc), True, {"reason": "scanMissing"}) from None
+    except RuntimeError as exc:
+        raise BridgeError("OVERLAY_FETCH_FAILED", str(exc), True) from None
+    if native is not None:
+        return json.loads(native)
     when = p.time(params, "valid_time") if params.get("valid_time") is not None else None
     from sharpmod.providers import radar_site as site
 
@@ -206,25 +217,15 @@ def radar_site(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def radar_sites(params: dict[str, Any]) -> dict[str, Any]:
-    """The bundled WSR-88D catalogue backing the single-site picker."""
+    """The native radar catalogue backing the single-site picker."""
     p.keys(params, ())
-    from sharpmod.providers import radar_site as site
+    import sharpmod_rs
 
-    return {
-        "sites": [
-            {"id": entry.id, "lat": float(entry.lat), "lon": float(entry.lon)}
-            for entry in site.sites()
-        ]
-    }
+    return json.loads(sharpmod_rs.radar_sites(public=True))
 
 
 def place_labels(params: dict[str, Any]) -> dict[str, Any]:
-    """Map place names: the curated major cities, then towns, one per quarter degree.
-
-    The selection is the legacy map's (``ui/maps/presentation.py``): major
-    cities always, and from the bundled Census index the largest incorporated
-    place in each quarter-degree cell. Towns come largest first.
-    """
+    """Major cities, then the largest Census towns per quarter-degree cell."""
     p.keys(params, ())
     from sharpmod.maps.map_geography import MAJOR_CITIES
     from sharpmod.maps.place_names import _conus_place_cells

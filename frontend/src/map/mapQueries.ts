@@ -12,6 +12,7 @@ import { useSoundingStore } from "../stores/soundingStore";
 import { releaseTime } from "../features/sounding/soundingTime";
 import { OUTLOOK_KEYS, type AvailabilityReport, type ContourLines, type FieldFrame, type PlaceLabels, type RadarFrame, type RadarSiteCatalog, type RadarSiteFrame, type ReportOptions, type SatelliteChannel, type SatelliteFrame, type SpcOutlook, type StormReports } from "../types/map";
 import { nearestRadarSite } from "./nearestSite";
+import { panelRadar } from "./panelRadar";
 
 const OUTLOOK_STALE_MS = 10 * 60_000;
 const SPC_REFRESH_MS = 5 * 60_000;
@@ -127,7 +128,7 @@ export function useRadarFrame(product: string | null, enabled: boolean, validTim
   });
 }
 
-/** The bundled WSR-88D catalogue; static for the life of the bridge. */
+/** The bundled radar catalogue; static for the life of the bridge. */
 export function useRadarSites(enabled: boolean): UseQueryResult<RadarSiteCatalog> {
   const client = useBackendClient();
   return useQuery({
@@ -141,10 +142,14 @@ export function useRadarSites(enabled: boolean): UseQueryResult<RadarSiteCatalog
 
 /** Use the pinned antenna or the nearest to the map centre; wait for the catalogue. */
 export function useEffectiveRadarSite(panel?: number): string | null {
-  const pinned = useMapStore((state) => panelWeather(state, panel).radarSite);
+  return usePanelRadar(panel).site;
+}
+
+export function usePanelRadar(panel?: number) {
+  const weather = useMapStore((state) => panelWeather(state, panel));
   const camera = useMapStore((state) => state.cameraSnapshot);
   const sites = useRadarSites(true).data?.sites;
-  return pinned ?? nearestRadarSite(sites ?? [], camera?.center[1] ?? 0, camera?.center[0] ?? 0);
+  return panelRadar(weather, nearestRadarSite(sites ?? [], camera?.center[1] ?? 0, camera?.center[0] ?? 0), sites);
 }
 
 /** Key the frame by site so panning never refetches a pinned antenna. */
@@ -157,15 +162,18 @@ export function useRadarSiteFrame(
 ): UseQueryResult<RadarSiteFrame> {
   const client = useBackendClient();
   const queryClient = useQueryClient();
+  const selection = panelRadar({ radarScope: "site", radarSite: site, radarProduct: product, radarTilt: tilt }, null,
+    queryClient.getQueryData<RadarSiteCatalog>(mapKeys.radarSites)?.sites);
+  const effectiveProduct = selection.product, effectiveTilt = selection.tilt;
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.radarSite(product, site ?? "", validTime, tilt),
-    queryFn: () => client.getRadarSiteFrame({ site: site ?? "" }, product, validTime, tilt),
+    queryKey: mapKeys.radarSite(effectiveProduct, site ?? "", validTime, effectiveTilt),
+    queryFn: () => client.getRadarSiteFrame({ site: site ?? "" }, effectiveProduct, validTime, effectiveTilt),
     placeholderData: () => {
       if (validTime === null || site === null) return undefined;
       let latest: RadarSiteFrame | undefined;
-      for (const [key, frame] of queryClient.getQueriesData<RadarSiteFrame>({ queryKey: ["radar-site", product ?? "reflectivity", site] })) {
-        if (key.at(-1) !== tilt || frame?.siteId !== site) continue;
+      for (const [key, frame] of queryClient.getQueriesData<RadarSiteFrame>({ queryKey: ["radar-site", effectiveProduct ?? "reflectivity", site] })) {
+        if (key.at(-1) !== effectiveTilt || frame?.siteId !== site) continue;
         const target = key[3];
         const age = Date.parse(validTime) - Date.parse(typeof target === "string" ? target : "");
         const scanAge = Date.parse(validTime) - Date.parse(frame.validTime ?? "");
@@ -174,7 +182,7 @@ export function useRadarSiteFrame(
       }
       return latest;
     },
-    enabled: enabled && site !== null,
+    enabled: enabled && site !== null && selection.supportedProducts?.length !== 0,
     staleTime: validTime === null ? 0 : Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
     refetchInterval: (query) => {

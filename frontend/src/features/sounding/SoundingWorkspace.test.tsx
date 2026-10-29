@@ -72,11 +72,12 @@ describe("SoundingWorkspace", () => {
     await userEvent.upload(screen.getByLabelText("File", { selector: "input" }), file);
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     await screen.findByTestId("sounding-image");
+    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Sounding time (UTC)" }));
     expect(screen.getAllByRole("option")).toHaveLength(49);
     await userEvent.keyboard("{End}{Enter}");
     await waitFor(() => { expect(transport.calls.some((call) => call.command === "render_sounding_view" && (call.args as { view?: ViewRequest }).view?.timeIndex === 48)).toBe(true); });
-    expect(screen.getByLabelText("Sounding details").textContent).toContain("time 49 of 49");
+    expect(screen.getByTestId("sounding-viewer").getAttribute("aria-description")).toContain("time 49 of 49");
   });
 
   it("edits a level, undoes and redoes it, and retains it across navigation", async () => {
@@ -98,8 +99,8 @@ describe("SoundingWorkspace", () => {
     expect(document.activeElement).toBe(level);
     expect(screen.getByRole("button", { name: "Edit profile" }).getAttribute("aria-pressed")).toBe("true");
     await userEvent.click(level);
-    await userEvent.keyboard("{ArrowDown}{Enter}");
-    expect(level.getAttribute("value")).toBe("tmpc:0");
+    await userEvent.keyboard("{Home}{Enter}");
+    expect(level.getAttribute("value")).toBe("0");
     const input = screen.getByRole("spinbutton", { name: /Temperature/u });
     const before = (input as HTMLInputElement).value;
     await userEvent.clear(input); await userEvent.type(input, "30");
@@ -114,7 +115,8 @@ describe("SoundingWorkspace", () => {
     workspace.view.unmount();
     renderWithBackend(<SoundingWorkspace />, transport);
     await screen.findByTestId("sounding-image");
-    expect(screen.getByText(/1 edited level · Original retained/u).closest("header")).not.toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
+    expect(screen.getByRole("combobox", { name: "Undo history" }).textContent).toContain("1 edited level");
     expect(transport.calls.filter((call) => call.command === "render_sounding_view").every((call) => (call.args as Record<string, unknown>).imageMode === "uhd")).toBe(true);
   });
   it("opens an hourly ERA5 reanalysis at a typed point without a forecast hour", async () => {
@@ -170,10 +172,6 @@ describe("SoundingWorkspace", () => {
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     const image = await screen.findByTestId("sounding-image", {}, { timeout: 3000 });
     expect(image.getAttribute("src")).toBe("blob:fixture");
-    const header = screen.getByLabelText("Sounding details");
-    expect(within(header).getByText("Original profile")).toBeTruthy();
-    expect(screen.getByText("3260 × 2198 · lossless PNG").closest("header")).toBe(header);
-    expect(header.textContent).not.toContain("Hover Skew-T or hodograph");
     const request = transport.calls.find((call) => call.command === "open_sounding")?.args as {
       request: Record<string, unknown>;
     };
@@ -182,9 +180,7 @@ describe("SoundingWorkspace", () => {
     expect(screen.getByTestId("sounding-title").textContent).toBe("72357 (example data)");
     expect(within(screen.getByTestId("open-soundings")).getAllByRole("listitem")).toHaveLength(1);
     await userEvent.click(screen.getByRole("button", { name: "Show sounding controls" }));
-    expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")?.open).toBe(false);
-    await userEvent.click(screen.getByText("Chart panels", { selector: "summary" }));
-    expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")?.open).toBe(true);
+    expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("details")).toBeNull();
     expect(screen.getByRole("group", { name: CHOICE_LABEL }).closest("header")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "ML" }));
     await waitFor(() => {
@@ -203,14 +199,18 @@ describe("SoundingWorkspace", () => {
       expect(last?.args).toMatchObject({ imageMode: "hd" });
     });
     for (const group of viewExample.options) {
-      const dropdown = screen.getByRole("combobox", { name: group.label });
-      await userEvent.click(dropdown);
-      expect(within(screen.getByRole("listbox", { name: group.label })).getAllByRole("option")).toHaveLength(group.choices.length);
-      await userEvent.keyboard("{End}{Enter}");
-      expect(dropdown.getAttribute("value")).toBe(group.choices.at(-1)?.key);
+      const selector = screen.getByRole("combobox", { name: group.label });
+      await userEvent.click(selector);
+      const menu = screen.getByRole("listbox", { name: group.label });
+      const choices = group.choices.filter((choice) => choice.key !== "HEIGHT CHARTS");
+      expect(within(menu).getAllByRole("option")).toHaveLength(choices.length + (group.key === "chart" ? 1 : 0));
+      const choice = choices.at(-1);
+      if (choice === undefined) throw new Error("Missing chart choice");
+      await userEvent.click(within(menu).getByRole("option", { name: choice.label }));
+      expect(selector.textContent).toBe(choice.label);
       await waitFor(() => {
         const last = transport.calls.filter((call) => call.command === "render_sounding_view").at(-1);
-        expect(last?.args).toMatchObject({ view: { [group.key]: group.choices.at(-1)?.key } });
+        expect(last?.args).toMatchObject({ view: { [group.key]: choice.key } });
       });
     }
   });

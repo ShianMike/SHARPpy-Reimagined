@@ -1,0 +1,811 @@
+{
+  "schema": 1,
+  "source": "https://feeds.mrrl.net/polling/",
+  "catalogue_source": "mrrlworldwide_customradars.gis",
+  "sites": [
+    {
+      "id": "AABP",
+      "lat": -34.6169,
+      "lon": 138.4689,
+      "name": "Adelaide (Buckland Park)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AARA",
+      "lat": -11.6485,
+      "lon": 133.38,
+      "name": "Arafura (aka Warruwi)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AASP",
+      "lat": -23.7951,
+      "lon": 133.889,
+      "name": "Alice Springs",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ABEL",
+      "lat": -20.3718,
+      "lon": 118.6317,
+      "name": "Port Hedland",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ABER",
+      "lat": -12.4559,
+      "lon": 130.9266,
+      "name": "Berrimah",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ABGP",
+      "lat": -37.8874,
+      "lon": 147.5756,
+      "name": "Bairnsdale",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ABMS",
+      "lat": -27.7177,
+      "lon": 153.2399,
+      "name": "Brisbane-Mt Stapylton",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ABOW",
+      "lat": -19.8858,
+      "lon": 148.076,
+      "name": "Bowen",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ABRD",
+      "lat": -37.691,
+      "lon": 144.946,
+      "name": "Broadmeadows",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ABRO",
+      "lat": -17.9475,
+      "lon": 122.2353,
+      "name": "Broome",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ABRW",
+      "lat": -29.9708,
+      "lon": 146.814,
+      "name": "Brewarrina",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ACAR",
+      "lat": -24.8883,
+      "lon": 113.669,
+      "name": "Gascoyne",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ACED",
+      "lat": -32.1296,
+      "lon": 133.6962,
+      "name": "Ceduna",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ACFC",
+      "lat": -35.6614,
+      "lon": 149.5123,
+      "name": "Captains Flat (Canberra)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ACSM",
+      "lat": -16.8182,
+      "lon": 145.663,
+      "name": "Cairns (Saddle Mt)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ACUL",
+      "lat": -34.2781,
+      "lon": 141.5982,
+      "name": "Mildura (Cullulleraine)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ADAR",
+      "lat": -12.4247,
+      "lon": 130.8919,
+      "name": "Darwin AP",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AEMR",
+      "lat": -23.5494,
+      "lon": 148.2392,
+      "name": "Emerald",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AESP",
+      "lat": -33.83,
+      "lon": 121.8909,
+      "name": "Esperance",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AGER",
+      "lat": -28.8047,
+      "lon": 114.6973,
+      "name": "Geraldton",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AGIL",
+      "lat": -25.0341,
+      "lon": 128.301,
+      "name": "Giles",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AGLA",
+      "lat": -23.8553,
+      "lon": 151.2628,
+      "name": "Gladstone",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AGMK",
+      "lat": -25.9572,
+      "lon": 152.5769,
+      "name": "Gympie (Mt Kanigan)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AGNV",
+      "lat": -18.9803,
+      "lon": 144.9405,
+      "name": "Greenvale",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AGOV",
+      "lat": -12.2689,
+      "lon": 136.8204,
+      "name": "Gove",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AGRA",
+      "lat": -29.6206,
+      "lon": 152.9632,
+      "name": "Grafton",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AHAP",
+      "lat": -42.8374,
+      "lon": 147.5008,
+      "name": "Hobart AP",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AHCK",
+      "lat": -18.2289,
+      "lon": 127.6628,
+      "name": "Halls Creek",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AHIL",
+      "lat": -33.552,
+      "lon": 145.5286,
+      "name": "Hilston",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AHMK",
+      "lat": -43.1122,
+      "lon": 147.8061,
+      "name": "Hobart (Mt Koonya)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AKAL",
+      "lat": -30.7839,
+      "lon": 121.4536,
+      "name": "Kalgoorlie",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AKRR",
+      "lat": -20.992,
+      "lon": 116.876,
+      "name": "Karratha",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ALBA",
+      "lat": -34.9419,
+      "lon": 117.8018,
+      "name": "Albany",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ALCR",
+      "lat": -22.103,
+      "lon": 113.999,
+      "name": "Learmonth",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ALON",
+      "lat": -23.4398,
+      "lon": 144.2822,
+      "name": "Longreach",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AMAC",
+      "lat": -21.1172,
+      "lon": 149.2169,
+      "name": "Mackay",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AMAR",
+      "lat": -27.6064,
+      "lon": 152.5401,
+      "name": "Marburg",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AMEL",
+      "lat": -37.8552,
+      "lon": 144.7552,
+      "name": "Melbourne (Laverton)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AMIS",
+      "lat": -16.664,
+      "lon": 139.1837,
+      "name": "Mornington Island",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AMOR",
+      "lat": -29.4903,
+      "lon": 149.8461,
+      "name": "Moree",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AMTG",
+      "lat": -37.7475,
+      "lon": 140.7746,
+      "name": "Mt Gambier",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AMTH",
+      "lat": -20.7114,
+      "lon": 139.5553,
+      "name": "Mount Isa (Telstra Hill)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ANAM",
+      "lat": -31.0236,
+      "lon": 150.1917,
+      "name": "Namoi (Blackjack Mountain)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ANEW",
+      "lat": -32.7298,
+      "lon": 152.0254,
+      "name": "Lemon Tree Passage (Newcastle)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ANLK",
+      "lat": -29.033,
+      "lon": 167.933,
+      "name": "Norfolk Island",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ANWD",
+      "lat": -33.097,
+      "lon": 119.009,
+      "name": "Newdegate",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "APAP",
+      "lat": -31.9273,
+      "lon": 115.9756,
+      "name": "Perth AP",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "APSE",
+      "lat": -32.3917,
+      "lon": 115.867,
+      "name": "Perth Serpentine",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ARCH",
+      "lat": -20.7518,
+      "lon": 143.1414,
+      "name": "Richmond",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ARNB",
+      "lat": -35.998,
+      "lon": 142.013,
+      "name": "Rainbow",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ASDO",
+      "lat": -31.777,
+      "lon": 117.953,
+      "name": "South Doodlakine",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ASMT",
+      "lat": -35.3295,
+      "lon": 138.5025,
+      "name": "Sellick's Hill (Mt Terrible)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ASTH",
+      "lat": -33.7008,
+      "lon": 151.2094,
+      "name": "Sydney (Terrey Hills)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ATAR",
+      "lat": -25.6962,
+      "lon": 149.8982,
+      "name": "Taroom",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ATKA",
+      "lat": -14.5131,
+      "lon": 132.4461,
+      "name": "Tindal (Katherine)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "ATOO",
+      "lat": -26.9631,
+      "lon": 151.5877,
+      "name": "Toowoomba",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AWAP",
+      "lat": -34.2623,
+      "lon": 150.8751,
+      "name": "Wollongong (Appin)",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AWAR",
+      "lat": -26.4401,
+      "lon": 147.3491,
+      "name": "Warrego",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AWAT",
+      "lat": -30.36,
+      "lon": 116.29,
+      "name": "Watheroo",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AWAW",
+      "lat": -35.1582,
+      "lon": 147.4563,
+      "name": "Wagga Wagga",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AWEP",
+      "lat": -12.6778,
+      "lon": 141.9208,
+      "name": "Weipa",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AWIS",
+      "lat": -16.2878,
+      "lon": 149.9652,
+      "name": "Willis Island",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AWOO",
+      "lat": -31.1558,
+      "lon": 136.8044,
+      "name": "Woomera",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AWTA",
+      "lat": -41.1806,
+      "lon": 145.5783,
+      "name": "West Takone",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AWWB",
+      "lat": -15.4519,
+      "lon": 128.121,
+      "name": "Wyndham",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AYAR",
+      "lat": -36.0294,
+      "lon": 146.0306,
+      "name": "Yarrawonga",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "AYEO",
+      "lat": -32.7444,
+      "lon": 148.7081,
+      "name": "Yeoval",
+      "country": "AU",
+      "products": [
+        "reflectivity",
+        "velocity"
+      ],
+      "half_span_deg": 0.0
+    }
+  ]
+}

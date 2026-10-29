@@ -7,15 +7,48 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Upcoming
+
+- Expand the available weather-model parameters, offering only fields supported
+  by each model and the selected run.
+- Add isobars with numeric pressure labels on weather maps.
+
+## [v3.5.0] - 2026-10-29
+
 ### Added
 
+- Add 67 Australian radar sites from the supplied MRRL catalogue to Live
+  Tracking, with searchable site names, Base Reflectivity and Doppler Velocity
+  at the lowest available elevation. Use the existing velocity colour table
+  and unit preferences, keeping missing gates and range folding distinct.
+  Fetch, decode, WGS84 sampling and calibrated PNG generation run in Rust.
+  Preserve actual scan times, missing sectors and exact source gate values;
+  unsupported products and elevations remain unavailable, and feed delays do
+  not substitute an old scan for the requested time.
 - Add 1-hour and 3-hour maximum updraft helicity for the 2-5 km AGL layer
   to HRRR and supporting convection-allowing models, using the supplied
   0-400 m²/s² colour table. The three-hour field takes the cell-wise maximum
   of three native hourly maxima from the same run and requires the full interval.
 
+### Removed
+
+- Remove the introductory subtitle beneath the Settings sidebar heading.
+- Remove the sounding sidebar Info panel and its unused docking styles. Keep
+  multi-profile time selection in Sounding controls and retain accessible
+  profile identity, valid time and level-count context on the chart region.
+
 ### Fixed
 
+- Improve sounding-sidebar helper text, placeholders, unit labels and profile
+  details on glass. Give the sidebar more contrast over bright maps and keep
+  disabled-control labels readable without enabling their actions.
+- Use the same temperature, dewpoint and wind styling for fresh and stale
+  surface observations. Replace the oversized yellow warning ring with a small
+  neutral dashed ring, retaining observation times, stale warnings on hover,
+  missing-wind symbols and unavailable-report states.
+- Show full hazard names in storm-report legends instead of internal category
+  codes. Distinguish significant hail and wind reports while preserving report
+  details, symbols, colours and the selected time window.
 - Let fixture map probes report an unavailable projection while a style is
   being replaced. Keep browser projection polling active through theme changes
   instead of throwing before the selected projection is restored.
@@ -29,6 +62,43 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Align Python, Rust, desktop and frontend versions and contract fixtures with
+  v3.5.0. Refresh the README and its original-size 1920 × 1080 screenshots.
+  Keep radar-capability and playback tests in their existing focused modules,
+  move binary frame assembly into the existing conversion layer, and trim stale
+  bridge documentation so the module-size checks pass without raising limits.
+  Use fixed-size radar pixel rows to satisfy current stable Rust lint rules
+  while retaining Rust 1.88 compatibility.
+- Open sounding Model, Run, Forecast and observed Launch selectors in compact
+  glass popups beside the sidebar. Add model search and grouped UTC cycle/hour
+  tiles with concise Pending/Latest labels, preserving sounding availability,
+  exact run times and cycle limits.
+- Group sounding edit targets into one pressure-level choice with separate
+  variable buttons and previous/next navigation. Open the first editable level
+  immediately, retain the variable when moving between levels, and keep duplicate
+  pressures and storm-motion targets distinct. Show concise range errors in the
+  selected units and keep original-value comparison, precise edits, chart dragging
+  and undo/redo. Move level-selection UI and styles into a focused module.
+- Simplify display-unit controls to unit symbols, a short chart-units note and
+  a Reset action. Remove repeated names and examples while preserving accessible
+  labels, saved choices and conversion behavior. Target those accessible labels
+  in browser hover and persistence checks instead of removed explanatory text.
+- Restyle sounding sources, controls and the chart frame with the workspace glass,
+  translucent fields and shared transparency fallbacks, without stacking blur.
+  Keep rendered sounding images and exported PNGs unchanged.
+  Use Height chart and Diagnostic panel dropdowns without checkmarks or radio
+  buttons. Keep All height charts in the height selector and allow direct
+  switching to an individual chart or diagnostic. Keep parcel selection beside
+  profile controls and export in a separate section.
+- Use the shared soft hover fill for quiet buttons, sounding dropdown options
+  and parcel controls without adding an outline on pointer hover. Remove square
+  corner overrides from profile and parcel controls and round fallback station
+  rows; preserve selected-state indicators, accent actions and keyboard focus.
+- Restore OpenStreetMap roads and road names in the online basemap. Keep the
+  provider's road widths, zoom rules and label placement, use muted road colours
+  and land-coloured casings in dark mode, and keep road artwork beneath weather
+  layers without adding border halos to it. Add a saved Road networks toggle
+  under Map details for each panel, independent of the basemap and place names.
 - Collect coverage in the complete offline release gate when it runs, skipping
   the overlapping deterministic job while retaining the coverage threshold,
   timing budgets, Python compatibility and full scientific-property lanes.
@@ -40,6 +110,49 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   consumers; preserve scientific reference fixtures and historical measurements.
   Remove stale category-reporting and historical timing claims from the
   contributor guide; keep reviewed baselines in the timing budget file.
+- Remove the custom test-category reporter and its tests while retaining pytest
+  logs, JUnit, coverage, and enforced timing budgets. Keep weekly live-provider
+  contracts and dependency audits without repeating the deterministic test matrix;
+  retain correctness and release gates on their existing push, pull-request,
+  manual, and release paths. Type-check the frontend through
+  its existing production build once per job, move the SHRF timing benchmark out
+  of routine discovery, and keep map label-cache assertions without repeated
+  timing samples or benchmark output.
+- Defer Settings, Soundings, Overview and Logs code until each workspace opens.
+  Initialize the WebGL map only when Model Viewer or Live Tracking is first
+  visited, then retain it across workspace changes. Keep an accessible loading
+  message while a workspace's code loads.
+- Allow the existing browser-check job 12 minutes so slow software-rendering
+  runners can finish the playback check and cleanup without a full rerun.
+  Keep the same test set, jobs and four shards.
+- Replace Maximum Updraft Velocity with the requested 1-hour 2-5 km updraft
+  helicity product. Hide hourly maxima before F001 and three-hour maxima before
+  F003; retain the distinct 0-3 km UH layer with an accurate hourly label.
+- Simplify routine pull-request checks: report test categories inside the fast
+  job instead of nine separate jobs, and reserve Python compatibility/property
+  and Rust NumPy/wheel matrices for full validation runs. Retain core tests,
+  coverage, frontend unit/type/build checks, desktop/Rust checks, static analysis
+  and dependency audits on routine PRs. Run the full browser matrix after merge,
+  on manual runs and on release PRs. Keep the frontend gate and require
+  a browser success for full runs or an intentional skip for an ordinary PR;
+  failures, cancellations and unexpected skips still fail the gate.
+- Build map cell-colour tables with packed RGBA copies, avoiding per-cell byte
+  copies and temporary array views while preserving palette and no-data output.
+- Cache the pinned cargo-audit executable while continuing both lockfile audits
+  with current advisory data.
+- Run staged updater verification with the release Cargo profile, and use the
+  workflow working directory directly for the native-wheel build.
+
+## [v3.4.2] - Rust migration baseline
+
+Included in v3.5.0; no separate v3.4.2 binary release was published.
+
+### Changed
+
+- Move resumable GRIB range scheduling, retries, fragment identity checks,
+  progress, cancellation and atomic file assembly into focused Rust modules.
+  Preserve the existing Python call interface and injected-session compatibility;
+  native HTTP streams enforce identity encoding and bounded workers.
 - Race model-download mirrors and maintain their bounded exact-object cache in
   Rust, removing the Python HTTP probe, worker-pool, selection, and cache loops.
   Preserve the four-probe ceiling, 2.5-second connection and 6-second read
@@ -49,14 +162,6 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sessions; warm probe connections must not bias selection toward a slower full
   transfer. Keep the public Herbie source fields; retire private Python probe
   helpers and four duplicate Python policy tests now covered in Rust.
-- Remove the custom test-category reporter and its tests while retaining pytest
-  logs, JUnit, coverage, and enforced timing budgets. Keep weekly live-provider
-  contracts and dependency audits without repeating the deterministic test matrix;
-  retain correctness and release gates on their existing push, pull-request,
-  manual, and release paths. Type-check the frontend through
-  its existing production build once per job, move the SHRF timing benchmark out
-  of routine discovery, and keep map label-cache assertions without repeated
-  timing samples or benchmark output.
 - Acquire ensemble members through a shared four-worker Rust scheduler instead
   of a sequential Python loop. Preserve requested member order, GEFS/CFS member
   arguments, exact source profiles, individual failure reasons and temporary-file
@@ -75,10 +180,6 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Python HTTP/TLS/body handling and numeric row loops. Preserve standard JSON
   object decoding, custom loaders, station aliases, exact station/time selection,
   missing values, provider errors and provenance.
-- Defer Settings, Soundings, Overview and Logs code until each workspace opens.
-  Initialize the WebGL map only when Model Viewer or Live Tracking is first
-  visited, then retain it across workspace changes. Keep an accessible loading
-  message while a workspace's code loads.
 - Prepare sounding wind interpolation once in Rust and reuse pressure-weighted
   layer means for the right/left storm-relative winds and endpoint shears.
   Retain one-hPa sampling, fractional layer bounds, duplicate-pressure order, component
@@ -119,9 +220,6 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   line. Remove the replaced parsing and column-assembly loops. Keep the
   existing sounding objects, units, missing sentinels, decreasing-pressure
   filtering, source codes and counts of dropped or reconstructed levels.
-- Allow the existing browser-check job 12 minutes so slow software-rendering
-  runners can finish the playback check and cleanup without a full rerun.
-  Keep the same test set, jobs and four shards.
 - Compute maximum parcel levels in Rust using the existing thermodynamic lift
   and pressure interpolation routines. Remove the Python energy/refinement
   loops used when constructing native sounding parcels. Preserve reported
@@ -177,29 +275,6 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   between missing scans and failed checks. Reflectivity/correlation checks and
   radar image decoding keep their existing providers. Embed the shared 155-site
   catalogue in Rust and remove the replaced Python inventory implementation.
-- Replace Maximum Updraft Velocity with the requested 1-hour 2-5 km updraft
-  helicity product. Hide hourly maxima before F001 and three-hour maxima before
-  F003; retain the distinct 0-3 km UH layer with an accurate hourly label.
-- Simplify routine pull-request checks: report test categories inside the fast
-  job instead of nine separate jobs, and reserve Python compatibility/property
-  and Rust NumPy/wheel matrices for full validation runs. Retain core tests,
-  coverage, frontend unit/type/build checks, desktop/Rust checks, static analysis
-  and dependency audits on routine PRs. Run the full browser matrix after merge,
-  on manual runs and on release PRs. Keep the frontend gate and require
-  a browser success for full runs or an intentional skip for an ordinary PR;
-  failures, cancellations and unexpected skips still fail the gate.
-- Build map cell-colour tables with packed RGBA copies, avoiding per-cell byte
-  copies and temporary array views while preserving palette and no-data output.
-- Cache the pinned cargo-audit executable while continuing both lockfile audits
-  with current advisory data.
-- Run staged updater verification with the release Cargo profile, and use the
-  workflow working directory directly for the native-wheel build.
-
-### Upcoming
-
-- Expand the available weather-model parameters, offering only fields supported
-  by each model and the selected run.
-- Add isobars with numeric pressure labels on weather maps.
 
 ## [v3.4.1] - 2026-10-28
 

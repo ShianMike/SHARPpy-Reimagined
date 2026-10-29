@@ -75,7 +75,7 @@ it("keeps the chart and pending edit when recalculation loses its connection", a
   const image = screen.getByTestId("sounding-image");
   await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
-  await userEvent.keyboard("{ArrowDown}{Enter}");
+  await userEvent.keyboard("{Home}{Enter}");
   const input = screen.getByRole("spinbutton", { name: "Temperature °C" });
   await userEvent.clear(input); await userEvent.type(input, "30");
   render.mockRejectedValueOnce(new Error("Connection lost"));
@@ -91,7 +91,7 @@ it("marks a recalculation started during an update download before the new profi
   const { render } = await open();
   await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
-  await userEvent.keyboard("{ArrowDown}{Enter}");
+  await userEvent.keyboard("{Home}{Enter}");
   useUpdateStore.setState({ status: "downloading", soundingWorkChanged: false });
   render.mockImplementation(() => new Promise(() => undefined));
   await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
@@ -281,7 +281,7 @@ it("marks only edited levels and jumps through undo history, including reset and
   await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   const level = screen.getByRole("combobox", { name: "Profile level" });
   await userEvent.click(level);
-  await userEvent.keyboard("{ArrowDown}{Enter}");
+  await userEvent.keyboard("{Home}{Enter}");
   expect(level.textContent).toContain("Edited");
   expect(screen.getByTestId("sounding-stage").querySelectorAll('circle[data-edited="true"]')).toHaveLength(3);
   expect(screen.getByLabelText("Temperature before").textContent).not.toContain("30");

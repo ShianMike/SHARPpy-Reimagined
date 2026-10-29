@@ -58,7 +58,7 @@ it("swaps sources and controls without losing a file or draft, with no Info pane
   expect(screen.getByTestId("sounding-viewer").querySelector("header, [role=toolbar]")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Edit profile" }));
   await userEvent.click(screen.getByRole("combobox", { name: "Profile level" }));
-  await userEvent.keyboard("{ArrowDown}{Enter}");
+  await userEvent.keyboard("{Home}{Enter}");
   const input = screen.getByRole<HTMLInputElement>("spinbutton", { name: "Temperature °C" });
   const editor = screen.getByRole("region", { name: "Level editor" });
   expect(screen.getByRole("group", { name: "View controls" }).hasAttribute("open")).toBe(false);

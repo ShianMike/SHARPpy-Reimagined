@@ -99,8 +99,8 @@ describe("SoundingWorkspace", () => {
     expect(document.activeElement).toBe(level);
     expect(screen.getByRole("button", { name: "Edit profile" }).getAttribute("aria-pressed")).toBe("true");
     await userEvent.click(level);
-    await userEvent.keyboard("{ArrowDown}{Enter}");
-    expect(level.getAttribute("value")).toBe("tmpc:0");
+    await userEvent.keyboard("{Home}{Enter}");
+    expect(level.getAttribute("value")).toBe("0");
     const input = screen.getByRole("spinbutton", { name: /Temperature/u });
     const before = (input as HTMLInputElement).value;
     await userEvent.clear(input); await userEvent.type(input, "30");

@@ -51,6 +51,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Group sounding edit targets into one pressure-level choice with separate
+  variable buttons and previous/next navigation. Open the first editable level
+  immediately, retain the variable when moving between levels, and keep duplicate
+  pressures and storm-motion targets distinct. Show concise range errors in the
+  selected units and keep original-value comparison, precise edits, chart dragging
+  and undo/redo. Move level-selection UI and styles into a focused module.
 - Simplify display-unit controls to unit symbols, a short chart-units note and
   a Reset action. Remove repeated names and examples while preserving accessible
   labels, saved choices and conversion behavior.

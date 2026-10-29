@@ -36,8 +36,11 @@ it("edits in selected units, validates the canonical range and keeps untouched p
   await user.clear(temperature);
   await user.type(temperature, "150");
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Apply changes" }).disabled).toBe(true);
+  expect(temperature.getAttribute("aria-invalid")).toBe("true");
+  expect(screen.getByRole("alert").textContent).toBe("Range: -238 to 149 °F.");
   await user.clear(temperature);
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Apply changes" }).disabled).toBe(true);
+  expect(screen.getByRole("alert").textContent).toBe("Enter a value.");
 });
 
 it("keeps an unavailable original value explicit", () => {

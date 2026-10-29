@@ -10,7 +10,7 @@ import { AscentPicker } from "./AscentPicker";
 import { SoundingErrorNotice } from "./SoundingErrorNotice";
 import { SoundingExport } from "./SoundingExport";
 import { useObjectUrl } from "./soundingQueries";
-import { PointEditor } from "./PointEditor";
+import { LevelEditor } from "./LevelEditor";
 import { LevelReadout } from "./LevelReadout";
 import { QuickUnits } from "../settings/QuickUnits";
 import { SourceSelect } from "./SourceFields";
@@ -73,7 +73,6 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
     setInspected((previous) => previous?.image === data.image && previous.index === index && previous.x === x && previous.y === y && previous.chart === chart ? previous : { image: data.image, index, x, y, chart, box: rect });
   };
   const url = useObjectUrl(data?.image);
-  const point = data?.points.find((point) => point.id === selected);
   const ratio = window.devicePixelRatio || 1;
   const fit = data === undefined ? 1 : Math.min(1 / ratio, Math.max(1, size.width - 24) / data.width, fitWidth ? Infinity : Math.max(1, size.height - 24) / data.height);
   const scale = zoom ?? fit;
@@ -160,7 +159,6 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
       edit.mutate({ ...request, drag: { target: active.id, x: preview.x, y: preview.y } });
     }
   };
-  const editor = editing && point !== undefined ? <PointEditor key={point.id + JSON.stringify(point.values) + JSON.stringify(units)} point={point} busy={unavailable} onApply={(values) => { edit.mutate({ ...request, edits: replaceValues(edits, Number(point.id.split(":")[1]), values) }); }} /> : null;
   const controls = <>
     <div className={styles.tools} data-docked={controlsTarget !== undefined} role="toolbar" aria-label="Sounding image controls">
       <div className={styles.toolGroup} role="group" aria-label="Profile controls">
@@ -168,7 +166,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
         {timeControl}
         <div className={styles.profileMode}>
           <Action ref={inspectButton} aria-pressed={!editing} onClick={() => { setEditing(false); setSelected(null); }}><Hand className="icon-sm" />Inspect</Action>
-          <Action aria-pressed={editing} onClick={() => { setEditing(true); }} disabled={data === undefined || unavailable}><Pencil className="icon-sm" />Edit profile</Action>
+          <Action aria-pressed={editing} onClick={() => { setEditing(true); setSelected((current) => current ?? data?.points[0]?.id ?? null); }} disabled={data === undefined || unavailable}><Pencil className="icon-sm" />Edit profile</Action>
         </div>
         <AscentPicker />
         {state.history.length < 2 ? null : <><SourceSelect label="Undo history" value={state.cursor} disabled={busy}
@@ -181,11 +179,9 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
           <Action aria-label="Reset profile" disabled={busy || edits.length === 0} onClick={() => { edit.mutate({ ...request, edits: [] }); }}><RotateCcw className="icon-sm" />Reset</Action>
         </div></>}
       </div>
-      {editing ? <section className={styles.levelEditor} aria-label="Level editor">
-        <header><strong>Edit level</strong><Action aria-label="Finish editing" onClick={() => { setEditing(false); setSelected(null); inspectButton.current?.focus(); }}>Done</Action></header>
-        <SourceSelect label="Profile level" value={selected ?? ""} disabled={busy} compact options={[{ value: "", label: "Choose a level…" }, ...(data?.points.map((point) => ({ value: point.id, label: point.label + (editedLevels.has(point.id.split(":")[1]) ? " · Edited" : "") })) ?? [])]} onChange={(value) => { setSelected(value || null); }} />
-        {editor ?? <p>Choose a level or drag a point.</p>}
-      </section> : null}
+      {!editing || data === undefined ? null : <LevelEditor points={data.points} selected={selected} edited={editedLevels} busy={unavailable} onSelect={setSelected}
+        onApply={(point, values) => { edit.mutate({ ...request, edits: replaceValues(edits, Number(point.id.split(":")[1]), values) }); }}
+        onDone={() => { setEditing(false); setSelected(null); inspectButton.current?.focus(); }} />}
       {data === undefined ? null : <section className={styles.panelPicker} aria-label="Chart panels">
         <h2 className={styles.panelHeading}>Chart panels</h2>
         <div className={styles.options}>

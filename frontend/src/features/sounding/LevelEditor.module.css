@@ -1,0 +1,25 @@
+.panel { display: grid; flex: none; min-width: 0; gap: var(--space-2); padding: var(--space-3); border: var(--hairline) solid var(--glass-border); border-radius: var(--radius-md); background: var(--control-fill); }
+.panel > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-small); }
+.panel > header > button { min-height: var(--control-h-xs); padding-inline: var(--space-2); border: 0; background: transparent; color: var(--text-secondary); }
+.panel > p { color: var(--text-secondary); font-size: var(--font-size-caption); }
+.navigation { display: grid; grid-template-columns: var(--control-h-sm) minmax(0, 1fr) var(--control-h-sm); align-items: center; gap: var(--space-1); }
+.levelCount { color: var(--text-tertiary); font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; text-align: center; }
+.variables { display: flex; gap: var(--space-1); padding-bottom: var(--space-1); border-bottom: var(--hairline) solid var(--border-subtle); }
+.variables > button { flex: 1; min-width: 0; padding-inline: var(--space-1); border-color: transparent; background: transparent; color: var(--text-secondary); font-size: var(--font-size-caption); }
+.variables > button[aria-pressed="true"] { background: var(--accent-subtle); color: var(--accent-bright); }
+.editor { display: grid; min-width: 0; gap: var(--space-3); }
+.comparisonLabels, .valueComparison { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: var(--space-2); }
+.comparisonLabels { color: var(--text-secondary); font-size: var(--font-size-caption); }
+.editFields { display: grid; gap: var(--space-3); }
+.editFields label { display: grid; gap: var(--space-1); min-width: 0; font-size: var(--font-size-small); color: var(--text-secondary); }
+.editFields strong { color: var(--text-primary); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); }
+.valueComparison { font-variant-numeric: tabular-nums; }
+.valueComparison output { padding-inline: var(--space-1); color: var(--text-secondary); overflow-wrap: anywhere; }
+.afterValue { display: flex; align-items: center; min-width: 0; gap: var(--space-1); padding-right: var(--space-2); border: var(--hairline) solid var(--border-strong); border-radius: var(--radius-sm); background: var(--control-fill); }
+.editFields label[data-edited="true"] .afterValue { border-color: var(--workspace-orange-text); }
+.afterValue:focus-within { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.afterValue > span { flex: none; color: var(--text-secondary); font-size: var(--font-size-caption); }
+.afterValue input { width: 100%; min-width: 0; height: var(--control-h-sm); padding: var(--space-2); border: 0; outline: none; border-radius: inherit; background: transparent; color: var(--text-primary); font: inherit; font-variant-numeric: tabular-nums; }
+.afterValue input:disabled { color: var(--text-disabled); }
+.editFields .invalid { color: var(--danger); font-size: var(--font-size-caption); }
+.editor > button { width: 100%; min-height: var(--control-h-sm); border-radius: var(--radius-sm); }

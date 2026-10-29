@@ -29,6 +29,17 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Collect coverage in the complete offline release gate when it runs, skipping
+  the overlapping deterministic job while retaining the coverage threshold,
+  timing budgets, Python compatibility and full scientific-property lanes.
+  Keep Rust MSRV validation with the existing release/manual compatibility
+  checks; routine PRs retain stable native tests and Python/Rust equivalence.
+  Consolidate duplicate worker-distribution assertions into the existing lane
+  command tests while retaining the actual xdist grouping regression.
+  Remove the unused KLOT VWP CSV fixture after checking explicit and directory
+  consumers; preserve scientific reference fixtures and historical measurements.
+  Remove stale category-reporting and historical timing claims from the
+  contributor guide; keep reviewed baselines in the timing budget file.
 - Race model-download mirrors and maintain their bounded exact-object cache in
   Rust, removing the Python HTTP probe, worker-pool, selection, and cache loops.
   Preserve the four-probe ceiling, 2.5-second connection and 6-second read

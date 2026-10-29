@@ -153,7 +153,7 @@ jobs:
           if-no-files-found: error
   compatibility:
     name: Compatibility smoke (Python ${{ matrix.python-version }})
-    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'release/') }}
+    if: ${{ github.event_name != 'schedule' && (github.event_name != 'pull_request' || startsWith(github.head_ref, 'release/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -230,6 +230,8 @@ jobs:
 
   fast:
     name: Deterministic and coverage (Python 3.13)
+    # The weekly schedule checks live providers; pushes already validate main.
+    if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -258,7 +260,6 @@ jobs:
       - *install_rust_backend
 
       - name: Run grouped deterministic lane with coverage
-        id: fast_tests
         env:
           SHARPMOD_BACKEND: rust
         run: >-
@@ -266,17 +267,6 @@ jobs:
           --workers 4
           --coverage
           --coverage-xml coverage.xml
-
-      - name: Summarize test categories
-        if: ${{ always() && !cancelled() && hashFiles('.test-results/fast.xml') != '' }}
-        env:
-          SOURCE_RESULT: ${{ steps.fast_tests.outcome }}
-        run: |
-          status=0
-          for group in visualization charts maps analysis exports interface science providers platform; do
-            python scripts/summarize_test_categories.py .test-results/fast.xml --group "$group" --source-result "$SOURCE_RESULT" || status=1
-          done
-          exit "$status"
 
       - name: Upload coverage and timing reports
         if: always()
@@ -292,7 +282,7 @@ jobs:
 
   property:
     name: Full properties (${{ matrix.backend }}, Python 3.13)
-    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'release/') }}
+    if: ${{ github.event_name != 'schedule' && (github.event_name != 'pull_request' || startsWith(github.head_ref, 'release/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -419,6 +409,7 @@ jobs:
 
   windows-wrf:
     name: Windows WRF runtime
+    if: ${{ github.event_name != 'schedule' }}
     runs-on: windows-latest
     timeout-minutes: 25
 

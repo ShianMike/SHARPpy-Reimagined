@@ -87,6 +87,36 @@ async fn backoff(
 }
 
 impl ModelClient {
+    pub async fn probe_sources(urls: Vec<String>) -> Vec<Option<(u64, f64)>> {
+        let mut pending = urls.into_iter().enumerate();
+        let mut tasks = tokio::task::JoinSet::new();
+        let mut results = Vec::with_capacity(pending.len());
+        results.resize(pending.len(), None);
+        let Some(client) = mirror_client() else {
+            return results;
+        };
+        // Preserve the four-request ceiling without per-call Python executors.
+        loop {
+            while tasks.len() < 4 {
+                let Some((index, url)) = pending.next() else {
+                    break;
+                };
+                let client = client.clone();
+                tasks.spawn(async move {
+                    let probe = probe_range(&client, &url).await;
+                    (index, probe)
+                });
+            }
+            let Some(joined) = tasks.join_next().await else {
+                break;
+            };
+            if let Ok((index, probe)) = joined {
+                results[index] = probe;
+            }
+        }
+        results
+    }
+
     pub fn shared() -> &'static Self {
         static CLIENT: OnceLock<ModelClient> = OnceLock::new();
         CLIENT.get_or_init(Self::default)
@@ -224,6 +254,64 @@ impl ModelClient {
         cancelled(&cancel)?;
         Ok(output)
     }
+}
+
+fn mirror_client() -> Option<Client> {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    // The selected source still downloads through fresh transfer sessions.
+    // Keeping probe connections between races under-measures those sources'
+    // actual setup cost and can select a slower complete download.
+    Client::builder()
+        .user_agent("sharpmod")
+        .redirect(reqwest::redirect::Policy::limited(30))
+        .retry(reqwest::retry::never())
+        .connect_timeout(Duration::from_millis(2500))
+        .read_timeout(Duration::from_secs(6))
+        .build()
+        .ok()
+}
+
+async fn probe_range(client: &Client, url: &str) -> Option<(u64, f64)> {
+    let started = std::time::Instant::now();
+    let mut response = client
+        .get(url)
+        .header(header::RANGE, "bytes=0-65535")
+        .header(header::ACCEPT_ENCODING, "identity")
+        .send()
+        .await
+        .ok()?;
+    if response.status() != 206 {
+        return None;
+    }
+    let total = response
+        .headers()
+        .get(header::CONTENT_RANGE)?
+        .to_str()
+        .ok()?
+        .rsplit('/')
+        .next()?
+        .trim()
+        .parse()
+        .ok()?;
+    let chunked = response
+        .headers()
+        .get(header::TRANSFER_ENCODING)
+        .is_some_and(|value| {
+            value
+                .to_str()
+                .is_ok_and(|value| value.eq_ignore_ascii_case("chunked"))
+        });
+    let mut read = 0;
+    while read < 65536 {
+        let Some(chunk) = response.chunk().await.ok()? else {
+            break;
+        };
+        read += chunk.len();
+        if chunked {
+            break;
+        }
+    }
+    Some((total, started.elapsed().as_secs_f64()))
 }
 
 #[cfg(test)]

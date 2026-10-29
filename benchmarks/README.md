@@ -6,6 +6,24 @@ The [current performance plan](../docs/performance/RUST_MIGRATION_PLAN.md),
 optimizations from new experiments. Keep individual samples and correctness
 evidence before making a speed claim.
 
+## Frontend measurements
+
+Run `npm run test:performance` from `frontend/` for the SHRF PNG transport
+benchmark. Its `*.benchmark.ts` file is outside routine Vitest discovery;
+`map.test.ts` keeps parser, payload, and Blob correctness checks in the normal
+suite. `SHARPPY_SHRF_ITERS` controls the sample count (20 by default).
+
+The field-image suite still runs its exact-palette, allocation-reuse, and
+cancellation regressions during normal testing. Its timing experiment remains
+opt-in: set `SHARPPY_FIELD_BENCHMARK=1` and run
+`npm test -- src/map/fieldImages.performance.test.tsx --maxWorkers=1`.
+
+Historical results under `results/` are measurement evidence, not test inputs
+or active CI budgets. Keep their original environment and limitations attached;
+older Qt application timings do not describe the current Tauri frontend.
+Active pytest regression budgets live in
+`constraints/test-performance-baseline.json`.
+
 ## Headless sounding renders
 
 `benchmark_rendering.py` measures the real bundled-input renderer in one fresh

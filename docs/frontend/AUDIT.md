@@ -505,8 +505,9 @@ How CI runs them:
   - `compatibility`: Python 3.11 and 3.12 on the Python fallback, 2 workers.
   - `fast`: Python 3.13 with the Rust wheel built by maturin,
     `SHARPMOD_BACKEND=rust`, 4 workers, coverage (`fail_under = 35`).
-  - The "test tree" category jobs re-report the fast JUnit without rerunning
-    tests.
+  - At audit time, "test tree" category jobs re-reported the fast JUnit without
+    rerunning tests. That reporting layer has since been removed; pytest logs,
+    JUnit, coverage, and timing reports remain the source of test results.
   - `property`: Python 3.13 on both the `python` and `rust` backends, 2
     workers each.
   - `serial-release` (release only), `windows-wrf`, `quality` (two Ruff runs
@@ -527,11 +528,10 @@ How CI runs them:
 
 Constraints on adding tests:
 
-- New Python test modules must be classified in
-  `scripts/summarize_test_categories.py::category_for_module`; unmatched names
-  fall into `providers`.
+- The former category-classification requirement was retired with the category
+  reporter. Test discovery uses the existing pytest configuration directly.
 - Workflow-structure tests parse `tests.yml`, `release.yml`, and `rust.yml`
-  (`test_test_lane_runner.py`, `test_test_category_summary.py`,
+  (`test_test_lane_runner.py`,
   `test_backend_packaging.py`, `test_model_fetch_packaging.py`,
   `test_release_packaging.py`). A separate workflow file for the frontend is
   lower risk than editing `tests.yml`.
@@ -624,7 +624,7 @@ The static import scan parsed every production module with `ast`, recorded
 module-scope imports separately from function-scope imports, and flagged Qt
 (`qtpy`, `PySide6`), upstream SHARPpy, network, GRIB, and cross-package
 imports. Per-category test counts come from classifying the baseline fast-lane
-JUnit with `scripts/summarize_test_categories.py::category_for_module`.
+JUnit with the category reporter used at the time of this historical audit.
 
 ## Corrections and clarifications
 

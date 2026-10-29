@@ -432,3 +432,126 @@ async fn rejects_invalid_url_timeout_and_ranges_before_network() {
     }
     assert_eq!(server.count(), 0);
 }
+
+#[tokio::test]
+async fn mirror_probes_measure_new_connections_and_consume_the_whole_range() {
+    let server = Server::new(|request| {
+        assert_eq!(request.headers.get("range").unwrap(), "bytes=0-65535");
+        assert_eq!(request.headers.get("accept-encoding").unwrap(), "identity");
+        let mut reply = Reply::new(206, vec![1; 65536]);
+        reply
+            .headers
+            .push(("Content-Range", "bytes 0-65535/12610787".into()));
+        reply.chunks = 4;
+        reply.pause = Duration::from_millis(10);
+        reply
+    });
+    for _ in 0..2 {
+        let (size, elapsed) =
+            ModelClient::probe_sources(vec![server.url.clone()]).await[0].unwrap();
+        assert_eq!(size, 12610787);
+        assert!(elapsed >= 0.025);
+    }
+    let requests = server.requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert_ne!(requests[0].port, requests[1].port);
+}
+
+#[tokio::test]
+async fn mirror_failures_require_206_and_a_numeric_total_without_retrying() {
+    for (status, range) in [
+        (200, "bytes 0-3/100"),
+        (503, "bytes 0-3/100"),
+        (206, "bytes 0-3/*"),
+        (206, "bad"),
+    ] {
+        let server = Server::new(move |_| {
+            let mut reply = Reply::new(status, b"GRIB");
+            reply.headers.push(("Content-Range", range.into()));
+            reply
+        });
+        assert_eq!(
+            ModelClient::probe_sources(vec![server.url.clone()]).await[0],
+            None
+        );
+        assert_eq!(server.count(), 1);
+    }
+    let server = Server::new(|_| Reply::new(206, b"GRIB"));
+    assert_eq!(
+        ModelClient::probe_sources(vec![server.url.clone()]).await[0],
+        None
+    );
+    assert_eq!(
+        ModelClient::probe_sources(vec!["file:///wrong".into()]).await[0],
+        None
+    );
+}
+
+#[tokio::test]
+async fn mirror_read_deadlines_reset_on_progress_and_reject_a_stalled_body() {
+    let server = Server::new(|_| {
+        let mut reply = Reply::new(206, vec![1; 500]);
+        reply
+            .headers
+            .push(("Content-Range", "bytes 0-499/1000".into()));
+        reply.chunks = 5;
+        reply.pause = Duration::from_millis(40);
+        reply
+    });
+    let client = Client::builder()
+        .no_proxy()
+        .read_timeout(Duration::from_millis(120))
+        .retry(reqwest::retry::never())
+        .build()
+        .unwrap();
+    let (size, elapsed) = probe_range(&client, &server.url).await.unwrap();
+    assert_eq!(size, 1000);
+    assert!(elapsed >= 0.14);
+    let client = Client::builder()
+        .no_proxy()
+        .read_timeout(Duration::from_millis(10))
+        .retry(reqwest::retry::never())
+        .build()
+        .unwrap();
+    assert_eq!(probe_range(&client, &server.url).await, None);
+}
+
+#[tokio::test]
+async fn mirror_batches_keep_input_order_with_four_concurrent_requests() {
+    let active = Arc::new(AtomicUsize::new(0));
+    let peak = Arc::new(AtomicUsize::new(0));
+    let (running, high) = (active.clone(), peak.clone());
+    let server = Server::new(move |request| {
+        let count = running.fetch_add(1, Ordering::SeqCst) + 1;
+        high.fetch_max(count, Ordering::SeqCst);
+        thread::sleep(Duration::from_millis(20));
+        running.fetch_sub(1, Ordering::SeqCst);
+        let index: u64 = request.path.trim_start_matches('/').parse().unwrap();
+        let mut reply = Reply::new(206, b"GRIB");
+        reply
+            .headers
+            .push(("Content-Range", format!("bytes 0-3/{}", 1000 + index)));
+        reply
+    });
+    for _ in 0..2 {
+        let urls = (0..12)
+            .map(|index| format!("{}/{index}", server.url))
+            .collect();
+        let results = ModelClient::probe_sources(urls).await;
+        assert_eq!(
+            results
+                .iter()
+                .map(|probe| probe.unwrap().0)
+                .collect::<Vec<_>>(),
+            (1000..1012).collect::<Vec<_>>()
+        );
+    }
+    let requests = server.requests.lock().unwrap();
+    let first: std::collections::HashSet<_> =
+        requests[..12].iter().map(|request| request.port).collect();
+    assert!(requests[12..]
+        .iter()
+        .all(|request| !first.contains(&request.port)));
+    assert_eq!(peak.load(Ordering::SeqCst), 4);
+    assert_eq!(active.load(Ordering::SeqCst), 0);
+}

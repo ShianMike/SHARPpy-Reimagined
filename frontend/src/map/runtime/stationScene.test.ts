@@ -35,18 +35,13 @@ it("reuses unchanged label layouts during four-panel contour playback, invalidat
     scene.setStations(stationFixture.stations as Station[]);
     return scene;
   });
-  const samples: number[] = [];
-  for (let frame = 0; frame < 30; frame++) {
-    const start = performance.now();
+  // An initial layout and an unchanged refresh prove reuse for every panel.
+  for (let frame = 0; frame < 2; frame++) {
     for (const scene of scenes) {
       scene.setData({ contours: { wind: null, segments: [] } as unknown as ContourLines });
       scene.updateLabels(map);
     }
-    samples.push(performance.now() - start);
   }
-  const sorted = [...samples].sort((a, b) => a - b);
-  console.log(JSON.stringify({ benchmark: "four-panel-contour-labels", frames: 30, stations: stationFixture.stations.length,
-    projections: project.mock.calls.length, p50Ms: sorted[14], p95Ms: sorted[28], samples }));
   expect(project.mock.calls.length).toBe(stationFixture.stations.length * 4);
   project.mockClear();
   useAppStore.getState().selectStation("72357");

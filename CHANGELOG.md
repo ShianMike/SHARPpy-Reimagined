@@ -51,6 +51,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Align application versions and release metadata with v3.5.1.
 - Keep release-highlights layout checks valid for patch releases with a single
   highlight while retaining the multi-column checks for larger releases.
+- Support explicitly rebuilding a mutable release after all existing gates pass,
+  preserving the preceding stable upgrade baseline and keeping replacement
+  artifacts unpublished until their upload completes. Verify Live Tracking's
+  storm-report controls and rendered layer in the browser checks.
 
 ## [v3.5.0] - 2026-10-29
 

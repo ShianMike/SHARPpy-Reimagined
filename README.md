@@ -16,6 +16,14 @@
 
 ## What's new in 3.5.1
 
+- **Storm reports in Live Tracking:** show tornado, hail and wind reports beside
+  radar and alerts, with hazard filters, event windows, hover details and past-hour
+  caching and playback.
+- **Correct supplemental radar times:** retain the actual elevation times for
+  SAILS and MRLE scans, avoiding false future-scan failures.
+- **Clear overlay recovery:** distinguish unavailable radar scans and uncached
+  alert history from connection or decoding failures, with Return to Live for
+  missing historical frames.
 - **Faster first sounding display:** ECAPE now uses a native Rust workspace,
   reducing first-render delay and initial memory use while preserving scientific
   reference checks and missing-data behavior. In the recorded local UHD comparison,

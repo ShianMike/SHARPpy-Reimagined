@@ -15,10 +15,15 @@ on:
         required: true
         type: boolean
         default: false
+      replace_release:
+        description: "Rebuild an existing mutable, published release from the dispatched source; replaces its tag and assets only when publish_release is also enabled."
+        required: true
+        type: boolean
+        default: false
 
 # Build and test jobs have no repository write permission. A dedicated job can
 # write only provenance attestations, and only the isolated publish job can
-# create a tag or GitHub Release.
+# create or replace a tag or GitHub Release.
 permissions:
   contents: read
 
@@ -31,6 +36,9 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
       tag_exists: ${{ steps.release.outputs.tag_exists }}
       source_sha: ${{ steps.source.outputs.sha }}
+      old_tag_sha: ${{ steps.release.outputs.old_tag_sha }}
+      release_id: ${{ steps.release.outputs.release_id }}
+      previous_tag: ${{ steps.release.outputs.previous_tag }}
 
     steps:
       - name: Resolve release tag and source
@@ -39,9 +47,11 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           DISPATCH_TAG: ${{ github.event.inputs.tag }}
+          REPLACE_RELEASE: ${{ inputs.replace_release }}
           EVENT_TAG: ${{ github.ref_name }}
           REMOTE_URL: https://github.com/${{ github.repository }}.git
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
@@ -77,9 +87,36 @@ jobs:
             checkout_ref="$GITHUB_SHA"
             tag_exists=true
           fi
+
+          old_tag_sha=
+          release_id=
+          previous_tag=
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REPLACE_RELEASE" = "true" ]; then
+            if [ "$tag_exists" != "true" ]; then
+              echo "Replacement requires an existing tag and published mutable release: $tag" >&2
+              exit 1
+            fi
+            release=$(gh api "repos/$GH_REPO/releases/tags/$tag")
+            if ! jq -e '.immutable == false and .draft == false' <<< "$release" >/dev/null; then
+              echo "Replacement requires a published mutable release: $tag" >&2
+              exit 1
+            fi
+            release_id=$(jq -r '.id' <<< "$release")
+            old_tag_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq '.object.sha')
+            checkout_ref="$GITHUB_SHA"
+            previous_tag=$(gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" |
+              jq -r --arg tag "$tag" '[.[][] | select(.draft == false and .prerelease == false and .tag_name != $tag)] | max_by(.published_at).tag_name // empty')
+            if [ -z "$previous_tag" ]; then
+              echo "Replacement requires a previous stable release other than $tag" >&2
+              exit 1
+            fi
+          fi
           printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
           printf 'checkout_ref=%s\n' "$checkout_ref" >> "$GITHUB_OUTPUT"
           printf 'tag_exists=%s\n' "$tag_exists" >> "$GITHUB_OUTPUT"
+          printf 'old_tag_sha=%s\n' "$old_tag_sha" >> "$GITHUB_OUTPUT"
+          printf 'release_id=%s\n' "$release_id" >> "$GITHUB_OUTPUT"
+          printf 'previous_tag=%s\n' "$previous_tag" >> "$GITHUB_OUTPUT"
 
       - name: Check out release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -475,8 +512,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
+          PREVIOUS_TAG: ${{ needs.resolve-release.outputs.previous_tag }}
         run: |
-          $previous = gh api "repos/$env:GH_REPO/releases/latest" | ConvertFrom-Json
+          $baseline = if ($env:PREVIOUS_TAG) { "tags/$env:PREVIOUS_TAG" } else { 'latest' }
+          $previous = gh api "repos/$env:GH_REPO/releases/$baseline" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw "Previous stable release lookup failed" }
           $version = $env:RELEASE_TAG.TrimStart('v')
           $previousVersion = $previous.tag_name.TrimStart('v')
@@ -556,8 +595,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
+          PREVIOUS_TAG: ${{ needs.resolve-release.outputs.previous_tag }}
         run: |
-          $previous = gh api "repos/$env:GITHUB_REPOSITORY/releases/latest" | ConvertFrom-Json
+          $baseline = if ($env:PREVIOUS_TAG) { "tags/$env:PREVIOUS_TAG" } else { 'latest' }
+          $previous = gh api "repos/$env:GITHUB_REPOSITORY/releases/$baseline" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Previous stable release lookup failed' }
           & packaging/verify_native_acceptance.ps1 -Artifacts "$env:RUNNER_TEMP/native-candidate" `
             -PreviousVersion $previous.tag_name.TrimStart('v') -ExpectedVersion $env:RELEASE_TAG.TrimStart('v') `
@@ -614,13 +655,42 @@ jobs:
           name: windows-release-${{ needs.resolve-release.outputs.tag }}
           path: release-artifacts
 
+      - name: Guard and prepare explicit release replacement
+        if: github.event_name == 'workflow_dispatch' && inputs.replace_release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
+          RELEASE_ID: ${{ needs.resolve-release.outputs.release_id }}
+          OLD_TAG_SHA: ${{ needs.resolve-release.outputs.old_tag_sha }}
+          RELEASE_SOURCE_SHA: ${{ needs.resolve-release.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          release=$(gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG")
+          if ! jq -e --argjson id "$RELEASE_ID" '.id == $id and .immutable == false and .draft == false' <<< "$release" >/dev/null; then
+            echo "Release identity, mutability or published state changed; refusing replacement" >&2
+            exit 1
+          fi
+          current_tag_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
+          if [ "$current_tag_sha" != "$OLD_TAG_SHA" ]; then
+            echo "Release tag changed during verification; refusing replacement" >&2
+            exit 1
+          fi
+          jq -j '.body // ""' <<< "$release" > "$RUNNER_TEMP/release-body.md"
+          gh api --method PATCH "repos/$GH_REPO/releases/$RELEASE_ID" -F draft=true >/dev/null
+          gh api --method PATCH "repos/$GH_REPO/git/refs/tags/$RELEASE_TAG" \
+            -f sha="$RELEASE_SOURCE_SHA" -F force=true >/dev/null
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ needs.resolve-release.outputs.tag }}
           target_commitish: ${{ needs.resolve-release.outputs.source_sha }}
           name: SHARPpy Reimagined ${{ needs.resolve-release.outputs.tag == 'v3.0.1' && 'v3.0.0' || needs.resolve-release.outputs.tag }}${{ needs.resolve-release.outputs.tag == 'v2.0.0' && ' Legacy' || '' }}
-          generate_release_notes: true
+          draft: ${{ inputs.replace_release }}
+          generate_release_notes: ${{ !inputs.replace_release }}
+          body_path: ${{ inputs.replace_release && format('{0}/release-body.md', runner.temp) || '' }}
           body: |
             **Recommended Windows download:** `SHARPpy-Reimagined-${{ needs.resolve-release.outputs.tag }}-windows-x64-setup.exe`
 
@@ -665,3 +735,15 @@ jobs:
               gh release delete-asset "$RELEASE_TAG" "$stale" --yes
             fi
           done
+
+      - name: Publish completed replacement as latest stable release
+        if: github.event_name == 'workflow_dispatch' && inputs.replace_release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.resolve-release.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          gh api --method PATCH "repos/$GH_REPO/releases/$RELEASE_ID" \
+            -F draft=false -F prerelease=false -f make_latest=true >/dev/null

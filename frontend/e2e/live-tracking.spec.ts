@@ -92,6 +92,21 @@ test("Live Tracking ignores map clicks and preserves Model Viewer's point", asyn
   expectWarnings(consoleMessages, []);
 });
 
+test("Storm reports expose live filters and render beside the other live layers", async ({ page, consoleMessages }) => {
+  await page.clock.setFixedTime(new Date("2026-10-04T21:00:00Z"));
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Live Tracking", exact: true }).click();
+  await waitForMapDrawn(page);
+  await turnOn(page, "storm-reports");
+  const reports = page.getByTestId("layer-row-storm-reports");
+  await expect(reports.getByRole("combobox", { name: "Event window", exact: true })).toBeVisible();
+  await expect(reports.getByRole("combobox", { name: "Hazard", exact: true })).toBeVisible();
+  await expect(reports).toContainText("NWS Local Storm Reports");
+  await expect.poll(() => deckLayers(page)).toContain("storm-reports");
+  await saveScreenshot(page, "browser-live-storm-reports.png");
+  expectWarnings(consoleMessages, []);
+});
+
 test("Live Tracking has independent layers, a past-hour clock, and a session cache", async ({ page, consoleMessages }) => {
   // Install before app timers exist; the pause target exceeds this test's entire timeout.
   await page.clock.install({ time: new Date("2026-10-04T20:00:00Z") });

@@ -131,7 +131,8 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await expect(page.getByRole("button", { name: "Show point details", exact: true })).toHaveCount(0);
   await expect(radar.getByTestId("radar-shown")).toBeVisible();
   await expect(page.getByTestId("layer-row-model-field")).toHaveCount(0);
-  for (const id of ["spc-cat", "spc-hail", "spc-wind", "spc-torn", "storm-reports"]) await expect(page.getByTestId(`layer-row-${id}`)).toHaveCount(0);
+  for (const id of ["spc-cat", "spc-hail", "spc-wind", "spc-torn"]) await expect(page.getByTestId(`layer-row-${id}`)).toHaveCount(0);
+  await expect(page.getByTestId("layer-row-storm-reports")).toBeVisible();
   for (const id of ["warnings", "watches"]) await expect(page.getByTestId(`layer-row-${id}`)).toBeVisible();
   const time = page.getByRole("slider", { name: "Live history" });
   await time.fill("-30");

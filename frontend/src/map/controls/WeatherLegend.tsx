@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { RadarScale } from "../../features/tracking/RadarScale";
+import { failureOf, overlayAvailability } from "../../lib/backend/errors";
 import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { formatUtc } from "../../features/sounding/soundingTime";
 import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
@@ -48,7 +49,9 @@ function AlertKey({ kind }: { kind: "warning" | "watch" }) {
   const query = useWeatherAlerts(time, true);
   const alerts = query.data?.alerts.filter((alert) => alert.kind === kind) ?? [];
   const plural = kind === "watch" ? "watches" : "warnings";
-  return time === null ? <p>Choose a time to view NWS alerts.</p> : query.isError ? <p>Alerts unavailable. Open layer settings to retry.</p>
+  const failure = failureOf(query.error);
+  const historyMissing = failure !== null && overlayAvailability(failure) === "historyUnavailable";
+  return time === null ? <p>Choose a time to view NWS alerts.</p> : query.isError ? <p>{historyMissing ? "Alert history unavailable for this time. Return to Live for current alerts." : "Alerts unavailable. Open layer settings to retry."}</p>
     : query.data === undefined ? <p>Loading NWS alerts…</p> : <>
       <ColourKeys entries={alerts.map((alert) => ({ label: alert.event, fill: null, stroke: alert.colour }))} />
       <p>{alerts.length === 0 ? `No active ${plural} at this time.` : `${String(alerts.length)} active ${alerts.length === 1 ? kind : plural}`}</p>

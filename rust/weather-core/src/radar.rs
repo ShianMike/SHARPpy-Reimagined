@@ -8,6 +8,8 @@ use std::time::{Duration, Instant};
 use time::{OffsetDateTime, PrimitiveDateTime};
 use tokio::sync::Semaphore;
 
+pub mod scan_time;
+
 const BASE: &str = "https://tgftp.nws.noaa.gov/SL.us008001/DF.of/DC.radar";
 const TILTS: [&str; 7] = ["z", "0", "a", "1", "b", "2", "3"];
 const BYTE_LIMIT: usize = 256 * 1024;

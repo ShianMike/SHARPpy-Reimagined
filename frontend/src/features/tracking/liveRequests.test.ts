@@ -4,6 +4,7 @@ import radarTilts from "@contracts/public/map/radar-tilts.json";
 import { QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { BackendClient } from "../../lib/backend/client";
+import { BackendFailure } from "../../lib/backend/errors";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import { createQueryClient, mapKeys } from "../../lib/backend/queryOptions";
 import { parseRadarSiteFrame } from "../../lib/contracts/frames";
@@ -11,12 +12,31 @@ import { parseRadarTilts } from "../../lib/contracts/map";
 import { useAppStore } from "../../stores/appStore";
 import { LIVE_MINUTE } from "../../stores/liveTrackingStore";
 import { useMapStore } from "../../stores/mapStore";
-import { isLiveQuery, liveRequests, preloadRadarTilts, trimLiveCache } from "./liveRequests";
+import { fetchLiveRequest, isLiveQuery, liveRequests, preloadRadarTilts, trimLiveCache } from "./liveRequests";
 
 const map = useMapStore.getState(), app = useAppStore.getState();
 const now = Date.parse("2026-10-17T08:00:00Z");
 beforeEach(() => { useMapStore.setState(map, true); useAppStore.setState(app, true); });
 afterEach(() => { vi.restoreAllMocks(); });
+
+it("reuses a confirmed alert history gap on playback loops but retries other provider failures", async () => {
+  const client = createQueryClient();
+  const missing = new BackendFailure({ code: "OVERLAY_FETCH_FAILED", message: "No snapshot", retryable: false,
+    details: { reason: "historyUnavailable" } });
+  const queryFn = vi.fn().mockRejectedValue(missing);
+  const request = { queryKey: mapKeys.alerts("2026-10-30T02:40:00Z"), queryFn };
+  await expect(fetchLiveRequest(client, request)).rejects.toBe(missing);
+  await expect(fetchLiveRequest(client, request)).rejects.toBe(missing);
+  await expect(fetchLiveRequest(client, request, true)).rejects.toBe(missing);
+  expect(queryFn).toHaveBeenCalledOnce();
+  const outage = new BackendFailure({ code: "OVERLAY_FETCH_FAILED", message: "Network unavailable", retryable: true });
+  const retry = vi.fn().mockRejectedValueOnce(outage).mockResolvedValue("current snapshot");
+  const current = { queryKey: mapKeys.alerts("2026-10-30T02:47:00Z"), queryFn: retry };
+  await expect(fetchLiveRequest(client, current)).rejects.toBe(outage);
+  await expect(fetchLiveRequest(client, current, true)).resolves.toBe("current snapshot");
+  expect(retry).toHaveBeenCalledTimes(2);
+  client.clear();
+});
 
 it("bounds raster memory and unavailable cuts without removing active imagery or model data", async () => {
   const client = createQueryClient();

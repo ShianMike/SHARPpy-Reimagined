@@ -1,7 +1,19 @@
 {
   "3.5.1": {
-    "summary": "Faster first sounding display with lower initial memory use.",
+    "summary": "Storm reports in Live Tracking, clearer overlay recovery and faster first sounding display.",
     "highlights": [
+      {
+        "title": "Storm reports in Live Tracking",
+        "description": "Show tornado, hail and wind reports alongside radar and alerts. Choose an event window and hazard filter, inspect event details on hover, and include reports when caching or replaying the past hour. Reports follow the selected live time and remain available in Model Viewer."
+      },
+      {
+        "title": "Correct supplemental radar times",
+        "description": "Supplemental US radar scans retain their correct elevation times, avoiding false future-scan failures. Missing scans show an availability warning with useful recovery."
+      },
+      {
+        "title": "Clear alert-history recovery",
+        "description": "Uncached past NWS alerts show a history warning with Return to Live. Reopening controls or looping playback does not keep requesting missing alert snapshots, and copied diagnostics explain the availability limit. Connection and decoding failures keep their retry actions."
+      },
       {
         "title": "Faster sounding startup",
         "description": "In local UHD measurements, the first-render median fell from 5.15 s to 3.37 s, with about 160 MiB less initial peak memory use. Repeated-render timings were essentially unchanged."

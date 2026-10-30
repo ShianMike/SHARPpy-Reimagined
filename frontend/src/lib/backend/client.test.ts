@@ -46,6 +46,23 @@ afterEach(() => {
 beforeEach(() => { useLogStore.setState({ entries: [], nextId: 1 }); });
 
 describe("BackendClient error mapping", () => {
+  it.each([
+    ["get_weather_alerts", "historyUnavailable"],
+    ["get_radar_site_frame", "scanMissing"],
+  ] as const)("records confirmed %s availability gaps with useful safe guidance", async (operation, reason) => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const client = new BackendClient(scripted(rejecting({ code: "OVERLAY_FETCH_FAILED", message: "private raw provider details",
+      retryable: reason === "scanMissing", context: { operation, provider: "python-bridge" }, details: { reason, token: "secret" } })).transport);
+    await failureOf(operation === "get_weather_alerts" ? client.getWeatherAlerts("2026-10-30T02:40:00Z")
+      : client.getRadarSiteFrame({ site: "KDFX" }, "velocity", "2026-10-30T02:40:00Z", "0"));
+    const entry = useLogStore.getState().entries[0];
+    expect(entry).toMatchObject({ level: "warning", diagnostic: { operation, code: "OVERLAY_FETCH_FAILED", reason } });
+    const summary = formatDiagnosticSummary(entry?.time ?? "", entry?.diagnostic);
+    expect(summary).toContain("Error category: Data availability");
+    expect(summary).toContain(reason === "historyUnavailable" ? "Return to Live" : "Choose another radar scan");
+    expect(summary).not.toMatch(/private|secret|connection/u);
+  });
+
   it("retains safe structured error context and excludes sensitive resource, details and message from summaries", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const client = new BackendClient(scripted(rejecting({

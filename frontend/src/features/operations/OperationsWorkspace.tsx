@@ -54,7 +54,7 @@ export function OperationsWorkspace(): ReactNode {
         <ul className={styles.liveFeatures}>
           <li><strong>Radar</strong><p>Base Reflectivity, Velocity, Correlation Coefficient, and Enhanced Echo Tops.</p></li>
           <li><strong>Satellite & observations</strong><p>Cloud imagery and conditions on the ground.</p></li>
-          <li><strong>Warnings & watches</strong><p>Active alerts alongside your live layers.</p></li>
+          <li><strong>Alerts & storm reports</strong><p>Warnings, watches, and tornado, hail and wind reports alongside your live layers.</p></li>
         </ul>
         <div className={styles.workflowFooter}><Action tone="accent" onClick={() => { navigate("live"); }}>Open Live Tracking</Action></div>
       </section>

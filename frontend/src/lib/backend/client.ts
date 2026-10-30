@@ -36,7 +36,7 @@ import type {
 import { MARKS, markOnce } from "../metrics";
 import type { CacheClearResult, CacheTarget, StorageUsage } from "../../types/storage";
 import { parseCachedHours, parseCacheClearResult, parseStorageUsage } from "../contracts/storage";
-import { BackendFailure, contractViolation, transportFailed } from "./errors";
+import { BackendFailure, contractViolation, overlayAvailability, transportFailed } from "./errors";
 import { BRIDGE_STATUS_CHANGED } from "./events";
 import { callWithSignal, type CommandName, type Transport } from "./transport";
 import { recordLog } from "../../stores/logStore";
@@ -52,7 +52,8 @@ function warnFailure(failure: BackendFailure, operation: string, extra?: unknown
     parts.push(extra);
   }
   console.warn(...parts);
-  recordLog("error", operation, failure.error.message, `${code}${context?.provider === undefined ? "" : ` · ${context.provider}`}`, { operation: context?.operation ?? operation, provider: context?.provider, code });
+  const availability = overlayAvailability(failure.error);
+  recordLog(availability === null ? "error" : "warning", operation, failure.error.message, `${code}${context?.provider === undefined ? "" : ` · ${context.provider}`}`, { operation: context?.operation ?? operation, provider: context?.provider, code, reason: availability });
 }
 export function failureFromRejection(reason: unknown, operation: string): BackendFailure {
   try {

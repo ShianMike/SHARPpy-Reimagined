@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { createTransport } from "../../lib/backend/fixtureTransport";
+import { mapKeys } from "../../lib/backend/queryOptions";
 import { encodeShrf, parseShrf } from "../../lib/contracts/frames";
 import type { Transport } from "../../lib/backend/transport";
 import { useAppStore } from "../../stores/appStore";
@@ -36,6 +37,41 @@ beforeEach(() => {
   vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 2, height: 2 }));
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+it("shares storm-report history across live panels and resets cached status for changed filters or windows", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(now);
+  useMapStore.getState().setPanelLayout(4);
+  for (const panel of [0, 1, 2, 3]) {
+    useMapStore.getState().setActivePanel(panel);
+    useMapStore.getState().setLayerVisible("radar", false);
+    useMapStore.getState().setLayerVisible("storm-reports", true);
+  }
+  const transport = createTransport(), fetch = vi.spyOn(transport, "call");
+  const { view, queryClient } = renderTimeline(transport);
+  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("13 cached");
+  expect(fetch.mock.calls.filter(([command]) => command === "get_storm_reports")).toHaveLength(13);
+  const key = mapKeys.reports(liveTimestamp(now - 30 * LIVE_MINUTE), 21600, "all");
+  expect(queryClient.getQueryState(key)?.status).toBe("success");
+  expect(isLiveQuery(key)).toBe(true);
+  expect(isLiveQuery(mapKeys.reportOptions)).toBe(false);
+  fetch.mockClear();
+  fireEvent.click(screen.getByRole("button", { name: "Play" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(751); });
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 55 * LIVE_MINUTE);
+  expect(fetch.mock.calls.filter(([command]) => command === "get_storm_reports")).toHaveLength(0);
+  act(() => { useLiveTrackingStore.getState().setPlaying(false); useMapStore.getState().setReportFilter("hail"); });
+  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).not.toContain("Ready");
+  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  expect(fetch.mock.calls.filter(([command]) => command === "get_storm_reports")).toHaveLength(13);
+  expect(queryClient.getQueryState(mapKeys.reports(liveTimestamp(now), 21600, "hail"))?.status).toBe("success");
+  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).toContain("Ready");
+  act(() => { useMapStore.getState().setReportWindowS(7200); });
+  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).not.toContain("Ready");
+  view.unmount(); queryClient.clear();
+});
 
 it("caches thirteen full-resolution steps, scrubs without changing the forecast, and resumes live", async () => {
   vi.spyOn(Date, "now").mockReturnValue(now);

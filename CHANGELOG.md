@@ -15,6 +15,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v3.5.1] - 2026-10-30
 
+### Added
+
+- Add Storm reports to Live Tracking with the existing hazard filters, event
+  windows, hover details, legend and layer controls. Follow the live or selected
+  playback time, share requests across matching panels, and include reports in
+  past-hour caching and refresh. Keep cached status in sync with filter and
+  event-window changes, while preserving the Model Viewer report layer.
+
 ### Performance
 
 - Move ECAPE's reference thermodynamics, parcel ascent, CAPE/NCAPE and
@@ -27,6 +35,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Correct NEXRAD Level III supplemental-scan timestamps in Rust so SAILS and
+  MRLE elevation times do not receive the volume offset twice and fail freshness
+  checks. Retain site, product, elevation and requested-time validation.
+  Show unavailable alert history and missing radar scans as availability warnings
+  with appropriate recovery, including Return to Live for past frames. Stop
+  refetching confirmed missing alert snapshots when controls reopen or playback
+  loops, and include safe availability guidance in copied diagnostics.
 - Confirm the existing install review in the public-updater acceptance test.
   Bind that opt-in check to the published version's tag so test-only maintenance
   can verify released installers; candidate checks still require the exact checkout.

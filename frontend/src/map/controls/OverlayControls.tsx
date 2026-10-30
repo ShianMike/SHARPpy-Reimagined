@@ -9,6 +9,7 @@ import { useForecastContext } from "../../features/forecast/useForecast";
 import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { compactUtc, formatUtc } from "../../features/sounding/soundingTime";
 import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice";
+import { OverlayErrorNotice } from "./OverlayErrorNotice";
 import { SourceSelect } from "../../features/sounding/SourceFields";
 import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
 import { OUTLOOK_KEYS, SATELLITE_CHANNELS, type OutlookKey } from "../../types/map";
@@ -112,7 +113,7 @@ export function RadarControls(): ReactNode {
         : isAustralianRadarSite(effectiveSite) ? <SourceSelect label="Tilt" value="0" options={[{ value: "0", label: "Lowest available" }]} disabled onChange={useMapStore.getState().setRadarTilt} /> : null)}
       {radar.isError ? (
         <>
-          <SoundingErrorNotice
+          <OverlayErrorNotice
             error={radar.error}
             operation={scope === "site" ? "get_radar_site_frame" : "get_radar_frame"}
             onRetry={() => {

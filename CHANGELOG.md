@@ -34,6 +34,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - Align application versions and release metadata with v3.5.1.
+- Keep release-highlights layout checks valid for patch releases with a single
+  highlight while retaining the multi-column checks for larger releases.
 
 ## [v3.5.0] - 2026-10-29
 

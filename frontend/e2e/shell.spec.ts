@@ -159,9 +159,13 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1920, height: 108
     const box = await boxOf(dialog);
     expect(isInside(box, viewportBox(page))).toBe(true);
     expect(box.width).toBeGreaterThan(box.height);
-    const first = await boxOf(highlights.nth(0)), second = await boxOf(highlights.nth(1));
-    expect(Math.abs(first.y - second.y)).toBeLessThan(1);
-    expect(second.x).toBeGreaterThanOrEqual(first.x + first.width);
+    const first = await boxOf(highlights.first());
+    expect(isInside(first, box)).toBe(true);
+    if (await highlights.count() > 1) {
+      const second = await boxOf(highlights.nth(1));
+      expect(Math.abs(first.y - second.y)).toBeLessThan(1);
+      expect(second.x).toBeGreaterThanOrEqual(first.x + first.width);
+    }
     expect(await dialog.evaluate((element) => {
       const body = element.querySelector("ul")?.parentElement;
       return body !== null && body !== undefined && [element, body].every((part) =>

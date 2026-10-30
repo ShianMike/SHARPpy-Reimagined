@@ -1,7 +1,7 @@
 # Native ECAPE workspace
 
 Measured on 2026-10-30 against `b9d6148d6f7a04c882f80e1235baa88cf4df9ee4`.
-This is pending work after v3.5.0; published releases and their assets are unchanged.
+Release target: v3.5.1. These measurements describe the ECAPE workspace change.
 
 ## Measured target
 

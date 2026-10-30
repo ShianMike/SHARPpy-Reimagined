@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.5.0
+# SHARPpy Reimagined · v3.5.1
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,11 +10,23 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v350---2026-10-29)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v351---2026-10-30)
 
 </div>
 
-## What's new in 3.5.0
+## What's new in 3.5.1
+
+- **Faster first sounding display:** ECAPE now uses a native Rust workspace,
+  reducing first-render delay and initial memory use while preserving scientific
+  reference checks and missing-data behavior. In the recorded local UHD comparison,
+  the first-render median improved from 5.15 s to 3.37 s with about 160 MiB less
+  initial peak working set; repeated-render timings were essentially unchanged.
+
+See the [measurement report](docs/performance/ECAPE_RUST_MIGRATION.md) for the
+hardware, comparison method and limits. This patch also includes the public-updater
+acceptance check for the existing install review.
+
+### Included from 3.5.0
 
 - **Australian radar:** search 67 sites and view MRRL Base Reflectivity or
   Doppler Velocity, with actual scan times and distinct range-folded values.
@@ -56,7 +68,8 @@ open soundings, edits and history will be lost.
 
 ## Screenshots
 
-Current v3.5.0 views, captured at 1920 × 1080 from the live local application.
+Interface views from 3.5.0, captured at 1920 × 1080 from the live local application.
+The v3.5.1 performance update retains this interface.
 Open an image to view it at its original size.
 
 <details open>

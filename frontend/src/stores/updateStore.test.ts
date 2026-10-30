@@ -23,7 +23,7 @@ const work = [
 ];
 
 function availableUpdate() {
-  const update = new Update({ rid: 1, currentVersion: "3.5.0", version: "3.5.1", rawJson: {} });
+  const update = new Update({ rid: 1, currentVersion: "3.5.1", version: "3.5.2", rawJson: {} });
   const download = vi.spyOn(update, "download").mockResolvedValue();
   const install = vi.spyOn(update, "install").mockResolvedValue();
   useUpdateStore.setState({ update, status: "available" });

@@ -7,6 +7,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Upcoming
+
+- Expand the available weather-model parameters, offering only fields supported
+  by each model and the selected run.
+- Add isobars with numeric pressure labels on weather maps.
+
+## [v3.5.1] - 2026-10-30
+
 ### Performance
 
 - Move ECAPE's reference thermodynamics, parcel ascent, CAPE/NCAPE and
@@ -23,11 +31,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Bind that opt-in check to the published version's tag so test-only maintenance
   can verify released installers; candidate checks still require the exact checkout.
 
-### Upcoming
+### Changed
 
-- Expand the available weather-model parameters, offering only fields supported
-  by each model and the selected run.
-- Add isobars with numeric pressure labels on weather maps.
+- Align application versions and release metadata with v3.5.1.
 
 ## [v3.5.0] - 2026-10-29
 

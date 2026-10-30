@@ -1,10 +1,10 @@
 {
-  "Unreleased": {
-    "summary": "Faster first sounding display with the same scientific results.",
+  "3.5.1": {
+    "summary": "Faster first sounding display with lower initial memory use.",
     "highlights": [
       {
         "title": "Faster sounding startup",
-        "description": "ECAPE now uses a native Rust workspace, reducing first-render delay and memory use. Scientific reference checks, missing-data handling and the CAPE bound stay intact."
+        "description": "In local UHD measurements, the first-render median fell from 5.15 s to 3.37 s, with about 160 MiB less initial peak memory use. Repeated-render timings were essentially unchanged."
       }
     ]
   },

@@ -28,6 +28,22 @@ it("copies only safe failure metadata, time, and fixed recovery guidance", () =>
   ].join("\n"));
 });
 
+it("only copies known overlay availability reasons for their matching operations", () => {
+  const valid = { operation: "get_weather_alerts", code: "OVERLAY_FETCH_FAILED", reason: "historyUnavailable" };
+  expect(diagnosticMetadata("", valid).reason).toBe("historyUnavailable");
+  for (const input of [
+    { ...valid, reason: "secret\nAuthorization: token" },
+    { ...valid, reason: { token: "secret" } },
+    { ...valid, reason: "__proto__" },
+    { ...valid, operation: "get_weather_field" },
+    { ...valid, code: "FIELD_FETCH_FAILED" },
+    { ...valid, reason: "scanMissing" },
+  ]) {
+    expect(diagnosticMetadata("", input).reason).toBeUndefined();
+    expect(formatDiagnosticSummary("2026-10-30T02:47:04Z", input)).not.toMatch(/Availability:|secret|Authorization/u);
+  }
+});
+
 it.each([
   "https://user:password@example.test?token=secret",
   "C:\\Users\\private-user\\secret.txt",

@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { BackendProvider } from "../lib/backend/BackendProvider";
 import { BackendClient } from "../lib/backend/client";
+import { createTransport } from "../lib/backend/fixtureTransport";
 import { createQueryClient, mapKeys } from "../lib/backend/queryOptions";
 import { encodeShrf, parseFieldFrame, parseShrf } from "../lib/contracts/frames";
 import { parseMapCatalog } from "../lib/contracts/map";
@@ -77,6 +78,42 @@ afterEach(() => {
 });
 
 const bytes = (url: string): ArrayBuffer => Uint8Array.from(atob(url.split(",")[1] ?? ""), (c) => c.charCodeAt(0)).buffer;
+
+it.each(["map", "live"] as const)("renders storm reports at the %s clock with the selected hazard and event window", async (view) => {
+  const layers = defaultLayerStates();
+  layers["storm-reports"].visible = true;
+  useMapStore.setState((state) => ({ view, activePanel: 0, layers, reportFilter: "all", reportWindowS: 21600,
+    livePanels: state.livePanels.map((panel, index) => index === 0 ? { ...panel, layers } : panel) }));
+  const liveTime = Date.parse("2026-10-17T08:00:00Z");
+  useLiveTrackingStore.setState({ now: liveTime, selectedTime: null });
+  useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T18:00:00Z", forecastHour: 3 });
+  const transport = createTransport(), calls = vi.spyOn(transport, "call");
+  const queryClient = createQueryClient(), client = new BackendClient(transport);
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>;
+  const scene: Partial<SceneData> = {};
+  const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
+  const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
+  const time = view === "live" ? "2026-10-17T08:00:00Z" : "2026-10-04T21:00:00Z";
+  await waitFor(() => { expect(scene.reports?.length).toBeGreaterThan(0); });
+  expect(calls).toHaveBeenCalledWith("get_storm_reports", { validTime: time, windowS: 21600, hazardFilter: "all" });
+  const previous = scene.reports;
+  act(() => {
+    if (view === "live") useLiveTrackingStore.getState().selectTime(liveTime - 30 * 60_000);
+    else useForecastStore.getState().setHour(4);
+    useMapStore.getState().setReportFilter("hail");
+    useMapStore.getState().setReportWindowS(7200);
+  });
+  const next = view === "live" ? "2026-10-17T07:30:00Z" : "2026-10-04T22:00:00Z";
+  await waitFor(() => {
+    expect(scene.reports?.length).toBeGreaterThan(0);
+    expect(scene.reports).not.toBe(previous);
+  });
+  expect(calls).toHaveBeenCalledWith("get_storm_reports", { validTime: next, windowS: 7200, hazardFilter: "hail" });
+  expect(scene.reports?.every((report) => report.category === "h" || report.category === "significant" && report.symbol === "diamond")).toBe(true);
+  act(() => { useMapStore.getState().setLayerVisible("storm-reports", false); });
+  await waitFor(() => { expect(scene.reports).toBeNull(); });
+  hook.unmount(); queryClient.clear();
+});
 
 it("shares a frame across panels and reopens, colouring only when its Sharp image is read", () => {
   const construct = vi.fn(function (data: Uint8ClampedArray, width: number, height: number) { return { data, width, height }; });

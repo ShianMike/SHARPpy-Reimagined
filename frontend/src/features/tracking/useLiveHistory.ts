@@ -1,7 +1,6 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useBackendClient } from "../../lib/backend/BackendProvider";
-import { BASE_QUERY_OPTIONS } from "../../lib/backend/queryOptions";
 import { useRadarSites } from "../../map/mapQueries";
 import { nearestRadarSite } from "../../map/nearestSite";
 import { FRAME_INTERVAL_MS } from "../../map/usePlayback";
@@ -10,7 +9,7 @@ import { useMapStore } from "../../stores/mapStore";
 import { liveHistoryTimes, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
 import { useUiStore } from "../../stores/uiStore";
 import { decodePng } from "../../map/pngImages";
-import { isLiveQuery, liveRequests, preloadRadarTilts, trimLiveCache } from "./liveRequests";
+import { fetchLiveRequest, isLiveQuery, liveRequests, preloadRadarTilts, trimLiveCache } from "./liveRequests";
 import { radarPlaybackFrame } from "./radarPlayback";
 
 const IDLE_PROGRESS = { running: false, done: 0, total: 0, failed: 0, stopped: false };
@@ -26,6 +25,8 @@ export function useLiveHistory() {
   const { speed, loop } = useUiStore();
   const panels = useMapStore((state) => state.livePanels);
   const layout = useMapStore((state) => state.panelLayout);
+  const reportWindowS = useMapStore((state) => state.reportWindowS);
+  const reportFilter = useMapStore((state) => state.reportFilter);
   const time = liveTimestamp(now);
   const selection = JSON.stringify(liveRequests(client, useMapStore.getState(), site, anchor, time, sites)
     .map(({ queryKey }) => queryKey.filter((part) => part !== time)));
@@ -56,7 +57,7 @@ export function useLiveHistory() {
 
   const load = useCallback(async (time: number, refresh = false): Promise<void> => {
     await Promise.allSettled(liveRequests(client, useMapStore.getState(), site, anchor, liveTimestamp(time), sites).map((request) =>
-      queryClient.query({ ...BASE_QUERY_OPTIONS, ...request, staleTime: refresh ? 0 : Number.POSITIVE_INFINITY, gcTime: Number.POSITIVE_INFINITY, retry: false }).then(async (data) => {
+      fetchLiveRequest(queryClient, request, refresh).then(async (data) => {
         const frame = data as { png?: unknown } | undefined;
         if (frame?.png instanceof Blob) await decodePng(frame.png);
       })));
@@ -76,7 +77,7 @@ export function useLiveHistory() {
       useLiveTrackingStore.getState().selectTime(next);
     });
     return () => { stopped = true; clearTimeout(timer); };
-  }, [now, selectedTime, playing, speed, loop, panels, layout, load]);
+  }, [now, selectedTime, playing, speed, loop, panels, layout, reportWindowS, reportFilter, load]);
   useEffect(() => () => { useLiveTrackingStore.getState().setPlaying(false); }, []);
 
   const cacheHour = async (): Promise<void> => {
@@ -93,7 +94,7 @@ export function useLiveHistory() {
       while (generation.current === token) {
         const request = requests[index++];
         if (request === undefined) return;
-        try { await queryClient.query({ ...BASE_QUERY_OPTIONS, ...request, staleTime: Number.POSITIVE_INFINITY, gcTime: Number.POSITIVE_INFINITY, retry: false }); }
+        try { await fetchLiveRequest(queryClient, request); }
         catch { failed++; }
         if (generation.current !== token) return;
         done++;

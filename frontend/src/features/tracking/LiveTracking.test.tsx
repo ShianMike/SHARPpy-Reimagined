@@ -256,7 +256,7 @@ it.each([0, 10])("keeps the same radar source while a recent request refreshes (
   view.unmount(); queryClient.clear();
 });
 
-it("puts outlooks and reports in Model Viewer and warnings and watches in Live Tracking", async () => {
+it("shares reports across map workspaces while keeping outlooks in Model Viewer and alerts in Live Tracking", async () => {
   const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
   expect(screen.queryByTestId("layer-row-radar")).toBeNull();
   expect(screen.getByTestId("layer-row-model-field")).toBeTruthy();
@@ -267,24 +267,27 @@ it("puts outlooks and reports in Model Viewer and warnings and watches in Live T
   const live = renderWithBackend(<LayerPanel availabilities={new Set()} />, transportWithRadar());
   expect(await screen.findByTestId("layer-row-radar")).toBeTruthy();
   expect(screen.queryByTestId("layer-row-model-field")).toBeNull();
-  for (const id of ["spc-cat", "spc-hail", "spc-wind", "spc-torn", "storm-reports"]) expect(screen.queryByTestId(`layer-row-${id}`)).toBeNull();
-  for (const id of ["warnings", "watches"]) expect(screen.getByTestId(`layer-row-${id}`)).toBeTruthy();
+  for (const id of ["spc-cat", "spc-hail", "spc-wind", "spc-torn"]) expect(screen.queryByTestId(`layer-row-${id}`)).toBeNull();
+  for (const id of ["warnings", "watches", "storm-reports"]) expect(screen.getByTestId(`layer-row-${id}`)).toBeTruthy();
   expect(screen.queryByRole("group", { name: "Active map panel" })).toBeNull();
   live.view.unmount(); live.queryClient.clear(); queryClient.clear();
 });
 
-it("shares one warning/watch request across panels and never fetches their old SPC/report settings", async () => {
+it("shares warning/watch and storm-report requests without fetching forecast outlooks", async () => {
   useAppStore.getState().setActiveWorkspace("live");
   for (const id of ["radar", "spc-cat", "storm-reports", "warnings", "watches"] as const) useMapStore.getState().setLayerVisible(id, id !== "radar");
   const transport = createTransport();
   const call = vi.spyOn(transport, "call");
   const requests = liveRequests(new BackendClient(transport), useMapStore.getState(), null, null, "2026-10-04T21:00:00Z");
-  expect(requests.map(({ queryKey }) => queryKey)).toEqual([mapKeys.alerts("2026-10-04T21:00:00Z")]);
-  await requests[0]?.queryFn();
+  expect(requests.map(({ queryKey }) => queryKey)).toEqual([
+    mapKeys.alerts("2026-10-04T21:00:00Z"), mapKeys.reports("2026-10-04T21:00:00Z", 21600, "all"),
+  ]);
+  await Promise.all(requests.map(({ queryFn }) => queryFn()));
   expect(call).toHaveBeenCalledWith("get_weather_alerts", { validTime: "2026-10-04T21:00:00Z" });
+  expect(call).toHaveBeenCalledWith("get_storm_reports", { validTime: "2026-10-04T21:00:00Z", windowS: 21600, hazardFilter: "all" });
   expect(isLiveQuery(mapKeys.outlook("cat", "2026-10-04T21:00:00Z"))).toBe(false);
   const saved = currentPreferences();
   resetLayerSettings();
   applyPreferences(saved);
-  expect(panelLayers(useMapStore.getState(), 0)).toMatchObject({ warnings: { visible: true }, watches: { visible: true } });
+  expect(panelLayers(useMapStore.getState(), 0)).toMatchObject({ warnings: { visible: true }, watches: { visible: true }, "storm-reports": { visible: true } });
 });

@@ -144,8 +144,8 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const satellite = usePngImage(useSatelliteFrame(channel, validTime, live && layers.satellite.visible), live && layers.satellite.visible, channel);
   const alertQuery = useWeatherAlerts(validTime, live && (layers.warnings.visible || layers.watches.visible));
   const alerts = live && !alertQuery.isError && (layers.warnings.visible || layers.watches.visible) ? alertQuery.data?.alerts ?? null : null;
-  const reportQuery = useStormReports(validTime, reportWindowS, reportFilter, !live && reportsVisible);
-  const reports = !live && reportsVisible && !reportQuery.isError ? reportQuery.data?.reports ?? null : null;
+  const reportQuery = useStormReports(validTime, reportWindowS, reportFilter, reportsVisible);
+  const reports = reportsVisible && !reportQuery.isError ? reportQuery.data?.reports ?? null : null;
   const surfaceAnchor = useSelectionAnchor();
   const surfaceQuery = useSurfacePlots(surfaceAnchor, validTime, live && surfaceVisible);
   const surfacePlots = !live || !surfaceVisible || surfaceQuery.isError ? null : surfaceQuery.data?.plots ?? null;

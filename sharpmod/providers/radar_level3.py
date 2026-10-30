@@ -484,6 +484,7 @@ def fetch_frame(
     opener=None,
     now=None,
 ) -> OverlayRaster:
+    import sharpmod_rs
     from metpy.io import Level3File
 
     echo_tops = product == "echo-tops"
@@ -546,8 +547,10 @@ def fetch_frame(
     payload = call(url, timeout, 2 * 1024 * 1024)
     try:
         file = Level3File(io.BytesIO(payload))
-        actual = file.metadata["vol_time"].replace(tzinfo=timezone.utc) + timedelta(
-            seconds=float(file.metadata.get("delta_time", 0))
+        actual = sharpmod_rs.radar_level3_scan_time(
+            file.metadata["vol_time"].replace(tzinfo=timezone.utc),
+            file.metadata.get("delta_time", 0),
+            file.metadata.get("supplemental_scan", "Non-supplemental scan"),
         )
         angle = None if echo_tops else float(file.metadata["el_angle"])
         if (

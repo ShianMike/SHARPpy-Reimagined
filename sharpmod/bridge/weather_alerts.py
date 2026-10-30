@@ -18,6 +18,7 @@ def current(params):
             "OVERLAY_FETCH_FAILED",
             f"NWS warnings and watches could not be loaded: {str(exc)[:250]}",
             not isinstance(exc, sharpmod_rs.WeatherHistoryUnavailable),
+            {"reason": "historyUnavailable"} if isinstance(exc, sharpmod_rs.WeatherHistoryUnavailable) else None,
         ) from None
 
 

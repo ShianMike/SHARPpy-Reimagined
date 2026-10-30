@@ -32,7 +32,7 @@ export type OrderableLayerId = (typeof ORDERABLE_LAYER_IDS)[number];
 
 /** Keep controls and rendering consistent, including previously saved layers. */
 export function layerInView(id: LayerId, view: "map" | "live"): boolean {
-  if (id === "model-field" || id === "storm-reports" || id.startsWith("spc-")) return view === "map";
+  if (id === "model-field" || id.startsWith("spc-")) return view === "map";
   if (["radar", "satellite", "surface-plots", "warnings", "watches", "radar-site-labels"].includes(id)) return view === "live";
   return true;
 }

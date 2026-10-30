@@ -3,6 +3,27 @@ use numpy::{
     PyUntypedArrayMethods,
 };
 use pyo3::{exceptions::PyValueError, prelude::*};
+use sharpmod_weather::radar::scan_time::ScanKind;
+
+#[pyfunction]
+fn radar_level3_scan_time(
+    volume_time: time::OffsetDateTime,
+    delta_time: i64,
+    supplemental_scan: &str,
+) -> PyResult<time::OffsetDateTime> {
+    let kind = match supplemental_scan {
+        "Non-supplemental scan" => ScanKind::Ordinary,
+        "SAILS scan" => ScanKind::Sails,
+        "MRLE scan" => ScanKind::Mrle,
+        _ => {
+            return Err(PyValueError::new_err(
+                "unknown Level III supplemental scan type",
+            ))
+        }
+    };
+    sharpmod_weather::radar::scan_time::level3(volume_time, delta_time, kind)
+        .map_err(PyValueError::new_err)
+}
 
 #[pyfunction(signature=(codes, starts, ends, bearings, ranges, gate_width, gate_start=0.))]
 #[allow(clippy::too_many_arguments)] // Native radial geometry and one cached projection.
@@ -51,6 +72,7 @@ fn sample_radar_radials<'py>(
 }
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(radar_level3_scan_time, module)?)?;
     module.add_function(wrap_pyfunction!(sample_radar_radials, module)?)?;
     Ok(())
 }

@@ -5,6 +5,7 @@ export interface DiagnosticInput {
   operation?: unknown;
   provider?: unknown;
   code?: unknown;
+  reason?: unknown;
 }
 
 type DiagnosticCode = AnyBackendError["code"] | "APPLICATION_ERROR" | "WINDOW_FAILED" | "MAP_RENDER_FAILED" | "UPDATE_FAILED" | "UNKNOWN_ERROR";
@@ -12,6 +13,7 @@ export interface DiagnosticMetadata {
   operation: string;
   provider: string;
   code: DiagnosticCode;
+  reason?: "historyUnavailable" | "scanMissing";
 }
 
 const OPERATIONS = new Set<string>([
@@ -108,17 +110,26 @@ export function diagnosticMetadata(source: string, input: DiagnosticInput = {}):
     ? input.operation : OPERATIONS.has(source) ? source : fallback.operation;
   const provider = typeof input.provider === "string" ? Object.hasOwn(PROVIDERS, input.provider) ? input.provider
     : Object.hasOwn(PROVIDER_ALIASES, input.provider) ? PROVIDER_ALIASES[input.provider] : undefined : undefined;
+  const code = typeof input.code === "string" && Object.hasOwn(GUIDANCE, input.code) ? input.code as DiagnosticCode : fallback.code;
+  const reason = code !== "OVERLAY_FETCH_FAILED" ? undefined
+    : operation === "get_weather_alerts" && input.reason === "historyUnavailable" ? input.reason
+    : (operation === "get_radar_site_frame" || operation === "get_radar_frame") && input.reason === "scanMissing" ? input.reason : undefined;
   return {
     operation,
     provider: provider ?? fallback.provider,
-    code: typeof input.code === "string" && Object.hasOwn(GUIDANCE, input.code) ? input.code as DiagnosticCode : fallback.code,
+    code,
+    ...(reason === undefined ? {} : { reason }),
   };
 }
 
 /** Copy only allowlisted metadata and fixed guidance, never raw messages or resource context. */
 export function formatDiagnosticSummary(time: string, input?: DiagnosticInput): string {
-  const { operation, provider, code } = diagnosticMetadata("", input);
-  const [category, recovery] = GUIDANCE[code];
+  const { operation, provider, code, reason } = diagnosticMetadata("", input);
+  const [category, recovery] = reason === "historyUnavailable"
+    ? ["Data availability", "Return to Live for current NWS warnings and watches. Past alerts require a snapshot cached during this session."]
+    : reason === "scanMissing"
+      ? ["Data availability", "Choose another radar scan, elevation, or site, or return to Live. Retry later for a newly published scan."]
+      : GUIDANCE[code];
   const providerName = (Object.hasOwn(PROVIDERS, provider) ? PROVIDERS[provider] : undefined) ?? provider;
   const date = new Date(time);
   return [
@@ -128,6 +139,7 @@ export function formatDiagnosticSummary(time: string, input?: DiagnosticInput): 
     `Time (UTC): ${Number.isNaN(date.getTime()) ? "Not recorded" : date.toISOString()}`,
     `Error category: ${category}`,
     `Error code: ${code}`,
+    ...(reason === undefined ? [] : [`Availability: ${reason === "historyUnavailable" ? "No cached alert snapshot" : "No matching radar scan"}`]),
     `Suggested recovery: ${recovery}`,
   ].join("\n");
 }

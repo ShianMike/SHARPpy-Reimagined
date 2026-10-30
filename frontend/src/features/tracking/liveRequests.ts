@@ -1,5 +1,6 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import type { BackendClient } from "../../lib/backend/client";
+import { BackendFailure, overlayAvailability } from "../../lib/backend/errors";
 import { BASE_QUERY_OPTIONS, mapKeys } from "../../lib/backend/queryOptions";
 import { panelLayers, panelWeather, type MapState } from "../../stores/mapStore";
 import type { SurfaceAnchor } from "../../map/surfaceQueries";
@@ -10,6 +11,14 @@ import { isAustralianRadarSite, panelRadar } from "../../map/panelRadar";
 export interface LiveRequest {
   queryKey: QueryKey;
   queryFn: () => Promise<unknown>;
+}
+
+/** An uncached past alert snapshot cannot appear on a later playback loop. */
+export function fetchLiveRequest(queryClient: QueryClient, request: LiveRequest, refresh = false): Promise<unknown> {
+  const previous = queryClient.getQueryState(request.queryKey);
+  if (previous?.error instanceof BackendFailure && overlayAvailability(previous.error.error) === "historyUnavailable") return Promise.reject(previous.error);
+  return queryClient.query({ ...BASE_QUERY_OPTIONS, ...request, staleTime: refresh ? 0 : Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY, retry: false });
 }
 
 /** Use the same addresses as the displayed layers, keeping native source quality. */
@@ -29,6 +38,7 @@ export function liveRequests(client: BackendClient, state: MapState, site: strin
   }
   if (layers.satellite.visible) requests.push({ queryKey: mapKeys.satellite(channel, time), queryFn: () => client.getSatelliteFrame(time, channel) });
   if (layers.warnings.visible || layers.watches.visible) requests.push({ queryKey: mapKeys.alerts(time), queryFn: () => client.getWeatherAlerts(time) });
+  if (layers["storm-reports"].visible) requests.push({ queryKey: mapKeys.reports(time, state.reportWindowS, state.reportFilter), queryFn: () => client.getStormReports(time, state.reportWindowS, state.reportFilter) });
   if (layers["surface-plots"].visible && anchor !== null) requests.push({ queryKey: mapKeys.surface(anchor.latitude, anchor.longitude, time), queryFn: () => client.getSurfacePlots(anchor.latitude, anchor.longitude, time) });
   return requests;
 }
@@ -76,7 +86,7 @@ export async function preloadRadarTilts(client: BackendClient, queryClient: Quer
   }
 }
 
-const LIVE_PREFIXES = new Set(["radar", "radar-site", "satellite", "weather-alerts", "surface"]);
+const LIVE_PREFIXES = new Set(["radar", "radar-site", "satellite", "weather-alerts", "surface", "reports"]);
 export function isLiveQuery(key: QueryKey): boolean {
   return typeof key[0] === "string" && LIVE_PREFIXES.has(key[0]) && key.some((part) => typeof part === "string" && /^\d{4}-\d{2}-\d{2}T/u.test(part));
 }

@@ -35,3 +35,10 @@ export function transportFailed(operation: string): FrontendError {
 export function failureOf(error: unknown): AnyBackendError | null {
   return error instanceof BackendFailure ? error.error : null;
 }
+
+/** Confirmed overlay gaps are availability warnings; other failures keep their errors. */
+export function overlayAvailability(error: AnyBackendError): "historyUnavailable" | "scanMissing" | null {
+  if (error.code !== "OVERLAY_FETCH_FAILED") return null;
+  const reason = error.details?.reason;
+  return reason === "historyUnavailable" || reason === "scanMissing" ? reason : null;
+}

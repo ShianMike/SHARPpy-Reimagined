@@ -35,9 +35,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Correct NEXRAD Level III supplemental-scan timestamps in Rust so SAILS and
-  MRLE elevation times do not receive the volume offset twice and fail freshness
-  checks. Retain site, product, elevation and requested-time validation.
+- Correct NEXRAD Level III supplemental-scan timestamps in Rust so SAILS cut
+  times and MRLE's published sequence start do not receive the volume offset
+  twice and fail freshness checks. Keep MRLE's stated sequence time instead of
+  inferring individual later-cut times. Retain site, product, elevation and
+  requested-time validation.
   Show unavailable alert history and missing radar scans as availability warnings
   with appropriate recovery, including Return to Live for past frames. Stop
   refetching confirmed missing alert snapshots when controls reopen or playback

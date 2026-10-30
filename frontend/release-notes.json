@@ -8,7 +8,7 @@
       },
       {
         "title": "Correct supplemental radar times",
-        "description": "Supplemental US radar scans retain their correct elevation times, avoiding false future-scan failures. Missing scans show an availability warning with useful recovery."
+        "description": "Supplemental US radar products use their published observation times, avoiding false future-scan failures. Missing scans show an availability warning with useful recovery."
       },
       {
         "title": "Clear alert-history recovery",

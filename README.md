@@ -19,8 +19,8 @@
 - **Storm reports in Live Tracking:** show tornado, hail and wind reports beside
   radar and alerts, with hazard filters, event windows, hover details and past-hour
   caching and playback.
-- **Correct supplemental radar times:** retain the actual elevation times for
-  SAILS and MRLE scans, avoiding false future-scan failures.
+- **Correct supplemental radar times:** use the published observation times for
+  SAILS and MRLE products, avoiding false future-scan failures.
 - **Clear overlay recovery:** distinguish unavailable radar scans and uncached
   alert history from connection or decoding failures, with Return to Live for
   missing historical frames.

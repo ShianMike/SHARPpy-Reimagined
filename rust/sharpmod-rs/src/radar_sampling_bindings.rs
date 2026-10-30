@@ -3,6 +3,7 @@ use numpy::{
     PyUntypedArrayMethods,
 };
 use pyo3::{exceptions::PyValueError, prelude::*};
+use sharpmod_weather::radar::scan_time::ScanKind;
 
 #[pyfunction]
 fn radar_level3_scan_time(
@@ -10,16 +11,17 @@ fn radar_level3_scan_time(
     delta_time: i64,
     supplemental_scan: &str,
 ) -> PyResult<time::OffsetDateTime> {
-    let supplemental = match supplemental_scan {
-        "Non-supplemental scan" => false,
-        "SAILS scan" | "MRLE scan" => true,
+    let kind = match supplemental_scan {
+        "Non-supplemental scan" => ScanKind::Ordinary,
+        "SAILS scan" => ScanKind::Sails,
+        "MRLE scan" => ScanKind::Mrle,
         _ => {
             return Err(PyValueError::new_err(
                 "unknown Level III supplemental scan type",
             ))
         }
     };
-    sharpmod_weather::radar::scan_time::level3(volume_time, delta_time, supplemental)
+    sharpmod_weather::radar::scan_time::level3(volume_time, delta_time, kind)
         .map_err(PyValueError::new_err)
 }
 

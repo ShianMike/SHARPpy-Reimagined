@@ -17,7 +17,7 @@ MetPy==1.7.1
 ecape==0.1.1
 
 cdsapi==0.7.7
-herbie-data==2026.9.2
+herbie-data==2026.10.0
 cfgrib==0.9.15.1
 eccodes==2.50.0
 xarray==2026.9.0

@@ -45,7 +45,7 @@ function setup() {
 }
 
 it.each([
-  ...["gfs", "aigfs", "openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3"].map((modelKey) => ({ modelKey, individual: false })),
+  ...["gfs", "aigfs", "openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km", "rrfs-a", "refs-m1", "refs-m5"].map((modelKey) => ({ modelKey, individual: false })),
   { modelKey: "gfs", individual: true },
 ])("keeps $modelKey downloads running while another hour's catalogue loads (individual: $individual)", async ({ modelKey, individual }) => {
   const { queryClient, client, fields, storedFields, wrapper } = setup();

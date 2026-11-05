@@ -30,7 +30,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   observation pagination before choosing the nearest observation.
 - Check Level II radar history against the actual cut time, including cached
   cuts, through Rust. Stop automatic alert-history requests when playback
-  revisits a confirmed unavailable snapshot.
+  revisits a confirmed unavailable snapshot. Preserve the radar-window error
+  wording used by existing callers.
 - Await backend shutdown and session-cache cleanup before the Windows updater
   launches its installer and exits. Hand blocking shutdown back to Tokio so
   cleanup also finishes when the updater occupies the only runtime worker.
@@ -41,6 +42,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   from the shared forecast and sounding model selectors following NWS SCN
   26-47. Preserve provider implementations and catalog definitions. Resolve
   stale retired choices to an active model before requesting map products.
+  Keep download regressions on active RRFS/REFS choices and exercise the
+  updater notice through its cleanup-aware native command.
 - Refresh dependencies: Herbie 2026.10.0, netCDF4
   1.7.5.1.post1, certifi 2026.10.23 and Ruff 0.17.3. Keep the installation
   reference aligned with the quality-tool pin.

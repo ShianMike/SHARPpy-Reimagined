@@ -426,7 +426,9 @@ def fetch_frame(
         cached = radar_site._CACHE.get(key)
     if cached is not None:
         if not sharpmod_rs.radar_level2_matches(cached[1].valid_time, requested, reference):
-            raise radar_site.RadarScanMissing("Level II cut does not match the requested time")
+            raise radar_site.RadarScanMissing(
+                "Level II cut is outside the current radar window or does not match the requested time"
+            )
         return cached[1]
     sweep = _volume(site, selected, call, timeout).get((product, tilt))
     if sweep is None:
@@ -435,7 +437,7 @@ def fetch_frame(
         )
     if not sharpmod_rs.radar_level2_matches(sweep.when, requested, reference):
         raise radar_site.RadarScanMissing(
-            "Level II cut does not match the requested time"
+            "Level II cut is outside the current radar window or does not match the requested time"
         )
     bounds = site.bounds()
     image = radar_level3.render_radials(

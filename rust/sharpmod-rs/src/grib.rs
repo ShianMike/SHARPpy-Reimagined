@@ -17,6 +17,11 @@ use std::path::{Path, PathBuf};
 use std::ptr::{self, NonNull};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
+mod grid_points;
+#[cfg(test)]
+mod profiling;
+use grid_points::{GridFingerprint, GridPointCache};
+
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt as _;
 #[cfg(windows)]
@@ -246,6 +251,8 @@ struct GribInventory {
 
 impl GribInventory {
     fn matches_mapping(&self, bytes: &[u8]) -> bool {
+        #[cfg(test)]
+        let _span = profiling::span("inventory_validation");
         self.messages.iter().all(|message| {
             let boundary = message.boundary;
             let Some(end) = boundary.offset.checked_add(boundary.length) else {
@@ -276,6 +283,7 @@ impl GribInventory {
 struct InventoryCache {
     enabled: bool,
     entries: VecDeque<(FileIdentity, Arc<GribInventory>)>,
+    grid_points: GridPointCache,
     hits: u64,
     misses: u64,
     evictions: u64,
@@ -287,6 +295,7 @@ impl Default for InventoryCache {
         Self {
             enabled: true,
             entries: VecDeque::new(),
+            grid_points: GridPointCache::default(),
             hits: 0,
             misses: 0,
             evictions: 0,
@@ -353,6 +362,7 @@ impl InventoryCache {
 
     fn clear(&mut self, reset_stats: bool) {
         self.entries.clear();
+        self.grid_points.clear();
         if reset_stats {
             self.hits = 0;
             self.misses = 0;
@@ -383,7 +393,7 @@ fn inventory_cache() -> MutexGuard<'static, InventoryCache> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// Enable or bypass native GRIB inventory reuse for subsequent decodes.
+/// Enable or bypass native GRIB inventory and grid-index reuse.
 ///
 /// Disabling does not destroy retained entries; callers that require a fully
 /// cold state should call [`clear_grib_inventory_cache`] as well.
@@ -391,7 +401,7 @@ pub fn set_grib_inventory_cache_enabled(enabled: bool) {
     inventory_cache().enabled = enabled;
 }
 
-/// Drop every retained immutable inventory, optionally resetting counters.
+/// Drop retained inventories and grid indexes, optionally resetting counters.
 pub fn clear_grib_inventory_cache(reset_stats: bool) {
     inventory_cache().clear(reset_stats);
 }
@@ -416,6 +426,8 @@ fn read_be_u64(bytes: &[u8]) -> Result<usize, GribError> {
 
 /// Locate complete GRIB1/GRIB2 messages without copying the mapped file.
 fn scan_message_boundaries(bytes: &[u8]) -> Result<Vec<MessageBoundary>, GribError> {
+    #[cfg(test)]
+    let _span = profiling::span("boundary_scan");
     let mut boundaries = Vec::new();
     let mut cursor = 0;
 
@@ -536,6 +548,8 @@ struct EccodesApi {
 
 impl EccodesApi {
     fn cached(path: &Path) -> Result<&'static Self, GribError> {
+        #[cfg(test)]
+        let _span = profiling::span("runtime_load");
         if let Some(api) = ECCODES_API.get() {
             return api.for_path(path);
         }
@@ -655,6 +669,8 @@ impl EccodesApi {
         cursor: &mut *mut c_void,
         remaining: &mut usize,
     ) -> Result<Option<CodesHandle<'api, 'message>>, GribError> {
+        #[cfg(test)]
+        let _span = profiling::span("handle_open");
         let mut error = 0;
         // SAFETY: cursor initially points into `message`, remaining is that
         // slice's length, and both remain writable across calls. With multi
@@ -679,6 +695,8 @@ impl EccodesApi {
     }
 
     fn get_long_value(&self, handle: *const c_void, key: &[u8]) -> Result<c_long, GribError> {
+        #[cfg(test)]
+        let _span = profiling::span("metadata");
         let mut value = 0;
         // SAFETY: handle is live, key is NUL terminated, and value is writable.
         let code = unsafe { (self.get_long)(handle, key.as_ptr().cast(), &mut value) };
@@ -687,6 +705,8 @@ impl EccodesApi {
     }
 
     fn get_double_value(&self, handle: *const c_void, key: &[u8]) -> Result<f64, GribError> {
+        #[cfg(test)]
+        let _span = profiling::span("metadata");
         let mut value = 0.0;
         // SAFETY: handle is live, key is NUL terminated, and value is writable.
         let code = unsafe { (self.get_double)(handle, key.as_ptr().cast(), &mut value) };
@@ -695,6 +715,8 @@ impl EccodesApi {
     }
 
     fn get_optional_double(&self, handle: *const c_void, key: &[u8]) -> Option<f64> {
+        #[cfg(test)]
+        let _span = profiling::span("metadata");
         let mut value = 0.0;
         // SAFETY: handle is live, key is NUL terminated, and value is writable.
         let code = unsafe { (self.get_double)(handle, key.as_ptr().cast(), &mut value) };
@@ -702,6 +724,8 @@ impl EccodesApi {
     }
 
     fn get_string_value(&self, handle: *const c_void, key: &[u8]) -> Result<String, GribError> {
+        #[cfg(test)]
+        let _span = profiling::span("metadata");
         let mut length = 0;
         // SAFETY: handle is live, key is NUL terminated, and length is writable.
         let code = unsafe { (self.get_length)(handle, key.as_ptr().cast(), &mut length) };
@@ -747,6 +771,8 @@ impl EccodesApi {
         handle: *const c_void,
         indexes: &[c_int],
     ) -> Result<Vec<f64>, GribError> {
+        #[cfg(test)]
+        let _span = profiling::span("values_unpack_extract");
         if indexes.len() == 1 {
             return self
                 .get_element(handle, indexes[0])
@@ -777,6 +803,8 @@ impl EccodesApi {
         latitude: f64,
         longitude: f64,
     ) -> Result<GridPoint, GribError> {
+        #[cfg(test)]
+        let _span = profiling::span("nearest");
         let mut error = 0;
         // SAFETY: handle is live and error is writable.
         let pointer = unsafe { (self.nearest_new)(handle, &mut error) };
@@ -869,6 +897,8 @@ impl CodesHandle<'_, '_> {
 
 impl Drop for CodesHandle<'_, '_> {
     fn drop(&mut self) {
+        #[cfg(test)]
+        let _span = profiling::span("handle_delete");
         // SAFETY: this handle is uniquely owned and deleted exactly once.
         let _ = unsafe { (self.api.handle_delete)(self.pointer.as_ptr()) };
     }
@@ -1424,9 +1454,37 @@ fn grid_points_for<'points>(
     grids: &'points mut HashMap<String, Vec<GridPoint>>,
 ) -> Result<&'points [GridPoint], GribError> {
     if !grids.contains_key(grid_key) {
+        // Verify geometry against this handle even when field metadata came
+        // from a retained inventory. Missing or nonstandard hashes bypass the
+        // cross-decode cache; per-decode grid sharing remains unchanged.
+        let fingerprint = api
+            .get_optional_string(handle, GRID_HASH_KEY)
+            .filter(|hash| hash == grid_key)
+            .zip(api.get_long_value(handle, NUMBER_OF_POINTS_KEY).ok())
+            .and_then(|(hash, count)| GridFingerprint::new(&hash, count));
         let points = coordinates
             .iter()
-            .map(|(latitude, longitude)| find_nearest_wrapped(api, handle, *latitude, *longitude))
+            .map(|&(latitude, longitude)| {
+                if let Some(fingerprint) = fingerprint {
+                    let mut cache = inventory_cache();
+                    if cache.enabled {
+                        if let Some(point) = cache.grid_points.get(fingerprint, latitude, longitude)
+                        {
+                            return Ok(point);
+                        }
+                    }
+                }
+                let point = find_nearest_wrapped(api, handle, latitude, longitude)?;
+                if let Some(fingerprint) = fingerprint {
+                    let mut cache = inventory_cache();
+                    if cache.enabled {
+                        cache
+                            .grid_points
+                            .insert(fingerprint, latitude, longitude, point);
+                    }
+                }
+                Ok(point)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         grids.insert(grid_key.to_owned(), points);
     }
@@ -1682,6 +1740,8 @@ fn assemble_decoded_points(
     states: Vec<PointDecodeState>,
     missing: Option<f64>,
 ) -> Result<Vec<DecodedPoint>, GribError> {
+    #[cfg(test)]
+    let _span = profiling::span("assembly");
     states
         .into_iter()
         .map(|state| {
@@ -1699,6 +1759,8 @@ fn assemble_decoded_points(
 fn open_grib_mapping(
     grib_path: &Path,
 ) -> Result<(File, memmap2::Mmap, Option<FileIdentity>), GribError> {
+    #[cfg(test)]
+    let _span = profiling::span("file_open_map_identity");
     let file = File::open(grib_path).map_err(|error| {
         GribError::new(format!(
             "could not open GRIB file {}: {error}",
@@ -1762,9 +1824,13 @@ pub fn decode_grib_points(
         None
     };
 
-    let _guard = ECCODES_CALL_LOCK
-        .lock()
-        .map_err(|_| GribError::new("ecCodes call lock was poisoned"))?;
+    let _guard = {
+        #[cfg(test)]
+        let _span = profiling::span("ecCodes_lock_wait");
+        ECCODES_CALL_LOCK
+            .lock()
+            .map_err(|_| GribError::new("ecCodes call lock was poisoned"))?
+    };
     let api = EccodesApi::cached(eccodes_library_path)?;
     let states = if let Some(inventory) = cached_inventory {
         match decode_from_inventory(api, &mapping, &inventory, &coordinates, missing) {

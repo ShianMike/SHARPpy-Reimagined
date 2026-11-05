@@ -13,6 +13,30 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   by each model and the selected run.
 - Add isobars with numeric pressure labels on weather maps.
 
+## [v3.5.3] - 2026-11-05
+
+### Fixed
+
+- Explicitly request the pressure-level archive for ECMWF IFS 9 km and the
+  surface archive for its companion. Newer Herbie templates otherwise default
+  the split feed to surface fields, causing sounding retrieval to fail with
+  a missing pressure-coordinate error. Verify the reported Southern Brazil
+  point with a real F012 pressure/surface file and a native regression.
+- Keep the Effective Layer STP title and conditional-probability text compact
+  and reserve complete glyph height for every row on Linux and Windows.
+  Measure the emphasized header when fitting its box to the panel.
+
+### Performance
+
+- Reuse consecutive 1-hPa parcel integration endpoints and retain a bounded
+  cache of verified GRIB grid-point lookups. Continue reading field values from
+  the current file and preserve existing cache-disable and clear controls.
+  Local Windows release measurements on bundled profiles reduced parcel and
+  thermodynamic kernel time by about 15–22%; a small repeated HRRR extraction
+  sample decreased from an 8.217 s median to 7.616 s. Initial grid lookups and
+  weather-field unpacking remain required. Native diagnostic/trace and decoded
+  field comparisons retained identical results.
+
 ## [v3.5.2] - 2026-11-05
 
 ### Fixed

@@ -327,7 +327,9 @@ def _install_stp_xlabel_colors():
 
                 # Title.
                 qp.setPen(_QtGui.QPen(self.fg_color, 2, _QtCore.Qt.SolidLine))
-                qp.setFont(self.plot_font)
+                title_font = _QtGui.QFont(self.plot_font)
+                title_font.setPointSizeF(min(12., title_font.pointSizeF()))
+                qp.setFont(title_font)
                 qp.drawText(
                     _QtCore.QRectF(0, 5, self.brx, self.plot_height),
                     _QtCore.Qt.TextDontClip | _QtCore.Qt.AlignCenter,
@@ -404,7 +406,6 @@ def _install_stp_prob_box_spacing():
     Idempotent + fully guarded: any failure leaves the vendored method intact.
     """
     try:
-        import platform as _platform
         import sharppy.viz.stp as _stp_mod
         _cls = _stp_mod.plotSTP
         if getattr(_cls, "_sharpmod_box_spacing", False):
@@ -424,10 +425,16 @@ def _install_stp_prob_box_spacing():
                 # the inset's right edge, so the wide right-hand whitespace is
                 # removed. The value column sits just past the longest label.
                 _box_font = _QtGui.QFont(self.box_font)
+                # Linux does not apply the vendored Windows font reduction.
+                # Keep this inset annotation compact at the logical canvas size;
+                # export density still scales the finished text normally.
+                _box_font.setPointSizeF(min(9., _box_font.pointSizeF()))
                 if _render_api.USE_CUSTOM_FONT:
                     _box_font.setFamily(_render_api.FONT_FAMILY)
                 apply_render_font_quality(_box_font)
                 _fm = _QtGui.QFontMetrics(_box_font)
+                _header_font = _render_api._custom_emphasis_font(_box_font)
+                _header_metrics = _QtGui.QFontMetrics(_header_font)
                 _adv = getattr(_fm, "horizontalAdvance", None) or _fm.width
                 _labels = ['based on CAPE:', 'based on LCL:', 'based on ESRH:',
                            'based on EBWD:', 'based on STPC:',
@@ -438,7 +445,8 @@ def _install_stp_prob_box_spacing():
                 col_gap = max(12, _adv('  '))
                 val_w = _adv('0.00')
                 content_w = max(label_w + col_gap + val_w,
-                                max(_adv(t) for t in _headers))
+                                max(_header_metrics.horizontalAdvance(t)
+                                    for t in _headers))
                 # The Streamwiseness inset now shares the former STP column.
                 # Fit this long-label box to the available right half instead
                 # of letting its height-derived font clip at the new width.
@@ -449,6 +457,8 @@ def _install_stp_prob_box_spacing():
                         scale = available_w / float(content_w + 8)
                         _box_font.setPointSizeF(max(5.0, point_size * scale * .96))
                         _fm = _QtGui.QFontMetrics(_box_font)
+                        _header_font = _render_api._custom_emphasis_font(_box_font)
+                        _header_metrics = _QtGui.QFontMetrics(_header_font)
                         _adv = (getattr(_fm, "horizontalAdvance", None)
                                 or _fm.width)
                         label_w = max(_adv(t) for t in _labels)
@@ -456,7 +466,8 @@ def _install_stp_prob_box_spacing():
                         val_w = _adv('0.00')
                         content_w = max(
                             label_w + col_gap + val_w,
-                            max(_adv(t) for t in _headers),
+                            max(_header_metrics.horizontalAdvance(t)
+                                for t in _headers),
                         )
                 # Anchor the box against the inset's right edge (but never left
                 # of the mid-line, so it can't overlap the EF box-and-whisker
@@ -464,11 +475,11 @@ def _install_stp_prob_box_spacing():
                 right_x = self.brx - 5.
                 left_x = max(width * 7, right_x - (content_w + 8))
 
-                # One consistent row height for both header and data rows.
-                box_height = _fm.xHeight() + self.textpad
-                row_h = box_height + 1
-                if _platform.system() == "Windows":
-                    row_h += _fm.descent()
+                # Reserve the complete glyph height on every platform. xHeight
+                # excludes capitals and descenders and caused Linux rows to
+                # overlap even when their horizontal measurements fitted.
+                box_height = max(_fm.height(), _header_metrics.height())
+                row_h = box_height + 2
 
                 # Symmetric breathing room around the divider rule so the first
                 # data row is no longer flush against it.
@@ -501,7 +512,6 @@ def _install_stp_prob_box_spacing():
                 ## header/title rows
                 pen = _QtGui.QPen(self.fg_color, 1, _QtCore.Qt.SolidLine)
                 qp.setPen(pen)
-                _header_font = _render_api._custom_emphasis_font(_box_font)
                 self._sharpmod_box_header_font = _header_font
                 qp.setFont(_header_font)
                 for text in ['Prob EF2+ torn with supercell',

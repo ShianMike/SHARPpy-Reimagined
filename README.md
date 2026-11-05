@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.5.2
+# SHARPpy Reimagined · v3.5.3
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -14,10 +14,19 @@
 
 </div>
 
-## What's new in 3.5.2
+## What's new in 3.5.3
 
 Windows installers and portable downloads are available in
 [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases).
+
+- **ECMWF 9 km soundings:** request the correct pressure-level and surface
+  data so forecast profiles open instead of failing with a missing coordinate.
+- **Readable STP charts:** fit the title and probability text to the panel on
+  Windows and Linux.
+- **Faster native calculations:** reuse parcel integration endpoints and verified
+  grid lookups while preserving current-file weather values and diagnostic results.
+
+### Included from 3.5.2
 
 - **Map ready at startup:** load the map behind Overview as the app opens and
   preserve it when moving between workspaces.

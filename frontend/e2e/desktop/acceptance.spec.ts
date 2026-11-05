@@ -181,7 +181,7 @@ test.describe("installed native acceptance", () => {
         await workspaces().getByRole("button", { name: "Model Viewer", exact: true }).click();
       }
       if (cycle % 4 === 0) {
-        for (const model of ["NAM 3km CONUS", "HRRR"]) {
+        for (const model of ["RRFS", "HRRR"]) {
           await forecast.getByRole("button", { name: "Choose model", exact: true }).click();
           await page.getByRole("button", { name: `Choose ${model}`, exact: true }).click();
         }

@@ -624,3 +624,39 @@ async fn shutdown_asks_the_child_to_exit_and_kills_a_child_that_does_not() {
     assert!(t0.elapsed() >= 2 * SECOND);
     assert_eq!(sink.names(), ["starting", "up"]);
 }
+
+#[test]
+fn synchronous_updater_exit_waits_for_backend_shutdown_from_a_runtime_worker() {
+    let (finished, result) = std::sync::mpsc::sync_channel(1);
+    let worker = std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let exits = Arc::new(AtomicUsize::new(0));
+            let child_exits = Arc::clone(&exits);
+            let child = script(move |io| async move {
+                let code = bridge(io, Arc::default()).await;
+                child_exits.fetch_add(1, Ordering::SeqCst);
+                code
+            });
+            let (supervisor, sink) = start(FakeLauncher::with(vec![child]));
+            sink.wait_for(1, is_up).await;
+            let other = supervisor.clone();
+            tokio::spawn(async move {
+                other.shutdown_before_exit();
+            })
+            .await
+            .unwrap();
+            assert_eq!(exits.load(Ordering::SeqCst), 1);
+            assert!(supervisor.finish_shutdown().await.is_none());
+        });
+        finished.send(()).unwrap();
+    });
+    result
+        .recv_timeout(6 * SECOND)
+        .expect("updater shutdown blocked the only runtime worker");
+    worker.join().unwrap();
+}

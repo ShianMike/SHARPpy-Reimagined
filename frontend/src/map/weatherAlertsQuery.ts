@@ -13,7 +13,7 @@ export function useWeatherAlerts(validTime: string | null, enabled: boolean) {
     ...BASE_QUERY_OPTIONS,
     queryKey,
     queryFn: () => client.getWeatherAlerts(validTime ?? ""),
-    enabled: enabled && validTime !== null,
+    enabled: enabled && validTime !== null && !missingHistory,
     // Mounting another panel cannot make an uncached historical snapshot exist.
     retryOnMount: !missingHistory,
     staleTime: 60_000,

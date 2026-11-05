@@ -91,10 +91,11 @@ it("hides Point controls only in Live Tracking and returns focus to Layers after
 it.each(["overview", "settings", "status", "sounding"] as const)("transitions from %s to Model Viewer without rebuilding the map", async (workspace) => {
   useAppStore.getState().setActiveWorkspace(workspace);
   const { queryClient } = renderWithBackend(<Shell />, createTransport());
-  expect(screen.queryByTestId("map-canvas")).toBeNull();
-  expect(mapMounts).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Model Viewer" }));
   const canvas = await screen.findByTestId("map-canvas");
+  expect(canvas.parentElement?.hasAttribute("inert")).toBe(true);
+  expect(mapMounts).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "Model Viewer" }));
+  expect(screen.getByTestId("map-canvas")).toBe(canvas);
   fireEvent.click(screen.getByRole("button", { name: workspaceDefinition(workspace).label }));
   const panel = screen.getByTestId("workspace-panel");
   const finish = pendingExit(panel);

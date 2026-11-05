@@ -6,6 +6,15 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 use sharpmod_weather::radar::scan_time::ScanKind;
 
 #[pyfunction]
+fn radar_level2_matches(
+    observed: time::OffsetDateTime,
+    requested: Option<time::OffsetDateTime>,
+    now: time::OffsetDateTime,
+) -> bool {
+    sharpmod_weather::radar::scan_time::level2_matches(observed, requested, now)
+}
+
+#[pyfunction]
 fn radar_level3_scan_time(
     volume_time: time::OffsetDateTime,
     delta_time: i64,
@@ -72,6 +81,7 @@ fn sample_radar_radials<'py>(
 }
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(radar_level2_matches, module)?)?;
     module.add_function(wrap_pyfunction!(radar_level3_scan_time, module)?)?;
     module.add_function(wrap_pyfunction!(sample_radar_radials, module)?)?;
     Ok(())

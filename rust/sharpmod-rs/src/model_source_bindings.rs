@@ -84,6 +84,9 @@ fn select_model_provider(
                     .collect()
             })
     });
+    let Some(selected) = selected else {
+        return Ok(current.unbind());
+    };
     let selected = &request.sources[selected];
     herbie.setattr("grib_source", &selected.name)?;
     herbie.setattr("grib", &selected.url)?;

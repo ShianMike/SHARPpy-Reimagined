@@ -24,6 +24,11 @@ const MODEL_LIST_STALE_MS = 10 * 60_000;
 /** Images are large; an unused one leaves memory after five minutes. */
 const IMAGE_GC_MS = 5 * 60_000;
 
+// NWS SCN 26-47 retires these offered families on 2026-11-03.
+// Keep their labels, backend definitions and providers for archived data.
+// https://www.weather.gov/media/notification/pdf_2026/scn26-47_Updated_Retirement_of_NAM_SREF_HREF_HiresW_NAM_MOS_aac.pdf
+const RETIRED_MODELS = new Set(["nam", "nam-3km-conus", "sref", "href", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3"]);
+
 const MODEL_LABELS: Readonly<Record<string, string>> = {
   hrrr: "HRRR",
   rap: "RAP",
@@ -54,7 +59,7 @@ export const modelRegion = (model: Pick<ForecastModel, "key" | "domain">): (type
 const requestedModels = (catalog: ModelCatalog): ModelCatalog => ({
   ...catalog,
   models: catalog.models
-    .filter((model) => Object.hasOwn(MODEL_LABELS, model.key))
+    .filter((model) => !RETIRED_MODELS.has(model.key) && Object.hasOwn(MODEL_LABELS, model.key))
     .map((model) => ({ ...model, label: MODEL_LABELS[model.key] ?? model.label }))
     .toSorted((left, right) => MODEL_REGIONS.indexOf(modelRegion(left)) - MODEL_REGIONS.indexOf(modelRegion(right))),
 });

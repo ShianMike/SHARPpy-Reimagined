@@ -9,6 +9,7 @@
 use std::cmp::Ordering;
 
 mod maximum;
+mod start;
 pub use maximum::maximum_parcel_level;
 pub mod convective_temperature;
 pub mod trajectory;
@@ -100,11 +101,20 @@ impl PressureSeries {
     }
 
     fn at(&self, pressure: f64) -> f64 {
-        if !pressure.is_finite() || pressure <= 0.0 || self.pairs.len() < 2 {
+        if !pressure.is_finite() || pressure <= 0.0 || self.pairs.is_empty() {
             return f64::NAN;
         }
         let target = pressure.log10();
-        if target < self.pairs[0].0 || target > self.pairs[self.pairs.len() - 1].0 {
+        // Match the endpoint convention used by SHARPpy's interpolation.
+        for &(coordinate, value) in [self.pairs.last().unwrap(), &self.pairs[0]] {
+            if (target - coordinate).abs() <= 1.0e-8 + 1.0e-5 * coordinate.abs() {
+                return value;
+            }
+        }
+        if self.pairs.len() < 2
+            || target < self.pairs[0].0
+            || target > self.pairs[self.pairs.len() - 1].0
+        {
             return f64::NAN;
         }
         let upper = self.pairs.partition_point(|pair| pair.0 <= target);
@@ -395,217 +405,6 @@ impl<'a> ParcelProfile<'a> {
 
     fn start_height(&self, pressure: f64) -> f64 {
         self.height_series.at(pressure) - self.surface_height
-    }
-
-    fn surface_start(&self, sfc: usize) -> ParcelStart {
-        ParcelStart {
-            pressure: self.surface_pressure,
-            temperature: self.temperature[sfc],
-            dewpoint: self.dewpoint[sfc],
-        }
-    }
-
-    fn most_unstable_start(&self) -> ParcelStart {
-        let top = self.surface_pressure - 300.0;
-        if top <= 0.0
-            || !self.temp_series.at(top).is_finite()
-            || !self.dewpoint_series.at(top).is_finite()
-        {
-            return ParcelStart {
-                pressure: f64::NAN,
-                temperature: f64::NAN,
-                dewpoint: f64::NAN,
-            };
-        }
-        let mut best = None;
-        let mut pressure = self.surface_pressure;
-        while pressure > top - 1.0 {
-            let temperature = self.temp_series.at(pressure);
-            let dewpoint = self.dewpoint_series.at(pressure);
-            let (lcl_pressure, lcl_temperature) = dry_lift(pressure, temperature, dewpoint);
-            let theta_e_proxy = wet_lift(lcl_pressure, lcl_temperature, 1_000.0);
-            if theta_e_proxy.is_finite()
-                && best.is_none_or(|(_, best_value): (ParcelStart, f64)| {
-                    theta_e_proxy > best_value + THERMO_TOLERANCE
-                })
-            {
-                best = Some((
-                    ParcelStart {
-                        pressure,
-                        temperature,
-                        dewpoint,
-                    },
-                    theta_e_proxy,
-                ));
-            }
-            pressure -= 1.0;
-        }
-        best.map_or(
-            ParcelStart {
-                pressure: f64::NAN,
-                temperature: f64::NAN,
-                dewpoint: f64::NAN,
-            },
-            |(start, _)| start,
-        )
-    }
-
-    fn mixed_layer_start(&self) -> ParcelStart {
-        let bottom = self.surface_pressure;
-        let top = bottom - 100.0;
-        let bottom_temperature = self.temp_series.at(bottom);
-        let top_temperature = self.temp_series.at(top);
-        let bottom_dewpoint = self.dewpoint_series.at(bottom);
-        let top_dewpoint = self.dewpoint_series.at(top);
-        if [
-            bottom_temperature,
-            top_temperature,
-            bottom_dewpoint,
-            top_dewpoint,
-        ]
-        .iter()
-        .any(|value| !value.is_finite())
-        {
-            return ParcelStart {
-                pressure: f64::NAN,
-                temperature: f64::NAN,
-                dewpoint: f64::NAN,
-            };
-        }
-
-        let mut theta_sum = 0.5 * theta(bottom, bottom_temperature, 1_000.0)
-            + 0.5 * theta(top, top_temperature, 1_000.0);
-        let mut pressure_sum = 0.5 * bottom + 0.5 * top;
-        let mut dewpoint_sum = 0.5 * bottom_dewpoint + 0.5 * top_dewpoint;
-        let mut weight = 1.0;
-        for index in 0..self.pressure.len() {
-            let pressure = self.pressure[index];
-            if pressure >= bottom
-                || pressure <= top
-                || is_missing(pressure, self.missing)
-                || is_missing(self.temperature[index], self.missing)
-                || is_missing(self.dewpoint[index], self.missing)
-            {
-                continue;
-            }
-            theta_sum += theta(pressure, self.temperature[index], 1_000.0);
-            pressure_sum += pressure;
-            dewpoint_sum += self.dewpoint[index];
-            weight += 1.0;
-        }
-        let mean_theta = theta_sum / weight;
-        let mean_pressure = pressure_sum / weight;
-        let mean_dewpoint = dewpoint_sum / weight;
-        let ratio = mix_ratio(mean_pressure, mean_dewpoint);
-        ParcelStart {
-            pressure: bottom,
-            temperature: theta(1_000.0, mean_theta, bottom),
-            dewpoint: temperature_at_mix_ratio(ratio, bottom),
-        }
-    }
-
-    fn forecast_start(&self) -> ParcelStart {
-        let top = self.surface_pressure - 100.0;
-        let top_temperature = self.temp_series.at(top);
-        let (_, mean_pressure, mean_dewpoint) = self.exact_layer_means(self.surface_pressure, top);
-        let ratio = mix_ratio(mean_pressure, mean_dewpoint);
-        ParcelStart {
-            pressure: self.surface_pressure,
-            temperature: if top_temperature.is_finite() && top > 0.0 {
-                (top_temperature + ZERO_C_K + 2.0) * (self.surface_pressure / top).powf(ROCP)
-                    - ZERO_C_K
-            } else {
-                f64::NAN
-            },
-            dewpoint: temperature_at_mix_ratio(ratio, self.surface_pressure),
-        }
-    }
-
-    fn exact_layer_means(&self, bottom: f64, top: f64) -> (f64, f64, f64) {
-        let bottom_temperature = self.temp_series.at(bottom);
-        let top_temperature = self.temp_series.at(top);
-        let bottom_dewpoint = self.dewpoint_series.at(bottom);
-        let top_dewpoint = self.dewpoint_series.at(top);
-        if [
-            bottom_temperature,
-            top_temperature,
-            bottom_dewpoint,
-            top_dewpoint,
-        ]
-        .iter()
-        .any(|value| !value.is_finite())
-        {
-            return (f64::NAN, f64::NAN, f64::NAN);
-        }
-        let mut theta_sum = 0.5 * theta(bottom, bottom_temperature, 1_000.0)
-            + 0.5 * theta(top, top_temperature, 1_000.0);
-        let mut pressure_sum = 0.5 * bottom + 0.5 * top;
-        let mut dewpoint_sum = 0.5 * bottom_dewpoint + 0.5 * top_dewpoint;
-        let mut weight = 1.0;
-        for index in 0..self.pressure.len() {
-            let pressure = self.pressure[index];
-            if pressure >= bottom
-                || pressure <= top
-                || is_missing(pressure, self.missing)
-                || is_missing(self.temperature[index], self.missing)
-                || is_missing(self.dewpoint[index], self.missing)
-            {
-                continue;
-            }
-            theta_sum += theta(pressure, self.temperature[index], 1_000.0);
-            pressure_sum += pressure;
-            dewpoint_sum += self.dewpoint[index];
-            weight += 1.0;
-        }
-        (
-            theta_sum / weight,
-            pressure_sum / weight,
-            dewpoint_sum / weight,
-        )
-    }
-
-    fn effective_start(&self, bottom: f64, top: f64) -> ParcelStart {
-        if !bottom.is_finite() || !top.is_finite() || bottom < top {
-            return ParcelStart {
-                pressure: f64::NAN,
-                temperature: f64::NAN,
-                dewpoint: f64::NAN,
-            };
-        }
-        let mut theta_weighted_sum = 0.0;
-        let mut theta_weight_sum = 0.0;
-        let mut ratio_sum = 0.0;
-        let mut ratio_count = 0.0;
-        let mut pressure = bottom;
-        // SHARPpy samples this layer with
-        // ``np.arange(bottom, top - 1.0, -1.0)``.  For a fractional upper
-        // boundary that deliberately retains the final integer-spaced sample
-        // just below ``top``; stopping at ``pressure >= top`` changes the
-        // effective parcel's mean moisture and can move its LCL trace beyond
-        // the public 0.05 C equivalence tolerance.
-        while pressure > top - 1.0 {
-            let temperature = self.temp_series.at(pressure);
-            let dewpoint = self.dewpoint_series.at(pressure);
-            let potential_temperature = theta(pressure, temperature, 1_000.0);
-            let ratio = mix_ratio(pressure, dewpoint);
-            if potential_temperature.is_finite() {
-                theta_weighted_sum += potential_temperature * pressure;
-                theta_weight_sum += pressure;
-            }
-            if ratio.is_finite() {
-                ratio_sum += ratio;
-                ratio_count += 1.0;
-            }
-            pressure -= 1.0;
-        }
-        let mean_theta = theta_weighted_sum / theta_weight_sum;
-        let mean_ratio = ratio_sum / ratio_count;
-        let start_pressure = (bottom + top) / 2.0;
-        ParcelStart {
-            pressure: start_pressure,
-            temperature: theta(1_000.0, mean_theta, start_pressure),
-            dewpoint: temperature_at_mix_ratio(mean_ratio, start_pressure),
-        }
     }
 }
 
@@ -932,10 +731,16 @@ fn lift_parcel<const DIAGNOSTICS: bool, const TRACED: bool>(
     // fractional contribution. The default top is the last observed level,
     // so the replacement is zero-length and the terminal full layer must be
     // removed from the accumulated totals.
-    if terminal_energy > 0.0 {
-        positive_energy -= terminal_energy;
-    } else if terminal_energy < 0.0 && terminal_pressure > 500.0 {
-        negative_energy -= terminal_energy;
+    if profile
+        .pressure
+        .last()
+        .is_some_and(|&top| top == terminal_pressure)
+    {
+        if terminal_energy > 0.0 {
+            positive_energy -= terminal_energy;
+        } else if terminal_energy < 0.0 && terminal_pressure > 500.0 {
+            negative_energy -= terminal_energy;
+        }
     }
 
     output[10] = positive_energy;
@@ -1334,243 +1139,4 @@ pub fn profile_thermodynamic_diagnostics(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        explicit_parcel, profile_convective_parcels, profile_dcape, profile_parcels,
-        profile_thermodynamic_diagnostics, profile_thermodynamics, CONVECTIVE_PARCEL_COUNT,
-        PARCEL_COUNT, PARCEL_WIDTH,
-    };
-
-    fn unstable_profile() -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>) {
-        let height: Vec<f64> = (0..17).map(|index| index as f64 * 1_000.0).collect();
-        let pressure: Vec<f64> = height
-            .iter()
-            .map(|height| 1_000.0 * (-height / 8_000.0).exp())
-            .collect();
-        let temperature: Vec<f64> = height
-            .iter()
-            .map(|height| 30.0 - 7.0 * height / 1_000.0)
-            .collect();
-        let dewpoint: Vec<f64> = temperature
-            .iter()
-            .enumerate()
-            .map(|(index, value)| value - 3.0 - index as f64)
-            .collect();
-        (pressure, height, temperature, dewpoint)
-    }
-
-    #[test]
-    fn unstable_profile_produces_three_finite_parcels() {
-        let (pressure, height, temperature, dewpoint) = unstable_profile();
-        let result = profile_parcels(&pressure, &height, &temperature, &dewpoint, 0, None).unwrap();
-
-        assert_eq!(result.len(), PARCEL_COUNT);
-        assert_eq!(result[0].len(), PARCEL_WIDTH);
-        assert!(result[0][4].is_finite());
-        assert!(result[0][10].is_finite());
-        assert!(result[1][0].is_finite());
-        assert!(result[2][0].is_finite());
-    }
-
-    #[test]
-    fn extended_workspace_and_explicit_ascent_include_traces() {
-        let (pressure, height, temperature, dewpoint) = unstable_profile();
-        let result =
-            profile_convective_parcels(&pressure, &height, &temperature, &dewpoint, 0, None)
-                .unwrap();
-        assert_eq!(result.parcels.len(), CONVECTIVE_PARCEL_COUNT);
-        assert!(result
-            .parcels
-            .iter()
-            .all(|parcel| parcel.pressure_trace.len() == parcel.temperature_trace.len()));
-        assert!(result.parcels[0].pressure_trace.len() > 2);
-
-        let user = explicit_parcel(
-            &pressure,
-            &height,
-            &temperature,
-            &dewpoint,
-            pressure[2],
-            temperature[2],
-            dewpoint[2],
-            0,
-            None,
-        )
-        .unwrap();
-        assert!(user.diagnostics[10].is_finite());
-        assert_eq!(user.pressure_trace.len(), user.temperature_trace.len());
-    }
-
-    #[test]
-    fn downdraft_workspace_has_finite_summary_and_trace() {
-        let (pressure, height, temperature, dewpoint) = unstable_profile();
-        let result = profile_dcape(&pressure, &height, &temperature, &dewpoint, 0, None).unwrap();
-        assert!(result.cape.is_finite());
-        assert!(result.source_pressure.is_finite());
-        assert!(result.downrush_temperature.is_finite());
-        assert!(result.pressure_trace.len() > 2);
-        assert_eq!(result.pressure_trace.len(), result.temperature_trace.len());
-    }
-
-    #[test]
-    fn shared_thermodynamic_workspace_matches_standalone_results() {
-        let (pressure, height, temperature, dewpoint) = unstable_profile();
-        let combined =
-            profile_thermodynamics(&pressure, &height, &temperature, &dewpoint, 0, None).unwrap();
-        let convective =
-            profile_convective_parcels(&pressure, &height, &temperature, &dewpoint, 0, None)
-                .unwrap();
-        let downdraft =
-            profile_dcape(&pressure, &height, &temperature, &dewpoint, 0, None).unwrap();
-
-        let assert_row = |left: &[f64; PARCEL_WIDTH], right: &[f64; PARCEL_WIDTH]| {
-            assert!(left
-                .iter()
-                .zip(right)
-                .all(|(left, right)| left == right || (left.is_nan() && right.is_nan())));
-        };
-        assert_row(&combined.parcels[0], &convective.parcels[0].diagnostics);
-        assert_row(&combined.parcels[1], &convective.parcels[2].diagnostics);
-        assert_row(&combined.parcels[2], &convective.parcels[3].diagnostics);
-        assert_eq!(
-            combined.convective.effective_bottom_pressure,
-            convective.effective_bottom_pressure
-        );
-        assert_eq!(
-            combined.convective.effective_top_pressure,
-            convective.effective_top_pressure
-        );
-        assert_eq!(combined.downdraft.cape, downdraft.cape);
-        assert_eq!(combined.downdraft.pressure_trace, downdraft.pressure_trace);
-        assert_eq!(
-            combined.downdraft.temperature_trace,
-            downdraft.temperature_trace
-        );
-    }
-
-    #[test]
-    fn trace_free_thermodynamics_matches_traced_diagnostics_bit_for_bit() {
-        let (pressure, height, temperature, dewpoint) = unstable_profile();
-        let traced =
-            profile_thermodynamics(&pressure, &height, &temperature, &dewpoint, 0, None).unwrap();
-        let compact =
-            profile_thermodynamic_diagnostics(&pressure, &height, &temperature, &dewpoint, 0, None)
-                .unwrap();
-        let same = |left: f64, right: f64| {
-            (left.is_nan() && right.is_nan()) || left.to_bits() == right.to_bits()
-        };
-        for (left, right) in compact.parcels.iter().zip(&traced.parcels) {
-            assert!(left
-                .iter()
-                .zip(right)
-                .all(|(&left, &right)| same(left, right)));
-        }
-        for (left, right) in compact
-            .convective_parcels
-            .iter()
-            .zip(&traced.convective.parcels)
-        {
-            assert!(left
-                .iter()
-                .zip(&right.diagnostics)
-                .all(|(&left, &right)| same(left, right)));
-        }
-        assert!(same(
-            compact.effective_bottom_pressure,
-            traced.convective.effective_bottom_pressure,
-        ));
-        assert!(same(
-            compact.effective_top_pressure,
-            traced.convective.effective_top_pressure,
-        ));
-        assert!(same(compact.downdraft[0], traced.downdraft.cape));
-        assert!(same(compact.downdraft[1], traced.downdraft.source_pressure,));
-        assert!(same(
-            compact.downdraft[2],
-            traced.downdraft.downrush_temperature,
-        ));
-    }
-
-    #[test]
-    fn configured_sentinels_match_nan_in_all_trace_free_diagnostics() {
-        let (pressure, height, mut sentinel_temperature, mut sentinel_dewpoint) =
-            unstable_profile();
-        sentinel_temperature[5] = -9_999.0;
-        sentinel_dewpoint[9] = -9_999.0;
-        let mut nan_temperature = sentinel_temperature.clone();
-        let mut nan_dewpoint = sentinel_dewpoint.clone();
-        nan_temperature[5] = f64::NAN;
-        nan_dewpoint[9] = f64::NAN;
-
-        let sentinel = profile_thermodynamic_diagnostics(
-            &pressure,
-            &height,
-            &sentinel_temperature,
-            &sentinel_dewpoint,
-            0,
-            Some(-9_999.0),
-        )
-        .unwrap();
-        let nan = profile_thermodynamic_diagnostics(
-            &pressure,
-            &height,
-            &nan_temperature,
-            &nan_dewpoint,
-            0,
-            Some(-9_999.0),
-        )
-        .unwrap();
-        let same = |left: f64, right: f64| {
-            (left.is_nan() && right.is_nan()) || left.to_bits() == right.to_bits()
-        };
-
-        assert!(sentinel
-            .parcels
-            .iter()
-            .flatten()
-            .zip(nan.parcels.iter().flatten())
-            .all(|(&left, &right)| same(left, right)));
-        assert!(sentinel
-            .convective_parcels
-            .iter()
-            .flatten()
-            .zip(nan.convective_parcels.iter().flatten())
-            .all(|(&left, &right)| same(left, right)));
-        assert!(same(
-            sentinel.effective_bottom_pressure,
-            nan.effective_bottom_pressure,
-        ));
-        assert!(same(
-            sentinel.effective_top_pressure,
-            nan.effective_top_pressure,
-        ));
-        assert!(sentinel
-            .downdraft
-            .iter()
-            .zip(nan.downdraft.iter())
-            .all(|(&left, &right)| same(left, right)));
-    }
-
-    #[test]
-    fn invalid_and_shallow_profiles_are_handled() {
-        assert!(profile_parcels(
-            &[1_000.0, 900.0],
-            &[0.0],
-            &[20.0, 10.0],
-            &[15.0, 5.0],
-            0,
-            None,
-        )
-        .is_err());
-        let shallow = profile_parcels(
-            &[1_000.0, 900.0],
-            &[0.0, 1_000.0],
-            &[20.0, 10.0],
-            &[15.0, 5.0],
-            0,
-            None,
-        )
-        .unwrap();
-        assert!(shallow.iter().flatten().all(|value| value.is_nan()));
-    }
-}
+mod tests;

@@ -13,6 +13,44 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   by each model and the selected run.
 - Add isobars with numeric pressure labels on weather maps.
 
+## [v3.5.2] - 2026-11-05
+
+### Fixed
+
+- Initialize the map behind Overview at app startup, without requiring a visit
+  to Model Viewer or Live Tracking. Keep the same map when changing workspaces.
+- Correct saturated-surface LCL/LFC interpolation, independently mask temperature
+  and moisture in mixed-layer parcel averages, and retain the last usable CAPE
+  layer when the requested top temperature is missing. Add native regressions
+  against the pinned SHARPpy conventions.
+- Keep pending sounding edits protected across navigation and reject stale
+  completions that would replace newer profile work or chart selections.
+- Validate model byte-range offsets and lengths before decoding, preserve the
+  original model provider when every mirror probe fails, and read bounded NWS
+  observation pagination before choosing the nearest observation.
+- Check Level II radar history against the actual cut time, including cached
+  cuts, through Rust. Stop automatic alert-history requests when playback
+  revisits a confirmed unavailable snapshot.
+- Await backend shutdown and session-cache cleanup before the Windows updater
+  launches its installer and exits. Hand blocking shutdown back to Tokio so
+  cleanup also finishes when the updater occupies the only runtime worker.
+
+### Changed
+
+- Retire NAM (including NAM 3km), SREF, HREF and the offered HiResW variants
+  from the shared forecast and sounding model selectors following NWS SCN
+  26-47. Preserve provider implementations and catalog definitions. Resolve
+  stale retired choices to an active model before requesting map products.
+- Refresh dependencies: Herbie 2026.10.0, netCDF4
+  1.7.5.1.post1, certifi 2026.10.23 and Ruff 0.17.3. Keep the installation
+  reference aligned with the quality-tool pin.
+- Advance application version to 3.5.2 so existing 3.5.1 installations can detect
+  these fixes through the updater. Keep published release notes unchanged.
+- Preserve published releases and tags. Stage new uploads as drafts and publish
+  only after upload completion; failed new uploads can resume their draft.
+  Remove published-release replacement and choose the highest stable version
+  below each candidate for installed-upgrade checks, including existing tags.
+
 ## [v3.5.1] - 2026-10-30
 
 ### Added

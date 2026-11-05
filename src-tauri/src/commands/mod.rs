@@ -5,3 +5,4 @@ pub mod backend;
 pub mod map;
 pub mod soundings;
 pub mod stations;
+pub mod updater;

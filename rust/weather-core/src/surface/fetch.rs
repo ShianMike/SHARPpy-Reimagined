@@ -4,7 +4,7 @@ use super::{
 };
 use reqwest::{Client, Url};
 use serde_json::Value;
-use std::{future::Future, time::Duration};
+use std::{collections::HashSet, future::Future, time::Duration};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tokio::task::JoinSet;
 
@@ -94,6 +94,40 @@ enum Outcome {
     Matched(Observation),
     Unmatched,
     Failed(String),
+}
+
+/// Read a complete, bounded station window before comparing observation times.
+async fn station_observations(
+    source: &impl JsonSource,
+    mut url: Url,
+    timeout: Duration,
+) -> Result<Vec<Observation>, String> {
+    let station_path = url.path().to_owned();
+    let mut visited = HashSet::new();
+    let mut rows = Vec::new();
+    for _ in 0..100 {
+        if !visited.insert(url.to_string()) {
+            return Err("NWS observation pagination repeated a page".into());
+        }
+        let payload = source.get_json(url.as_str(), timeout).await?;
+        rows.extend(observations(&payload));
+        let next = match payload.pointer("/pagination/next") {
+            None | Some(Value::Null) => return Ok(rows),
+            Some(Value::String(next)) => url.join(next).map_err(|error| error.to_string())?,
+            Some(_) => return Err("NWS observation pagination link is invalid".into()),
+        };
+        if next.scheme() != "https"
+            || next.host_str() != Some("api.weather.gov")
+            || !next.username().is_empty()
+            || next.password().is_some()
+            || next.port_or_known_default() != Some(443)
+            || next.path() != station_path
+        {
+            return Err("NWS observation pagination left the station endpoint".into());
+        }
+        url = next;
+    }
+    Err("NWS observation pagination exceeded 100 pages".into())
 }
 
 pub async fn fetch(
@@ -206,9 +240,8 @@ pub async fn fetch(
                 .append_pair("limit", "50");
             let source = source.clone();
             tasks.spawn(async move {
-                let outcome = match source.get_json(url.as_str(), timeout).await {
-                    Ok(payload) => {
-                        let mut rows = observations(&payload);
+                let outcome = match station_observations(&source, url, timeout).await {
+                    Ok(mut rows) => {
                         match nearest_index(
                             rows.iter().map(|row| row.observed_at),
                             requested,
@@ -223,7 +256,14 @@ pub async fn fetch(
                 (rank, outcome)
             });
         }
-        let Some(result) = tasks.join_next().await else {
+        let result = tokio::select! {
+            result = tasks.join_next() => result,
+            _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                check_cancel(&cancel)?;
+                continue;
+            }
+        };
+        let Some(result) = result else {
             break;
         };
         let (rank, outcome) = result.map_err(|error| {

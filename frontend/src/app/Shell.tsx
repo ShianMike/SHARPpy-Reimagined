@@ -80,8 +80,6 @@ export function Shell(): ReactNode {
   const liveText = useCatalogueEffects();
   const isLive = workspace.id === "live";
   const isMap = workspace.id === "map" || isLive;
-  const [mapOpened, setMapOpened] = useState(isMap);
-  if (isMap && !mapOpened) setMapOpened(true);
   const [panelWorkspace, setPanelWorkspace] = useState<WorkspaceDefinition | null>(isMap ? null : workspace);
   const workspacePanel = useRef<HTMLElement>(null);
   if (!isMap && panelWorkspace?.id !== workspace.id) setPanelWorkspace(workspace);
@@ -119,7 +117,7 @@ export function Shell(): ReactNode {
         </div>
         <main className={styles.main}>
           <section className={styles.mapSurface} aria-label={isLive ? "Live tracking map" : "Model map"} inert={!isMap}>
-            {!mapOpened && !isMap ? null : mode === "full" && renderer !== "failed"
+            {mode === "full" && renderer !== "failed"
               ? <Suspense fallback={null}><WeatherMap /></Suspense>
               : <ReducedRenderingView />}
             {mode === "full" && renderer === "pending" ? <Surface className={styles.mapLoading} role="status" aria-label="Loading map" data-motion="enter" hidden={!isMap}>

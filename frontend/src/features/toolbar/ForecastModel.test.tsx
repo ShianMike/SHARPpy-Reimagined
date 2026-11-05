@@ -33,21 +33,21 @@ it("opens the selected model's region and keeps selection visible while browsing
   expect(within(dialog).getByRole("button", { name: "Move popup" }).querySelector("svg")).not.toBeNull();
   expect(within(dialog).getByRole("button", { name: "Close forecast setup" }).querySelector("svg")).not.toBeNull();
   await userEvent.click(within(dialog).getByRole("radio", { name: "CONUS" }));
-  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(11);
+  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(7);
   expect(dialog.querySelector("footer")?.textContent).toContain("ECMWF 9km");
   expect(useForecastStore.getState().modelKey).toBe("ecmwf-ifs-9km");
 });
 
-it.each([["NAM", "nam"], ["RAP", "rap"]])("opens %s in Regional and keeps NAM 3km in CONUS", async (label, key) => {
-  useForecastStore.getState().setModel(key);
+it("opens RAP in Regional and excludes retired NAM models from CONUS", async () => {
+  useForecastStore.getState().setModel("rap");
   const dialog = await openModels();
   expect(within(dialog).getByRole<HTMLInputElement>("radio", { name: "Regional" }).checked).toBe(true);
-  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(3);
-  expect(within(dialog).getByRole("button", { name: `Choose ${label}` }).textContent).toContain("Selected");
+  expect(within(dialog).getAllByRole("button", { name: /^Choose /u })).toHaveLength(2);
+  expect(within(dialog).getByRole("button", { name: "Choose RAP" }).textContent).toContain("Selected");
   await userEvent.click(within(dialog).getByRole("radio", { name: "CONUS" }));
   expect(within(dialog).queryByRole("button", { name: "Choose NAM" })).toBeNull();
   expect(within(dialog).queryByRole("button", { name: "Choose RAP" })).toBeNull();
-  expect(within(dialog).getByRole("button", { name: "Choose NAM 3km CONUS" })).toBeTruthy();
+  expect(within(dialog).queryByRole("button", { name: "Choose NAM 3km CONUS" })).toBeNull();
 });
 
 it.each([["ECMWF", "openmeteo-ecmwf-ifs025"], ["GDPS", "gdps"], ["AIGFS", "aigfs"]])("switches regions and selects %s without extra confirmation", async (label, key) => {

@@ -240,6 +240,36 @@ impl ModelClient {
         {
             return Err(Error::Budget);
         }
+        let expected_length = if let Some((start, end)) = byte_range {
+            let range = response
+                .headers()
+                .get(header::CONTENT_RANGE)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.strip_prefix("bytes "))
+                .and_then(|value| value.split_once('/'))
+                .and_then(|(span, total)| {
+                    let (first, last) = span.split_once('-')?;
+                    Some((
+                        first.parse::<u64>().ok()?,
+                        last.parse::<u64>().ok()?,
+                        total.parse::<u64>().ok()?,
+                    ))
+                });
+            let Some((first, last, _)) = range.filter(|&(first, last, total)| {
+                response.status() == 206
+                    && total > start
+                    && first == start
+                    && last == end.min(total - 1)
+                    && first <= last
+            }) else {
+                return Err(Error::Invalid(
+                    "model response does not match the requested byte range".into(),
+                ));
+            };
+            Some(last - first + 1)
+        } else {
+            None
+        };
         let mut output = Vec::new();
         loop {
             let chunk = wait(response.chunk(), timeout, &cancel)
@@ -252,6 +282,11 @@ impl ModelClient {
             output.extend_from_slice(&chunk);
         }
         cancelled(&cancel)?;
+        if expected_length.is_some_and(|length| output.len() as u64 != length) {
+            return Err(Error::Invalid(
+                "model response contains an incomplete byte range".into(),
+            ));
+        }
         Ok(output)
     }
 }

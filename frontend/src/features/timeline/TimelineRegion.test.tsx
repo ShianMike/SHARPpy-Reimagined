@@ -24,9 +24,9 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it("offers exactly the requested models in both selectors and resolves a removed choice safely", async () => {
-  useForecastStore.getState().setModel("gefs");
-  useSoundingStore.getState().setModel({ modelKey: "gefs", atStation: false, latitude: "35", longitude: "-97" });
+it.each(["gefs", "nam", "nam-3km-conus", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3", "sref", "href"])("offers exactly the requested models in both selectors and resolves removed choice %s safely", async (modelKey) => {
+  useForecastStore.getState().setModel(modelKey);
+  useSoundingStore.getState().setModel({ modelKey, atStation: false, latitude: "35", longitude: "-97" });
   const base = createTransport();
   let request: unknown;
   renderWithBackend(<><ForecastControls /><ModelForm /></>, {
@@ -37,17 +37,17 @@ it("offers exactly the requested models in both selectors and resolves a removed
     },
   });
   const model = await screen.findByRole("combobox", { name: "Model" });
-  const names = ["HRRR", "RAP", "NAM", "NAM 3km CONUS", "RDPS", "HRW WRF-ARW", "HRW WRF-NSSL", "HRW FV3", "RRFS", "REFSm1", "REFSm2", "REFSm3", "REFSm4", "REFSm5", "GFS", "GDPS", "ECMWF", "ECMWF 9km"].toSorted();
+  const names = ["HRRR", "RAP", "RDPS", "RRFS", "REFSm1", "REFSm2", "REFSm3", "REFSm4", "REFSm5", "GFS", "GDPS", "ECMWF", "ECMWF 9km"].toSorted();
   await userEvent.click(model);
   expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label")).toSorted()).toEqual(names);
   const soundingModels = screen.getByRole("listbox", { name: "Model" });
-  expect(within(soundingModels).getByRole("group", { name: "CONUS" }).querySelectorAll('[role="option"]')).toHaveLength(11);
+  expect(within(soundingModels).getByRole("group", { name: "CONUS" }).querySelectorAll('[role="option"]')).toHaveLength(7);
   expect(within(within(soundingModels).getByRole("group", { name: "Global" })).getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["GFS", "ECMWF 9km", "ECMWF", "GDPS"]);
-  expect(within(within(soundingModels).getByRole("group", { name: "Regional" })).getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["RAP", "NAM", "RDPS"]);
+  expect(within(within(soundingModels).getByRole("group", { name: "Regional" })).getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["RAP", "RDPS"]);
   await userEvent.keyboard("{ArrowDown}{End}");
   expect(document.activeElement).toBe(screen.getByRole("option", { name: "RDPS" }));
   await userEvent.keyboard("{ArrowUp}");
-  expect(document.activeElement).toBe(screen.getByRole("option", { name: "NAM" }));
+  expect(document.activeElement).toBe(screen.getByRole("option", { name: "RAP" }));
   await userEvent.keyboard("g");
   expect(document.activeElement).toBe(screen.getByRole("option", { name: "GFS" }));
   expect((model as HTMLButtonElement).value).toBe("hrrr");
@@ -56,12 +56,12 @@ it("offers exactly the requested models in both selectors and resolves a removed
   const dialog = screen.getByRole("dialog", { name: "Forecast model" });
   expect(document.activeElement).toBe(screen.getByRole("searchbox", { name: "Search models" }));
   expect(within(dialog).getByRole<HTMLInputElement>("radio", { name: "CONUS" }).checked).toBe(true);
-  expect(within(within(dialog).getByRole("group", { name: "CONUS" })).getAllByRole("button")).toHaveLength(11);
+  expect(within(within(dialog).getByRole("group", { name: "CONUS" })).getAllByRole("button")).toHaveLength(7);
   expect(within(dialog).queryByRole("button", { name: "Choose ECMWF" })).toBeNull();
   await userEvent.click(within(dialog).getByRole("radio", { name: "Global" }));
   expect(within(within(dialog).getByRole("group", { name: "Global" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Choose GFS", "Choose ECMWF 9km", "Choose ECMWF", "Choose GDPS", "Choose AIGFS"]);
   await userEvent.click(within(dialog).getByRole("radio", { name: "Regional" }));
-  expect(within(within(dialog).getByRole("group", { name: "Regional" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Choose RAP", "Choose NAM", "Choose RDPS"]);
+  expect(within(within(dialog).getByRole("group", { name: "Regional" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["Choose RAP", "Choose RDPS"]);
   await userEvent.click(screen.getByRole("button", { name: "Close forecast setup" }));
   await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
   await waitFor(() => { expect(request).toMatchObject({ request: { kind: "model", model: "hrrr" } }); });

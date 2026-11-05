@@ -9,6 +9,24 @@ pub enum ScanKind {
     Mrle,
 }
 
+/// Apply history tolerance to the actual cut, including an already cached cut.
+pub fn level2_matches(
+    observed: OffsetDateTime,
+    requested: Option<OffsetDateTime>,
+    now: OffsetDateTime,
+) -> bool {
+    let recent = observed >= now - time::Duration::minutes(70)
+        && observed <= now + time::Duration::minutes(1);
+    recent
+        && requested.is_none_or(|target| {
+            if target < now - time::Duration::minutes(2) {
+                (observed - target).abs() <= time::Duration::minutes(10)
+            } else {
+                observed >= now - time::Duration::minutes(15)
+            }
+        })
+}
+
 /// Return the source product's observation time, not its production time.
 ///
 /// Ordinary products carry volume start plus a volume-relative elevation offset. SAILS
@@ -43,6 +61,33 @@ pub fn level3(
 mod tests {
     use super::*;
     use time::format_description::well_known::Rfc3339;
+
+    #[test]
+    fn level2_history_uses_the_cut_time_rather_than_volume_start() {
+        let now = OffsetDateTime::parse("2026-10-30T12:15:00Z", &Rfc3339).unwrap();
+        let target = now - time::Duration::minutes(22);
+        assert!(!level2_matches(
+            now - time::Duration::minutes(7),
+            Some(target),
+            now
+        ));
+        assert!(level2_matches(
+            target + time::Duration::minutes(10),
+            Some(target),
+            now
+        ));
+        assert!(!level2_matches(
+            target + time::Duration::minutes(10) + time::Duration::seconds(1),
+            Some(target),
+            now
+        ));
+        assert!(level2_matches(now - time::Duration::minutes(1), None, now));
+        assert!(!level2_matches(
+            now - time::Duration::minutes(71),
+            Some(target),
+            now
+        ));
+    }
 
     #[test]
     fn sails_kdfx_scan_does_not_add_the_volume_offset_twice() {

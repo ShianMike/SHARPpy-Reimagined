@@ -29,7 +29,7 @@ fn reference_size_excludes_a_faster_different_object_and_name_breaks_ties() {
             &[sample(100, 0.4), sample(100, 0.2), sample(200, 0.1)],
             request.reference.as_deref()
         ),
-        1
+        Some(1)
     );
     assert_eq!(
         choose(
@@ -37,7 +37,7 @@ fn reference_size_excludes_a_faster_different_object_and_name_breaks_ties() {
             &[sample(100, 0.2); 3],
             request.reference.as_deref()
         ),
-        0
+        Some(0)
     );
     assert_eq!(
         choose(
@@ -45,7 +45,7 @@ fn reference_size_excludes_a_faster_different_object_and_name_breaks_ties() {
             &[None, None, None],
             Some(&request.sources[1].url)
         ),
-        1
+        None
     );
 }
 
@@ -58,7 +58,7 @@ fn an_unavailable_reference_uses_the_modal_positive_size_then_the_larger_tie() {
             &[None, sample(100, 0.2), sample(200, 0.3)],
             request.reference.as_deref()
         ),
-        2
+        Some(2)
     );
     assert_eq!(
         choose(
@@ -66,11 +66,11 @@ fn an_unavailable_reference_uses_the_modal_positive_size_then_the_larger_tie() {
             &[sample(0, 0.01), sample(100, 0.2), sample(100, 0.3)],
             None
         ),
-        1
+        Some(1)
     );
     assert_eq!(
         choose(&request.sources, &[sample(0, 0.01), None, None], None),
-        0
+        None
     );
 }
 
@@ -86,9 +86,9 @@ fn a_cached_mirror_is_revalidated_and_changed_sizes_or_failures_force_a_complete
             .map(|source| sample(100, if source.name == "aws" { 0.1 } else { 0.2 }))
             .collect()
     };
-    assert_eq!(router.select(&request, 0., probe), 0);
+    assert_eq!(router.select(&request, 0., probe), Some(0));
     request.sources.reverse();
-    assert_eq!(router.select(&request, 1., probe), 2);
+    assert_eq!(router.select(&request, 1., probe), Some(2));
     assert_eq!(*calls.borrow(), vec![3, 1]);
     request.reference = Some("https://google/a".into());
     let changed = |sources: &[Source]| {
@@ -98,7 +98,7 @@ fn a_cached_mirror_is_revalidated_and_changed_sizes_or_failures_force_a_complete
             .map(|source| sample(if source.name == "aws" { 200 } else { 100 }, 0.2))
             .collect()
     };
-    assert_eq!(router.select(&request, 2., changed), 0);
+    assert_eq!(router.select(&request, 2., changed), Some(0));
     let failed = |sources: &[Source]| {
         calls.borrow_mut().push(sources.len());
         sources
@@ -111,7 +111,7 @@ fn a_cached_mirror_is_revalidated_and_changed_sizes_or_failures_force_a_complete
             })
             .collect()
     };
-    assert_eq!(router.select(&request, 3., failed), 2);
+    assert_eq!(router.select(&request, 3., failed), Some(2));
     assert_eq!(*calls.borrow(), vec![3, 1, 1, 3, 1, 3]);
 }
 
@@ -142,14 +142,21 @@ fn unsuccessful_probes_fall_back_then_are_retried_without_caching_false_success(
     let request = request("a");
     assert_eq!(
         router.select(&request, 0., |sources| vec![None; sources.len()]),
-        0
+        None
     );
     let counts = RefCell::new(Vec::new());
     router.select(&request, 1., |sources| {
         counts.borrow_mut().push(sources.len());
         vec![None; sources.len()]
     });
-    assert_eq!(*counts.borrow(), vec![1, 3]);
+    assert_eq!(*counts.borrow(), vec![3]);
+    assert!(router.cache.lock().unwrap().is_empty());
+    let mut outside = request;
+    outside.reference = Some("https://nomads/original".into());
+    assert_eq!(
+        router.select(&outside, 2., |sources| vec![None; sources.len()]),
+        None
+    );
 }
 
 #[test]

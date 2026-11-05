@@ -19,7 +19,7 @@ from xml.etree import ElementTree as ET
 import numpy as np
 
 from sharpmod.maps.map_overlays import OverlayRaster
-from sharpmod.providers import radar_level3, radar_site
+from sharpmod.providers import radar_level3, radar_site, radar_time
 
 BASE = "https://unidata-nexrad-level2.s3.amazonaws.com"
 MAX_VOLUME_BYTES = 64 * 1024 * 1024
@@ -409,11 +409,14 @@ def fetch_frame(
     opener=None,
     now=None,
 ):
+    import sharpmod_rs
+
     if product not in MOMENTS:
         raise radar_site.RadarSiteError("unknown Level II product")
     if tilt not in radar_level3.TILTS or tilt in {"x", "y"}:
         raise radar_site.RadarSiteError("unknown radar tilt")
     site, reference, selected, call, timeout = _select(site_id, valid_time, now, opener)
+    requested = radar_time._utc(valid_time) if valid_time is not None else None
     if selected is None:
         raise radar_site.RadarScanMissing(
             f"{site.id} has no recent Level II volume for this time"
@@ -422,19 +425,19 @@ def fetch_frame(
     with radar_site._CACHE_LOCK:
         cached = radar_site._CACHE.get(key)
     if cached is not None:
+        if not sharpmod_rs.radar_level2_matches(cached[1].valid_time, requested, reference):
+            raise radar_site.RadarScanMissing(
+                "Level II cut is outside the current radar window or does not match the requested time"
+            )
         return cached[1]
     sweep = _volume(site, selected, call, timeout).get((product, tilt))
     if sweep is None:
         raise radar_site.RadarScanMissing(
             f"{site.id} does not have this {radar_site.get_product(product).label} tilt in the selected volume"
         )
-    if (
-        not reference - timedelta(minutes=70)
-        <= sweep.when
-        <= reference + timedelta(minutes=1)
-    ):
-        raise radar_site.RadarSiteError(
-            "Level II sweep time is outside the current radar window"
+    if not sharpmod_rs.radar_level2_matches(sweep.when, requested, reference):
+        raise radar_site.RadarScanMissing(
+            "Level II cut is outside the current radar window or does not match the requested time"
         )
     bounds = site.bounds()
     image = radar_level3.render_radials(

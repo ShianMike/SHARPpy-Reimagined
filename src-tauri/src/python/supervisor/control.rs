@@ -3,6 +3,15 @@
 use super::*;
 
 impl Supervisor {
+    /// Both the normal app exit and the updater's synchronous pre-exit hook
+    /// wait for child exit and session cleanup. The hook can run on a Tokio
+    /// worker, so hand off its async tasks before waiting on that runtime.
+    pub fn shutdown_before_exit(&self) {
+        tokio::task::block_in_place(|| {
+            self.shared.rt.block_on(self.finish_shutdown());
+        });
+    }
+
     /// Kills any child, clears the crash history, and starts a new child.
     /// Returns once `hello` has succeeded or failed. A call while a restart is
     /// running joins that restart.

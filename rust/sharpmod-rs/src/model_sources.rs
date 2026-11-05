@@ -41,7 +41,7 @@ pub(crate) fn choose(
     sources: &[Source],
     probes: &[Option<Probe>],
     reference: Option<&str>,
-) -> usize {
+) -> Option<usize> {
     let first = sources
         .iter()
         .position(|source| Some(source.url.as_str()) == reference)
@@ -69,7 +69,7 @@ pub(crate) fn choose(
             best = Some((index, probe.elapsed));
         }
     }
-    best.map_or(first, |(index, _)| index)
+    best.map(|(index, _)| index)
 }
 
 impl Router {
@@ -78,7 +78,7 @@ impl Router {
         request: &Request,
         now: f64,
         probe: impl Fn(&[Source]) -> Vec<Option<Probe>>,
-    ) -> usize {
+    ) -> Option<usize> {
         let mut identity = request.sources.clone();
         identity.sort();
         let key = (request.model.clone(), request.product.clone(), identity);
@@ -95,11 +95,11 @@ impl Router {
                 .unwrap();
             let result = probe(&request.sources[index..index + 1]);
             if result[0].is_some_and(|probe| probe.size == cached.size) {
-                return index;
+                return Some(index);
             }
         }
         let probes = probe(&request.sources);
-        let selected = choose(&request.sources, &probes, request.reference.as_deref());
+        let selected = choose(&request.sources, &probes, request.reference.as_deref())?;
         let mut cache = self.cache.lock().unwrap();
         cache.insert(
             key,
@@ -117,7 +117,7 @@ impl Router {
                 .unwrap();
             cache.remove(&oldest);
         }
-        selected
+        Some(selected)
     }
 }
 

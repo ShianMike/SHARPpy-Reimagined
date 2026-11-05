@@ -4,9 +4,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Transport } from "./transport";
+import { Update } from "@tauri-apps/plugin-updater";
 
 export { getCurrentWindow } from "@tauri-apps/api/window";
-export { check as checkForUpdates } from "@tauri-apps/plugin-updater";
+export async function checkForUpdates(options: { timeout?: number } = {}): Promise<Update | null> {
+  const metadata = await invoke<ConstructorParameters<typeof Update>[0] | null>("check_for_updates", options);
+  return metadata === null ? null : new Update(metadata);
+}
 
 export function createTransport(): Transport {
   return {

@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.5.1
+# SHARPpy Reimagined · v3.5.2
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,11 +10,34 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v351---2026-10-30)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#unreleased)
 
 </div>
 
-## What's new in 3.5.1
+## What's new in 3.5.2
+
+Windows installers and portable downloads are available in
+[Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases).
+
+- **Map ready at startup:** load the map behind Overview as the app opens and
+  preserve it when moving between workspaces.
+- **Correct parcel diagnostics:** preserve saturated-surface LCL and LFC values,
+  average temperature and moisture independently, and retain usable CAPE layers
+  beneath a missing profile-top temperature.
+- **Protected sounding edits:** retain pending-edit protection across navigation
+  and prevent late results from replacing newer profile work or chart selections.
+- **Accurate weather requests:** validate model download ranges, preserve the
+  original provider when mirror checks fail, and include observation pagination
+  when finding the nearest report.
+- **Consistent live history:** match Level II history to the actual cut time and
+  avoid repeatedly requesting confirmed unavailable alert snapshots.
+- **Cleaner updates:** finish backend shutdown before starting the Windows
+  installer, preserve published releases, and validate upgrades from an earlier
+  stable version.
+- **Current model choices:** retire NAM, SREF, HREF and the offered HiResW
+  variants from the forecast and sounding selectors after their NWS retirement.
+
+### Included from 3.5.1
 
 - **Storm reports in Live Tracking:** show tornado, hail and wind reports beside
   radar and alerts, with hazard filters, event windows, hover details and past-hour
@@ -51,9 +74,9 @@ for downloads, live providers, map processing and sounding calculations.
 ## Weather analysis
 
 - **Model Viewer:** compare forecast fields in one, two or four synchronized
-  maps. Models are grouped into CONUS, Global and Regional, with NAM and RAP
+  maps. Models are grouped into CONUS, Global and Regional, with RAP and RDPS
   under Regional. Parameter choices follow the selected run's published fields.
-- **More model coverage:** explore supported GFS, ECMWF, ECMWF 9km, NAM and HRW
+- **More model coverage:** explore supported GFS, ECMWF, ECMWF 9km, RRFS and REFS
   parameters. GDPS provides point soundings; AIGFS provides map analysis only.
 - **Live Tracking:** follow radar, satellite imagery, surface observations,
   warnings and watches. Compare available radar products and tilts, inspect
@@ -77,7 +100,7 @@ open soundings, edits and history will be lost.
 ## Screenshots
 
 Interface views from 3.5.0, captured at 1920 × 1080 from the live local application.
-The v3.5.1 performance update retains this interface.
+These maintenance fixes retain this interface.
 Open an image to view it at its original size.
 
 <details open>

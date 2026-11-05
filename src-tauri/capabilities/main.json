@@ -5,6 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "allow-get-backend-health",
+    "allow-check-for-updates",
     "allow-get-station-catalog",
     "allow-restart-backend",
     "allow-cancel-request",
@@ -43,7 +44,6 @@
     "core:window:allow-is-fullscreen",
     "core:window:allow-set-fullscreen",
     "core:resources:allow-close",
-    "updater:allow-check",
     "updater:allow-download",
     "updater:allow-install"
   ]

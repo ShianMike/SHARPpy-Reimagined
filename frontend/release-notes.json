@@ -1,4 +1,33 @@
 {
+  "3.5.2": {
+    "summary": "A map ready at startup, current forecast models, more accurate parcel diagnostics and protected profile edits.",
+    "highlights": [
+      {
+        "title": "Ready forecast workspace",
+        "description": "Load the map behind Overview as the app opens and keep it ready across workspaces. Retire NAM and its nests, SREF, HREF and the offered HiResW variants from model choices; RRFS and REFS remain available."
+      },
+      {
+        "title": "Correct parcel diagnostics",
+        "description": "Preserve saturated-surface LCL and LFC values, average temperature and moisture independently when readings are missing, and retain usable CAPE layers beneath an incomplete profile top."
+      },
+      {
+        "title": "Protected sounding edits",
+        "description": "Switch between soundings while a recalculation finishes without enabling competing edits or losing newer chart selections and profile work."
+      },
+      {
+        "title": "Accurate weather requests",
+        "description": "Validate model download ranges, keep an available provider when mirror checks fail, and include later observation pages when finding the nearest station report. Refresh forecast-model access, NetCDF reading and HTTPS trust data."
+      },
+      {
+        "title": "Consistent live history",
+        "description": "Use actual Level II cut times when matching radar history, including cached cuts, and avoid repeatedly requesting alert snapshots already known to be unavailable."
+      },
+      {
+        "title": "Cleaner app updates",
+        "description": "Finish backend shutdown and clear the session cache before Windows launches the update installer, without stalling the app. Existing installations can detect these fixes as a new application version."
+      }
+    ]
+  },
   "3.5.1": {
     "summary": "Storm reports in Live Tracking, clearer overlay recovery and faster first sounding display.",
     "highlights": [

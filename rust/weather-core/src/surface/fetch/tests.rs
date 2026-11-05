@@ -33,7 +33,8 @@ impl JsonSource for Fixture {
         self.peak.fetch_max(active, Ordering::SeqCst);
         tokio::time::sleep(Duration::from_millis(2)).await;
         self.payloads
-            .get(url.split('?').next().unwrap())
+            .get(url)
+            .or_else(|| self.payloads.get(url.split('?').next().unwrap()))
             .cloned()
             .unwrap_or_else(|| Err("unavailable".into()))
     }
@@ -64,6 +65,51 @@ fn fixture(count: usize) -> Fixture {
     Fixture {
         payloads: Arc::new(payloads),
         ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn nearest_observation_can_be_on_a_later_page() {
+    let mut source = fixture(1);
+    let next = format!("{BASE}/stations/K000/observations?cursor=older");
+    let payloads = Arc::make_mut(&mut source.payloads);
+    payloads.insert(
+        format!("{BASE}/stations/K000/observations"),
+        Ok(json!({
+            "features": [{"properties":{"timestamp":"2026-09-13T02:30:00Z"}}],
+            "pagination":{"next":next},
+        })),
+    );
+    payloads.insert(
+        next,
+        Ok(json!({"features":[{"properties":{"timestamp":"2026-09-13T01:40:00Z"}}]})),
+    );
+    let result = fetch(source.clone(), request(), || Ok(false))
+        .await
+        .unwrap();
+    assert_eq!(result.matched[0].1.observed_at.hour(), 1);
+    assert_eq!(result.matched[0].1.observed_at.minute(), 40);
+    assert_eq!(source.hits.lock().unwrap().len(), 4);
+}
+
+#[tokio::test]
+async fn pagination_rejects_cycles_and_other_origins_without_using_partial_results() {
+    for next in [
+        "https://evil.example/observations",
+        "https://api.weather.gov/stations/OTHER/observations",
+        "https://api.weather.gov/stations/K000/observations",
+    ] {
+        let mut source = fixture(1);
+        let mut payload = source.payloads[&format!("{BASE}/stations/K000/observations")]
+            .clone()
+            .unwrap();
+        payload["pagination"] = json!({"next":next});
+        Arc::make_mut(&mut source.payloads)
+            .insert(format!("{BASE}/stations/K000/observations"), Ok(payload));
+        assert!(matches!(
+            fetch(source, request(), || Ok(false)).await,
+            Err(FetchError::Provider(_))
+        ));
     }
 }
 

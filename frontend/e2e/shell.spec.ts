@@ -15,14 +15,14 @@ test("opens Overview first, including after reopening from either viewer", async
   await expect(overview).toHaveAttribute("aria-current", "page");
   await expect(panel).toHaveAttribute("aria-label", "Overview");
   await expect(panel).toBeVisible();
-  await expect(page.locator("canvas")).toHaveCount(0);
+  await waitForMapDrawn(page);
   for (const name of ["Model Viewer", "Live Tracking"]) {
     await rail.getByRole("button", { name, exact: true }).click();
     await page.reload();
     await expect(overview).toHaveAttribute("aria-current", "page");
     await expect(panel).toHaveAttribute("aria-label", "Overview");
     await expect(panel).toBeVisible();
-    await expect(page.locator("canvas")).toHaveCount(0);
+    await waitForMapDrawn(page);
   }
   expectWarnings(consoleMessages, []);
 });
@@ -216,23 +216,23 @@ test.describe("at the 1280 by 800 minimum window", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
   test("a desktop update notice fits above playback and Later keeps it available in Settings", async ({ page, consoleMessages }) => {
-    await page.addInitScript(() => {
+    await page.addInitScript((currentVersion) => {
       // Exercise the native notification UI without downloading or installing a release.
       Object.defineProperty(window, "__TAURI_INTERNALS__", { value: {
         metadata: { currentWindow: { label: "main" } },
         invoke: (command: string) => {
-          if (command === "plugin:updater|check") return Promise.resolve({ rid: 1, currentVersion: "3.5.1", version: "3.5.2", rawJson: {} });
+          if (command === "check_for_updates") return Promise.resolve({ rid: 1, currentVersion, version: "99.0.0", rawJson: {} });
           if (command === "plugin:resources|close") return Promise.resolve();
           if (command === "plugin:window|is_fullscreen") return Promise.resolve(false);
           return Promise.reject(new Error(`Unexpected native command: ${command}`));
         },
       } });
-    });
+    }, appManifest.version);
     await page.goto("/");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
     const notice = page.getByTestId("app-update-notice");
-    await expect(notice).toContainText("Version 3.5.2 is available");
+    await expect(notice).toContainText("Version 99.0.0 is available");
     await expect(notice.getByRole("button", { name: "Update now" })).toBeEnabled();
     const box = await boxOf(notice);
     expect(isInside(box, viewportBox(page))).toBe(true);
@@ -242,7 +242,7 @@ test.describe("at the 1280 by 800 minimum window", () => {
     await expect(notice).toHaveCount(0);
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Updates", exact: true }).click();
-    await expect(page.getByText("Version 3.5.2 is available")).toBeVisible();
+    await expect(page.getByText("Version 99.0.0 is available")).toBeVisible();
     await expect(page.getByRole("button", { name: "Install update" })).toBeEnabled();
     expectWarnings(consoleMessages, []);
   });

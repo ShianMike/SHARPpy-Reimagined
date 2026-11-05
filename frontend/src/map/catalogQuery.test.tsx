@@ -28,7 +28,7 @@ afterEach(() => {
   vi.useRealTimers(); vi.restoreAllMocks();
 });
 
-it.each(["hrrr", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5", "nam-3km-conus", "gfs", "aigfs", "openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3"])("checks %s product availability for the selected run and hour", async (modelKey) => {
+it.each(["hrrr", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5", "gfs", "aigfs", "openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km"])("checks %s product availability for the selected run and hour", async (modelKey) => {
   const model = models.models.find((entry) => entry.key === modelKey);
   if (model === undefined) throw new Error("Model fixture missing");
   const raw = parseMapCatalog(modelKey === "hrrr" ? mapCatalog : (modelMapCatalogs as Readonly<Record<string, unknown>>)[modelKey]);
@@ -59,7 +59,7 @@ it.each(["hrrr", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5"
   expect(queryClient.getQueryData(mapKeys.catalog(modelKey, model.suggestedRun, 12))).toEqual(raw);
 });
 
-it.each(["hrrr", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5", "nam-3km-conus", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3"])("only offers complete trailing UH intervals for %s", async (modelKey) => {
+it.each(["hrrr", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5"])("only offers complete trailing UH intervals for %s", async (modelKey) => {
   const queryClient = createQueryClient();
   queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
   const client = new BackendClient(createTransport());
@@ -79,20 +79,20 @@ it.each(["hrrr", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5"
   }
 });
 
-it("keeps normal NAM's catalogue static without UH products", async () => {
+it.each(["nam", "nam-3km-conus", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3", "sref", "href"])("falls back from retired %s before requesting map products", async (modelKey) => {
   const queryClient = createQueryClient();
   queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
   const client = new BackendClient(createTransport());
   const getCatalog = vi.spyOn(client, "getMapCatalog");
-  useForecastStore.setState({ modelKey: "nam", runTime: null, forecastHour: 0 });
+  useForecastStore.setState({ modelKey, runTime: "2000-01-01T00:00:00Z", forecastHour: 0 });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>
   );
-  const hook = renderHook(useMapCatalog, { wrapper });
-  await waitFor(() => { expect(hook.result.current.isSuccess).toBe(true); });
-  act(() => { useForecastStore.getState().setHour(3); });
-  expect(getCatalog).toHaveBeenCalledExactlyOnceWith("nam", undefined, undefined);
-  expect(hook.result.current.data?.products.some((product) => product.key.startsWith("uh-"))).toBe(false);
+  const hook = renderHook(() => ({ catalog: useMapCatalog(), forecast: useForecast() }), { wrapper });
+  await waitFor(() => { expect(hook.result.current.catalog.isSuccess).toBe(true); });
+  expect(getCatalog).toHaveBeenCalledExactlyOnceWith("hrrr", models.models[0]?.suggestedRun, 0);
+  expect(hook.result.current.forecast).toMatchObject({ status: "ready", context: { model: { key: "hrrr" }, fieldsAvailable: true } });
+  expect(queryClient.getQueryData<ReturnType<typeof parseModelCatalog>>(QUERY_KEYS.models)?.models.some((model) => model.key === "nam")).toBe(true);
 });
 
 it("waits for ECMWF product availability before advancing playback", async () => {

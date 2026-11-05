@@ -52,6 +52,7 @@ pub fn invoke_handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
 {
     tauri::generate_handler![
         commands::backend::get_backend_health,
+        commands::updater::check_for_updates,
         commands::stations::get_station_catalog,
         commands::backend::restart_backend,
         commands::backend::cancel_request,
@@ -163,9 +164,7 @@ pub fn run() {
         }
         RunEvent::Exit => {
             if let Some(supervisor) = supervisor(app) {
-                tauri::async_runtime::block_on(async move {
-                    supervisor.finish_shutdown().await;
-                });
+                supervisor.shutdown_before_exit();
             }
         }
         _ => {}

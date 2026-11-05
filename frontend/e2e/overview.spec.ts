@@ -1,3 +1,4 @@
+import { waitForMapDrawn } from "./support/app";
 import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
 import { boxOf, isInside, viewportBox } from "./support/ui";
@@ -26,7 +27,12 @@ for (const { width, height, theme } of [
     for (const button of await buttons.all()) expect(isInside(await boxOf(button), panelBox)).toBe(true);
     expect(await panel.locator("[class*='_page_']").evaluate((element) => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight)).toBe(true);
     await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
-    await expect(page.locator("canvas")).toHaveCount(0);
+    await waitForMapDrawn(page);
+    await expect(page.getByTestId("map").locator("canvas.maplibregl-canvas")).toBeVisible();
+    await expect(page.locator('section[aria-label="Model map"]')).toHaveAttribute("inert", "");
+    await expect(page.getByTestId("toolbar")).toHaveCount(0);
+    await expect(panel).toContainText("14 forecast models");
+    await expect(panel).not.toContainText("Parameters loading");
     await saveScreenshot(page, `overview-${String(width)}x${String(height)}-${theme}.png`);
   });
 }

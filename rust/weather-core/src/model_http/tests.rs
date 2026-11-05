@@ -206,7 +206,11 @@ async fn ranges_keep_exact_headers_bytes_and_connection_reuse() {
     let server = Server::new(|request| {
         assert_eq!(request.headers.get("range").unwrap(), "bytes=10-13");
         assert_eq!(request.headers.get("accept-encoding").unwrap(), "identity");
-        Reply::new(206, b"GRIB")
+        let mut reply = Reply::new(206, b"GRIB");
+        reply
+            .headers
+            .push(("Content-Range", "bytes 10-13/100".into()));
+        reply
     });
     let client = client();
     for _ in 0..2 {
@@ -228,6 +232,45 @@ async fn ranges_keep_exact_headers_bytes_and_connection_reuse() {
     assert_eq!(calls.len(), 2);
     assert_eq!(calls[0].path, "/field");
     assert_eq!(calls[0].port, calls[1].port);
+}
+
+#[tokio::test]
+async fn rejects_ignored_misaligned_and_truncated_ranges() {
+    for (status, range, body) in [
+        (200, "", "0123456789ABCDEF"),
+        (206, "bytes 0-3/16", "0123"),
+        (206, "bytes 8-9/16", "89"),
+        (206, "bytes 8-11/16", "89"),
+        (206, "", "89AB"),
+    ] {
+        let server = Server::new(move |_| {
+            let mut reply = Reply::new(status, body.as_bytes());
+            if !range.is_empty() {
+                reply.headers.push(("Content-Range", range.into()));
+            }
+            reply
+        });
+        assert!(matches!(
+            client()
+                .fetch(&server.url, 2., 4096, Some((8, 11)), || Ok(false))
+                .await,
+            Err(Error::Invalid(_))
+        ));
+    }
+    let server = Server::new(|_| {
+        let mut reply = Reply::new(206, b"89AB");
+        reply
+            .headers
+            .push(("Content-Range", "bytes 8-11/12".into()));
+        reply
+    });
+    assert_eq!(
+        client()
+            .fetch(&server.url, 2., 4096, Some((8, 100)), || Ok(false))
+            .await
+            .unwrap(),
+        b"89AB"
+    );
 }
 
 #[tokio::test]

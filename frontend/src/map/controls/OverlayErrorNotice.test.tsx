@@ -78,3 +78,20 @@ it.each(["historyUnavailable", "providerFailure"] as const)("only suppresses rem
   expect(screen.queryByText(/0 active/u)).toBeNull();
   queryClient.clear();
 });
+
+it("does not refetch a known history gap when playback revisits its query key", async () => {
+  const transport = createTransport(), original = transport.call.bind(transport);
+  const call = vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_weather_alerts"
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- public backend error contract
+    ? Promise.reject(history) : original(command, args));
+  const { view, queryClient } = renderWithBackend(<WeatherAlertStatus kind="warning" />, transport);
+  await waitFor(() => { expect(screen.getByTestId("weather-alerts-error")).toBeTruthy(); });
+  const selected = useLiveTrackingStore.getState().selectedTime;
+  useLiveTrackingStore.getState().selectTime(now - 10 * LIVE_MINUTE);
+  await waitFor(() => { expect(call.mock.calls.filter(([command]) => command === "get_weather_alerts")).toHaveLength(2); });
+  await waitFor(() => { expect(screen.getByTestId("weather-alerts-error")).toBeTruthy(); });
+  useLiveTrackingStore.getState().selectTime(selected);
+  await waitFor(() => { expect(screen.getByTestId("weather-alerts-error")).toBeTruthy(); });
+  expect(call.mock.calls.filter(([command]) => command === "get_weather_alerts")).toHaveLength(2);
+  view.unmount(); queryClient.clear();
+});

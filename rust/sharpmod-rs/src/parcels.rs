@@ -588,33 +588,33 @@ fn lift_parcel<const DIAGNOSTICS: bool, const TRACED: bool>(
     let theta_parcel = theta(lcl_pressure, lcl_temperature, 1_000.0);
     let parcel_mix_ratio = mix_ratio(start.pressure, start.dewpoint);
     let mut negative_energy = 0.0;
-    let mut p1 = start.pressure;
-    let mut p2 = p1 - 1.0;
-    while p2 > lcl_pressure - 1.0 {
-        let h1 = profile.height_series.at(p1);
-        let h2 = profile.height_series.at(p2);
-        let env_theta1 = theta(p1, profile.temp_series.at(p1), 1_000.0);
-        let env_theta2 = theta(p2, profile.temp_series.at(p2), 1_000.0);
-        let env_virtual1 = virtual_temperature(p1, env_theta1, profile.dewpoint_series.at(p1));
-        let env_virtual2 = virtual_temperature(p2, env_theta2, profile.dewpoint_series.at(p2));
-        let parcel_virtual1 = virtual_temperature(
-            p1,
-            theta_parcel,
-            temperature_at_mix_ratio(parcel_mix_ratio, p1),
-        );
-        let parcel_virtual2 = virtual_temperature(
-            p2,
-            theta_parcel,
-            temperature_at_mix_ratio(parcel_mix_ratio, p2),
-        );
-        let def1 = buoyancy_fraction(parcel_virtual1, env_virtual1);
-        let def2 = buoyancy_fraction(parcel_virtual2, env_virtual2);
-        let energy = GRAVITY * (def1 + def2) / 2.0 * (h2 - h1);
-        if energy.is_finite() && energy < 0.0 {
-            negative_energy += energy;
+    let mut p2 = start.pressure - 1.0;
+    if p2 > lcl_pressure - 1.0 {
+        let dry_state = |pressure| {
+            let height = profile.height_series.at(pressure);
+            let env_theta = theta(pressure, profile.temp_series.at(pressure), 1_000.0);
+            let env_virtual =
+                virtual_temperature(pressure, env_theta, profile.dewpoint_series.at(pressure));
+            let parcel_virtual = virtual_temperature(
+                pressure,
+                theta_parcel,
+                temperature_at_mix_ratio(parcel_mix_ratio, pressure),
+            );
+            (height, buoyancy_fraction(parcel_virtual, env_virtual))
+        };
+        let (mut h1, mut def1) = dry_state(start.pressure);
+        while p2 > lcl_pressure - 1.0 {
+            let (h2, def2) = dry_state(p2);
+            let energy = GRAVITY * (def1 + def2) / 2.0 * (h2 - h1);
+            if energy.is_finite() && energy < 0.0 {
+                negative_energy += energy;
+            }
+            // The upper endpoint is the next 1-hPa step's lower endpoint.
+            // Retain its exact values without changing integration order.
+            h1 = h2;
+            def1 = def2;
+            p2 -= 1.0;
         }
-        p1 = p2;
-        p2 -= 1.0;
     }
 
     let mut previous = Level {

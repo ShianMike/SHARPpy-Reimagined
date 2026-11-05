@@ -1,4 +1,21 @@
 {
+  "3.5.3": {
+    "summary": "Working ECMWF 9 km soundings, clearer STP charts and faster native calculations.",
+    "highlights": [
+      {
+        "title": "ECMWF 9 km soundings restored",
+        "description": "Open forecast soundings using the correct pressure-level download and its surface data, including locations that previously failed with a missing pressure-coordinate error."
+      },
+      {
+        "title": "Readable STP charts",
+        "description": "Keep the Effective Layer STP title and probability text compact, with enough room for each line on Windows and Linux."
+      },
+      {
+        "title": "Faster native calculations",
+        "description": "Reuse repeated parcel calculations and verified grid lookups while reading weather values from the current file. Initial weather-data downloads and decoding still depend on the provider and file size."
+      }
+    ]
+  },
   "3.5.2": {
     "summary": "A map ready at startup, current forecast models, more accurate parcel diagnostics and protected profile edits.",
     "highlights": [

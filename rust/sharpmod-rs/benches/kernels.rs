@@ -175,5 +175,65 @@ fn kernel_benchmarks(criterion: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, kernel_benchmarks, sounding_benchmarks);
+fn real_sounding_benchmarks(criterion: &mut Criterion) {
+    for (name, text) in [
+        (
+            "observed_oax",
+            include_str!("../../../examples/soundings/14061619.OAX"),
+        ),
+        (
+            "forecast_hrrr",
+            include_str!("../../../examples/soundings/hrrr_point_36.68N_95.66W_f018.spc"),
+        ),
+    ] {
+        let raw = text
+            .split_once("%RAW%")
+            .unwrap()
+            .1
+            .split_once("%END%")
+            .unwrap()
+            .0;
+        let rows = sharpmod_rs::parsing::parse_sounding_rows(raw, -9999.0).unwrap();
+        let columns: [Vec<f64>; 4] =
+            std::array::from_fn(|column| rows.iter().map(|row| row[column]).collect());
+        let [pressure, height, temperature, dewpoint] = columns;
+        let surface = temperature
+            .iter()
+            .position(|value| value.is_finite() && *value != -9999.0)
+            .unwrap();
+        criterion.bench_function(&format!("real_thermodynamics_{name}"), |bencher| {
+            bencher.iter(|| {
+                parcels::profile_thermodynamics(
+                    black_box(&pressure),
+                    black_box(&height),
+                    black_box(&temperature),
+                    black_box(&dewpoint),
+                    surface,
+                    Some(-9999.0),
+                )
+                .unwrap()
+            })
+        });
+        criterion.bench_function(&format!("real_parcels_{name}"), |bencher| {
+            bencher.iter(|| {
+                parcels::profile_parcels(
+                    black_box(&pressure),
+                    black_box(&height),
+                    black_box(&temperature),
+                    black_box(&dewpoint),
+                    surface,
+                    Some(-9999.0),
+                )
+                .unwrap()
+            })
+        });
+    }
+}
+
+criterion_group!(
+    benches,
+    kernel_benchmarks,
+    sounding_benchmarks,
+    real_sounding_benchmarks
+);
 criterion_main!(benches);

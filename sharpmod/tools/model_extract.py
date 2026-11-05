@@ -672,9 +672,10 @@ def _herbie_kwargs(config, member=None, *, surface=False):
     kwargs = dict(config.kwargs)
     if member is not None:
         kwargs["member"] = member
-    if surface and config.herbie_model == "ifs" \
+    if config.herbie_model == "ifs" \
             and kwargs.get("resolution") == "0p1":
-        kwargs["levtype"] = "sfc"
+        # Newer Herbie templates default the split IFS feed to surface fields.
+        kwargs["levtype"] = "sfc" if surface else "pl"
     return kwargs
 
 

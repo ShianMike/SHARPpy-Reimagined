@@ -5,6 +5,110 @@ use super::{
 };
 use super::{ParcelProfile, PressureSeries};
 
+#[test]
+fn bundled_soundings_preserve_thermodynamic_diagnostics() {
+    for (name, text) in [
+        (
+            "observed_oax",
+            include_str!("../../../../examples/soundings/14061619.OAX"),
+        ),
+        (
+            "forecast_hrrr",
+            include_str!("../../../../examples/soundings/hrrr_point_36.68N_95.66W_f018.spc"),
+        ),
+    ] {
+        let raw = text
+            .split_once("%RAW%")
+            .unwrap()
+            .1
+            .split_once("%END%")
+            .unwrap()
+            .0;
+        let rows = crate::parsing::parse_sounding_rows(raw, -9999.0).unwrap();
+        let columns: [Vec<f64>; 4] =
+            std::array::from_fn(|column| rows.iter().map(|row| row[column]).collect());
+        let [pressure, height, temperature, dewpoint] = columns;
+        let surface = temperature
+            .iter()
+            .position(|value| value.is_finite() && *value != -9999.0)
+            .unwrap();
+        let result = profile_thermodynamics(
+            &pressure,
+            &height,
+            &temperature,
+            &dewpoint,
+            surface,
+            Some(-9999.0),
+        )
+        .unwrap();
+        let compact = profile_thermodynamic_diagnostics(
+            &pressure,
+            &height,
+            &temperature,
+            &dewpoint,
+            surface,
+            Some(-9999.0),
+        )
+        .unwrap();
+        // Reference CAPE/CIN from these bundled soundings before endpoint reuse.
+        let expected = if name == "observed_oax" {
+            [
+                [5769.227600989068, -0.6446882423912884],
+                [5209.442837428716, -0.3146990965285444],
+                [5769.227600989068, -0.6446882423912884],
+                [4205.978162098738, -59.01525997809417],
+                [3066.066746662548, -105.54983920643541],
+            ]
+        } else {
+            [
+                [2993.8044866739724, -47.83477703560904],
+                [3451.8446199549085, 0.0],
+                [2993.8044866739724, -47.83477703560904],
+                [2465.4150227329797, -25.56174471883464],
+                [1610.6352143958434, -6.048700997701934],
+            ]
+        };
+        let mut fingerprint = 0xcbf29ce484222325_u64;
+        for ((parcel, summary), expected) in result
+            .convective
+            .parcels
+            .iter()
+            .zip(compact.convective_parcels)
+            .zip(expected)
+        {
+            for (&actual, expected) in parcel.diagnostics[10..12].iter().zip(expected) {
+                assert!(
+                    (actual - expected).abs() < 1.0e-8,
+                    "{name}: {actual} != {expected}"
+                );
+            }
+            for (&left, right) in parcel.diagnostics.iter().zip(summary) {
+                assert!((left.is_nan() && right.is_nan()) || left.to_bits() == right.to_bits());
+            }
+            for value in parcel
+                .diagnostics
+                .iter()
+                .chain(&parcel.pressure_trace)
+                .chain(&parcel.temperature_trace)
+            {
+                let bits = if value.is_nan() {
+                    f64::NAN.to_bits()
+                } else {
+                    value.to_bits()
+                };
+                fingerprint = (fingerprint ^ bits).wrapping_mul(0x100000001b3);
+            }
+            eprintln!("{name} parcel: {:?}", parcel.diagnostics);
+        }
+        eprintln!(
+            "{name} levels={} surface={surface} fingerprint={fingerprint:016x} bounds={:?} downdraft={:?}",
+            pressure.len(),
+            [result.convective.effective_bottom_pressure, result.convective.effective_top_pressure],
+            [result.downdraft.cape, result.downdraft.source_pressure, result.downdraft.downrush_temperature],
+        );
+    }
+}
+
 fn unstable_profile() -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>) {
     let height: Vec<f64> = (0..17).map(|index| index as f64 * 1_000.0).collect();
     let pressure: Vec<f64> = height

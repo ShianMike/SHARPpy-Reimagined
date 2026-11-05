@@ -16,7 +16,7 @@ impl GridFingerprint {
             return None;
         }
         let mut digest = [0; 16];
-        for (byte, pair) in digest.iter_mut().zip(hash.as_bytes().chunks_exact(2)) {
+        for (byte, pair) in digest.iter_mut().zip(hash.as_bytes().as_chunks::<2>().0) {
             let high = char::from(pair[0]).to_digit(16)?;
             let low = char::from(pair[1]).to_digit(16)?;
             *byte = (high * 16 + low) as u8;

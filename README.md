@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.5.3
+# SHARPpy Reimagined · v3.5.4
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -14,10 +14,19 @@
 
 </div>
 
-## What's new in 3.5.3
+## What's new in 3.5.4
 
 Windows installers and portable downloads are available in
 [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases).
+
+- **Smooth, labelled isobars:** add a separate pressure layer on supported HRRR,
+  GFS and ECMWF forecasts, with 4 hPa spacing, opacity and saved per-panel controls.
+- **Complete forecast overlays:** keep height contours and wind barbs available
+  on dense maps, with bounded display detail and the selected contour interval.
+- **Native weather fetching:** use Rust for map-field inventory parsing, byte-range
+  grouping and parallel downloading, with retries, cancellation and size limits.
+
+### Included from 3.5.3
 
 - **ECMWF 9 km soundings:** request the correct pressure-level and surface
   data so forecast profiles open instead of failing with a missing coordinate.

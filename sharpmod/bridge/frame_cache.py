@@ -9,11 +9,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sharpmod.providers import hrrr_field
-
 
 def path(kind: str, model: str, product: str, run: datetime, hour: int,
          size: tuple[int, int]) -> Path:
+    from sharpmod.providers import hrrr_field
+
     # Version the derived representation separately from the provider's raw data.
     version = 2 if kind == "contours" and product == "mslp" else 1
     return hrrr_field.disk_cache_root() / (
@@ -22,6 +22,8 @@ def path(kind: str, model: str, product: str, run: datetime, hour: int,
 
 
 def read(target: Path) -> dict[str, Any] | None:
+    from sharpmod.providers import hrrr_field
+
     data = hrrr_field._disk_read(target)
     if data is not None:
         try:
@@ -34,6 +36,8 @@ def read(target: Path) -> dict[str, Any] | None:
 
 
 def write(target: Path, value: dict[str, Any]) -> dict[str, Any]:
+    from sharpmod.providers import hrrr_field
+
     hrrr_field._disk_write(target, gzip.compress(
         json.dumps(value, separators=(",", ":"), allow_nan=False).encode(),
         compresslevel=1, mtime=0,
@@ -44,6 +48,7 @@ def write(target: Path, value: dict[str, Any]) -> dict[str, Any]:
 def cached_hours(params):
     """Hours with every selected compact field and required auxiliary file on disk."""
     from sharpmod.bridge import fields, params as p, storage
+    from sharpmod.providers import hrrr_field
 
     p.keys(params, ("model", "products", "run_time", "hours"))
     products, hours = params["products"], params["hours"]

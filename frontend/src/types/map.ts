@@ -1,7 +1,9 @@
 // Map data DTOs (src-tauri/src/dto/map.rs), pinned by src-tauri/contracts/public/map/.
 // The backend sends numbers and geography; the frontend chooses every pixel.
 import type { Station } from "./contracts";
+import type { ProductContour } from "./contours";
 import type { Bounds } from "./soundings";
+export type { ContourLines, ProductContour, WindBarbGrid } from "./contours";
 
 /** A sharpmod colour scale: `[value, "#rrggbb"]` stops in display units, ascending. */
 export interface Palette {
@@ -31,38 +33,6 @@ export interface FieldProduct {
   contour: ProductContour | null;
   /** Wind barbs in knots, independent of the shaded field's quantity. */
   wind: boolean;
-}
-
-/** A product's contour lines: a level set of its own contour field. */
-export interface ProductContour {
-  /** The level spacing in `label` units. */
-  interval: number;
-  label: string;
-  colour: string;
-  width: number;
-}
-
-/** The isolines of one product's contour field, as two-point lon/lat segments. */
-export interface ContourLines {
-  product: string;
-  runTime: string;
-  forecastHour: number;
-  unit: string;
-  interval: number;
-  segments: readonly (readonly [readonly [number, number], readonly [number, number]])[];
-  /** Joined display paths, when provided instead of independent segments. */
-  paths?: readonly (readonly (readonly [number, number])[])[];
-  /** Optional native contour levels at their geographic label anchors. */
-  labels?: readonly { position: readonly [number, number]; value: number }[];
-  wind: WindBarbGrid | null;
-}
-
-/** Display winds; row 0 is north. Low 9 bits: from degrees; high 7: speed / 5 kt; 65535: missing. */
-export interface WindBarbGrid {
-  width: number;
-  height: number;
-  bounds: Bounds;
-  data: Uint16Array;
 }
 
 export interface RadarProduct {

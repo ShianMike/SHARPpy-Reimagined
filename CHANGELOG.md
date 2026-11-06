@@ -31,8 +31,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   small spatial features can be omitted at the reduced display resolution.
 - Carry sparse numeric contour labels through both desktop and browser
   contracts while continuing to accept existing unlabelled frames.
-- Keep lightweight bridge startup independent of the optional map-provider
-  extension, so the handshake and bundled station catalogue remain available.
+- Keep lightweight bridge startup and cache inspection independent of the
+  optional map-provider extension, so the handshake, station catalogue and
+  Storage remain available without it.
 - Join pressure segments at the same level and round the display corners within
   half a grid sample, keeping open endpoints, closed loops and masked gaps.
   Place labels on the rendered paths, preserve original pressure values and

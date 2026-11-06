@@ -50,7 +50,8 @@ async fn bridge_starts_without_the_optional_native_map_extension() {
         (1, "hello"),
         (2, "stations.catalog"),
         (3, "health"),
-        (4, "shutdown"),
+        (4, "storage.usage"),
+        (5, "shutdown"),
     ] {
         let params = if method == "hello" {
             json!({"protocol_version": 1})
@@ -79,6 +80,7 @@ async fn bridge_starts_without_the_optional_native_map_extension() {
                 assert_eq!(result["scientific_backend"]["active_backend"], "python");
                 assert_eq!(result["scientific_backend"]["rust_installed"], false);
             }
+            "storage.usage" => assert_eq!(result["caches"].as_array().unwrap().len(), 7),
             "shutdown" => assert_eq!(result["ok"], true),
             _ => unreachable!(),
         }

@@ -460,9 +460,11 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                 || model == "ecmwf-ifs-9km"
                 || model == "openmeteo-ecmwf-ifs025"
             {
-                20
+                21
             } else if model == "aigfs" {
                 9
+            } else if model == "hrrr" {
+                40
             } else {
                 39
             }

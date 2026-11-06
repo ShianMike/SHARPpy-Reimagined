@@ -1,4 +1,21 @@
 {
+  "3.5.4": {
+    "summary": "Labelled isobars, complete forecast overlays and native weather fetching.",
+    "highlights": [
+      {
+        "title": "Labelled isobars",
+        "description": "Add smooth mean sea-level pressure lines over any model field, with numeric labels every 4 hPa. Follow the selected model, run and hour on supported HRRR, GFS and ECMWF forecasts, and save the layer separately in each panel."
+      },
+      {
+        "title": "Complete forecast overlays",
+        "description": "Keep height contours and wind barbs available on dense forecast maps. Display detail adjusts within the existing size limit while retaining the requested contour interval and missing-data gaps."
+      },
+      {
+        "title": "Native weather fetching",
+        "description": "Fetch model-field records with native parallel downloading, retries and cancellation. Stop remaining requests when a batch fails, and reuse completed contours when returning to the same forecast."
+      }
+    ]
+  },
   "3.5.3": {
     "summary": "Working ECMWF 9 km soundings, clearer STP charts and faster native calculations.",
     "highlights": [

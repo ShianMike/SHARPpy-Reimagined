@@ -23,6 +23,19 @@ const VALID = {
 };
 
 describe("parsePreferences", () => {
+  it("adds isobars disabled to older workspaces without changing saved layers or their relative order", () => {
+    const order = ORDERABLE_LAYER_IDS.filter((id) => id !== "isobars").reverse();
+    applyPreferences(parsePreferences(JSON.stringify({ version: 1, layerOrder: order,
+      layers: { "model-field": { visible: true, opacity: 0.7 } },
+      panels: [{ layers: { "model-field": { visible: false, opacity: 0.3 } } }] })));
+    const state = useMapStore.getState();
+    expect(state.layerOrder).toEqual([...order, "isobars"]);
+    for (let panel = 0; panel < 4; panel++) expect(panelLayers(state, panel).isobars).toEqual({ visible: false, opacity: 1 });
+    expect(panelLayers(state, 0)["model-field"]).toMatchObject({ visible: true, opacity: 0.7 });
+    expect(panelLayers(state, 1)["model-field"]).toMatchObject({ visible: false, opacity: 0.3 });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("restores the legend category with the existing layer preferences", () => {
     useMapStore.getState().setLayerPanelGroup("legend");
     const saved = JSON.stringify(currentPreferences());

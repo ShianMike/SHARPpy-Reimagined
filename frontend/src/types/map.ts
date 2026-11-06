@@ -50,6 +50,10 @@ export interface ContourLines {
   unit: string;
   interval: number;
   segments: readonly (readonly [readonly [number, number], readonly [number, number]])[];
+  /** Joined display paths, when provided instead of independent segments. */
+  paths?: readonly (readonly (readonly [number, number])[])[];
+  /** Optional native contour levels at their geographic label anchors. */
+  labels?: readonly { position: readonly [number, number]; value: number }[];
   wind: WindBarbGrid | null;
 }
 

@@ -22,8 +22,9 @@ fn contour_segments(
     let (height, width) = (field.shape()[0], field.shape()[1]);
     let values: Vec<f64> = field.iter().copied().collect();
     let segments = py.detach(move || {
-        let mut segments = crate::contours::extract(&values, height, width, interval, max_segments)
-            .map_err(PyValueError::new_err)?;
+        let mut segments =
+            crate::contours::extract_display(&values, height, width, interval, max_segments)
+                .map_err(PyValueError::new_err)?;
         if let Some(bounds) = bounds {
             crate::contours::project(&mut segments, height, width, bounds)
                 .map_err(PyValueError::new_err)?;

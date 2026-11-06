@@ -3,6 +3,7 @@
 pub mod alerts;
 pub mod australian_radar;
 mod http;
+pub mod map_fields;
 pub mod model_http;
 pub mod radar;
 pub mod radar_sites;

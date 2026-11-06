@@ -19,20 +19,20 @@ import type { ScreenPoint, Viewport } from "../labels/declutter";
 export const LAYER_IDS = [
   "basemap", "roads", "stations", "station-labels", "selection", "model-field", "satellite", "radar",
   "storm-reports", "surface-plots", "spc-cat", "spc-torn", "spc-wind", "spc-hail", "boundaries",
-  "model-domain", "place-labels", "watches", "warnings", "radar-site-labels",
+  "model-domain", "place-labels", "watches", "warnings", "radar-site-labels", "isobars",
 ] as const;
 export type LayerId = (typeof LAYER_IDS)[number];
 
 /** The weather layers, which the user may stack in any order; bottom first by default. */
 export const ORDERABLE_LAYER_IDS = [
   "model-field", "satellite", "radar", "storm-reports", "spc-cat", "spc-torn", "spc-wind", "spc-hail",
-  "surface-plots", "watches", "warnings",
+  "isobars", "surface-plots", "watches", "warnings",
 ] as const;
 export type OrderableLayerId = (typeof ORDERABLE_LAYER_IDS)[number];
 
 /** Keep controls and rendering consistent, including previously saved layers. */
 export function layerInView(id: LayerId, view: "map" | "live"): boolean {
-  if (id === "model-field" || id.startsWith("spc-")) return view === "map";
+  if (id === "model-field" || id === "isobars" || id.startsWith("spc-")) return view === "map";
   if (["radar", "satellite", "surface-plots", "warnings", "watches", "radar-site-labels"].includes(id)) return view === "live";
   return true;
 }
@@ -56,6 +56,7 @@ export const LAYER_DEFAULTS: Readonly<Record<LayerId, LayerState>> = {
   "radar-site-labels": { visible: true, opacity: 1 },
   selection: { visible: true, opacity: 1 },
   "model-field": { visible: false, opacity: 0.5, smoothing: true },
+  isobars: { visible: false, opacity: 1 },
   satellite: { visible: false, opacity: 0.72 },
   radar: { visible: false, opacity: 0.8 },
   watches: { visible: false, opacity: 1 },
@@ -105,6 +106,8 @@ export interface SceneData {
   /** The product's contour lines and the spec that draws them; both or neither. */
   contours: ContourLines | null;
   contourSpec: ProductContour | null;
+  /** Mean-sea-level pressure, independent of the selected field and its contours. */
+  isobars: ContourLines | null;
   outlooks: Readonly<Partial<Record<OutlookKey, Outlook>>>;
   /** The selected model's domain, a closed [lon, lat] path. */
   domain: readonly (readonly [number, number])[] | null;
@@ -126,6 +129,7 @@ export const NO_SCENE_DATA: SceneData = {
   surfacePlots: null,
   contours: null,
   contourSpec: null,
+  isobars: null,
   outlooks: {},
   domain: null,
   places: [],
@@ -152,7 +156,7 @@ export interface LayerBuildContext extends SceneData {
   weatherShown: boolean;
   /** Native outlines above the weather stack in interleaved maps. */
   weatherBeforeId?: string | undefined;
-  /** Shared screen bounds for the visible outlook badges, rebuilt once per scene update. */
+  /** Shared screen bounds for weather labels, rebuilt once per scene update. */
   outlookLabelLayout?: (Viewport & {
     project: (position: readonly [number, number]) => ScreenPoint;
     occupied: (ScreenPoint & Viewport)[];
@@ -224,7 +228,7 @@ export function buildDeckLayers<Id extends string>(
       const layers = descriptor.build(context, stateFor(descriptor, states));
       for (const layer of layers) {
         // Keep readings above every weather fill, even when the user reorders overlays.
-        if (descriptor.id === "surface-plots" || descriptor.id === "storm-reports" || (layer.id.startsWith("spc-") && layer.id.endsWith("-labels"))) {
+        if (descriptor.id === "surface-plots" || descriptor.id === "storm-reports" || ((layer.id.startsWith("spc-") || descriptor.id === "isobars") && layer.id.endsWith("-labels"))) {
           labels.push(layer);
           continue;
         }

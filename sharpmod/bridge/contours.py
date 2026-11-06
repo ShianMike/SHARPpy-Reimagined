@@ -143,16 +143,14 @@ def _from_decoded(model, product, run, hour, decoded):
         raise BridgeError(
             "FIELD_FETCH_FAILED", f"{product.label} could not be read.", False
         ) from None
-    segments = contour_segments(grid, float(spec.interval), bounds=bounds) if spec is not None else []
-    return frame_cache.write(target, {
-        "product": product.key,
-        "run_time": p.iso(run),
-        "forecast_hour": hour,
-        "unit": spec.label if spec is not None else "kt",
-        "interval": float(spec.interval) if spec is not None else 5.0,
-        "segments": segments,
-        "wind": wind,
-    })
+    import sharpmod_rs
+
+    return frame_cache.write(target, sharpmod_rs.map_contour_frame(
+        product.key, p.iso(run), hour,
+        spec.label if spec is not None else "kt",
+        float(spec.interval) if spec is not None else 5.0,
+        grid if spec is not None else None, bounds, wind,
+    ))
 
 
 HANDLERS = {"fields.contours": contours}

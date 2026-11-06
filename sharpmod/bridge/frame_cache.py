@@ -15,8 +15,9 @@ from sharpmod.providers import hrrr_field
 def path(kind: str, model: str, product: str, run: datetime, hour: int,
          size: tuple[int, int]) -> Path:
     # Version the derived representation separately from the provider's raw data.
+    version = 2 if kind == "contours" and product == "mslp" else 1
     return hrrr_field.disk_cache_root() / (
-        f"{kind}-v1_{model}_{product}_{run:%Y%m%d%H}_f{hour:03d}_{size[0]}x{size[1]}.json.gz"
+        f"{kind}-v{version}_{model}_{product}_{run:%Y%m%d%H}_f{hour:03d}_{size[0]}x{size[1]}.json.gz"
     )
 
 

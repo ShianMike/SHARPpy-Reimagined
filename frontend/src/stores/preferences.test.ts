@@ -114,6 +114,8 @@ describe("applying and saving", () => {
       store.setLayerVisible("station-labels", panel % 2 === 0);
       store.setLayerVisible("roads", panel % 2 === 0);
       store.setLayerVisible("radar", panel % 2 === 1);
+      store.setLayerVisible("isobars", panel % 2 === 1);
+      store.setLayerOpacity("isobars", (panel + 1) / 5);
       store.setLayerOpacity("model-field", (panel + 1) / 5);
       store.setFieldSmoothing(panel % 2 === 0);
     }
@@ -128,6 +130,7 @@ describe("applying and saving", () => {
     for (let panel = 0; panel < 4; panel++) {
       const saved = panel === 0 ? expected : expected.panels[panel - 1];
       expect(panelLayers(useMapStore.getState(), panel)).toEqual(saved?.layers);
+      expect(panelLayers(useMapStore.getState(), panel).isobars).toEqual({ visible: panel % 2 === 1, opacity: (panel + 1) / 5 });
     }
     for (const layout of [2, 4, 1, 4] as const) {
       useMapStore.getState().setPanelLayout(layout);

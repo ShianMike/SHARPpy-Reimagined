@@ -33,7 +33,8 @@ export interface FrameRequest {
 export function trimFieldCache(queryClient: QueryClient, budgetBytes: number, incoming?: FieldFrame | ContourLines): void {
   // Estimate retained contour/point arrays alongside the compact winds and raster textures.
   const bytes = (frame: FieldFrame | ContourLines) => "cells" in frame ? 5 * frame.cells.byteLength
-    : (frame.wind?.data.byteLength ?? 0) + frame.segments.length * 192;
+    : (frame.wind?.data.byteLength ?? 0) + frame.segments.length * 192 + (frame.labels?.length ?? 0) * 128
+      + (frame.paths?.reduce((sum, path) => sum + 64 + path.length * 64, 0) ?? 0);
   const queries = queryClient
     .getQueryCache()
     .findAll()

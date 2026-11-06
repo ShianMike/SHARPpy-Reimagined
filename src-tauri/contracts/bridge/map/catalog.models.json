@@ -84332,6 +84332,57 @@
         },
         "wind": false,
         "contour": null
+      },
+      {
+        "key": "mslp",
+        "label": "Mean Sea-level Pressure",
+        "short_label": "MSLP",
+        "category": "Surface",
+        "description": "Mean sea-level pressure in hPa, with isobars every 4 hPa.",
+        "caveat": "Uses the model's published sea-level reduction; surface pressure is not substituted.",
+        "palette": {
+          "stops": [
+            [
+              960.0,
+              "#425e92"
+            ],
+            [
+              980.0,
+              "#659cc0"
+            ],
+            [
+              1000.0,
+              "#c0d7d1"
+            ],
+            [
+              1020.0,
+              "#e0c38e"
+            ],
+            [
+              1040.0,
+              "#b47755"
+            ]
+          ],
+          "units": "hPa",
+          "display": "fixed",
+          "stepped": false,
+          "floor": null,
+          "ceiling": null,
+          "ticks": [
+            960.0,
+            980.0,
+            1000.0,
+            1020.0,
+            1040.0
+          ]
+        },
+        "wind": false,
+        "contour": {
+          "interval": 4.0,
+          "label": "hPa",
+          "colour": "#101418",
+          "width": 1.2
+        }
       }
     ],
     "radar_products": [
@@ -91555,6 +91606,57 @@
         },
         "wind": false,
         "contour": null
+      },
+      {
+        "key": "mslp",
+        "label": "Mean Sea-level Pressure",
+        "short_label": "MSLP",
+        "category": "Surface",
+        "description": "Mean sea-level pressure in hPa, with isobars every 4 hPa.",
+        "caveat": "Uses the model's published sea-level reduction; surface pressure is not substituted.",
+        "palette": {
+          "stops": [
+            [
+              960.0,
+              "#425e92"
+            ],
+            [
+              980.0,
+              "#659cc0"
+            ],
+            [
+              1000.0,
+              "#c0d7d1"
+            ],
+            [
+              1020.0,
+              "#e0c38e"
+            ],
+            [
+              1040.0,
+              "#b47755"
+            ]
+          ],
+          "units": "hPa",
+          "display": "fixed",
+          "stepped": false,
+          "floor": null,
+          "ceiling": null,
+          "ticks": [
+            960.0,
+            980.0,
+            1000.0,
+            1020.0,
+            1040.0
+          ]
+        },
+        "wind": false,
+        "contour": {
+          "interval": 4.0,
+          "label": "hPa",
+          "colour": "#101418",
+          "width": 1.2
+        }
       }
     ],
     "radar_products": [
@@ -102858,6 +102960,57 @@
         },
         "wind": false,
         "contour": null
+      },
+      {
+        "key": "mslp",
+        "label": "Mean Sea-level Pressure",
+        "short_label": "MSLP",
+        "category": "Surface",
+        "description": "Mean sea-level pressure in hPa, with isobars every 4 hPa.",
+        "caveat": "Uses the model's published sea-level reduction; surface pressure is not substituted.",
+        "palette": {
+          "stops": [
+            [
+              960.0,
+              "#425e92"
+            ],
+            [
+              980.0,
+              "#659cc0"
+            ],
+            [
+              1000.0,
+              "#c0d7d1"
+            ],
+            [
+              1020.0,
+              "#e0c38e"
+            ],
+            [
+              1040.0,
+              "#b47755"
+            ]
+          ],
+          "units": "hPa",
+          "display": "fixed",
+          "stepped": false,
+          "floor": null,
+          "ceiling": null,
+          "ticks": [
+            960.0,
+            980.0,
+            1000.0,
+            1020.0,
+            1040.0
+          ]
+        },
+        "wind": false,
+        "contour": {
+          "interval": 4.0,
+          "label": "hPa",
+          "colour": "#101418",
+          "width": 1.2
+        }
       }
     ],
     "radar_products": [

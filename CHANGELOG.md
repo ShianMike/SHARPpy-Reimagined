@@ -11,7 +11,37 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Expand the available weather-model parameters, offering only fields supported
   by each model and the selected run.
-- Add isobars with numeric pressure labels on weather maps.
+
+### Added
+
+- Add a separate, default-off Isobars layer to Model Viewer with smooth paths and numeric
+  pressure labels, opacity and draw-order controls, saved per panel. Use the
+  published mean-sea-level records for HRRR, GFS and ECMWF when available, with
+  4 hPa spacing and the selected model, run and forecast hour. Keep pressure
+  independent of the coloured product and never substitute surface pressure.
+
+### Fixed
+
+- Keep dense forecast contours within the existing 100,000-segment limit using
+  bounded native display extraction at the same requested interval. Retry the
+  display geometry with larger cells instead of rejecting the combined contour
+  and wind response. Preserve missing-data holes and original grid coordinates;
+  small spatial features can be omitted at the reduced display resolution.
+- Carry sparse numeric contour labels through both desktop and browser
+  contracts while continuing to accept existing unlabelled frames.
+- Join pressure segments at the same level and round the display corners within
+  half a grid sample, keeping open endpoints, closed loops and masked gaps.
+  Place labels on the rendered paths, preserve original pressure values and
+  bound the total number of path vertices. Refresh only old isobar geometry.
+
+### Changed
+
+- Move wgrib2 inventory parsing, shared-message range grouping and default
+  map-field download scheduling into Rust. Reuse the existing pooled HTTP
+  transport and its retries, cancellation and byte budgets; keep four parallel
+  transfers by default, bounded at eight, and stop outstanding work on failure.
+  Retain custom-opener compatibility without silently falling back on native
+  errors.
 
 ## [v3.5.3] - 2026-11-05
 

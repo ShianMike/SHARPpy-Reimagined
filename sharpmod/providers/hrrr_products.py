@@ -1332,7 +1332,13 @@ def _build_catalogue() -> tuple[HrrrProduct, ...]:
             caveat=("Uses native hourly MXUPHL maxima from the same run. "
                     f"Available from F{hours:03d}; a complete interval is required.")))
 
-    return tuple(products)
+    from sharpmod.backends.selector import _rust_is_installed
+
+    if not _rust_is_installed():
+        return tuple(products)
+    import sharpmod_rs
+
+    return (*products, *sharpmod_rs.map_pressure_products("hrrr"))
 
 
 PRODUCTS: MappingProxyType = MappingProxyType(
@@ -1372,8 +1378,7 @@ def _shear_0_1km(fields: dict[str, np.ndarray]) -> np.ndarray:
     return ms_to_kt(np.hypot(*top))
 
 
-@lru_cache(maxsize=len(FIELD_MODELS))
-def available_products(model: str = "hrrr") -> tuple[HrrrProduct, ...]:
+def _available_products(model: str) -> tuple[HrrrProduct, ...]:
     """Reuse the HRRR products with each model's published record addresses."""
     if model not in FIELD_MODELS:
         raise ValueError(f"{model!r} has no map field catalogue")
@@ -1430,6 +1435,14 @@ def available_products(model: str = "hrrr") -> tuple[HrrrProduct, ...]:
         products.append(replace(product, fields=tuple(map(mapped, product.fields)),
                                 contour_fields=tuple(map(mapped, product.contour_fields))))
     return tuple(products)
+
+
+@lru_cache(maxsize=len(FIELD_MODELS))
+def available_products(model: str = "hrrr") -> tuple[HrrrProduct, ...]:
+    """Adapt native pressure metadata to the existing model catalogue."""
+    import sharpmod_rs
+
+    return tuple(sharpmod_rs.map_pressure_catalogue(model, _available_products(model)))
 
 
 def products_by_category(model: str = "hrrr") -> tuple[tuple[str, tuple[HrrrProduct, ...]], ...]:

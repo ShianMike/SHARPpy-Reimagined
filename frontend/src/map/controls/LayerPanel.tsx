@@ -11,6 +11,7 @@ import { resetLayerSettings } from "../../stores/preferences";
 import type { StationAvailability } from "../../types/contracts";
 import { Action, IconAction } from "../../ui/Controls";
 import { LAYER_REGISTRY } from "../layers/descriptors";
+import { useMapCatalog } from "../mapQueries";
 import { layerInView, ORDERABLE_LAYER_IDS, type LayerDescriptor, type OrderableLayerId } from "../layers/registry";
 import { WeatherAlertStatus } from "./WeatherAlertStatus";
 import { AvailabilityControl } from "./AvailabilityControl";
@@ -46,6 +47,8 @@ function WeatherExtra({ id, panel }: { id: OrderableLayerId; panel: number }): R
       return <WeatherAlertStatus kind={id === "warnings" ? "warning" : "watch"} />;
     case "model-field":
       return <FieldControls panel={panel} />;
+    case "isobars":
+      return <p className={styles.hint}>Mean sea-level pressure · 4 hPa intervals. Follows the selected model, run and forecast hour.</p>;
     case "satellite":
       return <SatelliteControls />;
     case "radar":
@@ -70,6 +73,9 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
   const states = useMapStore((state) => panelLayers(state, panel));
   const order = useMapStore((state) => state.layerOrder);
   const context = useForecastContext();
+  const catalog = useMapCatalog().data;
+  const isobarsUnavailable = !live && states.isobars.visible && context !== null && catalog !== undefined
+    && (!context.fieldsAvailable || !catalog.products.some((product) => product.key === "mslp"));
   const topFirst = [...order].reverse().filter((id) => ORDERABLE.has(id) && layerInView(id, live ? "live" : "map"));
   const active = topFirst.filter((id) => states[id].visible);
   const available = topFirst.filter((id) => !states[id].visible);
@@ -84,6 +90,7 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
           </span>
         </div>
         {live ? <span className={styles.hint}>Viewing · {formatUtc(validTime)} UTC</span> : context === null ? null : <span className={styles.hint}>Forecast valid · {compactUtc(context.validTime)} UTC</span>}
+        {isobarsUnavailable ? <span className={styles.hint}>Isobars are unavailable for this model and forecast time.</span> : null}
       </div>
       <div className={styles.categories}>
         {layout === 1 ? null : <div className={styles.panelPicker} role="group" aria-label="Active map panel">

@@ -17,10 +17,10 @@ REQUEST = {"run_time": "2026-10-26T12:00:00Z", "forecast_hour": 12}
 
 
 @pytest.mark.parametrize("model", hp.ECMWF_MODELS)
-def test_only_twenty_supported_products_and_native_forecast_steps(model):
+def test_supported_products_and_native_forecast_steps(model):
     catalog = fields.catalog({"model": model})
     keys = {product["key"] for product in catalog["products"]}
-    assert len(keys) == 20
+    assert len(keys) == 21
     assert {"tmp-2m", "rh-2m", "snod", "mucape", "prate-frzr", "hgt-wind-200"} <= keys
     assert not keys & {"refc", "ltng", "sbcape", "mlcape", "stp", "shear-0-1km", "uh-0-3km", "uh-2-5km-1h", "uh-2-5km-3h"}
     assert catalog["default_product"] == "tmp-2m"

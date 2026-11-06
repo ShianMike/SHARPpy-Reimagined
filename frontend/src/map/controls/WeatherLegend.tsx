@@ -104,6 +104,7 @@ function SatelliteKey({ panel }: { panel: number }) {
 function WeatherKey({ id, panel }: { id: OrderableLayerId; panel: number }): ReactNode {
   switch (id) {
     case "model-field": return <ModelKey panel={panel} />;
+    case "isobars": return <p>Mean sea-level pressure · lines every 4 hPa. Pressure labels are in hPa when available.</p>;
     case "radar": return <RadarScale panel={panel} horizontal />;
     case "satellite": return <SatelliteKey panel={panel} />;
     case "warnings": return <AlertKey kind="warning" />;

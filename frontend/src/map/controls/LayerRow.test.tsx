@@ -75,6 +75,36 @@ it("toggles road networks in Map details for the active panel without hiding the
   view.unmount(); queryClient.clear();
 });
 
+it("adds isobars with independent opacity in the selected panel and omits them from Live Tracking", async () => {
+  useMapStore.getState().setPanelLayout(2);
+  useMapStore.getState().setActivePanel(1);
+  const field = panelLayers(useMapStore.getState(), 1)["model-field"];
+  const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
+  const user = userEvent.setup();
+  const available = within(screen.getByRole("region", { name: "Available weather layers" }));
+  expect(available.getByRole("switch", { name: "Isobars" }).getAttribute("aria-checked")).toBe("false");
+  await user.click(available.getByRole("switch", { name: "Isobars" }));
+  expect(panelLayers(useMapStore.getState(), 0).isobars.visible).toBe(false);
+  expect(panelLayers(useMapStore.getState(), 1).isobars.visible).toBe(true);
+  expect(panelLayers(useMapStore.getState(), 1)["model-field"]).toBe(field);
+  await user.click(screen.getByRole("button", { name: "Isobars settings" }));
+  expect(screen.getByText(/Mean sea-level pressure · 4 hPa intervals/u)).toBeTruthy();
+  fireEvent.change(screen.getByRole("slider", { name: "Isobars opacity" }), { target: { value: "0.45" } });
+  expect(panelLayers(useMapStore.getState(), 1).isobars.opacity).toBe(0.45);
+  expect(panelLayers(useMapStore.getState(), 0).isobars.opacity).toBe(1);
+  await user.click(screen.getByRole("button", { name: "Panel 1" }));
+  expect(screen.getByRole("switch", { name: "Isobars" }).getAttribute("aria-checked")).toBe("false");
+  await user.click(screen.getByRole("button", { name: "Panel 2" }));
+  await user.click(screen.getByRole("switch", { name: "Isobars" }));
+  expect(panelLayers(useMapStore.getState(), 1).isobars).toEqual({ visible: false, opacity: 0.45 });
+  await user.click(screen.getByRole("switch", { name: "Isobars" }));
+  act(() => { useMapStore.setState({ view: "live" }); });
+  expect(screen.queryByRole("switch", { name: "Isobars" })).toBeNull();
+  act(() => { useMapStore.setState({ view: "map" }); });
+  expect(panelLayers(useMapStore.getState(), 1).isobars).toEqual({ visible: true, opacity: 0.45 });
+  view.unmount(); queryClient.clear();
+});
+
 it("shows the fixed live projection and keeps the Model Viewer projection choice", () => {
   useMapStore.setState({ projection: "globe", view: "live", layerPanelGroup: "map" });
   renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());

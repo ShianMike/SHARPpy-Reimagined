@@ -5,6 +5,7 @@
 mod common;
 
 use std::collections::HashSet;
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,6 +20,77 @@ use sharppy_reimagined_lib::dto::stations::CatalogOrigin;
 use sharppy_reimagined_lib::python::launcher::{ProcessLauncher, TokioLauncher};
 use sharppy_reimagined_lib::python::supervisor::{Supervisor, SupervisorConfig};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+#[tokio::test]
+#[ignore = "needs a Python interpreter with sharpmod (SHARPPY_PYTHON or .gribenv)"]
+async fn bridge_starts_without_the_optional_native_map_extension() {
+    let interpreter = sharppy_reimagined_lib::python::interpreter::discover_from_environment(
+        &std::path::PathBuf::new(),
+    )
+    .unwrap();
+    let mut child = tokio::process::Command::new(interpreter)
+        .args([
+            "-I",
+            "-u",
+            "-X",
+            "utf8",
+            "-c",
+            "import sys; sys.modules['sharpmod_rs'] = None; from sharpmod.bridge.server import main; assert 'sharpmod.providers.hrrr_field' not in sys.modules; raise SystemExit(main())",
+        ])
+        .env("SHARPMOD_BACKEND", "auto")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    for (id, method) in [
+        (1, "hello"),
+        (2, "stations.catalog"),
+        (3, "health"),
+        (4, "storage.usage"),
+        (5, "shutdown"),
+    ] {
+        let params = if method == "hello" {
+            json!({"protocol_version": 1})
+        } else {
+            json!({})
+        };
+        let request = json!({"id": id, "method": method, "params": params});
+        stdin
+            .write_all(format!("{request}\n").as_bytes())
+            .await
+            .unwrap();
+        stdin.flush().await.unwrap();
+        let mut line = String::new();
+        tokio::time::timeout(Duration::from_secs(60), stdout.read_line(&mut line))
+            .await
+            .unwrap()
+            .unwrap();
+        let response: serde_json::Value = serde_json::from_str(&line).expect("bridge response");
+        assert_eq!(response["id"], id);
+        let result = response.get("result").expect("successful bridge operation");
+        match method {
+            "hello" => assert_eq!(result["protocol_version"], 1),
+            "stations.catalog" => assert_eq!(result["stations"].as_array().unwrap().len(), 933),
+            "health" => {
+                assert_eq!(result["scientific_backend"]["status"], "ok");
+                assert_eq!(result["scientific_backend"]["active_backend"], "python");
+                assert_eq!(result["scientific_backend"]["rust_installed"], false);
+            }
+            "storage.usage" => assert_eq!(result["caches"].as_array().unwrap().len(), 7),
+            "shutdown" => assert_eq!(result["ok"], true),
+            _ => unreachable!(),
+        }
+    }
+    let status = tokio::time::timeout(Duration::from_secs(10), child.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(status.success());
+}
 
 #[tokio::test]
 #[ignore = "needs a Python interpreter with sharpmod (SHARPPY_PYTHON or .gribenv)"]

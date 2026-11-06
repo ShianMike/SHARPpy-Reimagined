@@ -149,7 +149,9 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const surfaceAnchor = useSelectionAnchor();
   const surfaceQuery = useSurfacePlots(surfaceAnchor, validTime, live && surfaceVisible);
   const surfacePlots = !live || !surfaceVisible || surfaceQuery.isError ? null : surfaceQuery.data?.plots ?? null;
-  const contourSpec = live ? null : field.product?.contour ?? null;
+  // Pressure lines belong to the independent Isobars control, including when
+  // the coloured product itself is MSLP; do not draw a second copy underneath.
+  const contourSpec = live || field.product?.key === "mslp" ? null : field.product?.contour ?? null;
   const contourQuery = useFieldContours(
     field.request?.product ?? null,
     field.request?.runTime ?? null,
@@ -158,6 +160,17 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
     field.request?.model,
   );
   const contourLines = contourQuery.isError ? null : contourQuery.data ?? null;
+  const isobarsWanted = !live && layers.isobars.visible;
+  const pressureProduct = field.catalog.data?.products.find((product) => product.key === "mslp");
+  const isobarRequest = isobarsWanted && pressureProduct !== undefined && context?.fieldsAvailable === true;
+  const isobarQuery = useFieldContours(
+    isobarRequest ? pressureProduct.key : null,
+    isobarRequest ? context.run : null,
+    isobarRequest ? context.hour : null,
+    isobarRequest,
+    context?.model.key,
+  );
+  const isobars = isobarRequest && !isobarQuery.isError ? isobarQuery.data ?? null : null;
   const outlooks = useOutlooks(panel, live ? null : validTime);
   const places = usePlaceLabels(import.meta.env.MODE === "fixture" && placesVisible).data?.places ?? NO_PLACES;
   const model = live ? undefined : context?.model;
@@ -168,8 +181,8 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   }, [runtime, stations]);
   useFieldTransition(runtime, image, model?.key);
   useEffect(() => {
-    runtime?.setScene({ radar, satellite: satellite.image, reports, alerts, surfacePlots, contourSpec, contours: contourLines, outlooks, domain, radarSites });
-  }, [runtime, radar, satellite.image, reports, alerts, surfacePlots, contourSpec, contourLines, outlooks, domain, radarSites]);
+    runtime?.setScene({ radar, satellite: satellite.image, reports, alerts, surfacePlots, contourSpec, contours: contourLines, isobars, outlooks, domain, radarSites });
+  }, [runtime, radar, satellite.image, reports, alerts, surfacePlots, contourSpec, contourLines, isobars, outlooks, domain, radarSites]);
   useEffect(() => {
     runtime?.setScene({ places });
   }, [runtime, places]);
@@ -180,5 +193,6 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
     ...(satellite.issue === null ? [] : [`Satellite: ${satellite.issue}`]),
     ...(auxiliaryWanted && contourQuery.isError ? ["Wind and contour overlays could not be loaded; the coloured field may still be available."] : []),
     ...(missingWind ? ["Wind barbs are missing from this frame; available contours and the coloured field are still shown."] : []),
-  ], retry: () => { radarImage.retry(); satellite.retry(); if (auxiliaryWanted) void contourQuery.refetch(); } };
+    ...(isobarRequest && isobarQuery.isError ? ["Isobars could not be loaded; the other layers are still available."] : []),
+  ], retry: () => { radarImage.retry(); satellite.retry(); if (auxiliaryWanted) void contourQuery.refetch(); if (isobarRequest) void isobarQuery.refetch(); } };
 }

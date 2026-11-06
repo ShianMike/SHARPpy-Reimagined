@@ -1,6 +1,6 @@
 // The layer descriptors (DESIGN-frontend F4 table). Adding a layer means adding
 // a descriptor here and its module; WeatherMap.tsx does not change. The weather
-// layers (zOrder 10 to 15) stack in the user's order (mapStore.layerOrder).
+// layers stack in the user's order (mapStore.layerOrder).
 
 import { applyBasemapState, applyRoadNetworkState } from "../basemap/basemapLayers";
 import { buildBoundaryLayers, buildDomainLayers, buildPlaceLabels } from "./geographyLayers";
@@ -12,6 +12,7 @@ import { buildReportLayers } from "./StormReportLayer";
 import { buildAlertLayers } from "./WeatherAlertLayer";
 import { buildSurfacePlotLayers } from "./SurfacePlotLayer";
 import { buildRadarSiteLabels, buildStationLabels, buildStationMarkers } from "./StationLayer";
+import { buildIsobarLayers } from "./IsobarLayer";
 import { OUTLOOK_NAMES, type OutlookKey } from "../../types/map";
 
 function outlookDescriptor(key: OutlookKey, zOrder: number): LayerDescriptor {
@@ -93,9 +94,19 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
   outlookDescriptor("torn", 15),
   outlookDescriptor("wind", 16),
   outlookDescriptor("hail", 17),
+  {
+    id: "isobars",
+    label: "Isobars",
+    kind: "deck",
+    zOrder: 18,
+    userControllable: true,
+    opacityControl: true,
+    defaults: LAYER_DEFAULTS.isobars,
+    build: buildIsobarLayers,
+  },
   ...(["watch", "warning"] as const).map((kind, index): LayerDescriptor => {
     const id = kind === "warning" ? "warnings" : "watches";
-    return { id, label: `NWS ${id}`, kind: "deck", zOrder: 19 + index, userControllable: true,
+    return { id, label: `NWS ${id}`, kind: "deck", zOrder: 20 + index, userControllable: true,
       opacityControl: true, defaults: LAYER_DEFAULTS[id], build: (ctx, state) => buildAlertLayers(kind, ctx, state) };
   }),
   {
@@ -103,7 +114,7 @@ export const LAYER_REGISTRY: readonly LayerDescriptor[] = [
     id: "surface-plots",
     label: "Surface observations",
     kind: "deck",
-    zOrder: 18,
+    zOrder: 19,
     userControllable: true,
     opacityControl: true,
     defaults: LAYER_DEFAULTS["surface-plots"],

@@ -337,32 +337,9 @@ def parse_inventory(text: str) -> tuple[InventoryRow, ...]:
     the object, whose size the sidecar does not state, so it is left as zero and
     the caller requests an open-ended range for it.
     """
-    rows: list[tuple[int, int, str, str, str, int]] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        parts = line.split(":")
-        if len(parts) < 6 or not parts[1].isdigit():
-            continue
-        try:
-            number, _, part = parts[0].partition(".")
-            index = int(number)
-            field_index = int(part) - 1 if part else 0
-            if field_index < 0:
-                continue
-        except ValueError:
-            continue
-        rows.append((index, int(parts[1]), parts[3], parts[4], parts[5], field_index))
-    offsets = tuple(dict.fromkeys(row[1] for row in rows))
-    next_offset = dict(zip(offsets, (*offsets[1:], 0)))
-    parsed: list[InventoryRow] = []
-    for index, offset, variable, level, forecast, field_index in rows:
-        following = next_offset[offset]
-        length = max(0, following - offset) if following else 0
-        parsed.append(InventoryRow(index, offset, length, variable, level,
-                                   forecast, field_index))
-    return tuple(parsed)
+    import sharpmod_rs
+
+    return tuple(InventoryRow(*row) for row in sharpmod_rs.parse_wgrib_inventory(text))
 
 
 def fetch_inventory(url: str, *, opener=None, timeout=None,
@@ -416,17 +393,11 @@ def _merge_ranges(rows: list[InventoryRow], *, slack: int = 65536
     product needing seven pressure levels typically collapses to two or three
     requests this way.
     """
-    ordered = sorted(rows, key=lambda row: row.offset)
-    groups: list[tuple[int, int, list[InventoryRow]]] = []
-    for row in ordered:
-        end = row.offset + row.length - 1 if row.length else 0
-        if groups and end and groups[-1][1]:
-            start_prev, end_prev, members = groups[-1]
-            if row.offset - end_prev - 1 <= slack:
-                groups[-1] = (start_prev, max(end_prev, end), members + [row])
-                continue
-        groups.append((row.offset, end, [row]))
-    return groups
+    import sharpmod_rs
+
+    return [(start, end, [rows[index] for index in members])
+            for start, end, members in sharpmod_rs.merge_map_ranges(
+                [(row.offset, row.length) for row in rows], slack)]
 
 
 # --------------------------------------------------------------------------- #

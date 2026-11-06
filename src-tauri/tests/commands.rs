@@ -380,7 +380,7 @@ fn ecmwf_catalogues_keep_run_hour_availability_and_validate_before_cache() {
         serde_json::json!({"model": "ecmwf-ifs-9km"}),
     )
     .unwrap();
-    assert_eq!(initial["products"].as_array().unwrap().len(), 20);
+    assert_eq!(initial["products"].as_array().unwrap().len(), 21);
     let error: BackendError = parse(
         invoke_args(
             &webview,
@@ -392,7 +392,7 @@ fn ecmwf_catalogues_keep_run_hour_availability_and_validate_before_cache() {
         .unwrap_err(),
     );
     assert_eq!(error.code, ErrorCode::InvalidArgument);
-    for (hour, count) in [(12, 20), (360, 19)] {
+    for (hour, count) in [(12, 21), (360, 20)] {
         let result = invoke_args(
             &webview,
             "get_map_catalog",

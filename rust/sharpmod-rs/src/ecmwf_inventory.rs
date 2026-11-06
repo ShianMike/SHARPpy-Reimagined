@@ -55,6 +55,7 @@ pub fn parse_inventory(text: &str) -> Result<Vec<InventoryRow>, ()> {
                     "2t" => ("TMP", "2 m above ground"),
                     "2d" => ("DPT", "2 m above ground"),
                     "sp" => ("PRES", "surface"),
+                    "msl" => ("PRMSL", "mean sea level"),
                     "10u" => ("UGRD", "10 m above ground"),
                     "10v" => ("VGRD", "10 m above ground"),
                     "10fg" => ("GUST", "surface"),
@@ -169,5 +170,23 @@ mod tests {
         assert!(parse_inventory(r#"{"param":[],"levtype":"other"}"#)
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn mean_sea_level_pressure_keeps_its_distinct_record_address() {
+        let rows = parse_inventory(concat!(
+            "{\"param\":\"sp\",\"levtype\":\"sfc\",\"_offset\":0,\"_length\":100}\n",
+            "{\"param\":\"msl\",\"levtype\":\"sfc\",\"_offset\":100,\"_length\":200}"
+        ))
+        .unwrap();
+        assert_eq!(
+            (rows[0].variable, rows[0].level.as_str()),
+            ("PRES", "surface")
+        );
+        assert_eq!(
+            (rows[1].variable, rows[1].level.as_str()),
+            ("PRMSL", "mean sea level")
+        );
+        assert_eq!((rows[1].offset, rows[1].length), (100, 200));
     }
 }

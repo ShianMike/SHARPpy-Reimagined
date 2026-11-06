@@ -23,6 +23,20 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
+it("describes the pressure interval independently of the selected model field and SPC outlooks", () => {
+  useMapStore.getState().setLayerVisible("isobars", true);
+  useMapStore.getState().setLayerPanelGroup("legend");
+  const transport = createTransport();
+  const calls = vi.spyOn(transport, "call");
+  const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, transport);
+  const key = within(screen.getByTestId("legend-isobars"));
+  expect(key.getByText("Mean sea-level pressure · lines every 4 hPa. Pressure labels are in hPa when available.")).toBeTruthy();
+  expect(key.getByText("100% opacity")).toBeTruthy();
+  expect(calls.mock.calls.some(([command]) => command === "get_spc_outlook")).toBe(false);
+  expect(screen.queryByTestId("legend-model-field")).toBeNull();
+  view.unmount(); queryClient.clear();
+});
+
 it("names report hazards and significant symbols without listing individual magnitudes in the key", async () => {
   useAppStore.getState().setActiveWorkspace("map");
   useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T12:00:00Z", forecastHour: 9 });

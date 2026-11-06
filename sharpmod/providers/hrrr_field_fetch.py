@@ -19,6 +19,8 @@ import threading
 import time
 from sharpmod.providers import hrrr_field as _api
 
+_NATIVE_OPENER = _api._default_opener
+
 
 def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
                      opener, timeout: float, should_cancel, model: str = "hrrr") -> dict[str, np.ndarray]:
@@ -31,6 +33,7 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     """
     if should_cancel and should_cancel():
         return {}
+    native = opener is _NATIVE_OPENER
     failed = threading.Event()
 
     def stopped():
@@ -100,7 +103,14 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
         return opener(url, timeout, stop - start + 4096, (start, stop))
 
     payloads: list[bytes | None] = [None] * len(jobs)
-    if len(jobs) == 1:
+    if native:
+        import sharpmod_rs
+
+        payloads = sharpmod_rs.fetch_model_ranges(
+            [(url, stop - start + 4096, start, stop) for url, start, stop, _members, _names in jobs],
+            timeout, stopped, _api._RANGE_WORKERS,
+        )
+    elif len(jobs) == 1:
         payloads[0] = fetch(jobs[0])
     else:
         from concurrent.futures import ThreadPoolExecutor, as_completed

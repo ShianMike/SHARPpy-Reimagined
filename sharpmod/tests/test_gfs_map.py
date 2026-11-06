@@ -16,9 +16,9 @@ REQUEST = {"model": "gfs", "run_time": "2026-10-27T00:00:00Z", "forecast_hour": 
 
 def test_gfs_reuses_ecmwf_parameter_choices_with_its_own_native_ingredients():
     products = hp.available_products("gfs")
-    assert {p.key for p in products} == {p.key for p in ec.products()}
-    assert len(products) == 20
-    assert all(product is hp.PRODUCTS[product.key] for product in products)
+    assert {p.key for p in products} == {p.key for p in ec.products()} | {"mslp"}
+    assert len(products) == 21
+    assert all(product is hp.PRODUCTS[product.key] for product in products if product.key != "mslp")
     catalog = fields.catalog({"model": "gfs"})
     assert catalog["field_model"] == "gfs" and catalog["default_product"] == "tmp-2m"
     assert catalog["field_bounds"] == fields._bounds(ec.BOUNDS)
@@ -49,12 +49,12 @@ def test_selected_run_inventory_hides_missing_fields_and_f000_precipitation(monk
 
     monkeypatch.setattr(hf, "fetch_inventory", inventory)
     catalog = fields.catalog(REQUEST)
-    assert len(catalog["products"]) == 18
+    assert len(catalog["products"]) == 19
     assert not {p["key"] for p in catalog["products"]} & {"mucape", "snod"}
     assert set(calls) == {"https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.20261027/00/atmos/gfs.t00z.pgrb2.0p25.f006"}
     missing.clear()
-    assert len(fields.catalog({**REQUEST, "forecast_hour": 0})["products"]) == 19
-    assert len(fields.catalog({**REQUEST, "forecast_hour": 384})["products"]) == 20
+    assert len(fields.catalog({**REQUEST, "forecast_hour": 0})["products"]) == 20
+    assert len(fields.catalog({**REQUEST, "forecast_hour": 384})["products"]) == 21
     monkeypatch.setattr(hf, "fetch_inventory", lambda _url: ())
     with pytest.raises(BridgeError, match="No supported GFS"):
         fields.catalog(REQUEST)

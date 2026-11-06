@@ -5,6 +5,7 @@ import stations from "@contracts/public/stations.catalog.full.json";
 import sites from "@contracts/public/map/radar-sites.json";
 import places from "@contracts/public/map/places.json";
 import outlook from "@contracts/public/map/outlook.cat.json";
+import contourFixture from "@contracts/public/map/contours.json";
 import fieldPng from "@contracts/public/map/field.shrf?url&inline";
 import radarPng from "@contracts/public/map/radar.shrf?url&inline";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -78,6 +79,47 @@ afterEach(() => {
 });
 
 const bytes = (url: string): ArrayBuffer => Uint8Array.from(atob(url.split(",")[1] ?? ""), (c) => c.charCodeAt(0)).buffer;
+
+it("loads selected-time isobars only when enabled, independently of the coloured field", async () => {
+  const layers = defaultLayerStates();
+  useMapStore.setState({ view: "map", activePanel: 0, layers });
+  useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T18:00:00Z", forecastHour: 3 });
+  const template = catalog.products[0];
+  if (template === undefined) throw new Error("Missing catalogue fixture");
+  const pressureCatalog = { ...catalog, products: [...catalog.products.filter((product) => product.key !== "mslp"), { ...template,
+    key: "mslp", label: "Mean Sea-level Pressure", shortLabel: "MSLP", category: "Surface", wind: false,
+    palette: { ...template.palette, units: "hPa" }, contour: { interval: 4, label: "hPa", colour: "#101418", width: 1.2 },
+  }] };
+  const fallback = createTransport();
+  const calls = vi.fn((command: CommandName, params?: Record<string, unknown>) => {
+    if (command === "get_field_contours") return Promise.resolve({ ...contourFixture, product: "mslp", interval: 4, unit: "hPa", wind: null,
+      forecastHour: params?.forecastHour, labels: [{ position: [-99.5, 35.5], value: 1012 }] });
+    const replies: Partial<Record<CommandName, unknown>> = { get_map_catalog: pressureCatalog, get_model_catalog: models, get_station_catalog: stations, get_place_labels: places };
+    return command in replies ? Promise.resolve(replies[command]) : fallback.call(command, params);
+  });
+  const transport: Transport = { call: calls, listen: () => Promise.resolve(() => undefined) };
+  const queryClient = createQueryClient(), client = new BackendClient(transport);
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>;
+  const scene: Partial<SceneData> = {};
+  const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
+  const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
+  await waitFor(() => { expect(hook.result.current.catalog.data).toBeDefined(); });
+  expect(calls.mock.calls.filter(([method]) => method === "get_field_contours")).toHaveLength(0);
+  act(() => { useMapStore.getState().setLayerVisible("isobars", true); });
+  await waitFor(() => { expect(scene.isobars?.forecastHour).toBe(3); });
+  expect(scene.isobars?.labels?.[0]?.value).toBe(1012);
+  expect(calls).toHaveBeenCalledWith("get_field_contours", expect.objectContaining({ product: "mslp", model: "hrrr", runTime: "2026-10-04T18:00:00Z", forecastHour: 3 }));
+  expect(calls.mock.calls.filter(([method]) => method === "get_weather_field")).toHaveLength(0);
+  act(() => { useForecastStore.getState().setHour(4); });
+  await waitFor(() => { expect(scene.isobars?.forecastHour).toBe(4); });
+  act(() => { useMapStore.getState().setLayerVisible("isobars", false); });
+  await waitFor(() => { expect(scene.isobars).toBeNull(); });
+  const completed = calls.mock.calls.filter(([method]) => method === "get_field_contours").length;
+  act(() => { useForecastStore.getState().setHour(5); });
+  await waitFor(() => { expect(hook.result.current.catalog.data).toBeDefined(); });
+  expect(calls.mock.calls.filter(([method]) => method === "get_field_contours")).toHaveLength(completed);
+  hook.unmount(); queryClient.clear();
+});
 
 it.each(["map", "live"] as const)("renders storm reports at the %s clock with the selected hazard and event window", async (view) => {
   const layers = defaultLayerStates();

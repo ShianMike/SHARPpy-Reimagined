@@ -27,6 +27,33 @@ describe("contour contracts", () => {
     }
   });
 
+  it("accepts sparse numeric labels without changing legacy frames", () => {
+    const labels = [{ position: [-99.5, 35.5], value: 1012 }];
+    expect(parseContourLines({ ...contours, product: "mslp", unit: "hPa", interval: 4, labels }).labels).toEqual(labels);
+    expect(parseContourLines(contours).labels).toBeUndefined();
+  });
+
+  it("accepts connected paths and rejects incomplete, off-globe or oversized paths", () => {
+    const frame = { ...contours, product: "mslp", unit: "hPa", interval: 4, segments: [], wind: null };
+    const paths = [[[-100, 35], [-99.5, 35.25], [-99, 36]]];
+    expect(parseContourLines({ ...frame, paths }).paths).toEqual(paths);
+    expect(parseContourLines(frame).paths).toBeUndefined();
+    for (const invalid of [[[[-100, 35]]], [[[-100, 35], [-99.5, 95]]], [Array.from({ length: 200_001 }, () => [-100, 35])]]) {
+      expect(() => parseContourLines({ ...frame, paths: invalid })).toThrow(ContractError);
+    }
+  });
+
+  it.each([
+    { name: "off-globe point", labels: [{ position: [-99, 95], value: 1012 }] },
+    { name: "extra coordinate", labels: [{ position: [-99, 35, 0], value: 1012 }] },
+    { name: "non-contour level", labels: [{ position: [-99, 35], value: 1013 }] },
+    { name: "infinite value", labels: [{ position: [-99, 35], value: Number.POSITIVE_INFINITY }] },
+    { name: "unexpected property", labels: [{ position: [-99, 35], value: 1012, extra: true }] },
+    { name: "too many labels", labels: Array.from({ length: 257 }, () => ({ position: [-99, 35], value: 1012 })) },
+  ])("rejects $name", ({ labels }) => {
+    expect(() => parseContourLines({ ...contours, interval: 4, labels })).toThrow(ContractError);
+  });
+
   it.each([
     ["a forecast beyond F384", () => parseContourLines({ ...contours, forecastHour: 385 })],
     ["a segment with three points", () =>

@@ -24,6 +24,33 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true);
 });
 
+it("submits independent pressure geometry per panel and removes it from the live scene", () => {
+  const pressure: ContourLines = { product: "mslp", runTime: "2026-11-06T00:00:00Z", forecastHour: 6,
+    unit: "hPa", interval: 4, segments: [[[-100, 35], [-99, 36]]], labels: [{ position: [-99.5, 35.5], value: 1004 }], wind: null };
+  const read = cssTokenReader(tokensCss);
+  const submit = vi.fn<(props: { layers: Layer[] }) => void>();
+  const scene = new StationScene({ setProps: submit } as unknown as MapLibreOverlay,
+    readCanvasTokens(read), read("--font-mono"), 1, vi.fn());
+  useMapStore.getState().setPanelLayout(2);
+  useMapStore.getState().setActivePanel(1);
+  useMapStore.getState().setLayerVisible("isobars", true);
+  useMapStore.getState().setLayerOpacity("isobars", 0.55);
+  useMapStore.getState().setLayerVisible("model-field", false);
+  expect(scene.setData({ isobars: pressure })).toBe(true);
+  expect(scene.setData({ isobars: pressure })).toBe(false);
+  scene.render();
+  expect(submit.mock.lastCall?.[0].layers.find(({ id }) => id === "isobars")?.props).toMatchObject({ visible: true, opacity: 0.55 });
+  expect(scene.shownLayerIds).toContain("isobars");
+  expect(scene.shownLayerIds).toContain("isobars-labels");
+  const other = new StationScene({ setProps: submit } as unknown as MapLibreOverlay,
+    readCanvasTokens(read), read("--font-mono"), 0, vi.fn());
+  other.setData({ isobars: pressure }); other.render();
+  expect(other.shownLayerIds).not.toContain("isobars");
+  useMapStore.setState({ view: "live" });
+  scene.render();
+  expect(submit.mock.lastCall?.[0].layers.some(({ id }) => id.startsWith("isobars"))).toBe(false);
+});
+
 it("reuses unchanged label layouts during four-panel contour playback, invalidating on selection and camera changes", () => {
   const project = vi.fn(([lon, lat]: readonly number[]) => ({ x: ((lon ?? 0) + 100) * 180, y: (40 - (lat ?? 0)) * 180 }));
   let east = -96;

@@ -1440,6 +1440,10 @@ def _available_products(model: str) -> tuple[HrrrProduct, ...]:
 @lru_cache(maxsize=len(FIELD_MODELS))
 def available_products(model: str = "hrrr") -> tuple[HrrrProduct, ...]:
     """Adapt native pressure metadata to the existing model catalogue."""
+    from sharpmod.backends.selector import _rust_is_installed
+
+    if not _rust_is_installed():
+        return _available_products(model)
     import sharpmod_rs
 
     return tuple(sharpmod_rs.map_pressure_catalogue(model, _available_products(model)))

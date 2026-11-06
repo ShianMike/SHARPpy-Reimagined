@@ -35,7 +35,7 @@ async fn bridge_starts_without_the_optional_native_map_extension() {
             "-X",
             "utf8",
             "-c",
-            "import sys; sys.modules['sharpmod_rs'] = None; from sharpmod.bridge.server import main; assert 'sharpmod.providers.hrrr_field' not in sys.modules; raise SystemExit(main())",
+            "import sys; sys.modules['sharpmod_rs'] = None; from sharpmod.bridge.server import main; from sharpmod.providers.hrrr_products import available_products; assert available_products(); assert 'sharpmod.providers.hrrr_field' not in sys.modules; raise SystemExit(main())",
         ])
         .env("SHARPMOD_BACKEND", "auto")
         .stdin(Stdio::piped())

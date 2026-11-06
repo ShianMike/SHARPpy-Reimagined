@@ -33,7 +33,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   contracts while continuing to accept existing unlabelled frames.
 - Keep lightweight bridge startup and cache inspection independent of the
   optional map-provider extension, so the handshake, station catalogue and
-  Storage remain available without it.
+  Storage remain available without it. Keep the existing non-native product
+  catalogue available for metadata inspection and Python-only test collection.
 - Join pressure segments at the same level and round the display corners within
   half a grid sample, keeping open endpoints, closed loops and masked gaps.
   Place labels on the rendered paths, preserve original pressure values and

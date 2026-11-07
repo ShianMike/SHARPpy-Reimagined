@@ -31,6 +31,7 @@ def download_ranges(
     retries: int = 2,
     retry_backoff: float = 0.25,
     metrics: _api.RangeTransferMetrics | None = None,
+    decode_point=None,
 ) -> Path:
     """Download, resume, validate, and atomically assemble GRIB ranges in Rust."""
     from sharpmod_rs import download_model_ranges
@@ -40,6 +41,7 @@ def download_ranges(
         os.fspath(output_path), timeout, chunk_size, cancelled, progress,
         on_bytes, _api.range_worker_count(workers), session_factory,
         retries, retry_backoff, metrics,
+        **({"decode_point": decode_point} if decode_point is not None else {}),
     ))
 
 
@@ -58,6 +60,7 @@ def download_herbie_subset(
     workers: int | None = None,
     retries: int = 2,
     metrics: _api.RangeTransferMetrics | None = None,
+    decode_point=None,
 ) -> tuple[Path, int]:
     """Download a Herbie inventory subset through the optimized transport."""
     source = str(getattr(herbie, "grib", "") or "")
@@ -111,6 +114,7 @@ def download_herbie_subset(
                 session_factory=session_factory,
                 retries=retries,
                 metrics=parallel_metrics,
+                decode_point=decode_point,
             )
         except _api.OptimizedTransportUnavailable as parallel_error:
             if worker_count <= 1:
@@ -137,6 +141,7 @@ def download_herbie_subset(
                 workers=1,
                 retries=retries,
                 metrics=sequential_metrics,
+                decode_point=decode_point,
             )
         return result, total
     finally:

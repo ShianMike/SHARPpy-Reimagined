@@ -298,6 +298,11 @@ That snapshot predates the scalar, repeated-field, real-`Profile`, and
 two-thread scenarios; retain a new full output before making claims from those
 rows.
 
+Published records use relative or placeholder paths for local environments
+and fixtures; the measured values and fixture identities are preserved. Keep
+new raw machine-specific output under the ignored `benchmarks/results/local/`
+directory before preparing a portable result for the repository.
+
 The real-HRRR decoder comparison recorded on 2026-07-16 is retained in
 [`results/2026-07-16-decoding-windows-amd64.txt`](results/2026-07-16-decoding-windows-amd64.txt).
 

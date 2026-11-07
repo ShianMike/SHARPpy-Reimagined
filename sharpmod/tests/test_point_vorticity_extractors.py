@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-import ast
-import importlib.util
-import inspect
 import json
-import textwrap
 from datetime import datetime, timezone
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -17,23 +12,8 @@ import xarray as xr
 from sharpmod.io import decoder as decoder_mod
 from sharpmod.tools import era5_extract as era5
 from sharpmod.tools import ifs_extract as ifs
+from sharpmod.tools import model_extract
 from sharpmod.tests.era5_synth import make_era5_dataset
-
-
-ROOT = Path(__file__).resolve().parents[2]
-
-# Loaded by path rather than imported: this is a development script under
-# scripts/, not part of the installed ``sharpmod`` package, so there is no module
-# path to import it from. It moved out of the repository root in 0.9.0 -- it was
-# never an entry point, and sitting beside pyproject.toml implied it was one.
-#
-# What is worth testing here is the ABSV -> relative-vorticity conversion below;
-# the supported extraction route is ``model-extract``, which additionally merges
-# the verified surface row this script does not fetch.
-_HRRR_SPEC = importlib.util.spec_from_file_location(
-    "hrrr_extract", ROOT / "scripts" / "hrrr_extract.py")
-hrrr = importlib.util.module_from_spec(_HRRR_SPEC)
-_HRRR_SPEC.loader.exec_module(hrrr)
 
 
 def _add_vo(ds, surface_value):
@@ -43,28 +23,6 @@ def _add_vo(ds, surface_value):
     vo = np.full(ds["t"].shape, 2.0e-5, dtype=float)
     vo[:, int(np.nanargmax(levels)), :, :] = surface_value
     return ds.assign(vo=(dims, vo))
-
-
-def test_hrrr_outputs_explicitly_identify_as_forecasts():
-    """Both HRRR output records must prevent heuristic observation labels."""
-    tree = ast.parse(textwrap.dedent(inspect.getsource(hrrr.main)))
-    output_records = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Dict):
-            continue
-        values = {
-            key.value: value
-            for key, value in zip(node.keys, node.values)
-            if isinstance(key, ast.Constant) and isinstance(key.value, str)
-        }
-        if "model" in values and "fxx" in values:
-            output_records.append(values)
-
-    assert len(output_records) == 2
-    for record in output_records:
-        observed = record.get("observed")
-        assert isinstance(observed, ast.Constant)
-        assert observed.value is False
 
 
 def test_ifs_extract_writes_surface_relative_vorticity_to_npz(tmp_path):
@@ -104,8 +62,8 @@ def test_ifs_extract_writes_surface_relative_vorticity_to_npz(tmp_path):
     assert prof.surface_relative_vorticity == pytest.approx(8.0e-5)
 
 
-def test_hrrr_extract_column_converts_absv_to_relative_vorticity():
-    """HRRR ``ABSV`` is stored as relative vorticity by subtracting Coriolis."""
+def test_hrrr_model_extract_writes_relative_vorticity_and_forecast_metadata(tmp_path):
+    """The supported HRRR route subtracts Coriolis at the selected grid point."""
     levels = np.array([850.0, 1000.0, 700.0], dtype=float)
     lat_grid = np.array([[35.0, 35.0], [36.0, 36.0]], dtype=float)
     lon_grid = np.array([[-100.0, -99.0], [-100.0, -99.0]], dtype=float)
@@ -120,12 +78,19 @@ def test_hrrr_extract_column_converts_absv_to_relative_vorticity():
     ds = xr.Dataset(
         data_vars={
             "t": (("isobaricInhPa", "y", "x"), np.full(shape, 290.0)),
-            "gh": (("isobaricInhPa", "y", "x"), np.full(shape, 100.0)),
+            "gh": (("isobaricInhPa", "y", "x"), np.broadcast_to(
+                np.array([1500.0, 150.0, 3000.0])[:, None, None], shape)),
             "r": (("isobaricInhPa", "y", "x"), np.full(shape, 60.0)),
             "u": (("isobaricInhPa", "y", "x"), np.full(shape, 5.0)),
             "v": (("isobaricInhPa", "y", "x"), np.full(shape, 2.0)),
             "w": (("isobaricInhPa", "y", "x"), np.zeros(shape)),
             "absv": (("isobaricInhPa", "y", "x"), absv),
+            "sp": (("y", "x"), np.full(lat_grid.shape, 100500.0)),
+            "orog": (("y", "x"), np.full(lat_grid.shape, 100.0)),
+            "t2m": (("y", "x"), np.full(lat_grid.shape, 292.0)),
+            "d2m": (("y", "x"), np.full(lat_grid.shape, 284.0)),
+            "u10": (("y", "x"), np.full(lat_grid.shape, 5.0)),
+            "v10": (("y", "x"), np.full(lat_grid.shape, 2.0)),
         },
         coords={
             "isobaricInhPa": ("isobaricInhPa", levels),
@@ -134,12 +99,20 @@ def test_hrrr_extract_column_converts_absv_to_relative_vorticity():
         },
     )
 
-    cols, _, glat, glon = hrrr.extract_column(ds, 36.05, -99.05)
-
-    assert glat == pytest.approx(36.0)
-    assert glon == pytest.approx(-99.0)
-    assert cols["pres"][0] == pytest.approx(1000.0)
-    assert cols["surface_relative_vorticity"] == pytest.approx(8.5e-5)
+    output = tmp_path / "hrrr.npz"
+    model_extract.extract(
+        "hrrr", 36.05, -99.05, out_path=output, dataset=ds,
+        run_time=datetime(2026, 7, 5, tzinfo=timezone.utc), fxx=1,
+    )
+    with np.load(output, allow_pickle=False) as sounding:
+        assert float(sounding["lat"]) == pytest.approx(36.0)
+        assert float(sounding["lon"]) == pytest.approx(-99.0)
+        assert sounding["pres"][:2] == pytest.approx([1005.0, 1000.0])
+        assert float(sounding["surface_relative_vorticity"]) == pytest.approx(8.5e-5)
+        assert bool(sounding["observed"]) is False
+    metadata = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
+    assert metadata["observed"] is False
+    assert metadata["surface_relative_vorticity"] == pytest.approx(8.5e-5)
 
 
 def test_surface_vorticity_falls_back_to_wind_grid_gradient():

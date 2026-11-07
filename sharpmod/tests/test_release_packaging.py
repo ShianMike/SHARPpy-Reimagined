@@ -217,9 +217,9 @@ def test_pyinstaller_uses_validated_metadata_and_source_pe_version():
     assert spec.count("upx=False") == 3
     assert "upx=True" not in spec
     assert '_RETIRED_GUI_MODULES = ("sharppy.gui", "sutils.progress", "sutils.ver_updates")' in spec
-    assert "filter_submodules=lambda name: name not in _RETIRED_GUI_MODULES" in spec
+    assert "name not in _RETIRED_GUI_MODULES" in spec
     assert "exclude_datas=[" in spec
-    assert "excludes=[*_RETIRED_GUI_MODULES," in spec
+    assert 'excludes=["__main__", *_RETIRED_GUI_MODULES,' in spec
 
 
 def test_frozen_launcher_reports_every_version_without_the_legacy_gui():

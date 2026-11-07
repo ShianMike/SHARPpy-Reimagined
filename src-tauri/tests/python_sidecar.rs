@@ -127,6 +127,38 @@ async fn session_files_are_removed_after_normal_and_forced_exit() {
             .unwrap();
         let response: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert!(response.get("result").is_some(), "{response}");
+        let analysis_request = json!({"id": 2, "method": "soundings.analysis", "params": {
+            "sounding_id": response["result"]["sounding_id"]
+        }});
+        process
+            .stdin
+            .write_all(format!("{analysis_request}\n").as_bytes())
+            .await
+            .unwrap();
+        process.stdin.flush().await.unwrap();
+        line.clear();
+        tokio::time::timeout(Duration::from_secs(60), stdout.read_line(&mut line))
+            .await
+            .unwrap()
+            .unwrap();
+        let analysis: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert!(analysis.get("result").is_some(), "{analysis}");
+        let parameters = analysis["result"]["groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|group| group["parameters"].as_array().unwrap());
+        let value = |key: &str| {
+            parameters
+                .clone()
+                .find(|parameter| parameter["key"] == key)
+                .unwrap()["value"]
+                .as_f64()
+                .unwrap()
+        };
+        let probability = value("mmp");
+        let expected = 1.0 / (1.0 + value("mcs_index").exp());
+        assert!((probability - expected).abs() < 1e-12);
         let cache = std::fs::read_dir(&working_dir)
             .unwrap()
             .map(|entry| entry.unwrap().path())
@@ -141,7 +173,7 @@ async fn session_files_are_removed_after_normal_and_forced_exit() {
         } else {
             process
                 .stdin
-                .write_all(b"{\"id\":2,\"method\":\"shutdown\",\"params\":{}}\n")
+                .write_all(b"{\"id\":3,\"method\":\"shutdown\",\"params\":{}}\n")
                 .await
                 .unwrap();
             process.stdin.flush().await.unwrap();

@@ -13,6 +13,7 @@ use std::{
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 
 mod disk;
+mod reader;
 mod requests;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -110,6 +111,7 @@ struct Transfer<'a> {
     store: disk::Store,
     state: Mutex<State>,
     stop: AtomicBool,
+    feed: Option<&'a reader::Feed>,
 }
 
 impl Transfer<'_> {
@@ -128,6 +130,9 @@ impl Transfer<'_> {
         }
         state.completed = state.completed - state.sizes[index] + size;
         state.sizes[index] = size;
+        if let Some(feed) = self.feed {
+            feed.changed.notify_all();
+        }
         self.hooks
             .progress(state.completed, state.metrics.planned_bytes)
     }
@@ -162,6 +167,10 @@ impl Transfer<'_> {
             state.completed = sizes.iter().sum();
             state.metrics.reused_bytes = state.completed;
             state.sizes = sizes;
+            if let Some(feed) = self.feed {
+                feed.ready.store(true, Ordering::Release);
+                feed.changed.notify_all();
+            }
             if state.completed > 0 {
                 self.hooks
                     .progress(state.completed, state.metrics.planned_bytes)?;
@@ -176,7 +185,7 @@ impl Transfer<'_> {
         }
         self.check()?;
         self.store.assemble(self.plan, output, || self.check())?;
-        self.store.remove()
+        Ok(())
     }
 
     fn parallel(&self, incomplete: &[usize], workers: usize) -> Result<(), Error> {
@@ -236,6 +245,36 @@ pub fn download(
     options: &Options,
     metrics: &mut Metrics,
 ) -> Result<(), Error> {
+    download_with_reader(
+        transport,
+        hooks,
+        url,
+        plan,
+        output,
+        options,
+        metrics,
+        None::<(u64, fn(&mut dyn std::io::Read) -> Option<()>)>,
+    )
+    .map(|_| ())
+}
+
+/// An optional bounded reader can prepare a result from complete messages.
+/// Its output is returned only after the same transport validation succeeds.
+#[allow(clippy::too_many_arguments)]
+pub fn download_with_reader<T, F>(
+    transport: &dyn Transport,
+    hooks: &dyn Hooks,
+    url: &str,
+    plan: &[ByteRange],
+    output: &Path,
+    options: &Options,
+    metrics: &mut Metrics,
+    consumer: Option<(u64, F)>,
+) -> Result<Option<T>, Error>
+where
+    T: Send,
+    F: FnOnce(&mut dyn std::io::Read) -> Option<T> + Send,
+{
     *metrics = Metrics::default();
     if plan.is_empty() {
         return Err(Error::Unavailable("byte-range plan is empty".into()));
@@ -262,8 +301,10 @@ pub fn download(
     if disk::valid_grib(output) {
         metrics.worker_count = 0;
         metrics.reused_bytes = metrics.planned_bytes;
-        return Ok(());
+        return Ok(None);
     }
+    let consumer = consumer.filter(|(minimum, _)| metrics.planned_bytes >= *minimum);
+    let feed = reader::Feed::default();
     let transfer = Transfer {
         transport,
         hooks,
@@ -277,9 +318,10 @@ pub fn download(
             metrics: metrics.clone(),
         }),
         stop: AtomicBool::new(false),
+        feed: consumer.as_ref().map(|_| &feed),
     };
     let done = (Mutex::new(false), Condvar::new());
-    let result = std::thread::scope(|scope| {
+    let (result, assembled) = std::thread::scope(|scope| {
         scope.spawn(|| loop {
             let finished = done
                 .1
@@ -296,13 +338,30 @@ pub fn download(
                 transport.close_active();
             }
         });
+        let decoding = consumer.map(|(_, consume)| {
+            scope.spawn(|| {
+                let mut input = reader::Fragments::new(&transfer, &feed);
+                consume(&mut input)
+            })
+        });
         let result = transfer.run(output);
+        let assembled = result.is_ok();
+        feed.finish();
+        let decoded = decoding.and_then(|task| task.join().ok().flatten());
         *done.0.lock().unwrap() = true;
         done.1.notify_one();
-        result
+        (
+            result.and_then(|()| {
+                // Preparation may outlast assembly. A Stop received while joining
+                // that work must not expose its result to the caller.
+                transfer.check()?;
+                Ok(decoded)
+            }),
+            assembled,
+        )
     });
     *metrics = transfer.state.into_inner().unwrap().metrics;
-    if matches!(result, Err(Error::ObjectChanged(_))) {
+    if assembled || matches!(result, Err(Error::ObjectChanged(_))) {
         transfer.store.remove()?;
     }
     result

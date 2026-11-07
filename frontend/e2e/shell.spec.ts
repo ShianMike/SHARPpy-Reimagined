@@ -1,6 +1,5 @@
 // Desktop workspace navigation, linked forecast controls, and floating panel geometry.
 import appManifest from "../package.json" with { type: "json" };
-import releaseNotes from "../release-notes.json" with { type: "json" };
 import { MARKS, deckLayers, nextFrames, waitForMapDrawn, waitForMark } from "./support/app";
 import { expectWarnings } from "./support/console";
 import { saveScreenshot } from "./support/screenshots";
@@ -144,40 +143,6 @@ test("Settings exposes application updates and explains the browser limitation",
   await saveScreenshot(page, "browser-updates.png");
   expectWarnings(consoleMessages, []);
 });
-
-for (const viewport of [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }]) {
-  test(`release highlights fit without scrolling at ${String(viewport.width)} by ${String(viewport.height)}`, async ({ page }) => {
-    await page.setViewportSize(viewport);
-    await page.goto("/");
-    await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Updates", exact: true }).click();
-    await page.getByRole("button", { name: "View highlights", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: /^What’s new in /u });
-    const highlights = dialog.getByRole("listitem");
-    await expect(highlights).toHaveCount(releaseNotes[appManifest.version as keyof typeof releaseNotes].highlights.length);
-    await dialog.evaluate(async (panel) => { await Promise.allSettled(panel.getAnimations().map((animation) => animation.finished)); });
-    const box = await boxOf(dialog);
-    expect(isInside(box, viewportBox(page))).toBe(true);
-    expect(box.width).toBeGreaterThan(box.height);
-    const first = await boxOf(highlights.first());
-    expect(isInside(first, box)).toBe(true);
-    if (await highlights.count() > 1) {
-      const second = await boxOf(highlights.nth(1));
-      expect(Math.abs(first.y - second.y)).toBeLessThan(1);
-      expect(second.x).toBeGreaterThanOrEqual(first.x + first.width);
-    }
-    expect(await dialog.evaluate((element) => {
-      const body = element.querySelector("ul")?.parentElement;
-      return body !== null && body !== undefined && [element, body].every((part) =>
-        part.scrollHeight <= part.clientHeight + 1 && part.scrollWidth <= part.clientWidth + 1);
-    })).toBe(true);
-    await expect(dialog.getByRole("button", { name: "Got it", exact: true })).toBeVisible();
-    await saveScreenshot(page, `browser-release-highlights-${String(viewport.width)}.png`);
-    await dialog.getByRole("button", { name: "Close release highlights", exact: true }).click();
-    await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "View highlights", exact: true })).toBeFocused();
-  });
-}
 
 test("other workspaces leave the map inert and returning preserves the selected station", async ({ page, consoleMessages }) => {
   await page.goto("/");

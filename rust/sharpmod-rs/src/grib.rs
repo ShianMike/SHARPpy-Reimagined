@@ -18,9 +18,13 @@ use std::ptr::{self, NonNull};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 mod grid_points;
+mod messages;
+mod point_cache;
 #[cfg(test)]
 mod profiling;
+pub(crate) mod streaming;
 use grid_points::{GridFingerprint, GridPointCache};
+use point_cache::{Fingerprint, PointCache};
 
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt as _;
@@ -247,6 +251,7 @@ struct InventoryMessage {
 #[derive(Clone, Debug)]
 struct GribInventory {
     messages: Vec<InventoryMessage>,
+    content: Option<Fingerprint>,
 }
 
 impl GribInventory {
@@ -284,6 +289,8 @@ struct InventoryCache {
     enabled: bool,
     entries: VecDeque<(FileIdentity, Arc<GribInventory>)>,
     grid_points: GridPointCache,
+    decoded_points: PointCache,
+    generation: u64,
     hits: u64,
     misses: u64,
     evictions: u64,
@@ -296,6 +303,8 @@ impl Default for InventoryCache {
             enabled: true,
             entries: VecDeque::new(),
             grid_points: GridPointCache::default(),
+            decoded_points: PointCache::default(),
+            generation: 0,
             hits: 0,
             misses: 0,
             evictions: 0,
@@ -363,6 +372,8 @@ impl InventoryCache {
     fn clear(&mut self, reset_stats: bool) {
         self.entries.clear();
         self.grid_points.clear();
+        self.decoded_points.clear();
+        self.generation = self.generation.wrapping_add(1);
         if reset_stats {
             self.hits = 0;
             self.misses = 0;
@@ -393,7 +404,7 @@ fn inventory_cache() -> MutexGuard<'static, InventoryCache> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// Enable or bypass native GRIB inventory and grid-index reuse.
+/// Enable or bypass native GRIB inventory, grid-index and exact-point reuse.
 ///
 /// Disabling does not destroy retained entries; callers that require a fully
 /// cold state should call [`clear_grib_inventory_cache`] as well.
@@ -401,7 +412,7 @@ pub fn set_grib_inventory_cache_enabled(enabled: bool) {
     inventory_cache().enabled = enabled;
 }
 
-/// Drop retained inventories and grid indexes, optionally resetting counters.
+/// Drop retained inventories, grid indexes and decoded points.
 pub fn clear_grib_inventory_cache(reset_stats: bool) {
     inventory_cache().clear(reset_stats);
 }
@@ -1579,99 +1590,23 @@ fn scan_inventory_and_decode(
     boundaries: &[MessageBoundary],
     coordinates: &[(f64, f64)],
     missing: Option<f64>,
+    content: Option<Fingerprint>,
 ) -> Result<(Arc<GribInventory>, Vec<PointDecodeState>), GribError> {
     let _multi_support = api.enable_multi_support();
-    let mut grids = HashMap::<String, Vec<GridPoint>>::new();
-    let mut states = (0..coordinates.len())
-        .map(|_| PointDecodeState::default())
-        .collect::<Vec<_>>();
+    let mut decoder = messages::PointDecoder::new(coordinates, missing);
     let mut inventory_messages = Vec::new();
-    let mut message_order = 0;
-
-    for boundary in boundaries {
+    for &boundary in boundaries {
         let message = &mapping[boundary.offset..boundary.offset + boundary.length];
-        let mut cursor = message.as_ptr().cast_mut().cast::<c_void>();
-        let mut remaining = message.len();
-        let mut field_index = 0;
-        let mut inventory_fields = Vec::new();
-        loop {
-            let Some(handle) = api.next_multi_handle(message, &mut cursor, &mut remaining)? else {
-                break;
-            };
-            let order = message_order;
-            message_order += 1;
-
-            let edition = api.get_long_value(handle.as_ptr(), EDITION_KEY)?;
-            if edition != c_long::from(boundary.edition) {
-                return Err(GribError::new(format!(
-                    "ecCodes edition {edition} disagrees with GRIB{} boundary at byte {}",
-                    boundary.edition, boundary.offset
-                )));
-            }
-
-            let Ok(short_name) = api.get_string_value(handle.as_ptr(), SHORT_NAME_KEY) else {
-                field_index += 1;
-                continue;
-            };
-            let Ok(type_of_level) = api.get_string_value(handle.as_ptr(), TYPE_OF_LEVEL_KEY) else {
-                field_index += 1;
-                continue;
-            };
-            let Ok(level) = api.get_double_value(handle.as_ptr(), LEVEL_KEY) else {
-                field_index += 1;
-                continue;
-            };
-            let pressure_field =
-                pressure_hpa(&type_of_level, level).zip(classify_field(&short_name));
-            let surface_field = classify_surface_field(&short_name, &type_of_level, level);
-            if pressure_field.is_none() && surface_field.is_none() {
-                field_index += 1;
-                continue;
-            }
-
-            let grid_key = api
-                .get_optional_string(handle.as_ptr(), GRID_HASH_KEY)
-                .filter(|value| !value.is_empty())
-                .unwrap_or_else(|| format!("message:{}", boundary.offset));
-            let points = grid_points_for(api, handle.as_ptr(), &grid_key, coordinates, &mut grids)?;
-            let indexes = points.iter().map(|point| point.index).collect::<Vec<_>>();
-            let raw_values = api.get_elements(handle.as_ptr(), &indexes)?;
-            let field = InventoryField {
-                field_index,
-                order,
-                pressure_field,
-                surface_field,
-                grid_key,
-                missing_value: api.get_optional_double(handle.as_ptr(), MISSING_VALUE_KEY),
-                wind_rotation: if matches!(
-                    pressure_field,
-                    Some((_, FieldKind::UWind | FieldKind::VWind))
-                ) || matches!(
-                    surface_field,
-                    Some(SurfaceFieldKind::UWind | SurfaceFieldKind::VWind)
-                ) {
-                    WindRotation::from_grib(api, handle.as_ptr())?
-                } else {
-                    WindRotation::default()
-                },
-            };
-            apply_field_values(&field, points, &raw_values, &mut states, missing)?;
-            inventory_fields.push(field);
-            field_index += 1;
-        }
-        if !inventory_fields.is_empty() {
-            inventory_messages.push(InventoryMessage {
-                boundary: *boundary,
-                fields: inventory_fields,
-            });
+        if let Some(message) = decoder.message(api, message, boundary)? {
+            inventory_messages.push(message);
         }
     }
-
     Ok((
         Arc::new(GribInventory {
             messages: inventory_messages,
+            content,
         }),
-        states,
+        decoder.states,
     ))
 }
 
@@ -1815,16 +1750,48 @@ pub fn decode_grib_points(
     }
 
     let (_file, mapping, identity) = open_grib_mapping(grib_path)?;
-    let cached_inventory = identity
-        .as_ref()
-        .and_then(|identity| inventory_cache().lookup(identity));
+    let generation = if coordinates.len() == 1 && mapping.len() >= point_cache::MIN_FILE_BYTES {
+        let cache = inventory_cache();
+        cache.enabled.then_some(cache.generation)
+    } else {
+        None
+    };
+    // Large packed grids can take seconds to unpack. Hash the current bytes
+    // outside the ecCodes lock so repeat requests can skip decompression safely.
+    let content = generation.map(|_| point_cache::fingerprint(&mapping));
+    let point_key = content.map(|content| point_cache::Key::new(content, coordinates[0], missing));
+    let cached_inventory = identity.as_ref().and_then(|identity| {
+        let mut cache = inventory_cache();
+        let inventory = cache.lookup(identity)?;
+        if content.is_some() && inventory.content != content {
+            cache.invalidate(identity);
+            return None;
+        }
+        Some(inventory)
+    });
+    if let Some(key) = &point_key {
+        let point = {
+            let mut cache = inventory_cache();
+            (cache.enabled && generation == Some(cache.generation))
+                .then(|| cache.decoded_points.get(key))
+                .flatten()
+        };
+        if let Some(point) = point {
+            // A decoded entry can only exist after successful ecCodes setup.
+            ECCODES_API
+                .get()
+                .expect("decoded point has a runtime")
+                .for_path(eccodes_library_path)?;
+            return Ok(vec![point]);
+        }
+    }
     let cold_boundaries = if cached_inventory.is_none() {
         Some(scan_message_boundaries(&mapping)?)
     } else {
         None
     };
 
-    let _guard = {
+    let guard = {
         #[cfg(test)]
         let _span = profiling::span("ecCodes_lock_wait");
         ECCODES_CALL_LOCK
@@ -1841,8 +1808,14 @@ pub fn decode_grib_points(
                     inventory_cache().invalidate(identity);
                 }
                 let boundaries = scan_message_boundaries(&mapping)?;
-                let (inventory, states) =
-                    scan_inventory_and_decode(api, &mapping, &boundaries, &coordinates, missing)?;
+                let (inventory, states) = scan_inventory_and_decode(
+                    api,
+                    &mapping,
+                    &boundaries,
+                    &coordinates,
+                    missing,
+                    content,
+                )?;
                 if let Some(identity) = identity.clone() {
                     inventory_cache().insert(identity, inventory);
                 }
@@ -1852,13 +1825,21 @@ pub fn decode_grib_points(
     } else {
         let boundaries = cold_boundaries.expect("a cold decode scanned GRIB boundaries");
         let (inventory, states) =
-            scan_inventory_and_decode(api, &mapping, &boundaries, &coordinates, missing)?;
+            scan_inventory_and_decode(api, &mapping, &boundaries, &coordinates, missing, content)?;
         if let Some(identity) = identity {
             inventory_cache().insert(identity, inventory);
         }
         states
     };
-    assemble_decoded_points(states, missing)
+    drop(guard);
+    let decoded = assemble_decoded_points(states, missing)?;
+    if let Some(key) = point_key {
+        let mut cache = inventory_cache();
+        if cache.enabled && generation == Some(cache.generation) {
+            cache.decoded_points.insert(key, &decoded[0]);
+        }
+    }
+    Ok(decoded)
 }
 
 /// Decode one nearest-grid-point sounding with one Python-to-Rust call.
@@ -1910,6 +1891,7 @@ mod tests {
     fn empty_inventory() -> Arc<GribInventory> {
         Arc::new(GribInventory {
             messages: Vec::new(),
+            content: None,
         })
     }
 

@@ -3,7 +3,8 @@
 Audit date: 2026-10-19. Baseline candidate: `0b505e649c554dc718ae55498c177434c4bcfe65`.
 This is the audit behind the measured implementation checkpoint, not release approval.
 See [the plan](RUST_MIGRATION_PLAN.md), [measurements](BENCHMARK_RESULTS.md) and
-[recoverable checkpoints](TASK_CHECKPOINTS.md) for execution status.
+[historical checkpoints](https://github.com/ShianMike/SHARPpy-Reimagined/blob/84056a2634ae53028b931c8728a8a7e8b97bc07c/docs/performance/TASK_CHECKPOINTS.md)
+for the original v3.2.0 execution record.
 
 ## Actual architecture
 

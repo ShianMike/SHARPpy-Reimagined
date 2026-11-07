@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.5.4
+# SHARPpy Reimagined · v3.5.5
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,14 +10,26 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#unreleased)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v355---2026-11-07)
 
 </div>
 
-## What's new in 3.5.4
+## What's new in 3.5.5
 
-Windows installers and portable downloads are available in
+Windows installers and portable builds are available in
 [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases).
+
+- **Faster repeat forecast soundings:** the native decoder can reuse the
+  column when you reopen the same point from the same large GRIB file.
+- **Prepare large soundings sooner:** begin processing complete GRIB messages
+  while the remaining data downloads, then validate the complete file and
+  required surface data before opening the profile.
+- **Consistent MCS maintenance probability:** use the analyzed profile's
+  validated result so the probability agrees with the MCS index.
+- **Sounding reading guide:** read parcel ascent, instability and winds together
+  in the updated [parameter guide](docs/sounding_parameter_guide.md).
+
+### Included from 3.5.4
 
 - **Smooth, labelled isobars:** add a separate pressure layer on supported HRRR,
   GFS and ECMWF forecasts, with 4 hPa spacing, opacity and saved per-panel controls.
@@ -222,6 +234,8 @@ For a live browser preview, run `npm run dev:browser` in `frontend/` and open
 ## Documentation
 
 - [Using the app and command-line tools](docs/USAGE.md)
+- [Sounding parameter guide](docs/sounding_parameter_guide.md)
+- [Historical interface screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/tree/84056a2634ae53028b931c8728a8a7e8b97bc07c/docs/images)
 - [Installation and optional dependencies](installation.txt)
 - [Frontend development](docs/frontend/ARCHITECTURE.md)
 - [Rust backend and Python fallback](docs/RUST_BACKEND.md)

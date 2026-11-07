@@ -180,32 +180,6 @@
         }
       }
     },
-    "sharpmod.tests.test_hazard_single_label_property::test_classify_returns_exactly_one_valid_label": {
-      "baseline_seconds": 41.58,
-      "maximum_seconds": 70.0,
-      "suite_overrides": {
-        "property": {
-          "baseline_seconds": 46.92,
-          "maximum_seconds": 80.0,
-          "environment_overrides": {
-            "github-actions": {
-              "baseline_seconds": 69.44,
-              "maximum_seconds": 110.0
-            }
-          }
-        },
-        "serial-release": {
-          "baseline_seconds": 41.58,
-          "maximum_seconds": 70.0,
-          "environment_overrides": {
-            "github-actions": {
-              "baseline_seconds": 2.738,
-              "maximum_seconds": 14.0
-            }
-          }
-        }
-      }
-    },
     "sharpmod.tests.test_packaging_render_smoke::test_example_input_renders_to_decodable_png[14061619.OAX]": {
       "baseline_seconds": 6.99,
       "maximum_seconds": 14.0,

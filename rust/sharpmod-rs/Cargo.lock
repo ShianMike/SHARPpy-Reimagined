@@ -1319,7 +1319,7 @@ dependencies = [
 
 [[package]]
 name = "sharpmod-rs"
-version = "3.5.4"
+version = "3.5.5"
 dependencies = [
  "criterion",
  "libloading",
@@ -1328,6 +1328,7 @@ dependencies = [
  "numpy",
  "pyo3",
  "rayon",
+ "ring",
  "serde_json",
  "sharpmod-weather",
  "time",
@@ -1336,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "sharpmod-weather"
-version = "3.5.4"
+version = "3.5.5"
 dependencies = [
  "base64 0.22.1",
  "bzip2",

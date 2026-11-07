@@ -354,7 +354,11 @@ def composite_values(prof) -> dict[str, float]:
             ("conv_t", "convT"),
             ("max_t", "maxT"),
         ):
-            number = _api._finite(getattr(oracle, attribute, None))
+            raw = getattr(oracle, attribute, None)
+            if key == "mmp":
+                # The analyzed profile already avoids upstream's unfilled shear cells.
+                raw = getattr(prof, attribute, raw)
+            number = _api._finite(raw)
             if number is not None:
                 values[key] = number
         # Effective SRH arrives as (total, positive, negative).

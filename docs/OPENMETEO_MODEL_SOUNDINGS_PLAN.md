@@ -1,26 +1,19 @@
 # Open-Meteo Forecast-Model Soundings Implementation Plan
 
-The Qt interface tasks and `gui_*` paths below are historical. That interface
-was retired from v3.0.3; current source controls live in
-`frontend/src/features/sounding/`, and retrieval runs through `sharpmod/bridge/`.
-The provider implementation and model-extraction notes remain relevant.
+**Current routing:** The CLI and Tauri sounding workspace share
+`sharpmod/tools/model_extract.py`. The React source controls live in
+`frontend/src/features/sounding/` and call it through `sharpmod/bridge/`.
+The [provider manifest](../sharpmod/providers/openmeteo.py) defines the enabled
+ICON Global 11 km and ECMWF IFS 0.25° Open-Meteo routes. The native GRIB
+ECMWF IFS 9 km route is separate.
 
-**Status:** Partially implemented. The Qt-free provider core is delivered and
-wired into `model_extract`; see [Implementation status](#12-implementation-status)
-for exactly what landed, what the implementation corrected in this plan, and what
-is still outstanding. No dependency change, published key, commit, push, or
-release has been made.
-
-**Scope reduction:** one model is enabled, DWD ICON Global at 11 km
-(`icon_global`), not the five-candidate pilot in section 5. The pilot list is
-retained below as the expansion backlog.
-
-**Correction:** this plan was written around ECMWF IFS. The live capability audit
-proved that model cannot work here — Open-Meteo serves ECMWF IFS with no
-pressure-level fields at all — so it is withheld and ICON Global took its place.
-See [the audit](#the-live-capability-audit) for the evidence and the full
-per-model matrix. Wherever sections 1 through 11 name ECMWF as the pilot model,
-read ICON Global instead.
+**Historical plan:** The original pilot shipped ICON Global. The Open-Meteo
+identifier `ecmwf_ifs` lacked pressure fields in the
+[original capability audit](#the-live-capability-audit); it is distinct from
+the later enabled `ecmwf_ifs025` route. Sections 1–11 record the pilot design,
+including the retired Qt interface tasks. The
+[implementation record](#12-implementation-status) describes the pilot and
+its remaining provider work.
 
 **Goal:** Add new deterministic forecast models through Open-Meteo's
 pressure-level API, produce the same verified SHARPpy Reimagined sounding
@@ -718,6 +711,9 @@ Evidence: `.tmp/openmeteo_capability_matrix.json`, produced by
 
 ### Outstanding
 
+The provider items below came from the pilot. Use the current capability
+manifest and test coverage when deciding whether they still apply.
+
 - **Task 4's budget governor** (`sharpmod/openmeteo_budget.py`) is not written.
   The structural protections are in place — one request per sounding, no
   background probe, no cycle spray, manifest-only availability, and
@@ -731,42 +727,21 @@ Evidence: `.tmp/openmeteo_capability_matrix.json`, produced by
   payload and its validation are not implemented; the existing
   `valid_sounding_paths` precedent is the intended route rather than
   generalizing `valid_grib_paths`.
-- **Task 5, GUI and CLI integration.** Partly live, and not by design. Because
-  the model is an entry in `_CONFIGS`, it appears in the Forecast Model tab's
-  model list and is fetched by the existing `_ModelFetchWorker` with no
-  Open-Meteo-specific worker involved. That works, but it was not a decision --
-  and it broke on first use, which is worth recording because the cause was a
-  gap this plan's own refactor was meant to close.
-
-  `POINT_PROVIDER_KEYS` replaced seven hardcoded `{"gdps", "rdps"}` literals. It
-  missed an eighth, inside `_retrieve_dataset`, which is not one of the public
-  seams but the Herbie retrieval helper. `extract` returns early for point
-  providers, so the command line was fine; the GUI's model-hour cache calls
-  `_retrieve_dataset` directly to populate a shared entry, so selecting ICON in
-  the picker fell through to Herbie and failed with `module 'herbie.models' has
-  no attribute 'openmeteo-icon-global'` -- Herbie blamed for a name it was never
-  asked about. Both point providers now share one branch keyed on
-  `POINT_PROVIDER_KEYS`, and
+- **Task 5, interface integration.** The CLI and Tauri now use the shared point
+  provider routing. The Qt picker and dedicated worker ideas are retired.
+  The old picker originally fell through to Herbie on a cache miss.
+  `_retrieve_dataset` now also checks `POINT_PROVIDER_KEYS`, and
   `test_retrieve_dataset_routes_every_point_provider_away_from_herbie` is
-  parametrized over the whole set so a provider added later cannot reintroduce
-  it by being handled in `extract` alone.
-
-  Still outstanding is the polish: picker grouping, an access-mode display, and
-  date/F-hour gating driven from the manifest rather than from `fxx_values`.
-  `_ERA5FetchWorker` remains the better precedent for a dedicated worker if one
-  is ever wanted, since it is the non-GRIB cached-point case.
+  parametrized over the full set. Picker grouping, access-mode display, and
+  manifest-driven date and forecast-hour controls were proposed separately.
 - **Task 6, timeline and batch coalescing.** `fetch_times(...)` does not exist,
   so a multi-hour timeline would still issue one request per frame.
-- **Task 7, documentation.** README and USAGE are untouched. The live matrix is
-  done — see [the audit](#the-live-capability-audit) — so the level set and
-  pressure-level completeness are now measured rather than assumed. What remains
-  unverified is the far end of the forecast horizon: the audit probed F012 only,
-  so the F078 cadence change and the F120/F180 cut-offs come from DWD's published
-  schedule, not from observation. Request-time validation catches a mismatch as an
-  explicit error rather than a wrong sounding.
+- **Task 7, horizon verification.** The [pilot audit](#the-live-capability-audit)
+  measured pressure-level completeness at F012. ICON's F078 cadence change and
+  F120/F180 limits came from DWD's schedule; the audit did not probe those
+  hours. Request-time validation makes a mismatch explicit.
 - **The three non-JSON responses.** `kma_gdps`, `bom_access_global`, and
   `kma_ldps` need their raw bodies inspected before they can be trusted or ruled
   out; two of them are global models and would otherwise be worth having.
-- **Expansion is now cheap.** `MEASURED_LADDERS` holds the audited ladder for all
-  twelve usable models, so enabling one is a manifest entry plus its withheld
-  reason removed, with no further live calls.
+- **Expansion.** `MEASURED_LADDERS` preserves the pilot's measured levels. Review
+  each model's capabilities before enabling another entry in the manifest.

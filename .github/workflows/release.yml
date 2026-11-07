@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v3.5.4). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v3.5.5). Created if it does not exist."
         required: true
-        default: "v3.5.4"
+        default: "v3.5.5"
       publish_release:
         description: "Publish after verification; leave off to build a release candidate only."
         required: true
@@ -247,6 +247,10 @@ jobs:
         with:
           python-version: "3.13.16"
           cache: pip
+          # Native package versions do not change Python dependency downloads.
+          cache-dependency-path: |
+            pyproject.toml
+            constraints/release.txt
 
       - name: Verify maintained bundled Python and TLS runtime
         shell: pwsh
@@ -260,12 +264,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Maintained Python/TLS runtime check failed' }
 
       - name: Set up Rust 1.88 toolchain
+        id: scientific-rust
         shell: bash
         run: |
           set -euo pipefail
           rustup toolchain install 1.88.0 --profile minimal
           rustup default 1.88.0
           rustc --version | grep -E '^rustc 1\.88\.0 '
+          echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
 
       - name: Install constrained package and build dependencies
         shell: pwsh
@@ -292,6 +298,30 @@ jobs:
           --repo-root .
           --require-dist-info
           --require-external-metadata
+
+      # Downloaded Cargo inputs are toolchain-independent and checksum-checked
+      # against Cargo.lock. Do not archive both .crate files and unpacked src/.
+      - name: Cache Cargo downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-downloads-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/sharpmod-rs/Cargo.lock', 'src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-downloads-v1-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Cache scientific release dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            rust/sharpmod-rs/target/release/.fingerprint
+            rust/sharpmod-rs/target/release/build
+            rust/sharpmod-rs/target/release/deps
+          key: scientific-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.scientific-rust.outputs.version }}-cp313-3.13.16-release-default-thin-cgu1-${{ hashFiles('rust/sharpmod-rs/Cargo.lock', 'rust/sharpmod-rs/Cargo.toml', 'rust/weather-core/Cargo.toml') }}
+          restore-keys: |
+            scientific-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.scientific-rust.outputs.version }}-cp313-3.13.16-release-default-thin-cgu1-
 
       - name: Build and install locked Rust wheel
         working-directory: rust/sharpmod-rs
@@ -388,6 +418,13 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: "24.12.0", cache: npm, cache-dependency-path: frontend/package-lock.json }
 
+      - name: Install frontend dependencies
+        working-directory: frontend
+        shell: pwsh
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw "Frontend dependency install failed" }
+
       # Pinned, not `stable`: the cache key below includes the rustc version, so
       # every new stable release would otherwise force a cold build. Bump on purpose.
       - name: Set up Rust 1.99.1 for Tauri
@@ -403,14 +440,12 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
             src-tauri/target/release/.fingerprint
             src-tauri/target/release/build
             src-tauri/target/release/deps
-          key: desktop-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.desktop-rust.outputs.version }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          key: desktop-release-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.desktop-rust.outputs.version }}-release-default-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'rust/weather-core/Cargo.toml') }}
           restore-keys: |
-            desktop-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.desktop-rust.outputs.version }}-
+            desktop-release-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.desktop-rust.outputs.version }}-release-default-
 
       - name: Build desktop shell and Windows installer
         working-directory: frontend
@@ -420,8 +455,6 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: |
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) { throw "Updater signing key is not configured" }
-          npm ci
-          if ($LASTEXITCODE -ne 0) { throw "Frontend dependency install failed" }
           # Refresh app assets and version metadata while retaining compiled dependencies.
           cargo clean --manifest-path ../src-tauri/Cargo.toml --release -p sharppy-reimagined
           if ($LASTEXITCODE -ne 0) { throw "Desktop application cleanup failed" }
@@ -487,7 +520,10 @@ jobs:
         env:
           SHARPPY_UPDATER_ARTIFACT_DIR: ${{ github.workspace }}/release-artifacts
         run: |
-          cargo test --release --locked --test updater_artifacts -- --ignored --nocapture
+          # The optimized desktop and signed installer were staged above.
+          # This test uses the real release-mode updater dependency; avoid
+          # optimizing the otherwise unused application library a second time.
+          cargo test --release --locked --test updater_artifacts --config profile.release.package.sharppy-reimagined.opt-level=0 -- --ignored --nocapture
           if ($LASTEXITCODE -ne 0) { throw "Final updater artifact verification failed" }
 
       - name: Verify installed upgrade from the previous stable release
@@ -543,6 +579,17 @@ jobs:
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)"
           } | Set-Content -Encoding ascii "release-artifacts/SHARPpy-Reimagined-$env:RELEASE_TAG-SHA256SUMS.txt"
+
+      # actions/cache saves in post-job hooks. Keep only dependency artifacts:
+      # every run compiles both first-party scientific and desktop crates anew.
+      # Wheels, backend files and signed installers have already been staged.
+      - name: Remove first-party artifacts from dependency caches
+        shell: pwsh
+        run: |
+          cargo +1.88.0 clean --manifest-path rust/sharpmod-rs/Cargo.toml --release -p sharpmod-rs -p sharpmod-weather
+          if ($LASTEXITCODE -ne 0) { throw "Scientific dependency cache preparation failed" }
+          cargo clean --manifest-path src-tauri/Cargo.toml --release -p sharppy-reimagined -p sharpmod-weather
+          if ($LASTEXITCODE -ne 0) { throw "Desktop dependency cache preparation failed" }
 
       - name: Upload tested release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

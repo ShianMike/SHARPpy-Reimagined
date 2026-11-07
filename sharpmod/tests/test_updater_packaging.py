@@ -11,25 +11,30 @@ import pytest
 WRITE_MANIFEST = runpy.run_path(
     str(Path(__file__).resolve().parents[2] / "packaging/write_updater_manifest.py")
 )["write_manifest"]
+FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 
 
 def test_manifest_uses_renamed_release_asset_and_signature_contents(tmp_path):
-    installer = tmp_path / "SHARPpy-Reimagined-v3.1.0-windows-x64-setup.exe"
+    version = json.loads((FRONTEND / "package.json").read_text(encoding="utf-8"))["version"]
+    release = json.loads((FRONTEND / "release-notes.json").read_text(encoding="utf-8"))[version]
+    tag = f"v{version}"
+    installer = tmp_path / f"SHARPpy-Reimagined-{tag}-windows-x64-setup.exe"
     installer.write_bytes(b"installer")
     signature = base64.b64encode(b"test signature").decode()
     installer.with_suffix(".exe.sig").write_text(signature + "\n", encoding="utf-8")
-    manifest = json.loads(WRITE_MANIFEST(installer, "v3.1.0").read_text())
-    assert manifest["version"] == "3.1.0"
+    manifest = json.loads(WRITE_MANIFEST(installer, tag).read_text(encoding="utf-8"))
+    assert manifest["version"] == version
     assert manifest["pub_date"].endswith("+00:00")
-    assert manifest["notes"].startswith("Live weather joins forecasts and soundings")
-    assert "- Live Tracking:" in manifest["notes"]
-    assert "Enhanced Echo Tops" in manifest["notes"]
-    assert "A simpler Overview" not in manifest["notes"]
+    summary, _, highlights = manifest["notes"].partition("\n\n")
+    assert summary == release["summary"]
+    assert highlights.splitlines() == [
+        f"- {item['title']}: {item['description']}" for item in release["highlights"]
+    ]
     platform = manifest["platforms"]["windows-x86_64"]
     assert platform["signature"] == signature
     assert platform["url"] == (
         "https://github.com/ShianMike/SHARPpy-Reimagined/releases/download/"
-        "v3.1.0/SHARPpy-Reimagined-v3.1.0-windows-x64-setup.exe"
+        f"{tag}/{installer.name}"
     )
 
 
@@ -57,9 +62,8 @@ def test_manifest_requires_highlights_for_the_exact_release(tmp_path):
 
 
 def test_current_application_version_has_release_highlights():
-    frontend = Path(__file__).resolve().parents[2] / "frontend"
-    version = json.loads((frontend / "package.json").read_text(encoding="utf-8"))["version"]
-    release = json.loads((frontend / "release-notes.json").read_text(encoding="utf-8"))[version]
+    version = json.loads((FRONTEND / "package.json").read_text(encoding="utf-8"))["version"]
+    release = json.loads((FRONTEND / "release-notes.json").read_text(encoding="utf-8"))[version]
     assert isinstance(release["summary"], str) and release["summary"].strip()
     assert release["highlights"]
     for item in release["highlights"]:

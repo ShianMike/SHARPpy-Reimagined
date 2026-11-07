@@ -1,12 +1,12 @@
 Command:
-$env:PATH = 'C:\Users\shian\.cargo\bin;' + $env:PATH; .\.gribenv\Scripts\python.exe benchmarks\benchmark_backends.py --repeat 20 --warmup 5 --large-size 100000 --repeated-calls 1000 --batch-profiles 2048 --batch-levels 128 --cpu-model "12th Gen Intel(R) Core(TM) i5-1235U" --power-mode "Balanced"
+$env:PATH = "$env:USERPROFILE\.cargo\bin;" + $env:PATH; .\.gribenv\Scripts\python.exe benchmarks\benchmark_backends.py --repeat 20 --warmup 5 --large-size 100000 --repeated-calls 1000 --batch-profiles 2048 --batch-levels 128 --cpu-model "12th Gen Intel(R) Core(TM) i5-1235U" --power-mode "Balanced"
 
 SHARPpy Reimagined backend benchmark
 platform: Windows-10-10.0.26200-SP0
 machine: AMD64
 cpu: 12th Gen Intel(R) Core(TM) i5-1235U
 power mode: Balanced
-python: 3.11.14 (C:\Users\shian\OneDrive\Desktop\sharppy reimagined\SHARPpy Reimagined\.gribenv\Scripts\python.exe)
+python: 3.11.14 (.gribenv\Scripts\python.exe)
 numpy: 2.4.6
 sharpmod_rs: 0.3.1
 rustc: rustc 1.97.0 (2d8144b78 2026-07-07)

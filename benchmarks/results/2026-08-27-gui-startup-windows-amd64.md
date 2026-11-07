@@ -1,8 +1,11 @@
-# Interface startup timings — 0.9.0
+# Historical Qt interface startup timings — 0.9.0
 
 Windows AMD64, Python 3.11.14, Qt `offscreen`, `--repeat 7`, medians.
-Harness: `benchmarks/benchmark_gui_startup.py`.
-Raw samples: `2026-08-27-gui-startup-windows-amd64.json`.
+Original harness: `benchmarks/benchmark_gui_startup.py`.
+[Archived raw samples](https://github.com/ShianMike/SHARPpy-Reimagined/blob/84056a2634ae53028b931c8728a8a7e8b97bc07c/benchmarks/results/2026-08-27-gui-startup-windows-amd64.json).
+
+These timings describe the retired Qt interface. They are not a startup
+baseline for the current Tauri app.
 
 Recorded to establish where the time in the desktop app goes, after the 0.9.0
 interface redesign. Elapsed medians only; no speed claims, and no comparison

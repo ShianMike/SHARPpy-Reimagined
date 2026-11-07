@@ -42,6 +42,7 @@ REQUIRED_RUST_CAPABILITIES = (
     "ecape_building_blocks",
     "decode_grib_point",
     "decode_grib_points",
+    "GribDownloadPoint",
     "set_grib_inventory_cache_enabled",
     "clear_grib_inventory_cache",
     "grib_inventory_cache_info",

@@ -2,8 +2,8 @@
 
 Historical v3.2.0 implementation plan, updated 2026-10-19. The published v3.2.0
 baseline is `b2b396df766717b6ecbb0758aa83bc1964ddd7dc`; the starting revisions
-and experiment sequence below describe its development history. Current patch
-work is recorded in [V3_2_1_CHECKPOINTS.md](V3_2_1_CHECKPOINTS.md) and
+and experiment sequence below describe its development history. The v3.2.1
+patch is documented in the [archived checkpoints](https://github.com/ShianMike/SHARPpy-Reimagined/blob/84056a2634ae53028b931c8728a8a7e8b97bc07c/docs/performance/V3_2_1_CHECKPOINTS.md) and
 [V3_2_1_PERFORMANCE_REPORT.md](V3_2_1_PERFORMANCE_REPORT.md). v3.2.1 retains
 the scientific backend and calibrated Qt renderer; no further kernel migration
 is justified by this patch's measurements. Publication requires separate user
@@ -27,7 +27,8 @@ Stable main is `206d1885b03543aca6c3976a5b16f49b447d4b4d`.
 ## Recoverable sequence
 
 Tasks are deliberately smaller than a five-hour session. Read
-[TASK_CHECKPOINTS.md](TASK_CHECKPOINTS.md) before resuming. Complete a bounded
+[the original checkpoints](https://github.com/ShianMike/SHARPpy-Reimagined/blob/84056a2634ae53028b931c8728a8a7e8b97bc07c/docs/performance/TASK_CHECKPOINTS.md)
+for historical evidence. Complete a bounded
 implementation, its regression check and measurements before beginning another.
 Unmeasured hypotheses remain open; an unsuccessful experiment is not a gain.
 

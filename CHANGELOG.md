@@ -42,6 +42,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Let Maturin configure PyO3 extension linking, so native Rust tests and
+  benchmarks can link Python normally on Linux. Require Maturin 1.9.4 or newer
+  for its automatic extension-build configuration.
 - Honor cancellation received after range assembly while native point
   preparation is still finishing, without returning a late prepared result.
   Remove its duplicate range fragments after readers close, retaining the

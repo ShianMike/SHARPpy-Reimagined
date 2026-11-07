@@ -17,8 +17,10 @@ they do not replace source validation, runtime checks or signed-artifact tests.
 
 Before successful post-job cache saves, the workflow removes artifacts owned
 by `sharpmod-rs`, `sharpmod-weather` and `sharppy-reimagined` from the relevant
-targets. Both scientific first-party crates and the desktop application are
-compiled from the checked-out source on every runner. Cached wheels and final
+targets that will be saved. Exact hits are immutable and are not uploaded
+again, so their final cleanup is skipped. Every runner compiles both scientific
+first-party crates and the desktop application from the checked-out source.
+Cached wheels and final
 executables cannot substitute for these builds. A missing cache follows the
 ordinary full build path. A broken dependency or artifact must still fail the
 build or its existing verification gate.
@@ -33,8 +35,17 @@ entry size when reviewing dependency updates. Bump the cache namespace when
 changing toolchain policy, ABI, release features, LTO, codegen units, target
 architecture or cache contents.
 
-The initial run after changing cache paths or namespaces may be a miss. Do not
-hide this migration cost in warm-build comparisons, and do not use broader
+Keep the populated desktop v2 namespace. Only when it has no exact or partial
+match, a restore-only action tries v1 with its original five paths, including
+the Cargo registry and Git directories. Cache paths contribute to GitHub's
+cache version, so adding a v1 restore-key to the v2 action would not migrate
+the old archive. The fallback remains inside the same OS, architecture and
+compiler namespace. It cleans the legacy first-party weather crate; the
+application clean still runs immediately before the production build. Only
+the dependency-only v2 archive is saved after successful verification.
+
+If both generations miss, the ordinary full build remains available. Do not
+hide migration costs in warm-build comparisons or broaden compatibility
 prefixes to accept a previously built application.
 
 ## Frozen scientific backend
@@ -97,3 +108,54 @@ separately, include archive restore/save time, and distinguish hosted job time
 from total workflow time. Keep raw diagnostics outside the repository. A local
 unsigned executable or a prior release's signed installer does not establish
 that a new signed NSIS release or installed upgrade has passed.
+
+## Release #72 / #73 regression
+
+The GitHub jobs API and timestamped logs identify #72 as run `42190371418`
+(v3.5.4, `84056a2634ae53028b931c8728a8a7e8b97bc07c`) and #73 as run
+`42338901605` (v3.5.5, `bbdcb8414feb9bde89bcdefdf8cb05a3f3ac2a9e`).
+The end-to-end increase is 301 seconds; 298 are in the Windows job.
+
+| Measured interval | #72 | #73 | Delta |
+|---|---:|---:|---:|
+| Complete workflow | 1,093 s | 1,394 s | +301 s |
+| Windows job, including post-job hooks | 889 s | 1,187 s | +298 s |
+| Desktop cache restore | 36 s, partial v1 hit | 1 s, v2 miss | -35 s |
+| Frontend install plus desktop/installer build | 199 s | 457 s | +258 s |
+| Scientific wheel build and install | 132 s | 166 s | +34 s |
+| Node setup | 11 s | 29 s | +18 s |
+| Final updater verification | 107 s | 98 s | -9 s |
+| All Windows post-job hooks | 47 s | 60 s | +13 s |
+
+The desktop Cargo log reports 1m40s versus 5m39s: #72 compiled the two
+first-party crates using restored dependencies, while #73 compiled the Tauri
+dependency graph after the path/namespace migration missed. NSIS itself took
+62.64 versus 70.87 seconds. The three Rust cache saves in #73 took 19 seconds
+combined; first-party post-build cleanup took one second. Neither accounts
+for five minutes of regression. `npm ci` moved out of the desktop build step,
+so compare its combined interval rather than adding its new step twice.
+
+#73 also missed both new scientific/download caches. It is a cold-cache
+measurement, not evidence of steady-state cache performance. Scientific source
+and dependency inputs differ from #72, so its extra compilation time cannot
+be assigned solely to caching. Cold PyInstaller collection/startup decreased
+about five seconds, while graph analysis increased about ten; whole freezing
+rose from 132 to 137 seconds. This does not establish a hosted freezer speedup.
+
+For a hosted comparison of this correction, use the existing non-publishing
+candidate path, twice without clearing caches:
+
+```powershell
+gh workflow run release.yml --repo ShianMike/SHARPpy-Reimagined `
+  --ref '<branch-containing-the-corrected-workflow>' `
+  -f tag=v3.5.5 -F publish_release=false
+```
+
+Run and inspect each candidate to completion before starting the next. The
+existing tag pins the same v3.5.5 application source; the selected branch
+supplies the workflow. Publication stays disabled, and the existing installed
+upgrade baseline remains v3.5.4. Record run IDs, matched cache keys, all job
+and step times, post-job compression/upload, and the full critical path.
+Compare like cache states and retain the first candidate's startup cost.
+Passing local checks or a warmed candidate alone does not prove a hosted
+end-to-end improvement over the 1,093-second baseline.

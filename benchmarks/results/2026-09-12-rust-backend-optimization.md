@@ -32,7 +32,7 @@ No LTO/configuration change was justified by a measured experiment.
   `sharpmod_rs` 1.1.0, backend API 7.
 - Rust/Cargo 1.97.0; locked release builds through maturin 1.15.0.
 - Fixed GRIB fixture:
-  `C:\Users\shian\AppData\Local\sharpmod\benchmark-fixtures\20260716\canonical\hrrr.grib2`
+  `<sharpmod-cache>\benchmark-fixtures\20260716\canonical\hrrr.grib2`
   (161,875,836 bytes), SHA-256
   `b6e291f5e4b2628f44bc9f2050ec1fb846d196b12adf6d57fdd1d206d3aa69e6`.
 - GRIB point: 35.18 N, 97.44 W. The operating-system file cache was not
@@ -184,10 +184,10 @@ precise speedup. Native warm-inventory timing was unavailable before this work.
 The resolved source-checkout directory is:
 
 ```text
-C:\Users\shian\OneDrive\Desktop\sharppy reimagined\SHARPpy Reimagined\rendered_soundings
+rendered_soundings
 ```
 
-An independent Python process launched with `cwd=C:\Windows\Temp` rendered a
+An independent Python process launched with `cwd=<system-temp>` rendered a
 real 3260 × 2198 PNG through the extractor helper into that same directory. The
 1,193,528-byte PNG decoded successfully and had SHA-256
 `1eb969d947c6eca00e4b8bde55aaeea4c7206f61afe14b2c38d349d7904527f2`
@@ -226,7 +226,7 @@ $env:SHARPMOD_BACKEND = 'rust'
 & .\.gribenv\Scripts\python.exe benchmarks\benchmark_backends.py --repeat 5 --warmup 2 --repeated-calls 100 --cpu-model "12th Gen Intel(R) Core(TM) i5-1235U" --power-mode Balanced --output-json benchmarks\results\2026-09-12-backend-after.json
 
 & .\.gribenv\Scripts\python.exe benchmarks\benchmark_decoding.py `
-  --grib 'C:\Users\shian\AppData\Local\sharpmod\benchmark-fixtures\20260716\canonical\hrrr.grib2' `
+  --grib '<sharpmod-cache>\benchmark-fixtures\20260716\canonical\hrrr.grib2' `
   --lat 35.18 --lon -97.44 --repeat 3 --warmup 0 `
   --implementations optimized-python optimized-rust `
   --stages application-cold warm-inventory-point-miss multipoint-inventory-reuse repeated-scalar-inventory-reuse point-cache-hit `
@@ -235,7 +235,7 @@ $env:SHARPMOD_BACKEND = 'rust'
 
 $eccodesDir = (Resolve-Path '.\.gribenv\Lib\site-packages\eccodes').Path
 $env:PATH = $eccodesDir + [IO.Path]::PathSeparator + $env:PATH
-$env:SHARPMOD_GRIB_TEST_FIXTURE = 'C:\Users\shian\AppData\Local\sharpmod\benchmark-fixtures\20260716\canonical\hrrr.grib2'
+$env:SHARPMOD_GRIB_TEST_FIXTURE = '<sharpmod-cache>\benchmark-fixtures\20260716\canonical\hrrr.grib2'
 $env:SHARPMOD_ECCODES_LIBRARY = Join-Path $eccodesDir 'eccodes.dll'
 cargo test --manifest-path rust\sharpmod-rs\Cargo.toml --locked
 ```

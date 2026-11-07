@@ -1,6 +1,6 @@
 # v3.2.1 performance and reliability report
 
-Status: **v3.2.1 is published as the latest stable release**, at exact source
+Historical release verification: **v3.2.1**, published from exact source
 `58df75396dc1a2e249fc7a17450a1738dd7f0fd0`. [Release run 39422411276](https://github.com/ShianMike/SHARPpy-Reimagined/actions/runs/39422411276)
 passes on attempt 2, after a targeted retry of one SwiftShader startup timeout;
 no timing limits were relaxed. All nine downloaded asset digests, eight checksum
@@ -8,7 +8,8 @@ entries, nine verified provenance subjects and 4,991 portable-file hashes match.
 The final offline lane passes 3,793 tests with two Windows-only skips in 212.504
 seconds, and WRF passes 66/66 in 25.533 seconds. Both timing gates pass. Frozen
 rendering, signed updater byte verification and installed upgrade reports pass.
-The public updater endpoint serves the signed v3.2.1 installer and current notes.
+At verification time, the public updater served the signed v3.2.1 installer and
+its release notes.
 Main Tests run 39422375964 and its public badge pass. Checkpoint 21 and external
 `published-*` evidence preserve the exact artifact identities and raw results.
 
@@ -212,7 +213,7 @@ are uploaded within the authorized candidate scope and kept for 14 days.
 Local copies, all logs, raw JUnit/timing and verification scripts/results are
 preserved in `C:\Users\shian\Documents\CodexReports\v3.2.1-candidate-ci`.
 No public tag, GitHub Release, main merge or updater distribution was performed;
-latest stable is verified still v3.2.0. These are candidate-readiness results,
+v3.2.0 was still the public release at that checkpoint. These are candidate-readiness results,
 not public-release or unmeasured native presentation claims.
 
 ## E12–E22 follow-up measurements and limits

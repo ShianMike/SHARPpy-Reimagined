@@ -32,9 +32,21 @@ Use `npm run tauri -- dev` in `frontend/` for the current desktop. The retired
 Qt interface is available in the [v2.0.0 Legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0).
 
 Desktop CI caches the pinned `cargo-audit` executable. Both lockfile audits
-still refresh advisory data and run on every check. Release verification uses
-`cargo test --release --locked --test updater_artifacts -- --ignored --nocapture`
-to use the release build profile while checking the staged installer.
+still refresh advisory data and run on every check. Release verification checks
+the staged signed installer with the release-mode updater dependency, without
+optimizing the unused application library again:
+
+```powershell
+cargo test --release --locked --test updater_artifacts `
+  --config profile.release.package.sharppy-reimagined.opt-level=0 `
+  -- --ignored --nocapture
+```
+
+This override applies only to the verification command. The desktop executable,
+scientific backend and installer retain their production build settings.
+
+See [Windows release build inputs and caches](docs/WINDOWS_RELEASE_BUILD.md)
+for cache ownership, invalidation and frozen-runtime verification requirements.
 
 ```powershell
 # Fast deterministic feedback (grouped across four bounded workers).

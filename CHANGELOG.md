@@ -12,6 +12,52 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Expand the available weather-model parameters, offering only fields supported
   by each model and the selected run.
 
+## [v3.5.5] - 2026-11-07
+
+### Changed
+
+- Reduce Windows release collection with maintained scientific package hooks
+  and retain warm freezer analysis. Cache Cargo downloads once and compatible
+  scientific and desktop dependencies, rebuilding first-party crates. Key pip
+  downloads to Python dependency inputs and install frontend dependencies
+  outside the updater signing environment. Avoid reoptimizing the application
+  library for the staged-installer signature test while retaining release-mode
+  updater dependencies and production artifact settings.
+- Reuse the decoded forecast column for repeated requests at the same point
+  in a large GRIB file. The native cache checks the file contents and keeps
+  the same pressure levels, surface merge, and selected coordinates.
+- Prepare a forecast column from complete GRIB messages while a large range
+  download is still running. Reuse the existing bounded downloader and point
+  cache, serialize ecCodes calls, and verify the final bytes and any appended
+  surface or terrain companion before reusing the result. Keep ordinary
+  decoding for ineligible downloads or unavailable streaming preparation.
+- Consolidate repeated decoder, release highlights, and version metadata tests.
+  Keep the generated NPZ round trip, real browser upgrade and layout checks,
+  installer validation, and supported and retired model checks.
+- Check the exact hazard label for a bundled sounding and retain randomized
+  classification and missing-input coverage without repeatedly promoting
+  generated soundings.
+- Keep the current sounding guide and move old interface screenshots and
+  migration records to the historical documentation linked from the README.
+
+### Fixed
+
+- Let Maturin configure PyO3 extension linking, so native Rust tests and
+  benchmarks can link Python normally on Linux. Require Maturin 1.9.4 or newer
+  for its automatic extension-build configuration.
+- Honor cancellation received after range assembly while native point
+  preparation is still finishing, without returning a late prepared result.
+  Remove its duplicate range fragments after readers close, retaining the
+  validated complete file for reuse and incomplete fragments for resume.
+- Read MCS maintenance probability from the analyzed profile's existing
+  validated calculation, avoiding the upstream oracle's unfilled shear cells.
+  Keep the existing MCS predictor and probability formula.
+
+### Added
+
+- Add native overlap, fragment-order, cancellation and source-change tests,
+  plus opt-in real-GRIB correctness and complete HTTP-to-point benchmarks.
+
 ## [v3.5.4] - 2026-11-06
 
 ### Added
@@ -4591,11 +4637,11 @@ state so only the palette changes.
 
 ##### Inverted / light mode
 
-![SHARPpy Reimagined sounding in inverted light mode](docs/images/v0.4.0/sounding-light-mode.png)
+![SHARPpy Reimagined sounding in inverted light mode](https://raw.githubusercontent.com/ShianMike/SHARPpy-Reimagined/84056a2634ae53028b931c8728a8a7e8b97bc07c/docs/images/v0.4.0/sounding-light-mode.png)
 
 ##### Protanopia colorblind mode
 
-![SHARPpy Reimagined sounding in the Protanopia colorblind palette](docs/images/v0.4.0/sounding-protanopia.png)
+![SHARPpy Reimagined sounding in the Protanopia colorblind palette](https://raw.githubusercontent.com/ShianMike/SHARPpy-Reimagined/84056a2634ae53028b931c8728a8a7e8b97bc07c/docs/images/v0.4.0/sounding-protanopia.png)
 
 ### Compatibility and limitations
 

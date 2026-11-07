@@ -1,11 +1,11 @@
 # SHARPpy Reimagined Usage Guide
 
-This guide describes the **v3.1.0 desktop interface** and the
+This guide describes the **v3.5.4 desktop interface** and the
 command-line tools. For installation, see the [README](../README.md#get-started)
 and [dependency reference](../installation.txt). The previous Qt interface has
 its own [v2.0.0 Legacy guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md).
 
-For a visual walkthrough, see the [v3.1.0 tour and screenshots](../README.md#v310-tour).
+For a visual walkthrough, see the [current screenshots](../README.md#screenshots).
 
 ## Choose a workflow
 
@@ -22,7 +22,7 @@ The extractors write portable `.npz` point soundings that can be imported into
 the desktop or passed to `sharpmod-render`. Forecast fields, profile data, and
 rendered images retain their source and time metadata.
 
-## 0. Desktop interface (v3.1.0)
+## 0. Desktop interface
 
 ### Open the app
 
@@ -33,15 +33,15 @@ bundled `backend` folder. Find v3 downloads on the
 v2.0.0 Legacy remains available there.
 
 From a prepared source checkout, run `npm run tauri -- dev` in `frontend/`.
-The [README setup](../README.md#run-v3-from-source) installs the Python analysis
+The [README setup](../README.md#get-started) installs the Python analysis
 environment and frontend dependencies. The old `sharpmod-gui` entry point and
 Qt interface are retired from this source tree; use the
 [v2.0.0 Legacy release](https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0)
 to run that interface. Qt still renders the current app's sounding images
 headlessly.
 
-The app opens **Overview** at startup, with direct entry cards for Model Viewer,
-Live Tracking, and soundings. Your saved layers, products, and panel layout remain
+The app opens **Overview** and starts its map at launch, with direct entry cards
+for Model Viewer, Live Tracking, and soundings. Your saved layers, products, and panel layout remain
 available. Expand **Model availability** when you want to check providers.
 
 The navigation rail opens **Overview**, **Model Viewer**, **Live Tracking**,
@@ -51,10 +51,11 @@ menus; Escape closes popovers.
 
 The desktop window has a minimum size of **1280 × 800**.
 
-### Application updates (v3.0.1 and newer)
+### Application updates
 
-The installed Windows app checks the latest stable GitHub Release on launch,
-every hour while open, and when the internet connection returns. When a newer
+The installed Windows app checks for a stable update at **00:00 and 12:00 UTC**,
+once per window on this device. If it is closed or offline, it checks when next
+available. When a newer
 version is available, a notice offers **Update now** or **Later**. Later hides
 that version's notice for the session; the update remains under **Settings →
 Updates**, where **Check for updates** can also check immediately. Background
@@ -72,9 +73,9 @@ its installer once; v3.0.1 and newer can update through **Settings → Updates**
 
 ### Live Tracking
 
-Open **Live Tracking** for radar, GOES imagery, surface observations, and NWS
-warnings and watches. It has its own saved layers and products, with one, two,
-or four synchronized panels. SPC outlooks and storm reports stay in Model Viewer.
+Open **Live Tracking** for radar, GOES imagery, surface observations, NWS
+warnings and watches, SPC outlooks, and storm reports. It has its own saved
+layers and products, with one, two, or four synchronized panels.
 Live Tracking uses the flat map; Model Viewer keeps its saved projection.
 
 Use **Site** to select the nearest radar or pin an antenna, **Site Product** to
@@ -98,7 +99,7 @@ than treating an incomplete download as ready.
 Downloaded live data appears in **Settings → Storage**. Caches are bounded and
 cleared when the app session closes; cleared data downloads again when needed.
 
-### Display units (v3.0.2)
+### Display units
 
 In **Settings → Units**, choose original temperature units, Celsius or Fahrenheit,
 and wind speeds in knots, km/h, mph or m/s. Readings and editable profile values
@@ -117,8 +118,8 @@ chart images and exports retain their labelled units, and wind barbs use knots.
 2. Pan or zoom to your area. Hover over an enabled model layer for its value.
    Click a map point to inspect the location, value, forecast time, and source,
    then choose **Open sounding** to load the point profile.
-   In 3.2.1 source builds, keyboard users can focus a map, pan with arrow keys,
-   and press **Enter** to inspect the point at its centre.
+   Keyboard users can focus a map, pan with arrow keys, and press **Enter** to
+   inspect the point at its centre.
 3. Use the timeline to step between available hours or play them in sequence.
    Playback speed and looping are controlled beside the timeline.
    On the left, choose **Navigate** to pan and zoom without hover descriptions
@@ -134,31 +135,23 @@ chart images and exports retain their labelled units, and wind barbs use knots.
 6. Use the small eye control beneath a panel's colour range to switch its
    model layer on or off. Other overlay visibility is controlled separately.
 
-Original **NAM** offers 34 map parameters on its native 12 km grid, with
-three-hour steps through F084. It shares the supported NAM 3km choices;
-updraft helicity and maximum updraft velocity are omitted because its files
-do not publish them. Pressure contours and wind barbs use NAM's own projection,
-and accumulated precipitation sums non-overlapping native intervals.
+The forecast and sounding pickers omit retired **NAM** (including NAM 3 km),
+**SREF**, **HREF**, and **HiResW** models. **RRFS** and the offered **REFS**
+members remain available. Archived-data support in the backend is separate
+from the models the pickers offer.
 
-**HRW WRF-ARW**, **HRW WRF-NSSL** and **HRW FV3** each offer up to 28 map
-products from their native 5 km files. Choices include height/wind, surface
-conditions, accumulated precipitation, CAPE, lapse rates, shear and helicity.
-The picker checks every required ingredient at the selected run and hour;
-forecast maxima start at F001. WRF members run to F048 and FV3 to F060, from
-00Z and 12Z cycles. Unsupported precipitation rates, snow depth, lightning,
-MUCAPE, SCP and STP are omitted. The 1 km shear uses interpolated model winds.
-
-Both **ECMWF** and **ECMWF 9km** offer up to 20 global map products: five
+Both **ECMWF** and **ECMWF 9km** offer global map products: five
 height/wind levels, surface temperature, dewpoint, humidity, theta-e and winds,
 precipitation and winter-weather fields, most-unstable CAPE and the 700–500 mb
 lapse rate. The picker checks the selected run and hour and omits products with
-missing ingredients. Maps use ECMWF's direct 0.25° and 0.1° open-data grids;
-the existing ECMWF point-sounding source remains Open-Meteo. Older archived
+missing ingredients. Maps use ECMWF's direct 0.25° and 0.1° open-data grids.
+The 0.25° point source uses Open-Meteo; the 9 km point source uses the
+pressure-level download and its surface companion. Older archived
 soundings can remain available after their direct map files expire.
 Snow depth uses snow density to convert water equivalent to physical depth;
 gusts and MUCAPE retain ECMWF's own interval and parcel definitions.
 
-In v3.2.0 source builds, **Load hours** saves the selected panels' forecast
+**Load hours** saves the selected panels' forecast
 frames and required contours or winds to disk. Its details button separates
 **Saved to cache** from **Ready in memory**: playback retains a rolling set of
 frames in RAM and reads other saved hours as needed. The details show missing
@@ -178,7 +171,13 @@ observation for its time, location, measured values, remarks, and source.
 Wind barbs become denser as you zoom in. Borders and land outlines remain
 visible above filled overlays.
 
-In 3.2.1 source builds, an incomplete-layer notice identifies failed imagery
+Turn on **Isobars** in the Model Viewer layer controls for the active panel.
+On supported HRRR, GFS, and ECMWF runs, smooth mean sea-level pressure lines
+follow the selected forecast hour and show labels at 4 hPa intervals. The
+layer has its own opacity control and can be used over a different shaded
+field. If mean sea-level pressure is unavailable, the layer stays empty.
+
+An incomplete-layer notice identifies failed imagery
 or wind/contour overlays and offers **Retry layers**. If an earlier image is
 retained, its timestamp is shown in the notice. A failed renderer is reported
 in its own panel with **Reload maps**; the chosen products and camera are kept.
@@ -201,7 +200,7 @@ Submit the form to load the profile. Provider or input errors appear beside the
 form with a retry action. Use **Hide sources** to give the image more room;
 **Show sources** brings the form back. The open-sounding list switches between
 profiles already loaded during the current backend session.
-In v3.2.0 source builds, **Stop download** cancels a model request and removes
+**Stop download** cancels a model request and removes
 that attempt's temporary files after its I/O stops. Provider calls stop at
 their cancellation checkpoints; an already-running decoder may need to finish.
 
@@ -211,7 +210,7 @@ their cancellation checkpoints; an already-running decoder may need to finish.
 2. Choose **Browse files**, select a file, then choose **Open sounding**.
 3. Use **Change file** to select another input.
 
-In 3.2.1 source builds, a file containing multiple profiles has a **Sounding
+A file containing multiple profiles has a **Sounding
 time (UTC)** selector above the image. Every file time is available, including
 entries with no date. Open it and use arrow keys, Home/End and Enter, or choose
 a time with the pointer. Edits and undo histories belong to each time;

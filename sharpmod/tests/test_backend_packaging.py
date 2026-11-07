@@ -413,21 +413,24 @@ def test_release_workflow_caches_dependencies_without_reusing_the_app():
     assert cache["uses"].startswith("actions/cache@")
     config = cache["with"]
     assert set(config["path"].splitlines()) == {
-        "~/.cargo/registry", "~/.cargo/git",
         "src-tauri/target/release/.fingerprint",
         "src-tauri/target/release/build", "src-tauri/target/release/deps",
     }
     prefix = config["restore-keys"].strip()
     for dimension in ("runner.os", "runner.arch", "steps.desktop-rust.outputs.version"):
         assert "${{ " + dimension + " }}" in prefix
-    assert config["key"] == prefix + "${{ hashFiles('src-tauri/Cargo.lock') }}"
+    assert config["key"] == prefix + "${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'rust/weather-core/Cargo.toml') }}"
     assert "if" not in cache and "if" not in build
     assert steps.index(toolchain) < steps.index(cache) < steps.index(build)
     cleanup = "cargo clean --manifest-path ../src-tauri/Cargo.toml --release -p sharppy-reimagined"
     assert build["run"].index(cleanup) < build["run"].index("npm run tauri -- build")
     updater = by_name["Verify final updater artifacts"]
     assert updater["working-directory"] == "src-tauri"
-    assert "cargo test --release --locked --test updater_artifacts -- --ignored --nocapture" in updater["run"]
+    assert (
+        "cargo test --release --locked --test updater_artifacts "
+        "--config profile.release.package.sharppy-reimagined.opt-level=0 "
+        "-- --ignored --nocapture"
+    ) in updater["run"]
 
 
 def test_release_requires_rust_runtime_reports_and_uploads_wheel():

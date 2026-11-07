@@ -39,6 +39,11 @@ The selected default parcel controls the parcel trace emphasized on the Skew-T. 
 
 ## Parcel thermodynamics
 
+A lifted parcel cools at the dry adiabatic rate before reaching saturation.
+Above the lifting condensation level, condensation releases latent heat, so
+the parcel follows a moist adiabat and usually cools more slowly. CAPE and CIN
+describe the parcel's positive and negative buoyancy along that ascent.
+
 ### CAPE
 
 SHARPpy integrates positive parcel buoyancy. Its standard parcel calculation applies a virtual-temperature correction.
@@ -674,6 +679,21 @@ The palette constants behind these tiers are amber `#c8911f`, yellow `#ffff00`, 
 | ECAPE | 1000 | 2500 | 4000 |
 
 LSCP uses the inverse negative scale: yellow at -1 or lower, red at -4 or lower, and pink at -8 or lower; zero and positive values are neutral.
+
+## Reading a sounding
+
+Start with the source and quality information in the Soundings workspace.
+Check that the profile has enough usable levels and a trustworthy surface
+record. Compare parcel choices to see whether the instability is surface based
+or elevated, then use CIN and the temperature profile to assess inhibition.
+
+Read wind shear and storm-relative helicity for the relevant layer alongside
+the thermodynamics. Use the effective layer when a storm could ingest elevated
+air. Hazard indices are aids: compare STP and the low-level hodograph for
+tornado environments, SHIP and hail-growth-zone CAPE for hail, and DCAPE and
+mid-level moisture for downdrafts. Review mean wind and the Corfidi vectors
+when considering storm motion and propagation. Individual indices do not
+constitute a forecast.
 
 ## Maintenance source map
 

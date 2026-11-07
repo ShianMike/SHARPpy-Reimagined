@@ -2,7 +2,7 @@
   "benchmark": "SHARPpy Reimagined Python and Rust backends",
   "captured_at": "2026-09-12T07:12:43.130807+00:00",
   "command": [
-    "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+    ".gribenv\\Scripts\\python.exe",
     "benchmarks\\benchmark_backends.py",
     "--repeat",
     "5",
@@ -141,7 +141,7 @@
     "platform": "Windows-10-10.0.26200-SP0",
     "power_mode": "Balanced",
     "python": "3.11.14",
-    "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+    "python_executable": ".gribenv\\Scripts\\python.exe",
     "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)",
     "sharpmod_rs": "1.1.0"
   },

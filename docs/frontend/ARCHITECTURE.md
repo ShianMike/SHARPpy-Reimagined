@@ -11,10 +11,14 @@ semantic operations from the existing `sharpmod` code.
 Related documents: [DATA_CONTRACTS.md](DATA_CONTRACTS.md) (commands, DTOs,
 errors, the bridge protocol), [MAP_RENDERING.md](MAP_RENDERING.md) (MapLibre,
 deck.gl, layers, graphics profiles), [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)
-(layout, themes, and tokens), [MIGRATION.md](MIGRATION.md) (phase status), and
-[AUDIT.md](AUDIT.md) (the Phase 0 audit), and
+(layout, themes, and tokens), and
 [performance/PERFORMANCE_AUDIT.md](../performance/PERFORMANCE_AUDIT.md) (the
 current Rust-first execution map, measurements and migration gates).
+
+The [Qt-to-Tauri migration record](https://github.com/ShianMike/SHARPpy-Reimagined/blob/84056a2634ae53028b931c8728a8a7e8b97bc07c/docs/frontend/MIGRATION.md)
+and [Phase 0 inventory](https://github.com/ShianMike/SHARPpy-Reimagined/blob/84056a2634ae53028b931c8728a8a7e8b97bc07c/docs/frontend/AUDIT.md)
+remain available in the source archive. Use this page and the contracts above
+for the current implementation.
 
 The current shell uses the SHARPpy backend. Its workspaces are Overview,
 Model Viewer, Live Tracking, Soundings, Logs,

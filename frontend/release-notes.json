@@ -1,4 +1,25 @@
 {
+  "3.5.5": {
+    "summary": "Earlier preparation of large forecast soundings, faster repeat requests and an updated profile guide.",
+    "highlights": [
+      {
+        "title": "Faster repeat forecast soundings",
+        "description": "The native decoder can reuse the previously decoded column at the same point when the GRIB file has not changed."
+      },
+      {
+        "title": "Prepare large forecast soundings sooner",
+        "description": "Process large forecast files while they download so sounding preparation can finish sooner. The complete download and required surface data are still checked before opening the profile."
+      },
+      {
+        "title": "Consistent MCS maintenance probability",
+        "description": "Use the analyzed sounding's validated MCS maintenance probability so repeated analyses agree with the MCS index."
+      },
+      {
+        "title": "Sounding reading guide",
+        "description": "The sounding parameter guide now explains how to read parcel ascent, instability, and winds together."
+      }
+    ]
+  },
   "3.5.4": {
     "summary": "Labelled isobars, complete forecast overlays and native weather fetching.",
     "highlights": [

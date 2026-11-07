@@ -1,5 +1,7 @@
 //! Existing Python transport objects at the boundary of the native downloader.
 
+#[cfg(test)]
+mod pipeline_benchmark;
 mod sessions;
 
 use pyo3::prelude::*;
@@ -48,16 +50,20 @@ impl Hooks for Callbacks {
     }
 
     fn progress(&self, completed: u64, total: u64) -> Result<(), Error> {
-        self.result(Python::attach(|py| match &self.progress {
-            Some(callback) => callback.bind(py).call1((completed, total)).map(|_| ()),
-            None => Ok(()),
+        let Some(callback) = &self.progress else {
+            return Ok(());
+        };
+        self.result(Python::attach(|py| {
+            callback.bind(py).call1((completed, total)).map(|_| ())
         }))
     }
 
     fn bytes(&self, count: u64) -> Result<(), Error> {
-        self.result(Python::attach(|py| match &self.bytes {
-            Some(callback) => callback.bind(py).call1((count,)).map(|_| ()),
-            None => Ok(()),
+        let Some(callback) = &self.bytes else {
+            return Ok(());
+        };
+        self.result(Python::attach(|py| {
+            callback.bind(py).call1((count,)).map(|_| ())
         }))
     }
 }
@@ -208,7 +214,41 @@ fn transfer_error(py: Python<'_>, error: Error) -> PyErr {
     construct().unwrap_or_else(|error| error)
 }
 
-#[pyfunction(signature=(session,url,ranges,output,timeout,chunk_size,cancelled,progress,on_bytes,workers,session_factory,retries,retry_backoff,metrics))]
+#[pyclass]
+struct GribDownloadPoint {
+    request: Option<crate::grib::streaming::Request>,
+    prepared: Mutex<Option<crate::grib::streaming::Prepared>>,
+}
+
+#[pymethods]
+impl GribDownloadPoint {
+    #[new]
+    #[pyo3(signature=(library, latitude, longitude, missing=Some(-9999.0)))]
+    fn new(
+        library: PathBuf,
+        latitude: f64,
+        longitude: f64,
+        missing: Option<f64>,
+    ) -> PyResult<Self> {
+        let request =
+            crate::grib::streaming::Request::new(library, latitude, longitude, missing)
+                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        Ok(Self {
+            request,
+            prepared: Mutex::new(None),
+        })
+    }
+
+    /// Validate the final file, including any subsequently appended terrain or surface file.
+    fn finish(&self, py: Python<'_>, path: PathBuf) -> bool {
+        py.detach(|| {
+            let prepared = self.prepared.lock().unwrap().take();
+            prepared.is_some_and(|prepared| prepared.finish(&path).unwrap_or(false))
+        })
+    }
+}
+
+#[pyfunction(signature=(session,url,ranges,output,timeout,chunk_size,cancelled,progress,on_bytes,workers,session_factory,retries,retry_backoff,metrics,decode_point=None))]
 #[allow(clippy::too_many_arguments)]
 fn download_model_ranges(
     py: Python<'_>,
@@ -226,7 +266,11 @@ fn download_model_ranges(
     retries: isize,
     retry_backoff: f64,
     metrics: Option<Py<PyAny>>,
+    decode_point: Option<Py<GribDownloadPoint>>,
 ) -> PyResult<PathBuf> {
+    let decode = decode_point
+        .as_ref()
+        .and_then(|point| point.borrow(py).request.clone());
     let callbacks = Arc::new(Callbacks {
         cancelled,
         progress,
@@ -289,15 +333,32 @@ fn download_model_ranges(
     };
     let mut counts = Metrics::default();
     let result = py.detach(|| {
-        range_transfer::download(
-            transport.as_ref(),
-            callbacks.as_ref(),
-            &url,
-            &plan,
-            &output,
-            &options,
-            &mut counts,
-        )
+        if let Some(request) = decode {
+            range_transfer::download_with_reader(
+                transport.as_ref(),
+                callbacks.as_ref(),
+                &url,
+                &plan,
+                &output,
+                &options,
+                &mut counts,
+                Some((
+                    crate::grib::streaming::Request::MIN_BYTES,
+                    move |input: &mut dyn std::io::Read| request.decode(input).ok(),
+                )),
+            )
+        } else {
+            range_transfer::download(
+                transport.as_ref(),
+                callbacks.as_ref(),
+                &url,
+                &plan,
+                &output,
+                &options,
+                &mut counts,
+            )
+            .map(|()| None)
+        }
     });
     if let Some(metrics) = metrics {
         let metrics = metrics.bind(py);
@@ -316,11 +377,19 @@ fn download_model_ranges(
     if let Some(error) = callbacks.error.lock().unwrap().take() {
         return Err(error);
     }
-    result.map_err(|error| transfer_error(py, error))?;
+    if let Some(point) = result.map_err(|error| transfer_error(py, error))? {
+        *decode_point
+            .expect("prepared download has an owner")
+            .borrow(py)
+            .prepared
+            .lock()
+            .unwrap() = Some(point);
+    }
     Ok(output)
 }
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_class::<GribDownloadPoint>()?;
     module.add_function(wrap_pyfunction!(model_range_session, module)?)?;
     module.add_function(wrap_pyfunction!(download_model_ranges, module)?)?;
     Ok(())

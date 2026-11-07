@@ -16,7 +16,7 @@ function Harness() {
   return <><button onClick={() => { useUiStore.getState().setWhatsNewOpen(true); }}>View highlights</button>{open ? <WhatsNew /> : null}</>;
 }
 
-it("keeps fresh installs on Overview and permits opening the current release manually", async () => {
+it("does not auto-open on a fresh install and can show the current notes manually", async () => {
   useUiStore.getState().prepareReleaseNotes(version, false);
   render(<Harness />);
   expect(screen.queryByRole("dialog")).toBeNull();

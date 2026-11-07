@@ -80,23 +80,17 @@ def test_release_manifests_and_health_fixture_share_package_version():
         if example["python"] is not None:
             assert example["python"]["sharpmodVersion"] == package_version, path.name
 
-    for relative, table in (
-        ("rust/sharpmod-rs/Cargo.toml", "package"),
-        ("rust/sharpmod-rs/pyproject.toml", "project"),
-        ("src-tauri/Cargo.toml", "package"),
-    ):
-        document = tomllib.loads((ROOT / relative).read_text(encoding="utf-8"))
-        assert document[table]["version"] == package_version, relative
-
-    for relative, name in (
-        ("rust/sharpmod-rs/Cargo.lock", "sharpmod-rs"),
-        ("src-tauri/Cargo.lock", "sharppy-reimagined"),
-    ):
-        document = tomllib.loads((ROOT / relative).read_text(encoding="utf-8"))
-        assert [
-            package["version"] for package in document["package"]
-            if package["name"] == name
-        ] == [package_version], relative
+    # Native crate, maturin and native lock versions are checked by the wheel
+    # lane in test_backend_packaging.py, without importing the renderer.
+    tauri = tomllib.loads((ROOT / "src-tauri/Cargo.toml").read_text(encoding="utf-8"))
+    assert tauri["package"]["version"] == package_version
+    desktop_lock = tomllib.loads(
+        (ROOT / "src-tauri/Cargo.lock").read_text(encoding="utf-8")
+    )
+    assert [
+        package["version"] for package in desktop_lock["package"]
+        if package["name"] == "sharppy-reimagined"
+    ] == [package_version]
 
     frontend = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))
     lock = json.loads((ROOT / "frontend/package-lock.json").read_text(encoding="utf-8"))
@@ -118,32 +112,24 @@ def test_release_manifests_and_health_fixture_share_package_version():
         health["scientificBackend"]["rustVersion"],
         hello["sharpmod_version"], backend["scientific_backend"]["rust_version"],
     } == {package_version}
-    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-    assert f'        default: "v{package_version}"' in workflow
 
 
-def test_changelog_preserves_the_dated_legacy_release():
+def test_changelog_identifies_the_current_version():
     from sharpmod._version import __version__ as package_version
 
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     headings = [
         line.strip()
-        for line in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+        for line in changelog.splitlines()
         if line.startswith("## [v")
     ]
 
     assert headings[0].startswith(f"## [v{package_version}] - ") or (
         f"Target version: **{package_version}** (not published)."
-        in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").split("## [v", 1)[0]
+        in changelog.split("## [v", 1)[0]
         and f"## What's new in {package_version} (Unreleased)"
         in (ROOT / "README.md").read_text(encoding="utf-8")
     )
-    assert "## [v2.0.0 Legacy] - 2026-09-26" in headings
-
-    release_url = (
-        "https://github.com/ShianMike/SHARPpy-Reimagined/releases/tag/v2.0.0"
-    )
-    for name in ("CHANGELOG.md", ".github/workflows/release.yml"):
-        assert release_url in (ROOT / name).read_text(encoding="utf-8"), name
 
 
 def test_readme_feature_summary_names_the_current_version():

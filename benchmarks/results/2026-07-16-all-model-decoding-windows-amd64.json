@@ -8,34 +8,34 @@
     "git_tracked_diff_sha256": "93f34f82c96226e0d51dff10d07d822b0effb3b753ab0a7465240824d1c9fd1e",
     "numpy": "2.4.6",
     "python": "3.11.14",
-    "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+    "python_executable": ".gribenv\\Scripts\\python.exe",
     "source_fingerprints": {
       "benchmark_decoding": {
-        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+        "path": "benchmarks\\benchmark_decoding.py",
         "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
       },
       "legacy_decoding": {
-        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+        "path": "benchmarks\\legacy_decoding.py",
         "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
       },
       "sharpmod.backends.grib": {
-        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+        "path": "sharpmod\\backends\\grib.py",
         "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
       },
       "sharpmod.backends.python_backend": {
-        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+        "path": "sharpmod\\backends\\python_backend.py",
         "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
       },
       "sharpmod.backends.rust_backend": {
-        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+        "path": "sharpmod\\backends\\rust_backend.py",
         "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
       },
       "sharpmod_rs": {
-        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+        "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
         "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
       },
       "sharpmod_rs.sharpmod_rs": {
-        "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+        "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
         "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
       }
     },
@@ -64,7 +64,7 @@
     "manifest_sha256": "ed231928dae8192fb0a7ce48ef8a2fe23d1c10e4537b58dd5b14e69bf193a7d5",
     "matrix_driver_sha256": "33cd6d5dca7514e6234577da6f46eee819fba4e543636170f1e32c246c1f1275"
   },
-  "manifest": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\all-model-fixtures.json",
+  "manifest": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\all-model-fixtures.json",
   "models": [
     {
       "fixture": {
@@ -73,7 +73,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "hrrr",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrrr.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\hrrr.grib2",
         "pressure_level_count": 40,
         "product": "prs",
         "production_decode_path": "direct GRIB (F000 may use point Zarr in auto mode)",
@@ -98,36 +98,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -180,7 +180,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181241618072800,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrrr.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\hrrr.grib2",
           "sha256": "b6e291f5e4b2628f44bc9f2050ec1fb846d196b12adf6d57fdd1d206d3aa69e6",
           "size_bytes": 161875836
         },
@@ -360,7 +360,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "rap",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\rap.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\rap.grib2",
         "pressure_level_count": 37,
         "product": "awp130pgrb",
         "production_decode_path": "direct GRIB",
@@ -385,36 +385,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -467,7 +467,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181242443973300,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\rap.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\rap.grib2",
           "sha256": "67a9cd7521e4e8a61406a516e87f461024eacf2589cd2e2f13f2d30a63e6c42d",
           "size_bytes": 9815504
         },
@@ -647,7 +647,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "nam",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\nam.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\nam.grib2",
         "pressure_level_count": 39,
         "product": "awphys",
         "production_decode_path": "direct GRIB",
@@ -672,36 +672,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -754,7 +754,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181165115599700,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\nam.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\nam.grib2",
           "sha256": "faa291ad708ccfcaf209e373bba50ea59839b08e939281b77424ebb371c42a79",
           "size_bytes": 37539877
         },
@@ -934,7 +934,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "nam-3km-conus",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\nam-3km-conus.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\nam-3km-conus.grib2",
         "pressure_level_count": 42,
         "product": "conusnest.hiresf",
         "production_decode_path": "direct GRIB",
@@ -959,36 +959,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -1041,7 +1041,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181498913595500,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\nam-3km-conus.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\nam-3km-conus.grib2",
           "sha256": "6978ccbf7fbb928a6d81736a585129a30a77398334472e9d24cb340f5846c2db",
           "size_bytes": 380603239
         },
@@ -1221,7 +1221,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "hrw-wrf-arw",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrw-wrf-arw.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\hrw-wrf-arw.grib2",
         "pressure_level_count": 27,
         "product": "arw_5km",
         "production_decode_path": "direct GRIB",
@@ -1246,36 +1246,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -1328,7 +1328,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181243372868400,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrw-wrf-arw.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\hrw-wrf-arw.grib2",
           "sha256": "8874ea477c764fcbb2efe79b1115160aff9b6ad6f7679ac9cec76c6a23148c62",
           "size_bytes": 96301647
         },
@@ -1508,7 +1508,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "hrw-fv3",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrw-fv3.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\hrw-fv3.grib2",
         "pressure_level_count": 27,
         "product": "fv3_5km",
         "production_decode_path": "direct GRIB",
@@ -1533,36 +1533,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -1615,7 +1615,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181244175579100,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\hrw-fv3.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\hrw-fv3.grib2",
           "sha256": "69510ed624aa9ce345d4d7cf15c12eca4f2b8336d5ca02f7bfdfdee33bdabb9f",
           "size_bytes": 92106618
         },
@@ -1795,7 +1795,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "rrfs-a",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\rrfs-a.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\rrfs-a.grib2",
         "pressure_level_count": 45,
         "product": "prslev",
         "production_decode_path": "direct GRIB",
@@ -1820,36 +1820,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -1902,7 +1902,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181304047854400,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\rrfs-a.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\rrfs-a.grib2",
           "sha256": "66768eaf01e9a8c0dd39296300dd4442d744bc541130a54b90374168a9678fd5",
           "size_bytes": 355350947
         },
@@ -2082,7 +2082,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "gfs",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\gfs.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\gfs.grib2",
         "pressure_level_count": 41,
         "product": "pgrb2.0p25",
         "production_decode_path": "direct GRIB",
@@ -2107,36 +2107,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -2198,7 +2198,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181496997301800,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\gfs.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\gfs.grib2",
           "sha256": "7f90ea419466b86c7bee93abd001fb6a615a46846af7179257f406509fd5476a",
           "size_bytes": 229809761
         },
@@ -2378,7 +2378,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "aigfs",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\aigfs.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\aigfs.grib2",
         "pressure_level_count": 13,
         "product": "pres",
         "production_decode_path": "xarray vorticity fallback (direct point decoder benchmarked)",
@@ -2403,36 +2403,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -2485,7 +2485,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181644745146500,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\aigfs.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\aigfs.grib2",
           "sha256": "f541aa33fcb78a9684b334958dee30133650a69056a1b8899629c52b8803f25e",
           "size_bytes": 82834645
         },
@@ -2666,7 +2666,7 @@
         "lon": -97.44,
         "member": 1,
         "model": "cfs",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\cfs.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\cfs.grib2",
         "pressure_level_count": 37,
         "product": "6_hourly",
         "production_decode_path": "direct GRIB",
@@ -2691,36 +2691,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -2773,7 +2773,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181305023603600,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\cfs.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\cfs.grib2",
           "sha256": "6e7b4f6e6ed3ff1340f3d1e0dd445a41188bef0e3eff7b36ad1498100dc0a5de",
           "size_bytes": 12181352
         },
@@ -2953,7 +2953,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "ecmwf-ifs",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\ecmwf-ifs.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\ecmwf-ifs.grib2",
         "pressure_level_count": 14,
         "product": "oper",
         "production_decode_path": "direct GRIB",
@@ -2978,36 +2978,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -3060,7 +3060,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181628096572200,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\ecmwf-ifs.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\ecmwf-ifs.grib2",
           "sha256": "4230720b5c51941fbfe912e017509bb2287abbc3420122e754e74b1cba9c6829",
           "size_bytes": 74926254
         },
@@ -3240,7 +3240,7 @@
         "lat": 35.18,
         "lon": -97.44,
         "model": "ecmwf-aifs",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\ecmwf-aifs.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\ecmwf-aifs.grib2",
         "pressure_level_count": 14,
         "product": "oper",
         "production_decode_path": "xarray vorticity fallback (direct point decoder benchmarked)",
@@ -3265,36 +3265,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -3347,7 +3347,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181628877669000,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\ecmwf-aifs.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\ecmwf-aifs.grib2",
           "sha256": "33a26417175380d62cc8be87d766dac44514d56a16d059864e69bed8d48c5deb",
           "size_bytes": 58648820
         },
@@ -3528,7 +3528,7 @@
         "lon": -97.44,
         "member": "c00",
         "model": "gefs",
-        "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\gefs.grib2",
+        "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\gefs.grib2",
         "pressure_level_count": 12,
         "product": "atmos.5",
         "production_decode_path": "xarray vorticity fallback (direct point decoder benchmarked)",
@@ -3553,36 +3553,36 @@
           "platform": "Windows-10-10.0.26200-SP0",
           "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
           "python": "3.11.14",
-          "python_executable": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Scripts\\python.exe",
+          "python_executable": ".gribenv\\Scripts\\python.exe",
           "sharpmod": "0.4.0",
           "sharpmod_rs": "0.4.0",
           "source_fingerprints": {
             "benchmark_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\benchmark_decoding.py",
+              "path": "benchmarks\\benchmark_decoding.py",
               "sha256": "4e5974ad817e2e2cc1e87bfd59aa47f68cfd5333dba1722968d361e72d8d0df9"
             },
             "legacy_decoding": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\benchmarks\\legacy_decoding.py",
+              "path": "benchmarks\\legacy_decoding.py",
               "sha256": "0643c05c7c1c47e8d56f1eb5cba96d9c89ac5ffc9c58da4ffda4a829bac56f74"
             },
             "sharpmod.backends.grib": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\grib.py",
+              "path": "sharpmod\\backends\\grib.py",
               "sha256": "ed0be7049209adb1f14c02eb8c0892d10f6722a1bc9906e4995591dcd0d40cbe"
             },
             "sharpmod.backends.python_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\python_backend.py",
+              "path": "sharpmod\\backends\\python_backend.py",
               "sha256": "074fb0a7a5bfe575d959afc2d49b0e196a17b5d6cf5934eded37c83eec98de3b"
             },
             "sharpmod.backends.rust_backend": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\sharpmod\\backends\\rust_backend.py",
+              "path": "sharpmod\\backends\\rust_backend.py",
               "sha256": "cabd9745f9a2294075b56e83739f22cffd068295723d624356a198ab06268bae"
             },
             "sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\__init__.py",
               "sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d"
             },
             "sharpmod_rs.sharpmod_rs": {
-              "path": "C:\\Users\\shian\\OneDrive\\Desktop\\sharppy reimagined\\SHARPpy Reimagined\\.gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
+              "path": ".gribenv\\Lib\\site-packages\\sharpmod_rs\\sharpmod_rs.cp311-win_amd64.pyd",
               "sha256": "e24d40c37d6063cf7366c08006e84c5453778b53006e521c63560dae3c4cbde0"
             }
           },
@@ -3647,7 +3647,7 @@
         },
         "fixture": {
           "mtime_ns": 1784181589150846700,
-          "path": "C:\\Users\\shian\\AppData\\Local\\sharpmod\\benchmark-fixtures\\20260716\\canonical\\gefs.grib2",
+          "path": "<sharpmod-cache>\\benchmark-fixtures\\20260716\\canonical\\gefs.grib2",
           "sha256": "515abcfec9962f1e99ec7d13f189b8f1878929705ce86603e19f6a0c617df50d",
           "size_bytes": 11552600
         },

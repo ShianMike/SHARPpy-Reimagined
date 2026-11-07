@@ -13,6 +13,7 @@ use std::{
 mod basic;
 mod identity;
 mod parallel;
+mod pipeline;
 mod retry;
 
 struct Directory(PathBuf);

@@ -32,6 +32,7 @@ import sys
 from PyInstaller.utils.hooks import (
     collect_all,
     collect_data_files,
+    collect_dynamic_libs,
     collect_submodules,
     copy_metadata,
 )
@@ -129,20 +130,23 @@ for _archive in glob.glob(os.path.join(_RES, "*.zip")):
 for _ttf in glob.glob(os.path.join(_RES, "fonts", "*.ttf")):
     datas.append((_ttf, "sharpmod/resources/fonts"))
 
-# Collect the fork, the vendored render stack, and the scientific runtime in
-# full (data files + submodules + any bundled binaries). ``collect_all`` is the
-# robust way to pull package data (fonts, station JSON, sharppy databases,
-# metpy/pint unit + static data) that would otherwise be missed by a frozen app.
+# Keep recursive collection for the app and dynamically loaded providers and
+# decoders. Their package data and module discovery are runtime requirements;
+# dependency test trees and bytecode caches are not.
 for pkg in (
-    "sharpmod", "sharppy", "sutils", "metpy", "pint", "ecape",
-    "cdsapi", "ecmwf", "cfgrib", "eccodes", "numcodecs", "pyproj",
-    "netCDF4", "cftime",
+    "sharpmod", "sharppy", "sutils", "ecape",
+    "cdsapi", "ecmwf", "cfgrib", "eccodes",
 ):
     try:
         d, b, h = collect_all(
             pkg,
-            filter_submodules=lambda name: name not in _RETIRED_GUI_MODULES,
+            filter_submodules=lambda name: (
+                name not in _RETIRED_GUI_MODULES
+                and not any(part in ("tests", "testsuite", "test") for part in name.split("."))
+            ),
             exclude_datas=[
+                "**/tests/**", "**/testsuite/**", "**/test/**", "**/__pycache__/**",
+            ] + [
                 module.split(".", 1)[1] + ".py"
                 for module in _RETIRED_GUI_MODULES if module.startswith(pkg + ".")
             ],
@@ -164,6 +168,20 @@ for pkg in (
         pass
 
 datas += _SHARPMOD_METADATA
+
+# Maintained hooks collect these packages' unit definitions, projection data,
+# codec extensions and delvewheel DLLs. Normal import analysis follows their
+# scientific code; collecting every test, CLI and raw source file duplicates
+# hook work and pulls unused modules into the graph. Retain their metadata and
+# license material even when a hook does not copy it itself.
+for pkg in ("metpy", "pint", "numcodecs", "pyproj", "netCDF4", "cftime"):
+    if importlib.util.find_spec(pkg) is not None:
+        hiddenimports.append(pkg)
+        datas += copy_metadata(pkg)
+        if pkg == "netCDF4":
+            # Its hook covers delvewheel's .libs directory, but not the HDF5
+            # compression filters shipped inside netCDF4/plugins/.
+            binaries += collect_dynamic_libs(pkg)
 
 # Rust release contract: official binaries set SHARPMOD_REQUIRE_RUST=1 and must
 # fail closed if the native extension cannot be collected.  Keeping the flag
@@ -256,12 +274,16 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     # Trim heavyweight optional deps unused by the backend and renderer.
-    excludes=[*_RETIRED_GUI_MODULES,
+    # PyInstaller adds __main__ to this list in-place during Analysis. Declaring
+    # its existing exclusion here prevents every warm build seeing a changed
+    # excludes input and needlessly rebuilding the entire module graph.
+    excludes=["__main__", *_RETIRED_GUI_MODULES,
               "tkinter", "PyQt5", "PyQt6", "PySide2", "IPython", "notebook",
               "pytest", "hypothesis",
               # Test trees dragged in by scientific deps -- never needed at run.
               "pandas.tests", "scipy.tests", "numpy.tests", "matplotlib.tests",
-              "xarray.tests", "sharpmod.tests",
+              "xarray.tests", "sharpmod.tests", "metpy.tests", "pint.testsuite",
+              "numcodecs.tests",
               # Optional Herbie plotting helpers require cartopy; forecast
               # inventory/download/xarray support does not use this toolbox.
               "herbie.toolbox",

@@ -3,7 +3,7 @@ SHARPpy Reimagined local GRIB decoding benchmark
 
 Fixture
 -------
-path: C:\Users\shian\AppData\Local\sharpmod\model-cache\hrrr\2026071601\f000-deterministic-41_7677_-98_4026\hrrr\20260716\subset_eeef4502__hrrr.t01z.wrfprsf00.grib2
+path: <sharpmod-cache>\model-cache\hrrr\2026071601\f000-deterministic-41_7677_-98_4026\hrrr\20260716\subset_eeef4502__hrrr.t01z.wrfprsf00.grib2
 size: 181267625 bytes
 sha256: 7d8b0595c0efbaf546b118a4d96e6f2ee7b7577279bd0935eb225e9448adbc99
 requested point: 35.18, -97.44

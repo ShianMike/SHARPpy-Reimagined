@@ -20,8 +20,7 @@
 /semantic-review/
 
 # Local sounding render outputs
-/rendered_soundings/*
-!/rendered_soundings/.gitkeep
+/rendered_soundings/
 /CLAUDE.md
 
 # ---------------------------------------------------------------------------
@@ -119,11 +118,8 @@ sharpmod-gui.log*
 # ---------------------------------------------------------------------------
 /attic/
 
-# sounding_parameter_guide.md was listed here as a stale local-only copy. It is
-# now a maintained reference for every displayed index -- formula, clamps,
-# colour thresholds, and literature citation -- kept in step with
-# sharpmod/sharptab/ and sharpmod/colors.py, and linked from the README. It
-# ships.
+# Raw benchmark output can contain local fixture and environment paths.
+/benchmarks/results/local/
 
 # ---------------------------------------------------------------------------
 # Editor / OS cruft

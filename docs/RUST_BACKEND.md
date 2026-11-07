@@ -512,6 +512,16 @@ Criterion confidence intervals, complete-adapter JSON, fixed-fixture GRIB cache
 states, batch worker evaluation, regressions, and validation commands, are in
 [`2026-09-12-rust-backend-optimization.md`](../benchmarks/results/2026-09-12-rust-backend-optimization.md).
 
+In the v3.5.5 candidate, the Rust decoder can retain up to 16 exact
+single-point columns from GRIB files of at least 64 MiB. The key includes the
+SHA-256 of the mapped file, the normalized coordinates, and the missing-value
+convention. The existing cache controls also bypass or clear these columns.
+For one 264,080,531-byte ECMWF IFS 9 km F012 subset, the median of three
+repeat decodes in the same process went from 6.108 s to 0.279 s. The first
+decode went from 7.352 s to 7.767 s, including the new fingerprint. The decoded
+matrices, selected coordinates, vorticity, and surface metadata matched.
+This measures local decoding of one saved subset, without provider downloads.
+
 ## Platform status
 
 The crate is portable Rust stable code. The dedicated
@@ -531,6 +541,36 @@ runtime-checking the one-folder and one-file PyInstaller applications. Rust is
 therefore the supported primary backend in those binaries. The Python-only
 package remains the portable fallback for source installs and platforms without
 a compatible extension.
+
+## Opt-in GRIB and transport checks
+
+The ordinary Rust suite keeps the SHRF allocation-counter correctness test.
+Run the transport timing separately in release mode on an idle machine:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --locked --release --test shrf_performance -- --ignored --nocapture --test-threads=1
+```
+
+`SHARPPY_SHRF_ITERS` controls the sample count (20 by default). The benchmark
+uses bundled frame fixtures and measures decoding and frame assembly without
+network access or image rendering.
+
+The ignored IFS 9 km regression needs the saved Open Data **2026-11-05 00Z
+F012** indexed GRIB subset: pressure fields `gh,t,u,v,r,w,vo`, the F012
+surface companion, and F000 terrain from the same run. A surface-only file
+cannot validate this regression. The 264,080,531-byte reference payload has
+SHA-256 `f77fa5f1de818905fa17833b2432739a98151af4f6b9b7541dd1f2401039cdbf`.
+The test opens the file twice and checks the decoded pressure levels, terrain
+merge, below-ground filtering and equality after inventory reuse.
+
+```powershell
+$env:SHARPMOD_ECMWF_9KM_FIXTURE = 'C:\path\to\ecmwf-ifs-9km-2026110500-f012-verified-surface.grib2'
+$env:SHARPMOD_ECCODES_LIBRARY = 'C:\path\to\eccodes.dll'
+cargo test --manifest-path rust/sharpmod-rs/Cargo.toml --locked --release --test ecmwf_9km -- --ignored --nocapture
+```
+
+On Linux, use the absolute path to the installed `libeccodes.so`. Ensure the
+library's dependent binaries are discoverable by the OS loader.
 
 ## Current limitations
 

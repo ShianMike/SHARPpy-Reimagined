@@ -158,7 +158,7 @@ cannot remove external rate limits or make a missing dataset valid.
 ## Recovery and release boundary
 
 [RUST_MIGRATION_PLAN.md](RUST_MIGRATION_PLAN.md) lists task dependencies and
-current statuses. [TASK_CHECKPOINTS.md](TASK_CHECKPOINTS.md) records tested
+current statuses. The [archived task checkpoints](https://github.com/ShianMike/SHARPpy-Reimagined/blob/84056a2634ae53028b931c8728a8a7e8b97bc07c/docs/performance/TASK_CHECKPOINTS.md) record tested
 checkpoints, changed files, exact continuation paths and unresolved work.
 Raw evidence and source snapshots are retained outside the checkout under
 `C:\Users\shian\Documents\CodexReports\v3.2.0`.

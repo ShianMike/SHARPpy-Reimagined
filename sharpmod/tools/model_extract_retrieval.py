@@ -493,6 +493,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
         # GUI and worker processes; retrieval exceptions still propagate.
         transport = None
         local_path = None
+        decode_point = None
         source_url = str(H.grib)
         if lat is not None and lon is not None and selected_fields \
                 and _api._point_backends_enabled() and nomads_supported(config) \
@@ -531,6 +532,15 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                 )
             source_url = str(H.grib)
             transport = "optimized-ranges"
+            if lat is not None and lon is not None and _api._direct_grib_enabled():
+                from sharpmod.backends import get_backend
+
+                if get_backend().name == "rust":
+                    from sharpmod_rs import GribDownloadPoint
+                    from sharpmod.backends.rust_backend import _eccodes_library_path
+
+                    decode_point = GribDownloadPoint(
+                        _eccodes_library_path(), float(lat), float(lon))
             try:
                 _path, transferred_bytes = _api.download_herbie_subset(
                     H,
@@ -540,6 +550,7 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
                     cancelled=cancelled,
                     workers=range_worker_count(default=4),
                     on_bytes=on_bytes,
+                    decode_point=decode_point,
                 )
                 local_path = _api._local_grib_path(_path)
                 if transferred_bytes:
@@ -637,6 +648,8 @@ def _retrieve_dataset(config, run_dt, fxx, member=None, download_dir=None,
             H._sharpmod_fields = tuple(dict.fromkeys(
                 (*selected_fields, *companion_fields)
             ))
+        if local_path is not None and decode_point is not None:
+            decode_point.finish(os.fspath(local_path))
         H._sharpmod_search = search
         H._sharpmod_transport = transport
         H._sharpmod_source_url = source_url

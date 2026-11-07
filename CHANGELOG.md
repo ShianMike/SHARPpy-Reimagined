@@ -7,6 +7,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve compatible Windows release dependencies when the desktop v2 cache
+  misses by restoring the legacy cache with its original path identity and
+  rebuilding both first-party desktop crates. Retain the populated v2 cache
+  namespace and skip dependency-cache cleanup on exact hits, which do not
+  upload another archive. Keep all release artifact and acceptance checks.
+
 ### Upcoming
 
 - Expand the available weather-model parameters, offering only fields supported

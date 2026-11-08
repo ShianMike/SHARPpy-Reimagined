@@ -92,12 +92,36 @@ it("stops offering previously verified cuts if refreshing their check fails", as
   const transport = createTransport(), original = transport.call.bind(transport);
   let fail = false;
   transport.call = (command, args) => command === "get_radar_tilts" && fail ? Promise.reject(new Error("offline")) : original(command, args);
-  const { view, queryClient } = renderWithBackend(<Picker />, transport);
-  await waitFor(() => { expect(screen.getByRole("combobox", { name: "Site Tilt" }).textContent).toBe("0.5°"); });
+  const { view, queryClient } = renderWithBackend(<RadarControls />, transport);
+  await waitFor(() => { expect(screen.getByRole("combobox", { name: "Tilt" }).textContent).toBe("0.5°"); });
   fail = true;
   await act(async () => { await queryClient.invalidateQueries({ queryKey: ["radar-tilts"] }); });
-  await waitFor(() => { expect(screen.getByRole("combobox", { name: "Site Tilt" }).textContent).toBe("Could not verify tilts"); });
-  expect(screen.getByRole<HTMLButtonElement>("combobox", { name: "Site Tilt" }).disabled).toBe(true);
+  await waitFor(() => { expect(screen.getByRole("combobox", { name: "Tilt" }).textContent).toBe("Elevations unavailable"); });
+  expect(screen.getByRole<HTMLButtonElement>("combobox", { name: "Tilt" }).disabled).toBe(true);
+  expect(screen.getByTestId("radar-tilts-error").textContent).toContain("Radar elevations unavailable");
+  fail = false;
+  fireEvent.click(screen.getByRole("button", { name: "Check elevations" }));
+  await waitFor(() => { expect(screen.queryByTestId("radar-tilts-error")).toBeNull(); });
+  expect(screen.getByRole("combobox", { name: "Tilt" }).textContent).toBe("0.5°");
+  view.unmount(); queryClient.clear();
+});
+
+it.each([
+  ["get_radar_sites", "radar-sites-error", "Reload radar sites", "Site"],
+  ["get_map_catalog", "radar-products-error", "Reload parameters", "Product"],
+])("recovers %s instead of leaving the radar controls loading", async (command, testId, recovery, control) => {
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  const transport = createTransport(), original = transport.call.bind(transport);
+  let fail = true;
+  transport.call = (name, args) => name === command && fail ? Promise.reject(new Error("offline")) : original(name, args);
+  const { view, queryClient } = renderWithBackend(<RadarControls />, transport);
+  const notice = await screen.findByTestId(testId);
+  expect(notice.querySelector("details")?.open).toBe(false);
+  expect(screen.queryByText("Loading the radar sites")).toBeNull();
+  fail = false;
+  fireEvent.click(screen.getByRole("button", { name: recovery }));
+  await waitFor(() => { expect(screen.queryByTestId(testId)).toBeNull(); });
+  expect(screen.getByRole("combobox", { name: control })).toBeTruthy();
   view.unmount(); queryClient.clear();
 });
 

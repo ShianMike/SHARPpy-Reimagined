@@ -33,7 +33,8 @@ describe("readCanvasTokens over the shipped tokens.css", () => {
   const tokens = readCanvasTokens(shipped);
 
   it("parses every shipped map canvas token", () => {
-    const declared = [...rootDeclarations(tokensCss).keys()].filter((name) => name.startsWith("--map-"));
+    // Box-handle borders are CSS controls, rather than numeric canvas inputs.
+    const declared = [...rootDeclarations(tokensCss).keys()].filter((name) => name.startsWith("--map-") && name !== "--map-box-handle-border");
     expect(declared.length).toBe(
       Object.keys(tokens.colours).length + Object.keys(tokens.lengths).length,
     );
@@ -69,12 +70,12 @@ describe("readCanvasTokens over the shipped tokens.css", () => {
 
   it("parses the layout tokens", () => {
     expect(tokens.layout).toEqual({
-      toolbarHeight: 56,
-      railWidth: 232,
-      inspectorWidth: 340,
-      layerPanelWidth: 340,
-      timelineHeight: 58,
-      chromeGap: 8,
+      toolbarHeight: 50.4,
+      railWidth: 208.8,
+      inspectorWidth: 306,
+      layerPanelWidth: 306,
+      timelineHeight: 52.2,
+      chromeGap: 7.2,
     });
   });
 

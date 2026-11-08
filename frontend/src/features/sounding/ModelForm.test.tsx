@@ -10,12 +10,11 @@ import { useForecastStore } from "../../stores/forecastStore";
 import { useSoundingStore } from "../../stores/soundingStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import { ModelForm, parseCoordinate } from "./ModelForm";
-import { formatUtc } from "./soundingTime";
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true);
   useSoundingStore.setState(useSoundingStore.getInitialState(), true);
-  useSoundingStore.getState().setModel({ modelKey: "hrrr", atStation: false });
+  useSoundingStore.getState().setModel({ modelKey: "hrrr" });
 });
 afterEach(cleanup);
 
@@ -25,8 +24,8 @@ async function setup(catalog = modelCatalog) {
   renderWithBackend(<ModelForm />, { ...base, call });
   const form = await screen.findByRole("form", { name: "Model sounding" });
   return { user: userEvent.setup(), call, form,
-    latitude: screen.getByRole<HTMLInputElement>("textbox", { name: "Latitude, degrees north" }),
-    longitude: screen.getByRole<HTMLInputElement>("textbox", { name: "Longitude, degrees east" }),
+    latitude: screen.getByRole<HTMLInputElement>("textbox", { name: "Latitude" }),
+    longitude: screen.getByRole<HTMLInputElement>("textbox", { name: "Longitude" }),
     submit: screen.getByRole<HTMLButtonElement>("button", { name: "Open sounding" }) };
 }
 
@@ -82,6 +81,7 @@ it("validates bounds that cross the date line without rejecting their western ha
 });
 
 it("falls back to an offered hour when the default exceeds the selected cycle's limit", async () => {
+  useAppStore.setState({ selectedStationId: "72357" });
   const catalog = structuredClone(modelCatalog);
   const hrrr = catalog.models.find((model) => model.key === "hrrr");
   if (hrrr === undefined) throw new Error("Missing HRRR fixture");
@@ -89,6 +89,7 @@ it("falls back to an offered hour when the default exceeds the selected cycle's 
   hrrr.maxForecastHours = Array.from({ length: 24 }, () => 1);
   useSoundingStore.getState().setModel({ forecastHour: 2 });
   const { user, latitude, longitude, submit, call } = await setup(catalog);
+  expect(screen.queryByRole("switch")).toBeNull();
   expect(screen.getByRole("combobox", { name: "Forecast" }).textContent).toContain("F000");
   await user.click(screen.getByRole("combobox", { name: "Forecast" }));
   const popup = screen.getByRole("dialog", { name: "Forecast" });
@@ -100,7 +101,7 @@ it("falls back to an offered hour when the default exceeds the selected cycle's 
   await user.click(screen.getByRole("option", { name: "F000" }));
   await user.type(latitude, "35"); await user.type(longitude, "-97");
   await user.click(submit);
-  await waitFor(() => { expect(call.mock.calls.find(([command]) => command === "open_sounding")?.[1]?.request).toMatchObject({ forecastHour: 0 }); });
+  await waitFor(() => { expect(call.mock.calls.find(([command]) => command === "open_sounding")?.[1]?.request).toMatchObject({ forecastHour: 0, latitude: 35, longitude: -97, location: null }); });
 });
 
 it("searches sounding models without changing the selected value or the map forecast", async () => {
@@ -133,14 +134,140 @@ it("keeps exact run timestamps behind the compact UTC cycle tiles", async () => 
   const run = modelCatalog.models.find((model) => model.key === "hrrr")?.recentRuns[1];
   if (run === undefined) throw new Error("Missing HRRR run fixture");
   const { user } = await setup();
-  const trigger = screen.getByRole("combobox", { name: "Run" });
+  const trigger = screen.getByRole("combobox", { name: "Cycle (UTC)" });
   await user.click(trigger);
-  const popup = screen.getByRole("dialog", { name: "Run" });
-  const choice = within(popup).getByRole("option", { name: formatUtc(run) });
+  const popup = screen.getByRole("dialog", { name: "Cycle (UTC)" });
+  const choice = within(popup).getByRole("option", { name: `${run.slice(11, 13)}Z` });
   expect(choice.textContent).toContain(`${run.slice(11, 13)}Z`);
   expect(within(popup).getByRole("group", { name: `${run.slice(0, 10)} · UTC` })).toBeTruthy();
   await user.click(choice);
   expect(useSoundingStore.getState().model.runTime).toBe(run);
-  expect(trigger.textContent).toBe(formatUtc(run));
+  expect(trigger.textContent).toBe(`${run.slice(11, 13)}Z`);
   expect(document.activeElement).toBe(trigger);
+});
+
+it("chooses a historical leap day in the custom calendar and sends its exact UTC cycle", async () => {
+  useSoundingStore.getState().setModel({ runTime: "2024-03-31T12:00:00Z", forecastHour: 0 });
+  const mapForecast = useForecastStore.getState();
+  const { user, latitude, longitude, submit, call } = await setup();
+  const date = screen.getByRole("button", { name: "Run date (UTC)" });
+  await user.click(date);
+  expect(screen.getByRole("dialog", { name: "Run date (UTC)" })).toBeTruthy();
+  expect(screen.getByRole("grid", { name: "March 2024" })).toBeTruthy();
+  await user.keyboard("{PageUp}{Enter}");
+  expect(useSoundingStore.getState().model.runTime).toBe("2024-02-29T12:00:00Z");
+  expect(date.textContent).toContain("29 Feb 2024");
+  expect(screen.getByRole("combobox", { name: "Cycle (UTC)" }).textContent).toBe("12Z");
+  expect(document.activeElement).toBe(date);
+  expect(useForecastStore.getState()).toBe(mapForecast);
+  await user.type(latitude, "35"); await user.type(longitude, "-97");
+  await user.click(submit);
+  await waitFor(() => { expect(call.mock.calls.find(([command]) => command === "open_sounding")?.[1]?.request)
+    .toMatchObject({ model: "hrrr", runTime: "2024-02-29T12:00:00Z", forecastHour: 0, latitude: 35, longitude: -97 }); });
+});
+
+it("limits the newest UTC day to occurred cycles and clamps a later archived cycle", async () => {
+  useSoundingStore.getState().setModel({ runTime: "2026-10-03T23:00:00Z" });
+  const { user } = await setup();
+  await user.click(screen.getByRole("button", { name: "Next run date" }));
+  expect(useSoundingStore.getState().model.runTime).toBe("2026-10-04T18:00:00Z");
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Next run date" }).disabled).toBe(true);
+  await user.click(screen.getByRole("combobox", { name: "Cycle (UTC)" }));
+  const cycles = screen.getByRole("dialog", { name: "Cycle (UTC)" });
+  expect(within(cycles).queryByRole("option", { name: "19Z" })).toBeNull();
+  expect(within(cycles).getByRole("option", { name: "18Z" }).textContent).toContain("Pending");
+  await user.keyboard("{Escape}");
+  await user.click(screen.getByRole("button", { name: "Run date (UTC)" }));
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Monday, October 5, 2026" }).disabled).toBe(true);
+});
+
+it("can jump through months and years, cancel without changing the run, and return to the latest date", async () => {
+  useSoundingStore.getState().setModel({ runTime: "2024-02-29T12:00:00Z" });
+  const { user } = await setup();
+  const trigger = screen.getByRole("button", { name: "Run date (UTC)" });
+  await user.click(trigger);
+  await user.click(screen.getByRole("button", { name: "Choose month and year" }));
+  const year = screen.getByRole("spinbutton", { name: "Calendar year" });
+  await user.clear(year); await user.type(year, "2025");
+  await user.click(screen.getByRole("button", { name: "Jan" }));
+  expect(screen.getByRole("grid", { name: "January 2025" })).toBeTruthy();
+  await user.keyboard("{Escape}");
+  expect(useSoundingStore.getState().model.runTime).toBe("2024-02-29T12:00:00Z");
+  expect(document.activeElement).toBe(trigger);
+  await user.click(trigger);
+  await user.click(screen.getByRole("button", { name: "Latest date" }));
+  expect(useSoundingStore.getState().model.runTime).toBe("2026-10-04T12:00:00Z");
+});
+
+it("uses the selected model's date and cycle schedule after changing models", async () => {
+  useSoundingStore.getState().setModel({ runTime: "2024-02-29T23:00:00Z" });
+  const { user } = await setup();
+  await user.click(screen.getByRole("combobox", { name: "Model" }));
+  await user.type(screen.getByRole("searchbox", { name: "Search models" }), "GFS");
+  await user.click(screen.getByRole("option", { name: "GFS" }));
+  expect(screen.getByRole("button", { name: "Run date (UTC)" }).textContent).toContain("4 Oct 2026");
+  expect(screen.getByRole("combobox", { name: "Cycle (UTC)" }).textContent).toBe("12Z");
+  await user.click(screen.getByRole("combobox", { name: "Cycle (UTC)" }));
+  expect(within(screen.getByRole("dialog", { name: "Cycle (UTC)" })).getAllByRole("option")
+    .map((option) => option.getAttribute("aria-label"))).toEqual(["00Z", "06Z", "12Z", "18Z"]);
+});
+
+it("recomputes forecast-hour choices when a selected cycle has a shorter range", async () => {
+  useSoundingStore.getState().setModel({ runTime: "2026-10-03T12:00:00Z", forecastHour: 47 });
+  const { user } = await setup();
+  expect(screen.getByRole("combobox", { name: "Forecast" }).textContent).toBe("F047");
+  await user.click(screen.getByRole("combobox", { name: "Cycle (UTC)" }));
+  await user.click(screen.getByRole("option", { name: "13Z" }));
+  expect(screen.getByRole("combobox", { name: "Forecast" }).textContent).toBe("F000");
+  await user.click(screen.getByRole("combobox", { name: "Forecast" }));
+  const popup = screen.getByRole("dialog", { name: "Forecast" });
+  expect(within(popup).queryByRole("option", { name: "F047" })).toBeNull();
+  expect(within(popup).getByRole("option", { name: "F018" })).toBeTruthy();
+});
+
+it("preserves signed map longitude while requesting the same geographic point", async () => {
+  useSoundingStore.getState().setModel({ latitude: "32.9604", longitude: "-96.6463" });
+  const { user, longitude, submit, call } = await setup();
+  expect(longitude.value).toBe("-96.6463");
+  expect(screen.getByText("°W")).toBeTruthy();
+  expect(screen.getByText("Negative = south / west")).toBeTruthy();
+  await user.click(submit);
+  await waitFor(() => { expect(call.mock.calls.find(([command]) => command === "open_sounding")?.[1]?.request)
+    .toMatchObject({ latitude: 32.9604, longitude: -96.6463 }); });
+});
+
+it("keeps coordinate signs as entered and follows both hemispheres in the labels", async () => {
+  const { user, latitude, longitude, submit } = await setup();
+  await user.type(latitude, "35.2"); await user.type(longitude, "97.4");
+  expect(latitude.value).toBe("35.2"); expect(longitude.value).toBe("97.4");
+  expect(screen.getByText("°N")).toBeTruthy(); expect(screen.getByText("°E")).toBeTruthy();
+  expect(submit.disabled).toBe(true);
+  fireEvent.change(latitude, { target: { value: "-35.2" } });
+  fireEvent.change(longitude, { target: { value: "-97.4" } });
+  expect(latitude.value).toBe("-35.2"); expect(longitude.value).toBe("-97.4");
+  expect(screen.getByText("°S")).toBeTruthy(); expect(screen.getByText("°W")).toBeTruthy();
+  fireEvent.change(latitude, { target: { value: "+35.2" } });
+  fireEvent.change(longitude, { target: { value: "+97.4" } });
+  expect(latitude.value).toBe("+35.2"); expect(longitude.value).toBe("+97.4");
+  expect(screen.getByText("°N")).toBeTruthy(); expect(screen.getByText("°E")).toBeTruthy();
+});
+
+it("accepts positive eastern longitude on global grids without fixing malformed signs into valid requests", async () => {
+  useSoundingStore.getState().setModel({ modelKey: "gfs" });
+  const { user, form, latitude, longitude, submit, call } = await setup();
+  await user.type(latitude, "35"); await user.type(longitude, "151.5");
+  expect(longitude.value).toBe("151.5");
+  expect(screen.getByText("°E")).toBeTruthy();
+  expect(submit.disabled).toBe(false);
+  await user.click(submit);
+  await waitFor(() => { expect(call.mock.calls.find(([command]) => command === "open_sounding")?.[1]?.request)
+    .toMatchObject({ model: "gfs", longitude: 151.5 }); });
+  await waitFor(() => { expect(submit.disabled).toBe(false); });
+  for (const invalid of ["--1", "++1", "-+1", "+-1", "- 1"]) {
+    await user.clear(longitude); await user.type(longitude, invalid);
+    expect(longitude.getAttribute("aria-invalid")).toBe("true");
+    expect(submit.disabled).toBe(true);
+    fireEvent.submit(form);
+    expect(call.mock.calls.filter(([command]) => command === "open_sounding")).toHaveLength(1);
+  }
 });

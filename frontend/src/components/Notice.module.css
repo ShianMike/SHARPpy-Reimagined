@@ -5,15 +5,11 @@
   gap: var(--space-3);
   min-width: 0;
   max-width: var(--notice-max-w);
-  padding: var(--space-5);
-  border-radius: var(--radius-lg);
   overflow-wrap: anywhere;
   pointer-events: auto;
 }
 
-.notice:not([data-material="glass"]) {
-  padding: var(--space-1) 0;
-}
+.notice[data-material="glass"] { padding: var(--space-4); }
 
 .notice[data-tone="info"] {
   --notice-tone: var(--info);
@@ -27,21 +23,22 @@
   --notice-tone: var(--danger);
 }
 
-.heading {
+.contentRow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
+  min-width: 0;
+}
+
+.notice:is([data-tone="warning"], [data-tone="danger"])[data-material="glass"] {
+  border-color: color-mix(in srgb, var(--notice-tone) 25%, var(--glass-border));
 }
 
 .icon {
   display: grid;
   place-items: center;
   flex: none;
-  width: var(--control-h-sm);
-  height: var(--control-h-sm);
-  border: var(--hairline) solid color-mix(in srgb, var(--notice-tone) 20%, transparent);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--notice-tone) 12%, transparent);
+  margin-top: var(--space-0-5);
   color: var(--notice-tone);
 }
 
@@ -51,24 +48,24 @@
   stroke-width: var(--icon-stroke);
 }
 
+.content { min-width: 0; flex: 1; }
+
 .title {
   color: var(--text-primary);
-  font-size: var(--font-size-subhead);
+  font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  text-wrap: pretty;
 }
 
 .body {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 .message {
   color: var(--text-secondary);
+  font-size: var(--font-size-small);
   line-height: var(--line-height-body);
-  text-wrap: pretty;
 }
 
 .detail {
@@ -76,15 +73,18 @@
   font-size: var(--font-size-small);
   overflow-wrap: anywhere;
 }
+.body details { color: var(--text-tertiary); font-size: var(--font-size-small); }
+.body summary { min-height: var(--control-h-sm); cursor: pointer; }
+.body details p { margin-top: var(--space-2); }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   justify-content: flex-end;
-  margin-top: var(--space-1);
-  padding-top: var(--space-3);
-  border-top: var(--hairline) solid var(--border-subtle);
 }
 
-.actions > button { min-height: var(--control-h-md); padding-inline: var(--space-4); }
+.actions > button { min-height: var(--control-h-md); }
+.notice:not([data-material="glass"]) > .actions > button:only-child { flex: 1; }
+.actions > button[data-tone="accent"] { padding-inline: var(--space-4); }
+.actions:empty { display: none; }

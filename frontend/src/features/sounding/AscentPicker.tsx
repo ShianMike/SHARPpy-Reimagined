@@ -1,7 +1,7 @@
 // The image's ascent choice: sharpmod.rendering.cli's PARCEL_TYPES without
 // USER, as a segmented control. sharpmod redraws the image for each choice;
 // the frontend only names the choices.
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useIsMutating } from "@tanstack/react-query";
 import { Action } from "../../ui/Controls";
 import { useSoundingStore } from "../../stores/soundingStore";
@@ -20,7 +20,8 @@ export function AscentPicker(): ReactNode {
       <span className={styles.groupLabel} id="ascent-picker-label">
         {CHOICE_LABEL}
       </span>
-      <div className={styles.segmented} role="group" aria-labelledby="ascent-picker-label">
+      <div className={styles.segmented} role="group" aria-labelledby="ascent-picker-label" data-selection-track="horizontal"
+        style={{ "--selection-index": RENDER_CHOICES.indexOf(choice) } as CSSProperties}>
         {RENDER_CHOICES.map((item) => (
           <Action
             key={item}

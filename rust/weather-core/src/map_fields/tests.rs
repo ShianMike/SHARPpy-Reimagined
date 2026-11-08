@@ -285,14 +285,13 @@ impl Server {
         }
     }
 
-    fn jobs(&self, paths: &[&str]) -> Vec<RangeJob> {
+    fn jobs(&self, paths: &[&str]) -> Vec<FieldJob> {
         paths
             .iter()
-            .map(|path| RangeJob {
+            .map(|path| FieldJob {
                 url: format!("{}{path}", self.url),
                 limit: 4,
-                start: 10,
-                end: 13,
+                range: Some((10, 13)),
             })
             .collect()
     }
@@ -321,7 +320,7 @@ async fn batches_are_concurrent_bounded_and_return_input_order() {
             Reply::range(vec![index; 4])
         });
         let jobs = server.jobs(&["/0", "/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8"]);
-        let output = fetch_model_ranges(&ModelClient::default(), jobs, 2., workers, || Ok(false))
+        let output = fetch_model_fields(&ModelClient::default(), jobs, 2., workers, || Ok(false))
             .await
             .unwrap();
         assert_eq!(
@@ -350,7 +349,7 @@ async fn first_failure_aborts_slow_siblings_and_leaves_queued_jobs_unstarted() {
     });
     let jobs = server.jobs(&["/slow", "/missing", "/queued", "/queued"]);
     let started = Instant::now();
-    let result = fetch_model_ranges(&ModelClient::default(), jobs, 2., 2, || Ok(false)).await;
+    let result = fetch_model_fields(&ModelClient::default(), jobs, 2., 2, || Ok(false)).await;
     assert_eq!(result, Err(Error::Unavailable(404)));
     assert!(started.elapsed() < Duration::from_millis(400));
     assert!(server
@@ -370,12 +369,12 @@ async fn user_cancellation_and_callback_errors_stop_the_whole_batch() {
     });
     let client = ModelClient::default();
     assert_eq!(
-        fetch_model_ranges(&client, server.jobs(&["/never"]), 2., 4, || Ok(true)).await,
+        fetch_model_fields(&client, server.jobs(&["/never"]), 2., 4, || Ok(true)).await,
         Err(Error::Cancelled)
     );
     assert!(server.requests.lock().unwrap().is_empty());
     assert_eq!(
-        fetch_model_ranges(&client, server.jobs(&["/never"]), 2., 4, || Err(
+        fetch_model_fields(&client, server.jobs(&["/never"]), 2., 4, || Err(
             "callback failed".into()
         ))
         .await,
@@ -383,7 +382,7 @@ async fn user_cancellation_and_callback_errors_stop_the_whole_batch() {
     );
     assert!(server.requests.lock().unwrap().is_empty());
     let started = Instant::now();
-    let result = fetch_model_ranges(
+    let result = fetch_model_fields(
         &client,
         server.jobs(&["/slow", "/slow", "/queued"]),
         2.,
@@ -442,7 +441,7 @@ async fn batches_retain_response_byte_budgets_and_range_validation() {
         let mut jobs = server.jobs(&["/field"]);
         jobs[0].limit = limit;
         assert_eq!(
-            fetch_model_ranges(&ModelClient::default(), jobs, 2., 4, || Ok(false)).await,
+            fetch_model_fields(&ModelClient::default(), jobs, 2., 4, || Ok(false)).await,
             Err(expected)
         );
         assert_eq!(server.requests.lock().unwrap().len(), 1);
@@ -460,7 +459,7 @@ async fn transient_failures_retry_through_the_existing_model_client() {
         }
         reply
     });
-    let output = fetch_model_ranges(
+    let output = fetch_model_fields(
         &ModelClient::default(),
         server.jobs(&["/field"]),
         2.,
@@ -472,7 +471,7 @@ async fn transient_failures_retry_through_the_existing_model_client() {
     assert_eq!(output, [b"GRIB"]);
     assert_eq!(attempts.load(Ordering::SeqCst), 2);
     assert!(
-        fetch_model_ranges(&ModelClient::default(), vec![], 2., 4, || Ok(false))
+        fetch_model_fields(&ModelClient::default(), vec![], 2., 4, || Ok(false))
             .await
             .unwrap()
             .is_empty()

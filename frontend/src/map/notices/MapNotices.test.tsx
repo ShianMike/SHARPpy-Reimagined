@@ -26,13 +26,22 @@ describe("MapNotices", () => {
     expect(screen.queryByText(LAYERS_NOTICE_TITLE)).toBeNull();
   });
 
-  it("shows the notice for a failed source and names it", () => {
+  it("keeps failed-source diagnostics behind the Details control", async () => {
     render(<MapNotices />);
     act(() => {
       useMapNoticeStore.getState().setBasemapIssues(["lakes", "states"], []);
     });
     expect(screen.getByText(LAYERS_NOTICE_TITLE)).toBeTruthy();
+    const toggle = screen.getByRole("button", { name: "Details" });
+    const details = document.getElementById(toggle.getAttribute("aria-controls") ?? "");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(details?.hidden).toBe(true);
+    await userEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(details?.hidden).toBe(false);
     expect(notice()?.textContent).toContain("Could not load: lakes, states.");
+    await userEvent.click(toggle);
+    expect(details?.hidden).toBe(true);
   });
 
   it("shows the notice for a slow source and names it", () => {

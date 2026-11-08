@@ -45,11 +45,14 @@
 .modelPicker { height: min(75dvh, var(--floating-panel-h)); }
 .modelPicker .dialogBody { flex: 1; }
 .modelPicker .headerAction { min-height: var(--control-h-xs); padding-inline: var(--space-2); font-size: var(--font-size-caption); }
-.modelRegions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); flex: none; min-width: 0; margin: 0 var(--space-4) var(--space-3); padding: var(--space-1); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--control-fill); }
+.modelRegions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); flex: none; min-width: 0; margin: 0 var(--space-4) var(--space-3); padding: var(--space-1); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--control-fill); --selection-shadow: inset 0 0 0 var(--hairline) var(--accent); }
+.modelRegions:not(:has(input:checked))::before { opacity: 0; }
 .regionChoice { position: relative; display: flex; align-items: center; justify-content: center; gap: var(--space-2); min-width: 0; min-height: var(--control-h-md); padding: var(--space-1); border: var(--hairline) solid transparent; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: var(--font-size-small); font-weight: var(--font-weight-semibold); cursor: pointer; }
 .regionChoice input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .regionChoice small { min-width: var(--space-5); padding: var(--space-0-5) var(--space-1); border-radius: var(--radius-pill); background: var(--control-fill); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); font-variant-numeric: tabular-nums; text-align: center; }
-.regionChoice:hover, .regionChoice:has(input:checked) { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-bright); }
+.regionChoice:hover { background: var(--fill-hover); color: var(--accent-bright); }
+.regionChoice:has(input:checked) { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-bright); }
+.modelRegions[data-selection-track] .regionChoice:has(input:checked) { background: transparent; border-color: transparent; }
 .regionChoice:has(input:focus-visible) { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .modelPicker .modelGroup { display: grid; gap: var(--space-1); }
 .modelPicker .modelChoice { min-height: var(--control-h-lg); padding: var(--space-2) var(--space-3); border-color: var(--border-subtle); background: var(--control-fill); }
@@ -102,11 +105,12 @@
 .hourDay h3 { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-2); font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; }
 .hourDay h3 span { color: var(--text-secondary); font-weight: var(--font-weight-regular); }
 .parameterBrowser { display: grid; grid-template-columns: max-content minmax(0, 1fr); flex: 1; min-height: 0; margin-top: var(--space-2); border-top: var(--hairline) solid var(--border-subtle); }
-.categories { display: grid; grid-auto-rows: minmax(var(--control-h-xs), 1fr); min-height: 0; gap: var(--space-0-5); padding: var(--space-2); border-right: var(--hairline) solid var(--border-subtle); background: var(--control-fill); }
+.categories { display: grid; grid-auto-rows: minmax(var(--control-h-xs), 1fr); min-height: 0; gap: var(--space-0-5); padding: var(--space-2); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border-right: var(--hairline) solid var(--border-subtle); background: var(--control-fill); --selection-gap: var(--space-0-5); }
 .categories button { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: var(--control-h-xs); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); text-align: left; font-size: var(--font-size-small); font-weight: var(--font-weight-medium); white-space: nowrap; }
 .categories button small, .resultHeading > span { flex: none; min-width: var(--space-6); padding: var(--space-0-5) var(--space-1); border-radius: var(--radius-pill); background: var(--control-fill); font-size: var(--font-size-caption); font-weight: var(--font-weight-regular); font-variant-numeric: tabular-nums; text-align: center; }
-.categories button:is(:hover, :focus-visible) { background: var(--accent-subtle); color: var(--accent-bright); }
+.categories button:is(:hover, :focus-visible) { background: var(--fill-hover); color: var(--accent-bright); }
 .categories button[aria-current="true"] { background: var(--accent-subtle); color: var(--accent-bright); }
+.categories[data-selection-track] button[aria-current="true"] { background: transparent; }
 .results { min-width: 0; min-height: 0; padding: var(--space-3); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .resultHeading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: var(--control-h-sm); padding: 0 var(--space-2) var(--space-3); color: var(--text-secondary); font-size: var(--font-size-small); }
 .product { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: var(--control-h-lg); padding: var(--space-3); margin-bottom: var(--space-1); border: var(--hairline) solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-primary); text-align: left; }

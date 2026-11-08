@@ -14,6 +14,7 @@ import { compactUtc, forecastLabel, formatUtc } from "../sounding/soundingTime";
 import { HealthIndicator } from "../toolbar/HealthIndicator";
 import styles from "./OperationsWorkspace.module.css";
 import { ModelBackendStatus } from "./ModelBackendStatus";
+import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
 
 const SOURCES: readonly { source: SoundingSource; label: string; hint: string }[] = [
   { source: "observed", label: "Observed", hint: "Weather balloon profiles" },
@@ -39,7 +40,9 @@ export function OperationsWorkspace(): ReactNode {
     <div className={styles.workflows}>
       <section className={styles.workflow} aria-labelledby="continue-title">
         <header className={styles.workflowHeading}><h2 id="continue-title">Model Viewer</h2><p>Explore forecast guidance.</p></header>
-        {context === null ? <div className={styles.forecastCopy}><h3>{forecast.status === "loading" ? "Preparing your forecast…" : "Forecast unavailable"}</h3><p>{forecast.status === "error" ? forecast.error.message : forecast.status === "empty" ? "No forecast models are available from the backend." : "Loading models and parameters."}</p></div> : <>
+        {context === null ? <div className={styles.forecastCopy}>{forecast.status === "error"
+          ? <SoundingErrorNotice error={forecast.error} operation="get_model_catalog" onRetry={forecast.retry} busy={forecast.retrying} testId="overview-model-error" />
+          : <><h3>{forecast.status === "loading" ? "Preparing your forecast…" : "Forecast unavailable"}</h3><p>{forecast.status === "empty" ? "No forecast models are available." : "Loading models and parameters."}</p></>}</div> : <>
           <div className={styles.forecastCopy}><h3>{context.model.label} <span>{forecastLabel(context.hour)}</span></h3><p>{context.fieldsAvailable ? product?.label ?? "Model guidance" : context.model.soundingsAvailable ? "Point soundings available for this model" : "Maps only"}</p></div>
           <dl className={styles.facts}>
             <div><dt>Valid · UTC</dt><dd><time dateTime={context.validTime} title={formatUtc(context.validTime)}>{compactUtc(context.validTime)}</time></dd></div>
@@ -47,7 +50,7 @@ export function OperationsWorkspace(): ReactNode {
             <div><dt>Forecast range</dt><dd>{forecastLabel(context.hours[0] ?? 0)} – {forecastLabel(context.hours.at(-1) ?? 0)}</dd></div>
           </dl>
         </>}
-        <div className={styles.workflowFooter}>{forecast.status === "error" ? <Action disabled={forecast.retrying} onClick={forecast.retry}>Retry catalogue</Action> : null}<Action tone="accent" onClick={() => { navigate("map"); }}>Open Model Viewer</Action></div>
+        <div className={styles.workflowFooter}><Action tone="accent" onClick={() => { navigate("map"); }}>Open Model Viewer</Action></div>
       </section>
       <section className={styles.workflow} aria-labelledby="live-start-title">
         <header className={styles.workflowHeading}><h2 id="live-start-title">Live Tracking</h2><p>Live layers. Past-hour playback.</p></header>
@@ -68,7 +71,7 @@ export function OperationsWorkspace(): ReactNode {
         <summary><span>Model availability</span><small>{String(context.models.length)} models</small><ChevronDown className="icon-sm" aria-hidden="true" /></summary>
         {providersOpen ? <ModelBackendStatus models={context.models} /> : null}
       </details>}
-      <details className={styles.disclosure}>
+      <details className={styles.disclosure} data-motion="details">
         <summary><span>Recent activity</span><small className={styles.activityStatus} data-error={errors > 0}>{errors > 0 ? `${String(errors)} ${errors === 1 ? "error" : "errors"} this session` : "No errors this session"}</small><ChevronDown className="icon-sm" aria-hidden="true" /></summary>
         <div className={styles.activity}>
           <div className={styles.sectionHeading}><p>Latest requests and connection changes</p><Action onClick={() => { navigate("status"); }}>View logs</Action></div>

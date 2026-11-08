@@ -11,11 +11,12 @@
   --brand-profile-stroke: 2.6;
   --brand-orange-soft: #342114;
   --link: var(--workspace-orange-text);
-  --rail-collapsed-w: 58px;
-  --dialog-w: 880px;
-  --dialog-nav-w: 176px;
-  --forecast-strip-h: 54px;
+  --rail-collapsed-w: 52.2px;
+  --dialog-w: 792px;
+  --dialog-nav-w: 158.4px;
+  --forecast-strip-h: 48.6px;
   --scrim: rgb(13 17 22 / 0.6);
+  --popover-focus-filter: blur(9px);
   color-scheme: dark;
 
   /* Surfaces (surface, surface_raised, surface_overlay, surface_sunken) */
@@ -52,7 +53,7 @@
   /* Focus */
   --focus-ring: var(--workspace-orange-text);
   --focus-ring-width: 2px;
-  --focus-ring-offset: 2px;
+  --focus-ring-offset: 1.8px;
 
   /* State fills: translucent, so they read on glass and on opaque surfaces */
   --fill-hover: var(--workspace-orange-subtle);
@@ -60,60 +61,61 @@
   --fill-selected: var(--workspace-orange-subtle);
   --selection-indicator: var(--brand-orange);
 
-  /* Spacing (theme.py SPACE) */
-  --space-0-5: 2px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
+  /* Interface lengths use 90% of the original design; canvas geometry stays separate. */
+  /* Spacing */
+  --space-0-5: 1.8px;
+  --space-1: 3.6px;
+  --space-2: 7.2px;
+  --space-3: 10.8px;
+  --space-4: 14.4px;
+  --space-5: 18px;
+  --space-6: 21.6px;
+  --space-8: 28.8px;
 
-  /* Control heights (theme.py CONTROL_H); 28px is the primary pointer minimum */
-  --control-h-xs: 28px;
-  --control-h-sm: 36px;
-  --control-h-md: 40px;
-  --control-h-lg: 44px;
+  /* Control heights; the smallest target remains above 24px. */
+  --control-h-xs: 25.2px;
+  --control-h-sm: 32.4px;
+  --control-h-md: 36px;
+  --control-h-lg: 39.6px;
 
   /* Layout (web layout, not Qt widths; shrink rules in DESIGN-frontend F8) */
-  --toolbar-h: 56px;
-  --rail-w: 232px;
-  --inspector-w: 340px;
+  --toolbar-h: 50.4px;
+  --rail-w: 208.8px;
+  --inspector-w: 306px;
   --layer-panel-w: var(--inspector-w);
-  --search-w: 240px;
-  --search-min-w: 176px;
-  --chip-min-w: 120px;
-  --chip-max-w: 280px;
-  --notice-max-w: 480px;
-  --popover-w: 320px;
-  --timeline-h: 58px;
-  --chrome-gap: 8px;
+  --search-w: 216px;
+  --search-min-w: 158.4px;
+  --chip-min-w: 108px;
+  --chip-max-w: 252px;
+  --notice-max-w: 432px;
+  --popover-w: 288px;
+  --timeline-h: 52.2px;
+  --chrome-gap: 7.2px;
   --hairline: 1px;
-  --selection-indicator-w: 2px;
-  --status-dot-size: 8px;
+  --selection-indicator-w: 1.8px;
+  --status-dot-size: 7.2px;
 
   /* Component dimensions (added as components are built) */
-  --switch-track-w: 36px;
-  --switch-track-h: 22px;
-  --switch-thumb-size: 16px;
-  --slider-w: 112px;
+  --switch-track-w: 32.4px;
+  --switch-track-h: 19.8px;
+  --switch-thumb-size: 14.4px;
+  --slider-w: 100.8px;
   /* The layer panel's sliders: its body may carry a scrollbar */
-  --layer-slider-w: 96px;
-  --slider-value-w: 36px;
-  --rail-item-h: 36px;
-  --empty-icon-size: 64px;
-  --brand-icon-size: 32px;
+  --layer-slider-w: 86.4px;
+  --slider-value-w: 32.4px;
+  --rail-item-h: 32.4px;
+  --empty-icon-size: 57.6px;
+  --brand-icon-size: 28.8px;
 
   /* Sounding and responsive viewer dimensions */
-  --sounding-side-w: 280px;
-  --field-label-w: 84px;
-  --side-panel-min-h: 220px;
-  --workspace-min-h: 360px;
+  --sounding-side-w: 252px;
+  --field-label-w: 75.6px;
+  --side-panel-min-h: 198px;
+  --workspace-min-h: 324px;
 
   /* Icons: Lucide's 24px default is too large for 28 to 32px controls */
-  --icon-size-sm: 14px;
-  --icon-size-md: 20px;
+  --icon-size-sm: 12.6px;
+  --icon-size-md: 18px;
   --icon-stroke: 1.8;
 
   /* Type: locally bundled Inter with platform fallbacks; no CDN */
@@ -134,17 +136,17 @@
   --line-height-body: 1.5;
 
   /* Rounded surfaces and inset controls share a consistent curvature. */
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
-  --radius-xl: 30px;
+  --radius-sm: 9px;
+  --radius-md: 14.4px;
+  --radius-lg: 21.6px;
+  --radius-xl: 27px;
   --radius-pill: 999px;
   --radius-round: 50%;
 
   /* Elevation */
-  --shadow-chrome: 0 4px 20px rgb(8 18 34 / 0.12);
-  --shadow-floating: 0 12px 40px rgb(8 18 34 / 0.18), 0 2px 6px rgb(8 18 34 / 0.08);
-  --shadow-popover: 0 24px 72px rgb(8 18 34 / 0.28), 0 4px 12px rgb(8 18 34 / 0.12);
+  --shadow-chrome: 0 3.6px 18px rgb(8 18 34 / 0.12);
+  --shadow-floating: 0 10.8px 36px rgb(8 18 34 / 0.18), 0 1.8px 5.4px rgb(8 18 34 / 0.08);
+  --shadow-popover: 0 21.6px 64.8px rgb(8 18 34 / 0.28), 0 3.6px 10.8px rgb(8 18 34 / 0.12);
 
   /* Glass: fill and filter live only in the profile blocks and overrides below */
   --glass-tint: 25 31 40;
@@ -154,37 +156,37 @@
   --glass-sheen: linear-gradient(145deg, rgb(255 255 255 / 0.07), transparent 45%, rgb(255 255 255 / 0.015));
   --control-fill: rgb(255 255 255 / 0.08);
   --control-selected: rgb(255 255 255 / 0.16);
-  --chrome-inset: 20px;
-  --dock-w: 56px;
-  --dock-offset: 88px;
-  --forecast-top: 86px;
-  --forecast-w: 760px;
-  --player-w: 1000px;
-  --player-h: 58px;
-  --floating-panel-top: 202px;
-  --floating-panel-h: 560px;
-  --picker-w: 440px;
-  --hour-picker-w: 480px;
-  --parameter-picker-w: 760px;
-  --parameter-scale-w: 48px;
-  --parameter-scale-h: 360px;
-  --parameter-ramp-w: 12px;
-  --attribution-size: 20px;
-  --track-h: 5px;
+  --chrome-inset: 18px;
+  --dock-w: 50.4px;
+  --dock-offset: 79.2px;
+  --forecast-top: 77.4px;
+  --forecast-w: 684px;
+  --player-w: 900px;
+  --player-h: 52.2px;
+  --floating-panel-top: 181.8px;
+  --floating-panel-h: 504px;
+  --picker-w: 396px;
+  --hour-picker-w: 432px;
+  --parameter-picker-w: 684px;
+  --parameter-scale-w: 43.2px;
+  --parameter-scale-h: 324px;
+  --parameter-ramp-w: 10.8px;
+  --attribution-size: 18px;
+  --track-h: 4.5px;
   --track-fill: rgb(255 255 255 / 0.22);
   --slider-thumb: #ffffff;
-  --thumb-size: 16px;
-  --control-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  --thumb-size: 14.4px;
+  --control-shadow: 0 1.8px 7.2px rgb(0 0 0 / 0.12);
   --workspace-background: var(--surface-0);
   --theme-preview-light: #f6f8fb;
   --theme-preview-dark: #252c38;
-  --overview-h: 760px;
+  --overview-h: 684px;
   --workspace-orange: #b8540b;
   --workspace-orange-hover: #a54806;
   --workspace-orange-pressed: #913e04;
   --workspace-orange-text: #ffb16f;
   --workspace-orange-subtle: rgb(244 129 32 / 0.13);
-  --scrollbar-size: 10px;
+  --scrollbar-size: 9px;
   --scrollbar-thumb: color-mix(in srgb, var(--text-secondary) 48%, transparent);
   --scrollbar-thumb-hover: var(--workspace-orange-text);
 
@@ -194,6 +196,8 @@
   --motion-slow: 240ms;
   --motion-camera: 600ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: ease-out;
+  --ease-travel: ease-in-out;
 
   /* Layers (DR6-4 order: notices sit above floating panels, below chrome) */
   --z-map: 0;
@@ -204,6 +208,8 @@
   --z-chrome: 20;
   --z-popover: 30;
   --z-tooltip: 40;
+  --z-popover-backdrop: 50;
+  --z-popover-focused: 51;
 
   /* Map canvas: boundaries (DARK_MAP) and widths (map_geography BOUNDARY_WIDTHS) */
   --map-background: #0a0a09;
@@ -262,35 +268,37 @@
   --map-obs-lower: #5fd98a;
   --map-plot-warn: #d29922;
   --map-domain-width: 1.5px;
+  --map-box-handle-border: 2px;
   --map-outlook-width: 1.5px;
   --map-hatch-width: 1px;
   --map-outlook-label-size: 14px;
   --map-place-label-size: 12px;
 
   /* Map workspace: the forecast fields, the field legend, and the 2- and 4-panel layouts */
-  --model-select-w: 144px;
-  --legend-ramp-h: 10px;
-  --radar-legend-w: 540px;
-  --panel-chip-max-w: 320px;
+  --model-select-w: 129.6px;
+  --legend-ramp-h: 9px;
+  --radar-legend-w: 486px;
+  --panel-chip-max-w: 288px;
 }
 
 /* Light diffusion retains the backdrop's detail; low and accessibility profiles stay opaque. */
 [data-graphics-profile="high"] {
   --glass-fill: rgb(var(--glass-tint) / 0.62);
   --tooltip-glass-fill: rgb(var(--glass-tint) / 0.32);
-  --glass-filter: blur(6px) saturate(112%);
+  --glass-filter: blur(5.4px) saturate(112%);
 }
 
 [data-graphics-profile="balanced"] {
   --glass-fill: rgb(var(--glass-tint) / 0.68);
   --tooltip-glass-fill: rgb(var(--glass-tint) / 0.32);
-  --glass-filter: blur(4px) saturate(108%);
+  --glass-filter: blur(3.6px) saturate(108%);
 }
 
 [data-graphics-profile="low"] {
   --glass-fill: rgb(var(--glass-tint) / 0.97);
   --tooltip-glass-fill: rgb(var(--glass-tint) / 0.97);
   --glass-filter: none;
+  --popover-focus-filter: none;
 }
 
 /* Reduced transparency: opaque glass under every profile. (0,2,0) beats the blocks above. */
@@ -299,10 +307,21 @@
     --glass-fill: var(--surface-1);
     --tooltip-glass-fill: var(--surface-1);
     --glass-filter: none;
+    --popover-focus-filter: none;
   }
 }
 
 /* Reduced motion: every duration, the camera included, takes a single frame. */
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    /* Apple's zero-bounce spring, sampled and normalized for a finite CSS transition.
+       See WWDC23 "Animate with springs": https://developer.apple.com/videos/play/wwdc2023/10158/?time=1234
+       f(t) = 1 - (1 + 2πt)e^(-2πt); samples of f(t) / f(1) at t = 0, 1/16, …, 1. */
+    --ease-travel: linear(0, 0.0604, 0.1885, 0.334, 0.472, 0.5921, 0.6913, 0.7706, 0.8323,
+      0.8797, 0.9154, 0.942, 0.9618, 0.9762, 0.9868, 0.9945, 1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-fast: 0ms;

@@ -1,5 +1,6 @@
 import { Download, HardDrive, MemoryStick, RotateCw, Square } from "lucide-react";
 import type { useFrameDownload } from "../../map/useFrameDownload";
+import { Notice } from "../../components/Notice";
 import { Action, IconAction } from "../../ui/Controls";
 import styles from "./ForecastDownloads.module.css";
 
@@ -23,7 +24,9 @@ export function ForecastDownloads({ download }: { download: ReturnType<typeof us
     </div>
     {!download.cacheError && download.total > 0 ? <progress className={styles.progress} aria-label={download.running ? "Downloaded Forecast Hours" : "Saved Forecast Hours"}
       max={download.total} value={download.running ? download.loaded : download.cached} /> : null}
-    {download.cacheError || failed && !download.running ? <p className={styles.error} role="status">{download.cacheError
-      ? "Saved-hour cache unavailable. Check cache to try again." : failedHours ? "Select a red hour above to retry its download." : "Some hours are unavailable for this run."}</p> : null}
+    {download.cacheError || failed && !download.running ? <div className={styles.error}><Notice tone="warning"
+      icon={download.cacheError ? HardDrive : Download} title={download.cacheError ? "Saved hours unavailable" : "Some hours could not download"}
+      message={download.cacheError ? "Use Check Cache to read the saved hours again." : failedHours
+        ? "Select a failed hour above to retry it, or retry all missing hours." : "Some hours are unavailable for this run."} /></div> : null}
   </div>;
 }

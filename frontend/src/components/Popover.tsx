@@ -39,6 +39,8 @@ export interface PopoverProps {
   movable?: boolean;
   /** Group separate surfaces under the same positioning and focus boundary. */
   unframed?: boolean;
+  /** Soften the workspace behind a focused popup. */
+  backdrop?: boolean;
   children: ReactNode;
 }
 
@@ -67,6 +69,7 @@ export function Popover({
   testId,
   movable = false,
   unframed = false,
+  backdrop = false,
   children,
 }: PopoverProps): ReactNode {
   const [present, setPresent] = useState(open);
@@ -101,24 +104,41 @@ export function Popover({
     POPOVER_ANCHORS.set(element, anchor);
     drag.current = null;
     const place = (): void => {
-      const target = anchor.getBoundingClientRect();
-      if (width === "anchor") element.style.setProperty("--popover-anchor-w", `${String(target.width)}px`);
-      const box = element.getBoundingClientRect();
+      const rect = anchor.getBoundingClientRect();
+      // The trigger can still be returning from its pressed scale when the popup opens.
+      const scale = movable ? 1 : Number.parseFloat(getComputedStyle(anchor).scale) || 1;
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const targetWidth = rect.width / scale;
+      const targetHeight = rect.height / scale;
+      const left = centerX - targetWidth / 2;
+      const right = centerX + targetWidth / 2;
+      const top = centerY - targetHeight / 2;
+      const bottom = centerY + targetHeight / 2;
+      if (width === "anchor") element.style.setProperty("--popover-anchor-w", `${String(targetWidth)}px`);
       const gap = parseFloat(getComputedStyle(element).getPropertyValue("--chrome-gap")) || 0;
+      element.style.setProperty("--popover-bottom", `${String(window.innerHeight - top + gap)}px`);
+      // Measure the layout box so entry scaling cannot move the popup during a resize.
+      const boxWidth = element.offsetWidth;
+      const boxHeight = element.offsetHeight;
       const clamp = (value: number, extent: number, size: number): number => Math.max(gap, Math.min(value, extent - size - gap));
-      if (moved.current !== null) moved.current = { x: clamp(moved.current.x, window.innerWidth, box.width), y: clamp(moved.current.y, window.innerHeight, box.height) };
-      const beside = target.right + gap + box.width > window.innerWidth - gap && target.left >= box.width + 2 * gap
-        ? target.left - box.width - gap : target.right + gap;
-      const x = moved.current?.x ?? (movable ? (window.innerWidth - box.width) / 2 : side === "right" ? beside : align === "end" ? target.right - box.width : target.left);
-      const y = moved.current?.y ?? (movable ? (window.innerHeight - box.height) / 2 : side === "top" ? target.top - box.height - gap : side === "right" ? target.top : target.bottom);
+      if (moved.current !== null) moved.current = { x: clamp(moved.current.x, window.innerWidth, boxWidth), y: clamp(moved.current.y, window.innerHeight, boxHeight) };
+      const flipped = side === "right" && right + gap + boxWidth > window.innerWidth - gap && left >= boxWidth + 2 * gap;
+      const beside = flipped ? left - boxWidth - gap : right + gap;
+      const x = moved.current?.x ?? (movable ? (window.innerWidth - boxWidth) / 2 : side === "right" ? beside : align === "end" ? right - boxWidth : left);
+      const y = moved.current?.y ?? (movable ? (window.innerHeight - boxHeight) / 2 : side === "top" ? top - boxHeight - gap : side === "right" ? top : bottom);
       // Keep grouped cards steady when the description changes size.
       if (movable && unframed) moved.current = { x, y };
+      if (!movable) {
+        element.toggleAttribute("data-flipped", flipped);
+        element.style.setProperty("--popover-anchor-x", `${String(centerX)}px`);
+        element.style.setProperty("--popover-anchor-y", `${String(centerY)}px`);
+      }
       element.style.setProperty("--popover-x", `${String(x)}px`);
       element.style.setProperty("--popover-y", `${String(y)}px`);
-      element.style.setProperty("--popover-bottom", `${String(window.innerHeight - target.top + gap)}px`);
       element.style.setProperty("--popover-gap", !movable && side === "bottom" ? "var(--space-1)" : `calc(var(--space-1) * 0)`);
-      element.style.setProperty("--popover-measured-w", `${String(box.width)}px`);
-      element.style.setProperty("--popover-measured-h", `${String(box.height)}px`);
+      element.style.setProperty("--popover-measured-w", `${String(boxWidth)}px`);
+      element.style.setProperty("--popover-measured-h", `${String(boxHeight)}px`);
     };
     placeRef.current = place;
     place();
@@ -237,6 +257,7 @@ export function Popover({
   const Container = unframed ? "section" : Surface;
   return createPortal(
     <GlassContextBoundary>
+    {backdrop && open ? <div data-popover-backdrop data-motion="fade" aria-hidden="true" /> : null}
     <Container
         ref={ref}
         id={id}

@@ -107,17 +107,17 @@ it.each(["auto", "high"] as const)("explains unavailable WebGL2 with the %s choi
   expect(screen.getByRole("button", { name: override === "auto" ? /^Automatic/u : /^High/u }).getAttribute("aria-pressed")).toBe("true");
   expect(screen.getByTestId("effective-profile").textContent).toBe("Low");
   expect(screen.getByRole("status").textContent).toContain("Map rendering unavailable");
-  expect(screen.getByRole("status").textContent).toContain("WebGL2 is unavailable");
-  expect(screen.getByRole("status").textContent).toContain("changing profiles cannot enable the map");
-  expect(screen.getByRole("status").textContent).toContain("Station search still works");
+  expect(screen.getByRole("status").textContent).toContain("does not provide WebGL2");
+  expect(screen.queryByRole("button", { name: "Reload map" })).toBeNull();
+  expect(screen.getByRole("status").textContent).toContain("Station search is available");
   expect(screen.getByRole("status").textContent).toContain(override === "auto" ? "Automatic" : "High requested");
   expect(screen.getByRole("status").textContent).not.toContain("Reduced quality");
 });
 
 it.each([
-  ["constructor", "The map could not start on this graphics device."],
-  ["overlay", "The station layer could not start on this graphics device."],
-  ["timeout", "The map did not start drawing within 15 seconds."],
+  ["constructor", "Map could not start"],
+  ["overlay", "Station layer unavailable"],
+  ["timeout", "Map startup timed out"],
 ] as const)("explains the %s startup fallback without claiming the profile was downgraded", (kind, reason) => {
   useGraphicsStore.getState().setCapabilities(capabilities);
   useGraphicsStore.getState().setOverride("high");
@@ -127,7 +127,7 @@ it.each([
   const status = screen.getByRole("status");
   expect(status.textContent).toContain(reason);
   expect(status.textContent).toContain("The station list replaces the map");
-  expect(status.textContent).toContain("Use Try the map again");
+  expect(screen.getByRole("button", { name: "Reload map" })).toBeTruthy();
   expect(status.textContent).not.toContain("developer diagnostic");
   act(() => { useGraphicsStore.getState().retryMap(); });
   expect(screen.getByTestId("effective-profile").textContent).toBe("High");
@@ -141,8 +141,8 @@ it("distinguishes a lost graphics context from a profile reduction and clears th
   act(() => { useGraphicsStore.getState().setContextLost(true); });
   expect(screen.getByTestId("effective-profile").textContent).toBe("High");
   expect(screen.getByRole("status").textContent).toContain("Map interrupted");
-  expect(screen.getByRole("status").textContent).toContain("Use Reload map");
-  expect(screen.getByRole("status").textContent).toContain("Profile unchanged");
+  expect(screen.getByRole("button", { name: "Reload map" })).toBeTruthy();
+  expect(screen.getByTestId("effective-profile").textContent).toBe("High");
   act(() => { useGraphicsStore.getState().setContextLost(false); });
   expect(screen.getByRole("status").textContent).toContain("Automatic");
   expect(screen.getByRole("status").textContent).toContain("Dedicated GPU");
@@ -156,7 +156,7 @@ it.each([0, 2])("keeps the map available for a late renderer failure in panel %i
   act(() => { useGraphicsStore.getState().setRendererFailed("overlay", "late failure", panel); });
   expect(screen.getByTestId("effective-profile").textContent).toBe("High");
   expect(screen.getByRole("status").textContent).toContain("Map panel unavailable");
-  expect(screen.getByRole("status").textContent).toContain("Use Reload maps");
+  expect(screen.getByRole("button", { name: "Reload map" })).toBeTruthy();
   expect(screen.getByRole("status").textContent).not.toContain("station list replaces");
   act(() => { useGraphicsStore.getState().setRendererReady(panel); });
   expect(screen.getByRole("status").textContent).not.toContain("Map panel unavailable");

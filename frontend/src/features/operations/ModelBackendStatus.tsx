@@ -6,6 +6,7 @@ import type { ForecastModel, ModelStatus } from "../../types/soundings";
 import { Action } from "../../ui/Controls";
 import { compactUtc, forecastLabel, formatUtc } from "../sounding/soundingTime";
 import styles from "./OperationsWorkspace.module.css";
+import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
 
 const LABELS: Record<ModelStatus["state"], string> = { available: "Available", partial: "Partial", unavailable: "Not found", unknown: "Unconfirmed", configured: "Configured" };
 const FILTERS = [{ key: "all", label: "All models" }, { key: "available", label: "Available" }, { key: "attention", label: "Needs attention" }] as const;
@@ -40,9 +41,10 @@ export function ModelBackendStatus({ models }: { models: readonly ForecastModel[
       <details className={styles.backendModel}>
         <summary><span className={styles.backendIdentity}><strong>{model.label}</strong><small>{status?.provider ?? "Provider check pending"}</small></span><span className={styles.backendState} data-state={state}><i aria-hidden="true" />{label}</span><ChevronDown className="icon-sm" aria-hidden="true" /></summary>
         <div className={styles.backendDetail}>
-          <p>{message}</p>
+          {query?.isError ? <SoundingErrorNotice error={query.error} operation="get_model_status"
+            onRetry={() => { void query.refetch(); }} busy={query.isFetching} testId={`model-status-error-${model.key}`} /> : <p>{message}</p>}
           <dl><div><dt>Cycle · UTC</dt><dd><time dateTime={model.suggestedRun} title={formatUtc(model.suggestedRun)}>{compactUtc(model.suggestedRun)}</time></dd></div><div><dt>Forecast hour</dt><dd>{forecastLabel(model.defaultForecastHour)}</dd></div></dl>
-          <div className={styles.backendChecked}><span>{status === undefined ? "Not checked yet" : <>Last checked <time dateTime={status.checkedAt} title={formatUtc(status.checkedAt)}>{status.checkedAt.slice(11, 19)} UTC</time></>}</span><Action aria-label={`Recheck ${model.label}`} disabled={!enabled || query?.isFetching} onClick={() => { void query?.refetch(); }}>{query?.isFetching ? "Checking…" : "Check again"}</Action></div>
+          <div className={styles.backendChecked}><span>{status === undefined ? "Not checked yet" : <>Last checked <time dateTime={status.checkedAt} title={formatUtc(status.checkedAt)}>{status.checkedAt.slice(11, 19)} UTC</time></>}</span>{query?.isError ? null : <Action aria-label={`Recheck ${model.label}`} disabled={!enabled || query?.isFetching} onClick={() => { void query?.refetch(); }}>{query?.isFetching ? "Checking…" : "Check again"}</Action>}</div>
         </div>
       </details>
     </li>)}</ul>

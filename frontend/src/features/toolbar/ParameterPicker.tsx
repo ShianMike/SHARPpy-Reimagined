@@ -1,5 +1,5 @@
 import { GripHorizontal, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { useMapStore } from "../../stores/mapStore";
 import { useUiStore } from "../../stores/uiStore";
 import { displayUnit } from "../../lib/displayUnits";
@@ -13,10 +13,12 @@ export function ParameterPicker({ products, selected, anchor, onClose }: {
 }): ReactNode {
   const units = useUiStore((state) => state.units);
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("All");
+  const [chosenCategory, setCategory] = useState("All");
   const [preview, setPreview] = useState(selected);
   const groups = [...new Set(products.map((product) => product.category))];
   const categories = ["All", ...groups.filter((item) => item !== "Winter Weather"), ...groups.filter((item) => item === "Winter Weather")];
+  const categoryIndex = Math.max(0, categories.indexOf(chosenCategory));
+  const category = categories[categoryIndex] ?? "All";
   const matches = products.filter((product) => `${product.label} ${product.shortLabel} ${product.description}`.toLowerCase().includes(query.trim().toLowerCase()));
   const results = matches.filter((product) => category === "All" || product.category === category);
   const detail = results.find((product) => product.key === preview) ?? results.find((product) => product.key === selected) ?? results[0];
@@ -26,7 +28,11 @@ export function ParameterPicker({ products, selected, anchor, onClose }: {
     <header className={styles.dialogHeader} data-popover-drag><IconAction icon={GripHorizontal} size="sm" label="Move popup" data-popover-move aria-description="Drag to move. Arrow keys move the popup; Home centers it on the screen." /><h2>Parameters</h2><IconAction icon={X} size="sm" label="Close parameter selector" onClick={done} /></header>
     <label className={styles.search}><input data-autofocus type="search" aria-label="Search parameters" placeholder="Find a parameter…" value={query} onChange={(event) => { setQuery(event.target.value); }} /></label>
     <div className={styles.parameterBrowser}>
-      <nav aria-label="Parameter categories" className={styles.categories}>{categories.map((item) => <button type="button" key={item} aria-current={category === item ? "true" : undefined} onClick={() => { setCategory(item); }}><span>{item}</span><small>{item === "All" ? matches.length : matches.filter((product) => product.category === item).length}</small></button>)}</nav>
+      <nav aria-label="Parameter categories" className={styles.categories} data-selection-track="vertical"
+        style={{ "--selection-index": categoryIndex } as CSSProperties}>
+        {categories.map((item) => <button type="button" key={item} aria-current={category === item ? "true" : undefined}
+          onClick={() => { setCategory(item); }}><span>{item}</span><small>{item === "All" ? matches.length : matches.filter((product) => product.category === item).length}</small></button>)}
+      </nav>
       <section key={category} data-motion="fade" className={styles.results} aria-label="Parameter results">
         <div className={styles.resultHeading}><strong>{category === "All" ? "All parameters" : category}</strong><span aria-live="polite">{results.length}</span></div>
         {results.map((product) => <button type="button" className={styles.product} key={product.key} aria-label={`${product.label}, ${displayUnit(product.palette.units, units, product.palette.display) || "Index"}`} aria-pressed={selected === product.key} aria-description={`${product.description} ${product.caveat}`} onFocus={() => { setPreview(product.key); }} onMouseEnter={() => { setPreview(product.key); }} onClick={() => {

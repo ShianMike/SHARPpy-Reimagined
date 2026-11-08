@@ -33,6 +33,17 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     """
     if should_cancel and should_cancel():
         return {}
+    if product.key == "apcp" and fxx == 0:
+        return {"apcp": np.zeros(_api.field_grid(model).shape, dtype=np.float32)}
+    if fxx < product.max_hours:
+        raise _api.HrrrFieldUnavailable(
+            f"{product.label} needs {product.max_hours} complete forecast hours")
+    if model == "gdps":
+        import sharpmod_rs
+
+        return sharpmod_rs.download_gdps_map_fields(
+            product, run, fxx, timeout, should_cancel, _api._RANGE_WORKERS,
+        )
     native = opener is _NATIVE_OPENER
     failed = threading.Event()
 
@@ -42,11 +53,6 @@ def _download_fields(product: HrrrProduct, run: datetime, fxx: int, *,
     if opener is _api._default_opener:
         def opener(url, timeout, limit, byte_range=None):
             return _api._default_opener(url, timeout, limit, byte_range, should_cancel=stopped)
-    if product.key == "apcp" and fxx == 0:
-        return {"apcp": np.zeros(_api.field_grid(model).shape, dtype=np.float32)}
-    if fxx < product.max_hours:
-        raise _api.HrrrFieldUnavailable(
-            f"{product.label} needs {product.max_hours} complete forecast hours")
     eccodes = _api._load_eccodes()
     decoded: dict[str, np.ndarray] = {}
     nam_total = model in {"nam", "nam-3km-conus"} and product.key == "apcp"

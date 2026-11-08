@@ -27,7 +27,7 @@ export function UpdateNotice(): ReactNode {
   const review = installReview === null ? null : <UpdateInstallReview />;
   if (update === null || update.version === dismissedVersion) return review;
   const busy = status === "checking" || status === "reviewing" || status === "downloading" || status === "installing";
-  const title = error !== null ? "Update failed"
+  const title = error !== null ? "Update could not be installed"
     : status === "downloading" ? `Downloading update${total === undefined ? "…" : `: ${String(Math.min(100, Math.floor(downloaded / total * 100)))}%`}`
     : status === "installing" ? "Installing update…" : `Version ${update.version} is available`;
   return <>{review}<Notice surface="floating" tone={error === null ? "info" : "danger"} role={error === null ? "status" : "alert"}
@@ -36,6 +36,6 @@ export function UpdateNotice(): ReactNode {
     {...(error === null ? { detail: "Review your work before installing." } : {})}
     actions={<>
       <Action disabled={busy} onClick={dismiss}>Later</Action>
-      <Action tone="accent" disabled={busy} onClick={install}>Update now</Action>
+      <Action tone="accent" disabled={busy} onClick={install}>{error === null ? "Update now" : "Retry update"}</Action>
     </>} /></>;
 }

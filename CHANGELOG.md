@@ -7,18 +7,114 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Upcoming
+
+- Expand the available weather-model parameters, offering only fields supported
+  by each model and the selected run.
+
+## [v3.6.0] - 2026-11-08
+
+### Added
+
+- Generate a geographic box sounding from native model columns in Model Viewer.
+  Draw, move, resize or clear a region on flat and globe maps, with keyboard
+  corner controls and cancellation. Area weights, common above-ground pressure
+  levels, specific humidity and wind components feed the existing sounding
+  diagnostics and image layout. Record extraction geometry and coverage with
+  the portable sounding; reuse leased sources and bounded native profile caches.
+  Draw individual native-grid temperature, dew-point and hodograph traces behind
+  the thicker area mean, preserving them in the portable file. Show all valid
+  columns up to 64, with a deterministic sample for larger boxes; diagnostics
+  continue to use the full area mean.
+  Document supported grids, coverage/work limits and local measurements in
+  `docs/box-soundings.md`, with scientific, contract and point-regression checks.
+- Show simulated Composite Reflectivity in GFS Model Viewer. Use the published
+  0.25-degree GFS composite field and the existing dBZ color scale; offer it
+  when the selected run and forecast hour have the required record.
+- Add GDPS forecast maps from ECCC's 15 km global grids, with available GFS-style
+  choices for pressure, winds, temperatures, moisture, and precipitation.
+  Show GDPS's native CAPE, label frozen precipitation rates as three-hour
+  averages, and filter the choices against the selected run and forecast hour.
+
+### Changed
+
+- Reduce interface typography, spacing, controls, panels and popups to 90% of
+  their original size through the shared design tokens.
+- Open and dismiss pickers toward their triggers, with a shorter exit. Buttons
+  respond immediately on press, and switches settle into their new state. The
+  selection highlight follows the workspace dock, forecast model regions,
+  Model Viewer and Live Tracking layer controls, Soundings sources, and
+  Settings sections. Respect reduced motion and keep drag and map interactions
+  immediate.
+- Carry the selection highlight into the map layout, Navigate and Inspect,
+  and parameter categories. Crossfade playback icons in Model Viewer and Live
+  Tracking, and keep every parameter category reachable in shorter windows.
+- Arrange Map details in two columns, retaining each layer's visibility toggle
+  and expandable settings, with place-name status beneath the grid.
+- Show loading in the eye control on model and radar scales. Keep the visibility
+  toggle usable while loading and restore its eye icon when the request finishes.
+- Give centered workspaces a brief settling transition and shorter exits.
+  Expand and collapse recent activity and log details smoothly, keep log
+  filters and copy feedback steady as counts change, show which recovery
+  action is running, and keep timeline status changes from shifting controls.
+- Blur and dim the entire workspace while What’s new is open, keeping the
+  highlights sharp. Use dimming alone when graphics settings turn blur off.
+- Speed up sounding profile recalculation with native pressure interpolation
+  in the render worker. Preserve SHARPpy’s endpoint and missing-value behavior,
+  and use its original routine for inputs outside the native path.
+- Refresh the README gallery with Playwright captures of the 3.6.0 interface
+  at 1920 × 1080, including native box selection and its generated sounding.
+  Preserve the previous screenshot assets.
+- Shorten the box-sounding inspector and move detailed guidance into a disclosure.
+  Use a compact, specific size-limit warning with a redraw action, and keep
+  connection/download recovery actions without repeated backend provenance.
+- Use the same compact failure notices across forecast and live layers,
+  soundings, station search, imports and exports, storage, graphics, updates
+  and service status. Name the failed operation and offer the relevant recovery
+  beside it; keep full diagnostics in a closed disclosure and Logs. Preserve
+  unavailable-history warnings, request inputs, cached charts and update checks.
+  Recover radar site and elevation checks in place instead of leaving controls
+  loading, and show missing forecast downloads with the same warning design.
+  Keep inline notice backgrounds transparent and display sounding render errors
+  directly in the viewer without an extra card or shadow.
+  Present map-layer and graphics recovery as a compact horizontal glass bar,
+  with actions beside the message and diagnostics that expand below.
+- Align Sounding controls with the shared interface: contained selection tracks
+  for interaction mode, parcel, edit variable and view fit; consistent labels,
+  buttons, dropdowns, zoom controls and panel spacing. Keep sources and controls
+  at the same width, and group export actions beneath the view settings.
+  Shorten the temperature edit-variable selector to "Temp".
+- Pick Model sounding run dates with a custom UTC calendar, month/year navigation
+  and previous/next-day controls. Choose scheduled cycles separately, retain the
+  cycle when changing dates, and respect each cycle's forecast-hour limit.
+- Remove the selected-station toggle from Model soundings. Always show and use
+  latitude and longitude, including coordinates filled from the map.
+- Keep Model sounding latitude and longitude exactly as entered, with
+  north/south and east/west labels that follow each coordinate's sign.
+  Remove the model grid description, archive hint and separate valid-time line
+  from the form; keep forecast valid times in the forecast picker.
+
 ### Fixed
+
+- Preserve the committed box when a draw, move or corner resize is interrupted.
+  Restore map panning after pointer capture is lost, ignore additional touches
+  during a drag, and cancel corner edits on Escape or lost window focus without
+  accepting a late drag result. Leave browser arrow shortcuts unchanged.
+- Restore parameter-list reload after a frontend/backend contract mismatch;
+  keep validating the replacement catalogue before making its fields available.
+- Keep sounding source input focus rings fully visible at the form's scroll
+  edges, including the station field and both coordinate fields.
+- Remove the empty feedback gap between the Logs filters and event table; only
+  allocate feedback space while a copy/export message is present.
+- Keep unavailable effective-layer wind values masked instead of converting
+  missing numeric placeholders into enormous vectors. Match the native verified
+  ground merge to the existing saturated-surface rounding tolerance.
 
 - Preserve compatible Windows release dependencies when the desktop v2 cache
   misses by restoring the legacy cache with its original path identity and
   rebuilding both first-party desktop crates. Retain the populated v2 cache
   namespace and skip dependency-cache cleanup on exact hits, which do not
   upload another archive. Keep all release artifact and acceptance checks.
-
-### Upcoming
-
-- Expand the available weather-model parameters, offering only fields supported
-  by each model and the selected run.
 
 ## [v3.5.5] - 2026-11-07
 

@@ -1,0 +1,4 @@
+.handle { width: var(--space-3); height: var(--space-3); min-width: 0; padding: 0; border: var(--map-box-handle-border) solid var(--text-primary); border-radius: var(--space-0-5); background: var(--accent); cursor: nwse-resize; box-shadow: var(--shadow-chrome); }
+.handle[data-corner="1"], .handle[data-corner="3"] { cursor: nesw-resize; }
+.handle:focus-visible { outline: var(--focus-ring-width) solid var(--accent-bright); outline-offset: var(--space-1); }
+.handle:global(.maplibregl-marker-covered) { visibility: hidden; pointer-events: none; }

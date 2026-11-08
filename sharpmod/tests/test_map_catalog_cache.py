@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+import sharpmod_rs
 
 from sharpmod.bridge import fields, frame_cache
 from sharpmod.bridge.errors import BridgeError
@@ -37,6 +38,9 @@ def saved_frames(tmp_path, monkeypatch):
         return b"1:0:d=2026102700:TMP:2 m above ground:6 hour fcst:\n"
 
     monkeypatch.setattr(hf, "_default_opener", inventory)
+    monkeypatch.setattr(sharpmod_rs, "available_gdps_map_products", lambda products, *_args: [
+        product for product in products if product.key == "tmp-2m"
+    ])
     hf.clear_cache()
     try:
         yield
@@ -51,6 +55,7 @@ def _offline(monkeypatch, error=hf.HrrrFieldOffline):
         raise error("inventory is offline")
 
     monkeypatch.setattr(hf, "_default_opener", unavailable)
+    monkeypatch.setattr(sharpmod_rs, "available_gdps_map_products", unavailable)
     monkeypatch.setattr(hf, "_download_fields", lambda *_args, **_kwargs: pytest.fail(
         "A saved frame must not be downloaded again"))
 
@@ -61,7 +66,8 @@ def test_saved_fields_remain_selectable_after_offline_restart(saved_frames, monk
     request = {**REQUEST, "model": model}
     assert [p["key"] for p in fields.catalog(request)["products"]] == ["tmp-2m"]
     saved = fields.grid({**request, "product": "tmp-2m"})
-    assert hf._INVENTORY_CACHE
+    if model != "gdps":
+        assert hf._INVENTORY_CACHE
     _offline(monkeypatch, error)
     assert not hf._INVENTORY_CACHE
 

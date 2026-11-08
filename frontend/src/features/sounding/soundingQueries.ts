@@ -79,7 +79,7 @@ export function useModelCatalog(): UseQueryResult<ModelCatalog> {
  * Opens a sounding. On success it joins the open list, becomes the active
  * sounding, and the Sounding workspace comes forward.
  */
-export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, OpenSoundingRequest> & { progress: SoundingProgress | undefined; cancelled: boolean; cancel: () => void } {
+export function useOpenSounding(accept?: () => boolean): UseMutationResult<SoundingSummary, Error, OpenSoundingRequest> & { progress: SoundingProgress | undefined; cancelled: boolean; cancel: () => void } {
   const client = useBackendClient();
   const [progressId, setProgressId] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
@@ -87,6 +87,7 @@ export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, Ope
   useEffect(() => () => { controller.current?.abort(); controller.current = null; }, []);
   const mutation = useMutation({
     mutationFn: async (request: OpenSoundingRequest) => {
+      controller.current?.abort();
       const id = request.kind === "model" ? crypto.randomUUID().replaceAll("-", "") : undefined;
       setProgressId(id ?? null);
       setCancelled(false);
@@ -95,6 +96,7 @@ export function useOpenSounding(): UseMutationResult<SoundingSummary, Error, Ope
       try {
         const summary = await client.openSounding(request, id, request.kind === "model" ? job.signal : undefined);
         if (request.kind === "model") job.signal.throwIfAborted();
+        if (controller.current !== job || accept?.() === false) throw new DOMException("The sounding selection changed", "AbortError");
         useSoundingStore.getState().add(summary);
         useAppStore.getState().setActiveWorkspace("sounding");
         return summary;

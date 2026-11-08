@@ -6,6 +6,8 @@ import { BrandMark } from "../../ui/BrandMark";
 import { Action } from "../../ui/Controls";
 import styles from "./SettingsView.module.css";
 import { ReleaseNotes } from "./ReleaseNotes";
+import { Notice } from "../../components/Notice";
+import { Download } from "lucide-react";
 
 export function UpdateSettings(): ReactNode {
   const { status, update, downloaded, total, error, check, install } = useUpdateStore();
@@ -25,10 +27,14 @@ export function UpdateSettings(): ReactNode {
       <BrandMark className={styles.updateBrand} />
       <div><h3>SHARPpy Reimagined</h3><p className={styles.updateVersion}>Current version: {version}</p></div>
     </div>
-    <div className={styles.updateStatus}>
-      <div className={styles.updateMessage} role={error === null ? "status" : "alert"}>
+    {error !== null ? <Notice tone="danger" role="alert" title={update === null ? "Update check failed" : "Update could not be installed"} icon={Download}
+      message={error} testId="update-error" actions={<>
+        <Action disabled={!desktop || busy} onClick={() => { void check(); }}>Check for updates</Action>
+        {update === null ? null : <Action tone="accent" disabled={!desktop || busy} onClick={install}>Retry update</Action>}
+      </>} /> : <div className={styles.updateStatus}>
+      <div className={styles.updateMessage} role="status">
         <p className={styles.updateTitle}>{title}</p>
-        <p>{!desktop ? "Check for updates in the installed Windows app." : error ?? (update === null
+        <p>{!desktop ? "Check for updates in the installed Windows app." : (update === null
           ? "New releases are installed only when you choose."
           : "Updating keeps saved preferences and disk caches. Open soundings, profile edits and undo/redo history are lost when the app closes. Review your work before installing.")}</p>
       </div>
@@ -36,7 +42,7 @@ export function UpdateSettings(): ReactNode {
         <Action tone={update === null ? "accent" : "quiet"} disabled={!desktop || busy} onClick={() => { void check(); }}>{status === "checking" ? "Checking…" : "Check for updates"}</Action>
         {update === null ? null : <Action tone="accent" disabled={!desktop || busy} onClick={install}>Install update</Action>}
       </div>
-    </div>
+    </div>}
     <p className={styles.updateSchedule}>Automatic checks run at 00:00 and 12:00 UTC, once per window on this device. If the app is closed or offline, it checks when next available. You can check manually anytime and choose when to install.</p>
     {status === "downloading" ? <div className={styles.updateProgress}>
       <progress aria-label="Update download" value={total === undefined ? undefined : downloaded} max={total ?? 1} />

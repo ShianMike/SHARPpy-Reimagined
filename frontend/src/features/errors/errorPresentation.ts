@@ -1,10 +1,8 @@
-// How a backend error is presented (DESIGN-contracts C6): the notice title
-// from the operation, the muted provider and resource line, and the action
-// each code calls for. Presentation only: the message itself is composed by
-// the producer and shown as it is.
+// Operation names and recovery permissions shared by notices and service status.
 
 import type { AnyBackendError, ErrorContext } from "../../types/contracts";
 import type { CommandName } from "../../lib/backend/transport";
+import { Activity, Archive, Bell, CloudDownload, CloudSun, Database, FileSearch, Layers, Map, MapPin, Radar, Satellite, Server, Wind, type LucideIcon } from "lucide-react";
 
 export interface ErrorActions {
   /** Retry: repeating the same request may succeed. */
@@ -49,58 +47,83 @@ export function errorActions(code: AnyBackendError["code"]): ErrorActions {
   return ACTIONS[code];
 }
 
-/**
- * REQUEST §27 asks every error to say whether retrying is possible. With a
- * Retry or Restart button the button says it; without one, this line does.
- */
-export function noRetryHint(actions: ErrorActions): string | null {
-  if (actions.retry || actions.restart) {
-    return null;
-  }
-  return actions.configure ? "Retrying will not help until this is fixed." : "Retrying will not help.";
-}
-
 const TITLES: Readonly<Record<string, string>> = {
-  get_cached_forecast_hours: "Downloaded hours could not be checked",
-  cancel_request: "The request could not be stopped",
-  get_radar_tilts: "Radar tilts could not be checked",
-  get_storage_usage: "Cache usage could not be loaded",
-  clear_cache: "Cached weather data could not be cleared",
-  get_station_catalog: "Stations could not be loaded",
-  get_backend_health: "The backend status could not be checked",
-  restart_backend: "The backend could not be restarted",
-  start_backend: "The Python backend could not start",
-  get_model_catalog: "Forecast models could not be loaded",
-  get_model_status: "Model availability could not be checked",
-  open_sounding: "The sounding could not be opened",
-  get_sounding_progress: "Sounding download progress could not be checked",
-  inspect_wrf: "The WRF file could not be inspected",
-  get_sounding_analysis: "The sounding parameters could not be computed",
-  get_sounding_trends: "Sounding trends could not be loaded",
-  get_threshold_metrics: "The threshold diagnostics could not be loaded",
-  evaluate_threshold: "The threshold could not be evaluated",
-  export_threshold_csv: "The threshold results could not be exported",
+  get_cached_forecast_hours: "Saved forecast hours unavailable",
+  cancel_request: "Request is still running",
+  get_radar_tilts: "Radar elevations unavailable",
+  get_storage_usage: "Cache usage unavailable",
+  clear_cache: "Cache could not be cleared",
+  get_station_catalog: "Stations unavailable",
+  get_backend_health: "Service status unavailable",
+  restart_backend: "Service restart failed",
+  start_backend: "Weather service could not start",
+  get_model_catalog: "Forecast models unavailable",
+  get_model_status: "Model availability unknown",
+  open_sounding: "Sounding unavailable",
+  get_sounding_progress: "Download progress unavailable",
+  inspect_wrf: "WRF file could not be read",
+  get_sounding_analysis: "Sounding calculations unavailable",
+  get_sounding_trends: "Sounding trends unavailable",
+  get_threshold_metrics: "Threshold diagnostics unavailable",
+  evaluate_threshold: "Threshold calculation failed",
+  export_threshold_csv: "Threshold export failed",
   render_sounding: "Sounding image unavailable",
   render_sounding_view: "Sounding image unavailable",
-  get_map_catalog: "Map products could not be loaded",
-  get_weather_field: "The model field could not be loaded",
-  get_spc_outlook: "The SPC outlook could not be loaded",
-  get_weather_alerts: "NWS warnings and watches could not be loaded",
-  get_radar_frame: "The radar mosaic could not be loaded",
-  get_radar_sites: "Radar sites could not be loaded",
-  get_radar_site_frame: "The radar site image could not be loaded",
-  get_satellite_frame: "The satellite image could not be loaded",
-  get_storm_reports: "Storm reports could not be loaded",
-  get_report_options: "Storm report options could not be loaded",
-  get_field_contours: "Map contours could not be loaded",
-  get_surface_plots: "Surface observations could not be loaded",
-  get_place_labels: "Place names could not be loaded",
-  get_station_availability: "Station availability could not be checked",
+  get_map_catalog: "Map parameters unavailable",
+  get_weather_field: "Forecast field unavailable",
+  get_spc_outlook: "SPC outlook unavailable",
+  get_weather_alerts: "Warnings and watches unavailable",
+  get_radar_frame: "Radar mosaic unavailable",
+  get_radar_sites: "Radar sites unavailable",
+  get_radar_site_frame: "Radar image unavailable",
+  get_satellite_frame: "Satellite imagery unavailable",
+  get_storm_reports: "Storm reports unavailable",
+  get_report_options: "Report dates unavailable",
+  get_field_contours: "Map contours unavailable",
+  get_surface_plots: "Surface observations unavailable",
+  get_place_labels: "Place names unavailable",
+  get_station_availability: "Station availability unknown",
 } satisfies Record<CommandName | "start_backend", string>;
 
-/** "Stations could not be loaded" for get_station_catalog. */
 export function errorTitle(context: ErrorContext | undefined): string {
-  return (context !== undefined && Object.hasOwn(TITLES, context.operation) ? TITLES[context.operation] : undefined) ?? "A backend request failed";
+  return (context !== undefined && Object.hasOwn(TITLES, context.operation) ? TITLES[context.operation] : undefined) ?? "Weather request failed";
+}
+
+const RECOVERY: Partial<Record<CommandName, readonly [string, LucideIcon]>> = {
+  get_cached_forecast_hours: ["Check saved hours", Archive],
+  cancel_request: ["Cancel request", Activity],
+  get_radar_tilts: ["Check elevations", Radar],
+  get_storage_usage: ["Refresh usage", Database],
+  clear_cache: ["Clear cache again", Database],
+  get_station_catalog: ["Reload stations", MapPin],
+  get_backend_health: ["Check connection", Server],
+  get_model_catalog: ["Reload models", CloudSun],
+  get_model_status: ["Check model", CloudSun],
+  open_sounding: ["Try again", CloudDownload],
+  inspect_wrf: ["Read file again", FileSearch],
+  get_sounding_analysis: ["Recalculate", Activity],
+  get_sounding_trends: ["Reload trends", Activity],
+  render_sounding: ["Redraw sounding", Activity],
+  render_sounding_view: ["Redraw sounding", Activity],
+  get_map_catalog: ["Reload parameters", Layers],
+  get_weather_field: ["Retry field", Layers],
+  get_spc_outlook: ["Retry outlook", Map],
+  get_weather_alerts: ["Retry alerts", Bell],
+  get_radar_frame: ["Retry radar", Radar],
+  get_radar_site_frame: ["Retry radar", Radar],
+  get_radar_sites: ["Reload radar sites", Radar],
+  get_satellite_frame: ["Retry imagery", Satellite],
+  get_storm_reports: ["Retry reports", MapPin],
+  get_report_options: ["Reload dates", MapPin],
+  get_field_contours: ["Retry contours", Wind],
+  get_surface_plots: ["Retry observations", Wind],
+  get_place_labels: ["Retry place names", MapPin],
+  get_station_availability: ["Check station", MapPin],
+};
+
+export function errorRecovery(context: ErrorContext | undefined): readonly [string, LucideIcon] {
+  return (context !== undefined && Object.hasOwn(RECOVERY, context.operation)
+    ? RECOVERY[context.operation as CommandName] : undefined) ?? ["Try again", Server];
 }
 
 const PROVIDERS: Readonly<Record<string, string>> = {

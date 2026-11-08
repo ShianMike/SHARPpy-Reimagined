@@ -1350,7 +1350,7 @@ DEFAULT_PRODUCT = "refc"
 
 
 ECMWF_MODELS = ("openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km")
-GLOBAL_MODELS = (*ECMWF_MODELS, "aigfs", "gfs")
+GLOBAL_MODELS = (*ECMWF_MODELS, "aigfs", "gfs", "gdps")
 HRW_MODELS = ("hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3")
 FIELD_MODELS = ("hrrr", "rrfs-a", "nam", "nam-3km-conus", *(f"refs-m{i}" for i in range(1, 6)), *GLOBAL_MODELS, *HRW_MODELS)
 _HRW_UNSUPPORTED = frozenset({"ltng", "efhl", "prate", "prate-frzr", "prate-sleet", "prate-snow", "snod", "mucape", "scp", "stp"})
@@ -1384,6 +1384,8 @@ def _available_products(model: str) -> tuple[HrrrProduct, ...]:
         raise ValueError(f"{model!r} has no map field catalogue")
     if model == "hrrr":
         return tuple(PRODUCTS.values())
+    if model == "gdps":
+        return ()  # The native catalogue owns the GDPS product set.
     if model == "aigfs":
         keys = {*(f"hgt-wind-{level}" for level in (200, 300, 500, 700, 850)),
                 "tmp-2m", "wind-10m", "apcp", "lapse-700-500"}
@@ -1439,7 +1441,7 @@ def _available_products(model: str) -> tuple[HrrrProduct, ...]:
 
 @lru_cache(maxsize=len(FIELD_MODELS))
 def available_products(model: str = "hrrr") -> tuple[HrrrProduct, ...]:
-    """Adapt native pressure metadata to the existing model catalogue."""
+    """Apply native product metadata to the existing model catalogue."""
     from sharpmod.backends.selector import _rust_is_installed
 
     if not _rust_is_installed():

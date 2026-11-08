@@ -1,14 +1,14 @@
-// A backend error as a notice (REQUEST §27, DESIGN-contracts C6): what failed
-// (the title, from the operation), the producer's message, what was involved
-// (a muted provider and resource line), and what the user can do: Retry,
-// Restart backend, the configuration instruction (the message itself), or the
-// developer log path. details never render; the client already logged them.
+// A compact failure explanation and the recovery the operation supports.
+// Keep the producer's message and provenance in Details; raw error.details
+// remain in the diagnostic log, never rendered as page content.
 
-import type { ReactNode } from "react";
+import { ChevronDown, LoaderCircle, RotateCcw } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { Action } from "../../ui/Controls";
 import { Notice } from "../../components/Notice";
 import type { AnyBackendError } from "../../types/contracts";
-import { errorActions, errorSourceLine, errorTitle, noRetryHint } from "./errorPresentation";
+import { errorActions, errorRecovery, errorSourceLine } from "./errorPresentation";
+import { errorCopy } from "./errorCopy";
 import styles from "./BackendErrorNotice.module.css";
 
 export interface BackendErrorNoticeProps {
@@ -22,6 +22,7 @@ export interface BackendErrorNoticeProps {
   surface?: "floating" | "flat";
   testId?: string;
   showIcon?: boolean;
+  operation?: string;
 }
 
 export function BackendErrorNotice({
@@ -33,47 +34,50 @@ export function BackendErrorNotice({
   surface = "floating",
   testId = "backend-error",
   showIcon = true,
+  operation,
 }: BackendErrorNoticeProps): ReactNode {
+  const [action, setAction] = useState<"retry" | "restart" | null>(null);
   const actions = errorActions(error.code);
-  const source = errorSourceLine(error.context);
-  const hint = noRetryHint(actions);
+  const context = operation === undefined ? error.context : { ...error.context, operation };
+  const copy = errorCopy(error, context);
+  const source = errorSourceLine(context);
+  const [retryLabel] = errorRecovery(context);
   const buttons =
     actions.retry || actions.restart ? (
       <>
         {actions.retry ? (
-          <Action tone="accent" disabled={busy} onClick={onRetry}>
-            Retry
+          <Action tone="accent" disabled={busy} aria-busy={busy && action === "retry"} onClick={() => { setAction("retry"); onRetry(); }}>
+            {busy && action === "retry" ? <><LoaderCircle className="icon-sm" data-loading="true" aria-hidden="true" />Retrying…</> : <><RotateCcw className="icon-sm" aria-hidden="true" />{retryLabel}</>}
           </Action>
         ) : null}
         {actions.restart ? (
-          <Action tone={actions.retry ? "quiet" : "accent"} disabled={busy} onClick={onRestart}>
-            Restart backend
+          <Action tone={actions.retry ? "quiet" : "accent"} disabled={busy} aria-busy={busy && action === "restart"} onClick={() => { setAction("restart"); onRestart(); }}>
+            {busy && action === "restart" ? <><LoaderCircle className="icon-sm" data-loading="true" aria-hidden="true" />Restarting…</> : "Restart service"}
           </Action>
         ) : null}
       </>
     ) : undefined;
   return (
     <Notice
-      tone="danger"
+      tone={copy.tone}
       surface={surface}
       role="alert"
-      title={errorTitle(error.context)}
-      message={error.message}
-      {...(source === null ? {} : { detail: source })}
+      title={copy.title}
+      message={copy.message}
+      icon={copy.icon}
       {...(buttons === undefined ? {} : { actions: buttons })}
       testId={testId}
       showIcon={showIcon}
     >
-      {hint === null ? null : (
-        <p className={styles.hint} data-testid="error-no-retry">
-          {hint}
-        </p>
-      )}
-      {actions.logPath ? (
-        <p className={styles.log} data-testid="error-log-path">
-          {logFile === null ? "Details are in the developer log." : `Details are in the log: ${logFile}`}
-        </p>
-      ) : null}
+      <details className={styles.details}>
+        <summary>Details<ChevronDown className="icon-sm" aria-hidden="true" /></summary>
+        {copy.message === error.message ? null : <p>{error.message}</p>}
+        {source === null ? null : <p>{source}</p>}
+        <code>{error.code}{context === undefined ? "" : ` · ${context.operation}`}</code>
+        {actions.logPath ? <p className={styles.log} data-testid="error-log-path">
+          {logFile === null ? "Recorded in Logs." : `Log: ${logFile}`}
+        </p> : null}
+      </details>
     </Notice>
   );
 }

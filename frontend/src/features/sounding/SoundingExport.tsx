@@ -8,6 +8,7 @@ import { useObjectUrl } from "./soundingQueries";
 import { annotatedSoundingPng, editedLevelAnnotations } from "./exportAnnotations";
 import { SourceSelect } from "./SourceFields";
 import styles from "./Viewer.module.css";
+import { Notice } from "../../components/Notice";
 
 export function SoundingExport({ view, quality, onQualityChange, ready, busy, filename }: {
   view: SoundingView | undefined; quality: ImageMode; ready: boolean; busy: boolean; filename: string;
@@ -16,7 +17,7 @@ export function SoundingExport({ view, quality, onQualityChange, ready, busy, fi
   const units = useUiStore((state) => state.units);
   const url = useObjectUrl(view?.image);
   const annotations = view === undefined ? [] : editedLevelAnnotations(view, units);
-  const [notice, setNotice] = useState<{ image: Blob; text: string; pending: boolean; failed: boolean } | null>(null);
+  const [notice, setNotice] = useState<{ image: Blob; text: string; pending: boolean; failed: boolean; copy?: boolean } | null>(null);
   const exporting = notice?.pending === true;
   const enabled = ready && url !== null && view !== undefined && !exporting;
   const currentNotice = ready && notice?.image === view?.image ? notice : null;
@@ -37,7 +38,7 @@ export function SoundingExport({ view, quality, onQualityChange, ready, busy, fi
       }
       setNotice({ image: view.image, text: copy ? "Copied" : "Exported", pending: false, failed: false });
     } catch {
-      setNotice({ image: view.image, text: copy ? "Copy unavailable. Use Export PNG." : "Export failed. Try again.", pending: false, failed: true });
+      setNotice({ image: view.image, text: copy ? "Clipboard access is unavailable. Save the image as a PNG." : "The image could not be saved. Try exporting again.", pending: false, failed: true, copy });
     }
   };
   return <>
@@ -51,11 +52,13 @@ export function SoundingExport({ view, quality, onQualityChange, ready, busy, fi
           ? `~${(view.image.size / 1024 ** 2).toFixed(2)} MiB` : "—"}</span>
       </div>
     </div>
-    <SourceSelect<ImageMode> label="Image resolution" value={quality} disabled={busy || exporting} compact options={[{ value: "uhd", label: "UHD · lossless" }, { value: "hd", label: "HD · lossless" }]} onChange={onQualityChange} />
+    <SourceSelect<ImageMode> label="Image resolution" value={quality} disabled={busy || exporting} options={[{ value: "uhd", label: "UHD · lossless" }, { value: "hd", label: "HD · lossless" }]} onChange={onQualityChange} />
     <div className={styles.exportButtons}>
       <Action tone="accent" disabled={!enabled} title={description} aria-description={description} onClick={() => { void exportImage(false); }}><Download className="icon-sm" aria-hidden="true" />Export PNG</Action>
       <Action aria-label="Copy sounding image" disabled={!enabled} title={description} aria-description={description} onClick={() => { void exportImage(true); }}><Copy className="icon-sm" aria-hidden="true" />Copy</Action>
     </div>
-    {currentNotice?.failed ? <p className={styles.exportNotice} role="alert">{currentNotice.text}</p> : null}
+    {currentNotice?.failed ? <Notice tone="danger" role="alert" title={currentNotice.copy ? "Image copy unavailable" : "Image export failed"}
+      icon={currentNotice.copy ? Copy : Download} message={currentNotice.text}
+      actions={<Action tone="accent" disabled={!enabled} onClick={() => { void exportImage(false); }}>Export PNG again</Action>} /> : null}
   </>;
 }

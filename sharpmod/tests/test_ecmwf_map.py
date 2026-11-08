@@ -101,7 +101,7 @@ def test_derived_humidity_snow_depth_and_precipitation_types():
 @pytest.mark.parametrize("model", hp.GLOBAL_MODELS)
 def test_native_cell_mapping_wraps_longitude_and_keeps_north_at_the_top(model):
     mapping = hf.index_map((4, 2), (-180, 180, -60, 60), model=model)
-    native = ec.grid(model)
+    native = hf.field_grid(model)
     for index, (lon, lat) in enumerate(((-135, 30), (-45, 30), (45, 30), (135, 30),
                                        (-135, -30), (-45, -30), (45, -30), (135, -30))):
         row, col = round((90 - lat) / native.spacing), round((lon + 180) / native.spacing)
@@ -148,7 +148,12 @@ def test_shared_scalar_contour_and_wind_pipeline_uses_global_grid(tmp_path, monk
         assert scalar["value_max"] == pytest.approx(10 * hp.MS_TO_KT)
         packed = np.frombuffer(base64.b64decode(auxiliary["wind"]["data_base64"]), dtype="<u2")
         assert (packed & 511 == 270).all()  # These global winds already reference true north.
-        assert ("GFS" if model == "gfs" else "AIGFS" if model == "aigfs" else "ECMWF") in scalar["attribution"]
-        assert ("/gfs." if model == "gfs" else "/aigfs/" if model == "aigfs" else "/ifs/") in scalar["source_url"]
+        attribution, source = {
+            "gfs": ("GFS", "/gfs."),
+            "aigfs": ("AIGFS", "/aigfs/"),
+            "gdps": ("MSC Datamart", "/model_gdps/"),
+        }.get(model, ("ECMWF", "/ifs/"))
+        assert attribution in scalar["attribution"]
+        assert source in scalar["source_url"]
     finally:
         hf.clear_derived_cache()

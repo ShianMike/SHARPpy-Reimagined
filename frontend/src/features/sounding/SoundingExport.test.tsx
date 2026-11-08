@@ -94,7 +94,8 @@ it("copies the prepared PNG once, disables concurrent exports, and keeps downloa
   write.mockRejectedValueOnce(new Error("Clipboard denied"));
   fireEvent.click(screen.getByRole("button", { name: "Copy sounding image" }));
   await screen.findByRole("alert");
-  expect(screen.getByRole("alert").textContent).toBe("Copy unavailable. Use Export PNG.");
+  expect(screen.getByRole("alert").textContent).toContain("Image copy unavailable");
+  expect(screen.getByRole("button", { name: "Export PNG again" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Export PNG" }).hasAttribute("disabled")).toBe(false);
 });
 

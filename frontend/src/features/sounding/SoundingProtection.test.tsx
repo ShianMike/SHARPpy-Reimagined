@@ -40,7 +40,7 @@ afterEach(cleanup);
 
 describe("Sounding local work protection", () => {
   it("stops successive model downloads without opening a sounding or losing cancellation ownership", async () => {
-    useSoundingStore.getState().setModel({ atStation: false, latitude: "35", longitude: "-97" });
+    useSoundingStore.getState().setModel({ latitude: "35", longitude: "-97" });
     const base = viewTransport();
     const call = vi.fn<Transport["call"]>((command, args) => command === "open_sounding"
       ? new Promise(() => undefined) : base.call(command, args));
@@ -52,7 +52,7 @@ describe("Sounding local work protection", () => {
       await waitFor(() => { expect(queryClient.isMutating()).toBe(0); });
       expect(screen.getByRole("status").textContent).toBe("Request cancelled. Your inputs and open soundings have been kept.");
       expect(screen.getByRole<HTMLButtonElement>("button", { name: "Open sounding" }).disabled).toBe(false);
-      expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Longitude, degrees east" }).value).toBe("-97");
+      expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Longitude" }).value).toBe("-97");
       expect(screen.queryByTestId("model-error")).toBeNull();
       expect(call.mock.calls.filter(([command]) => command === "cancel_request")).toHaveLength(attempt);
       expect(useSoundingStore.getState().open).toHaveLength(0);

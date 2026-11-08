@@ -48,7 +48,7 @@ it("keeps the selected variable when stepping through levels and applies to the 
   await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
   expect(apply.mock.calls[0]?.[0].id).toBe("wind:1");
   expect(apply.mock.calls[0]?.[1]).toMatchObject({ u: 14 });
-  await userEvent.click(within(screen.getByRole("group", { name: "Edit variable" })).getByRole("button", { name: "Temperature" }));
+  await userEvent.click(within(screen.getByRole("group", { name: "Edit variable" })).getByRole("button", { name: "Temp" }));
   await userEvent.click(screen.getByRole("button", { name: "Previous level" }));
   expect(screen.getByRole("spinbutton", { name: "Temperature °C" })).toBeTruthy();
 });

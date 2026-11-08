@@ -62,5 +62,5 @@ export function useFullscreen() {
     return () => { document.removeEventListener("keydown", onKey); };
   }, [fullscreen, nativeWindow, toggle]);
 
-  return { fullscreen, busy, error, toggle };
+  return { fullscreen, busy, error, toggle, dismissError: () => { setError(""); } };
 }

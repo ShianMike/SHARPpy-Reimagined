@@ -25,7 +25,7 @@ fn vector<'py>(
 }
 
 #[pyfunction]
-fn profile_wind_layers<'py>(
+pub(crate) fn profile_wind_layers<'py>(
     py: Python<'py>,
     prof: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyDict>> {
@@ -205,7 +205,7 @@ fn profile_wind_layers<'py>(
             } else {
                 result.set_item(
                     format!("{side}_srw_{suffix}"),
-                    PyList::new(py, [-9999.; 3])?,
+                    PyList::new(py, [&missing; 3])?,
                 )?;
             }
         }
@@ -252,11 +252,11 @@ fn profile_wind_layers<'py>(
             utils.call_method1("mag", vector(py, layers[11].shear, &missing)?)?,
         )?;
     } else {
-        result.set_item("eff_shear", PyList::new(py, [-9999.; 2])?)?;
+        result.set_item("eff_shear", PyList::new(py, [&missing; 2])?)?;
         for name in ["ebwd", "mean_eff", "mean_ebw"] {
-            result.set_item(name, PyList::new(py, [-9999.; 3])?)?;
+            result.set_item(name, PyList::new(py, [&missing; 3])?)?;
         }
-        result.set_item("ebwspd", -9999.)?;
+        result.set_item("ebwspd", &missing)?;
     }
     for name in [
         "srw_eff",

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Eye, EyeOff, LoaderCircle, TriangleAlert } from "lucide-react";
+import { Eye, EyeOff, TriangleAlert } from "lucide-react";
 import { cx } from "../../lib/cx";
 import { displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
@@ -55,7 +55,7 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
   const age = Date.parse(time ?? "") - Date.parse(frame?.validTime ?? "");
   const delay = age > 10 * 60_000 ? `Radar scan is ${String(Math.floor(age / 60_000))} minutes behind the selected time` : null;
   const status = !visible ? null : query.isError ? "Unavailable" : query.isFetching ? "Loading…" : delay;
-  const StatusIcon = query.isError || !query.isFetching ? TriangleAlert : LoaderCircle;
+  const loading = visible && query.isFetching && !query.isError;
   if (horizontal) return <div className={styles.inline} aria-label="Radar color key">
     <strong>{label}{shownUnits ? ` · ${shownUnits}` : ""}</strong>
     {palette !== null ? <FieldLegend palette={palette} description={description} /> : frame?.legendPng
@@ -67,8 +67,8 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
       <div className={styles.ramp} aria-hidden="true">{frame?.legendPng === undefined || frame.legendPng === null ? null : <img src={frame.legendPng} alt="" />}</div>
       <span className={cx(hints.hint, styles.key)} data-side="left" role="tooltip"><strong>{label}{units ? ` · ${units}` : ""}</strong>{frame?.legendPng ? <img src={frame.legendPng} alt={`${label} · NOAA color scale`} /> : <span>{status ?? (visible ? "Provider color key unavailable." : "Enable the layer to load its color key.")}</span>}</span>
     </div> : <FieldLegend palette={palette} vertical description={`${description}${scan === "" ? "" : ` ${scan}.`}`} />}
-    {status === null ? null : <span className={cx(scaleStyles.status, hints.target)} tabIndex={0} role="img" aria-label={status}><StatusIcon className="icon-sm" data-loading={query.isFetching && !query.isError} aria-hidden="true" /><span className={hints.hint} data-side="left" aria-hidden="true">{label} · {status}{scan === "" ? "" : ` · ${scan}`}</span></span>}
-    <IconAction className={scaleStyles.visibility} size="sm" icon={visible ? Eye : EyeOff} label="Radar layer" aria-pressed={visible} aria-description={visible ? "Layer on. Activate to hide." : "Layer off. Activate to show."} hintSide="left" onClick={() => {
+    {status === null || loading ? null : <span className={cx(scaleStyles.status, hints.target)} tabIndex={0} role="img" aria-label={status}><TriangleAlert className="icon-sm" aria-hidden="true" /><span className={hints.hint} data-side="left" aria-hidden="true">{label} · {status}{scan === "" ? "" : ` · ${scan}`}</span></span>}
+    <IconAction className={scaleStyles.visibility} size="sm" icon={visible ? Eye : EyeOff} loading={loading} label="Radar layer" aria-pressed={visible} aria-description={`${loading ? "Loading. " : ""}${visible ? "Layer on. Activate to hide." : "Layer off. Activate to show."}`} hintSide="left" hintText={`Radar layer${loading ? " · Loading…" : ""}`} onClick={() => {
       const state = useMapStore.getState();
       state.setActivePanel(panel);
       state.setLayerVisible("radar", !panelLayers(state, panel).radar.visible);

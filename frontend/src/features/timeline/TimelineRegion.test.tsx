@@ -26,7 +26,7 @@ afterEach(cleanup);
 
 it.each(["gefs", "nam", "nam-3km-conus", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3", "sref", "href"])("offers exactly the requested models in both selectors and resolves removed choice %s safely", async (modelKey) => {
   useForecastStore.getState().setModel(modelKey);
-  useSoundingStore.getState().setModel({ modelKey, atStation: false, latitude: "35", longitude: "-97" });
+  useSoundingStore.getState().setModel({ modelKey, latitude: "35", longitude: "-97" });
   const base = createTransport();
   let request: unknown;
   renderWithBackend(<><ForecastControls /><ModelForm /></>, {
@@ -69,7 +69,7 @@ it.each(["gefs", "nam", "nam-3km-conus", "hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3
 
 it("keeps AIGFS in maps and safely falls back to HRRR in the sounding form", async () => {
   useForecastStore.getState().setModel("aigfs");
-  useSoundingStore.getState().setModel({ modelKey: "aigfs", atStation: false, latitude: "35", longitude: "-97" });
+  useSoundingStore.getState().setModel({ modelKey: "aigfs", latitude: "35", longitude: "-97" });
   renderWithBackend(<><ForecastControls /><TimelineRegion /><ModelForm /></>, createTransport());
   const model = await screen.findByRole<HTMLButtonElement>("combobox", { name: "Model" });
   expect(model.value).toBe("hrrr");
@@ -90,7 +90,7 @@ it.each(["openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km"])("shares %s run limits betwe
   useForecastStore.getState().setModel(modelKey);
   useForecastStore.getState().setRun(fullRun ?? "");
   useForecastStore.getState().setHour(360);
-  useSoundingStore.getState().setModel({ modelKey, runTime: shortRun ?? null, forecastHour: 360, atStation: false, latitude: "35", longitude: "-97" });
+  useSoundingStore.getState().setModel({ modelKey, runTime: shortRun ?? null, forecastHour: 360, latitude: "35", longitude: "-97" });
   const base = createTransport();
   let request: unknown;
   renderWithBackend(<><ForecastControls /><TimelineRegion /><ModelForm /></>, {
@@ -190,11 +190,11 @@ it("changes shared playback speed and loop settings", async () => {
   const loop = screen.getByRole("button", { name: "Loop Forecast Animation" });
   const mode = screen.getByRole("button", { name: "Smooth Playback" });
   expect(loop.nextElementSibling).toBe(mode);
-  expect(mode.querySelectorAll("svg")).toHaveLength(1);
   expect(mode.querySelectorAll(":scope > span:not([aria-hidden])")).toHaveLength(0);
   await userEvent.click(loop);
   expect(useUiStore.getState().loop).toBe(false);
   await userEvent.click(mode);
+  expect(document.activeElement).toBe(mode);
   expect(useUiStore.getState().smoothPlayback).toBe(true);
   expect(mode.getAttribute("aria-pressed")).toBe("true");
 });

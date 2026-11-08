@@ -1,6 +1,7 @@
 //! Public DTOs returned by the Tauri commands and events (camelCase, stable).
 
 pub mod analysis;
+pub mod box_sounding;
 pub mod checks;
 pub mod contours;
 pub mod health;

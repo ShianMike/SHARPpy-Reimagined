@@ -37,7 +37,7 @@ function SoundingViewer({ sources, onShow, showRef, controlsTarget, controls }: 
     <Surface as="section" className={viewer.viewer} aria-label="Sounding" aria-description={`${active.title}, ${soundingMeta(current)}, ${levels}${times}`} data-testid="sounding-viewer">
       <SoundingImage key={`${active.soundingId}:${String(timeIndex)}`} soundingId={active.soundingId} timeIndex={timeIndex} choice={choice} title={active.title} controlsTarget={controlsTarget}
         navigation={sources ? null : <IconAction ref={showRef} icon={PanelLeft} label={controls ? "Show controls" : "Show sources"} aria-expanded={false} aria-controls="sounding-sources" onClick={onShow} />}
-        timeControl={active.timeCount < 2 ? null : <SourceSelect label="Sounding time (UTC)" value={timeIndex} compact
+        timeControl={active.timeCount < 2 ? null : <SourceSelect label="Sounding time (UTC)" value={timeIndex}
             options={Array.from({ length: active.timeCount }, (_, index) => ({ value: index, label: `${String(index + 1)} · ${formatUtc(active.times?.[index] ?? null)}` }))}
             onChange={(index) => { useSoundingStore.getState().setTimeIndex(active.soundingId, index); }} />} />
     </Surface>

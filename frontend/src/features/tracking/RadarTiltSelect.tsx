@@ -8,6 +8,7 @@ import { liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingSt
 import { panelWeather, useMapStore } from "../../stores/mapStore";
 import { RADAR_TILTS, type RadarTilt } from "../../types/map";
 import { SourceSelect } from "../sounding/SourceFields";
+import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
 
 /** Both pickers offer confirmed cuts for this site, product and viewing time. */
 export function RadarTiltSelect({ label, site, product, tilt, angle, toolbarIcon }: {
@@ -28,8 +29,10 @@ export function RadarTiltSelect({ label, site, product, tilt, angle, toolbarIcon
       && (weather.radarSite === null || weather.radarSite === site) && (weather.radarProduct ?? "reflectivity") === product
       && weather.radarTilt === tilt && first !== undefined && query.data?.tilts.find((item) => item.tilt === tilt)?.status !== "available") state.setRadarTilt(first);
   }, [first, panel, product, site, tilt, query.data]);
-  const empty = australian ? "Lowest available" : query.isError ? "Could not verify tilts" : query.data === undefined ? "Checking tilts…"
+  const empty = australian ? "Lowest available" : query.isError ? "Elevations unavailable" : query.data === undefined ? "Checking tilts…"
     : query.data.tilts.some((cut) => cut.status === "unknown") ? "Could not verify tilts" : "No recent scans";
-  return <SourceSelect label={label} value={tilt} options={available.length === 0 ? [{ value: tilt, label: empty }] : available.map((cut) => ({ ...cut, label: cut.value === tilt && angle !== null && angle !== undefined ? `${angle.toFixed(1)}°` : cut.label }))}
-    disabled={available.length === 0} onChange={useMapStore.getState().setRadarTilt} {...(toolbarIcon === undefined ? {} : { toolbarIcon })} />;
+  return <><SourceSelect label={label} value={tilt} options={available.length === 0 ? [{ value: tilt, label: empty }] : available.map((cut) => ({ ...cut, label: cut.value === tilt && angle !== null && angle !== undefined ? `${angle.toFixed(1)}°` : cut.label }))}
+    disabled={available.length === 0} onChange={useMapStore.getState().setRadarTilt} {...(toolbarIcon === undefined ? {} : { toolbarIcon })} />
+    {query.isError && toolbarIcon === undefined ? <SoundingErrorNotice error={query.error} operation="get_radar_tilts"
+      onRetry={() => { void query.refetch(); }} busy={query.isFetching} testId="radar-tilts-error" /> : null}</>;
 }

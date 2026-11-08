@@ -31,7 +31,7 @@ it("explains missing alert history as a warning and returns to current live data
   const { queryClient } = renderWithBackend(<OverlayErrorNotice error={new BackendFailure(history)} operation="get_weather_alerts" onRetry={retry} testId="gap" />, createTransport());
   const notice = screen.getByTestId("gap");
   expect(notice.getAttribute("data-tone")).toBe("warning");
-  expect(notice.textContent).toContain("Alert status at this time is unknown");
+  expect(notice.textContent).toContain("Alert status is unknown");
   expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Return to Live" }));
   expect(useLiveTrackingStore.getState()).toMatchObject({ playing: false, selectedTime: null });
@@ -55,7 +55,7 @@ it("keeps a connection or decode failure as an error with its producer message",
   const { queryClient } = renderWithBackend(<OverlayErrorNotice error={failed} operation="get_weather_alerts" onRetry={vi.fn()} testId="failure" />, createTransport());
   expect(screen.getByRole("alert").getAttribute("data-tone")).toBe("danger");
   expect(screen.getByRole("alert").textContent).toContain(failed.message);
-  expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Retry alerts" })).toBeTruthy();
   queryClient.clear();
 });
 

@@ -1,7 +1,7 @@
 import { useIsFetching } from "@tanstack/react-query";
-import { Blend, Pause, Play, Repeat, StepBack, StepForward, Zap } from "lucide-react";
+import { Blend, Repeat, Zap } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
-import { Action, IconAction } from "../../ui/Controls";
+import { IconAction } from "../../ui/Controls";
 import { Surface } from "../../ui/Surface";
 import { cx } from "../../lib/cx";
 import { hourAfter } from "../../map/usePlayback";
@@ -13,6 +13,7 @@ import { FORECAST_RANGE_ID } from "../toolbar/ForecastControls";
 import styles from "./TimelineRegion.module.css";
 import hints from "../../ui/HoverHint.module.css";
 import { MapInteractionControls } from "./MapInteractionControls";
+import { PlaybackTransport } from "./PlaybackTransport";
 
 export { FORECAST_RANGE_ID } from "../toolbar/ForecastControls";
 export interface TimelineRegionProps { className?: string | undefined; }
@@ -39,11 +40,9 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
   };
   return <Surface as="section" data-motion="fade" aria-label="Forecast timeline" className={cx(styles.timeline, className)} data-testid="timeline">
     <MapInteractionControls />
-    <div className={styles.transport} role="group" aria-label="Playback">
-      <IconAction icon={StepBack} size="sm" label="Previous frame" hintSide="top" disabled={context === null || index === 0} onClick={() => { step(-1); }} />
-      <IconAction className={styles.play} icon={playing ? Pause : Play} label={playing ? "Pause" : "Play"} hintSide="top" disabled={hours.length < 2} onClick={() => { useForecastStore.getState().setPlaying(!playing); }} />
-      <IconAction icon={StepForward} size="sm" label="Next frame" hintSide="top" disabled={context === null || index === last} onClick={() => { step(1); }} />
-    </div>
+    <PlaybackTransport playing={playing} playDisabled={hours.length < 2} onToggle={() => { useForecastStore.getState().setPlaying(!playing); }}
+      onPrevious={context === null || index === 0 ? undefined : () => { step(-1); }}
+      onNext={context === null || index === last ? undefined : () => { step(1); }} />
     <strong className={cx(styles.selection, hints.target)} tabIndex={0} aria-description={selectionHint}>
       <span className={styles.hour}>{context === null ? "—" : forecastLabel(context.hour)}</span>
       <span className={hints.hint} data-side="top" aria-hidden="true">{selectionHint}</span>
@@ -66,11 +65,9 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
         useUiStore.getState().setSpeed(PLAYBACK_SPEEDS[(current + 1) % PLAYBACK_SPEEDS.length] ?? 1);
       }}>{speed}×<span className={hints.hint} data-side="top" aria-hidden="true">Change playback speed · {speed}×</span></button>
       <IconAction icon={Repeat} size="sm" label="Loop Forecast Animation" hintSide="top" aria-pressed={loop} onClick={() => { useUiStore.getState().setLoop(!loop); }} />
-      <Action className={cx(styles.option, styles.mode, hints.target)} aria-label="Smooth Playback" aria-pressed={smooth}
-        onClick={() => { useUiStore.getState().setSmoothPlayback(!smooth); }}>
-        {smooth ? <Blend className="icon" aria-hidden="true" /> : <Zap className="icon" aria-hidden="true" />}
-        <span className={hints.hint} data-side="top" aria-hidden="true">{smooth ? "Smooth · Blend Between Frames" : "Fast · Switch Frames Instantly"}</span>
-      </Action>
+      <IconAction className={cx(styles.option, styles.mode)} size="sm" icon={Zap} alternateIcon={{ icon: Blend, active: smooth }}
+        label="Smooth Playback" hintSide="top" hintText={smooth ? "Smooth · Blend Between Frames" : "Fast · Switch Frames Instantly"}
+        aria-pressed={smooth} onClick={() => { useUiStore.getState().setSmoothPlayback(!smooth); }} />
     </div>
   </Surface>;
 }

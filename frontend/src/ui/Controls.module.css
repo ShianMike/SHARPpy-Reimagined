@@ -40,6 +40,9 @@
 .iconAction:hover:not(:disabled) { background: var(--fill-hover); color: var(--accent-bright); }
 .iconAction[aria-pressed="true"], .iconAction[aria-expanded="true"] { background: var(--accent-subtle); color: var(--accent-bright); }
 .iconAction:disabled { color: var(--text-disabled); }
+.iconSwap { display: grid; place-items: center; }
+.iconSwap > svg { grid-area: 1 / 1; transition: opacity var(--motion-fast) var(--ease-standard), scale var(--motion-fast) var(--ease-enter); }
+.iconSwap[data-alternate="true"] > :first-child, .iconSwap[data-alternate="false"] > :last-child { opacity: 0; scale: 0.86; }
 .toggle {
   display: flex;
   align-items: center;
@@ -82,11 +85,22 @@
   border-radius: var(--radius-round);
   background: var(--text-secondary);
   color: var(--accent);
-  transition: transform var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
+  transition: transform var(--motion-base) var(--ease-travel), background-color var(--motion-fast) var(--ease-standard),
+    scale var(--motion-fast) var(--ease-enter);
 }
-.toggleThumb svg { width: var(--icon-size-sm); height: var(--icon-size-sm); stroke-width: var(--focus-ring-width); }
+.toggleThumb svg {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  stroke-width: var(--focus-ring-width);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .toggle:active:not(:disabled) .toggleThumb { scale: 1.12 1; transition-duration: var(--motion-base), var(--motion-fast), 0ms; }
+}
 .toggle[aria-checked="true"] .toggleTrack { background: var(--accent); border-color: var(--accent); }
 .toggle[aria-checked="true"] .toggleThumb { background: var(--accent-text); transform: translateX(calc(var(--switch-track-w) - var(--switch-thumb-size) - 2 * var(--switch-inset))); }
+.toggle[aria-checked="true"] .toggleThumb svg { opacity: 1; }
 .rangeControl { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .rangeHeading { display: flex; justify-content: space-between; gap: var(--space-2); color: var(--text-secondary); font-size: var(--font-size-small); }
 .rangeHeading output { color: var(--text-primary); }

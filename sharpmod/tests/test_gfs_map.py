@@ -16,8 +16,8 @@ REQUEST = {"model": "gfs", "run_time": "2026-10-27T00:00:00Z", "forecast_hour": 
 
 def test_gfs_reuses_ecmwf_parameter_choices_with_its_own_native_ingredients():
     products = hp.available_products("gfs")
-    assert {p.key for p in products} == {p.key for p in ec.products()} | {"mslp"}
-    assert len(products) == 21
+    assert {p.key for p in products} == {p.key for p in ec.products()} | {"mslp", "refc"}
+    assert len(products) == 22
     assert all(product is hp.PRODUCTS[product.key] for product in products if product.key != "mslp")
     catalog = fields.catalog({"model": "gfs"})
     assert catalog["field_model"] == "gfs" and catalog["default_product"] == "tmp-2m"
@@ -27,9 +27,9 @@ def test_gfs_reuses_ecmwf_parameter_choices_with_its_own_native_ingredients():
 
 def test_native_forecast_cadence_is_hourly_to_f120_then_three_hourly():
     for hour in (0, 1, 119, 120, 123, 381, 384):
-        assert fields._request({**REQUEST, "product": "tmp-2m", "forecast_hour": hour})[-1] == hour
+        assert fields._request({**REQUEST, "product": "refc", "forecast_hour": hour})[-1] == hour
     for change in ({"forecast_hour": 121}, {"forecast_hour": 122}, {"forecast_hour": 385},
-                   {"run_time": "2026-10-27T01:00:00Z"}, {"product": "refc"}):
+                   {"run_time": "2026-10-27T01:00:00Z"}, {"product": "ltng"}):
         with pytest.raises(BridgeError):
             fields._request({**REQUEST, "product": "tmp-2m", **change})
 
@@ -39,7 +39,7 @@ def test_selected_run_inventory_hides_missing_fields_and_f000_precipitation(monk
     specs = {spec for product in hp.available_products("gfs") for spec in product.all_fields}
     rows = tuple(hf.InventoryRow(i, i * 100, 100, spec.variable, spec.level,
                                 spec.forecast.replace("*", "6 hour")) for i, spec in enumerate(specs))
-    missing = {"SNOD", "CAPE"}
+    missing = {"SNOD", "CAPE", "REFC"}
     calls = []
 
     def inventory(url):
@@ -50,11 +50,11 @@ def test_selected_run_inventory_hides_missing_fields_and_f000_precipitation(monk
     monkeypatch.setattr(hf, "fetch_inventory", inventory)
     catalog = fields.catalog(REQUEST)
     assert len(catalog["products"]) == 19
-    assert not {p["key"] for p in catalog["products"]} & {"mucape", "snod"}
+    assert not {p["key"] for p in catalog["products"]} & {"mucape", "snod", "refc"}
     assert set(calls) == {"https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.20261027/00/atmos/gfs.t00z.pgrb2.0p25.f006"}
     missing.clear()
-    assert len(fields.catalog({**REQUEST, "forecast_hour": 0})["products"]) == 20
-    assert len(fields.catalog({**REQUEST, "forecast_hour": 384})["products"]) == 21
+    assert len(fields.catalog({**REQUEST, "forecast_hour": 0})["products"]) == 21
+    assert len(fields.catalog({**REQUEST, "forecast_hour": 384})["products"]) == 22
     monkeypatch.setattr(hf, "fetch_inventory", lambda _url: ())
     with pytest.raises(BridgeError, match="No supported GFS"):
         fields.catalog(REQUEST)

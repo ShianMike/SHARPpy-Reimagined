@@ -28,7 +28,7 @@ it.each(["success", "error"] as const)("shows real bytes and speed, then stops p
   let finish = (): void => { throw new Error("No sounding request started"); };
   let progress: SoundingProgress = { stage: "waiting", downloadedBytes: 0, bytesPerSecond: 0 };
   const ids: unknown[] = [];
-  useSoundingStore.getState().setModel({ modelKey: "hrrr", forecastHour: 0, atStation: false, latitude: "44.0231", longitude: "-75.4697" });
+  useSoundingStore.getState().setModel({ modelKey: "hrrr", forecastHour: 0, latitude: "44.0231", longitude: "-75.4697" });
   const { queryClient } = renderWithBackend(<ModelForm />, {
     ...transport,
     call: (command, args) => {

@@ -15,8 +15,8 @@ export function OverlayErrorNotice(props: SoundingErrorNoticeProps) {
   if (reason === null) return <SoundingErrorNotice {...props} />;
   return <Notice tone="warning" title={reason === "historyUnavailable" ? "Alert history unavailable" : "Radar scan unavailable"}
     message={reason === "historyUnavailable"
-      ? "No alert snapshot was saved for this time in this session. Alert status at this time is unknown."
-      : "No radar scan matches this site, elevation and time. Choose another scan, elevation or site, or retry when a new scan is published."}
+      ? "No snapshot was saved for this time. Alert status is unknown."
+      : "No scan matches this elevation and time. Choose another scan or elevation."}
     testId={props.testId} actions={<>
       {live && historical ? <Action tone="accent" onClick={() => {
         const clock = useLiveTrackingStore.getState();

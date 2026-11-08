@@ -1,4 +1,4 @@
-import { Check, type LucideIcon } from "lucide-react";
+import { Check, LoaderCircle, type LucideIcon } from "lucide-react";
 import { useId, type ButtonHTMLAttributes, type ReactNode, type Ref } from "react";
 import { cx } from "../lib/cx";
 import styles from "./Controls.module.css";
@@ -15,16 +15,23 @@ export function Action({ tone = "quiet", type = "button", className, ...props }:
 
 export interface IconActionProps extends Omit<ActionProps, "children"> {
   icon: LucideIcon;
+  loading?: boolean;
+  alternateIcon?: { icon: LucideIcon; active: boolean };
   label: string;
   size?: "sm" | "md";
   hintSide?: "left" | "right" | "top" | "bottom" | "bottom-end";
+  hintText?: string;
 }
 
-export function IconAction({ icon: Icon, label, size = "md", hintSide, className, ...props }: IconActionProps): ReactNode {
+export function IconAction({ icon: Icon, loading = false, alternateIcon, label, size = "md", hintSide, hintText = label, className, ...props }: IconActionProps): ReactNode {
+  const Alternate = alternateIcon?.icon;
   return (
-    <button {...props} type="button" aria-label={label} title={hintSide === undefined ? label : undefined} data-size={size} className={cx(styles.iconAction, hintSide === undefined ? undefined : hints.target, className)}>
-      <Icon className="icon" aria-hidden="true" />
-      {hintSide === undefined ? null : <span className={hints.hint} data-side={hintSide} aria-hidden="true">{label}</span>}
+    <button {...props} type="button" aria-label={label} aria-busy={loading || props["aria-busy"]} title={hintSide === undefined ? hintText : undefined} data-size={size} className={cx(styles.iconAction, hintSide === undefined ? undefined : hints.target, className)}>
+      {loading ? <LoaderCircle className="icon" data-loading="true" aria-hidden="true" /> : Alternate === undefined ? <Icon className="icon" aria-hidden="true" /> :
+        <span className={styles.iconSwap} aria-hidden="true" data-alternate={alternateIcon?.active}>
+          <Icon className="icon" /><Alternate className="icon" />
+        </span>}
+      {hintSide === undefined ? null : <span className={hints.hint} data-side={hintSide} aria-hidden="true">{hintText}</span>}
     </button>
   );
 }
@@ -41,7 +48,7 @@ export function Toggle({ label, checked, onChange, disabled = false, id }: {
       className={styles.toggle} onClick={() => { onChange(!checked); }}>
       <span className={styles.toggleLabel}>{label}</span>
       <span className={styles.toggleTrack} aria-hidden="true">
-        <span className={styles.toggleThumb}>{checked ? <Check /> : null}</span>
+        <span className={styles.toggleThumb}><Check /></span>
       </span>
     </button>
   );

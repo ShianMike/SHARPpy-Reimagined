@@ -22,8 +22,10 @@ export function DownloadStatus({ label, progress }: { label: string; progress: S
   const [phase, detail] = STAGES[progress?.stage ?? "waiting"];
   return (
     <div className={styles.busy} role="status">
-      <strong>{phase} · {label}</strong>
-      <span>{detail}</span>
+      <div key={progress?.stage ?? "waiting"} className={styles.busyPhase} data-motion="fade">
+        <strong>{phase} · {label}</strong>
+        <span>{detail}</span>
+      </div>
       {received > 0 ? <span className={styles.transfer} aria-live="off">
         <span>{transferSize(received)} received</span>
         {downloading ? <span>{transferSize(progress.bytesPerSecond)}/s</span> : null}

@@ -8,6 +8,8 @@
 
 import type { ReactNode } from "react";
 import { Action } from "../../ui/Controls";
+import { Notice } from "../../components/Notice";
+import { errorCopy } from "../errors/errorCopy";
 import { Popover, type PopoverCloseReason } from "../../components/Popover";
 import { StatusDot } from "../../components/StatusDot";
 import { cx } from "../../lib/cx";
@@ -77,6 +79,10 @@ export function HealthPopover(props: HealthPopoverProps): ReactNode {
   const { open, anchor, onClose, view, health, error, onRestart, restarting } = props;
   const problem = problemText(health, error);
   const scientific = health?.scientificBackend;
+  const failure = failureOf(error) ?? (health?.bridge.status === "unavailable" ? health.bridge.error
+    : scientific?.status === "unavailable" ? { code: scientific.code, message: scientific.message, retryable: false }
+    : scientific?.status === "unknown" ? scientific.error : null);
+  const copy = failure === null ? null : errorCopy(failure);
   const restarts = health?.bridge.status === "up" ? health.bridge.restarts : 0;
   return (
     <Popover
@@ -95,7 +101,11 @@ export function HealthPopover(props: HealthPopoverProps): ReactNode {
           <StatusDot tone={view.tone} />
           <span>{view.label}</span>
         </p>
-        {problem === null ? null : <p className={styles.problem}>{problem}</p>}
+        {problem === null ? null : <Notice tone={copy?.tone ?? "warning"} title={copy?.title ?? (view.tone === "warning" ? "Reconnecting weather service" : "Calculation engine needs attention")}
+          message={copy?.message ?? (health?.bridge.status === "restarting" ? `Reconnection attempt ${String(health.bridge.attempt)}.` : problem)}
+          {...(copy === null ? {} : { icon: copy.icon })} />}
+        <details className={styles.diagnostics}><summary>Service details</summary>
+        {copy !== null && problem !== copy.message ? <p className={styles.problem}>{problem}</p> : null}
         {health === undefined ? null : (
           <dl className={styles.facts}>
             <Fact term="App">{`${health.app.name} ${health.app.version} (${health.app.buildProfile})`}</Fact>
@@ -119,10 +129,11 @@ export function HealthPopover(props: HealthPopoverProps): ReactNode {
           </dl>
         )}
         {restarts > 0 ? <p className={styles.note}>{`Backend restarts this session: ${String(restarts)}`}</p> : null}
+        </details>
         {canRestart(health) ? (
           <div className={styles.actions}>
-            <Action tone="accent" disabled={restarting} onClick={onRestart}>
-              Restart backend
+            <Action data-autofocus tone="accent" disabled={restarting} onClick={onRestart}>
+              Restart service
             </Action>
           </div>
         ) : null}

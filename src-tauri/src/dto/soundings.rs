@@ -59,6 +59,8 @@ pub enum OpenSoundingRequest {
         longitude: f64,
         #[serde(default)]
         location: Option<String>,
+        #[serde(default, rename = "box", skip_serializing_if = "Option::is_none")]
+        box_bounds: Option<super::box_sounding::BoxBounds>,
     },
     Era5 {
         time: String,
@@ -95,6 +97,7 @@ impl OpenSoundingRequest {
                 latitude,
                 longitude,
                 location,
+                box_bounds,
             } => {
                 check_text("model", model, 1, 40)?;
                 check_opt_text("runTime", run_time.as_ref(), 40)?;
@@ -105,7 +108,11 @@ impl OpenSoundingRequest {
                 if !latitude.is_finite() || !longitude.is_finite() {
                     return Err("latitude and longitude must be finite".into());
                 }
-                check_lat_lon(Some(*latitude), Some(*longitude))
+                check_lat_lon(Some(*latitude), Some(*longitude))?;
+                if let Some(bounds) = box_bounds {
+                    bounds.validate()?;
+                }
+                Ok(())
             }
             OpenSoundingRequest::Era5 {
                 time,
@@ -171,17 +178,21 @@ impl OpenSoundingRequest {
                 latitude,
                 longitude,
                 location,
-            } => (
-                "soundings.open_model",
-                json!({
+                box_bounds,
+            } => {
+                let mut params = json!({
                     "model": model,
                     "run_time": run_time,
                     "forecast_hour": forecast_hour,
                     "latitude": latitude,
                     "longitude": longitude,
                     "location": location,
-                }),
-            ),
+                });
+                if let Some(bounds) = box_bounds {
+                    params["box"] = json!(bounds);
+                }
+                ("soundings.open_model", params)
+            }
             OpenSoundingRequest::Era5 {
                 time,
                 latitude,
@@ -263,10 +274,15 @@ pub struct SoundingSummary {
     pub time_count: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub times: Vec<Option<String>>,
+    #[serde(default, rename = "box", skip_serializing_if = "Option::is_none")]
+    pub box_metadata: Option<super::box_sounding::BoxMetadata>,
 }
 
 impl SoundingSummary {
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(metadata) = &self.box_metadata {
+            metadata.validate()?;
+        }
         check_text("soundingId", &self.sounding_id, 1, 64)?;
         check_text("title", &self.title, 1, MAX_TEXT)?;
         for (field, value) in [

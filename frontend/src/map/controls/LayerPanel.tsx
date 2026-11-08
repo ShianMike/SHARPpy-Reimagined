@@ -2,7 +2,7 @@
 // be added below. Settings and live provider controls edit the active panel.
 
 import { CloudSun, EyeOff, List, Map as MapIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { useForecastContext } from "../../features/forecast/useForecast";
 import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { compactUtc, formatUtc, forecastLabel } from "../../features/sounding/soundingTime";
@@ -28,6 +28,12 @@ export interface LayerPanelProps {
 }
 
 const ORDERABLE = new Set<string>(ORDERABLE_LAYER_IDS);
+const CATEGORIES = [
+  { id: "weather", label: "Weather", icon: CloudSun },
+  { id: "legend", label: "Legend", icon: List },
+  { id: "map", label: "Map", icon: MapIcon },
+] as const;
+const PROJECTIONS = ["mercator", "globe"] as const;
 const descriptor = (id: string): LayerDescriptor | undefined => LAYER_REGISTRY.find((item) => item.id === id);
 /** The map layers, in the order the panel lists them. */
 const MAP_LAYERS = ["model-domain", "place-labels", "roads", "radar-site-labels", "stations", "station-labels", "basemap"]
@@ -93,24 +99,21 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
         {isobarsUnavailable ? <span className={styles.hint}>Isobars are unavailable for this model and forecast time.</span> : null}
       </div>
       <div className={styles.categories}>
-        {layout === 1 ? null : <div className={styles.panelPicker} role="group" aria-label="Active map panel">
+        {layout === 1 ? null : <div className={styles.panelPicker} role="group" aria-label="Active map panel"
+          data-selection-track="horizontal" style={{ "--selection-index": panel } as CSSProperties}>
           {Array.from({ length: layout }, (_, index) => <button key={index} type="button" aria-pressed={panel === index}
             onClick={() => { useMapStore.getState().setActivePanel(index); }}>Panel {index + 1}</button>)}
         </div>}
-        <div className={styles.groups} role="group" aria-label="Layer categories">
-          <button type="button" aria-pressed={group === "weather"} onClick={() => { useMapStore.getState().setLayerPanelGroup("weather"); }}>
-            <CloudSun className="icon" aria-hidden="true" /> Weather
-          </button>
-          <button type="button" aria-pressed={group === "legend"} onClick={() => { useMapStore.getState().setLayerPanelGroup("legend"); }}>
-            <List className="icon" aria-hidden="true" /> Legend
-          </button>
-          <button type="button" aria-label="Map details" aria-pressed={group === "map"} onClick={() => { useMapStore.getState().setLayerPanelGroup("map"); }}>
-            <MapIcon className="icon" aria-hidden="true" /> Map
-          </button>
+        <div className={styles.groups} role="group" aria-label="Layer categories" data-selection-track="horizontal"
+          style={{ "--selection-index": CATEGORIES.findIndex((item) => item.id === group) } as CSSProperties}>
+          {CATEGORIES.map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-pressed={group === id}
+            aria-label={id === "map" ? "Map details" : undefined} onClick={() => { useMapStore.getState().setLayerPanelGroup(id); }}>
+            <Icon className="icon" aria-hidden="true" /> {label}
+          </button>)}
         </div>
       </div>
       <div className={styles.body}>
-        {group !== "weather" ? null : <div className={styles.weatherLayout}>
+        {group !== "weather" ? null : <div className={styles.weatherLayout} data-motion="fade">
           <section className={styles.layerColumn} aria-label="Active weather layers">
           <div className={styles.stackHeading}><h3 className={styles.group}>On map <span>{active.length} · top first</span></h3>
             <IconAction icon={EyeOff} size="sm" label="Hide all weather layers" disabled={active.length === 0}
@@ -135,21 +138,23 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
             })}{available.length === 0 ? <p className={styles.hint}>All weather layers are on the map.</p> : null}</div>
           </section>
         </div>}
-        {group !== "legend" ? null : <div className={styles.scrollBody}><WeatherLegend active={active} panel={panel} availabilities={availabilities} /></div>}
-        {group !== "map" ? null : <div className={styles.scrollBody}>
+        {group !== "legend" ? null : <div className={styles.scrollBody} data-motion="fade"><WeatherLegend active={active} panel={panel} availabilities={availabilities} /></div>}
+        {group !== "map" ? null : <div className={styles.scrollBody} data-motion="fade">
           <div className={styles.projection}>
             <h3 className={styles.group}>Projection <span>{live ? "Flat map" : "All panels"}</span></h3>
-            {live ? null : <div className={styles.panelPicker} role="group" aria-label="Map projection">
-              {(["mercator", "globe"] as const).map((value) => <button key={value} type="button" aria-pressed={projection === value}
+            {live ? null : <div className={styles.panelPicker} role="group" aria-label="Map projection"
+              data-selection-track="horizontal" style={{ "--selection-index": PROJECTIONS.indexOf(projection) } as CSSProperties}>
+              {PROJECTIONS.map((value) => <button key={value} type="button" aria-pressed={projection === value}
                 onClick={() => { useMapStore.getState().setProjection(value); }}>{value === "globe" ? "Globe" : "Flat map"}</button>)}
             </div>}
           </div>
           <h3 className={styles.group}>Map details</h3>
-          <div>{MAP_LAYERS.filter((layer) => layerInView(layer.id, live ? "live" : "map") && (!live || layer.id !== "model-domain")).map((layer) => (
+          <div className={styles.mapDetails}>{MAP_LAYERS.filter((layer) => layerInView(layer.id, live ? "live" : "map") && (!live || layer.id !== "model-domain")).map((layer) => (
             <LayerRow key={layer.id} layer={layer} state={states[layer.id]}>
               {MAP_EXTRA[layer.id] ?? null}
             </LayerRow>
-          ))}{states["place-labels"].visible ? <PlaceStatus /> : null}</div>
+          ))}</div>
+          {states["place-labels"].visible ? <PlaceStatus /> : null}
         </div>}
       </div>
       <footer className={styles.footer}>

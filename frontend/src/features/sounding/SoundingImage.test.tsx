@@ -51,7 +51,7 @@ async function open(next = response()) {
   };
 }
 
-it("shows a recoverable connection message without an icon and retries the same view", async () => {
+it("shows the shared connection notice and retries the same view", async () => {
   const base = createTransport();
   const render = vi.fn(() => Promise.resolve(response())).mockRejectedValueOnce(new Error("Connection lost"));
   renderWithBackend(<SoundingImage soundingId="fixture" choice="MU" title="Test sounding" />, {
@@ -60,11 +60,11 @@ it("shows a recoverable connection message without an icon and retries the same 
   const notice = await screen.findByTestId("render-error");
   expect(notice.textContent).toContain("Sounding image unavailable");
   expect(notice.textContent).toContain("Try again to reconnect");
-  expect(notice.querySelector("svg")).toBeNull();
+  expect(notice.querySelector("details")?.open).toBe(false);
   expect(notice.textContent).not.toContain("Retrying will not help");
-  expect(notice.parentElement?.parentElement?.getAttribute("data-retained")).toBe("false");
+  expect(notice.parentElement?.getAttribute("data-retained")).toBe("false");
   expect(screen.getByTestId("sounding-stage").contains(notice)).toBe(true);
-  await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await userEvent.click(screen.getByRole("button", { name: "Redraw sounding" }));
   await screen.findByTestId("sounding-image");
   expect(screen.queryByTestId("render-error")).toBeNull();
   expect(render).toHaveBeenCalledTimes(2);
@@ -81,10 +81,10 @@ it("keeps the chart and pending edit when recalculation loses its connection", a
   render.mockRejectedValueOnce(new Error("Connection lost"));
   await userEvent.click(screen.getByRole("button", { name: "Apply changes" }));
   const notice = await screen.findByTestId("render-error");
-  expect(notice.parentElement?.parentElement?.getAttribute("data-retained")).toBe("true");
+  expect(notice.parentElement?.getAttribute("data-retained")).toBe("true");
   expect(screen.getByTestId("sounding-image")).toBe(image);
   expect((input as HTMLInputElement).value).toBe("30");
-  expect(notice.querySelector("svg")).toBeNull();
+  expect(notice.querySelector("svg")).not.toBeNull();
 });
 
 it("marks a recalculation started during an update download before the new profile is ready", async () => {

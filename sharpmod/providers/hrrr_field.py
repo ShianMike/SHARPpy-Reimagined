@@ -117,6 +117,10 @@ NAM_COVERAGE_BOUNDS = NAM_GRID.bounds()
 
 def field_grid(model: str = "hrrr"):
     """Return the grid encoded by this model's native field products."""
+    if model == "gdps":
+        import sharpmod_rs
+
+        return sharpmod_rs.gdps_map_grid()
     if model in GLOBAL_MODELS:
         from sharpmod.providers.ecmwf_fields import grid
         return grid(model)
@@ -247,6 +251,10 @@ def pin_request(run: datetime, fxx: int | None = None) -> tuple[datetime, int]:
 
 
 def grib_url(run: datetime, fxx: int, source: str, model: str = "hrrr", *, release=None) -> str:
+    if model == "gdps":
+        import sharpmod_rs
+
+        return sharpmod_rs.gdps_map_directory(run, fxx)
     if model == "gfs":
         return (f"https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.{run:%Y%m%d}/{run:%H}/atmos/"
                 f"gfs.t{run:%H}z.pgrb2.0p25.f{int(fxx):03d}")

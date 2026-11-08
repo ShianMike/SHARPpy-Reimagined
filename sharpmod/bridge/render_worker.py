@@ -56,7 +56,16 @@ def main() -> int:
     if warning:
         log.warning("%s; descriptor-level protection still holds", warning)
     from sharpmod.rendering import cli  # Qt, fonts, and the SHARPpy widgets, once
+    from sharpmod.backends import get_backend
     from sharpmod.rendering.prepared import PreparedInputCache
+
+    if get_backend().name == "rust":
+        try:
+            from sharpmod_rs import install_render_pressure_interpolation
+        except ImportError:
+            pass  # Older matching-version extensions still use SHARPpy directly.
+        else:
+            install_render_pressure_interpolation()
 
     prepared = PreparedInputCache()
     log.info("render worker ready (pid %d)", os.getpid())

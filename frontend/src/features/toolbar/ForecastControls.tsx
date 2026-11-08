@@ -2,8 +2,10 @@ import { CalendarDays, ChevronDown, Clock3, CloudSun, SlidersHorizontal } from "
 import { useState, type ReactNode } from "react";
 import { Surface } from "../../ui/Surface";
 import { Action } from "../../ui/Controls";
+import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
 import { Popover } from "../../components/Popover";
 import { cx } from "../../lib/cx";
+import { failureOf } from "../../lib/backend/errors";
 import { useMapStore } from "../../stores/mapStore";
 import { usePanelField } from "../../map/panelField";
 import { useFrameDownload } from "../../map/useFrameDownload";
@@ -60,12 +62,12 @@ export function ForecastControls({ className }: ForecastControlsProps): ReactNod
     {forecast.status === "error" ? <button type="button" className={styles.retry} onClick={forecast.retry} disabled={forecast.retrying}>Retry models</button> : null}
     <Popover open={parameterErrorOpen} anchor={parameterAnchor} movable role="dialog" label="Parameters unavailable" initialFocus="first"
       className={styles.loadError} onClose={() => { setDismissedError(field.catalog.error); }}>
-      <h2>Parameters unavailable</h2>
-      {context === null ? null : <p className={styles.errorContext}>{context.model.label} · {compactUtc(context.run)} UTC · {forecastLabel(context.hour)}</p>}
-      <p>{field.catalog.error?.message}</p>
+      {field.catalog.error === null ? null : <SoundingErrorNotice error={field.catalog.error} operation="get_map_catalog"
+        onRetry={() => { void field.catalog.refetch(); }} busy={field.catalog.isFetching} testId="parameter-error" />}
       <div className={styles.errorActions}>
+        {failureOf(field.catalog.error)?.code === "CONTRACT_VIOLATION" ? <Action tone="accent" disabled={field.catalog.isFetching}
+          onClick={() => { void field.catalog.refetch(); }}>Reload parameters</Action> : null}
         <Action onClick={() => { setDismissedError(field.catalog.error); parameterAnchor?.focus(); }}>Dismiss</Action>
-        <Action data-autofocus tone="accent" onClick={() => { void field.catalog.refetch(); }} disabled={field.catalog.isFetching}>{field.catalog.isFetching ? "Retrying…" : "Retry"}</Action>
       </div>
     </Popover>
     <Popover key={picker} id={`forecast-${picker}-picker`} open={pickerOpen && context !== null} movable unframed={picker === "parameter"} anchor={anchor} onClose={() => { setPickerOpen(false); }} role="dialog"

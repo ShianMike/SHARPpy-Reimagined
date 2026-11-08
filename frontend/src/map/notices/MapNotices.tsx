@@ -1,18 +1,15 @@
-// Map notices (DESIGN-frontend F4, F8): portalled into the overlay's centre
-// column. "Some map layers could not be drawn" stays while a basemap source
-// failed or is slow, or a runtime error happened, and is withdrawn when all
-// three are empty. A lost WebGL context has its own notice. Both offer Reload
-// map, which rebuilds the map with a fresh runtime.
+// Compact map recovery bar; diagnostics expand beneath its message and actions.
 
-import type { ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { Action } from "../../ui/Controls";
-import { Notice } from "../../components/Notice";
+import { Surface } from "../../ui/Surface";
 import { useGraphicsStore } from "../../stores/graphicsStore";
 import { useMapNoticeStore } from "./mapNoticeStore";
 import styles from "./MapNotices.module.css";
+import { ChevronDown, Map, RotateCw } from "lucide-react";
 
-export const LAYERS_NOTICE_TITLE = "Some map layers could not be drawn";
-export const CONTEXT_LOST_TITLE = "Map rendering stopped because the graphics device was reset";
+export const LAYERS_NOTICE_TITLE = "Map layers missing";
+export const CONTEXT_LOST_TITLE = "Map drawing stopped";
 
 function detailLine(failed: readonly string[], slow: readonly string[], runtimeErrors: number): string {
   const parts: string[] = [];
@@ -29,47 +26,41 @@ function detailLine(failed: readonly string[], slow: readonly string[], runtimeE
 }
 
 export function MapNotices(): ReactNode {
+  const id = useId();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const failed = useMapNoticeStore((state) => state.basemapFailed);
   const slow = useMapNoticeStore((state) => state.basemapSlow);
   const runtimeErrors = useMapNoticeStore((state) => state.runtimeErrors);
   const contextLost = useGraphicsStore((state) => state.contextLost);
   const hasIssues = failed.length > 0 || slow.length > 0 || runtimeErrors > 0;
 
-  const reload = (
-    <Action
-      tone="accent"
-      onClick={() => {
-        useGraphicsStore.getState().retryMap();
-      }}
-    >
-      Reload map
-    </Action>
-  );
+  if (!hasIssues && !contextLost) return null;
 
   return (
     <div className={styles.notices}>
-      {contextLost ? (
-        <Notice
-          tone="danger"
-          surface="floating"
-          role="alert"
-          title={CONTEXT_LOST_TITLE}
-          message="The stations and the basemap come back when the map is reloaded."
-          actions={reload}
-          testId="map-context-lost"
-        />
-      ) : null}
-      {hasIssues && !contextLost ? (
-        <Notice
-          tone="warning"
-          surface="floating"
-          title={LAYERS_NOTICE_TITLE}
-          message="The stations keep drawing. Reload the map to try the missing layers again."
-          detail={detailLine(failed, slow, runtimeErrors)}
-          actions={reload}
-          testId="map-layers-notice"
-        />
-      ) : null}
+      <Surface className={styles.notice} elevation="chrome" data-motion="enter"
+        data-tone={contextLost ? "danger" : "warning"} role={contextLost ? "alert" : "status"}
+        aria-labelledby={`${id}-title`} data-testid={contextLost ? "map-context-lost" : "map-layers-notice"}>
+        <div className={styles.content}>
+          <Map className={styles.icon} aria-hidden="true" />
+          <div className={styles.copy}>
+            <p id={`${id}-title`} className={styles.title}>{contextLost ? CONTEXT_LOST_TITLE : LAYERS_NOTICE_TITLE}</p>
+            <p className={styles.message}>{contextLost ? "The graphics device was reset." : "Some map layers are unavailable."}</p>
+          </div>
+        </div>
+        <div className={styles.actions}>
+          {contextLost ? null : <Action className={styles.disclosure} aria-expanded={detailsOpen} aria-controls={`${id}-details`}
+            onClick={() => { setDetailsOpen(!detailsOpen); }}>
+            Details <ChevronDown className="icon-sm" aria-hidden="true" />
+          </Action>}
+          <Action tone="accent" onClick={() => { setDetailsOpen(false); useGraphicsStore.getState().retryMap(); }}>
+            <RotateCw className="icon-sm" aria-hidden="true" /> Reload map
+          </Action>
+        </div>
+        {contextLost ? null : <p id={`${id}-details`} className={styles.details} hidden={!detailsOpen}>
+          {detailLine(failed, slow, runtimeErrors)}
+        </p>}
+      </Surface>
     </div>
   );
 }

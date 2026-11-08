@@ -1,6 +1,6 @@
 .rail { width: var(--dock-w); padding: var(--space-1); border-radius: var(--radius-pill); color: var(--text-secondary); }
 .rail:is([data-workspace="overview"], [data-workspace="settings"], [data-workspace="status"]) { --accent-bright: var(--workspace-orange-text); --focus-ring: var(--workspace-orange-text); }
-.list { display: flex; flex-direction: column; gap: var(--space-1); }
+.list { display: grid; grid-auto-rows: 1fr; gap: var(--space-1); --selection-fill: var(--control-selected); --selection-shadow: var(--control-shadow); --selection-radius: var(--radius-round); }
 .item { display: grid; place-items: center; width: 100%; height: var(--control-h-lg); padding: 0; border: 0; border-radius: var(--radius-round); background: transparent; color: var(--text-secondary); position: relative; }
-.item[aria-current="page"] { background: var(--control-selected); color: var(--accent-bright); box-shadow: var(--control-shadow); }
 .item:hover, .item:focus-visible { background: var(--fill-hover); color: var(--accent-bright); }
+.item[aria-current="page"] { background: transparent; color: var(--accent-bright); }

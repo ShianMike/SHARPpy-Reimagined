@@ -12,7 +12,7 @@ import { useMapStore } from "../../stores/mapStore";
 import { useUiStore } from "../../stores/uiStore";
 import { useStationAvailability } from "../../map/mapQueries";
 import { formatUtc } from "../sounding/soundingTime";
-import { Action } from "../../ui/Controls";
+import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
 import {
   availabilityExplanation,
   availabilityText,
@@ -51,7 +51,7 @@ export function StationDetails({ station, origin, stationCount }: StationDetails
       explanation = "Could not check UWyo. Try again.";
     }
   } else if (report.isError) {
-    explanation = "Could not refresh UWyo. Showing the last check.";
+    explanation = "Showing the last confirmed launch check.";
   }
   return (
     <>
@@ -59,15 +59,16 @@ export function StationDetails({ station, origin, stationCount }: StationDetails
         <div><dt>Latitude</dt><dd className="tabular">{formatLatitude(station.latitude)}</dd></div>
         <div><dt>Longitude</dt><dd className="tabular">{formatLongitude(station.longitude)}</dd></div>
       </dl>
-      <dl className={styles.availability}>
+      {report.isError && report.data === undefined ? null : <dl className={styles.availability}>
         <dt>Availability</dt>
         <dd role="status" aria-live="polite">
           {status}
           <span className={styles.explanation}>{explanation}</span>
           {report.data === undefined ? null : <span className={cx(styles.explanation, "tabular")}>{`UWyo · ${formatUtc(report.data.observationTime)}`}{report.isFetching ? " · Refreshing…" : ""}</span>}
-          {report.isError ? <Action onClick={() => { void report.refetch(); }} disabled={report.isFetching} aria-label="Retry station availability check">Retry check</Action> : null}
         </dd>
-      </dl>
+      </dl>}
+      {report.isError ? <SoundingErrorNotice error={report.error} operation="get_station_availability"
+        onRetry={() => { void report.refetch(); }} busy={report.isFetching} testId="inspector-station-error" /> : null}
       <details className={styles.disclosure} open={sourceOpen}
         onToggle={(event) => { useUiStore.getState().setInspectorSourceOpen(event.currentTarget.open); }}>
         <summary>Station &amp; source <ChevronDown className="icon icon-sm" aria-hidden="true" /></summary>

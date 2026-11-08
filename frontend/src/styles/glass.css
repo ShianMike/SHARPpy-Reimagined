@@ -50,3 +50,15 @@
 }
 
 dialog[data-material="glass"]::backdrop { background: var(--scrim); }
+
+[data-popover-backdrop] {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-popover-backdrop);
+  pointer-events: none;
+  background: color-mix(in srgb, var(--scrim) 45%, transparent);
+  -webkit-backdrop-filter: var(--popover-focus-filter);
+  backdrop-filter: var(--popover-focus-filter);
+}
+
+[data-popover-backdrop] + [data-popover] { z-index: var(--z-popover-focused); }

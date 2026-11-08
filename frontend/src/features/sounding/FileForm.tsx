@@ -3,6 +3,7 @@
 // to the backend, which decides whether it is a sounding.
 import { useRef, useState, type ReactNode } from "react";
 import { FileUp } from "lucide-react";
+import { Notice } from "../../components/Notice";
 import { Action } from "../../ui/Controls";
 import { SoundingErrorNotice } from "./SoundingErrorNotice";
 import { useOpenSounding } from "./soundingQueries";
@@ -94,7 +95,8 @@ function ProfileFileForm(): ReactNode {
         </Action>
         {(reading || open.isPending) && file !== null ? <span className={styles.busy} data-motion="fade" role="status">{`Reading ${file.name}`}</span> : null}
       </div>
-      {problem === null ? null : <p className={styles.hintWarning} role="alert">{problem}</p>}
+      {problem === null ? null : <Notice tone="warning" role="alert" icon={FileUp} title={file?.size === 0 ? "File is empty" : file !== null && file.size > MAX_FILE_BYTES ? "File is too large" : "File could not be read"}
+        message={problem} actions={<Action onClick={() => { input.current?.click(); }}>Choose another file</Action>} />}
       {open.isError ? (
         <SoundingErrorNotice
           error={open.error}

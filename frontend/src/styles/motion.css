@@ -4,11 +4,41 @@
     border-color var(--motion-fast) var(--ease-standard),
     color var(--motion-fast) var(--ease-standard),
     opacity var(--motion-fast) var(--ease-standard),
-    scale var(--motion-fast) var(--ease-standard);
+    scale var(--press-duration, var(--motion-fast)) var(--ease-standard);
+}
+
+/* An equal-cell grid lets the highlight travel without measuring controls. */
+:where([data-selection-track]) {
+  position: relative;
+  isolation: isolate;
+}
+:where([data-selection-track])::before {
+  content: "";
+  position: absolute;
+  grid-area: 1 / 1 / 2 / 2;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: var(--selection-radius, var(--radius-sm));
+  background: var(--selection-fill, var(--accent-subtle));
+  box-shadow: var(--selection-shadow, none);
+  transition: translate var(--motion-base) var(--ease-travel), opacity var(--motion-fast) var(--ease-standard);
+}
+:where([data-selection-track="horizontal"])::before {
+  translate: calc(var(--selection-index) * (100% + var(--selection-gap, var(--space-1)))) 0;
+}
+:where([data-selection-track="vertical"])::before {
+  translate: 0 calc(var(--selection-index) * (100% + var(--selection-gap, var(--space-1))));
+}
+@media (forced-colors: active) {
+  :where([data-selection-track])::before { border: var(--hairline) solid Highlight; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  :where(button:active:not(:disabled, [role="switch"], [data-popover-move])) { scale: 0.97; }
+  :where(button:active:not(:disabled, [aria-disabled="true"], [role="switch"], [data-popover-move])) {
+    --press-duration: 0ms;
+    scale: 0.97;
+  }
   :where([data-motion="enter"]) { animation: ui-enter var(--motion-base) var(--ease-standard) backwards; }
   :where([data-motion="fade"]) { animation: ui-fade var(--motion-fast) var(--ease-standard) backwards; }
   :where([role="tooltip"]) { animation: ui-fade var(--motion-fast) var(--ease-standard) backwards; }
@@ -24,6 +54,28 @@
 :where([data-motion="disclosure"][hidden]) { opacity: 0; }
 @starting-style { :where([data-motion="disclosure"]:not([hidden])) { opacity: 0; } }
 
+/* Native disclosure semantics remain the fallback when intrinsic-size motion is unavailable. */
+@supports (interpolate-size: allow-keywords) and selector(details::details-content) {
+  :where(details[data-motion="details"]) { interpolate-size: allow-keywords; }
+  :where(details[data-motion="details"])::details-content {
+    block-size: 0;
+    opacity: 0;
+    overflow: clip;
+    transition: block-size calc(var(--motion-base) * 0.8) var(--ease-travel),
+      opacity calc(var(--motion-fast) * 0.8) var(--ease-enter),
+      content-visibility calc(var(--motion-base) * 0.8) allow-discrete;
+  }
+  :where(details[data-motion="details"][open])::details-content {
+    block-size: auto;
+    opacity: 1;
+    transition-duration: var(--motion-base), var(--motion-fast), var(--motion-base);
+  }
+  :where(details[data-motion="details"][open] > :not(summary)) { animation: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(details[data-motion="details"])::details-content { transition: none; }
+}
+
 :where(button[aria-expanded] > .lucide-chevron-down, summary > .lucide-chevron-down) {
   transition: transform var(--motion-fast) var(--ease-standard);
 }
@@ -33,13 +85,24 @@
 :where([data-motion="panel"]) {
   opacity: 1;
   translate: 0;
-  transition: opacity var(--motion-base) var(--ease-standard),
-    translate var(--motion-base) var(--ease-standard),
-    display var(--motion-base) allow-discrete;
+  scale: 1;
+  transition: opacity var(--motion-fast) var(--ease-enter),
+    translate var(--panel-duration, var(--motion-base)) var(--ease-travel),
+    scale var(--panel-duration, var(--motion-base)) var(--ease-travel),
+    display var(--panel-duration, var(--motion-base)) allow-discrete;
 }
-:where([data-motion="panel"][hidden]) { opacity: 0; translate: var(--motion-panel-x, var(--space-2)) 0; }
+:where([data-motion="panel"][hidden]) {
+  --panel-duration: calc(var(--motion-base) * 0.8);
+  opacity: 0;
+  translate: var(--motion-panel-x, var(--space-2)) var(--motion-panel-y, 0);
+  scale: var(--motion-panel-scale, 1);
+}
 @starting-style {
-  :where([data-motion="panel"]:not([hidden])) { opacity: 0; translate: var(--motion-panel-x, var(--space-2)) 0; }
+  :where([data-motion="panel"]:not([hidden])) {
+    opacity: 0;
+    translate: var(--motion-panel-x, var(--space-2)) var(--motion-panel-y, 0);
+    scale: var(--motion-panel-scale, 1);
+  }
 }
 
 @keyframes ui-enter { from { opacity: 0; translate: 0 var(--space-2); } to { opacity: 1; translate: 0; } }

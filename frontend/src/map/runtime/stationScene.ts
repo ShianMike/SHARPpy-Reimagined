@@ -9,6 +9,7 @@ import { IconLayer, TextLayer } from "@deck.gl/layers";
 import type { MapLibreOverlay } from "@deck.gl/maplibre";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useAppStore } from "../../stores/appStore";
+import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
 import { useGraphicsStore } from "../../stores/graphicsStore";
 import { mapProjection, panelLayers, useMapStore } from "../../stores/mapStore";
 import { stationIndex } from "../../stations/stationIndex";
@@ -267,6 +268,7 @@ export function hoverFromPick(info: PickingInfo, panel: number, origin: { left: 
 
 /** Stations remain selectable; free points belong to Model Viewer. */
 export function clickFromPick(info: PickingInfo): void {
+  if (useMapStore.getState().view === "map" && useBoxSoundingStore.getState().mode === "box") return;
   const station = pickedStation(info);
   if (station !== undefined) {
     useAppStore.getState().selectStation(station.id);

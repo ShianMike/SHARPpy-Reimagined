@@ -66,7 +66,7 @@ describe("Inspector", () => {
     expect(useAppStore.getState().activeWorkspace).toBe("sounding");
     expect(useSoundingStore.getState().model).toMatchObject({
       modelKey: "hrrr", runTime: "2026-10-04T16:00:00Z", forecastHour: 6,
-      atStation: false, latitude: "35.1800", longitude: "-97.4400",
+      latitude: "35.1800", longitude: "-97.4400",
     });
   });
 
@@ -148,16 +148,16 @@ describe("Inspector", () => {
     const report = { ...availability, observationTime: "2026-10-16T12:00:00Z" };
     const transport = scriptedTransport({ get_station_catalog: [catalogFull], get_station_availability: [{ reject: { ...unavailable, retryable: false } }, report, { reject: { ...unavailable, retryable: false } }] });
     const { queryClient } = renderWithBackend(<Inspector />, transport);
-    await screen.findByText("Check failed");
+    await screen.findByText("Station availability unknown");
     expect(screen.queryByText("Unknown")).toBeNull();
     expect(transport.calls("get_station_availability")).toBe(1);
-    await userEvent.click(screen.getByRole("button", { name: "Retry station availability check" }));
+    await userEvent.click(screen.getByRole("button", { name: "Check station" }));
     await screen.findByText("Available");
     await act(async () => { await queryClient.refetchQueries({ queryKey: mapKeys.availability(report.observationTime), exact: true }); });
     expect(screen.getByRole("status").textContent).toContain("Available");
-    await waitFor(() => { expect(screen.getByRole("status").textContent).toContain("Showing the last check."); });
+    await waitFor(() => { expect(screen.getByRole("status").textContent).toContain("Showing the last confirmed launch check."); });
     expect(screen.getByRole("status").textContent).toContain("2026-10-16 12Z");
-    expect(screen.getByRole("button", { name: "Retry station availability check" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Check station" })).toBeTruthy();
   });
 
   it("opens the same launch that an explicit availability check describes", async () => {

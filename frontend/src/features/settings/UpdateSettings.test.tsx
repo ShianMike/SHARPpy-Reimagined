@@ -117,7 +117,7 @@ it("does not install a failed or unverified download and can retry with an unkno
     progress?.({ event: "Started", data: {} });
     return new Promise<void>((resolve) => { finish = resolve; });
   });
-  fireEvent.click(screen.getByRole("button", { name: "Install update" }));
+  fireEvent.click(screen.getByRole("button", { name: "Retry update" }));
   fireEvent.click(screen.getByRole("button", { name: "Install update & restart" }));
   expect(screen.getByRole("progressbar").hasAttribute("value")).toBe(false);
   await act(async () => { finish?.(); await Promise.resolve(); });

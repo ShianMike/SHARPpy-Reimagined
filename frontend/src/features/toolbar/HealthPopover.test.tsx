@@ -43,7 +43,7 @@ describe("HealthIndicator and HealthPopover (DR6-5)", () => {
     const { user, indicator, dialog } = await openIndicator(createTransport("python-unavailable"), "Backend unavailable");
     expect(dialog.getAttribute("aria-modal")).toBeNull();
     // PYTHON_NOT_FOUND needs a configuration change, so there is no button: the dialog takes focus.
-    expect(screen.queryByRole("button", { name: "Restart backend" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restart service" })).toBeNull();
     expect(document.activeElement).toBe(dialog);
     expect(dialog.textContent).toContain("Set SHARPPY_PYTHON");
     expect(dialog.textContent).toContain("sharppy-reimagined.log");
@@ -56,7 +56,7 @@ describe("HealthIndicator and HealthPopover (DR6-5)", () => {
   it("focuses Restart backend when it is offered, and Tab out closes the dialog", async () => {
     const transport = scriptedTransport({ get_backend_health: [unavailableHealth] });
     const { user, indicator } = await openIndicator(transport, "Backend unavailable");
-    const restart = screen.getByRole("button", { name: "Restart backend" });
+    const restart = screen.getByRole("button", { name: "Restart service" });
     expect(document.activeElement).toBe(restart);
     await user.tab();
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -70,7 +70,7 @@ describe("HealthIndicator and HealthPopover (DR6-5)", () => {
     });
     const { user, queryClient } = await openIndicator(transport, "Backend unavailable");
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
-    await user.click(screen.getByRole("button", { name: "Restart backend" }));
+    await user.click(screen.getByRole("button", { name: "Restart service" }));
     await screen.findByRole("button", { name: "Backend ready" });
     expect(transport.calls("restart_backend")).toBe(1);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["backend", "health"] });

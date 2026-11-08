@@ -29,20 +29,26 @@ try {
   const drawer = page.locator("#drawer"), menu = page.locator("#menu");
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 
-  await menu.evaluate((element) => { element.dataset.open = "true"; element.inert = false; });
   const motion = await menu.evaluate((element) => {
+    element.dataset.open = "true";
+    element.inert = false;
     const animations = element.getAnimations();
-    animations.forEach((animation) => { animation.pause(); animation.currentTime = 90; });
+    animations.forEach((animation) => { animation.pause(); animation.currentTime = animation.effect.getTiming().duration / 2; });
     return { count: animations.length, opacity: Number(getComputedStyle(element).opacity), width: element.offsetWidth,
       properties: animations.map((animation) => animation.transitionProperty), duration: animations.map((animation) => animation.effect.getTiming().duration) };
   });
   assert(motion.count > 0 && motion.opacity > 0 && motion.opacity < 1, "Popover must visibly interpolate");
-  assert(motion.properties.every((property) => ["opacity", "translate"].includes(property)), "Popover must avoid layout/paint animation");
+  assert(motion.properties.every((property) => ["opacity", "translate", "scale"].includes(property)), "Popover must avoid layout/paint animation");
+  assert(motion.properties.includes("scale"), "Popover must gently scale from the anchor");
   assert(motion.duration.every((duration) => duration <= 200), "Feedback must finish within 200 ms");
   assert.equal(motion.width, 300, "Motion must not change measured popup width");
   await finish("#menu");
-  await menu.evaluate((element) => { element.dataset.open = "false"; element.inert = true; });
-  assert(await menu.evaluate((element) => element.getAnimations().length > 0), "Closing must animate too");
+  const exitDuration = await menu.evaluate((element) => {
+    element.dataset.open = "false";
+    element.inert = true;
+    return Math.max(...element.getAnimations().map((animation) => animation.effect.getTiming().duration));
+  });
+  assert(exitDuration > 0 && exitDuration < Math.max(...motion.duration), "Closing must finish sooner than opening");
   await finish("#menu");
   assert.equal(await menu.evaluate((element) => getComputedStyle(element).opacity), "0");
 

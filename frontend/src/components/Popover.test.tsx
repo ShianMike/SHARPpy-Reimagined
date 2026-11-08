@@ -25,7 +25,6 @@ interface HarnessProps {
   width?: PopoverProps["width"];
 }
 
-/** A toolbar-like anchor button that toggles a non-modal dialog, plus an outside target. */
 function Harness({ initialFocus, withButtons = true, onClose, movable = false, unframed = false, side = "bottom", width = "content", id = "test-popup" }: HarnessProps): ReactNode {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -69,9 +68,8 @@ async function openPopover(props: HarnessProps) {
 describe("Popover", () => {
   it("keeps grouped cards anchored as content shrinks and clamps growth inside the viewport", async () => {
     let height = 300;
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      return this.getAttribute("role") === "dialog" ? new DOMRect(0, 0, 400, height) : new DOMRect(100, 40, 120, 40);
-    });
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(400);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(() => height);
     const { dialog } = await openPopover({ initialFocus: "first", movable: true, unframed: true });
     const top = dialog.style.getPropertyValue("--popover-y");
     expect(dialog.hasAttribute("data-material")).toBe(false);
@@ -114,7 +112,7 @@ describe("Popover", () => {
     const { anchor, dialog } = await openPopover({ initialFocus: "none", side: "right" });
     dialog.style.setProperty("--chrome-gap", "8px");
     const rect = vi.spyOn(anchor, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 200, 244, 40));
-    vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 320, 380));
+    vi.spyOn(dialog, "offsetWidth", "get").mockReturnValue(320);
     fireEvent.resize(window);
     expect(dialog.style.getPropertyValue("--popover-x")).toBe("352px");
     expect(dialog.style.getPropertyValue("--popover-y")).toBe("200px");
@@ -122,6 +120,7 @@ describe("Popover", () => {
     rect.mockReturnValue(new DOMRect(window.innerWidth - 140, 200, 120, 40));
     fireEvent.resize(window);
     expect(dialog.style.getPropertyValue("--popover-x")).toBe(`${String(window.innerWidth - 468)}px`);
+    expect(dialog.hasAttribute("data-flipped")).toBe(true);
   });
 
   it("keeps dropdown width in sync with its trigger after resizing", async () => {
@@ -139,13 +138,13 @@ describe("Popover", () => {
     const { anchor, dialog } = await openPopover({ initialFocus: "none", side: "top" });
     dialog.style.setProperty("--chrome-gap", "8px");
     vi.spyOn(anchor, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 700, 200, 32));
-    const rect = vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 320, 280));
+    const height = vi.spyOn(dialog, "offsetHeight", "get").mockReturnValue(280);
     fireEvent.resize(window);
     expect(dialog.style.getPropertyValue("--popover-y")).toBe("412px");
     const bottom = `${String(window.innerHeight - 700 + 8)}px`;
     expect(dialog.style.getPropertyValue("--popover-bottom")).toBe(bottom);
     expect(dialog.style.getPropertyValue("--popover-gap")).toBe("calc(var(--space-1) * 0)");
-    rect.mockReturnValue(new DOMRect(0, 0, 320, 340));
+    height.mockReturnValue(340);
     fireEvent.resize(window);
     expect(dialog.style.getPropertyValue("--popover-y")).toBe("352px");
     expect(dialog.style.getPropertyValue("--popover-bottom")).toBe(bottom);
@@ -229,24 +228,27 @@ describe("Popover", () => {
     vi.stubGlobal("innerWidth", 1280);
     vi.stubGlobal("innerHeight", 800);
     const { dialog } = await openPopover({ initialFocus: "first", movable: true });
-    const rect = vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 320, 380));
+    const width = vi.spyOn(dialog, "offsetWidth", "get").mockReturnValue(320);
+    const height = vi.spyOn(dialog, "offsetHeight", "get").mockReturnValue(380);
     fireEvent.resize(window);
     expect(dialog.style.getPropertyValue("--popover-x")).toBe("480px");
     expect(dialog.style.getPropertyValue("--popover-y")).toBe("210px");
     expect(dialog.style.getPropertyValue("--popover-gap")).toBe("calc(var(--space-1) * 0)");
     vi.stubGlobal("innerWidth", 1920);
     vi.stubGlobal("innerHeight", 1080);
-    rect.mockReturnValue(new DOMRect(0, 0, 500, 600));
+    width.mockReturnValue(500);
+    height.mockReturnValue(600);
     fireEvent.resize(window);
     expect(dialog.style.getPropertyValue("--popover-x")).toBe("710px");
     expect(dialog.style.getPropertyValue("--popover-y")).toBe("240px");
   });
 
   it("moves only from the header handle, stays within the viewport, and retains position after scroll", async () => {
-    const { user, dialog, anchor } = await openPopover({ initialFocus: "first", movable: true });
+    const { user, dialog } = await openPopover({ initialFocus: "first", movable: true });
     dialog.style.setProperty("--chrome-gap", "8px");
     dialog.style.setProperty("--space-5", "20px");
-    vi.spyOn(anchor, "getBoundingClientRect").mockReturnValue(new DOMRect(400, 60, 100, 40));
+    vi.spyOn(dialog, "offsetWidth", "get").mockReturnValue(300);
+    vi.spyOn(dialog, "offsetHeight", "get").mockReturnValue(200);
     vi.spyOn(dialog, "getBoundingClientRect").mockImplementation(() => new DOMRect(
       Number.parseFloat(dialog.style.getPropertyValue("--popover-x")) || 400,
       Number.parseFloat(dialog.style.getPropertyValue("--popover-y")) || 100, 300, 200));

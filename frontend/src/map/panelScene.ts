@@ -191,8 +191,8 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   return { ...field, issues: [
     ...(radarImage.issue === null ? [] : [`Radar: ${radarImage.issue}`]),
     ...(satellite.issue === null ? [] : [`Satellite: ${satellite.issue}`]),
-    ...(auxiliaryWanted && contourQuery.isError ? ["Wind and contour overlays could not be loaded; the coloured field may still be available."] : []),
-    ...(missingWind ? ["Wind barbs are missing from this frame; available contours and the coloured field are still shown."] : []),
-    ...(isobarRequest && isobarQuery.isError ? ["Isobars could not be loaded; the other layers are still available."] : []),
+    ...(auxiliaryWanted && contourQuery.isError ? ["Wind and contour overlays unavailable."] : []),
+    ...(missingWind ? ["Wind barbs are missing from this frame."] : []),
+    ...(isobarRequest && isobarQuery.isError ? ["Isobars unavailable."] : []),
   ], retry: () => { radarImage.retry(); satellite.retry(); if (auxiliaryWanted) void contourQuery.refetch(); if (isobarRequest) void isobarQuery.refetch(); } };
 }

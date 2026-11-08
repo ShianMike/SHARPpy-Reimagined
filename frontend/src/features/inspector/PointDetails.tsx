@@ -80,7 +80,6 @@ export function openModelSounding(context: ForecastContext, point: MapPoint): vo
     modelKey: context.model.key,
     runTime: context.run,
     forecastHour: context.model.forecastHours.includes(context.hour) ? context.hour : null,
-    atStation: false,
     latitude: point.latitude.toFixed(4),
     longitude: point.longitude.toFixed(4),
   });

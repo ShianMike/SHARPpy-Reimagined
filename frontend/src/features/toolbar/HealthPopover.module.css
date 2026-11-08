@@ -51,3 +51,6 @@
   display: flex;
   gap: var(--space-2);
 }
+.diagnostics { color: var(--text-secondary); font-size: var(--font-size-small); }
+.diagnostics summary { cursor: pointer; padding-block: var(--space-2); }
+.diagnostics .facts { margin-top: var(--space-2); }

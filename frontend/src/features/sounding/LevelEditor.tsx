@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { useUiStore } from "../../stores/uiStore";
 import type { ViewPoint } from "../../types/soundingView";
 import { Action, IconAction } from "../../ui/Controls";
@@ -44,8 +44,9 @@ export function LevelEditor({ points, selected, edited, busy, onSelect, onApply,
         <IconAction icon={ChevronDown} size="sm" label="Next level" disabled={busy || index === levels.length - 1} onClick={() => { selectLevel(index + 1); }} />
       </div>
       <div className={styles.levelCount}>{index + 1} / {levels.length}</div>
-      {level.points.length < 2 ? null : <div className={styles.variables} role="group" aria-label="Edit variable">
-        {level.points.map((item) => <Action key={item.id} aria-pressed={item.id === point.id} disabled={busy} onClick={() => { onSelect(item.id); }}>{item.label.split(" · ")[0]}</Action>)}
+      {level.points.length < 2 ? null : <div className={styles.variables} role="group" aria-label="Edit variable" data-selection-track="horizontal"
+        style={{ "--selection-index": level.points.indexOf(point) } as CSSProperties}>
+        {level.points.map((item) => <Action key={item.id} aria-pressed={item.id === point.id} disabled={busy} onClick={() => { onSelect(item.id); }}>{item.id.startsWith("tmpc:") ? "Temp" : item.label.split(" · ")[0]}</Action>)}
       </div>}
       <PointEditor key={point.id + JSON.stringify(point.values) + JSON.stringify(units)} point={point} busy={busy} onApply={(values) => { onApply(point, values); }} />
     </>}

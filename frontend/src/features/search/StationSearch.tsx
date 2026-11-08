@@ -12,7 +12,8 @@ import { useStationCatalog } from "../../stations/stationQueries";
 import { fold, MAX_QUERY_LENGTH, pythonStrip, SEARCH_LIMIT, searchStations } from "../../stations/stationSearch";
 import type { Station } from "../../types/contracts";
 import type { RadarSite } from "../../types/map";
-import { Action, IconAction } from "../../ui/Controls";
+import { IconAction } from "../../ui/Controls";
+import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
 import picker from "../toolbar/ForecastControls.module.css";
 import styles from "./StationSearch.module.css";
 
@@ -117,7 +118,9 @@ export function StationSearch(): ReactNode {
             <span className={styles.name}>{name}<small>{formatCoordinates(location)}</small></span><ArrowUpRight className="icon-sm" aria-hidden="true" />
           </div>;
         })}
-      </div> : <div className={styles.empty} role="status"><p>{placeholder}</p>{source.isError ? <Action disabled={source.isFetching} onClick={() => { void source.refetch(); }}>Retry</Action> : null}</div>}
+      </div> : source.isError ? <SoundingErrorNotice error={source.error} operation={section === "stations" ? "get_station_catalog" : "get_radar_sites"}
+        onRetry={() => { void source.refetch(); }} busy={source.isFetching} testId="search-error" />
+        : <div className={styles.empty} role="status"><p>{placeholder}</p></div>}
       <footer className={styles.footer}><span>{section === "stations" ? `${String(stations.length)} stations · select to inspect` : `${String(sites.length)} radar sites · select to view`}</span><span>↑ ↓ Browse · Enter Select</span></footer>
     </Popover>
   </>;

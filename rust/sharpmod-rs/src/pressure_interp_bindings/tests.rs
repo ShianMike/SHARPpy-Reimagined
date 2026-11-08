@@ -76,7 +76,7 @@ fn native_pressure_interpolation_matches_the_installed_reference() {
             assert!(native.interpolate(&target, &coordinates, &values).is_some());
             let actual = native.__call__(&target, &coordinates, &values)?;
             let reference = original.call1((&target, &coordinates, &values))?;
-            assert!(actual.get_type().is(&reference.get_type()));
+            assert!(actual.get_type().is(reference.get_type()));
             if reference.is(native.masked.bind(py)) {
                 assert!(actual.is(&reference));
             } else {
@@ -103,7 +103,7 @@ fn native_pressure_interpolation_matches_the_installed_reference() {
             );
             let actual = native.__call__(&targets, &coordinates, &values)?;
             let reference = original.call1((&targets, &coordinates, &values))?;
-            assert!(actual.get_type().is(&reference.get_type()));
+            assert!(actual.get_type().is(reference.get_type()));
             for attr in ["data", "mask"] {
                 assert_equal.call1((actual.getattr(attr)?, reference.getattr(attr)?))?;
             }

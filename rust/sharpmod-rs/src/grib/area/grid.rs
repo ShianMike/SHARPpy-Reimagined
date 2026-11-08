@@ -47,8 +47,8 @@ pub(super) fn read(
                 .or_else(|_| api.get_long_value(raw, b"Nj\0"))?;
             if nx <= 0
                 || ny <= 0
-                || i64::from(nx) * i64::from(ny)
-                    != i64::from(api.get_long_value(raw, NUMBER_OF_POINTS_KEY)?)
+                || i128::from(nx) * i128::from(ny)
+                    != i128::from(api.get_long_value(raw, NUMBER_OF_POINTS_KEY)?)
             {
                 return Err(Error::Data(
                     "This native grid is not a supported complete rectangular mesh".into(),

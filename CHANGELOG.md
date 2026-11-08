@@ -100,6 +100,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Widen native grid dimensions consistently for Windows and Linux when
+  validating the ecCodes mesh, preserving rectangular-grid rejection without
+  platform-dependent conversion warnings.
 - Preserve the committed box when a draw, move or corner resize is interrupted.
   Restore map panning after pointer capture is lost, ignore additional touches
   during a drag, and cancel corner edits on Escape or lost window focus without

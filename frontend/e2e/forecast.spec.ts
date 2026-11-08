@@ -5,7 +5,6 @@ import { saveScreenshot } from "./support/screenshots";
 import { hoverAt, layerRow, turnOn } from "./support/ui";
 import { expect, test } from "./support/test";
 
-
 test.describe("the forecast map", () => {
   test("the forecast setup and timeline share run limits and time", async ({ page, consoleMessages }) => {
     await page.goto("/");

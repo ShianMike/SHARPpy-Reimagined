@@ -48,14 +48,14 @@ describe("CatalogueStatusNotice (DR6-2)", () => {
   it("warns about the seed fallback", async () => {
     renderWithBackend(<CatalogueStatusNotice surface="floating" />, createTransport("seed-fallback"));
     const notice = await screen.findByTestId("catalogue-seed-fallback");
-    expect(notice.textContent).toContain("Showing the 10-station seed list: the bundled catalogue could not be read");
-    expect(seedFallbackText(10)).toBe("Showing the 10-station seed list: the bundled catalogue could not be read");
+    expect(notice.textContent).toContain("Limited station list · 10 stations");
+    expect(seedFallbackText(10)).toBe("Limited station list · 10 stations");
   });
 
   it("PYTHON_NOT_FOUND: the configuration instruction and no button", async () => {
     renderWithBackend(<CatalogueStatusNotice surface="flat" />, createTransport("python-unavailable"));
     const notice = await screen.findByTestId("catalogue-error");
-    expect(notice.textContent).toContain("Stations could not be loaded");
+    expect(notice.textContent).toContain("Weather service is not configured");
     expect(notice.textContent).toContain("Set SHARPPY_PYTHON");
     expect(notice.textContent).toContain("Python backend, bundled UWyo station catalogue");
     expect(screen.queryByRole("button")).toBeNull();
@@ -64,8 +64,10 @@ describe("CatalogueStatusNotice (DR6-2)", () => {
 
   it("CATALOG_UNAVAILABLE: Retry after the two automatic retries, then nothing", async () => {
     vi.useFakeTimers();
+    let finishRetry: (value: typeof catalogFull) => void = () => { throw new Error("Retry was not started"); };
+    const retryResult = new Promise<typeof catalogFull>((resolve) => { finishRetry = resolve; });
     const transport = scriptedTransport({
-      get_station_catalog: [{ reject: catalogUnavailable }, { reject: catalogUnavailable }, { reject: catalogUnavailable }, catalogFull],
+      get_station_catalog: [{ reject: catalogUnavailable }, { reject: catalogUnavailable }, { reject: catalogUnavailable }, retryResult],
     });
     renderWithBackend(<CatalogueStatusNotice surface="floating" />, transport);
     await act(async () => { await vi.advanceTimersByTimeAsync(999); });
@@ -73,11 +75,16 @@ describe("CatalogueStatusNotice (DR6-2)", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(transport.calls("get_station_catalog")).toBe(2);
     await act(async () => { await vi.advanceTimersByTimeAsync(2001); });
-    const retry = screen.getByRole("button", { name: "Retry" });
+    const retry = screen.getByRole("button", { name: "Reload stations" });
     expect(transport.calls("get_station_catalog")).toBe(3);
     expect(warn).toHaveBeenCalledTimes(3);
     fireEvent.click(retry);
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByRole("button", { name: "Retrying…" })).toBe(retry);
+    expect((retry as HTMLButtonElement).disabled).toBe(true);
+    expect(retry.getAttribute("aria-busy")).toBe("true");
+    expect(screen.queryByTestId("catalogue-loading")).toBeNull();
+    await act(async () => { finishRetry(catalogFull); await vi.advanceTimersByTimeAsync(1); });
     expect(screen.queryByTestId("catalogue-error")).toBeNull();
     expect(transport.calls("get_station_catalog")).toBe(4);
   });
@@ -88,8 +95,8 @@ describe("CatalogueStatusNotice (DR6-2)", () => {
       restart_backend: [BRIDGE_UP],
     });
     renderWithBackend(<CatalogueStatusNotice surface="floating" />, transport);
-    const restart = await screen.findByRole("button", { name: "Restart backend" });
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    const restart = await screen.findByRole("button", { name: "Restart service" });
+    expect(screen.queryByRole("button", { name: "Reload stations" })).toBeNull();
     await userEvent.click(restart);
     await waitFor(() => {
       expect(screen.queryByTestId("catalogue-error")).toBeNull();

@@ -274,10 +274,12 @@ test.describe("desktop measurements", () => {
     test.skip(!(await isTauri()), "not running inside the Tauri app");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMarks(["sharppy:basemap-loaded"]);
-    await expect(page.getByText("Stations could not be loaded")).toBeVisible();
+    const notice = page.getByTestId("catalogue-error");
+    await expect(notice).toContainText("Weather service is not configured");
+    await notice.getByText("Details", { exact: true }).click();
     await expect(page.getByText(/SHARPPY_PYTHON/u).first()).toBeVisible();
     await expect(page.getByTestId("catalogue-announcement")).toHaveCount(0);
-    results.pythonMissing = { notice: await page.getByText("Stations could not be loaded").locator("..").innerText() };
+    results.pythonMissing = { notice: await notice.innerText() };
     await shot("desktop-python-missing.png");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Logs" }).click();
     await expect(page.getByTestId("health-indicator")).toHaveText("Backend unavailable");

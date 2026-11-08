@@ -6,6 +6,8 @@ import { QUERY_KEYS } from "../../lib/backend/queryOptions";
 import type { CacheTarget } from "../../types/storage";
 import { Action, IconAction } from "../../ui/Controls";
 import styles from "./SettingsView.module.css";
+import { Notice } from "../../components/Notice";
+import { SoundingErrorNotice } from "../sounding/SoundingErrorNotice";
 
 const LABELS = {
   models: { title: "Forecast downloads", description: "Model data used to open forecast soundings." },
@@ -52,8 +54,12 @@ export function StorageSettings(): ReactNode {
       {usage.data === undefined ? null : <div className={styles.storageBar} aria-hidden="true">{usage.data.caches.map((row) => <span key={row.key} data-cache={row.key} style={{ "--cache-bytes": row.bytes } as CSSProperties} />)}</div>}
       {confirm ? <div className={styles.cacheConfirm}><p>Clear all available caches?</p><div className={styles.updateActions}><Action disabled={clearing} onClick={() => { setConfirm(false); }}>Cancel</Action><Action tone="accent" disabled={busy || clearable === 0} onClick={() => { mutation.mutate("all"); }}>{clearing ? "Clearing…" : "Clear now"}</Action></div></div> : null}
     </section>
-    {error === null ? mutation.data === undefined ? null : <p className={styles.storageFeedback} role="status">{formatStorageBytes(mutation.data.freedBytes)} cleared.{mutation.data.failedFiles > 0 ? " Some files couldn’t be removed. Refresh and try again." : ""}</p>
-      : <div className={styles.storageFeedback} role="alert"><p>{error.message}</p><Action disabled={busy} onClick={() => { mutation.reset(); void usage.refetch(); }}>Try again</Action></div>}
+    {error === null ? mutation.data === undefined ? null : mutation.data.failedFiles > 0
+      ? <Notice tone="warning" title="Some cached files remain" message={`${formatStorageBytes(mutation.data.freedBytes)} cleared. Close anything using the remaining files, then refresh usage.`}
+        actions={<Action disabled={busy} onClick={() => { mutation.reset(); void usage.refetch(); }}>Refresh usage</Action>} />
+      : <p className={styles.storageFeedback} role="status">{formatStorageBytes(mutation.data.freedBytes)} cleared.</p>
+      : <SoundingErrorNotice error={error} operation={mutation.error === null ? "get_storage_usage" : "clear_cache"} busy={busy}
+        onRetry={() => { if (mutation.error !== null) mutation.mutate(mutation.variables); else void usage.refetch(); }} testId="storage-error" />}
     {usage.data === undefined ? null : <section className={styles.section} aria-label="Cache categories">{usage.data.caches.map((row) => <div className={styles.cacheRow} key={row.key}>
       <div className={styles.cacheLabel}><h3><span data-cache={row.key} aria-hidden="true" />{LABELS[row.key].title}</h3><p className={styles.hint}>{LABELS[row.key].description}</p>
         {row.key === "maps" ? <p className={styles.cacheKept}>Up to 2 GiB · 48 hours after last use</p> : null}

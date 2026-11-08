@@ -2,7 +2,7 @@
 
 use pyo3::{prelude::*, types::PyBytes};
 use sharpmod_weather::{
-    map_fields::{self, RangeJob},
+    map_fields::{self, FieldJob},
     model_http::{Error, ModelClient},
 };
 
@@ -100,16 +100,15 @@ fn fetch_model_ranges(
 ) -> PyResult<Vec<Py<PyBytes>>> {
     let jobs = jobs
         .into_iter()
-        .map(|(url, limit, start, end)| RangeJob {
+        .map(|(url, limit, start, end)| FieldJob {
             url,
             limit,
-            start,
-            end,
+            range: Some((start, end)),
         })
         .collect();
     let runtime = crate::weather::runtime()?;
     let result = py.detach(move || {
-        runtime.block_on(map_fields::fetch_model_ranges(
+        runtime.block_on(map_fields::fetch_model_fields(
             ModelClient::shared(),
             jobs,
             timeout,
@@ -127,7 +126,7 @@ fn fetch_model_ranges(
         .map_err(|error| field_error(py, error))
 }
 
-fn cancelled(callback: Option<&Py<PyAny>>) -> Result<bool, String> {
+pub(crate) fn cancelled(callback: Option<&Py<PyAny>>) -> Result<bool, String> {
     match callback {
         None => Ok(false),
         Some(callback) => Python::attach(|py| callback.bind(py).call0()?.is_truthy())
@@ -135,24 +134,24 @@ fn cancelled(callback: Option<&Py<PyAny>>) -> Result<bool, String> {
     }
 }
 
-fn field_error(py: Python<'_>, error: Error) -> PyErr {
+pub(crate) fn field_error(py: Python<'_>, error: Error) -> PyErr {
     let (kind, message) = match error {
         Error::Cancelled => ("DownloadCancelled", "field download cancelled".into()),
         Error::Offline(message) => (
             "HrrrFieldOffline",
-            format!("HRRR connection failed: {message}"),
+            format!("Model connection failed: {message}"),
         ),
         Error::Unavailable(status) => (
             "HrrrFieldUnavailable",
-            format!("HRRR object is not published yet ({status})"),
+            format!("Model file is not published ({status})"),
         ),
         Error::Http(status) => (
             "HrrrFieldError",
-            format!("HRRR request failed: HTTP {status}"),
+            format!("Model request failed: HTTP {status}"),
         ),
         Error::Budget => (
             "HrrrFieldError",
-            "HRRR response exceeded the byte budget".into(),
+            "Model response exceeded the byte budget".into(),
         ),
         Error::Invalid(message) => ("HrrrFieldError", message),
     };

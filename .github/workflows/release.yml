@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v3.5.5). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v3.6.0). Created if it does not exist."
         required: true
-        default: "v3.5.5"
+        default: "v3.6.0"
       publish_release:
         description: "Publish after verification; leave off to build a release candidate only."
         required: true
@@ -313,6 +313,7 @@ jobs:
             cargo-downloads-v1-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache scientific release dependencies
+        id: scientific-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -437,6 +438,7 @@ jobs:
           echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
 
       - name: Cache desktop release dependencies
+        id: desktop-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -446,6 +448,33 @@ jobs:
           key: desktop-release-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.desktop-rust.outputs.version }}-release-default-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'rust/weather-core/Cargo.toml') }}
           restore-keys: |
             desktop-release-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.desktop-rust.outputs.version }}-release-default-
+
+      # A miss has an empty cache-hit output; a partial v2 hit is 'false'.
+      # Keep any v2 match. The old path list is required because paths also
+      # determine the cache version; a v1 restore-key on v2 cannot migrate it.
+      - name: Restore legacy desktop dependencies on a v2 miss
+        id: legacy-desktop-cache
+        if: steps.desktop-cache.outputs.cache-hit == ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target/release/.fingerprint
+            src-tauri/target/release/build
+            src-tauri/target/release/deps
+          key: desktop-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.desktop-rust.outputs.version }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            desktop-release-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.desktop-rust.outputs.version }}-
+
+      - name: Discard first-party weather artifacts from legacy cache
+        if: steps.legacy-desktop-cache.outputs.cache-matched-key != ''
+        shell: pwsh
+        run: |
+          # Legacy archives also contain first-party outputs. The application
+          # clean remains immediately before the production build below.
+          cargo clean --manifest-path src-tauri/Cargo.toml --release -p sharpmod-weather
+          if ($LASTEXITCODE -ne 0) { throw "Legacy weather cache cleanup failed" }
 
       - name: Build desktop shell and Windows installer
         working-directory: frontend
@@ -584,12 +613,22 @@ jobs:
       # every run compiles both first-party scientific and desktop crates anew.
       # Wheels, backend files and signed installers have already been staged.
       - name: Remove first-party artifacts from dependency caches
+        if: steps.scientific-cache.outputs.cache-hit != 'true' || steps.desktop-cache.outputs.cache-hit != 'true'
         shell: pwsh
+        env:
+          SCIENTIFIC_CACHE_HIT: ${{ steps.scientific-cache.outputs.cache-hit }}
+          DESKTOP_CACHE_HIT: ${{ steps.desktop-cache.outputs.cache-hit }}
         run: |
-          cargo +1.88.0 clean --manifest-path rust/sharpmod-rs/Cargo.toml --release -p sharpmod-rs -p sharpmod-weather
-          if ($LASTEXITCODE -ne 0) { throw "Scientific dependency cache preparation failed" }
-          cargo clean --manifest-path src-tauri/Cargo.toml --release -p sharppy-reimagined -p sharpmod-weather
-          if ($LASTEXITCODE -ne 0) { throw "Desktop dependency cache preparation failed" }
+          # Exact hits have no post-job save. Clean only targets being saved;
+          # signed outputs and runtime reports were already staged above.
+          if ($env:SCIENTIFIC_CACHE_HIT -ne 'true') {
+            cargo +1.88.0 clean --manifest-path rust/sharpmod-rs/Cargo.toml --release -p sharpmod-rs -p sharpmod-weather
+            if ($LASTEXITCODE -ne 0) { throw "Scientific dependency cache preparation failed" }
+          }
+          if ($env:DESKTOP_CACHE_HIT -ne 'true') {
+            cargo clean --manifest-path src-tauri/Cargo.toml --release -p sharppy-reimagined -p sharpmod-weather
+            if ($LASTEXITCODE -ne 0) { throw "Desktop dependency cache preparation failed" }
+          }
 
       - name: Upload tested release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

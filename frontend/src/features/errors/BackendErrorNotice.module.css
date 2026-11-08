@@ -1,6 +1,12 @@
-.hint, .log {
+.details {
   color: var(--text-tertiary);
   font-size: var(--font-size-small);
   overflow-wrap: anywhere;
 }
+.details summary { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-h-sm); cursor: pointer; list-style: none; }
+.details summary::-webkit-details-marker { display: none; }
+.details summary:is(:hover, :focus-visible) { color: var(--text-primary); }
+.details summary svg { transition: transform var(--motion-fast) var(--ease-standard); }
+.details[open] summary svg { transform: rotate(180deg); }
+.details p, .details code { display: block; margin-top: var(--space-2); line-height: var(--line-height-body); }
 .log { font-family: var(--font-mono); }

@@ -81,8 +81,8 @@ export function SourceSelect<T extends string | number>({ label, value, options:
   </div>;
 }
 
-export function SourceDate({ label = "Date (UTC)", value, min = "0001-01-01", max = utcDate(new Date()), onChange }: {
-  label?: string; value: string; min?: string; max?: string; onChange: (date: string) => void;
+export function SourceDate({ label = "Date (UTC)", value, min = "0001-01-01", max = utcDate(new Date()), disabled = false, showLabel = true, onChange }: {
+  label?: string; value: string; min?: string; max?: string; disabled?: boolean; showLabel?: boolean; onChange: (date: string) => void;
 }): ReactNode {
   const id = useId();
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
@@ -90,8 +90,8 @@ export function SourceDate({ label = "Date (UTC)", value, min = "0001-01-01", ma
   const time = releaseTime(value, 0);
   const close = (): void => { setOpen(false); anchor?.focus(); };
   return <div className={styles.field}>
-    <label htmlFor={id}>{label}</label>
-    <button ref={setAnchor} id={id} type="button" value={value} aria-label={label} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? `${id}-calendar` : undefined}
+    {showLabel ? <label htmlFor={id}>{label}</label> : null}
+    <button ref={setAnchor} id={id} type="button" value={value} disabled={disabled} aria-label={label} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? `${id}-calendar` : undefined}
       className={styles.fieldButton} onClick={() => { setOpen(!open); }}>
       <CalendarDays className="icon-sm" aria-hidden="true" /><span>{time === null ? "Choose a date" : new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(time))}</span><ChevronDown className="icon-sm" aria-hidden="true" />
     </button>

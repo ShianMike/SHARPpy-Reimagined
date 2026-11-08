@@ -17,13 +17,17 @@ use std::path::{Path, PathBuf};
 use std::ptr::{self, NonNull};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
+pub mod area;
+pub(crate) mod gdps_grid;
 mod grid_points;
+pub(crate) mod humidity;
 mod messages;
 mod point_cache;
 #[cfg(test)]
 mod profiling;
 pub(crate) mod streaming;
 use grid_points::{GridFingerprint, GridPointCache};
+use humidity::{dewpoint_from_rh, dewpoint_from_specific_humidity};
 use point_cache::{Fingerprint, PointCache};
 
 #[cfg(unix)]
@@ -1234,10 +1238,12 @@ impl RecordAssembler {
                 (100.0..=1100.0).contains(pressure)
                     && (-1000.0..=10_000.0).contains(height)
                     && (-120.0..=70.0).contains(temperature)
-                    && (-150.0..=*temperature + 1.0e-6).contains(dewpoint)
+                    && (-150.0..=*temperature + 0.5).contains(dewpoint)
                     && u.abs() <= 200.0
                     && v.abs() <= 200.0
-            });
+            })
+            // Match the established verified-surface contract's rounding tolerance.
+            .map(|(p, z, t, td, u, v)| (p, z, t, td.min(t), u, v));
         // Preserve a vorticity sample that is exactly coincident with the
         // verified ground. The profile row at that pressure is replaced by
         // the 2 m/10 m merge, but the pressure-level vorticity is still the
@@ -1379,23 +1385,6 @@ fn first_usable(
     missing: Option<f64>,
 ) -> Option<f64> {
     values.into_iter().find_map(|value| usable(value, missing))
-}
-
-fn dewpoint_from_rh(temperature_c: f64, relative_humidity: f64) -> f64 {
-    let a = 17.625;
-    let b = 243.04;
-    let rh = relative_humidity.clamp(1.0e-3, 100.0);
-    let gamma = (rh / 100.0).ln() + (a * temperature_c) / (b + temperature_c);
-    (b * gamma) / (a - gamma)
-}
-
-fn dewpoint_from_specific_humidity(specific_humidity: f64, pressure_hpa: f64) -> f64 {
-    let vapor_pressure =
-        ((specific_humidity * pressure_hpa) / (0.622 + 0.378 * specific_humidity)).max(1.0e-6);
-    let a = 17.625;
-    let b = 243.04;
-    let logarithm = (vapor_pressure / 6.112).ln();
-    (b * logarithm) / (a - logarithm)
 }
 
 fn coriolis_parameter(latitude: f64) -> f64 {

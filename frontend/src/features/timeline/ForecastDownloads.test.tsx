@@ -33,7 +33,8 @@ it("embeds download counts, cache recovery and bulk retry without another popup"
   expect(refresh).toHaveBeenCalledOnce();
   await user.click(screen.getByRole("button", { name: "Retry Missing Hours" }));
   expect(toggle).toHaveBeenCalledOnce();
-  expect(screen.getByText(/Select a red hour/u)).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toContain("Some hours could not download");
+  expect(screen.getByText(/Select a failed hour/u)).toBeTruthy();
 });
 
 it("shows loading, stopping, completion and cache errors in the inline controls", async () => {
@@ -53,9 +54,9 @@ it("shows loading, stopping, completion and cache errors in the inline controls"
   expect(screen.getByRole("progressbar", { name: "Saved Forecast Hours" }).getAttribute("value")).toBe("19");
   rerender(<ForecastDownloads download={{ ...download, failed: true }} />);
   expect(screen.getByText("Some hours are unavailable for this run.")).toBeTruthy();
-  expect(screen.queryByText(/Select a red hour/u)).toBeNull();
+  expect(screen.queryByText(/Select a failed hour/u)).toBeNull();
   rerender(<ForecastDownloads download={{ ...download, cacheError: true }} />);
-  expect(screen.getByText(/Saved-hour cache unavailable/u)).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toContain("Saved hours unavailable");
   expect(screen.queryByRole("progressbar")).toBeNull();
   rerender(<ForecastDownloads download={{ ...download, disabled: true, total: 0, missing: [] }} />);
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Load Hours" }).disabled).toBe(true);

@@ -4,6 +4,8 @@ import { useGraphicsStore } from "../../stores/graphicsStore";
 import type { GraphicsOverride, GraphicsProfile } from "../../types/graphics";
 import { REDUCED_NOTICES } from "../fallback/ReducedRenderingView";
 import styles from "./SettingsView.module.css";
+import { Notice } from "../../components/Notice";
+import { Map } from "lucide-react";
 
 const OVERRIDE_OPTIONS: readonly { value: GraphicsOverride; label: string; hint: string }[] = [
   { value: "auto", label: "Automatic", hint: "" },
@@ -24,19 +26,19 @@ export function GraphicsSettings(): ReactNode {
   const mapOff = effective.mode === "reduced" || renderer === "failed";
   const lowerQuality = probed && !mapOff && override === "auto" && effective.profile !== "high";
   let title: string | undefined;
-  let detail: string | undefined;
+  let detail = "";
   if (effective.mode === "reduced") {
     title = "Map rendering unavailable";
-    detail = "WebGL2 is unavailable on this device. Station search still works; changing profiles cannot enable the map.";
+    detail = "This device does not provide WebGL2. Station search is available.";
   } else if (renderer === "failed") {
     title = REDUCED_NOTICES[rendererError?.kind ?? "constructor"];
-    detail = "The station list replaces the map. Use Try the map again in the map view.";
+    detail = "The station list replaces the map until drawing resumes.";
   } else if (contextLost) {
     title = "Map interrupted";
-    detail = "Use Reload map to recover. Profile unchanged.";
+    detail = "The graphics device was reset.";
   } else if (Object.keys(panelErrors).length > 0) {
     title = "Map panel unavailable";
-    detail = "Use Reload maps to recover. Profile unchanged.";
+    detail = "One or more panels stopped drawing.";
   }
   return <>
     <section className={styles.graphicsActive} aria-label="Current rendering" role="status" data-tone={title === undefined && !lowerQuality ? "info" : "warning"}>
@@ -45,7 +47,8 @@ export function GraphicsSettings(): ReactNode {
         <span className={styles.graphicsMode}>{override === "auto" ? "Automatic" : override === effective.profile ? "Manual" : `${PROFILE_NAMES[override]} requested`}</span>
         {lowerQuality ? <span className={styles.graphicsLimited}>Reduced quality</span> : null}
       </div>
-      {title === undefined ? probed && override === "auto" ? <p>{effective.reasons.join(" · ")}</p> : null : <div className={styles.graphicsRecovery}><strong>{title}</strong><p>{detail}</p></div>}
+      {title === undefined ? probed && override === "auto" ? <p>{effective.reasons.join(" · ")}</p> : null : <Notice tone="warning" role="alert" title={title} message={detail} icon={Map}
+        {...(effective.mode === "reduced" ? {} : { actions: <Action onClick={() => { useGraphicsStore.getState().retryMap(); }}>Reload map</Action> })} />}
     </section>
     <div className={styles.graphicsChoices} role="group" aria-label="Graphics profile">
       {OVERRIDE_OPTIONS.map((option) => <Action key={option.value} className={styles.graphicsOption} aria-label={option.label} aria-pressed={override === option.value}

@@ -48,3 +48,14 @@
 .availability { padding: var(--space-3); border-radius: var(--radius-md); background: var(--control-fill); }
 .availability dd { margin: var(--space-1) 0 0; font-size: var(--font-size-body); font-weight: var(--font-weight-medium); }
 .missing { color: var(--text-secondary); }
+.boxHint, .boxMetrics { color: var(--text-secondary); font-size: var(--font-size-small); }
+.boxHint { margin: 0; }
+.boxMetrics { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); font-variant-numeric: tabular-nums; }
+.boxMetrics span + span { color: var(--text-primary); }
+.boxHelp { padding-top: var(--space-2); border-top: var(--hairline) solid var(--border-subtle); color: var(--text-secondary); font-size: var(--font-size-small); }
+.boxHelp summary { display: flex; align-items: center; justify-content: space-between; min-height: var(--control-h-sm); cursor: pointer; list-style: none; }
+.boxHelp summary::-webkit-details-marker { display: none; }
+.boxHelp summary:is(:hover, :focus-visible) { color: var(--text-primary); }
+.boxHelp summary svg { transition: transform var(--motion-fast) var(--ease-standard); }
+.boxHelp[open] summary svg { transform: rotate(180deg); }
+.boxHelp p { margin: var(--space-2) 0; line-height: var(--line-height-body); }

@@ -1,17 +1,15 @@
 // Forecast-model sounding: a model, a recent or archived run, a forecast hour,
-// and a point (the selected station, or typed coordinates). Models, runs, and
-// hours all come from the backend's model list; the valid time shown is the
-// run plus the forecast hour.
+// and a point given by latitude and signed longitude.
 import { useId, useState, type ReactNode, type SyntheticEvent } from "react";
-import { Action, Toggle } from "../../ui/Controls";
+import { Action } from "../../ui/Controls";
 import { Notice } from "../../components/Notice";
 import { useSoundingStore } from "../../stores/soundingStore";
-import { useSelectedStation } from "../../stations/stationIndex";
 import type { ForecastModel } from "../../types/soundings";
 import { SoundingErrorNotice } from "./SoundingErrorNotice";
 import { modelRegion, useModelCatalog, useOpenSounding } from "./soundingQueries";
-import { addHours, forecastLabel, formatUtc, resolveModelRun } from "./soundingTime";
+import { addHours, forecastLabel, resolveModelRun } from "./soundingTime";
 import { SourceSelect } from "./SourceFields";
+import { ModelRunFields } from "./ModelRunFields";
 import { DownloadStatus } from "./DownloadStatus";
 import styles from "./Sounding.module.css";
 
@@ -23,7 +21,6 @@ export function parseCoordinate(text: string, limit: number): number | null {
 function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNode {
   const inputs = useSoundingStore((state) => state.model);
   const setModel = useSoundingStore((state) => state.setModel);
-  const selected = useSelectedStation();
   const open = useOpenSounding();
   const request = open.isPending && open.variables.kind === "model" ? open.variables : null;
   const ids = { lat: useId(), lon: useId() };
@@ -46,13 +43,13 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
     inputs.forecastHour !== null && hours.includes(inputs.forecastHour)
       ? inputs.forecastHour
       : hours.includes(model.defaultForecastHour) ? model.defaultForecastHour : hours[0] ?? 0;
-  const station = selected.state === "found" ? selected.station : null;
-  const atStation = inputs.atStation && station !== null;
-  const latitude = atStation ? station.latitude : parseCoordinate(inputs.latitude, 90);
-  const longitude = atStation ? station.longitude : parseCoordinate(inputs.longitude, 180);
-  const latInvalid = !atStation && latitude === null && (touched.lat || inputs.latitude.trim() !== "");
-  const lonInvalid = !atStation && longitude === null && (touched.lon || inputs.longitude.trim() !== "");
+  const latitude = parseCoordinate(inputs.latitude, 90);
+  const longitude = parseCoordinate(inputs.longitude, 180);
+  const latInvalid = latitude === null && (touched.lat || inputs.latitude.trim() !== "");
+  const lonInvalid = longitude === null && (touched.lon || inputs.longitude.trim() !== "");
   const bounds = model.bounds;
+  const latitudeSouth = latitude === null ? inputs.latitude.trimStart().startsWith("-") : latitude < 0;
+  const longitudeWest = longitude === null ? inputs.longitude.trimStart().startsWith("-") : longitude < 0;
   const outside = latitude !== null && longitude !== null && (latitude < bounds.south || latitude > bounds.north ||
     (bounds.west <= bounds.east ? longitude < bounds.west || longitude > bounds.east : longitude < bounds.west && longitude > bounds.east));
   const valid = latitude !== null && longitude !== null && !outside && hours.includes(hour);
@@ -66,67 +63,61 @@ function ModelFields({ models }: { models: readonly ForecastModel[] }): ReactNod
         forecastHour: hour,
         latitude,
         longitude,
-        location: atStation ? station.id : null,
+        location: null,
       });
     }
   };
-  const newestFirst = model.recentRuns.includes(run) ? model.recentRuns : [...model.recentRuns, run];
 
   return (
     <form className={styles.form} onSubmit={submit} aria-label="Model sounding">
       <SourceSelect label="Model" value={model.key} popup="list" searchLabel="Search models" options={models.map((item) => ({ value: item.key, label: item.label, group: modelRegion(item), detail: `${item.domain}${item.gridSpacingKm === null ? "" : ` · ${String(item.gridSpacingKm)} km`}` }))} onChange={(modelKey) => { edit({ modelKey, runTime: null, forecastHour: null }); }} />
-      <p className={styles.hint}>{`${model.domain}${model.gridSpacingKm === null ? "" : `, ${String(model.gridSpacingKm)} km grid`}`}</p>
-      <SourceSelect label="Run" value={run} popup="grid" options={newestFirst.map((item) => ({ value: item, label: formatUtc(item), shortLabel: `${item.slice(11, 13)}Z`, group: `${item.slice(0, 10)} · UTC`, detail: item > model.suggestedRun ? "Pending" : item === model.suggestedRun ? "Latest" : undefined }))} onChange={(runTime) => { edit({ modelKey: model.key, runTime }); }} />
+      <ModelRunFields model={model} run={run} onChange={(runTime) => { edit({ modelKey: model.key, runTime }); }} />
       <SourceSelect label="Forecast" value={hour} popup="grid" options={hours.map((item) => ({ value: item, label: forecastLabel(item), group: `Valid ${addHours(run, item).slice(0, 10)} · UTC`, detail: `${addHours(run, item).slice(11, 13)}Z` }))} onChange={(forecastHour) => { edit({ forecastHour }); }} />
-      <p className={styles.hint}>Valid {formatUtc(addHours(run, hour))}</p>
-      <Toggle label={station === null ? "Use selected station" : `At station ${station.id}`} checked={atStation} disabled={station === null} onChange={(atStation) => { edit({ atStation }); }} />
-      {atStation ? null : (
-        <div className={styles.pair}>
-          <label className={styles.field} htmlFor={ids.lat}>
-            <span className={styles.coordinateLabel}>Latitude<small>°N</small></span>
-            <input
-              id={ids.lat}
-              className={styles.input}
-              inputMode="decimal"
-              aria-label="Latitude, degrees north"
-              aria-required="true"
-              aria-invalid={latInvalid}
-              aria-describedby={latInvalid ? `${ids.lat}-error` : undefined}
-              placeholder="35.2"
-              value={inputs.latitude}
-              onChange={(event) => {
-                edit({ latitude: event.target.value });
-              }}
-              onBlur={() => { setTouched((state) => ({ ...state, lat: true })); }}
-            />
-          </label>
-          <label className={styles.field} htmlFor={ids.lon}>
-            <span className={styles.coordinateLabel}>Longitude<small>°E</small></span>
-            <input
-              id={ids.lon}
-              className={styles.input}
-              inputMode="decimal"
-              aria-label="Longitude, degrees east"
-              aria-required="true"
-              aria-invalid={lonInvalid}
-              aria-describedby={lonInvalid ? `${ids.lon}-error` : undefined}
-              placeholder="-97.4"
-              value={inputs.longitude}
-              onChange={(event) => {
-                edit({ longitude: event.target.value });
-              }}
-              onBlur={() => { setTouched((state) => ({ ...state, lon: true })); }}
-            />
-          </label>
-        </div>
-      )}
+      <div className={styles.pair}>
+        <label className={styles.field} htmlFor={ids.lat}>
+          <span className={styles.coordinateLabel}>Latitude<small>{latitudeSouth ? "°S" : "°N"}</small></span>
+          <input
+            id={ids.lat}
+            className={styles.input}
+            inputMode="decimal"
+            aria-label="Latitude"
+            aria-required="true"
+            aria-invalid={latInvalid}
+            aria-describedby={latInvalid ? `${ids.lat}-error` : undefined}
+            placeholder="35.2"
+            value={inputs.latitude}
+            onChange={(event) => {
+              edit({ latitude: event.target.value });
+            }}
+            onBlur={() => { setTouched((state) => ({ ...state, lat: true })); }}
+          />
+        </label>
+        <label className={styles.field} htmlFor={ids.lon}>
+          <span className={styles.coordinateLabel}>Longitude<small>{longitudeWest ? "°W" : "°E"}</small></span>
+          <input
+            id={ids.lon}
+            className={styles.input}
+            inputMode="decimal"
+            aria-label="Longitude"
+            aria-required="true"
+            aria-invalid={lonInvalid}
+            aria-describedby={lonInvalid ? `${ids.lon}-error` : undefined}
+            placeholder="-97.4"
+            value={inputs.longitude}
+            onChange={(event) => {
+              edit({ longitude: event.target.value });
+            }}
+            onBlur={() => { setTouched((state) => ({ ...state, lon: true })); }}
+          />
+        </label>
+      </div>
       {!latInvalid && !lonInvalid ? null : <Notice tone="danger" title="Check coordinates" detail="Enter decimal degrees." role="alert">
         <dl className={styles.coordinateRanges}>
           {!latInvalid ? null : <div id={`${ids.lat}-error`}><dt>Latitude</dt><dd>−90° to 90°</dd></div>}
           {!lonInvalid ? null : <div id={`${ids.lon}-error`}><dt>Longitude</dt><dd>−180° to 180°</dd></div>}
         </dl>
       </Notice>}
-      {atStation ? null : <p className={styles.hint}>Negative = south / west</p>}
+      <p className={styles.hint}>Negative = south / west</p>
       {outside ? <Notice tone="warning" title="Outside model coverage" message={`${model.label} covers ${model.domain}. Choose a point inside its map outline.`} role="alert" /> : null}
       <div className={styles.actions}>
         <Action

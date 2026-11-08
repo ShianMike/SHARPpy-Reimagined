@@ -1,5 +1,5 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Radio, Repeat, StepBack, StepForward } from "lucide-react";
+import { Radio, Repeat } from "lucide-react";
 import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../../lib/cx";
@@ -14,6 +14,7 @@ import { RadarScanPicker } from "./RadarScanPicker";
 import styles from "../timeline/TimelineRegion.module.css";
 import hints from "../../ui/HoverHint.module.css";
 import { MapInteractionControls } from "../timeline/MapInteractionControls";
+import { PlaybackTransport } from "../timeline/PlaybackTransport";
 
 export function LiveTimeline({ className, scanTarget }: { className?: string | undefined; scanTarget?: HTMLDivElement | null }): ReactNode {
   const { now, selectedTime, playing, selectTime, setPlaying } = useLiveTrackingStore();
@@ -48,11 +49,8 @@ export function LiveTimeline({ className, scanTarget }: { className?: string | u
     {scanTarget == null ? null : createPortal(<RadarScanPicker history={history} status={status} fetching={fetching > 0}
       onSelect={(frame) => { choose(frame === now ? null : frame); void history.loadFrame(frame); }} />, scanTarget)}
     <MapInteractionControls />
-    <div className={styles.transport} role="group" aria-label="Playback">
-      <IconAction icon={StepBack} size="sm" label="Previous frame" hintSide="top" disabled={previous === undefined} onClick={() => { if (previous !== undefined) choose(previous); }} />
-      <IconAction className={styles.play} icon={playing ? Pause : Play} label={playing ? "Pause" : "Play"} hintSide="top" onClick={toggle} />
-      <IconAction icon={StepForward} size="sm" label="Next frame" hintSide="top" disabled={next === undefined} onClick={() => { if (next !== undefined) choose(next); }} />
-    </div>
+    <PlaybackTransport playing={playing} onToggle={toggle} onPrevious={previous === undefined ? undefined : () => { choose(previous); }}
+      onNext={next === undefined ? undefined : () => { choose(next); }} />
     <strong className={styles.selection}><span className={styles.model}>Live Tracking</span><span className={styles.hour}>{selectedTime === null ? "LIVE" : `−${String(minutes)}m`}</span></strong>
     <div className={styles.scrubber}>
       <input id="live-history-time" type="range" aria-label="Live history" min={-LIVE_HISTORY_MINUTES} max={0} step={1} value={-minutes}

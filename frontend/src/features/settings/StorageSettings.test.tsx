@@ -78,11 +78,11 @@ it("keeps every clear action disabled across navigation while cleanup is running
 it("shows an empty state and can retry after a usage failure", async () => {
   const user = userEvent.setup();
   const empty = { caches: storageFixture.caches.map((row) => ({ ...row, bytes: 0, files: 0, clearableBytes: 0 })) };
-  const transport = scriptedTransport({ get_storage_usage: [{ reject: unavailable }, empty] });
+  const transport = scriptedTransport({ get_storage_usage: [{ reject: { ...unavailable, code: "BRIDGE_TIMEOUT", retryable: true } }, empty] });
   renderWithBackend(<StorageSettings />, transport);
   await screen.findByRole("alert");
   expect(screen.queryByText("0 B")).toBeNull();
-  await user.click(screen.getByRole("button", { name: "Try again" }));
+  await user.click(screen.getByRole("button", { name: "Refresh usage" }));
   await screen.findByText("No cached weather data on this device.");
   expect(screen.queryByRole("alert")).toBeNull();
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Clear all caches…" }).disabled).toBe(true);
@@ -95,7 +95,7 @@ it("reports partial cleanup without claiming that every file was removed", async
   renderWithBackend(<StorageSettings />, transport);
   await screen.findByText("144 MiB");
   await user.click(screen.getByRole("button", { name: "Clear map images" }));
-  expect((await screen.findByRole("status")).textContent).toContain("Some files couldn’t be removed");
+  expect((await screen.findByRole("status")).textContent).toContain("Some cached files remain");
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Clear map images" }).disabled).toBe(false);
 });
 
@@ -118,4 +118,21 @@ it("rejects impossible totals or duplicate categories", () => {
   expect(() => parseStorageUsage({ caches: [storageFixture.caches[0], storageFixture.caches[0], storageFixture.caches[2]] })).toThrow();
   expect(() => parseStorageUsage({ caches: storageFixture.caches.map((row) => ({ ...row, clearableBytes: row.bytes + 1 })) })).toThrow();
   expect(() => parseStorageUsage({ caches: storageFixture.caches.map((row) => ({ ...row, bytes: -1 })) })).toThrow();
+});
+
+it("retries the same cache category after a transient cleanup failure", async () => {
+  const base = createTransport();
+  const call = vi.fn((command: Parameters<typeof base.call>[0], args: Parameters<typeof base.call>[1]) => {
+    if (command === "clear_cache" && call.mock.calls.filter(([method]) => method === "clear_cache").length === 1) {
+      return Promise.reject(Object.assign(new Error("Cache access timed out."), { code: "BRIDGE_TIMEOUT", retryable: true }));
+    }
+    return base.call(command, args);
+  });
+  renderWithBackend(<StorageSettings />, { ...base, call });
+  await screen.findByText("144 MiB");
+  await userEvent.click(screen.getByRole("button", { name: "Clear map images" }));
+  await screen.findByRole("alert");
+  await userEvent.click(screen.getByRole("button", { name: "Clear cache again" }));
+  await screen.findByText("12 MiB cleared.");
+  expect(call.mock.calls.filter(([command]) => command === "clear_cache").map(([, args]) => args)).toEqual([{ cache: "maps" }, { cache: "maps" }]);
 });

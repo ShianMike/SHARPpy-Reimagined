@@ -125,11 +125,13 @@ test("panel titles open their parameter picker and selected categories stay on o
   const picker = page.getByRole("dialog", { name: "Parameters", exact: true });
   await expect(picker).toBeVisible();
   await expect(picker.getByRole("searchbox", { name: "Search parameters" })).toBeFocused();
+  await picker.evaluate(async (element) => { await Promise.allSettled(element.getAnimations({ subtree: true }).map((animation) => animation.finished)); });
   const categories = picker.getByRole("navigation", { name: "Parameter categories" });
   const category = categories.getByRole("button", { name: /^Composite Parameters/u });
   const before = await boxOf(category);
   const sidebarWidth = (await boxOf(categories)).width;
   await category.click();
+  await category.evaluate(async (element) => { await Promise.allSettled(element.getAnimations().map((animation) => animation.finished)); });
   await nextFrames(page);
   expect((await boxOf(category)).height).toBe(before.height);
   expect(await category.locator("span").evaluate((element) => {
@@ -140,7 +142,7 @@ test("panel titles open their parameter picker and selected categories stay on o
   expect(await category.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   expect((await boxOf(categories)).width).toBe(sidebarWidth);
   const [label, count] = await Promise.all([boxOf(category.locator("span")), boxOf(category.locator("small"))]);
-  expect(count.x - label.x - label.width).toBeGreaterThanOrEqual(12);
+  expect(count.x - label.x - label.width).toBeGreaterThanOrEqual(12 * 0.9 - 0.05);
   const main = picker.getByRole("region", { name: "Parameter browser", exact: true });
   const mainBox = await boxOf(main);
   const results = picker.getByRole("region", { name: "Parameter results" });

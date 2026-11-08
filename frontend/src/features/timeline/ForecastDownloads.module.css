@@ -5,7 +5,7 @@
 .counts strong { color: var(--text-primary); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
 .actions { margin-left: auto; }
 .primary { min-height: var(--control-h-sm); border-radius: var(--radius-sm); font-size: var(--font-size-small); }
-.error { margin: var(--space-2) 0 0; color: var(--danger); font-size: var(--font-size-caption); }
+.error { margin-top: var(--space-2); }
 .progress { display: block; width: 100%; height: var(--space-1); margin-top: var(--space-2); border: 0; border-radius: var(--radius-pill); overflow: hidden; appearance: none; background: var(--track-fill); color: var(--accent-bright); }
 .progress::-webkit-progress-bar { background: var(--track-fill); }
 .progress::-webkit-progress-value { background: var(--accent-bright); }

@@ -1,4 +1,33 @@
 {
+  "3.6.0": {
+    "summary": "Native box soundings, a more compact workspace and clearer controls and recovery throughout the app.",
+    "highlights": [
+      {
+        "title": "Native box soundings",
+        "description": "Draw a region in Model Viewer to open an area-weighted sounding from supported native GRIB grids. See up to 64 individual grid traces behind the mean in the Skew-T and hodograph, retain them in saved files, and calculate diagnostics from all contributing valid columns."
+      },
+      {
+        "title": "More room for weather",
+        "description": "Use text, controls, panels and popups at 90% of their previous size. Moving highlights, press feedback and shorter popup exits respect reduced motion. What’s new softens the whole workspace behind it."
+      },
+      {
+        "title": "Choose sounding runs by date",
+        "description": "Pick a Model sounding run with the custom UTC calendar and separate cycle selector. Keep latitude and longitude as entered, with hemisphere labels that follow their signs and forecast choices that respect the selected cycle."
+      },
+      {
+        "title": "Clear recovery where it matters",
+        "description": "Read compact notices beside the failed operation, use its relevant retry or recovery action, and expand Details for diagnostics. Redraw oversized boxes, reload incompatible parameter lists and recover map layers without losing your selection."
+      },
+      {
+        "title": "Forecast maps and sounding controls",
+        "description": "See simulated Composite Reflectivity on GFS and use familiar parameter groups on native GDPS maps. Map details use two columns, visibility controls show loading, and sounding controls use a consistent layout."
+      },
+      {
+        "title": "Reliable edits and missing values",
+        "description": "Recalculate profile edits faster. Cancel interrupted box draws and corner resizes without losing the committed region. Keep unavailable effective-layer winds masked and handle saturated surfaces consistently with point soundings."
+      }
+    ]
+  },
   "3.5.5": {
     "summary": "Earlier preparation of large forecast soundings, faster repeat requests and an updated profile guide.",
     "highlights": [

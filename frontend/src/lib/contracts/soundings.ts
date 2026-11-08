@@ -16,6 +16,7 @@ import type {
   TrendPoint,
   WrfFile,
 } from "../../types/soundings";
+import { parseBoxSounding } from "./boxSounding";
 import {
   ContractError,
   at,
@@ -138,7 +139,7 @@ const SUMMARY_KEYS = [
 
 export function parseSoundingSummary(value: unknown, path = ""): SoundingSummary {
   const obj = expectObject(value, path);
-  expectExactKeys(obj, path, SUMMARY_KEYS, ["times"]);
+  expectExactKeys(obj, path, SUMMARY_KEYS, ["times", "box"]);
   const times = obj.times === undefined ? undefined : expectArray(obj.times, at(path, "times"), (value, p) => expectNullable(value, p, expectTimestamp));
   if (times !== undefined && times.length !== obj.timeCount) throw new ContractError(at(path, "times"), "must match timeCount");
   const latitude = optionalNumber(obj.latitude, at(path, "latitude"));
@@ -166,6 +167,7 @@ export function parseSoundingSummary(value: unknown, path = ""): SoundingSummary
     levelCount: expectInteger(obj.levelCount, at(path, "levelCount"), { min: 0 }),
     timeCount: expectInteger(obj.timeCount, at(path, "timeCount"), { min: 0 }),
     ...(times === undefined ? {} : { times }),
+    ...(obj.box === undefined ? {} : { box: parseBoxSounding(obj.box, at(path, "box")) }),
   };
 }
 

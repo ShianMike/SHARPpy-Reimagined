@@ -1,6 +1,7 @@
 // Helpers over the app's User Timing marks and the fixture-only test hooks
 // (window.__SHARPPY_E2E__, DESIGN-frontend F4).
 import type { Page } from "@playwright/test";
+import appManifest from "../../package.json" with { type: "json" };
 
 export const MARKS = {
   shellPainted: "sharppy:shell-painted",
@@ -87,9 +88,12 @@ export async function camera(page: Page): Promise<{ center: [number, number]; zo
 
 /** Stored preferences written before the app boots (sharppy.prefs.v1). */
 export async function presetPreferences(page: Page, preferences: Record<string, unknown>): Promise<void> {
-  await page.addInitScript((value) => {
+  await page.addInitScript(({ value, version }) => {
     window.localStorage.setItem("sharppy.prefs.v1", JSON.stringify({ version: 1, ...value }));
-  }, preferences);
+    if (window.localStorage.getItem("sharppy-workspace-ui") === null) {
+      window.localStorage.setItem("sharppy-workspace-ui", JSON.stringify({ state: { lastVersion: version }, version: 0 }));
+    }
+  }, { value: preferences, version: appManifest.version });
 }
 
 /** The app with getContext("webgl2") returning null, as on a device without WebGL2. */

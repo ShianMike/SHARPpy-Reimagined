@@ -15,10 +15,10 @@ import { StationList } from "./StationList";
 import styles from "./ReducedRenderingView.module.css";
 
 export const REDUCED_NOTICES: Readonly<Record<"noWebgl2" | RendererErrorKind, string>> = {
-  noWebgl2: "Map rendering is off: WebGL2 is not available on this device.",
-  constructor: "The map could not start on this graphics device.",
-  overlay: "The station layer could not start on this graphics device.",
-  timeout: "The map did not start drawing within 15 seconds.",
+  noWebgl2: "Map needs WebGL2",
+  constructor: "Map could not start",
+  overlay: "Station layer unavailable",
+  timeout: "Map startup timed out",
 };
 
 export const STILL_WORKS = "Station search, selection, and the inspector still work.";
@@ -34,7 +34,7 @@ export function ReducedRenderingView(): ReactNode {
         tone="warning"
         surface="flat"
         title={title}
-        message={STILL_WORKS}
+        message={noWebgl2 ? `This device does not provide WebGL2. ${STILL_WORKS}` : errorKind === "timeout" ? `No frame appeared within 15 seconds. ${STILL_WORKS}` : STILL_WORKS}
         testId="reduced-notice"
         {...(noWebgl2
           ? {}

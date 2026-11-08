@@ -78,9 +78,12 @@ def _request(params: dict[str, Any], *, require_interval: bool = True):
         if hour % 6:
             raise BridgeError("FIELD_UNAVAILABLE", "AIGFS publishes six-hour steps through F384.", False)
         return model, product, run, hour
-    if model in hrrr_products.ECMWF_MODELS or model == "gfs":
-        from sharpmod.tools.model_extract import forecast_hours
-        if hour not in forecast_hours(model, cycle_hour=run.hour):
+    if model in hrrr_products.GLOBAL_MODELS:
+        from sharpmod.tools.model_extract import cycle_hours, forecast_hours
+        if ((model == "gdps" and run.hour not in cycle_hours(model))
+                or hour not in forecast_hours(model, cycle_hour=run.hour)):
+            if model == "gdps":
+                raise BridgeError("FIELD_UNAVAILABLE", "GDPS maps use 00 and 12Z runs with three-hour steps through F240.", False)
             if model == "gfs":
                 raise BridgeError("FIELD_UNAVAILABLE", "GFS publishes hourly steps through F120, then three-hour steps through F384.", False)
             raise BridgeError("FIELD_UNAVAILABLE", "ECMWF publishes three-hour steps through F144, then six-hour steps; 06/18Z runs stop at F144.", False)
@@ -219,6 +222,7 @@ def _produce(model, product, run, hour, target, stopped):
         "source_url": hrrr_field.grib_url(run, hour, product.sources[0], model),
         "attribution": ("ECMWF IFS via ECMWF Open Data (CC BY 4.0)" if model in hrrr_field.ECMWF_MODELS
                         else "NOAA/NCEP GFS via AWS Open Data" if model == "gfs"
+                        else "Environment and Climate Change Canada via MSC Datamart" if model == "gdps"
                         else "NOAA/NCEP AIGFS via NOMADS" if model == "aigfs"
                         else hrrr_field.ATTRIBUTION if model == "hrrr"
                         else "NOAA/NCEP NAM via AWS Open Data" if model in {"nam", "nam-3km-conus"}

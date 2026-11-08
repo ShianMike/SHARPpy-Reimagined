@@ -171,8 +171,20 @@ observation for its time, location, measured values, remarks, and source.
 Wind barbs become denser as you zoom in. Borders and land outlines remain
 visible above filled overlays.
 
+Select **Radar → Composite Reflectivity** under Parameters on a GFS run to
+view simulated echoes. Live Tracking shows the observed radar separately.
+
+Choose **GDPS** in the Global model group to view Environment and Climate
+Change Canada's 15 km forecast grids. Its 00Z and 12Z runs share the
+three-hour forecast selection through F240 with GDPS point soundings. The
+picker shows the fields available for the selected time: pressure, height and
+wind, surface conditions, precipitation, snow depth, CAPE, and lapse rate.
+The freezing rain, sleet, and snow rates average the published amounts over
+the preceding three hours. GDPS CAPE uses the model's native diagnostic.
+Composite reflectivity and precipitable water are not in this GDPS catalogue.
+
 Turn on **Isobars** in the Model Viewer layer controls for the active panel.
-On supported HRRR, GFS, and ECMWF runs, smooth mean sea-level pressure lines
+On supported HRRR, GFS, GDPS, and ECMWF runs, smooth mean sea-level pressure lines
 follow the selected forecast hour and show labels at 4 hPa intervals. The
 layer has its own opacity control and can be used over a different shaded
 field. If mean sea-level pressure is unavailable, the layer stays empty.

@@ -9,7 +9,7 @@ import { saveScreenshot } from "./support/screenshots";
 import { expect, test } from "./support/test";
 import { boxOf } from "./support/ui";
 
-const NO_WEBGL2 = "Map rendering is off: WebGL2 is not available on this device.";
+const NO_WEBGL2 = "Map needs WebGL2";
 
 test("without WebGL2 the station list replaces the map, and the keyboard selects", async ({ page, consoleMessages }) => {
   await stubNoWebgl2(page);
@@ -51,7 +51,8 @@ test("DR6-2: without WebGL2 or Python, the instruction sits above the empty list
   await waitForMark(page, MARKS.shellPainted);
   await expect(page.getByTestId("reduced-notice")).toContainText(NO_WEBGL2);
   const instruction = page.getByTestId("catalogue-error");
-  await expect(instruction).toContainText("Stations could not be loaded");
+  await expect(instruction).toContainText("Weather service is not configured");
+  await instruction.getByText("Details", { exact: true }).click();
   await expect(instruction).toContainText("Set SHARPPY_PYTHON");
   await expect(instruction.getByRole("button")).toHaveCount(0);
   const empty = page.getByTestId("station-list-empty");

@@ -1,0 +1,289 @@
+{
+  "soundingId": "box-example",
+  "kind": "model",
+  "title": "HRRR Box 35.18N 97.44W",
+  "location": "Box 35.18N 97.44W",
+  "stationId": null,
+  "stationName": null,
+  "latitude": 35.18,
+  "longitude": -97.44,
+  "validTime": "2026-11-07T12:00:00Z",
+  "runTime": "2026-11-07T11:00:00Z",
+  "forecastHour": 1,
+  "model": "HRRR",
+  "provider": "hrrr",
+  "providerName": "HRRR",
+  "sourceUrl": null,
+  "fileName": null,
+  "levelCount": 39,
+  "timeCount": 1,
+  "box": {
+    "bounds": {
+      "west": -97.4894821579392,
+      "south": 35.16858108108108,
+      "east": -97.3905178420608,
+      "north": 35.19141891891892
+    },
+    "widthKm": 8.994358080117628,
+    "heightKm": 2.5394552107391304,
+    "areaKm2": 22.842348252476075,
+    "gridResolutionKm": 3.0,
+    "gridType": "lambert",
+    "selectedColumns": 4,
+    "validColumns": 4,
+    "surfacePressureHpa": 981.2,
+    "method": "native-area-log-pressure-highest-ground-v1",
+    "profileCacheHit": false,
+    "coverage": [
+      {
+        "pressureHpa": 981.2,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 975.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 950.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 925.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 900.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 875.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 850.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 825.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 800.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 775.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 750.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 725.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 700.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 675.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 650.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 625.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 600.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 575.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 550.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 525.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 500.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 475.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 450.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 425.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 400.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 375.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 350.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 325.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 300.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 275.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 250.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 225.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 200.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 175.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 150.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 125.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 100.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 75.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      },
+      {
+        "pressureHpa": 50.0,
+        "validColumns": 4,
+        "fraction": 1.0,
+        "retained": true
+      }
+    ],
+    "timings": {
+      "sourceMs": 192.05620000000002,
+      "geometryMs": 621.0917999999999,
+      "decodeMs": 5027.0202,
+      "unpackReadMs": 4760.1741,
+      "columnAssemblyMs": 266.8414,
+      "interpolationMs": 0.0074,
+      "spatialMs": 0.0474,
+      "aggregationMs": 0.058100000000000006,
+      "totalMs": 29728.5098,
+      "dataAccessMs": 23822.0003,
+      "artifactMs": 46.2543
+    },
+    "sourceCacheHit": false,
+    "location": "Box 35.18N 97.44W"
+  }
+}

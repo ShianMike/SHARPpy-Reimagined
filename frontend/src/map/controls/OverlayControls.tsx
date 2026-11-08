@@ -65,7 +65,8 @@ export function SatelliteControls(): ReactNode {
 
 export function RadarControls(): ReactNode {
   const validTime = useWeatherTime();
-  const catalog = useMapCatalog().data;
+  const mapCatalog = useMapCatalog();
+  const catalog = mapCatalog.data;
   const { radarScope: scope, radarSite: pinnedSite } = useMapStore((state) => panelWeather(state));
   const sites = useRadarSites(true);
   const { site: effectiveSite, product, tilt, tiltable, supportedProducts } = usePanelRadar();
@@ -91,7 +92,8 @@ export function RadarControls(): ReactNode {
         options={[{ value: "mosaic", label: "CONUS mosaic" }, { value: "site", label: "Single site" }]}
         onChange={useMapStore.getState().setRadarScope} />
       {scope === "site" ? (
-        sites.data === undefined ? (
+        sites.isError ? <SoundingErrorNotice error={sites.error} operation="get_radar_sites"
+          onRetry={() => { void sites.refetch(); }} busy={sites.isFetching} testId="radar-sites-error" /> : sites.data === undefined ? (
           <p className={styles.hint}>Loading the radar sites</p>
         ) : (
           <SourceSelect label="Site" value={pinnedSite ?? ""}
@@ -104,6 +106,8 @@ export function RadarControls(): ReactNode {
             }} />
         )
       ) : null}
+      {mapCatalog.isError ? <SoundingErrorNotice error={mapCatalog.error} operation="get_map_catalog"
+        onRetry={() => { void mapCatalog.refetch(); }} busy={mapCatalog.isFetching} testId="radar-products-error" /> : null}
       {products.length === 0 ? null : (
         <SourceSelect label="Product" value={value}
           options={products.map((item) => ({ value: item.key, label: item.label }))}

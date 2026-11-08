@@ -5,7 +5,7 @@
 numpy>=1.24,<3.0
 PySide6>=6.5,<6.12
 qtpy>=2.3,<3.0
-python-dateutil>=2.8,<3.0
+python-dateutil>=2.8,<5.0
 certifi>=2023.7.22
 requests>=2.28,<3.0
 Pillow>=10,<14
@@ -105,7 +105,7 @@ and the pip distribution name); "SHARPpy Reimagined" is the project name.
   numpy             >=1.24,<3.0       arrays / numerical math
   PySide6           >=6.5,<6.12       Qt6 GUI toolkit (used for rendering)
   qtpy              >=2.3,<3.0        Qt binding abstraction layer
-  python-dateutil   >=2.8,<3.0        flexible date/time parsing
+  python-dateutil   >=2.8,<5.0        flexible date/time parsing
   certifi           >=2023.7.22       CA bundle for verified HTTPS fetches
   requests          >=2.28,<3.0       HTTP (UWyo + SHARPpy datasources)
   Pillow            >=10,<14          self-contained GIF animation exports

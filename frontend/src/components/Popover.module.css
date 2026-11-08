@@ -1,14 +1,21 @@
 /* --popover-x/-y (the anchor edge) and --popover-measured-w/-h (this box) are
    set by Popover.tsx before paint; the clamps keep the box inside the viewport. */
 .popover {
-  position: fixed;
-  z-index: var(--z-popover);
-  top: clamp(
+  --popover-top: clamp(
     var(--chrome-gap),
     calc(var(--popover-y) + var(--popover-gap, var(--space-1))),
     calc(100vh - var(--popover-measured-h) - var(--chrome-gap))
   );
-  left: clamp(var(--chrome-gap), var(--popover-x), calc(100vw - var(--popover-measured-w) - var(--chrome-gap)));
+  --popover-left: clamp(var(--chrome-gap), var(--popover-x), calc(100vw - var(--popover-measured-w) - var(--chrome-gap)));
+  --popover-origin-x: clamp(0%, calc(var(--popover-anchor-x, var(--popover-left)) - var(--popover-left)), 100%);
+  --popover-origin-y: 0%;
+  --popover-shift-x: 0;
+  --popover-shift-y: calc(-1 * var(--space-1));
+  --popover-closed-scale: 0.95;
+  position: fixed;
+  z-index: var(--z-popover);
+  top: var(--popover-top);
+  left: var(--popover-left);
   max-width: calc(100vw - 2 * var(--chrome-gap));
   max-height: calc(100vh - 2 * var(--chrome-gap));
   overflow: auto;
@@ -16,16 +23,45 @@
   font-size: var(--font-size-body);
   opacity: 1;
   translate: 0;
-  transition: opacity var(--motion-base) var(--ease-standard), translate var(--motion-base) var(--ease-standard);
+  scale: 1;
+  transform-origin: var(--popover-origin-x) var(--popover-origin-y);
+  transition: opacity var(--motion-fast) var(--ease-enter),
+    translate var(--motion-base) var(--ease-enter), scale var(--motion-base) var(--ease-enter);
 }
-.popover[data-open="false"] { opacity: 0; translate: 0 var(--space-1); pointer-events: none; transition-duration: var(--motion-fast); }
-@starting-style { .popover[data-open="true"] { opacity: 0; translate: 0 var(--space-1); } }
-.popover[data-dragging="true"] { translate: 0; transition: none; }
+.popover[data-open="false"] {
+  opacity: 0;
+  translate: var(--popover-shift-x) var(--popover-shift-y);
+  scale: var(--popover-closed-scale);
+  pointer-events: none;
+  transition-duration: calc(var(--motion-fast) * 0.8), calc(var(--motion-base) * 0.8), calc(var(--motion-base) * 0.8);
+  transition-timing-function: ease-in;
+}
+@starting-style {
+  .popover[data-open="true"] {
+    opacity: 0;
+    translate: var(--popover-shift-x) var(--popover-shift-y);
+    scale: var(--popover-closed-scale);
+  }
+}
 .popover[data-side="top"][data-movable="false"] {
+  --popover-origin-y: 100%;
+  --popover-shift-y: var(--space-1);
   top: auto;
   bottom: max(var(--chrome-gap), var(--popover-bottom));
   max-height: min(calc(100vh - 2 * var(--chrome-gap)), calc(100vh - var(--popover-bottom) - var(--chrome-gap)));
 }
+.popover[data-side="right"][data-movable="false"] {
+  --popover-origin-x: 0%;
+  --popover-origin-y: clamp(0%, calc(var(--popover-anchor-y, var(--popover-top)) - var(--popover-top)), 100%);
+  --popover-shift-x: calc(-1 * var(--space-1));
+  --popover-shift-y: 0;
+}
+.popover[data-side="right"][data-movable="false"][data-flipped] {
+  --popover-origin-x: 100%;
+  --popover-shift-x: var(--space-1);
+}
+.popover[data-movable="true"] { --popover-shift-y: 0; --popover-closed-scale: 1; }
+.popover[data-dragging="true"] { transition: none; }
 
 .popover[data-width="popover"] {
   width: var(--popover-w);

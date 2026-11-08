@@ -14,10 +14,6 @@
   background: var(--border-subtle);
 }
 
-.toolbar > button { width: var(--control-h-md); height: var(--control-h-md); align-self: center; }
-
-.toolbar [aria-pressed="true"] {
-  background: var(--control-selected);
-  color: var(--accent-bright);
-  box-shadow: var(--control-shadow);
-}
+.layouts { display: grid; align-self: center; gap: var(--space-0-5); --selection-gap: var(--space-0-5); --selection-fill: var(--control-selected); --selection-shadow: var(--control-shadow); --selection-radius: var(--radius-round); }
+.toolbar > button, .layouts > button { width: var(--control-h-md); height: var(--control-h-md); align-self: center; }
+.layouts[data-selection-track] button[aria-pressed="true"] { background: transparent; }

@@ -52,6 +52,8 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
     is_global = model in hrrr_products.GLOBAL_MODELS
     is_hrw = model in hrrr_products.HRW_MODELS
     model_label = "ECMWF 9km" if model == "ecmwf-ifs-9km" else "ECMWF" if is_ecmwf else model.upper()
+    if not products:
+        raise BridgeError("FIELD_UNAVAILABLE", f"{model_label} maps require the bundled Rust backend.", False)
     selected = "run_time" in params or "forecast_hour" in params
     if selected:
         run, hour = _request({**params, "model": model, "product": "tmp-2m"})[-2:]
@@ -59,7 +61,13 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
     if (is_global or is_hrw) and selected:
         supported, failure = products, None
         try:
-            if is_global:
+            if model == "gdps":
+                import sharpmod_rs
+
+                products = tuple(sharpmod_rs.available_gdps_map_products(
+                    products, run, hour, hrrr_field._remote_limits()[0],
+                ))
+            elif is_global:
                 from sharpmod.providers.ecmwf_fields import available_products
                 products = available_products(model, run, hour)
             else:
@@ -79,7 +87,7 @@ def catalog(params: dict[str, Any]) -> dict[str, Any]:
             raise BridgeError("FIELD_UNAVAILABLE", f"No supported {model_label} fields are published for this run and hour. Choose an earlier run or retry later.", False)
     if is_global or is_hrw:
         from sharpmod.tools.model_extract import forecast_hours
-        cycles = (0, 12) if is_hrw else (0, 6, 12, 18)
+        cycles = (0, 12) if is_hrw or model == "gdps" else (0, 6, 12, 18)
         limits = [max(forecast_hours(model, cycle_hour=cycle)) if cycle in cycles else 0 for cycle in range(24)]
     else:
         limits = [(hrrr_field.max_forecast_hour(cycle) if model == "hrrr"

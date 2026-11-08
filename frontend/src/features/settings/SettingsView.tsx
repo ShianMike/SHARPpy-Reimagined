@@ -1,5 +1,5 @@
 import { Cpu, Download, HardDrive, Monitor, Palette, Play, Ruler, SlidersHorizontal } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { CapabilityTable } from "./CapabilityTable";
 import { GraphicsSettings } from "./GraphicsSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
@@ -25,7 +25,10 @@ export function SettingsView(): ReactNode {
   const current = SECTIONS.find((item) => item.id === section) ?? SECTIONS[0];
   return <div className={styles.view} data-testid="settings-view">
     <aside className={styles.sidebar}><header><h1>Settings</h1></header>
-      <nav className={styles.navigation} aria-label="Settings sections">{SECTIONS.map((item) => <button key={item.id} type="button" aria-current={section === item.id ? "true" : undefined} aria-controls="settings-content" onClick={() => { setSection(item.id); }}><item.icon className="icon" aria-hidden="true" />{item.label}</button>)}</nav>
+      <nav className={styles.navigation} aria-label="Settings sections" data-selection-track="vertical"
+        style={{ "--selection-index": SECTIONS.indexOf(current) } as CSSProperties}>
+        {SECTIONS.map((item) => <button key={item.id} type="button" aria-current={section === item.id ? "true" : undefined} aria-controls="settings-content" onClick={() => { setSection(item.id); }}><item.icon className="icon" aria-hidden="true" />{item.label}</button>)}
+      </nav>
       <p className={styles.saved}>Changes save automatically on this device.</p>
     </aside>
     <section key={section} data-motion="fade" id="settings-content" className={styles.content} aria-labelledby="settings-section-title">

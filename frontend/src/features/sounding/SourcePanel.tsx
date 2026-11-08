@@ -1,5 +1,5 @@
 // The sounding source as a tab list over one form.
-import type { KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { RadioTower, CloudSun, History, FileUp, PanelLeftClose, SlidersHorizontal } from "lucide-react";
 import { IconAction } from "../../ui/Controls";
 import { useSoundingStore, type SoundingSource } from "../../stores/soundingStore";
@@ -19,12 +19,12 @@ const SOURCES: readonly { id: SoundingSource; label: string }[] = [
 export function SourcePanel({ onHide, onControls }: { onHide: () => void; onControls?: () => void }): ReactNode {
   const source = useSoundingStore((state) => state.source);
   const setSource = useSoundingStore((state) => state.setSource);
+  const index = SOURCES.findIndex((item) => item.id === source);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") {
       return;
     }
     event.preventDefault();
-    const index = SOURCES.findIndex((item) => item.id === source);
     const step = event.key === "ArrowRight" ? 1 : SOURCES.length - 1;
     const next = SOURCES[(index + step) % SOURCES.length];
     if (next !== undefined) {
@@ -38,7 +38,8 @@ export function SourcePanel({ onHide, onControls }: { onHide: () => void; onCont
         {onControls === undefined ? null : <IconAction icon={SlidersHorizontal} size="sm" label="Show sounding controls" aria-controls="sounding-controls" onClick={onControls} />}
         <IconAction icon={PanelLeftClose} size="sm" label="Hide sources" aria-expanded={true} aria-controls="sounding-sources" onClick={onHide} />
       </div></header>
-      <div className={styles.tabs} role="tablist" aria-label="Source" onKeyDown={onKeyDown}>
+      <div className={styles.tabs} role="tablist" aria-label="Source" onKeyDown={onKeyDown}
+        data-selection-track="horizontal" style={{ "--selection-index": index } as CSSProperties}>
         {SOURCES.map((item) => (
           <button
             key={item.id}

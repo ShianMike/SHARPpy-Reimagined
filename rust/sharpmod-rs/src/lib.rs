@@ -2,12 +2,16 @@
 //! GRIB point-decoding backend.
 
 pub mod batch_analysis;
+mod box_bindings;
+pub mod box_soundings;
 pub mod contours;
 mod ecape;
 mod ecape_bindings;
 mod ecmwf_inventory;
 mod ensemble;
 mod ensemble_bindings;
+mod gdps_field_bindings;
+mod gdps_fields;
 pub mod grib;
 mod height_grid;
 mod height_grid_bindings;
@@ -20,13 +24,14 @@ pub mod kinematics;
 mod locator_paths;
 mod map_contour_bindings;
 mod map_geometry;
+mod map_products;
 mod model_http_bindings;
 mod model_source_bindings;
 mod model_sources;
 mod parcel_display_bindings;
 pub mod parcels;
 pub mod parsing;
-mod pressure_maps;
+mod pressure_interp_bindings;
 mod profile_input;
 pub mod quality_control;
 pub mod radar_sampling;
@@ -822,7 +827,8 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     weather::register(module)?;
     map_geometry::register(module)?;
     map_contour_bindings::register(module)?;
-    pressure_maps::register(module)?;
+    map_products::register(module)?;
+    gdps_field_bindings::register(module)?;
     height_grid_bindings::register(module)?;
     igra_bindings::register(module)?;
     report_bindings::register(module)?;
@@ -831,12 +837,14 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     radar_sampling_bindings::register(module)?;
     model_http_bindings::register(module)?;
     model_source_bindings::register(module)?;
+    box_bindings::register(module)?;
     range_bindings::register(module)?;
     iem_bindings::register(module)?;
     ensemble_bindings::register(module)?;
     locator_paths::register(module)?;
     satellite_bindings::register(module)?;
     parcel_display_bindings::register(module)?;
+    pressure_interp_bindings::register(module)?;
     wind_layer_bindings::register(module)?;
     wind_grid_bindings::register(module)?;
     ecape_bindings::register(module)?;

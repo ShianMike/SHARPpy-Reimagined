@@ -220,8 +220,8 @@ describe("SoundingWorkspace", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Station" }), "72357");
     await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
     const notice = await screen.findByTestId("observed-error");
-    expect(notice.textContent).toContain("The sounding could not be opened");
-    expect(notice.textContent).toContain("Retrying will not help.");
+    expect(notice.textContent).toContain("Sounding unavailable");
+    expect(notice.textContent).not.toContain("Retrying will not help.");
     // Editing the request clears the notice, which described the previous one.
     await userEvent.click(screen.getByRole("combobox", { name: /^Launch/u }));
     await userEvent.click(screen.getByRole("option", { name: "06Z" }));

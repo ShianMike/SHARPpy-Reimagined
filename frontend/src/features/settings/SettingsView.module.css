@@ -3,9 +3,11 @@
 .sidebar header { padding-inline: var(--space-3); }
 .sidebar h1 { font-size: var(--font-size-title); }
 .navigation { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-5); }
+.navigation[data-selection-track] { display: grid; flex: none; grid-auto-rows: 1fr; }
 .navigation button { display: flex; align-items: center; gap: var(--space-3); border: 0; border-radius: var(--radius-sm); background: none; min-height: var(--control-h-md); text-align: left; padding: var(--space-2) var(--space-3); color: var(--text-secondary); font-size: var(--font-size-small); }
 .navigation button:hover { background: var(--fill-hover); color: var(--accent-bright); }
 .navigation button[aria-current] { color: var(--accent-bright); background: var(--accent-subtle); font-weight: var(--font-weight-medium); }
+.navigation[data-selection-track] button[aria-current] { background: transparent; }
 .saved { margin-top: auto; padding: var(--space-4) var(--space-3) 0; color: var(--text-tertiary); font-size: var(--font-size-caption); line-height: var(--line-height-body); }
 .content { min-width: 0; overflow: auto; padding: var(--space-6); overscroll-behavior: contain; }
 .heading { margin-bottom: var(--space-5); }

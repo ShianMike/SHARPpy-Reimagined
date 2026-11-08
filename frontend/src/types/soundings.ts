@@ -70,6 +70,7 @@ export type OpenSoundingRequest =
       latitude: number;
       longitude: number;
       location: string | null;
+      box?: Bounds;
     }
   | { kind: "era5"; time: string; latitude: number; longitude: number; location: string | null }
   | { kind: "wrf"; filePath: string; time: string; latitude: number; longitude: number }
@@ -107,6 +108,7 @@ export interface SoundingSummary {
   timeCount: number;
   /** Every file time in collection order, including undated entries. */
   times?: readonly (string | null)[];
+  box?: import("./boxSounding").BoxSoundingMetadata;
 }
 
 export interface TableColumn {

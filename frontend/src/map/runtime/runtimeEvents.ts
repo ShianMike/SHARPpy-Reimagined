@@ -7,6 +7,8 @@ import type { Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
 import type { PickingInfo } from "@deck.gl/core";
 import { MARKS, markOnce } from "../../lib/metrics";
 import { useGraphicsStore } from "../../stores/graphicsStore";
+import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
+import { useMapStore } from "../../stores/mapStore";
 import type { CanvasTokens } from "../canvasTokens";
 import { useHoverStore } from "../hover/hoverStore";
 import { attachMapEvents } from "./mapEvents";
@@ -71,7 +73,7 @@ export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, tar
     { pickingRadius: tokens.lengths.pickingRadius, useDevicePixels: pixelRatio },
     {
       onHover: live((info) => {
-        if (!target.dragging) {
+        if (!target.dragging && (useMapStore.getState().view === "live" || useBoxSoundingStore.getState().mode === "point")) {
           hoverFromPick(info, target.panel, target.container.getBoundingClientRect());
         }
       }),
@@ -107,7 +109,8 @@ export function wireOverlayEvents(map: MapLibreMap, overlay: MapLibreOverlay, ta
     useHoverStore.getState().clear();
   };
   const move = target.live((event: MapMouseEvent) => {
-    if (target.dragging || map.isMoving() || !useHoverStore.getState().inspecting) return;
+    if (target.dragging || map.isMoving() || !useHoverStore.getState().inspecting
+      || (useMapStore.getState().view === "map" && useBoxSoundingStore.getState().mode === "box")) return;
     pending = event;
     if (frame !== null) return;
     frame = requestAnimationFrame(target.live(() => {

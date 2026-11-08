@@ -14,7 +14,9 @@ export function useMapCatalog(): UseQueryResult<MapCatalog> {
   const model = selected?.key ?? "hrrr";
   const runChoice = useForecastStore((state) => state.runTime);
   const hourChoice = useForecastStore((state) => state.forecastHour);
-  const dynamic = model === "hrrr" || model === "rrfs-a" || model.startsWith("refs-") || model === "nam-3km-conus" || model === "gfs" || model === "aigfs" || model === "openmeteo-ecmwf-ifs025" || model === "ecmwf-ifs-9km" || model.startsWith("hrw-");
+  const dynamic = model === "hrrr" || model === "rrfs-a" || model.startsWith("refs-")
+    || model === "nam-3km-conus" || model === "gfs" || model === "gdps" || model === "aigfs"
+    || model === "openmeteo-ecmwf-ifs025" || model === "ecmwf-ifs-9km" || model.startsWith("hrw-");
   const run = dynamic && selected !== undefined ? resolveModelRun(selected, model === requestedModel ? runChoice : null) : undefined;
   const limit = run === undefined ? 0 : selected?.maxForecastHours[new Date(run).getUTCHours()] ?? 0;
   const hour = run === undefined ? undefined : selected?.forecastHours.findLast((value) => value <= limit && value <= (hourChoice ?? selected.defaultForecastHour));

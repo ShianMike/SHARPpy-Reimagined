@@ -64,7 +64,7 @@ it("reports an incompatible map catalogue and recovers after the backend is upda
   });
   const dialog = await screen.findByRole("dialog", { name: "Parameters unavailable" });
   expect(dialog.parentElement).toBe(document.body);
-  expect(within(screen.getByRole("group", { name: "Forecast" })).queryByRole("button", { name: "Retry" })).toBeNull();
+  expect(within(screen.getByRole("group", { name: "Forecast" })).queryByRole("button", { name: "Reload parameters" })).toBeNull();
   const parameter = screen.getByRole<HTMLButtonElement>("button", { name: "Choose parameter" });
   expect(parameter.textContent).toContain("Unavailable");
   expect(parameter.getAttribute("aria-description")).toContain("versions may not match");
@@ -75,7 +75,7 @@ it("reports an incompatible map catalogue and recovers after the backend is upda
   await userEvent.click(parameter);
   const reopened = screen.getByRole("dialog", { name: "Parameters unavailable" });
   staleBackend = false;
-  await userEvent.click(within(reopened).getByRole("button", { name: "Retry" }));
+  await userEvent.click(within(reopened).getByRole("button", { name: "Reload parameters" }));
   await waitFor(() => { expect(parameter.disabled).toBe(false); });
   expect(parameter.textContent).toContain("Composite Reflectivity");
   await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Parameters unavailable" })).toBeNull(); });
@@ -118,16 +118,17 @@ it("sends an archived UTC run from the date picker through the map, timeline, an
   expect(screen.getByLabelText("Valid time").textContent).toContain("03-02 04Z");
   await waitFor(() => { expect(fields).toContainEqual(expect.objectContaining({ runTime: "2024-02-29T12:00:00Z", forecastHour: 40 })); });
   await userEvent.click(screen.getByRole("button", { name: "Open HRRR sounding here" }));
-  expect(screen.getByRole<HTMLButtonElement>("combobox", { name: "Run" }).value).toBe("2024-02-29T12:00:00Z");
+  expect(screen.getByRole("button", { name: "Run date (UTC)" }).textContent).toContain("29 Feb 2024");
+  expect(screen.getByRole<HTMLButtonElement>("combobox", { name: "Cycle (UTC)" }).value).toBe("2024-02-29T12:00:00Z");
   await userEvent.click(screen.getByRole("button", { name: "Open sounding" }));
   await waitFor(() => { expect(sounding).toMatchObject({ request: { model: "hrrr", runTime: "2024-02-29T12:00:00Z", forecastHour: 40 } }); });
 });
 
 it("keeps run edits when the sounding form starts with the default model", async () => {
   renderWithBackend(<ModelForm />, createTransport());
-  const run = await screen.findByRole<HTMLButtonElement>("combobox", { name: "Run" });
+  const run = await screen.findByRole<HTMLButtonElement>("combobox", { name: "Cycle (UTC)" });
   await userEvent.click(run);
-  await userEvent.click(screen.getByRole("option", { name: "2026-10-04 12Z" }));
+  await userEvent.click(screen.getByRole("option", { name: "12Z" }));
   expect(run.value).toBe("2026-10-04T12:00:00Z");
 });
 

@@ -122,7 +122,7 @@ def open_observed(params: dict[str, Any]) -> dict[str, Any]:
 def open_model(params: dict[str, Any]) -> dict[str, Any]:
     """A forecast-model point sounding (HRRR, RAP, GFS, and the rest)."""
     p.keys(params, ("model", "forecast_hour", "latitude", "longitude"),
-           ("run_time", "location", "progress_id"))
+           ("run_time", "location", "progress_id", "box"))
     with track(params.get("progress_id")) as progress:
         entry_id = cache().new_id()
         try:
@@ -152,21 +152,24 @@ def _open_model(params, progress, entry_id):
         ) from None
     path = cache().data_path(entry_id, ".npz")
     stop = cancellation.event()
+    extract = mx.extract
+    box_args = {"box_bounds": params["box"]} if params.get("box") is not None else {}
+    box_metadata = None
+    if box_args:
+        from sharpmod_rs import extract_box_sounding
+        extract = extract_box_sounding
     try:
-        written = mx.extract(
-            config.key,
-            lat,
-            lon,
-            run_time=run,
-            fxx=fxx,
-            out_path=str(path),
+        written = extract(
+            config.key, lat, lon, run_time=run, fxx=fxx, out_path=str(path),
             loc=location,
             download_dir=str(cache().root / f"{entry_id}-grib"),
-            progress_callback=progress.stage,
-            on_bytes=progress.receive,
+            progress_callback=progress.stage, on_bytes=progress.receive,
             cancelled=stop.is_set if stop is not None else (lambda: False),
-            source_cache=cache().model_hours,
+            source_cache=cache().model_hours, **box_args,
         )
+        if box_args:
+            written, box_metadata = written
+            location = box_metadata["location"]
     except DownloadCancelled:
         raise cancellation.Cancelled() from None
     except era5_extract.ParameterRangeError as exc:
@@ -187,19 +190,16 @@ def _open_model(params, progress, entry_id):
     north, east = ("N" if lat >= 0 else "S"), ("E" if lon >= 0 else "W")
     point = f"{abs(lat):.2f}{north} {abs(lon):.2f}{east}"
     return register(
-        entry_id,
-        data_path,
+        entry_id, data_path,
         summary(
-            entry_id,
-            "model",
-            collection,
+            entry_id, "model", collection,
             title=f"{config.label} {location or point}",
             location=location or point,
             latitude=lat, longitude=lon,
             run_time=p.iso(meta(collection, "run") or meta(collection, "base_time")),
             forecast_hour=fxx,
-            model=config.label,
-            provider=config.key, provider_name=config.label,
+            model=config.label, provider=config.key, provider_name=config.label,
+            **({"box": box_metadata} if box_metadata is not None else {}),
         ),
         collection,
     )

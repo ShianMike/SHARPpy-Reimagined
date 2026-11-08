@@ -26,7 +26,7 @@ it("shows a failed secondary panel and recovers without clearing products or the
   renderWithBackend(<MapPanel panel={2} layout={1} />, createTransport());
   try {
     act(() => { useGraphicsStore.getState().setRendererFailed("overlay", "shader failed", 2); });
-    expect(screen.getByRole("alert").textContent).toContain("Panel 3 could not be drawn");
+    expect(screen.getByRole("alert").textContent).toContain("Panel 3 drawing stopped");
     act(() => { useGraphicsStore.getState().setRendererReady(2); });
     expect(screen.queryByRole("alert")).toBeNull();
     act(() => { useGraphicsStore.getState().setRendererFailed("constructor", "context unavailable", 2); });

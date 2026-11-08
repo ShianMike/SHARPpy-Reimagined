@@ -38,7 +38,7 @@ test("the forecast workspace has linked controls and only the supported destinat
   expect(mapToolsBox.y).toBeGreaterThan(navigationBox.y + navigationBox.height);
   const scale = page.getByRole("complementary", { name: "Parameter scale" });
   await expect(scale).toBeVisible();
-  expect((await boxOf(scale)).width).toBe(48);
+  expect((await boxOf(scale)).width).toBeCloseTo(48 * 0.9, 1);
   await expect(scale.getByRole("listitem")).toHaveCount(0);
   await expect(scale.getByRole("slider", { name: "Explore parameter scale" })).toBeVisible();
   const forecast = page.getByRole("group", { name: "Forecast", exact: true });
@@ -59,7 +59,7 @@ test("the forecast workspace has linked controls and only the supported destinat
   const brand = page.getByTestId("product-name").locator("..");
   const topRow = await Promise.all([brand, forecast, actions].map(boxOf));
   expect(topRow.every((box) => Math.abs(box.y - (topRow[0]?.y ?? 0)) < 1)).toBe(true);
-  expect(topRow.every((box) => box.height === 56)).toBe(true);
+  for (const box of topRow) expect(box.height).toBeCloseTo(56 * 0.9, 1);
   await expect(forecast).not.toContainText("Latest suggested");
   await expect(forecast).not.toContainText("km ·");
   const selectedHour = forecast.getByRole("button", { name: "Choose forecast hour" });
@@ -68,8 +68,8 @@ test("the forecast workspace has linked controls and only the supported destinat
   expect(limit.x).toBeGreaterThan(current.x + current.width);
   expect(limit.y).toBeLessThan(current.y + current.height);
   const credits = await boxOf(page.locator(".maplibregl-ctrl-bottom-right"));
-  expect(credits.x + credits.width).toBe(viewportBox(page).width - 8);
-  expect(credits.y + credits.height).toBe(viewportBox(page).height - 8);
+  expect(credits.x + credits.width).toBeCloseTo(viewportBox(page).width - 8 * 0.9, 1);
+  expect(credits.y + credits.height).toBeCloseTo(viewportBox(page).height - 8 * 0.9, 1);
   await saveScreenshot(page, "browser-shell.png");
   expectWarnings(consoleMessages, []);
 });
@@ -89,7 +89,7 @@ test("the compact dock provides one keyboard stop and arrow navigation", async (
   await expect(rail.getByRole("button", { name: "Settings" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("settings-view")).toBeVisible();
   await expect(rail.locator('button[tabindex="0"]')).toHaveCount(1);
-  expect((await boxOf(rail)).width).toBe(56);
+  expect((await boxOf(rail)).width).toBeCloseTo(56 * 0.9, 1);
 });
 
 test("fullscreen sits after Point details and can exit from another workspace", async ({ page, consoleMessages }) => {

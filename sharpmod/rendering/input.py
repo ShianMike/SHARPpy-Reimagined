@@ -60,6 +60,10 @@ def _decode_local_input(infile: str, display_name: str):
     """Decode one already-local input without repeating remote downloads."""
     if infile.lower().endswith(".npz"):
         prof_col, station_id = decoder_mod.load_npz(infile)
+        from sharpmod.backends import get_backend
+        if get_backend().name == "rust":
+            from sharpmod_rs import attach_box_profiles
+            attach_box_profiles(prof_col, infile)
         return _accelerate_decoded_collection(prof_col), station_id
 
     last_err: BaseException | None = None

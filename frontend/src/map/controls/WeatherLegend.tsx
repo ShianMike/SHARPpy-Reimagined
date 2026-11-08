@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { RadarScale } from "../../features/tracking/RadarScale";
-import { failureOf, overlayAvailability } from "../../lib/backend/errors";
+import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice";
+import { OverlayErrorNotice } from "./OverlayErrorNotice";
 import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { formatUtc } from "../../features/sounding/soundingTime";
 import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
@@ -40,7 +41,7 @@ function ModelKey({ panel }: { panel: number }) {
   return field.product === null ? <p>Select a model parameter to see its color key.</p> : <>
     <strong>{field.product.label}</strong><FieldLegend palette={field.product.palette} />
     {field.product.contour === null ? null : <p>Contours · {field.product.contour.label}</p>}
-    {field.frame.isError ? <p>Field unavailable. Open its settings to retry.</p> : null}
+    {field.frame.isError ? <SoundingErrorNotice error={field.frame.error} operation="get_weather_field" onRetry={() => { void field.frame.refetch(); }} busy={field.frame.isFetching} testId="legend-field-error" /> : null}
   </>;
 }
 
@@ -49,9 +50,7 @@ function AlertKey({ kind }: { kind: "warning" | "watch" }) {
   const query = useWeatherAlerts(time, true);
   const alerts = query.data?.alerts.filter((alert) => alert.kind === kind) ?? [];
   const plural = kind === "watch" ? "watches" : "warnings";
-  const failure = failureOf(query.error);
-  const historyMissing = failure !== null && overlayAvailability(failure) === "historyUnavailable";
-  return time === null ? <p>Choose a time to view NWS alerts.</p> : query.isError ? <p>{historyMissing ? "Alert history unavailable for this time. Return to Live for current alerts." : "Alerts unavailable. Open layer settings to retry."}</p>
+  return time === null ? <p>Choose a time to view NWS alerts.</p> : query.isError ? <OverlayErrorNotice error={query.error} operation="get_weather_alerts" onRetry={() => { void query.refetch(); }} busy={query.isFetching} testId="legend-alert-error" />
     : query.data === undefined ? <p>Loading NWS alerts…</p> : <>
       <ColourKeys entries={alerts.map((alert) => ({ label: alert.event, fill: null, stroke: alert.colour }))} />
       <p>{alerts.length === 0 ? `No active ${plural} at this time.` : `${String(alerts.length)} active ${alerts.length === 1 ? kind : plural}`}</p>
@@ -62,7 +61,7 @@ function OutlookKey({ product }: { product: OutlookKey }) {
   const time = useWeatherTime();
   const query = useSpcOutlooks(OUTLOOK_KEYS.map((key) => key === product), time)[OUTLOOK_KEYS.indexOf(product)];
   const outlook = query?.data?.outlook;
-  return time === null ? <p>Choose a forecast time to view SPC outlooks.</p> : query?.isError === true ? <p>Outlook unavailable. Open layer settings to retry.</p>
+  return time === null ? <p>Choose a forecast time to view SPC outlooks.</p> : query?.isError === true ? <SoundingErrorNotice error={query.error} operation="get_spc_outlook" onRetry={() => { void query.refetch(); }} busy={query.isFetching} testId="legend-outlook-error" />
     : query?.data === undefined ? <p>Loading SPC outlook…</p> : outlook?.covers !== true ? <p>No SPC outlook covers this time.</p> : <>
       <ColourKeys entries={outlook.areas.map(({ label, fill, stroke, hatch }) => ({ label, fill, stroke, hatch }))} />
       <p>{outlook.subtitle}</p>
@@ -75,7 +74,7 @@ function ReportKey() {
   const filter = useMapStore((state) => state.reportFilter);
   const query = useStormReports(time, windowS, filter, true);
   const symbols = [...new Map(query.data?.reports.map((report) => [JSON.stringify([report.category, report.symbol, report.fill, report.stroke]), report])).values()];
-  return time === null ? <p>Choose a forecast time to view reports.</p> : query.isError ? <p>Reports unavailable. Open layer settings to retry.</p>
+  return time === null ? <p>Choose a forecast time to view reports.</p> : query.isError ? <SoundingErrorNotice error={query.error} operation="get_storm_reports" onRetry={() => { void query.refetch(); }} busy={query.isFetching} testId="legend-reports-error" />
     : query.data === undefined ? <p>Loading report symbols…</p> : <>
       <ul className={styles.keys}>{symbols.map((report) => {
         const type = REPORT_TYPES.find((item) => report.category === "significant" ? item.symbol === report.symbol : item.category === report.category);
@@ -93,7 +92,7 @@ function SatelliteKey({ panel }: { panel: number }) {
   const time = useWeatherTime();
   const channel = useMapStore((state) => panelWeather(state, panel).satelliteChannel);
   const query = useSatelliteFrame(channel, time, true);
-  return time === null ? <p>Choose a time to view GOES imagery.</p> : query.isError ? <p>Imagery unavailable. Open layer settings to retry.</p>
+  return time === null ? <p>Choose a time to view GOES imagery.</p> : query.isError ? <SoundingErrorNotice error={query.error} operation="get_satellite_frame" onRetry={() => { void query.refetch(); }} busy={query.isFetching} testId="legend-satellite-error" />
     : query.data === undefined ? <p>Loading GOES imagery…</p> : <>
       <strong>{query.data.label}</strong>
       <p>{channel === "infrared" ? "Colors show cloud-top temperature." : "Brightness shows reflected sunlight."} Uncovered areas are transparent.</p>

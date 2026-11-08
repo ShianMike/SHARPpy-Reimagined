@@ -113,17 +113,16 @@ pub fn merge_map_ranges(rows: &[(u64, u64)], slack: i64) -> Result<Vec<RangeGrou
     Ok(groups)
 }
 
-pub struct RangeJob {
+pub struct FieldJob {
     pub url: String,
     pub limit: usize,
-    pub start: u64,
-    pub end: u64,
+    pub range: Option<(u64, u64)>,
 }
 
 /// Transfer a bounded batch through the existing pooled, validated HTTP client.
-pub async fn fetch_model_ranges(
+pub async fn fetch_model_fields(
     client: &ModelClient,
-    jobs: Vec<RangeJob>,
+    jobs: Vec<FieldJob>,
     timeout: f64,
     workers: usize,
     should_cancel: impl Fn() -> Result<bool, String>,
@@ -136,13 +135,7 @@ pub async fn fetch_model_ranges(
     let mut pending = jobs.into_iter().enumerate().map(|(index, job)| {
         Box::pin(async move {
             let result = client
-                .fetch(
-                    &job.url,
-                    timeout,
-                    job.limit,
-                    Some((job.start, job.end)),
-                    cancel,
-                )
+                .fetch(&job.url, timeout, job.limit, job.range, cancel)
                 .await;
             (index, result)
         })

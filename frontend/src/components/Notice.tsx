@@ -2,7 +2,7 @@
 // "floating" makes it its own glass surface (map notices); "flat" sits inside
 // another surface or an opaque workspace.
 
-import { CircleAlert, Info, TriangleAlert } from "lucide-react";
+import { CircleAlert, Info, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Surface } from "../ui/Surface";
 import styles from "./Notice.module.css";
@@ -20,6 +20,7 @@ export interface NoticeProps {
   role?: "status" | "alert";
   testId?: string;
   showIcon?: boolean;
+  icon?: LucideIcon;
   /** Extra content after the detail line, such as a log path. */
   children?: ReactNode;
 }
@@ -34,20 +35,23 @@ export function Notice({
   role = "status",
   testId,
   showIcon = true,
+  icon,
   children,
 }: NoticeProps): ReactNode {
-  const Icon = tone === "danger" ? CircleAlert : tone === "warning" ? TriangleAlert : Info;
+  const Icon = icon ?? (tone === "danger" ? CircleAlert : tone === "warning" ? TriangleAlert : Info);
   const body = (
     <>
-      <div className={styles.heading}>
+      <div className={styles.contentRow}>
         {showIcon ? <span className={styles.icon} aria-hidden="true"><Icon /></span> : null}
-        <p className={styles.title}>{title}</p>
+        <div className={styles.content}>
+          <p className={styles.title}>{title}</p>
+          {message === undefined && detail === undefined && children === undefined ? null : <div className={styles.body}>
+            {message === undefined ? null : <p className={styles.message}>{message}</p>}
+            {detail === undefined ? null : <p className={styles.detail}>{detail}</p>}
+            {children}
+          </div>}
+        </div>
       </div>
-      {message === undefined && detail === undefined && children === undefined ? null : <div className={styles.body}>
-        {message === undefined ? null : <p className={styles.message}>{message}</p>}
-        {detail === undefined ? null : <p className={styles.detail}>{detail}</p>}
-        {children}
-      </div>}
       {actions === undefined ? null : <div className={styles.actions}>{actions}</div>}
     </>
   );

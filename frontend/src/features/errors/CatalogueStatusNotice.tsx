@@ -6,8 +6,9 @@
 // centre column above MapNotices; ReducedRenderingView renders it above
 // StationList.
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Notice } from "../../components/Notice";
+import { Action } from "../../ui/Controls";
 import { failureOf, transportFailed } from "../../lib/backend/errors";
 import { useKnownHealth } from "../../lib/backend/useKnownHealth";
 import { useRestartBackend } from "../../lib/backend/useRestartBackend";
@@ -18,7 +19,7 @@ export const CATALOGUE_LOADING = "Loading stations";
 export const CATALOGUE_EMPTY = "The station catalogue is empty";
 
 export function seedFallbackText(count: number): string {
-  return `Showing the ${String(count)}-station seed list: the bundled catalogue could not be read`;
+  return `Limited station list · ${String(count)} stations`;
 }
 
 export interface CatalogueStatusNoticeProps {
@@ -29,11 +30,17 @@ export function CatalogueStatusNotice({ surface }: CatalogueStatusNoticeProps): 
   const catalog = useStationCatalog();
   const health = useKnownHealth();
   const { restart, pending } = useRestartBackend();
+  const [lastError, setLastError] = useState(catalog.error);
+  if (catalog.isError && lastError !== catalog.error) setLastError(catalog.error);
+  if (catalog.isSuccess && lastError !== null) setLastError(null);
+  // A first-load retry clears the query's error while fetching. Keep its recovery
+  // control mounted so the chosen action can show progress until a result arrives.
+  const error = catalog.error ?? (catalog.isFetching ? lastError : null);
 
-  if (catalog.status === "error") {
+  if (catalog.status === "error" || error !== null) {
     return (
       <BackendErrorNotice
-        error={failureOf(catalog.error) ?? transportFailed("get_station_catalog")}
+        error={failureOf(error) ?? transportFailed("get_station_catalog")}
         onRetry={() => {
           void catalog.refetch();
         }}
@@ -57,7 +64,8 @@ export function CatalogueStatusNotice({ surface }: CatalogueStatusNoticeProps): 
         tone="warning"
         surface={surface}
         title={seedFallbackText(catalog.data.stations.length)}
-        message="The station markers, search, and inspector use the seed list until the bundled catalogue can be read."
+        message="Using the backup list. Reload stations to restore the full catalogue."
+        actions={<Action disabled={catalog.isFetching} onClick={() => { void catalog.refetch(); }}>Reload stations</Action>}
         testId="catalogue-seed-fallback"
       />
     );

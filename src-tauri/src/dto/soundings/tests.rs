@@ -64,3 +64,43 @@ fn summaries_read_snake_case_and_write_camel_case() {
     multi.times.push(None);
     assert!(multi.validate().is_err());
 }
+
+#[test]
+fn box_request_and_summary_preserve_geography_and_native_metadata() {
+    let request: OpenSoundingRequest = serde_json::from_value(serde_json::json!({
+        "kind":"model","model":"hrrr","runTime":"2026-11-07T11:00:00Z","forecastHour":1,
+        "latitude":35.18,"longitude":-97.44,"box":{"west":-97.46,"east":-97.42,"south":35.16,"north":35.20}
+    })).unwrap();
+    request.validate().unwrap();
+    assert_eq!(request.bridge_call().1["box"]["west"], -97.46);
+    let public: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../contracts/public/soundings/summary.box.json"
+    ))
+    .unwrap();
+    // The bridge uses snake_case recursively; deserialize that wire representation.
+    fn snake(value: serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(values) => values
+                .into_iter()
+                .map(|(key, value)| {
+                    let key: String = key
+                        .chars()
+                        .flat_map(|c| {
+                            if c.is_ascii_uppercase() {
+                                vec!['_', c.to_ascii_lowercase()]
+                            } else {
+                                vec![c]
+                            }
+                        })
+                        .collect();
+                    (key, snake(value))
+                })
+                .collect(),
+            serde_json::Value::Array(values) => values.into_iter().map(snake).collect(),
+            value => value,
+        }
+    }
+    let summary: SoundingSummary = serde_json::from_value(snake(public.clone())).unwrap();
+    summary.validate().unwrap();
+    assert_eq!(serde_json::to_value(summary).unwrap(), public);
+}

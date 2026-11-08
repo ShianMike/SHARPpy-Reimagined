@@ -58,7 +58,8 @@ it("waits for the clipboard result, reports denial without leaking it, and allow
   expect(copy.disabled).toBe(true);
   expect(screen.queryByText("Diagnostic summary copied.")).toBeNull();
   await act(async () => { rejectCopy?.(new Error("credential=private clipboard error")); await Promise.resolve(); });
-  expect(screen.getByRole("alert").textContent).toBe("Clipboard access was unavailable. Try copying the diagnostic summary again.");
+  expect(screen.getByRole("alert").textContent).toContain("Diagnostic copy unavailable");
+  expect(screen.getByRole("button", { name: "Copy again" })).toBeTruthy();
   expect(document.body.textContent).not.toContain("private clipboard error");
   expect(copy.disabled).toBe(false);
   await user.click(copy);
@@ -72,6 +73,6 @@ it("handles a missing Clipboard API without claiming success", async () => {
   recordLog("error", "Window", "Could not change fullscreen");
   render(<LogsWorkspace />);
   await user.click(screen.getByRole("button", { name: "Copy diagnostic summary" }));
-  expect(screen.getByRole("alert").textContent).toContain("Clipboard access was unavailable");
+  expect(screen.getByRole("alert").textContent).toContain("Clipboard access was refused");
   expect(screen.queryByText("Diagnostic summary copied.")).toBeNull();
 });

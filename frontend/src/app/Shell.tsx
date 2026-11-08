@@ -5,13 +5,16 @@ import { VisuallyHidden } from "../components/VisuallyHidden";
 import { useBackendHealth } from "../lib/backend/BackendProvider";
 import { ReducedRenderingView } from "../features/fallback/ReducedRenderingView";
 import { Inspector } from "../features/inspector/Inspector";
+import { BoxInspector } from "../features/inspector/BoxInspector";
+import { useBoxSoundingStore } from "../stores/boxSoundingStore";
 import { NavigationRail } from "../features/rail/NavigationRail";
 import { UpdateNotice } from "../features/settings/UpdateNotice";
 import { WhatsNew } from "../features/settings/WhatsNew";
 import { TimelineRegion } from "../features/timeline/TimelineRegion";
 import { LiveTimeline } from "../features/tracking/LiveTimeline";
 import { useTheme, useUiStore } from "../stores/uiStore";
-import { EmptyPanel, IconAction } from "../ui/Controls";
+import { Action, EmptyPanel, IconAction } from "../ui/Controls";
+import { Notice } from "../components/Notice";
 import { Surface } from "../ui/Surface";
 import { Toolbar } from "../features/toolbar/Toolbar";
 import { useAppStore } from "../stores/appStore";
@@ -57,13 +60,14 @@ function WorkspaceView({ workspace }: { workspace: WorkspaceDefinition }): React
 export function Shell(): ReactNode {
   const whatsNewOpen = useUiStore((state) => state.whatsNewOpen);
   useGlobalShortcuts();
-  const { fullscreen, busy: fullscreenBusy, error: fullscreenError, toggle: toggleFullscreen } = useFullscreen();
+  const { fullscreen, busy: fullscreenBusy, error: fullscreenError, toggle: toggleFullscreen, dismissError: dismissFullscreenError } = useFullscreen();
   useTheme();
   useBackendHealth();
   const workspace = workspaceDefinition(useAppStore((state) => state.activeWorkspace));
   const mode = useGraphicsStore((state) => state.effective.mode);
   const renderer = useGraphicsStore((state) => state.renderer);
   const hasSelection = useAppStore((state) => state.selectedStationId !== null || (state.activeWorkspace !== "live" && state.selectedPoint !== null));
+  const boxMode = useBoxSoundingStore((state) => state.mode === "box");
   const [sideTab, setSideTab] = useState<"point" | "layers">("point");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [layersAnchor, setLayersAnchor] = useState<HTMLButtonElement | null>(null);
@@ -98,6 +102,9 @@ export function Shell(): ReactNode {
     (state) => state.selectedPoint ?? state.selectedStationId,
     (selection) => { setDetailsOpen(selection !== null); if (selection !== null) setSideTab("point"); },
   ), []);
+  useEffect(() => useBoxSoundingStore.subscribe((state) => state.mode, (mode) => {
+    if (mode === "box") { setDetailsOpen(true); setSideTab("point"); }
+  }), []);
   return (
     <MapOverlaySlotsProvider slots={slots}>
       <div className={styles.shell} data-live={isLive}>
@@ -133,12 +140,12 @@ export function Shell(): ReactNode {
             <Surface as="aside" id="map-details" className={styles.sidePanel} data-motion="panel" data-view="point" aria-label="Map details" inert={!detailsOpen || sideTab !== "point"} hidden={!detailsOpen || sideTab !== "point"}
               onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeDetails(); } }}>
               <div className={styles.sideHeader} role="group" aria-label="Detail panel">
-                <h2>Point</h2>
+                <h2>{boxMode && !isLive ? "Region" : "Point"}</h2>
                 <IconAction icon={Layers} size="sm" label="Show layers" onClick={() => { setSideTab("layers"); }} />
                 <IconAction icon={X} size="sm" label="Close map details" onClick={closeDetails} />
               </div>
               <div className={styles.point} data-motion="fade">
-                {hasSelection ? <Inspector /> : <EmptyPanel title={isLive ? "Explore live weather" : "Explore a forecast point"}
+                {boxMode && workspace.id === "map" ? <BoxInspector /> : hasSelection ? <Inspector /> : <EmptyPanel title={isLive ? "Explore live weather" : "Explore a forecast point"}
                   message={isLive ? "Hover over weather layers for details, or choose a station to open its sounding." : "Choose a location on the map to see its weather values and open a sounding."} />}
               </div>
             </Surface>
@@ -158,10 +165,14 @@ export function Shell(): ReactNode {
             </Suspense>
           </Surface>}
         </main>
-        <div className={styles.updateNotice}><UpdateNotice /></div>
+        <div className={styles.updateNotice}>
+          {fullscreenError === "" ? null : <Notice tone="warning" surface="floating" role="alert" icon={Maximize} title="Fullscreen unavailable"
+            message={fullscreenError} actions={<><Action onClick={dismissFullscreenError}>Dismiss</Action>
+              <Action tone="accent" disabled={fullscreenBusy} onClick={() => { void toggleFullscreen(); }}>Try fullscreen again</Action></>} />}
+          <UpdateNotice />
+        </div>
         {whatsNewOpen ? <WhatsNew /> : null}
         <VisuallyHidden role="status" aria-live="polite" data-testid={liveText === "" ? undefined : "catalogue-announcement"}>{liveText}</VisuallyHidden>
-        {fullscreenError === "" ? null : <VisuallyHidden role="alert">{fullscreenError}</VisuallyHidden>}
       </div>
     </MapOverlaySlotsProvider>
   );

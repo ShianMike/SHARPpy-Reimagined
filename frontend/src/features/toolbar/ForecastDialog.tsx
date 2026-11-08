@@ -1,5 +1,5 @@
 import { CalendarDays, ChevronLeft, ChevronRight, GripHorizontal, X } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type CSSProperties, type ReactNode } from "react";
 import { useForecastStore } from "../../stores/forecastStore";
 import { Action, IconAction } from "../../ui/Controls";
 import type { useFrameDownload } from "../../map/useFrameDownload";
@@ -44,7 +44,8 @@ export function ForecastDialog({ context, step, anchor, download, onClose }: {
   return <>
     <header className={styles.dialogHeader} data-popover-drag><IconAction icon={GripHorizontal} size="sm" label="Move popup" data-popover-move aria-description="Drag to move. Arrow keys move the popup; Home centers it on the screen." /><h2>{FORECAST_TITLES[step]}</h2>{step === "model" ? null : <span className={styles.badge}>{context.model.label}</span>}<IconAction icon={X} size="sm" label="Close forecast setup" onClick={done} /></header>
     {step === "model" ? <>
-      <fieldset className={styles.modelRegions} aria-label="Model region">
+      <fieldset className={styles.modelRegions} aria-label="Model region" data-selection-track="horizontal"
+        style={{ "--selection-index": MODEL_REGIONS.indexOf(selectedRegion) } as CSSProperties}>
         {MODEL_REGIONS.map((region, index) => <label key={region} className={styles.regionChoice}>
           <input type="radio" name={regionName} aria-label={region} checked={!searching && selectedRegion === region}
             tabIndex={searching ? (index === 0 ? 0 : -1) : (selectedRegion === region ? 0 : -1)}
@@ -56,7 +57,7 @@ export function ForecastDialog({ context, step, anchor, download, onClose }: {
         {query.length > 0 ? <Action className={styles.headerAction} aria-label="Clear search" onClick={(event) => { setQuery(""); event.currentTarget.parentElement?.querySelector("input")?.focus(); }}>Clear</Action> : null}
       </div>
       <div className={styles.listHeading}><span>{searching ? `${String(models.length)} results` : `${selectedRegion} models`}</span><span>Grid</span></div>
-      <div key={searching ? query : selectedRegion} className={styles.dialogBody}><div className={styles.modelChoices}>
+      <div key={searching ? query : selectedRegion} className={styles.dialogBody}><div className={styles.modelChoices} data-motion={searching ? undefined : "fade"}>
         {MODEL_REGIONS.map((region) => {
           const members = models.filter((model) => modelRegion(model) === region);
           return members.length === 0 ? null : <section key={region} role="group" aria-label={region} className={styles.modelGroup}>

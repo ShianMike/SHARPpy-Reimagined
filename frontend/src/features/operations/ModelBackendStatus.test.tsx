@@ -78,7 +78,7 @@ it("filters provider results, opens check details, retries one model and preserv
   expect(detail?.open).toBe(true);
   expect(detail?.textContent).toContain("The app could not reach its backend.");
   failed = false;
-  await user.click(screen.getByRole("button", { name: `Recheck ${failedModel}` }));
+  await user.click(screen.getByRole("button", { name: "Check model" }));
   await waitFor(() => { expect(within(list).getByText("Unconfirmed")).toBeTruthy(); });
   expect(calls).toBe(6);
   expect(detail?.textContent).toContain("Last checked");

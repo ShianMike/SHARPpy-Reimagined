@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { WORKSPACES } from "../../app/workspaces";
 import { cx } from "../../lib/cx";
 import { useAppStore } from "../../stores/appStore";
@@ -10,7 +10,8 @@ export interface NavigationRailProps { className?: string | undefined; }
 export function NavigationRail({ className }: NavigationRailProps): ReactNode {
   const active = useAppStore((state) => state.activeWorkspace);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
-  const stop = focusIndex ?? Math.max(0, WORKSPACES.findIndex((workspace) => workspace.id === active));
+  const activeIndex = Math.max(0, WORKSPACES.findIndex((workspace) => workspace.id === active));
+  const stop = focusIndex ?? activeIndex;
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
     const target = { ArrowDown: stop + 1, ArrowUp: stop - 1, Home: 0, End: WORKSPACES.length - 1 }[event.key];
@@ -22,7 +23,7 @@ export function NavigationRail({ className }: NavigationRailProps): ReactNode {
   };
   return <Surface as="nav" aria-label="Workspaces" data-workspace={active} className={cx(styles.rail, className)} onKeyDown={onKeyDown}
     onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocusIndex(null); }}>
-    <ul className={styles.list}>{WORKSPACES.map((workspace, index) => {
+    <ul className={styles.list} data-selection-track="vertical" style={{ "--selection-index": activeIndex } as CSSProperties}>{WORKSPACES.map((workspace, index) => {
       const Icon = workspace.icon;
       return <li key={workspace.id}><button ref={(element) => { buttons.current[index] = element; }} type="button" data-workspace-link
         className={cx(styles.item, hints.target)} tabIndex={index === stop ? 0 : -1} aria-current={workspace.id === active ? "page" : undefined}

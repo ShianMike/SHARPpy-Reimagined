@@ -1,6 +1,7 @@
 import analysisExample from "@contracts/public/soundings/analysis.example.json";
 import modelCatalog from "@contracts/public/soundings/models.catalog.json";
 import summaryExample from "@contracts/public/soundings/summary.example.json";
+import summaryBox from "@contracts/public/soundings/summary.box.json";
 import summaryMultiTime from "@contracts/public/soundings/summary.multi-time.json";
 import trendsExample from "@contracts/public/soundings/trends.example.json";
 import { describe, expect, it } from "vitest";
@@ -25,8 +26,17 @@ describe("sounding contracts", () => {
     expect(parseModelCatalog(modelCatalog)).toEqual(modelCatalog);
     expect(parseSoundingSummary(summaryExample)).toEqual(summaryExample);
     expect(parseSoundingSummary(summaryMultiTime)).toEqual(summaryMultiTime);
+    expect(parseSoundingSummary(summaryBox)).toEqual(summaryBox);
     expect(parseSoundingAnalysis(analysisExample)).toEqual(analysisExample);
     expect(parseSoundingTrends(trendsExample)).toEqual(trendsExample);
+  });
+
+  it("rejects malformed box metadata at the response boundary", () => {
+    for (const patch of [{ selectedColumns: 0 }, { validColumns: 100 }, { widthKm: NaN },
+      { bounds: { west: -97, east: -98, south: 36, north: 35 } }, { coverage: [] },
+      { timings: { totalMs: -1 } }, { extra: true }]) {
+      expect(() => parseSoundingSummary({ ...summaryBox, box: { ...summaryBox.box, ...patch } })).toThrow(ContractError);
+    }
   });
 
   it("keeps the shapes the views rely on", () => {

@@ -13,6 +13,7 @@ import { parseSpcOutlook } from "../../lib/contracts/map";
 import { parseStormReports } from "../../lib/contracts/reports";
 import { useMapStore } from "../../stores/mapStore";
 import { useAppStore } from "../../stores/appStore";
+import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
 import tokensCss from "../../styles/tokens.css?raw";
 import { cssTokenReader } from "../../test/cssTokens";
 import { readCanvasTokens } from "../canvasTokens";
@@ -22,6 +23,19 @@ import { clickFromPick, StationScene } from "./stationScene";
 afterEach(() => {
   useMapStore.setState(useMapStore.getInitialState(), true);
   useAppStore.setState(useAppStore.getInitialState(), true);
+  useBoxSoundingStore.setState(useBoxSoundingStore.getInitialState(), true);
+});
+
+it("preserves point and station selection in box mode and restores ordinary point picking", () => {
+  useAppStore.getState().selectPoint({ longitude: -97, latitude: 35 });
+  useBoxSoundingStore.getState().setMode("box");
+  clickFromPick({ coordinate: [-98, 36] } as PickingInfo);
+  clickFromPick({ layer: { id: "stations" }, object: { id: "72357" } } as unknown as PickingInfo);
+  expect(useAppStore.getState().selectedPoint).toEqual({ longitude: -97, latitude: 35 });
+  expect(useAppStore.getState().selectedStationId).toBeNull();
+  useBoxSoundingStore.getState().setMode("point");
+  clickFromPick({ coordinate: [-98, 36] } as PickingInfo);
+  expect(useAppStore.getState().selectedPoint).toEqual({ longitude: -98, latitude: 36 });
 });
 
 it("submits independent pressure geometry per panel and removes it from the live scene", () => {

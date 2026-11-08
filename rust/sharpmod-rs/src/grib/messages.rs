@@ -70,15 +70,6 @@ impl PointDecoder {
                 .get_optional_string(handle.as_ptr(), GRID_HASH_KEY)
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| format!("message:{}", boundary.offset));
-            let points = grid_points_for(
-                api,
-                handle.as_ptr(),
-                &grid_key,
-                &self.coordinates,
-                &mut self.grids,
-            )?;
-            let indexes = points.iter().map(|point| point.index).collect::<Vec<_>>();
-            let values = api.get_elements(handle.as_ptr(), &indexes)?;
             let field = InventoryField {
                 field_index,
                 order,
@@ -98,7 +89,18 @@ impl PointDecoder {
                     WindRotation::default()
                 },
             };
-            apply_field_values(&field, points, &values, &mut self.states, self.missing)?;
+            if !self.coordinates.is_empty() {
+                let points = grid_points_for(
+                    api,
+                    handle.as_ptr(),
+                    &field.grid_key,
+                    &self.coordinates,
+                    &mut self.grids,
+                )?;
+                let indexes = points.iter().map(|point| point.index).collect::<Vec<_>>();
+                let values = api.get_elements(handle.as_ptr(), &indexes)?;
+                apply_field_values(&field, points, &values, &mut self.states, self.missing)?;
+            }
             fields.push(field);
             field_index += 1;
         }

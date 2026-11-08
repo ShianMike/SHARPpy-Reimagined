@@ -456,10 +456,20 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                 34
             } else if model.starts_with("hrw-") {
                 29
-            } else if model == "gfs"
-                || model == "ecmwf-ifs-9km"
-                || model == "openmeteo-ecmwf-ifs025"
-            {
+            } else if model == "gfs" {
+                assert!(catalog.products.iter().any(|product| product.key == "refc"));
+                22
+            } else if model == "gdps" {
+                assert_eq!(catalog.max_forecast_hours[0], 240);
+                assert_eq!(catalog.max_forecast_hours[6], 0);
+                assert_eq!(catalog.max_forecast_hours[12], 240);
+                assert!(catalog.products.iter().any(|product| product.key == "cape"));
+                assert!(!catalog
+                    .products
+                    .iter()
+                    .any(|product| matches!(product.key.as_str(), "refc" | "pwat" | "mucape")));
+                20
+            } else if model == "ecmwf-ifs-9km" || model == "openmeteo-ecmwf-ifs025" {
                 21
             } else if model == "aigfs" {
                 9

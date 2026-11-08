@@ -21,13 +21,12 @@ import { createPanelOverlay, wireMapEvents, wireOverlayEvents, type RuntimeEvent
 import { createRuntimeWatch, subscribeToStores } from "./runtimeWiring";
 import type { StartupWatch } from "./startupWatch";
 import { StationScene } from "./stationScene";
-
+import { wireBoxSelection } from "../box/boxRuntime";
 type E2eModule = typeof import("./e2eHooks");
 type E2eTarget = import("./e2eHooks").E2eTarget; // type-only: the module loads in fixture builds alone
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
-
 export class MapRuntime implements RuntimeEventTarget {
   private disposed = false;
   /** Read by the fixture-only probe, as are scene, container, and errors. */
@@ -77,6 +76,7 @@ export class MapRuntime implements RuntimeEventTarget {
       return;
     }
     this.unsubscribers.push(linkCamera(this.map, this.live(() => { this.moveEnded(); })));
+    this.unsubscribers.push(wireBoxSelection(this.map, panel));
     this.subscribe();
     this.redraw();
     if (import.meta.env.MODE === "fixture" && this.primary) {

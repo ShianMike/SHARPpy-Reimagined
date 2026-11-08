@@ -8,6 +8,8 @@ import { Notice } from "../../components/Notice";
 import { Action } from "../../ui/Controls";
 import { useGraphicsStore } from "../../stores/graphicsStore";
 import { useAppStore } from "../../stores/appStore";
+import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
+import { boxBetween } from "../box/boxGeometry";
 import { mapProjection, panelLayers, panelWeather, useMapStore, type PanelLayout } from "../../stores/mapStore";
 import { RadarScale } from "../../features/tracking/RadarScale";
 import { useMapCatalog, usePanelRadar } from "../mapQueries";
@@ -155,6 +157,10 @@ export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode
           const center = runtime?.map?.getCenter();
           if (center === undefined) return;
           event.preventDefault();
+          if (useBoxSoundingStore.getState().mode === "box") {
+            useBoxSoundingStore.getState().commit(boxBetween([center.lng - 0.025, center.lat - 0.025], [center.lng + 0.025, center.lat + 0.025]));
+            return;
+          }
           useAppStore.getState().selectPoint({ latitude: center.lat, longitude: center.lng });
         }}
         onFocus={() => {
@@ -167,12 +173,12 @@ export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode
       {isMap ? <PanelChip panel={panel} layout={layout} field={field} /> : null}
       {live ? isLive ? <RadarTooltip panel={panel} /> : null : <FieldTooltip panel={panel} field={field} />}
       {rendererError === undefined ? null : <div className={styles.notice}>
-        <Notice tone="danger" surface="floating" role="alert" title={`Panel ${String(panel + 1)} could not be drawn`}
-          message="Reload the maps to restore this panel. Your selected products and view are kept."
+        <Notice tone="danger" surface="floating" role="alert" title={`Panel ${String(panel + 1)} drawing stopped`}
+          message="Reload maps to restore this panel."
           actions={<Action onClick={() => { useGraphicsStore.getState().retryMap(); }}>Reload maps</Action>} />
       </div>}
       {rendererError !== undefined || field.issues.length === 0 ? null : <div className={styles.notice}>
-        <Notice tone="warning" surface="floating" role="alert" title={`Panel ${String(panel + 1)} has incomplete layers`}
+        <Notice tone="warning" surface="floating" role="alert" title={`Panel ${String(panel + 1)} · Missing layers`}
           message={field.issues.join(" ")} actions={<Action onClick={field.retry}>Retry layers</Action>} />
       </div>}
     </div>

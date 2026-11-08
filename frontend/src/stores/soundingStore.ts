@@ -27,9 +27,8 @@ export interface ModelInputs {
   /** RFC 3339; null takes the model's suggested run. */
   runTime: string | null;
   forecastHour: number | null;
-  /** Use the selected station's coordinates rather than the typed ones. */
-  atStation: boolean;
   latitude: string;
+  /** Signed longitude: negative west, positive east. */
   longitude: string;
 }
 
@@ -74,7 +73,6 @@ const INITIAL_MODEL: ModelInputs = {
   modelKey: null,
   runTime: null,
   forecastHour: null,
-  atStation: true,
   latitude: "",
   longitude: "",
 };

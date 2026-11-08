@@ -164,7 +164,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
       <div className={styles.toolGroup} role="group" aria-label="Profile controls">
         <span className={styles.groupLabel}>Profile</span>
         {timeControl}
-        <div className={styles.profileMode}>
+        <div className={styles.profileMode} data-selection-track="horizontal" style={{ "--selection-index": editing ? 1 : 0 } as CSSProperties}>
           <Action ref={inspectButton} aria-pressed={!editing} onClick={() => { setEditing(false); setSelected(null); }}><Hand className="icon-sm" />Inspect</Action>
           <Action aria-pressed={editing} onClick={() => { setEditing(true); setSelected((current) => current ?? data?.points[0]?.id ?? null); }} disabled={data === undefined || unavailable}><Pencil className="icon-sm" />Edit profile</Action>
         </div>
@@ -199,7 +199,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
             }} />)}
         </div>
       </section>}
-      <details className={styles.viewControls} aria-label="View controls" open={!editing}>
+      <details className={styles.viewControls} aria-label="View controls" data-motion="details" open={!editing}>
         <summary>View<ChevronDown className="icon-sm" aria-hidden="true" /></summary>
         <div className={styles.viewBody}>
         <div className={styles.viewActions}><div className={styles.zoomControls}>
@@ -207,7 +207,8 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
           <button className={styles.zoomLabel} type="button" onClick={() => { zoomTo(1 / ratio); }} aria-label="Actual pixels (100%)" title="Actual pixels (100%)">{Math.round(scale * ratio * 100)}%</button>
           <IconAction icon={ZoomIn} label="Zoom in" size="sm" onClick={() => { zoomTo(scale * 1.25); }} />
         </div><QuickUnits /></div>
-        <div className={styles.fitControls}>
+        <div className={styles.fitControls} data-selection-track={zoom === null ? "horizontal" : undefined}
+          style={{ "--selection-index": fitWidth ? 0 : 1 } as CSSProperties}>
           <Action aria-label="Fit sounding to width" aria-pressed={zoom === null && fitWidth} onClick={() => { setFitWidth(true); setZoom(null); }}><MoveHorizontal className="icon-sm" />Fit width</Action>
           <Action aria-label="Fit sounding to view" aria-pressed={zoom === null && !fitWidth} onClick={() => { setFitWidth(false); setZoom(null); }}><Maximize className="icon-sm" />Fit all</Action>
         </div>
@@ -268,7 +269,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
         </div>
       </div>
       {busy ? <div className={styles.rendering} data-motion="fade" role="status">{data === undefined ? "Rendering sounding image…" : edit.isPending ? "Recalculating profile…" : "Rendering updated sounding…"}</div> : null}
-      {image.isError || edit.isError ? <div className={styles.failure} data-retained={data !== undefined}><div className={styles.failureCard}><SoundingErrorNotice error={edit.error ?? image.error} operation="render_sounding_view" onRetry={() => { if (edit.variables) edit.mutate(edit.variables); else void image.refetch(); }} busy={busy} testId="render-error" /></div></div> : null}
+      {image.isError || edit.isError ? <div className={styles.failure} data-retained={data !== undefined}><SoundingErrorNotice error={edit.error ?? image.error} operation="render_sounding_view" onRetry={() => { if (edit.variables) edit.mutate(edit.variables); else void image.refetch(); }} busy={busy} testId="render-error" /></div> : null}
     </div>
     {!inspecting ? null : <>
       <LevelReadout chart="skew" position={linkedPosition("skew")} readings={readings.slice(0, 4)} onLeave={() => { setInspected(null); }} />

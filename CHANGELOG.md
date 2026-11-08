@@ -38,6 +38,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Update the Windows release inputs to pip 26.3, Maturin 1.16.0 and
+  python-dateutil 4.0.0. Use Maturin 1.16.0 in native CI builds and keep the
+  installation reference aligned with the supported dateutil range. Retain
+  pytest below 9.2 while released pytest-xdist cannot preserve Qt worker groups.
 - Reduce interface typography, spacing, controls, panels and popups to 90% of
   their original size through the shared design tokens.
 - Open and dismiss pickers toward their triggers, with a shorter exit. Buttons

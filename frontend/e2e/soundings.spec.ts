@@ -187,7 +187,7 @@ test.describe("at 1440 by 900", () => {
     expectWarnings(consoleMessages, []);
   });
 
-  test("a model sounding at the selected station", async ({ page, consoleMessages }) => {
+  test("a model sounding uses the entered signed coordinates", async ({ page, consoleMessages }) => {
     await page.goto("/");
     await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
     await waitForMapDrawn(page);
@@ -196,9 +196,14 @@ test.describe("at 1440 by 900", () => {
     await page.getByRole("tab", { name: "Model" }).click();
     const form = page.getByRole("form", { name: "Model sounding" });
     await expect(form.getByRole("combobox", { name: "Model" })).toBeVisible();
-    const atStation = form.getByRole("switch", { name: "At station 72357" });
-    await expect(atStation).toBeChecked();
-    await expect(form.getByRole("textbox", { name: "Latitude, degrees north" })).toHaveCount(0);
+    await expect(form.getByRole("switch")).toHaveCount(0);
+    const latitude = form.getByRole("textbox", { name: "Latitude", exact: true });
+    const longitude = form.getByRole("textbox", { name: "Longitude", exact: true });
+    await latitude.fill("35.2");
+    await longitude.fill("-97.4");
+    await expect(latitude).toHaveValue("35.2");
+    await expect(longitude).toHaveValue("-97.4");
+    await expect(longitude.locator("..")).toContainText("°W");
     await page.getByTestId("open-model").click();
     await expectImageDrawn(page.getByTestId("sounding-viewer").getByTestId("sounding-stage"));
     await expect(page.getByTestId("sounding-title")).toHaveText(/\(example data\)$/u);
@@ -214,8 +219,10 @@ test.describe("at 1440 by 900", () => {
     await page.getByRole("textbox", { name: "Station" }).fill("72357");
     await page.getByTestId("open-observed").click();
     const notice = page.getByTestId("observed-error");
-    await expect(notice).toContainText("The sounding could not be opened");
-    await expect(notice).toContainText("Retrying will not help.");
+    await expect(notice).toContainText("Sounding unavailable");
+    await expect(notice).toContainText("No provider has a sounding for 72357");
+    await expect(notice).toContainText("Try another time or station.");
+    await expect(notice.locator("details")).not.toHaveAttribute("open");
     await expect(notice.getByRole("button", { name: "Retry" })).toHaveCount(0);
     await expect(page.getByText("No sounding open")).toBeVisible();
     await nextFrames(page);

@@ -14,7 +14,8 @@ test("python-unavailable: the instruction, no Retry, and no station count (DR6-3
   await waitForMark(page, MARKS.mapLoaded);
   await waitForMark(page, MARKS.basemapLoaded);
   const notice = page.getByTestId("catalogue-error");
-  await expect(notice).toContainText("Stations could not be loaded");
+  await expect(notice).toContainText("Weather service is not configured");
+  await notice.getByText("Details", { exact: true }).click();
   await expect(notice).toContainText("Set SHARPPY_PYTHON");
   await expect(notice).toContainText("Python backend, bundled UWyo station catalogue");
   await expect(notice.getByRole("button")).toHaveCount(0);
@@ -46,12 +47,12 @@ test("catalog-error: the notice after two automatic retries, then Retry loads th
   await page.goto("/?scenario=catalog-error");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   const notice = page.getByTestId("catalogue-error");
-  await expect(notice).toContainText("Stations could not be loaded", { timeout: 10_000 });
+  await expect(notice).toContainText("Stations unavailable", { timeout: 10_000 });
   await expect(notice).toContainText("The station catalogue could not be loaded.");
   await expect(page.getByTestId("catalogue-announcement")).toHaveCount(0);
   expect(isInside(await boxOf(notice), viewportBox(page))).toBe(true);
   await saveScreenshot(page, "browser-catalog-error.png");
-  await notice.getByRole("button", { name: "Retry" }).click();
+  await notice.getByRole("button", { name: "Reload stations" }).click();
   await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   await expect(notice).toHaveCount(0);
   await waitForMark(page, MARKS.stationsRendered);
@@ -62,7 +63,7 @@ test("seed-fallback: the warning, newly reporting stations, and the seed list in
   await page.goto("/?scenario=seed-fallback");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await expect(page.getByTestId("catalogue-seed-fallback")).toContainText(
-    "Showing the 11-station seed list: the bundled catalogue could not be read",
+    "Limited station list · 11 stations",
   );
   await expect(page.getByTestId("catalogue-announcement")).toHaveText("11 stations loaded");
   await waitForMark(page, MARKS.stationsRendered);
@@ -79,7 +80,7 @@ test("restarting: the indicator and its popover say so, and the stations still l
   await expect(page.getByTestId("health-indicator")).toHaveText("Restarting backend");
   await page.getByTestId("health-indicator").click();
   await expect(page.getByRole("dialog", { name: "Backend status" })).toContainText(
-    "The Python backend stopped unexpectedly and is restarting. Attempt 1.",
+    "Reconnecting weather serviceReconnection attempt 1.",
   );
   await expect(page.getByTestId("catalogue-announcement")).toHaveText("934 stations loaded");
   expectWarnings(consoleMessages, []);
@@ -124,7 +125,7 @@ test("basemap-missing: the notice with Reload map, and the stations still draw a
   await page.goto("/?scenario=basemap-missing");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   const notice = page.getByTestId("map-layers-notice");
-  await expect(notice).toContainText("Some map layers could not be drawn");
+  await expect(notice).toContainText("Map layers missing");
   await expect(notice.getByRole("button", { name: "Reload map" })).toBeVisible();
   await waitForMark(page, MARKS.stationsRendered);
   await nextFrames(page);

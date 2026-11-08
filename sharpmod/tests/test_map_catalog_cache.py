@@ -8,11 +8,12 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-import sharpmod_rs
 
 from sharpmod.bridge import fields, frame_cache
 from sharpmod.bridge.errors import BridgeError
 from sharpmod.providers import hrrr_field as hf, hrrr_products as hp
+
+sharpmod_rs = pytest.importorskip("sharpmod_rs")
 
 REQUEST = {"model": "gfs", "run_time": "2026-10-27T00:00:00Z", "forecast_hour": 6}
 

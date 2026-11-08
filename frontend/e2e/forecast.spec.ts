@@ -34,8 +34,9 @@ test.describe("the forecast map", () => {
     await page.getByRole("button", { name: "Choose model" }).click();
     await page.getByRole("button", { name: "Choose GDPS", exact: true }).click();
     await expect(page.getByRole("button", { name: "Choose model" })).toContainText("GDPS");
-    await expect(page.getByRole("button", { name: "Choose parameter" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Choose parameter" })).toContainText("Soundings only");
+    await expect(page.getByRole("button", { name: "Choose parameter" })).toBeEnabled();
+    await page.getByRole("button", { name: "Choose parameter" }).click();
+    await expect(page.getByRole("dialog", { name: "Parameters", exact: true }).getByRole("button", { name: /^2 m AGL Temperature,/u })).toBeVisible();
     expectWarnings(consoleMessages, []);
   });
 
@@ -75,9 +76,9 @@ test.describe("the forecast map", () => {
     await waitForMapDrawn(page);
     await turnOn(page, "model-field");
     const notice = page.getByTestId("field-error");
-    await expect(notice).toContainText("The model field could not be loaded");
+    await expect(notice).toContainText("Forecast field unavailable");
     await expect(notice.getByRole("button", { name: "Retry" })).toHaveCount(0);
-    await expect(notice.getByTestId("error-no-retry")).toHaveText("Retrying will not help.");
+    await expect(notice).toContainText("HRRR did not return refc.");
     await expect(page.getByRole("complementary", { name: "Parameter scale" })).toContainText("Unavailable");
     expect(await deckLayers(page)).not.toContain("model-field-smooth");
     expectWarnings(consoleMessages, [{ pattern: /^\[backend\] FIELD_UNAVAILABLE in get_weather_field/u }]);
@@ -208,10 +209,10 @@ test.describe("the forecast map", () => {
     await expect(inspector.getByTestId("point-value-1")).toContainText("dBZ");
     await inspector.getByRole("button", { name: "Open HRRR sounding here" }).click();
     await expect(page.getByTestId("workspace-panel")).toHaveAttribute("data-workspace", "sounding");
-    await expect(page.getByLabel("Latitude, degrees north")).toHaveValue(/^3[56]\.\d{4}$/u);
-    await expect(page.getByLabel("Longitude, degrees east")).toHaveValue(/^-10[78]\.\d{4}$/u);
-    const latitude = Number(await page.getByLabel("Latitude, degrees north").inputValue());
-    const longitude = Number(await page.getByLabel("Longitude, degrees east").inputValue());
+    await expect(page.getByRole("textbox", { name: "Latitude", exact: true })).toHaveValue(/^3[56]\.\d{4}$/u);
+    await expect(page.getByRole("textbox", { name: "Longitude", exact: true })).toHaveValue(/^-10[78]\.\d{4}$/u);
+    const latitude = Number(await page.getByRole("textbox", { name: "Latitude", exact: true }).inputValue());
+    const longitude = Number(await page.getByRole("textbox", { name: "Longitude", exact: true }).inputValue());
     expect(Math.abs(latitude - 36)).toBeLessThan(0.05);
     expect(Math.abs(longitude + 108)).toBeLessThan(0.05);
     await expect(page.getByRole("combobox", { name: "Model" }).last()).toHaveAttribute("value", "hrrr");

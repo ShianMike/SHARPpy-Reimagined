@@ -42,6 +42,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   python-dateutil 4.0.0. Use Maturin 1.16.0 in native CI builds and keep the
   installation reference aligned with the supported dateutil range. Retain
   pytest below 9.2 while released pytest-xdist cannot preserve Qt worker groups.
+  Build Linux compatibility wheels in Maturin's official 1.16.0 container,
+  pinned by digest, retaining manylinux2014 auditing and clean-install checks.
 - Reduce interface typography, spacing, controls, panels and popups to 90% of
   their original size through the shared design tokens.
 - Open and dismiss pickers toward their triggers, with a shorter exit. Buttons

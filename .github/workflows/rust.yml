@@ -272,7 +272,19 @@ jobs:
           python -m pip install -e . --no-deps
           python scripts/install_sharppy_compat.py --sharppy-only --skip-pip-check
 
+      - name: Build manylinux wheel with the pinned Maturin image
+        if: runner.os == 'Linux'
+        run: >-
+          docker run --rm --platform linux/amd64
+          --volume "$GITHUB_WORKSPACE:/io"
+          --workdir /io/rust/sharpmod-rs
+          ghcr.io/pyo3/maturin@sha256:50bf2ff99eeff7b09332bad9baf4a5e925e2502304ae2f88f48ce8c06fd9957c
+          build --release --locked --out dist --manylinux 2014
+          --target ${{ matrix.target }}
+          --interpreter /opt/python/${{ matrix.python-tag }}-${{ matrix.python-tag }}/bin/python
+
       - name: Build wheel
+        if: runner.os != 'Linux'
         uses: PyO3/maturin-action@v1
         with:
           command: build

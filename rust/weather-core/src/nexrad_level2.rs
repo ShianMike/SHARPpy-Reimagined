@@ -324,7 +324,12 @@ impl RadarClient {
                 "radar history is available only for the past 60 minutes".into(),
             ));
         }
-        let cutoff = now - time::Duration::minutes(70);
+        // Keep the listing cache wide enough for the oldest selectable time,
+        // including the preceding volume and its later cut timestamp.
+        let cutoff = now - time::Duration::minutes(95);
+        let oldest = requested.map_or(now - time::Duration::minutes(70), |time| {
+            time - time::Duration::minutes(35)
+        });
         let mut days = vec![cutoff.date()];
         if now.date() != cutoff.date() {
             days.push(now.date());
@@ -332,10 +337,7 @@ impl RadarClient {
         let mut scans = Vec::new();
         for day in days {
             for scan in self.listing(site, day, cutoff).await? {
-                if scan.0 >= cutoff
-                    && scan.0 <= target.min(now)
-                    && (requested.is_none() || scan.0 >= target - time::Duration::minutes(35))
-                {
+                if scan.0 >= oldest && scan.0 <= target.min(now) {
                     scans.push(scan);
                 }
             }

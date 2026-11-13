@@ -26,11 +26,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and ray geometry. Unsupported formats and licences remain unavailable.
 - Add eleven Météo-France radar sites in France and overseas via MRRL InterRAD,
   with lowest-available reflectivity, source credits and capability-aware
-  controls. Show standing radar-source credits in the bottom-left corner during
-  Live Tracking.
+  controls. Show compact, expandable radar-source credits in the bottom-left
+  corner during Live Tracking.
 
 ### Changed
 
+- Keep the README release summary focused on versions 3.7.0 and 3.6.0;
+  earlier release history remains in the changelog.
 - Move US NEXRAD Level II S3 volume listing, Archive II BZip2 and Message
   5/31 decoding, reflectivity and correlation-coefficient tilt availability, and
   geodesic polar rendering into the shared Rust weather core, eliminating
@@ -61,6 +63,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Read NOAA's advertised radar scan times when they follow the layer name, so
+  current and recent mosaic imagery can be selected correctly.
+- Install the native backend in the Windows WRF and live-provider checks, which
+  exercise sounding and provider operations migrated to Rust.
 - Restore dark, light and protanopia sounding display choices in Appearance
   settings, preserving the selection across sessions and applying it to
   interactive, edited and exported sounding images.

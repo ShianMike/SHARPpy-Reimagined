@@ -23,7 +23,7 @@ This release adds radar coverage and sounding display choices:
 - **European radar:** discover OPERA sites and display compatible reflectivity
   scans. Availability depends on each site's data format, licence and scans.
 - **French radar:** view additional Météo-France sites in France and overseas
-  through MRRL InterRAD, with source credits at the bottom left of Live Tracking.
+  through MRRL InterRAD, with expandable credits at the bottom left of Live Tracking.
 - **Radar controls:** choose a network, search sites by code or place, and click
   map labels to select a site. Borders show selected and unavailable sites.
 - **Sounding display:** choose Dark, Light or Protanopia for sounding images in
@@ -57,90 +57,6 @@ Download published Windows installers and portable builds from
   Unavailable effective-layer winds stay masked instead of becoming invalid vectors.
 - **Faster profile edits:** use native pressure interpolation for repeated
   calculations while preserving the rendered chart and diagnostic values.
-
-### Included from 3.5.5
-
-- **Faster repeat forecast soundings:** the native decoder can reuse the
-  column when you reopen the same point from the same large GRIB file.
-- **Prepare large soundings sooner:** begin processing complete GRIB messages
-  while the remaining data downloads, then validate the complete file and
-  required surface data before opening the profile.
-- **Consistent MCS maintenance probability:** use the analyzed profile's
-  validated result so the probability agrees with the MCS index.
-- **Sounding reading guide:** read parcel ascent, instability and winds together
-  in the updated [parameter guide](docs/sounding_parameter_guide.md).
-
-### Included from 3.5.4
-
-- **Smooth, labelled isobars:** add a separate pressure layer on supported HRRR,
-  GFS and ECMWF forecasts, with 4 hPa spacing, opacity and saved per-panel controls.
-- **Complete forecast overlays:** keep height contours and wind barbs available
-  on dense maps, with bounded display detail and the selected contour interval.
-- **Native weather fetching:** use Rust for map-field inventory parsing, byte-range
-  grouping and parallel downloading, with retries, cancellation and size limits.
-
-### Included from 3.5.3
-
-- **ECMWF 9 km soundings:** request the correct pressure-level and surface
-  data so forecast profiles open instead of failing with a missing coordinate.
-- **Readable STP charts:** fit the title and probability text to the panel on
-  Windows and Linux.
-- **Faster native calculations:** reuse parcel integration endpoints and verified
-  grid lookups while preserving current-file weather values and diagnostic results.
-
-### Included from 3.5.2
-
-- **Map ready at startup:** load the map behind Overview as the app opens and
-  preserve it when moving between workspaces.
-- **Correct parcel diagnostics:** preserve saturated-surface LCL and LFC values,
-  average temperature and moisture independently, and retain usable CAPE layers
-  beneath a missing profile-top temperature.
-- **Protected sounding edits:** retain pending-edit protection across navigation
-  and prevent late results from replacing newer profile work or chart selections.
-- **Accurate weather requests:** validate model download ranges, preserve the
-  original provider when mirror checks fail, and include observation pagination
-  when finding the nearest report.
-- **Consistent live history:** match Level II history to the actual cut time and
-  avoid repeatedly requesting confirmed unavailable alert snapshots.
-- **Cleaner updates:** finish backend shutdown before starting the Windows
-  installer, preserve published releases, and validate upgrades from an earlier
-  stable version.
-- **Current model choices:** retire NAM, SREF, HREF and the offered HiResW
-  variants from the forecast and sounding selectors after their NWS retirement.
-
-### Included from 3.5.1
-
-- **Storm reports in Live Tracking:** show tornado, hail and wind reports beside
-  radar and alerts, with hazard filters, event windows, hover details and past-hour
-  caching and playback.
-- **Correct supplemental radar times:** use the published observation times for
-  SAILS and MRLE products, avoiding false future-scan failures.
-- **Clear overlay recovery:** distinguish unavailable radar scans and uncached
-  alert history from connection or decoding failures, with Return to Live for
-  missing historical frames.
-- **Faster first sounding display:** ECAPE now uses a native Rust workspace,
-  reducing first-render delay and initial memory use while preserving scientific
-  reference checks and missing-data behavior. In the recorded local UHD comparison,
-  the first-render median improved from 5.15 s to 3.37 s with about 160 MiB less
-  initial peak working set; repeated-render timings were essentially unchanged.
-
-See the [measurement report](docs/performance/ECAPE_RUST_MIGRATION.md) for the
-hardware, comparison method and limits. This patch also includes the public-updater
-acceptance check for the existing install review.
-
-### Included from 3.5.0
-
-- **Australian radar:** search 67 sites and view MRRL Base Reflectivity or
-  Doppler Velocity, with actual scan times and distinct range-folded values.
-- **Updraft tracks:** view 1-hour and 3-hour maximum updraft helicity for
-  2–5 km AGL on HRRR and supporting models, with a shared colour table.
-- **Map details:** toggle OpenStreetMap roads per panel, read full storm-report
-  hazard names and use consistent surface-station symbols.
-- **Sounding controls:** pick sources and forecast times in compact glass
-  popups, switch chart panels, and edit one level at a time with undo/redo.
-
-This release includes the [Rust migration baseline](CHANGELOG.md#v342---rust-migration-baseline)
-for downloads, live providers, map processing and sounding calculations.
 
 ## Weather analysis
 

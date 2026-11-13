@@ -19,6 +19,8 @@ Map contours and wind barbs, radial radar sampling, velocity tilt availability, 
 NWS warning/watch processing, nearby surface observations, and IEM report fetching/parsing require the native extension
 in browser mode. The desktop calls the shared Rust weather core directly for
 radar inventory. These migrated operations have no Python implementation.
+UWyo sounding decoding and availability, box-mean soundings, threshold
+controls, radar mosaics and satellite processing also use the native extension.
 Build/install `sharpmod_rs` before running the complete source application.
 
 IGRA sounding header scans, fixed-width level decoding, humidity-derived

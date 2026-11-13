@@ -119,6 +119,7 @@ pub fn parse_capabilities(
 
     struct Frame {
         tag: String,
+        name: Option<String>,
         times: Vec<OffsetDateTime>,
         is_time_dim: bool,
         is_name: bool,
@@ -188,10 +189,13 @@ pub fn parse_capabilities(
             } else if popped.is_name {
                 let layer_name = popped.text.trim();
                 if !layer_name.is_empty() {
-                    if let Some(parent) = stack.last() {
-                        let short = local_name(layer_name).to_owned();
-                        result.insert(short, parent.times.clone());
+                    if let Some(parent) = stack.last_mut().filter(|frame| frame.tag == "Layer") {
+                        parent.name = Some(local_name(layer_name).to_owned());
                     }
+                }
+            } else if popped.tag == "Layer" {
+                if let Some(name) = popped.name {
+                    result.insert(name, popped.times);
                 }
             }
             continue;
@@ -221,6 +225,7 @@ pub fn parse_capabilities(
         let is_name = tag == "Name";
         stack.push(Frame {
             tag,
+            name: None,
             times: inherited,
             is_time_dim,
             is_name,
@@ -327,5 +332,14 @@ mod tests {
         assert_eq!(parsed["radar"].len(), 2);
         assert!(parse_capabilities(b"<!DOCTYPE wms><wms/>").is_err());
         assert!(parse_capabilities(b"not XML").is_err());
+    }
+
+    #[test]
+    fn capabilities_read_times_after_layer_names() {
+        let xml = br#"<WMS_Capabilities><Capability><Layer><Name>conus:parent</Name><Dimension name="time">2026-11-13T09:00:00Z,2026-11-13T09:02:00Z</Dimension><Layer><Name>conus:inherited</Name></Layer><Layer><Name>conus:override</Name><Dimension name="time">2026-11-13T09:04:00Z</Dimension></Layer></Layer></Capability></WMS_Capabilities>"#;
+        let parsed = parse_capabilities(xml).unwrap();
+        assert_eq!(parsed["parent"].len(), 2);
+        assert_eq!(parsed["inherited"], parsed["parent"]);
+        assert_eq!(stamp(parsed["override"][0]), "2026-11-13T09:04:00.000Z");
     }
 }

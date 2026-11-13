@@ -101,8 +101,8 @@ the provider and the selected time.
 Additional Météo-France sites in France and its overseas territories are
 available via MRRL. These converted scans offer reflectivity at the lowest
 available elevation; they do not offer velocity or selectable tilts. The
-displayed scan time is the time supplied in the converted file. See the bottom
-left of Live Tracking for radar-source credits and licences.
+displayed scan time is the time supplied in the converted file. Expand **Radar
+credits** at the bottom left of Live Tracking for source credits and licences.
 Enhanced Echo Tops uses the full volume, so its tilt control is disabled. The
 toolbar and Layers controls edit the active panel.
 

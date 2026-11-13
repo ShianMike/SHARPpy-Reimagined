@@ -154,7 +154,7 @@ def test_ci_covers_supported_python_and_windows_wrf_runtime():
     rust_build = next(
         step for step in property_steps if "maturin build" in step.get("run", "")
     )
-    assert rust_build["if"] == "${{ matrix.backend == 'rust' }}"
+    assert "if" not in rust_build
 
     # Weather operations are native; numerical compatibility still selects Python.
     assert any(

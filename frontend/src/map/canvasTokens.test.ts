@@ -38,6 +38,8 @@ describe("readCanvasTokens over the shipped tokens.css", () => {
     expect(declared.length).toBe(
       Object.keys(tokens.colours).length + Object.keys(tokens.lengths).length,
     );
+    expect(tokens.colours.radarLabelSelectedEdge).toEqual(parseColour(shipped("--success"), "--success"));
+    expect(tokens.colours.radarLabelUnavailableEdge).toEqual(parseColour(shipped("--danger"), "--danger"));
     expect(tokens.colours.background).toEqual([10, 10, 9, 255]);
     expect(tokens.colours.stationUnknown).toEqual([156, 151, 141, 255]);
     expect(tokens.colours.selectedHalo).toEqual([255, 208, 0, 71]);
@@ -52,6 +54,7 @@ describe("readCanvasTokens over the shipped tokens.css", () => {
       coastlineWidth: 2.4,
       stationRadius: 3.5,
       stationEdge: 1,
+      radarLabelHighlightWidth: 2,
       selectedRadius: 6,
       selectedHaloRadius: 12,
       labelSize: 15,
@@ -89,6 +92,9 @@ describe("readCanvasTokens over the shipped tokens.css", () => {
     const declarations = rootDeclarations(tokensCss);
     expect(declarations.has("--glass-fill")).toBe(false);
     expect(declarations.has("--glass-filter")).toBe(false);
+    expect(declarations.get("--map-radar-label-selected-edge")).toBe("var(--success)");
+    expect(declarations.get("--map-radar-label-unavailable-edge")).toBe("var(--danger)");
+    expect(declarations.get("--map-radar-label-highlight-width")).toBe("2px");
     expect(declarations.get("--motion-fast")).toBe("120ms");
     expect(declarations.get("--z-notice")).toBe("15");
   });

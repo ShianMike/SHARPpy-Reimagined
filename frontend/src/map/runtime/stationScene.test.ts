@@ -11,19 +11,54 @@ import outlookFixture from "@contracts/public/map/outlook.cat.json";
 import reportsFixture from "@contracts/public/map/reports.json";
 import { parseSpcOutlook } from "../../lib/contracts/map";
 import { parseStormReports } from "../../lib/contracts/reports";
-import { useMapStore } from "../../stores/mapStore";
+import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
 import { useAppStore } from "../../stores/appStore";
 import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
 import tokensCss from "../../styles/tokens.css?raw";
 import { cssTokenReader } from "../../test/cssTokens";
 import { readCanvasTokens } from "../canvasTokens";
 import type { PickingInfo } from "@deck.gl/core";
-import { clickFromPick, StationScene } from "./stationScene";
+import { useHoverStore } from "../hover/hoverStore";
+import { clickFromPick, hoverFromPick, StationScene } from "./stationScene";
 
 afterEach(() => {
   useMapStore.setState(useMapStore.getInitialState(), true);
   useAppStore.setState(useAppStore.getInitialState(), true);
   useBoxSoundingStore.setState(useBoxSoundingStore.getInitialState(), true);
+  useHoverStore.setState(useHoverStore.getInitialState(), true);
+});
+
+it("selects a clicked radar label on its live panel, syncing capabilities without changing sounding selection", () => {
+  useAppStore.getState().selectStation("72357");
+  useAppStore.getState().setActiveWorkspace("live");
+  const state = useMapStore.getState();
+  state.setPanelLayout(2);
+  state.setActivePanel(1);
+  state.setRadarScope("site"); state.setRadarProduct("velocity"); state.setRadarTilt("2"); state.setLayerVisible("radar", false);
+  state.setActivePanel(0);
+  const compatible = { id: "KTLX", longitude: -97, latitude: 35, products: ["reflectivity", "velocity"] };
+  clickFromPick({ layer: { id: "radar-site-labels" }, object: compatible } as unknown as PickingInfo, 1);
+  expect(panelWeather(useMapStore.getState(), 1)).toMatchObject({ radarSite: "KTLX", radarProduct: "velocity", radarTilt: "2" });
+  useMapStore.getState().setLayerVisible("radar", false);
+  useMapStore.getState().setActivePanel(0);
+  const site = { id: "DESS", longitude: 11, latitude: 48, country: "DE", products: ["reflectivity"] };
+  const info = { layer: { id: "radar-site-labels" }, object: site, coordinate: [11, 48], x: 12, y: 24 } as unknown as PickingInfo;
+  hoverFromPick(info, 1, { left: 10, top: 20 });
+  expect(useHoverStore.getState().hovered).toBeNull();
+  expect(useHoverStore.getState().pointer).toMatchObject({ panel: 1, longitude: 11, latitude: 48 });
+  clickFromPick(info, 1);
+  const after = useMapStore.getState();
+  expect(after.activePanel).toBe(1);
+  expect(panelWeather(after, 1)).toMatchObject({ radarScope: "site", radarSite: "DESS", radarProduct: "reflectivity", radarTilt: "0" });
+  expect(panelLayers(after, 1).radar.visible).toBe(true);
+  expect(panelWeather(after, 0)).toMatchObject({ radarScope: "mosaic", radarSite: null });
+  expect(useAppStore.getState().selectedStationId).toBe("72357");
+  clickFromPick({ layer: { id: "stations" }, object: { id: "72469" } } as unknown as PickingInfo, 0);
+  expect(useAppStore.getState().selectedStationId).toBe("72469");
+  useAppStore.getState().setActiveWorkspace("map");
+  clickFromPick(info, 0);
+  expect(useAppStore.getState().selectedPoint).toEqual({ longitude: 11, latitude: 48 });
+  expect(useMapStore.getState().livePanels[1]?.radarSite).toBe("DESS");
 });
 
 it("preserves point and station selection in box mode and restores ordinary point picking", () => {

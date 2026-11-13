@@ -31,7 +31,7 @@ import type {
   ThresholdMetrics,
 } from "../../types/thresholds";
 import type {
-  ImageMode, ModelCatalog, ModelStatus, OpenSoundingRequest, RenderChoice, SoundingAnalysis, SoundingSummary, SoundingTrends, SoundingProgress, WrfFile,
+  ImageMode, ModelCatalog, ModelStatus, OpenSoundingRequest, RenderChoice, SoundingAnalysis, SoundingSummary, SoundingTrends, SoundingProgress, SoundingColorStyle, WrfFile,
 } from "../../types/soundings";
 import { MARKS, markOnce } from "../metrics";
 import type { CacheClearResult, CacheTarget, StorageUsage } from "../../types/storage";
@@ -135,12 +135,12 @@ export class BackendClient {
     return this.request("export_threshold_csv", parseThresholdCsv, thresholdArgs(request));
   }
 
-  renderSounding(soundingId: string, ascent: RenderChoice, imageMode: ImageMode = "hd"): Promise<Blob> {
-    return this.request("render_sounding", parsePng, { soundingId, ascent, imageMode });
+  renderSounding(soundingId: string, ascent: RenderChoice, imageMode: ImageMode = "hd", colorStyle: SoundingColorStyle = "standard"): Promise<Blob> {
+    return this.request("render_sounding", parsePng, { soundingId, ascent, imageMode, colorStyle });
   }
 
-  renderSoundingView(soundingId: string, ascent: RenderChoice, imageMode: ImageMode, view: ViewRequest): Promise<SoundingView> {
-    return this.request("render_sounding_view", parseSoundingView, { soundingId, ascent, imageMode, view });
+  renderSoundingView(soundingId: string, ascent: RenderChoice, imageMode: ImageMode, view: ViewRequest, colorStyle: SoundingColorStyle = "standard"): Promise<SoundingView> {
+    return this.request("render_sounding_view", parseSoundingView, { soundingId, ascent, imageMode, view, colorStyle });
   }
 
   getMapCatalog(model = "hrrr", runTime?: string, forecastHour?: number): Promise<MapCatalog> {

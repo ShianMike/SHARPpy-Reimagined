@@ -91,6 +91,16 @@ fn australian_radar_uses_native_capabilities_and_rejects_unsupported_requests() 
         broadmeadows["products"],
         serde_json::json!(["reflectivity", "velocity"])
     );
+    let guadeloupe = catalogue["sites"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|site| site["id"] == "MF90")
+        .unwrap();
+    assert_eq!(guadeloupe["name"], "Le Moule");
+    assert_eq!(guadeloupe["country"], "GP");
+    assert_eq!(guadeloupe["provider"], "MRRL");
+    assert_eq!(guadeloupe["products"], serde_json::json!(["reflectivity"]));
     for (command, args) in [
         (
             "get_radar_site_frame",
@@ -107,6 +117,18 @@ fn australian_radar_uses_native_capabilities_and_rejects_unsupported_requests() 
         (
             "get_radar_tilts",
             serde_json::json!({"site": "ABRD", "product": "velocity"}),
+        ),
+        (
+            "get_radar_site_frame",
+            serde_json::json!({"site": "MF90", "product": "velocity"}),
+        ),
+        (
+            "get_radar_site_frame",
+            serde_json::json!({"site": "MF90", "product": "reflectivity", "tilt": "1"}),
+        ),
+        (
+            "get_radar_tilts",
+            serde_json::json!({"site": "MF90", "product": "reflectivity"}),
         ),
     ] {
         let error: BackendError = parse(invoke_args(&webview, command, args).unwrap_err());

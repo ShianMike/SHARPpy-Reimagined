@@ -250,6 +250,9 @@
   --map-label-halo: #000000;
   --map-station-label-text: #25354a;
   --map-station-label-fill: rgb(248 251 255 / 0.94);
+  --map-radar-label-selected-edge: var(--success);
+  --map-radar-label-unavailable-edge: var(--danger);
+  --map-radar-label-highlight-width: 2px;
   --map-station-label-edge: rgb(68 90 116 / 0.32);
   --map-station-radius: 3.5px;
   --map-station-edge: 1px;

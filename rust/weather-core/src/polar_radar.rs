@@ -1,15 +1,58 @@
 //! WGS84 sampling keeps the source gates and missing azimuths intact.
 
-use super::{decode::Sweep, Bounds, Palette};
 use crate::radar_sites::RadarSite;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use geographiclib_rs::{DirectGeodesic, Geodesic, InverseGeodesic};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Palette {
+    pub stops: Vec<(f64, String)>,
+    pub units: String,
+    pub display: String,
+    pub stepped: bool,
+    pub floor: Option<f64>,
+    pub ceiling: Option<f64>,
+    pub ticks: Vec<f64>,
+}
+
+#[derive(Clone, Copy, Serialize)]
+pub struct Bounds {
+    pub west: f64,
+    pub east: f64,
+    pub south: f64,
+    pub north: f64,
+}
+
+#[derive(Debug)]
+pub(crate) struct Sweep {
+    pub site_id: String,
+    pub valid_time: String,
+    pub elevation_angle: f64,
+    pub radials: Vec<Radial>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Radial {
+    /// Centre angle, clockwise from north, in degrees.
+    pub azimuth: f64,
+    /// Angular sample width; missing sectors are never widened.
+    pub width: f64,
+    /// Elevation for terrain-following scans; None retains existing ground-range sampling.
+    pub elevation_angle: Option<f64>,
+    /// Distance to the centre of the first gate, in metres.
+    pub first_gate_m: f64,
+    pub gate_spacing_m: f64,
+    /// Physical values; NaN is missing and positive infinity is range folded.
+    pub values: Vec<f32>,
+}
 
 #[cfg(not(test))]
 const PIXELS: usize = 1024;
 #[cfg(test)]
 const PIXELS: usize = 64;
 
-pub(super) fn render(
+pub(crate) fn render(
     sweep: &Sweep,
     site: &RadarSite,
     palette: &Palette,
@@ -23,9 +66,10 @@ pub(super) fn render(
         .collect::<Vec<_>>();
     values.sort_unstable_by(f32::total_cmp);
     values.dedup();
-    if values.len() > 254 {
+    if values.len() > 65_534 {
         return Err("Radar sweep exceeds indexed gate precision.".into());
     }
+    let wide = values.len() > 254;
     let factor = if palette.units == "mph" {
         3600.0 / 1609.344
     } else {
@@ -33,7 +77,9 @@ pub(super) fn render(
     };
     let mut lookup = vec![None, None];
     lookup.extend(values.iter().map(|&value| Some(f64::from(value) * factor)));
-    lookup.resize(256, None);
+    if !wide {
+        lookup.resize(256, None);
+    }
     let mut rgb = vec![0_u8; 768];
     let mut alpha = vec![0_u8; 256];
     let folded = (palette.units == "mph").then_some(1);
@@ -41,10 +87,26 @@ pub(super) fn render(
         rgb[3..6].copy_from_slice(&[128, 0, 128]);
         alpha[1] = 255;
     }
-    for (index, value) in values.iter().enumerate() {
-        rgb[(index + 2) * 3..(index + 3) * 3]
-            .copy_from_slice(&colour(f64::from(*value) * factor, palette)?);
-        alpha[index + 2] = 255;
+    let opaque_start = values.partition_point(|&value| {
+        palette
+            .floor
+            .is_some_and(|floor| f64::from(value) * factor < floor)
+    });
+    if !wide {
+        for (index, value) in values.iter().enumerate() {
+            rgb[(index + 2) * 3..(index + 3) * 3]
+                .copy_from_slice(&colour(f64::from(*value) * factor, palette)?);
+            alpha[index + 2] = if index < opaque_start { 0 } else { 255 };
+        }
+    } else {
+        let opaque = &values[opaque_start..];
+        let slots = opaque.len().min(253);
+        for slot in 0..slots {
+            let sample = opaque[slot * (opaque.len() - 1) / (slots - 1).max(1)];
+            rgb[(slot + 3) * 3..(slot + 4) * 3]
+                .copy_from_slice(&colour(f64::from(sample) * factor, palette)?);
+            alpha[slot + 3] = 255;
+        }
     }
     let codes = sweep
         .radials
@@ -55,14 +117,24 @@ pub(super) fn render(
                 .iter()
                 .map(|value| {
                     if *value == f32::INFINITY && folded.is_some() {
-                        1
+                        (1_u8, 1_u16)
                     } else if !value.is_finite() {
-                        0
+                        (0_u8, 0_u16)
                     } else {
-                        (values
+                        let index = values
                             .binary_search_by(|entry| entry.total_cmp(value))
-                            .expect("collected source gate")
-                            + 2) as u8
+                            .expect("collected source gate");
+                        let code = (index + 2) as u16;
+                        let visual = if !wide {
+                            code as u8
+                        } else if index < opaque_start {
+                            2
+                        } else {
+                            let opaque = values.len() - opaque_start;
+                            let slots = opaque.min(253);
+                            (3 + (index - opaque_start) * (slots - 1) / (opaque - 1).max(1)) as u8
+                        };
+                        (visual, code)
                     }
                 })
                 .collect::<Vec<_>>()
@@ -106,6 +178,7 @@ pub(super) fn render(
         .collect::<Vec<_>>();
     azimuths.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
     let mut pixels = vec![0_u8; PIXELS * PIXELS];
+    let mut grid = vec![0_u16; if wide { PIXELS * PIXELS } else { 0 }];
     for (row, output) in pixels.as_chunks_mut::<PIXELS>().0.iter_mut().enumerate() {
         let latitude =
             bounds.north - (row as f64 + 0.5) / PIXELS as f64 * (bounds.north - bounds.south);
@@ -122,9 +195,25 @@ pub(super) fn render(
                 index - 1
             }];
             let radial = &sweep.radials[radial_index];
-            let gate = ((distance - radial.first_gate_m) / radial.gate_spacing_m + 0.5).floor();
+            // Convert ground distance back to slant range for a 4/3-Earth beam.
+            // The inverse geodesic above supplies the ground azimuth and distance.
+            let range = if let Some(elevation) = radial.elevation_angle {
+                let earth_radius = 6_371_000.0 * 4.0 / 3.0;
+                let arc = distance / earth_radius;
+                earth_radius * arc.sin() / (elevation.to_radians() + arc).cos()
+            } else {
+                distance
+            };
+            let gate = ((range - radial.first_gate_m) / radial.gate_spacing_m + 0.5).floor();
             if (bearing - start).rem_euclid(360.0) < radial.width && gate >= 0.0 {
-                *output = codes[radial_index].get(gate as usize).copied().unwrap_or(0);
+                let (visual, code) = codes[radial_index]
+                    .get(gate as usize)
+                    .copied()
+                    .unwrap_or((0, 0));
+                *output = visual;
+                if wide {
+                    grid[row * PIXELS + column] = code;
+                }
             }
         }
     }
@@ -135,13 +224,32 @@ pub(super) fn render(
     encoder.set_palette(rgb);
     encoder.set_trns(alpha);
     encoder.set_compression(png::Compression::Fast);
-    encoder
-        .add_text_chunk(
-            "sharppy-radar".into(),
-            serde_json::json!({ "values": lookup, "folded": folded, "lowerBounds": [] })
+    if wide {
+        let bytes = grid
+            .iter()
+            .flat_map(|code| code.to_le_bytes())
+            .collect::<Vec<_>>();
+        encoder
+            .add_ztxt_chunk(
+                "sharppy-radar".into(),
+                serde_json::json!({
+                    "values": lookup,
+                    "folded": folded,
+                    "lowerBounds": [],
+                    "codes": STANDARD.encode(bytes),
+                })
                 .to_string(),
-        )
-        .map_err(|error| error.to_string())?;
+            )
+            .map_err(|error| error.to_string())?;
+    } else {
+        encoder
+            .add_text_chunk(
+                "sharppy-radar".into(),
+                serde_json::json!({ "values": lookup, "folded": folded, "lowerBounds": [] })
+                    .to_string(),
+            )
+            .map_err(|error| error.to_string())?;
+    }
     let mut writer = encoder.write_header().map_err(|error| error.to_string())?;
     writer
         .write_image_data(&pixels)

@@ -133,6 +133,8 @@ pub struct RadarSiteEntry {
     pub country: Option<String>,
     #[serde(default)]
     pub products: Option<Vec<String>>,
+    #[serde(default)]
+    pub provider: Option<String>,
 }
 
 /// One site for the webview; legacy sites omit the optional metadata.
@@ -148,6 +150,8 @@ pub struct RadarSite {
     pub country: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub products: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
 }
 
 impl From<&sharpmod_weather::radar_sites::RadarSite> for RadarSite {
@@ -159,7 +163,8 @@ impl From<&sharpmod_weather::radar_sites::RadarSite> for RadarSite {
             name: site.name.clone(),
             country: site.country.clone(),
             // The US catalogue carries WMS layer names, not public product IDs.
-            products: (site.country.as_deref() == Some("AU")).then(|| site.products.clone()),
+            products: site.country.as_ref().map(|_| site.products.clone()),
+            provider: site.provider.clone(),
         }
     }
 }
@@ -242,6 +247,9 @@ impl RadarSiteCatalog {
                 }
                 crate::dto::checks::unique(products, "radar products")?;
             }
+            if let Some(provider) = &site.provider {
+                check_text("provider", provider, 1, 40)?;
+            }
         }
         Ok(())
     }
@@ -252,14 +260,13 @@ impl RadarSiteCatalog {
                 .sites
                 .into_iter()
                 .map(|site| RadarSite {
-                    products: site
-                        .products
-                        .filter(|_| site.country.as_deref() == Some("AU")),
+                    products: site.products.filter(|_| site.country.is_some()),
                     id: site.id,
                     latitude: site.lat,
                     longitude: site.lon,
                     name: site.name,
                     country: site.country,
+                    provider: site.provider,
                 })
                 .collect(),
         }
@@ -274,86 +281,5 @@ fn bounds_ok(b: &Bounds) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn legacy_catalogue_keeps_its_public_contract() {
-        let catalog: RadarSiteCatalog = serde_json::from_str(include_str!(
-            "../../contracts/bridge/map/radar-sites.result.json"
-        ))
-        .unwrap();
-        catalog.validate().unwrap();
-        let expected: serde_json::Value =
-            serde_json::from_str(include_str!("../../contracts/public/map/radar-sites.json"))
-                .unwrap();
-        assert_eq!(
-            serde_json::to_value(catalog.into_public()).unwrap(),
-            expected
-        );
-    }
-
-    #[test]
-    fn australian_metadata_survives_both_catalogue_paths() {
-        let native = sharpmod_weather::radar_sites::sites()
-            .iter()
-            .find(|site| site.id == "ABRD")
-            .unwrap();
-        let expected = json!({
-            "id": "ABRD", "latitude": -37.691, "longitude": 144.946,
-            "name": "Broadmeadows", "country": "AU", "products": ["reflectivity", "velocity"]
-        });
-        assert_eq!(
-            serde_json::to_value(RadarSite::from(native)).unwrap(),
-            expected
-        );
-        let catalog: RadarSiteCatalog = serde_json::from_value(json!({"sites": [{
-            "id": "ABRD", "lat": -37.691, "lon": 144.946,
-            "name": "Broadmeadows", "country": "AU", "products": ["reflectivity", "velocity"]
-        }]}))
-        .unwrap();
-        catalog.validate().unwrap();
-        assert_eq!(
-            serde_json::to_value(catalog.into_public()).unwrap(),
-            json!({"sites": [expected]})
-        );
-        let us = sharpmod_weather::radar_sites::sites()
-            .iter()
-            .find(|site| site.id == "KTLX")
-            .unwrap();
-        let public_us = serde_json::to_value(RadarSite::from(us)).unwrap();
-        assert_eq!(public_us.as_object().unwrap().len(), 3);
-        assert!(public_us.get("products").is_none());
-        let legacy: RadarSiteCatalog = serde_json::from_value(json!({"sites": [{
-            "id": "KTLX", "lat": us.lat, "lon": us.lon,
-            "products": ["reflectivity"]
-        }]}))
-        .unwrap();
-        legacy.validate().unwrap();
-        assert_eq!(
-            serde_json::to_value(legacy.into_public()).unwrap(),
-            json!({"sites": [public_us]})
-        );
-    }
-
-    #[test]
-    fn catalogue_rejects_invalid_metadata_at_the_bridge_boundary() {
-        for metadata in [
-            json!({"name": ""}),
-            json!({"country": "Australia"}),
-            json!({"country": "au"}),
-            json!({"products": []}),
-            json!({"products": ["sr_bref"]}),
-            json!({"products": ["reflectivity", "reflectivity"]}),
-        ] {
-            let mut site = json!({"id": "ABRD", "lat": -37.691, "lon": 144.946});
-            site.as_object_mut()
-                .unwrap()
-                .extend(metadata.as_object().unwrap().clone());
-            let catalog: RadarSiteCatalog =
-                serde_json::from_value(json!({"sites": [site]})).unwrap();
-            assert!(catalog.validate().is_err(), "{metadata}");
-        }
-    }
-}
+#[path = "radar_tests.rs"]
+mod tests;

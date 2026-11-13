@@ -114,6 +114,21 @@ it("shows the fixed live projection and keeps the Model Viewer projection choice
   expect(screen.getByRole("button", { name: "Globe" }).getAttribute("aria-pressed")).toBe("true");
 });
 
+it("shows radar credits in the Live Tracking legend even when no weather layers are enabled", () => {
+  useMapStore.setState({ view: "live", layerPanelGroup: "legend" });
+  for (const id of ORDERABLE_LAYER_IDS) useMapStore.getState().setLayerVisible(id, false);
+  const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
+  expect(screen.getByText("No weather layers enabled. Add one in Weather to see its key.")).toBeTruthy();
+  const credits = within(screen.getByRole("region", { name: "Radar credits" }));
+  expect(credits.getByRole("link", { name: "MRRL InterRAD" }).getAttribute("href")).toBe("https://mrrl.net/");
+  expect(credits.getByRole("link", { name: "Météo-France" })).toBeTruthy();
+  act(() => { useMapStore.setState({ view: "map" }); });
+  expect(screen.queryByRole("region", { name: "Radar credits" })).toBeNull();
+  act(() => { useMapStore.setState({ view: "live" }); });
+  expect(screen.getByRole("region", { name: "Radar credits" })).toBeTruthy();
+  view.unmount(); queryClient.clear();
+});
+
 it("keeps opacity inside settings, with independent visibility and the active panel's values", async () => {
   useMapStore.setState({ view: "live" });
   useMapStore.getState().setPanelLayout(2);
@@ -207,7 +222,7 @@ it("chooses provider settings through custom menus and preserves numeric and aut
   await userEvent.click(screen.getByRole("option", { name: "KTLX" }));
   expect(useMapStore.getState().radarSite).toBe("KTLX");
   await userEvent.click(site);
-  await userEvent.keyboard("{Home}{Enter}");
+  await userEvent.keyboard("{ArrowDown}{Enter}");
   expect(useMapStore.getState().radarSite).toBeNull();
   const product = await screen.findByRole("combobox", { name: "Product" });
   await userEvent.click(product);

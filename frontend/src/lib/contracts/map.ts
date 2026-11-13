@@ -227,13 +227,16 @@ export function parseAvailabilityReport(value: unknown, path = ""): Availability
 
 function parseSite(value: unknown, path: string): RadarSite {
   const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["id", "latitude", "longitude"], ["name", "country", "products"]);
+  expectExactKeys(obj, path, ["id", "latitude", "longitude"], ["name", "country", "provider", "products"]);
+  const country = obj.country === undefined ? undefined : expectString(obj.country, at(path, "country"), { minLength: 2, maxLength: 2 });
+  if (country !== undefined && !/^[A-Z]{2}$/.test(country)) throw new ContractError(at(path, "country"), "expected an uppercase country code");
   return {
     id: expectString(obj.id, at(path, "id"), { minLength: 1, maxLength: 16 }),
     latitude: expectFiniteNumber(obj.latitude, at(path, "latitude"), { min: -90, max: 90 }),
     longitude: expectFiniteNumber(obj.longitude, at(path, "longitude"), { min: -180, max: 180 }),
     ...(obj.name === undefined ? {} : { name: label(obj.name, at(path, "name")) }),
-    ...(obj.country === undefined ? {} : { country: expectString(obj.country, at(path, "country"), { minLength: 2, maxLength: 2 }) }),
+    ...(country === undefined ? {} : { country }),
+    ...(obj.provider === undefined ? {} : { provider: expectString(obj.provider, at(path, "provider"), { minLength: 1, maxLength: 40 }) }),
     ...(obj.products === undefined ? {} : { products: expectArray(obj.products, at(path, "products"), key) }),
   };
 }

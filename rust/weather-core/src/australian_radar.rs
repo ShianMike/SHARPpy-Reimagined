@@ -1,14 +1,13 @@
 //! Australian radar volumes supplied by MRRL; all fetching and decoding is native.
 
 mod decode;
-mod render;
 #[cfg(test)]
 mod tests;
 
-use crate::{format_rfc3339_utc, radar_sites::RadarSite};
+pub use crate::polar_radar::{Bounds, Palette};
+pub use crate::radar_provider::{Error, Frame, Request};
+use crate::{format_rfc3339_utc, polar_radar as render, radar_sites::RadarSite};
 use base64::{engine::general_purpose::STANDARD, Engine};
-use geographiclib_rs::{Geodesic, InverseGeodesic};
-use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
@@ -17,75 +16,6 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime, PrimitiveDat
 const BASE: &str = "https://feeds.mrrl.net/polling";
 const LIST_LIMIT: usize = 2 * 1024 * 1024;
 const VOLUME_LIMIT: usize = 32 * 1024 * 1024;
-
-#[derive(Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Request {
-    pub product: Option<String>,
-    pub site_id: Option<String>,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
-    pub valid_time: Option<String>,
-    pub tilt: Option<String>,
-}
-
-#[derive(Debug)]
-pub enum Error {
-    Invalid(String),
-    ScanMissing,
-    Fetch(String),
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Invalid(message) | Self::Fetch(message) => f.write_str(message),
-            Self::ScanMissing => {
-                f.write_str("No Australian radar scan is available near the requested time.")
-            }
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct Palette {
-    pub stops: Vec<(f64, String)>,
-    pub units: String,
-    pub display: String,
-    pub stepped: bool,
-    pub floor: Option<f64>,
-    pub ceiling: Option<f64>,
-    pub ticks: Vec<f64>,
-}
-
-#[derive(Clone, Copy, Serialize)]
-pub struct Bounds {
-    pub west: f64,
-    pub east: f64,
-    pub south: f64,
-    pub north: f64,
-}
-
-#[derive(Serialize)]
-pub struct Frame {
-    #[serde(skip)]
-    actual_time: OffsetDateTime,
-    pub product: String,
-    pub site_id: String,
-    pub elevation_angle: f64,
-    pub palette: Palette,
-    pub legend_png_base64: Option<String>,
-    pub label: String,
-    pub units: String,
-    pub bounds: Bounds,
-    pub retrieved_at: String,
-    pub valid_time: String,
-    pub update_interval_s: f64,
-    pub attribution: String,
-    pub source_url: String,
-    pub byte_length: usize,
-    pub png_base64: String,
-}
 
 struct Directory {
     site: String,
@@ -140,42 +70,33 @@ impl RadarClient {
         request: Request,
         now: OffsetDateTime,
     ) -> Result<Option<Arc<Frame>>, Error> {
-        let site = if let Some(id) = request.site_id.as_deref() {
-            crate::radar_sites::sites()
-                .iter()
-                .find(|site| site.id.eq_ignore_ascii_case(id))
-        } else if let (Some(lat), Some(lon)) = (request.latitude, request.longitude) {
-            if !lat.is_finite()
-                || !lon.is_finite()
-                || !(-90.0..=90.0).contains(&lat)
-                || !(-180.0..=180.0).contains(&lon)
-            {
-                return Err(Error::Invalid("Radar coordinates must be in range.".into()));
-            }
-            let earth = Geodesic::wgs84();
-            crate::radar_sites::sites()
-                .iter()
-                .map(|site| {
-                    let distance: f64 = earth.inverse(lat, lon, site.lat, site.lon);
-                    (site, distance)
-                })
-                .min_by(|a, b| a.1.total_cmp(&b.1))
-                .filter(|(_, distance)| *distance <= 500_000.0)
-                .map(|(site, _)| site)
-        } else {
-            None
-        };
-        let Some(site) = site.filter(|site| site.country.as_deref() == Some("AU")) else {
+        let site = crate::radar_provider::resolve(&request)?;
+        let Some(site) = site.filter(|site| {
+            site.country.as_deref() == Some("AU") || site.provider.as_deref() == Some("MRRL")
+        }) else {
             return Ok(None);
         };
-        if request
-            .product
-            .as_deref()
-            .is_some_and(|product| !matches!(product, "reflectivity" | "velocity"))
-        {
-            return Err(Error::Invalid(
-                "Australian radar supports Base Reflectivity and Velocity.".into(),
-            ));
+        self.fetch_site(request, now, site).await
+    }
+
+    pub(crate) async fn fetch_site(
+        &self,
+        request: Request,
+        now: OffsetDateTime,
+        site: &'static RadarSite,
+    ) -> Result<Option<Arc<Frame>>, Error> {
+        let is_mrrl = site.provider.as_deref() == Some("MRRL");
+        if let Some(product) = request.product.as_deref() {
+            if is_mrrl && product != "reflectivity" {
+                return Err(Error::Invalid(
+                    "This MRRL radar supports Reflectivity only.".into(),
+                ));
+            }
+            if !is_mrrl && !matches!(product, "reflectivity" | "velocity") {
+                return Err(Error::Invalid(
+                    "Australian radar supports Base Reflectivity and Velocity.".into(),
+                ));
+            }
         }
         let product = request
             .product
@@ -184,7 +105,12 @@ impl RadarClient {
             .to_owned();
         if request.tilt.as_deref().is_some_and(|tilt| tilt != "0") {
             return Err(Error::Invalid(
-                "Australian radar uses its lowest available elevation.".into(),
+                if is_mrrl {
+                    "MRRL radar uses its lowest available elevation."
+                } else {
+                    "Australian radar uses its lowest available elevation."
+                }
+                .into(),
             ));
         }
         let target = request
@@ -303,9 +229,12 @@ impl RadarClient {
 }
 
 fn parse_listing(bytes: &[u8], site: &str) -> Vec<(OffsetDateTime, String)> {
-    let format =
+    let underscored =
         time::format_description::parse_borrowed::<2>("[year][month][day]_[hour][minute][second]")
             .expect("static radar filename format");
+    let compact =
+        time::format_description::parse_borrowed::<2>("[year][month][day][hour][minute][second]")
+            .expect("static compact radar filename format");
     let text = String::from_utf8_lossy(bytes);
     let mut scans = Vec::new();
     for link in text
@@ -314,13 +243,32 @@ fn parse_listing(bytes: &[u8], site: &str) -> Vec<(OffsetDateTime, String)> {
         .filter_map(|entry| entry.split_once('"').map(|(link, _)| link))
     {
         let file = link.rsplit('/').next().unwrap_or("");
-        let Some(stamp) = file
-            .strip_prefix(&format!("{site}_"))
-            .and_then(|file| file.strip_suffix(".ar2v"))
-        else {
+        let Some(prefix) = file.get(..site.len()) else {
             continue;
         };
-        if let Ok(time) = PrimitiveDateTime::parse(stamp, &format) {
+        if !prefix.eq_ignore_ascii_case(site) {
+            continue;
+        }
+        let rest = &file[site.len()..];
+        let parsed =
+            if let Some(stamp) = rest.strip_prefix('_').and_then(|s| s.strip_suffix(".ar2v")) {
+                match stamp.len() {
+                    15 => PrimitiveDateTime::parse(stamp, &underscored).ok(),
+                    14 => PrimitiveDateTime::parse(stamp, &compact).ok(),
+                    _ => None,
+                }
+            } else if let Some(stamp) = rest.strip_suffix(".ar2v") {
+                (stamp.len() == 15)
+                    .then(|| PrimitiveDateTime::parse(stamp, &underscored).ok())
+                    .flatten()
+            } else if let Some(stamp) = rest.strip_suffix("_V06") {
+                (stamp.len() == 18 && stamp.as_bytes()[..3].iter().all(u8::is_ascii_uppercase))
+                    .then(|| PrimitiveDateTime::parse(&stamp[3..], &underscored).ok())
+                    .flatten()
+            } else {
+                None
+            };
+        if let Some(time) = parsed {
             scans.push((time.assume_utc(), file.to_owned()));
         }
     }
@@ -347,7 +295,7 @@ fn make_frame(
     target: OffsetDateTime,
     now: OffsetDateTime,
 ) -> Result<Frame, Error> {
-    let sweep = decode::decode(bytes, product).map_err(Error::Fetch)?;
+    let mut sweep = decode::decode(bytes, product).map_err(Error::Fetch)?;
     if !sweep.site_id.eq_ignore_ascii_case(&site.id) {
         return Err(Error::Fetch("Radar volume belongs to another site.".into()));
     }
@@ -356,23 +304,41 @@ fn make_frame(
     if actual > target || actual < target - time::Duration::minutes(10) {
         return Err(Error::ScanMissing);
     }
+    let is_mrrl = site.provider.as_deref() == Some("MRRL");
     let velocity = product == "velocity";
-    let palette: Palette = serde_json::from_str(if velocity {
+    let mut palette: Palette = serde_json::from_str(if velocity {
         include_str!("../resources/australian_velocity.palette.json")
     } else {
         include_str!("../resources/australian_reflectivity.palette.json")
     })
     .expect("bundled radar palette");
+    if is_mrrl && !velocity {
+        palette.floor = Some(0.0);
+        let elevation = sweep.elevation_angle;
+        for radial in &mut sweep.radials {
+            radial.elevation_angle = Some(elevation);
+        }
+    }
     let (bounds, png) = render::render(&sweep, site, &palette).map_err(Error::Fetch)?;
+    let (update_interval_s, attribution) = if is_mrrl {
+        (
+            300.0,
+            "Météo-France · Licence Ouverte 2.0 (data.gouv.fr/pages/legal/licences/etalab-2-0) · converted by MRRL, rendered by SHARPpy Reimagined",
+        )
+    } else {
+        (60.0, "Australian Bureau of Meteorology radar via MRRL")
+    };
     Ok(Frame {
         actual_time: actual,
         product: product.into(),
         site_id: site.id.clone(),
-        elevation_angle: sweep.elevation_angle,
+        elevation_angle: Some(sweep.elevation_angle),
         palette,
         legend_png_base64: None,
         label: if velocity {
             "Velocity"
+        } else if is_mrrl {
+            "Reflectivity"
         } else {
             "Base Reflectivity"
         }
@@ -382,8 +348,8 @@ fn make_frame(
         retrieved_at: format_rfc3339_utc(now),
         // Public weather DTOs use whole seconds; comparisons keep source precision.
         valid_time: format_rfc3339_utc(actual),
-        update_interval_s: 60.0,
-        attribution: "Australian Bureau of Meteorology radar via MRRL".into(),
+        update_interval_s,
+        attribution: attribution.into(),
         source_url: format!("{BASE}/{}/{path}", site.id),
         byte_length: png.len(),
         png_base64: STANDARD.encode(png),

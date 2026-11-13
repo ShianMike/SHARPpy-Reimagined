@@ -78,8 +78,31 @@ warnings and watches, SPC outlooks, and storm reports. It has its own saved
 layers and products, with one, two, or four synchronized panels.
 Live Tracking uses the flat map; Model Viewer keeps its saved projection.
 
-Use **Site** to select the nearest radar or pin an antenna, **Site Product** to
-choose a product, and **Site Tilt** to choose a verified available elevation.
+Use **Network** to narrow the radar list, **Site** to select the nearest radar or
+pin an antenna, **Site Product** to choose a product, and **Site Tilt** to choose
+a verified available elevation where the provider offers one. Selecting a
+network selects a nearby site in that network and centers the map on it. The
+map and site controls use radar codes such as `KTLX` for Oklahoma City and
+`NOHUR` for OPERA's Hurum site. Search by code or place name. The site list
+includes the place and network for reference. Click any radar site label on
+the map to select that site on the panel; the selected site border turns green,
+and unavailable site borders are highlighted in red.
+
+The German DWD network provides precipitation-scan reflectivity at 17 sites; its
+scan elevation varies with direction, so it has no selectable tilt. Weak DWD
+returns below 0 dBZ are transparent, and clutter-flagged gates are masked.
+The **Europe · OPERA** network lists participating stations discovered from
+EUMETNET. Compatible scans show Doppler-filtered reflectivity at the lowest
+available elevation, with returns below 0 dBZ transparent. OPERA stations may
+appear in the list even when their current format, licence, or scan is not
+supported; a listing does not guarantee a usable scan. German antennas use the
+separate DWD network to avoid duplicate site markers. Availability depends on
+the provider and the selected time.
+Additional Météo-France sites in France and its overseas territories are
+available via MRRL. These converted scans offer reflectivity at the lowest
+available elevation; they do not offer velocity or selectable tilts. The
+displayed scan time is the time supplied in the converted file. See the Live
+Tracking legend for radar-source credits and licences.
 Enhanced Echo Tops uses the full volume, so its tilt control is disabled. The
 toolbar and Layers controls edit the active panel.
 
@@ -98,6 +121,8 @@ than treating an incomplete download as ready.
 
 Downloaded live data appears in **Settings → Storage**. Caches are bounded and
 cleared when the app session closes; cleared data downloads again when needed.
+See the [worldwide radar inventory](worldwide-radar-research.md) for source
+coverage, attribution, limitations and other providers researched.
 
 ### Display units
 
@@ -106,6 +131,10 @@ and wind speeds in knots, km/h, mph or m/s. Readings and editable profile values
 use your choices immediately, and they are saved on this device. **Reset units**
 restores the defaults. Map colours and scientific calculations stay the same;
 chart images and exports retain their labelled units, and wind barbs use knots.
+
+In **Settings → Appearance → Sounding display**, choose Dark, Light or
+Protanopia for sounding images. This choice is saved independently of the
+workspace theme and applies to the interactive view and exported images.
 
 ### Model Viewer
 

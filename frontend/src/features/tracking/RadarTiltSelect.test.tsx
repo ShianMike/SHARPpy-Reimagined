@@ -148,7 +148,7 @@ it.each(["toolbar", "layer"])("filters %s products to Australian capabilities an
   const { view, queryClient } = renderWithBackend(<>{controls === "toolbar" ? <LiveRadarControls /> : <RadarControls />}<Imagery /></>, transport);
   await waitFor(() => { expect(screen.getByRole("combobox", { name: productLabel }).textContent).toContain("Velocity"); });
   fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
-  const australian = await screen.findByRole("option", { name: "ABRD · Broadmeadows" });
+  const australian = await screen.findByRole("option", { name: "ABRD" });
   expect(australian.getAttribute("aria-description")).toContain("Australia");
   fireEvent.click(australian);
   expect(useMapStore.getState().focusRequest).toMatchObject({ stationId: "ABRD", position: { latitude: -37.85, longitude: 144.75 } });
@@ -173,6 +173,108 @@ it.each(["toolbar", "layer"])("filters %s products to Australian capabilities an
     fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
     fireEvent.click(screen.getByRole("option", { name: "CONUS mosaic" }));
     expect(useMapStore.getState().focusRequest).toBe(focus);
+  }
+  view.unmount(); queryClient.clear();
+});
+
+it("selects the German network and exposes only its precipitation scan", async () => {
+  useMapStore.getState().setRadarProduct("velocity");
+  const transport = createTransport(), original = transport.call.bind(transport);
+  transport.call = (command, args) => command === "get_radar_sites" ? Promise.resolve({ sites: [
+    { id: "KTLX", latitude: 35.3333, longitude: -97.2783 },
+    { id: "DESS", name: "Essen", country: "DE", products: ["reflectivity"], latitude: 51.405649, longitude: 6.967111 },
+  ] }) : command === "get_radar_site_frame" ? new Promise<unknown>(() => undefined) : original(command, args);
+  const call = vi.spyOn(transport, "call");
+  const { view, queryClient } = renderWithBackend(<LiveRadarControls />, transport);
+  await waitFor(() => { expect(screen.getByRole("combobox", { name: "Network" })).toBeTruthy(); });
+  fireEvent.click(screen.getByRole("combobox", { name: "Network" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Germany" }));
+  expect(panelWeather(useMapStore.getState()).radarSite).toBe("DESS");
+  expect(useMapStore.getState().focusRequest).toMatchObject({ stationId: "DESS" });
+  expect(screen.getByRole("combobox", { name: "Site Product" }).textContent).toContain("Base Reflectivity");
+  const tilt = screen.getByRole<HTMLButtonElement>("button", { name: "Site Tilt" });
+  expect(tilt.disabled).toBe(true);
+  expect(tilt.textContent).toContain("Variable");
+  expect(tilt.getAttribute("aria-description")).toContain("vary their elevation with direction");
+  fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
+  expect(screen.queryByRole("option", { name: "CONUS mosaic" })).toBeNull();
+  expect(screen.queryByRole("option", { name: "Nearest site" })).toBeNull();
+  expect(screen.getByRole("option", { name: "DESS" }).getAttribute("aria-description")).toContain("Essen");
+  fireEvent.click(screen.getByRole("option", { name: "DESS" }));
+  fireEvent.click(screen.getByRole("combobox", { name: "Site Product" }));
+  expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["Base Reflectivity"]);
+  expect(call.mock.calls.some(([command, args]) => command === "get_radar_tilts" && args?.site === "DESS")).toBe(false);
+  view.unmount(); queryClient.clear();
+});
+
+it("selects the OPERA network and keeps its scans separate from NEXRAD", async () => {
+  useMapStore.getState().setRadarProduct("velocity");
+  const transport = createTransport(), original = transport.call.bind(transport);
+  transport.call = (command, args) => command === "get_radar_sites" ? Promise.resolve({ sites: [
+    { id: "KTLX", latitude: 35.3333, longitude: -97.2783 },
+    { id: "0-578-0-nohur", name: "Hurum", country: "NO", provider: "OPERA", products: ["reflectivity"], latitude: 59.627083, longitude: 10.564472 },
+  ] }) : command === "get_radar_site_frame" ? new Promise<unknown>(() => undefined) : original(command, args);
+  const call = vi.spyOn(transport, "call");
+  const { view, queryClient } = renderWithBackend(<LiveRadarControls />, transport);
+  fireEvent.click(await screen.findByRole("combobox", { name: "Network" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Europe" }));
+  expect(panelWeather(useMapStore.getState()).radarSite).toBe("0-578-0-nohur");
+  expect(screen.getByRole("combobox", { name: "Site" }).textContent).toContain("NOHUR");
+  expect(screen.getByRole("combobox", { name: "Site Product" }).textContent).toContain("Base Reflectivity");
+  const tilt = screen.getByRole<HTMLButtonElement>("button", { name: "Site Tilt" });
+  expect(tilt.disabled).toBe(true);
+  expect(tilt.textContent).toContain("Lowest available");
+  fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
+  expect(screen.queryByRole("option", { name: "CONUS mosaic" })).toBeNull();
+  expect(screen.getByRole("option", { name: "NOHUR" }).getAttribute("aria-description")).toContain("Hurum");
+  const search = screen.getByRole("searchbox", { name: "Find a radar by code or place name" });
+  for (const query of ["Hurum", "NOHUR", "0-578-0-nohur"]) {
+    fireEvent.change(search, { target: { value: query } });
+    expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["NOHUR"]);
+  }
+  expect(call.mock.calls.some(([command, args]) => command === "get_radar_tilts" && args?.site === "0-578-0-nohur")).toBe(false);
+  view.unmount(); queryClient.clear();
+});
+
+it("shows the saved OPERA code in both pickers when its catalogue entry is unavailable", async () => {
+  useMapStore.getState().setRadarSite("0-578-0-nohur");
+  const { view, queryClient } = renderWithBackend(<><LiveRadarControls /><RadarControls /></>, createTransport());
+  await waitFor(() => {
+    const pickers = screen.getAllByRole("combobox", { name: "Site" });
+    expect(pickers).toHaveLength(2);
+    for (const picker of pickers) expect(picker.textContent).toContain("NOHUR");
+  });
+  expect(panelWeather(useMapStore.getState()).radarSite).toBe("0-578-0-nohur");
+  view.unmount(); queryClient.clear();
+});
+
+it.each(["toolbar", "layer"])("uses MRRL metadata for the %s controls and keeps unsupported products and tilts out", async (controls) => {
+  const state = useMapStore.getState();
+  state.setRadarSite("MF94"); state.setRadarProduct("velocity"); state.setRadarTilt("2");
+  const transport = createTransport(), original = transport.call.bind(transport);
+  transport.call = (command, args) => command === "get_radar_sites" ? Promise.resolve({ sites: [
+    { id: "MF94", name: "Nouméa", country: "NC", provider: "MRRL", products: ["reflectivity"], latitude: -22.27611, longitude: 166.45278 },
+  ] }) : command === "get_radar_site_frame" ? new Promise<unknown>(() => undefined) : original(command, args);
+  const call = vi.spyOn(transport, "call");
+  function Imagery() {
+    const { site, product, tilt } = usePanelRadar();
+    useRadarSiteFrame(product, site, true, "2026-10-17T08:00:00Z", tilt);
+    return null;
+  }
+  const { view, queryClient } = renderWithBackend(<>{controls === "toolbar" ? <LiveRadarControls /> : <RadarControls />}<Imagery /></>, transport);
+  const product = controls === "toolbar" ? "Site Product" : "Product";
+  await waitFor(() => { expect(screen.getByRole("combobox", { name: product }).textContent).toContain("Reflectivity"); });
+  fireEvent.click(screen.getByRole("combobox", { name: product }));
+  expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["Reflectivity"]);
+  fireEvent.click(screen.getByRole("option", { name: "Reflectivity" }));
+  const tilt = controls === "toolbar" ? screen.getByRole<HTMLButtonElement>("button", { name: "Site Tilt" }) : screen.getByRole<HTMLButtonElement>("combobox", { name: "Tilt" });
+  expect(tilt.disabled).toBe(true);
+  expect(tilt.textContent).toContain("Lowest available");
+  await waitFor(() => { expect(call).toHaveBeenCalledWith("get_radar_site_frame", { site: "MF94", product: "reflectivity", validTime: "2026-10-17T08:00:00Z", tilt: "0" }); });
+  expect(call.mock.calls.some(([command, args]) => command === "get_radar_tilts" && args?.site === "MF94")).toBe(false);
+  if (controls === "toolbar") {
+    fireEvent.click(screen.getByRole("combobox", { name: "Network" }));
+    expect(screen.getByRole("option", { name: "New Caledonia" }).getAttribute("aria-description")).toBe("New Caledonia · MRRL");
   }
   view.unmount(); queryClient.clear();
 });

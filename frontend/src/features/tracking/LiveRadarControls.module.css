@@ -1,2 +1,3 @@
+.fields.fields { grid-template-columns: repeat(5, minmax(0, 1fr)); flex-basis: calc(var(--forecast-w) * 1.25); }
 .scanSlot { display: contents; }
 .scanSlot > button, .scanSlot + button, .scanSlot + * > button { border-inline-start: var(--hairline) solid var(--border-subtle); }

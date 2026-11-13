@@ -4,7 +4,7 @@
 
 import { useAppStore } from "../../stores/appStore";
 import { useGraphicsStore } from "../../stores/graphicsStore";
-import { panelLayers, useMapStore, type FocusRequest } from "../../stores/mapStore";
+import { panelLayers, panelWeather, useMapStore, type FocusRequest } from "../../stores/mapStore";
 import { BASEMAP_SOURCE_IDS } from "../basemap/basemapStyle";
 import { useMapNoticeStore } from "../notices/mapNoticeStore";
 import { documentVisibility, performanceClock } from "./mapOptions";
@@ -64,6 +64,10 @@ export function subscribeToStores(panel: number, reactions: StoreReactions): (()
         next[id].visible !== previous[id].visible,
       ));
     }),
+    useMapStore.subscribe((state) => panelWeather(state, panel), (next, previous) => {
+      if (next.radarScope !== previous.radarScope || next.radarSite !== previous.radarSite) reactions.selectionChanged();
+    }),
+    useMapStore.subscribe((state) => state.view, reactions.selectionChanged),
     useMapStore.subscribe((state) => state.layerOrder, () => { reactions.layersChanged(false); }),
     useMapStore.subscribe(
       (state) => state.focusRequest,

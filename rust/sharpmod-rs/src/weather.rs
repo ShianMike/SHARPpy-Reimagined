@@ -53,29 +53,35 @@ fn clear_weather_cache() {
     if let Some(inventory) = INVENTORY.get() {
         inventory.clear();
     }
-    sharpmod_weather::australian_radar::client().clear();
+    sharpmod_weather::radar_provider::clear();
 }
 
 #[pyfunction(signature = (public=false))]
-fn radar_sites(public: bool) -> PyResult<String> {
-    let sites = sharpmod_weather::radar_sites::sites();
+fn radar_sites(py: Python<'_>, public: bool) -> PyResult<String> {
     let result = if public {
+        let runtime = runtime()?;
+        let sites = py.detach(move || runtime.block_on(sharpmod_weather::radar_provider::sites()));
         let sites: Vec<_> = sites
             .iter()
             .map(|site| {
                 let mut entry =
                     serde_json::json!({ "id": site.id, "lat": site.lat, "lon": site.lon });
-                if site.country.as_deref() == Some("AU") {
-                    entry["name"] = serde_json::json!(site.name);
+                if let Some(name) = &site.name {
+                    entry["name"] = serde_json::json!(name);
+                }
+                if site.country.is_some() {
                     entry["country"] = serde_json::json!(site.country);
                     entry["products"] = serde_json::json!(site.products);
+                }
+                if let Some(provider) = &site.provider {
+                    entry["provider"] = serde_json::json!(provider);
                 }
                 entry
             })
             .collect();
         serde_json::json!({"sites": sites})
     } else {
-        serde_json::json!({"sites": sites})
+        serde_json::json!({"sites": sharpmod_weather::radar_sites::sites()})
     };
     serde_json::to_string(&result).map_err(|error| PyRuntimeError::new_err(error.to_string()))
 }
@@ -87,18 +93,18 @@ fn australian_radar_frame(py: Python<'_>, request: &str) -> PyResult<Option<Stri
     let runtime = runtime()?;
     py.detach(move || {
         let frame = runtime
-            .block_on(
-                sharpmod_weather::australian_radar::client()
-                    .fetch(request, OffsetDateTime::now_utc()),
-            )
+            .block_on(sharpmod_weather::radar_provider::fetch(
+                request,
+                OffsetDateTime::now_utc(),
+            ))
             .map_err(|error| match error {
-                sharpmod_weather::australian_radar::Error::Invalid(message) => {
+                sharpmod_weather::radar_provider::Error::Invalid(message) => {
                     PyValueError::new_err(message)
                 }
-                sharpmod_weather::australian_radar::Error::ScanMissing => {
+                sharpmod_weather::radar_provider::Error::ScanMissing => {
                     WeatherRadarScanMissing::new_err(error.to_string())
                 }
-                sharpmod_weather::australian_radar::Error::Fetch(message) => {
+                sharpmod_weather::radar_provider::Error::Fetch(message) => {
                     PyRuntimeError::new_err(message)
                 }
             })?;

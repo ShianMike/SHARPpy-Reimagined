@@ -53,3 +53,23 @@ it("passes station and coordinate focus requests through without changing select
     expect(focus).toHaveBeenLastCalledWith({ stationId: "KTLX", position, seq: (saved.focusRequest?.seq ?? 0) + 2 });
   } finally { unsubscribers.forEach((unsubscribe) => { unsubscribe(); }); useMapStore.setState(saved); }
 });
+
+it("redraws the affected panel immediately for radar selection and view changes", () => {
+  const saved = useMapStore.getState(), selectionChanged = vi.fn();
+  useMapStore.setState({ view: "live", panelLayout: 2, activePanel: 1 });
+  const unsubscribers = subscribeToStores(1, {
+    selectionChanged, layersChanged: vi.fn(), focus: vi.fn(), profileChanged: vi.fn(), pixelRatioChanged: vi.fn(),
+  });
+  try {
+    useMapStore.getState().setRadarScope("site");
+    useMapStore.getState().setRadarSite("KTLX");
+    expect(selectionChanged).toHaveBeenCalledTimes(2);
+    useMapStore.getState().setRadarProduct("velocity");
+    expect(selectionChanged).toHaveBeenCalledTimes(2);
+    useMapStore.getState().setActivePanel(0);
+    useMapStore.getState().setRadarSite("KOUN");
+    expect(selectionChanged).toHaveBeenCalledTimes(2);
+    useMapStore.setState({ view: "map" });
+    expect(selectionChanged).toHaveBeenCalled();
+  } finally { unsubscribers.forEach((unsubscribe) => { unsubscribe(); }); useMapStore.setState(saved, true); }
+});

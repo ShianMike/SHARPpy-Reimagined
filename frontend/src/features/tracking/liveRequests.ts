@@ -6,7 +6,7 @@ import { panelLayers, panelWeather, type MapState } from "../../stores/mapStore"
 import type { SurfaceAnchor } from "../../map/surfaceQueries";
 import { RADAR_TILTABLE_PRODUCTS, RADAR_TILTS, type RadarSite, type RadarSiteCatalog, type RadarTilts } from "../../types/map";
 import { radarTiltQuery } from "../../map/radarTiltQueries";
-import { isAustralianRadarSite, panelRadar } from "../../map/panelRadar";
+import { isFixedScanRadarSite, panelRadar } from "../../map/panelRadar";
 
 export interface LiveRequest {
   queryKey: QueryKey;
@@ -21,7 +21,7 @@ export function fetchLiveRequest(queryClient: QueryClient, request: LiveRequest,
     gcTime: Number.POSITIVE_INFINITY, retry: false });
 }
 
-/** Use the same addresses as the displayed layers, keeping native source quality. */
+/** Use the same source addresses as the displayed layers. */
 export function liveRequests(client: BackendClient, state: MapState, site: string | null, anchor: SurfaceAnchor | null, time: string, sites: readonly RadarSite[] = [], panel?: number): LiveRequest[] {
   if (panel === undefined) {
     const requests = Array.from({ length: state.panelLayout }, (_, index) => liveRequests(client, state, site, anchor, time, sites, index)).flat();
@@ -46,7 +46,7 @@ export function liveRequests(client: BackendClient, state: MapState, site: strin
 /** Warm native radar cuts after the displayed scans, two requests at a time. */
 export async function preloadRadarTilts(client: BackendClient, queryClient: QueryClient, state: MapState, site: string | null, time: string, stopped: () => boolean): Promise<void> {
   const sites = queryClient.getQueryData<RadarSiteCatalog>(mapKeys.radarSites)?.sites ?? [];
-  const current = liveRequests(client, state, site, null, time, sites).filter(({ queryKey }) => queryKey[0] === "radar-site" && !isAustralianRadarSite(String(queryKey[2])) && RADAR_TILTABLE_PRODUCTS.some((product) => product === queryKey[1]));
+  const current = liveRequests(client, state, site, null, time, sites).filter(({ queryKey }) => queryKey[0] === "radar-site" && !isFixedScanRadarSite(String(queryKey[2]), sites.find((entry) => entry.id === queryKey[2])) && RADAR_TILTABLE_PRODUCTS.some((product) => product === queryKey[1]));
   if (current.length === 0 || stopped()) return;
   const fetch = (request: LiveRequest): Promise<unknown> => queryClient.query({ ...BASE_QUERY_OPTIONS, ...request, staleTime: Number.POSITIVE_INFINITY, gcTime: Number.POSITIVE_INFINITY, retry: false });
   await Promise.allSettled(current.map(fetch));

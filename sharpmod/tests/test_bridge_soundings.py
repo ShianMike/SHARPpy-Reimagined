@@ -622,7 +622,7 @@ def test_render_returns_the_png_and_reuses_it(monkeypatch, opened):
     drawn = []
 
     class StandIn:
-        def render(self, infile, outfile, parcel, image_mode):
+        def render(self, infile, outfile, parcel, image_mode, *, color_style="standard"):
             drawn.append((Path(infile).name, parcel, image_mode))
             Path(outfile).write_bytes(FAKE_PNG)
 

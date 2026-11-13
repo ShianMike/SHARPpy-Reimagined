@@ -7,6 +7,35 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Target version: **3.7.0** (not published).
+
+### Added
+
+- Add DWD's 17 German radar sites and live individual-site DX
+  precipitation-scan reflectivity. Preserve source values and per-ray scan
+  angles, mask clutter, show source attribution, and report missing or stale
+  scans. Add a network selector and a documented worldwide radar inventory.
+- Discover European OPERA radar sites and show compatible, attributed
+  single-site DBZH reflectivity scans across ODIM 2.0–2.4 in 8-bit, 16-bit and
+  floating-point encodings, preserving source calibration, exact hover values
+  and ray geometry. Unsupported formats and licences remain unavailable.
+- Add eleven Météo-France radar sites in France and overseas via MRRL InterRAD,
+  with lowest-available reflectivity, source credits and capability-aware
+  controls. Show standing radar-source credits in the Live Tracking legend.
+
+### Fixed
+
+- Restore dark, light and protanopia sounding display choices in Appearance
+  settings, preserving the selection across sessions and applying it to
+  interactive, edited and exported sounding images.
+- Show radar station codes in Live Tracking map labels, site pickers, search
+  results, scan history and hover readouts. Keep place names searchable and use
+  compact ODIM node codes for OPERA without changing saved station IDs. Keep
+  the saved site's code visible if its catalogue entry is unavailable.
+- Make Live Tracking radar site labels clickable to select that site on the
+  clicked panel, highlight the active selected site label border in green, and
+  highlight unavailable site label borders in red.
+
 ### Upcoming
 
 - Expand the available weather-model parameters, offering only fields supported

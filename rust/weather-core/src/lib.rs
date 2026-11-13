@@ -2,10 +2,14 @@
 
 pub mod alerts;
 pub mod australian_radar;
+pub mod dwd_radar;
 mod http;
 pub mod map_fields;
 pub mod model_http;
+pub mod opera_radar;
+pub mod polar_radar;
 pub mod radar;
+pub mod radar_provider;
 pub mod radar_sites;
 pub mod range_http;
 pub mod reports;

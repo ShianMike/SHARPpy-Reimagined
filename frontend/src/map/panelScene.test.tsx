@@ -43,16 +43,20 @@ it("exposes image decode failure, ignores an obsolete rejection, and retries the
   const newer = { png: new Blob(["new"]), bounds, validTime: "2026-10-04T19:00:00Z" };
   const hook = renderHook(({ data, enabled }) => usePngImage({ data, isError: false, refetch }, enabled, "radar"),
     { initialProps: { data: older, enabled: true } });
+  expect(hook.result.current.decodedCurrent).toBe(false);
   hook.rerender({ data: newer, enabled: true });
   await waitFor(() => { expect(hook.result.current.issue).toContain("could not be decoded"); });
+  expect(hook.result.current.decodedCurrent).toBe(false);
   await act(async () => { rejectOld(new Error("obsolete")); await Promise.resolve(); });
   expect(hook.result.current.issue).toContain("could not be decoded");
   act(() => { hook.result.current.retry(); });
   await waitFor(() => { expect(hook.result.current.image).not.toBeNull(); });
   expect(hook.result.current.issue).toBeNull();
+  expect(hook.result.current.decodedCurrent).toBe(true);
   expect(refetch).toHaveBeenCalledTimes(1);
   hook.rerender({ data: newer, enabled: false });
   expect(hook.result.current.image).toBeNull();
+  expect(hook.result.current.decodedCurrent).toBe(false);
   act(() => { hook.result.current.retry(); });
   expect(refetch).toHaveBeenCalledTimes(1);
 });

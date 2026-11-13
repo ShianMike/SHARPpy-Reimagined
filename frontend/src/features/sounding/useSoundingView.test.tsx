@@ -11,10 +11,42 @@ import { createTransport } from "../../lib/backend/fixtureTransport";
 import { createQueryClient } from "../../lib/backend/queryOptions";
 import { parseSoundingSummary } from "../../lib/contracts/soundings";
 import { useSoundingStore } from "../../stores/soundingStore";
+import { useUiStore } from "../../stores/uiStore";
 import { useSoundingView } from "./useSoundingView";
 import { INITIAL_VIEW } from "./viewHistory";
 
-afterEach(() => { cleanup(); useSoundingStore.setState(useSoundingStore.getInitialState(), true); });
+afterEach(() => { cleanup(); useSoundingStore.setState(useSoundingStore.getInitialState(), true); useUiStore.setState({ soundingColorStyle: "standard" }); });
+
+it("redraws each palette and keeps an in-flight edit with the palette it requested", async () => {
+  useSoundingStore.getState().add({ ...parseSoundingSummary(summaryExample), soundingId: "profile" });
+  const cache = createQueryClient(), base = createTransport();
+  const calls: { colorStyle: unknown; edits: unknown[] }[] = [];
+  const png = btoa(String.fromCharCode(137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13));
+  let finish: (value: unknown) => void = () => undefined;
+  const client = new BackendClient({ ...base, call: (command, args) => {
+    if (command !== "render_sounding_view") return base.call(command, args);
+    const view = args?.view as { edits: unknown[] };
+    calls.push({ colorStyle: args?.colorStyle, edits: view.edits });
+    const response = { ...viewExample, width: 3260, height: 2198, edits: view.edits, image: png };
+    return view.edits.length > 0 && args?.colorStyle === "inverted" ? new Promise((resolve) => { finish = resolve; }) : Promise.resolve(response);
+  } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={cache}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>;
+  const hook = renderHook(() => useSoundingView("profile", "MU", "uhd"), { wrapper });
+  await waitFor(() => { expect(hook.result.current.ready).toBe(true); });
+  expect(calls.at(-1)?.colorStyle).toBe("standard");
+  act(() => { useUiStore.getState().setSoundingColorStyle("inverted"); });
+  await waitFor(() => { expect(hook.result.current.ready).toBe(true); expect(calls.at(-1)?.colorStyle).toBe("inverted"); });
+  const edits = [{ index: 0, values: { tmpc: 35 } }];
+  act(() => { hook.result.current.edit.mutate({ edits }); });
+  await waitFor(() => { expect(cache.isMutating()).toBe(1); expect(calls.at(-1)).toEqual({ colorStyle: "inverted", edits }); });
+  act(() => { useUiStore.getState().setSoundingColorStyle("protanopia"); });
+  await waitFor(() => { expect(calls.at(-1)).toEqual({ colorStyle: "protanopia", edits: [] }); });
+  act(() => { finish({ ...viewExample, width: 3260, height: 2198, edits, image: png }); });
+  await waitFor(() => { expect(hook.result.current.ready).toBe(true); expect(calls.at(-1)).toEqual({ colorStyle: "protanopia", edits }); });
+  expect(useSoundingStore.getState().views.profile?.history.at(-1)).toEqual(edits);
+  expect(cache.getQueryData(["soundings", "profile", "view", 0, "MU", "uhd", "inverted", { edits }])).toBeDefined();
+  hook.unmount(); cache.clear();
+});
 
 it.each([false, true])("retains pending edit ownership after remount and ignores a replaced view (%s)", async (replaceView) => {
   const store = useSoundingStore.getState();

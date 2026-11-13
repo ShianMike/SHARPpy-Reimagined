@@ -1,4 +1,33 @@
 {
+  "3.7.0": {
+    "summary": "Explore more radar networks and choose how your sounding images look.",
+    "highlights": [
+      {
+        "title": "German radar sites",
+        "description": "View precipitation-scan reflectivity from 17 DWD radar sites, with source attribution and measured values where available. The scan elevation varies by direction."
+      },
+      {
+        "title": "European OPERA radar",
+        "description": "Discover European radar sites and view compatible lowest-elevation reflectivity scans, including high-precision 16-bit and floating-point sweeps, with their source credits. Availability depends on each station's data format and license."
+      },
+      {
+        "title": "French radar via MRRL",
+        "description": "View reflectivity from additional Météo-France sites in France and overseas through MRRL InterRAD. Find radar-source credits in the Live Tracking legend."
+      },
+      {
+        "title": "Choose a radar network",
+        "description": "Filter the site picker by network and move to a nearby radar in the selected network. Product and elevation controls follow each source's available capabilities."
+      },
+      {
+        "title": "Radar station codes",
+        "description": "See codes like KTLX, DESS and NOHUR on the map and in Live Tracking controls, and search by code or place name. Click a radar label on the map to select it; selected labels use a green border and unavailable sites are highlighted in red."
+      },
+      {
+        "title": "Sounding display colors",
+        "description": "Choose Dark, Light or Protanopia for sounding images in Settings → Appearance. Your choice is saved and applies to edited and exported soundings."
+      }
+    ]
+  },
   "3.6.0": {
     "summary": "Native box soundings, a more compact workspace and clearer controls and recovery throughout the app.",
     "highlights": [

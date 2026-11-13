@@ -36,6 +36,7 @@ it("cancels without changing the setup, then resets preferences while keeping op
   map.setCameraSnapshot({ center: [-90, 40], zoom: 5 });
   useForecastStore.getState().setModel("namnest");
   useUiStore.getState().setTheme("dark");
+  useUiStore.getState().setSoundingColorStyle("protanopia");
   useUiStore.getState().setSpeed(2);
   useUiStore.getState().setLoop(false);
   useUiStore.getState().setUnits({ temperature: "°C", wind: "m/s" });
@@ -53,6 +54,7 @@ it("cancels without changing the setup, then resets preferences while keeping op
   await user.click(screen.getByRole("button", { name: "Cancel" }));
   expect(useMapStore.getState()).toBe(before);
   expect(useUiStore.getState().theme).toBe("dark");
+  expect(useUiStore.getState().soundingColorStyle).toBe("protanopia");
   await user.click(screen.getByRole("button", { name: "Reset all settings…" }));
   await user.click(screen.getByRole("button", { name: "Reset now" }));
   expect(screen.getByRole("status").textContent).toBe("Settings reset to defaults.");
@@ -60,7 +62,7 @@ it("cancels without changing the setup, then resets preferences while keeping op
   for (let panel = 0; panel < 4; panel++) expect(panelLayers(useMapStore.getState(), panel)).toEqual(panelLayers(initialMap, panel));
   expect(useForecastStore.getState()).toEqual(initialForecast);
   expect(useUiStore.getState()).toEqual({ ...initialUi, lastVersion: "3.1.0" });
-  expect(JSON.parse(localStorage.getItem("sharppy-workspace-ui") ?? "{}")).toMatchObject({ state: { lastVersion: "3.1.0", theme: "system", units: initialUi.units, speed: 1, loop: true, popupPositions: {} } });
+  expect(JSON.parse(localStorage.getItem("sharppy-workspace-ui") ?? "{}")).toMatchObject({ state: { lastVersion: "3.1.0", theme: "system", soundingColorStyle: "standard", units: initialUi.units, speed: 1, loop: true, popupPositions: {} } });
   expect(useGraphicsStore.getState()).toMatchObject({ override: "auto", renderer: "ready", mapAttempt: 7 });
   expect(useAppStore.getState().selectedPoint).toEqual({ latitude: 40, longitude: -90 });
   expect(useSoundingStore.getState()).toBe(openWork);

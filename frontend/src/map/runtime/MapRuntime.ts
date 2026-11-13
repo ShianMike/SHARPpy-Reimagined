@@ -100,7 +100,7 @@ export class MapRuntime implements RuntimeEventTarget {
   /** The field, overlays, domain, and places this panel draws. */
   setScene(patch: Partial<SceneData>): void {
     if (!this.disposed && this.scene?.setData(patch) === true) {
-      if (patch.places !== undefined || patch.radarSites !== undefined || patch.surfacePlots !== undefined || patch.contours !== undefined) {
+      if (patch.places !== undefined || patch.radarSites !== undefined || patch.surfacePlots !== undefined || patch.contours !== undefined || patch.selectedRadarSite !== undefined) {
         this.redraw();
       } else {
         this.scene.render();

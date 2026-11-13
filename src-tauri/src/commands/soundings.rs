@@ -3,7 +3,9 @@
 use crate::dto::analysis::{SoundingAnalysis, SoundingTrends};
 use crate::dto::models::{ModelCatalog, ModelStatus};
 use crate::dto::sounding_progress::SoundingProgress;
-use crate::dto::soundings::{ImageMode, OpenSoundingRequest, RenderParcel, SoundingSummary};
+use crate::dto::soundings::{
+    ImageMode, OpenSoundingRequest, RenderParcel, SoundingColorStyle, SoundingSummary,
+};
 use crate::dto::threshold_catalog::{ThresholdCsv, ThresholdMetrics};
 use crate::dto::thresholds::{ThresholdDefinitionInput, ThresholdEvaluation};
 use crate::dto::wrf::WrfFile;
@@ -88,6 +90,7 @@ pub async fn render_sounding(
     sounding_id: String,
     ascent: Option<RenderParcel>,
     image_mode: Option<ImageMode>,
+    color_style: Option<SoundingColorStyle>,
 ) -> Result<tauri::ipc::Response, BackendError> {
     let bytes = state
         .router
@@ -95,6 +98,7 @@ pub async fn render_sounding(
             &sounding_id,
             ascent.unwrap_or_default(),
             image_mode.unwrap_or_default(),
+            color_style.unwrap_or_default(),
         )
         .await?;
     Ok(tauri::ipc::Response::new(bytes))
@@ -108,10 +112,17 @@ pub async fn render_sounding_view(
     ascent: RenderParcel,
     image_mode: ImageMode,
     view: serde_json::Value,
+    color_style: Option<SoundingColorStyle>,
 ) -> Result<serde_json::Value, BackendError> {
     state
         .router
-        .render_sounding_view(&sounding_id, ascent, image_mode, view)
+        .render_sounding_view(
+            &sounding_id,
+            ascent,
+            image_mode,
+            view,
+            color_style.unwrap_or_default(),
+        )
         .await
 }
 

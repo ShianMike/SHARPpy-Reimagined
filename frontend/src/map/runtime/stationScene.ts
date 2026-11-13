@@ -4,31 +4,24 @@
 // hands the registry's layers to the overlay. Data keeps stable references,
 // so a rebuild never re-uploads a buffer that did not change.
 
-import type { Layer, PickingInfo } from "@deck.gl/core";
+import type { Layer } from "@deck.gl/core";
 import { IconLayer, TextLayer } from "@deck.gl/layers";
 import type { MapLibreOverlay } from "@deck.gl/maplibre";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useAppStore } from "../../stores/appStore";
-import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
 import { useGraphicsStore } from "../../stores/graphicsStore";
-import { mapProjection, panelLayers, useMapStore } from "../../stores/mapStore";
+import { mapProjection, panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
 import { stationIndex } from "../../stations/stationIndex";
 import type { Station } from "../../types/contracts";
-import { OUTLOOK_KEYS, type Place, type RadarSite, type ReportPoint } from "../../types/map";
+import { OUTLOOK_KEYS, type Place, type RadarSite } from "../../types/map";
 import type { CanvasTokens } from "../canvasTokens";
-import { useHoverStore } from "../hover/hoverStore";
 import { declutter, declutterPoints } from "../labels/declutter";
 import { declutterCellFor, equivalentSpan, labelTierFor, longitudeSpan } from "../labels/labelPolicy";
 import { selectPlaceLabels } from "../labels/placeLabels";
 import { LAYER_REGISTRY } from "../layers/descriptors";
 import { buildDeckLayers, layerInView, NO_SCENE_DATA, type LabelSelection, type LayerBuildContext, type LayerId, type LayerState, type SceneData } from "../layers/registry";
-import type { AlertShape } from "../layers/WeatherAlertLayer";
-import { formatUtc } from "../../features/sounding/soundingTime";
-import type { AreaFill } from "../layers/SPCOutlookLayer";
-import { STATIONS_LAYER_ID, STATION_LABELS_LAYER_ID } from "../layers/StationLayer";
-import { REPORTS_LAYER_ID } from "../layers/StormReportLayer";
-import { SURFACE_LAYER_ID } from "../layers/SurfacePlotLayer";
 import { selectWindBarbs, type WindBarb } from "../layers/WindBarbLayer";
+import { radarSiteCode } from "../panelRadar";
 import type { WindBarbGrid } from "../../types/map";
 import type { SurfacePlot } from "../../types/surface";
 
@@ -132,15 +125,29 @@ export class StationScene {
       this.windView = view;
       this.windBarbs = wind === null ? [] : selectWindBarbs(wind, map, profile === "low" ? 88 : 64);
     }
-    const layers = panelLayers(useMapStore.getState(), this.panel);
+    const state = useMapStore.getState();
+    const layers = panelLayers(state, this.panel);
+    const weather = panelWeather(state, this.panel);
+    const radarId = weather.radarScope === "site" ? weather.radarSite ?? this.data.selectedRadarSite ?? null : null;
     const labelView = [view, window.innerWidth, useAppStore.getState().selectedStationId,
-      layers.stations.visible, layers["station-labels"].visible, layers["place-labels"].visible].join();
+      layers.stations.visible, layers["station-labels"].visible, layers["place-labels"].visible, weather.radarScope, this.data.selectedRadarSite, radarId].join();
     const inputs = [this.stations, this.data.radarSites, this.data.surfacePlots, this.data.places];
     if (labelView === this.labelView && inputs.every((input, index) => input === this.labelInputs[index])) return;
     this.labelView = labelView;
     this.labelInputs = inputs;
-    this.radarSiteLabels = declutterPoints(this.data.radarSites, (site) => project(site.longitude, site.latitude), viewport,
-      5 * this.tokens.lengths.labelSize);
+    const radarLabels = [...this.data.radarSites];
+    const pinned = radarLabels.findIndex((site) => site.id === radarId);
+    if (pinned > 0) radarLabels.unshift(...radarLabels.splice(pinned, 1));
+    const { labelSize, stationRadius } = this.tokens.lengths;
+    const occupied: { x: number; y: number; halfWidth: number }[] = [];
+    this.radarSiteLabels = radarLabels.filter((site) => {
+      const { x, y } = project(site.longitude, site.latitude);
+      if (!(x >= 0 && x <= viewport.width && y >= 0 && y <= viewport.height)) return false;
+      const halfWidth = Math.max(2.5, radarSiteCode(site.id).length * 0.35) * labelSize + 2 * stationRadius;
+      if (occupied.some((label) => Math.abs(y - label.y) < 2 * labelSize && Math.abs(x - label.x) < halfWidth + label.halfWidth)) return false;
+      occupied.push({ x, y, halfWidth });
+      return true;
+    });
     const plots = [...(this.data.surfacePlots ?? [])].sort((a, b) =>
       Number(b.availability === "available") - Number(a.availability === "available") || Number(a.stale) - Number(b.stale) || a.id.localeCompare(b.id),
     );
@@ -182,6 +189,7 @@ export class StationScene {
   render(): void {
     const mapState = useMapStore.getState();
     const layers = panelLayers(mapState, this.panel);
+    const weather = panelWeather(mapState, this.panel);
     const app = useAppStore.getState();
     const selectedId = app.selectedStationId;
     const built: Layer[] = buildDeckLayers(
@@ -199,6 +207,7 @@ export class StationScene {
         labelFont: this.labelFont,
         placeLabels: this.placeLabels,
         radarSites: this.radarSiteLabels,
+        selectedRadarSite: mapState.view === "live" && weather.radarScope === "site" ? weather.radarSite ?? this.data.selectedRadarSite ?? null : null,
         span: this.span,
         basemap: layers.basemap,
         weatherShown: weatherShown(layers, this.data),
@@ -219,65 +228,4 @@ export class StationScene {
   }
 }
 
-function pickedStation(info: PickingInfo): Station | undefined {
-  return info.layer?.id === STATIONS_LAYER_ID || info.layer?.id === STATION_LABELS_LAYER_ID ? (info.object ?? undefined) as Station | undefined : undefined;
-}
-
-function pickedReport(info: PickingInfo): ReportPoint | undefined {
-  return info.layer?.id === REPORTS_LAYER_ID || info.layer?.id === `${REPORTS_LAYER_ID}-captions`
-    ? (info.object ?? undefined) as ReportPoint | undefined : undefined;
-}
-
-function pickedSurfacePlot(info: PickingInfo): SurfacePlot | undefined {
-  return (info.layer?.id === SURFACE_LAYER_ID || info.layer?.id === `${SURFACE_LAYER_ID}-wind`)
-    ? (info.object as import("../layers/SurfacePlotLayer").MarkItem | undefined)?.plot
-    : undefined;
-}
-
-function pickedOutlook(info: PickingInfo): AreaFill | undefined {
-  const id = info.layer?.id ?? "";
-  return id.startsWith("spc-") && id.endsWith("-fill") ? (info.object ?? undefined) as AreaFill | undefined : undefined;
-}
-
-/** deck.gl onHover: only the hover store changes. `origin` is the panel's viewport offset. */
-export function hoverFromPick(info: PickingInfo, panel: number, origin: { left: number; top: number }): void {
-  if (!useHoverStore.getState().inspecting) return;
-  const x = origin.left + info.x;
-  const y = origin.top + info.y;
-  const station = pickedStation(info);
-  const area = station === undefined ? pickedOutlook(info) : undefined;
-  const alert = station === undefined && /^(warnings|watches)(-|$)/u.test(info.layer?.id ?? "") ? (info.object as AlertShape | undefined)?.alert : undefined;
-  const report = station === undefined && area === undefined ? pickedReport(info) : undefined;
-  // A station model under the pointer reads as its own hover block, sharing
-  // the mark tooltip: the label, the provider's description, no caption.
-  const plot =
-    station === undefined && area === undefined && report === undefined
-      ? pickedSurfacePlot(info)
-      : undefined;
-  const at = info.coordinate;
-  useHoverStore.setState({
-    hovered: station === undefined ? null : { stationId: station.id, x, y },
-    outlook: alert !== undefined ? { label: alert.event, description: alert.event, title: `NWS ${alert.office}`, subtitle: `Issued ${formatUtc(alert.issued)} · Expires ${formatUtc(alert.expires)}`, x, y }
-      : area === undefined ? null : { label: area.area.label, description: area.area.description, title: area.outlook.title, subtitle: area.outlook.subtitle, x, y },
-    report: report !== undefined ? { label: report.label, description: report.description, caption: report.caption, x, y }
-      : plot === undefined ? null : { label: plot.label, description: plot.description, caption: "", ...(plot.availability === "available" ? { observation: { temperatureC: plot.temperatureC, dewpointC: plot.dewpointC } } : {}), x, y },
-    pointer: at === undefined || !Number.isFinite(at[0]) || !Number.isFinite(at[1]) ? null
-      : { panel, longitude: at[0] ?? 0, latitude: at[1] ?? 0, x: info.x, y: info.y },
-  });
-}
-
-/** Stations remain selectable; free points belong to Model Viewer. */
-export function clickFromPick(info: PickingInfo): void {
-  if (useMapStore.getState().view === "map" && useBoxSoundingStore.getState().mode === "box") return;
-  const station = pickedStation(info);
-  if (station !== undefined) {
-    useAppStore.getState().selectStation(station.id);
-    return;
-  }
-  if (useMapStore.getState().view === "live") return;
-  const plot = pickedSurfacePlot(info);
-  const at = plot === undefined ? info.coordinate : [plot.longitude, plot.latitude];
-  if (at !== undefined && Number.isFinite(at[0]) && Number.isFinite(at[1])) {
-    useAppStore.getState().selectPoint({ longitude: at[0] ?? 0, latitude: at[1] ?? 0 });
-  }
-}
+export { clickFromPick, hoverFromPick } from "./stationPicking";

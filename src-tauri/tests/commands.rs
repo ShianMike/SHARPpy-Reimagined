@@ -90,6 +90,28 @@ fn parse<T: DeserializeOwned>(value: Value) -> T {
 }
 
 #[test]
+fn sounding_view_passes_the_selected_palette_to_the_bridge() {
+    let launcher = FakeLauncher::with(vec![script(|mut io| async move {
+        for style in ["protanopia", "standard"] {
+            let request = io.expect("soundings.view").await.unwrap();
+            assert_eq!(request["params"]["color_style"], style);
+            io.reply(&request["id"], serde_json::json!({"image": "iVBORw0KGgo="}))
+                .await;
+        }
+        0
+    })]);
+    let (_app, webview) = window(launcher);
+    let args = serde_json::json!({"soundingId": "abc123", "ascent": "MU", "imageMode": "hd", "view": {"edits": []}});
+    let mut selected = args.clone();
+    selected["colorStyle"] = serde_json::json!("protanopia");
+    assert!(invoke_args(&webview, "render_sounding_view", selected).is_ok());
+    assert!(invoke_args(&webview, "render_sounding_view", args.clone()).is_ok());
+    let mut invalid = args;
+    invalid["colorStyle"] = serde_json::json!("unknown");
+    assert!(invoke_args(&webview, "render_sounding_view", invalid).is_err());
+}
+
+#[test]
 fn global_forecast_cache_accepts_f384_and_rejects_later_hours() {
     let launcher = FakeLauncher::with(vec![script(|mut io| async move {
         for (model, count) in [("aigfs", 4), ("gfs", 209)] {

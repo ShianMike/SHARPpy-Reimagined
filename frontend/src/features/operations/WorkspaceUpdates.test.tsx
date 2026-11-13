@@ -188,7 +188,7 @@ it("keeps a bounded log and captures application errors with removable listeners
 it("keeps appearance, playback and graphics settings functional across sections", async () => {
   render(<SettingsView />);
   const user = userEvent.setup();
-  await user.click(screen.getByRole("radio", { name: /Dark/u }));
+  await user.click(screen.getByRole("radio", { name: /^Dark/u }));
   expect(useUiStore.getState().theme).toBe("dark");
   await user.click(screen.getByRole("button", { name: "Playback" }));
   await user.click(screen.getByRole("radio", { name: "2×" }));
@@ -201,7 +201,7 @@ it("keeps appearance, playback and graphics settings functional across sections"
   await user.click(screen.getByRole("button", { name: "Device Info" }));
   expect(screen.getByTestId("capability-table")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Appearance" }));
-  expect(screen.getByRole<HTMLInputElement>("radio", { name: /Dark/u }).checked).toBe(true);
+  expect(screen.getByRole<HTMLInputElement>("radio", { name: /^Dark/u }).checked).toBe(true);
   await waitFor(() => { expect(JSON.parse(localStorage.getItem("sharppy-workspace-ui") ?? "{}")).toMatchObject({ state: { theme: "dark", speed: 2 } }); });
   fireEvent.click(screen.getByRole("radio", { name: /System/u }));
 });

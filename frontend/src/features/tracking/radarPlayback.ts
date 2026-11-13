@@ -1,5 +1,6 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { failureOf } from "../../lib/backend/errors";
+import { radarSiteCode } from "../../map/panelRadar";
 import { LIVE_MINUTE } from "../../stores/liveTrackingStore";
 import type { RadarFrame } from "../../types/map";
 import { formatUtc } from "../sounding/soundingTime";
@@ -15,7 +16,7 @@ export function radarPlaybackFrame(client: QueryClient, keys: readonly QueryKey[
   const scans = keys.map((key): { state: RadarFrameState; detail: string } => {
     const query = client.getQueryState<RadarFrame>(key);
     const data = query?.data;
-    const source = `${key[0] === "radar-site" ? String(key[2]) : "Mosaic"} · ${data?.label ?? (key[1] === "default" ? "Radar" : String(key[1]))}`;
+    const source = `${key[0] === "radar-site" ? radarSiteCode(String(key[2])) : "Mosaic"} · ${data?.label ?? (key[1] === "default" ? "Radar" : String(key[1]))}`;
     const scan = data?.validTime == null ? "" : ` · Scan ${formatUtc(data.validTime)} UTC`;
     if (query?.fetchStatus === "fetching" || query?.fetchStatus === "paused") return { state: "loading", detail: `${source}: Loading${scan}` };
     if (query?.status === "error") return failureOf(query.error)?.details?.reason === "scanMissing"

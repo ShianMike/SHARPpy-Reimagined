@@ -281,9 +281,11 @@ impl Router {
         }
         let native_request = serde_json::from_value(params.clone())
             .map_err(|reason| invalid(&context, &format!("Invalid radar request: {reason}")))?;
-        match sharpmod_weather::australian_radar::client()
-            .fetch(native_request, time::OffsetDateTime::now_utc())
-            .await
+        match sharpmod_weather::radar_provider::fetch(
+            native_request,
+            time::OffsetDateTime::now_utc(),
+        )
+        .await
         {
             Ok(Some(frame)) => {
                 let frame: RadarSiteResult = serde_json::from_value(
@@ -298,8 +300,7 @@ impl Router {
             Ok(None) => {}
             Err(error) => {
                 return Err(BackendError {
-                    code: if matches!(error, sharpmod_weather::australian_radar::Error::Invalid(_))
-                    {
+                    code: if matches!(error, sharpmod_weather::radar_provider::Error::Invalid(_)) {
                         crate::error::ErrorCode::InvalidArgument
                     } else {
                         crate::error::ErrorCode::OverlayFetchFailed
@@ -307,19 +308,16 @@ impl Router {
                     message: error.to_string(),
                     retryable: !matches!(
                         error,
-                        sharpmod_weather::australian_radar::Error::Invalid(_)
+                        sharpmod_weather::radar_provider::Error::Invalid(_)
                     ),
                     context: Some(Box::new(context)),
-                    details: matches!(
-                        error,
-                        sharpmod_weather::australian_radar::Error::ScanMissing
-                    )
-                    .then(|| {
-                        json!({"reason": "scanMissing"})
-                            .as_object()
-                            .expect("object")
-                            .clone()
-                    }),
+                    details: matches!(error, sharpmod_weather::radar_provider::Error::ScanMissing)
+                        .then(|| {
+                            json!({"reason": "scanMissing"})
+                                .as_object()
+                                .expect("object")
+                                .clone()
+                        }),
                 });
             }
         }

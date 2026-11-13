@@ -1,6 +1,5 @@
-//! Sounding and forecast-model operations. All are served by the Python
-//! bridge today (`sharpmod/bridge/soundings.py`); the frontend only sees the
-//! operation names, so any of them can move to Rust later.
+//! Sounding and forecast-model operations served by the Python bridge.
+//! The frontend sees operation names, so providers can move to Rust later.
 //!
 //! | Operation | Bridge method | Deadline |
 //! |---|---|---|
@@ -22,7 +21,7 @@ use crate::dto::checks::check_text;
 use crate::dto::models::{ModelCatalog, ModelStatus};
 use crate::dto::sounding_progress::SoundingProgress;
 use crate::dto::soundings::{
-    ImageMode, OpenSoundingRequest, RenderParcel, RenderResult, SoundingSummary,
+    ImageMode, OpenSoundingRequest, RenderParcel, RenderResult, SoundingColorStyle, SoundingSummary,
 };
 use crate::dto::wrf::WrfFile;
 use crate::error::{BackendError, BridgeFailure, ErrorCode, ErrorContext, PYTHON_PROVIDER};
@@ -312,6 +311,7 @@ impl Router {
         parcel: RenderParcel,
         image_mode: ImageMode,
         view: Value,
+        color_style: SoundingColorStyle,
     ) -> Result<Value, BackendError> {
         let context = ErrorContext::new(
             "render_sounding_view",
@@ -330,7 +330,7 @@ impl Router {
                 "soundings.view",
                 json!({
                     "sounding_id": sounding_id, "parcel": parcel.as_str(),
-                    "image_mode": image_mode.as_str(), "view": view,
+                    "image_mode": image_mode.as_str(), "view": view, "color_style": color_style,
                 }),
                 RENDER_TIMEOUT,
             )
@@ -355,6 +355,7 @@ impl Router {
         sounding_id: &str,
         parcel: RenderParcel,
         image_mode: ImageMode,
+        color_style: SoundingColorStyle,
     ) -> Result<Vec<u8>, BackendError> {
         let context = ErrorContext::new(OP_RENDER, Some(PYTHON_PROVIDER), Some("sounding image"));
         if !sounding_id_ok(sounding_id) {
@@ -368,6 +369,7 @@ impl Router {
                     "sounding_id": sounding_id,
                     "parcel": parcel.as_str(),
                     "image_mode": image_mode.as_str(),
+                    "color_style": color_style,
                 }),
                 RENDER_TIMEOUT,
             )

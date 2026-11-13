@@ -129,7 +129,7 @@ export function useRadarFrame(product: string | null, enabled: boolean, validTim
   });
 }
 
-/** The bundled radar catalogue; static for the life of the bridge. */
+/** The bundled catalogue and periodically refreshed OPERA sites. */
 export function useRadarSites(enabled: boolean): UseQueryResult<RadarSiteCatalog> {
   const client = useBackendClient();
   return useQuery({
@@ -137,7 +137,8 @@ export function useRadarSites(enabled: boolean): UseQueryResult<RadarSiteCatalog
     queryKey: mapKeys.radarSites,
     queryFn: () => client.getRadarSites(),
     enabled,
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: 15 * 60_000,
+    refetchInterval: 15 * 60_000,
   });
 }
 

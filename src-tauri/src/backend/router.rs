@@ -16,7 +16,7 @@ use serde_json::json;
 
 use crate::backend::convert;
 use crate::dto::health::{AppInfo, BackendHealth, BridgeStatus, ScientificBackendStatus};
-use crate::dto::map::{MapCatalog, PlaceLabels, RadarSiteCatalogPublic};
+use crate::dto::map::{MapCatalog, PlaceLabels};
 use crate::dto::models::ModelCatalog;
 use crate::dto::reports::ReportOptions;
 use crate::dto::rfc3339_utc_now;
@@ -42,8 +42,6 @@ pub struct Router {
     /// The map catalogue and the place names, static per bridge (backend/map_ops.rs).
     pub(crate) map_catalog: Mutex<Option<Arc<MapCatalog>>>,
     pub(crate) places: Mutex<Option<Arc<PlaceLabels>>>,
-    /// The radar site catalogue, static per bridge (backend/map_ops.rs).
-    pub(crate) radar_sites: Mutex<Option<Arc<RadarSiteCatalogPublic>>>,
     pub(crate) velocity_inventory: VelocityInventory,
     /// The storm report options, static per bridge (backend/reports_ops.rs).
     pub(crate) report_options: Mutex<Option<Arc<ReportOptions>>>,
@@ -60,7 +58,6 @@ impl Router {
             models: Mutex::new(None),
             map_catalog: Mutex::new(None),
             places: Mutex::new(None),
-            radar_sites: Mutex::new(None),
             velocity_inventory: VelocityInventory::new(),
             report_options: Mutex::new(None),
         }
@@ -158,10 +155,6 @@ impl Router {
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = None;
         *self.places.lock().unwrap_or_else(PoisonError::into_inner) = None;
-        *self
-            .radar_sites
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = None;
         *self
             .report_options
             .lock()

@@ -11,6 +11,7 @@ import { useBackendClient } from "../../lib/backend/BackendProvider";
 import { BASE_QUERY_OPTIONS, QUERY_KEYS, soundingKeys } from "../../lib/backend/queryOptions";
 import { useAppStore } from "../../stores/appStore";
 import { useSoundingStore } from "../../stores/soundingStore";
+import { useUiStore } from "../../stores/uiStore";
 import type {
   ModelCatalog,
   ForecastModel,
@@ -125,10 +126,11 @@ export function useOpenSounding(accept?: () => boolean): UseMutationResult<Sound
 
 export function useSoundingImage(soundingId: string | null, choice: RenderChoice): UseQueryResult<Blob> {
   const client = useBackendClient();
+  const colorStyle = useUiStore((store) => store.soundingColorStyle);
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: soundingKeys.image(soundingId ?? "", choice),
-    queryFn: () => client.renderSounding(soundingId ?? "", choice),
+    queryKey: [...soundingKeys.image(soundingId ?? "", choice), colorStyle],
+    queryFn: () => client.renderSounding(soundingId ?? "", choice, "hd", colorStyle),
     enabled: soundingId !== null,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: IMAGE_GC_MS,

@@ -151,3 +151,30 @@ it.each([
   expect(checks.mock.calls.map(([site]) => site)).toEqual(["KTLX", "KTLX"]);
   queryClient.clear();
 });
+
+it("uses provider metadata for MRRL playback without requesting NEXRAD tilts", async () => {
+  useAppStore.getState().setActiveWorkspace("live");
+  const state = useMapStore.getState();
+  state.setRadarScope("site"); state.setRadarSite("TEST"); state.setRadarProduct("velocity"); state.setRadarTilt("2");
+  const sites = [{ id: "TEST", country: "NC", provider: "MRRL", products: ["reflectivity"], latitude: -22.27, longitude: 166.45 }];
+  const client = new BackendClient(createTransport()), queryClient = createQueryClient();
+  queryClient.setQueryData(mapKeys.radarSites, { sites });
+  const frames = vi.spyOn(client, "getRadarSiteFrame"), tilts = vi.spyOn(client, "getRadarTilts");
+  const time = "2026-10-17T08:00:00Z";
+  expect(liveRequests(client, useMapStore.getState(), null, null, time, sites).map(({ queryKey }) => queryKey))
+    .toContainEqual(mapKeys.radarSite("reflectivity", "TEST", time, "0"));
+  await preloadRadarTilts(client, queryClient, useMapStore.getState(), null, time, () => false);
+  expect(frames).not.toHaveBeenCalled();
+  expect(tilts).not.toHaveBeenCalled();
+  queryClient.clear();
+});
+
+it("keeps Australian velocity while the site catalogue is loading", () => {
+  useAppStore.getState().setActiveWorkspace("live");
+  const state = useMapStore.getState();
+  state.setRadarScope("site"); state.setRadarSite("ABRD"); state.setRadarProduct("velocity"); state.setRadarTilt("2");
+  const time = "2026-10-17T08:00:00Z";
+  const client = new BackendClient(createTransport());
+  expect(liveRequests(client, useMapStore.getState(), null, null, time).map(({ queryKey }) => queryKey))
+    .toContainEqual(mapKeys.radarSite("velocity", "ABRD", time, "0"));
+});

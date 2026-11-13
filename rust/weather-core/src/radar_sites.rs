@@ -1,8 +1,8 @@
-//! Bundled US WSR-88D and Australian MRRL radar sites.
+//! Bundled radar sites and their provider-specific product capabilities.
 
-use std::sync::OnceLock;
+use std::{collections::HashMap, sync::OnceLock};
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct RadarSite {
     pub id: String,
     pub lat: f64,
@@ -14,6 +14,31 @@ pub struct RadarSite {
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub country: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wmo: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct SiteNames {
+    nexrad: HashMap<String, String>,
+    opera: HashMap<String, String>,
+}
+
+fn names() -> &'static SiteNames {
+    static NAMES: OnceLock<SiteNames> = OnceLock::new();
+    NAMES.get_or_init(|| {
+        serde_json::from_str(include_str!("../resources/radar_site_names.json"))
+            .expect("bundled radar site names")
+    })
+}
+
+pub(crate) fn opera_site_name(code: &str) -> Option<&'static str> {
+    names()
+        .opera
+        .get(&code.to_ascii_lowercase())
+        .map(String::as_str)
 }
 
 pub fn sites() -> &'static [RadarSite] {
@@ -26,10 +51,21 @@ pub fn sites() -> &'static [RadarSite] {
         let mut catalog: Catalog =
             serde_json::from_str(include_str!("../resources/radar_sites.json"))
                 .expect("bundled radar site catalogue");
+        for site in &mut catalog.sites {
+            site.name = names().nexrad.get(&site.id).cloned();
+        }
         let australia: Catalog =
             serde_json::from_str(include_str!("../resources/australian_radar_sites.json"))
                 .expect("bundled Australian radar site catalogue");
         catalog.sites.extend(australia.sites);
+        let germany: Catalog =
+            serde_json::from_str(include_str!("../resources/german_radar_sites.json"))
+                .expect("bundled German radar site catalogue");
+        catalog.sites.extend(germany.sites);
+        let mrrl: Catalog =
+            serde_json::from_str(include_str!("../resources/mrrl_radar_sites.json"))
+                .expect("bundled MRRL radar site catalogue");
+        catalog.sites.extend(mrrl.sites);
         catalog.sites
     })
 }
@@ -63,7 +99,11 @@ mod tests {
         let us: Vec<_> = sites()
             .iter()
             .filter(|site| site.country.is_none())
-            .map(|site| serde_json::to_value(site).unwrap())
+            .map(|site| {
+                let mut record = serde_json::to_value(site).unwrap();
+                assert!(record.as_object_mut().unwrap().remove("name").is_some());
+                record
+            })
             .collect();
         assert_eq!(serde_json::Value::Array(us), original["sites"]);
     }
@@ -86,6 +126,46 @@ mod tests {
         assert!(australia.iter().any(|site| site.id == "AWEP"));
         for alias in ["ADAM", "AFFW", "APER", "AWEI"] {
             assert!(!sites().iter().any(|site| site.id == alias));
+        }
+    }
+
+    #[test]
+    fn german_sites_describe_only_the_dx_product() {
+        let germany: Vec<_> = sites()
+            .iter()
+            .filter(|site| site.country.as_deref() == Some("DE"))
+            .collect();
+        assert_eq!(germany.len(), 17);
+        for site in germany {
+            assert_eq!(site.products, ["reflectivity"]);
+            assert!(site
+                .wmo
+                .as_ref()
+                .is_some_and(|id| id.len() == 5 && id.bytes().all(|c| c.is_ascii_digit())));
+        }
+    }
+
+    #[test]
+    fn mrrl_international_sites_have_verified_provider_countries_and_no_opera_duplicates() {
+        let mrrl: Vec<_> = sites()
+            .iter()
+            .filter(|site| site.provider.as_deref() == Some("MRRL"))
+            .collect();
+        assert_eq!(mrrl.len(), 11);
+        for site in &mrrl {
+            assert!(site.name.as_ref().is_some_and(|name| !name.is_empty()));
+            assert!(matches!(
+                site.country.as_deref(),
+                Some("FR" | "GP" | "MQ" | "RE" | "NC")
+            ));
+            assert_eq!(site.products, ["reflectivity"]);
+            assert_eq!(site.half_span_deg, 0.0);
+        }
+        let noumea = mrrl.iter().find(|site| site.id == "MF94").unwrap();
+        assert_eq!(noumea.name.as_deref(), Some("Nouméa"));
+        assert_eq!(noumea.country.as_deref(), Some("NC"));
+        for duplicate in ["MF40", "MF41", "MF50", "MF51", "SAPP", "CSKR"] {
+            assert!(!sites().iter().any(|site| site.id == duplicate));
         }
     }
 }

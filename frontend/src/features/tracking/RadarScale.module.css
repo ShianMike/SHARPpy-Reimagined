@@ -7,3 +7,4 @@
 .key img { width: 100%; height: auto; }
 .inline { display: grid; min-width: 0; gap: var(--space-2); }
 .inline > img { max-width: 100%; height: auto; }
+.attribution { position: absolute; right: var(--chrome-inset); bottom: calc(var(--player-h) + 2 * var(--chrome-inset)); z-index: var(--z-map-chip); max-width: min(44ch, calc(100% - 2 * var(--chrome-inset))); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); background: var(--surface-1); color: var(--text-primary); font-size: var(--font-size-caption); line-height: var(--line-height-tight); overflow-wrap: anywhere; text-align: right; pointer-events: none; }

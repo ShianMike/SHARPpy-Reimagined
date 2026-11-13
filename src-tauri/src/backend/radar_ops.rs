@@ -7,31 +7,19 @@ use crate::dto::radar::RadarTilts;
 use crate::dto::weather_alerts::alert_time;
 use crate::error::{BackendError, ErrorCode, ErrorContext, PYTHON_PROVIDER};
 use serde_json::json;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 use std::time::Duration;
 
 impl Router {
-    /// The bundled US and Australian catalogue backing the single-site picker.
+    /// The bundled and currently available OPERA radar sites.
     pub async fn radar_sites(&self) -> Result<Arc<RadarSiteCatalogPublic>, BackendError> {
-        if let Some(sites) = self
-            .radar_sites
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
-        {
-            return Ok(sites);
-        }
-        let catalog = Arc::new(RadarSiteCatalogPublic {
-            sites: sharpmod_weather::radar_sites::sites()
+        Ok(Arc::new(RadarSiteCatalogPublic {
+            sites: sharpmod_weather::radar_provider::sites()
+                .await
                 .iter()
                 .map(crate::dto::radar::RadarSite::from)
                 .collect(),
-        });
-        *self
-            .radar_sites
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&catalog));
-        Ok(catalog)
+        }))
     }
 
     pub async fn radar_tilts(
@@ -69,12 +57,13 @@ impl Router {
             .iter()
             .any(|candidate| {
                 candidate.id.eq_ignore_ascii_case(site)
-                    && candidate.country.as_deref() == Some("AU")
+                    && (matches!(candidate.country.as_deref(), Some("AU" | "DE"))
+                        || candidate.provider.as_deref() == Some("MRRL"))
             })
         {
             return Err(invalid(
                 &context,
-                "Australian radar uses its lowest available elevation.",
+                "This radar does not offer selectable NEXRAD elevations.",
             ));
         }
         if product == "velocity" {

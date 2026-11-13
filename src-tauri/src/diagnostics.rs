@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 
 use crate::backend::router::Router;
-use crate::dto::soundings::{ImageMode, OpenSoundingRequest, RenderParcel};
+use crate::dto::soundings::{ImageMode, OpenSoundingRequest, RenderParcel, SoundingColorStyle};
 use crate::error::BackendError;
 
 async fn check(router: &Router, sample: PathBuf) -> Result<Value, BackendError> {
@@ -34,7 +34,12 @@ async fn check(router: &Router, sample: PathBuf) -> Result<Value, BackendError> 
         )
         .await?;
     let image = router
-        .render_sounding(&summary.sounding_id, RenderParcel::Mu, ImageMode::Hd)
+        .render_sounding(
+            &summary.sounding_id,
+            RenderParcel::Mu,
+            ImageMode::Hd,
+            SoundingColorStyle::Standard,
+        )
         .await?;
     Ok(
         json!({ "ok": true, "health": health, "station_count": catalog.stations.len(),

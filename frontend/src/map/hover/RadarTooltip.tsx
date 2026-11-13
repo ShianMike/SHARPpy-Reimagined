@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
 import { usePanelRadar, useRadarSiteFrame } from "../mapQueries";
+import { radarSiteCode } from "../panelRadar";
 import { radarValues } from "../pngImages";
 import { radarCodeAt, type RadarValues } from "../radarValues";
 import { formatValue } from "../field/colourize";
@@ -36,5 +37,5 @@ export function RadarTooltip({ panel }: { panel: number }): ReactNode {
   const unit = displayUnit(frame.units, units, frame.palette?.display);
   const text = code === samples.folded ? "Range folded" : value == null ? "No data here"
     : `${samples.lowerBounds.has(code) ? "≥ " : ""}${frame.product === "correlation-coefficient" ? value.toFixed(3) : formatValue(convertUnit(value, frame.units, unit, frame.palette?.display))}${unit === "" ? "" : ` ${unit}`}`;
-  return <PointerValue pointer={pointer} label={`${frame.siteId} · ${frame.label}`} text={text} />;
+  return <PointerValue pointer={pointer} label={`${radarSiteCode(frame.siteId)} · ${frame.label}`} text={text} />;
 }

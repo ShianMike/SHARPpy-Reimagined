@@ -160,7 +160,7 @@ it.each(["toolbar", "layer"])("filters %s products to Australian capabilities an
     : screen.getByRole<HTMLButtonElement>("combobox", { name: "Tilt" });
   expect(tilt.textContent).toContain("Lowest available");
   expect(tilt.disabled).toBe(true);
-  await waitFor(() => { expect(call).toHaveBeenCalledWith("get_radar_site_frame", { site: "ABRD", product: "reflectivity", validTime: "2026-10-17T08:00:00Z", tilt: "0" }); });
+  await waitFor(() => { expect(call).toHaveBeenCalledWith("get_radar_site_frame", { site: "ABRD", product: "reflectivity", tilt: "0" }); });
   const australianCalls = call.mock.calls.filter(([, args]) => args?.site === "ABRD");
   expect(australianCalls.length).toBeGreaterThan(0);
   expect(australianCalls.every(([command, args]) => command === "get_radar_site_frame" && args?.product === "reflectivity" && args.tilt === "0")).toBe(true);
@@ -270,7 +270,7 @@ it.each(["toolbar", "layer"])("uses MRRL metadata for the %s controls and keeps 
   const tilt = controls === "toolbar" ? screen.getByRole<HTMLButtonElement>("button", { name: "Site Tilt" }) : screen.getByRole<HTMLButtonElement>("combobox", { name: "Tilt" });
   expect(tilt.disabled).toBe(true);
   expect(tilt.textContent).toContain("Lowest available");
-  await waitFor(() => { expect(call).toHaveBeenCalledWith("get_radar_site_frame", { site: "MF94", product: "reflectivity", validTime: "2026-10-17T08:00:00Z", tilt: "0" }); });
+  await waitFor(() => { expect(call).toHaveBeenCalledWith("get_radar_site_frame", { site: "MF94", product: "reflectivity", tilt: "0" }); });
   expect(call.mock.calls.some(([command, args]) => command === "get_radar_tilts" && args?.site === "MF94")).toBe(false);
   if (controls === "toolbar") {
     fireEvent.click(screen.getByRole("combobox", { name: "Network" }));

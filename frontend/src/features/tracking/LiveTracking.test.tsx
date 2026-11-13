@@ -210,20 +210,26 @@ it("plays loaded history, pauses on stepping, and stops at the end without loopi
   fireEvent.change(screen.getByRole("slider", { name: "Live history" }), { target: { value: "-5" } });
   fireEvent.click(screen.getByRole("button", { name: "Play" }));
   await act(async () => { await vi.advanceTimersByTimeAsync(751); });
-  expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: now, playing: false });
+  expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: null, playing: false });
   expect(useForecastStore.getState()).toEqual(forecast);
   view.unmount(); queryClient.clear();
 });
 
-it.each([0, 10])("keeps the same radar source while a recent request refreshes (%s minute provider lag)", async (delay) => {
+it("requests the latest live site scan and keeps historical requests separate", async () => {
+  useAppStore.getState().setActiveWorkspace("live");
   const transport = createTransport();
   const call = transport.call.bind(transport);
-  const first = "2026-10-17T08:00:00Z";
-  const scan = new Date(Date.parse(first) - delay * LIVE_MINUTE).toISOString().replace(".000Z", "Z");
+  const scan = "2026-10-17T07:41:00Z";
+  const newerScan = "2026-10-17T07:49:00Z";
+  let latest = scan;
+  const historicalScan = "2026-10-17T07:26:00Z";
+  const requests: (string | undefined)[] = [];
   const frame = parseShrf(Uint8Array.from(atob(radar.split(",")[1] ?? ""), (character) => character.charCodeAt(0)).buffer);
-  transport.call = (command, args) => command !== "get_radar_site_frame" ? call(command, args)
-    : args?.validTime !== first || args.site !== "KTLX" || args.product !== "velocity" ? new Promise(() => undefined)
-    : Promise.resolve(encodeShrf({ ...frame.header, kind: "radar-site", siteId: "KTLX", product: "velocity", units: "mph", validTime: scan }, frame.body));
+  transport.call = (command, args) => {
+    if (command !== "get_radar_site_frame") return call(command, args);
+    requests.push(args?.validTime as string | undefined);
+    return Promise.resolve(encodeShrf({ ...frame.header, kind: "radar-site", siteId: "KTLX", product: "velocity", units: "mph", validTime: args?.validTime === undefined ? latest : historicalScan }, frame.body));
+  };
   useMapStore.setState({ radarSite: "KTLX", radarProduct: "velocity" });
   useLiveTrackingStore.setState({ now, selectedTime: null });
   function Probe() {
@@ -234,25 +240,19 @@ it.each([0, 10])("keeps the same radar source while a recent request refreshes (
   }
   const { view, queryClient } = renderWithBackend(<Probe />, transport);
   await waitFor(() => { expect(screen.getByTestId("radar-probe").textContent).toBe(scan); });
+  expect(requests).toEqual([undefined]);
   act(() => { useLiveTrackingStore.setState({ now: now + LIVE_MINUTE }); });
   expect(screen.getByTestId("radar-probe").textContent).toBe(scan);
-  act(() => { useMapStore.getState().setRadarTilt("1"); });
-  expect(screen.getByTestId("radar-probe").textContent).toBe("empty");
-  const cached = await new BackendClient(transport).getRadarSiteFrame({ site: "KTLX" }, "velocity", first, "0");
-  queryClient.setQueryData(mapKeys.radarSite("velocity", "KTLX", first, "1"), { ...cached, elevationAngle: 1.3 });
-  act(() => { useMapStore.getState().setRadarTilt("0"); });
-  expect(screen.getByTestId("radar-probe").textContent).toBe(scan);
-  act(() => { useMapStore.getState().setRadarTilt("1"); });
-  expect(screen.getByTestId("radar-probe").textContent).toBe(scan);
-  act(() => { useMapStore.getState().setRadarTilt("0"); });
-  act(() => { useLiveTrackingStore.setState({ now: now + 11 * LIVE_MINUTE }); });
-  expect(screen.getByTestId("radar-probe").textContent).toBe("empty");
-  act(() => { useLiveTrackingStore.setState({ now: now - LIVE_MINUTE }); });
-  expect(screen.getByTestId("radar-probe").textContent).toBe("empty");
-  act(() => { useLiveTrackingStore.setState({ now: now + LIVE_MINUTE }); useMapStore.setState({ radarSite: "KOUN" }); });
-  expect(screen.getByTestId("radar-probe").textContent).toBe("empty");
-  act(() => { useMapStore.setState({ radarSite: "KTLX", radarProduct: "reflectivity" }); });
-  expect(screen.getByTestId("radar-probe").textContent).toBe("empty");
+  expect(requests).toHaveLength(1);
+  latest = newerScan;
+  await act(async () => { await queryClient.refetchQueries({ queryKey: mapKeys.radarSite("velocity", "KTLX", null, "0") }); });
+  await waitFor(() => { expect(screen.getByTestId("radar-probe").textContent).toBe(newerScan); });
+  expect(requests).toEqual([undefined, undefined]);
+  act(() => { useLiveTrackingStore.setState({ selectedTime: now - 30 * LIVE_MINUTE }); });
+  await waitFor(() => { expect(screen.getByTestId("radar-probe").textContent).toBe(historicalScan); });
+  expect(requests).toContain("2026-10-17T07:30:00Z");
+  act(() => { useLiveTrackingStore.setState({ selectedTime: null }); });
+  await waitFor(() => { expect(screen.getByTestId("radar-probe").textContent).toBe(newerScan); });
   view.unmount(); queryClient.clear();
 });
 

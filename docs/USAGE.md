@@ -112,13 +112,16 @@ The readout identifies the site and product, preserves missing and range-folded
 gates, and marks lower-bound echo-top heights with **≥**. Image-only products
 without numeric calibration do not expose measured hover values.
 
-Use the player to step, scrub, or animate up to the past **60 minutes**, where
-the provider supplies history. Choose a UTC minute in **Radar time** or use the
-timeline. The arrows move five minutes at a time; scan intervals vary by radar,
-so the time picker shows the provider's actual scan time separately from the
-requested time. Multiple requested times can resolve to the same scan. Playback
-loads frames as needed, and **Live** returns to current data. An unavailable
-scan is reported rather than substituted silently.
+Live radar loads the provider's latest available scan automatically. **Radar
+time** shows its actual UTC time and age; a delayed scan is identified. Use the
+timeline to step, scrub, or animate up to the past **60 minutes** when the
+provider supplies history. Scan intervals vary, so multiple requested times can
+resolve to the same scan. Radar history uses a recent scan at or before the
+selected time, and the radar time shows the scan's actual time. Playback loads
+frames as needed and returns to live
+at the present; **Live** also returns immediately. An unavailable scan is
+reported rather than substituted silently. Selecting a different radar site or
+switching to the mosaic stops playback and returns to the latest live scan.
 
 Downloaded live data appears in **Settings → Storage**. Caches are bounded and
 cleared when the app session closes; cleared data downloads again when needed.

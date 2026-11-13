@@ -5,11 +5,13 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createTransport } from "../lib/backend/fixtureTransport";
 import { encodeShrf, parseShrf } from "../lib/contracts/frames";
 import { useLiveTrackingStore } from "../stores/liveTrackingStore";
+import { useMapStore } from "../stores/mapStore";
 import { renderWithBackend } from "../test/backendHarness";
 import { useRadarFrame, useRadarSiteFrame } from "./mapQueries";
 
 const clock = useLiveTrackingStore.getState();
-afterEach(() => { cleanup(); useLiveTrackingStore.setState(clock, true); });
+const map = useMapStore.getState();
+afterEach(() => { cleanup(); useLiveTrackingStore.setState(clock, true); useMapStore.setState(map, true); });
 
 it.each(["site", "mosaic"] as const)("does not reuse the previous %s image while another historical time loads", async (scope) => {
   const first = "2026-10-17T07:50:00Z", next = "2026-10-17T07:55:00Z";
@@ -35,6 +37,7 @@ it.each(["site", "mosaic"] as const)("does not reuse the previous %s image while
 });
 
 it.each(["site", "mosaic"] as const)("refreshes a %s time first seen live when it becomes historical", async (scope) => {
+  useMapStore.setState({ view: "live" });
   const requested = "2026-10-17T08:00:00Z";
   const earlier = "2026-10-17T07:50:00Z", later = "2026-10-17T07:58:00Z";
   const raw = parseShrf(Uint8Array.from(atob(radar.split(",")[1] ?? ""), (character) => character.charCodeAt(0)).buffer);
@@ -56,6 +59,9 @@ it.each(["site", "mosaic"] as const)("refreshes a %s time first seen live when i
   act(() => { useLiveTrackingStore.setState({ now: Date.parse(requested) + 10 * 60_000, selectedTime: Date.parse(requested) }); });
   await waitFor(() => { expect(screen.getByTestId("history-probe").textContent).toBe(later); });
   const method = scope === "site" ? "get_radar_site_frame" : "get_radar_frame";
-  expect(call.mock.calls.filter(([command]) => command === method)).toHaveLength(2);
+  const requests = call.mock.calls.filter(([command]) => command === method);
+  expect(requests).toHaveLength(2);
+  expect(requests[0]?.[1]?.validTime).toBeUndefined();
+  expect(requests[1]?.[1]?.validTime).toBe(requested);
   view.unmount(); queryClient.clear();
 });

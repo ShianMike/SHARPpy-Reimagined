@@ -1,4 +1,17 @@
 {
+  "3.7.1": {
+    "summary": "Live radar automatically follows the latest available scan.",
+    "highlights": [
+      {
+        "title": "Automatic radar scan time",
+        "description": "Live Tracking loads the latest available scan for the selected radar and keeps it updated. Changing sites returns to Live. Radar time shows the actual scan time and age, including delayed scans."
+      },
+      {
+        "title": "More reliable radar sources",
+        "description": "Australian, German, MRRL and European OPERA radar can show recent delayed scans with their actual times. Compatible OPERA scans use the provider's current download service and supported license information."
+      }
+    ]
+  },
   "3.7.0": {
     "summary": "Explore more radar networks and choose how your sounding images look.",
     "highlights": [

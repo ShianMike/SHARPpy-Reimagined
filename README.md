@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.7.0
+# SHARPpy Reimagined · v3.7.1
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,13 +10,14 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v370---2026-11-13)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v371---2026-11-13)
 
 </div>
 
-## What's new in 3.7.0
+## What's new in 3.7.1
 
-This release adds radar coverage and sounding display choices:
+Live radar now follows the latest available scan automatically, showing its
+actual time and age. Version 3.7.0 added radar coverage and sounding choices:
 
 - **German radar:** view DWD precipitation-scan reflectivity at 17 sites, with
   measured values, source credits and terrain-following scan elevations.
@@ -26,7 +27,7 @@ This release adds radar coverage and sounding display choices:
   through MRRL InterRAD, with the active radar's source credit at the bottom left.
 - **Radar controls:** choose a network, search sites by code or place, and click
   map labels to select a site. Borders show selected and unavailable sites;
-  choose a UTC time or use the live timeline to request recent data as needed.
+  use the live timeline to request recent data as needed.
 - **Sounding display:** choose Dark, Light or Protanopia for sounding images in
   Settings. The saved choice applies to interactive and exported soundings.
 

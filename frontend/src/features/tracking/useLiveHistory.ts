@@ -44,9 +44,12 @@ export function useLiveHistory() {
     const next = times.find((step) => step > time) ?? (loop ? times[0] ?? now : null);
     if (next === null) { useLiveTrackingStore.getState().setPlaying(false); return; }
     const delay = new Promise<void>((resolve) => { timer = setTimeout(resolve, FRAME_INTERVAL_MS / speed); });
-    void Promise.all([load(next), delay]).then(() => {
+    void Promise.all([!loop && next >= now ? Promise.resolve() : load(next), delay]).then(() => {
       if (stopped) return;
-      useLiveTrackingStore.getState().selectTime(next);
+      if (!loop && next >= now) {
+        useLiveTrackingStore.getState().setPlaying(false);
+        useLiveTrackingStore.getState().selectTime(null);
+      } else useLiveTrackingStore.getState().selectTime(next);
     });
     return () => { stopped = true; clearTimeout(timer); };
   }, [now, selectedTime, playing, speed, loop, panels, layout, reportWindowS, reportFilter, load]);

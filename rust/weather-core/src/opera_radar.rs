@@ -217,6 +217,7 @@ impl RadarClient {
                 "OPERA currently uses its lowest available scan.".into(),
             ));
         }
+        let max_age = time::Duration::minutes(if request.valid_time.is_some() { 30 } else { 70 });
         let target = request
             .valid_time
             .as_deref()
@@ -229,7 +230,12 @@ impl RadarClient {
                 "Radar history is available only for the past 60 minutes.".into(),
             ));
         }
-        for scan in self.scans(&site, target, now).await?.into_iter().take(6) {
+        for scan in self
+            .scans(&site, target, now, max_age)
+            .await?
+            .into_iter()
+            .take(6)
+        {
             let url = scan.url;
             if let Some(frame) = self
                 .frames
@@ -239,9 +245,10 @@ impl RadarClient {
                 .find(|(cached, frame)| cached == &url && frame.attribution == scan.attribution)
                 .map(|(_, frame)| Arc::clone(frame))
             {
-                if frame.actual_time.is_some_and(|actual| {
-                    actual <= target && actual >= target - time::Duration::minutes(10)
-                }) {
+                if frame
+                    .actual_time
+                    .is_some_and(|actual| actual <= target && actual >= target - max_age)
+                {
                     return Ok(Some(frame));
                 }
                 continue;
@@ -259,8 +266,8 @@ impl RadarClient {
                     target,
                     now,
                     source,
-                    scan.interval_s,
-                    scan.attribution,
+                    (scan.interval_s, scan.attribution),
+                    max_age,
                 )
             })
             .await
@@ -285,8 +292,9 @@ impl RadarClient {
         site: &RadarSite,
         target: OffsetDateTime,
         now: OffsetDateTime,
+        max_age: time::Duration,
     ) -> Result<Vec<Scan>, Error> {
-        let window_start = target - time::Duration::minutes(15);
+        let window_start = target - max_age - time::Duration::minutes(5);
         if let Some(scans) = self
             .listings
             .lock()
@@ -479,8 +487,12 @@ fn parse_scans(bytes: &[u8], site: &RadarSite) -> Result<Vec<Scan>, Error> {
             continue;
         }
         let attribution = match coverage.license.as_deref() {
-            Some(LICENSE | "https://creativecommons.org/licenses/by/4.0/ (CC BY 4.0)") => CREDIT_CC,
-            Some(ETALAB) if site.country.as_deref() == Some("FR") => CREDIT_FR,
+            Some(
+                LICENSE
+                | "https://creativecommons.org/licenses/by/4.0/ (CC BY 4.0)"
+                | "CC BY 4.0 Creative Commons license",
+            ) => CREDIT_CC,
+            Some(ETALAB | "Etalab2.0") if site.country.as_deref() == Some("FR") => CREDIT_FR,
             _ => {
                 unsupported_license = true;
                 continue;
@@ -514,8 +526,12 @@ fn parse_scans(bytes: &[u8], site: &RadarSite) -> Result<Vec<Scan>, Error> {
             let Ok(url) = reqwest::Url::parse(&link.href) else {
                 continue;
             };
+            let bucket = match url.host_str() {
+                Some("s3.waw3-1.cloudferro.com") => "openradar-24h",
+                Some("object-store.os-api.cci1.ecmwf.int") => "openradar-24h-backup",
+                _ => continue,
+            };
             if url.scheme() != "https"
-                || url.host_str() != Some("s3.waw3-1.cloudferro.com")
                 || url.port().is_some()
                 || !url.username().is_empty()
                 || url.password().is_some()
@@ -527,10 +543,7 @@ fn parse_scans(bytes: &[u8], site: &RadarSite) -> Result<Vec<Scan>, Error> {
             let Some(parts) = url.path_segments().map(|parts| parts.collect::<Vec<_>>()) else {
                 continue;
             };
-            if parts.len() != 8
-                || parts[0] != "openradar-24h"
-                || !parts[5].eq_ignore_ascii_case(nod)
-            {
+            if parts.len() != 8 || parts[0] != bucket || !parts[5].eq_ignore_ascii_case(nod) {
                 continue;
             }
             let file = parts[7].split('@').collect::<Vec<_>>();
@@ -593,10 +606,10 @@ fn make_frame(
     target: OffsetDateTime,
     now: OffsetDateTime,
     url: String,
-    interval_s: f64,
-    attribution: &str,
+    source: (f64, &str),
+    max_age: time::Duration,
 ) -> Result<Frame, Error> {
-    let sweep = decode::decode(bytes, site, target).map_err(|error| {
+    let sweep = decode::decode(bytes, site, target, max_age).map_err(|error| {
         if error == "No recent ODIM DBZH sweep" {
             Error::ScanMissing
         } else {
@@ -628,8 +641,8 @@ fn make_frame(
         bounds,
         retrieved_at: format_rfc3339_utc(now),
         valid_time: Some(format_rfc3339_utc(actual)),
-        update_interval_s: interval_s,
-        attribution: attribution.into(),
+        update_interval_s: source.0,
+        attribution: source.1.into(),
         source_url: url,
         byte_length: png.len(),
         png_base64: STANDARD.encode(png),

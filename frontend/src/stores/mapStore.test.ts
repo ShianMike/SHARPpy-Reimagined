@@ -1,14 +1,35 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { LAYER_DEFAULTS } from "../map/layers/registry";
 import { mapProjection, panelLayers, panelProduct, useMapStore } from "./mapStore";
+import { useLiveTrackingStore } from "./liveTrackingStore";
 
 const initial = useMapStore.getState();
+const liveInitial = useLiveTrackingStore.getState();
 
 beforeEach(() => {
   useMapStore.setState(initial, true);
+  useLiveTrackingStore.setState(liveInitial, true);
 });
 
 describe("mapStore", () => {
+  it("returns to live and stops playback when the active radar site or scope changes", () => {
+    useMapStore.setState({ view: "live" });
+    useMapStore.getState().setRadarScope("site");
+    useMapStore.getState().setRadarSite("KCLX");
+    const selectedTime = Date.now() - 5 * 60_000;
+    useLiveTrackingStore.setState({ selectedTime, playing: true });
+    useMapStore.getState().setRadarSite("KCLX");
+    expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime, playing: true });
+    useMapStore.getState().setRadarSite("KRAX");
+    expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: null, playing: false });
+    useLiveTrackingStore.setState({ selectedTime, playing: true });
+    useMapStore.getState().setRadarScope("mosaic");
+    expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: null, playing: false });
+    useMapStore.setState({ view: "map" });
+    useLiveTrackingStore.setState({ selectedTime, playing: true });
+    useMapStore.getState().setRadarSite("KTLX");
+    expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime, playing: true });
+  });
   it("keeps Live Tracking flat and preserves the Model Viewer projection", () => {
     useMapStore.getState().setProjection("globe");
     expect(mapProjection(useMapStore.getState())).toBe("globe");

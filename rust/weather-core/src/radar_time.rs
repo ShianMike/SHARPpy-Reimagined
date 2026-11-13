@@ -7,6 +7,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime, UtcOffset};
 
 const HISTORY: time::Duration = time::Duration::minutes(60);
 const TOLERANCE: time::Duration = time::Duration::minutes(10);
+const SCAN_TOLERANCE: time::Duration = time::Duration::minutes(20);
 const CAPABILITIES_TTL: Duration = Duration::from_secs(45);
 const MAX_CAPABILITIES_BYTES: usize = 2 * 1024 * 1024;
 const CACHE_LIMIT: usize = 24;
@@ -305,17 +306,17 @@ pub async fn select_time(
     let selected = times
         .iter()
         .copied()
-        .filter(|&scan| scan >= reference - HISTORY && scan <= reference)
-        .min_by_key(|&scan| ((scan - requested).abs(), scan))
+        .filter(|&scan| scan >= reference - HISTORY && scan <= reference && scan <= requested)
+        .max()
         .ok_or_else(|| {
             TimeError::Missing(format!(
                 "{layer} advertises no historical scans in the past 60 minutes"
             ))
         })?;
     let current = (reference - requested).abs() <= time::Duration::minutes(2);
-    if !current && (selected - requested).abs() > TOLERANCE {
+    if !current && requested - selected > SCAN_TOLERANCE {
         return Err(TimeError::Missing(format!(
-            "{layer} has no advertised scan within 10 minutes of the requested time"
+            "{layer} has no advertised scan within 20 minutes before the requested time"
         )));
     }
     Ok(selected)
@@ -341,5 +342,60 @@ mod tests {
         assert_eq!(parsed["parent"].len(), 2);
         assert_eq!(parsed["inherited"], parsed["parent"]);
         assert_eq!(stamp(parsed["override"][0]), "2026-11-13T09:04:00.000Z");
+    }
+
+    #[tokio::test]
+    async fn historical_wms_requests_choose_a_preceding_advertised_scan() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; 4096];
+            let _ = stream.read(&mut request).unwrap();
+            let xml = r#"<WMS_Capabilities><Capability><Layer><Name>radar</Name><Dimension name="time">2026-10-17T11:30:00Z,2026-10-17T11:45:00Z,2026-10-17T11:52:00Z</Dimension></Layer></Capability></WMS_Capabilities>"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                xml.len(),
+                xml
+            )
+            .unwrap();
+        });
+        let client = reqwest::Client::new();
+        let parse = |value| OffsetDateTime::parse(value, &Rfc3339).unwrap();
+        let now = parse("2026-10-17T12:00:00Z");
+        let selected = select_time(
+            &client,
+            &endpoint,
+            "radar",
+            parse("2026-10-17T11:50:00Z"),
+            now,
+        )
+        .await
+        .unwrap();
+        assert_eq!(selected, parse("2026-10-17T11:45:00Z"));
+        let delayed = select_time(
+            &client,
+            &endpoint,
+            "radar",
+            parse("2026-10-17T11:44:00Z"),
+            now,
+        )
+        .await
+        .unwrap();
+        assert_eq!(delayed, parse("2026-10-17T11:30:00Z"));
+        assert!(matches!(
+            select_time(
+                &client,
+                &endpoint,
+                "radar",
+                parse("2026-10-17T11:29:00Z"),
+                now
+            )
+            .await,
+            Err(TimeError::Missing(_))
+        ));
+        server.join().unwrap();
     }
 }

@@ -177,31 +177,24 @@ impl SiteWmsClient {
         let site_lower = site.id.to_ascii_lowercase();
         let ows_url = format!("{BASE}/{site_lower}/ows");
         let layer = format!("{site_lower}{}", product.suffix);
-        let selected = match requested {
-            Some(when) => Some(
-                radar_time::select_time(client, &ows_url, &layer, when, now)
-                    .await
-                    .map_err(|error| match error {
-                        TimeError::Missing(_) => Error::ScanMissing,
-                        TimeError::Other(msg) => {
-                            Error::Fetch(format!("{} history is unavailable: {msg}", site.id))
-                        }
-                    })?,
-            ),
-            None => None,
-        };
+        let selected =
+            radar_time::select_time(client, &ows_url, &layer, requested.unwrap_or(now), now)
+                .await
+                .map_err(|error| match error {
+                    TimeError::Missing(_) => Error::ScanMissing,
+                    TimeError::Other(msg) => {
+                        Error::Fetch(format!("{} scan is unavailable: {msg}", site.id))
+                    }
+                })?;
         let bounds = site_bounds(site);
-        let pixels = if selected.is_some() { 4096 } else { 2048 };
+        let pixels = if requested.is_some() { 4096 } else { 2048 };
         let (width, height) = frame_size(bounds, pixels);
-        let cache_key = match selected {
-            Some(t) => format!(
-                "{}:{}:{width}x{height}:{}",
-                product.key,
-                site.id,
-                radar_time::stamp(t)
-            ),
-            None => format!("{}:{}:{width}x{height}", product.key, site.id),
-        };
+        let cache_key = format!(
+            "{}:{}:{width}x{height}:{}",
+            product.key,
+            site.id,
+            radar_time::stamp(selected)
+        );
         if let Some(cached) = self.cache_get(&cache_key) {
             return cached.map(Some).ok_or_else(|| {
                 Error::Fetch(format!("{} {} was unavailable", site.id, product.label))
@@ -227,9 +220,7 @@ impl SiteWmsClient {
                 ("format", WMS_FORMAT),
                 ("transparent", "TRUE"),
             ]);
-            if let Some(t) = selected {
-                pairs.append_pair("time", &radar_time::stamp(t));
-            }
+            pairs.append_pair("time", &radar_time::stamp(selected));
         }
         let source_url = url.to_string();
         let response = match client
@@ -261,7 +252,7 @@ impl SiteWmsClient {
             };
             return Err(Error::Fetch(format!("{}: {detail}", site.id)));
         }
-        let legend_png_base64 = if selected.is_some() {
+        let legend_png_base64 = if requested.is_some() {
             self.legend_png(client, &ows_url, &layer)
                 .await
                 .as_deref()
@@ -270,7 +261,7 @@ impl SiteWmsClient {
             None
         };
         let frame = Arc::new(Frame {
-            actual_time: selected,
+            actual_time: Some(selected),
             product: product.key.to_owned(),
             site_id: site.id.clone(),
             elevation_angle: None,
@@ -280,7 +271,7 @@ impl SiteWmsClient {
             units: product.units.to_owned(),
             bounds,
             retrieved_at: format_rfc3339_utc(now),
-            valid_time: selected.map(format_rfc3339_utc),
+            valid_time: Some(format_rfc3339_utc(selected)),
             update_interval_s: product.update_interval_s,
             attribution: ATTRIBUTION.to_owned(),
             source_url,

@@ -113,6 +113,7 @@ impl RadarClient {
                 .into(),
             ));
         }
+        let max_age = time::Duration::minutes(if request.valid_time.is_some() { 20 } else { 70 });
         let target = request
             .valid_time
             .as_deref()
@@ -128,7 +129,9 @@ impl RadarClient {
         let scans = self.scans(site).await?;
         // A filename identifies a volume start. Its lowest complete cut can be
         // acquired minutes later; only the actual sweep time may satisfy history.
-        for (_, path) in candidate_scans(&scans, target).take(3) {
+        for (_, path) in
+            candidate_scans(&scans, target, max_age + time::Duration::minutes(10)).take(3)
+        {
             let cache_key = format!("{product}:{path}");
             if let Some(frame) = self
                 .frames
@@ -138,9 +141,10 @@ impl RadarClient {
                 .find(|(key, _)| key == &cache_key)
                 .map(|(_, frame)| Arc::clone(frame))
             {
-                if frame.actual_time.is_some_and(|actual| {
-                    actual <= target && actual >= target - time::Duration::minutes(10)
-                }) {
+                if frame
+                    .actual_time
+                    .is_some_and(|actual| actual <= target && actual >= target - max_age)
+                {
                     return Ok(Some(frame));
                 }
                 continue;
@@ -151,7 +155,7 @@ impl RadarClient {
             let source = path.clone();
             let kind = product.clone();
             let frame = tokio::task::spawn_blocking(move || {
-                make_frame(site, &source, &bytes, &kind, target, now)
+                make_frame(site, &source, &bytes, &kind, target, now, max_age)
             })
             .await
             .map_err(|error| Error::Fetch(error.to_string()))?;
@@ -281,11 +285,12 @@ fn parse_listing(bytes: &[u8], site: &str) -> Vec<(OffsetDateTime, String)> {
 fn candidate_scans(
     scans: &[(OffsetDateTime, String)],
     target: OffsetDateTime,
+    max_age: time::Duration,
 ) -> impl Iterator<Item = &(OffsetDateTime, String)> {
     scans
         .iter()
         .rev()
-        .filter(move |(time, _)| *time <= target && *time >= target - time::Duration::minutes(20))
+        .filter(move |(time, _)| *time <= target && *time >= target - max_age)
 }
 
 fn make_frame(
@@ -295,6 +300,7 @@ fn make_frame(
     product: &str,
     target: OffsetDateTime,
     now: OffsetDateTime,
+    max_age: time::Duration,
 ) -> Result<Frame, Error> {
     let mut sweep = decode::decode(bytes, product).map_err(Error::Fetch)?;
     if !sweep.site_id.eq_ignore_ascii_case(&site.id) {
@@ -302,7 +308,7 @@ fn make_frame(
     }
     let actual = OffsetDateTime::parse(&sweep.valid_time, &Rfc3339)
         .map_err(|error| Error::Fetch(error.to_string()))?;
-    if actual > target || actual < target - time::Duration::minutes(10) {
+    if actual > target || actual < target - max_age {
         return Err(Error::ScanMissing);
     }
     let is_mrrl = site.provider.as_deref() == Some("MRRL");

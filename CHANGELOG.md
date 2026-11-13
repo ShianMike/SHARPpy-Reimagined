@@ -12,10 +12,21 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Expand the available weather-model parameters, offering only fields supported
   by each model and the selected run.
 
+## [v3.7.1] - 2026-11-13
+
 ### Fixed
 
-- Keep live radar cache entries separate from historical requests, so a scan
-  published after the live minute can be selected without reloading the app.
+- Automatically load and refresh each radar provider's latest available live
+  scan, including delayed NEXRAD volumes. Display its actual UTC time and age,
+  and keep live and historical requests separate so older imagery is not
+  presented as a new scan. Playback returns to live when it reaches the present.
+- Resolve historical requests to a recent scan at or before the selected time,
+  accounting for publication delays without showing a future scan.
+- Load supported OPERA scans from the provider's current published object store
+  and recognize its current CC BY 4.0 and French Etalab 2.0 license labels.
+  Account for delayed scans from Australian, MRRL, German and OPERA feeds.
+- Return to live data and stop playback when choosing a different radar site
+  or switching between a single site and the mosaic.
 
 ## [v3.7.0] - 2026-11-13
 

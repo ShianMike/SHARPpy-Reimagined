@@ -42,7 +42,7 @@ it("propagates an active frame failure, decode failure, recovery, and mosaic sel
   const scene: Partial<SceneData> = {};
   const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
-  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "0", true);
+  const key = mapKeys.radarSite("reflectivity", "KTLX", null, "0");
   try {
     await waitFor(() => { expect(queryClient.getQueryState(key)?.status).toBe("error"); });
     await waitFor(() => { expect(scene.unavailableRadarSites?.has("KTLX")).toBe(true); });
@@ -88,7 +88,7 @@ it("keeps a failed site unavailable until its successful retry has decoded", asy
   const scene: Partial<SceneData> = {};
   const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
-  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "0", true);
+  const key = mapKeys.radarSite("reflectivity", "KTLX", null, "0");
   try {
     await waitFor(() => { expect(queryClient.getQueryState(key)?.status).toBe("error"); });
     await waitFor(() => { expect(scene.unavailableRadarSites?.has("KTLX")).toBe(true); });
@@ -125,7 +125,7 @@ it("keeps each panel's active site independent of other products, tilts, and sta
   const runtime = (index: number) => ({ setScene: (patch: Partial<SceneData>) => { Object.assign(scenes[index] ?? {}, patch); }, setStations: vi.fn() }) as unknown as MapRuntime;
   const runtimes = [runtime(0), runtime(1)];
   const hook = renderHook(() => { usePanelScene(runtimes[0] ?? null, 0); usePanelScene(runtimes[1] ?? null, 1); }, { wrapper });
-  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "0", true);
+  const key = mapKeys.radarSite("reflectivity", "KTLX", null, "0");
   try {
     await waitFor(() => { expect(queryClient.getQueryState(key)?.status).toBe("success"); });
     await waitFor(() => { expect(scenes[1]?.unavailableRadarSites?.has("KTLX")).toBe(true); });
@@ -157,7 +157,7 @@ it("keeps each panel's active site independent of other products, tilts, and sta
     act(() => { active.setState({ status: "pending", data: undefined, error: null, errorUpdateCount: 0, fetchFailureReason: null, fetchFailureCount: 1 }); });
     await waitFor(() => { expect(scenes[0]?.unavailableRadarSites?.has("KTLX")).toBe(true); });
     act(() => { useMapStore.getState().setActivePanel(0); useMapStore.getState().setRadarTilt("1"); });
-    await waitFor(() => { expect(queryClient.getQueryState(mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "1", true))?.status).toBe("success"); });
+    await waitFor(() => { expect(queryClient.getQueryState(mapKeys.radarSite("reflectivity", "KTLX", null, "1"))?.status).toBe("success"); });
     await waitFor(() => { expect(scenes[0]?.unavailableRadarSites?.has("KTLX")).toBe(false); });
     expect(scenes[1]?.unavailableRadarSites?.has("KTLX")).toBe(true);
   } finally { hook.unmount(); queryClient.clear(); }
@@ -190,7 +190,7 @@ it("keeps a failed site unavailable and hides its older bitmap during retry deco
   const scene: Partial<SceneData> = {};
   const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
-  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "0", true);
+  const key = mapKeys.radarSite("reflectivity", "KTLX", null, "0");
   try {
     await waitFor(() => { expect(scene.radar?.image).toBe(oldBitmap); });
     outcome = "failure";
@@ -235,7 +235,7 @@ it("keeps an automatically retried site unavailable after fetch success until de
   const scene: Partial<SceneData> = {};
   const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
-  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "0", true);
+  const key = mapKeys.radarSite("reflectivity", "KTLX", null, "0");
   try {
     await waitFor(() => { expect(request).toHaveBeenCalledTimes(2); }, { timeout: 3000 });
     expect(queryClient.getQueryState(key)).toMatchObject({ status: "pending", errorUpdateCount: 0, fetchFailureCount: 1 });

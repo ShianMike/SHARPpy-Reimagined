@@ -10,6 +10,7 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { RADAR_TILTABLE_PRODUCTS, type RadarTilt } from "../types/map";
 import type { CameraSnapshot } from "../map/runtime/camera";
+import { useLiveTrackingStore } from "./liveTrackingStore";
 import {
   clampOpacity,
   defaultLayerStates,
@@ -222,9 +223,21 @@ export const useMapStore = create<MapState>()(
     setRadarScope: (scope) => {
       // The two scopes publish different products; the mosaic's key is not a
       // site's key, so switching clears the choice and each scope takes its own default.
-      set((state) => patchWeather(state, { radarScope: scope, radarProduct: null, radarTilt: "0" }));
+      const state = useMapStore.getState();
+      if (state.view === "live" && panelWeather(state).radarScope !== scope) {
+        useLiveTrackingStore.getState().tick();
+        useLiveTrackingStore.getState().setPlaying(false);
+        useLiveTrackingStore.getState().selectTime(null);
+      }
+      set((current) => patchWeather(current, { radarScope: scope, radarProduct: null, radarTilt: "0" }));
     },
     setRadarSite: (site) => {
+      const state = useMapStore.getState();
+      if (state.view === "live" && panelWeather(state).radarSite !== site) {
+        useLiveTrackingStore.getState().tick();
+        useLiveTrackingStore.getState().setPlaying(false);
+        useLiveTrackingStore.getState().selectTime(null);
+      }
       set((state) => patchWeather(state, { radarSite: site }));
     },
     setSatelliteChannel: (channel) => {

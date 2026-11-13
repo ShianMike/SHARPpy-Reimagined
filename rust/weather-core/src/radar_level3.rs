@@ -483,6 +483,22 @@ pub fn render_level3(
     )
 }
 
+fn valid_scan_time(
+    actual: OffsetDateTime,
+    target: OffsetDateTime,
+    now: OffsetDateTime,
+    historical: bool,
+) -> bool {
+    actual <= target
+        && actual <= now
+        && actual
+            >= if historical {
+                target - time::Duration::minutes(20)
+            } else {
+                now - time::Duration::minutes(70)
+            }
+}
+
 struct CachedDir {
     path: String,
     cached_at: Instant,
@@ -584,19 +600,19 @@ impl Level3Client {
             .directory_scans(&directory)
             .await
             .map_err(Error::Fetch)?;
+        let earliest = if requested.is_some() {
+            target - time::Duration::minutes(30)
+        } else {
+            now - time::Duration::minutes(70)
+        };
         let recent: Vec<(OffsetDateTime, String)> = entries
             .into_iter()
-            .filter(|(date, _)| *date >= now - time::Duration::minutes(65) && *date <= now)
+            .filter(|(date, _)| *date >= earliest && *date <= target.min(now))
             .collect();
         let (modified, name) = recent
             .into_iter()
-            .min_by_key(|(date, _)| (*date - target).abs())
+            .max_by_key(|(date, _)| *date)
             .ok_or(Error::ScanMissing)?;
-        if requested.is_some_and(|t| t < now - time::Duration::minutes(2))
-            && (modified - target).abs() > time::Duration::minutes(10)
-        {
-            return Err(Error::ScanMissing);
-        }
         let pixels = if requested.is_some() { 4096 } else { 2048 };
         let cache_key = format!(
             "level3:{product}:{}:{tilt}:{name}:{}:{pixels}",
@@ -611,10 +627,9 @@ impl Level3Client {
             .find(|(k, _)| k == &cache_key)
             .map(|(_, f)| Arc::clone(f))
         {
-            let valid_ok = frame.actual_time.is_some_and(|actual| {
-                target >= now - time::Duration::minutes(2)
-                    || (actual - target).abs() <= time::Duration::minutes(10)
-            });
+            let valid_ok = frame
+                .actual_time
+                .is_some_and(|actual| valid_scan_time(actual, target, now, requested.is_some()));
             if valid_ok {
                 return Ok(Some(frame));
             }
@@ -627,7 +642,7 @@ impl Level3Client {
             .unwrap_or(&site.id)
             .to_ascii_uppercase();
         let product_owned = product.to_owned();
-        let (actual, elevation_angle, bounds, png) = tokio::task::spawn_blocking(move || {
+        let rendered = tokio::task::spawn_blocking(move || {
             let decoded = decode_level3(&payload)?;
             let actual = scan_time::level3(decoded.vol_time, decoded.delta_time, decoded.scan_kind)
                 .map_err(str::to_owned)?;
@@ -636,22 +651,22 @@ impl Level3Client {
                 || (!echo_tops
                     && (!decoded.el_angle.is_finite()
                         || !(min_el..=max_el).contains(&decoded.el_angle)))
-                || actual < now - time::Duration::minutes(70)
-                || actual > now
-                || (requested.is_some_and(|t| t < now - time::Duration::minutes(2))
-                    && (actual - target).abs() > time::Duration::minutes(10))
             {
                 return Err("radar identity, product or actual scan time does not match".into());
             }
+            if !valid_scan_time(actual, target, now, requested.is_some()) {
+                return Ok(None);
+            }
             let el = (!echo_tops).then_some(decoded.el_angle);
             let (bounds, png) = render_level3(&decoded, site, &product_owned, pixels)?;
-            Ok::<_, String>((actual, el, bounds, png))
+            Ok::<_, String>(Some((actual, el, bounds, png)))
         })
         .await
         .map_err(|error| Error::Fetch(error.to_string()))?
         .map_err(|error| {
             Error::Fetch(format!("numeric radar scan could not be decoded: {error}"))
         })?;
+        let (actual, elevation_angle, bounds, png) = rendered.ok_or(Error::ScanMissing)?;
         let label = match product {
             "echo-tops" => "Enhanced Echo Tops".into(),
             "velocity" => format!("Velocity · {:.1}°", elevation_angle.unwrap_or(0.0)),
@@ -791,6 +806,33 @@ impl Level3Client {
 mod tests {
     use super::*;
     use flate2::{write::ZlibEncoder, Compression};
+
+    #[test]
+    fn historical_level3_time_does_not_accept_future_or_old_scans() {
+        let parse = |raw| {
+            OffsetDateTime::parse(raw, &time::format_description::well_known::Rfc3339).unwrap()
+        };
+        let now = parse("2026-10-17T12:12:00Z");
+        let target = parse("2026-10-17T12:10:00Z");
+        assert!(valid_scan_time(
+            parse("2026-10-17T11:55:00Z"),
+            target,
+            now,
+            true
+        ));
+        assert!(!valid_scan_time(
+            parse("2026-10-17T12:11:00Z"),
+            target,
+            now,
+            true
+        ));
+        assert!(!valid_scan_time(
+            parse("2026-10-17T11:49:59Z"),
+            target,
+            now,
+            true
+        ));
+    }
     use std::io::Write;
 
     fn build_synthetic_nids(

@@ -108,23 +108,18 @@ export function useSpcOutlooks(enabled: readonly boolean[], validTime: string | 
 
 export function useRadarFrame(product: string | null, enabled: boolean, validTime: string | null = null): UseQueryResult<RadarFrame> {
   const client = useBackendClient();
+  const live = useMapStore((state) => state.view === "live");
   const followingLive = useLiveTrackingStore((state) => state.selectedTime === null);
+  const time = live && followingLive ? null : validTime;
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.radar(product, validTime, followingLive),
-    queryFn: () => client.getRadarFrame(product, validTime),
-    placeholderData: (previous, query) => {
-      if (!followingLive || validTime === null || query?.queryKey[1] !== (product ?? "default")) return undefined;
-      const target = query.queryKey[2];
-      const age = Date.parse(validTime) - Date.parse(typeof target === "string" ? target : "");
-      const scanAge = Date.parse(validTime) - Date.parse(previous?.validTime ?? "");
-      return age >= 0 && age <= 10 * 60_000 && scanAge >= 0 && scanAge <= 70 * 60_000 ? previous : undefined;
-    },
+    queryKey: mapKeys.radar(product, time),
+    queryFn: () => client.getRadarFrame(product, time),
     enabled,
-    staleTime: validTime === null ? 0 : followingLive ? Number.POSITIVE_INFINITY : RADAR_HISTORY_STALE_MS,
+    staleTime: time === null ? 0 : RADAR_HISTORY_STALE_MS,
     gcTime: Number.POSITIVE_INFINITY,
     refetchInterval: (query) => {
-      if (validTime !== null) return false;
+      if (time !== null) return false;
       const seconds = query.state.data?.updateIntervalS ?? 0;
       return seconds > 0 ? seconds * 1000 : RADAR_DEFAULT_REFRESH_MS;
     },
@@ -166,32 +161,21 @@ export function useRadarSiteFrame(
 ): UseQueryResult<RadarSiteFrame> {
   const client = useBackendClient();
   const queryClient = useQueryClient();
+  const live = useMapStore((state) => state.view === "live");
   const followingLive = useLiveTrackingStore((state) => state.selectedTime === null);
+  const time = live && followingLive ? null : validTime;
   const selection = panelRadar({ radarScope: "site", radarSite: site, radarProduct: product, radarTilt: tilt }, null,
     queryClient.getQueryData<RadarSiteCatalog>(mapKeys.radarSites)?.sites);
   const effectiveProduct = selection.product, effectiveTilt = selection.tilt;
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.radarSite(effectiveProduct, site ?? "", validTime, effectiveTilt, followingLive),
-    queryFn: () => client.getRadarSiteFrame({ site: site ?? "" }, effectiveProduct, validTime, effectiveTilt),
-    placeholderData: () => {
-      if (!followingLive || validTime === null || site === null) return undefined;
-      let latest: RadarSiteFrame | undefined;
-      for (const [key, frame] of queryClient.getQueriesData<RadarSiteFrame>({ queryKey: ["radar-site", effectiveProduct ?? "reflectivity", site] })) {
-        if (key.at(-1) !== effectiveTilt || frame?.siteId !== site) continue;
-        const target = key[3];
-        const age = Date.parse(validTime) - Date.parse(typeof target === "string" ? target : "");
-        const scanAge = Date.parse(validTime) - Date.parse(frame.validTime ?? "");
-        // Provider lag does not make the preceding minute's request an unrelated scan.
-        if (age >= 0 && age <= 10 * 60_000 && scanAge >= 0 && scanAge <= 70 * 60_000 && (latest === undefined || Date.parse(frame.validTime ?? "") > Date.parse(latest.validTime ?? ""))) latest = frame;
-      }
-      return latest;
-    },
+    queryKey: mapKeys.radarSite(effectiveProduct, site ?? "", time, effectiveTilt),
+    queryFn: () => client.getRadarSiteFrame({ site: site ?? "" }, effectiveProduct, time, effectiveTilt),
     enabled: enabled && site !== null && selection.supportedProducts?.length !== 0,
-    staleTime: validTime === null ? 0 : followingLive ? Number.POSITIVE_INFINITY : RADAR_HISTORY_STALE_MS,
+    staleTime: time === null ? 0 : RADAR_HISTORY_STALE_MS,
     gcTime: Number.POSITIVE_INFINITY,
     refetchInterval: (query) => {
-      if (validTime !== null) return false;
+      if (time !== null) return false;
       const seconds = query.state.data?.updateIntervalS ?? 0;
       return seconds > 0 ? seconds * 1000 : RADAR_DEFAULT_REFRESH_MS;
     },

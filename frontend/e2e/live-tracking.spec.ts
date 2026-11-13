@@ -154,15 +154,12 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await expect(page.getByLabel("Live viewing time")).toContainText("20:30Z");
   await page.getByRole("button", { name: "Live", exact: true }).click();
   await expect(time).toHaveValue("0");
-  await page.getByRole("button", { name: "Choose radar time", exact: true }).click();
+  await page.getByRole("button", { name: "Radar scan time", exact: true }).click();
   const radarTime = page.getByRole("dialog", { name: "Radar time", exact: true });
-  await radarTime.getByRole("button", { name: "Previous 5 minutes" }).click();
-  await expect(time).toHaveValue("-5");
-  await radarTime.getByRole("textbox", { name: "UTC time" }).fill("20:45");
-  await radarTime.getByRole("button", { name: "Apply UTC time" }).click();
-  await expect(time).toHaveValue("-15");
-  await expect(page.getByLabel("Live viewing time")).toContainText("20:45Z");
-  await page.getByRole("button", { name: "Live", exact: true }).click();
+  await expect(radarTime.getByText("Latest scan")).toBeVisible();
+  await expect(radarTime.getByText("Scan time unavailable")).toBeVisible();
+  await expect(radarTime.getByRole("textbox")).toHaveCount(0);
+  await radarTime.getByRole("button", { name: "Close radar time" }).click();
   await page.clock.pauseAt(new Date("2026-10-04T21:00:01Z"));
   await page.getByRole("button", { name: "Play", exact: true }).press("Enter");
   await page.clock.fastForward(750);
@@ -171,6 +168,14 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await page.clock.resume();
   await page.getByRole("button", { name: "Live", exact: true }).click();
   await expect(time).toHaveValue("0");
+  await time.focus();
+  await time.press("ArrowLeft");
+  await expect(time).toHaveValue("-1");
+  await liveRadar.getByRole("combobox", { name: "Site", exact: true }).click();
+  await page.getByRole("searchbox", { name: "Find a radar by code or place name" }).fill("KTLX");
+  await page.getByRole("option", { name: "KTLX", exact: true }).click();
+  await expect(time).toHaveValue("0");
+  await expect(page.getByRole("button", { name: "Live", exact: true })).toHaveAttribute("aria-pressed", "true");
   expectWarnings(consoleMessages, []);
 });
 

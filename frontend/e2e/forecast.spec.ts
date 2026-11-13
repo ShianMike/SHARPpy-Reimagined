@@ -130,7 +130,7 @@ test.describe("the forecast map", () => {
     await page.getByRole("option", { name: "Single site", exact: true }).click();
     await expect(row.getByRole("combobox", { name: "Site" })).toBeVisible();
     await expect(row.getByTestId("radar-shown")).toContainText("Base Reflectivity");
-    await expect(row.getByTestId("radar-shown")).toContainText("One antenna's own imagery");
+    await expect(row.getByTestId("radar-shown")).toContainText("One antenna's imagery");
     await expect.poll(() => deckLayers(page)).toContain("radar");
     // Pin an antenna by identifier: the status names the site it asked for.
     await row.getByRole("combobox", { name: "Site" }).click();

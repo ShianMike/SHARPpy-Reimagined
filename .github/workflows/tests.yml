@@ -299,8 +299,8 @@ jobs:
       fail-fast: false
       matrix:
         # The >=100-example scientific contract has to hold on both compute
-        # paths that ship: the Rust extension the installer delivers, and the
-        # pure-Python fallback used wherever that wheel is unavailable.
+        # scientific paths that ship: the Rust extension and the Python
+        # numerical backend. Provider and decoder operations still use Rust.
         #
         # Running only one of them would leave a real hole. The compatibility
         # matrix covers the fallback across the whole suite but at ten
@@ -340,16 +340,15 @@ jobs:
           python scripts/install_sharppy_compat.py --sharppy-only
           python -m pip check
 
-      # Written out rather than reusing the anchor above: this is the one lane
-      # that must also run without the extension, and a plain matrix condition
-      # is clearer than relying on how GitHub coerces an undefined context.
+      # Both scientific backends share native provider and decoder operations.
       - name: Build and install the Rust backend
-        if: ${{ matrix.backend == 'rust' }}
+        env:
+          SHARPMOD_BACKEND: ${{ matrix.backend }}
         run: |
           python -m pip install "maturin>=1.15,<2"
           (cd rust/sharpmod-rs && python -m maturin build --release --locked --interpreter python --out dist)
           python -m pip install --force-reinstall --no-deps rust/sharpmod-rs/dist/*.whl
-          python -c "from sharpmod.backends import backend_info; info = backend_info(); assert info['active_backend'] == 'rust', info; assert info['rust_installed'] is True, info; print('backend:', info)"
+          python -c "import os; from sharpmod.backends import backend_info; info = backend_info(); assert info['active_backend'] == os.environ['SHARPMOD_BACKEND'], info; assert info['rust_installed'] is True, info; print('backend:', info)"
 
       - name: Run full property lane
         env:

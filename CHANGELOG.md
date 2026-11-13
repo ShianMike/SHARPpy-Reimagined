@@ -74,6 +74,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its final response cannot race process exit.
 - Install the native backend in the Windows WRF and live-provider checks, which
   exercise sounding and provider operations migrated to Rust.
+- Install the native decoder in both property-test lanes while preserving the
+  explicitly selected Python or Rust scientific backend.
+- Update the radar browser check to match the current single-site description.
 - Restore dark, light and protanopia sounding display choices in Appearance
   settings, preserving the selection across sessions and applying it to
   interactive, edited and exported sounding images.

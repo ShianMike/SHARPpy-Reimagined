@@ -37,17 +37,17 @@ impl std::fmt::Display for Error {
 #[derive(Serialize)]
 pub struct Frame {
     #[serde(skip)]
-    pub(crate) actual_time: OffsetDateTime,
+    pub(crate) actual_time: Option<OffsetDateTime>,
     pub product: String,
     pub site_id: String,
     pub elevation_angle: Option<f64>,
-    pub palette: Palette,
+    pub palette: Option<Palette>,
     pub legend_png_base64: Option<String>,
     pub label: String,
     pub units: String,
     pub bounds: Bounds,
     pub retrieved_at: String,
-    pub valid_time: String,
+    pub valid_time: Option<String>,
     pub update_interval_s: f64,
     pub attribution: String,
     pub source_url: String,
@@ -55,7 +55,7 @@ pub struct Frame {
     pub png_base64: String,
 }
 
-pub(crate) fn resolve(request: &Request) -> Result<Option<&'static RadarSite>, Error> {
+pub fn resolve(request: &Request) -> Result<Option<&'static RadarSite>, Error> {
     if let Some(id) = request.site_id.as_deref() {
         return Ok(crate::radar_sites::sites()
             .iter()
@@ -79,7 +79,14 @@ pub(crate) fn resolve(request: &Request) -> Result<Option<&'static RadarSite>, E
             (site, distance)
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
-        .filter(|(_, distance)| *distance <= 500_000.0)
+        .filter(|(site, distance)| {
+            let max_distance = if site.country.is_none() {
+                460_000.0
+            } else {
+                500_000.0
+            };
+            *distance <= max_distance
+        })
         .map(|(site, _)| site))
 }
 
@@ -114,6 +121,41 @@ fn merge_sites(bundled: &[RadarSite], opera: Vec<RadarSite>) -> Vec<RadarSite> {
 }
 
 pub async fn fetch(request: Request, now: OffsetDateTime) -> Result<Option<Arc<Frame>>, Error> {
+    if let Some(frame) = fetch_international(request.clone(), now).await? {
+        return Ok(Some(frame));
+    }
+    let Some(site) = resolve(&request)? else {
+        return Ok(None);
+    };
+    if site.country.is_none() {
+        return match request.product.as_deref() {
+            None | Some("reflectivity" | "correlation-coefficient") => {
+                crate::nexrad_level2::client()
+                    .fetch_site(request, now, site, None)
+                    .await
+            }
+            Some("velocity" | "echo-tops") => {
+                crate::radar_level3::client()
+                    .fetch_site(request, now, site)
+                    .await
+            }
+            Some("hydrometeor" | "storm-total" | "one-hour") => {
+                crate::radar_site_wms::client()
+                    .fetch_site(request, now, site)
+                    .await
+            }
+            Some(other) => Err(Error::Invalid(format!(
+                "Unsupported radar product {other:?}."
+            ))),
+        };
+    }
+    Ok(None)
+}
+
+pub async fn fetch_international(
+    request: Request,
+    now: OffsetDateTime,
+) -> Result<Option<Arc<Frame>>, Error> {
     if request
         .site_id
         .as_deref()
@@ -142,7 +184,11 @@ pub async fn fetch(request: Request, now: OffsetDateTime) -> Result<Option<Arc<F
 pub fn clear() {
     crate::australian_radar::client().clear();
     crate::dwd_radar::client().clear();
+    crate::nexrad_level2::client().clear();
     crate::opera_radar::client().clear();
+    crate::radar_mosaic::client().clear();
+    crate::radar_level3::client().clear();
+    crate::radar_site_wms::client().clear();
 }
 
 #[cfg(test)]

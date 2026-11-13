@@ -14,8 +14,7 @@ sharpmod inside each handler, so importing them stays cheap and never loads Qt.
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
+import json
 from typing import Any
 
 from sharpmod.bridge import params as p
@@ -103,36 +102,9 @@ def _result(result) -> dict[str, Any]:
 def metrics(params: dict[str, Any]) -> dict[str, Any]:
     """The registry's diagnostics with their control bounds, for the form."""
     p.keys(params, ())
-    from sharpmod.analysis import box_analysis
-    from sharpmod.analysis.ensemble_thresholds import OPERATOR_ORDER
-    from sharpmod.analysis.metric_controls import control_for
+    import sharpmod_rs
 
-    rows = []
-    for item in box_analysis.PARAMETERS:
-        control = control_for(item.key)
-        rows.append(
-            {
-                "key": control.key,
-                "label": control.label,
-                "units": control.units,
-                "display_label": item.display_label,
-                "decimals": int(control.decimals),
-                "minimum": float(control.minimum),
-                "maximum": float(control.maximum),
-                "step": float(control.step),
-                "suggested": float(control.suggested),
-                "guidance": control.describe(),
-            }
-        )
-    from sharpmod.analysis.metric_controls import SHIPPED_SUGGESTIONS
-
-    return {
-        "metrics": rows,
-        "operators": list(OPERATOR_ORDER),
-        # The diagnostics the form starts with: the three this application has
-        # always shipped starting values for.
-        "default_metrics": list(SHIPPED_SUGGESTIONS),
-    }
+    return json.loads(sharpmod_rs.threshold_metrics_catalog())
 
 
 def _evaluate(params: dict[str, Any]):
@@ -158,12 +130,10 @@ def evaluate(params: dict[str, Any]) -> dict[str, Any]:
 
 def export_csv(params: dict[str, Any]) -> dict[str, Any]:
     """The same verdicts as ``export_threshold_csv`` writes, as download text."""
-    from sharpmod.analysis.ensemble_thresholds import export_threshold_csv
+    from sharpmod.analysis.ensemble_thresholds import format_threshold_csv
 
     result = _evaluate(params)
-    with tempfile.TemporaryDirectory(prefix="sharpmod-threshold") as tmp:
-        written = export_threshold_csv(Path(tmp) / CSV_NAME, (result,))
-        text = written.read_text(encoding="utf-8")
+    text = format_threshold_csv((result,))
     if len(text) > MAX_CSV_CHARS:
         raise BridgeError(
             "INTERNAL", "The threshold export was too large to return.", False

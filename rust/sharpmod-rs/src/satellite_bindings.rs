@@ -6,7 +6,9 @@ use pyo3::{
     types::{PyByteArray, PyBytes, PyDict},
 };
 use sharpmod_weather::model_http::{Error, ModelClient};
+use sharpmod_weather::polar_radar::Bounds;
 use std::sync::OnceLock;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 fn provider_error(py: Python<'_>, kind: &str, message: impl Into<String>) -> PyErr {
     let error = || -> PyResult<PyErr> {
@@ -178,7 +180,117 @@ fn fetch_satellite_bytes(
     }
 }
 
+type PyListedCandidate = (String, String, i64, String, String, Option<usize>);
+
+#[pyfunction]
+fn goes_parse_listing(
+    py: Python<'_>,
+    payload: &[u8],
+    satellite: &str,
+    channel: &str,
+) -> PyResult<Vec<PyListedCandidate>> {
+    let candidates = sharpmod_weather::satellite::parse_listing(payload, satellite, channel)
+        .map_err(|error| provider_error(py, "SatelliteContextError", error))?;
+    Ok(candidates
+        .into_iter()
+        .map(|item| {
+            (
+                item.satellite,
+                item.channel,
+                item.scan_unix,
+                item.key,
+                item.url,
+                item.size_bytes,
+            )
+        })
+        .collect())
+}
+
+#[pyfunction]
+fn goes_render_frame(
+    py: Python<'_>,
+    payload: &[u8],
+    bounds: (f64, f64, f64, f64),
+    channel: &str,
+    max_output_pixels: usize,
+) -> PyResult<(Py<PyBytes>, f64, f64)> {
+    let payload = payload.to_vec();
+    let channel = channel.to_owned();
+    let bounds = Bounds {
+        west: bounds.0,
+        east: bounds.1,
+        south: bounds.2,
+        north: bounds.3,
+    };
+    let (png, coverage, resolution) = py
+        .detach(move || {
+            sharpmod_weather::satellite::render_goes_frame(
+                &payload,
+                bounds,
+                &channel,
+                max_output_pixels,
+            )
+        })
+        .map_err(|error| provider_error(py, "SatelliteContextError", error))?;
+    Ok((PyBytes::new(py, &png).unbind(), coverage, resolution))
+}
+
+type PyFetchedSatellite = (
+    Py<PyBytes>,
+    String,
+    String,
+    String,
+    String,
+    f64,
+    f64,
+    String,
+    String,
+);
+
+#[pyfunction]
+fn goes_fetch_frame(
+    py: Python<'_>,
+    when_iso: &str,
+    bounds: (f64, f64, f64, f64),
+    channel: &str,
+) -> PyResult<PyFetchedSatellite> {
+    let when = OffsetDateTime::parse(when_iso, &Rfc3339)
+        .map_err(|error| provider_error(py, "SatelliteContextError", error.to_string()))?;
+    let bounds = Bounds {
+        west: bounds.0,
+        east: bounds.1,
+        south: bounds.2,
+        north: bounds.3,
+    };
+    let channel = channel.to_owned();
+    let runtime = crate::weather::runtime()?;
+    let frame = py
+        .detach(move || {
+            runtime.block_on(sharpmod_weather::satellite::client().fetch(
+                when,
+                bounds,
+                &channel,
+                OffsetDateTime::now_utc(),
+            ))
+        })
+        .map_err(|error| provider_error(py, "SatelliteContextError", error))?;
+    Ok((
+        PyBytes::new(py, &frame.png_bytes).unbind(),
+        frame.satellite,
+        frame.requested_time,
+        frame.retrieved_at,
+        frame.valid_time,
+        frame.coverage_fraction,
+        frame.native_resolution_km,
+        frame.attribution,
+        frame.source_url,
+    ))
+}
+
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(fetch_satellite_bytes, module)?)?;
+    module.add_function(wrap_pyfunction!(goes_parse_listing, module)?)?;
+    module.add_function(wrap_pyfunction!(goes_render_frame, module)?)?;
+    module.add_function(wrap_pyfunction!(goes_fetch_frame, module)?)?;
     Ok(())
 }

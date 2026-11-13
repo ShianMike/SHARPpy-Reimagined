@@ -22,46 +22,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from sharpmod.analysis.box_analysis import BoxAnalysisError, parameter
-
-
-#: ``(minimum, maximum, step)`` per raw registry unit.
-#:
-#: Keyed on the raw ``units`` string rather than the display form, because that is
-#: what the registry stores and what saved threshold documents contain. One range
-#: covers both signs of a unit that has both -- CAPE and CIN share ``J/kg`` -- so a
-#: reader who wants a negative CIN gate is not blocked by a positive-only bound.
-_UNIT_RANGES = {
-    "J/kg": (-1000.0, 8000.0, 100.0),
-    "kt": (0.0, 200.0, 5.0),
-    "m2/s2": (-500.0, 1500.0, 25.0),
-    "m3/s3": (0.0, 100000.0, 1000.0),
-    "m": (0.0, 20000.0, 100.0),
-    "m AGL": (0.0, 20000.0, 100.0),
-    "hPa": (100.0, 1100.0, 10.0),
-    "C": (-60.0, 60.0, 1.0),
-    "F": (-40.0, 130.0, 5.0),
-    "C/km": (-10.0, 15.0, 0.5),
-    "g/kg": (0.0, 30.0, 0.5),
-    "%": (0.0, 100.0, 5.0),
-    "in": (0.0, 4.0, 0.1),
-    "deg": (0.0, 360.0, 5.0),
-}
-
-#: Unitless diagnostics split by their own precision. The two-decimal SPC
-#: composites sit near zero to ten; the whole-number legacy indices run far wider,
-#: so one unitless range would be wrong for one group or the other.
-_UNITLESS_RANGES = {
-    2: (-5.0, 20.0, 0.25),
-    1: (-20.0, 60.0, 0.5),
-    0: (-50.0, 100.0, 1.0),
-}
-
-#: Used only when a diagnostic arrives with a unit this module has never seen.
-#: Wide enough not to block a real value, and reported as a fallback rather than
-#: pretending to be a considered range.
-_FALLBACK = (-100000.0, 100000.0, 1.0)
-
 #: Starting values this application already shipped, preserved exactly so adding
 #: derived defaults for the other fifty-six diagnostics does not quietly change
 #: the three a reader may already be used to. The keys are also the threshold
@@ -133,71 +93,11 @@ class MetricControl:
         return f"{float(value):.{max(0, int(self.decimals))}f}"
 
 
-def _nice_step(step: float, decimals: int) -> float:
-    """Round a step to this diagnostic's precision without collapsing to zero."""
-    smallest = 10.0 ** -max(0, int(decimals))
-    return max(smallest, round(float(step), max(0, int(decimals))))
-
-
-def _derived_suggestion(minimum: float, maximum: float, step: float, notable: str):
-    """Return a neutral starting value inside the bounds, snapped to the step.
-
-    An eighth of the notable extent, where the notable extent is the negative
-    bound only for a low-notable diagnostic that actually has one. Taking the
-    minimum unconditionally for every low-notable diagnostic put a zero in the
-    LCL-height control and pinned the inflow-top control to its own lower bound,
-    both of which read as a broken control rather than a starting point.
-
-    This is a placeholder a reader replaces, not a recommendation. Deriving a
-    meaningful threshold from units alone is not possible, and inventing one per
-    diagnostic would put meteorological claims in a units table.
-    """
-    extent = maximum
-    if str(notable).strip().lower() == "low" and minimum < 0.0:
-        extent = minimum
-    snapped = round(float(extent) / 8.0 / step) * step
-    return max(minimum, min(maximum, snapped))
-
-
 def control_for(key) -> MetricControl:
     """Return the numeric-control profile for one registry diagnostic."""
-    try:
-        item = parameter(str(key))
-    except (BoxAnalysisError, Exception):  # noqa: BLE001 - unknown key still usable
-        minimum, maximum, step = _FALLBACK
-        return MetricControl(
-            str(key),
-            str(key).replace("_", " ").upper(),
-            "",
-            1,
-            minimum,
-            maximum,
-            step,
-            0.0,
-            derived=True,
-        )
-    decimals = max(0, int(item.decimals))
-    if item.units:
-        bounds = _UNIT_RANGES.get(item.units)
-    else:
-        bounds = _UNITLESS_RANGES.get(decimals)
-    derived = bounds is None
-    minimum, maximum, step = bounds or _FALLBACK
-    step = _nice_step(step, decimals)
-    suggested = SHIPPED_SUGGESTIONS.get(item.key)
-    if suggested is None:
-        suggested = _derived_suggestion(minimum, maximum, step, item.notable)
-    return MetricControl(
-        item.key,
-        item.label,
-        item.display_units,
-        decimals,
-        minimum,
-        maximum,
-        step,
-        round(float(suggested), decimals),
-        derived=derived,
-    )
+    import sharpmod_rs
+
+    return MetricControl(*sharpmod_rs.threshold_control_for(str(key)))
 
 
 __all__ = ["MetricControl", "SHIPPED_SUGGESTIONS", "control_for"]

@@ -7,7 +7,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Target version: **3.7.0** (not published).
+### Upcoming
+
+- Expand the available weather-model parameters, offering only fields supported
+  by each model and the selected run.
+
+## [v3.7.0] - 2026-11-13
 
 ### Added
 
@@ -21,7 +26,38 @@ Target version: **3.7.0** (not published).
   and ray geometry. Unsupported formats and licences remain unavailable.
 - Add eleven Météo-France radar sites in France and overseas via MRRL InterRAD,
   with lowest-available reflectivity, source credits and capability-aware
-  controls. Show standing radar-source credits in the Live Tracking legend.
+  controls. Show standing radar-source credits in the bottom-left corner during
+  Live Tracking.
+
+### Changed
+
+- Move US NEXRAD Level II S3 volume listing, Archive II BZip2 and Message
+  5/31 decoding, reflectivity and correlation-coefficient tilt availability, and
+  geodesic polar rendering into the shared Rust weather core, eliminating
+  Python bridge and MetPy overhead in desktop and browser backends.
+- Move CONUS place-label indexing, boundary polygon checks, and offline
+  reverse-town lookup, plus SPC convective outlook candidate resolution,
+  GeoJSON polygon/hole decoding, and HTTP caching into the shared Rust weather
+  core and desktop router.
+- Move UWyo station availability retrieval, payload filtering, fixed-width HTML
+  sounding table decoding, and high-resolution pressure thinning into the
+  shared Rust weather core and desktop router.
+- Move NOAA MRMS radar mosaic WMS retrieval, GetCapabilities XML time parsing,
+  and box-mean sounding thermodynamics, moisture mixing-ratio saturation
+  clamping, and vector-wind averaging into Rust.
+- Move GOES ABI-L2-CMIPC S3 scan discovery, NetCDF4/HDF5 fixed-grid decoding,
+  geodesic projection, and PNG rendering into the shared Rust weather core.
+- Move US NEXRAD Level III NIDS decoding, directory scan listing, indexed
+  polar PNG rendering, and single-site NCEP GeoServer WMS overlays into the
+  shared Rust weather core and desktop router.
+- Move the threshold diagnostic catalog, numeric-control bounds, condition
+  formatting/evaluation, and CSV export into the shared Rust weather core and
+  desktop router.
+- Move desktop NWS weather alerts and storm-report options, filtering,
+  formatting, and IEM feed caching into the shared Rust weather core and
+  desktop router.
+- Move surface station-plot wind-staff specification, reading formatting, and
+  plot assembly into the shared Rust weather core and desktop router.
 
 ### Fixed
 
@@ -36,11 +72,6 @@ Target version: **3.7.0** (not published).
   clicked panel, highlight the active selected site label border in green, and
   highlight unavailable site label borders in red.
 - Keep offline radar catalogue fixtures deterministic as live OPERA sites change.
-
-### Upcoming
-
-- Expand the available weather-model parameters, offering only fields supported
-  by each model and the selected run.
 
 ## [v3.6.0] - 2026-11-08
 

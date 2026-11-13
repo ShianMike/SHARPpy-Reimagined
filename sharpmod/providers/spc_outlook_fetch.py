@@ -5,6 +5,7 @@ time; shared product definitions and the provider-facing API remain in ``spc_out
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from datetime import timezone
 from sharpmod.maps.map_overlays import OverlayLayer
@@ -35,6 +36,25 @@ def fetch_layer(
     yesterday's outlook over today's sounding.
     """
     if now is None:
+        if opener is None and not disk_cache:
+            if should_cancel is not None and should_cancel():
+                return None
+            import sharpmod_rs
+
+            if valid_time.tzinfo is None:
+                raise ValueError("candidates_for requires a tz-aware valid_time")
+            when_iso = (
+                valid_time.astimezone(timezone.utc)
+                .isoformat(timespec="seconds")
+                .replace("+00:00", "Z")
+            )
+            try:
+                native = sharpmod_rs.spc_outlook_fetch(when_iso, product=product)
+            except (ValueError, RuntimeError) as exc:
+                raise _api.OutlookError(str(exc)) from None
+            if native is None:
+                return None
+            return _api._layer_from_native(json.loads(native))
         now = datetime.now(timezone.utc)
 
     candidates = _api.candidates_for(valid_time, now, product)

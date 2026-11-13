@@ -239,9 +239,9 @@ impl RadarClient {
                 .find(|(cached, frame)| cached == &url && frame.attribution == scan.attribution)
                 .map(|(_, frame)| Arc::clone(frame))
             {
-                if frame.actual_time <= target
-                    && frame.actual_time >= target - time::Duration::minutes(10)
-                {
+                if frame.actual_time.is_some_and(|actual| {
+                    actual <= target && actual >= target - time::Duration::minutes(10)
+                }) {
                     return Ok(Some(frame));
                 }
                 continue;
@@ -617,17 +617,17 @@ fn make_frame(
         .all(|ray| ray.elevation_angle == Some(sweep.elevation_angle))
         .then_some(sweep.elevation_angle);
     Ok(Frame {
-        actual_time: actual,
+        actual_time: Some(actual),
         product: "reflectivity".into(),
         site_id: site.id.clone(),
         elevation_angle,
-        palette,
+        palette: Some(palette),
         legend_png_base64: None,
         label: "Doppler-filtered Reflectivity".into(),
         units: "dBZ".into(),
         bounds,
         retrieved_at: format_rfc3339_utc(now),
-        valid_time: format_rfc3339_utc(actual),
+        valid_time: Some(format_rfc3339_utc(actual)),
         update_interval_s: interval_s,
         attribution: attribution.into(),
         source_url: url,

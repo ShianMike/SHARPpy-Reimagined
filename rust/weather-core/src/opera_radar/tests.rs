@@ -184,7 +184,9 @@ async fn live_opera_scans_are_available() {
             .unwrap();
         eprintln!(
             "{}: {}, {} bytes",
-            frame.site_id, frame.valid_time, frame.byte_length
+            frame.site_id,
+            frame.valid_time.as_deref().unwrap_or("untimed"),
+            frame.byte_length
         );
         assert!(frame.byte_length > 0);
     }

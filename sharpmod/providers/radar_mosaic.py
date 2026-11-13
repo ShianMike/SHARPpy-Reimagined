@@ -40,6 +40,8 @@ cost is fixed resolution -- see :data:`DEFAULT_FRAME_SIZE`.
 
 from __future__ import annotations
 
+import base64
+import json
 import logging
 import re
 import ssl
@@ -498,6 +500,43 @@ def fetch_frame(
     resolved = get_product(product)
     if should_cancel is not None and should_cancel():
         return None
+    if opener is None and now is None and size is None:
+        import sharpmod_rs
+
+        when_iso = (
+            radar_time._utc(valid_time)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
+            if valid_time is not None
+            else None
+        )
+        try:
+            native = json.loads(
+                sharpmod_rs.radar_mosaic_frame(product=resolved.key, valid_time=when_iso)
+            )
+        except sharpmod_rs.WeatherRadarScanMissing as exc:
+            raise RadarScanMissing(str(exc)) from None
+        except (ValueError, RuntimeError) as exc:
+            raise RadarError(str(exc)) from None
+        bounds = native["bounds"]
+        return OverlayRaster(
+            key=OVERLAY_KEY,
+            title=f"{native['label']} ({native['units']})" if native["units"] else native["label"],
+            image_bytes=base64.b64decode(native["png_base64"]),
+            bounds=(bounds["west"], bounds["east"], bounds["south"], bounds["north"]),
+            subtitle=resolved.description,
+            short_name=native["label"],
+            retrieved_at=datetime.fromisoformat(native["retrieved_at"].replace("Z", "+00:00")),
+            valid_time=(
+                datetime.fromisoformat(native["valid_time"].replace("Z", "+00:00"))
+                if native.get("valid_time")
+                else None
+            ),
+            update_interval_s=native["update_interval_s"],
+            opacity=opacity,
+            source_url=native["source_url"],
+            attribution=native["attribution"],
+        )
     selected = None
     if valid_time is not None:
         from sharpmod.io.decoder import _remote_timeout

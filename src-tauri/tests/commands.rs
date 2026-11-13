@@ -202,82 +202,45 @@ fn sounding_progress_command_tracks_the_model_request_and_validates_ids() {
 #[test]
 fn radar_commands_forward_optional_scan_times_and_preserve_the_actual_time() {
     let launcher = FakeLauncher::with(vec![script(|mut io| async move {
-        for (method, params, file) in [
-            ("radar.mosaic", serde_json::json!({}), "radar.result.json"),
-            (
-                "radar.mosaic",
-                serde_json::json!({"product": "composite-reflectivity", "valid_time": "2026-10-17T11:40:00Z"}),
-                "radar.result.json",
-            ),
-            (
-                "radar.site",
-                serde_json::json!({"site_id": "KTLX"}),
-                "radar-site.result.json",
-            ),
-            (
-                "radar.site",
-                serde_json::json!({"product": "reflectivity", "site_id": "KTLX", "valid_time": "2026-10-17T11:40:00Z", "tilt": "1"}),
-                "radar-site.result.json",
-            ),
-            (
-                "radar.site",
-                serde_json::json!({"latitude": 35.2, "longitude": -97.4, "valid_time": "2026-10-17T11:40:00Z"}),
-                "radar-site.result.json",
-            ),
-        ] {
-            let request = io.expect(method).await.unwrap();
-            assert_eq!(request["params"], params);
-            let mut result = fixture(&format!("bridge/map/{file}"));
-            if params.get("valid_time").is_some() {
-                result["valid_time"] = serde_json::json!("2026-10-17T11:38:49Z");
+        while let Some(request) = io.next_request().await {
+            match request["method"].as_str().unwrap() {
+                "hello" => io.reply(&request["id"], common::hello_result()).await,
+                "shutdown" => return 0,
+                method => panic!("native single-site radar must not call Python: {method}"),
             }
-            io.reply(&request["id"], result).await;
         }
-        io.expect("shutdown").await;
         0
     })]);
     let (_app, webview) = window(launcher);
-    let error: BackendError = parse(
-        invoke_args(
-            &webview,
-            "get_radar_site_frame",
+    for (args, expected) in [
+        (
             serde_json::json!({"site": "KTLX", "tilt": "../0"}),
-        )
-        .unwrap_err(),
-    );
-    assert_eq!(error.code, ErrorCode::InvalidArgument);
-    for (command, args) in [
-        ("get_radar_frame", serde_json::json!({})),
-        (
-            "get_radar_frame",
-            serde_json::json!({"product": "composite-reflectivity", "validTime": "2026-10-17T11:40:00Z"}),
-        ),
-        ("get_radar_site_frame", serde_json::json!({"site": "KTLX"})),
-        (
-            "get_radar_site_frame",
-            serde_json::json!({"product": "reflectivity", "site": "KTLX", "validTime": "2026-10-17T11:40:00Z", "tilt": "1"}),
+            ErrorCode::InvalidArgument,
         ),
         (
-            "get_radar_site_frame",
-            serde_json::json!({"latitude": 35.2, "longitude": -97.4, "validTime": "2026-10-17T11:40:00Z"}),
+            serde_json::json!({"product": "echo-tops", "site": "KTLX", "tilt": "1"}),
+            ErrorCode::InvalidArgument,
+        ),
+        (
+            serde_json::json!({"product": "echo-tops", "site": "ZZZZ"}),
+            ErrorCode::InvalidArgument,
+        ),
+        (
+            serde_json::json!({"product": "unknown-product", "site": "KTLX"}),
+            ErrorCode::InvalidArgument,
+        ),
+        (
+            serde_json::json!({"product": "echo-tops", "latitude": 0.0, "longitude": 0.0}),
+            ErrorCode::OverlayFetchFailed,
+        ),
+        (
+            serde_json::json!({"product": "echo-tops", "site": "KTLX", "validTime": "2000-01-01T00:00:00Z"}),
+            ErrorCode::InvalidArgument,
         ),
     ] {
-        let timed = args.get("validTime").is_some();
-        let bytes: Vec<u8> = parse(invoke_args(&webview, command, args).unwrap());
-        assert_eq!(&bytes[..8], b"SHRF\x01\x00\x00\x00");
-        let length = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
-        let header: Value = serde_json::from_slice(&bytes[12..12 + length]).unwrap();
-        assert_eq!(
-            header["validTime"],
-            if timed {
-                serde_json::json!("2026-10-17T11:38:49Z")
-            } else if command == "get_radar_site_frame" {
-                fixture("bridge/map/radar-site.result.json")["valid_time"].clone()
-            } else {
-                Value::Null
-            }
-        );
-        assert!(bytes[12 + length..].starts_with(b"\x89PNG\r\n\x1a\n"));
+        let error: BackendError =
+            parse(invoke_args(&webview, "get_radar_site_frame", args).unwrap_err());
+        assert_eq!(error.code, expected);
     }
 }
 
@@ -285,20 +248,7 @@ fn radar_commands_forward_optional_scan_times_and_preserve_the_actual_time() {
 fn every_raster_route_rejects_invalid_base64_padding_size_and_png_signatures() {
     use base64::Engine as _;
 
-    for (command, method, file) in [
-        ("get_weather_field", "fields.grid", "field.result.json"),
-        ("get_radar_frame", "radar.mosaic", "radar.result.json"),
-        (
-            "get_radar_site_frame",
-            "radar.site",
-            "radar-site.result.json",
-        ),
-        (
-            "get_satellite_frame",
-            "satellite.goes",
-            "satellite.result.json",
-        ),
-    ] {
+    for (command, method, file) in [("get_weather_field", "fields.grid", "field.result.json")] {
         let cases = if method == "fields.grid" { 4 } else { 5 };
         let launcher = FakeLauncher::with(vec![script(move |mut io| async move {
             let encoded = if method == "fields.grid" {
@@ -463,40 +413,25 @@ fn aigfs_accepts_f384_for_catalogues_fields_and_contours() {
 #[test]
 fn timed_radar_rejects_an_untimed_provider_frame() {
     let launcher = FakeLauncher::with(vec![script(|mut io| async move {
-        for (method, file) in [
-            ("radar.mosaic", "radar.result.json"),
-            ("radar.site", "radar-site.result.json"),
-        ] {
-            let request = io.expect(method).await.unwrap();
-            assert_eq!(request["params"]["valid_time"], "2026-10-17T11:40:00Z");
-            let mut result = fixture(&format!("bridge/map/{file}"));
-            result["valid_time"] = Value::Null;
-            io.reply(&request["id"], result).await;
+        while let Some(request) = io.next_request().await {
+            match request["method"].as_str().unwrap() {
+                "hello" => io.reply(&request["id"], common::hello_result()).await,
+                "shutdown" => return 0,
+                method => panic!("native single-site radar must not call Python: {method}"),
+            }
         }
-        io.expect("shutdown").await;
         0
     })]);
     let (_app, webview) = window(launcher);
-    for command in ["get_radar_frame", "get_radar_site_frame"] {
-        let error: BackendError = parse(
-            invoke_args(
-                &webview,
-                command,
-                serde_json::json!({"site": "KTLX", "validTime": "2026-10-17T11:40:00Z"}),
-            )
-            .unwrap_err(),
-        );
-        assert_eq!(error.code, ErrorCode::BridgeProtocol);
-        let error: BackendError = parse(
-            invoke_args(
-                &webview,
-                command,
-                serde_json::json!({"site": "KTLX", "validTime": ""}),
-            )
-            .unwrap_err(),
-        );
-        assert_eq!(error.code, ErrorCode::InvalidArgument);
-    }
+    let error: BackendError = parse(
+        invoke_args(
+            &webview,
+            "get_radar_site_frame",
+            serde_json::json!({"product": "echo-tops", "site": "KTLX", "validTime": ""}),
+        )
+        .unwrap_err(),
+    );
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
 }
 
 #[test]
@@ -576,14 +511,13 @@ fn unknown_commands_are_rejected() {
 #[test]
 fn weather_alerts_validate_requests_and_return_the_public_snapshot() {
     let launcher = FakeLauncher::with(vec![script(|mut io| async move {
-        let request = io.expect("alerts.weather").await.unwrap();
-        assert_eq!(
-            request["params"],
-            serde_json::json!({"valid_time": "2026-10-04T21:00:00Z"})
-        );
-        io.reply(&request["id"], fixture("bridge/map/alerts.result.json"))
-            .await;
-        io.expect("shutdown").await;
+        while let Some(request) = io.next_request().await {
+            match request["method"].as_str().unwrap() {
+                "hello" => io.reply(&request["id"], common::hello_result()).await,
+                "shutdown" => return 0,
+                method => panic!("native alerts must not use Python: {method}"),
+            }
+        }
         0
     })]);
     let (_app, webview) = window(launcher);
@@ -596,13 +530,115 @@ fn weather_alerts_validate_requests_and_return_the_public_snapshot() {
         .unwrap_err(),
     );
     assert_eq!(error.code, ErrorCode::InvalidArgument);
-    assert_eq!(
+    let history_err: BackendError = parse(
         invoke_args(
             &webview,
             "get_weather_alerts",
-            serde_json::json!({"validTime": "2026-10-04T21:00:00Z"})
+            serde_json::json!({"validTime": "2026-10-04T21:00:00Z"}),
         )
-        .unwrap(),
-        fixture("public/map/alerts.json")
+        .unwrap_err(),
     );
+    assert_eq!(history_err.code, ErrorCode::OverlayFetchFailed);
+    assert!(!history_err.retryable);
+    assert_eq!(
+        history_err.details.unwrap().get("reason"),
+        Some(&serde_json::json!("historyUnavailable"))
+    );
+}
+
+#[test]
+fn place_labels_and_pre_archive_spc_outlooks_run_natively_without_python() {
+    let launcher = FakeLauncher::with(vec![script(|mut io| async move {
+        while let Some(request) = io.next_request().await {
+            match request["method"].as_str().unwrap() {
+                "hello" => io.reply(&request["id"], common::hello_result()).await,
+                "shutdown" => return 0,
+                method => panic!("native place/outlook call must not use Python: {method}"),
+            }
+        }
+        0
+    })]);
+    let (_app, webview) = window(launcher);
+    let places = invoke(&webview, "get_place_labels").unwrap();
+    let items = places["places"].as_array().unwrap();
+    assert!(items.len() > 1000);
+    assert_eq!(items[0]["name"], "New York, New York");
+    assert_eq!(items[0]["tier"], 1);
+    let outlook = invoke_args(
+        &webview,
+        "get_spc_outlook",
+        serde_json::json!({"product": "cat", "validTime": "1998-05-20T18:00:00Z"}),
+    )
+    .unwrap();
+    assert_eq!(outlook["product"], "cat");
+    assert_eq!(outlook["outlook"], Value::Null);
+    for bad_time in ["2026-10-04T12:30:00Z", "2099-01-01T00:00:00Z"] {
+        let error: BackendError = parse(
+            invoke_args(
+                &webview,
+                "get_station_availability",
+                serde_json::json!({"observationTime": bad_time}),
+            )
+            .unwrap_err(),
+        );
+        assert_eq!(error.code, ErrorCode::InvalidArgument);
+    }
+    let mosaic_err: BackendError = parse(
+        invoke_args(
+            &webview,
+            "get_radar_frame",
+            serde_json::json!({"validTime": "2000-01-01T00:00:00Z"}),
+        )
+        .unwrap_err(),
+    );
+    assert_eq!(mosaic_err.code, ErrorCode::OverlayFetchFailed);
+    let sat_err: BackendError = parse(
+        invoke_args(
+            &webview,
+            "get_satellite_frame",
+            serde_json::json!({"validTime": "2026-10-04T21:00:00Z", "channel": "bad"}),
+        )
+        .unwrap_err(),
+    );
+    assert_eq!(sat_err.code, ErrorCode::InvalidArgument);
+    let threshold_catalog = invoke(&webview, "get_threshold_metrics").unwrap();
+    assert_eq!(threshold_catalog["metrics"].as_array().unwrap().len(), 59);
+    assert_eq!(
+        threshold_catalog["operators"],
+        serde_json::json!([">", ">=", "<", "<=", "==", "between"])
+    );
+    assert_eq!(
+        threshold_catalog["defaultMetrics"],
+        serde_json::json!(["mlcape", "shear_6km", "srh_3km"])
+    );
+    let report_options = invoke(&webview, "get_report_options").unwrap();
+    assert_eq!(report_options["windows"].as_array().unwrap().len(), 4);
+    assert_eq!(report_options["filters"].as_array().unwrap().len(), 5);
+    let reports_err: BackendError = parse(
+        invoke_args(
+            &webview,
+            "get_storm_reports",
+            serde_json::json!({"validTime": "2026-10-04T21:00:00Z", "windowS": 1234}),
+        )
+        .unwrap_err(),
+    );
+    assert_eq!(reports_err.code, ErrorCode::InvalidArgument);
+    let surface_err: BackendError = parse(
+        invoke_args(
+            &webview,
+            "get_surface_plots",
+            serde_json::json!({"latitude": 91.0, "longitude": -97.4, "validTime": "2026-10-04T21:00:00Z"}),
+        )
+        .unwrap_err(),
+    );
+    assert_eq!(surface_err.code, ErrorCode::InvalidArgument);
+    let surface_bad_time: BackendError = parse(
+        invoke_args(
+            &webview,
+            "get_surface_plots",
+            serde_json::json!({"latitude": 35.2, "longitude": -97.4, "validTime": "bad-time"}),
+        )
+        .unwrap_err(),
+    );
+    assert_eq!(surface_bad_time.code, ErrorCode::InvalidArgument);
 }

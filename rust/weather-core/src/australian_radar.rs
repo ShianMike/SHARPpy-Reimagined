@@ -138,8 +138,9 @@ impl RadarClient {
                 .find(|(key, _)| key == &cache_key)
                 .map(|(_, frame)| Arc::clone(frame))
             {
-                let actual = frame.actual_time;
-                if actual <= target && actual >= target - time::Duration::minutes(10) {
+                if frame.actual_time.is_some_and(|actual| {
+                    actual <= target && actual >= target - time::Duration::minutes(10)
+                }) {
                     return Ok(Some(frame));
                 }
                 continue;
@@ -329,11 +330,11 @@ fn make_frame(
         (60.0, "Australian Bureau of Meteorology radar via MRRL")
     };
     Ok(Frame {
-        actual_time: actual,
+        actual_time: Some(actual),
         product: product.into(),
         site_id: site.id.clone(),
         elevation_angle: Some(sweep.elevation_angle),
-        palette,
+        palette: Some(palette),
         legend_png_base64: None,
         label: if velocity {
             "Velocity"
@@ -347,7 +348,7 @@ fn make_frame(
         bounds,
         retrieved_at: format_rfc3339_utc(now),
         // Public weather DTOs use whole seconds; comparisons keep source precision.
-        valid_time: format_rfc3339_utc(actual),
+        valid_time: Some(format_rfc3339_utc(actual)),
         update_interval_s,
         attribution: attribution.into(),
         source_url: format!("{BASE}/{}/{path}", site.id),

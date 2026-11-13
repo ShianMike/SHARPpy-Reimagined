@@ -3,6 +3,7 @@
 
 pub mod batch_analysis;
 mod box_bindings;
+mod box_mean;
 pub mod box_soundings;
 pub mod contours;
 mod ecape;
@@ -838,6 +839,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     model_http_bindings::register(module)?;
     model_source_bindings::register(module)?;
     box_bindings::register(module)?;
+    box_mean::register(module)?;
     range_bindings::register(module)?;
     iem_bindings::register(module)?;
     ensemble_bindings::register(module)?;

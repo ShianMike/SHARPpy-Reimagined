@@ -126,9 +126,9 @@ impl RadarClient {
                 .find(|(cached, _)| cached == &key)
                 .map(|(_, frame)| Arc::clone(frame))
             {
-                if frame.actual_time <= target
-                    && frame.actual_time >= target - time::Duration::minutes(10)
-                {
+                if frame.actual_time.is_some_and(|actual| {
+                    actual <= target && actual >= target - time::Duration::minutes(10)
+                }) {
                     return Ok(Some(frame));
                 }
                 continue;
@@ -280,17 +280,17 @@ fn make_frame(
     palette.floor = Some(0.0);
     let (bounds, png) = polar_radar::render(&sweep, site, &palette).map_err(Error::Fetch)?;
     Ok(Frame {
-        actual_time: actual,
+        actual_time: Some(actual),
         product: "reflectivity".into(),
         site_id: site.id.clone(),
         elevation_angle: None,
-        palette,
+        palette: Some(palette),
         legend_png_base64: None,
         label: "Precipitation-scan Reflectivity".into(),
         units: "dBZ".into(),
         bounds,
         retrieved_at: format_rfc3339_utc(now),
-        valid_time: format_rfc3339_utc(actual),
+        valid_time: Some(format_rfc3339_utc(actual)),
         update_interval_s: 300.0,
         attribution: "Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben"
             .into(),

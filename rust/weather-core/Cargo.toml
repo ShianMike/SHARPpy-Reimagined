@@ -12,6 +12,7 @@ repository = "https://github.com/ShianMike/SHARPpy-Reimagined"
 base64 = "=0.22.1"
 bzip2 = "=0.6.1"
 csv = "=1.4.0"
+flate2 = "=1.1.10"
 geographiclib-rs = { version = "=0.2.7", default-features = false }
 hdf5-reader = { version = "=0.12.1", default-features = false }
 log = "0.4.34"

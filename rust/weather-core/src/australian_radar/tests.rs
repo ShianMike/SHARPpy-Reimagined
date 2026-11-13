@@ -219,7 +219,8 @@ async fn live_australian_reflectivity() {
         .unwrap();
     assert!(frame.byte_length > 1_000);
     assert!(frame.elevation_angle.is_some_and(f64::is_finite));
-    let actual = instant(&frame.valid_time);
+    let valid_time = frame.valid_time.as_deref().unwrap();
+    let actual = instant(valid_time);
     assert!(actual <= now && actual >= now - time::Duration::minutes(10));
     if let Ok(output) = std::env::var("SHARPPY_RADAR_TEST_PNG") {
         std::fs::write(output, STANDARD.decode(&frame.png_base64).unwrap()).unwrap();
@@ -228,7 +229,7 @@ async fn live_australian_reflectivity() {
         "{} {} {} {}deg {}bytes",
         frame.site_id,
         frame.product,
-        frame.valid_time,
+        valid_time,
         frame.elevation_angle.unwrap(),
         frame.byte_length
     );
@@ -337,9 +338,9 @@ fn mrrl_noumea_sample_decodes_and_renders_with_licence_ouverte_metadata() {
     assert_eq!(frame.product, "reflectivity");
     assert_eq!(frame.label, "Reflectivity");
     assert_eq!(frame.units, "dBZ");
-    assert_eq!(frame.valid_time, "2026-11-11T10:09:33Z");
+    assert_eq!(frame.valid_time.as_deref(), Some("2026-11-11T10:09:33Z"));
     assert_eq!(frame.update_interval_s, 300.0);
-    assert_eq!(frame.palette.floor, Some(0.0));
+    assert_eq!(frame.palette.as_ref().unwrap().floor, Some(0.0));
     assert_eq!(
         frame.attribution,
         "Météo-France · Licence Ouverte 2.0 (data.gouv.fr/pages/legal/licences/etalab-2-0) · converted by MRRL, rendered by SHARPpy Reimagined"

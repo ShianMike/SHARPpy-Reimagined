@@ -114,18 +114,12 @@ it("shows the fixed live projection and keeps the Model Viewer projection choice
   expect(screen.getByRole("button", { name: "Globe" }).getAttribute("aria-pressed")).toBe("true");
 });
 
-it("shows radar credits in the Live Tracking legend even when no weather layers are enabled", () => {
+it("omits radar credits from the legend popup now that Live Tracking displays them on the map", () => {
   useMapStore.setState({ view: "live", layerPanelGroup: "legend" });
   for (const id of ORDERABLE_LAYER_IDS) useMapStore.getState().setLayerVisible(id, false);
   const { view, queryClient } = renderWithBackend(<LayerPanel availabilities={new Set()} />, createTransport());
   expect(screen.getByText("No weather layers enabled. Add one in Weather to see its key.")).toBeTruthy();
-  const credits = within(screen.getByRole("region", { name: "Radar credits" }));
-  expect(credits.getByRole("link", { name: "MRRL InterRAD" }).getAttribute("href")).toBe("https://mrrl.net/");
-  expect(credits.getByRole("link", { name: "Météo-France" })).toBeTruthy();
-  act(() => { useMapStore.setState({ view: "map" }); });
-  expect(screen.queryByRole("region", { name: "Radar credits" })).toBeNull();
-  act(() => { useMapStore.setState({ view: "live" }); });
-  expect(screen.getByRole("region", { name: "Radar credits" })).toBeTruthy();
+  expect(screen.queryByRole("complementary", { name: "Radar credits" })).toBeNull();
   view.unmount(); queryClient.clear();
 });
 

@@ -11,6 +11,7 @@ import { NavigationRail } from "../features/rail/NavigationRail";
 import { UpdateNotice } from "../features/settings/UpdateNotice";
 import { WhatsNew } from "../features/settings/WhatsNew";
 import { TimelineRegion } from "../features/timeline/TimelineRegion";
+import { RadarCredits } from "../features/tracking/RadarCredits";
 import { LiveTimeline } from "../features/tracking/LiveTimeline";
 import { useTheme, useUiStore } from "../stores/uiStore";
 import { Action, EmptyPanel, IconAction } from "../ui/Controls";
@@ -157,6 +158,7 @@ export function Shell(): ReactNode {
               </header>
               <div ref={attachRightEnd} className={styles.rightEnd} />
             </Popover>
+            {isLive ? <RadarCredits className={styles.radarCredits} /> : null}
             {isLive ? <LiveTimeline className={styles.timeline} scanTarget={radarScanTarget} /> : <TimelineRegion className={styles.timeline} />}
           </div>
           {panelWorkspace === null ? null : <Surface key={panelWorkspace.id} ref={workspacePanel} as="section" className={styles.workspace} data-motion="panel" data-workspace={panelWorkspace.id} data-testid="workspace-panel" aria-label={panelWorkspace.label} inert={isMap} aria-hidden={isMap} hidden={isMap}>

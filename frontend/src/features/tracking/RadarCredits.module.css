@@ -1,0 +1,27 @@
+.credits {
+  max-width: min(var(--notice-max-w), calc(100% - 2 * var(--chrome-inset)));
+  padding: var(--space-1) var(--space-2);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+}
+
+.credits a {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.credits a:hover {
+  color: var(--accent-bright);
+}
+
+.credits a:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

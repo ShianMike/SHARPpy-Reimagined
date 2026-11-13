@@ -114,7 +114,7 @@ function WeatherKey({ id, panel }: { id: OrderableLayerId; panel: number }): Rea
   }
 }
 
-export function WeatherLegend({ active, panel, availabilities, live }: { active: readonly OrderableLayerId[]; panel: number; availabilities: ReadonlySet<StationAvailability>; live: boolean }) {
+export function WeatherLegend({ active, panel, availabilities }: { active: readonly OrderableLayerId[]; panel: number; availabilities: ReadonlySet<StationAvailability> }) {
   const layers = useMapStore((state) => panelLayers(state, panel));
   return <section aria-label="Map legend" className={styles.weather}>
     <h3>Enabled layers <span>{active.length} · top first</span></h3>
@@ -126,13 +126,5 @@ export function WeatherLegend({ active, panel, availabilities, live }: { active:
       </li>)}
     </ol>}
     {!layers.stations.visible ? null : <div className={styles.stationKey}><h3>Stations</h3><Legend availabilities={availabilities} /></div>}
-    {!live ? null : <section className={styles.credits} aria-labelledby="radar-credits-title">
-      <h3 id="radar-credits-title">Radar credits</h3>
-      <div>
-        <p>Radar data from <a href="https://www.weather.gov/" target="_blank" rel="noreferrer">NOAA / NWS</a>, <a href="https://www.bom.gov.au/" target="_blank" rel="noreferrer">Australia’s Bureau of Meteorology</a>, <a href="https://www.dwd.de/" target="_blank" rel="noreferrer">Deutscher Wetterdienst</a>, and <a href="https://www.meteofrance.fr/" target="_blank" rel="noreferrer">Météo-France</a>.</p>
-        <p>European scans are supplied by national providers through <a href="https://eumetnet.github.io/openradardata-documentation/" target="_blank" rel="noreferrer">EUMETNET OPERA</a>. Australian and additional French scans are supplied and converted by <a href="https://mrrl.net/" target="_blank" rel="noreferrer">MRRL InterRAD</a> (<a href="https://feeds.mrrl.net/ATTRIBUTION.txt" target="_blank" rel="noreferrer">source credits</a>).</p>
-        <p>OPERA licences vary by scan. French data is provided under <a href="https://www.etalab.gouv.fr/wp-content/uploads/2017/04/ETALAB-Licence-Ouverte-v2.0.pdf" target="_blank" rel="noreferrer">Licence Ouverte 2.0</a>. Radar images are rendered by SHARPpy Reimagined.</p>
-      </div>
-    </section>}
   </section>;
 }

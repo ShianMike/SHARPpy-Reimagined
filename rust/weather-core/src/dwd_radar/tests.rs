@@ -104,7 +104,7 @@ fn frame_rejects_wrong_time_and_keeps_numeric_lookup() {
     )
     .unwrap();
     assert_eq!(frame.elevation_angle, None);
-    assert_eq!(frame.valid_time, "2026-11-09T02:55:00Z");
+    assert_eq!(frame.valid_time.as_deref(), Some("2026-11-09T02:55:00Z"));
     let png = STANDARD.decode(frame.png_base64).unwrap();
     let reader = png::Decoder::new(std::io::Cursor::new(png))
         .read_info()
@@ -168,9 +168,10 @@ async fn live_dwd_reflectivity() {
         .unwrap()
         .unwrap();
     assert!(frame.byte_length > 1000);
-    assert!(instant(&frame.valid_time) <= now);
+    let valid_time = frame.valid_time.as_deref().unwrap();
+    assert!(instant(valid_time) <= now);
     eprintln!(
         "{} {} {} {}bytes",
-        frame.site_id, frame.product, frame.valid_time, frame.byte_length
+        frame.site_id, frame.product, valid_time, frame.byte_length
     );
 }

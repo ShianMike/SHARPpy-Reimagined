@@ -138,7 +138,7 @@ export function LayerPanel({ availabilities }: LayerPanelProps): ReactNode {
             })}{available.length === 0 ? <p className={styles.hint}>All weather layers are on the map.</p> : null}</div>
           </section>
         </div>}
-        {group !== "legend" ? null : <div className={styles.scrollBody} data-motion="fade"><WeatherLegend active={active} panel={panel} availabilities={availabilities} live={live} /></div>}
+        {group !== "legend" ? null : <div className={styles.scrollBody} data-motion="fade"><WeatherLegend active={active} panel={panel} availabilities={availabilities} /></div>}
         {group !== "map" ? null : <div className={styles.scrollBody} data-motion="fade">
           <div className={styles.projection}>
             <h3 className={styles.group}>Projection <span>{live ? "Flat map" : "All panels"}</span></h3>

@@ -2,9 +2,13 @@
 
 mod fetch;
 mod parse;
+mod plots;
 
 pub use fetch::{fetch, FetchError, JsonSource, Request, SurfaceClient};
 pub use parse::{nearest_index, observations, stations};
+pub use plots::{
+    build_plots, fetch_plots, StaffSpec, SurfacePlot, SurfacePlotCounts, SurfacePlotsSnapshot,
+};
 use time::OffsetDateTime;
 
 pub const MAX_BYTES: usize = 8 * 1024 * 1024;

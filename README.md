@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.7.0 (Unreleased)
+# SHARPpy Reimagined · v3.7.0
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,20 +10,20 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#unreleased)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v370---2026-11-13)
 
 </div>
 
-## What's new in 3.7.0 (Unreleased)
+## What's new in 3.7.0
 
-The upcoming version adds radar coverage and sounding display choices:
+This release adds radar coverage and sounding display choices:
 
 - **German radar:** view DWD precipitation-scan reflectivity at 17 sites, with
   measured values, source credits and terrain-following scan elevations.
 - **European radar:** discover OPERA sites and display compatible reflectivity
   scans. Availability depends on each site's data format, licence and scans.
 - **French radar:** view additional Météo-France sites in France and overseas
-  through MRRL InterRAD, with source credits in the Live Tracking legend.
+  through MRRL InterRAD, with source credits at the bottom left of Live Tracking.
 - **Radar controls:** choose a network, search sites by code or place, and click
   map labels to select a site. Borders show selected and unavailable sites.
 - **Sounding display:** choose Dark, Light or Protanopia for sounding images in

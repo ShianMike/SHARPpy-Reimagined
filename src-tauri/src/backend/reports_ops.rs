@@ -1,10 +1,10 @@
-//! Storm report and contour operations, served by the Python bridge
-//! (`sharpmod/bridge/reports.py`, `sharpmod/bridge/contours.py`).
+//! Storm report (native `sharpmod_weather::reports`) and contour operations
+//! (`sharpmod/bridge/contours.py`).
 //!
 //! | Operation | Bridge method | Deadline |
 //! |---|---|---|
-//! | `get_storm_reports` | `reports.storms` | 60 s |
-//! | `get_report_options` | `reports.options`, cached for the session | 30 s |
+//! | `get_storm_reports` | native (`sharpmod_weather::reports`) | — |
+//! | `get_report_options` | native (`sharpmod_weather::reports`) | — |
 //! | `get_field_contours` | `fields.contours` | 120 s |
 //!
 //! Reports cross as JSON point records and contours as JSON line segments,
@@ -19,15 +19,14 @@ use crate::backend::map_ops::{context, key_ok, time_ok};
 use crate::backend::router::Router;
 use crate::backend::sounding_ops::{invalid, rejected};
 use crate::dto::contours::ContourLines;
-use crate::dto::reports::{ReportOptions, StormReports};
-use crate::error::BackendError;
+use crate::dto::reports::{ReportFilter, ReportOptions, ReportPoint, ReportWindow, StormReports};
+use crate::error::{BackendError, ErrorCode};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 pub const OP_REPORTS: &str = "get_storm_reports";
 pub const OP_REPORT_OPTIONS: &str = "get_report_options";
 pub const OP_CONTOURS: &str = "get_field_contours";
 
-const REPORTS_TIMEOUT: Duration = Duration::from_secs(60);
-const OPTIONS_TIMEOUT: Duration = Duration::from_secs(30);
 const CONTOURS_TIMEOUT: Duration = Duration::from_secs(120);
 
 fn filter_ok(filter: &str) -> bool {
@@ -46,23 +45,65 @@ impl Router {
         if !time_ok(valid_time) {
             return Err(invalid(&context, "validTime must be an RFC 3339 time"));
         }
-        let mut params = json!({ "valid_time": valid_time });
-        if let Some(seconds) = window_s {
-            params["window_s"] = seconds.into();
-        }
-        match hazard_filter {
-            Some(key) if filter_ok(key) => params["hazard_filter"] = key.into(),
+        let when = OffsetDateTime::parse(valid_time, &Rfc3339)
+            .map_err(|_| invalid(&context, "validTime must be an RFC 3339 time"))?;
+        let window_s = match window_s {
+            Some(seconds @ (7200 | 21600 | 43200 | 86400)) => seconds,
             Some(_) => {
                 return Err(invalid(
                     &context,
-                    "hazardFilter must be \"all\", \"tornado\", \"hail\", \"wind\", or \"significant\"",
+                    "window_s must be one of [7200, 21600, 43200, 86400]",
                 ));
             }
-            None => {}
+            None => 21600,
+        };
+        if hazard_filter.is_some_and(|key| !filter_ok(key)) {
+            return Err(invalid(
+                &context,
+                "hazardFilter must be \"all\", \"tornado\", \"hail\", \"wind\", or \"significant\"",
+            ));
         }
-        let reports: StormReports = self
-            .call(&context, "reports.storms", params, REPORTS_TIMEOUT)
-            .await?;
+        let snapshot = sharpmod_weather::reports::shared_client()
+            .fetch_snapshot(when, window_s, hazard_filter, OffsetDateTime::now_utc())
+            .await
+            .map_err(|error| BackendError {
+                code: ErrorCode::OverlayFetchFailed,
+                message: format!("The storm reports could not be loaded: {error}."),
+                retryable: true,
+                context: Some(Box::new(context.clone())),
+                details: None,
+            })?;
+        let reports = StormReports {
+            valid_time: snapshot.valid_time,
+            window_s: snapshot.window_s,
+            window_label: snapshot.window_label,
+            hazard_filter: snapshot.hazard_filter,
+            total_count: snapshot.total_count,
+            shown_count: snapshot.shown_count,
+            subtitle: snapshot.subtitle,
+            valid_from: snapshot.valid_from,
+            valid_to: snapshot.valid_to,
+            source_url: snapshot.source_url,
+            attribution: snapshot.attribution,
+            reports: snapshot
+                .reports
+                .into_iter()
+                .map(|r| ReportPoint {
+                    label: r.label,
+                    description: r.description,
+                    fill: r.fill,
+                    stroke: r.stroke,
+                    radius_px: r.radius_px,
+                    symbol: r.symbol,
+                    caption: r.caption,
+                    significant: r.significant,
+                    category: r.category,
+                    valid: r.valid,
+                    lon: r.lon,
+                    lat: r.lat,
+                })
+                .collect(),
+        };
         reports
             .validate()
             .map_err(|reason| rejected(&context, "reports.storms", reason))?;
@@ -75,9 +116,25 @@ impl Router {
             return Ok(options);
         }
         let context = context(OP_REPORT_OPTIONS, "storm report options");
-        let result: ReportOptions = self
-            .call(&context, "reports.options", json!({}), OPTIONS_TIMEOUT)
-            .await?;
+        let payload = sharpmod_weather::reports::report_options();
+        let result = ReportOptions {
+            windows: payload
+                .windows
+                .into_iter()
+                .map(|w| ReportWindow {
+                    label: w.label,
+                    seconds: w.seconds,
+                })
+                .collect(),
+            filters: payload
+                .filters
+                .into_iter()
+                .map(|f| ReportFilter {
+                    key: f.key,
+                    label: f.label,
+                })
+                .collect(),
+        };
         result
             .validate()
             .map_err(|reason| rejected(&context, "reports.options", reason))?;

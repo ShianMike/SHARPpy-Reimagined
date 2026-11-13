@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import re
@@ -9,7 +10,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from email.utils import parsedate_to_datetime
 from functools import lru_cache
 from urllib.error import HTTPError
 
@@ -289,21 +289,16 @@ def palette(product="velocity") -> dict:
 
 def scans(payload: bytes) -> tuple[tuple[datetime, str], ...]:
     """NOAA's rolling directory uses UTC modification times, not scan times."""
-    if len(payload) > 256 * 1024:
-        raise RadarSiteError("velocity directory exceeded its byte budget")
-    entries = []
-    for name, day, month, year, clock in re.findall(
-        rb'href="(sn\.\d{4})"[^\n]*?(\d{2})-([A-Za-z]{3})-(\d{4}) (\d{2}:\d{2})',
-        payload,
-    ):
-        try:
-            date = parsedate_to_datetime(
-                b" ".join((day, month, year, clock, b"GMT")).decode("ascii")
-            )
-            entries.append((date, name.decode("ascii")))
-        except (ValueError, UnicodeError):
-            continue
-    return tuple(entries)
+    import sharpmod_rs
+
+    try:
+        rows = sharpmod_rs.radar_level3_scans(bytes(payload))
+    except ValueError as exc:
+        raise RadarSiteError(str(exc)) from None
+    return tuple(
+        (datetime.fromtimestamp(ts, tz=timezone.utc), name)
+        for ts, name in rows
+    )
 
 
 def directory_scans(directory, call, timeout):
@@ -485,7 +480,6 @@ def fetch_frame(
     now=None,
 ) -> OverlayRaster:
     import sharpmod_rs
-    from metpy.io import Level3File
 
     echo_tops = product == "echo-tops"
     if (
@@ -497,6 +491,52 @@ def fetch_frame(
     site = site_by_id(site_id)
     if site is None:
         raise RadarSiteError("unknown radar site")
+    if opener is None and now is None:
+        req: dict[str, object] = {"product": product, "site_id": site.id, "tilt": tilt}
+        if valid_time is not None:
+            when = (
+                valid_time.replace(tzinfo=timezone.utc)
+                if valid_time.tzinfo is None
+                else valid_time.astimezone(timezone.utc)
+            )
+            req["valid_time"] = when.isoformat().replace("+00:00", "Z")
+        try:
+            raw_frame = sharpmod_rs.radar_site_frame(json.dumps(req))
+        except sharpmod_rs.WeatherRadarScanMissing as exc:
+            raise RadarScanMissing(str(exc)) from None
+        except (ValueError, RuntimeError) as exc:
+            raise RadarSiteError(str(exc)) from None
+        if raw_frame is not None:
+            data = json.loads(raw_frame)
+            angle = data.get("elevation_angle")
+            return OverlayRaster(
+                key=OVERLAY_KEY,
+                title=f"{site.id} {data['label']}",
+                short_name=site.id,
+                subtitle="18 dBZ echo height · full volume"
+                if echo_tops
+                else f"Elevation {angle:.1f}°",
+                elevation_angle=angle,
+                image_bytes=base64.b64decode(data["png_base64"]),
+                bounds=(
+                    float(data["bounds"]["west"]),
+                    float(data["bounds"]["east"]),
+                    float(data["bounds"]["south"]),
+                    float(data["bounds"]["north"]),
+                ),
+                retrieved_at=datetime.fromisoformat(
+                    data["retrieved_at"].replace("Z", "+00:00")
+                ),
+                valid_time=datetime.fromisoformat(
+                    data["valid_time"].replace("Z", "+00:00")
+                ),
+                update_interval_s=float(data["update_interval_s"]),
+                source_url=str(data["source_url"]),
+                attribution=str(data["attribution"]),
+                opacity=0.85,
+            )
+
+    from metpy.io import Level3File
     reference = now or datetime.now(timezone.utc)
     reference = (
         reference.replace(tzinfo=timezone.utc)

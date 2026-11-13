@@ -33,6 +33,10 @@
 .point { justify-content: center; }
 .point > :not([data-testid="inspector"]) { min-height: var(--side-panel-min-h); }
 .timeline { position: absolute; bottom: max(var(--chrome-inset), env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(var(--player-w), calc(100% - 2 * var(--dock-offset))); z-index: var(--z-floating); pointer-events: auto; }
+.radarCredits { position: absolute; left: max(var(--chrome-gap), env(safe-area-inset-left)); bottom: max(var(--chrome-gap), env(safe-area-inset-bottom)); width: min(var(--inspector-w), calc((100% - min(var(--player-w), calc(100% - 2 * var(--dock-offset)))) / 2 - 2 * var(--chrome-gap))); z-index: var(--z-floating); }
+@media (max-width: 1259px) {
+  .radarCredits { width: auto; bottom: calc(var(--player-h) + 2 * var(--chrome-inset)); }
+}
 .workspace { --motion-panel-x: 0; position: absolute; top: max(var(--chrome-inset), env(safe-area-inset-top)); bottom: max(var(--chrome-inset), env(safe-area-inset-bottom)); left: var(--dock-offset); right: max(var(--chrome-inset), env(safe-area-inset-right)); overflow: hidden; display: flex; align-items: stretch; justify-content: stretch; z-index: var(--z-floating); }
 .workspace[data-workspace="sounding"] { padding: var(--space-3); overflow: hidden;
   --accent: var(--workspace-orange); --accent-hover: var(--workspace-orange-hover); --accent-pressed: var(--workspace-orange-pressed);

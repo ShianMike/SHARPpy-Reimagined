@@ -31,6 +31,7 @@ reflectivity ramps over the same storm is not twice the information.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import math
@@ -443,6 +444,53 @@ def fetch_frame(product_key: str | None, *, site_id: str | None = None,
             opener=opener, now=now,
         )
         return None if should_cancel and should_cancel() else raster.at_opacity(opacity)
+    if opener is None and should_cancel is None and now is None and pixels in (DEFAULT_FRAME_PIXELS, MAX_FRAME_PIXELS):
+        import sharpmod_rs
+
+        req: dict[str, object] = {"product": product.key, "site_id": site.id}
+        if valid_time is not None:
+            when = (
+                valid_time.replace(tzinfo=timezone.utc)
+                if valid_time.tzinfo is None
+                else valid_time.astimezone(timezone.utc)
+            )
+            req["valid_time"] = when.isoformat().replace("+00:00", "Z")
+        if tilt is not None:
+            req["tilt"] = tilt
+        try:
+            raw_frame = sharpmod_rs.radar_site_frame(json.dumps(req))
+        except sharpmod_rs.WeatherRadarScanMissing as exc:
+            raise RadarScanMissing(str(exc)) from None
+        except (ValueError, RuntimeError) as exc:
+            raise RadarSiteError(str(exc)) from None
+        if raw_frame is not None:
+            data = json.loads(raw_frame)
+            valid_dt = (
+                datetime.fromisoformat(data["valid_time"].replace("Z", "+00:00"))
+                if data.get("valid_time")
+                else None
+            )
+            return OverlayRaster(
+                key=OVERLAY_KEY,
+                title=f"{site.id} {data['label']}",
+                image_bytes=base64.b64decode(data["png_base64"]),
+                bounds=(
+                    float(data["bounds"]["west"]),
+                    float(data["bounds"]["east"]),
+                    float(data["bounds"]["south"]),
+                    float(data["bounds"]["north"]),
+                ),
+                subtitle=f"Single site · {site.lat:.2f}, {site.lon:.2f}",
+                short_name=site.id,
+                retrieved_at=datetime.fromisoformat(
+                    data["retrieved_at"].replace("Z", "+00:00")
+                ),
+                valid_time=valid_dt,
+                update_interval_s=float(data["update_interval_s"]),
+                opacity=opacity,
+                source_url=str(data["source_url"]),
+                attribution=str(data["attribution"]),
+            )
     selected = None
     timeout, _limit = _remote_limits()
     call = opener or _default_opener

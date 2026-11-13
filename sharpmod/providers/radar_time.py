@@ -6,7 +6,6 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
-from xml.etree import ElementTree
 
 HISTORY = timedelta(minutes=60)
 TOLERANCE = timedelta(minutes=10)
@@ -38,48 +37,20 @@ def stamp(value: datetime) -> str:
 
 def parse_capabilities(payload: bytes) -> dict[str, tuple[datetime, ...]]:
     """Read each layer's discrete TIME values, including inherited dimensions."""
-    if len(payload) > MAX_CAPABILITIES_BYTES or b"<!DOCTYPE" in payload.upper():
-        raise RadarTimeError("radar capabilities exceed the safety limits")
+    import json
+    import sharpmod_rs
+
     try:
-        root = ElementTree.fromstring(payload)
-    except ElementTree.ParseError as exc:
-        raise RadarTimeError("radar service returned invalid capabilities") from exc
-    if root.tag.rsplit("}", 1)[-1] not in {"WMS_Capabilities", "WMT_MS_Capabilities"}:
-        raise RadarTimeError("radar service returned invalid capabilities")
-    result = {}
-
-    def visit(element, inherited=()):
-        times = inherited
-        for child in element:
-            if (
-                child.tag.rsplit("}", 1)[-1] in ("Dimension", "Extent")
-                and child.get("name", "").lower() == "time"
-            ):
-                parsed = set()
-                for token in (child.text or "").split(","):
-                    # shortcut: NOAA supplies discrete scans; add interval dimensions if NOAA publishes them.
-                    if "/" in token:
-                        continue
-                    try:
-                        parsed.add(
-                            _utc(
-                                datetime.fromisoformat(
-                                    token.strip().replace("Z", "+00:00")
-                                )
-                            )
-                        )
-                    except ValueError:
-                        continue
-                times = tuple(sorted(parsed))
-        for child in element:
-            name = child.tag.rsplit("}", 1)[-1]
-            if name == "Name" and child.text:
-                result[child.text.strip().split(":")[-1]] = times
-            elif name in ("Capability", "Layer"):
-                visit(child, times)
-
-    visit(root)
-    return result
+        raw = json.loads(sharpmod_rs.radar_wms_capabilities(bytes(payload)))
+    except ValueError as exc:
+        raise RadarTimeError(str(exc)) from exc
+    return {
+        key: tuple(
+            _utc(datetime.fromisoformat(stamp_text.replace("Z", "+00:00")))
+            for stamp_text in stamps
+        )
+        for key, stamps in raw.items()
+    }
 
 
 def select_time(

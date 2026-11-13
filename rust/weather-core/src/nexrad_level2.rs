@@ -129,18 +129,26 @@ impl RadarClient {
             return Err(Error::Invalid("unknown Level II product".into()));
         }
         let moment = MomentKind::from_product(product).expect("checked above");
-        let selected = self.select(site, target, now).await?;
-        let volume = match selected {
-            Some(scan) => Some(self.volume(site, &scan, cache_dir).await?),
-            None => None,
-        };
+        let mut volume = None;
+        for scan in self.select(site, target, now).await? {
+            let candidate = self.volume(site, &scan, cache_dir).await?;
+            if candidate
+                .cuts
+                .iter()
+                .any(|((kind, _), cut)| *kind == moment && matches_window(cut.when, target, now))
+            {
+                volume = Some(candidate);
+                break;
+            }
+        }
         let tilts = TILTS
             .iter()
             .map(|(cut, _, _)| RadarTiltStatus {
                 tilt: (*cut).into(),
                 status: if volume
                     .as_ref()
-                    .is_some_and(|vol| vol.cuts.contains_key(&(moment, *cut)))
+                    .and_then(|vol| vol.cuts.get(&(moment, *cut)))
+                    .is_some_and(|cut| matches_window(cut.when, target, now))
                 {
                     "available"
                 } else {
@@ -190,35 +198,38 @@ impl RadarClient {
             .map(|value| OffsetDateTime::parse(value, &Rfc3339))
             .transpose()
             .map_err(|_| Error::Invalid("A valid radar time is required.".into()))?;
-        let selected = self
-            .select(site, requested, now)
-            .await?
-            .ok_or(Error::ScanMissing)?;
         let pixels = pixels.clamp(64, 4096);
-        let cache_key = format!("level2:{product}:{}:{tilt_key}:{pixels}", selected.1);
-        if let Some(frame) = self
-            .frames
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .iter()
-            .find(|(key, _)| key == &cache_key)
-            .map(|(_, frame)| Arc::clone(frame))
-        {
-            if !frame
-                .actual_time
-                .is_some_and(|actual| matches_window(actual, requested, now))
+        let mut matched = None;
+        for selected in self.select(site, requested, now).await? {
+            let cache_key = format!("level2:{product}:{}:{tilt_key}:{pixels}", selected.1);
+            if let Some(frame) = self
+                .frames
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .iter()
+                .find(|(key, _)| key == &cache_key)
+                .map(|(_, frame)| Arc::clone(frame))
             {
-                return Err(Error::ScanMissing);
+                if frame
+                    .actual_time
+                    .is_some_and(|actual| matches_window(actual, requested, now))
+                {
+                    return Ok(Some(frame));
+                }
+                continue;
             }
-            return Ok(Some(frame));
+            let volume = self.volume(site, &selected, cache_dir).await?;
+            if volume
+                .cuts
+                .get(&(moment, tilt_key))
+                .is_some_and(|cut| matches_window(cut.when, requested, now))
+            {
+                matched = Some((selected, volume, cache_key));
+                break;
+            }
         }
-        let volume = self.volume(site, &selected, cache_dir).await?;
-        let Some(cut) = volume.cuts.get(&(moment, tilt_key)) else {
-            return Err(Error::ScanMissing);
-        };
-        if !matches_window(cut.when, requested, now) {
-            return Err(Error::ScanMissing);
-        }
+        let (selected, volume, cache_key) = matched.ok_or(Error::ScanMissing)?;
+        let cut = &volume.cuts[&(moment, tilt_key)];
         let bounds = site_bounds(site);
         let palette = palette_for(product);
         let folded_rgb = (moment == MomentKind::Reflectivity).then_some([128, 0, 255]);
@@ -306,7 +317,7 @@ impl RadarClient {
         site: &RadarSite,
         requested: Option<OffsetDateTime>,
         now: OffsetDateTime,
-    ) -> Result<Option<ScanEntry>, Error> {
+    ) -> Result<Vec<ScanEntry>, Error> {
         let target = requested.unwrap_or(now);
         if target < now - time::Duration::minutes(70) || target > now + time::Duration::minutes(1) {
             return Err(Error::Invalid(
@@ -321,19 +332,16 @@ impl RadarClient {
         let mut scans = Vec::new();
         for day in days {
             for scan in self.listing(site, day, cutoff).await? {
-                if scan.0 >= cutoff && scan.0 <= now {
+                if scan.0 >= cutoff
+                    && scan.0 <= target.min(now)
+                    && (requested.is_none() || scan.0 >= target - time::Duration::minutes(35))
+                {
                     scans.push(scan);
                 }
             }
         }
-        let selected = match requested {
-            Some(_) => scans
-                .into_iter()
-                .filter(|(when, _, _)| (*when - target).abs() <= time::Duration::minutes(10))
-                .min_by_key(|(when, _, _)| (*when - target).abs()),
-            None => scans.into_iter().max_by_key(|(when, _, _)| *when),
-        };
-        Ok(selected)
+        scans.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        Ok(scans)
     }
 
     async fn listing(
@@ -526,7 +534,7 @@ fn matches_window(
         return false;
     }
     match requested {
-        Some(target) => (actual - target).abs() <= time::Duration::minutes(10),
+        Some(target) => actual <= target && actual >= target - time::Duration::minutes(20),
         None => actual >= now - time::Duration::minutes(70),
     }
 }

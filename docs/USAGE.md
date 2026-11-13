@@ -116,7 +116,9 @@ Live radar loads the provider's latest available scan automatically. **Radar
 time** shows its actual UTC time and age; a delayed scan is identified. Use the
 timeline to step, scrub, or animate up to the past **60 minutes** when the
 provider supplies history. Scan intervals vary, so multiple requested times can
-resolve to the same scan. Playback loads frames as needed and returns to live
+resolve to the same scan. NEXRAD history uses a recent scan at or before the
+selected time, and the radar time shows the scan's actual time. Playback loads
+frames as needed and returns to live
 at the present; **Live** also returns immediately. An unavailable scan is
 reported rather than substituted silently.
 

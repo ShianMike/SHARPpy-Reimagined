@@ -438,7 +438,7 @@ async fn live_uses_latest_completed_volume_even_when_publication_is_delayed() {
     );
 
     let timed = Request {
-        valid_time: Some("2026-10-17T12:00:00Z".into()),
+        valid_time: Some("2026-10-17T11:10:00Z".into()),
         ..request.clone()
     };
     assert!(matches!(
@@ -452,6 +452,98 @@ async fn live_uses_latest_completed_volume_even_when_publication_is_delayed() {
             .fetch_site_with_pixels(request, now + TimeDuration::minutes(75), site, 128, None)
             .await,
         Err(Error::ScanMissing)
+    ));
+}
+
+#[tokio::test]
+async fn history_uses_the_latest_cut_at_or_before_the_requested_time() {
+    let site = crate::radar_sites::sites()
+        .iter()
+        .find(|site| site.id == "KTLX")
+        .unwrap();
+    let now = instant("2026-10-17T12:12:00Z");
+    let newest = instant("2026-10-17T11:57:40Z");
+    let older = instant("2026-10-17T11:48:40Z");
+    let newest_key = "2026/10/17/KTLX/KTLX20261017_115600_V06";
+    let older_key = "2026/10/17/KTLX/KTLX20261017_114700_V06";
+    let mut newest_volume = build_volume("KTLX", site.lat as f32, site.lon as f32, newest, true);
+    let mut older_volume = build_volume("KTLX", site.lat as f32, site.lon as f32, older, true);
+    for (volume, start) in [
+        (&mut newest_volume, "2026-10-17T11:56:00Z"),
+        (&mut older_volume, "2026-10-17T11:47:00Z"),
+    ] {
+        let (day, millis) = volume_time_fields(instant(start));
+        volume[12..16].copy_from_slice(&day.to_be_bytes());
+        volume[16..20].copy_from_slice(&millis.to_be_bytes());
+    }
+    let xml = s3_listing(&[
+        (older_key, older_volume.len()),
+        (newest_key, newest_volume.len()),
+    ]);
+    let server = Server::new(move |path| Reply {
+        status: 200,
+        body: if path.starts_with("/?") {
+            xml.clone()
+        } else if path.ends_with(newest_key) {
+            newest_volume.clone()
+        } else {
+            older_volume.clone()
+        },
+    });
+    let client = RadarClient {
+        base: server.base.clone(),
+        ..Default::default()
+    };
+    let request = Request {
+        product: Some("reflectivity".into()),
+        site_id: Some("KTLX".into()),
+        tilt: Some("0".into()),
+        valid_time: Some("2026-10-17T12:10:00Z".into()),
+        ..Default::default()
+    };
+    let frame = client
+        .fetch_site_with_pixels(request.clone(), now, site, 128, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(frame.actual_time, Some(newest));
+    assert!(frame.source_url.ends_with(newest_key));
+    let tilts = client
+        .availability(
+            site,
+            "reflectivity",
+            Some(instant("2026-10-17T12:10:00Z")),
+            now,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        tilts
+            .tilts
+            .iter()
+            .find(|tilt| tilt.tilt == "0")
+            .unwrap()
+            .status,
+        "available"
+    );
+
+    // The latest volume began before this target, but its cut was measured later.
+    let earlier_request = Request {
+        valid_time: Some("2026-10-17T11:57:00Z".into()),
+        ..request
+    };
+    let frame = client
+        .fetch_site_with_pixels(earlier_request, now, site, 128, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(frame.actual_time, Some(older));
+    assert!(frame.source_url.ends_with(older_key));
+    assert!(!matches_window(
+        instant("2026-10-17T11:49:59Z"),
+        Some(instant("2026-10-17T12:10:00Z")),
+        now
     ));
 }
 

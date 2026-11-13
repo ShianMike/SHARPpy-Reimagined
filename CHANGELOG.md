@@ -26,7 +26,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and ray geometry. Unsupported formats and licences remain unavailable.
 - Add eleven Météo-France radar sites in France and overseas via MRRL InterRAD,
   with lowest-available reflectivity, source credits and capability-aware
-  controls. Show compact, expandable radar-source credits in the bottom-left
+  controls. Show the active radar frame's source credit in the bottom-left
   corner during Live Tracking.
 
 ### Changed

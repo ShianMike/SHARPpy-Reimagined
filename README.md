@@ -23,7 +23,7 @@ This release adds radar coverage and sounding display choices:
 - **European radar:** discover OPERA sites and display compatible reflectivity
   scans. Availability depends on each site's data format, licence and scans.
 - **French radar:** view additional Météo-France sites in France and overseas
-  through MRRL InterRAD, with expandable credits at the bottom left of Live Tracking.
+  through MRRL InterRAD, with the active radar's source credit at the bottom left.
 - **Radar controls:** choose a network, search sites by code or place, and click
   map labels to select a site. Borders show selected and unavailable sites.
 - **Sounding display:** choose Dark, Light or Protanopia for sounding images in

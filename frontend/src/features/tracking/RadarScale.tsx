@@ -3,6 +3,7 @@ import { Eye, EyeOff, TriangleAlert } from "lucide-react";
 import { cx } from "../../lib/cx";
 import { displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
+import { useAppStore } from "../../stores/appStore";
 import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
 import { Surface } from "../../ui/Surface";
 import { IconAction } from "../../ui/Controls";
@@ -27,6 +28,7 @@ const CORRELATION = parsePalette(correlationPalette, "radarCorrelation");
 const ECHO_TOPS = parsePalette(echoTopsPalette, "radarEchoTops");
 
 export function RadarScale({ panel, horizontal = false }: { panel: number; horizontal?: boolean }): ReactNode {
+  const isLive = useAppStore((state) => state.activeWorkspace === "live");
   const preferences = useUiStore((state) => state.units);
   const visible = useMapStore((state) => panelLayers(state, panel).radar.visible);
   const { radarScope: scope } = useMapStore((state) => panelWeather(state, panel));
@@ -62,11 +64,12 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
   const delay = age > 10 * 60_000 ? `Radar scan is ${String(Math.floor(age / 60_000))} minutes behind the selected time` : null;
   const status = !visible ? null : query.isError ? "Unavailable" : query.isFetching ? "Loading…" : delay;
   const loading = visible && query.isFetching && !query.isError;
+  const attribution = isLive && visible && frame?.attribution ? frame.attribution : null;
   if (horizontal) return <div className={styles.inline} aria-label="Radar color key">
     <strong>{label}{shownUnits ? ` · ${shownUnits}` : ""}</strong>
     {palette !== null ? <FieldLegend palette={palette} description={description} /> : frame?.legendPng
       ? <img src={frame.legendPng} alt={`${label} · NOAA color scale`} /> : <p>Provider color key unavailable.</p>}
-    {palette === null ? <p>{description}</p> : null}{scan === "" ? null : <p>{scan}</p>}{status === null ? null : <p>{status}</p>}{visible && frame?.attribution ? <p>{frame.attribution}</p> : null}
+    {palette === null ? <p>{description}</p> : null}{scan === "" ? null : <p>{scan}</p>}{status === null ? null : <p>{status}</p>}{attribution === null ? null : <p>{attribution}</p>}
   </div>;
   return <><Surface as="aside" data-motion="fade" className={scaleStyles.panel} aria-label="Radar scale" aria-description={`${label} · ${shownUnits || (palette === null ? "Categories" : "Unitless")} · Panel ${String(panel + 1)}${scan === "" ? "" : ` · ${scan}`}`} data-testid="radar-scale">
     {palette === null ? <div className={cx(styles.provider, hints.target)} tabIndex={0} role="img" aria-label={`${label} color scale, ${units || "categories"}`} aria-description="Focus or hover to see the provider's labelled color key.">
@@ -79,5 +82,5 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
       state.setActivePanel(panel);
       state.setLayerVisible("radar", !panelLayers(state, panel).radar.visible);
     }} />
-  </Surface>{visible && frame?.attribution ? <div className={styles.attribution} data-testid="radar-attribution">{frame.attribution}</div> : null}</>;
+  </Surface>{attribution === null ? null : <div className={styles.attribution} data-testid="radar-attribution">{attribution}</div>}</>;
 }

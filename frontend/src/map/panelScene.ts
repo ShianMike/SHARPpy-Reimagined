@@ -61,7 +61,7 @@ export function useFieldImage(frame: FieldFrame | undefined, palette: Palette | 
 type PngFrame = Pick<RadarFrame, "png" | "bounds" | "validTime">;
 
 /** Decode once across panels; keep this query's last good image during refresh errors. */
-export function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data" | "isError" | "refetch">, enabled: boolean, source: string) {
+export function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data" | "isError" | "refetch">, enabled: boolean, source: string, retainEarlier = true) {
   const frame = enabled ? query.data : undefined;
   const [decoded, setDecoded] = useState<{ frame: PngFrame; source: string; image: RasterImage } | null>(null);
   const [failure, setFailure] = useState<PngFrame | null>(null);
@@ -94,8 +94,8 @@ export function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data" | "isEr
     if (frame === undefined) return null;
     if (ready !== undefined) return { image: ready, bounds: frame.bounds };
     const age = Date.parse(frame.validTime ?? "") - Date.parse(decoded?.frame.validTime ?? "");
-    return decoded?.source === source && (decoded.frame === frame || age >= 0 && age <= 10 * 60_000) ? decoded.image : null;
-  }, [frame, ready, decoded, source]);
+    return decoded?.source === source && (decoded.frame === frame || retainEarlier && age >= 0 && age <= 10 * 60_000) ? decoded.image : null;
+  }, [frame, ready, decoded, source, retainEarlier]);
   const failed = enabled && (query.isError || frame !== undefined && failure === frame);
   const issue = failed ? `${query.isError ? "Imagery could not be loaded" : "Imagery could not be decoded"}.${image !== null && decoded !== null ? ` Showing the earlier image from ${decoded.frame.validTime ?? "an unknown time"}.` : " No image is shown."}` : null;
   const decodedCurrent = frame !== undefined && (ready !== undefined || decoded?.frame === frame && failure !== frame);
@@ -142,9 +142,9 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const reportFilter = useMapStore((state) => state.reportFilter);
   const { site, product: radarProduct, tilt } = usePanelRadar(panel);
   const historyTime = useLiveTrackingStore((state) => state.selectedTime === null ? null : liveTimestamp(state.selectedTime));
-  const mosaic = usePngImage(useRadarFrame(radarProduct, live && radarVisible && scope === "mosaic", live ? validTime : null), live && radarVisible && scope === "mosaic", radarProduct ?? "default");
+  const mosaic = usePngImage(useRadarFrame(radarProduct, live && radarVisible && scope === "mosaic", live ? validTime : null), live && radarVisible && scope === "mosaic", radarProduct ?? "default", false);
   const siteFrameQuery = useRadarSiteFrame(radarProduct, site, live && radarVisible && scope === "site", live ? validTime : null, tilt);
-  const siteFrame = usePngImage(siteFrameQuery, live && radarVisible && scope === "site", `${site ?? ""}/${radarProduct ?? "reflectivity"}/${tilt}`);
+  const siteFrame = usePngImage(siteFrameQuery, live && radarVisible && scope === "site", `${site ?? ""}/${radarProduct ?? "reflectivity"}/${tilt}`, false);
   const selectedRadarSite = scope === "site" ? site : null;
   const activeSite = live && radarVisible && scope === "site" ? site : null;
   const activeFailure = useActiveRadarFailure(activeSite, mapKeys.radarSite(radarProduct, site ?? "", live ? validTime : null, tilt), siteFrameQuery, siteFrame);

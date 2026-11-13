@@ -20,7 +20,7 @@
       },
       {
         "title": "Radar station codes",
-        "description": "Search by radar code or place and click a map label to select a site. Borders show selected and unavailable sites. Choose a UTC time or step by five minutes to load recent radar data as needed."
+        "description": "Search by radar code or place and click a map label to select a site. Borders show selected and unavailable sites. Choose a UTC time or step by five minutes; see the actual scan time as radar data loads."
       },
       {
         "title": "Sounding display colors",

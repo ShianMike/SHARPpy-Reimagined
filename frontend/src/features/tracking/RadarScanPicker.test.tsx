@@ -3,8 +3,9 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { createTransport } from "../../lib/backend/fixtureTransport";
+import { mapKeys } from "../../lib/backend/queryOptions";
 import { useAppStore } from "../../stores/appStore";
-import { LIVE_MINUTE, useLiveTrackingStore } from "../../stores/liveTrackingStore";
+import { LIVE_MINUTE, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
 import { useMapStore } from "../../stores/mapStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import { LiveTimeline } from "./LiveTimeline";
@@ -116,6 +117,21 @@ it("keeps a partially entered time when the live minute changes", () => {
   fireEvent.change(input, { target: { value: "07:4" } });
   act(() => { useLiveTrackingStore.getState().tick(now + LIVE_MINUTE); });
   expect(input.value).toBe("07:4");
+  view.unmount(); queryClient.clear();
+});
+
+it("distinguishes the requested time from the actual scan, including a scan reused by the provider", async () => {
+  const { view, queryClient } = renderWithBackend(<Playback />, createTransport());
+  const scan = "2026-10-17T07:54:00Z";
+  act(() => { queryClient.setQueryData(mapKeys.radar(null, liveTimestamp(now)), { validTime: scan }); });
+  fireEvent.click(screen.getByRole("button", { name: "Choose radar time" }));
+  const dialog = screen.getByRole("dialog", { name: "Radar time" });
+  expect(within(dialog).getByText("Requested · UTC")).toBeTruthy();
+  await waitFor(() => { expect(within(dialog).getByText("Radar scan · 2026-10-17 07:54:00 UTC")).toBeTruthy(); });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Previous 5 minutes" }));
+  expect(within(dialog).getByText("No radar scan loaded")).toBeTruthy();
+  act(() => { queryClient.setQueryData(mapKeys.radar(null, liveTimestamp(now - 5 * LIVE_MINUTE)), { validTime: scan }); });
+  await waitFor(() => { expect(within(dialog).getByText("Radar scan · 2026-10-17 07:54:00 UTC")).toBeTruthy(); });
   view.unmount(); queryClient.clear();
 });
 

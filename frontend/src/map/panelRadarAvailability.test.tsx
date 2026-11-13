@@ -163,7 +163,7 @@ it("keeps each panel's active site independent of other products, tilts, and sta
   } finally { hook.unmount(); queryClient.clear(); }
 });
 
-it("keeps a failed site unavailable while its older bitmap is displayed during retry decoding", async () => {
+it("keeps a failed site unavailable and hides its older bitmap during retry decoding", async () => {
   useLiveTrackingStore.setState({ now: Date.parse("2026-10-17T08:00:00Z"), selectedTime: null });
   useMapStore.setState({ view: "live", activePanel: 0 });
   useMapStore.getState().setRadarScope("site");
@@ -200,14 +200,14 @@ it("keeps a failed site unavailable while its older bitmap is displayed during r
     await act(async () => { await queryClient.refetchQueries({ queryKey: key, exact: true }); });
     await waitFor(() => { expect(decode).toHaveBeenCalledTimes(2); });
     expect(queryClient.getQueryState(key)).toMatchObject({ status: "success", errorUpdateCount: 1, fetchFailureReason: null });
-    expect(scene.radar?.image).toBe(oldBitmap);
+    expect(scene.radar).toBeNull();
     expect(scene.unavailableRadarSites?.has("KTLX")).toBe(true);
     await act(async () => { resolveDecode(newBitmap); await heldDecode; });
     await waitFor(() => { expect(scene.radar?.image).toBe(newBitmap); });
     await waitFor(() => { expect(scene.unavailableRadarSites?.has("KTLX")).toBe(false); });
     await act(async () => { await queryClient.refetchQueries({ queryKey: key, exact: true }); });
     await waitFor(() => { expect(decode).toHaveBeenCalledTimes(3); });
-    expect(scene.radar?.image).toBe(newBitmap);
+    expect(scene.radar).toBeNull();
     expect(scene.unavailableRadarSites?.has("KTLX")).toBe(false);
     await act(async () => { resolveNextDecode(nextBitmap); await nextDecode; });
     await waitFor(() => { expect(scene.radar?.image).toBe(nextBitmap); });

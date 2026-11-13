@@ -68,6 +68,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Read NOAA's advertised radar scan times when they follow the layer name, so
   current and recent mosaic imagery can be selected correctly.
+- Keep an earlier radar image from appearing as the newly selected historical
+  time while a frame loads, and show the provider's actual scan time separately.
 - Install the native backend in the Windows WRF and live-provider checks, which
   exercise sounding and provider operations migrated to Rust.
 - Restore dark, light and protanopia sounding display choices in Appearance

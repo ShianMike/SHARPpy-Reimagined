@@ -61,6 +61,25 @@ it("exposes image decode failure, ignores an obsolete rejection, and retries the
   expect(refetch).toHaveBeenCalledTimes(1);
 });
 
+it("clears an earlier radar image until the newly selected frame finishes decoding", async () => {
+  let finish: (image: { width: number; height: number }) => void = () => undefined;
+  vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValueOnce({ width: 2, height: 2 })
+    .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })));
+  const bounds = { west: -100, east: -90, south: 30, north: 40 };
+  const older = { png: new Blob(["old"]), bounds, validTime: "2026-10-04T18:00:00Z" };
+  const newer = { png: new Blob(["new"]), bounds, validTime: "2026-10-04T18:05:00Z" };
+  const refetch = vi.fn();
+  const hook = renderHook(({ data }) => usePngImage({ data, isError: false, refetch }, true, "radar", false),
+    { initialProps: { data: older } });
+  await waitFor(() => { expect(hook.result.current.image).not.toBeNull(); });
+  hook.rerender({ data: newer });
+  expect(hook.result.current.image).toBeNull();
+  await act(async () => { finish({ width: 2, height: 2 }); await Promise.resolve(); });
+  await waitFor(() => { expect(hook.result.current.decodedCurrent).toBe(true); });
+  expect(hook.result.current.image).not.toBeNull();
+  hook.unmount();
+});
+
 it("uses the same closed grid perimeter without adding a zero-length segment", () => {
   const catalogue = parseModelCatalog(models);
   const reference = catalogue.models.find((model) => model.key === "hrrr");

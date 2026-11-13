@@ -115,9 +115,10 @@ without numeric calibration do not expose measured hover values.
 Use the player to step, scrub, or animate up to the past **60 minutes**, where
 the provider supplies history. Choose a UTC minute in **Radar time** or use the
 timeline. The arrows move five minutes at a time; scan intervals vary by radar,
-so the app shows the provider's actual scan time when available. Playback loads
-frames as needed, and **Live** returns to current data. An unavailable scan is
-reported rather than substituted silently.
+so the time picker shows the provider's actual scan time separately from the
+requested time. Multiple requested times can resolve to the same scan. Playback
+loads frames as needed, and **Live** returns to current data. An unavailable
+scan is reported rather than substituted silently.
 
 Downloaded live data appears in **Settings → Storage**. Caches are bounded and
 cleared when the app session closes; cleared data downloads again when needed.

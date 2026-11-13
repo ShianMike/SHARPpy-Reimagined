@@ -2,7 +2,9 @@ import { ChevronDown, ChevronLeft, ChevronRight, Clock3, GripHorizontal, Radio, 
 import { useId, useState, type ReactNode } from "react";
 import { Popover } from "../../components/Popover";
 import { cx } from "../../lib/cx";
+import { usePanelRadar, useRadarFrame, useRadarSiteFrame } from "../../map/mapQueries";
 import { LIVE_HISTORY_MINUTES, LIVE_MINUTE, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
+import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
 import { Action, IconAction, RangeControl } from "../../ui/Controls";
 import controls from "../toolbar/ForecastControls.module.css";
 import styles from "./RadarScanPicker.module.css";
@@ -45,6 +47,13 @@ export function RadarScanPicker({ onSelect }: { onSelect: (time: number) => void
   const errorId = useId();
   const { now, selectedTime } = useLiveTrackingStore();
   const time = selectedTime ?? now;
+  const scope = useMapStore((state) => panelWeather(state).radarScope);
+  const visible = useMapStore((state) => panelLayers(state, state.activePanel).radar.visible);
+  const { site, product, tilt } = usePanelRadar();
+  const mosaic = useRadarFrame(product, false, liveTimestamp(time));
+  const antenna = useRadarSiteFrame(product, site, false, liveTimestamp(time), tilt);
+  const radar = scope === "site" ? antenna : mosaic;
+  const scan = radar.data?.validTime;
   const earliest = now - LIVE_HISTORY_MINUTES * LIVE_MINUTE;
   const minutesAgo = Math.round((now - time) / LIVE_MINUTE);
   const inputValue = draft ?? hhmm(time);
@@ -78,9 +87,10 @@ export function RadarScanPicker({ onSelect }: { onSelect: (time: number) => void
       </header>
       <div className={controls.selectionSummary}>
         <span><strong>{selectedTime === null ? "Live" : `−${String(minutesAgo)}m`}</strong><small>{selectedTime === null ? "Following live" : "Selected offset"}</small></span>
-        <span><strong>{utcDateTime(time)}</strong><small>Viewing · UTC</small></span>
+        <span><strong>{utcDateTime(time)}</strong><small>Requested · UTC</small></span>
       </div>
       <div className={cx(controls.dialogBody, styles.body)}>
+        <p className={styles.scanTime} role="status">{!visible ? "Radar layer hidden" : scan == null ? radar.isFetching ? "Loading radar scan…" : "No radar scan loaded" : `Radar scan · ${liveTimestamp(Date.parse(scan)).replace("T", " ").replace("Z", " UTC")}${radar.isFetching ? " · updating" : ""}`}</p>
         <form className={styles.timeForm} onSubmit={(event) => { event.preventDefault(); submitTime(); }} noValidate>
           <label className={styles.timeLabel} htmlFor={timeInputId}>UTC time (HH:MM)</label>
           <div className={styles.timeRow}>

@@ -225,7 +225,7 @@ it.each([0, 10])("keeps the same radar source while a recent request refreshes (
     : args?.validTime !== first || args.site !== "KTLX" || args.product !== "velocity" ? new Promise(() => undefined)
     : Promise.resolve(encodeShrf({ ...frame.header, kind: "radar-site", siteId: "KTLX", product: "velocity", units: "mph", validTime: scan }, frame.body));
   useMapStore.setState({ radarSite: "KTLX", radarProduct: "velocity" });
-  useLiveTrackingStore.setState({ now, selectedTime: now });
+  useLiveTrackingStore.setState({ now, selectedTime: null });
   function Probe() {
     const { radarProduct, radarSite, radarTilt } = useMapStore();
     const time = new Date(useLiveTrackingStore((state) => state.selectedTime ?? state.now)).toISOString().replace(".000Z", "Z");
@@ -234,7 +234,7 @@ it.each([0, 10])("keeps the same radar source while a recent request refreshes (
   }
   const { view, queryClient } = renderWithBackend(<Probe />, transport);
   await waitFor(() => { expect(screen.getByTestId("radar-probe").textContent).toBe(scan); });
-  act(() => { useLiveTrackingStore.setState({ selectedTime: now + LIVE_MINUTE }); });
+  act(() => { useLiveTrackingStore.setState({ now: now + LIVE_MINUTE }); });
   expect(screen.getByTestId("radar-probe").textContent).toBe(scan);
   act(() => { useMapStore.getState().setRadarTilt("1"); });
   expect(screen.getByTestId("radar-probe").textContent).toBe("empty");
@@ -245,11 +245,11 @@ it.each([0, 10])("keeps the same radar source while a recent request refreshes (
   act(() => { useMapStore.getState().setRadarTilt("1"); });
   expect(screen.getByTestId("radar-probe").textContent).toBe(scan);
   act(() => { useMapStore.getState().setRadarTilt("0"); });
-  act(() => { useLiveTrackingStore.setState({ selectedTime: now + 11 * LIVE_MINUTE }); });
+  act(() => { useLiveTrackingStore.setState({ now: now + 11 * LIVE_MINUTE }); });
   expect(screen.getByTestId("radar-probe").textContent).toBe("empty");
-  act(() => { useLiveTrackingStore.setState({ selectedTime: now - LIVE_MINUTE }); });
+  act(() => { useLiveTrackingStore.setState({ now: now - LIVE_MINUTE }); });
   expect(screen.getByTestId("radar-probe").textContent).toBe("empty");
-  act(() => { useLiveTrackingStore.setState({ selectedTime: now + LIVE_MINUTE }); useMapStore.setState({ radarSite: "KOUN" }); });
+  act(() => { useLiveTrackingStore.setState({ now: now + LIVE_MINUTE }); useMapStore.setState({ radarSite: "KOUN" }); });
   expect(screen.getByTestId("radar-probe").textContent).toBe("empty");
   act(() => { useMapStore.setState({ radarSite: "KTLX", radarProduct: "reflectivity" }); });
   expect(screen.getByTestId("radar-probe").textContent).toBe("empty");

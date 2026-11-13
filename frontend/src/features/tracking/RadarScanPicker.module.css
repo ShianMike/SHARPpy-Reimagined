@@ -1,9 +1,12 @@
-.scan[aria-pressed][data-scan-state="available"] { border-color: var(--success); }
-.scan[aria-pressed][data-scan-state="loading"] { border-color: var(--forecast-loading); }
-.scan[aria-pressed][data-scan-state="failed"] { border-color: var(--danger); }
-.scan[aria-pressed][data-scan-state="delayed"] { border-color: var(--warning); }
-.scan[aria-pressed][data-scan-state="missing"] { border-color: var(--text-secondary); border-style: dashed; }
-.scan small { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
-.downloads { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
-.downloads > span { flex: 1; }
-.progress { width: 100%; height: var(--track-h); margin-top: var(--space-3); accent-color: var(--accent-bright); }
+.body { display: flex; flex-direction: column; gap: var(--space-4); padding-inline: var(--space-4); }
+.timeForm { display: flex; flex-direction: column; gap: var(--space-2); }
+.timeLabel { color: var(--text-secondary); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); }
+.timeRow { display: flex; align-items: center; gap: var(--space-2); }
+.timeField { display: flex; flex: 1; min-width: 0; align-items: center; gap: var(--space-2); height: var(--control-h-md); padding: 0 var(--space-3); border: var(--hairline) solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--control-fill); }
+.timeField:focus-within { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.timeField[data-invalid="true"] { border-color: var(--danger); }
+.timeField input { flex: 1; width: 100%; min-width: 0; border: 0; background: transparent; outline: none; color: var(--text-primary); font-family: var(--font-mono); font-size: var(--font-size-body); font-variant-numeric: tabular-nums; }
+.utcTag { flex: none; color: var(--text-secondary); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); }
+.error { color: var(--danger); font-size: var(--font-size-caption); }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.footer > span { font-variant-numeric: tabular-nums; }

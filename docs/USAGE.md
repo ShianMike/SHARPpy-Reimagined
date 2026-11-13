@@ -113,11 +113,11 @@ gates, and marks lower-bound echo-top heights with **≥**. Image-only products
 without numeric calibration do not expose measured hover values.
 
 Use the player to step, scrub, or animate up to the past **60 minutes**, where
-the provider supplies history. **Load hour** caches the selected panels' available
-frames; **Stop caching** stops queuing further downloads. Changing a data source
-resets readiness for that selection. **Live** returns to current data, and the
-refresh button requests it again. The player reports unavailable layers rather
-than treating an incomplete download as ready.
+the provider supplies history. Choose a UTC minute in **Radar time** or use the
+timeline. The arrows move five minutes at a time; scan intervals vary by radar,
+so the app shows the provider's actual scan time when available. Playback loads
+frames as needed, and **Live** returns to current data. An unavailable scan is
+reported rather than substituted silently.
 
 Downloaded live data appears in **Settings → Storage**. Caches are bounded and
 cleared when the app session closes; cleared data downloads again when needed.

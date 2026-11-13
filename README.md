@@ -25,7 +25,8 @@ This release adds radar coverage and sounding display choices:
 - **French radar:** view additional Météo-France sites in France and overseas
   through MRRL InterRAD, with the active radar's source credit at the bottom left.
 - **Radar controls:** choose a network, search sites by code or place, and click
-  map labels to select a site. Borders show selected and unavailable sites.
+  map labels to select a site. Borders show selected and unavailable sites;
+  choose a UTC time or use the live timeline to request recent data as needed.
 - **Sounding display:** choose Dark, Light or Protanopia for sounding images in
   Settings. The saved choice applies to interactive and exported soundings.
 

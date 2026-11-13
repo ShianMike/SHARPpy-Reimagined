@@ -1,5 +1,5 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect } from "react";
 import { useBackendClient } from "../../lib/backend/BackendProvider";
 import { useRadarSites } from "../../map/mapQueries";
 import { nearestRadarSite } from "../../map/nearestSite";
@@ -9,10 +9,7 @@ import { useMapStore } from "../../stores/mapStore";
 import { liveHistoryTimes, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
 import { useUiStore } from "../../stores/uiStore";
 import { decodePng } from "../../map/pngImages";
-import { fetchLiveRequest, isLiveQuery, liveRequests, preloadRadarTilts, trimLiveCache } from "./liveRequests";
-import { radarPlaybackFrame } from "./radarPlayback";
-
-const IDLE_PROGRESS = { running: false, done: 0, total: 0, failed: 0, stopped: false };
+import { fetchLiveRequest, isLiveQuery, liveRequests, trimLiveCache } from "./liveRequests";
 
 export function useLiveHistory() {
   const client = useBackendClient();
@@ -27,40 +24,15 @@ export function useLiveHistory() {
   const layout = useMapStore((state) => state.panelLayout);
   const reportWindowS = useMapStore((state) => state.reportWindowS);
   const reportFilter = useMapStore((state) => state.reportFilter);
-  const time = liveTimestamp(now);
-  const selection = JSON.stringify(liveRequests(client, useMapStore.getState(), site, anchor, time, sites)
-    .map(({ queryKey }) => queryKey.filter((part) => part !== time)));
   const pending = useIsFetching({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 });
-  const generation = useRef(0);
-  const preloading = useRef(Promise.resolve());
-  const [storedProgress, setProgress] = useState({ ...IDLE_PROGRESS, selection });
-  const progress = storedProgress.selection === selection ? storedProgress : IDLE_PROGRESS;
-  const radarFrames = liveHistoryTimes(now).map((time) => ({ time, keys: liveRequests(client, useMapStore.getState(), site, anchor, liveTimestamp(time), sites)
-    .filter(({ queryKey }) => queryKey[0] === "radar" || queryKey[0] === "radar-site").map(({ queryKey }) => queryKey) })).filter(({ keys }) => keys.length > 0);
-  useSyncExternalStore((changed) => queryClient.getQueryCache().subscribe(changed), () =>
-    radarFrames.map(({ time, keys }) => { const frame = radarPlaybackFrame(queryClient, keys, time); return `${frame.state}:${frame.detail}`; }).join("\n"));
-  const frames = radarFrames.map(({ time, keys }) => radarPlaybackFrame(queryClient, keys, time));
-  useEffect(() => () => {
-    generation.current++;
-    setProgress((state) => state.running ? { ...state, running: false, stopped: true } : state);
-  }, [selection]);
 
-  useEffect(() => {
-    if (selectedTime !== null || playing || progress.running) return;
-    let stopped = false;
-    const warm = async (): Promise<void> => {
-      await preloadRadarTilts(client, queryClient, useMapStore.getState(), site, liveTimestamp(now), () => stopped);
-    };
-    preloading.current = preloading.current.then(warm, warm);
-    return () => { stopped = true; };
-  }, [client, queryClient, panels, layout, site, now, selectedTime, playing, progress.running]);
-
-  const load = useCallback(async (time: number, refresh = false): Promise<void> => {
+  const load = useCallback(async (time: number): Promise<void> => {
     await Promise.allSettled(liveRequests(client, useMapStore.getState(), site, anchor, liveTimestamp(time), sites).map((request) =>
-      fetchLiveRequest(queryClient, request, refresh).then(async (data) => {
+      fetchLiveRequest(queryClient, request).then(async (data) => {
         const frame = data as { png?: unknown } | undefined;
         if (frame?.png instanceof Blob) await decodePng(frame.png);
       })));
+    trimLiveCache(queryClient);
   }, [client, queryClient, site, anchor, sites]);
 
   useEffect(() => {
@@ -80,38 +52,5 @@ export function useLiveHistory() {
   }, [now, selectedTime, playing, speed, loop, panels, layout, reportWindowS, reportFilter, load]);
   useEffect(() => () => { useLiveTrackingStore.getState().setPlaying(false); }, []);
 
-  const cacheHour = async (): Promise<void> => {
-    const token = ++generation.current;
-    const state = useMapStore.getState();
-    const now = useLiveTrackingStore.getState().now;
-    const requests = liveHistoryTimes(now).reverse().flatMap((time) => liveRequests(client, state, site, anchor, liveTimestamp(time), sites));
-    let done = 0;
-    let failed = 0;
-    setProgress({ running: true, done, total: requests.length, failed, stopped: false, selection });
-    let index = 0;
-    // Keep two downloads busy without making a completed request wait for its slower partner.
-    const download = async (): Promise<void> => {
-      while (generation.current === token) {
-        const request = requests[index++];
-        if (request === undefined) return;
-        try { await fetchLiveRequest(queryClient, request); }
-        catch { failed++; }
-        if (generation.current !== token) return;
-        done++;
-        trimLiveCache(queryClient);
-        setProgress({ running: done < requests.length, done, total: requests.length, failed, stopped: false, selection });
-      }
-    };
-    await Promise.all([download(), download()]);
-    if (requests.length === 0) setProgress({ ...IDLE_PROGRESS, selection });
-  };
-
-  const refresh = async (): Promise<void> => {
-    useLiveTrackingStore.getState().tick();
-    const state = useLiveTrackingStore.getState();
-    await load(state.selectedTime ?? state.now, true);
-    trimLiveCache(queryClient);
-  };
-  const stop = (): void => { generation.current++; setProgress((state) => ({ ...state, running: false, stopped: true })); };
-  return { progress, frames, loadFrame: load, waiting: playing && pending > 0, cacheHour, refresh, stop };
+  return { waiting: playing && pending > 0 };
 }

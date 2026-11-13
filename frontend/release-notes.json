@@ -20,7 +20,7 @@
       },
       {
         "title": "Radar station codes",
-        "description": "See codes like KTLX, DESS and NOHUR on the map and in Live Tracking controls, and search by code or place name. Click a radar label on the map to select it; selected labels use a green border and unavailable sites are highlighted in red."
+        "description": "Search by radar code or place and click a map label to select a site. Borders show selected and unavailable sites. Choose a UTC time or step by five minutes to load recent radar data as needed."
       },
       {
         "title": "Sounding display colors",

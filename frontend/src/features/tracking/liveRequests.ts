@@ -4,9 +4,8 @@ import { BackendFailure, overlayAvailability } from "../../lib/backend/errors";
 import { BASE_QUERY_OPTIONS, mapKeys } from "../../lib/backend/queryOptions";
 import { panelLayers, panelWeather, type MapState } from "../../stores/mapStore";
 import type { SurfaceAnchor } from "../../map/surfaceQueries";
-import { RADAR_TILTABLE_PRODUCTS, RADAR_TILTS, type RadarSite, type RadarSiteCatalog, type RadarTilts } from "../../types/map";
-import { radarTiltQuery } from "../../map/radarTiltQueries";
-import { isFixedScanRadarSite, panelRadar } from "../../map/panelRadar";
+import type { RadarSite } from "../../types/map";
+import { panelRadar } from "../../map/panelRadar";
 
 export interface LiveRequest {
   queryKey: QueryKey;
@@ -41,49 +40,6 @@ export function liveRequests(client: BackendClient, state: MapState, site: strin
   if (layers["storm-reports"].visible) requests.push({ queryKey: mapKeys.reports(time, state.reportWindowS, state.reportFilter), queryFn: () => client.getStormReports(time, state.reportWindowS, state.reportFilter) });
   if (layers["surface-plots"].visible && anchor !== null) requests.push({ queryKey: mapKeys.surface(anchor.latitude, anchor.longitude, time), queryFn: () => client.getSurfacePlots(anchor.latitude, anchor.longitude, time) });
   return requests;
-}
-
-/** Warm native radar cuts after the displayed scans, two requests at a time. */
-export async function preloadRadarTilts(client: BackendClient, queryClient: QueryClient, state: MapState, site: string | null, time: string, stopped: () => boolean): Promise<void> {
-  const sites = queryClient.getQueryData<RadarSiteCatalog>(mapKeys.radarSites)?.sites ?? [];
-  const current = liveRequests(client, state, site, null, time, sites).filter(({ queryKey }) => queryKey[0] === "radar-site" && !isFixedScanRadarSite(String(queryKey[2]), sites.find((entry) => entry.id === queryKey[2])) && RADAR_TILTABLE_PRODUCTS.some((product) => product === queryKey[1]));
-  if (current.length === 0 || stopped()) return;
-  const fetch = (request: LiveRequest): Promise<unknown> => queryClient.query({ ...BASE_QUERY_OPTIONS, ...request, staleTime: Number.POSITIVE_INFINITY, gcTime: Number.POSITIVE_INFINITY, retry: false });
-  await Promise.allSettled(current.map(fetch));
-  if (stopped()) return;
-  const products = [...new Set(["reflectivity", "velocity", ...current.map(({ queryKey }) => String(queryKey[1]))])];
-  const inventories = [...new Map(current.flatMap(({ queryKey }) => products.filter((product) => {
-    const supported = sites.find((site) => site.id === queryKey[2])?.products;
-    return supported === undefined || supported.includes(product);
-  }).map((product) => {
-    const options = radarTiltQuery(client, String(queryKey[2]), product);
-    return [JSON.stringify(options.queryKey), options] as const;
-  }))).values()];
-  for (let index = 0; index < inventories.length; index += 2) {
-    if (stopped()) return;
-    await Promise.allSettled(inventories.slice(index, index + 2).map((options) => queryClient.query(options)));
-  }
-  const requests: LiveRequest[] = [];
-  for (let panel = 0; panel < state.panelLayout; panel++) {
-    const weather = state.livePanels[panel];
-    if (weather === undefined) continue;
-    const { site: antenna, product: selected, tiltable, supportedProducts } = panelRadar(weather, site, sites);
-    if (!tiltable || !weather.layers.radar.visible || antenna === null) continue;
-    const product = selected ?? "reflectivity";
-    for (const { value: tilt } of RADAR_TILTS) for (const kind of [product, ...products.filter((kind) => kind !== product)]) {
-      if (supportedProducts !== undefined && !supportedProducts.includes(kind)) continue;
-      const inventory = queryClient.getQueryData<RadarTilts>(mapKeys.radarTilts(kind, antenna));
-      if (!inventory?.tilts.some((cut) => cut.tilt === tilt && cut.status === "available")) continue;
-      requests.push({ queryKey: mapKeys.radarSite(kind, antenna, time, tilt), queryFn: () => client.getRadarSiteFrame({ site: antenna }, kind, time, tilt) });
-    }
-  }
-  const displayed = new Set(current.map((request) => JSON.stringify(request.queryKey)));
-  const unique = [...new Map(requests.map((request) => [JSON.stringify(request.queryKey), request])).values()].filter((request) => !displayed.has(JSON.stringify(request.queryKey)));
-  for (let index = 0; index < unique.length; index += 2) {
-    if (stopped()) return;
-    await Promise.allSettled(unique.slice(index, index + 2).map(fetch));
-    trimLiveCache(queryClient);
-  }
 }
 
 const LIVE_PREFIXES = new Set(["radar", "radar-site", "satellite", "weather-alerts", "surface", "reports"]);

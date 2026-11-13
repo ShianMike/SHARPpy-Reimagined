@@ -1,72 +1,115 @@
-import { Check, ChevronDown, Clock3, Download, GripHorizontal, RefreshCw, Square, TriangleAlert, X } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, Clock3, GripHorizontal, Radio, X } from "lucide-react";
+import { useId, useState, type ReactNode } from "react";
 import { Popover } from "../../components/Popover";
 import { cx } from "../../lib/cx";
-import { LIVE_MINUTE, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
-import { Action, IconAction } from "../../ui/Controls";
-import { formatUtc } from "../sounding/soundingTime";
-import { RADAR_FRAME_LABELS, type RadarPlaybackFrame } from "./radarPlayback";
-import type { useLiveHistory } from "./useLiveHistory";
+import { LIVE_HISTORY_MINUTES, LIVE_MINUTE, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
+import { Action, IconAction, RangeControl } from "../../ui/Controls";
 import controls from "../toolbar/ForecastControls.module.css";
 import styles from "./RadarScanPicker.module.css";
 import hints from "../../ui/HoverHint.module.css";
 
-export function RadarScanPicker({ history, status, fetching, onSelect }: {
-  history: ReturnType<typeof useLiveHistory>; status: string; fetching: boolean; onSelect: (time: number) => void;
-}) {
+const DAY_MS = 24 * 60 * LIVE_MINUTE;
+const TIME_STEP = 5 * LIVE_MINUTE;
+const hhmm = (time: number): string => liveTimestamp(time).slice(11, 16);
+const utcDateTime = (time: number): string => `${liveTimestamp(time).slice(0, 10)} ${hhmm(time)} UTC`;
+
+function resolvePastHourUtcTime(raw: string, now: number): { time: number } | { error: string } {
+  const earliest = now - LIVE_HISTORY_MINUTES * LIVE_MINUTE;
+  const trimmed = raw.trim().replace(/\s*(?:utc|z)$/i, "");
+  if (/^(?:live|now)$/i.test(trimmed)) return { time: now };
+  const match = /^(\d{1,2}):(\d{2})$/.exec(trimmed) ?? /^(\d{2})(\d{2})$/.exec(trimmed);
+  if (match === null) {
+    return { error: `Enter HH:MM UTC between ${hhmm(earliest)} and ${hhmm(now)}.` };
+  }
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) {
+    return { error: `Enter HH:MM UTC between ${hhmm(earliest)} and ${hhmm(now)}.` };
+  }
+  const nowDate = new Date(now);
+  const sameDay = Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate(), hour, minute);
+  const target = [sameDay - DAY_MS, sameDay, sameDay + DAY_MS].find((candidate) => candidate >= earliest && candidate <= now);
+  if (target === undefined) {
+    return { error: `Time must be between ${hhmm(earliest)} and ${hhmm(now)} UTC.` };
+  }
+  return { time: target };
+}
+
+export function RadarScanPicker({ onSelect }: { onSelect: (time: number) => void }): ReactNode {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const timeInputId = useId();
+  const windowId = useId();
+  const errorId = useId();
   const { now, selectedTime } = useLiveTrackingStore();
   const time = selectedTime ?? now;
-  const { progress, frames } = history;
-  const cached = frames.filter((frame) => frame.state === "available" || frame.state === "delayed").length;
-  const ready = !progress.running && !progress.stopped && progress.total > 0 && progress.done === progress.total && progress.failed === 0 && cached === frames.length;
-  const DownloadIcon = progress.running ? Square : ready ? Check : progress.failed > 0 ? TriangleAlert : Download;
-  const days = new Map<string, RadarPlaybackFrame[]>();
-  for (const frame of frames) {
-    const date = liveTimestamp(frame.time).slice(0, 10);
-    days.set(date, [...(days.get(date) ?? []), frame]);
-  }
-  const close = (): void => { setOpen(false); anchor?.focus(); };
+  const earliest = now - LIVE_HISTORY_MINUTES * LIVE_MINUTE;
+  const minutesAgo = Math.round((now - time) / LIVE_MINUTE);
+  const inputValue = draft ?? hhmm(time);
+  const close = (): void => { setOpen(false); setDraft(null); setError(null); anchor?.focus(); };
+  const selectMinute = (target: number, shouldClose = false): void => {
+    setDraft(null);
+    setError(null);
+    onSelect(Math.max(earliest, Math.min(now, target)));
+    if (shouldClose) close();
+  };
+  const submitTime = (): void => {
+    const resolved = resolvePastHourUtcTime(inputValue, now);
+    if ("error" in resolved) {
+      setError(resolved.error);
+      return;
+    }
+    selectMinute(resolved.time, true);
+  };
   return <>
-    <button type="button" className={cx(controls.trigger, hints.target)} aria-label="Choose radar scan" aria-haspopup="dialog" aria-expanded={open}
-      onClick={(event) => { setAnchor(event.currentTarget); setOpen(!open); }}>
-      <Clock3 className="icon-sm" aria-hidden="true" /><span className={controls.triggerCopy}><span className={controls.name}>Radar scans</span>
-        <strong>{selectedTime === null ? "Live" : `${liveTimestamp(time).slice(11, 16)} UTC`}</strong></span><ChevronDown className="icon-sm" aria-hidden="true" />
-      <span className={hints.hint} data-side="bottom" aria-hidden="true">Choose a scan, check availability, or load the past hour.</span>
+    <button type="button" className={cx(controls.trigger, hints.target)} aria-label="Choose radar time" aria-haspopup="dialog" aria-expanded={open}
+      onClick={(event) => { setAnchor(event.currentTarget); setDraft(null); setError(null); setOpen(!open); }}>
+      <Clock3 className="icon-sm" aria-hidden="true" /><span className={controls.triggerCopy}><span className={controls.name}>Radar time</span>
+        <strong>{selectedTime === null ? "Live" : `${hhmm(time)} UTC`}</strong></span><ChevronDown className="icon-sm" aria-hidden="true" />
+      <span className={hints.hint} data-side="bottom" aria-hidden="true">Follow live or choose a UTC time in the past hour.</span>
     </button>
-    <Popover open={open} anchor={anchor} movable role="dialog" label="Radar scans" initialFocus="first" width="content"
-      className={cx(controls.picker, controls.hourPicker)} onClose={() => { setOpen(false); }}>
+    <Popover open={open} anchor={anchor} movable role="dialog" label="Radar time" initialFocus="first" width="content"
+      className={controls.picker} onClose={() => { setOpen(false); setDraft(null); setError(null); }}>
       <header className={controls.dialogHeader} data-popover-drag>
         <IconAction icon={GripHorizontal} size="sm" label="Move popup" data-popover-move aria-description="Drag to move. Arrow keys move the popup; Home centers it on the screen." />
-        <h2>Radar scans</h2><span className={controls.badge}>Past hour</span><IconAction icon={X} size="sm" label="Close radar scans" onClick={close} />
+        <h2>Radar time</h2><span className={controls.badge}>Past hour</span><IconAction icon={X} size="sm" label="Close radar time" onClick={close} />
       </header>
-      <div className={controls.selectionSummary}><span><strong>{selectedTime === null ? "Live" : `−${String(Math.round((now - time) / LIVE_MINUTE))}m`}</strong><small>Selected frame</small></span>
-        <span><strong>{formatUtc(liveTimestamp(time))}</strong><small>Viewing · UTC</small></span></div>
-      <div className={controls.dialogBody}>
-        {frames.length === 0 ? <p className={controls.hint}>Enable radar in a panel to see its scan availability.</p> : <div role="group" aria-label="Radar scan availability">
-          {[...days].map(([date, scans]) => <section className={controls.hourDay} key={date} aria-label={`Scans ${date}`}>
-            <h3>{date}<span>Scan request · UTC</span></h3><div className={controls.hourChoices}>
-              {scans.map((frame) => <button key={frame.time} type="button" className={cx(controls.choice, styles.scan)} data-scan-state={frame.state}
-                aria-label={`${liveTimestamp(frame.time).slice(11, 16)} UTC · ${RADAR_FRAME_LABELS[frame.state]}`} aria-description={frame.detail} title={frame.detail}
-                aria-pressed={frame.time === time} onClick={() => { onSelect(frame.time); if (frame.state !== "failed" && frame.state !== "missing") close(); }}>
-                <strong>{liveTimestamp(frame.time).slice(11, 16)}</strong><small>{frame.state === "failed" ? "Failed" : RADAR_FRAME_LABELS[frame.state]}</small>
-              </button>)}
-            </div>
-          </section>)}
-        </div>}
+      <div className={controls.selectionSummary}>
+        <span><strong>{selectedTime === null ? "Live" : `−${String(minutesAgo)}m`}</strong><small>{selectedTime === null ? "Following live" : "Selected offset"}</small></span>
+        <span><strong>{utcDateTime(time)}</strong><small>Viewing · UTC</small></span>
       </div>
-      <footer className={controls.pickerFooter}>
-        <p>{status}</p>
-        <div className={styles.downloads}>
-          <span>{cached} / {frames.length} radar frames cached</span>
-          <IconAction icon={RefreshCw} size="sm" label="Refresh live layers" disabled={fetching || progress.running} onClick={() => { void history.refresh(); }} />
-          <Action tone="accent" aria-label={progress.running ? "Stop caching" : "Cache past hour"} aria-description="Load the past hour for all panels at full resolution. Kept until the app closes."
-            onClick={() => { if (progress.running) history.stop(); else void history.cacheHour(); }}>
-            <DownloadIcon className="icon-sm" aria-hidden="true" />{progress.running ? "Loading" : ready ? "Ready" : progress.stopped ? "Resume" : progress.failed > 0 ? "Retry" : "Load hour"}
-          </Action>
-        </div>
-        {progress.running ? <progress className={styles.progress} aria-label="Caching live history" value={progress.done} max={Math.max(1, progress.total)} /> : null}
+      <div className={cx(controls.dialogBody, styles.body)}>
+        <form className={styles.timeForm} onSubmit={(event) => { event.preventDefault(); submitTime(); }} noValidate>
+          <label className={styles.timeLabel} htmlFor={timeInputId}>UTC time (HH:MM)</label>
+          <div className={styles.timeRow}>
+            <IconAction icon={ChevronLeft} size="sm" label="Previous 5 minutes" disabled={time <= earliest} onClick={() => { selectMinute(time - TIME_STEP); }} />
+            <div className={styles.timeField} data-invalid={error !== null}>
+              <input id={timeInputId} data-autofocus type="text" inputMode="numeric" placeholder="HH:MM"
+                aria-label="UTC time" aria-invalid={error !== null} aria-describedby={error !== null ? errorId : windowId}
+                value={inputValue} onChange={(event) => {
+                  setDraft(event.currentTarget.value);
+                  if (error !== null) setError(null);
+                }} />
+              <span className={styles.utcTag} aria-hidden="true">UTC</span>
+            </div>
+            <IconAction icon={ChevronRight} size="sm" label="Next 5 minutes" disabled={time >= now} onClick={() => { selectMinute(time + TIME_STEP); }} />
+            <Action type="submit" tone="accent" aria-label="Apply UTC time">Set</Action>
+          </div>
+          {error === null ? null : <p id={errorId} className={styles.error} role="alert">{error}</p>}
+        </form>
+        <RangeControl label="Past hour minute" visibleLabel="Past hour"
+          value={-minutesAgo} min={-LIVE_HISTORY_MINUTES} max={0} step={1}
+          formatValue={(offset) => offset === 0 ? "Live" : `${hhmm(now + offset * LIVE_MINUTE)} UTC (${String(offset)}m)`}
+          onChange={(offset) => { selectMinute(now + offset * LIVE_MINUTE); }} />
+      </div>
+      <footer className={cx(controls.pickerFooter, styles.footer)}>
+        <span id={windowId}>{selectedTime === null ? `Following live · ${hhmm(earliest)}–${hhmm(now)} UTC` : `Window ${hhmm(earliest)}–${hhmm(now)} UTC`}</span>
+        <Action tone={selectedTime === null ? "quiet" : "accent"} aria-label="Return to Live" disabled={selectedTime === null}
+          onClick={() => { selectMinute(now, true); }}>
+          <Radio className="icon-sm" aria-hidden="true" />Live
+        </Action>
       </footer>
     </Popover>
   </>;

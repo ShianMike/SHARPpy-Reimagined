@@ -31,6 +31,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Replace the radar scan grid and bulk loading with a UTC time selector,
+  five-minute navigation, and on-demand playback; stop preloading unused radar
+  products and tilts.
 - Keep the README release summary focused on versions 3.7.0 and 3.6.0;
   earlier release history remains in the changelog.
 - Move US NEXRAD Level II S3 volume listing, Archive II BZip2 and Message

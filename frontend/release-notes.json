@@ -5,6 +5,10 @@
       {
         "title": "Automatic radar scan time",
         "description": "Live Tracking loads the latest available scan for the selected radar and keeps it updated. Radar time shows the actual scan time and age, including delayed scans. Review available history without mistaking a later NEXRAD scan for an earlier one."
+      },
+      {
+        "title": "More reliable radar sources",
+        "description": "Australian, German, MRRL and European OPERA radar can show recent delayed scans with their actual times. Compatible OPERA scans use the provider's current download service and supported license information."
       }
     ]
   },

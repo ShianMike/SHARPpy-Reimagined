@@ -20,8 +20,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   scan, including delayed NEXRAD volumes. Display its actual UTC time and age,
   and keep live and historical requests separate so older imagery is not
   presented as a new scan. Playback returns to live when it reaches the present.
-- Resolve historical NEXRAD requests to a recent cut at or before the selected
-  time, accounting for publication delays without showing a future scan.
+- Resolve historical requests to a recent scan at or before the selected time,
+  accounting for publication delays without showing a future scan.
+- Load supported OPERA scans from the provider's current published object store
+  and recognize its current CC BY 4.0 and French Etalab 2.0 license labels.
+  Account for delayed scans from Australian, MRRL, German and OPERA feeds.
 
 ## [v3.7.0] - 2026-11-13
 

@@ -21,8 +21,13 @@ fn site(id: &str, lat: f64, lon: f64) -> RadarSite {
 fn decodes_norwegian_volume_calibration_geometry_and_time() {
     let bytes = include_bytes!("../../resources/opera_nohur_20261109_0330.h5");
     let target = OffsetDateTime::parse("2026-11-09T03:31:00Z", &Rfc3339).unwrap();
-    let sweep =
-        decode::decode(bytes, &site("0-578-0-nohur", 59.627083, 10.564472), target).unwrap();
+    let sweep = decode::decode(
+        bytes,
+        &site("0-578-0-nohur", 59.627083, 10.564472),
+        target,
+        time::Duration::minutes(10),
+    )
+    .unwrap();
     assert_eq!(sweep.valid_time, "2026-11-09T03:30:07Z");
     assert_eq!(sweep.elevation_angle, 0.5);
     assert_eq!(sweep.radials.len(), 720);
@@ -36,8 +41,13 @@ fn decodes_norwegian_volume_calibration_geometry_and_time() {
 fn decodes_finnish_scan_with_source_azimuth_arrays_and_multiple_moments() {
     let bytes = include_bytes!("../../resources/opera_fianj_20261109_0345.h5");
     let target = OffsetDateTime::parse("2026-11-09T03:46:00Z", &Rfc3339).unwrap();
-    let sweep =
-        decode::decode(bytes, &site("0-246-0-fianj", 60.903870, 27.108060), target).unwrap();
+    let sweep = decode::decode(
+        bytes,
+        &site("0-246-0-fianj", 60.903870, 27.108060),
+        target,
+        time::Duration::minutes(10),
+    )
+    .unwrap();
     assert_eq!(sweep.valid_time, "2026-11-09T03:45:27Z");
     assert_eq!(sweep.elevation_angle, 0.3);
     assert_eq!(sweep.radials.len(), 360);
@@ -58,9 +68,36 @@ fn decodes_finnish_scan_with_source_azimuth_arrays_and_multiple_moments() {
 fn rejects_wrong_site_and_future_scans() {
     let bytes = include_bytes!("../../resources/opera_nohur_20261109_0330.h5");
     let target = OffsetDateTime::parse("2026-11-09T03:31:00Z", &Rfc3339).unwrap();
-    assert!(decode::decode(bytes, &site("0-578-0-other", 59.627083, 10.564472), target).is_err());
+    assert!(decode::decode(
+        bytes,
+        &site("0-578-0-other", 59.627083, 10.564472),
+        target,
+        time::Duration::minutes(10)
+    )
+    .is_err());
     let early = OffsetDateTime::parse("2026-11-09T03:29:00Z", &Rfc3339).unwrap();
-    assert!(decode::decode(bytes, &site("0-578-0-nohur", 59.627083, 10.564472), early).is_err());
+    assert!(decode::decode(
+        bytes,
+        &site("0-578-0-nohur", 59.627083, 10.564472),
+        early,
+        time::Duration::minutes(30)
+    )
+    .is_err());
+    let delayed = OffsetDateTime::parse("2026-11-09T03:45:00Z", &Rfc3339).unwrap();
+    assert!(decode::decode(
+        bytes,
+        &site("0-578-0-nohur", 59.627083, 10.564472),
+        delayed,
+        time::Duration::minutes(20)
+    )
+    .is_ok());
+    assert!(decode::decode(
+        bytes,
+        &site("0-578-0-nohur", 59.627083, 10.564472),
+        delayed,
+        time::Duration::minutes(10)
+    )
+    .is_err());
 }
 
 #[test]
@@ -116,6 +153,8 @@ fn listing_checks_license_and_rejects_untrusted_download_links() {
         })
     };
     let valid = "https://s3.waw3-1.cloudferro.com/openradar-24h/2026/11/09/NO/nohur/PVOL/nohur@20261109T0330@0.5@DBZH.h5";
+    let backup = "https://object-store.os-api.cci1.ecmwf.int/openradar-24h-backup/2026/11/09/NO/nohur/SCAN/nohur@20261109T0330@0.5@DBZH.h5";
+    let wrong_bucket = "https://object-store.os-api.cci1.ecmwf.int/other/2026/11/09/NO/nohur/SCAN/nohur@20261109T0330@0.5@DBZH.h5";
     let wrong_host = "https://example.com/openradar-24h/2026/11/09/NO/nohur/PVOL/nohur@20261109T0330@0.5@DBZH.h5";
     let wrong_site = "https://s3.waw3-1.cloudferro.com/openradar-24h/2026/11/09/NO/noand/PVOL/noand@20261109T0330@0.5@DBZH.h5";
     let bytes = serde_json::to_vec(
@@ -127,6 +166,11 @@ fn listing_checks_license_and_rejects_untrusted_download_links() {
     assert_eq!(scans[0].url, valid);
     assert_eq!(scans[0].interval_s, 300.0);
     assert_eq!(scans[0].attribution, CREDIT_CC);
+    let backup_listing = serde_json::to_vec(&json!({"coverages": [coverage("CC BY 4.0 Creative Commons license", vec![backup, wrong_bucket])]})).unwrap();
+    let backup_scans = parse_scans(&backup_listing, &station).unwrap();
+    assert_eq!(backup_scans.len(), 1);
+    assert_eq!(backup_scans[0].url, backup);
+    assert_eq!(backup_scans[0].attribution, CREDIT_CC);
     let restricted =
         serde_json::to_vec(&json!({"coverages": [coverage("restricted", vec![valid])]})).unwrap();
     assert!(matches!(
@@ -142,9 +186,20 @@ fn listing_checks_license_and_rejects_untrusted_download_links() {
         parse_scans(&french_listing, &french).unwrap()[0].attribution,
         CREDIT_FR
     );
+    let short_french =
+        serde_json::to_vec(&json!({"coverages": [coverage("Etalab2.0", vec![french_url])]}))
+            .unwrap();
+    assert_eq!(
+        parse_scans(&short_french, &french).unwrap()[0].attribution,
+        CREDIT_FR
+    );
     french.country = Some("NO".into());
     assert!(matches!(
         parse_scans(&french_listing, &french),
+        Err(Error::Fetch(_))
+    ));
+    assert!(matches!(
+        parse_scans(&short_french, &french),
         Err(Error::Fetch(_))
     ));
 }

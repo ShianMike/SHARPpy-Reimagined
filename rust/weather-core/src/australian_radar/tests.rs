@@ -14,18 +14,30 @@ fn filenames_choose_only_preceding_scans_from_the_requested_site() {
     let scans = parse_listing(html, "ABRD");
     assert_eq!(scans.len(), 2);
     assert_eq!(
-        candidate_scans(&scans, instant("2026-10-29T11:34:00Z"))
-            .next()
-            .unwrap()
-            .1,
+        candidate_scans(
+            &scans,
+            instant("2026-10-29T11:34:00Z"),
+            time::Duration::minutes(20)
+        )
+        .next()
+        .unwrap()
+        .1,
         "ABRD_20261029_113000.ar2v"
     );
-    assert!(candidate_scans(&scans, instant("2026-10-29T11:29:00Z"))
-        .next()
-        .is_none());
-    assert!(candidate_scans(&scans, instant("2026-10-29T11:56:00Z"))
-        .next()
-        .is_none());
+    assert!(candidate_scans(
+        &scans,
+        instant("2026-10-29T11:29:00Z"),
+        time::Duration::minutes(20)
+    )
+    .next()
+    .is_none());
+    assert!(candidate_scans(
+        &scans,
+        instant("2026-10-29T11:56:00Z"),
+        time::Duration::minutes(20)
+    )
+    .next()
+    .is_none());
     assert_eq!(
         parse_listing(
             br#"<a href="/polling/MF90/MF90_20261111_100445.ar2v">fr</a>
@@ -312,6 +324,7 @@ fn mrrl_noumea_sample_decodes_and_renders_with_licence_ouverte_metadata() {
         "reflectivity",
         instant("2026-11-11T10:12:00Z"),
         instant("2026-11-11T10:12:00Z"),
+        time::Duration::minutes(10),
     )
     .is_err());
     assert!(matches!(
@@ -322,9 +335,20 @@ fn mrrl_noumea_sample_decodes_and_renders_with_licence_ouverte_metadata() {
             "reflectivity",
             instant("2026-11-11T10:25:00Z"),
             instant("2026-11-11T10:25:00Z"),
+            time::Duration::minutes(10),
         ),
         Err(Error::ScanMissing)
     ));
+    assert!(make_frame(
+        site,
+        "MF94_20261111_100933.ar2v",
+        bytes,
+        "reflectivity",
+        instant("2026-11-11T10:25:00Z"),
+        instant("2026-11-11T10:25:00Z"),
+        time::Duration::minutes(20)
+    )
+    .is_ok());
     let frame = make_frame(
         site,
         "MF94_20261111_100933.ar2v",
@@ -332,6 +356,7 @@ fn mrrl_noumea_sample_decodes_and_renders_with_licence_ouverte_metadata() {
         "reflectivity",
         instant("2026-11-11T10:12:00Z"),
         instant("2026-11-11T10:12:00Z"),
+        time::Duration::minutes(10),
     )
     .unwrap();
     assert_eq!(frame.site_id, "MF94");

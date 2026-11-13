@@ -96,6 +96,7 @@ impl RadarClient {
                 "DWD DX uses a terrain-following precipitation scan, not selectable tilts.".into(),
             ));
         }
+        let max_age = time::Duration::minutes(if request.valid_time.is_some() { 20 } else { 70 });
         let target = request
             .valid_time
             .as_deref()
@@ -114,7 +115,7 @@ impl RadarClient {
             .await?
             .into_iter()
             .rev()
-            .filter(|(time, _)| *time <= target && *time >= target - time::Duration::minutes(10))
+            .filter(|(time, _)| *time <= target && *time >= target - max_age)
             .take(3)
         {
             let key = format!("{}:{path}", site.id);
@@ -126,9 +127,10 @@ impl RadarClient {
                 .find(|(cached, _)| cached == &key)
                 .map(|(_, frame)| Arc::clone(frame))
             {
-                if frame.actual_time.is_some_and(|actual| {
-                    actual <= target && actual >= target - time::Duration::minutes(10)
-                }) {
+                if frame
+                    .actual_time
+                    .is_some_and(|actual| actual <= target && actual >= target - max_age)
+                {
                     return Ok(Some(frame));
                 }
                 continue;
@@ -139,7 +141,7 @@ impl RadarClient {
                 result => result?,
             };
             let frame = tokio::task::spawn_blocking(move || {
-                make_frame(site, &bytes, nominal, target, now, url)
+                make_frame(site, &bytes, nominal, target, now, url, max_age)
             })
             .await
             .map_err(|error| Error::Fetch(error.to_string()))??;
@@ -260,6 +262,7 @@ fn make_frame(
     target: OffsetDateTime,
     now: OffsetDateTime,
     url: String,
+    max_age: time::Duration,
 ) -> Result<Frame, Error> {
     let sweep = decode::decode(bytes, site).map_err(Error::Fetch)?;
     let actual = OffsetDateTime::parse(&sweep.valid_time, &Rfc3339)
@@ -269,7 +272,7 @@ fn make_frame(
             "DWD scan header time does not match its filename.".into(),
         ));
     }
-    if actual > target || actual < target - time::Duration::minutes(10) {
+    if actual > target || actual < target - max_age {
         return Err(Error::ScanMissing);
     }
     let mut palette: Palette = serde_json::from_str(include_str!(

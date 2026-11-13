@@ -137,6 +137,7 @@ pub(super) fn decode(
     bytes: &[u8],
     site: &RadarSite,
     target: OffsetDateTime,
+    max_age: time::Duration,
 ) -> Result<Sweep, String> {
     if bytes.len() > super::MAX_ODIM_BYTES {
         return Err("ODIM file exceeds the byte limit".into());
@@ -207,11 +208,7 @@ pub(super) fn decode(
         let what = group.group("what").map_err(|e| e.to_string())?;
         let start = time(&what, "start")?;
         let end = time(&what, "end")?;
-        if !(0.0..=30.0).contains(&angle)
-            || end < start
-            || end > target
-            || end < target - time::Duration::minutes(10)
-        {
+        if !(0.0..=30.0).contains(&angle) || end < start || end > target || end < target - max_age {
             continue;
         }
         let (fields, _) = group.member_names().map_err(|e| e.to_string())?;

@@ -93,7 +93,16 @@ fn listing_uses_exact_station_filenames_and_utc_times() {
 fn frame_rejects_wrong_time_and_keeps_numeric_lookup() {
     let valid = instant("2026-11-09T02:55:00Z");
     let now = instant("2026-11-09T03:00:00Z");
-    assert!(make_frame(site(), ESSEN, now, now, now, "https://example.test".into()).is_err());
+    assert!(make_frame(
+        site(),
+        ESSEN,
+        now,
+        now,
+        now,
+        "https://example.test".into(),
+        time::Duration::minutes(10)
+    )
+    .is_err());
     let frame = make_frame(
         site(),
         ESSEN,
@@ -101,8 +110,32 @@ fn frame_rejects_wrong_time_and_keeps_numeric_lookup() {
         now,
         now,
         "https://example.test".into(),
+        time::Duration::minutes(10),
     )
     .unwrap();
+    let delayed = valid + time::Duration::minutes(15);
+    assert!(make_frame(
+        site(),
+        ESSEN,
+        valid,
+        delayed,
+        delayed,
+        "https://example.test".into(),
+        time::Duration::minutes(20)
+    )
+    .is_ok());
+    assert!(matches!(
+        make_frame(
+            site(),
+            ESSEN,
+            valid,
+            delayed,
+            delayed,
+            "https://example.test".into(),
+            time::Duration::minutes(10)
+        ),
+        Err(Error::ScanMissing)
+    ));
     assert_eq!(frame.elevation_angle, None);
     assert_eq!(frame.valid_time.as_deref(), Some("2026-11-09T02:55:00Z"));
     let png = STANDARD.decode(frame.png_base64).unwrap();

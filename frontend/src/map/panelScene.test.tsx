@@ -231,7 +231,7 @@ it("keeps radar visible during decoding and refresh failure, and clears it on pr
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
   try {
     await waitFor(() => { expect(scene.radar).toBeTruthy(); });
-    const key = mapKeys.radar(null, new Date(useLiveTrackingStore.getState().now).toISOString().replace(".000Z", "Z"));
+    const key = mapKeys.radar(null, new Date(useLiveTrackingStore.getState().now).toISOString().replace(".000Z", "Z"), true);
     const first = scene.radar;
     let ready: (image: { width: number; height: number }) => void = () => undefined;
     decode.mockImplementationOnce(() => new Promise((resolve) => { ready = resolve; }));

@@ -23,6 +23,15 @@ function cuts(siteId: string, status: RadarTilts["tilts"][number]["status"]): Ra
   return { siteId, product: "reflectivity", checkedAt: secondTime, tilts: RADAR_TILTS.map(({ value }) => ({ tilt: value, status })) };
 }
 
+it("does not treat an earlier live failure as a historical failure for the same requested minute", () => {
+  const client = createQueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  attempt(client, mapKeys.radarSite("reflectivity", "KTLX", secondTime, "0", true), "error", 20);
+  const hook = renderHook(() => useUnavailableRadarSites(sites, "reflectivity", secondTime, null), { wrapper });
+  expect(hook.result.current.has("KTLX")).toBe(false);
+  hook.unmount(); client.clear();
+});
+
 it("reacts to the latest live attempt per site, active failures and recovery", () => {
   const client = createQueryClient();
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;

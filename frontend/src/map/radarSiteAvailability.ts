@@ -95,7 +95,7 @@ function cachedUnavailable(cache: QueryCache, sites: ReadonlyMap<string, RadarSi
     }
     if (queryProduct !== effectiveProduct) continue;
     const event = order.queries.get(query);
-    if (kind === "radar-site" && (historyTime === null || time === historyTime)) {
+    if (kind === "radar-site" && (historyTime === null || time === historyTime && query.queryKey[4] !== "live")) {
       const { status, dataUpdatedAt, error, errorUpdatedAt, errorUpdateCount, fetchFailureReason } = query.state;
       const failed = status === "error" || status === "pending" && (error !== null || fetchFailureReason !== null || errorUpdateCount > 0);
       if (status === "pending" && !failed) continue;

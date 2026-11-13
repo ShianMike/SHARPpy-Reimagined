@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { BackendClient } from "../../lib/backend/client";
 import { BackendFailure } from "../../lib/backend/errors";
 import { createTransport } from "../../lib/backend/fixtureTransport";
-import { createQueryClient, mapKeys } from "../../lib/backend/queryOptions";
+import { createQueryClient, mapKeys, RADAR_HISTORY_STALE_MS } from "../../lib/backend/queryOptions";
 import { parseRadarSiteFrame } from "../../lib/contracts/frames";
 import { useAppStore } from "../../stores/appStore";
 import { LIVE_MINUTE } from "../../stores/liveTrackingStore";
@@ -34,6 +34,19 @@ it("reuses a confirmed alert history gap on playback loops but retries other pro
   await expect(fetchLiveRequest(client, current, true)).resolves.toBe("current snapshot");
   expect(retry).toHaveBeenCalledTimes(2);
   client.clear();
+});
+
+it.each([
+  { queryKey: mapKeys.radar(null, "2026-10-17T08:00:00Z") },
+  { queryKey: mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z") },
+])("rechecks an expired radar frame during playback but reuses a fresh one", async ({ queryKey }) => {
+    const client = createQueryClient();
+    const queryFn = vi.fn().mockResolvedValue("new scan");
+    client.setQueryData(queryKey, "old scan", { updatedAt: Date.now() - RADAR_HISTORY_STALE_MS - 1 });
+    await expect(fetchLiveRequest(client, { queryKey, queryFn })).resolves.toBe("new scan");
+    await expect(fetchLiveRequest(client, { queryKey, queryFn })).resolves.toBe("new scan");
+    expect(queryFn).toHaveBeenCalledOnce();
+    client.clear();
 });
 
 it("bounds raster memory and unavailable cuts without removing active imagery or model data", async () => {

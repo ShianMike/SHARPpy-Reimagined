@@ -1,7 +1,7 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import type { BackendClient } from "../../lib/backend/client";
 import { BackendFailure, overlayAvailability } from "../../lib/backend/errors";
-import { BASE_QUERY_OPTIONS, mapKeys } from "../../lib/backend/queryOptions";
+import { BASE_QUERY_OPTIONS, mapKeys, RADAR_HISTORY_STALE_MS } from "../../lib/backend/queryOptions";
 import { panelLayers, panelWeather, type MapState } from "../../stores/mapStore";
 import type { SurfaceAnchor } from "../../map/surfaceQueries";
 import type { RadarSite } from "../../types/map";
@@ -16,7 +16,8 @@ export interface LiveRequest {
 export function fetchLiveRequest(queryClient: QueryClient, request: LiveRequest, refresh = false): Promise<unknown> {
   const previous = queryClient.getQueryState(request.queryKey);
   if (previous?.error instanceof BackendFailure && overlayAvailability(previous.error.error) === "historyUnavailable") return Promise.reject(previous.error);
-  return queryClient.query({ ...BASE_QUERY_OPTIONS, ...request, staleTime: refresh ? 0 : Number.POSITIVE_INFINITY,
+  const radar = request.queryKey[0] === "radar" || request.queryKey[0] === "radar-site";
+  return queryClient.query({ ...BASE_QUERY_OPTIONS, ...request, staleTime: refresh ? 0 : radar ? RADAR_HISTORY_STALE_MS : Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY, retry: false });
 }
 

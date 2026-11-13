@@ -98,6 +98,7 @@ fn sounding_view_passes_the_selected_palette_to_the_bridge() {
             io.reply(&request["id"], serde_json::json!({"image": "iVBORw0KGgo="}))
                 .await;
         }
+        io.expect("shutdown").await;
         0
     })]);
     let (_app, webview) = window(launcher);

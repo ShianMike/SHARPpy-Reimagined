@@ -37,7 +37,7 @@ it("displays radar source attribution at the bottom left following the visible f
   const decoded = parseShrf(Uint8Array.from(atob(radar.split(",")[1] ?? ""), (character) => character.charCodeAt(0)).buffer);
   transport.call = (command, args) => {
     if (command === "get_radar_site_frame") {
-      const siteId = typeof args === "object" && args !== null && "siteId" in args ? String(args.siteId) : "DESS";
+      const siteId = String(args?.siteId ?? "DESS");
       const attribution = siteId === "DESS"
         ? "Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben"
         : siteId === "NONE"

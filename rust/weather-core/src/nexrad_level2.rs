@@ -129,7 +129,6 @@ impl RadarClient {
             return Err(Error::Invalid("unknown Level II product".into()));
         }
         let moment = MomentKind::from_product(product).expect("checked above");
-        let target = target.unwrap_or(now);
         let selected = self.select(site, target, now).await?;
         let volume = match selected {
             Some(scan) => Some(self.volume(site, &scan, cache_dir).await?),
@@ -191,9 +190,8 @@ impl RadarClient {
             .map(|value| OffsetDateTime::parse(value, &Rfc3339))
             .transpose()
             .map_err(|_| Error::Invalid("A valid radar time is required.".into()))?;
-        let target = requested.unwrap_or(now);
         let selected = self
-            .select(site, target, now)
+            .select(site, requested, now)
             .await?
             .ok_or(Error::ScanMissing)?;
         let pixels = pixels.clamp(64, 4096);
@@ -306,9 +304,10 @@ impl RadarClient {
     async fn select(
         &self,
         site: &RadarSite,
-        target: OffsetDateTime,
+        requested: Option<OffsetDateTime>,
         now: OffsetDateTime,
     ) -> Result<Option<ScanEntry>, Error> {
+        let target = requested.unwrap_or(now);
         if target < now - time::Duration::minutes(70) || target > now + time::Duration::minutes(1) {
             return Err(Error::Invalid(
                 "radar history is available only for the past 60 minutes".into(),
@@ -327,16 +326,12 @@ impl RadarClient {
                 }
             }
         }
-        let selected = if target < now - time::Duration::minutes(2) {
-            scans
+        let selected = match requested {
+            Some(_) => scans
                 .into_iter()
                 .filter(|(when, _, _)| (*when - target).abs() <= time::Duration::minutes(10))
-                .min_by_key(|(when, _, _)| (*when - target).abs())
-        } else {
-            scans
-                .into_iter()
-                .filter(|(when, _, _)| *when >= now - time::Duration::minutes(15))
-                .min_by_key(|(when, _, _)| (*when - target).abs())
+                .min_by_key(|(when, _, _)| (*when - target).abs()),
+            None => scans.into_iter().max_by_key(|(when, _, _)| *when),
         };
         Ok(selected)
     }
@@ -532,7 +527,7 @@ fn matches_window(
     }
     match requested {
         Some(target) => (actual - target).abs() <= time::Duration::minutes(10),
-        None => actual >= now - time::Duration::minutes(15),
+        None => actual >= now - time::Duration::minutes(70),
     }
 }
 

@@ -198,37 +198,33 @@ impl MosaicClient {
             .client
             .as_ref()
             .map_err(|e| MosaicError::Fetch(e.clone()))?;
-        let selected = match valid_time {
-            Some(when) => Some(
-                radar_time::select_time(client, WMS_URL, product.layer, when, now)
-                    .await
-                    .map_err(|error| match error {
-                        TimeError::Missing(msg) => MosaicError::ScanMissing(format!(
-                            "{} history is unavailable: {msg}",
-                            product.label
-                        )),
-                        TimeError::Other(msg) => MosaicError::Fetch(format!(
-                            "{} history is unavailable: {msg}",
-                            product.label
-                        )),
-                    })?,
-            ),
-            None => None,
-        };
-        let (width, height) = if selected.is_some() {
+        let selected = radar_time::select_time(
+            client,
+            WMS_URL,
+            product.layer,
+            valid_time.unwrap_or(now),
+            now,
+        )
+        .await
+        .map_err(|error| match error {
+            TimeError::Missing(msg) => {
+                MosaicError::ScanMissing(format!("{} scan is unavailable: {msg}", product.label))
+            }
+            TimeError::Other(msg) => {
+                MosaicError::Fetch(format!("{} scan is unavailable: {msg}", product.label))
+            }
+        })?;
+        let (width, height) = if valid_time.is_some() {
             HISTORY_SIZE
         } else {
             DEFAULT_SIZE
         };
-        let cache_key = match selected {
-            Some(t) => format!(
-                "{}:{}:{width}x{height}:{}",
-                product.layer,
-                product.style,
-                radar_time::stamp(t)
-            ),
-            None => format!("{}:{}:{width}x{height}", product.layer, product.style),
-        };
+        let cache_key = format!(
+            "{}:{}:{width}x{height}:{}",
+            product.layer,
+            product.style,
+            radar_time::stamp(selected)
+        );
         if let Some(cached) = self.cache_get(&cache_key) {
             return cached.ok_or_else(|| {
                 MosaicError::Fetch(format!(
@@ -260,9 +256,7 @@ impl MosaicClient {
                 ("FORMAT", WMS_FORMAT),
                 ("TRANSPARENT", "TRUE"),
             ]);
-            if let Some(t) = selected {
-                pairs.append_pair("TIME", &radar_time::stamp(t));
-            }
+            pairs.append_pair("TIME", &radar_time::stamp(selected));
         }
         let source_url = url.to_string();
         let response = match client
@@ -303,7 +297,7 @@ impl MosaicClient {
                 product.label
             )));
         }
-        let legend_png_bytes = if selected.is_some() {
+        let legend_png_bytes = if valid_time.is_some() {
             self.legend_png(client, product.layer).await
         } else {
             None
@@ -314,7 +308,7 @@ impl MosaicClient {
             units: product.units.to_owned(),
             bounds: COVERAGE_BOUNDS,
             retrieved_at: format_rfc3339_utc(now),
-            valid_time: selected.map(format_rfc3339_utc),
+            valid_time: Some(format_rfc3339_utc(selected)),
             update_interval_s: product.update_interval_s,
             attribution: ATTRIBUTION.to_owned(),
             source_url,

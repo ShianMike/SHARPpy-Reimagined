@@ -147,7 +147,7 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const siteFrame = usePngImage(siteFrameQuery, live && radarVisible && scope === "site", `${site ?? ""}/${radarProduct ?? "reflectivity"}/${tilt}`, false);
   const selectedRadarSite = scope === "site" ? site : null;
   const activeSite = live && radarVisible && scope === "site" ? site : null;
-  const activeFailure = useActiveRadarFailure(activeSite, mapKeys.radarSite(radarProduct, site ?? "", live ? validTime : null, tilt, historyTime === null), siteFrameQuery, siteFrame);
+  const activeFailure = useActiveRadarFailure(activeSite, mapKeys.radarSite(radarProduct, site ?? "", live ? historyTime : null, tilt), siteFrameQuery, siteFrame);
   const unavailableRadarSites = useUnavailableRadarSites(radarSites, requestedRadarProduct, historyTime, activeFailure, activeSite);
   const radarImage = scope === "site" ? siteFrame : mosaic;
   const radar = radarImage.image;

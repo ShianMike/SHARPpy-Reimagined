@@ -384,6 +384,78 @@ fn listing_rejects_external_keys_bad_xml_and_incomplete_results() {
 }
 
 #[tokio::test]
+async fn live_uses_latest_completed_volume_even_when_publication_is_delayed() {
+    let site = crate::radar_sites::sites()
+        .iter()
+        .find(|site| site.id == "KTLX")
+        .unwrap();
+    let now = instant("2026-10-17T12:00:00Z");
+    let when = instant("2026-10-17T11:41:00Z");
+    let key = "2026/10/17/KTLX/KTLX20261017_114100_V06";
+    let payload = build_volume("KTLX", site.lat as f32, site.lon as f32, when, true);
+    let xml = s3_listing(&[
+        ("2026/10/17/KTLX/KTLX20261017_113500_V06", payload.len()),
+        (key, payload.len()),
+        ("2026/10/17/KTLX/KTLX20261017_120100_V06", payload.len()),
+    ]);
+    let server = Server::new(move |path| Reply {
+        status: 200,
+        body: if path.starts_with("/?") {
+            xml.clone()
+        } else {
+            payload.clone()
+        },
+    });
+    let client = RadarClient {
+        base: server.base.clone(),
+        ..Default::default()
+    };
+    let request = Request {
+        product: Some("reflectivity".into()),
+        site_id: Some("KTLX".into()),
+        tilt: Some("0".into()),
+        ..Default::default()
+    };
+    let frame = client
+        .fetch_site_with_pixels(request.clone(), now, site, 128, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(frame.actual_time, Some(when));
+    assert!(frame.source_url.ends_with(key));
+    let tilts = client
+        .availability(site, "reflectivity", None, now, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        tilts
+            .tilts
+            .iter()
+            .find(|tilt| tilt.tilt == "0")
+            .unwrap()
+            .status,
+        "available"
+    );
+
+    let timed = Request {
+        valid_time: Some("2026-10-17T12:00:00Z".into()),
+        ..request.clone()
+    };
+    assert!(matches!(
+        client
+            .fetch_site_with_pixels(timed, now, site, 128, None)
+            .await,
+        Err(Error::ScanMissing)
+    ));
+    assert!(matches!(
+        client
+            .fetch_site_with_pixels(request, now + TimeDuration::minutes(75), site, 128, None)
+            .await,
+        Err(Error::ScanMissing)
+    ));
+}
+
+#[tokio::test]
 async fn availability_and_frames_coalesce_volume_download_and_reuse_disk_cache() {
     let site = crate::radar_sites::sites()
         .iter()

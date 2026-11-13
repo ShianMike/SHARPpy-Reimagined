@@ -56,11 +56,15 @@ fn clear_weather_cache() {
     sharpmod_weather::radar_provider::clear();
 }
 
-#[pyfunction(signature = (public=false))]
-fn radar_sites(py: Python<'_>, public: bool) -> PyResult<String> {
+#[pyfunction(signature = (public=false, include_discovered=true))]
+fn radar_sites(py: Python<'_>, public: bool, include_discovered: bool) -> PyResult<String> {
     let result = if public {
-        let runtime = runtime()?;
-        let sites = py.detach(move || runtime.block_on(sharpmod_weather::radar_provider::sites()));
+        let sites = if include_discovered {
+            let runtime = runtime()?;
+            py.detach(move || runtime.block_on(sharpmod_weather::radar_provider::sites()))
+        } else {
+            sharpmod_weather::radar_sites::sites().to_vec()
+        };
         let sites: Vec<_> = sites
             .iter()
             .map(|site| {

@@ -35,6 +35,7 @@ Target version: **3.7.0** (not published).
 - Make Live Tracking radar site labels clickable to select that site on the
   clicked panel, highlight the active selected site label border in green, and
   highlight unavailable site label borders in red.
+- Keep offline radar catalogue fixtures deterministic as live OPERA sites change.
 
 ### Upcoming
 

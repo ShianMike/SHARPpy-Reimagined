@@ -168,6 +168,14 @@ test("Live Tracking has independent layers, a past-hour clock, and a session cac
   await page.clock.resume();
   await page.getByRole("button", { name: "Live", exact: true }).click();
   await expect(time).toHaveValue("0");
+  await time.focus();
+  await time.press("ArrowLeft");
+  await expect(time).toHaveValue("-1");
+  await liveRadar.getByRole("combobox", { name: "Site", exact: true }).click();
+  await page.getByRole("searchbox", { name: "Find a radar by code or place name" }).fill("KTLX");
+  await page.getByRole("option", { name: "KTLX", exact: true }).click();
+  await expect(time).toHaveValue("0");
+  await expect(page.getByRole("button", { name: "Live", exact: true })).toHaveAttribute("aria-pressed", "true");
   expectWarnings(consoleMessages, []);
 });
 

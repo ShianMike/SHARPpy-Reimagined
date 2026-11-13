@@ -120,7 +120,8 @@ resolve to the same scan. Radar history uses a recent scan at or before the
 selected time, and the radar time shows the scan's actual time. Playback loads
 frames as needed and returns to live
 at the present; **Live** also returns immediately. An unavailable scan is
-reported rather than substituted silently.
+reported rather than substituted silently. Selecting a different radar site or
+switching to the mosaic stops playback and returns to the latest live scan.
 
 Downloaded live data appears in **Settings → Storage**. Caches are bounded and
 cleared when the app session closes; cleared data downloads again when needed.

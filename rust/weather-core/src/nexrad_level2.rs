@@ -342,7 +342,7 @@ impl RadarClient {
                 }
             }
         }
-        scans.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        scans.sort_unstable_by_key(|scan| std::cmp::Reverse(scan.0));
         Ok(scans)
     }
 

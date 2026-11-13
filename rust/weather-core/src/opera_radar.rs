@@ -266,8 +266,7 @@ impl RadarClient {
                     target,
                     now,
                     source,
-                    scan.interval_s,
-                    scan.attribution,
+                    (scan.interval_s, scan.attribution),
                     max_age,
                 )
             })
@@ -607,8 +606,7 @@ fn make_frame(
     target: OffsetDateTime,
     now: OffsetDateTime,
     url: String,
-    interval_s: f64,
-    attribution: &str,
+    source: (f64, &str),
     max_age: time::Duration,
 ) -> Result<Frame, Error> {
     let sweep = decode::decode(bytes, site, target, max_age).map_err(|error| {
@@ -643,8 +641,8 @@ fn make_frame(
         bounds,
         retrieved_at: format_rfc3339_utc(now),
         valid_time: Some(format_rfc3339_utc(actual)),
-        update_interval_s: interval_s,
-        attribution: attribution.into(),
+        update_interval_s: source.0,
+        attribution: source.1.into(),
         source_url: url,
         byte_length: png.len(),
         png_base64: STANDARD.encode(png),

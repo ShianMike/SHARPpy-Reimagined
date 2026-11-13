@@ -4,7 +4,7 @@
     "highlights": [
       {
         "title": "Automatic radar scan time",
-        "description": "Live Tracking loads the latest available scan for the selected radar and keeps it updated. Radar time shows the actual scan time and age, including delayed scans. Review available history without mistaking a later NEXRAD scan for an earlier one."
+        "description": "Live Tracking loads the latest available scan for the selected radar and keeps it updated. Changing sites returns to Live. Radar time shows the actual scan time and age, including delayed scans."
       },
       {
         "title": "More reliable radar sources",

@@ -25,6 +25,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Load supported OPERA scans from the provider's current published object store
   and recognize its current CC BY 4.0 and French Etalab 2.0 license labels.
   Account for delayed scans from Australian, MRRL, German and OPERA feeds.
+- Return to live data and stop playback when choosing a different radar site
+  or switching between a single site and the mosaic.
 
 ## [v3.7.0] - 2026-11-13
 

@@ -123,7 +123,7 @@ it("keeps a partially entered time when the live minute changes", () => {
 it("distinguishes the requested time from the actual scan, including a scan reused by the provider", async () => {
   const { view, queryClient } = renderWithBackend(<Playback />, createTransport());
   const scan = "2026-10-17T07:54:00Z";
-  act(() => { queryClient.setQueryData(mapKeys.radar(null, liveTimestamp(now)), { validTime: scan }); });
+  act(() => { queryClient.setQueryData(mapKeys.radar(null, liveTimestamp(now), true), { validTime: scan }); });
   fireEvent.click(screen.getByRole("button", { name: "Choose radar time" }));
   const dialog = screen.getByRole("dialog", { name: "Radar time" });
   expect(within(dialog).getByText("Requested · UTC")).toBeTruthy();

@@ -4,7 +4,7 @@ import { useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryRe
 import { useBackendClient } from "../lib/backend/BackendProvider";
 import type { RadarTilt } from "../types/map";
 import type { BackendClient } from "../lib/backend/client";
-import { BASE_QUERY_OPTIONS, mapKeys, QUERY_KEYS } from "../lib/backend/queryOptions";
+import { BASE_QUERY_OPTIONS, mapKeys, QUERY_KEYS, RADAR_HISTORY_STALE_MS } from "../lib/backend/queryOptions";
 import { profileSettings } from "../lib/graphics/profileSettings";
 import { useGraphicsStore } from "../stores/graphicsStore";
 import { useLiveTrackingStore } from "../stores/liveTrackingStore";
@@ -111,7 +111,7 @@ export function useRadarFrame(product: string | null, enabled: boolean, validTim
   const followingLive = useLiveTrackingStore((state) => state.selectedTime === null);
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.radar(product, validTime),
+    queryKey: mapKeys.radar(product, validTime, followingLive),
     queryFn: () => client.getRadarFrame(product, validTime),
     placeholderData: (previous, query) => {
       if (!followingLive || validTime === null || query?.queryKey[1] !== (product ?? "default")) return undefined;
@@ -121,7 +121,7 @@ export function useRadarFrame(product: string | null, enabled: boolean, validTim
       return age >= 0 && age <= 10 * 60_000 && scanAge >= 0 && scanAge <= 70 * 60_000 ? previous : undefined;
     },
     enabled,
-    staleTime: validTime === null ? 0 : Number.POSITIVE_INFINITY,
+    staleTime: validTime === null ? 0 : followingLive ? Number.POSITIVE_INFINITY : RADAR_HISTORY_STALE_MS,
     gcTime: Number.POSITIVE_INFINITY,
     refetchInterval: (query) => {
       if (validTime !== null) return false;
@@ -172,7 +172,7 @@ export function useRadarSiteFrame(
   const effectiveProduct = selection.product, effectiveTilt = selection.tilt;
   return useQuery({
     ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.radarSite(effectiveProduct, site ?? "", validTime, effectiveTilt),
+    queryKey: mapKeys.radarSite(effectiveProduct, site ?? "", validTime, effectiveTilt, followingLive),
     queryFn: () => client.getRadarSiteFrame({ site: site ?? "" }, effectiveProduct, validTime, effectiveTilt),
     placeholderData: () => {
       if (!followingLive || validTime === null || site === null) return undefined;
@@ -188,7 +188,7 @@ export function useRadarSiteFrame(
       return latest;
     },
     enabled: enabled && site !== null && selection.supportedProducts?.length !== 0,
-    staleTime: validTime === null ? 0 : Number.POSITIVE_INFINITY,
+    staleTime: validTime === null ? 0 : followingLive ? Number.POSITIVE_INFINITY : RADAR_HISTORY_STALE_MS,
     gcTime: Number.POSITIVE_INFINITY,
     refetchInterval: (query) => {
       if (validTime !== null) return false;

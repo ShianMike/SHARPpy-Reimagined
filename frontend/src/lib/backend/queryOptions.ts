@@ -6,6 +6,9 @@ import type { RadarTilt } from "../../types/map";
 import { trackRadarCacheOrder } from "../../map/radarSiteAvailability";
 import { BackendFailure } from "./errors";
 
+/** A provider can publish a closer scan after a recent historical request. */
+export const RADAR_HISTORY_STALE_MS = 2 * 60_000;
+
 export const QUERY_KEYS = {
   storage: ["storage", "usage"],
   health: ["backend", "health"],
@@ -21,10 +24,10 @@ export const mapKeys = {
   field: (product: string, runTime: string, hour: number, model = "hrrr") => ["fields", product, runTime, hour, model] as const,
   outlook: (product: string, validTime: string) => ["outlooks", product, validTime] as const,
   alerts: (validTime: string) => ["weather-alerts", validTime] as const,
-  radar: (product: string | null, time: string | null = null) => ["radar", product ?? "default", ...(time === null ? [] : [time])] as const,
+  radar: (product: string | null, time: string | null = null, live = false) => ["radar", product ?? "default", ...(time === null ? [] : [time]), ...(live && time !== null ? ["live"] : [])] as const,
   radarSites: ["radar", "sites"] as const,
   radarTilts: (product: string, site: string, time: string | null = null) => ["radar-tilts", product, site, time] as const,
-  radarSite: (product: string | null, site: string, time: string | null = null, tilt: RadarTilt = "0") => ["radar-site", product ?? "reflectivity", site, ...(time === null ? [] : [time]), tilt] as const,
+  radarSite: (product: string | null, site: string, time: string | null = null, tilt: RadarTilt = "0", live = false) => ["radar-site", product ?? "reflectivity", site, ...(time === null ? [] : [time]), ...(live && time !== null ? ["live"] : []), tilt] as const,
   satellite: (channel: string, validTime: string) => ["satellite", channel, validTime] as const,
   reports: (validTime: string, windowS: number, hazardFilter: string) =>
     ["reports", validTime, windowS, hazardFilter] as const,

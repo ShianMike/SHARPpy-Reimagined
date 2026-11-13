@@ -12,6 +12,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Expand the available weather-model parameters, offering only fields supported
   by each model and the selected run.
 
+### Fixed
+
+- Keep live radar cache entries separate from historical requests, so a scan
+  published after the live minute can be selected without reloading the app.
+
 ## [v3.7.0] - 2026-11-13
 
 ### Added

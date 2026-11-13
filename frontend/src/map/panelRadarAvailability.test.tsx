@@ -42,7 +42,7 @@ it("propagates an active frame failure, decode failure, recovery, and mosaic sel
   const scene: Partial<SceneData> = {};
   const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
-  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z");
+  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "0", true);
   try {
     await waitFor(() => { expect(queryClient.getQueryState(key)?.status).toBe("error"); });
     await waitFor(() => { expect(scene.unavailableRadarSites?.has("KTLX")).toBe(true); });
@@ -88,7 +88,7 @@ it("keeps a failed site unavailable until its successful retry has decoded", asy
   const scene: Partial<SceneData> = {};
   const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
-  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z");
+  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "0", true);
   try {
     await waitFor(() => { expect(queryClient.getQueryState(key)?.status).toBe("error"); });
     await waitFor(() => { expect(scene.unavailableRadarSites?.has("KTLX")).toBe(true); });
@@ -125,19 +125,19 @@ it("keeps each panel's active site independent of other products, tilts, and sta
   const runtime = (index: number) => ({ setScene: (patch: Partial<SceneData>) => { Object.assign(scenes[index] ?? {}, patch); }, setStations: vi.fn() }) as unknown as MapRuntime;
   const runtimes = [runtime(0), runtime(1)];
   const hook = renderHook(() => { usePanelScene(runtimes[0] ?? null, 0); usePanelScene(runtimes[1] ?? null, 1); }, { wrapper });
-  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z");
+  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "0", true);
   try {
     await waitFor(() => { expect(queryClient.getQueryState(key)?.status).toBe("success"); });
     await waitFor(() => { expect(scenes[1]?.unavailableRadarSites?.has("KTLX")).toBe(true); });
     await waitFor(() => { expect(scenes[0]?.unavailableRadarSites?.has("KTLX")).toBe(false); });
-    const stale = queryClient.getQueryCache().build(queryClient, { queryKey: mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T07:55:00Z", "1") });
+    const stale = queryClient.getQueryCache().build(queryClient, { queryKey: mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T07:55:00Z", "1", true) });
     act(() => { stale.setState({ status: "error", error: new Error("Other tilt offline"), errorUpdatedAt: Date.now() + 1000 }); });
     expect(scenes[0]?.unavailableRadarSites?.has("KTLX")).toBe(false);
     const active = queryClient.getQueryCache().find({ queryKey: key, exact: true });
     if (active === undefined) throw new Error("Missing active frame query");
     const previous = queryClient.getQueryData<RadarSiteFrame>(key);
     if (previous === undefined) throw new Error("Missing active frame");
-    act(() => { queryClient.setQueryData(mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T07:55:00Z"), { ...previous, validTime: "2026-10-17T07:55:00Z" }); });
+    act(() => { queryClient.setQueryData(mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T07:55:00Z", "0", true), { ...previous, validTime: "2026-10-17T07:55:00Z" }); });
     act(() => { active.setState({ status: "pending", data: undefined, error: new Error("Retrying"), errorUpdatedAt: Date.now() + 2000 }); });
     await waitFor(() => { expect(scenes[0]?.unavailableRadarSites?.has("KTLX")).toBe(true); });
     act(() => { active.setState({ status: "pending", error: null, errorUpdateCount: 0, errorUpdatedAt: 0 }); });
@@ -157,7 +157,7 @@ it("keeps each panel's active site independent of other products, tilts, and sta
     act(() => { active.setState({ status: "pending", data: undefined, error: null, errorUpdateCount: 0, fetchFailureReason: null, fetchFailureCount: 1 }); });
     await waitFor(() => { expect(scenes[0]?.unavailableRadarSites?.has("KTLX")).toBe(true); });
     act(() => { useMapStore.getState().setActivePanel(0); useMapStore.getState().setRadarTilt("1"); });
-    await waitFor(() => { expect(queryClient.getQueryState(mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "1"))?.status).toBe("success"); });
+    await waitFor(() => { expect(queryClient.getQueryState(mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "1", true))?.status).toBe("success"); });
     await waitFor(() => { expect(scenes[0]?.unavailableRadarSites?.has("KTLX")).toBe(false); });
     expect(scenes[1]?.unavailableRadarSites?.has("KTLX")).toBe(true);
   } finally { hook.unmount(); queryClient.clear(); }
@@ -190,7 +190,7 @@ it("keeps a failed site unavailable and hides its older bitmap during retry deco
   const scene: Partial<SceneData> = {};
   const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
-  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z");
+  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "0", true);
   try {
     await waitFor(() => { expect(scene.radar?.image).toBe(oldBitmap); });
     outcome = "failure";
@@ -235,7 +235,7 @@ it("keeps an automatically retried site unavailable after fetch success until de
   const scene: Partial<SceneData> = {};
   const runtime = { setScene: (patch: Partial<SceneData>) => { Object.assign(scene, patch); }, setStations: vi.fn() } as unknown as MapRuntime;
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
-  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z");
+  const key = mapKeys.radarSite("reflectivity", "KTLX", "2026-10-17T08:00:00Z", "0", true);
   try {
     await waitFor(() => { expect(request).toHaveBeenCalledTimes(2); }, { timeout: 3000 });
     expect(queryClient.getQueryState(key)).toMatchObject({ status: "pending", errorUpdateCount: 0, fetchFailureCount: 1 });

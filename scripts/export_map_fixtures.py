@@ -22,6 +22,7 @@ import json
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -230,6 +231,7 @@ def _radar_png() -> bytes:
 def stand_ins() -> Iterator[None]:
     """The offline providers, installed for the duration of the block only."""
     import numpy as np
+    import sharpmod_rs
 
     from sharpmod.bridge import fields
     from sharpmod.bridge import params as p
@@ -248,6 +250,9 @@ def stand_ins() -> Iterator[None]:
 
     hrrr_field.clear_derived_cache()
     stack = ExitStack()
+    stack.enter_context(patch.object(
+        sharpmod_rs, "radar_sites", partial(sharpmod_rs.radar_sites, include_discovered=False),
+    ))
     cache_root = stack.enter_context(TemporaryDirectory(prefix="sharpmod-map-fixtures-"))
     stack.enter_context(patch.object(hrrr_field, "disk_cache_root", lambda: Path(cache_root)))
     stack.callback(hrrr_field.clear_derived_cache)

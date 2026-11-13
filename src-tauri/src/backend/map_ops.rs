@@ -7,27 +7,21 @@ use serde_json::json;
 
 use crate::backend::router::Router;
 use crate::backend::sounding_ops::{invalid, rejected};
-use crate::dto::map::{
-    AvailabilityReport, AvailabilityResult, FieldGridResult, MapCatalog, PlaceLabels, RadarResult,
-    RadarSiteResult, SpcOutlook,
-};
-use crate::error::{BackendError, ErrorContext, PYTHON_PROVIDER};
+use crate::dto::map::{AvailabilityReport, FieldGridResult, MapCatalog, PlaceLabels, SpcOutlook};
+use crate::dto::overlays::{Outlook, OutlookArea, Place};
+use crate::dto::stations::{Station, StationAvailability as StationAvailabilityState};
+use crate::error::{BackendError, ErrorCode, ErrorContext, PYTHON_PROVIDER};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 pub const OP_MAP_CATALOG: &str = "get_map_catalog";
 pub const OP_FIELD: &str = "get_weather_field";
 pub const OP_OUTLOOK: &str = "get_spc_outlook";
-pub const OP_RADAR: &str = "get_radar_frame";
-pub const OP_RADAR_SITE: &str = "get_radar_site_frame";
 pub const OP_PLACES: &str = "get_place_labels";
 pub const OP_AVAILABILITY: &str = "get_station_availability";
 
 const CATALOG_TIMEOUT: Duration = Duration::from_secs(30);
 const FIELD_TIMEOUT: Duration = Duration::from_secs(120);
-const OUTLOOK_TIMEOUT: Duration = Duration::from_secs(60);
-const RADAR_TIMEOUT: Duration = Duration::from_secs(60);
-const PLACES_TIMEOUT: Duration = Duration::from_secs(30);
-const AVAILABILITY_TIMEOUT: Duration = Duration::from_secs(35);
-const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+const OUTLOOK_VERTEX_SCALE: f64 = 10_000.0;
 
 pub(crate) fn key_ok(key: &str) -> bool {
     (1..=40).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
@@ -160,202 +154,64 @@ impl Router {
                 "product must be a key and validTime an RFC 3339 time",
             ));
         }
-        let outlook: SpcOutlook = self
-            .call(
-                &context,
-                "outlooks.spc",
-                json!({ "product": product, "valid_time": valid_time }),
-                OUTLOOK_TIMEOUT,
-            )
-            .await?;
+        let when = OffsetDateTime::parse(valid_time, &Rfc3339)
+            .map_err(|_| invalid(&context, "validTime must be an RFC 3339 time"))?;
+        let product = if matches!(product, "cat" | "torn" | "wind" | "hail" | "prob") {
+            product
+        } else {
+            "cat"
+        };
+        let layer = sharpmod_weather::spc_outlook::client()
+            .fetch(when, OffsetDateTime::now_utc(), product)
+            .await
+            .map_err(|error| BackendError {
+                code: ErrorCode::OverlayFetchFailed,
+                message: format!("The SPC outlook could not be read: {error}."),
+                retryable: true,
+                context: Some(Box::new(context.clone())),
+                details: None,
+            })?;
+        let round4 = |v: f64| (v * OUTLOOK_VERTEX_SCALE).round() / OUTLOOK_VERTEX_SCALE;
+        let outlook = SpcOutlook {
+            product: product.to_owned(),
+            valid_time: Some(sharpmod_weather::format_rfc3339_utc(when)),
+            outlook: layer.map(|layer| Outlook {
+                title: layer.title.clone(),
+                subtitle: layer.subtitle.clone(),
+                valid_from: layer.valid_from.clone(),
+                valid_to: layer.valid_to.clone(),
+                issued: layer.issued.clone(),
+                covers: layer.covers(when),
+                source_url: layer.source_url.clone(),
+                attribution: layer.attribution.clone(),
+                areas: layer
+                    .areas
+                    .iter()
+                    .map(|area| OutlookArea {
+                        label: area.label.clone(),
+                        description: area.description.clone(),
+                        fill: Some(area.fill.clone()),
+                        stroke: area.stroke.clone(),
+                        rank: area.rank,
+                        hatch: area.hatch,
+                        hatch_level: area.hatch_level,
+                        rings: area
+                            .rings
+                            .iter()
+                            .map(|ring| {
+                                ring.iter()
+                                    .map(|&[lon, lat]| [round4(lon), round4(lat)])
+                                    .collect()
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+            }),
+        };
         outlook
             .validate()
             .map_err(|reason| rejected(&context, "outlooks.spc", reason))?;
         Ok(outlook)
-    }
-
-    /// A latest or genuinely time-addressed radar frame holding the service's PNG.
-    pub async fn radar_frame(
-        &self,
-        product: Option<&str>,
-        valid_time: Option<&str>,
-    ) -> Result<Vec<u8>, BackendError> {
-        let context = context(OP_RADAR, "MRMS radar mosaic");
-        let mut params = match product {
-            Some(key) if key_ok(key) => json!({ "product": key }),
-            Some(_) => return Err(invalid(&context, "product must be a key")),
-            None => json!({}),
-        };
-        if let Some(time) = valid_time {
-            if !time_ok(time) {
-                return Err(invalid(&context, "validTime must be an RFC 3339 time"));
-            }
-            params["valid_time"] = json!(time);
-        }
-        let frame: RadarResult = self
-            .call(&context, "radar.mosaic", params, RADAR_TIMEOUT)
-            .await?;
-        frame
-            .validate()
-            .map_err(|reason| rejected(&context, "radar.mosaic", reason))?;
-        if valid_time.is_some() && frame.valid_time.is_none() {
-            return Err(rejected(
-                &context,
-                "radar.mosaic",
-                "a requested scan has no actual valid_time".to_owned(),
-            ));
-        }
-        let (bytes, body_offset) = shrf_frame(&frame.header(), &frame.png_base64)
-            .map_err(|reason| rejected(&context, "radar.mosaic", reason))?;
-        let body = &bytes[body_offset..];
-        if !body.starts_with(PNG_SIGNATURE)
-            || u64::try_from(body.len()).ok() != Some(frame.byte_length)
-        {
-            return Err(rejected(
-                &context,
-                "radar.mosaic",
-                "the frame is not the PNG that was described".to_owned(),
-            ));
-        }
-        Ok(bytes)
-    }
-
-    /// One antenna's own frame, pinned by site id or served for a map point.
-    /// `site` is `Some(id)` to pin, else `latitude`/`longitude` serve the nearest.
-    pub async fn radar_site_frame(
-        &self,
-        product: Option<&str>,
-        site: Option<&str>,
-        latitude: Option<f64>,
-        longitude: Option<f64>,
-        valid_time: Option<&str>,
-        tilt: Option<&str>,
-    ) -> Result<Vec<u8>, BackendError> {
-        let id = site.or(product).unwrap_or("default");
-        let context = context(OP_RADAR_SITE, &format!("single-site radar {id}"));
-        let mut params = match (site, latitude, longitude) {
-            (Some(id), _, _) => {
-                if !key_ok(id) {
-                    return Err(invalid(&context, "site must be a radar identifier"));
-                }
-                match product {
-                    Some(key) if key_ok(key) => json!({ "product": key, "site_id": id }),
-                    Some(_) => return Err(invalid(&context, "product must be a key")),
-                    None => json!({ "site_id": id }),
-                }
-            }
-            (None, Some(lat), Some(lon)) => {
-                if !lat.is_finite()
-                    || !(-90.0..=90.0).contains(&lat)
-                    || !lon.is_finite()
-                    || !(-180.0..=180.0).contains(&lon)
-                {
-                    return Err(invalid(&context, "latitude and longitude must be in range"));
-                }
-                match product {
-                    Some(key) if key_ok(key) => {
-                        json!({ "product": key, "latitude": lat, "longitude": lon })
-                    }
-                    Some(_) => return Err(invalid(&context, "product must be a key")),
-                    None => json!({ "latitude": lat, "longitude": lon }),
-                }
-            }
-            _ => {
-                return Err(invalid(
-                    &context,
-                    "site, or latitude and longitude, must be given",
-                ));
-            }
-        };
-        if let Some(time) = valid_time {
-            if !time_ok(time) {
-                return Err(invalid(&context, "validTime must be an RFC 3339 time"));
-            }
-            params["valid_time"] = json!(time);
-        }
-        if let Some(cut) = tilt {
-            if !matches!(cut, "x" | "y" | "z" | "0" | "a" | "1" | "b" | "2" | "3") {
-                return Err(invalid(&context, "tilt must be a supported NEXRAD cut"));
-            }
-            params["tilt"] = json!(cut);
-        }
-        let native_request = serde_json::from_value(params.clone())
-            .map_err(|reason| invalid(&context, &format!("Invalid radar request: {reason}")))?;
-        match sharpmod_weather::australian_radar::client()
-            .fetch(native_request, time::OffsetDateTime::now_utc())
-            .await
-        {
-            Ok(Some(frame)) => {
-                let frame: RadarSiteResult = serde_json::from_value(
-                    serde_json::to_value(frame.as_ref())
-                        .map_err(|reason| rejected(&context, "radar.site", reason.to_string()))?,
-                )
-                .map_err(|reason| rejected(&context, "radar.site", reason.to_string()))?;
-                return shrf_frame(&frame.header(), &frame.png_base64)
-                    .map(|(bytes, _)| bytes)
-                    .map_err(|reason| rejected(&context, "radar.site", reason));
-            }
-            Ok(None) => {}
-            Err(error) => {
-                return Err(BackendError {
-                    code: if matches!(error, sharpmod_weather::australian_radar::Error::Invalid(_))
-                    {
-                        crate::error::ErrorCode::InvalidArgument
-                    } else {
-                        crate::error::ErrorCode::OverlayFetchFailed
-                    },
-                    message: error.to_string(),
-                    retryable: !matches!(
-                        error,
-                        sharpmod_weather::australian_radar::Error::Invalid(_)
-                    ),
-                    context: Some(Box::new(context)),
-                    details: matches!(
-                        error,
-                        sharpmod_weather::australian_radar::Error::ScanMissing
-                    )
-                    .then(|| {
-                        json!({"reason": "scanMissing"})
-                            .as_object()
-                            .expect("object")
-                            .clone()
-                    }),
-                });
-            }
-        }
-        // A cold Level II request downloads and decodes a complete volume.
-        let timeout = if matches!(
-            product.unwrap_or("reflectivity"),
-            "reflectivity" | "correlation-coefficient"
-        ) {
-            Duration::from_secs(120)
-        } else {
-            RADAR_TIMEOUT
-        };
-        let frame: RadarSiteResult = self.call(&context, "radar.site", params, timeout).await?;
-        frame
-            .validate()
-            .map_err(|reason| rejected(&context, "radar.site", reason))?;
-        if valid_time.is_some() && frame.valid_time.is_none() {
-            return Err(rejected(
-                &context,
-                "radar.site",
-                "a requested scan has no actual valid_time".to_owned(),
-            ));
-        }
-        let (bytes, body_offset) = shrf_frame(&frame.header(), &frame.png_base64)
-            .map_err(|reason| rejected(&context, "radar.site", reason))?;
-        let body = &bytes[body_offset..];
-        if !body.starts_with(PNG_SIGNATURE)
-            || u64::try_from(body.len()).ok() != Some(frame.byte_length)
-        {
-            return Err(rejected(
-                &context,
-                "radar.site",
-                "the frame is not the PNG that was described".to_owned(),
-            ));
-        }
-        Ok(bytes)
     }
 
     /// Map place names; static for the life of the bridge.
@@ -364,9 +220,17 @@ impl Router {
             return Ok(places);
         }
         let context = context(OP_PLACES, "place names");
-        let places: PlaceLabels = self
-            .call(&context, "places.labels", json!({}), PLACES_TIMEOUT)
-            .await?;
+        let places = PlaceLabels {
+            places: sharpmod_weather::place_names::place_labels()
+                .iter()
+                .map(|place| Place {
+                    name: place.name.clone(),
+                    lat: place.lat,
+                    lon: place.lon,
+                    tier: place.tier,
+                })
+                .collect(),
+        };
         places
             .validate()
             .map_err(|reason| rejected(&context, "places.labels", reason))?;
@@ -387,14 +251,41 @@ impl Router {
                 "observationTime must be an RFC 3339 time",
             ));
         }
-        let result: AvailabilityResult = self
-            .call(
-                &context,
-                "stations.availability",
-                json!({ "observation_time": observation_time }),
-                AVAILABILITY_TIMEOUT,
-            )
-            .await?;
-        Ok(result.into_report())
+        let when = OffsetDateTime::parse(observation_time, &Rfc3339)
+            .map_err(|_| invalid(&context, "observationTime must be an RFC 3339 time"))?;
+        let payload = sharpmod_weather::uwyo::client()
+            .fetch(when, OffsetDateTime::now_utc())
+            .await
+            .map_err(|error| match error {
+                sharpmod_weather::uwyo::AvailabilityError::Invalid(message) => {
+                    invalid(&context, &message)
+                }
+                sharpmod_weather::uwyo::AvailabilityError::Unavailable(message) => BackendError {
+                    code: ErrorCode::StationListUnavailable,
+                    message: format!(
+                        "The UWyo station list could not be loaded ({message}). The bundled list is still shown."
+                    ),
+                    retryable: true,
+                    context: Some(Box::new(context)),
+                    details: None,
+                },
+            })?;
+        Ok(AvailabilityReport {
+            observation_time: payload.observation_time,
+            listed_ids: payload.listed_ids,
+            extra_stations: payload
+                .extra_stations
+                .into_iter()
+                .map(|record| Station {
+                    id: record.id,
+                    name: record.name,
+                    latitude: record.lat,
+                    longitude: record.lon,
+                    source: record.src,
+                    availability: StationAvailabilityState::Listed,
+                })
+                .collect(),
+            dropped_count: payload.dropped_count,
+        })
     }
 }

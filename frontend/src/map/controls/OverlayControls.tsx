@@ -16,7 +16,7 @@ import { OUTLOOK_KEYS, SATELLITE_CHANNELS, type OutlookKey } from "../../types/m
 import { RadarTiltSelect } from "../../features/tracking/RadarTiltSelect";
 import { useMapCatalog, usePanelRadar, usePlaceLabels, useRadarFrame, useRadarSiteFrame, useRadarSites, useSatelliteFrame, useSpcOutlooks } from "../mapQueries";
 import { domainPath } from "../panelScene";
-import { isAustralianRadarSite } from "../panelRadar";
+import { isFixedScanRadarSite, radarSiteCode, radarSiteOption } from "../panelRadar";
 import styles from "./LayerPanel.module.css";
 
 /** The satellite row's own controls: the channel, and the scan's own provenance. */
@@ -69,17 +69,14 @@ export function RadarControls(): ReactNode {
   const catalog = mapCatalog.data;
   const { radarScope: scope, radarSite: pinnedSite } = useMapStore((state) => panelWeather(state));
   const sites = useRadarSites(true);
-  const { site: effectiveSite, product, tilt, tiltable, supportedProducts } = usePanelRadar();
+  const { site: effectiveSite, product, tilt, tiltable, supportedProducts, provider } = usePanelRadar();
   const mosaic = useRadarFrame(product, scope === "mosaic", validTime);
   const siteFrame = useRadarSiteFrame(product, effectiveSite, scope === "site", validTime, tilt);
   const radar = scope === "site" ? siteFrame : mosaic;
   const products = (scope === "site" ? (catalog?.siteProducts ?? []) : (catalog?.radarProducts ?? []))
     .filter((item) => scope !== "site" || supportedProducts === undefined || supportedProducts.includes(item.key));
   const value = product ?? radar.data?.product ?? products[0]?.key ?? "";
-  const shownSite: string =
-    scope === "site" && radar.data !== undefined && "siteId" in radar.data && typeof radar.data.siteId === "string"
-      ? ` from ${radar.data.siteId}`
-      : "";
+  const shownSite = scope === "site" && siteFrame.data !== undefined ? ` from ${radarSiteCode(siteFrame.data.siteId)}` : "";
   const shown =
     radar.data === undefined
       ? "Radar"
@@ -96,8 +93,10 @@ export function RadarControls(): ReactNode {
           onRetry={() => { void sites.refetch(); }} busy={sites.isFetching} testId="radar-sites-error" /> : sites.data === undefined ? (
           <p className={styles.hint}>Loading the radar sites</p>
         ) : (
-          <SourceSelect label="Site" value={pinnedSite ?? ""}
-            options={[{ value: "", label: "Nearest to map centre" }, ...sites.data.sites.map((site) => ({ value: site.id, label: site.name === undefined ? site.id : `${site.id} · ${site.name}`, ...(site.country === "AU" ? { detail: "Australia" } : {}) }))]}
+          <SourceSelect label="Site" value={pinnedSite ?? ""} popup="list" searchLabel="Find a radar by code or place name"
+            options={[{ value: "", label: "Nearest to map centre" },
+              ...(pinnedSite !== null && !sites.data.sites.some((site) => site.id === pinnedSite) ? [{ value: pinnedSite, label: radarSiteCode(pinnedSite) }] : []),
+              ...sites.data.sites.map(radarSiteOption).sort((a, b) => a.label.localeCompare(b.label) || a.value.localeCompare(b.value))]}
             onChange={(value) => {
               const state = useMapStore.getState();
               state.setRadarSite(value === "" ? null : value);
@@ -110,11 +109,11 @@ export function RadarControls(): ReactNode {
         onRetry={() => { void mapCatalog.refetch(); }} busy={mapCatalog.isFetching} testId="radar-products-error" /> : null}
       {products.length === 0 ? null : (
         <SourceSelect label="Product" value={value}
-          options={products.map((item) => ({ value: item.key, label: item.label }))}
+          options={products.map((item) => ({ value: item.key, label: provider === "MRRL" && item.key === "reflectivity" ? "Reflectivity" : item.label }))}
           onChange={useMapStore.getState().setRadarProduct} />
       )}
       {scope === "site" && (tiltable ? <RadarTiltSelect label="Tilt" site={effectiveSite} product={value} tilt={tilt} angle={siteFrame.data?.elevationAngle} />
-        : isAustralianRadarSite(effectiveSite) ? <SourceSelect label="Tilt" value="0" options={[{ value: "0", label: "Lowest available" }]} disabled onChange={useMapStore.getState().setRadarTilt} /> : null)}
+        : isFixedScanRadarSite(effectiveSite, sites.data?.sites.find((site) => site.id === effectiveSite)) ? <SourceSelect label="Tilt" value="0" options={[{ value: "0", label: /^D[A-Z]{3}$/.test(effectiveSite ?? "") ? "Varies by direction" : "Lowest available" }]} disabled onChange={useMapStore.getState().setRadarTilt} /> : null)}
       {radar.isError ? (
         <>
           <OverlayErrorNotice
@@ -134,7 +133,7 @@ export function RadarControls(): ReactNode {
         <p className={styles.hint} data-testid="radar-shown">
           {`${shown}. ${
             scope === "site"
-              ? "One antenna's own imagery at its native resolution."
+              ? "One antenna's imagery; resolution and scan geometry depend on the source."
               : "High-resolution MRMS mosaic."
           } ${radar.data.attribution}.`}
         </p>

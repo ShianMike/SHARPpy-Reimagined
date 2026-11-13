@@ -181,3 +181,4 @@ export interface SoundingTrends {
 export const RENDER_CHOICES = ["SFC", "ML", "FCST", "MU", "EFF"] as const;
 export type RenderChoice = (typeof RENDER_CHOICES)[number];
 export type ImageMode = "hd" | "uhd";
+export type SoundingColorStyle = "standard" | "inverted" | "protanopia";

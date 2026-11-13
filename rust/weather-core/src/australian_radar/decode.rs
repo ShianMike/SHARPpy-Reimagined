@@ -5,6 +5,7 @@
 //! REF values remain in dBZ and VEL values in m/s, using each moment's source
 //! scale and offset. Missing gates are NaN; range-folded velocity is +infinity.
 
+pub(super) use crate::polar_radar::{Radial, Sweep};
 use bzip2::bufread::BzDecoder;
 use std::borrow::Cow;
 use std::io::Read;
@@ -16,29 +17,6 @@ const MAX_RECORDS: usize = 100_000;
 const MAX_CUTS: usize = 64;
 const MAX_RADIALS: usize = 720;
 const MAX_GATES: usize = 8192;
-
-#[derive(Debug)]
-pub struct Sweep {
-    pub site_id: String,
-    /// Earliest radial acquisition time in the selected complete sweep (UTC).
-    pub valid_time: String,
-    pub elevation_angle: f64,
-    pub radials: Vec<Radial>,
-}
-
-#[derive(Debug)]
-pub struct Radial {
-    /// Centre angle, clockwise from north, in degrees.
-    pub azimuth: f64,
-    /// Encoded angular sample width, in degrees; never widened over missing rays.
-    pub width: f64,
-    /// Range to the centre of the first gate, in metres.
-    pub first_gate_m: f64,
-    pub gate_spacing_m: f64,
-    /// Unclamped physical dBZ (REF) or m/s (VEL). Missing gates are NaN;
-    /// range-folded VEL is +infinity, while range-folded REF remains NaN.
-    pub values: Vec<f32>,
-}
 
 struct Cut {
     number: u8,
@@ -315,6 +293,7 @@ fn read_ray(bytes: &[u8], site: &[u8], moment: &[u8; 3]) -> Result<Ray, String> 
                     data = Some(Radial {
                         azimuth,
                         width,
+                        elevation_angle: None,
                         first_gate_m: f64::from(i16::from_be_bytes(field(block, 10)?)),
                         gate_spacing_m: f64::from(u16_at(block, 12)?),
                         values,

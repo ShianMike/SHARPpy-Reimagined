@@ -3,11 +3,40 @@ import type { MapLibreOverlay } from "@deck.gl/maplibre";
 import type { Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
 import { afterEach, expect, it, vi } from "vitest";
 import { useAppStore } from "../../stores/appStore";
+import { panelWeather, useMapStore } from "../../stores/mapStore";
 import { useHoverStore } from "../hover/hoverStore";
-import { wireOverlayEvents, type RuntimeEventTarget } from "./runtimeEvents";
+import { createPanelOverlay, wireOverlayEvents, type RuntimeEventTarget } from "./runtimeEvents";
 import { NO_WATCH } from "./runtimeWiring";
+import type { CanvasTokens } from "../canvasTokens";
 
-afterEach(() => { vi.unstubAllGlobals(); useHoverStore.setState(useHoverStore.getInitialState(), true); });
+const overlayCallbacks = vi.hoisted(() => ({ click: undefined as ((info: import("@deck.gl/core").PickingInfo) => void) | undefined }));
+vi.mock("./overlay", () => ({ createOverlay: (_options: unknown, callbacks: { onClick: typeof overlayCallbacks.click }) => {
+  overlayCallbacks.click = callbacks.onClick;
+  return {};
+} }));
+
+afterEach(() => { vi.unstubAllGlobals(); useHoverStore.setState(useHoverStore.getInitialState(), true); useMapStore.setState(useMapStore.getInitialState(), true); });
+
+it.each(["interleaved", "separate"] as const)("passes the clicked panel through the %s overlay handler", (mode) => {
+  useMapStore.setState({ view: "live", panelLayout: 2, activePanel: 0 });
+  const site = { id: "KTLX", longitude: -97, latitude: 35 };
+  const picked = { layer: { id: "radar-site-labels" }, object: site };
+  const target: RuntimeEventTarget = { panel: 1, container: document.createElement("div"), primary: false, watch: NO_WATCH,
+    errors: [], dragging: false, overlayReady: true, live: (fn) => fn, styleLoaded: vi.fn(), runtimeError: vi.fn() };
+  if (mode === "separate") {
+    createPanelOverlay({ lengths: { pickingRadius: 6 } } as CanvasTokens, 1, target);
+    overlayCallbacks.click?.(picked as import("@deck.gl/core").PickingInfo);
+  } else {
+    const handlers = new Map<string, (event: MapMouseEvent) => void>();
+    const map = { on: (name: string, fn: (event: MapMouseEvent) => void) => { handlers.set(name, fn); }, off: () => undefined };
+    const overlay = { pickObject: () => picked };
+    const unsubscribe = wireOverlayEvents(map as unknown as MapLibreMap, overlay as unknown as MapLibreOverlay, target, 6);
+    handlers.get("click")?.({ point: { x: 1, y: 2 }, lngLat: { lng: -97, lat: 35 } } as MapMouseEvent);
+    unsubscribe();
+  }
+  expect(useMapStore.getState().activePanel).toBe(1);
+  expect(panelWeather(useMapStore.getState(), 1)).toMatchObject({ radarScope: "site", radarSite: "KTLX" });
+});
 
 it("coalesces map movement into one atomic pick, selects points without a pick, and cancels on leaving, moving and disposal", () => {
   const saved = useAppStore.getState();

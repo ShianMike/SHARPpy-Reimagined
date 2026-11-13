@@ -43,18 +43,41 @@ it("exposes image decode failure, ignores an obsolete rejection, and retries the
   const newer = { png: new Blob(["new"]), bounds, validTime: "2026-10-04T19:00:00Z" };
   const hook = renderHook(({ data, enabled }) => usePngImage({ data, isError: false, refetch }, enabled, "radar"),
     { initialProps: { data: older, enabled: true } });
+  expect(hook.result.current.decodedCurrent).toBe(false);
   hook.rerender({ data: newer, enabled: true });
   await waitFor(() => { expect(hook.result.current.issue).toContain("could not be decoded"); });
+  expect(hook.result.current.decodedCurrent).toBe(false);
   await act(async () => { rejectOld(new Error("obsolete")); await Promise.resolve(); });
   expect(hook.result.current.issue).toContain("could not be decoded");
   act(() => { hook.result.current.retry(); });
   await waitFor(() => { expect(hook.result.current.image).not.toBeNull(); });
   expect(hook.result.current.issue).toBeNull();
+  expect(hook.result.current.decodedCurrent).toBe(true);
   expect(refetch).toHaveBeenCalledTimes(1);
   hook.rerender({ data: newer, enabled: false });
   expect(hook.result.current.image).toBeNull();
+  expect(hook.result.current.decodedCurrent).toBe(false);
   act(() => { hook.result.current.retry(); });
   expect(refetch).toHaveBeenCalledTimes(1);
+});
+
+it("clears an earlier radar image until the newly selected frame finishes decoding", async () => {
+  let finish: (image: { width: number; height: number }) => void = () => undefined;
+  vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValueOnce({ width: 2, height: 2 })
+    .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })));
+  const bounds = { west: -100, east: -90, south: 30, north: 40 };
+  const older = { png: new Blob(["old"]), bounds, validTime: "2026-10-04T18:00:00Z" };
+  const newer = { png: new Blob(["new"]), bounds, validTime: "2026-10-04T18:05:00Z" };
+  const refetch = vi.fn();
+  const hook = renderHook(({ data }) => usePngImage({ data, isError: false, refetch }, true, "radar", false),
+    { initialProps: { data: older } });
+  await waitFor(() => { expect(hook.result.current.image).not.toBeNull(); });
+  hook.rerender({ data: newer });
+  expect(hook.result.current.image).toBeNull();
+  await act(async () => { finish({ width: 2, height: 2 }); await Promise.resolve(); });
+  await waitFor(() => { expect(hook.result.current.decodedCurrent).toBe(true); });
+  expect(hook.result.current.image).not.toBeNull();
+  hook.unmount();
 });
 
 it("uses the same closed grid perimeter without adding a zero-length segment", () => {

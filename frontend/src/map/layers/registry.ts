@@ -114,6 +114,8 @@ export interface SceneData {
   /** All place names; the label pass picks the subset to draw. */
   places: readonly Place[];
   radarSites: readonly RadarSite[];
+  selectedRadarSite: string | null;
+  unavailableRadarSites: ReadonlySet<string>;
   /** The selected forecast point. */
   point: { latitude: number; longitude: number } | null;
 }
@@ -134,6 +136,8 @@ export const NO_SCENE_DATA: SceneData = {
   domain: null,
   places: [],
   radarSites: [],
+  selectedRadarSite: null,
+  unavailableRadarSites: new Set<string>(),
   point: null,
 };
 

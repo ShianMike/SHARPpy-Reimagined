@@ -238,42 +238,9 @@ def fetch_stations_for_datetime(when_utc: datetime,
         raise StationListError(
             f"UWyo station list could not be reached ({exc})") from exc
 
+    import sharpmod_rs
+
     try:
-        payload = json.loads(raw.decode("utf-8", errors="replace"))
-    except (ValueError, AttributeError) as exc:
-        raise StationListError(
-            f"UWyo station list was not valid JSON: {exc}") from exc
-
-    rows = payload.get("stations") if isinstance(payload, dict) else None
-    if not isinstance(rows, list):
-        raise StationListError(
-            "UWyo station list response did not contain a 'stations' array")
-
-    out: list[dict] = []
-    seen: set[str] = set()
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        sid = str(row.get("stationid", row.get("id", ""))).strip()
-        if not sid or sid in seen:
-            continue
-        try:
-            lat = float(row.get("lat", "nan"))
-            lon = float(row.get("lon", "nan"))
-        except (TypeError, ValueError):
-            lat = lon = float("nan")
-        seen.add(sid)
-        out.append({
-            "id": sid,
-            "name": _clean_name(row.get("name", "")),
-            "lat": lat,
-            "lon": lon,
-            "src": str(row.get("src", "UNKNOWN")).strip() or "UNKNOWN",
-        })
-
-    if not out:
-        raise StationListError(
-            "UWyo reported no stations for the requested time")
-
-    out.sort(key=lambda r: r["id"])
-    return out
+        return json.loads(sharpmod_rs.uwyo_parse_stations(raw))
+    except ValueError as exc:
+        raise StationListError(str(exc)) from exc

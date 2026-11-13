@@ -62,6 +62,51 @@ fn uses_last_duplicate_header_and_allows_extra_or_missing_optional_columns() {
     assert!(rows[1].remark.is_empty());
 }
 
+#[test]
+fn build_snapshot_matches_contract_fields_and_filtering() {
+    let rows = concat!(
+        "202610042005,35.4,-97.5,68,OUN,G,Norman,Cleveland,,OK,MESONET,Measured wind gust\n",
+        "202610042030,35.5,-97.6,,OUN,D,Norman,Cleveland,,OK,BROADCAST MEDIA,Damage reported\n",
+        "202610041940,35.3,-97.3,2.75,OUN,H,Norman,Cleveland,,OK,PUBLIC,Baseball size hail\n",
+        "202610041915,35.2,-97.1,,OUN,T,Norman,Cleveland,,OK,EMERGENCY MGR,Tornado reported\n"
+    );
+    let parsed = parse(&format!("{HEADER}{rows}"));
+    let when = time::OffsetDateTime::parse(
+        "2026-10-04T21:00:00Z",
+        &time::format_description::well_known::Rfc3339,
+    )
+    .unwrap();
+    let snapshot = build_snapshot(
+        &parsed,
+        when,
+        21600,
+        Some("all"),
+        "https://mesonet.agron.iastate.edu/example",
+    );
+    assert_eq!(snapshot.total_count, 4);
+    assert_eq!(snapshot.shown_count, 4);
+    assert_eq!(
+        snapshot.subtitle,
+        "4 storm reports · ±3 hours · 04 Oct 2100Z"
+    );
+    assert_eq!(snapshot.reports[0].label, "Wind 68 mph");
+    assert_eq!(snapshot.reports[2].label, "Sig Hail 2.75 in");
+    assert_eq!(snapshot.reports[2].caption, "2.75″");
+    assert_eq!(snapshot.reports[3].label, "Tornado");
+    let sig = build_snapshot(&parsed, when, 21600, Some("significant"), "https://example");
+    assert_eq!(sig.shown_count, 1);
+    assert_eq!(sig.total_count, 4);
+    assert_eq!(sig.reports[0].category, "significant");
+    let opts = report_options();
+    assert_eq!(opts.windows.len(), 4);
+    assert_eq!(opts.filters.len(), 5);
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../src-tauri/contracts/bridge/map/reports.result.json"
+    ))
+    .unwrap();
+    assert_eq!(serde_json::to_value(snapshot).unwrap(), expected);
+}
+
 #[tokio::test]
 async fn rejects_untrusted_targets_and_transfer_limits_before_network() {
     let client = ReportsClient::default();

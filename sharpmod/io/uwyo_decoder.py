@@ -433,97 +433,20 @@ class UWyo_Decoder:
         """
         if text is None or text.strip() == "":
             raise SoundingParseError("UWyo response was empty")
+        import sharpmod_rs
 
-        lines = text.split("\n")
-
-        # Locate the first data <PRE> block. On the modern /wsgi/ server the
-        # block is terminated by a bare "</PRE>"; the legacy server / test
-        # fixture terminates it with "</PRE><H3>". Both are matched below.
-        pre_idx = -1
-        for i, line in enumerate(lines):
-            if line.strip() == "<PRE>":
-                pre_idx = i
-                break
-
-        if pre_idx == -1:
-            # No data block present. If the service signalled that the
-            # station/time is unavailable, surface that; otherwise the response
-            # is simply not a sounding we can parse.
-            if self._looks_unavailable(text):
-                raise StationTimeUnavailableError(
-                    "UWyo has no sounding for the requested station/time")
-            raise SoundingParseError(
-                "UWyo response did not contain a sounding data block")
-
-        # Four header lines follow "<PRE>" (dashes / names / units / dashes);
-        # the first data row is five lines below it.
-        header_block = "\n".join(lines[pre_idx + 1:pre_idx + 5]).lower()
-        bgn = pre_idx + 5
-
-        # Wind-speed units: the modern server reports SPEED in m/s ("SPED" /
-        # "m/s"); the legacy server / fixture reports knots ("SKNT" / "knot").
-        in_knots = ("knot" in header_block) or ("sknt" in header_block)
-        wspd_in_ms = (not in_knots) and (
-            ("m/s" in header_block) or ("sped" in header_block))
-
-        end = -1
-        for i in range(bgn, len(lines)):
-            if lines[i].strip().startswith("</PRE>"):
-                end = i
-                break
-        if end == -1:
-            raise SoundingParseError(
-                "UWyo sounding data block was not terminated")
-        if end <= bgn:
-            raise SoundingParseError(
-                "UWyo sounding data block was empty or malformed")
-
-        cols = [[] for _ in self.CORE_FIELDS]
-        # Column start indices in the 7-char fixed-width table for
-        # pres, hght, tmpc, dwpc, wdir, wspd.
-        field_cols = (0, 1, 2, 3, 6, 7)
-        n_levels = 0
-        for i in range(bgn, end):
-            row = lines[i]
-            if row.strip() == "":
-                continue
-            try:
-                for k, j in enumerate(field_cols):
-                    val = row[(7 * j):(7 * (j + 1))].strip()
-                    cols[k].append(float(val) if val != "" else self.MISSING)
-            except (ValueError, IndexError) as exc:
-                raise SoundingParseError(
-                    f"could not parse UWyo sounding level {i - bgn}: {exc}"
-                ) from exc
-            n_levels += 1
-
-        if n_levels == 0:
-            raise SoundingParseError(
-                "UWyo sounding contained no reported levels")
+        try:
+            matrix, valid_iso, loc, lat, lon = sharpmod_rs.uwyo_decode_text(text)
+        except sharpmod_rs.UwyoStationUnavailable as exc:
+            raise StationTimeUnavailableError(str(exc)) from None
+        except ValueError as exc:
+            raise SoundingParseError(str(exc)) from None
 
         intermediate = {
-            name: np.asarray(col, dtype=float)
-            for name, col in zip(self.CORE_FIELDS, cols)
+            name: np.asarray(matrix[idx], dtype=float)
+            for idx, name in enumerate(self.CORE_FIELDS)
         }
-
-        # Thin high-resolution soundings (e.g. BUFR, which can report several
-        # thousand levels) down to a size the SHARPpy analysis + drawing
-        # pipeline handles interactively. This also guarantees a strictly
-        # decreasing pressure profile, which the downstream interpolation
-        # assumes -- non-monotonic high-res data can otherwise stall it.
-        intermediate = self._thin_high_res(intermediate)
-
-        # Convert wind speed m/s -> knots on the modern server, leaving the
-        # MISSING sentinel untouched (Requirement 7.2).
-        if wspd_in_ms:
-            ws = intermediate["wspd"]
-            intermediate["wspd"] = np.where(
-                ws == self.MISSING, self.MISSING, ws * MS_TO_KT)
-
-        # Metadata: valid time, location label, latitude/longitude. Parsed from
-        # whichever header style the response uses.
-        valid, loc, lat, lon = self._parse_metadata(lines)
-
+        valid = datetime.fromisoformat(valid_iso) if valid_iso is not None else None
         intermediate["omeg"] = None
         intermediate["meta"] = {
             "loc": loc,

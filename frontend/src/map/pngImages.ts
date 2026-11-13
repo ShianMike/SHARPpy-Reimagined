@@ -7,7 +7,7 @@ const images = new Map<Blob, DecodedPng>();
 
 function trim(): void {
   const budget = profileSettings(useGraphicsStore.getState().effective.profile).cpuFieldCacheMb * 1024 * 1024 / 2;
-  const size = (item: DecodedPng): number => (item.image === undefined ? 0 : item.image.width * item.image.height * 4) + (item.samples?.rows.byteLength ?? 0);
+  const size = (item: DecodedPng): number => (item.image === undefined ? 0 : item.image.width * item.image.height * 4) + (item.samples?.rows.byteLength ?? 0) + (item.samples?.cells?.byteLength ?? 0);
   let bytes = [...images.values()].reduce((total, item) => total + size(item), 0);
   for (const [key, item] of images) {
     if (bytes <= budget) break;

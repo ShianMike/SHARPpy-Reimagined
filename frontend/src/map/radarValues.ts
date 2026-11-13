@@ -6,9 +6,36 @@ export interface RadarValues {
   height: number;
   /** Unfiltered indexed PNG rows, each still preceded by its filter byte. */
   rows: Uint8Array;
+  /** Optional 16-bit gate codes for sweeps with more than 254 distinct values. */
+  cells?: Uint16Array;
   values: readonly (number | null)[];
   folded: number | null;
   lowerBounds: ReadonlySet<number>;
+}
+
+async function inflate(chunks: Uint8Array<ArrayBuffer>[], maxBytes: number, exactBytes?: number): Promise<Uint8Array> {
+  const reader = new Blob(chunks).stream().pipeThrough(new DecompressionStream("deflate")).getReader();
+  const parts: Uint8Array[] = [];
+  let filled = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (filled + value.length > maxBytes) throw new Error("Radar pixels exceed their dimensions");
+      parts.push(value);
+      filled += value.length;
+    }
+  } finally {
+    await reader.cancel();
+  }
+  if (exactBytes !== undefined && filled !== exactBytes) throw new Error("Truncated radar pixels");
+  const out = new Uint8Array(filled);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
 }
 
 function paeth(left: number, up: number, corner: number): number {
@@ -28,6 +55,7 @@ export async function decodeRadarValues(png: Blob): Promise<RadarValues | null> 
   // shortcut: our native radar renderer writes non-interlaced, 8-bit indexed PNGs; add other formats only when a numeric provider needs them.
   if (width < 1 || height < 1 || width > 4096 || height > 4096 || bytes[24] !== 8 || bytes[25] !== 3 || bytes[26] !== 0 || bytes[27] !== 0 || bytes[28] !== 0) return null;
   let metadata: unknown;
+  let compressedMetadata: Uint8Array<ArrayBuffer> | undefined;
   const chunks: Uint8Array<ArrayBuffer>[] = [];
   const decoder = new TextDecoder();
   let ended = false;
@@ -41,36 +69,32 @@ export async function decodeRadarValues(png: Blob): Promise<RadarValues | null> 
       if (length > 16_384) throw new Error("Radar calibration is too large");
       metadata = JSON.parse(decoder.decode(data.subarray(14)));
     }
+    if (type === "zTXt" && decoder.decode(data.subarray(0, 14)) === "sharppy-radar\0") {
+      if (length < 16 || length > 4 * 1024 * 1024 || data[14] !== 0) throw new Error("Radar calibration is too large");
+      compressedMetadata = data.subarray(15);
+    }
     offset += length + 12;
     if (type === "IEND") { ended = true; break; }
+  }
+  if (metadata === undefined && compressedMetadata !== undefined) {
+    metadata = JSON.parse(decoder.decode(await inflate([compressedMetadata], 8 * 1024 * 1024)));
   }
   if (metadata === undefined) return null;
   if (!ended || chunks.length === 0) throw new Error("Incomplete radar PNG");
   const object = expectObject(metadata, "radar");
-  expectExactKeys(object, "radar", ["values", "folded", "lowerBounds"]);
-  if (!Array.isArray(object.values) || object.values.length !== 256) throw new Error("Expected 256 radar gate values");
+  const wide = object.codes !== undefined;
+  expectExactKeys(object, "radar", wide ? ["values", "folded", "lowerBounds", "codes"] : ["values", "folded", "lowerBounds"]);
+  if (!Array.isArray(object.values) || (wide ? object.values.length < 257 || object.values.length > 65_536 : object.values.length !== 256)) {
+    throw new Error("Expected 256 radar gate values");
+  }
   const values = expectArray(object.values, "radar.values", (value, path) => expectNullable(value, path, expectFiniteNumber));
-  const code = (value: unknown, path: string): number => expectInteger(value, path, { min: 0, max: 255 });
+  const code = (value: unknown, path: string): number => expectInteger(value, path, { min: 0, max: values.length - 1 });
   const folded = expectNullable(object.folded, "radar.folded", (value, path) => expectInteger(value, path, { min: 1, max: 1 }));
   if (values[0] !== null || values[1] !== null) throw new Error("Missing radar gates must not have values");
   if (!Array.isArray(object.lowerBounds) || object.lowerBounds.length > 256) throw new Error("Invalid radar height flags");
   const lowerBounds = new Set(expectArray(object.lowerBounds, "radar.lowerBounds", code));
   const stride = width + 1;
-  const rows = new Uint8Array(stride * height);
-  const reader = new Blob(chunks).stream().pipeThrough(new DecompressionStream("deflate")).getReader();
-  let filled = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (filled + value.length > rows.length) throw new Error("Radar pixels exceed their dimensions");
-      rows.set(value, filled);
-      filled += value.length;
-    }
-  } finally {
-    await reader.cancel();
-  }
-  if (filled !== rows.length) throw new Error("Truncated radar pixels");
+  const rows = await inflate(chunks, stride * height, stride * height);
   for (let row = 0; row < height; row += 1) {
     const first = row * stride + 1;
     const filter = rows[first - 1] ?? 0;
@@ -84,6 +108,18 @@ export async function decodeRadarValues(png: Blob): Promise<RadarValues | null> 
       rows[index] = (rows[index] ?? 0) + (filter === 1 ? left : filter === 2 ? up : filter === 3 ? Math.floor((left + up) / 2) : paeth(left, up, corner));
     }
   }
+  if (wide) {
+    if (typeof object.codes !== "string") throw new Error("Invalid radar gate codes");
+    const raw = Uint8Array.from(atob(object.codes), (char) => char.charCodeAt(0));
+    if (raw.byteLength !== width * height * 2) throw new Error("Radar gate codes do not match dimensions");
+    const cells = new Uint16Array(width * height);
+    for (let i = 0; i < cells.length; i += 1) {
+      const entry = (raw[i * 2] ?? 0) | ((raw[i * 2 + 1] ?? 0) << 8);
+      if (entry >= values.length) throw new Error("Radar gate code out of range");
+      cells[i] = entry;
+    }
+    return { width, height, rows, cells, values, folded, lowerBounds };
+  }
   return { width, height, rows, values, folded, lowerBounds };
 }
 
@@ -92,5 +128,6 @@ export function radarCodeAt(samples: RadarValues, bounds: Bounds, longitude: num
   if (!(longitude >= west && longitude <= east && latitude >= south && latitude <= north)) return 0;
   const column = Math.min(samples.width - 1, Math.floor((longitude - west) / (east - west) * samples.width));
   const row = Math.min(samples.height - 1, Math.floor((north - latitude) / (north - south) * samples.height));
+  if (samples.cells !== undefined) return samples.cells[row * samples.width + column] ?? 0;
   return samples.rows[row * (samples.width + 1) + column + 1] ?? 0;
 }

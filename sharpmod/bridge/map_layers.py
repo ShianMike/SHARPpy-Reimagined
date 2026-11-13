@@ -227,33 +227,9 @@ def radar_sites(params: dict[str, Any]) -> dict[str, Any]:
 def place_labels(params: dict[str, Any]) -> dict[str, Any]:
     """Major cities, then the largest Census towns per quarter-degree cell."""
     p.keys(params, ())
-    from sharpmod.maps.map_geography import MAJOR_CITIES
-    from sharpmod.maps.place_names import _conus_place_cells
+    import sharpmod_rs
 
-    places = [
-        {"name": str(name), "lat": float(lat), "lon": float(lon), "tier": 1}
-        for name, lat, lon in MAJOR_CITIES
-    ]
-    best: dict[tuple[int, int, int, int], tuple[float, str, float, float]] = {}
-    for (lat_cell, lon_cell), records in _conus_place_cells().items():
-        for label, lat, lon, kind, area in records:
-            if kind != "place":
-                continue
-            cell = (
-                lat_cell,
-                lon_cell,
-                max(0, min(3, int((lat - lat_cell) * 4.0))),
-                max(0, min(3, int((lon - lon_cell) * 4.0))),
-            )
-            held = best.get(cell)
-            if held is None or (area, label) > (held[0], held[1]):
-                best[cell] = (float(area), str(label), float(lat), float(lon))
-    towns = sorted(best.values(), key=lambda town: (-town[0], town[1]))
-    places.extend(
-        {"name": label, "lat": lat, "lon": lon, "tier": 2}
-        for _area, label, lat, lon in towns
-    )
-    return {"places": places}
+    return json.loads(sharpmod_rs.place_labels_json())
 
 
 def station_availability(params: dict[str, Any]) -> dict[str, Any]:

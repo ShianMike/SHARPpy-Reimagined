@@ -1,0 +1,140 @@
+{
+  "schema": 1,
+  "source": "https://feeds.mrrl.net/polling/",
+  "catalogue_source": "https://feeds.mrrl.net/mrrlworldwide_customradars.gis.txt",
+  "license": "https://www.etalab.gouv.fr/wp-content/uploads/2017/04/ETALAB-Licence-Ouverte-v2.0.pdf",
+  "sites": [
+    {
+      "id": "MF36",
+      "lat": 48.04694,
+      "lon": -2.89417,
+      "name": "Noyal",
+      "country": "FR",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "MF38",
+      "lat": 46.06639,
+      "lon": 2.96056,
+      "name": "Saint-Rémy",
+      "country": "FR",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "MF43",
+      "lat": 45.14778,
+      "lon": 5.63944,
+      "name": "Moucherotte",
+      "country": "FR",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "MF68",
+      "lat": 44.01278,
+      "lon": 6.52917,
+      "name": "Maurel",
+      "country": "FR",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "MF69",
+      "lat": 44.49611,
+      "lon": 6.22056,
+      "name": "Colombis",
+      "country": "FR",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "MF90",
+      "lat": 16.31444,
+      "lon": -61.34889,
+      "name": "Le Moule",
+      "country": "GP",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "MF91",
+      "lat": 14.50139,
+      "lon": -61.0175,
+      "name": "Martinique",
+      "country": "MQ",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "MF92",
+      "lat": -20.91167,
+      "lon": 55.42194,
+      "name": "Colorado",
+      "country": "RE",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "MF93",
+      "lat": -21.19056,
+      "lon": 55.57361,
+      "name": "Piton Villers",
+      "country": "RE",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "MF94",
+      "lat": -22.27611,
+      "lon": 166.45278,
+      "name": "Nouméa",
+      "country": "NC",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    },
+    {
+      "id": "MF96",
+      "lat": -20.93889,
+      "lon": 167.21806,
+      "name": "Lifou",
+      "country": "NC",
+      "provider": "MRRL",
+      "products": [
+        "reflectivity"
+      ],
+      "half_span_deg": 0.0
+    }
+  ]
+}

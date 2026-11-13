@@ -340,3 +340,15 @@ def test_correlation_uses_its_own_calibration_geometry_and_cuts_in_one_shared_vo
 def test_an_empty_volume_inventory_is_a_confirmed_gap():
     with pytest.raises(radar_site.RadarScanMissing, match="no recent Level II volume"):
         radar.fetch_frame("KTLX", now=NOW, opener=lambda *_: listing())
+
+
+def test_production_level2_calls_use_native_rust_extension(monkeypatch):
+    import sharpmod_rs
+
+    monkeypatch.setattr(radar, "_select", lambda *_args, **_kwargs: pytest.fail("python fallback"))
+    with pytest.raises(radar_site.RadarSiteError, match="past 60 minutes"):
+        radar.availability("KTLX", valid_time=datetime(2000, 1, 1, tzinfo=UTC))
+    with pytest.raises(radar_site.RadarSiteError, match="past 60 minutes"):
+        radar.fetch_frame("KTLX", valid_time=datetime(2000, 1, 1, tzinfo=UTC))
+    assert callable(sharpmod_rs.radar_level2_tilts)
+    assert callable(sharpmod_rs.radar_level2_frame)

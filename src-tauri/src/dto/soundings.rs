@@ -353,6 +353,15 @@ impl ImageMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SoundingColorStyle {
+    #[default]
+    Standard,
+    Inverted,
+    Protanopia,
+}
+
 /// The bridge's `soundings.render` result; the webview receives only the PNG bytes.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]

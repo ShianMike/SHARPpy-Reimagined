@@ -642,7 +642,7 @@ def render(infile: str, outfile: str | None = None,
            parcel: str = DEFAULT_RENDER_PARCEL,
            locator_overlay: str | None = None,
            view: dict | None = None, view_result: dict | None = None,
-           show_locator: bool = True, *, _prepared=None) -> str:
+           show_locator: bool = True, *, color_style: str | None = None, _prepared=None) -> str:
     """Render ``infile`` to ``outfile`` and return the output path.
 
     Composes :class:`~sharppy.viz.SPCWindow.SPCWindow` with a real
@@ -685,6 +685,9 @@ def render(infile: str, outfile: str | None = None,
         install_font(app)
 
         config = build_config(out_dir)
+        if color_style is not None:
+            from sharpmod.rendering.input import _apply_selected_color_style
+            _apply_selected_color_style(config, color_style)
         _apply_sars_match_color()
         install_render_patches()
 

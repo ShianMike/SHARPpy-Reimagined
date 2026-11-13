@@ -1,0 +1,23 @@
+{
+  "source": "https://opendata.dwd.de/weather/radar/sites/dx/",
+  "coordinates": "https://www.dwd.de/DE/derdwd/messnetz/atmosphaerenbeobachtung/_functions/Teasergroup/Koordinaten_Radarstandorte_Windprofiler.pdf?__blob=publicationFile&v=3",
+  "sites": [
+    {"id":"DASB","name":"Borkum","wmo":"10103","lat":53.564129,"lon":6.748317,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DBOO","name":"Boostedt","wmo":"10132","lat":54.004381,"lon":10.046899,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DDRS","name":"Dresden","wmo":"10488","lat":51.124639,"lon":13.768639,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DEIS","name":"Eisberg","wmo":"10780","lat":49.540667,"lon":12.402788,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DESS","name":"Essen","wmo":"10410","lat":51.405649,"lon":6.967111,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DFBG","name":"Feldberg","wmo":"10908","lat":47.873611,"lon":8.003611,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DFLD","name":"Flechtdorf","wmo":"10440","lat":51.311197,"lon":8.801998,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DHNR","name":"Hannover","wmo":"10339","lat":52.460083,"lon":9.694533,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DISN","name":"Isen","wmo":"10873","lat":48.174705,"lon":12.101779,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DMEM","name":"Memmingen","wmo":"10950","lat":48.042145,"lon":10.219222,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DNEU","name":"Neuhaus","wmo":"10557","lat":50.500114,"lon":11.135034,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DNHB","name":"Neuheilenbach","wmo":"10605","lat":50.109656,"lon":6.548328,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DOFT","name":"Offenthal","wmo":"10629","lat":49.984745,"lon":8.712933,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DPRO","name":"Prötzel","wmo":"10392","lat":52.648667,"lon":13.858212,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DROS","name":"Rostock","wmo":"10169","lat":54.175660,"lon":12.058076,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DTUR","name":"Türkheim","wmo":"10832","lat":48.585379,"lon":9.782675,"country":"DE","products":["reflectivity"],"half_span_deg":0.0},
+    {"id":"DUMD","name":"Ummendorf","wmo":"10356","lat":52.160096,"lon":11.176091,"country":"DE","products":["reflectivity"],"half_span_deg":0.0}
+  ]
+}

@@ -26,6 +26,48 @@ fn filenames_choose_only_preceding_scans_from_the_requested_site() {
     assert!(candidate_scans(&scans, instant("2026-10-29T11:56:00Z"))
         .next()
         .is_none());
+    assert_eq!(
+        parse_listing(
+            br#"<a href="/polling/MF90/MF90_20261111_100445.ar2v">fr</a>
+            <a href="/polling/MF90/dir.list">list</a>"#,
+            "MF90"
+        ),
+        vec![(
+            instant("2026-11-11T10:04:45Z"),
+            "MF90_20261111_100445.ar2v".into()
+        )]
+    );
+    assert_eq!(
+        parse_listing(
+            br#"<a href="/polling/SAPP/SAPP20261111_095308.ar2v">jp</a>"#,
+            "SAPP"
+        ),
+        vec![(
+            instant("2026-11-11T09:53:08Z"),
+            "SAPP20261111_095308.ar2v".into()
+        )]
+    );
+    assert_eq!(
+        parse_listing(
+            br#"<a href="/polling/FLER/FLER_20261111100000.ar2v">it</a>"#,
+            "FLER"
+        ),
+        vec![(
+            instant("2026-11-11T10:00:00Z"),
+            "FLER_20261111100000.ar2v".into()
+        )]
+    );
+    assert_eq!(
+        parse_listing(
+            br#"<a href="/polling/1852/1852CAN20261111_095643_V06">mx</a>
+            <a href="/polling/1852/dir.list">list</a>"#,
+            "1852"
+        ),
+        vec![(
+            instant("2026-11-11T09:56:43Z"),
+            "1852CAN20261111_095643_V06".into()
+        )]
+    );
 }
 
 #[tokio::test]
@@ -46,6 +88,16 @@ async fn rejects_unsupported_australian_products_and_cuts_without_network() {
         Request {
             site_id: Some("ABRD".into()),
             valid_time: Some("2026-10-28T00:00:00Z".into()),
+            ..Default::default()
+        },
+        Request {
+            site_id: Some("MF90".into()),
+            product: Some("velocity".into()),
+            ..Default::default()
+        },
+        Request {
+            site_id: Some("MF90".into()),
+            tilt: Some("1".into()),
             ..Default::default()
         },
     ] {
@@ -81,6 +133,7 @@ fn indexed_image_preserves_gate_values_and_transparent_sectors() {
             decode::Radial {
                 azimuth: 0.0,
                 width: 90.0,
+                elevation_angle: None,
                 first_gate_m: 25_000.0,
                 gate_spacing_m: 50_000.0,
                 values: vec![30.0],
@@ -88,6 +141,7 @@ fn indexed_image_preserves_gate_values_and_transparent_sectors() {
             decode::Radial {
                 azimuth: 90.0,
                 width: 90.0,
+                elevation_angle: None,
                 first_gate_m: 25_000.0,
                 gate_spacing_m: 50_000.0,
                 values: vec![60.0],
@@ -164,15 +218,20 @@ async fn live_australian_reflectivity() {
         .unwrap()
         .unwrap();
     assert!(frame.byte_length > 1_000);
-    assert!(frame.elevation_angle.is_finite());
-    let actual = instant(&frame.valid_time);
+    assert!(frame.elevation_angle.is_some_and(f64::is_finite));
+    let valid_time = frame.valid_time.as_deref().unwrap();
+    let actual = instant(valid_time);
     assert!(actual <= now && actual >= now - time::Duration::minutes(10));
     if let Ok(output) = std::env::var("SHARPPY_RADAR_TEST_PNG") {
         std::fs::write(output, STANDARD.decode(&frame.png_base64).unwrap()).unwrap();
     }
     eprintln!(
         "{} {} {} {}deg {}bytes",
-        frame.site_id, frame.product, frame.valid_time, frame.elevation_angle, frame.byte_length
+        frame.site_id,
+        frame.product,
+        valid_time,
+        frame.elevation_angle.unwrap(),
+        frame.byte_length
     );
 }
 
@@ -190,6 +249,7 @@ fn velocity_image_keeps_folded_missing_and_exact_unit_calibration() {
             decode::Radial {
                 azimuth: 0.0,
                 width: 90.0,
+                elevation_angle: None,
                 first_gate_m: 25_000.0,
                 gate_spacing_m: 50_000.0,
                 values: vec![10.0],
@@ -197,6 +257,7 @@ fn velocity_image_keeps_folded_missing_and_exact_unit_calibration() {
             decode::Radial {
                 azimuth: 90.0,
                 width: 90.0,
+                elevation_angle: None,
                 first_gate_m: 25_000.0,
                 gate_spacing_m: 50_000.0,
                 values: vec![f32::INFINITY],
@@ -231,4 +292,80 @@ fn velocity_image_keeps_folded_missing_and_exact_unit_calibration() {
     assert_eq!(data[width / 2], 2);
     assert_eq!(data[(image.height as usize / 2) * width + width - 2], 1);
     assert_eq!(data[(image.height as usize - 2) * width + width / 2], 0);
+}
+
+#[test]
+fn mrrl_noumea_sample_decodes_and_renders_with_licence_ouverte_metadata() {
+    let bytes = include_bytes!("../../resources/mrrl_mf94_20261111_100933.ar2v");
+    let site = crate::radar_sites::sites()
+        .iter()
+        .find(|site| site.id == "MF94")
+        .unwrap();
+    let other = crate::radar_sites::sites()
+        .iter()
+        .find(|site| site.id == "MF90")
+        .unwrap();
+    assert!(make_frame(
+        other,
+        "MF94_20261111_100933.ar2v",
+        bytes,
+        "reflectivity",
+        instant("2026-11-11T10:12:00Z"),
+        instant("2026-11-11T10:12:00Z"),
+    )
+    .is_err());
+    assert!(matches!(
+        make_frame(
+            site,
+            "MF94_20261111_100933.ar2v",
+            bytes,
+            "reflectivity",
+            instant("2026-11-11T10:25:00Z"),
+            instant("2026-11-11T10:25:00Z"),
+        ),
+        Err(Error::ScanMissing)
+    ));
+    let frame = make_frame(
+        site,
+        "MF94_20261111_100933.ar2v",
+        bytes,
+        "reflectivity",
+        instant("2026-11-11T10:12:00Z"),
+        instant("2026-11-11T10:12:00Z"),
+    )
+    .unwrap();
+    assert_eq!(frame.site_id, "MF94");
+    assert_eq!(frame.product, "reflectivity");
+    assert_eq!(frame.label, "Reflectivity");
+    assert_eq!(frame.units, "dBZ");
+    assert_eq!(frame.valid_time.as_deref(), Some("2026-11-11T10:09:33Z"));
+    assert_eq!(frame.update_interval_s, 300.0);
+    assert_eq!(frame.palette.as_ref().unwrap().floor, Some(0.0));
+    assert_eq!(
+        frame.attribution,
+        "Météo-France · Licence Ouverte 2.0 (data.gouv.fr/pages/legal/licences/etalab-2-0) · converted by MRRL, rendered by SHARPpy Reimagined"
+    );
+    assert_eq!(
+        frame.source_url,
+        "https://feeds.mrrl.net/polling/MF94/MF94_20261111_100933.ar2v"
+    );
+    assert!((frame.elevation_angle.unwrap() - 0.03).abs() < 0.001);
+    let png = STANDARD.decode(&frame.png_base64).unwrap();
+    let reader = png::Decoder::new(std::io::Cursor::new(&png))
+        .read_info()
+        .unwrap();
+    let info = reader.info();
+    let metadata: serde_json::Value = serde_json::from_str(
+        &info
+            .uncompressed_latin1_text
+            .iter()
+            .find(|chunk| chunk.keyword == "sharppy-radar")
+            .unwrap()
+            .text,
+    )
+    .unwrap();
+    let values = metadata["values"].as_array().unwrap();
+    assert_eq!(values[2].as_f64(), Some(-9.5));
+    let trns = info.trns.as_ref().unwrap();
+    assert_eq!(trns[2], 0, "sub-0 dBZ gates stay transparent visually");
 }

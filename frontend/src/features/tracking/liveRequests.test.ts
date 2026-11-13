@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import radarSite from "@contracts/public/map/radar-site.shrf?url&inline";
-import radarTilts from "@contracts/public/map/radar-tilts.json";
 import { QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { BackendClient } from "../../lib/backend/client";
@@ -8,11 +7,10 @@ import { BackendFailure } from "../../lib/backend/errors";
 import { createTransport } from "../../lib/backend/fixtureTransport";
 import { createQueryClient, mapKeys } from "../../lib/backend/queryOptions";
 import { parseRadarSiteFrame } from "../../lib/contracts/frames";
-import { parseRadarTilts } from "../../lib/contracts/map";
 import { useAppStore } from "../../stores/appStore";
 import { LIVE_MINUTE } from "../../stores/liveTrackingStore";
 import { useMapStore } from "../../stores/mapStore";
-import { fetchLiveRequest, isLiveQuery, liveRequests, preloadRadarTilts, trimLiveCache } from "./liveRequests";
+import { fetchLiveRequest, isLiveQuery, liveRequests, trimLiveCache } from "./liveRequests";
 
 const map = useMapStore.getState(), app = useAppStore.getState();
 const now = Date.parse("2026-10-17T08:00:00Z");
@@ -62,68 +60,12 @@ it("bounds raster memory and unavailable cuts without removing active imagery or
   unsubscribe(); client.clear();
 });
 
-it.each(["reflectivity", "correlation-coefficient"])("preloads shared %s cuts with two requests and no retry of unavailable cuts", async (product) => {
-  useAppStore.getState().setActiveWorkspace("live");
-  useMapStore.getState().setPanelLayout(2);
-  for (const panel of [0, 1]) {
-    useMapStore.getState().setActivePanel(panel);
-    useMapStore.getState().setRadarScope("site");
-    useMapStore.getState().setRadarSite("KTLX");
-    useMapStore.getState().setRadarProduct(product);
-  }
-  const frame = parseRadarSiteFrame(Uint8Array.from(atob(radarSite.split(",")[1] ?? ""), (character) => character.charCodeAt(0)).buffer);
-  const client = new BackendClient(createTransport());
-  const queryClient = createQueryClient();
-  let pending = 0, peak = 0;
-  const fetch = vi.spyOn(client, "getRadarSiteFrame").mockImplementation(async (_where, product, validTime, tilt) => {
-    peak = Math.max(peak, ++pending);
-    await new Promise<void>((resolve) => { setTimeout(resolve, 0); });
-    pending--;
-    if (!["0", "1", "2", "3"].includes(tilt ?? "0")) throw new Error("No published cut");
-    return { ...frame, product: product ?? "reflectivity", validTime: validTime ?? frame.validTime };
-  });
-  const time = "2026-10-17T08:00:00Z";
-  await preloadRadarTilts(client, queryClient, useMapStore.getState(), null, time, () => false);
-  expect(fetch.mock.calls[0]).toEqual([{ site: "KTLX" }, product, time, "0"]);
-  expect(fetch).toHaveBeenCalledTimes(product === "correlation-coefficient" ? 12 : 8);
-  expect(fetch.mock.calls.every((call) => ["0", "1", "2", "3"].includes(call[3] ?? "0"))).toBe(true);
-  expect(fetch.mock.calls.some((call) => ["x", "y"].includes(call[3] ?? "0"))).toBe(false);
-  expect(peak).toBe(2);
-  expect(queryClient.getQueryData(mapKeys.radarSite("velocity", "KTLX", time, "3"))).toBeDefined();
-  fetch.mockClear();
-  await preloadRadarTilts(client, queryClient, useMapStore.getState(), null, time, () => true);
-  expect(fetch).not.toHaveBeenCalled();
-  queryClient.clear();
-});
-
-it("bounds inventory checks across four distinct sites and skips all unverified background images", async () => {
-  useAppStore.getState().setActiveWorkspace("live");
-  useMapStore.getState().setPanelLayout(4);
-  for (const [panel, site] of ["KTLX", "PGUA", "PAHG", "TJUA"].entries()) {
-    useMapStore.getState().setActivePanel(panel);
-    useMapStore.getState().setRadarScope("site"); useMapStore.getState().setRadarSite(site); useMapStore.getState().setRadarProduct("velocity");
-  }
-  const client = new BackendClient(createTransport()), queryClient = createQueryClient();
-  const images = vi.spyOn(client, "getRadarSiteFrame").mockRejectedValue(new Error("selected frame unavailable"));
-  let pending = 0, peak = 0;
-  const checks = vi.spyOn(client, "getRadarTilts").mockImplementation(async (site, product) => {
-    peak = Math.max(peak, ++pending);
-    await new Promise<void>((resolve) => { setTimeout(resolve, 0); });
-    pending--;
-    return parseRadarTilts({ ...radarTilts, siteId: site, product, tilts: radarTilts.tilts.map((cut) => ({ ...cut, status: "unknown" })) });
-  });
-  await preloadRadarTilts(client, queryClient, useMapStore.getState(), null, "2026-10-17T08:00:00Z", () => false);
-  expect(checks).toHaveBeenCalledTimes(8); expect(peak).toBe(2);
-  expect(images).toHaveBeenCalledTimes(4);
-  queryClient.clear();
-});
-
 it.each([
   ["pinned", ["reflectivity"], "reflectivity"],
   ["nearest", ["reflectivity"], "reflectivity"],
   ["pinned", ["reflectivity", "velocity"], "velocity"],
   ["nearest", ["reflectivity", "velocity"], "velocity"],
-] as const)("uses %s Australian history with supported %s products and preloads cuts only for the US panel", async (mode, products, product) => {
+] as const)("uses %s Australian history with supported %s products", async (mode, products, product) => {
   useAppStore.getState().setActiveWorkspace("live");
   const state = useMapStore.getState();
   state.setPanelLayout(2);
@@ -132,11 +74,9 @@ it.each([
     state.setRadarProduct("velocity"); state.setRadarTilt("2");
   }
   const sites = [{ id: "ABRD", name: "Broadmeadows", country: "AU", latitude: -37.85, longitude: 144.75, products }];
-  const client = new BackendClient(createTransport()), queryClient = createQueryClient();
-  queryClient.setQueryData(mapKeys.radarSites, { sites });
+  const client = new BackendClient(createTransport());
   const frame = parseRadarSiteFrame(Uint8Array.from(atob(radarSite.split(",")[1] ?? ""), (character) => character.charCodeAt(0)).buffer);
   const fetch = vi.spyOn(client, "getRadarSiteFrame").mockResolvedValue(frame);
-  const checks = vi.spyOn(client, "getRadarTilts");
   const time = "2026-10-17T08:00:00Z";
   const requests = liveRequests(client, useMapStore.getState(), "ABRD", null, time, sites);
   expect(requests.map(({ queryKey }) => queryKey)).toEqual([
@@ -144,10 +84,28 @@ it.each([
   ]);
   await requests[0]?.queryFn();
   expect(fetch).toHaveBeenCalledWith({ site: "ABRD" }, product, time, "0");
-  fetch.mockClear();
-  await preloadRadarTilts(client, queryClient, useMapStore.getState(), "ABRD", time, () => false);
-  expect(fetch.mock.calls.length).toBeGreaterThan(0);
-  expect(fetch.mock.calls.every(([where]) => "site" in where && where.site === "KTLX")).toBe(true);
-  expect(checks.mock.calls.map(([site]) => site)).toEqual(["KTLX", "KTLX"]);
-  queryClient.clear();
+});
+
+it("uses provider metadata for MRRL playback without requesting NEXRAD tilts", () => {
+  useAppStore.getState().setActiveWorkspace("live");
+  const state = useMapStore.getState();
+  state.setRadarScope("site"); state.setRadarSite("TEST"); state.setRadarProduct("velocity"); state.setRadarTilt("2");
+  const sites = [{ id: "TEST", country: "NC", provider: "MRRL", products: ["reflectivity"], latitude: -22.27, longitude: 166.45 }];
+  const client = new BackendClient(createTransport());
+  const frames = vi.spyOn(client, "getRadarSiteFrame"), tilts = vi.spyOn(client, "getRadarTilts");
+  const time = "2026-10-17T08:00:00Z";
+  expect(liveRequests(client, useMapStore.getState(), null, null, time, sites).map(({ queryKey }) => queryKey))
+    .toContainEqual(mapKeys.radarSite("reflectivity", "TEST", time, "0"));
+  expect(frames).not.toHaveBeenCalled();
+  expect(tilts).not.toHaveBeenCalled();
+});
+
+it("keeps Australian velocity while the site catalogue is loading", () => {
+  useAppStore.getState().setActiveWorkspace("live");
+  const state = useMapStore.getState();
+  state.setRadarScope("site"); state.setRadarSite("ABRD"); state.setRadarProduct("velocity"); state.setRadarTilt("2");
+  const time = "2026-10-17T08:00:00Z";
+  const client = new BackendClient(createTransport());
+  expect(liveRequests(client, useMapStore.getState(), null, null, time).map(({ queryKey }) => queryKey))
+    .toContainEqual(mapKeys.radarSite("velocity", "ABRD", time, "0"));
 });

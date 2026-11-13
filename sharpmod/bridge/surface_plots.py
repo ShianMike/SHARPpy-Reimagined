@@ -18,6 +18,7 @@ set only carries the provider's own fetch caps.
 
 from __future__ import annotations
 
+import json
 import math
 from typing import Any
 
@@ -85,11 +86,23 @@ def _wind_text(obs: Any) -> str:
 
 def plots(params: dict[str, Any]) -> dict[str, Any]:
     """The station models around one point at one time."""
+    import sharpmod_rs
+
     p.keys(params, ("latitude", "longitude", "valid_time"))
     lat = p.number(params, "latitude", -90.0, 90.0)
     lon = p.number(params, "longitude", -180.0, 180.0)
     when = p.time(params, "valid_time")
     from sharpmod.providers import surface_observations as surface
+
+    if getattr(surface.fetch_surface_observations, "__module__", None) == "sharpmod.providers.surface_observations":
+        try:
+            return json.loads(sharpmod_rs.surface_plots_json(lat, lon, p.iso(when)))
+        except RuntimeError as exc:
+            raise BridgeError(
+                "OVERLAY_FETCH_FAILED",
+                f"The surface observations could not be loaded: {str(exc)[:200]}.",
+                True,
+            ) from None
 
     try:
         dataset = surface.fetch_surface_observations(lat, lon, when)

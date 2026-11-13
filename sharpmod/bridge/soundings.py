@@ -32,6 +32,7 @@ from sharpmod.bridge.sounding_wrf import inspect_wrf, open_wrf
 MAX_IMAGE_BYTES = 6 * 1024 * 1024 - 4096
 RENDER_PARCELS = ("SFC", "ML", "FCST", "MU", "EFF")
 IMAGE_MODES = ("hd", "uhd")
+COLOR_STYLES = ("standard", "inverted", "protanopia")
 RECENT_RUN_COUNT = 16
 
 
@@ -45,16 +46,17 @@ def _png_size(data: bytes) -> tuple[int, int]:
 
 def render(params: dict[str, Any]) -> dict[str, Any]:
     """The SPC-style sounding image, drawn by ``sharpmod.rendering.cli.render``."""
-    p.keys(params, ("sounding_id",), ("parcel", "image_mode"))
+    p.keys(params, ("sounding_id",), ("parcel", "image_mode", "color_style"))
     entry = cache().get(params["sounding_id"])
     parcel = p.choice(params, "parcel", RENDER_PARCELS, "MU")
     mode = p.choice(params, "image_mode", IMAGE_MODES, "hd")
-    out = cache().render_path(entry.sounding_id, parcel, mode)
+    style = p.choice(params, "color_style", COLOR_STYLES, "standard")
+    out = cache().render_path(entry.sounding_id, f"{parcel}-{style}", mode)
     with entry.render_lock:
         if not out.exists():
             from sharpmod.bridge.render_client import client
 
-            client().render(entry.path, out, parcel, mode)
+            client().render(entry.path, out, parcel, mode, color_style=style)
         data = out.read_bytes()
     if len(data) > MAX_IMAGE_BYTES:
         raise BridgeError(

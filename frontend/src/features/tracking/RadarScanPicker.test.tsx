@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
-import radar from "@contracts/public/map/radar.shrf?url&inline";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { createTransport } from "../../lib/backend/fixtureTransport";
-import { encodeShrf, parseRadarFrame, parseShrf } from "../../lib/contracts/frames";
 import { mapKeys } from "../../lib/backend/queryOptions";
 import { useAppStore } from "../../stores/appStore";
 import { LIVE_MINUTE, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
@@ -15,8 +13,6 @@ import { LiveRadarControls } from "./LiveRadarControls";
 
 const map = useMapStore.getState(), clock = useLiveTrackingStore.getState(), app = useAppStore.getState();
 const now = Date.parse("2026-10-17T08:00:00Z");
-const source = parseShrf(Uint8Array.from(atob(radar.split(",")[1] ?? ""), (character) => character.charCodeAt(0)).buffer);
-const image = (time: number) => encodeShrf({ ...source.header, validTime: liveTimestamp(time) }, source.body);
 function Playback() {
   const [target, setTarget] = useState<HTMLDivElement | null>(null);
   return <><LiveRadarControls scansRef={setTarget} /><LiveTimeline scanTarget={target} /></>;
@@ -25,96 +21,134 @@ beforeEach(() => {
   useMapStore.setState(map, true); useLiveTrackingStore.setState({ ...clock, now, selectedTime: null, playing: false }, true);
   useAppStore.setState(app, true); useAppStore.getState().setActiveWorkspace("live");
   vi.spyOn(Date, "now").mockReturnValue(now);
-  vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 2, height: 2 }));
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-it("keeps unknown, loading, provider gaps, load failures and delayed scans distinct, and retries one frame", async () => {
-  const transport = createTransport(), original = transport.call.bind(transport);
-  let release: (frame: ArrayBuffer) => void = () => undefined;
-  let fail = true;
-  const slow = new Promise<ArrayBuffer>((resolve) => { release = resolve; });
-  const call = vi.spyOn(transport, "call").mockImplementation((command, args) => {
-    if (command !== "get_radar_frame") return original(command, args);
-    const time = Date.parse(String(args?.validTime));
-    if (time === now) return slow;
-    if (time === now - 5 * LIVE_MINUTE) return Promise.reject(Object.assign(new Error("No published scan."), { code: "OVERLAY_FETCH_FAILED", retryable: true, details: { reason: "scanMissing" } }));
-    if (time === now - 10 * LIVE_MINUTE && fail) return Promise.reject(new Error("Network timeout"));
-    return Promise.resolve(image(time === now - 15 * LIVE_MINUTE ? time - 12 * LIVE_MINUTE : time));
-  });
+it("renders Radar time in the toolbar with Live default, current viewing time, and no scan grid or downloads", () => {
+  const transport = createTransport();
+  const call = vi.spyOn(transport, "call");
   const { view, queryClient } = renderWithBackend(<Playback />, transport);
-  const trigger = screen.getByRole("button", { name: "Choose radar scan" });
+  const trigger = screen.getByRole("button", { name: "Choose radar time" });
+  expect(trigger.textContent).toContain("Radar time");
+  expect(trigger.textContent).toContain("Live");
   expect(trigger.compareDocumentPosition(screen.getByRole("button", { name: "Site Tilt" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(within(screen.getByTestId("live-timeline")).queryByRole("button", { name: "Cache past hour" })).toBeNull();
-  expect(within(screen.getByTestId("live-timeline")).queryByRole("group", { name: "Radar scan availability" })).toBeNull();
+  expect(within(screen.getByTestId("live-timeline")).queryByRole("button", { name: "Choose radar time" })).toBeNull();
   fireEvent.click(trigger);
-  expect(screen.getByRole("dialog", { name: "Radar scans" })).toBeTruthy();
-  const scans = within(screen.getByRole("group", { name: "Radar scan availability" }));
-  expect(scans.getAllByRole("button", { name: /Not loaded/u })).toHaveLength(13);
-  expect(call.mock.calls.filter(([command]) => command === "get_radar_frame")).toHaveLength(0);
-  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
-  await waitFor(() => { expect(scans.getByRole("button", { name: "08:00 UTC · Loading" })).toBeTruthy(); });
-  await waitFor(() => { expect(scans.getAllByRole("button", { name: /Available/u })).toHaveLength(9); });
-  expect(scans.getByRole("button", { name: "07:55 UTC · Missing" }).getAttribute("aria-description")).toContain("No published scan");
-  expect(scans.getByRole("button", { name: "07:45 UTC · Delayed" }).getAttribute("aria-description")).toContain("12 minutes behind · Scan 2026-10-17 07:33Z UTC");
-  expect(scans.getByRole("button", { name: "07:50 UTC · Load failed" })).toBeTruthy();
-  await act(async () => { release(image(now)); await slow; });
-  await waitFor(() => { expect(scans.getByRole("button", { name: "08:00 UTC · Available" })).toBeTruthy(); });
-  call.mockClear(); fail = false;
-  fireEvent.click(scans.getByRole("button", { name: "07:50 UTC · Load failed" }));
-  expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: now - 10 * LIVE_MINUTE, playing: false });
-  await waitFor(() => { expect(scans.getByRole("button", { name: "07:50 UTC · Available" }).getAttribute("aria-pressed")).toBe("true"); });
-  expect(call.mock.calls.filter(([command]) => command === "get_radar_frame")).toHaveLength(1);
-  act(() => { useMapStore.getState().setRadarProduct("echo-tops"); });
-  expect(scans.getAllByRole("button", { name: /Not loaded/u })).toHaveLength(13);
-  act(() => { useMapStore.getState().setLayerVisible("radar", false); });
+  const dialog = screen.getByRole("dialog", { name: "Radar time" });
+  expect(within(dialog).getByText("2026-10-17 08:00 UTC")).toBeTruthy();
+  expect(within(dialog).getByText("Following live")).toBeTruthy();
+  expect(within(dialog).getByRole("button", { name: "Return to Live" }).hasAttribute("disabled")).toBe(true);
+  expect(screen.queryByRole("dialog", { name: "Radar scans" })).toBeNull();
   expect(screen.queryByRole("group", { name: "Radar scan availability" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Cache past hour" })).toBeNull();
+  expect(call.mock.calls.filter(([command]) => command === "get_radar_frame" || command === "get_radar_site_frame" || command === "get_radar_tilts")).toHaveLength(0);
   view.unmount(); queryClient.clear();
 });
 
-it("combines visible radar sources, updates background cache results, and isolates elevations", () => {
-  useMapStore.getState().setPanelLayout(2);
-  useMapStore.getState().setActivePanel(1);
-  useMapStore.getState().setRadarScope("site");
-  useMapStore.getState().setRadarSite("KTLX");
-  useMapStore.getState().setRadarProduct("velocity");
-  useMapStore.getState().setRadarTilt("1");
-  useLiveTrackingStore.setState({ selectedTime: now });
-  const { view, queryClient } = renderWithBackend(<Playback />, createTransport());
-  fireEvent.click(screen.getByRole("button", { name: "Choose radar scan" }));
-  const time = liveTimestamp(now);
-  const mosaic = parseRadarFrame(image(now - 10 * LIVE_MINUTE));
-  act(() => {
-    queryClient.setQueryData(mapKeys.radar(null, time), mosaic);
-    queryClient.setQueryData(mapKeys.radarSite("velocity", "KTLX", time, "1"), { ...mosaic, label: "Velocity", validTime: liveTimestamp(now - 11 * LIVE_MINUTE) });
-  });
-  const delayed = screen.getByRole("button", { name: "08:00 UTC · Delayed" });
-  expect(delayed.getAttribute("aria-description")).toContain("Mosaic · Composite Reflectivity: Available");
-  expect(delayed.getAttribute("aria-description")).toContain("KTLX · Velocity: 11 minutes behind");
-  act(() => { useMapStore.getState().setRadarTilt("2"); });
-  expect(screen.getByRole("button", { name: "08:00 UTC · Not loaded" })).toBeTruthy();
-  act(() => { useMapStore.getState().setRadarTilt("1"); });
-  expect(screen.getByRole("button", { name: "08:00 UTC · Delayed" })).toBeTruthy();
-  act(() => { useMapStore.getState().setLayerVisible("radar", false); });
-  expect(screen.getByRole("button", { name: "08:00 UTC · Available" })).toBeTruthy();
-  view.unmount(); queryClient.clear();
-});
-
-it("selects a cached time, closes the picker, and returns keyboard focus to its toolbar button", async () => {
-  useLiveTrackingStore.setState({ selectedTime: now });
-  const { view, queryClient } = renderWithBackend(<Playback />, createTransport());
-  const selected = now - 30 * LIVE_MINUTE;
-  act(() => { queryClient.setQueryData(mapKeys.radar(null, liveTimestamp(selected)), parseRadarFrame(image(selected))); });
-  const trigger = screen.getByRole("button", { name: "Choose radar scan" });
+it("selects any UTC minute in the past hour directly, pauses playback, and handles UTC midnight", async () => {
+  const transport = createTransport();
+  const call = vi.spyOn(transport, "call");
+  const { view, queryClient } = renderWithBackend(<Playback />, transport);
+  call.mockClear();
+  const trigger = screen.getByRole("button", { name: "Choose radar time" });
   fireEvent.click(trigger);
-  fireEvent.click(screen.getByRole("button", { name: "07:30 UTC · Available" }));
-  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Radar scans" })).toBeNull(); });
+  const input = screen.getByRole("textbox", { name: "UTC time" });
+  fireEvent.change(input, { target: { value: "07:42" } });
+  fireEvent.click(screen.getByRole("button", { name: "Apply UTC time" }));
+  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Radar time" })).toBeNull(); });
   expect(document.activeElement).toBe(trigger);
-  expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: selected, playing: false });
+  expect(trigger.textContent).toContain("07:42 UTC");
+  expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: now - 18 * LIVE_MINUTE, playing: false });
+  expect(screen.getByLabelText("Live viewing time").textContent).toContain("10-17 07:42Z UTC");
+  expect(call.mock.calls.filter(([command]) => command === "get_radar_frame" || command === "get_radar_site_frame" || command === "get_radar_tilts")).toHaveLength(0);
+
+  useLiveTrackingStore.setState({ playing: true });
   fireEvent.click(trigger);
-  fireEvent.keyDown(screen.getByRole("dialog", { name: "Radar scans" }), { key: "Escape" });
-  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Radar scans" })).toBeNull(); });
+  fireEvent.change(screen.getByRole("textbox", { name: "UTC time" }), { target: { value: "07:35" } });
+  fireEvent.click(screen.getByRole("button", { name: "Apply UTC time" }));
+  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Radar time" })).toBeNull(); });
+  expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: now - 25 * LIVE_MINUTE, playing: false });
+  view.unmount(); queryClient.clear();
+
+  const midnightNow = Date.parse("2026-10-17T00:25:00Z");
+  vi.spyOn(Date, "now").mockReturnValue(midnightNow);
+  useLiveTrackingStore.setState({ now: midnightNow, selectedTime: null, playing: false });
+  const midnight = renderWithBackend(<Playback />, createTransport());
+  fireEvent.click(screen.getByRole("button", { name: "Choose radar time" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "UTC time" }), { target: { value: "23:40" } });
+  fireEvent.click(screen.getByRole("button", { name: "Apply UTC time" }));
+  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Radar time" })).toBeNull(); });
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(Date.parse("2026-10-16T23:40:00Z"));
+  midnight.view.unmount(); midnight.queryClient.clear();
+});
+
+it("steps five minutes, allows precise slider selection, and rejects out-of-window UTC times", () => {
+  const { view, queryClient } = renderWithBackend(<Playback />, createTransport());
+  fireEvent.click(screen.getByRole("button", { name: "Choose radar time" }));
+  const dialog = screen.getByRole("dialog", { name: "Radar time" });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "UTC time" }), { target: { value: "06:59" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Apply UTC time" }));
+  expect(within(dialog).getByRole("alert").textContent).toContain("07:00 and 08:00 UTC");
+  expect(useLiveTrackingStore.getState().selectedTime).toBeNull();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Previous 5 minutes" }));
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 5 * LIVE_MINUTE);
+  expect(within(dialog).getByText("2026-10-17 07:55 UTC")).toBeTruthy();
+  fireEvent.change(within(dialog).getByRole("slider", { name: "Past hour minute" }), { target: { value: "-23" } });
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 23 * LIVE_MINUTE);
+  expect(within(dialog).getByText("2026-10-17 07:37 UTC")).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Next 5 minutes" }));
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 18 * LIVE_MINUTE);
+  expect(within(dialog).getByText("2026-10-17 07:42 UTC")).toBeTruthy();
+  fireEvent.change(within(dialog).getByRole("slider", { name: "Past hour minute" }), { target: { value: "-58" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Previous 5 minutes" }));
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 60 * LIVE_MINUTE);
+  expect(within(dialog).getByRole("button", { name: "Previous 5 minutes" }).hasAttribute("disabled")).toBe(true);
+  fireEvent.change(within(dialog).getByRole("slider", { name: "Past hour minute" }), { target: { value: "-2" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Next 5 minutes" }));
+  expect(useLiveTrackingStore.getState().selectedTime).toBeNull();
+  view.unmount(); queryClient.clear();
+});
+
+it("keeps a partially entered time when the live minute changes", () => {
+  const { view, queryClient } = renderWithBackend(<Playback />, createTransport());
+  fireEvent.click(screen.getByRole("button", { name: "Choose radar time" }));
+  const input = screen.getByRole<HTMLInputElement>("textbox", { name: "UTC time" });
+  fireEvent.change(input, { target: { value: "07:4" } });
+  act(() => { useLiveTrackingStore.getState().tick(now + LIVE_MINUTE); });
+  expect(input.value).toBe("07:4");
+  view.unmount(); queryClient.clear();
+});
+
+it("distinguishes the requested time from the actual scan, including a scan reused by the provider", async () => {
+  const { view, queryClient } = renderWithBackend(<Playback />, createTransport());
+  const scan = "2026-10-17T07:54:00Z";
+  act(() => { queryClient.setQueryData(mapKeys.radar(null, liveTimestamp(now)), { validTime: scan }); });
+  fireEvent.click(screen.getByRole("button", { name: "Choose radar time" }));
+  const dialog = screen.getByRole("dialog", { name: "Radar time" });
+  expect(within(dialog).getByText("Requested · UTC")).toBeTruthy();
+  await waitFor(() => { expect(within(dialog).getByText("Radar scan · 2026-10-17 07:54:00 UTC")).toBeTruthy(); });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Previous 5 minutes" }));
+  expect(within(dialog).getByText("No radar scan loaded")).toBeTruthy();
+  act(() => { queryClient.setQueryData(mapKeys.radar(null, liveTimestamp(now - 5 * LIVE_MINUTE)), { validTime: scan }); });
+  await waitFor(() => { expect(within(dialog).getByText("Radar scan · 2026-10-17 07:54:00 UTC")).toBeTruthy(); });
+  view.unmount(); queryClient.clear();
+});
+
+it("returns to Live, closes the picker, and restores keyboard focus to its toolbar button", async () => {
+  useLiveTrackingStore.setState({ selectedTime: now - 30 * LIVE_MINUTE });
+  const { view, queryClient } = renderWithBackend(<Playback />, createTransport());
+  const trigger = screen.getByRole("button", { name: "Choose radar time" });
+  expect(trigger.textContent).toContain("07:30 UTC");
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole("button", { name: "Return to Live" }));
+  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Radar time" })).toBeNull(); });
+  expect(document.activeElement).toBe(trigger);
+  expect(trigger.textContent).toContain("Live");
+  expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: null, playing: false });
+  fireEvent.click(trigger);
+  fireEvent.keyDown(screen.getByRole("dialog", { name: "Radar time" }), { key: "Escape" });
+  await waitFor(() => { expect(screen.queryByRole("dialog", { name: "Radar time" })).toBeNull(); });
   expect(document.activeElement).toBe(trigger);
   view.unmount(); queryClient.clear();
 });

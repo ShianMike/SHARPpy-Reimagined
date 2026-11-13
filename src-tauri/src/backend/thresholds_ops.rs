@@ -3,7 +3,7 @@
 //!
 //! | Operation | Bridge method | Deadline |
 //! |---|---|---|
-//! | `get_threshold_metrics` | `thresholds.metrics` | 60 s |
+//! | `get_threshold_metrics` | native (`sharpmod_weather::threshold_catalog`) | — |
 //! | `evaluate_threshold` | `thresholds.evaluate` | 300 s + 60 s per member |
 //! | `export_threshold_csv` | `thresholds.export_csv` | 300 s + 60 s per member |
 //!
@@ -18,7 +18,7 @@ use serde_json::json;
 use crate::backend::map_ops::context;
 use crate::backend::router::Router;
 use crate::backend::sounding_ops::{invalid, rejected};
-use crate::dto::threshold_catalog::{ThresholdCsv, ThresholdMetrics};
+use crate::dto::threshold_catalog::{ThresholdCsv, ThresholdMetric, ThresholdMetrics};
 use crate::dto::thresholds::{ThresholdDefinitionInput, ThresholdEvaluation};
 use crate::error::BackendError;
 
@@ -26,7 +26,6 @@ pub const OP_THRESHOLD_METRICS: &str = "get_threshold_metrics";
 pub const OP_EVALUATE_THRESHOLD: &str = "evaluate_threshold";
 pub const OP_EXPORT_THRESHOLD_CSV: &str = "export_threshold_csv";
 
-const METRICS_TIMEOUT: Duration = Duration::from_secs(60);
 const EVALUATE_BASE: Duration = Duration::from_secs(300);
 const EVALUATE_PER_MEMBER: Duration = Duration::from_secs(60);
 
@@ -79,9 +78,27 @@ impl Router {
     /// Every registry diagnostic with its control bounds, for the form.
     pub async fn threshold_metrics(&self) -> Result<ThresholdMetrics, BackendError> {
         let context = context(OP_THRESHOLD_METRICS, "the threshold diagnostic catalog");
-        let metrics: ThresholdMetrics = self
-            .call(&context, "thresholds.metrics", json!({}), METRICS_TIMEOUT)
-            .await?;
+        let catalog = sharpmod_weather::threshold_catalog::metrics_catalog();
+        let metrics = ThresholdMetrics {
+            metrics: catalog
+                .metrics
+                .into_iter()
+                .map(|m| ThresholdMetric {
+                    key: m.key,
+                    label: m.label,
+                    units: m.units,
+                    display_label: m.display_label,
+                    decimals: m.decimals,
+                    minimum: m.minimum,
+                    maximum: m.maximum,
+                    step: m.step,
+                    suggested: m.suggested,
+                    guidance: m.guidance,
+                })
+                .collect(),
+            operators: catalog.operators,
+            default_metrics: catalog.default_metrics,
+        };
         metrics
             .validate()
             .map_err(|reason| rejected(&context, "thresholds.metrics", reason))?;

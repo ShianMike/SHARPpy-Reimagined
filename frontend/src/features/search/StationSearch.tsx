@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type R
 import { Popover } from "../../components/Popover";
 import { cx } from "../../lib/cx";
 import { useRadarSites } from "../../map/mapQueries";
-import { panelRadar } from "../../map/panelRadar";
+import { panelRadar, radarSiteCode, radarSiteCountry } from "../../map/panelRadar";
 import { useAppStore } from "../../stores/appStore";
 import { panelWeather, useMapStore } from "../../stores/mapStore";
 import { displayName, formatCoordinates } from "../../stations/stationFormat";
@@ -39,11 +39,11 @@ export function StationSearch(): ReactNode {
   const trimmed = pythonStrip(query.slice(0, MAX_QUERY_LENGTH));
   const results: readonly (Station | RadarSite)[] = useMemo(() => section === "stations"
     ? trimmed === "" ? stations.slice(0, SEARCH_LIMIT) : searchStations(stations, query)
-    : sites.filter((site) => fold(`${site.id} ${site.name ?? ""} ${site.country === "AU" ? "Australia" : site.country ?? ""}`).includes(fold(trimmed))).slice(0, SEARCH_LIMIT), [section, stations, sites, query, trimmed]);
+    : sites.filter((site) => fold(`${site.id} ${site.name ?? ""} ${site.country ?? ""} ${radarSiteCountry(site) ?? ""}`).includes(fold(trimmed))).slice(0, SEARCH_LIMIT), [section, stations, sites, query, trimmed]);
   const showList = !disabled;
   const label = section === "stations" ? "Search stations" : "Search radar sites";
   const placeholder = disabled ? source.status === "pending" ? section === "stations" ? "Loading stations" : "Loading radar sites"
-    : section === "stations" ? "Stations unavailable" : "Radar sites unavailable" : section === "stations" ? "Station name or ID…" : "Radar name or ID…";
+    : section === "stations" ? "Stations unavailable" : "Radar sites unavailable" : section === "stations" ? "Station name or ID…" : "Radar code or place name…";
   const optionId = (index: number): string => `${listId}-option-${String(index)}`;
   const activeId = showList && results[active] !== undefined ? optionId(active) : undefined;
   useEffect(() => { if (activeId !== undefined) document.getElementById(activeId)?.scrollIntoView({ block: "nearest" }); }, [activeId]);
@@ -109,13 +109,17 @@ export function StationSearch(): ReactNode {
         {results.length === 0 ? <div className={styles.empty} role="option" aria-selected="false" aria-disabled="true">
           {`No ${section === "stations" ? "stations" : "radar sites"} match "${trimmed}"`}
         </div> : results.map((location, index) => {
-          const name = "source" in location ? displayName(location.name)
-            : `${location.name ?? "WSR-88D radar"}${location.country === "AU" ? " · Australia" : ""}`;
-          const text = `${location.id} ${name}`;
+          const isStation = "source" in location;
+          const name = isStation ? displayName(location.name) : radarSiteCode(location.id);
+          const coordinates = formatCoordinates(location);
+          const detail = isStation ? coordinates : [location.name === name ? undefined : location.name,
+            location.id === name ? undefined : location.id, radarSiteCountry(location), coordinates].filter(Boolean).join(" · ");
+          const text = isStation ? `${location.id} ${name}` : name;
           return <div key={location.id} id={optionId(index)} role="option" aria-selected={index === active}
-            className={styles.option} title={text} aria-label={text} onMouseDown={(event) => { event.preventDefault(); }} onClick={() => { choose(location); }}>
-            <span className={cx(styles.id, "tabular")}>{location.id}</span>
-            <span className={styles.name}>{name}<small>{formatCoordinates(location)}</small></span><ArrowUpRight className="icon-sm" aria-hidden="true" />
+            className={styles.option} title={text} aria-label={text} aria-description={isStation ? undefined : detail}
+            onMouseDown={(event) => { event.preventDefault(); }} onClick={() => { choose(location); }}>
+            {isStation ? <span className={cx(styles.id, "tabular")}>{location.id}</span> : null}
+            <span className={styles.name}>{name}<small>{detail}</small></span><ArrowUpRight className="icon-sm" aria-hidden="true" />
           </div>;
         })}
       </div> : source.isError ? <SoundingErrorNotice error={source.error} operation={section === "stations" ? "get_station_catalog" : "get_radar_sites"}

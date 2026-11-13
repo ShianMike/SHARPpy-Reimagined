@@ -46,6 +46,10 @@ impl Router {
             .map_err(|reason| rejected(&context, "storage.clear", reason))?;
         if matches!(cache, "radar" | "all") {
             self.velocity_inventory.clear();
+            sharpmod_weather::radar_provider::clear();
+        }
+        if matches!(cache, "outlooks" | "all") {
+            sharpmod_weather::spc_outlook::client().clear();
         }
         Ok(result)
     }

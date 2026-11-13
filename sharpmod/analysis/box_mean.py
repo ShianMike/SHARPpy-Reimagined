@@ -376,89 +376,32 @@ def box_mean_profile(
             f"at least {int(min_members)} are needed to average an area"
         )
 
-    reference = _reference_member(members, lat, lon)
-    ladder = reference["pres"]
+    import sharpmod_rs
 
-    # The shared layer: no lower than the highest ground, no higher than the
-    # shallowest profile's top. Averaging outside it would blend a real column
-    # with nothing.
-    floor = min(float(member["pres"][0]) for member in members)
-    ceiling = max(float(member["pres"][-1]) for member in members)
-    inside = (ladder <= floor + 1e-6) & (ladder >= ceiling - 1e-6)
-    trimmed_below = int(np.count_nonzero(ladder > floor + 1e-6))
-    trimmed_above = int(np.count_nonzero(ladder < ceiling - 1e-6))
-    ladder = ladder[inside]
-    if ladder.size < 2:
-        raise BoxMeanError(
-            "these soundings share fewer than two pressure levels; the box "
-            "spans too much terrain to average as one column"
+    native_members = [
+        {
+            key: (np.ascontiguousarray(val, dtype=np.float64) if isinstance(val, np.ndarray) else val)
+            for key, val in member.items()
+        }
+        for member in members
+    ]
+    try:
+        (
+            matrix,
+            counts,
+            trimmed_below,
+            trimmed_above,
+            clamped,
+            centre_lat,
+            centre_lon,
+        ) = sharpmod_rs.compute_box_mean(
+            native_members,
+            lat=float(lat) if lat is not None else None,
+            lon=float(lon) if lon is not None else None,
         )
-
-    target_log = np.log10(ladder)
-    stacks: dict[str, list] = {
-        name: [] for name in ("hght", "tmpc", "mixr", "omeg", "u", "v")
-    }
-    for member in members:
-        source_log = np.log10(member["pres"])
-        for name in ("hght", "tmpc", "omeg"):
-            column = member.get(name)
-            if column is None:
-                stacks[name].append(np.full(ladder.size, np.nan))
-                continue
-            stacks[name].append(_interpolate(target_log, source_log, column))
-        stacks["mixr"].append(
-            _interpolate(
-                target_log, source_log, _member_mixing_ratio(member))
-        )
-        u, v = _components(member)
-        stacks["u"].append(_interpolate(target_log, source_log, u))
-        stacks["v"].append(_interpolate(target_log, source_log, v))
-
-    height, height_counts = _nanmean(stacks["hght"])
-    temperature, temperature_counts = _nanmean(stacks["tmpc"])
-    mixing_ratio, moisture_counts = _nanmean(stacks["mixr"])
-    omega, _omega_counts = _nanmean(stacks["omeg"])
-    u_mean, wind_counts = _nanmean(stacks["u"])
-    v_mean, _v_counts = _nanmean(stacks["v"])
-
-    # A level needs a pressure, a height, and a temperature to be a level at
-    # all. Wind and omega may be absent without making the column unusable.
-    keep = (
-        np.isfinite(height) & np.isfinite(temperature)
-        & (height_counts > 0) & (temperature_counts > 0)
-    )
-    if int(np.count_nonzero(keep)) < 2:
-        raise BoxMeanError(
-            "the averaged column has fewer than two usable levels")
-    ladder = ladder[keep]
-    height = height[keep]
-    temperature = temperature[keep]
-    mixing_ratio = mixing_ratio[keep]
-    omega = omega[keep]
-    u_mean = u_mean[keep]
-    v_mean = v_mean[keep]
-    counts = np.maximum(temperature_counts[keep], height_counts[keep])
-
-    dewpoint, clamped = _dewpoint_from_mixing_ratio(
-        ladder, mixing_ratio, temperature)
-
-    # The portable contract wants a strictly decreasing pressure ladder and a
-    # strictly increasing height ladder. Averaging preserves both, but a
-    # duplicated reference level or two members whose heights cross would not,
-    # so it is enforced rather than assumed.
-    ladder, height, keep_monotonic = _strictly_stacked(ladder, height)
-    if ladder.size < 2:
-        raise BoxMeanError(
-            "the averaged column is not vertically ordered after averaging")
-    temperature = temperature[keep_monotonic]
-    dewpoint = dewpoint[keep_monotonic]
-    omega = omega[keep_monotonic]
-    u_mean = u_mean[keep_monotonic]
-    v_mean = v_mean[keep_monotonic]
-    counts = counts[keep_monotonic]
-
-    speed, direction = _speed_direction(u_mean, v_mean)
-    centre_lat, centre_lon = _centre(members, lat, lon)
+    except ValueError as exc:
+        raise BoxMeanError(str(exc)) from exc
+    ladder, height, temperature, dewpoint, direction, speed, omega, u_mean, v_mean = matrix
 
     return BoxMeanProfile(
         pres=tuple(float(value) for value in ladder),

@@ -42,8 +42,8 @@ test.describe("installed native acceptance", () => {
     await expect(page.getByText(`Current version: ${version}`, { exact: true })).toBeVisible();
     results.version = version;
     await sections().getByRole("button", { name: "Appearance", exact: true }).click();
-    if (phase === "seed") await page.getByRole("radio", { name: /Light/u }).check();
-    await expect(page.getByRole("radio", { name: /Light/u })).toBeChecked();
+    if (phase === "seed") await page.getByRole("radio", { name: /^Light/u }).check();
+    await expect(page.getByRole("radio", { name: /^Light/u })).toBeChecked();
     await sections().getByRole("button", { name: "Units", exact: true }).click();
     if (phase === "seed") {
       await page.getByRole("radio", { name: "°C Celsius", exact: true }).check();

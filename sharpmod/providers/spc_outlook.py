@@ -590,6 +590,45 @@ def _colour(value: Any, fallback: str) -> str:
     return fallback
 
 
+def _layer_from_native(payload: dict[str, Any]) -> OverlayLayer:
+    def parse_iso(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+    shapes = tuple(
+        OverlayShape(
+            rings=tuple(
+                tuple((float(lon), float(lat)) for lon, lat in ring)
+                for ring in area["rings"]
+            ),
+            bounds=tuple(float(v) for v in area["bounds"]),
+            stroke=area["stroke"],
+            fill=area["fill"],
+            label=area["label"],
+            description=area["description"],
+            rank=int(area["rank"]),
+            hatch=bool(area["hatch"]),
+            hatch_level=int(area["hatch_level"]),
+        )
+        for area in payload.get("areas", ())
+    )
+    raw_bounds = payload.get("bounds")
+    return OverlayLayer(
+        key=payload["key"],
+        title=payload["title"],
+        shapes=shapes,
+        short_name=payload["short_name"],
+        subtitle=payload["subtitle"],
+        valid_from=parse_iso(payload.get("valid_from")),
+        valid_to=parse_iso(payload.get("valid_to")),
+        issued=parse_iso(payload.get("issued")),
+        source_url=payload["source_url"],
+        attribution=payload["attribution"],
+        bounds=tuple(float(v) for v in raw_bounds) if raw_bounds else None,
+    )
+
+
 def parse_outlook(
         payload: bytes | str,
         *,
@@ -605,106 +644,22 @@ def parse_outlook(
     of the severity order is far better than an area silently missing from a
     severe-weather overlay.
     """
-    if isinstance(payload, bytes):
-        try:
-            payload = payload.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise OutlookError(f"outlook payload is not UTF-8: {exc}") from exc
+    import sharpmod_rs
+
     try:
-        document = json.loads(payload)
+        raw = payload.encode("utf-8") if isinstance(payload, str) else bytes(payload)
+        parsed = json.loads(
+            sharpmod_rs.spc_outlook_parse(
+                raw,
+                source_url=source_url,
+                day=int(day),
+                label=label,
+                product=product,
+            )
+        )
     except (ValueError, TypeError) as exc:
-        raise OutlookError(f"outlook payload is not valid JSON: {exc}") from exc
-    if not isinstance(document, dict):
-        raise OutlookError("outlook payload is not a GeoJSON object")
-
-    features = document.get("features")
-    if not isinstance(features, list):
-        raise OutlookError("outlook payload has no feature list")
-
-    shapes: list[OverlayShape] = []
-    total_points = 0
-    truncated = False
-    valid_from: datetime | None = None
-    valid_to: datetime | None = None
-    issued: datetime | None = None
-
-    for feature in features[:MAX_SHAPES_PER_LAYER]:
-        if truncated:
-            break
-        if not isinstance(feature, dict):
-            continue
-        properties = feature.get("properties")
-        properties = properties if isinstance(properties, dict) else {}
-
-        valid_from = valid_from or _parse_stamp(properties.get("VALID"))
-        valid_to = valid_to or _parse_stamp(properties.get("EXPIRE"))
-        issued = issued or _parse_stamp(properties.get("ISSUE"))
-
-        raw_dn = properties.get("DN")
-        dn = raw_dn if isinstance(raw_dn, int) else None
-
-        code = str(properties.get("LABEL") or "").strip()
-        # DN 0 carries the validity of a published outlook with no risk areas.
-        if dn == 0 or (not code and dn is None):
-            continue
-
-        (default_name, rank, default_stroke, default_fill,
-         hatch, hatch_level) = _feature_style(product, dn, code)
-        name = str(properties.get("LABEL2") or default_name).strip()
-        stroke = _colour(properties.get("stroke"), default_stroke)
-        fill = _colour(properties.get("fill"), default_fill)
-
-        for rings in rings_from_geometry(feature.get("geometry")):
-            bounds = bounds_of(rings)
-            if bounds is None:
-                continue
-            points = sum(len(ring) for ring in rings)
-            if total_points + points > MAX_POINTS_PER_LAYER:
-                logger.warning(
-                    "spc_outlook.truncated url=%s points=%d",
-                    source_url, total_points)
-                truncated = True
-                break
-            total_points += points
-            shapes.append(OverlayShape(
-                rings=rings,
-                bounds=bounds,
-                stroke=stroke,
-                fill=fill,
-                label=_display_label(product, code),
-                description=name,
-                rank=rank,
-                hatch=hatch,
-                hatch_level=hatch_level,
-            ))
-
-    subtitle = label
-    if valid_from is not None and valid_to is not None:
-        prefix = f"{label} \u00b7 " if label else ""
-        if valid_from.date() == valid_to.date():
-            subtitle = (
-                f"{prefix}valid {valid_from:%d %b %H%M}"
-                f"\u2013{valid_to:%H%M}Z"
-            )
-        else:
-            subtitle = (
-                f"{prefix}valid {valid_from:%d %b %H%M}Z"
-                f" \u2192 {valid_to:%d %b %H%M}Z"
-            )
-
-    spec = resolve_product(product)
-    return build_layer(
-        OVERLAY_KEY,
-        f"{OVERLAY_TITLE} \u2014 Day {day} {spec.label.lower()}",
-        shapes,
-        short_name=spec.short,
-        subtitle=subtitle,
-        valid_from=valid_from,
-        valid_to=valid_to,
-        issued=issued,
-        source_url=source_url,
-        attribution=ATTRIBUTION,
-    )
+        raise OutlookError(str(exc)) from exc
+    return _layer_from_native(parsed)
 
 
 # --------------------------------------------------------------------------- #
@@ -725,9 +680,12 @@ _DAY_MISS: dict[frozenset, float] = {}
 
 def clear_cache() -> None:
     """Drop every cached outlook. Exposed for tests and manual refresh."""
+    import sharpmod_rs
+
     with _CACHE_LOCK:
         _CACHE.clear()
         _DAY_MISS.clear()
+    sharpmod_rs.spc_outlook_clear_cache()
 
 
 def _prune_locked(store: dict) -> None:

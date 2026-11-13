@@ -26,7 +26,7 @@ vi.mock("./runtimeEvents", () => ({ wireMapEvents: () => undefined, createPanelO
 vi.mock("./cameraLink", () => ({ linkCamera: () => () => undefined }));
 vi.mock("../box/boxRuntime", () => ({ wireBoxSelection: () => () => undefined }));
 vi.mock("./runtimeWiring", async (importOriginal) => ({ ...await importOriginal<typeof import("./runtimeWiring")>(), createRuntimeWatch: () => ({ dispose: () => undefined }) }));
-vi.mock("./stationScene", () => ({ StationScene: class { updateLabels() {} render() {} } }));
+vi.mock("./stationScene", () => ({ StationScene: class { updateLabels() {} render() {} setData() { return true; } } }));
 
 const original = useMapStore.getState();
 afterEach(() => { useMapStore.setState(original, true); calls.length = 0; vi.useRealTimers(); });
@@ -83,4 +83,22 @@ it("focuses radar coordinates without a sounding-station record and retains a cl
     expect(runtime.map?.getCenter()).toEqual({ lat: position.latitude, lng: position.longitude });
     expect(runtime.map?.getZoom()).toBe(7.25);
   } finally { runtime.dispose(); secondary.dispose(); }
+});
+
+it("renders changed radar selection and availability scene data immediately", () => {
+  const runtime = new MapRuntime(document.createElement("div"), 1);
+  if (runtime.scene === null) throw new Error("Missing station scene");
+  const render = vi.spyOn(runtime.scene, "render"), updateLabels = vi.spyOn(runtime.scene, "updateLabels"), setData = vi.spyOn(runtime.scene, "setData");
+  try {
+    const unavailableRadarSites = new Set(["KTLX"]);
+    runtime.setScene({ selectedRadarSite: "KTLX" });
+    expect(updateLabels).toHaveBeenCalledTimes(1);
+    runtime.setScene({ unavailableRadarSites });
+    expect(setData).toHaveBeenNthCalledWith(1, { selectedRadarSite: "KTLX" });
+    expect(setData).toHaveBeenNthCalledWith(2, { unavailableRadarSites });
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(updateLabels).toHaveBeenCalledTimes(1);
+    runtime.setScene({ selectedRadarSite: null });
+    expect(updateLabels).toHaveBeenCalledTimes(2);
+  } finally { runtime.dispose(); }
 });

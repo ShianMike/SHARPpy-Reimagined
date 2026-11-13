@@ -7,10 +7,12 @@ import { ScatterplotLayer, TextLayer, type TextLayerProps } from "@deck.gl/layer
 import type { Rgba } from "../canvasTokens";
 import type { Station, StationAvailability } from "../../types/contracts";
 import type { RadarSite } from "../../types/map";
+import { radarSiteCode } from "../panelRadar";
 import type { LayerBuildContext, LayerState } from "./registry";
 
 export const STATIONS_LAYER_ID = "stations";
 export const STATION_LABELS_LAYER_ID = "station-labels";
+export const RADAR_SITE_LABELS_LAYER_ID = "radar-site-labels";
 
 type Colour = [number, number, number, number];
 
@@ -117,11 +119,17 @@ export function buildRadarSiteLabels(ctx: LayerBuildContext, state: LayerState):
   if (ctx.radarSites.length === 0) return [];
   return [new TextLayer<RadarSite>({
     ...stationLabelStyle(ctx),
-    id: "radar-site-labels",
+    id: RADAR_SITE_LABELS_LAYER_ID,
     data: ctx.radarSites,
     getPosition: (site) => [site.longitude, site.latitude],
-    getText: (site) => site.id,
-    pickable: false,
+    getText: (site) => radarSiteCode(site.id),
+    getBorderColor: (site) => deckColour(ctx.unavailableRadarSites.has(site.id) ? ctx.tokens.colours.radarLabelUnavailableEdge
+      : site.id === ctx.selectedRadarSite ? ctx.tokens.colours.radarLabelSelectedEdge : ctx.tokens.colours.stationLabelEdge),
+    getBorderWidth: (site) => ctx.unavailableRadarSites.has(site.id) || site.id === ctx.selectedRadarSite
+      ? ctx.tokens.lengths.radarLabelHighlightWidth : ctx.tokens.lengths.stationEdge,
+    updateTriggers: { getBorderColor: [ctx.selectedRadarSite, ctx.unavailableRadarSites, ctx.tokens.colours],
+      getBorderWidth: [ctx.selectedRadarSite, ctx.unavailableRadarSites, ctx.tokens.lengths] },
+    pickable: true,
     visible: state.visible,
     opacity: state.opacity,
   })];

@@ -140,7 +140,7 @@ class RenderClient:
                 return reply
 
     def render(self, infile: Path, outfile: Path, parcel: str, image_mode: str,
-               *, view: dict | None = None) -> dict:
+               *, view: dict | None = None, color_style: str = "standard") -> dict:
         """Draw ``infile`` into ``outfile``; raise ``BridgeError`` on failure."""
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
@@ -156,6 +156,7 @@ class RenderClient:
                 "outfile": str(outfile),
                 "parcel": parcel,
                 "image_mode": image_mode,
+                "color_style": color_style,
             }
             if view is not None:
                 frame["view"] = view

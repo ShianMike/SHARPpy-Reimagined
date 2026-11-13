@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { DEFAULT_UNITS, parseUnitPreferences, type UnitPreferences } from "../lib/displayUnits";
+import type { SoundingColorStyle } from "../types/soundings";
 
 export type Theme = "system" | "light" | "dark";
 type PopupPosition = { x: number; y: number } | null;
@@ -18,6 +19,7 @@ interface UiState {
   setInspectorSourceOpen(value: boolean): void;
   collapsed: boolean;
   theme: Theme;
+  soundingColorStyle: SoundingColorStyle;
   speed: number;
   loop: boolean;
   smoothPlayback: boolean;
@@ -27,6 +29,7 @@ interface UiState {
   setPopupPosition(id: string, value: PopupPosition): void;
   setCollapsed(value: boolean): void;
   setTheme(value: Theme): void;
+  setSoundingColorStyle(value: SoundingColorStyle): void;
   setSpeed(value: number): void;
   setLoop(value: boolean): void;
   setSmoothPlayback(value: boolean): void;
@@ -51,6 +54,7 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
   setInspectorSourceOpen: (inspectorSourceOpen) => { set({ inspectorSourceOpen }); },
   collapsed: false,
   theme: "system",
+  soundingColorStyle: "standard",
   speed: 1,
   loop: true,
   smoothPlayback: false,
@@ -60,6 +64,7 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
   setPopupPosition: (id, position) => { set((state) => ({ popupPositions: { ...state.popupPositions, [id]: position } })); },
   setCollapsed: (collapsed) => { set({ collapsed }); },
   setTheme: (theme) => { set({ theme }); },
+  setSoundingColorStyle: (soundingColorStyle) => { set({ soundingColorStyle }); },
   setSpeed: (speed) => { if (PLAYBACK_SPEEDS.some((value) => value === speed)) set({ speed }); },
   setLoop: (loop) => { set({ loop }); },
   setSmoothPlayback: (smoothPlayback) => { set({ smoothPlayback }); },
@@ -82,7 +87,7 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
       removeItem: (name) => { memory = null; access(() => { localStorage.removeItem(name); }); },
     };
   }),
-  partialize: ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }) => ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, speed, loop, smoothPlayback, popupPositions, units }),
+  partialize: ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback, popupPositions, units }) => ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback, popupPositions, units }),
   merge: (saved, current) => {
     const value = saved !== null && typeof saved === "object" ? saved as Record<string, unknown> : {};
     const positions = value.popupPositions !== null && typeof value.popupPositions === "object" ? value.popupPositions as Record<string, unknown> : {};
@@ -91,6 +96,7 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
       lastVersion: typeof value.lastVersion === "string" && /^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/u.test(value.lastVersion) ? value.lastVersion : null,
       collapsed: typeof value.collapsed === "boolean" ? value.collapsed : current.collapsed,
       theme: value.theme === "light" || value.theme === "dark" ? value.theme : "system",
+      soundingColorStyle: value.soundingColorStyle === "inverted" || value.soundingColorStyle === "protanopia" ? value.soundingColorStyle : "standard",
       speed: PLAYBACK_SPEEDS.find((speed) => speed === value.speed) ?? 1,
       loop: typeof value.loop === "boolean" ? value.loop : current.loop,
       smoothPlayback: typeof value.smoothPlayback === "boolean" ? value.smoothPlayback : current.smoothPlayback,

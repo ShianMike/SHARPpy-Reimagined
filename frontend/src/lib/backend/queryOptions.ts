@@ -3,6 +3,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { ThresholdEvaluationRequest } from "../../types/thresholds";
 import type { RadarTilt } from "../../types/map";
+import { trackRadarCacheOrder } from "../../map/radarSiteAvailability";
 import { BackendFailure } from "./errors";
 
 export const QUERY_KEYS = {
@@ -88,5 +89,7 @@ export const BASE_QUERY_OPTIONS = {
 } as const;
 
 export function createQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: BASE_QUERY_OPTIONS } });
+  const client = new QueryClient({ defaultOptions: { queries: BASE_QUERY_OPTIONS } });
+  trackRadarCacheOrder(client.getQueryCache());
+  return client;
 }

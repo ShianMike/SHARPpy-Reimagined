@@ -77,7 +77,7 @@ export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, tar
           hoverFromPick(info, target.panel, target.container.getBoundingClientRect());
         }
       }),
-      onClick: live(clickFromPick),
+      onClick: live((info) => { clickFromPick(info, target.panel); }),
       onAfterRender: live(() => {
         target.overlayReady = true;
         target.watch.afterRender();
@@ -121,7 +121,7 @@ export function wireOverlayEvents(map: MapLibreMap, overlay: MapLibreOverlay, ta
       hoverFromPick(pick(latest), target.panel, target.container.getBoundingClientRect());
     }));
   });
-  const click = target.live((event: MapMouseEvent) => { clickFromPick(pick(event)); });
+  const click = target.live((event: MapMouseEvent) => { clickFromPick(pick(event), target.panel); });
   map.on("mousemove", move);
   map.on("mouseout", clear);
   map.on("movestart", clear);

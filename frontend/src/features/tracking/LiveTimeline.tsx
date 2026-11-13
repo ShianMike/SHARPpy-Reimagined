@@ -27,18 +27,18 @@ export function LiveTimeline({ className, scanTarget }: { className?: string | u
   const fetching = useIsFetching({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 });
   const failed = queryClient.getQueryCache().findAll({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 && query.state.status === "error" }).length;
   const history = useLiveHistory();
-  const { progress } = history;
   useEffect(() => {
-    useLiveTrackingStore.getState().tick();
-    const timer = setInterval(() => { useLiveTrackingStore.getState().tick(); }, LIVE_MINUTE);
-    return () => { clearInterval(timer); };
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = (): void => {
+      useLiveTrackingStore.getState().tick();
+      timer = setTimeout(tick, LIVE_MINUTE - Date.now() % LIVE_MINUTE);
+    };
+    tick();
+    return () => { clearTimeout(timer); };
   }, []);
   useEffect(() => { if (fetching === 0) trimLiveCache(queryClient); }, [fetching, queryClient]);
-  const status = progress.running ? `Caching ${String(progress.done)} / ${String(progress.total)}`
-    : progress.stopped ? "Caching stopped"
-    : failed > 0 ? `${String(failed)} layers unavailable · see Layers`
+  const status = failed > 0 ? `${String(failed)} layers unavailable · see Layers`
     : fetching > 0 || history.waiting ? "Fetching live data…"
-    : progress.total > 0 ? `${String(progress.done - progress.failed)} cached${progress.failed > 0 ? ` · ${String(progress.failed)} unavailable` : ""}`
     : "Past 60 minutes · session cache cleared on exit";
   const choose = (time: number | null): void => { setPlaying(false); selectTime(time); };
   const toggle = (): void => {
@@ -46,8 +46,7 @@ export function LiveTimeline({ className, scanTarget }: { className?: string | u
     setPlaying(!playing);
   };
   return <Surface as="section" className={cx(styles.timeline, className)} aria-label="Live Tracking timeline" data-testid="live-timeline">
-    {scanTarget == null ? null : createPortal(<RadarScanPicker history={history} status={status} fetching={fetching > 0}
-      onSelect={(frame) => { choose(frame === now ? null : frame); void history.loadFrame(frame); }} />, scanTarget)}
+    {scanTarget == null ? null : createPortal(<RadarScanPicker onSelect={(frame) => { choose(frame >= now ? null : frame); }} />, scanTarget)}
     <MapInteractionControls />
     <PlaybackTransport playing={playing} onToggle={toggle} onPrevious={previous === undefined ? undefined : () => { choose(previous); }}
       onNext={next === undefined ? undefined : () => { choose(next); }} />

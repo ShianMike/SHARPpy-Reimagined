@@ -12,7 +12,7 @@ pub mod scan_time;
 
 const BASE: &str = "https://tgftp.nws.noaa.gov/SL.us008001/DF.of/DC.radar";
 const TILTS: [&str; 7] = ["z", "0", "a", "1", "b", "2", "3"];
-const BYTE_LIMIT: usize = 256 * 1024;
+pub(crate) const BYTE_LIMIT: usize = 256 * 1024;
 const CACHE_TTL: Duration = Duration::from_secs(45);
 const CACHE_LIMIT: usize = 128;
 static REQUESTS: Semaphore = Semaphore::const_new(3);
@@ -202,6 +202,18 @@ impl Default for VelocityInventory {
 }
 
 fn scans(payload: &[u8]) -> Result<Vec<OffsetDateTime>, String> {
+    let entries = scan_entries(payload)?;
+    let text = String::from_utf8_lossy(payload);
+    if entries.is_empty() && !text.contains("Index of /") {
+        return Err("radar scan directory was not a directory listing".into());
+    }
+    Ok(entries.into_iter().map(|(date, _)| date).collect())
+}
+
+pub fn scan_entries(payload: &[u8]) -> Result<Vec<(OffsetDateTime, String)>, String> {
+    if payload.len() > BYTE_LIMIT {
+        return Err("velocity directory exceeded its byte budget".into());
+    }
     let text = String::from_utf8_lossy(payload);
     let format = time::format_description::parse_borrowed::<2>(
         "[day]-[month repr:short case_sensitive:false]-[year] [hour]:[minute]",
@@ -234,16 +246,13 @@ fn scans(payload: &[u8]) -> Result<Vec<OffsetDateTime>, String> {
             .ok()
             .and_then(|stamp| PrimitiveDateTime::parse(stamp, &format).ok())
         {
-            entries.push(date.assume_utc());
+            entries.push((date.assume_utc(), name.to_owned()));
         }
-    }
-    if entries.is_empty() && !text.contains("Index of /") {
-        return Err("radar scan directory was not a directory listing".into());
     }
     Ok(entries)
 }
 
-fn site_absent(payload: &[u8], site: &str) -> bool {
+pub(crate) fn site_absent(payload: &[u8], site: &str) -> bool {
     let text = String::from_utf8_lossy(payload);
     let mut verified = false;
     for entry in text.split("href=\"").skip(1) {

@@ -120,6 +120,7 @@
 .unitsFooter button { flex: none; }
 .unitChoices { border: 0; padding: 0; margin: 0; min-width: 0; }
 .unitChoices .legend { margin-bottom: var(--space-3); }
+.unitChoices + .hint { margin-top: var(--space-3); }
 .unitOptions { display: flex; gap: var(--space-2); }
 .unitOption { position: relative; display: flex; flex: 1; min-width: 0; align-items: center; justify-content: center; padding: var(--space-2); border: var(--hairline) solid var(--border-strong); border-radius: var(--radius-sm); cursor: pointer; }
 .unitOption input { position: absolute; opacity: 0; }

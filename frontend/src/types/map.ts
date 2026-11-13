@@ -147,6 +147,7 @@ export interface RadarSite {
   longitude: number;
   name?: string;
   country?: string;
+  provider?: string;
   products?: readonly string[];
 }
 

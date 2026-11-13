@@ -16,14 +16,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import io
 import math
 import re
-from typing import Callable
 from urllib.parse import quote
-from xml.etree import ElementTree
-
-import numpy as np
 
 from sharpmod.maps.map_overlays import OverlayRaster
 
@@ -141,52 +136,20 @@ def parse_listing(
 ) -> tuple[SatelliteCandidate, ...]:
     """Parse one S3 ListObjectsV2 document into time-addressed candidates."""
 
-    if satellite not in GOES_BUCKETS or channel not in CHANNELS:
-        raise SatelliteContextError("unknown GOES satellite or channel")
-    wanted = CHANNELS[channel][0]
-    try:
-        root = ElementTree.fromstring(payload)
-    except ElementTree.ParseError as exc:
-        raise SatelliteContextError(f"GOES listing is not valid XML: {exc}") from exc
-    candidates = []
-    for content in root.iter():
-        if content.tag.rsplit("}", 1)[-1] != "Contents":
-            continue
-        values = {
-            child.tag.rsplit("}", 1)[-1]: child.text or "" for child in content
-        }
-        key = values.get("Key", "")
-        channel_match = _CHANNEL_RE.search(key)
-        scan_match = _SCAN_RE.search(key)
-        if not channel_match or int(channel_match.group("channel")) != wanted:
-            continue
-        if not scan_match or f"_{satellite}_" not in key or not key.endswith(".nc"):
-            continue
-        parts = {name: int(value) for name, value in scan_match.groupdict().items()}
-        try:
-            scan = datetime(parts["year"], 1, 1, tzinfo=timezone.utc) + timedelta(
-                days=parts["day"] - 1,
-                hours=parts["hour"],
-                minutes=parts["minute"],
-                seconds=parts["second"],
-            )
-        except ValueError:
-            continue
-        try:
-            size = int(values.get("Size", ""))
-        except ValueError:
-            size = None
-        candidates.append(
-            SatelliteCandidate(
-                satellite,
-                channel,
-                scan,
-                key,
-                f"{GOES_BUCKETS[satellite]}/{quote(key)}",
-                size,
-            )
+    import sharpmod_rs
+
+    rows = sharpmod_rs.goes_parse_listing(bytes(payload), satellite, channel)
+    return tuple(
+        SatelliteCandidate(
+            sat_name,
+            ch_name,
+            datetime.fromtimestamp(scan_unix, tz=timezone.utc),
+            key,
+            url,
+            size_bytes,
         )
-    return tuple(sorted(candidates, key=lambda item: item.scan_start))
+        for sat_name, ch_name, scan_unix, key, url, size_bytes in rows
+    )
 
 
 def list_candidates(
@@ -257,25 +220,6 @@ def select_candidate(
     return winner
 
 
-def _nearest_indices(axis, values):
-    axis = np.asarray(axis, dtype=float)
-    values = np.asarray(values, dtype=float)
-    if axis.ndim != 1 or axis.size < 2 or not np.all(np.isfinite(axis)):
-        raise SatelliteContextError("GOES fixed-grid coordinate axis is malformed")
-    ascending = axis[-1] > axis[0]
-    ordered = axis if ascending else -axis
-    wanted = values if ascending else -values
-    upper = np.searchsorted(ordered, wanted, side="left")
-    upper = np.clip(upper, 1, axis.size - 1)
-    lower = upper - 1
-    choose_upper = np.abs(ordered[upper] - wanted) < np.abs(
-        ordered[lower] - wanted
-    )
-    indices = np.where(choose_upper, upper, lower)
-    inside = np.isfinite(values) & (wanted >= ordered[0]) & (wanted <= ordered[-1])
-    return indices, inside
-
-
 def _render_dimensions(bounds, resolution_km: float, max_pixels: int):
     lon0, lon1, lat0, lat1 = bounds
     latitude = math.radians((lat0 + lat1) / 2.0)
@@ -284,23 +228,6 @@ def _render_dimensions(bounds, resolution_km: float, max_pixels: int):
     # Retain source detail when zoomed, within a bounded shared texture budget.
     scale = min(1.0, math.sqrt(max_pixels / float(width * height)))
     return max(2, int(width * scale)), max(2, int(height * scale))
-
-
-def _colour_visible(values):
-    brightness = np.sqrt(np.clip(values, 0.0, 1.2) / 1.2)
-    grey = np.asarray(np.rint(brightness * 255.0), dtype=np.uint8)
-    return np.stack((grey, grey, grey), axis=-1)
-
-
-def _colour_infrared(values):
-    # A compact perceptually ordered cold-cloud palette. Temperature remains in
-    # the source units (kelvin); only the presentation is colour mapped.
-    normalized = np.clip((310.0 - values) / 120.0, 0.0, 1.0)
-    points = np.asarray((0.0, 0.35, 0.58, 0.78, 1.0))
-    red = np.interp(normalized, points, (15, 95, 230, 250, 255))
-    green = np.interp(normalized, points, (20, 110, 230, 120, 255))
-    blue = np.interp(normalized, points, (30, 175, 255, 80, 255))
-    return np.asarray(np.rint(np.stack((red, green, blue), axis=-1)), dtype=np.uint8)
 
 
 def render_goes_frame(
@@ -317,91 +244,18 @@ def render_goes_frame(
     masquerade as a valid frame over an uncovered region.
     """
 
-    if channel not in CHANNELS:
-        raise SatelliteContextError(f"unsupported imagery choice {channel!r}")
+    import sharpmod_rs
+
     try:
         lon0, lon1, lat0, lat1 = (float(item) for item in bounds)
     except (TypeError, ValueError) as exc:
         raise SatelliteContextError("map bounds must contain four numbers") from exc
-    if not (-180.0 <= lon0 < lon1 <= 180.0 and -90.0 <= lat0 < lat1 <= 90.0):
-        raise SatelliteContextError("map bounds are outside ordered lon/lat limits")
-    if not payload or len(payload) > MAX_SOURCE_BYTES:
-        raise SatelliteContextError("GOES source payload is empty or too large")
-    try:
-        from netCDF4 import Dataset
-        from PIL import Image
-        from pyproj import Proj
-    except ImportError as exc:  # pragma: no cover - installation contract
-        raise SatelliteContextError(
-            "GOES imagery requires netCDF4, pyproj, and Pillow"
-        ) from exc
-
-    try:
-        dataset = Dataset("goes-memory.nc", mode="r", memory=bytes(payload))
-    except Exception as exc:
-        raise SatelliteContextError(f"GOES netCDF could not be opened: {exc}") from exc
-    try:
-        if not {"x", "y", "CMI", "goes_imager_projection"}.issubset(
-            dataset.variables
-        ):
-            raise SatelliteContextError("GOES netCDF lacks fixed-grid imagery fields")
-        x_axis = np.asarray(dataset.variables["x"][:], dtype=float)
-        y_axis = np.asarray(dataset.variables["y"][:], dtype=float)
-        raw = np.ma.asarray(dataset.variables["CMI"][:], dtype=float)
-        data = np.asarray(raw.filled(np.nan), dtype=float)
-        if data.shape != (y_axis.size, x_axis.size):
-            raise SatelliteContextError("GOES image and coordinate dimensions disagree")
-        quality = None
-        if "DQF" in dataset.variables:
-            quality = np.ma.asarray(dataset.variables["DQF"][:]).filled(255)
-        projection = dataset.variables["goes_imager_projection"]
-        height = float(projection.perspective_point_height)
-        lon_origin = float(projection.longitude_of_projection_origin)
-        sweep = str(getattr(projection, "sweep_angle_axis", "x"))
-        semi_major = float(getattr(projection, "semi_major_axis", 6378137.0))
-        semi_minor = float(getattr(projection, "semi_minor_axis", 6356752.31414))
-        source_resolution = float(CHANNELS[channel][2])
-        width, height_px = _render_dimensions(
-            (lon0, lon1, lat0, lat1), source_resolution, int(max_output_pixels)
-        )
-        lons = np.linspace(lon0, lon1, width, dtype=float)
-        lats = np.linspace(lat1, lat0, height_px, dtype=float)
-        longitude, latitude = np.meshgrid(lons, lats)
-        geos = Proj(
-            proj="geos",
-            h=height,
-            lon_0=lon_origin,
-            sweep=sweep,
-            a=semi_major,
-            b=semi_minor,
-            units="m",
-        )
-        gx, gy = geos(longitude, latitude)
-        xi, x_inside = _nearest_indices(x_axis, gx / height)
-        yi, y_inside = _nearest_indices(y_axis, gy / height)
-        inside = x_inside & y_inside & np.isfinite(gx) & np.isfinite(gy)
-        sampled = data[yi, xi]
-        valid = inside & np.isfinite(sampled)
-        if quality is not None and quality.shape == data.shape:
-            valid &= np.asarray(quality[yi, xi], dtype=float) <= 1.0
-        coverage = float(np.count_nonzero(valid)) / float(valid.size)
-        if coverage < 0.01:
-            raise SatelliteContextError(
-                "the selected GOES sector does not cover this map view"
-            )
-        colours = (
-            _colour_visible(sampled)
-            if channel == "visible"
-            else _colour_infrared(sampled)
-        )
-        rgba = np.empty((height_px, width, 4), dtype=np.uint8)
-        rgba[..., :3] = colours
-        rgba[..., 3] = np.where(valid, 255, 0).astype(np.uint8)
-        output = io.BytesIO()
-        Image.fromarray(rgba, mode="RGBA").save(output, format="PNG", compress_level=3)
-        return output.getvalue(), coverage, source_resolution
-    finally:
-        dataset.close()
+    return sharpmod_rs.goes_render_frame(
+        bytes(payload),
+        (lon0, lon1, lat0, lat1),
+        channel,
+        max(1, int(max_output_pixels)),
+    )
 
 
 def fetch_satellite_overlay(
@@ -420,6 +274,66 @@ def fetch_satellite_overlay(
     requested = _utc(when)
     if requested is None:
         raise SatelliteContextError("a UTC analysis time is required")
+    if (
+        opener is None
+        and cancel is None
+        and satellite is None
+        and tolerance == DEFAULT_TIME_TOLERANCE
+        and timeout == 30.0
+    ):
+        try:
+            lon0, lon1, lat0, lat1 = (float(item) for item in bounds)
+        except (TypeError, ValueError) as exc:
+            raise SatelliteContextError("map bounds must contain four numbers") from exc
+        import sharpmod_rs
+
+        (
+            png,
+            sat_name,
+            _req_iso,
+            retrieved_iso,
+            valid_iso,
+            coverage,
+            resolution,
+            attribution,
+            source_url,
+        ) = sharpmod_rs.goes_fetch_frame(
+            requested.isoformat().replace("+00:00", "Z"),
+            (lon0, lon1, lat0, lat1),
+            channel,
+        )
+        selected_time = datetime.fromisoformat(valid_iso.replace("Z", "+00:00"))
+        retrieved_at = datetime.fromisoformat(retrieved_iso.replace("Z", "+00:00"))
+        delta_min = (selected_time - requested).total_seconds() / 60.0
+        channel_title = CHANNELS[channel][1]
+        subtitle = (
+            f"{sat_name} {channel_title} · actual "
+            f"{selected_time:%Y-%m-%d %H:%M:%SZ} · "
+            f"{delta_min:+.0f} min from requested · {coverage:.0%} view coverage"
+        )
+        raster = OverlayRaster(
+            key=GOES_OVERLAY_KEY,
+            title="GOES satellite",
+            image_bytes=png,
+            bounds=(lon0, lon1, lat0, lat1),
+            subtitle=subtitle,
+            short_name=channel,
+            valid_time=selected_time,
+            retrieved_at=retrieved_at,
+            update_interval_s=300.0,
+            opacity=0.72,
+            source_url=source_url,
+            attribution=attribution,
+        )
+        return SatelliteOverlay(
+            raster,
+            requested,
+            selected_time,
+            sat_name,
+            channel,
+            coverage,
+            resolution,
+        )
     satellite = satellite or choose_satellite(bounds)
     candidates = list_candidates(
         requested,

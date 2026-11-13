@@ -23,7 +23,7 @@ def renderer(tmp_path, monkeypatch):
     cache.add(entry)
     calls = []
 
-    def render(infile, outfile, parcel, mode, *, view):
+    def render(infile, outfile, parcel, mode, *, view, color_style="standard"):
         calls.append((parcel, mode, view))
         outfile.write_bytes(PNG)
         edits = [{"index": 0, "values": {"tmpc": 30}}] if "drag" in view else view["edits"]

@@ -16,9 +16,9 @@ PANELS = ("STP STATS", "COND STP", "WINTER", "FIRE", "SHIP", "VROT", "HEIGHT CHA
 MAX_CACHED_VIEWS = 4
 
 
-def _render_key(parcel, mode, view):
+def _render_key(parcel, mode, view, color_style):
     return hashlib.sha256(json.dumps(
-        [parcel, mode, {**view, "timeIndex": view.get("timeIndex", 0)}], sort_keys=True,
+        [parcel, mode, color_style, {**view, "timeIndex": view.get("timeIndex", 0)}], sort_keys=True,
     ).encode()).hexdigest()
 
 
@@ -70,17 +70,18 @@ def validate_view(value):
 
 def render_view(params):
     from sharpmod.bridge.render_client import client
-    from sharpmod.bridge.soundings import IMAGE_MODES, MAX_IMAGE_BYTES, RENDER_PARCELS, _png_size
+    from sharpmod.bridge.soundings import COLOR_STYLES, IMAGE_MODES, MAX_IMAGE_BYTES, RENDER_PARCELS, _png_size
     from sharpmod.bridge.errors import BridgeError
 
-    p.keys(params, ("sounding_id", "view"), ("parcel", "image_mode"))
+    p.keys(params, ("sounding_id", "view"), ("parcel", "image_mode", "color_style"))
     entry = cache().get(params["sounding_id"])
     view = validate_view(params["view"])
     if view.get("timeIndex", 0) >= max(1, entry.summary["time_count"]):
         raise p.invalid("timeIndex is outside this sounding's times")
     parcel = p.choice(params, "parcel", RENDER_PARCELS, "MU")
     mode = p.choice(params, "image_mode", IMAGE_MODES, "uhd")
-    key = _render_key(parcel, mode, view)
+    style = p.choice(params, "color_style", COLOR_STYLES, "standard")
+    key = _render_key(parcel, mode, view, style)
     with entry.render_lock:
         cached = entry.view_renders.get(key)
         if cached is not None and cached[0].is_file():
@@ -91,14 +92,14 @@ def render_view(params):
             # Each new view replays a fresh collection; the source file stays intact.
             with tempfile.TemporaryDirectory(prefix="sounding-view-", dir=cache().renders) as directory:
                 temporary = Path(directory) / "view.png"
-                metadata = client().render(entry.path, temporary, parcel, mode, view=view)
+                metadata = client().render(entry.path, temporary, parcel, mode, view=view, color_style=style)
                 data = temporary.read_bytes()
                 if len(data) > MAX_IMAGE_BYTES:
                     raise BridgeError("RENDER_FAILED", "The sounding image is too large to send.", False)
                 _png_size(data)
                 resolved = {**view, "edits": metadata["edits"]}
                 resolved.pop("drag", None)
-                resolved_key = _render_key(parcel, mode, resolved)
+                resolved_key = _render_key(parcel, mode, resolved, style)
                 out = cache().render_path(entry.sounding_id, f"{parcel}-{resolved_key}", mode)
                 temporary.replace(out)
             entry.view_renders[key] = (out, metadata)

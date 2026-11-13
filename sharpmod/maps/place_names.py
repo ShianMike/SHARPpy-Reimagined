@@ -389,6 +389,7 @@ def _point_in_polygon(
 
 def is_conus_point(lat: float, lon: float) -> bool:
     """Return whether a coordinate is in the lower 48 states or D.C."""
+    import sharpmod_rs
 
     try:
         latitude = float(lat)
@@ -397,16 +398,7 @@ def is_conus_point(lat: float, lon: float) -> bool:
         return False
     if not math.isfinite(latitude) or not math.isfinite(longitude):
         return False
-    south, west, north, east = _CONUS_BOUNDS
-    if not south <= latitude <= north or not west <= longitude <= east:
-        return False
-    for min_lat, min_lon, max_lat, max_lon, points in \
-            _conus_boundary_polygons():
-        if min_lat <= latitude <= max_lat \
-                and min_lon <= longitude <= max_lon \
-                and _point_in_polygon(latitude, longitude, points):
-            return True
-    return False
+    return bool(sharpmod_rs.is_conus_point(latitude, longitude))
 
 
 def _distance_km(
@@ -455,6 +447,7 @@ def offline_conus_town_name(
     max_distance_km: float = _CONUS_MAX_DISTANCE_KM,
 ) -> str:
     """Return the nearest bundled Census place for a likely CONUS point."""
+    import sharpmod_rs
 
     try:
         latitude = float(lat)
@@ -466,53 +459,7 @@ def offline_conus_town_name(
         latitude, longitude, distance_limit
     )):
         return ""
-
-    if not is_conus_point(latitude, longitude):
-        return ""
-
-    lat_delta = distance_limit / 110.5 + 0.1
-    lon_scale = max(0.35, math.cos(math.radians(latitude)))
-    lon_delta = distance_limit / (111.0 * lon_scale) + 0.1
-    cells = _conus_place_cells()
-    best: tuple[float, int, str] | None = None
-    containing_best: tuple[int, float, float, str] | None = None
-    for lat_cell in range(
-        math.floor(latitude - lat_delta),
-        math.floor(latitude + lat_delta) + 1,
-    ):
-        for lon_cell in range(
-            math.floor(longitude - lon_delta),
-            math.floor(longitude + lon_delta) + 1,
-        ):
-            for label, place_lat, place_lon, kind, land_area_sqmi in cells.get(
-                (lat_cell, lon_cell), ()
-            ):
-                distance = _distance_km(
-                    latitude, longitude, place_lat, place_lon
-                )
-                # Prefer an incorporated/CDP place only when representative
-                # points are effectively tied. A substantially closer named
-                # town/township remains the better rural title.
-                kind_rank = 0 if kind == "place" else 1
-                candidate = (distance, kind_rank, label)
-                if best is None or candidate < best:
-                    best = candidate
-                proxy_radius = _area_proxy_radius_km(land_area_sqmi)
-                if proxy_radius > 0.0 and distance <= proxy_radius:
-                    containing_candidate = (
-                        kind_rank,
-                        distance,
-                        land_area_sqmi,
-                        label,
-                    )
-                    if containing_best is None \
-                            or containing_candidate < containing_best:
-                        containing_best = containing_candidate
-    if containing_best is not None:
-        return containing_best[3]
-    if best is None or best[0] > distance_limit:
-        return ""
-    return best[2]
+    return str(sharpmod_rs.offline_conus_town_name(latitude, longitude, distance_limit))
 
 
 def reverse_town_name(

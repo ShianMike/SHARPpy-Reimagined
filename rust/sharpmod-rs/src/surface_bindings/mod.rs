@@ -7,7 +7,7 @@ use sharpmod_weather::surface::{
     self, Dataset, FetchError, Observation, Request, Station, SurfaceClient,
 };
 use std::sync::OnceLock;
-use time::{Duration, OffsetDateTime};
+use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
 fn station(kind: &Bound<'_, PyAny>, row: Station) -> PyResult<Py<PyAny>> {
     Ok(kind
@@ -193,10 +193,28 @@ fn fetch_surface_observations(
     }
 }
 
+#[pyfunction]
+fn surface_plots_json(
+    py: Python<'_>,
+    latitude: f64,
+    longitude: f64,
+    valid_time: &str,
+) -> PyResult<String> {
+    let when = OffsetDateTime::parse(valid_time, &Rfc3339)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    let runtime = crate::weather::runtime()?;
+    let snapshot = py
+        .detach(move || runtime.block_on(surface::fetch_plots(latitude, longitude, when)))
+        .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+    serde_json::to_string(&snapshot)
+        .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+}
+
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(parse_surface_stations, module)?)?;
     module.add_function(wrap_pyfunction!(parse_surface_observations, module)?)?;
     module.add_function(wrap_pyfunction!(select_surface_observation, module)?)?;
     module.add_function(wrap_pyfunction!(fetch_surface_observations, module)?)?;
+    module.add_function(wrap_pyfunction!(surface_plots_json, module)?)?;
     Ok(())
 }

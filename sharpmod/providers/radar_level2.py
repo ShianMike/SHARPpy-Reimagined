@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import io
+import json
 import logging
 import os
 import re
@@ -382,6 +384,31 @@ def availability(
 ):
     if product not in MOMENTS:
         raise radar_site.RadarSiteError("unknown Level II product")
+    if opener is None and now is None:
+        import sharpmod_rs
+
+        site = radar_site.site_by_id(site_id)
+        if site is None:
+            raise radar_site.RadarSiteError("unknown radar site")
+        requested = radar_time._utc(valid_time) if valid_time is not None else None
+        when_iso = (
+            requested.isoformat(timespec="seconds").replace("+00:00", "Z")
+            if requested is not None
+            else None
+        )
+        try:
+            return json.loads(
+                sharpmod_rs.radar_level2_tilts(
+                    site.id,
+                    product=product,
+                    valid_time=when_iso,
+                    cache_dir=os.fspath(disk_cache_root()),
+                )
+            )
+        except sharpmod_rs.WeatherRadarScanMissing as exc:
+            raise radar_site.RadarScanMissing(str(exc)) from None
+        except (ValueError, RuntimeError) as exc:
+            raise radar_site.RadarSiteError(str(exc)) from None
     site, reference, selected, call, timeout = _select(site_id, valid_time, now, opener)
     cuts = {} if selected is None else _volume(site, selected, call, timeout)
     return {
@@ -415,6 +442,48 @@ def fetch_frame(
         raise radar_site.RadarSiteError("unknown Level II product")
     if tilt not in radar_level3.TILTS or tilt in {"x", "y"}:
         raise radar_site.RadarSiteError("unknown radar tilt")
+    if opener is None and now is None:
+        site = radar_site.site_by_id(site_id)
+        if site is None:
+            raise radar_site.RadarSiteError("unknown radar site")
+        requested = radar_time._utc(valid_time) if valid_time is not None else None
+        payload: dict[str, object] = {
+            "site_id": site.id,
+            "product": product,
+            "tilt": tilt,
+        }
+        if requested is not None:
+            payload["valid_time"] = requested.isoformat(timespec="seconds").replace("+00:00", "Z")
+        try:
+            native = sharpmod_rs.radar_level2_frame(
+                json.dumps(payload),
+                pixels=max(256, min(4096, int(pixels))),
+                cache_dir=os.fspath(disk_cache_root()),
+            )
+        except sharpmod_rs.WeatherRadarScanMissing as exc:
+            raise radar_site.RadarScanMissing(str(exc)) from None
+        except (ValueError, RuntimeError) as exc:
+            raise radar_site.RadarSiteError(str(exc)) from None
+        if native is not None:
+            frame = json.loads(native)
+            bounds = frame["bounds"]
+            return OverlayRaster(
+                key=radar_site.OVERLAY_KEY,
+                title=f"{frame['site_id']} {frame['label']}",
+                short_name=frame["site_id"],
+                subtitle=f"Elevation {frame['elevation_angle']:.1f}\u00b0"
+                if frame.get("elevation_angle") is not None
+                else "",
+                elevation_angle=frame.get("elevation_angle"),
+                image_bytes=base64.b64decode(frame["png_base64"]),
+                bounds=(bounds["west"], bounds["east"], bounds["south"], bounds["north"]),
+                retrieved_at=datetime.fromisoformat(frame["retrieved_at"].replace("Z", "+00:00")),
+                valid_time=datetime.fromisoformat(frame["valid_time"].replace("Z", "+00:00")),
+                update_interval_s=frame["update_interval_s"],
+                source_url=frame["source_url"],
+                attribution=frame["attribution"],
+                opacity=0.85,
+            )
     site, reference, selected, call, timeout = _select(site_id, valid_time, now, opener)
     requested = radar_time._utc(valid_time) if valid_time is not None else None
     if selected is None:

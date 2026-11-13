@@ -12,6 +12,80 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Expand the available weather-model parameters, offering only fields supported
   by each model and the selected run.
 
+## [v3.7.0] - 2026-11-13
+
+### Added
+
+- Add DWD's 17 German radar sites and live individual-site DX
+  precipitation-scan reflectivity. Preserve source values and per-ray scan
+  angles, mask clutter, show source attribution, and report missing or stale
+  scans. Add a network selector and a documented worldwide radar inventory.
+- Discover European OPERA radar sites and show compatible, attributed
+  single-site DBZH reflectivity scans across ODIM 2.0–2.4 in 8-bit, 16-bit and
+  floating-point encodings, preserving source calibration, exact hover values
+  and ray geometry. Unsupported formats and licences remain unavailable.
+- Add eleven Météo-France radar sites in France and overseas via MRRL InterRAD,
+  with lowest-available reflectivity, source credits and capability-aware
+  controls. Show the active radar frame's source credit in the bottom-left
+  corner during Live Tracking.
+
+### Changed
+
+- Replace the radar scan grid and bulk loading with a UTC time selector,
+  five-minute navigation, and on-demand playback; stop preloading unused radar
+  products and tilts.
+- Keep the README release summary focused on versions 3.7.0 and 3.6.0;
+  earlier release history remains in the changelog.
+- Move US NEXRAD Level II S3 volume listing, Archive II BZip2 and Message
+  5/31 decoding, reflectivity and correlation-coefficient tilt availability, and
+  geodesic polar rendering into the shared Rust weather core, eliminating
+  Python bridge and MetPy overhead in desktop and browser backends.
+- Move CONUS place-label indexing, boundary polygon checks, and offline
+  reverse-town lookup, plus SPC convective outlook candidate resolution,
+  GeoJSON polygon/hole decoding, and HTTP caching into the shared Rust weather
+  core and desktop router.
+- Move UWyo station availability retrieval, payload filtering, fixed-width HTML
+  sounding table decoding, and high-resolution pressure thinning into the
+  shared Rust weather core and desktop router.
+- Move NOAA MRMS radar mosaic WMS retrieval, GetCapabilities XML time parsing,
+  and box-mean sounding thermodynamics, moisture mixing-ratio saturation
+  clamping, and vector-wind averaging into Rust.
+- Move GOES ABI-L2-CMIPC S3 scan discovery, NetCDF4/HDF5 fixed-grid decoding,
+  geodesic projection, and PNG rendering into the shared Rust weather core.
+- Move US NEXRAD Level III NIDS decoding, directory scan listing, indexed
+  polar PNG rendering, and single-site NCEP GeoServer WMS overlays into the
+  shared Rust weather core and desktop router.
+- Move the threshold diagnostic catalog, numeric-control bounds, condition
+  formatting/evaluation, and CSV export into the shared Rust weather core and
+  desktop router.
+- Move desktop NWS weather alerts and storm-report options, filtering,
+  formatting, and IEM feed caching into the shared Rust weather core and
+  desktop router.
+- Move surface station-plot wind-staff specification, reading formatting, and
+  plot assembly into the shared Rust weather core and desktop router.
+
+### Fixed
+
+- Read NOAA's advertised radar scan times when they follow the layer name, so
+  current and recent mosaic imagery can be selected correctly.
+- Keep an earlier radar image from appearing as the newly selected historical
+  time while a frame loads, and show the provider's actual scan time separately.
+- Keep the sounding-palette bridge test's mock backend alive until shutdown, so
+  its final response cannot race process exit.
+- Install the native backend in the Windows WRF and live-provider checks, which
+  exercise sounding and provider operations migrated to Rust.
+- Restore dark, light and protanopia sounding display choices in Appearance
+  settings, preserving the selection across sessions and applying it to
+  interactive, edited and exported sounding images.
+- Show radar station codes in Live Tracking map labels, site pickers, search
+  results, scan history and hover readouts. Keep place names searchable and use
+  compact ODIM node codes for OPERA without changing saved station IDs. Keep
+  the saved site's code visible if its catalogue entry is unavailable.
+- Make Live Tracking radar site labels clickable to select that site on the
+  clicked panel, highlight the active selected site label border in green, and
+  highlight unavailable site label borders in red.
+- Keep offline radar catalogue fixtures deterministic as live OPERA sites change.
+
 ## [v3.6.0] - 2026-11-08
 
 ### Added

@@ -1,34 +1,36 @@
 use super::*;
 
 #[test]
-fn level_two_tilts_keep_the_bridge_contract() {
-    for product in ["reflectivity", "correlation-coefficient"] {
-        let launcher = FakeLauncher::with(vec![script(move |mut io| async move {
-            let request = io.expect("radar.tilts").await.unwrap();
-            assert_eq!(
-                request["params"],
-                serde_json::json!({"site_id": "KTLX", "product": product, "valid_time": "2026-10-17T08:00:00Z"})
-            );
-            let mut result = fixture("bridge/map/radar-tilts.result.json");
-            result["product"] = serde_json::json!(product);
-            io.reply(&request["id"], result).await;
-            io.expect("shutdown").await;
-            0
-        })]);
-        let (_app, webview) = window(launcher);
-        for args in [
-            serde_json::json!({"site": "../bad", "product": "velocity"}),
-            serde_json::json!({"site": "KTLX", "product": "echo-tops"}),
-            serde_json::json!({"site": "KTLX", "product": "velocity", "validTime": "bad"}),
-        ] {
-            let error: BackendError =
-                parse(invoke_args(&webview, "get_radar_tilts", args).unwrap_err());
-            assert_eq!(error.code, ErrorCode::InvalidArgument);
-        }
-        let mut expected = fixture("public/map/radar-tilts.json");
-        expected["product"] = serde_json::json!(product);
-        assert_eq!(invoke_args(&webview, "get_radar_tilts", serde_json::json!({"site": "KTLX", "product": product, "validTime": "2026-10-17T08:00:00Z"})).unwrap(), expected);
+fn level_two_tilts_validate_site_and_history_without_python() {
+    let (_app, webview) = window(no_radar_bridge_launcher());
+    for args in [
+        serde_json::json!({"site": "../bad", "product": "reflectivity"}),
+        serde_json::json!({"site": "ZZZZ", "product": "reflectivity"}),
+        serde_json::json!({"site": "KTLX", "product": "echo-tops"}),
+        serde_json::json!({"site": "KTLX", "product": "correlation-coefficient", "validTime": "bad"}),
+    ] {
+        let error: BackendError =
+            parse(invoke_args(&webview, "get_radar_tilts", args).unwrap_err());
+        assert_eq!(error.code, ErrorCode::InvalidArgument);
     }
+    for product in ["reflectivity", "correlation-coefficient"] {
+        let error: BackendError = parse(
+            invoke_args(
+                &webview,
+                "get_radar_tilts",
+                serde_json::json!({"site": "KTLX", "product": product, "validTime": "2000-01-01T00:00:00Z"}),
+            )
+            .unwrap_err(),
+        );
+        assert_eq!(error.code, ErrorCode::OverlayFetchFailed);
+    }
+    let valid = fixture("bridge/map/radar-tilts.result.json");
+    assert!(
+        serde_json::from_value::<sharppy_reimagined_lib::dto::radar::RadarTilts>(valid)
+            .unwrap()
+            .validate()
+            .is_ok()
+    );
     let mut invalid = fixture("bridge/map/radar-tilts.result.json");
     invalid["tilts"][0]["tilt"] = serde_json::json!("0");
     assert!(
@@ -91,6 +93,16 @@ fn australian_radar_uses_native_capabilities_and_rejects_unsupported_requests() 
         broadmeadows["products"],
         serde_json::json!(["reflectivity", "velocity"])
     );
+    let guadeloupe = catalogue["sites"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|site| site["id"] == "MF90")
+        .unwrap();
+    assert_eq!(guadeloupe["name"], "Le Moule");
+    assert_eq!(guadeloupe["country"], "GP");
+    assert_eq!(guadeloupe["provider"], "MRRL");
+    assert_eq!(guadeloupe["products"], serde_json::json!(["reflectivity"]));
     for (command, args) in [
         (
             "get_radar_site_frame",
@@ -107,6 +119,18 @@ fn australian_radar_uses_native_capabilities_and_rejects_unsupported_requests() 
         (
             "get_radar_tilts",
             serde_json::json!({"site": "ABRD", "product": "velocity"}),
+        ),
+        (
+            "get_radar_site_frame",
+            serde_json::json!({"site": "MF90", "product": "velocity"}),
+        ),
+        (
+            "get_radar_site_frame",
+            serde_json::json!({"site": "MF90", "product": "reflectivity", "tilt": "1"}),
+        ),
+        (
+            "get_radar_tilts",
+            serde_json::json!({"site": "MF90", "product": "reflectivity"}),
         ),
     ] {
         let error: BackendError = parse(invoke_args(&webview, command, args).unwrap_err());

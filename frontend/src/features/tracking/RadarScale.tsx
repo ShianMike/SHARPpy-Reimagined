@@ -3,6 +3,7 @@ import { Eye, EyeOff, TriangleAlert } from "lucide-react";
 import { cx } from "../../lib/cx";
 import { displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
+import { useAppStore } from "../../stores/appStore";
 import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
 import { Surface } from "../../ui/Surface";
 import { IconAction } from "../../ui/Controls";
@@ -27,11 +28,12 @@ const CORRELATION = parsePalette(correlationPalette, "radarCorrelation");
 const ECHO_TOPS = parsePalette(echoTopsPalette, "radarEchoTops");
 
 export function RadarScale({ panel, horizontal = false }: { panel: number; horizontal?: boolean }): ReactNode {
+  const isLive = useAppStore((state) => state.activeWorkspace === "live");
   const preferences = useUiStore((state) => state.units);
   const visible = useMapStore((state) => panelLayers(state, panel).radar.visible);
   const { radarScope: scope } = useMapStore((state) => panelWeather(state, panel));
   const time = useWeatherTime();
-  const { site, product, tilt } = usePanelRadar(panel);
+  const { site, product, tilt, provider } = usePanelRadar(panel);
   const mosaic = useRadarFrame(product, visible && scope === "mosaic", time);
   const antenna = useRadarSiteFrame(product, site, visible && scope === "site", time, tilt);
   const query = scope === "site" ? antenna : mosaic;
@@ -39,6 +41,9 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
   const catalog = useMapCatalog().data;
   const products = scope === "site" ? catalog?.siteProducts : catalog?.radarProducts;
   const selected = products?.find((item) => item.key === product) ?? products?.[0];
+  const german = scope === "site" && /^D[A-Z]{3}$/.test(site ?? "");
+  const opera = scope === "site" && /^0-\d{1,3}-0-[a-z0-9]{5}$/i.test(site ?? "");
+  const mrrl = scope === "site" && (provider === "MRRL" || /^MF\d{2}$/i.test(site ?? ""));
   const label = frame?.label ?? selected?.label ?? "Radar";
   const units = frame?.units ?? selected?.units ?? "";
   const palette = frame?.palette ?? (scope === "site" && selected?.key === "correlation-coefficient" ? CORRELATION
@@ -47,7 +52,10 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
   const description = selected?.key === "correlation-coefficient"
     ? "Correlation Coefficient (ρHV), a unitless ratio. Lower values indicate less similar targets. Values above 1 can occur from measurement noise; values outside the scale use its end colors."
     : selected?.key === "echo-tops" ? "Enhanced Echo Tops: height of the 18 dBZ echo in thousands of feet above sea level. Some heights are lower bounds where echoes extend above the highest scan. Values outside the scale use its end colors."
-    : units === "dBZ" ? scope === "site" ? "Base Reflectivity in dBZ · BR HiRes color table. Values outside the scale use the end colors." : "Radar reflectivity in dBZ, following NOAA's labelled color key."
+    : units === "dBZ" ? german ? "DWD precipitation-scan reflectivity in dBZ. Elevation varies by direction; returns below 0 dBZ are transparent."
+    : opera ? "OPERA Doppler-filtered reflectivity in dBZ at the lowest available elevation. Returns below 0 dBZ are transparent."
+    : mrrl ? "MRRL-converted reflectivity in dBZ at the lowest available elevation. Returns below 0 dBZ are transparent."
+    : scope === "site" ? "Base Reflectivity in dBZ · BR HiRes color table. Values outside the scale use the end colors." : "Radar reflectivity in dBZ, following NOAA's labelled color key."
     : selected?.key === "velocity" ? "Negative values move toward the radar; positive values move away. Values outside the scale use the end colors. Purple means range folded. This color table does not undo velocity aliasing."
     : selected?.key === "hydrometeor" ? "Hydrometeor categories use the provider's labelled color key."
     : "Precipitation accumulations use the provider's labelled color key and units.";
@@ -56,13 +64,14 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
   const delay = age > 10 * 60_000 ? `Radar scan is ${String(Math.floor(age / 60_000))} minutes behind the selected time` : null;
   const status = !visible ? null : query.isError ? "Unavailable" : query.isFetching ? "Loading…" : delay;
   const loading = visible && query.isFetching && !query.isError;
+  const attribution = isLive && visible && frame?.attribution ? frame.attribution : null;
   if (horizontal) return <div className={styles.inline} aria-label="Radar color key">
     <strong>{label}{shownUnits ? ` · ${shownUnits}` : ""}</strong>
     {palette !== null ? <FieldLegend palette={palette} description={description} /> : frame?.legendPng
       ? <img src={frame.legendPng} alt={`${label} · NOAA color scale`} /> : <p>Provider color key unavailable.</p>}
-    {palette === null ? <p>{description}</p> : null}{scan === "" ? null : <p>{scan}</p>}{status === null ? null : <p>{status}</p>}
+    {palette === null ? <p>{description}</p> : null}{scan === "" ? null : <p>{scan}</p>}{status === null ? null : <p>{status}</p>}{attribution === null ? null : <p>{attribution}</p>}
   </div>;
-  return <Surface as="aside" data-motion="fade" className={scaleStyles.panel} aria-label="Radar scale" aria-description={`${label} · ${shownUnits || (palette === null ? "Categories" : "Unitless")} · Panel ${String(panel + 1)}${scan === "" ? "" : ` · ${scan}`}`} data-testid="radar-scale">
+  return <><Surface as="aside" data-motion="fade" className={scaleStyles.panel} aria-label="Radar scale" aria-description={`${label} · ${shownUnits || (palette === null ? "Categories" : "Unitless")} · Panel ${String(panel + 1)}${scan === "" ? "" : ` · ${scan}`}`} data-testid="radar-scale">
     {palette === null ? <div className={cx(styles.provider, hints.target)} tabIndex={0} role="img" aria-label={`${label} color scale, ${units || "categories"}`} aria-description="Focus or hover to see the provider's labelled color key.">
       <div className={styles.ramp} aria-hidden="true">{frame?.legendPng === undefined || frame.legendPng === null ? null : <img src={frame.legendPng} alt="" />}</div>
       <span className={cx(hints.hint, styles.key)} data-side="left" role="tooltip"><strong>{label}{units ? ` · ${units}` : ""}</strong>{frame?.legendPng ? <img src={frame.legendPng} alt={`${label} · NOAA color scale`} /> : <span>{status ?? (visible ? "Provider color key unavailable." : "Enable the layer to load its color key.")}</span>}</span>
@@ -73,5 +82,5 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
       state.setActivePanel(panel);
       state.setLayerVisible("radar", !panelLayers(state, panel).radar.visible);
     }} />
-  </Surface>;
+  </Surface>{attribution === null ? null : <div className={styles.attribution} data-testid="radar-attribution">{attribution}</div>}</>;
 }

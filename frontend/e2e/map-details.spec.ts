@@ -57,7 +57,7 @@ test("map projection survives reload and style changes, and resets with layers",
   await expect.poll(() => page.evaluate(() => window.__SHARPPY_E2E__?.projection())).toBe("globe");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Appearance", exact: true }).click();
-  await page.getByRole("radio", { name: /Light/u }).check();
+  await page.getByRole("radio", { name: /^Light/u }).check();
   await expect.poll(() => page.evaluate(() => window.__SHARPPY_E2E__?.projection())).toBe("globe");
   await page.getByRole("navigation", { name: "Workspaces" }).getByRole("button", { name: "Model Viewer", exact: true }).click();
   await layerRow(page, "model-domain");

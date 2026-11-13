@@ -23,7 +23,7 @@ it("saves unit choices, restores them and resets only units", async () => {
   expect(merge?.({ units: { temperature: "°C", wind: "km/h" } }, useUiStore.getState()))
     .toMatchObject({ units: { temperature: "°C", wind: "km/h" } });
   await user.click(screen.getByRole("button", { name: "Appearance" }));
-  await user.click(screen.getByRole("radio", { name: /Dark/u }));
+  await user.click(screen.getByRole("radio", { name: /^Dark/u }));
   await user.click(screen.getByRole("button", { name: "Units" }));
   expect(screen.getByRole<HTMLInputElement>("radio", { name: "°C Celsius" }).checked).toBe(true);
   await user.click(screen.getByRole("button", { name: "Reset units" }));

@@ -116,7 +116,7 @@ describe("StationSearch", () => {
     await user.click(screen.getByRole("button", { name: "Clear search" }));
     expect(document.activeElement).toBe(radarInput);
     await user.type(radarInput, "KTLX");
-    await user.click(screen.getByRole("option", { name: "KTLX WSR-88D radar" }));
+    await user.click(screen.getByRole("option", { name: "KTLX" }));
     expect(useMapStore.getState().livePanels[0]?.radarProduct).toBe("velocity");
     expect(useAppStore.getState().selectedStationId).toBeNull();
   });
@@ -137,7 +137,7 @@ describe("StationSearch", () => {
     const input = screen.getByRole<HTMLInputElement>("combobox", { name: "Search radar sites" });
     await waitFor(() => { expect(input.disabled).toBe(false); });
     await user.type(input, query);
-    expect(screen.getByRole("option", { name: "ABRD Broadmeadows · Australia" }).textContent).toContain("Australia");
+    expect(screen.getByRole("option", { name: "ABRD" }).getAttribute("aria-description")).toContain("Broadmeadows · Australia");
     await user.keyboard("{ArrowDown}{Enter}");
     const state = useMapStore.getState();
     expect(state.livePanels[1]).toMatchObject({ radarScope: "site", radarSite: "ABRD", radarProduct: "reflectivity", radarTilt: "0", layers: { radar: { visible: true } } });

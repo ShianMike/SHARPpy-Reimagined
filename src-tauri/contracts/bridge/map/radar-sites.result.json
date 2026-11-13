@@ -3,777 +3,932 @@
     {
       "id": "KABR",
       "lat": 45.4563,
-      "lon": -98.4133
+      "lon": -98.4133,
+      "name": "Aberdeen"
     },
     {
       "id": "KABX",
       "lat": 35.1503,
-      "lon": -106.8243
+      "lon": -106.8243,
+      "name": "Albuquerque"
     },
     {
       "id": "KAKQ",
       "lat": 36.9843,
-      "lon": -77.0073
+      "lon": -77.0073,
+      "name": "Norfolk"
     },
     {
       "id": "KAMA",
       "lat": 35.2333,
-      "lon": -101.7093
+      "lon": -101.7093,
+      "name": "Amarillo"
     },
     {
       "id": "KAMX",
       "lat": 25.6113,
-      "lon": -80.4133
+      "lon": -80.4133,
+      "name": "Miami"
     },
     {
       "id": "KAPX",
       "lat": 44.9063,
-      "lon": -84.7193
+      "lon": -84.7193,
+      "name": "Gaylord"
     },
     {
       "id": "KARX",
       "lat": 43.8233,
-      "lon": -91.1913
+      "lon": -91.1913,
+      "name": "La Crosse"
     },
     {
       "id": "KATX",
       "lat": 48.1953,
-      "lon": -122.4963
+      "lon": -122.4963,
+      "name": "Seattle"
     },
     {
       "id": "KBBX",
       "lat": 39.4963,
-      "lon": -121.6323
+      "lon": -121.6323,
+      "name": "Beale AFB"
     },
     {
       "id": "KBGM",
       "lat": 42.2003,
-      "lon": -75.9853
+      "lon": -75.9853,
+      "name": "Binghamton"
     },
     {
       "id": "KBHX",
       "lat": 40.4983,
-      "lon": -124.2923
+      "lon": -124.2923,
+      "name": "Eureka (Bunker Hill)"
     },
     {
       "id": "KBIS",
       "lat": 46.7713,
-      "lon": -100.7603
+      "lon": -100.7603,
+      "name": "Bismarck"
     },
     {
       "id": "KBLX",
       "lat": 45.8543,
-      "lon": -108.6073
+      "lon": -108.6073,
+      "name": "Billings"
     },
     {
       "id": "KBMX",
       "lat": 33.1723,
-      "lon": -86.7703
+      "lon": -86.7703,
+      "name": "Birmingham"
     },
     {
       "id": "KBOX",
       "lat": 41.9563,
-      "lon": -71.1373
+      "lon": -71.1373,
+      "name": "Boston"
     },
     {
       "id": "KBRO",
       "lat": 25.9163,
-      "lon": -97.4193
+      "lon": -97.4193,
+      "name": "Brownsville"
     },
     {
       "id": "KBUF",
       "lat": 42.9493,
-      "lon": -78.7373
+      "lon": -78.7373,
+      "name": "Buffalo"
     },
     {
       "id": "KBYX",
       "lat": 24.5973,
-      "lon": -81.7033
+      "lon": -81.7033,
+      "name": "Key West"
     },
     {
       "id": "KCAE",
       "lat": 33.9493,
-      "lon": -81.1193
+      "lon": -81.1193,
+      "name": "Columbia"
     },
     {
       "id": "KCBW",
       "lat": 46.0393,
-      "lon": -67.8063
+      "lon": -67.8063,
+      "name": "Caribou"
     },
     {
       "id": "KCBX",
       "lat": 43.4903,
-      "lon": -116.2363
+      "lon": -116.2363,
+      "name": "Boise"
     },
     {
       "id": "KCCX",
       "lat": 40.9233,
-      "lon": -78.0043
+      "lon": -78.0043,
+      "name": "State College"
     },
     {
       "id": "KCLE",
       "lat": 41.4133,
-      "lon": -81.8603
+      "lon": -81.8603,
+      "name": "Cleveland"
     },
     {
       "id": "KCLX",
       "lat": 32.6563,
-      "lon": -81.0423
+      "lon": -81.0423,
+      "name": "Charleston, SC"
     },
     {
       "id": "KCRP",
       "lat": 27.7843,
-      "lon": -97.5113
+      "lon": -97.5113,
+      "name": "Corpus Christi"
     },
     {
       "id": "KCXX",
       "lat": 44.5113,
-      "lon": -73.1663
+      "lon": -73.1663,
+      "name": "Burlington"
     },
     {
       "id": "KCYS",
       "lat": 41.1523,
-      "lon": -104.8063
+      "lon": -104.8063,
+      "name": "Cheyenne"
     },
     {
       "id": "KDAX",
       "lat": 38.5013,
-      "lon": -121.6783
+      "lon": -121.6783,
+      "name": "Sacramento"
     },
     {
       "id": "KDDC",
       "lat": 37.7613,
-      "lon": -99.9693
+      "lon": -99.9693,
+      "name": "Dodge City"
     },
     {
       "id": "KDFX",
       "lat": 29.2733,
-      "lon": -100.2803
+      "lon": -100.2803,
+      "name": "Laughlin AFB"
     },
     {
       "id": "KDGX",
       "lat": 32.2803,
-      "lon": -89.9843
+      "lon": -89.9843,
+      "name": "Jackson/Brandon, MS"
     },
     {
       "id": "KDIX",
       "lat": 39.9473,
-      "lon": -74.4113
+      "lon": -74.4113,
+      "name": "Philadelphia"
     },
     {
       "id": "KDLH",
       "lat": 46.8373,
-      "lon": -92.2103
+      "lon": -92.2103,
+      "name": "Duluth"
     },
     {
       "id": "KDMX",
       "lat": 41.7313,
-      "lon": -93.7233
+      "lon": -93.7233,
+      "name": "Des Moines"
     },
     {
       "id": "KDOX",
       "lat": 38.8263,
-      "lon": -75.4403
+      "lon": -75.4403,
+      "name": "Dover AFB"
     },
     {
       "id": "KDTX",
       "lat": 42.7003,
-      "lon": -83.4723
+      "lon": -83.4723,
+      "name": "Detroit"
     },
     {
       "id": "KDVN",
       "lat": 41.6123,
-      "lon": -90.5813
+      "lon": -90.5813,
+      "name": "Quad Cities"
     },
     {
       "id": "KDYX",
       "lat": 32.5383,
-      "lon": -99.2543
+      "lon": -99.2543,
+      "name": "Dyess AFB"
     },
     {
       "id": "KEAX",
       "lat": 38.8103,
-      "lon": -94.2643
+      "lon": -94.2643,
+      "name": "Pleasant Hill"
     },
     {
       "id": "KEMX",
       "lat": 31.8943,
-      "lon": -110.6303
+      "lon": -110.6303,
+      "name": "Tucson"
     },
     {
       "id": "KENX",
       "lat": 42.5873,
-      "lon": -74.0643
+      "lon": -74.0643,
+      "name": "Albany"
     },
     {
       "id": "KEOX",
       "lat": 31.4613,
-      "lon": -85.4593
+      "lon": -85.4593,
+      "name": "Ft Rucker"
     },
     {
       "id": "KEPZ",
       "lat": 31.8733,
-      "lon": -106.6983
+      "lon": -106.6983,
+      "name": "El Paso"
     },
     {
       "id": "KESX",
       "lat": 35.7013,
-      "lon": -114.8913
+      "lon": -114.8913,
+      "name": "Las Vegas"
     },
     {
       "id": "KEVX",
       "lat": 30.5653,
-      "lon": -85.9223
+      "lon": -85.9223,
+      "name": "Eglin AFB"
     },
     {
       "id": "KEWX",
       "lat": 29.7043,
-      "lon": -98.0293
+      "lon": -98.0293,
+      "name": "Austin/San Antonio"
     },
     {
       "id": "KEYX",
       "lat": 35.0983,
-      "lon": -117.5613
+      "lon": -117.5613,
+      "name": "Edwards AFB"
     },
     {
       "id": "KFCX",
       "lat": 37.0243,
-      "lon": -80.2743
+      "lon": -80.2743,
+      "name": "Roanoke"
     },
     {
       "id": "KFDR",
       "lat": 34.3623,
-      "lon": -98.9773
+      "lon": -98.9773,
+      "name": "Altus AFB"
     },
     {
       "id": "KFDX",
       "lat": 34.6343,
-      "lon": -103.6193
+      "lon": -103.6193,
+      "name": "Cannon AFB"
     },
     {
       "id": "KFFC",
       "lat": 33.3633,
-      "lon": -84.5663
+      "lon": -84.5663,
+      "name": "Atlanta"
     },
     {
       "id": "KFSD",
       "lat": 43.5883,
-      "lon": -96.7293
+      "lon": -96.7293,
+      "name": "Sioux Falls"
     },
     {
       "id": "KFSX",
       "lat": 34.5743,
-      "lon": -111.1983
+      "lon": -111.1983,
+      "name": "Flagstaff"
     },
     {
       "id": "KFTG",
       "lat": 39.7873,
-      "lon": -104.5463
+      "lon": -104.5463,
+      "name": "Denver"
     },
     {
       "id": "KFWS",
       "lat": 32.5733,
-      "lon": -97.3033
+      "lon": -97.3033,
+      "name": "Dallas/Ft Worth"
     },
     {
       "id": "KGGW",
       "lat": 48.2063,
-      "lon": -106.6253
+      "lon": -106.6253,
+      "name": "Glasgow"
     },
     {
       "id": "KGJX",
       "lat": 39.0623,
-      "lon": -108.2143
+      "lon": -108.2143,
+      "name": "Grand Junction"
     },
     {
       "id": "KGLD",
       "lat": 39.3673,
-      "lon": -101.7003
+      "lon": -101.7003,
+      "name": "Goodland"
     },
     {
       "id": "KGRB",
       "lat": 44.4993,
-      "lon": -88.1113
+      "lon": -88.1113,
+      "name": "Green Bay"
     },
     {
       "id": "KGRK",
       "lat": 30.7223,
-      "lon": -97.3833
+      "lon": -97.3833,
+      "name": "Ft Hood"
     },
     {
       "id": "KGRR",
       "lat": 42.8943,
-      "lon": -85.5453
+      "lon": -85.5453,
+      "name": "Grand Rapids"
     },
     {
       "id": "KGSP",
       "lat": 34.8833,
-      "lon": -82.2203
+      "lon": -82.2203,
+      "name": "Greer"
     },
     {
       "id": "KGWX",
       "lat": 33.8973,
-      "lon": -88.3293
+      "lon": -88.3293,
+      "name": "Columbus AFB"
     },
     {
       "id": "KGYX",
       "lat": 43.8913,
-      "lon": -70.2563
+      "lon": -70.2563,
+      "name": "Portland, ME"
     },
     {
       "id": "KHDX",
       "lat": 33.0773,
-      "lon": -106.1203
+      "lon": -106.1203,
+      "name": "Holloman AFB"
     },
     {
       "id": "KHGX",
       "lat": 29.4723,
-      "lon": -95.0793
+      "lon": -95.0793,
+      "name": "Houston"
     },
     {
       "id": "KHNX",
       "lat": 36.3143,
-      "lon": -119.6323
+      "lon": -119.6323,
+      "name": "San Joaquin Valley"
     },
     {
       "id": "KHPX",
       "lat": 36.7373,
-      "lon": -87.2853
+      "lon": -87.2853,
+      "name": "Ft Campbell"
     },
     {
       "id": "KHTX",
       "lat": 34.9313,
-      "lon": -86.0843
+      "lon": -86.0843,
+      "name": "Northeast Alabama"
     },
     {
       "id": "KICT",
       "lat": 37.6543,
-      "lon": -97.4433
+      "lon": -97.4433,
+      "name": "Wichita"
     },
     {
       "id": "KICX",
       "lat": 37.5913,
-      "lon": -112.8623
+      "lon": -112.8623,
+      "name": "Cedar City"
     },
     {
       "id": "KILN",
       "lat": 39.4203,
-      "lon": -83.8223
+      "lon": -83.8223,
+      "name": "Cincinnati"
     },
     {
       "id": "KILX",
       "lat": 40.1513,
-      "lon": -89.3373
+      "lon": -89.3373,
+      "name": "Lincoln"
     },
     {
       "id": "KIND",
       "lat": 39.7083,
-      "lon": -86.2803
+      "lon": -86.2803,
+      "name": "Indianapolis"
     },
     {
       "id": "KINX",
       "lat": 36.1753,
-      "lon": -95.5643
+      "lon": -95.5643,
+      "name": "Tulsa"
     },
     {
       "id": "KIWA",
       "lat": 33.2893,
-      "lon": -111.6703
+      "lon": -111.6703,
+      "name": "Phoenix"
     },
     {
       "id": "KIWX",
       "lat": 41.3593,
-      "lon": -85.7003
+      "lon": -85.7003,
+      "name": "Northern Indiana"
     },
     {
       "id": "KJAX",
       "lat": 30.4853,
-      "lon": -81.7023
+      "lon": -81.7023,
+      "name": "Jacksonville"
     },
     {
       "id": "KJGX",
       "lat": 32.6753,
-      "lon": -83.3513
+      "lon": -83.3513,
+      "name": "Robins AFB"
     },
     {
       "id": "KJKL",
       "lat": 37.5913,
-      "lon": -83.3133
+      "lon": -83.3133,
+      "name": "Jackson, KY"
     },
     {
       "id": "KLBB",
       "lat": 33.6543,
-      "lon": -101.8143
+      "lon": -101.8143,
+      "name": "Lubbock"
     },
     {
       "id": "KLCH",
       "lat": 30.1253,
-      "lon": -93.2163
+      "lon": -93.2163,
+      "name": "Lake Charles"
     },
     {
       "id": "KLGX",
       "lat": 47.1173,
-      "lon": -124.1073
+      "lon": -124.1073,
+      "name": "Langley Hill"
     },
     {
       "id": "KLNX",
       "lat": 41.9583,
-      "lon": -100.5763
+      "lon": -100.5763,
+      "name": "North Platte"
     },
     {
       "id": "KLOT",
       "lat": 41.6043,
-      "lon": -88.0843
+      "lon": -88.0843,
+      "name": "Chicago"
     },
     {
       "id": "KLRX",
       "lat": 40.7403,
-      "lon": -116.8033
+      "lon": -116.8033,
+      "name": "Elko"
     },
     {
       "id": "KLSX",
       "lat": 38.6993,
-      "lon": -90.6833
+      "lon": -90.6833,
+      "name": "St Louis"
     },
     {
       "id": "KLTX",
       "lat": 33.9893,
-      "lon": -78.4293
+      "lon": -78.4293,
+      "name": "Wilmington"
     },
     {
       "id": "KLVX",
       "lat": 37.9753,
-      "lon": -85.9443
+      "lon": -85.9443,
+      "name": "Louisville"
     },
     {
       "id": "KLWX",
       "lat": 38.9763,
-      "lon": -77.4873
+      "lon": -77.4873,
+      "name": "Sterling"
     },
     {
       "id": "KLZK",
       "lat": 34.8363,
-      "lon": -92.2623
+      "lon": -92.2623,
+      "name": "Little Rock"
     },
     {
       "id": "KMAF",
       "lat": 31.9443,
-      "lon": -102.1893
+      "lon": -102.1893,
+      "name": "Midland/Odessa"
     },
     {
       "id": "KMAX",
       "lat": 42.0813,
-      "lon": -122.7173
+      "lon": -122.7173,
+      "name": "Medford"
     },
     {
       "id": "KMBX",
       "lat": 48.3923,
-      "lon": -100.8643
+      "lon": -100.8643,
+      "name": "Minot AFB"
     },
     {
       "id": "KMHX",
       "lat": 34.7763,
-      "lon": -76.8763
+      "lon": -76.8763,
+      "name": "Morehead City"
     },
     {
       "id": "KMKX",
       "lat": 42.9683,
-      "lon": -88.5513
+      "lon": -88.5513,
+      "name": "Milwaukee"
     },
     {
       "id": "KMLB",
       "lat": 28.1133,
-      "lon": -80.6543
+      "lon": -80.6543,
+      "name": "Melbourne"
     },
     {
       "id": "KMOB",
       "lat": 30.6793,
-      "lon": -88.2403
+      "lon": -88.2403,
+      "name": "Mobile"
     },
     {
       "id": "KMPX",
       "lat": 44.8493,
-      "lon": -93.5663
+      "lon": -93.5663,
+      "name": "Minneapolis"
     },
     {
       "id": "KMQT",
       "lat": 46.5313,
-      "lon": -87.5483
+      "lon": -87.5483,
+      "name": "Marquette"
     },
     {
       "id": "KMRX",
       "lat": 36.1683,
-      "lon": -83.4023
+      "lon": -83.4023,
+      "name": "Knoxville"
     },
     {
       "id": "KMSX",
       "lat": 47.0413,
-      "lon": -113.9863
+      "lon": -113.9863,
+      "name": "Missoula"
     },
     {
       "id": "KMTX",
       "lat": 41.2633,
-      "lon": -112.4483
+      "lon": -112.4483,
+      "name": "Salt Lake City"
     },
     {
       "id": "KMUX",
       "lat": 37.1553,
-      "lon": -121.8983
+      "lon": -121.8983,
+      "name": "San Francisco"
     },
     {
       "id": "KMVX",
       "lat": 47.5283,
-      "lon": -97.3253
+      "lon": -97.3253,
+      "name": "Fargo/Grand Forks"
     },
     {
       "id": "KMXX",
       "lat": 32.5373,
-      "lon": -85.7903
+      "lon": -85.7903,
+      "name": "Maxwell AFB"
     },
     {
       "id": "KNKX",
       "lat": 32.9193,
-      "lon": -117.0423
+      "lon": -117.0423,
+      "name": "San Diego"
     },
     {
       "id": "KNQA",
       "lat": 35.3453,
-      "lon": -89.8733
+      "lon": -89.8733,
+      "name": "Memphis"
     },
     {
       "id": "KOAX",
       "lat": 41.3203,
-      "lon": -96.3673
+      "lon": -96.3673,
+      "name": "Omaha"
     },
     {
       "id": "KOHX",
       "lat": 36.2473,
-      "lon": -86.5623
+      "lon": -86.5623,
+      "name": "Nashville"
     },
     {
       "id": "KOKX",
       "lat": 40.8653,
-      "lon": -72.8643
+      "lon": -72.8643,
+      "name": "Brookhaven"
     },
     {
       "id": "KOTX",
       "lat": 47.6813,
-      "lon": -117.6263
+      "lon": -117.6263,
+      "name": "Spokane"
     },
     {
       "id": "KPAH",
       "lat": 37.0683,
-      "lon": -88.7723
+      "lon": -88.7723,
+      "name": "Paducah"
     },
     {
       "id": "KPBZ",
       "lat": 40.5323,
-      "lon": -80.2183
+      "lon": -80.2183,
+      "name": "Pittsburgh"
     },
     {
       "id": "KPDT",
       "lat": 45.6913,
-      "lon": -118.8533
+      "lon": -118.8533,
+      "name": "Pendleton"
     },
     {
       "id": "KPOE",
       "lat": 31.1553,
-      "lon": -92.9763
+      "lon": -92.9763,
+      "name": "Ft Polk"
     },
     {
       "id": "KPUX",
       "lat": 38.4593,
-      "lon": -104.1813
+      "lon": -104.1813,
+      "name": "Pueblo"
     },
     {
       "id": "KRAX",
       "lat": 35.6653,
-      "lon": -78.4903
+      "lon": -78.4903,
+      "name": "Raleigh/Durham"
     },
     {
       "id": "KRGX",
       "lat": 39.7543,
-      "lon": -119.4623
+      "lon": -119.4623,
+      "name": "Reno"
     },
     {
       "id": "KRIW",
       "lat": 43.0663,
-      "lon": -108.4773
+      "lon": -108.4773,
+      "name": "Riverton/Lander"
     },
     {
       "id": "KRLX",
       "lat": 38.3113,
-      "lon": -81.7233
+      "lon": -81.7233,
+      "name": "Charleston, WV"
     },
     {
       "id": "KRTX",
       "lat": 45.7153,
-      "lon": -122.9653
+      "lon": -122.9653,
+      "name": "Portland, OR"
     },
     {
       "id": "KSFX",
       "lat": 43.1063,
-      "lon": -112.6863
+      "lon": -112.6863,
+      "name": "Pocatello"
     },
     {
       "id": "KSGF",
       "lat": 37.2353,
-      "lon": -93.4003
+      "lon": -93.4003,
+      "name": "Springfield"
     },
     {
       "id": "KSHV",
       "lat": 32.4513,
-      "lon": -93.8413
+      "lon": -93.8413,
+      "name": "Shreveport"
     },
     {
       "id": "KSJT",
       "lat": 31.3713,
-      "lon": -100.4923
+      "lon": -100.4923,
+      "name": "San Angelo"
     },
     {
       "id": "KSOX",
       "lat": 33.8183,
-      "lon": -117.6363
+      "lon": -117.6363,
+      "name": "Santa Ana Mts"
     },
     {
       "id": "KSRX",
       "lat": 35.2903,
-      "lon": -94.3623
+      "lon": -94.3623,
+      "name": "Western Arkansas"
     },
     {
       "id": "KTBW",
       "lat": 27.7053,
-      "lon": -82.4023
+      "lon": -82.4023,
+      "name": "Tampa"
     },
     {
       "id": "KTFX",
       "lat": 47.4603,
-      "lon": -111.3853
+      "lon": -111.3853,
+      "name": "Great Falls"
     },
     {
       "id": "KTLH",
       "lat": 30.3983,
-      "lon": -84.3293
+      "lon": -84.3293,
+      "name": "Tallahassee"
     },
     {
       "id": "KTLX",
       "lat": 35.3333,
-      "lon": -97.2783
+      "lon": -97.2783,
+      "name": "Oklahoma City"
     },
     {
       "id": "KTWX",
       "lat": 38.9973,
-      "lon": -96.2333
+      "lon": -96.2333,
+      "name": "Topeka"
     },
     {
       "id": "KTYX",
       "lat": 43.7563,
-      "lon": -75.6803
+      "lon": -75.6803,
+      "name": "Ft Drum"
     },
     {
       "id": "KUDX",
       "lat": 44.1253,
-      "lon": -102.8303
+      "lon": -102.8303,
+      "name": "Rapid City"
     },
     {
       "id": "KUEX",
       "lat": 40.3213,
-      "lon": -98.4423
+      "lon": -98.4423,
+      "name": "Grand Island"
     },
     {
       "id": "KVAX",
       "lat": 30.8903,
-      "lon": -83.0023
+      "lon": -83.0023,
+      "name": "Moody AFB"
     },
     {
       "id": "KVBX",
       "lat": 34.8393,
-      "lon": -120.3983
+      "lon": -120.3983,
+      "name": "Vandenberg AFB"
     },
     {
       "id": "KVNX",
       "lat": 36.7413,
-      "lon": -98.1273
+      "lon": -98.1273,
+      "name": "Vance AFB"
     },
     {
       "id": "KVTX",
       "lat": 34.4123,
-      "lon": -119.1793
+      "lon": -119.1793,
+      "name": "Los Angeles"
     },
     {
       "id": "KVWX",
       "lat": 38.2603,
-      "lon": -87.7253
+      "lon": -87.7253,
+      "name": "Evansville, IN"
     },
     {
       "id": "KYUX",
       "lat": 32.4953,
-      "lon": -114.6573
+      "lon": -114.6573,
+      "name": "Yuma"
     },
     {
       "id": "PABC",
       "lat": 60.792,
-      "lon": -161.876
+      "lon": -161.876,
+      "name": "Bethel"
     },
     {
       "id": "PACG",
       "lat": 56.853,
-      "lon": -135.529
+      "lon": -135.529,
+      "name": "Sitka"
     },
     {
       "id": "PAEC",
       "lat": 64.511,
-      "lon": -165.295
+      "lon": -165.295,
+      "name": "Nome"
     },
     {
       "id": "PAHG",
       "lat": 60.726,
-      "lon": -151.351
+      "lon": -151.351,
+      "name": "Kenai"
     },
     {
       "id": "PAIH",
       "lat": 59.461,
-      "lon": -146.303
+      "lon": -146.303,
+      "name": "Middleton Island"
     },
     {
       "id": "PAKC",
       "lat": 58.679,
-      "lon": -156.629
+      "lon": -156.629,
+      "name": "King Salmon"
     },
     {
       "id": "PAPD",
       "lat": 65.035,
-      "lon": -147.502
+      "lon": -147.502,
+      "name": "Fairbanks FAA"
     },
     {
       "id": "PGUA",
       "lat": 13.4563,
-      "lon": 144.8107
+      "lon": 144.8107,
+      "name": "Andersen AFB"
     },
     {
       "id": "PHKI",
       "lat": 21.8943,
-      "lon": -159.5523
+      "lon": -159.5523,
+      "name": "South Kauai"
     },
     {
       "id": "PHKM",
       "lat": 20.1263,
-      "lon": -155.7783
+      "lon": -155.7783,
+      "name": "Kamuela/Kohala Apt"
     },
     {
       "id": "PHMO",
       "lat": 21.1333,
-      "lon": -157.1803
+      "lon": -157.1803,
+      "name": "Molokai"
     },
     {
       "id": "PHWA",
       "lat": 19.0953,
-      "lon": -155.5693
+      "lon": -155.5693,
+      "name": "South Shore"
     },
     {
       "id": "TJUA",
       "lat": 18.1163,
-      "lon": -66.0783
+      "lon": -66.0783,
+      "name": "San Juan"
     },
     {
       "country": "AU",
@@ -1511,6 +1666,297 @@
         "reflectivity",
         "velocity"
       ]
+    },
+    {
+      "country": "DE",
+      "id": "DASB",
+      "lat": 53.564129,
+      "lon": 6.748317,
+      "name": "Borkum",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DBOO",
+      "lat": 54.004381,
+      "lon": 10.046899,
+      "name": "Boostedt",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DDRS",
+      "lat": 51.124639,
+      "lon": 13.768639,
+      "name": "Dresden",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DEIS",
+      "lat": 49.540667,
+      "lon": 12.402788,
+      "name": "Eisberg",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DESS",
+      "lat": 51.405649,
+      "lon": 6.967111,
+      "name": "Essen",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DFBG",
+      "lat": 47.873611,
+      "lon": 8.003611,
+      "name": "Feldberg",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DFLD",
+      "lat": 51.311197,
+      "lon": 8.801998,
+      "name": "Flechtdorf",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DHNR",
+      "lat": 52.460083,
+      "lon": 9.694533,
+      "name": "Hannover",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DISN",
+      "lat": 48.174705,
+      "lon": 12.101779,
+      "name": "Isen",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DMEM",
+      "lat": 48.042145,
+      "lon": 10.219222,
+      "name": "Memmingen",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DNEU",
+      "lat": 50.500114,
+      "lon": 11.135034,
+      "name": "Neuhaus",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DNHB",
+      "lat": 50.109656,
+      "lon": 6.548328,
+      "name": "Neuheilenbach",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DOFT",
+      "lat": 49.984745,
+      "lon": 8.712933,
+      "name": "Offenthal",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DPRO",
+      "lat": 52.648667,
+      "lon": 13.858212,
+      "name": "Pr\u00f6tzel",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DROS",
+      "lat": 54.17566,
+      "lon": 12.058076,
+      "name": "Rostock",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DTUR",
+      "lat": 48.585379,
+      "lon": 9.782675,
+      "name": "T\u00fcrkheim",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "DE",
+      "id": "DUMD",
+      "lat": 52.160096,
+      "lon": 11.176091,
+      "name": "Ummendorf",
+      "products": [
+        "reflectivity"
+      ]
+    },
+    {
+      "country": "FR",
+      "id": "MF36",
+      "lat": 48.04694,
+      "lon": -2.89417,
+      "name": "Noyal",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
+    },
+    {
+      "country": "FR",
+      "id": "MF38",
+      "lat": 46.06639,
+      "lon": 2.96056,
+      "name": "Saint-R\u00e9my",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
+    },
+    {
+      "country": "FR",
+      "id": "MF43",
+      "lat": 45.14778,
+      "lon": 5.63944,
+      "name": "Moucherotte",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
+    },
+    {
+      "country": "FR",
+      "id": "MF68",
+      "lat": 44.01278,
+      "lon": 6.52917,
+      "name": "Maurel",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
+    },
+    {
+      "country": "FR",
+      "id": "MF69",
+      "lat": 44.49611,
+      "lon": 6.22056,
+      "name": "Colombis",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
+    },
+    {
+      "country": "GP",
+      "id": "MF90",
+      "lat": 16.31444,
+      "lon": -61.34889,
+      "name": "Le Moule",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
+    },
+    {
+      "country": "MQ",
+      "id": "MF91",
+      "lat": 14.50139,
+      "lon": -61.0175,
+      "name": "Martinique",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
+    },
+    {
+      "country": "RE",
+      "id": "MF92",
+      "lat": -20.91167,
+      "lon": 55.42194,
+      "name": "Colorado",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
+    },
+    {
+      "country": "RE",
+      "id": "MF93",
+      "lat": -21.19056,
+      "lon": 55.57361,
+      "name": "Piton Villers",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
+    },
+    {
+      "country": "NC",
+      "id": "MF94",
+      "lat": -22.27611,
+      "lon": 166.45278,
+      "name": "Noum\u00e9a",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
+    },
+    {
+      "country": "NC",
+      "id": "MF96",
+      "lat": -20.93889,
+      "lon": 167.21806,
+      "name": "Lifou",
+      "products": [
+        "reflectivity"
+      ],
+      "provider": "MRRL"
     }
   ]
 }

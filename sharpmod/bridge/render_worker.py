@@ -85,7 +85,7 @@ def main() -> int:
             view_result: dict[str, Any] = {}
             cli.render(infile, outfile, parcel=parcel, image_mode=mode,
                        view=request.get("view"), view_result=view_result,
-                       show_locator=False, _prepared=prepared)
+                       show_locator=False, color_style=request.get("color_style", "standard"), _prepared=prepared)
             reply: dict[str, Any] = {"id": request_id, "ok": True, "view": view_result}
         except Exception as exc:  # noqa: BLE001 - every failure is reported
             log.exception("render of %s failed", infile)

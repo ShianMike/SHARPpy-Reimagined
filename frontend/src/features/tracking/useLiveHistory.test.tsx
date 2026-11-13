@@ -1,92 +1,48 @@
 // @vitest-environment jsdom
 import radar from "@contracts/public/map/radar.shrf?url&inline";
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { useState } from "react";
 import { createTransport } from "../../lib/backend/fixtureTransport";
-import { mapKeys } from "../../lib/backend/queryOptions";
 import { encodeShrf, parseShrf } from "../../lib/contracts/frames";
-import type { Transport } from "../../lib/backend/transport";
 import { useAppStore } from "../../stores/appStore";
 import { useForecastStore } from "../../stores/forecastStore";
-import { LIVE_MINUTE, liveHistoryTimes, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
+import { LIVE_MINUTE, liveTimestamp, useLiveTrackingStore } from "../../stores/liveTrackingStore";
 import { useMapStore } from "../../stores/mapStore";
 import { useUiStore } from "../../stores/uiStore";
 import { renderWithBackend } from "../../test/backendHarness";
 import { LiveTimeline } from "./LiveTimeline";
-import { isLiveQuery } from "./liveRequests";
 
 const map = useMapStore.getState(), app = useAppStore.getState(), clock = useLiveTrackingStore.getState(), ui = useUiStore.getState();
 const now = Date.parse("2026-10-17T08:00:00Z");
 const forecast = useForecastStore.getState();
 const raster = parseShrf(Uint8Array.from(atob(radar.split(",")[1] ?? ""), (character) => character.charCodeAt(0)).buffer);
-const frame = (time = now) => encodeShrf({ ...raster.header, validTime: liveTimestamp(time) }, raster.body);
-function Playback() {
-  const [target, setTarget] = useState<HTMLDivElement | null>(null);
-  return <><div ref={setTarget} /><LiveTimeline scanTarget={target} /></>;
-}
-function renderTimeline(transport: Transport) {
-  const result = renderWithBackend(<Playback />, transport);
-  fireEvent.click(screen.getByRole("button", { name: "Choose radar scan" }));
-  return result;
-}
+const frame = (time: number) => encodeShrf({ ...raster.header, validTime: liveTimestamp(time) }, raster.body);
+
 beforeEach(() => {
   useMapStore.setState(map, true); useAppStore.setState(app, true); useUiStore.setState({ ...ui, speed: 1, loop: false }, true);
-  useLiveTrackingStore.setState({ ...clock, now, selectedTime: null }, true);
+  useLiveTrackingStore.setState({ ...clock, now, selectedTime: null, playing: false }, true);
   useAppStore.getState().setActiveWorkspace("live");
   vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 2, height: 2 }));
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-it("shares storm-report history across live panels and resets cached status for changed filters or windows", async () => {
+it("does not fetch other radar frames or tilts while live playback is paused", async () => {
   vi.useFakeTimers(); vi.setSystemTime(now);
-  useMapStore.getState().setPanelLayout(4);
-  for (const panel of [0, 1, 2, 3]) {
-    useMapStore.getState().setActivePanel(panel);
-    useMapStore.getState().setLayerVisible("radar", false);
-    useMapStore.getState().setLayerVisible("storm-reports", true);
-  }
-  const transport = createTransport(), fetch = vi.spyOn(transport, "call");
-  const { view, queryClient } = renderTimeline(transport);
-  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
+  useMapStore.getState().setRadarScope("site"); useMapStore.getState().setRadarSite("KTLX");
+  const transport = createTransport(), call = vi.spyOn(transport, "call");
+  const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
   await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-  expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("13 cached");
-  expect(fetch.mock.calls.filter(([command]) => command === "get_storm_reports")).toHaveLength(13);
-  const key = mapKeys.reports(liveTimestamp(now - 30 * LIVE_MINUTE), 21600, "all");
-  expect(queryClient.getQueryState(key)?.status).toBe("success");
-  expect(isLiveQuery(key)).toBe(true);
-  expect(isLiveQuery(mapKeys.reportOptions)).toBe(false);
-  fetch.mockClear();
-  fireEvent.click(screen.getByRole("button", { name: "Play" }));
-  await act(async () => { await vi.advanceTimersByTimeAsync(751); });
-  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 55 * LIVE_MINUTE);
-  expect(fetch.mock.calls.filter(([command]) => command === "get_storm_reports")).toHaveLength(0);
-  act(() => { useLiveTrackingStore.getState().setPlaying(false); useMapStore.getState().setReportFilter("hail"); });
-  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).not.toContain("Ready");
-  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
+  act(() => { useLiveTrackingStore.getState().tick(now + LIVE_MINUTE); });
   await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-  expect(fetch.mock.calls.filter(([command]) => command === "get_storm_reports")).toHaveLength(13);
-  expect(queryClient.getQueryState(mapKeys.reports(liveTimestamp(now), 21600, "hail"))?.status).toBe("success");
-  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).toContain("Ready");
-  act(() => { useMapStore.getState().setReportWindowS(7200); });
-  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).not.toContain("Ready");
+  expect(call.mock.calls.filter(([command]) => command === "get_radar_site_frame" || command === "get_radar_tilts")).toHaveLength(0);
   view.unmount(); queryClient.clear();
 });
 
-it("caches thirteen full-resolution steps, scrubs without changing the forecast, and resumes live", async () => {
+it("scrubs the live clock without changing the forecast and returns to live", () => {
   vi.spyOn(Date, "now").mockReturnValue(now);
-  const transport = createTransport(), original = transport.call.bind(transport);
-  const call = vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame" ? Promise.resolve(frame()) : original(command, args));
-  const { queryClient, view } = renderTimeline(transport);
-  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
-  await waitFor(() => { expect(screen.getByRole("status", { name: "Live data status" }).textContent).toContain("13 cached"); });
-  const radarCalls = call.mock.calls.filter(([command]) => command === "get_radar_frame");
-  expect(radarCalls).toHaveLength(13);
-  const times = radarCalls.map(([, args]) => Date.parse(String(args?.validTime)));
-  expect(Math.max(...times) - Math.min(...times)).toBe(60 * LIVE_MINUTE);
-  expect(queryClient.getQueryCache().findAll({ predicate: (query) => isLiveQuery(query.queryKey) })).toHaveLength(13);
+  const { view, queryClient } = renderWithBackend(<LiveTimeline />, createTransport());
   fireEvent.change(screen.getByRole("slider", { name: "Live history" }), { target: { value: "-30" } });
-  expect(useLiveTrackingStore.getState().selectedTime).toBe(useLiveTrackingStore.getState().now - 30 * LIVE_MINUTE);
+  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 30 * LIVE_MINUTE);
   expect(screen.getByLabelText("Live viewing time").textContent).toContain(":30Z");
   expect(useForecastStore.getState()).toEqual(forecast);
   fireEvent.click(screen.getByRole("button", { name: "Live" }));
@@ -94,112 +50,30 @@ it("caches thirteen full-resolution steps, scrubs without changing the forecast,
   view.unmount(); queryClient.clear();
 });
 
-it("retains the whole compressed hour across four matching panels and plays it without another download", async () => {
-  vi.useFakeTimers(); vi.setSystemTime(now);
-  useMapStore.getState().setPanelLayout(4);
-  const transport = createTransport(), call = transport.call.bind(transport);
-  const fetch = vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame" ? Promise.resolve(frame(Date.parse(String(args?.validTime)))) : call(command, args));
-  const { view, queryClient } = renderTimeline(transport);
-  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
-  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-  expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("13 cached");
-  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).toContain("Ready");
-  const product = useMapStore.getState().radarProduct;
-  act(() => { useMapStore.getState().setLayerOpacity("radar", 0.4); });
-  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).toContain("Ready");
-  act(() => { useMapStore.getState().setRadarProduct("echo-tops"); });
-  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).not.toContain("Ready");
-  act(() => { useMapStore.getState().setRadarProduct(product); });
-  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).toContain("Ready");
-  expect(queryClient.getQueryCache().findAll({ predicate: (query) => isLiveQuery(query.queryKey) })).toHaveLength(13);
-  expect(fetch.mock.calls.filter(([command]) => command === "get_radar_frame")).toHaveLength(13);
-  fetch.mockClear();
-  fireEvent.click(screen.getByRole("button", { name: "Play" }));
-  await act(async () => { await vi.advanceTimersByTimeAsync(751); });
-  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 55 * LIVE_MINUTE);
-  expect(fetch.mock.calls.filter(([command]) => command === "get_radar_frame")).toHaveLength(0);
-  expect(createImageBitmap).toHaveBeenCalled();
+it("updates the live clock at the UTC minute boundary", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(now + 59_000);
+  const { view, queryClient } = renderWithBackend(<LiveTimeline />, createTransport());
+  expect(useLiveTrackingStore.getState().now).toBe(now);
+  await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+  expect(useLiveTrackingStore.getState().now).toBe(now + LIVE_MINUTE);
   view.unmount(); queryClient.clear();
 });
 
-it("reuses downloaded five-minute steps after the minute clock advances", async () => {
-  vi.useFakeTimers(); vi.setSystemTime(now + LIVE_MINUTE);
-  const transport = createTransport(), call = transport.call.bind(transport);
-  const fetch = vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame" ? Promise.resolve(frame()) : call(command, args));
-  const { view, queryClient } = renderTimeline(transport);
-  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
-  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-  expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("13 cached");
-  fetch.mockClear();
-  act(() => { useLiveTrackingStore.getState().tick(now + 2 * LIVE_MINUTE); });
-  fireEvent.click(screen.getByRole("button", { name: "Play" }));
-  await act(async () => { await vi.advanceTimersByTimeAsync(751); });
-  expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 50 * LIVE_MINUTE);
-  expect(fetch.mock.calls.filter(([command]) => command === "get_radar_frame")).toHaveLength(0);
-  expect(liveHistoryTimes(now + 2 * LIVE_MINUTE)).toEqual([...liveHistoryTimes(now + LIVE_MINUTE).slice(0, -1), now + 2 * LIVE_MINUTE]);
-  view.unmount(); queryClient.clear();
-});
-
-it("continues downloading behind a slow frame, reports each completion, and retries only a failed frame", async () => {
-  let release: (data: ArrayBuffer) => void = () => undefined;
-  const slow = new Promise<ArrayBuffer>((resolve) => { release = resolve; });
-  const transport = createTransport(), call = transport.call.bind(transport);
-  let count = 0, pending = 0, peak = 0;
-  vi.spyOn(transport, "call").mockImplementation((command, args) => {
-    if (command !== "get_radar_frame") return call(command, args);
-    const index = count++;
-    peak = Math.max(peak, ++pending);
-    return (index === 0 ? slow : index === 5 ? Promise.reject(new Error("Provider timeout")) : Promise.resolve(frame())).finally(() => { pending--; });
-  });
-  const { view, queryClient } = renderTimeline(transport);
-  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
-  await waitFor(() => { expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("Caching 12 / 13"); });
-  expect(screen.getByRole("button", { name: "Stop caching" }).textContent).toContain("Loading");
-  expect(count).toBe(13); expect(peak).toBe(2);
-  await act(async () => { release(frame()); await slow; });
-  await waitFor(() => { expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("12 cached · 1 unavailable"); });
-  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).toContain("Retry");
-  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
-  await waitFor(() => { expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("13 cached"); });
-  expect(count).toBe(14);
-  view.unmount(); queryClient.clear();
-});
-
-it("waits for PNG decoding before advancing the playback time", async () => {
+it("loads only the next playback time and waits for its image before advancing", async () => {
   vi.useFakeTimers(); vi.setSystemTime(now);
   let ready: (image: { width: number; height: number }) => void = () => undefined;
   vi.stubGlobal("createImageBitmap", vi.fn().mockImplementation(() => new Promise((resolve) => { ready = resolve; })));
-  const transport = createTransport(), call = transport.call.bind(transport);
-  vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame" ? Promise.resolve(frame()) : call(command, args));
-  const { view, queryClient } = renderTimeline(transport);
+  const transport = createTransport(), original = transport.call.bind(transport);
+  const call = vi.spyOn(transport, "call").mockImplementation((command, args) => command === "get_radar_frame"
+    ? Promise.resolve(frame(Date.parse(String(args?.validTime)))) : original(command, args));
+  const { view, queryClient } = renderWithBackend(<LiveTimeline />, transport);
   fireEvent.click(screen.getByRole("button", { name: "Play" }));
   await act(async () => { await vi.advanceTimersByTimeAsync(751); });
   expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 60 * LIVE_MINUTE);
+  const radarCalls = call.mock.calls.filter(([command]) => command === "get_radar_frame");
+  expect(radarCalls).toHaveLength(1);
+  expect(radarCalls[0]?.[1]?.validTime).toBe(liveTimestamp(now - 55 * LIVE_MINUTE));
   await act(async () => { ready({ width: 2, height: 2 }); await Promise.resolve(); });
   expect(useLiveTrackingStore.getState().selectedTime).toBe(now - 55 * LIVE_MINUTE);
-  view.unmount(); queryClient.clear();
-});
-
-it.each([false, true])("stops queuing downloads while allowing in-flight frames to finish (source change: %s)", async (changeSources) => {
-  const releases: ((data: ArrayBuffer) => void)[] = [];
-  const transport = createTransport(), call = transport.call.bind(transport);
-  let count = 0;
-  vi.spyOn(transport, "call").mockImplementation((command, args) => {
-    if (command !== "get_radar_frame") return call(command, args);
-    count++;
-    return new Promise<ArrayBuffer>((resolve) => { releases.push(resolve); });
-  });
-  const { view, queryClient } = renderTimeline(transport);
-  fireEvent.click(screen.getByRole("button", { name: "Cache past hour" }));
-  await waitFor(() => { expect(count).toBe(2); });
-  if (changeSources) {
-    const product = useMapStore.getState().radarProduct;
-    act(() => { useMapStore.getState().setRadarProduct("echo-tops"); });
-    act(() => { useMapStore.getState().setRadarProduct(product); });
-  } else fireEvent.click(screen.getByRole("button", { name: "Stop caching" }));
-  await act(async () => { for (const release of releases) release(frame()); await Promise.resolve(); });
-  expect(count).toBe(2);
-  expect(screen.getByRole("status", { name: "Live data status" }).textContent).toBe("Caching stopped");
-  expect(screen.getByRole("button", { name: "Cache past hour" }).textContent).toContain("Resume");
   view.unmount(); queryClient.clear();
 });

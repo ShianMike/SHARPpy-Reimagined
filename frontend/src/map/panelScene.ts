@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useForecastContext } from "../features/forecast/useForecast";
 import { useWeatherTime } from "../features/tracking/useWeatherTime";
+import { liveTimestamp, useLiveTrackingStore } from "../stores/liveTrackingStore";
 import { useStationCatalog } from "../stations/stationQueries";
 import { panelLayers, panelWeather, useMapStore } from "../stores/mapStore";
 import type { Station } from "../types/contracts";
@@ -22,6 +23,8 @@ import type { MapRuntime } from "./runtime/MapRuntime";
 import { useFieldTransition } from "./useFieldTransition";
 import { useWeatherAlerts } from "./weatherAlertsQuery";
 import { cachedPng, decodePng } from "./pngImages";
+import { useActiveRadarFailure, useUnavailableRadarSites } from "./radarSiteAvailability";
+import { mapKeys } from "../lib/backend/queryOptions";
 
 const NO_STATIONS: readonly Station[] = [];
 const NO_PLACES: readonly Place[] = [];
@@ -58,7 +61,7 @@ export function useFieldImage(frame: FieldFrame | undefined, palette: Palette | 
 type PngFrame = Pick<RadarFrame, "png" | "bounds" | "validTime">;
 
 /** Decode once across panels; keep this query's last good image during refresh errors. */
-export function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data" | "isError" | "refetch">, enabled: boolean, source: string) {
+export function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data" | "isError" | "refetch">, enabled: boolean, source: string, retainEarlier = true) {
   const frame = enabled ? query.data : undefined;
   const [decoded, setDecoded] = useState<{ frame: PngFrame; source: string; image: RasterImage } | null>(null);
   const [failure, setFailure] = useState<PngFrame | null>(null);
@@ -91,11 +94,12 @@ export function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data" | "isEr
     if (frame === undefined) return null;
     if (ready !== undefined) return { image: ready, bounds: frame.bounds };
     const age = Date.parse(frame.validTime ?? "") - Date.parse(decoded?.frame.validTime ?? "");
-    return decoded?.source === source && (decoded.frame === frame || age >= 0 && age <= 10 * 60_000) ? decoded.image : null;
-  }, [frame, ready, decoded, source]);
+    return decoded?.source === source && (decoded.frame === frame || retainEarlier && age >= 0 && age <= 10 * 60_000) ? decoded.image : null;
+  }, [frame, ready, decoded, source, retainEarlier]);
   const failed = enabled && (query.isError || frame !== undefined && failure === frame);
   const issue = failed ? `${query.isError ? "Imagery could not be loaded" : "Imagery could not be decoded"}.${image !== null && decoded !== null ? ` Showing the earlier image from ${decoded.frame.validTime ?? "an unknown time"}.` : " No image is shown."}` : null;
-  return { image, issue, retry: () => { if (enabled) { setAttempt((value) => value + 1); void query.refetch(); } } };
+  const decodedCurrent = frame !== undefined && (ready !== undefined || decoded?.frame === frame && failure !== frame);
+  return { image, issue, decodedCurrent, retry: () => { if (enabled) { setAttempt((value) => value + 1); void query.refetch(); } } };
 }
 
 /** The outlooks this panel has loaded, keyed by product; a stable object while they do not change. */
@@ -133,12 +137,18 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const reportsVisible = layers["storm-reports"].visible;
   const surfaceVisible = layers["surface-plots"].visible;
   const placesVisible = layers["place-labels"].visible;
-  const { radarScope: scope, satelliteChannel: channel } = useMapStore((state) => panelWeather(state, panel));
+  const { radarScope: scope, radarProduct: requestedRadarProduct, satelliteChannel: channel } = useMapStore((state) => panelWeather(state, panel));
   const reportWindowS = useMapStore((state) => state.reportWindowS);
   const reportFilter = useMapStore((state) => state.reportFilter);
   const { site, product: radarProduct, tilt } = usePanelRadar(panel);
-  const mosaic = usePngImage(useRadarFrame(radarProduct, live && radarVisible && scope === "mosaic", live ? validTime : null), live && radarVisible && scope === "mosaic", radarProduct ?? "default");
-  const siteFrame = usePngImage(useRadarSiteFrame(radarProduct, site, live && radarVisible && scope === "site", live ? validTime : null, tilt), live && radarVisible && scope === "site", `${site ?? ""}/${radarProduct ?? "reflectivity"}/${tilt}`);
+  const historyTime = useLiveTrackingStore((state) => state.selectedTime === null ? null : liveTimestamp(state.selectedTime));
+  const mosaic = usePngImage(useRadarFrame(radarProduct, live && radarVisible && scope === "mosaic", live ? validTime : null), live && radarVisible && scope === "mosaic", radarProduct ?? "default", false);
+  const siteFrameQuery = useRadarSiteFrame(radarProduct, site, live && radarVisible && scope === "site", live ? validTime : null, tilt);
+  const siteFrame = usePngImage(siteFrameQuery, live && radarVisible && scope === "site", `${site ?? ""}/${radarProduct ?? "reflectivity"}/${tilt}`, false);
+  const selectedRadarSite = scope === "site" ? site : null;
+  const activeSite = live && radarVisible && scope === "site" ? site : null;
+  const activeFailure = useActiveRadarFailure(activeSite, mapKeys.radarSite(radarProduct, site ?? "", live ? validTime : null, tilt), siteFrameQuery, siteFrame);
+  const unavailableRadarSites = useUnavailableRadarSites(radarSites, requestedRadarProduct, historyTime, activeFailure, activeSite);
   const radarImage = scope === "site" ? siteFrame : mosaic;
   const radar = radarImage.image;
   const satellite = usePngImage(useSatelliteFrame(channel, validTime, live && layers.satellite.visible), live && layers.satellite.visible, channel);
@@ -181,8 +191,8 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   }, [runtime, stations]);
   useFieldTransition(runtime, image, model?.key);
   useEffect(() => {
-    runtime?.setScene({ radar, satellite: satellite.image, reports, alerts, surfacePlots, contourSpec, contours: contourLines, isobars, outlooks, domain, radarSites });
-  }, [runtime, radar, satellite.image, reports, alerts, surfacePlots, contourSpec, contourLines, isobars, outlooks, domain, radarSites]);
+    runtime?.setScene({ radar, satellite: satellite.image, reports, alerts, surfacePlots, contourSpec, contours: contourLines, isobars, outlooks, domain, radarSites, selectedRadarSite, unavailableRadarSites });
+  }, [runtime, radar, satellite.image, reports, alerts, surfacePlots, contourSpec, contourLines, isobars, outlooks, domain, radarSites, selectedRadarSite, unavailableRadarSites]);
   useEffect(() => {
     runtime?.setScene({ places });
   }, [runtime, places]);

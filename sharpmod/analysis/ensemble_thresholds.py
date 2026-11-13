@@ -8,7 +8,6 @@ coverage remains relative to the originally requested ensemble.
 
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
 from datetime import datetime
 import json
@@ -107,15 +106,14 @@ def fraction_text(numerator, denominator, *, decimals: int = 0) -> str:
     those carry very different weight. Every ratio this module reports therefore
     shows the counts that produced it.
     """
+    import sharpmod_rs
+
     try:
         below = int(denominator)
         above = int(numerator)
     except (TypeError, ValueError):
         return "\u2014"
-    if below <= 0:
-        return "\u2014"
-    share = above / below
-    return f"{above}/{below} ({share * 100:.{max(0, int(decimals))}f}%)"
+    return sharpmod_rs.threshold_fraction_text(above, below, max(0, int(decimals)))
 
 
 class ThresholdError(ValueError):
@@ -176,50 +174,23 @@ class ThresholdCondition:
         object.__setattr__(self, "units", str(self.units or ""))
 
     def evaluate(self, candidate) -> bool | None:
+        import sharpmod_rs
+
         number = _finite(candidate)
         if number is None:
             return None
-        if self.operator == ">":
-            return number > self.value
-        if self.operator == ">=":
-            return number >= self.value
-        if self.operator == "<":
-            return number < self.value
-        if self.operator == "<=":
-            return number <= self.value
-        if self.operator == "==":
-            return math.isclose(number, self.value, rel_tol=1e-9, abs_tol=1e-9)
-        return self.value <= number <= self.upper
+        return sharpmod_rs.threshold_evaluate_condition(
+            self.operator, self.value, self.upper, number
+        )
 
     @property
     def summary(self) -> str:
-        """Render the rule the way a reader states it, e.g. ``MLCAPE >= 1000 J/kg``.
+        """Render the rule the way a reader states it, e.g. ``MLCAPE >= 1000 J/kg``."""
+        import sharpmod_rs
 
-        The definition was only ever shown as a name the reader typed, so a saved
-        or restored definition called "Ingredient agreement" said nothing about
-        what it actually tested. Units come from the registry's display form, so
-        the sentence matches every other number on screen.
-        """
-        from sharpmod.analysis.box_analysis import parameter as _parameter
-
-        try:
-            item = _parameter(self.metric)
-            label = item.label
-            units = item.display_units
-            decimals = item.decimals
-        except Exception:  # noqa: BLE001 - an unknown key still names itself
-            label = self.metric.replace("_", " ").upper()
-            units = self.units
-            decimals = 1
-        suffix = f" {units}" if units else ""
-        low = f"{self.value:.{max(0, int(decimals))}f}"
-        if self.operator == "between":
-            high = f"{self.upper:.{max(0, int(decimals))}f}"
-            return f"{label} between {low} and {high}{suffix}"
-        symbol = {">=": "\u2265", "<=": "\u2264", "==": "="}.get(
-            self.operator, self.operator
+        return sharpmod_rs.threshold_condition_summary(
+            self.metric, self.operator, self.value, self.upper, self.units
         )
-        return f"{label} {symbol} {low}{suffix}"
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -845,6 +816,51 @@ def read_threshold_definition(path) -> ThresholdDefinition:
     return ThresholdDefinition.from_dict(payload.get("definition", {}))
 
 
+def format_threshold_csv(results: Iterable[ThresholdResult]) -> str:
+    """Format threshold results as CSV text via Rust."""
+    import sharpmod_rs
+
+    payload = [
+        {
+            "definition_name": result.definition.name,
+            "definition_summary": result.definition.summary,
+            "valid_time": _iso(result.valid_time),
+            "qualifying_count": result.qualifying_member_count,
+            "nonqualifying_count": result.nonqualifying_member_count,
+            "loaded_unusable_count": result.loaded_unusable_member_count,
+            "not_loaded_count": result.not_loaded_member_count,
+            "usable_count": result.usable_member_count,
+            "loaded_count": result.loaded_member_count,
+            "requested_count": result.requested_member_count,
+            "resolved_count": result.resolved_member_count,
+            "not_evaluated_count": result.not_evaluated_member_count,
+            "agreement_fraction": result.agreement_fraction,
+            "agreement": result.agreement_text,
+            "requested_coverage": result.requested_coverage,
+            "coverage": result.coverage_text,
+            "counts_reconcile": result.reconciles,
+            "cancelled": result.cancelled,
+            "members": [
+                {
+                    "member": member.member,
+                    "loaded": member.loaded,
+                    "usable": member.usable,
+                    "satisfied": member.satisfied,
+                    "reason": member.reason,
+                    "state": member.state,
+                    "state_label": member.state_label,
+                    "values": {
+                        str(k): _finite(v) for k, v in member.values.items()
+                    },
+                }
+                for member in result.members
+            ],
+        }
+        for result in results
+    ]
+    return sharpmod_rs.threshold_export_csv(json.dumps(payload, allow_nan=False))
+
+
 def export_threshold_csv(path, results: Iterable[ThresholdResult]) -> Path:
     """Export summary plus member classifications with explicit denominators."""
     destination = Path(path)
@@ -853,83 +869,10 @@ def export_threshold_csv(path, results: Iterable[ThresholdResult]) -> Path:
         prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
     )
     temporary = Path(name)
-    fields = (
-        "definition",
-        # What the definition actually tested, so an exported file is readable
-        # without the application that produced it.
-        "definition_summary",
-        "valid_time",
-        "member",
-        "loaded",
-        "usable",
-        "satisfied",
-        "reason",
-        # Which of the seven member states this row is in, and the same phrase the
-        # application shows for it.
-        "state",
-        "state_label",
-        "qualifying_count",
-        # The counts that were previously only derivable by subtraction.
-        "nonqualifying_count",
-        "loaded_unusable_count",
-        "not_loaded_count",
-        "usable_count",
-        "loaded_count",
-        "requested_count",
-        "resolved_count",
-        "not_evaluated_count",
-        "agreement_fraction",
-        "agreement",
-        "requested_coverage",
-        "coverage",
-        "counts_reconcile",
-        "cancelled",
-        "diagnostic_values",
-        "interpretation",
-    )
+    csv_text = format_threshold_csv(results)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=fields)
-            writer.writeheader()
-            for result in results:
-                for member in result.members:
-                    writer.writerow(
-                        {
-                            "definition": result.definition.name,
-                            "definition_summary": result.definition.summary,
-                            "valid_time": _iso(result.valid_time),
-                            "member": member.member,
-                            "loaded": member.loaded,
-                            "usable": member.usable,
-                            "satisfied": (
-                                "" if member.satisfied is None else member.satisfied
-                            ),
-                            "reason": member.reason or "",
-                            "state": member.state,
-                            "state_label": member.state_label,
-                            "qualifying_count": result.qualifying_member_count,
-                            "nonqualifying_count": result.nonqualifying_member_count,
-                            "loaded_unusable_count": (
-                                result.loaded_unusable_member_count
-                            ),
-                            "not_loaded_count": result.not_loaded_member_count,
-                            "usable_count": result.usable_member_count,
-                            "loaded_count": result.loaded_member_count,
-                            "requested_count": result.requested_member_count,
-                            "resolved_count": result.resolved_member_count,
-                            "not_evaluated_count": result.not_evaluated_member_count,
-                            "agreement_fraction": result.agreement_fraction,
-                            "agreement": result.agreement_text,
-                            "requested_coverage": result.requested_coverage,
-                            "coverage": result.coverage_text,
-                            "counts_reconcile": result.reconciles,
-                            "cancelled": result.cancelled,
-                            "diagnostic_values": json.dumps(
-                                dict(member.values), sort_keys=True
-                            ),
-                            "interpretation": DISCLAIMER,
-                        }
-                    )
+            stream.write(csv_text)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, destination)
@@ -966,6 +909,7 @@ __all__ = [
     "evaluate_threshold",
     "evaluate_threshold_timeline",
     "export_threshold_csv",
+    "format_threshold_csv",
     "fraction_text",
     "read_threshold_definition",
     "write_threshold_results",

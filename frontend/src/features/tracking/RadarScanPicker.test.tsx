@@ -25,6 +25,18 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
+it("returns to live when another radar is chosen in the site picker", async () => {
+  const { view, queryClient } = renderWithBackend(<LiveRadarControls />, createTransport());
+  fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
+  fireEvent.click(await screen.findByRole("option", { name: "KTLX" }));
+  useLiveTrackingStore.setState({ selectedTime: now - 5 * LIVE_MINUTE, playing: true });
+  fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
+  fireEvent.click(await screen.findByRole("option", { name: "KABR" }));
+  expect(useMapStore.getState().livePanels[0]?.radarSite).toBe("KABR");
+  expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: null, playing: false });
+  view.unmount(); queryClient.clear();
+});
+
 it("shows the actual latest scan automatically, including its age and delay", async () => {
   const transport = createTransport();
   const call = vi.spyOn(transport, "call");

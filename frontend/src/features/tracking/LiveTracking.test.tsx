@@ -110,19 +110,6 @@ it("keeps radar toolbar choices in the active live panel and reports the source'
   view.unmount(); queryClient.clear();
 });
 
-it("returns to live when another radar is chosen in the site picker", async () => {
-  useAppStore.getState().setActiveWorkspace("live");
-  const { view, queryClient } = renderWithBackend(<LiveRadarControls />, createTransport());
-  fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
-  fireEvent.click(await screen.findByRole("option", { name: "KTLX" }));
-  useLiveTrackingStore.setState({ selectedTime: now - 5 * LIVE_MINUTE, playing: true });
-  fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
-  fireEvent.click(await screen.findByRole("option", { name: "KABR" }));
-  expect(useMapStore.getState().livePanels[0]?.radarSite).toBe("KABR");
-  expect(useLiveTrackingStore.getState()).toMatchObject({ selectedTime: null, playing: false });
-  view.unmount(); queryClient.clear();
-});
-
 it("toggles and restores radar site labels independently for each live panel", () => {
   useAppStore.getState().setActiveWorkspace("live");
   useMapStore.getState().setPanelLayout(2);

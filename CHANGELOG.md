@@ -57,6 +57,11 @@ RAP/RDPS fields below are included.
   Keep RDPS's generic CAPE and hourly winter precipitation accumulations
   labeled separately from HRRR parcel diagnostics and instantaneous rates.
 
+### Fixed
+
+- Keep backend status and startup diagnostics available when the native
+  calculation engine is missing, without importing the wind decoder eagerly.
+
 ## [v3.7.1] - 2026-11-13
 
 ### Fixed

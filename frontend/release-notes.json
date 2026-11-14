@@ -20,7 +20,7 @@
       },
       {
         "title": "Simpler status and map recovery",
-        "description": "The backend status popup shows service details directly. If the map cannot start, its message, retry button and station list are centered in the available map area, with room for point details when open."
+        "description": "The backend status popup shows service details directly and can report an unavailable calculation engine. If the map cannot start, its message, retry button and station list are centered in the available map area, with room for point details when open."
       }
     ]
   },

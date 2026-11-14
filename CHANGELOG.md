@@ -61,7 +61,8 @@ RAP/RDPS fields below are included.
 
 - Keep backend status, startup diagnostics and storage usage available when the
   native calculation engine is missing. Resolve existing cache paths without
-  loading the model calculations, and avoid importing the wind decoder eagerly.
+  loading the model calculations, and load the native wind and metric adapters
+  only when their calculations are requested.
 
 ## [v3.7.1] - 2026-11-13
 

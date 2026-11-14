@@ -33,7 +33,6 @@ from types import MappingProxyType
 from typing import Callable, Literal
 
 import numpy as np
-import sharpmod_rs
 
 #: The two HRRR CONUS output files a product can draw records from. ``sfc`` is
 #: the 2-D/derived-parameter file; ``prs`` carries the pressure-level grids.
@@ -817,6 +816,8 @@ PALETTE_THETAE = Palette(
 
 def _thetae_2m(fields: dict[str, np.ndarray]) -> np.ndarray:
     """Bolton equivalent potential temperature using 2 m T/Td and surface pressure."""
+    import sharpmod_rs
+
     return sharpmod_rs.derive_map_diagnostic(
         "thetae", [fields["pres"], fields["tmp2m"], fields["dpt2m"]])
 
@@ -835,6 +836,8 @@ def _precipitation_type_rate(name: str):
     """Total liquid-equivalent rate in cells with the published type flag."""
 
     def derive(fields: dict[str, np.ndarray]) -> np.ndarray:
+        import sharpmod_rs
+
         return sharpmod_rs.derive_map_diagnostic(
             "precipitation-type", [fields["prate"], fields[name]])
 
@@ -856,6 +859,8 @@ def _ehi(srh_name: str):
     """Energy-Helicity Index: ``CAPE * SRH / 160000`` (Hart and Korotky 1991)."""
 
     def derive(fields: dict[str, np.ndarray]) -> np.ndarray:
+        import sharpmod_rs
+
         return sharpmod_rs.derive_map_diagnostic(
             "ehi", [fields["mlcape"], fields[srh_name]])
 
@@ -869,6 +874,8 @@ def _lapse_700_500(fields: dict[str, np.ndarray]) -> np.ndarray:
     them rather than a standard-atmosphere depth, so it stays correct where the
     layer is unusually thick or thin.
     """
+    import sharpmod_rs
+
     return sharpmod_rs.derive_map_diagnostic(
         "lapse-700-500", [fields[key] for key in ("tmp700", "tmp500", "hgt700", "hgt500")])
 
@@ -932,6 +939,8 @@ def _supercell_composite(fields: dict[str, np.ndarray]) -> np.ndarray:
     this uses the 0-3 km SRH and 0-6 km shear that HRRR publishes directly. The
     shear term follows SPC in saturating at 20 m/s and vanishing below 10.
     """
+    import sharpmod_rs
+
     return sharpmod_rs.derive_map_diagnostic(
         "scp", [fields[key] for key in ("mucape", "srh03", "ushr06", "vshr06")])
 
@@ -948,6 +957,8 @@ def _significant_tornado(fields: dict[str, np.ndarray]) -> np.ndarray:
     shear saturates at 30 m/s and vanishes below 12.5, and CIN saturates above
     -50 J/kg and vanishes below -200.
     """
+    import sharpmod_rs
+
     return sharpmod_rs.derive_map_diagnostic(
         "stp", [fields[key] for key in ("sbcape", "lcl", "srh01", "ushr06", "vshr06", "sbcin")])
 

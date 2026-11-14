@@ -32,7 +32,6 @@ from typing import Callable, Iterable, Mapping, Sequence
 import weakref
 
 import numpy as np
-import sharpmod_rs
 
 from sharpmod.analysis import box_analysis
 from sharpmod.analysis.comparison import (
@@ -427,10 +426,14 @@ def _collection_label(collection, index: int) -> str:
 
 
 def _distribution(values: Iterable[object]) -> MetricDistribution:
+    import sharpmod_rs
+
     return MetricDistribution(*sharpmod_rs.profile_metric_distribution(values))
 
 
 def _interpolate_column(profile, field: str, pressure_levels) -> tuple:
+    import sharpmod_rs
+
     return tuple(sharpmod_rs.profile_metric_column(profile, field, pressure_levels))
 
 

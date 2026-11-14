@@ -34,9 +34,6 @@ from dataclasses import dataclass
 import math
 from typing import Sequence
 
-from sharpmod.tools import model_extract
-
-
 #: Hard ceiling on nodes in one box, whatever the caller asks for. Each node is
 #: a complete sounding analysis, so this bounds CPU and memory, not transfer.
 MAX_BOX_POINTS = 256
@@ -358,6 +355,8 @@ def plan_box_samples(
     snapped up to a multiple of the model's grid spacing, and both are coarsened
     further if the result would exceed the node budget.
     """
+    from sharpmod.tools import model_extract
+
     config = (
         model
         if isinstance(model, model_extract.ModelConfig)

@@ -42,7 +42,7 @@ pub(super) fn dewpoint_from_humidity(p: f64, q: f64) -> f64 {
     273.15 + 243.5 * log / (17.67 - log)
 }
 
-pub(super) fn theta_e(p: f64, t: f64, td: f64) -> f64 {
+pub(crate) fn theta_e(p: f64, t: f64, td: f64) -> f64 {
     let r = mixing_ratio(p, td);
     let tl = 56. + 1. / (1. / (td - 56.) + (t / td).ln() / 800.);
     let theta_l = t * (1000. / (p - vapor_pressure(td))).powf(KAPPA) * (t / tl).powf(0.28 * r);

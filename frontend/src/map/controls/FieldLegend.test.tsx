@@ -82,7 +82,7 @@ it.each([
 it("explores occurrence masks as present or absent without inventing fractional categories", () => {
   render(<FieldLegend palette={{ display: "auto", stops: [[0, "#38bdf8"], [1, "#38bdf8"]], units: "flag", stepped: true, floor: 0.5, ceiling: null, ticks: [0, 1] }} vertical />);
   const slider = screen.getByRole("slider");
-  expect(slider.getAttribute("aria-valuenow")).toBe("1");
+  expect(screen.getAllByRole("listitem").map((tick) => tick.textContent)).toEqual(["Present", "Absent"]);
   expect(slider.getAttribute("aria-valuetext")).toBe("Present (1)");
   fireEvent.keyDown(slider, { key: "ArrowDown" });
   expect(slider.getAttribute("aria-valuenow")).toBe("0");
@@ -106,7 +106,7 @@ it("updates the scale, cursor and point values together while preserving the map
   expect(readout.textContent).toContain(expected);
   expect(screen.getByTestId("point-value-1").textContent).toContain(expected);
   expect(scale.getAttribute("aria-description")).toContain("°C");
-  expect(Number(within(scale).getByRole("slider").getAttribute("aria-valuemin"))).toBeCloseTo(-51.6666667);
+  expect(within(scale).getAllByRole("listitem").map((tick) => tick.textContent)).toEqual(["49", "24", "-1", "-26", "-52"]);
   const slider = within(scale).getByRole("slider");
   fireEvent.keyDown(slider, { key: "Home" });
   expect(slider.getAttribute("aria-valuenow")).toBe(slider.getAttribute("aria-valuemin"));
@@ -144,7 +144,6 @@ it("draws the highest colour at the top and lowest at the bottom, including nega
   expect(vertical?.height).toBe(LUT_SIZE);
   expect(Array.from(vertical?.data.slice(0, 4) ?? [])).toEqual([171, 205, 239, 255]);
   expect(Array.from(vertical?.data.slice(-4) ?? [])).toEqual([17, 51, 85, 255]);
-  expect(screen.queryByRole("list")).toBeNull();
   expect(screen.getByRole("slider").getAttribute("aria-valuemin")).toBe("-800");
   expect(screen.getByRole("slider").getAttribute("aria-valuemax")).toBe("-25");
   view.rerender(<FieldLegend palette={palette} />);
@@ -209,7 +208,8 @@ it.each([2, 4] as const)("gives all %i panels independent scales, compact titles
   act(() => { useMapStore.getState().setActivePanel(0); });
   const firstLayers = panelLayers(useMapStore.getState(), 0);
   const secondLayers = panelLayers(useMapStore.getState(), 1);
-  const toggle = within(second).getByRole("button", { name: "Model layer" });
+  expect(within(second).queryByRole("button", { name: "Model layer" })).toBeNull();
+  const toggle = within(screen.getByRole("group", { name: "Panel 2 controls" })).getByRole("button", { name: "Model layer" });
   expect(toggle.getAttribute("aria-pressed")).toBe("true");
   expect(toggle.getAttribute("title")).toBeNull();
   await userEvent.click(toggle);
@@ -223,7 +223,7 @@ it.each([2, 4] as const)("gives all %i panels independent scales, compact titles
   expect(toggle.getAttribute("aria-pressed")).toBe("true");
   expect(panelLayers(useMapStore.getState(), 1)).toEqual(secondLayers);
   expect(useMapStore.getState().panels[0]?.productKey).toBe("mlcin");
-  await userEvent.click(within(scale).getByRole("button", { name: "Model layer" }));
+  await userEvent.click(within(screen.getByRole("group", { name: "Panel 1 controls" })).getByRole("button", { name: "Model layer" }));
   expect(useMapStore.getState().activePanel).toBe(0);
   expect(panelLayers(useMapStore.getState(), 0)["model-field"].visible).toBe(false);
   expect(panelLayers(useMapStore.getState(), 1)).toEqual(secondLayers);
@@ -265,11 +265,11 @@ it("keeps product categories in the custom menu and changes only the active pane
   expect(document.activeElement).toBe(select);
 });
 
-it("reveals correctly oriented hover values and keyboard endpoints, without persistent tick labels", async () => {
+it("shows five whole-number labels and keeps precise hover and keyboard readings", async () => {
   render(<FieldLegend palette={palette} vertical />);
   const scale = screen.getByRole("slider", { name: "Explore parameter scale" });
   vi.spyOn(scale, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 100, 40, 300));
-  expect(screen.queryByRole("tooltip")).toBeNull();
+  expect(screen.getAllByRole("listitem").map((tick) => tick.textContent)).toEqual(["-25", "-219", "-413", "-606", "-800"]);
   const user = userEvent.setup();
   await user.pointer({ target: scale, coords: { clientY: 100 } });
   expect(screen.getByRole("tooltip").textContent).toBe("-25 J/kg");

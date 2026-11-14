@@ -18,7 +18,7 @@ import { useForecastContext } from "../../features/forecast/useForecast";
 import { ParameterPicker } from "../../features/toolbar/ParameterPicker";
 import { Popover } from "../../components/Popover";
 import pickerStyles from "../../features/toolbar/ForecastControls.module.css";
-import { ParameterScale } from "../controls/ParameterScale";
+import { ModelLayerButton, ParameterScale } from "../controls/ParameterScale";
 import { FieldTooltip } from "../hover/FieldTooltip";
 import { RadarTooltip } from "../hover/RadarTooltip";
 import type { PanelField } from "../panelField";
@@ -69,23 +69,28 @@ function PanelChip({ panel, layout, field }: { panel: number; layout: PanelLayou
     </>
   );
   return (
-    <><button
-      type="button"
-      className={styles.chip}
-      data-motion="fade"
-      aria-pressed={active}
-      aria-label={`Panel ${String(panel + 1)}: ${name}. Choose parameter.`}
-      aria-haspopup="dialog"
-      aria-expanded={anchor !== null}
-      disabled={field.catalog.data === undefined || context?.fieldsAvailable !== true}
-      data-testid={`panel-chip-${String(panel + 1)}`}
-      onClick={(event) => {
-        useMapStore.getState().setActivePanel(panel);
-        setAnchor(anchor === null ? event.currentTarget : null);
-      }}
-    >
-      {body}
-    </button>
+    <>
+      <div className={styles.heading} data-motion="fade" role="group" aria-label={`Panel ${String(panel + 1)} controls`}>
+        <button
+          type="button"
+          className={styles.chip}
+          aria-pressed={active}
+          aria-label={`Panel ${String(panel + 1)}: ${name}. Choose parameter.`}
+          aria-haspopup="dialog"
+          aria-expanded={anchor !== null}
+          disabled={field.catalog.data === undefined || context?.fieldsAvailable !== true}
+          data-testid={`panel-chip-${String(panel + 1)}`}
+          onClick={(event) => {
+            useMapStore.getState().setActivePanel(panel);
+            setAnchor(anchor === null ? event.currentTarget : null);
+          }}
+        >
+          {body}
+        </button>
+        {field.product !== null && context?.fieldsAvailable === true
+          ? <ModelLayerButton panel={panel} field={field} className={styles.layerToggle} hintSide="right" />
+          : null}
+      </div>
       <Popover id={`panel-${String(panel)}-parameters`} open={anchor !== null} movable unframed anchor={anchor} onClose={() => { setAnchor(null); }} role="dialog" label="Parameters" initialFocus="first" align="start" width="content" className={pickerStyles.parameterPicker}>
         {field.catalog.data === undefined ? null : <ParameterPicker products={field.catalog.data.products} selected={field.product?.key ?? null} anchor={anchor} onClose={() => { setAnchor(null); }} />}
       </Popover>
@@ -110,9 +115,9 @@ function LivePanelChip({ panel, layout }: { panel: number; layout: PanelLayout }
   const product = products?.find((item) => item.key === radar.product) ?? products?.[0];
   const title = layers.radar.visible ? product?.label ?? "Radar" : layers.satellite.visible ? `GOES ${options.satelliteChannel}` : "Live layers";
   if (layout === 1) return null;
-  return <button type="button" className={styles.chip} aria-pressed={active} aria-label={`Panel ${String(panel + 1)}: ${title}. Select panel.`} data-testid={`panel-chip-${String(panel + 1)}`} onClick={() => {
+  return <div className={styles.heading}><button type="button" className={styles.chip} aria-pressed={active} aria-label={`Panel ${String(panel + 1)}: ${title}. Select panel.`} data-testid={`panel-chip-${String(panel + 1)}`} onClick={() => {
     useMapStore.getState().setActivePanel(panel);
-  }}><span className={styles.product}>{String(panel + 1)} • {title}</span></button>;
+  }}><span className={styles.product}>{String(panel + 1)} • {title}</span></button></div>;
 }
 
 export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode {
@@ -168,7 +173,7 @@ export function MapPanel({ panel, layout, onRuntime }: MapPanelProps): ReactNode
           useMapStore.getState().setActivePanel(panel);
         }}
       />
-      {live ? <RadarScale panel={panel} /> : <ParameterScale panel={panel} field={field} />}
+      {live ? <RadarScale panel={panel} /> : <ParameterScale panel={panel} layout={layout} field={field} />}
       {live && isLive ? <LivePanelChip panel={panel} layout={layout} /> : null}
       {isMap ? <PanelChip panel={panel} layout={layout} field={field} /> : null}
       {live ? isLive ? <RadarTooltip panel={panel} /> : null : <FieldTooltip panel={panel} field={field} />}

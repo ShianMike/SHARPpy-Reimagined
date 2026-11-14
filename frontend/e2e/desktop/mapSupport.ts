@@ -153,7 +153,8 @@ export async function loadedPanels() {
     await expect(chip).toHaveAccessibleName(`Panel ${String(panel)}: ${product.label}. Choose parameter.`);
     const scale = page.getByTestId(`map-panel-${String(panel)}`).getByRole("complementary", { name: "Parameter scale" });
     await expect(scale).toHaveAccessibleDescription(`${product.label} · ${product.unit} · Panel ${String(panel)}`);
-    await expect(scale.getByRole("button", { name: "Model layer", exact: true })).toHaveAttribute("aria-pressed", "true");
+    const controls = page.getByRole("group", { name: `Panel ${String(panel)} controls` });
+    await expect(controls.getByRole("button", { name: "Model layer", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(scale.getByRole("img")).toHaveCount(0);
     const scaleValue = await scale.getByRole("slider", { name: "Explore parameter scale" }).getAttribute("aria-valuetext");
     expect(scaleValue).toMatch(/^-?\d+(?:\.\d+)? /u);

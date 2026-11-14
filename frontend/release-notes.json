@@ -1,4 +1,29 @@
 {
+  "3.7.2": {
+    "summary": "Explore RAP and RDPS maps with clearer color scales and matching radar pickers.",
+    "highlights": [
+      {
+        "title": "RAP and Canadian RDPS maps",
+        "description": "Choose implemented RAP and RDPS map parameters with the same color tables and controls as HRRR. Choices follow the selected run’s published fields. RAP’s coverage outline follows its curved grid. RDPS keeps its native CAPE and hourly winter precipitation labels."
+      },
+      {
+        "title": "Clearer map color scales",
+        "description": "Read five whole numbers beside outlined color scales near each map’s right edge. In two- and four-panel Model Viewer layouts, each panel’s eye button sits beside its title at the same height."
+      },
+      {
+        "title": "Wind, shear, and EHI color tables",
+        "description": "Read 850 mb wind on a 20–80 kt scale and 0–6 km bulk shear on a 20–140 kt scale. Both Energy Helicity Index maps use the supplied color bands, with the final shade starting at 16."
+      },
+      {
+        "title": "Matching radar pickers",
+        "description": "Choose radar networks, sites, products and tilts in movable popups that match the forecast and radar-time pickers. Search sites by code or place name and see the current selection."
+      },
+      {
+        "title": "Simpler status and map recovery",
+        "description": "The backend status popup shows service details directly. Status and storage usage remain available if the calculation engine is missing. If the map cannot start, its message, retry button and station list are centered in the available map area, with room for point details when open."
+      }
+    ]
+  },
   "3.7.1": {
     "summary": "Live radar automatically follows the latest available scan.",
     "highlights": [

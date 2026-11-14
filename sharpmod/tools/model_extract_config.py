@@ -257,6 +257,9 @@ def forecast_hours(model, cycle_hour=None):
     """
     cfg = _api._coerce_config(model)
     values = cfg.fxx_values or (cfg.default_fxx,)
+    if cfg.key == "rap" and cycle_hour is not None:
+        import sharpmod_rs
+        return tuple(sharpmod_rs.rap_forecast_hours(int(cycle_hour)))
     if cfg.key in _api.OPENMETEO_POINT_KEYS:
         # The provider adapter owns its own cadence and cut-off rules, so ask it
         # rather than restating them here.

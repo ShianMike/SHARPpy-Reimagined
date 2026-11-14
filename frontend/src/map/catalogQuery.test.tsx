@@ -28,7 +28,7 @@ afterEach(() => {
   vi.useRealTimers(); vi.restoreAllMocks();
 });
 
-it.each(["hrrr", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5", "gfs", "aigfs", "openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km"])("checks %s product availability for the selected run and hour", async (modelKey) => {
+it.each(["hrrr", "rap", "rdps", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5", "gfs", "aigfs", "openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km"])("checks %s product availability for the selected run and hour", async (modelKey) => {
   const model = models.models.find((entry) => entry.key === modelKey);
   if (model === undefined) throw new Error("Model fixture missing");
   const raw = parseMapCatalog(modelKey === "hrrr" ? mapCatalog : (modelMapCatalogs as Readonly<Record<string, unknown>>)[modelKey]);

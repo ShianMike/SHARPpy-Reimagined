@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from sharpmod.providers.hrrr_products import Palette
 from sharpmod.maps.map_overlays import MAX_RASTER_BYTES
-import io
 import numpy as np
+import sharpmod_rs
 from sharpmod.providers import hrrr_field as _api
 
 
@@ -51,9 +51,13 @@ def index_map(size: tuple[int, int],
             col = np.floor(np.round((lon_grid.ravel() + 180) / grid.spacing + 0.5, 8)).astype(np.int32) % grid.shape[1]
             row = np.floor(np.round((90 - lat_grid.ravel()) / grid.spacing + 0.5, 8)).astype(np.int32)
         else:
+            if model in {"rap", "rdps"}:
+                projection = sharpmod_rs.regional_map_projection(model)
+            else:
+                projection = _api.NAM_PROJ4 if model == "nam" or model in _api.HRW_MODELS else _api.HRRR_PROJ4
             transformer = Transformer.from_crs(
                 CRS.from_epsg(4326),
-                CRS.from_proj4(_api.NAM_PROJ4 if model == "nam" or model in _api.HRW_MODELS else _api.HRRR_PROJ4),
+                CRS.from_proj4(projection),
                 always_xy=True)
             xs, ys = transformer.transform(lon_grid.ravel(), lat_grid.ravel())
             col = np.rint((np.asarray(xs) - grid.x0) / grid.spacing).astype(np.int32)
@@ -77,26 +81,7 @@ def build_lut(palette: Palette) -> tuple[np.ndarray, float, float]:
     the same discrete classes the scale is defined in. A continuous one
     interpolates in RGB between stops.
     """
-    low = float(palette.minimum)
-    high = float(palette.maximum)
-    axis = np.linspace(low, high, _api._LUT_SIZE)
-    lut = np.zeros((_api._LUT_SIZE, 4), dtype=np.uint8)
-    positions = np.array([value for value, _colour in palette.stops],
-                         dtype=np.float64)
-    colours = np.array([_api._hex_to_rgb(colour) for _value, colour in palette.stops],
-                       dtype=np.float64)
-
-    if palette.stepped:
-        # Each sample takes the colour of the highest stop at or below it.
-        slot = np.searchsorted(positions, axis, side="right") - 1
-        slot = np.clip(slot, 0, len(positions) - 1)
-        lut[:, :3] = colours[slot].astype(np.uint8)
-    else:
-        for channel in range(3):
-            lut[:, channel] = np.interp(
-                axis, positions, colours[:, channel]).clip(0, 255).astype(np.uint8)
-    lut[:, 3] = 255
-    return lut, low, high
+    return sharpmod_rs.build_map_lut(palette, _api._LUT_SIZE)
 
 
 def colourize(field: np.ndarray, palette: Palette) -> np.ndarray:
@@ -109,32 +94,7 @@ def colourize(field: np.ndarray, palette: Palette) -> np.ndarray:
     like convective inhibition needs -- its uninteresting values are the ones
     near zero, at the top of its scale.
     """
-    low = float(palette.minimum)
-    if palette.stepped:
-        # A uniform LUT can skip narrow classes and shift their boundaries.
-        edges = np.asarray([value for value, _ in palette.stops])
-        colours = np.asarray(
-            [(*_api._hex_to_rgb(colour), 255) for _, colour in palette.stops],
-            dtype=np.uint8,
-        )
-        slot = np.clip(np.searchsorted(edges, field, side="right") - 1, 0, len(edges) - 1)
-        rgba = colours[slot]
-    else:
-        lut, low, high = _api.build_lut(palette)
-        span = high - low if high > low else 1.0
-        normalized = (field - low) / span
-        slot = np.clip(normalized, 0.0, 1.0) * (_api._LUT_SIZE - 1)
-        slot = np.nan_to_num(slot, nan=0.0, posinf=_api._LUT_SIZE - 1, neginf=0.0)
-        rgba = lut[slot.astype(np.uint16)]
-
-    hidden = ~np.isfinite(field)
-    hidden = hidden | (field < (low if palette.floor is None
-                                else palette.floor))
-    if palette.ceiling is not None:
-        hidden = hidden | (field > palette.ceiling)
-    rgba = rgba.copy()
-    rgba[..., 3] = np.where(hidden, 0, 255)
-    return rgba
+    return sharpmod_rs.colorize_map_field(field, palette, _api._LUT_SIZE)
 
 
 def draw_contours(rgba: np.ndarray, field: np.ndarray, interval: float,
@@ -147,71 +107,15 @@ def draw_contours(rgba: np.ndarray, field: np.ndarray, interval: float,
     neighbour. That yields closed, connected lines one to two pixels wide with
     two array comparisons and no polygon assembly.
     """
-    if not np.isfinite(interval) or interval <= 0:
-        return
-    with np.errstate(invalid="ignore"):
-        level = np.floor(field / float(interval))
-    valid = np.isfinite(field)
-    edge = np.zeros(field.shape, dtype=bool)
-    # A crossing needs a real value on *both* sides. Testing only the near cell
-    # would draw the domain outline as a contour: beyond the model edge the field
-    # is NaN, every comparison against it is unequal, and the last valid column
-    # would light up all the way round the border.
-    horizontal = (level[:, :-1] != level[:, 1:]) & valid[:, :-1] & valid[:, 1:]
-    vertical = (level[:-1, :] != level[1:, :]) & valid[:-1, :] & valid[1:, :]
-    edge[:, :-1] |= horizontal
-    edge[:-1, :] |= vertical
-    if width >= 2.0:
-        thick = edge.copy()
-        thick[1:, :] |= edge[:-1, :]
-        thick[:, 1:] |= edge[:, :-1]
-        edge = thick
-    red, green, blue = _api._hex_to_rgb(colour)
-    rgba[edge, 0] = red
-    rgba[edge, 1] = green
-    rgba[edge, 2] = blue
-    rgba[edge, 3] = 255
+    sharpmod_rs.draw_map_contours(rgba, field, interval, colour, width)
 
 
 def encode_png(rgba: np.ndarray) -> bytes:
-    """Encode RGBA to PNG, preferring Pillow and falling back to Qt.
+    """Encode RGBA through the shared native PNG runtime.
 
-    ``compress_level=1`` is deliberate: these frames are transient, and a
-    smaller file is not worth the extra encode time on a worker the user is
-    waiting on. The result is checked against the overlay contract's byte cap
-    here, where the size is still adjustable, rather than at construction.
+    The existing overlay byte cap is enforced before the PNG is returned.
     """
-    payload = None
-    try:
-        from PIL import Image
-        buffer = io.BytesIO()
-        Image.fromarray(rgba, mode="RGBA").save(
-            buffer, format="PNG", optimize=False, compress_level=1)
-        payload = buffer.getvalue()
-    except Exception:  # noqa: BLE001 - Qt can do it too
-        payload = None
-    if payload is None:
-        try:
-            from qtpy.QtCore import QBuffer, QByteArray
-            from qtpy.QtGui import QImage
-            height, width = rgba.shape[:2]
-            contiguous = np.ascontiguousarray(rgba)
-            image = QImage(contiguous.data, width, height, 4 * width,
-                           QImage.Format_RGBA8888).copy()
-            store = QByteArray()
-            buffer = QBuffer(store)
-            buffer.open(QBuffer.WriteOnly)
-            image.save(buffer, "PNG")
-            payload = bytes(store)
-        except Exception as error:  # noqa: BLE001
-            raise _api.HrrrFieldError(f"could not encode the field image: {error}")
-    if not payload:
-        raise _api.HrrrFieldError("field image encoding produced no bytes")
-    if len(payload) > MAX_RASTER_BYTES:
-        raise _api.HrrrFieldError(
-            f"field image is {len(payload)} bytes, over the "
-            f"{MAX_RASTER_BYTES}-byte overlay limit")
-    return payload
+    return sharpmod_rs.encode_map_png(rgba, MAX_RASTER_BYTES)
 
 
 def sample_derived(product_key: str, run, fxx: int, lat: float, lon: float,

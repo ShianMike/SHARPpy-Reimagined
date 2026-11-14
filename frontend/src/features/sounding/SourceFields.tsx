@@ -1,6 +1,7 @@
-import { CalendarDays, ChevronDown, Search, X, type LucideIcon } from "lucide-react";
+import { CalendarDays, Check, ChevronDown, GripHorizontal, Search, X, type LucideIcon } from "lucide-react";
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Popover } from "../../components/Popover";
+import { cx } from "../../lib/cx";
 import { IconAction } from "../../ui/Controls";
 import { RunCalendar } from "../toolbar/RunCalendar";
 import { releaseTime, utcDate } from "./soundingTime";
@@ -18,6 +19,7 @@ export function SourceSelect<T extends string | number>({ label, value, options:
   const [focused, setFocused] = useState(0);
   const [query, setQuery] = useState("");
   const search = useRef({ text: "", time: 0 });
+  const toolbarPicker = ToolbarIcon !== undefined && popup !== undefined;
   const offered = query.trim() === "" ? inputOptions : inputOptions.filter((option) =>
     `${option.label} ${option.detail ?? ""} ${option.group ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()));
   const groups = [...new Set(offered.map((option) => option.group))];
@@ -51,12 +53,13 @@ export function SourceSelect<T extends string | number>({ label, value, options:
       className={ToolbarIcon === undefined ? styles.fieldButton : toolbar.trigger} onClick={() => { if (open) setOpen(false); else show(); }} onKeyDown={(event) => {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); show(); }
       }}>{ToolbarIcon === undefined ? <span>{selectedLabel}</span> : <><ToolbarIcon className="icon-sm" aria-hidden="true" /><span className={toolbar.triggerCopy}><span className={toolbar.name}>{label}</span><strong>{selectedLabel}</strong></span></>}<ChevronDown className="icon-sm" aria-hidden="true" /></button>
-    <Popover open={open} anchor={anchor} onClose={() => { setOpen(false); }} role={popup === undefined ? "listbox" : "dialog"} label={label} id={`${id}-options`} initialFocus="first" width={popup === undefined ? "anchor" : "content"} side={popup === undefined ? "bottom" : "right"} className={popup === undefined ? styles.sourceMenu : styles.sourcePicker}>
-      {popup === undefined ? null : <header className={styles.pickerHeader}>
+    <Popover open={open} anchor={anchor} onClose={() => { setOpen(false); }} role={popup === undefined ? "listbox" : "dialog"} label={label} id={`${id}-options`} initialFocus="first" width={popup === undefined ? "anchor" : "content"} side={popup === undefined || toolbarPicker ? "bottom" : "right"} movable={toolbarPicker} className={popup === undefined ? styles.sourceMenu : toolbarPicker ? cx(toolbar.picker, toolbar.sourcePicker) : styles.sourcePicker}>
+      {popup === undefined ? null : <header className={toolbarPicker ? toolbar.dialogHeader : styles.pickerHeader} data-popover-drag={toolbarPicker ? true : undefined}>
+        {toolbarPicker ? <IconAction icon={GripHorizontal} size="sm" label="Move popup" data-popover-move aria-description="Drag to move. Arrow keys move the popup; Home centers it on the screen." /> : null}
         <h2>{label}</h2>
         <IconAction icon={X} size="sm" label={`Close ${label.toLowerCase()} picker`} onClick={() => { setOpen(false); anchor?.focus(); }} />
       </header>}
-      {searchLabel === undefined ? null : <label className={styles.pickerSearch}>
+      {searchLabel === undefined ? null : <label className={toolbarPicker ? toolbar.search : styles.pickerSearch}>
         <Search className="icon-sm" aria-hidden="true" />
         <input data-autofocus type="search" aria-label={searchLabel} placeholder={searchLabel} value={query} onChange={(event) => { setQuery(event.target.value); setFocused(0); }} onKeyDown={(event) => {
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -65,18 +68,20 @@ export function SourceSelect<T extends string | number>({ label, value, options:
           choices?.[event.key === "ArrowDown" ? 0 : choices.length - 1]?.focus();
         }} />
       </label>}
-      <div ref={list} onKeyDown={onKeyDown} className={popup === undefined ? undefined : styles.pickerBody} role={popup === undefined ? undefined : "listbox"} aria-label={popup === undefined ? undefined : label}>
+      <div ref={list} onKeyDown={onKeyDown} className={popup === undefined ? undefined : toolbarPicker ? toolbar.dialogBody : styles.pickerBody} role={popup === undefined ? undefined : "listbox"} aria-label={popup === undefined ? undefined : label}>
         {groups.map((group) => <div key={group ?? ""} role={group === undefined ? undefined : "group"} aria-label={group} className={group === undefined ? undefined : styles.sourceGroup}>
           {group === undefined ? null : <div className={styles.sourceGroupHeading} aria-hidden="true">{group}</div>}
-          <div className={popup === "grid" ? styles.pickerGrid : undefined}>
+          <div className={popup === "grid" ? styles.pickerGrid : toolbarPicker ? toolbar.modelChoices : undefined}>
             {options.map((option, index) => option.group !== group ? null : <button key={option.value} type="button" value={option.value} disabled={disabled} role="option" aria-label={option.label} aria-description={option.detail} aria-selected={option.value === value} tabIndex={focused === index ? 0 : -1}
-              data-autofocus={searchLabel === undefined && selected === index ? true : undefined} className={styles.sourceOption} onFocus={() => { setFocused(index); }} onClick={() => { choose(option.value); }}>
-              <span>{option.shortLabel ?? option.label}{option.detail === undefined ? null : <small>{option.detail}</small>}</span>
+              data-autofocus={searchLabel === undefined && selected === index ? true : undefined} className={toolbarPicker ? toolbar.modelChoice : styles.sourceOption} onFocus={() => { setFocused(index); }} onClick={() => { choose(option.value); }}>
+              <span className={toolbarPicker ? toolbar.modelIdentity : undefined}>{toolbarPicker ? <strong>{option.shortLabel ?? option.label}</strong> : option.shortLabel ?? option.label}{option.detail === undefined ? null : <small>{option.detail}</small>}</span>
+              {toolbarPicker && option.value === value ? <Check className="icon-sm" aria-hidden="true" /> : null}
             </button>)}
           </div>
         </div>)}
         {options.length === 0 ? <p role="status" className={styles.pickerEmpty}>No matches.</p> : null}
       </div>
+      {toolbarPicker ? <footer className={toolbar.pickerFooter}>Selected <strong>{selectedLabel}</strong></footer> : null}
     </Popover>
   </div>;
 }

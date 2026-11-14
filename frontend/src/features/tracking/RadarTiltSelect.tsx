@@ -34,7 +34,7 @@ export function RadarTiltSelect({ label, site, product, tilt, angle, toolbarIcon
   const empty = fixedScan ? (/^D[A-Z]{3}$/.test(site ?? "") ? "Varies by direction" : "Lowest available") : query.isError ? "Elevations unavailable" : query.data === undefined ? "Checking tilts…"
     : query.data.tilts.some((cut) => cut.status === "unknown") ? "Could not verify tilts" : "No recent scans";
   return <><SourceSelect label={label} value={tilt} options={available.length === 0 ? [{ value: tilt, label: empty }] : available.map((cut) => ({ ...cut, label: cut.value === tilt && angle !== null && angle !== undefined ? `${angle.toFixed(1)}°` : cut.label }))}
-    disabled={available.length === 0} onChange={useMapStore.getState().setRadarTilt} {...(toolbarIcon === undefined ? {} : { toolbarIcon })} />
+    disabled={available.length === 0} onChange={useMapStore.getState().setRadarTilt} {...(toolbarIcon === undefined ? {} : { toolbarIcon, popup: "list" })} />
     {query.isError && toolbarIcon === undefined ? <SoundingErrorNotice error={query.error} operation="get_radar_tilts"
       onRetry={() => { void query.refetch(); }} busy={query.isFetching} testId="radar-tilts-error" /> : null}</>;
 }

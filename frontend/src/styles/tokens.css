@@ -171,6 +171,7 @@
   --parameter-scale-w: 43.2px;
   --parameter-scale-h: 324px;
   --parameter-ramp-w: 10.8px;
+  --scale-label-w: var(--control-h-lg);
   --attribution-size: 18px;
   --track-h: 4.5px;
   --track-fill: rgb(255 255 255 / 0.22);

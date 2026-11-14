@@ -50,7 +50,7 @@ def wind_grid(product, decoded, mapping, *, model="hrrr"):
     )
     if u.shape != grid.shape or v.shape != u.shape:
         raise HrrrFieldError("wind components do not match the model grid")
-    lambert = None if model in GLOBAL_MODELS else (
+    lambert = None if model in GLOBAL_MODELS or model == "rdps" else (
         grid.shape[1], grid.x0, grid.y0, grid.spacing, grid._rho0
     )
     try:

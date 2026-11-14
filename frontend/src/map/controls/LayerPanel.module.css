@@ -105,7 +105,23 @@
 }
 
 .scale[data-orientation="vertical"] { flex: 1; min-height: 0; position: relative; align-items: center; }
-.scale[data-orientation="vertical"] .ramp { width: var(--parameter-ramp-w); height: 100%; min-height: 0; border-radius: var(--radius-pill); }
+.scale[data-orientation="vertical"] .ramp { width: var(--parameter-ramp-w); height: 100%; min-height: 0; border-radius: var(--radius-pill); outline: var(--hairline) solid var(--border-strong); }
+.verticalTicks {
+  position: absolute;
+  inset-block: 0;
+  right: calc(50% + var(--parameter-ramp-w) / 2 + var(--space-2));
+  color: var(--text-primary);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  text-align: right;
+  white-space: nowrap;
+  -webkit-text-stroke: calc(2 * var(--hairline)) var(--surface-0);
+  paint-order: stroke fill;
+  pointer-events: none;
+}
+.verticalTicks li { position: absolute; top: var(--tick-at); right: 0; transform: translateY(-50%); }
 .scaleExplore { position: absolute; inset: 0; cursor: crosshair; border-radius: var(--radius-pill); }
 .scaleExplore:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .scalePointer { position: absolute; top: var(--hint-at); left: var(--space-1); right: var(--space-1); height: var(--space-1); transform: translateY(-50%); background: var(--slider-thumb); border: var(--hairline) solid var(--border-strong); border-radius: var(--radius-pill); pointer-events: none; }
+.scaleExplore > .scaleValue[data-side="left"] { right: calc(100% + var(--space-3) + var(--scale-label-w)); }

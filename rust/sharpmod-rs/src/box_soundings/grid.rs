@@ -22,6 +22,10 @@ pub struct Lambert {
 }
 
 impl Lambert {
+    pub(crate) fn constants(self) -> (f64, f64) {
+        (self.n, self.factor)
+    }
+
     pub fn new(
         central_longitude: f64,
         first_parallel: f64,

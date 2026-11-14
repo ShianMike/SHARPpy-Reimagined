@@ -18,6 +18,7 @@ pub mod radar_site_wms;
 pub mod radar_sites;
 pub mod radar_time;
 pub mod range_http;
+pub mod raster_png;
 pub mod reports;
 pub mod satellite;
 pub mod spc_outlook;

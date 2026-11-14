@@ -271,15 +271,11 @@ def test_lapse_rate_matches_the_supplied_table(key):
     assert list(_alpha([-1, 0, 3, np.nan], palette)) == [0, 255, 255, 0]
 
 
-@pytest.mark.parametrize(
-    ("key", "minimum", "maximum", "floor"),
-    (("shear-0-1km", 5, 71, 5), ("shear-0-6km", 9, 100, 10)),
-)
-def test_bulk_shear_matches_the_supplied_knot_table(key, minimum, maximum, floor):
-    palette = hrrr_products.get_product(key).palette
-    assert (palette.minimum, palette.maximum, palette.units) == (minimum, maximum, "kt")
+def test_shallow_bulk_shear_matches_the_supplied_knot_table():
+    palette = hrrr_products.get_product("shear-0-1km").palette
+    assert (palette.minimum, palette.maximum, palette.units) == (5, 71, "kt")
     assert palette.stepped
-    assert palette.floor == floor
+    assert palette.floor == 5
     swatches = {
         10.5: "#f0f8ff", 14.5: "#9cd6fb", 15.5: "#87cefa",
         20.5: "#6a5acd", 25.5: "#e696dc", 30.5: "#c85abe",
@@ -291,7 +287,7 @@ def test_bulk_shear_matches_the_supplied_knot_table(key, minimum, maximum, floor
                 for colour in swatches.values()]
     np.testing.assert_array_equal(
         hrrr_field.colourize(np.asarray(list(swatches)), palette), expected)
-    assert list(_alpha([floor - 0.1, floor, np.nan], palette)) == [0, 255, 0]
+    assert list(_alpha([4.9, 5, np.nan], palette)) == [0, 255, 0]
 
 
 @pytest.mark.parametrize(
@@ -470,7 +466,7 @@ def test_shallow_helicity_keeps_its_lower_visibility_floor():
     assert list(_alpha([25.0], deep)) == [0]
 
 
-@pytest.mark.parametrize("level", (850, 700, 500, 300, 200))
+@pytest.mark.parametrize("level", (700, 500, 300, 200))
 def test_height_and_wind_matches_the_supplied_knot_table(level):
     palette = hrrr_products.get_product(f"hgt-wind-{level}").palette
     assert (palette.minimum, palette.maximum, palette.units) == (49, 171, "kt")

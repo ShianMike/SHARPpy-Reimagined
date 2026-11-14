@@ -71,16 +71,18 @@ export function RadarScale({ panel, horizontal = false }: { panel: number; horiz
       ? <img src={frame.legendPng} alt={`${label} · NOAA color scale`} /> : <p>Provider color key unavailable.</p>}
     {palette === null ? <p>{description}</p> : null}{scan === "" ? null : <p>{scan}</p>}{status === null ? null : <p>{status}</p>}{attribution === null ? null : <p>{attribution}</p>}
   </div>;
-  return <><Surface as="aside" data-motion="fade" className={scaleStyles.panel} aria-label="Radar scale" aria-description={`${label} · ${shownUnits || (palette === null ? "Categories" : "Unitless")} · Panel ${String(panel + 1)}${scan === "" ? "" : ` · ${scan}`}`} data-testid="radar-scale">
+  return <><aside data-motion="fade" className={scaleStyles.panel} aria-label="Radar scale" aria-description={`${label} · ${shownUnits || (palette === null ? "Categories" : "Unitless")} · Panel ${String(panel + 1)}${scan === "" ? "" : ` · ${scan}`}`} data-testid="radar-scale">
     {palette === null ? <div className={cx(styles.provider, hints.target)} tabIndex={0} role="img" aria-label={`${label} color scale, ${units || "categories"}`} aria-description="Focus or hover to see the provider's labelled color key.">
       <div className={styles.ramp} aria-hidden="true">{frame?.legendPng === undefined || frame.legendPng === null ? null : <img src={frame.legendPng} alt="" />}</div>
       <span className={cx(hints.hint, styles.key)} data-side="left" role="tooltip"><strong>{label}{units ? ` · ${units}` : ""}</strong>{frame?.legendPng ? <img src={frame.legendPng} alt={`${label} · NOAA color scale`} /> : <span>{status ?? (visible ? "Provider color key unavailable." : "Enable the layer to load its color key.")}</span>}</span>
     </div> : <FieldLegend palette={palette} vertical description={`${description}${scan === "" ? "" : ` ${scan}.`}`} />}
-    {status === null || loading ? null : <span className={cx(scaleStyles.status, hints.target)} tabIndex={0} role="img" aria-label={status}><TriangleAlert className="icon-sm" aria-hidden="true" /><span className={hints.hint} data-side="left" aria-hidden="true">{label} · {status}{scan === "" ? "" : ` · ${scan}`}</span></span>}
-    <IconAction className={scaleStyles.visibility} size="sm" icon={visible ? Eye : EyeOff} loading={loading} label="Radar layer" aria-pressed={visible} aria-description={`${loading ? "Loading. " : ""}${visible ? "Layer on. Activate to hide." : "Layer off. Activate to show."}`} hintSide="left" hintText={`Radar layer${loading ? " · Loading…" : ""}`} onClick={() => {
-      const state = useMapStore.getState();
-      state.setActivePanel(panel);
-      state.setLayerVisible("radar", !panelLayers(state, panel).radar.visible);
-    }} />
-  </Surface>{attribution === null ? null : <div className={styles.attribution} data-testid="radar-attribution">{attribution}</div>}</>;
+    <Surface className={scaleStyles.controls}>
+      {status === null || loading ? null : <span className={cx(scaleStyles.status, hints.target)} tabIndex={0} role="img" aria-label={status}><TriangleAlert className="icon-sm" aria-hidden="true" /><span className={hints.hint} data-side="left" aria-hidden="true">{label} · {status}{scan === "" ? "" : ` · ${scan}`}</span></span>}
+      <IconAction className={scaleStyles.visibility} size="sm" icon={visible ? Eye : EyeOff} loading={loading} label="Radar layer" aria-pressed={visible} aria-description={`${loading ? "Loading. " : ""}${visible ? "Layer on. Activate to hide." : "Layer off. Activate to show."}`} hintSide="left" hintText={`Radar layer${loading ? " · Loading…" : ""}`} onClick={() => {
+        const state = useMapStore.getState();
+        state.setActivePanel(panel);
+        state.setLayerVisible("radar", !panelLayers(state, panel).radar.visible);
+      }} />
+    </Surface>
+  </aside>{attribution === null ? null : <div className={styles.attribution} data-testid="radar-attribution">{attribution}</div>}</>;
 }

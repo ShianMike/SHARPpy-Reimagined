@@ -42,15 +42,9 @@ def _field_error(code: str, what: str, exc: Exception, retryable: bool) -> Bridg
 
 def _quantize(values: Any) -> tuple[bytes, float, float, float]:
     """uint16 little-endian cells (value = cell * scale + low), scale, low, high."""
-    import numpy as np
+    import sharpmod_rs
 
-    finite = np.isfinite(values)
-    low = float(values[finite].min()) if finite.any() else 0.0
-    high = float(values[finite].max()) if finite.any() else 0.0
-    scale = (high - low) / (NODATA - 1) if high > low else 1.0
-    cells = np.full(values.shape, NODATA, dtype="<u2")
-    cells[finite] = np.rint((values[finite] - low) / scale)
-    return cells.tobytes(), scale, low, high
+    return sharpmod_rs.quantize_map_field(values)
 
 
 def _request(params: dict[str, Any], *, require_interval: bool = True):
@@ -70,10 +64,15 @@ def _request(params: dict[str, Any], *, require_interval: bool = True):
     hour = p.integer(params, "forecast_hour", 0, 384)
     if require_interval and hour < product.max_hours:
         raise BridgeError("FIELD_UNAVAILABLE", f"{product.label} starts at F{product.max_hours:03d}.", False)
-    if model != "hrrr" and run.hour % 6:
+    if model not in {"hrrr", "rap"} and run.hour % 6:
         raise BridgeError("FIELD_UNAVAILABLE", f"{model} publishes 00, 06, 12 and 18Z runs.", False)
     if model in hrrr_products.HRW_MODELS and run.hour not in (0, 12):
         raise BridgeError("FIELD_UNAVAILABLE", "HRW publishes only 00 and 12Z runs.", False)
+    if model in {"rap", "rdps"}:
+        from sharpmod.tools.model_extract import forecast_hours
+        if hour not in forecast_hours(model, cycle_hour=run.hour):
+            raise BridgeError("FIELD_UNAVAILABLE", f"{model.upper()} does not publish this forecast hour for the selected run.", False)
+        return model, product, run, hour
     if model == "aigfs":
         if hour % 6:
             raise BridgeError("FIELD_UNAVAILABLE", "AIGFS publishes six-hour steps through F384.", False)
@@ -222,7 +221,8 @@ def _produce(model, product, run, hour, target, stopped):
         "source_url": hrrr_field.grib_url(run, hour, product.sources[0], model),
         "attribution": ("ECMWF IFS via ECMWF Open Data (CC BY 4.0)" if model in hrrr_field.ECMWF_MODELS
                         else "NOAA/NCEP GFS via AWS Open Data" if model == "gfs"
-                        else "Environment and Climate Change Canada via MSC Datamart" if model == "gdps"
+                        else "Environment and Climate Change Canada via MSC Datamart" if model in {"gdps", "rdps"}
+                        else "NOAA/NCEP RAP via AWS Open Data" if model == "rap"
                         else "NOAA/NCEP AIGFS via NOMADS" if model == "aigfs"
                         else hrrr_field.ATTRIBUTION if model == "hrrr"
                         else "NOAA/NCEP NAM via AWS Open Data" if model in {"nam", "nam-3km-conus"}

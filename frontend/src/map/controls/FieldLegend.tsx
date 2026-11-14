@@ -29,7 +29,7 @@ export function spacedTicks(ticks: readonly number[], low: number, high: number,
   return high > low ? [...kept, { value: high, at: 1 }] : kept;
 }
 
-const tickText = (value: number): string => String(Number(value.toFixed(2)));
+const tickText = (value: number, digits = 2): string => String(Number(value.toFixed(digits)));
 
 /** Rechoose round labels after conversion, retaining their true positions on the ramp. */
 export function convertedTicks(low: number, high: number): { value: number; at: number }[] {
@@ -72,20 +72,29 @@ export function FieldLegend({ palette, vertical = false, description }: { palett
   return (
     <figure className={styles.scale} data-testid="field-legend" data-orientation={vertical ? "vertical" : "horizontal"} title={vertical ? undefined : hidden}>
       <canvas ref={ref} className={styles.ramp} width={vertical ? RAMP_THICKNESS : LUT_SIZE} height={vertical ? LUT_SIZE : RAMP_THICKNESS} aria-hidden="true" />
-      {vertical ? <div className={styles.scaleExplore} role="slider" tabIndex={0} aria-label="Explore parameter scale" aria-orientation="vertical" aria-valuemin={shown(low)} aria-valuemax={shown(high)} aria-valuenow={Math.max(shown(low), Math.min(shown(high), Number(shown(value).toFixed(2))))} aria-valuetext={valueText} aria-describedby={descriptionId}
-        style={{ "--hint-at": `${String((1 - at) * 100)}%` } as CSSProperties}
-        onPointerMove={(event) => { const box = event.currentTarget.getBoundingClientRect(); if (box.height > 0) setAt(Math.max(0, Math.min(1, 1 - (event.clientY - box.top) / box.height))); setActive(true); }}
-        onPointerLeave={(event) => { if (document.activeElement !== event.currentTarget) setActive(false); }}
-        onFocus={() => { setActive(true); }} onBlur={() => { setActive(false); }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") { event.preventDefault(); setActive(false); return; }
-          const delta = { ArrowUp: 0.01, ArrowRight: 0.01, ArrowDown: -0.01, ArrowLeft: -0.01, PageUp: 0.1, PageDown: -0.1 }[event.key];
-          if (delta === undefined && event.key !== "Home" && event.key !== "End") return;
-          event.preventDefault(); setActive(true); setAt(Math.max(0, Math.min(1, event.key === "Home" ? 0 : event.key === "End" ? 1 : at + (categorical ? Math.sign(delta ?? 0) : delta ?? 0))));
-        }}>
-        {active ? <><span className={styles.scalePointer} aria-hidden="true" /><span className={cx(hints.hint, "tabular")} role="tooltip" data-side="left" data-open="true">{valueText}</span></> : null}
-        <VisuallyHidden id={descriptionId}>{hidden} Use arrow keys to explore values; Home and End show the limits.</VisuallyHidden>
-      </div> : <ol className={cx(styles.ticks, "tabular")} aria-label={`Scale ticks, ${unit || "unitless"}`}>
+      {vertical ? <>
+        <ol className={cx(styles.verticalTicks, "tabular")} aria-label={`Scale ticks, ${categorical ? "categories" : unit || "unitless"}`}>
+          {(categorical ? [1, 0] : [1, 0.75, 0.5, 0.25, 0]).map((fraction) => (
+            <li key={fraction} style={{ "--tick-at": `${String((1 - fraction) * 100)}%` } as CSSProperties}>
+              {categorical ? fraction === 1 ? "Present" : "Absent" : tickText(shown(low + fraction * (high - low)), 0)}
+            </li>
+          ))}
+        </ol>
+        <div className={styles.scaleExplore} role="slider" tabIndex={0} aria-label="Explore parameter scale" aria-orientation="vertical" aria-valuemin={shown(low)} aria-valuemax={shown(high)} aria-valuenow={Math.max(shown(low), Math.min(shown(high), Number(shown(value).toFixed(2))))} aria-valuetext={valueText} aria-describedby={descriptionId}
+          style={{ "--hint-at": `${String((1 - at) * 100)}%` } as CSSProperties}
+          onPointerMove={(event) => { const box = event.currentTarget.getBoundingClientRect(); if (box.height > 0) setAt(Math.max(0, Math.min(1, 1 - (event.clientY - box.top) / box.height))); setActive(true); }}
+          onPointerLeave={(event) => { if (document.activeElement !== event.currentTarget) setActive(false); }}
+          onFocus={() => { setActive(true); }} onBlur={() => { setActive(false); }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") { event.preventDefault(); setActive(false); return; }
+            const delta = { ArrowUp: 0.01, ArrowRight: 0.01, ArrowDown: -0.01, ArrowLeft: -0.01, PageUp: 0.1, PageDown: -0.1 }[event.key];
+            if (delta === undefined && event.key !== "Home" && event.key !== "End") return;
+            event.preventDefault(); setActive(true); setAt(Math.max(0, Math.min(1, event.key === "Home" ? 0 : event.key === "End" ? 1 : at + (categorical ? Math.sign(delta ?? 0) : delta ?? 0))));
+          }}>
+          {active ? <><span className={styles.scalePointer} aria-hidden="true" /><span className={cx(hints.hint, styles.scaleValue, "tabular")} role="tooltip" data-side="left" data-open="true">{valueText}</span></> : null}
+          <VisuallyHidden id={descriptionId}>{hidden} Use arrow keys to explore values; Home and End show the limits.</VisuallyHidden>
+        </div>
+      </> : <ol className={cx(styles.ticks, "tabular")} aria-label={`Scale ticks, ${unit || "unitless"}`}>
         {(unit === formatUnit(palette.units) ? spacedTicks(palette.ticks, low, high) : convertedTicks(shown(low), shown(high))).map((tick) => (
           <li
             key={tick.value}

@@ -1,4 +1,4 @@
-//! Published MSC Datamart addresses for GDPS's global forecast maps.
+//! Published MSC Datamart addresses for Canadian forecast maps.
 
 use sharpmod_weather::model_http::Error;
 use std::collections::HashSet;
@@ -56,6 +56,7 @@ pub enum Period {
     Instant,
     RunTotal,
     ThreeHours,
+    OneHour,
 }
 
 #[derive(Clone, Copy)]
@@ -127,7 +128,26 @@ pub fn record(name: &str) -> Result<Record, Error> {
     })
 }
 
+pub fn rdps_record(name: &str) -> Result<Record, Error> {
+    let mut result = record(name)?;
+    match name {
+        "gdps_frzr" => result.variable = "FreezingRain-Accum1h",
+        "gdps_sleet" => result.variable = "IcePellets-Accum1h",
+        "gdps_snow" => result.variable = "Snow-Accum1h",
+        _ => return Ok(result),
+    }
+    result.period = Period::OneHour;
+    Ok(result)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Model {
+    Gdps,
+    Rdps,
+}
+
 pub struct Frame {
+    pub model: Model,
     pub date: i32,
     pub cycle: u8,
     pub hour: u16,
@@ -135,20 +155,26 @@ pub struct Frame {
 
 impl Frame {
     pub fn new(run: OffsetDateTime, hour: u16) -> Result<Self, Error> {
+        Self::for_model(Model::Gdps, run, hour)
+    }
+
+    pub fn for_model(model: Model, run: OffsetDateTime, hour: u16) -> Result<Self, Error> {
         let run = run.to_offset(UtcOffset::UTC);
         if !(1..=9999).contains(&run.year())
-            || !matches!(run.hour(), 0 | 12)
+            || !matches!(run.hour(), 0 | 6 | 12 | 18)
             || run.minute() != 0
             || run.second() != 0
             || run.nanosecond() != 0
-            || hour > 240
-            || !hour.is_multiple_of(3)
+            || (model == Model::Gdps
+                && (!matches!(run.hour(), 0 | 12) || hour > 240 || !hour.is_multiple_of(3)))
+            || (model == Model::Rdps && hour > 84)
         {
             return Err(Error::Invalid(
-                "GDPS map frames use 00/12Z runs and three-hour steps through F240".into(),
+                "GDPS uses 00/12Z and three-hour steps through F240; RDPS uses six-hourly runs and hourly steps through F084".into(),
             ));
         }
         Ok(Self {
+            model,
             date: run.year() * 10000
                 + i32::from(u8::from(run.month())) * 100
                 + i32::from(run.day()),
@@ -158,18 +184,33 @@ impl Frame {
     }
 
     pub fn directory(&self) -> String {
+        let (model, resolution) = if self.model == Model::Rdps {
+            ("rdps", "10km")
+        } else {
+            ("gdps", "15km")
+        };
         format!(
-            "https://dd.weather.gc.ca/{:08}/WXO-DD/model_gdps/15km/{:02}/{:03}/",
+            "https://dd.weather.gc.ca/{:08}/WXO-DD/model_{model}/{resolution}/{:02}/{:03}/",
             self.date, self.cycle, self.hour
         )
     }
 
     fn prefix(&self) -> String {
-        format!("{:08}T{:02}Z_MSC_GDPS_", self.date, self.cycle)
+        let model = if self.model == Model::Rdps {
+            "RDPS"
+        } else {
+            "GDPS"
+        };
+        format!("{:08}T{:02}Z_MSC_{model}_", self.date, self.cycle)
     }
 
     fn suffix(&self) -> String {
-        format!("_LatLon0.15_PT{:03}H.grib2", self.hour)
+        let grid = if self.model == Model::Rdps {
+            "RLatLon0.09"
+        } else {
+            "LatLon0.15"
+        };
+        format!("_{grid}_PT{:03}H.grib2", self.hour)
     }
 
     pub fn file_url(&self, record: Record) -> String {
@@ -234,5 +275,17 @@ mod tests {
         assert!(Frame::new(run, 241).is_err());
         assert!(Frame::new(run, 1).is_err());
         assert!(Frame::new(run + time::Duration::hours(6), 24).is_err());
+    }
+
+    #[test]
+    fn rdps_uses_hourly_regional_files_and_one_hour_winter_accumulations() {
+        let run = OffsetDateTime::parse("2026-11-14T06:00:00Z", &Rfc3339).unwrap();
+        let frame = Frame::for_model(Model::Rdps, run, 1).unwrap();
+        let record = rdps_record("gdps_frzr").unwrap();
+        assert!(frame.file_url(record).ends_with("/model_rdps/10km/06/001/20261114T06Z_MSC_RDPS_FreezingRain-Accum1h_Sfc_RLatLon0.09_PT001H.grib2"));
+        assert!(matches!(record.period, Period::OneHour));
+        assert!(Frame::for_model(Model::Rdps, run, 84).is_ok());
+        assert!(Frame::for_model(Model::Rdps, run, 85).is_err());
+        assert!(Frame::for_model(Model::Rdps, run + time::Duration::hours(1), 1).is_err());
     }
 }

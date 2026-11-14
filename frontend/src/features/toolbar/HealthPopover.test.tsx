@@ -98,6 +98,8 @@ describe("HealthIndicator and HealthPopover (DR6-5)", () => {
   it("names Rust and its version when the Rust backend is active", async () => {
     const { dialog } = await openIndicator(createTransport(null), "Backend ready");
     expect(dialog.textContent).toContain(`Rust, sharpmod_rs ${version}`);
+    expect(dialog.querySelector("details")).toBeNull();
+    expect(screen.queryByText("Service details")).toBeNull();
   });
 });
 

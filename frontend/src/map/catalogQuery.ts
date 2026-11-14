@@ -14,7 +14,7 @@ export function useMapCatalog(): UseQueryResult<MapCatalog> {
   const model = selected?.key ?? "hrrr";
   const runChoice = useForecastStore((state) => state.runTime);
   const hourChoice = useForecastStore((state) => state.forecastHour);
-  const dynamic = model === "hrrr" || model === "rrfs-a" || model.startsWith("refs-")
+  const dynamic = model === "hrrr" || model === "rap" || model === "rdps" || model === "rrfs-a" || model.startsWith("refs-")
     || model === "nam-3km-conus" || model === "gfs" || model === "gdps" || model === "aigfs"
     || model === "openmeteo-ecmwf-ifs025" || model === "ecmwf-ifs-9km" || model.startsWith("hrw-");
   const run = dynamic && selected !== undefined ? resolveModelRun(selected, model === requestedModel ? runChoice : null) : undefined;

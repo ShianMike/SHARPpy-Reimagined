@@ -62,6 +62,7 @@ from sharpmod.providers.hrrr_products import (
     get_product,
 )
 from sharpmod.models.lambert_grid import HRRR_GRID, HRRR_PROJ4, NAM_GRID, NAM_PROJ4, HRW_GRID
+from sharpmod.models.model_disk_cache import map_disk_cache_root as disk_cache_root
 from sharpmod.providers.hrrr_products import HRW_MODELS
 from sharpmod.models.model_transport import DownloadCancelled
 from sharpmod.maps.map_overlays import MAX_RASTER_BYTES, OverlayRaster
@@ -117,6 +118,10 @@ NAM_COVERAGE_BOUNDS = NAM_GRID.bounds()
 
 def field_grid(model: str = "hrrr"):
     """Return the grid encoded by this model's native field products."""
+    if model in {"rap", "rdps"}:
+        import sharpmod_rs
+
+        return sharpmod_rs.regional_map_grid(model)
     if model == "gdps":
         import sharpmod_rs
 
@@ -128,6 +133,11 @@ def field_grid(model: str = "hrrr"):
 
 
 def field_bounds(model: str = "hrrr"):
+    if model == "rap":
+        return field_grid(model).bounds()
+    if model == "rdps":
+        from sharpmod.providers.eccc_geomet import get_capability
+        return get_capability(model).domain_bounds
     if model in GLOBAL_MODELS:
         from sharpmod.providers.ecmwf_fields import BOUNDS
         return BOUNDS
@@ -251,6 +261,14 @@ def pin_request(run: datetime, fxx: int | None = None) -> tuple[datetime, int]:
 
 
 def grib_url(run: datetime, fxx: int, source: str, model: str = "hrrr", *, release=None) -> str:
+    if model == "rap":
+        import sharpmod_rs
+
+        return sharpmod_rs.rap_map_url(run, fxx)
+    if model == "rdps":
+        import sharpmod_rs
+
+        return sharpmod_rs.rdps_map_directory(run, fxx)
     if model == "gdps":
         import sharpmod_rs
 
@@ -473,6 +491,10 @@ def decode_message(payload: bytes, eccodes=None, *, field_index: int = 0,
         try:
             ni = int(api.codes_get(handle, "Ni"))
             nj = int(api.codes_get(handle, "Nj"))
+            if model == "rap":
+                import sharpmod_rs
+
+                sharpmod_rs.validate_rap_map_grid(api, handle)
             if model in GLOBAL_MODELS:
                 native = field_grid(model)
                 expected_header = {
@@ -572,14 +594,6 @@ def _hex_to_rgb(colour: str) -> tuple[int, int, int]:
 # --------------------------------------------------------------------------- #
 # Disk cache for immutable frames
 # --------------------------------------------------------------------------- #
-
-
-def disk_cache_root() -> Path:
-    override = os.environ.get("SHARPMOD_HRRR_FIELD_CACHE", "").strip()
-    if override:
-        return Path(override).expanduser()
-    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-    return Path(base) / "SHARPpy Reimagined" / "hrrr-fields"
 
 
 def _disk_path(product_key: str, run: datetime, fxx: int,

@@ -816,19 +816,10 @@ PALETTE_THETAE = Palette(
 
 def _thetae_2m(fields: dict[str, np.ndarray]) -> np.ndarray:
     """Bolton equivalent potential temperature using 2 m T/Td and surface pressure."""
-    from metpy.calc import equivalent_potential_temperature
-    from metpy.units import units
+    import sharpmod_rs
 
-    pressure, temperature, dewpoint = (np.asarray(fields[key]) for key in ("pres", "tmp2m", "dpt2m"))
-    valid = ((pressure > 0) & (temperature > 0) & (dewpoint > 0)
-             & np.isfinite(pressure) & np.isfinite(temperature) & np.isfinite(dewpoint))
-    with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
-        result = equivalent_potential_temperature(
-            units.Quantity(np.where(valid, pressure, MISSING), "Pa"),
-            units.Quantity(np.where(valid, temperature, MISSING), "K"),
-            units.Quantity(np.where(valid, dewpoint, MISSING), "K"),
-        ).m_as("K")
-    return np.where(np.isfinite(result), result, MISSING)
+    return sharpmod_rs.derive_map_diagnostic(
+        "thetae", [fields["pres"], fields["tmp2m"], fields["dpt2m"]])
 
 
 def _single(name: str, convert: Callable[[np.ndarray], np.ndarray] | None = None):
@@ -845,11 +836,10 @@ def _precipitation_type_rate(name: str):
     """Total liquid-equivalent rate in cells with the published type flag."""
 
     def derive(fields: dict[str, np.ndarray]) -> np.ndarray:
-        rate = precipitation_rate_to_mm_per_hour(fields["prate"])
-        flag = fields[name]
-        valid = np.isfinite(rate) & (rate >= 0) & ((flag == 0) | (flag == 1))
-        # Type flags select cells, not mass fractions; mixed types can overlap.
-        return np.where(valid, np.where(flag == 1, rate, 0.0), MISSING)
+        import sharpmod_rs
+
+        return sharpmod_rs.derive_map_diagnostic(
+            "precipitation-type", [fields["prate"], fields[name]])
 
     return derive
 
@@ -869,7 +859,10 @@ def _ehi(srh_name: str):
     """Energy-Helicity Index: ``CAPE * SRH / 160000`` (Hart and Korotky 1991)."""
 
     def derive(fields: dict[str, np.ndarray]) -> np.ndarray:
-        return fields["mlcape"] * fields[srh_name] / 160000.0
+        import sharpmod_rs
+
+        return sharpmod_rs.derive_map_diagnostic(
+            "ehi", [fields["mlcape"], fields[srh_name]])
 
     return derive
 
@@ -881,10 +874,10 @@ def _lapse_700_500(fields: dict[str, np.ndarray]) -> np.ndarray:
     them rather than a standard-atmosphere depth, so it stays correct where the
     layer is unusually thick or thin.
     """
-    depth_km = (fields["hgt500"] - fields["hgt700"]) / 1000.0
-    with np.errstate(invalid="ignore", divide="ignore"):
-        rate = (fields["tmp700"] - fields["tmp500"]) / depth_km
-    return np.where(depth_km > 0.1, rate, MISSING)
+    import sharpmod_rs
+
+    return sharpmod_rs.derive_map_diagnostic(
+        "lapse-700-500", [fields[key] for key in ("tmp700", "tmp500", "hgt700", "hgt500")])
 
 
 def _lapse_0_3km(fields: dict[str, np.ndarray]) -> np.ndarray:
@@ -946,12 +939,10 @@ def _supercell_composite(fields: dict[str, np.ndarray]) -> np.ndarray:
     this uses the 0-3 km SRH and 0-6 km shear that HRRR publishes directly. The
     shear term follows SPC in saturating at 20 m/s and vanishing below 10.
     """
-    mucape = np.maximum(fields["mucape"], 0.0)
-    srh = fields["srh03"]
-    shear = np.hypot(fields["ushr06"], fields["vshr06"])
-    shear_term = np.clip(shear / 20.0, 0.0, 1.0)
-    shear_term = np.where(shear < 10.0, 0.0, shear_term)
-    return (mucape / 1000.0) * (srh / 50.0) * shear_term
+    import sharpmod_rs
+
+    return sharpmod_rs.derive_map_diagnostic(
+        "scp", [fields[key] for key in ("mucape", "srh03", "ushr06", "vshr06")])
 
 
 def _significant_tornado(fields: dict[str, np.ndarray]) -> np.ndarray:
@@ -966,19 +957,10 @@ def _significant_tornado(fields: dict[str, np.ndarray]) -> np.ndarray:
     shear saturates at 30 m/s and vanishes below 12.5, and CIN saturates above
     -50 J/kg and vanishes below -200.
     """
-    sbcape = np.maximum(fields["sbcape"], 0.0)
-    lcl = fields["lcl"]
-    srh = fields["srh01"]
-    shear = np.hypot(fields["ushr06"], fields["vshr06"])
-    cin = fields["sbcin"]
+    import sharpmod_rs
 
-    cape_term = sbcape / 1500.0
-    lcl_term = np.clip((2000.0 - lcl) / 1000.0, 0.0, 1.0)
-    srh_term = srh / 150.0
-    shear_term = np.clip(shear / 20.0, 0.0, 1.5)
-    shear_term = np.where(shear < 12.5, 0.0, shear_term)
-    cin_term = np.clip((200.0 + cin) / 150.0, 0.0, 1.0)
-    return cape_term * lcl_term * srh_term * shear_term * cin_term
+    return sharpmod_rs.derive_map_diagnostic(
+        "stp", [fields[key] for key in ("sbcape", "lcl", "srh01", "ushr06", "vshr06", "sbcin")])
 
 
 # --------------------------------------------------------------------------- #
@@ -1338,7 +1320,7 @@ def _build_catalogue() -> tuple[HrrrProduct, ...]:
         return tuple(products)
     import sharpmod_rs
 
-    return (*products, *sharpmod_rs.map_pressure_products("hrrr"))
+    return tuple(sharpmod_rs.map_pressure_products("hrrr", products))
 
 
 PRODUCTS: MappingProxyType = MappingProxyType(
@@ -1352,7 +1334,7 @@ DEFAULT_PRODUCT = "refc"
 ECMWF_MODELS = ("openmeteo-ecmwf-ifs025", "ecmwf-ifs-9km")
 GLOBAL_MODELS = (*ECMWF_MODELS, "aigfs", "gfs", "gdps")
 HRW_MODELS = ("hrw-wrf-arw", "hrw-wrf-nssl", "hrw-fv3")
-FIELD_MODELS = ("hrrr", "rrfs-a", "nam", "nam-3km-conus", *(f"refs-m{i}" for i in range(1, 6)), *GLOBAL_MODELS, *HRW_MODELS)
+FIELD_MODELS = ("hrrr", "rap", "rdps", "rrfs-a", "nam", "nam-3km-conus", *(f"refs-m{i}" for i in range(1, 6)), *GLOBAL_MODELS, *HRW_MODELS)
 _HRW_UNSUPPORTED = frozenset({"ltng", "efhl", "prate", "prate-frzr", "prate-sleet", "prate-snow", "snod", "mucape", "scp", "stp"})
 # The reduced REFS member stream omits these products' ingredients.
 _REFS_UNSUPPORTED = frozenset({
@@ -1384,8 +1366,8 @@ def _available_products(model: str) -> tuple[HrrrProduct, ...]:
         raise ValueError(f"{model!r} has no map field catalogue")
     if model == "hrrr":
         return tuple(PRODUCTS.values())
-    if model == "gdps":
-        return ()  # The native catalogue owns the GDPS product set.
+    if model in {"gdps", "rap", "rdps"}:
+        return ()  # The native catalogue owns these provider product sets.
     if model == "aigfs":
         keys = {*(f"hgt-wind-{level}" for level in (200, 300, 500, 700, 850)),
                 "tmp-2m", "wind-10m", "apcp", "lapse-700-500"}

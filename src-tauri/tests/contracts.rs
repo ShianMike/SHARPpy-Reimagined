@@ -469,6 +469,33 @@ fn map_fixtures_convert_from_bridge_to_public_form() {
                     .iter()
                     .any(|product| matches!(product.key.as_str(), "refc" | "pwat" | "mucape")));
                 20
+            } else if model == "rap" {
+                assert_eq!(catalog.max_forecast_hours[0], 21);
+                assert_eq!(catalog.max_forecast_hours[3], 51);
+                assert!(catalog.products.iter().any(|product| product.key == "scp"));
+                assert!(!catalog
+                    .products
+                    .iter()
+                    .any(|product| matches!(product.key.as_str(), "ltng" | "stp")));
+                35
+            } else if model == "rdps" {
+                assert_eq!(catalog.max_forecast_hours[0], 84);
+                assert_eq!(catalog.max_forecast_hours[6], 84);
+                assert!(catalog.products.iter().any(|product| product.key == "cape"));
+                assert!(!catalog
+                    .products
+                    .iter()
+                    .any(|product| matches!(product.key.as_str(), "mlcape" | "mucape")));
+                assert_eq!(
+                    catalog
+                        .products
+                        .iter()
+                        .find(|product| product.key == "prate-frzr")
+                        .unwrap()
+                        .minimum_forecast_hour,
+                    Some(1)
+                );
+                20
             } else if model == "ecmwf-ifs-9km" || model == "openmeteo-ecmwf-ifs025" {
                 21
             } else if model == "aigfs" {

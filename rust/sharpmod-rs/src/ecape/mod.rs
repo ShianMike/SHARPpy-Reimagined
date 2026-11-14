@@ -5,7 +5,7 @@ mod buoyancy;
 mod inflow;
 #[cfg(test)]
 mod tests;
-mod thermodynamics;
+pub(crate) mod thermodynamics;
 
 use thermodynamics::{dewpoint_from_humidity, parcel_profile, specific_humidity, CP, G, LV};
 

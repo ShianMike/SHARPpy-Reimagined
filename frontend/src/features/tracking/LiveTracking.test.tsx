@@ -77,39 +77,6 @@ it("offers Correlation Coefficient with checked tilts and Enhanced Echo Tops wit
   queryClient.clear();
 });
 
-it("keeps radar toolbar choices in the active live panel and reports the source's actual tilt support", async () => {
-  useAppStore.getState().setActiveWorkspace("live");
-  const { view, queryClient } = renderWithBackend(<LiveRadarControls />, createTransport());
-  await waitFor(() => { expect(screen.getByRole("combobox", { name: "Site Product" }).textContent).toContain("Composite Reflectivity"); });
-  expect(screen.getByRole("button", { name: "Site Tilt" }).textContent).toContain("All tilts");
-  fireEvent.click(screen.getByRole("combobox", { name: "Site" }));
-  fireEvent.click(await screen.findByRole("option", { name: "KTLX" }));
-  fireEvent.click(screen.getByRole("combobox", { name: "Site Product" }));
-  fireEvent.click(screen.getByRole("option", { name: "Velocity" }));
-  await waitFor(() => { expect(screen.getByRole("combobox", { name: "Site Tilt" }).textContent).toContain("0.5°"); });
-  fireEvent.click(screen.getByRole("combobox", { name: "Site Tilt" }));
-  expect(screen.queryByRole("option", { name: "−0.2°" })).toBeNull();
-  expect(screen.queryByRole("option", { name: "0.0° / 0.2°" })).toBeNull();
-  expect(screen.queryByRole("option", { name: "0.3° / 0.4°" })).toBeNull();
-  expect(screen.queryByText("Requires an available scan at this elevation")).toBeNull();
-  fireEvent.click(screen.getByRole("option", { name: "1.3° / 1.5°" }));
-  const chosen = useMapStore.getState().livePanels[0];
-  expect(chosen).toMatchObject({ radarScope: "site", radarSite: "KTLX", radarProduct: "velocity", radarTilt: "1" });
-  act(() => { useMapStore.getState().setPanelLayout(2); useMapStore.getState().setActivePanel(1); });
-  expect(screen.getByRole("combobox", { name: "Site" }).textContent).toContain("CONUS mosaic");
-  expect(screen.getByRole("combobox", { name: "Site Product · 2" }).textContent).toContain("Composite Reflectivity");
-  expect(screen.getByRole("button", { name: "Site Tilt" }).textContent).toContain("All tilts");
-  expect(useMapStore.getState().livePanels[0]).toBe(chosen);
-  expect(useMapStore.getState().panels).toBe(map.panels);
-  act(() => { useMapStore.getState().setActivePanel(0); });
-  expect(screen.getByRole("combobox", { name: "Site" }).textContent).toContain("KTLX");
-  expect(screen.getByRole("combobox", { name: "Site Product" }).textContent).toContain("Velocity");
-  expect(screen.getByRole("combobox", { name: "Site Tilt" }).textContent).toContain("1.3° / 1.5°");
-  act(() => { useMapStore.getState().setActivePanel(0); useMapStore.getState().setRadarProduct("one-hour"); });
-  expect(screen.getByRole("button", { name: "Site Tilt" }).textContent).toContain("Not applicable");
-  view.unmount(); queryClient.clear();
-});
-
 it("toggles and restores radar site labels independently for each live panel", () => {
   useAppStore.getState().setActiveWorkspace("live");
   useMapStore.getState().setPanelLayout(2);

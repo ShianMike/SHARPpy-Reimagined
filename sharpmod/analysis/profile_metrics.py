@@ -32,6 +32,7 @@ from typing import Callable, Iterable, Mapping, Sequence
 import weakref
 
 import numpy as np
+import sharpmod_rs
 
 from sharpmod.analysis import box_analysis
 from sharpmod.analysis.comparison import (
@@ -426,66 +427,11 @@ def _collection_label(collection, index: int) -> str:
 
 
 def _distribution(values: Iterable[object]) -> MetricDistribution:
-    finite = [number for value in values if (number := _finite(value)) is not None]
-    if not finite:
-        return MetricDistribution(0, None, None, None, None, None)
-    array = np.asarray(finite, dtype=float)
-    p10, median, p90 = np.percentile(array, (10.0, 50.0, 90.0))
-    return MetricDistribution(
-        count=int(array.size),
-        p10=float(p10),
-        median=float(median),
-        p90=float(p90),
-        minimum=float(np.min(array)),
-        maximum=float(np.max(array)),
-    )
+    return MetricDistribution(*sharpmod_rs.profile_metric_distribution(values))
 
 
 def _interpolate_column(profile, field: str, pressure_levels) -> tuple:
-    raw_pressure = getattr(profile, "pres", None)
-    raw_values = getattr(profile, field, None)
-    if raw_pressure is None or raw_values is None:
-        return tuple(None for _ in pressure_levels)
-    try:
-        pressure = np.ma.asarray(raw_pressure, dtype=float)
-        values = np.ma.asarray(raw_values, dtype=float)
-        length = min(pressure.size, values.size)
-        pressure = pressure[:length]
-        values = values[:length]
-        mask = (
-            np.ma.getmaskarray(pressure)
-            | np.ma.getmaskarray(values)
-            | ~np.isfinite(np.ma.filled(pressure, np.nan))
-            | ~np.isfinite(np.ma.filled(values, np.nan))
-            | (np.ma.filled(pressure, -9999.0) <= 0.0)
-            | (np.ma.filled(pressure, -9999.0) <= -9998.0)
-            | (np.ma.filled(values, -9999.0) <= -9998.0)
-        )
-        clean_pressure = np.asarray(pressure.data[~mask], dtype=float)
-        clean_values = np.asarray(values.data[~mask], dtype=float)
-    except (TypeError, ValueError):
-        return tuple(None for _ in pressure_levels)
-    if clean_pressure.size < 2:
-        return tuple(None for _ in pressure_levels)
-
-    # Sort low-to-high in log pressure and collapse duplicate observations.
-    order = np.argsort(clean_pressure)
-    clean_pressure = clean_pressure[order]
-    clean_values = clean_values[order]
-    clean_pressure, unique_index = np.unique(clean_pressure, return_index=True)
-    clean_values = clean_values[unique_index]
-    if clean_pressure.size < 2:
-        return tuple(None for _ in pressure_levels)
-    log_pressure = np.log(clean_pressure)
-    lower = float(clean_pressure[0])
-    upper = float(clean_pressure[-1])
-    result = []
-    for level in pressure_levels:
-        if level < lower or level > upper:
-            result.append(None)
-            continue
-        result.append(float(np.interp(math.log(level), log_pressure, clean_values)))
-    return tuple(result)
+    return tuple(sharpmod_rs.profile_metric_column(profile, field, pressure_levels))
 
 
 

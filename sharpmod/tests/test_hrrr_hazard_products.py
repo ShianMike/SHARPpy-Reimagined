@@ -217,7 +217,8 @@ def test_hazard_products_follow_each_models_published_inventory(model):
                  "gust", "lftx", "prate", "pwat", "snod", "wind-10m",
                  "prate-frzr", "prate-sleet", "prate-snow"}
     expected = (additions - {"efhl", "lftx"} - uh if model in hp.ECMWF_MODELS or model == "gfs"
-                else additions - {"efhl", "lftx", "pwat"} - uh if model == "gdps"
+                else additions - {"efhl", "lftx", "pwat"} - uh if model in {"gdps", "rdps"}
+                else additions - uh if model == "rap"
                 else {"apcp", "wind-10m"} if model == "aigfs"
                 else uh | {"apcp", "gust", "lftx", "pwat", "wind-10m"} if model in hp.HRW_MODELS
                 else uh | {"apcp", "gust", "pwat", "wind-10m"} if model.startswith("refs-")

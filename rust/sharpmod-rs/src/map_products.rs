@@ -1,10 +1,22 @@
 //! Native additions to the shared forecast map product catalogue.
 
+mod palettes;
+mod regional;
+
 use numpy::{
     ndarray::ArrayD, AllowTypeChange, IntoPyArray, PyArrayDyn, PyArrayLikeDyn,
     PyUntypedArrayMethods,
 };
-use pyo3::{exceptions::PyKeyError, prelude::*, types::PyDict};
+use pyo3::{
+    exceptions::PyKeyError,
+    prelude::*,
+    types::{PyDict, PyTuple},
+};
+
+use palettes::{
+    ehi_stops, isotach_stops, DEEP_SHEAR_MAX_KT, EHI_FLOOR, EHI_TICKS, ISOTACH_MIN_KT,
+    WIND_850_MAX_KT,
+};
 
 fn record_for_model(model: &str) -> Option<&'static str> {
     match model {
@@ -49,11 +61,59 @@ fn derive_mean_sea_level_pressure<'py>(
 }
 
 #[pyfunction]
-fn map_pressure_products(py: Python<'_>, model: &str) -> PyResult<Vec<Py<PyAny>>> {
+#[pyo3(signature = (model, products=None))]
+fn map_pressure_products(
+    py: Python<'_>,
+    model: &str,
+    products: Option<Vec<Py<PyAny>>>,
+) -> PyResult<Vec<Py<PyAny>>> {
+    let mut products = products.unwrap_or_default();
     let Some(variable) = record_for_model(model) else {
-        return Ok(Vec::new());
+        return Ok(products);
     };
-    Ok(vec![pressure_product(py, variable, None)?])
+    if model == "hrrr" {
+        let replace = PyModule::import(py, "dataclasses")?.getattr("replace")?;
+        for product in &mut products {
+            let entry = product.bind(py);
+            let key = entry.getattr("key")?.extract::<String>()?;
+            let (stops, ticks, floor) = match key.as_str() {
+                "hgt-wind-850" | "shear-0-6km" => {
+                    // Both tables reuse the upper wind colors from the provider catalogue.
+                    let source = PyModule::import(py, "sharpmod.providers.hrrr_products")?
+                        .getattr("PALETTE_ISOTACH_KT")?
+                        .getattr("stops")?
+                        .extract()?;
+                    let (max_kt, source_step) = if key == "hgt-wind-850" {
+                        (WIND_850_MAX_KT, 2.0)
+                    } else {
+                        (DEEP_SHEAR_MAX_KT, 1.0)
+                    };
+                    (
+                        PyTuple::new(py, isotach_stops(source, max_kt, source_step))?,
+                        PyTuple::new(py, (ISOTACH_MIN_KT..=max_kt).step_by(5))?,
+                        f64::from(ISOTACH_MIN_KT),
+                    )
+                }
+                "ehi-0-1km" | "ehi-0-3km" => (
+                    PyTuple::new(py, ehi_stops())?,
+                    PyTuple::new(py, EHI_TICKS)?,
+                    EHI_FLOOR,
+                ),
+                _ => continue,
+            };
+            let options = PyDict::new(py);
+            options.set_item("stepped", true)?;
+            options.set_item("floor", floor)?;
+            options.set_item("ticks", ticks)?;
+            options.set_item("stops", stops)?;
+            let palette = replace.call((entry.getattr("palette")?,), Some(&options))?;
+            let updates = PyDict::new(py);
+            updates.set_item("palette", palette)?;
+            *product = replace.call((entry,), Some(&updates))?.unbind();
+        }
+    }
+    products.push(pressure_product(py, variable, None)?);
+    Ok(products)
 }
 
 fn pressure_product(
@@ -132,6 +192,9 @@ fn map_product_catalogue(
     }
     if model == "gdps" {
         return gdps_catalogue(py);
+    }
+    if matches!(model, "rap" | "rdps") {
+        return regional::catalogue(py, model);
     }
     let is_gfs = model == "gfs";
     let mut result = Vec::with_capacity(products.len() + 2);

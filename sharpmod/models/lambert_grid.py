@@ -1,4 +1,4 @@
-"""Lambert conformal conic model grids, in pure Python.
+"""Model grid declarations backed by native Lambert conformal geometry.
 
 NOAA's mesoscale models -- HRRR, RAP, the NAM nests -- are computed on Lambert
 conformal conic grids. A grid is a *rectangle in the projection plane*, so its
@@ -12,12 +12,9 @@ The two never agree, which reads as though the projections had been swapped.
 
 This module exists so the boundary can be drawn as what it is.
 
-**Pure ``math``, no NumPy and no pyproj.** :mod:`sharpmod.tools.model_extract`
-imports this to publish a model's real perimeter, and that module is reachable
-from the picker's import path, which is held free of NumPy so the interface still
-opens promptly. The transform is textbook spherical Lambert conformal conic;
-:mod:`sharpmod.providers.hrrr_field` keeps using pyproj for the bulk field reprojection,
-where NumPy is already loaded and vectorised work is what matters.
+The frozen dataclass preserves the existing provider and testing interfaces.
+Rust owns projection, membership and perimeter calculations; bulk raster
+reprojection continues to use the existing pyproj path.
 
 Verified against pyproj at HRRR's four grid corners to 1e-13 degrees, and the
 south-west corner reproduces the ``21.138123N 237.280472E`` that HRRR's own GRIB
@@ -26,8 +23,8 @@ header publishes as its first grid point.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
+import sharpmod_rs
 
 __all__ = [
     "LambertConformalGrid",
@@ -35,12 +32,6 @@ __all__ = [
     "NAM_GRID",
     "HRW_GRID",
 ]
-
-#: Latitude the transform clamps to, so a pole cannot divide by zero. The models
-#: this describes are mid-latitude, so this is a guard and never a limit reached
-#: in normal use.
-_LAT_LIMIT = 89.9
-
 
 @dataclass(frozen=True)
 class LambertConformalGrid:
@@ -79,73 +70,39 @@ class LambertConformalGrid:
         ``0/0``, so the limit ``sin(phi_1)`` is used instead. HRRR is tangent at
         38.5, so this branch is the one that matters here, not a corner case.
         """
-        phi1 = math.radians(self.lat_1)
-        phi2 = math.radians(self.lat_2)
-        if abs(phi1 - phi2) < 1e-12:
-            return math.sin(phi1)
-        return (math.log(math.cos(phi1) / math.cos(phi2))
-                / math.log(math.tan(math.pi / 4.0 + phi2 / 2.0)
-                           / math.tan(math.pi / 4.0 + phi1 / 2.0)))
+        return sharpmod_rs.lambert_constants(self)[0]
 
     @property
     def _f(self) -> float:
-        n = self._n
-        phi1 = math.radians(self.lat_1)
-        return (math.cos(phi1)
-                * math.tan(math.pi / 4.0 + phi1 / 2.0) ** n) / n
+        return sharpmod_rs.lambert_constants(self)[1]
 
     @property
     def _rho0(self) -> float:
-        n = self._n
-        phi0 = math.radians(self.lat_origin)
-        return (self.radius * self._f
-                / math.tan(math.pi / 4.0 + phi0 / 2.0) ** n)
+        return sharpmod_rs.lambert_constants(self)[2]
 
     # -- extent -------------------------------------------------------------- #
     @property
     def x1(self) -> float:
         """Easting of the last grid column, metres."""
-        return self.x0 + (self.shape[1] - 1) * self.spacing
+        return sharpmod_rs.lambert_extent(self)[0]
 
     @property
     def y1(self) -> float:
         """Northing of the last grid row, metres."""
-        return self.y0 + (self.shape[0] - 1) * self.spacing
+        return sharpmod_rs.lambert_extent(self)[1]
 
     # -- transform ----------------------------------------------------------- #
     def forward(self, lon: float, lat: float) -> tuple[float, float]:
         """Return the projection-plane ``(x, y)`` in metres for a coordinate."""
-        n, f = self._n, self._f
-        phi = math.radians(max(-_LAT_LIMIT, min(_LAT_LIMIT, float(lat))))
-        delta = math.radians(
-            ((float(lon) - self.lon_origin + 180.0) % 360.0) - 180.0)
-        tangent = math.tan(math.pi / 4.0 + phi / 2.0)
-        if tangent <= 0.0:
-            raise ValueError("latitude is at or beyond the far pole")
-        rho = self.radius * f / tangent ** n
-        theta = n * delta
-        return rho * math.sin(theta), self._rho0 - rho * math.cos(theta)
+        return sharpmod_rs.lambert_forward(self, float(lon), float(lat))
 
     def inverse(self, x: float, y: float) -> tuple[float, float]:
         """Return the ``(lon, lat)`` in degrees for a projection-plane point."""
-        n, f = self._n, self._f
-        dy = self._rho0 - float(y)
-        rho = math.copysign(math.hypot(float(x), dy), n)
-        if rho == 0.0:
-            # The cone's apex is the pole; longitude is undefined there, so the
-            # central meridian is the only non-arbitrary answer.
-            return self._normalise_lon(self.lon_origin), 90.0 if n > 0 else -90.0
-        theta = (math.atan2(float(x), dy) if n > 0
-                 else math.atan2(-float(x), -dy))
-        lon = self.lon_origin + math.degrees(theta / n)
-        lat = math.degrees(
-            2.0 * math.atan((self.radius * f / rho) ** (1.0 / n))
-            - math.pi / 2.0)
-        return self._normalise_lon(lon), lat
+        return sharpmod_rs.lambert_inverse(self, float(x), float(y))
 
     @staticmethod
     def _normalise_lon(lon: float) -> float:
-        return ((float(lon) + 180.0) % 360.0) - 180.0
+        return sharpmod_rs.lambert_normalize_longitude(float(lon))
 
     # -- membership ---------------------------------------------------------- #
     def contains(self, lat: float, lon: float) -> bool:
@@ -161,20 +118,7 @@ class LambertConformalGrid:
             lon = float(lon)
         except (TypeError, ValueError):
             return False
-        if not math.isfinite(lat) or not math.isfinite(lon):
-            return False
-        if not -90.0 <= lat <= 90.0:
-            return False
-        delta = ((lon - self.lon_origin + 180.0) % 360.0) - 180.0
-        # Past a half-turn of the cone the projection folds back on itself and a
-        # point on the far side of the planet would land inside the grid.
-        if abs(math.radians(delta) * self._n) >= math.pi:
-            return False
-        try:
-            x, y = self.forward(lon, lat)
-        except ValueError:
-            return False
-        return (self.x0 <= x <= self.x1) and (self.y0 <= y <= self.y1)
+        return sharpmod_rs.lambert_contains(self, lat, lon)
 
     # -- perimeter ----------------------------------------------------------- #
     def outline(self, samples_per_edge: int = 32) -> tuple[
@@ -185,20 +129,7 @@ class LambertConformalGrid:
         longitude/latitude -- four corners joined by straight lines would cut
         3.2 degrees off HRRR's southern boundary at the middle.
         """
-        count = max(2, int(samples_per_edge))
-        x0, x1, y0, y1 = self.x0, self.x1, self.y0, self.y1
-
-        def along(start, stop):
-            return (start + (stop - start) * index / count
-                    for index in range(count))
-
-        points: list[tuple[float, float]] = []
-        points.extend(self.inverse(x, y0) for x in along(x0, x1))   # south
-        points.extend(self.inverse(x1, y) for y in along(y0, y1))   # east
-        points.extend(self.inverse(x, y1) for x in along(x1, x0))   # north
-        points.extend(self.inverse(x0, y) for y in along(y1, y0))   # west
-        points.append(points[0])
-        return tuple(points)
+        return sharpmod_rs.lambert_outline(self, int(samples_per_edge))
 
     def bounds(self, samples_per_edge: int = 32) -> tuple[
             float, float, float, float]:
@@ -209,10 +140,7 @@ class LambertConformalGrid:
         axis-aligned box around a bowed shape must be -- which is exactly why
         :meth:`contains` does not use it.
         """
-        points = self.outline(samples_per_edge)
-        lons = [lon for lon, _lat in points]
-        lats = [lat for _lon, lat in points]
-        return min(lons), max(lons), min(lats), max(lats)
+        return sharpmod_rs.lambert_bounds(self, int(samples_per_edge))
 
 
 #: The operational HRRR CONUS grid.

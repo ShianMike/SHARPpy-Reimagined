@@ -7,10 +7,53 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Upcoming
+Changes prepared for **3.7.2**. Other planned models and parameter sets remain
+upcoming; the implemented RAP/RDPS fields below are included.
 
-- Expand the available weather-model parameters, offering only fields supported
-  by each model and the selected run.
+### Changed
+
+- Move ensemble metric distributions and pressure-aligned temperature/dewpoint
+  columns into Rust. Preserve usable-member counts, linear percentile behavior,
+  missing-value masks, duplicate-pressure selection and gaps outside each
+  profile's observed pressure range. Keep Python entry points as compatibility
+  calls for the existing profile metrics engine.
+- Give the Live Tracking network, radar site, product and tilt selectors custom
+  movable popups matching the forecast and radar-time pickers. Keep radar site
+  search and the selected choice visible.
+- Show service details directly in the backend status popup, without an extra
+  dropdown to expand them.
+- Center the map startup failure message, retry button and station list in the
+  available map area. Reserve inspector space only while that panel is open.
+- Move shared model-raster color tables, colorization, contour drawing, PNG
+  encoding and browser-grid quantization into Rust. Preserve palette bands,
+  transparent cells, numeric encoding and the existing overlay byte limit.
+- Move shared Lambert transforms, model-domain outlines, GRIB wind-reference
+  handling, and the common theta-e, EHI, SCP, STP, lapse-rate and precipitation
+  type calculations into Rust. Reuse the native projection and thermodynamic
+  kernels, and retain the existing Python entry points as compatibility wiring.
+- Maintain the model hazard inventory checks for the supported RAP and RDPS
+  parameter sets, and keep radar-control regressions in a focused test module.
+- Give the vertical color scales in Model Viewer and Live Tracking a thin
+  outline and show five rounded values from minimum to maximum in the selected
+  units. Move the scales closer to each map's right edge. Place each Model
+  Viewer layer visibility button beside its panel title
+  at the same height in two- and four-panel layouts. In other views, keep the
+  button below the scale.
+- Use the existing wind colors at 20–80 kt for the 850 mb wind map, with each
+  color band assigned to the corresponding speed in the reference scale.
+- Use the supplied color bands for the 0–1 km and 0–3 km Energy Helicity Index
+  maps. Keep values below 0.5 transparent and use the final shade from 16 up.
+- Use the supplied 20–140 kt color table for Bulk Shear: 0–6 km AGL.
+
+### Added
+
+- Add RAP and Canadian RDPS map parameters using the shared HRRR color tables
+  and controls. Check the published ingredients for the selected run and hour;
+  preserve RAP's hourly cycles and 21/51-hour forecast limits. Decode RDPS's
+  native rotated grid and rotate its wind components to true east/north.
+  Draw RAP's actual curved grid perimeter instead of a rectangular CONUS box.
+  Keep RDPS's generic CAPE and hourly winter precipitation accumulations
+  labeled separately from HRRR parcel diagnostics and instantaneous rates.
 
 ## [v3.7.1] - 2026-11-13
 

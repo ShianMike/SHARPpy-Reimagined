@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.7.1
+# SHARPpy Reimagined · v3.7.2
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,11 +10,28 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v371---2026-11-13)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#unreleased)
 
 </div>
 
-## What's new in 3.7.1
+## Preparing 3.7.2
+
+- **RAP and RDPS maps:** use the implemented parameters with shared HRRR color
+  tables and controls. Available choices follow the selected run's published
+  fields, with RAP's actual curved coverage outline and RDPS's native grid.
+  Other planned models and parameter sets remain upcoming.
+- **Readable color scales:** show five whole numbers beside outlined scales.
+  In two- and four-panel Model Viewer layouts, the eye button sits beside each
+  panel title. Wind, deep-layer shear and EHI use the supplied color tables.
+- **Matching radar pickers:** choose networks, sites, products and tilts in
+  movable popups with site search and a visible current selection.
+- **Direct service details and map recovery:** backend details appear as soon
+  as its status popup opens. Map startup recovery controls and the station list
+  are centered in the available map area.
+- **More native calculations:** shared map rendering, projection, diagnostics
+  and ensemble statistics use Rust through the existing application interfaces.
+
+### Included from 3.7.1
 
 Live radar now follows the latest available scan automatically, showing its
 actual time and age. Version 3.7.0 added radar coverage and sounding choices:

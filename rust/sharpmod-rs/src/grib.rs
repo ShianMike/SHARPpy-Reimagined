@@ -5,6 +5,7 @@
 //! build-machine ecCodes installation while preserving ecCodes' grid, packing,
 //! and local-table behavior on Windows, Linux, and macOS.
 
+use crate::wind_reference::Reference as WindRotation;
 use libloading::Library;
 use memchr::memmem;
 use memmap2::MmapOptions;
@@ -173,12 +174,6 @@ struct InventoryField {
     wind_rotation: WindRotation,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-struct WindRotation {
-    cone: f64,
-    origin: f64,
-}
-
 impl WindRotation {
     fn from_grib(api: &EccodesApi, handle: *const c_void) -> Result<Self, GribError> {
         let relative = api
@@ -193,56 +188,25 @@ impl WindRotation {
             _ => return Err(GribError::new("invalid GRIB wind-reference flag")),
         }
         let grid = api.get_string_value(handle, b"gridType\0")?;
-        let (cone, origin) = match grid.as_str() {
+        match grid.as_str() {
             "regular_ll" | "regular_gg" | "reduced_ll" | "reduced_gg" | "mercator" => {
-                return Ok(Self::default());
+                Ok(Self::default())
             }
-            "lambert" => {
-                let first = api
-                    .get_double_value(handle, b"Latin1InDegrees\0")?
-                    .to_radians();
-                let second = api
-                    .get_double_value(handle, b"Latin2InDegrees\0")?
-                    .to_radians();
-                if first.abs() >= std::f64::consts::FRAC_PI_2
-                    || second.abs() >= std::f64::consts::FRAC_PI_2
-                {
-                    return Err(GribError::new("invalid Lambert standard parallels"));
-                }
-                let cone = if (first - second).abs() < 1.0e-12 {
-                    first.sin()
-                } else {
-                    (first.cos() / second.cos()).ln()
-                        / ((std::f64::consts::FRAC_PI_4 + second / 2.0).tan()
-                            / (std::f64::consts::FRAC_PI_4 + first / 2.0).tan())
-                        .ln()
-                };
-                (cone, api.get_double_value(handle, b"LoVInDegrees\0")?)
-            }
-            "polar_stereographic" => (
-                if api.get_long_value(handle, b"projectionCentreFlag\0")? & 128 != 0 {
-                    -1.0
-                } else {
-                    1.0
-                },
+            "lambert" => Self::lambert(
+                api.get_double_value(handle, b"Latin1InDegrees\0")?,
+                api.get_double_value(handle, b"Latin2InDegrees\0")?,
+                api.get_double_value(handle, b"LoVInDegrees\0")?,
+            )
+            .map_err(GribError::new),
+            "polar_stereographic" => Self::polar(
+                api.get_long_value(handle, b"projectionCentreFlag\0")? & 128 != 0,
                 api.get_double_value(handle, b"orientationOfTheGridInDegrees\0")?,
-            ),
-            _ => {
-                return Err(GribError::new(format!(
-                    "unsupported grid-relative wind projection: {grid}"
-                )))
-            }
-        };
-        if !cone.is_finite() || !origin.is_finite() || cone.abs() < 1.0e-12 {
-            return Err(GribError::new("invalid GRIB wind projection metadata"));
+            )
+            .map_err(GribError::new),
+            _ => Err(GribError::new(format!(
+                "unsupported grid-relative wind projection: {grid}"
+            ))),
         }
-        Ok(Self { cone, origin })
-    }
-
-    fn rotate(self, u: f64, v: f64, longitude: f64) -> (f64, f64) {
-        let angle = (self.cone * normalize_longitude(longitude - self.origin)).to_radians();
-        let (sine, cosine) = angle.sin_cos();
-        (cosine * u + sine * v, -sine * u + cosine * v)
     }
 }
 

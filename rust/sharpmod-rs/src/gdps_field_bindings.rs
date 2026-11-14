@@ -1,8 +1,8 @@
-//! GDPS map transfers through the shared native HTTP client and GRIB runtime.
+//! Canadian map transfers through the shared native HTTP client and GRIB runtime.
 
 use crate::{
     gdps_fields::{
-        self, Frame, Record, HEIGHT, MAX_FIELD_BYTES, MAX_INVENTORY_BYTES, SPACING, WIDTH,
+        self, Frame, Model, Record, HEIGHT, MAX_FIELD_BYTES, MAX_INVENTORY_BYTES, SPACING, WIDTH,
     },
     grib::gdps_grid,
     model_http_bindings::{cancelled, field_error},
@@ -16,14 +16,18 @@ use sharpmod_weather::{
 use std::path::Path;
 use time::OffsetDateTime;
 
-fn records(product: &Bound<'_, PyAny>) -> PyResult<Vec<(String, Record)>> {
+fn records(product: &Bound<'_, PyAny>, model: Model) -> PyResult<Vec<(String, Record)>> {
     product
         .getattr("all_fields")?
         .try_iter()?
         .map(|field| {
             let name: String = field?.getattr("name")?.extract()?;
-            let record =
-                gdps_fields::record(&name).map_err(|error| field_error(product.py(), error))?;
+            let record = (if model == Model::Rdps {
+                gdps_fields::rdps_record(&name)
+            } else {
+                gdps_fields::record(&name)
+            })
+            .map_err(|error| field_error(product.py(), error))?;
             Ok((name, record))
         })
         .collect()
@@ -48,6 +52,13 @@ fn gdps_map_directory(py: Python<'_>, run: OffsetDateTime, hour: u16) -> PyResul
 }
 
 #[pyfunction]
+fn rdps_map_directory(py: Python<'_>, run: OffsetDateTime, hour: u16) -> PyResult<String> {
+    Ok(Frame::for_model(Model::Rdps, run, hour)
+        .map_err(|error| field_error(py, error))?
+        .directory())
+}
+
+#[pyfunction]
 fn available_gdps_map_products(
     py: Python<'_>,
     products: Vec<Py<PyAny>>,
@@ -55,11 +66,40 @@ fn available_gdps_map_products(
     hour: u16,
     timeout: f64,
 ) -> PyResult<Vec<Py<PyAny>>> {
-    let frame = Frame::new(run, hour).map_err(|error| field_error(py, error))?;
+    available(
+        py,
+        products,
+        Frame::new(run, hour).map_err(|error| field_error(py, error))?,
+        timeout,
+    )
+}
+
+#[pyfunction]
+fn available_rdps_map_products(
+    py: Python<'_>,
+    products: Vec<Py<PyAny>>,
+    run: OffsetDateTime,
+    hour: u16,
+    timeout: f64,
+) -> PyResult<Vec<Py<PyAny>>> {
+    available(
+        py,
+        products,
+        Frame::for_model(Model::Rdps, run, hour).map_err(|error| field_error(py, error))?,
+        timeout,
+    )
+}
+
+fn available(
+    py: Python<'_>,
+    products: Vec<Py<PyAny>>,
+    frame: Frame,
+    timeout: f64,
+) -> PyResult<Vec<Py<PyAny>>> {
     let requested = products
         .iter()
         .map(|product| {
-            Ok(records(product.bind(py))?
+            Ok(records(product.bind(py), frame.model)?
                 .into_iter()
                 .map(|(_, record)| record)
                 .collect::<Vec<_>>())
@@ -83,7 +123,7 @@ fn available_gdps_map_products(
             || cancelled(callback.as_ref()),
         ))?;
         let text = std::str::from_utf8(&listing)
-            .map_err(|_| Error::Invalid("Invalid GDPS file listing".into()))?;
+            .map_err(|_| Error::Invalid("Invalid Canadian model file listing".into()))?;
         let inventory = frame.inventory(text);
         Ok::<_, Error>(
             requested
@@ -116,7 +156,32 @@ fn download_gdps_map_fields<'py>(
     workers: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
     let frame = Frame::new(run, hour).map_err(|error| field_error(py, error))?;
-    let records = records(product)?;
+    download(py, product, frame, timeout, should_cancel, workers)
+}
+
+#[pyfunction(signature = (product, run, hour, timeout, should_cancel=None, workers=4))]
+fn download_rdps_map_fields<'py>(
+    py: Python<'py>,
+    product: &Bound<'py, PyAny>,
+    run: OffsetDateTime,
+    hour: u16,
+    timeout: f64,
+    should_cancel: Option<Py<PyAny>>,
+    workers: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    let frame = Frame::for_model(Model::Rdps, run, hour).map_err(|error| field_error(py, error))?;
+    download(py, product, frame, timeout, should_cancel, workers)
+}
+
+fn download<'py>(
+    py: Python<'py>,
+    product: &Bound<'py, PyAny>,
+    frame: Frame,
+    timeout: f64,
+    should_cancel: Option<Py<PyAny>>,
+    workers: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    let records = records(product, frame.model)?;
     let library = PyModule::import(py, "sharpmod.backends.rust_backend")?
         .getattr("_eccodes_library_path")?
         .call0()
@@ -124,7 +189,7 @@ fn download_gdps_map_fields<'py>(
         .map_err(|error| {
             field_error(
                 py,
-                Error::Invalid(format!("GDPS needs the GRIB runtime: {error}")),
+                Error::Invalid(format!("Canadian maps need the GRIB runtime: {error}")),
             )
         })?;
     let jobs = records
@@ -167,11 +232,47 @@ fn download_gdps_map_fields<'py>(
             .collect::<Result<Vec<_>, _>>()
     });
     lock.call_method0("release")?;
-    let values = values.map_err(|error| field_error(py, error))?;
+    let mut values = values.map_err(|error| field_error(py, error))?;
+    if frame.model == Model::Rdps {
+        // Each product requests complete pairs. Rotate before deriving speed or
+        // packing arrows, so all downstream consumers see true east/north winds.
+        let pairs = values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, (name, _))| {
+                let other = name
+                    .strip_prefix("ugrd")
+                    .map(|level| format!("vgrd{level}"))
+                    .or_else(|| (name == "u10").then(|| "v10".to_owned()))?;
+                values
+                    .iter()
+                    .position(|(name, _)| name == &other)
+                    .map(|j| (i, j))
+            })
+            .collect::<Vec<_>>();
+        for (i, j) in pairs {
+            let (u, v) = if i < j {
+                let (a, b) = values.split_at_mut(j);
+                (&mut a[i].1, &mut b[0].1)
+            } else {
+                let (a, b) = values.split_at_mut(i);
+                (&mut b[0].1, &mut a[j].1)
+            };
+            crate::regional_grids::rotate_rdps(u, v);
+        }
+    }
+    let shape = if frame.model == Model::Rdps {
+        (
+            crate::regional_grids::RDPS_HEIGHT,
+            crate::regional_grids::RDPS_WIDTH,
+        )
+    } else {
+        (HEIGHT, WIDTH)
+    };
     let decoded = PyDict::new(py);
     for (name, values) in values {
         let grid =
-            Array2::from_shape_vec((HEIGHT, WIDTH), values).expect("validated GDPS dimensions");
+            Array2::from_shape_vec(shape, values).expect("validated Canadian grid dimensions");
         decoded.set_item(name, grid.into_pyarray(py))?;
     }
     Ok(decoded)
@@ -182,5 +283,8 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(gdps_map_directory, module)?)?;
     module.add_function(wrap_pyfunction!(available_gdps_map_products, module)?)?;
     module.add_function(wrap_pyfunction!(download_gdps_map_fields, module)?)?;
+    module.add_function(wrap_pyfunction!(rdps_map_directory, module)?)?;
+    module.add_function(wrap_pyfunction!(available_rdps_map_products, module)?)?;
+    module.add_function(wrap_pyfunction!(download_rdps_map_fields, module)?)?;
     Ok(())
 }

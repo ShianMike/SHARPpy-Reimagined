@@ -1,11 +1,17 @@
-/* The overlay box minus the inspector width and one gap on the right, so the
-   inspector never covers the list (DESIGN-frontend F8 layout frame). */
+/* Center the recovery controls in the map area; an open inspector reserves
+   its own space through the shell's fallback inset. */
 .view {
   position: absolute;
-  inset: var(--floating-panel-top) calc(var(--inspector-w) + 2 * var(--dock-offset)) calc(var(--player-h) + 2 * var(--chrome-inset)) var(--dock-offset);
+  inset: var(--forecast-top) var(--fallback-right, var(--chrome-inset)) calc(var(--player-h) + 2 * var(--chrome-inset)) var(--dock-offset);
+  width: min(var(--player-w), calc(100% - var(--dock-offset) - var(--fallback-right, var(--chrome-inset))));
+  height: min(var(--floating-panel-h), calc(100% - var(--forecast-top) - var(--player-h) - 2 * var(--chrome-inset)));
+  margin: auto;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-3);
   min-height: 0;
   padding: var(--space-3);
 }
+
+.view > * { width: 100%; }

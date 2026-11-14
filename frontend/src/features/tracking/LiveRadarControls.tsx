@@ -33,7 +33,7 @@ export function LiveRadarControls({ className, scansRef }: { className?: string 
     : selected?.key === "echo-tops" ? "Full volume"
     : selected?.key === "reflectivity" || selected?.key === "base-reflectivity" || selected?.key === "velocity" || selected?.key === "hydrometeor" ? "Lowest available" : "Not applicable";
   return <Surface className={cx(controls.fields, styles.fields, className)} data-motion="fade" role="group" aria-label="Live radar" aria-description={`Controls for Panel ${String(panel + 1)}. Available elevations depend on the radar and its scan pattern.`} data-testid="live-radar-fields">
-    <SourceSelect label="Network" toolbarIcon={Globe} value={activeNetwork}
+    <SourceSelect label="Network" toolbarIcon={Globe} popup="list" value={activeNetwork}
       options={[{ value: "all", label: "All networks" }, ...networks.map((country) => ({ value: country, label: radarNetworkLabel(country).split(" · ")[0] ?? country, detail: country === "OPERA" ? "Europe · OPERA · compatible scans only" : radarNetworkLabel(country) }))]}
       onChange={(country) => {
         setNetwork(country);
@@ -64,7 +64,7 @@ export function LiveRadarControls({ className, scansRef }: { className?: string 
         const selectedSite = sites.data?.sites.find((item) => item.id === value);
         if (selectedSite !== undefined) state.requestFocus(selectedSite.id, { latitude: selectedSite.latitude, longitude: selectedSite.longitude });
       }} />
-    <SourceSelect label={`Site Product${panel > 0 ? ` · ${String(panel + 1)}` : ""}`} toolbarIcon={Radar} value={selected?.key ?? ""} disabled={products.length === 0}
+    <SourceSelect label={`Site Product${panel > 0 ? ` · ${String(panel + 1)}` : ""}`} toolbarIcon={Radar} popup="list" value={selected?.key ?? ""} disabled={products.length === 0}
       options={products.length === 0 ? [{ value: "", label: catalog.isError ? "Unavailable" : "Loading…" }] : products.map((item) => ({ value: item.key, label: provider === "MRRL" && item.key === "reflectivity" ? "Reflectivity" : item.label, detail: item.units }))}
       onChange={useMapStore.getState().setRadarProduct} />
     <div ref={scansRef} className={styles.scanSlot} />

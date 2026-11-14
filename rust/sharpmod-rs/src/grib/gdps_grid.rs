@@ -1,7 +1,10 @@
 //! Decode one validated GDPS Datamart field into the map's regular grid order.
 
 use super::*;
-use crate::gdps_fields::{Frame, Period, Record, HEIGHT, SPACING, WIDTH};
+use crate::gdps_fields::{Frame, Model, Period, Record, HEIGHT, SPACING, WIDTH};
+use crate::regional_grids::{
+    RDPS_HEIGHT, RDPS_POLE_LAT, RDPS_POLE_LON, RDPS_SPACING, RDPS_WIDTH, RDPS_X0, RDPS_Y0,
+};
 
 type GetDoubleArray =
     unsafe extern "C" fn(*const c_void, *const c_char, *mut f64, *mut usize) -> c_int;
@@ -32,10 +35,23 @@ pub(crate) fn decode(
         .next_multi_handle(payload, &mut cursor, &mut remaining)?
         .ok_or_else(|| GribError::new("GDPS GRIB2 field could not be opened"))?;
     let pointer = handle.as_ptr();
+    let regional = frame.model == Model::Rdps;
+    let (width, height, spacing) = if regional {
+        (RDPS_WIDTH, RDPS_HEIGHT, RDPS_SPACING)
+    } else {
+        (WIDTH, HEIGHT, SPACING)
+    };
     let (level_type, level) = record.level.metadata();
     let (step_type, start, divisor) = match record.period {
         Period::Instant => ("instant", frame.hour, 1.0),
         Period::RunTotal => ("accum", 0, 1.0),
+        Period::OneHour => (
+            "accum",
+            frame.hour.checked_sub(1).ok_or_else(|| {
+                GribError::new("RDPS winter rates require one complete forecast hour")
+            })?,
+            1.0,
+        ),
         // ECCC publishes the liquid-equivalent amount over this interval.
         Period::ThreeHours => (
             "accum",
@@ -47,13 +63,13 @@ pub(crate) fn decode(
         ),
     };
     let integers: &[(&[u8], c_long)] = &[
-        (b"Ni\0", WIDTH as c_long),
-        (b"Nj\0", HEIGHT as c_long),
+        (b"Ni\0", width as c_long),
+        (b"Nj\0", height as c_long),
         (b"iScansNegatively\0", 0),
         (b"jScansPositively\0", 1),
         (b"jPointsAreConsecutive\0", 0),
         (b"alternativeRowScanning\0", 0),
-        (b"uvRelativeToGrid\0", 0),
+        (b"uvRelativeToGrid\0", c_long::from(regional)),
         (b"dataDate\0", frame.date as c_long),
         (b"dataTime\0", c_long::from(frame.cycle) * 100),
         (b"stepUnits\0", 1),
@@ -65,14 +81,20 @@ pub(crate) fn decode(
         (LEVEL_KEY, c_long::from(level)),
     ];
     let floats: &[(&[u8], f64)] = &[
-        (FIRST_LATITUDE_KEY, -90.0),
-        (FIRST_LONGITUDE_KEY, 0.0),
-        (b"iDirectionIncrementInDegrees\0", SPACING),
-        (b"jDirectionIncrementInDegrees\0", SPACING),
+        (FIRST_LATITUDE_KEY, if regional { RDPS_Y0 } else { -90.0 }),
+        (
+            FIRST_LONGITUDE_KEY,
+            if regional { RDPS_X0 + 360.0 } else { 0.0 },
+        ),
+        (b"iDirectionIncrementInDegrees\0", spacing),
+        (b"jDirectionIncrementInDegrees\0", spacing),
     ];
     let strings: &[(&[u8], &str)] = &[
         (b"centre\0", "cwao"),
-        (b"gridType\0", "regular_ll"),
+        (
+            b"gridType\0",
+            if regional { "rotated_ll" } else { "regular_ll" },
+        ),
         (TYPE_OF_LEVEL_KEY, level_type),
         (b"stepType\0", step_type),
     ];
@@ -85,6 +107,24 @@ pub(crate) fn decode(
         let value = api.get_double_value(pointer, key)?;
         if !value.is_finite() || (value - expected).abs() > 1e-8 {
             return Err(wrong_record(key));
+        }
+    }
+    if regional {
+        for (key, expected) in [
+            (
+                b"latitudeOfSouthernPoleInDegrees\0".as_slice(),
+                RDPS_POLE_LAT,
+            ),
+            (
+                b"longitudeOfSouthernPoleInDegrees\0".as_slice(),
+                RDPS_POLE_LON,
+            ),
+            (b"angleOfRotationInDegrees\0".as_slice(), 0.0),
+        ] {
+            let actual = api.get_double_value(pointer, key)?;
+            if !actual.is_finite() || (actual - expected).abs() > 1e-8 {
+                return Err(wrong_record(key));
+            }
         }
     }
     for (key, expected) in strings {
@@ -101,7 +141,7 @@ pub(crate) fn decode(
     // the output buffer has exactly the capacity passed through `length`.
     let get_array: GetDoubleArray =
         unsafe { load_symbol(&api._library, b"codes_get_double_array\0")? };
-    let mut values = vec![0.0; WIDTH * HEIGHT];
+    let mut values = vec![0.0; width * height];
     let mut length = values.len();
     let code = unsafe {
         get_array(
@@ -117,12 +157,25 @@ pub(crate) fn decode(
             "GDPS grid value count does not match its dimensions",
         ));
     }
-    Ok(map_order(&values, WIDTH, missing, divisor))
+    if regional {
+        Ok(values
+            .into_iter()
+            .map(|value| {
+                if value.is_finite() && Some(value) != missing {
+                    (value / divisor) as f32
+                } else {
+                    f32::NAN
+                }
+            })
+            .collect())
+    } else {
+        Ok(map_order(&values, width, missing, divisor))
+    }
 }
 
 fn wrong_record(key: &[u8]) -> GribError {
     GribError::new(format!(
-        "GDPS field did not match its published grid or record address ({})",
+        "Canadian field did not match its published grid or record address ({})",
         String::from_utf8_lossy(&key[..key.len() - 1])
     ))
 }

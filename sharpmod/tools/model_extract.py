@@ -30,6 +30,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+from sharpmod_rs import regional_map_grid
 
 from sharpmod import backends as _backends
 from sharpmod.providers import eccc_geomet
@@ -160,6 +161,7 @@ CONUS_DOMAIN = (-130.0, -60.0, 20.0, 55.0)
 #: measure of how wrong the box was: 4.1 degrees of longitude at the west edge,
 #: 2.4 degrees of latitude at the north.
 HRRR_OUTLINE = lambert_grid.HRRR_GRID.outline()
+RAP_GRID = regional_map_grid("rap")
 HRRR_DOMAIN = lambert_grid.HRRR_GRID.bounds()
 ALASKA_DOMAIN = (160.0, -120.0, 40.0, 80.0)
 HAWAII_DOMAIN = (-162.5, -152.5, 16.0, 24.0)
@@ -218,8 +220,9 @@ _CONFIGS = (
         notes="3-km CONUS pressure-level forecast grids"),
     ModelConfig(
         "rap", "RAP", "rap", "awp130pgrb", cycles=tuple(range(24)),
-        fxx_values=_hours(51), domain="CONUS", domain_bounds=CONUS_DOMAIN,
+        fxx_values=_hours(51), domain="CONUS", domain_bounds=RAP_GRID.bounds(),
         grid_spacing_km=13.0,
+        domain_outline=RAP_GRID.outline(),
         notes="13-km RAP AWIPS pressure-level forecast grids"),
     ModelConfig(
         "nam", "NAM", "nam", "awphys",

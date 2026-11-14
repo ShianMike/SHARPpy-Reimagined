@@ -7,8 +7,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Changes prepared for **3.7.2**. Other planned models and parameter sets remain
-upcoming; the implemented RAP/RDPS fields below are included.
+## [v3.7.2] - 2026-11-14
+
+Other planned models and parameter sets remain upcoming; the implemented
+RAP/RDPS fields below are included.
 
 ### Changed
 

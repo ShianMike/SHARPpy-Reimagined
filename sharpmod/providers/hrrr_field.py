@@ -62,6 +62,7 @@ from sharpmod.providers.hrrr_products import (
     get_product,
 )
 from sharpmod.models.lambert_grid import HRRR_GRID, HRRR_PROJ4, NAM_GRID, NAM_PROJ4, HRW_GRID
+from sharpmod.models.model_disk_cache import map_disk_cache_root as disk_cache_root
 from sharpmod.providers.hrrr_products import HRW_MODELS
 from sharpmod.models.model_transport import DownloadCancelled
 from sharpmod.maps.map_overlays import MAX_RASTER_BYTES, OverlayRaster
@@ -593,14 +594,6 @@ def _hex_to_rgb(colour: str) -> tuple[int, int, int]:
 # --------------------------------------------------------------------------- #
 # Disk cache for immutable frames
 # --------------------------------------------------------------------------- #
-
-
-def disk_cache_root() -> Path:
-    override = os.environ.get("SHARPMOD_HRRR_FIELD_CACHE", "").strip()
-    if override:
-        return Path(override).expanduser()
-    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-    return Path(base) / "SHARPpy Reimagined" / "hrrr-fields"
 
 
 def _disk_path(product_key: str, run: datetime, fxx: int,

@@ -61,8 +61,8 @@ def _files(root: Path | None, pattern: str | tuple[str, ...] = "*") -> list[tupl
 
 def _scan():
     from sharpmod.bridge.sounding_cache import cache
-    from sharpmod.models.model_disk_cache import ModelDiskCache
-    from sharpmod.providers import hrrr_field, spc_outlook
+    from sharpmod.models.model_disk_cache import ModelDiskCache, map_disk_cache_root
+    from sharpmod.providers import spc_outlook
 
     disk = ModelDiskCache()
     entries = disk.entries()
@@ -77,7 +77,7 @@ def _scan():
                     for path, size, _ in _files(session.model_root)]
     files = {
         "models": [(path, size, True) for path, size, ready in session_files if ready] + source_files,
-        "maps": _files(hrrr_field.disk_cache_root(), ("*.png", "*.json.gz", "*.part")),
+        "maps": _files(map_disk_cache_root(), ("*.png", "*.json.gz", "*.part")),
         "outlooks": _files(spc_outlook.disk_cache_root(), ("*.json", "*.part")),
         "radar": _files(session.root / "radar-volumes", ("*.ar2", "*.part")),
     }

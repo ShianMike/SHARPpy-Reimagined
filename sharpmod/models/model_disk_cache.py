@@ -63,6 +63,14 @@ def default_model_cache_root() -> Path:
     return Path.home() / ".cache" / "sharpmod" / "model-cache"
 
 
+def map_disk_cache_root() -> Path:
+    override = os.environ.get("SHARPMOD_HRRR_FIELD_CACHE", "").strip()
+    if override:
+        return Path(override).expanduser()
+    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    return Path(base) / "SHARPpy Reimagined" / "hrrr-fields"
+
+
 def _safe(value) -> str:
     return "".join(
         character if character.isalnum() or character in "-_" else "_"

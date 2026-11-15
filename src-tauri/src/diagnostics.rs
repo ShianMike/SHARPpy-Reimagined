@@ -88,26 +88,6 @@ fn view_png(view: &Value) -> Result<Value, String> {
     Ok(json!({"image_bytes": bytes.len(), "width": width, "height": height}))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn frozen_view_report_requires_png_dimensions() {
-        assert!(view_png(&json!({})).is_err());
-        assert!(view_png(&json!({"image": "not base64"})).is_err());
-        let encode = |bytes: &[u8]| json!({"image": base64::engine::general_purpose::STANDARD.encode(bytes)});
-        assert!(view_png(&encode(b"\x89PNG\r\n\x1a\n")).is_err());
-        let mut png = *b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\x0c\xbc\0\0\x08\x96";
-        assert_eq!(
-            view_png(&encode(&png)).unwrap(),
-            json!({"image_bytes": 24, "width": 3260, "height": 2198})
-        );
-        png[16..20].fill(0);
-        assert!(view_png(&encode(&png)).is_err());
-    }
-}
-
 pub fn start(app: AppHandle, router: Arc<Router>, output: PathBuf, sample: PathBuf) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
@@ -128,4 +108,24 @@ pub fn start(app: AppHandle, router: Arc<Router>, output: PathBuf, sample: PathB
             app.exit(code);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frozen_view_report_requires_png_dimensions() {
+        assert!(view_png(&json!({})).is_err());
+        assert!(view_png(&json!({"image": "not base64"})).is_err());
+        let encode = |bytes: &[u8]| json!({"image": base64::engine::general_purpose::STANDARD.encode(bytes)});
+        assert!(view_png(&encode(b"\x89PNG\r\n\x1a\n")).is_err());
+        let mut png = *b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\x0c\xbc\0\0\x08\x96";
+        assert_eq!(
+            view_png(&encode(&png)).unwrap(),
+            json!({"image_bytes": 24, "width": 3260, "height": 2198})
+        );
+        png[16..20].fill(0);
+        assert!(view_png(&encode(&png)).is_err());
+    }
 }

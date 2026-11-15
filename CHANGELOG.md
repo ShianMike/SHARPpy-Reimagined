@@ -23,6 +23,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Extend hodograph speed rings through 200 kt in Severe and Winter views,
   retaining the selected zoom, centering and existing labels.
+- Capitalize the Winter source caption as `Precipitation Source · Height AGL`
+  and label its separate hazard readout `Severe Weather Possible Hazard Type`,
+  fitting the heading to its existing box.
 
 ## [v3.8.0] - 2026-11-15
 

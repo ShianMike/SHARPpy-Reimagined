@@ -99,6 +99,7 @@ mod tests {
         Python::attach(|py| -> PyResult<()> {
             let extension = PyModule::import(py, "sharpmod_rs")?;
             register(&extension)?;
+            PyModule::import(py, "sharpmod.rendering.cli")?;
             PyModule::import(py, "sharpmod.render_patches.later_skewt")?
                 .call_method0("_install_hodo_label_fit")?;
 

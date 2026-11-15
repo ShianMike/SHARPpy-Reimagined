@@ -9,6 +9,10 @@
       {
         "title": "Hodograph rings to 200 kt",
         "description": "Severe and Winter hodographs include speed rings through 200 kt. Your zoom and centering controls continue to work as before."
+      },
+      {
+        "title": "Clearer Winter labels",
+        "description": "Read Precipitation Source and Height AGL above the source values. Severe Weather Possible Hazard Type identifies the separate hazard readout."
       }
     ]
   },

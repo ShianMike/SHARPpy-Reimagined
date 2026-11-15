@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (must match the package version, e.g. v3.7.2). Created if it does not exist."
+        description: "Release tag to publish (must match the package version, e.g. v3.8.0). Created if it does not exist."
         required: true
-        default: "v3.7.2"
+        default: "v3.8.0"
       publish_release:
         description: "Publish after verification; leave off to build a release candidate only."
         required: true
@@ -749,7 +749,7 @@ jobs:
       # Keep the release unpublished until the final publication step.
       - name: Publish GitHub Release
         id: create-release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
         with:
           tag_name: ${{ needs.resolve-release.outputs.tag }}
           target_commitish: ${{ needs.resolve-release.outputs.source_sha }}

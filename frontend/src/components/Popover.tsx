@@ -102,6 +102,10 @@ export function Popover({
     }
     moved.current = movable && id !== undefined ? useUiStore.getState().popupPositions[id] ?? null : null;
     POPOVER_ANCHORS.set(element, anchor);
+    // Child menus are portalled beside their parent, so they need an explicit stacking level.
+    const parent = anchor.closest<HTMLElement>("[data-popover]");
+    element.dataset.nested = String(parent !== null);
+    element.style.setProperty("--popover-depth", String(parent === null ? 0 : Number(parent.style.getPropertyValue("--popover-depth")) + 1));
     drag.current = null;
     const place = (): void => {
       const rect = anchor.getBoundingClientRect();

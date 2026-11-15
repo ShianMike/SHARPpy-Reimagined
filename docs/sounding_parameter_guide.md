@@ -22,6 +22,162 @@ Unless stated otherwise:
 - short expressions use inline GitHub math, such as $T_v$; and
 - display equations use GitHub's fenced `math` syntax.
 
+## Winter Weather composition
+
+The Winter choice is a separate native composition. It reuses the
+current profile's temperature, dewpoint, wet-bulb and wind traces. New layer
+calculations and composition live in `rust/sharpmod-rs/src/winter.rs` and
+`winter/` and `winter_view/`; the Python bridge only dispatches the selected
+mode. The severe diagnostic bank is replaced completely. No parcel selector,
+parcel table, parcel trace, parcel-level label or Skew-T lapse-rate annotation
+is displayed in winter mode. The PBL lapse rate remains a winter table value.
+
+Winter retains the severe view's hodograph magnification and selected center,
+including its mean-wind default. Centering moves the viewport without changing
+the ground-relative wind vectors. Native plot backgrounds are restored once,
+so the axes, rings, grid and frame strokes keep the severe view's weight.
+
+Diagnostic-value colors are continuous display scales computed from the current
+values. Cold temperatures, negative thermal energy and ascent use blue/violet;
+warm temperatures, positive energy and descent use yellow/orange/red. Wind and
+snow-squall magnitudes progress from neutral through yellow, red and pink.
+Moisture uses blue/cyan/green. Missing and zero magnitudes remain neutral, while
+fog/drizzle ingredient values match their existing met/unmet/unknown colors.
+Diagnostic labels, height/pressure coordinates and explanatory notes keep their
+neutral foreground; thermal-layer names follow their energy color. Each value
+in a combined readout is colored independently, including RH/RHi, T/Tw, and
+pressure-level wind/temperature pairs. The existing theme resolver keeps colored
+text readable on light backgrounds too.
+
+The visual scales reach their final shade at 30 °C below freezing or 10 °C
+above it; 40 °C below freezing for wind chill; −250/+15 J/kg for thermal energy;
+2 km for layer depth; 100% for humidity; ±10 µbar/s for omega; ±0.5 for OPRH;
+60 kt for wind; 30:1 for snow ratio; 0.3 in for DGZ water and 2 in for column
+PWAT; 4 for the snow-squall parameter; and ±10 °C/km for PBL lapse rate.
+Values beyond those display anchors keep the endpoint shade. These are
+presentation ranges, not new diagnostic thresholds or calibrated hazard levels;
+precipitation guidance and ingredient checks retain their existing calculations.
+
+- **DGZ:** all resolved temperature layers from −18 to −12 °C, including
+  separated layers in an inversion. Boundaries use linear interpolation in
+  height/temperature and logarithmic pressure. RH, RH over ice and omega means
+  are pressure weighted, requiring complete coverage of the resolved layers.
+  Omega is µbar/s, negative for ascent. Missing values do not connect otherwise
+  separated layers. DGZ PW integrates specific humidity over pressure,
+  `∫q dp / g`, converted from mm to inches. OPRH is mean DGZ omega times DGZ PW
+  times mean DGZ RH as a fraction; missing omega makes OPRH unavailable.
+- **Moisture:** saturation vapor pressure follows Murphy and Koop (2005),
+  equations 7 and 10, using liquid-water dewpoint to obtain vapor pressure.
+  RHi uses ice saturation at or below freezing and water saturation above it. See
+  [UCAR's documented formulations](https://www.eol.ucar.edu/data-software/conventions-and-standards/water-vapor-pressure-formulations).
+- **Thermal layers:** warm and cold wet-bulb layers below the identified
+  precipitation source are reported in descent order, with base, top, depth,
+  extreme Tw and energy. Signed energy is
+  `g / 273.15 × ∫Tw dz` in J/kg, with exact interpolated zero crossings and
+  trapezoidal integration. Layers shallower than 50 m and below 1 J/kg are
+  omitted from the experimental phase trace. Missing source or coverage does
+  not create a default 5 km source. The table shows up to eight layers and
+  explicitly counts additional resolved layers.
+- **Precipitation type/source:** SPC/SHARPpy guidance remains separate from the
+  experimental layer-by-layer Bourgouin/Birk method in
+  [SounderPy's reference implementation](https://github.com/kylejgillett/sounderpy/blob/3d9843390536f160023021bf9e3bcd550f20c24c/src/sounderpy/calc_winter.py).
+  Source cloud-top temperature sets the initial phase: above 0 °C liquid,
+  −10 to 0 °C drizzle, colder snow. Surface melting thresholds are
+  5.6/13.2 J/kg; elevated thresholds are 9.4/15 J/kg. Refreezing thresholds are
+  `117 + 0.08 ME` and `208 + 0.08 ME` J/kg. This sequential extension is **not**
+  Birk's calibrated column probability algorithm. It does not establish that
+  precipitation occurs. Disagreement between the two methods is preserved.
+- **Possible hazard versus precipitation type:** winter also displays the exact
+  label and theme color of the existing severe view's Possible Hazard Type
+  inset, including its selected storm-motion deviant. Snow is a precipitation
+  phase; BLIZZARD is a possible hazard, so both may be shown together. The
+  current SHARPpy blizzard flag requires surface wind above 35 mph, surface
+  temperature at or below 0 °C and a snow precipitation type. This profile
+  heuristic does not evaluate visibility or duration. The [NWS blizzard
+  definition](https://forecast.weather.gov/glossary.php?word=BLIZZARD) requires
+  sustained wind or frequent gusts of at least 35 mph and falling/blowing snow
+  that frequently reduces visibility below a quarter mile for at least three
+  hours; it has no temperature criterion. The displayed profile flag is not an
+  observed blizzard or an official warning.
+- **Kuchera SLR:** the existing two-branch temperature heuristic, using the
+  warmest temperature between the surface and the interpolated 500 hPa level; unavailable
+  when the profile does not cover that layer. It excludes riming, aggregation,
+  ground temperature and compaction. It is shown only if the experimental
+  surface precipitation type includes snow. FRZ/WB0 show the lowest resolved
+  crossings; an entirely subfreezing profile has no resolved crossing.
+- **Wind chill:** the [NWS formula](https://www.weather.gov/safety/cold-wind-chill-chart)
+  applies at or below 50 °F with winds over 3 mph. Wind is interpolated to 10 m
+  from the profile without extrapolation; it is an estimate, not a separate
+  observed 10 m measurement.
+- **PBL and winds:** the PBL top is the interpolated first crossing of surface
+  virtual potential temperature +0.5 K, following SPC/SHARPpy's definition.
+  Depth and lapse rate use that level. PBL/DGZ mean winds are height-weighted
+  vector means. Gust potential is the strongest profile wind inside the PBL,
+  not a calibrated gust forecast. Max 0–2 km and 850/700/500 hPa winds require
+  full coverage; below-ground levels are unavailable.
+- **Snow-squall parameter:** the [Banacos et al. (2014) formula](https://www.weather.gov/zbw/zbw_winter_diag)
+  is `max((RH02−60)/15,0) × max((4−Δθe02)/4,0) × (mean speed02 / 9 m/s)`.
+  Height-weighted 0–2 km means and the endpoint theta-e difference are used,
+  with surface Tw >1 °C giving zero. Theta-e reuses the existing Rust Bolton
+  implementation. Missing coverage gives N/A, not zero.
+- **Cloud/icing screens:** cloud candidates have RHi ≥90%, at least 200 m
+  depth and base below 8 km. Icing candidates have −15 to 0 °C and water RH
+  ≥90%. These do not measure liquid water or icing severity.
+- **Freezing-fog ingredients:** surface T <0 °C, RH ≥95%, interpolated 10 m
+  wind ≤6 kt, and a temperature increase >0.5 °C within the lowest 1.5 km.
+  The inversion's strength and height are reported.
+- **Freezing-drizzle ingredients:** surface Tw ≤0 °C, lowest cloud (base below
+  2 km) top warmer than −10 °C, mean RHi ≤75% in the full kilometre above,
+  cloud depth ≥500 m and mean cloud omega <0. Cloud tops truncated by the input
+  are unknown. Screens follow the reference's prototype thresholds; they show
+  met/unmet/unknown counts rather than calibrated LOW/MOD/HIGH risk. Missing
+  motion, humidity or wind remains explicit. Ice seeding and droplet sizes
+  cannot be established from these profiles alone.
+
+The choice of DGZ, wet-bulb structure and moisture is consistent with the
+[NWS winter-process overview](https://www.weather.gov/lmk/winterpt1) and
+[operational winter diagnostics](https://www.weather.gov/bis/winter_diag).
+These readouts do not estimate blowing-snow visibility or snowfall totals.
+
+### Winter panel references
+
+The image includes concise author-year references beside the fog ingredients
+and below the PBL/wind, snow-squall and drizzle readouts. Full references are
+linked here. Captions marked **context** identify research relevant to the
+displayed ingredients; they do not attribute this application's exact screening
+thresholds or gust calculation to those publications. The ingredient counts and
+missing-data handling described above remain the implemented method.
+
+- **Fog context:** [Gultepe et al. (2007), *Fog Research: A Review of Past
+  Achievements and Future Perspectives*](https://link.springer.com/article/10.1007/s00024-007-0211-x).
+  This review covers fog formation and forecasting. The four displayed
+  cold/moisture/wind/inversion checks are a profile ingredient screen, not a
+  calibrated Gultepe fog-probability model.
+- **PBL / blowing-snow context:** [Sczepanski et al. (2024), AMS ground-blizzard
+  observations](https://ams.confex.com/ams/104ANNUAL/webprogrampreliminary/Paper433440.html).
+  The study discusses blowing snow and boundary-layer thermodynamics using
+  in-situ observations, remote sensing and radiosondes. It is a conference
+  contribution; the displayed PBL definition still follows SPC/SHARPpy, and
+  maximum PBL wind remains gust potential. Snowpack availability, snow
+  erodibility and blowing-snow visibility are not diagnosed here.
+- **Snow-squall parameter:** [Banacos, Loconto and DeVoir (2014), *Snow Squalls:
+  Forecasting and Hazard Mitigation*](https://nwafiles.nwas.org/file/nwafiles/jom/articles/2014/2014-JOM12/2014-JOM12.pdf).
+  The implemented moisture, potential-instability and wind terms follow this
+  formulation; the display is a diagnostic parameter rather than a categorical
+  warning or a probability.
+- **Drizzle-process context:** [Huffman and Norman (1988), supercooled warm-rain
+  processes](https://journals.ametsoc.org/abstract/journals/mwre/116/11/1520-0493_1988_116_2172_tswrpa_2_0_co_2.xml)
+  and [Rauber et al. (2000), warm-rain and melting processes in freezing
+  precipitation](https://journals.ametsoc.org/view/journals/apme/39/7/1520-0450_2000_039_1185_triowr_2.0.co_2.xml).
+  These provide the physical context for supercooled liquid precipitation and
+  cloud-top temperature. They do not validate all five displayed thresholds as
+  a combined hazard classification.
+- **Icing / seeding context:** [McDonough et al. (2004), *The Forecast Icing
+  Potential (FIP) Algorithm*](https://ams.confex.com/ams/84Annual/techprogram/paper_70666.htm).
+  FIP combines cloud structure and several model fields in a situational fuzzy
+  logic scheme. This application uses only profile ingredient checks and does
+  not reproduce FIP or its icing probabilities, severity or liquid-water fields.
+
 ## Parcel definitions
 
 The GUI and CLI expose six parcel keys:

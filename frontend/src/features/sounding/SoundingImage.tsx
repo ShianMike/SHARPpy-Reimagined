@@ -1,4 +1,4 @@
-import { ChevronDown, Hand, Maximize, MoveHorizontal, Pencil, Redo2, RotateCcw, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, CloudLightning, Hand, Maximize, MoveHorizontal, Pencil, Redo2, RotateCcw, Snowflake, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Action, IconAction } from "../../ui/Controls";
@@ -6,6 +6,7 @@ import type { ImageMode, RenderChoice } from "../../types/soundings";
 import { convertUnit, displayUnit } from "../../lib/displayUnits";
 import { useUiStore } from "../../stores/uiStore";
 import { useUpdateStore } from "../../stores/updateStore";
+import { useSoundingStore } from "../../stores/soundingStore";
 import { AscentPicker } from "./AscentPicker";
 import { SoundingErrorNotice } from "./SoundingErrorNotice";
 import { SoundingExport } from "./SoundingExport";
@@ -20,6 +21,7 @@ import styles from "./Viewer.module.css";
 
 export function SoundingImage({ soundingId, choice, title, timeControl, navigation, controlsTarget, timeIndex = 0 }: { soundingId: string; choice: RenderChoice; title: string; timeControl?: ReactNode; navigation?: ReactNode; controlsTarget?: HTMLDivElement | null; timeIndex?: number }): ReactNode {
   const units = useUiStore((state) => state.units);
+  const mode = useSoundingStore((state) => state.mode);
   const [quality, setQuality] = useState<ImageMode>("uhd");
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -161,6 +163,10 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
   };
   const controls = <>
     <div className={styles.tools} data-docked={controlsTarget !== undefined} role="toolbar" aria-label="Sounding image controls">
+      <div className={styles.weatherModes} role="group" aria-label="Sounding weather mode">
+        <Action aria-pressed={mode === "severe"} disabled={busy} onClick={() => { useSoundingStore.getState().setMode("severe"); }}><CloudLightning className="icon-sm" />Severe</Action>
+        <Action aria-pressed={mode === "winter"} disabled={busy} onClick={() => { useSoundingStore.getState().setMode("winter"); }}><Snowflake className="icon-sm" />Winter</Action>
+      </div>
       <div className={styles.toolGroup} role="group" aria-label="Profile controls">
         <span className={styles.groupLabel}>Profile</span>
         {timeControl}
@@ -168,7 +174,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
           <Action ref={inspectButton} aria-pressed={!editing} onClick={() => { setEditing(false); setSelected(null); }}><Hand className="icon-sm" />Inspect</Action>
           <Action aria-pressed={editing} onClick={() => { setEditing(true); setSelected((current) => current ?? data?.points[0]?.id ?? null); }} disabled={data === undefined || unavailable}><Pencil className="icon-sm" />Edit profile</Action>
         </div>
-        <AscentPicker />
+        {mode === "severe" ? <AscentPicker /> : null}
         {state.history.length < 2 ? null : <><SourceSelect label="Undo history" value={state.cursor} disabled={busy}
           options={state.history.map((snapshot, index) => ({ value: index, label: snapshot.length === 0 ? index === 0 ? "Original profile" : `${String(index)} · Reset profile`
             : `${String(index)} · ${String(snapshot.length)} edited ${snapshot.length === 1 ? "level" : "levels"}` }))}
@@ -182,7 +188,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
       {!editing || data === undefined ? null : <LevelEditor points={data.points} selected={selected} edited={editedLevels} busy={unavailable} onSelect={setSelected}
         onApply={(point, values) => { edit.mutate({ ...request, edits: replaceValues(edits, Number(point.id.split(":")[1]), values) }); }}
         onDone={() => { setEditing(false); setSelected(null); inspectButton.current?.focus(); }} />}
-      {data === undefined ? null : <section className={styles.panelPicker} aria-label="Chart panels">
+      {data === undefined || mode === "winter" ? null : <section className={styles.panelPicker} aria-label="Chart panels">
         <h2 className={styles.panelHeading}>Chart panels</h2>
         <div className={styles.options}>
           {data.options.map((group) => <SourceSelect key={group.key} label={group.label} disabled={busy}
@@ -216,7 +222,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
       </details>
       <div className={styles.exportTools}>
         <SoundingExport view={data} quality={quality} onQualityChange={setQuality} ready={ready} busy={busy}
-          filename={title.replace(/[^a-zA-Z0-9_-]+/g, "-") + "-" + choice + (timeIndex > 0 ? `-time-${String(timeIndex + 1)}` : "") + (edits.length ? "-edited" : "") + ".png"} />
+          filename={title.replace(/[^a-zA-Z0-9_-]+/g, "-") + (mode === "winter" ? "-winter" : "-" + choice) + (timeIndex > 0 ? `-time-${String(timeIndex + 1)}` : "") + (edits.length ? "-edited" : "") + ".png"} />
       </div>
     </div>
   </>;

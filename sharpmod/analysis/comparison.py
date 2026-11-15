@@ -16,9 +16,6 @@ from typing import Iterable, Mapping
 
 import numpy as np
 
-from sharpmod.sharptab.vertical_interpolation import prepare_vertical_interpolator
-
-
 _PARCEL_KEYS = frozenset(
     {
         "sbcape",
@@ -37,7 +34,6 @@ _PARCEL_KEYS = frozenset(
 _STORM_MOTION_KEYS = frozenset(
     {"srh_500m", "srh_1km", "srh_3km", "stp_fixed", "stp_cin", "scp"}
 )
-_VERTICAL_FIELDS = ("tmpc", "dwpc", "u", "v")
 
 
 def _meta(collection, key, default=None):
@@ -459,11 +455,9 @@ def _interpolate_at(
     *,
     max_gap_m: float,
 ) -> float | None:
-    return prepare_vertical_interpolator(
-        heights,
-        values,
-        max_gap_m=max_gap_m,
-    )(target)
+    from sharpmod_rs import comparison_interpolate_at
+
+    return comparison_interpolate_at(heights, values, target, max_gap_m)
 
 
 def vertical_profile_difference(
@@ -477,93 +471,17 @@ def vertical_profile_difference(
     """Return candidate-minus-reference values on reference height levels.
 
     Each field is interpolated independently, only between real bracketing
-    levels, and gaps wider than ``max_gap_m`` remain missing.  These values are
+    levels, and gaps wider than ``max_gap_m`` remain missing. These values are
     for the vertical-difference display only.
     """
-    if reference_profile is None or candidate_profile is None:
-        return VerticalDifference(
-            str(reference_label),
-            str(candidate_label),
-            (),
-            None,
-            None,
-            "one or both profiles are unavailable",
-        )
-    reference_height = _values(reference_profile, "hght")
-    candidate_height = _values(candidate_profile, "hght")
-    finite_candidate = candidate_height[np.isfinite(candidate_height)]
-    finite_reference = reference_height[np.isfinite(reference_height)]
-    if not finite_candidate.size or not finite_reference.size:
-        return VerticalDifference(
-            str(reference_label),
-            str(candidate_label),
-            (),
-            None,
-            None,
-            "one or both profiles have no valid heights",
-        )
-    bottom = max(float(np.min(finite_reference)), float(np.min(finite_candidate)))
-    top = min(float(np.max(finite_reference)), float(np.max(finite_candidate)))
-    if top < bottom:
-        return VerticalDifference(
-            str(reference_label),
-            str(candidate_label),
-            (),
-            None,
-            None,
-            "profiles have no common vertical coverage",
-        )
+    from sharpmod_rs import comparison_vertical_profile_difference
 
-    reference_columns = {field: _values(reference_profile, field) for field in _VERTICAL_FIELDS}
-    candidate_columns = {field: _values(candidate_profile, field) for field in _VERTICAL_FIELDS}
-    candidate_interpolators = {
-        field: prepare_vertical_interpolator(
-            candidate_height,
-            candidate_columns[field],
-            max_gap_m=max_gap_m,
-        )
-        for field in _VERTICAL_FIELDS
-    }
-    pressure = _values(reference_profile, "pres")
-    rows = []
-    for index, height in enumerate(reference_height):
-        if not math.isfinite(height) or not bottom <= height <= top:
-            continue
-        differences = {}
-        for field in _VERTICAL_FIELDS:
-            ref_values = reference_columns[field]
-            reference_value = (
-                float(ref_values[index])
-                if index < ref_values.size and math.isfinite(ref_values[index])
-                else None
-            )
-            candidate_value = candidate_interpolators[field](float(height))
-            differences[field] = (
-                candidate_value - reference_value
-                if candidate_value is not None and reference_value is not None
-                else None
-            )
-        rows.append(
-            VerticalDifferenceLevel(
-                float(height),
-                (
-                    float(pressure[index])
-                    if index < pressure.size and math.isfinite(pressure[index])
-                    else None
-                ),
-                differences["tmpc"],
-                differences["dwpc"],
-                differences["u"],
-                differences["v"],
-            )
-        )
-    return VerticalDifference(
-        str(reference_label),
-        str(candidate_label),
-        tuple(rows),
-        bottom,
-        top,
-        None if rows else "no common reference levels are usable",
+    return comparison_vertical_profile_difference(
+        reference_profile,
+        candidate_profile,
+        reference_label,
+        candidate_label,
+        max_gap_m,
     )
 
 

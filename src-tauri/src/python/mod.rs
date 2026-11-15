@@ -6,4 +6,5 @@ pub mod interpreter;
 mod job_windows;
 pub mod launcher;
 pub mod protocol;
+mod session_cache;
 pub mod supervisor;

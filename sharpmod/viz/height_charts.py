@@ -37,12 +37,7 @@ import numpy as np
 from qtpy import QtCore, QtGui, QtWidgets
 
 from sharpmod.viz import colors
-from sharpmod.viz.streamwiseness import (
-    KTS_TO_MS,
-    _finite_vector,
-    _storm_motion,
-    _wind_components,
-)
+from sharpmod.viz.streamwiseness import _finite_vector
 
 __all__ = [
     "HeightChartInset",
@@ -95,49 +90,16 @@ def _agl_grid(prof, *, max_height_m, step_m):
     collapsed, and the grid stops at the sounding top rather than extrapolating
     past it.
     """
-    height = _finite_vector(getattr(prof, "hght", None), minimum_size=2)
-    if height is None:
-        return None, None, None
-    try:
-        sfc = int(getattr(prof, "sfc", 0) or 0)
-    except (TypeError, ValueError):
-        sfc = 0
-    if sfc < 0 or sfc >= height.size or not np.isfinite(height[sfc]):
-        return None, None, None
-    agl = height - height[sfc]
-    valid = np.isfinite(agl) & (agl >= 0.0)
-    if np.count_nonzero(valid) < 2:
-        return None, None, None
-    order = np.argsort(agl[valid], kind="stable")
-    top = min(float(max_height_m), float(agl[valid][order][-1]))
-    if top < step_m:
-        return None, None, None
-    grid = np.arange(0.0, np.floor(top / step_m) * step_m + step_m * 0.5,
-                     step_m)
-    if grid.size < 2:
-        return None, None, None
-    return grid, agl, valid
+    from sharpmod_rs import height_chart_grid
+
+    return height_chart_grid(prof, max_height_m, step_m)
 
 
 def _interp_to_grid(grid, agl, valid, source):
     """Interpolate ``source`` onto ``grid``, or return ``None``."""
-    array = _finite_vector(source, minimum_size=2)
-    if array is None or array.size != valid.size:
-        return None
-    usable = valid & np.isfinite(array)
-    if np.count_nonzero(usable) < 2:
-        return None
-    heights = agl[usable]
-    values = array[usable]
-    order = np.argsort(heights, kind="stable")
-    heights, values = heights[order], values[order]
-    heights, unique = np.unique(heights, return_index=True)
-    values = values[unique]
-    if heights.size < 2:
-        return None
-    out = np.interp(grid, heights, values, left=np.nan, right=np.nan)
-    out[grid > heights[-1]] = np.nan
-    return out
+    from sharpmod_rs import height_chart_interpolate
+
+    return height_chart_interpolate(grid, agl, valid, source)
 
 
 # ---------------------------------------------------------------------------
@@ -151,29 +113,10 @@ def storm_relative_wind_profile(
     The storm motion is the same vector the streamwiseness chart subtracts, so
     switching between the two charts cannot silently change the reference frame.
     """
-    if prof is None or step_m <= 0 or max_height_m <= 0:
-        return None
-    grid, agl, valid = _agl_grid(
-        prof, max_height_m=max_height_m, step_m=step_m)
-    if grid is None:
-        return None
-    u, v = _wind_components(prof)
-    if u is None or v is None:
-        return None
-    u_grid = _interp_to_grid(grid, agl, valid, u)
-    v_grid = _interp_to_grid(grid, agl, valid, v)
-    if u_grid is None or v_grid is None:
-        return None
-    motion = _storm_motion(prof, bool(use_left))
-    if motion is None:
-        return None
-    storm_u, storm_v = motion
-    u_sr = u_grid * KTS_TO_MS - storm_u
-    v_sr = v_grid * KTS_TO_MS - storm_v
-    speed_kt = np.hypot(u_sr, v_sr) / KTS_TO_MS
-    if not np.any(np.isfinite(speed_kt)):
-        return None
-    return HeightSeries(height_km=grid / 1000.0, values={"srw": speed_kt})
+    from sharpmod_rs import storm_relative_wind_chart
+
+    return storm_relative_wind_chart(
+        prof, use_left=bool(use_left), max_height_m=max_height_m, step_m=step_m)
 
 
 # ---------------------------------------------------------------------------
@@ -289,10 +232,9 @@ def _as_kelvin(array):
     in Celsius. A sounding whose values sit near 300 is already kelvin; one near
     30 is not, and plotting the two on one axis would be meaningless.
     """
-    finite = array[np.isfinite(array)]
-    if finite.size and float(np.nanmedian(finite)) < 150.0:
-        return array + 273.15
-    return array
+    from sharpmod_rs import height_chart_kelvin
+
+    return height_chart_kelvin(array)
 
 
 # ---------------------------------------------------------------------------

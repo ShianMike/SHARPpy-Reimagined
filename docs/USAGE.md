@@ -125,6 +125,12 @@ switching to the mosaic stops playback and returns to the latest live scan.
 
 Downloaded live data appears in **Settings → Storage**. Caches are bounded and
 cleared when the app session closes; cleared data downloads again when needed.
+Desktop session cleanup waits for the bridge and its render workers to exit
+and retries briefly if Windows still has a file open. After an interrupted or
+forced process exit, the next launch recovers identifiable abandoned sessions;
+it also checks again every 30 seconds. Recovery skips active sessions and paths
+containing links or junctions. Saved exports, preferences and reusable weather
+caches keep their existing storage rules.
 See the [worldwide radar inventory](worldwide-radar-research.md) for source
 coverage, attribution, limitations and other providers researched.
 
@@ -155,6 +161,7 @@ workspace theme and applies to the interactive view and exported images.
    inspect the point at its centre.
 3. Use the timeline to step between available hours or play them in sequence.
    Playback speed and looping are controlled beside the timeline.
+   The parameter color scale stays visible while another hour's catalogue loads.
    On the left, choose **Navigate** to pan and zoom without hover descriptions
    or **Inspect** to show station, weather and numeric readouts. The choice is
    shared with Live Tracking and all map panels for the current session.
@@ -167,6 +174,24 @@ workspace theme and applies to the interactive view and exported images.
    You can enable them through the map's layer controls.
 6. Use the small eye control beneath a panel's colour range to switch its
    model layer on or off. Other overlay visibility is controlled separately.
+
+Use **Export forecast GIF**, beside the Smooth/Fast button, to export the active
+panel's selected model parameter. Its model layer must be on. Choose individual
+forecast hours, an output size (960 × 540, 1280 × 720, or 1920 × 1080), and the
+time each hour stays on screen, then choose **Create GIF**. Every selected hour
+loads and is checked before capture starts. Export stops if an hour or parameter
+is unavailable, rather than silently omitting it.
+
+The exporter captures lossless PNGs at the output resolution before encoding the
+GIF in a background worker. Map pixels are smooth, the GIF loops, and each
+selected hour appears directly without blended transition frames. The map fills
+the plot; a centered crop fits the output aspect ratio without stretching the
+geography. Each frame includes its parameter scale, model/run, valid time and
+source credits. Preview the completed animation and choose **Save GIF**. Cancel
+at any stage to stop; the original forecast hour and pixel setting are restored.
+The app limits both stored PNG frames and the completed GIF to 128 MiB each;
+choose fewer hours or a smaller size if that limit is reached. GIF supports at
+most 256 colors.
 
 The forecast and sounding pickers omit retired **NAM** (including NAM 3 km),
 **SREF**, **HREF**, and **HiResW** models. **RRFS** and the offered **REFS**
@@ -294,6 +319,44 @@ NetCDF backend. The CLI equivalent is [`wrf-extract`](#4-wrf-arw-model-output-wr
 
 The viewer displays the native Skew-T, hodograph, and scientific panels. The
 old locator-map inset is removed from the v3 sounding image.
+
+Choose **Severe** or **Winter** above **Profile** in Sounding
+controls. Both modes use the same image dimensions and compact forecast/version
+header. Severe uses the existing composition. Winter retains
+the Skew-T, wind-speed strip, inferred temperature advection, model omega meter
+and ground-relative hodograph in the severe layout's positions. It removes the
+Skew-T lapse-rate annotation and parcel overlays. Four tall 0–3 km
+temperature/wet-bulb, humidity, wind and theta-e profiles occupy the lower-right
+chart positions and share the severe charts' native frames, grids and axes.
+Below the hodograph, Bourgouin/Birk and SPC precipitation estimates share one
+Estimated SFC PTYPE heading above their two method columns, with the
+precipitation source spanning the next two slots. The inset row's bottom
+border aligns with the Skew-T frame above its temperature-axis labels.
+The source area also shows **Possible hazard**, using the same label and color
+as the severe view. This is separate from precipitation phase: a profile may
+show **Snow** and **BLIZZARD** together. The possible-hazard flag is profile
+guidance and does not establish blizzard visibility or duration.
+The lower-left severe diagnostic bank is replaced by
+thermal layers, DGZ/OPRH and snow ratio, cold/PBL winds, snow-squall parameter,
+and freezing-fog/drizzle ingredient checks. Winter has no parcel selector,
+parcel table, parcel traces or parcel-level labels. Mode changes retain edits, selected
+times and the severe panel choices. The chosen weather mode remains active
+when opening another sounding. Both modes support inspection, editing, undo,
+copy and HD/UHD PNG export.
+
+Winter readouts are profile guidance: the experimental layer-based
+Bourgouin/Birk method and existing SPC/SHARPpy method are shown separately,
+including disagreement. Fog/drizzle checks show met, unmet and unavailable
+ingredients, not calibrated risk. The moisture screen does not measure icing
+severity or cloud liquid water. Missing omega is shown as unavailable. The temperature-based
+Kuchera ratio is conditional on snow and is not a snowfall forecast. See the
+[winter methods](sounding_parameter_guide.md#winter-weather-composition) for
+layer definitions and limitations.
+
+The winter image shows compact source references for fog, PBL/blowing-snow
+context, snow squalls and drizzle in place of the corresponding guide footers.
+See the [winter panel references](sounding_parameter_guide.md#winter-panel-references)
+for links and the distinction between research context and implemented methods.
 
 - **Inspect** — use the zoom buttons, actual-pixel percentage, or **Fit sounding
   to view**; drag the image to pan.
@@ -941,6 +1004,7 @@ sharpmod-render oun.npz oun.png
 sharpmod-render oun.npz oun_ml.png --parcel ML
 sharpmod-render oun.npz oun_uhd.png --uhd
 sharpmod-render oun.npz oun_lossless.png --lossless
+sharpmod-render oun.npz --out oun_winter.png --sounding-mode winter --uhd --json
 sharpmod-render examples/soundings/14061619.OAX oax.png
 sharpmod-render examples/soundings/hrrr_kbvo_20260625_06z.buf kbvo.png
 ```
@@ -950,6 +1014,14 @@ Supported inputs: the `.npz` point sounding (UWyo/ERA5/WRF/HRRR), SPC tabular
 CLI rendering defaults to a 2x HD PNG; pass `--uhd` or `--image-mode uhd` for
 the larger 2.8x export, or `--lossless` / `--image-mode lossless` for the
 original-size compact/lossless PNG.
+
+CLI images omit the locator map, including extraction commands with `--render`.
+An explicit `sharpmod-render --locator-overlay SPEC` request enables the locator
+with the requested overlay.
+
+Use `--sounding-mode winter` for the Winter layout. It has no parcel display.
+`--json` reports the saved PNG's path, dimensions and byte length for scripts;
+see [using sounding images in another app](SOUNDING_IMAGE_INTEGRATION.md).
 
 Choose the parcel visualized on the Skew-T with `--parcel SFC`, `--parcel ML`,
 `--parcel FCST`, `--parcel MU`, `--parcel EFF`, or `--parcel USER`. Parcel keys

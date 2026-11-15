@@ -11,12 +11,13 @@ import { appendEdit, INITIAL_VIEW } from "./viewHistory";
 export function useSoundingView(id: string, choice: RenderChoice, quality: ImageMode, timeIndex = 0) {
   const client = useBackendClient();
   const colorStyle = useUiStore((store) => store.soundingColorStyle);
+  const mode = useSoundingStore((store) => store.mode);
   const cache = useQueryClient();
   const viewId = timeIndex === 0 ? id : `${id}:${String(timeIndex)}`;
   const state = useSoundingStore((store) => store.views[viewId] ?? INITIAL_VIEW);
   const setView = useSoundingStore((store) => store.setView);
   const edits = state.history[state.cursor] ?? [];
-  const request = { ...state.options, edits, ...(timeIndex === 0 ? {} : { timeIndex }) };
+  const request: ViewRequest = { ...state.options, edits, ...(mode === "winter" ? { mode } : {}), ...(timeIndex === 0 ? {} : { timeIndex }) };
   const mutationKey = ["sounding-edit", id, timeIndex] as const;
   const pending = useIsMutating({ mutationKey }) > 0;
   const key = (view: ViewRequest, style = colorStyle) => ["soundings", id, "view", timeIndex, choice, quality, style, view] as const;

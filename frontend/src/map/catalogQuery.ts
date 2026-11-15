@@ -24,6 +24,9 @@ export function useMapCatalog(): UseQueryResult<MapCatalog> {
     ...BASE_QUERY_OPTIONS,
     queryKey: mapKeys.catalog(model, run, hour),
     queryFn: () => client.getMapCatalog(model, run, hour),
+    // An hour-specific inventory must not remove the palette while it loads.
+    // Never carry products across a different model or initialization.
+    placeholderData: (previous, query) => query?.queryKey[2] === model && query.queryKey[3] === run ? previous : undefined,
     enabled: !dynamic || (run !== undefined && hour !== undefined),
     staleTime: dynamic ? 10 * 60_000 : Number.POSITIVE_INFINITY,
   });

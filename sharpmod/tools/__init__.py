@@ -39,4 +39,5 @@ def render_npz(npz_path: str, png_path: str | None = None, **kwargs) -> str:
     if png_path is None:
         default_name = Path(npz_path).with_suffix(".png").name
         png_path = str(export_file_path(default_name))
+    kwargs.setdefault("show_locator", bool(kwargs.get("locator_overlay")))
     return render(npz_path, png_path, **kwargs)

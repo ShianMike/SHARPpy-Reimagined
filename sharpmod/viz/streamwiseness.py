@@ -97,82 +97,10 @@ def streamwiseness_profile(
     total horizontal-vorticity magnitude.  The sign is retained separately for
     cyclonic/anticyclonic shading.
     """
-    if prof is None or step_m <= 0 or max_height_m <= 0:
-        return None
+    from sharpmod_rs import streamwiseness_chart
 
-    height = _finite_vector(getattr(prof, "hght", None), minimum_size=2)
-    u, v = _wind_components(prof)
-    if height is None or u is None or v is None:
-        return None
-    if not (height.size == u.size == v.size):
-        return None
-
-    try:
-        sfc = int(getattr(prof, "sfc", 0) or 0)
-    except (TypeError, ValueError):
-        sfc = 0
-    if sfc < 0 or sfc >= height.size or not np.isfinite(height[sfc]):
-        return None
-
-    height = height[sfc:] - height[sfc]
-    u = u[sfc:]
-    v = v[sfc:]
-    valid = np.isfinite(height) & np.isfinite(u) & np.isfinite(v)
-    height, u, v = height[valid], u[valid], v[valid]
-    if height.size < 2:
-        return None
-
-    order = np.argsort(height, kind="stable")
-    height, u, v = height[order], u[order], v[order]
-    height, unique = np.unique(height, return_index=True)
-    u, v = u[unique], v[unique]
-    top = min(float(max_height_m), float(height[-1]))
-    if top < step_m:
-        return None
-    grid_top = np.floor(top / step_m) * step_m
-    grid = np.arange(0.0, grid_top + step_m * 0.5, step_m)
-    if grid.size < 2:
-        return None
-
-    motion = _storm_motion(prof, bool(use_left))
-    if motion is None:
-        return None
-    storm_u, storm_v = motion
-
-    u_ms = np.interp(grid, height, u) * KTS_TO_MS
-    v_ms = np.interp(grid, height, v) * KTS_TO_MS
-    u_sr = u_ms - storm_u
-    v_sr = v_ms - storm_v
-
-    dudz = np.gradient(u_ms, step_m)
-    dvdz = np.gradient(v_ms, step_m)
-    omega_u = -dvdz
-    omega_v = dudz
-    omega_mag = np.hypot(omega_u, omega_v)
-    sr_speed = np.hypot(u_sr, v_sr)
-    usable = (omega_mag > 1.0e-6) & (sr_speed > 0.1)
-
-    percent = np.full(grid.shape, np.nan, dtype=float)
-    signed = np.full(grid.shape, np.nan, dtype=float)
-    if not np.any(usable):
-        return None
-    omega_streamwise = np.full(grid.shape, np.nan, dtype=float)
-    omega_streamwise[usable] = (
-        omega_u[usable] * (u_sr[usable] / sr_speed[usable])
-        + omega_v[usable] * (v_sr[usable] / sr_speed[usable])
-    )
-    percent[usable] = np.clip(
-        np.abs(omega_streamwise[usable]) / omega_mag[usable] * 100.0,
-        0.0,
-        100.0,
-    )
-    signed[usable] = np.sign(omega_streamwise[usable]) * percent[usable]
-
-    return StreamwisenessData(
-        height_km=grid / 1000.0,
-        percent=percent,
-        signed_percent=signed,
-    )
+    return streamwiseness_chart(
+        prof, use_left=bool(use_left), max_height_m=max_height_m, step_m=step_m)
 
 
 class plotStreamwiseness(QtWidgets.QFrame):

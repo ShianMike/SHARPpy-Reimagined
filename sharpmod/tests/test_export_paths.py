@@ -129,8 +129,8 @@ def test_render_npz_defaults_to_export_folder_and_honors_explicit_path(
     assert Path(default_result) == dedicated
     assert Path(explicit_result) == explicit
     assert calls == [
-        (source, dedicated, {"image_mode": "hd"}),
-        (source, explicit, {}),
+        (source, dedicated, {"image_mode": "hd", "show_locator": False}),
+        (source, explicit, {"show_locator": False}),
     ]
 
 

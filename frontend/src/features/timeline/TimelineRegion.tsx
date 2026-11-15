@@ -1,19 +1,24 @@
 import { useIsFetching } from "@tanstack/react-query";
-import { Blend, Repeat, Zap } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import { Blend, Film, Repeat, Zap } from "lucide-react";
+import { lazy, Suspense, useState, type CSSProperties, type ReactNode } from "react";
 import { IconAction } from "../../ui/Controls";
 import { Surface } from "../../ui/Surface";
 import { cx } from "../../lib/cx";
 import { hourAfter } from "../../map/usePlayback";
 import { useForecastStore } from "../../stores/forecastStore";
 import { PLAYBACK_SPEEDS, useUiStore } from "../../stores/uiStore";
-import { useForecast } from "../forecast/useForecast";
+import { useForecast, type ForecastContext } from "../forecast/useForecast";
+import type { FieldProduct } from "../../types/map";
 import { compactUtc, forecastLabel } from "../sounding/soundingTime";
 import { FORECAST_RANGE_ID } from "../toolbar/ForecastControls";
 import styles from "./TimelineRegion.module.css";
 import hints from "../../ui/HoverHint.module.css";
 import { MapInteractionControls } from "./MapInteractionControls";
 import { PlaybackTransport } from "./PlaybackTransport";
+import { usePanelField } from "../../map/panelField";
+import { useMapStore } from "../../stores/mapStore";
+
+const ForecastExportDialog = lazy(async () => ({ default: (await import("../forecastExport/ForecastExportDialog")).ForecastExportDialog }));
 
 export { FORECAST_RANGE_ID } from "../toolbar/ForecastControls";
 export interface TimelineRegionProps { className?: string | undefined; }
@@ -23,6 +28,9 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
   const speed = useUiStore((state) => state.speed);
   const loop = useUiStore((state) => state.loop);
   const smooth = useUiStore((state) => state.smoothPlayback);
+  const panel = useMapStore((state) => state.activePanel);
+  const field = usePanelField(panel);
+  const [exportSelection, setExportSelection] = useState<{ anchor: HTMLButtonElement; context: ForecastContext; product: FieldProduct; panel: number } | null>(null);
   const context = forecast.status === "ready" ? forecast.context : null;
   const loading = useIsFetching({ predicate: ({ queryKey: key }) =>
     (key[0] === "fields" || key[0] === "contours") && key[2] === context?.run && key[3] === context?.hour && key[4] === context?.model.key,
@@ -68,6 +76,13 @@ export function TimelineRegion({ className }: TimelineRegionProps): ReactNode {
       <IconAction className={cx(styles.option, styles.mode)} size="sm" icon={Zap} alternateIcon={{ icon: Blend, active: smooth }}
         label="Smooth Playback" hintSide="top" hintText={smooth ? "Smooth · Blend Between Frames" : "Fast · Switch Frames Instantly"}
         aria-pressed={smooth} onClick={() => { useUiStore.getState().setSmoothPlayback(!smooth); }} />
+      <IconAction className={styles.mode} size="sm" icon={Film} label="Export forecast GIF" hintSide="top"
+        aria-haspopup="dialog" aria-expanded={exportSelection !== null}
+        disabled={context === null || !context.fieldsAvailable || field.product === null || field.blocked !== null}
+        onClick={(event) => {
+          if (context !== null && field.product !== null) setExportSelection({ anchor: event.currentTarget, context, product: field.product, panel });
+        }} />
     </div>
+    {exportSelection === null ? null : <Suspense fallback={null}><ForecastExportDialog {...exportSelection} onClose={() => { setExportSelection(null); }} /></Suspense>}
   </Surface>;
 }

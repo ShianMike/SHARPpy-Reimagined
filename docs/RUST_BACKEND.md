@@ -23,6 +23,11 @@ UWyo sounding decoding and availability, box-mean soundings, threshold
 controls, radar mosaics and satellite processing also use the native extension.
 Build/install `sharpmod_rs` before running the complete source application.
 
+The sounding height charts and height-aligned profile comparison also use
+the native extension. Comparison samples temperature, dewpoint and each wind
+component on the reference heights, preserving masks and the maximum-gap
+rule. Its Python result objects and the CLI commands are unchanged.
+
 IGRA sounding header scans, fixed-width level decoding, humidity-derived
 dewpoints and decreasing-pressure assembly also require Rust. Their thin
 adapters retain the public IGRA objects, timestamps, units and provenance counts.

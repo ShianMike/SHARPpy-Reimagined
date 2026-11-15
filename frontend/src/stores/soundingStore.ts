@@ -7,6 +7,7 @@ import { hasLocalWork, type ViewState } from "../features/sounding/viewHistory";
 import { subscribeWithSelector } from "zustand/middleware";
 import { latestRelease, utcDate } from "../features/sounding/soundingTime";
 import type { ObservedProvider, RenderChoice, SoundingSummary } from "../types/soundings";
+import type { SoundingMode } from "../types/soundingView";
 
 export type SoundingSource = "observed" | "model" | "era5" | "file";
 /** Unedited soundings drop off first; discarding local work requires confirmation. */
@@ -41,6 +42,8 @@ export interface Era5Inputs {
 }
 
 export interface SoundingState {
+  mode: SoundingMode;
+  setMode: (mode: SoundingMode) => void;
   views: Record<string, ViewState>;
   timeIndices: Record<string, number>;
   setTimeIndex: (id: string, index: number) => void;
@@ -116,6 +119,8 @@ function applyChanges(state: SoundingState, changes: SoundingChange[], discard =
 
 export const useSoundingStore = create<SoundingState>()(
   subscribeWithSelector((set) => ({
+    mode: "severe",
+    setMode: (mode) => { set({ mode }); },
     open: [],
     views: {},
     timeIndices: {},

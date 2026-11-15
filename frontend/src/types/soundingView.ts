@@ -7,7 +7,9 @@ export interface InspectionLevel {
   hodograph: { x: number; y: number } | null;
 }
 export interface ViewOptions { chart?: string; panel?: string }
+export type SoundingMode = "severe" | "winter";
 export interface ViewRequest extends ViewOptions {
+  mode?: SoundingMode;
   timeIndex?: number;
   edits: ViewEdit[];
   drag?: { target: string; x: number; y: number };

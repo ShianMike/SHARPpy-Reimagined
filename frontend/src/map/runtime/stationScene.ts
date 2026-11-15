@@ -24,6 +24,7 @@ import { selectWindBarbs, type WindBarb } from "../layers/WindBarbLayer";
 import { radarSiteCode } from "../panelRadar";
 import type { WindBarbGrid } from "../../types/map";
 import type { SurfacePlot } from "../../types/surface";
+import type { FrameRequest } from "../mapQueries";
 
 const NO_STATIONS: readonly Station[] = [];
 const NO_PLACES: readonly Place[] = [];
@@ -57,6 +58,13 @@ export class StationScene {
   private outlookLabelLayout: LayerBuildContext["outlookLabelLayout"];
   /** The ids of the deck layers last submitted visible; the fixture probe reads them. */
   shownLayerIds: readonly string[] = [];
+  private renderedLayers: readonly Layer[] = [];
+
+  matchesField(request: FrameRequest): boolean {
+    const frame = this.data.field?.frame;
+    return frame?.product === request.product && frame.runTime === request.runTime && frame.forecastHour === request.forecastHour
+      && this.data.previousField === null && this.renderedLayers.every((layer) => layer.isLoaded);
+  }
 
   constructor(
     private readonly overlay: MapLibreOverlay,
@@ -220,10 +228,12 @@ export class StationScene {
       mapState.layerOrder,
     );
     // Globe geometry can slice through screen-facing labels and icons at ground level.
-    this.overlay.setProps({ layers: mapProjection(mapState) === "globe"
+    const rendered = mapProjection(mapState) === "globe"
       ? built.map((layer): Layer => layer instanceof TextLayer || layer instanceof IconLayer
-        ? layer.clone({ parameters: { cullMode: "none", depthCompare: "always", depthWriteEnabled: false } }) as Layer : layer) : built });
+        ? layer.clone({ parameters: { cullMode: "none", depthCompare: "always", depthWriteEnabled: false } }) as Layer : layer) : built;
+    this.overlay.setProps({ layers: rendered });
     this.shownLayerIds = built.filter((layer) => layer.props.visible).map((layer) => layer.id);
+    this.renderedLayers = rendered;
     this.onSubmitted(this.stations.length > 0 && layers.stations.visible);
   }
 }

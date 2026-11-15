@@ -162,6 +162,9 @@ def original_values(prof):
 
 
 def configure_view(win, view, app, original):
+    if view.get("mode") == "winter":
+        from sharpmod_rs import configure_winter_view
+        return configure_winter_view(win, view, app, original)
     sw = win.spc_widget
     edits = deepcopy(view["edits"])
     if view.get("drag") is not None:

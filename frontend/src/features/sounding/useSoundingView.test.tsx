@@ -17,6 +17,32 @@ import { INITIAL_VIEW } from "./viewHistory";
 
 afterEach(() => { cleanup(); useSoundingStore.setState(useSoundingStore.getInitialState(), true); useUiStore.setState({ soundingColorStyle: "standard" }); });
 
+it("requests a separate winter image while retaining edits, selected panels and time", async () => {
+  const store = useSoundingStore.getState();
+  store.add({ ...parseSoundingSummary(summaryExample), soundingId: "winter-profile" });
+  const edits = [{ index: 0, values: { tmpc: -2 } }];
+  store.setView("winter-profile:1", { history: [[], edits], cursor: 1, options: { chart: "srw", panel: "FIRE" } });
+  const cache = createQueryClient(), base = createTransport();
+  const requests: unknown[] = [];
+  const client = new BackendClient({ ...base, call: (command, args) => {
+    if (command !== "render_sounding_view") return base.call(command, args);
+    requests.push(args?.view);
+    return Promise.resolve({ ...viewExample, edits, width: 4480, height: 2912,
+      image: btoa(String.fromCharCode(137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13)) });
+  } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={cache}><BackendProvider client={client}>{children}</BackendProvider></QueryClientProvider>;
+  const hook = renderHook(() => useSoundingView("winter-profile", "MU", "uhd", 1), { wrapper });
+  await waitFor(() => { expect(hook.result.current.ready).toBe(true); });
+  act(() => { store.setMode("winter"); });
+  await waitFor(() => { expect(hook.result.current.ready).toBe(true); expect(requests.at(-1)).toEqual({ edits, chart: "srw", panel: "FIRE", timeIndex: 1, mode: "winter" }); });
+  expect(useSoundingStore.getState().views["winter-profile:1"]?.cursor).toBe(1);
+  act(() => { store.setMode("severe"); });
+  await waitFor(() => { expect(hook.result.current.ready).toBe(true); expect(hook.result.current.request.mode).toBeUndefined(); });
+  expect(requests).toHaveLength(2);
+  expect(hook.result.current.state.options).toEqual({ chart: "srw", panel: "FIRE" });
+  hook.unmount(); cache.clear();
+});
+
 it("redraws each palette and keeps an in-flight edit with the palette it requested", async () => {
   useSoundingStore.getState().add({ ...parseSoundingSummary(summaryExample), soundingId: "profile" });
   const cache = createQueryClient(), base = createTransport();

@@ -41,6 +41,7 @@ export function usePlayback(): void {
   const context = useForecastContext();
   const products = useDrawnProducts();
   const playing = useForecastStore((state) => state.playing);
+  const exporting = useForecastStore((state) => state.exporting);
   const speed = useUiStore((state) => state.speed);
   const loop = useUiStore((state) => state.loop);
   const frameWindow = useGraphicsStore((state) => profileSettings(state.effective.profile).frameWindow);
@@ -50,7 +51,7 @@ export function usePlayback(): void {
   const model = context?.model.key ?? "hrrr";
   const catalogQuery = useMapCatalog();
   const catalog = catalogQuery.data;
-  const checkingProducts = catalogQuery.isPending;
+  const checkingProducts = catalogQuery.isPending || catalogQuery.isPlaceholderData;
   const sampling = useMapStore((state) => Array.from({ length: state.panelLayout }, (_, panel) => {
     const layer = panelLayers(state, panel)["model-field"];
     const product = productOf(catalog, panelProduct(state, panel), panel);
@@ -66,7 +67,7 @@ export function usePlayback(): void {
   const ahead = Math.max(1, frameWindow.next + (playing ? frameWindow.prefetched : 0));
 
   useEffect(() => {
-    if (!active || run === null || hour === null || hours === null || !settled || checkingProducts) {
+    if (!active || exporting || run === null || hour === null || hours === null || !settled || checkingProducts) {
       return;
     }
     let stopped = false;
@@ -101,5 +102,5 @@ export function usePlayback(): void {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [active, model, run, hour, hours, products, sampling, settled, checkingProducts, ahead, playing, loop, speed, client, queryClient]);
+  }, [active, exporting, model, run, hour, hours, products, sampling, settled, checkingProducts, ahead, playing, loop, speed, client, queryClient]);
 }

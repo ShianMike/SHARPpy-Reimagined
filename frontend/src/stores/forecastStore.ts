@@ -14,6 +14,7 @@ export interface ForecastState {
   /** Null takes the model's default hour. */
   forecastHour: number | null;
   playing: boolean;
+  exporting: boolean;
   /** A new model starts at its suggested run and default hour. */
   setModel: (key: string) => void;
   setRun: (runTime: string) => void;
@@ -27,6 +28,7 @@ export const useForecastStore = create<ForecastState>()(
     runTime: null,
     forecastHour: null,
     playing: false,
+    exporting: false,
     setModel: (key) => {
       set({ modelKey: key, runTime: null, forecastHour: null, playing: false });
     },

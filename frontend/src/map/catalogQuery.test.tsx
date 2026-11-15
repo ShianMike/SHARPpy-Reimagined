@@ -49,8 +49,9 @@ it.each(["hrrr", "rap", "rdps", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs
   expect(queryClient.getQueryData(mapKeys.catalog(modelKey, model.suggestedRun, 12))).toEqual(raw);
   act(() => { useForecastStore.getState().setHour(18); });
   await waitFor(() => { expect(resolveNext).toBeDefined(); });
-  expect(hook.result.current.forecast).toMatchObject({ status: "ready", context: { hour: 18, fieldsAvailable: false } });
-  expect(hook.result.current.catalog.data).toBeUndefined();
+  expect(hook.result.current.forecast).toMatchObject({ status: "ready", context: { hour: 18, fieldsAvailable: true } });
+  expect(hook.result.current.catalog.data).toEqual(raw);
+  expect(hook.result.current.catalog.isPlaceholderData).toBe(true);
   act(() => { resolveNext?.({ ...raw, products: raw.products.filter((product) => product.key !== hidden) }); });
   await waitFor(() => { expect(hook.result.current.catalog.data?.products).toHaveLength(raw.products.length - 1); });
   expect(call).toHaveBeenLastCalledWith("get_map_catalog", { model: modelKey, runTime: model.suggestedRun, forecastHour: 18 });
@@ -71,7 +72,7 @@ it.each(["hrrr", "rrfs-a", "refs-m1", "refs-m2", "refs-m3", "refs-m4", "refs-m5"
   const hook = renderHook(useMapCatalog, { wrapper });
   for (const hour of [0, 1, 2, 3]) {
     act(() => { useForecastStore.getState().setHour(hour); });
-    await waitFor(() => { expect(hook.result.current.isSuccess).toBe(true); });
+    await waitFor(() => { expect(hook.result.current.isSuccess && !hook.result.current.isPlaceholderData).toBe(true); });
     expect(getCatalog).toHaveBeenLastCalledWith(modelKey, expect.any(String), hour);
     expect(hook.result.current.data?.products.filter((product) => product.key.startsWith("uh-")).map((product) => product.key)).toEqual(
       hour === 0 ? [] : hour < 3 ? ["uh-0-3km", "uh-2-5km-1h"] : ["uh-0-3km", "uh-2-5km-1h", "uh-2-5km-3h"],

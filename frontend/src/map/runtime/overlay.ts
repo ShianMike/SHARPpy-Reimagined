@@ -31,12 +31,21 @@ function cursor({ isDragging, isHovering }: { isDragging: boolean; isHovering: b
 
 export function createOverlay(options: OverlayOptions, handlers: OverlayHandlers): MapLibreOverlay {
   let canvasContext: CanvasContext | null = null;
+  const interleaved = import.meta.env.MODE !== "fixture" && mapProjection(useMapStore.getState()) === "mercator";
   const overlay = new MapLibreOverlay({
-    interleaved: import.meta.env.MODE !== "fixture" && mapProjection(useMapStore.getState()) === "mercator",
+    interleaved,
     layers: [],
     pickingRadius: options.pickingRadius,
     useDevicePixels: options.useDevicePixels,
     onDeviceInitialized: (device) => { canvasContext = device.getDefaultCanvasContext(); },
+    onBeforeRender: () => {
+      // MapLibre owns this buffer. A pixel-ratio change leaves its CSS size unchanged,
+      // so luma's ResizeObserver cannot update the framebuffer and clipping rectangle.
+      if (interleaved && canvasContext !== null) {
+        const { width, height } = canvasContext.canvas;
+        canvasContext.setDrawingBufferSize(width, height);
+      }
+    },
     getCursor: cursor,
     onHover: (info) => {
       handlers.onHover(info);

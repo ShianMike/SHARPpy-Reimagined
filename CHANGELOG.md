@@ -7,6 +7,106 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v3.8.0] - 2026-11-15
+
+### Added
+
+- Add Severe and Winter choices above the sounding profile
+  controls. The winter composition retains the Skew-T, wind-speed and inferred
+  temperature-advection plots, omega meter and hodograph, with larger main
+  plots in the familiar severe layout, the same compact forecast/version
+  header and image dimensions, and no Skew-T lapse-rate label. Keep the header
+  clear of trace legends, remove the extra ground-relative wind caption from
+  the hodograph and the Skew-T cold-layer depth bar, and omit the redundant
+  profile-guidance footer.
+  Replace the severe diagnostic bank with native Rust precipitation-source and
+  wet-bulb layer analysis, experimental Bourgouin/Birk guidance beside SPC,
+  DGZ/OPRH, snow ratio, freezing levels, PBL and wind diagnostics, snow-squall
+  parameter, and explicit freezing-fog/drizzle ingredient checks. Place the
+  two precipitation estimates below the hodograph under one shared heading,
+  with uppercase type labels and the source spanning the next two inset slots.
+  Align the inset row's bottom border to the Skew-T frame above its axis labels.
+  Show the severe view's exact Possible Hazard Type label and color in a separate
+  source-area readout, so Snow phase and a possible BLIZZARD hazard remain distinct.
+  Place four tall low-level profiles, including theta-e, in the severe view's
+  lower-right chart positions using its native borders, axes and grids. Draw
+  the shared divider beside the diagnostic tables once, without stacked
+  panel/container borders.
+  Place cloud and icing layer bars at the 20 °C and 30 °C bottom-axis positions
+  with vertical labels, and retain PBL/DGZ markers. Align explanatory notes at
+  the bottom of all four winter diagnostic columns with consistent type size,
+  line spacing and padding.
+  Give thermal-layer headings and values shared column edges, wider spacing
+  for signed values, fixed-width numerals and a separate header rule.
+  Color winter diagnostic values by their current magnitude, retaining cold
+  and warm hues, neutral missing/zero magnitudes and theme contrast. Color each
+  quantity independently in paired readouts. Apply matching met/unmet colors
+  to fog/drizzle ingredient values without changing the checks. Give Met,
+  Not met and N/A statuses a padded right-aligned column, with a separate
+  value column. Keep explicit gaps around colored paired-value separators.
+  Add verified, vector-rendered author-year references for fog, PBL/blowing-snow
+  context, snow squalls and drizzle in place of the corresponding guide footers, with
+  linked publications and method/attribution limits in the parameter guide.
+  Omit parcel controls, tables, traces and levels in winter mode.
+  Retain profile editing and lossless PNG export, and keep the existing severe
+  composition available.
+- Export the active Model Viewer parameter and selected forecast hours as a
+  looping GIF from a button beside Smooth/Fast. Load and verify every selected
+  hour first, then capture lossless PNG frames before background GIF encoding.
+  Choose output resolution and time per hour; use smooth map pixels without
+  transition blending. Fill the plot edge to edge without stretching geography,
+  and overlay the parameter scale without a background panel. Include the
+  model, run, valid time and compact source credits.
+  Support progress, cancellation, preview and saving the completed GIF.
+- Render Severe and Winter soundings through `sharpmod-render`, with `--out`
+  as an alternative to the positional path. `--json` reports the PNG path,
+  dimensions, format and size for automation. `--version` reports the package
+  version, and the image integration guide covers headless setup and embedding.
+
+### Changed
+
+- Focus the README feature summary and screenshot gallery on v3.8.0.
+- Include the Dependabot updates for ecCodes 2.50.0 → 2.50.1, Ruff
+  0.17.3 → 0.17.4 and `softprops/action-gh-release` 3.0.3 → 3.0.4 in
+  v3.8.0. Keep the release action pinned to its verified commit.
+- Omit the locator map from default CLI images, including extractor `--render`
+  output. Keep explicitly requested locator overlays available.
+- Move height-aligned sounding comparison into Rust. Preserve the reference
+  level order and pressure annotations, the existing duplicate-height order,
+  the per-field masks and the maximum interpolation gap.
+- Move height-chart AGL grid generation, stable per-series interpolation,
+  Kelvin normalization, storm-relative wind speed, horizontal vorticity and
+  signed streamwiseness calculations into Rust. Keep the existing Qt widgets,
+  shared storm-motion selection, independent versus joint masks, first usable
+  duplicate-height reports, endpoint behavior and no-data results. Retain the
+  existing stepwise parcel calculation with its grid sampling routed to Rust.
+  Give the winter chart-series definition a named type for the Rust lint check.
+
+### Fixed
+
+- Remove temporary desktop bridge data only after the bridge and its workers
+  have exited. Retry transient file locks and recover abandoned, owned sessions
+  after a crash on the next launch and during periodic scans. Keep ownership
+  records through partial deletion, skip live owners and reparse points, and
+  preserve saved files and reusable weather caches. Extend the existing real
+  sidecar shutdown check to cover a Windows sharing violation.
+- Center the winter precipitation-source pressure, height and temperature in
+  their own content area above the separate possible-hazard box.
+- Match winter sounding axes, rings, grid lines and plot borders to the severe
+  view by restoring the native background once and preserving shared-border
+  ownership. Retain the severe hodograph's zoom and selected centering instead
+  of resetting winter to zero-wind center.
+- Retain the model parameter catalogue and color scale while checking another
+  forecast hour in the same model run. Keep model and run changes separate and
+  apply the hour's actual product availability when its catalogue arrives.
+- Keep dropdown menus above a parent popup's backdrop, including the forecast
+  GIF resolution and timing selectors.
+- Synchronize the weather framebuffer with MapLibre when export changes pixel
+  density, preventing high-resolution frames from clipping the weather overlay.
+- Wait for a fresh weather-overlay render after map movement and tile loading
+  before capturing a GIF frame. Restore smoothing on the exported panel when
+  export is cancelled after a panel-layout or workspace change.
+
 ## [v3.7.2] - 2026-11-14
 
 Other planned models and parameter sets remain upcoming; the implemented

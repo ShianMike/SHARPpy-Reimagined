@@ -18,6 +18,25 @@ vi.mock("@deck.gl/maplibre", () => ({ MapLibreOverlay: class {
 const saved = useMapStore.getState();
 afterEach(() => { useMapStore.setState(saved, true); mock.remove.mockReset(); });
 
+it.each(["mercator", "globe"] as const)("keeps the %s framebuffer synchronized with MapLibre's drawing buffer", (projection) => {
+  useMapStore.setState({ projection, view: "map" });
+  const canvas = { width: 1543, height: 1049 };
+  const context = { canvas, setDrawingBufferSize: vi.fn() };
+  createOverlay({ pickingRadius: 6, useDevicePixels: 1 }, {
+    onHover: vi.fn(), onClick: vi.fn(), onAfterRender: vi.fn(), onError: vi.fn(),
+  });
+  mock.props.onDeviceInitialized?.({ getDefaultCanvasContext: () => context } as unknown as Device);
+  const render = { device: {} as Device, gl: {} as WebGL2RenderingContext };
+  mock.props.onBeforeRender?.(render);
+  // Export raises pixel density without a CSS resize; the old width must not clip the weather.
+  canvas.width = 1920; canvas.height = 1305;
+  mock.props.onBeforeRender?.(render);
+  canvas.width = 1543; canvas.height = 1049;
+  mock.props.onBeforeRender?.(render);
+  expect(context.setDrawingBufferSize.mock.calls).toEqual(projection === "mercator"
+    ? [[1543, 1049], [1920, 1305], [1543, 1049]] : []);
+});
+
 it.each(["mercator", "globe"] as const)("releases the %s canvas observers after layers, even when removal fails", (projection) => {
   useMapStore.setState({ projection, view: "map" });
   const calls: string[] = [];

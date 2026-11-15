@@ -1,4 +1,25 @@
 {
+  "3.8.0": {
+    "summary": "Explore winter soundings, export forecast GIFs, and render sounding images from your own tools.",
+    "highlights": [
+      {
+        "title": "Winter soundings",
+        "description": "Choose Severe or Winter above Profile. Winter keeps the large Skew-T and hodograph, wind plots and omega meter. It replaces parcel diagnostics with precipitation type and source, snow growth, icing, fog and drizzle checks, and four profiles for the lowest 3 km. The centered source readout sits above a separate possible hazard box that distinguishes snow from a blizzard signal."
+      },
+      {
+        "title": "Forecast GIF export",
+        "description": "Use Export beside Smooth/Fast to choose forecast hours, resolution and speed. Every selected hour loads before lossless frame capture and GIF encoding. Preview a looping GIF with smooth map pixels, the full plot, the color scale and the forecast times. The scale also stays visible while the map loads another hour."
+      },
+      {
+        "title": "Sounding images for other apps",
+        "description": "Render Severe and Winter PNGs from the command line, with optional JSON containing the saved location and image size. The locator map is hidden unless you request an overlay."
+      },
+      {
+        "title": "More reliable session cleanup",
+        "description": "Closing the desktop app waits for its workers and retries temporary files that are still locked. After a process crash, a later launch recovers abandoned session files while preserving active sessions, saved exports and preferences."
+      }
+    ]
+  },
   "3.7.2": {
     "summary": "Explore RAP and RDPS maps with clearer color scales and matching radar pickers.",
     "highlights": [

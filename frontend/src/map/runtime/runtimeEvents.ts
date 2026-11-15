@@ -15,6 +15,8 @@ import { attachMapEvents } from "./mapEvents";
 import { createOverlay } from "./overlay";
 import type { StartupWatch } from "./startupWatch";
 import { clickFromPick, hoverFromPick } from "./stationScene";
+import type { StationScene } from "./stationScene";
+import { registerMapCapture } from "./mapCapture";
 
 /** What the handlers need from their runtime. */
 export interface RuntimeEventTarget {
@@ -28,6 +30,8 @@ export interface RuntimeEventTarget {
   live<T extends unknown[]>(handler: (...args: T) => void): (...args: T) => void;
   styleLoaded(): void;
   runtimeError(message: string): void;
+  readonly map?: MapLibreMap | null;
+  readonly scene?: Pick<StationScene, "matchesField"> | null;
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -69,7 +73,8 @@ export function wireMapEvents(map: MapLibreMap, target: RuntimeEventTarget): voi
 
 export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, target: RuntimeEventTarget): MapLibreOverlay {
   const live = target.live.bind(target);
-  return createOverlay(
+  const captures = new Set<() => void>();
+  const overlay = createOverlay(
     { pickingRadius: tokens.lengths.pickingRadius, useDevicePixels: pixelRatio },
     {
       onHover: live((info) => {
@@ -81,6 +86,7 @@ export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, tar
       onAfterRender: live(() => {
         target.overlayReady = true;
         target.watch.afterRender();
+        captures.forEach((listener) => { listener(); });
       }),
       onError: live((error) => {
         target.errors.push(error.message);
@@ -90,6 +96,10 @@ export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, tar
       }),
     },
   );
+  if (target.map !== undefined && target.map !== null) registerMapCapture(target.panel, target.map, overlay,
+    (request) => target.scene?.matchesField(request) === true,
+    (listener) => { captures.add(listener); return () => { captures.delete(listener); }; });
+  return overlay;
 }
 
 /** Interleaved overlays do not forward input. Pick once per animation frame, using MapLibre's coordinates. */

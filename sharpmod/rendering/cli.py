@@ -49,7 +49,7 @@ import sys
 import tempfile
 import threading
 import warnings
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext, redirect_stdout
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -826,6 +826,8 @@ def render(infile: str, outfile: str | None = None,
 
 
 def _build_cli_parser() -> argparse.ArgumentParser:
+    from sharpmod._version import __version__
+
     parser = argparse.ArgumentParser(
         prog="sharpmod-render",
         description="Render a sounding file to a PNG image.")
@@ -839,6 +841,16 @@ def _build_cli_parser() -> argparse.ArgumentParser:
             "sharpmod_sounding.png beside the application)"
         ),
     )
+    parser.add_argument(
+        "-o", "--out", metavar="PNG",
+        help="output PNG path (alternative to the positional path)")
+    parser.add_argument("--version", action="version", version=__version__)
+    parser.add_argument(
+        "--sounding-mode", choices=("severe", "winter"), default="severe",
+        help="sounding composition to render (default: severe)")
+    parser.add_argument(
+        "--json", action="store_true",
+        help="write a JSON report with the output path, dimensions and size to stdout")
     parser.add_argument(
         "--image-mode", "--image", choices=PNG_IMAGE_MODES,
         default=PNG_IMAGE_HD, help="PNG image mode (default: hd)")
@@ -864,7 +876,7 @@ def _build_cli_parser() -> argparse.ArgumentParser:
              "comma-separated list of 'risk[:hazard]', 'hrrr[:product]', "
              "'radar-site' or 'radar-mosaic'. Risk and a model field combine; "
              "radar replaces them and is only available for a sounding valid "
-             "near the present. Default: none, which reaches for no network.")
+             "near the present. The locator is hidden by default.")
     return parser
 
 
@@ -876,23 +888,33 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
     ns = parser.parse_args(args)
+    if ns.out is not None and ns.outfile is not None:
+        parser.error("choose either --out or a positional output path")
+    outfile = ns.out if ns.out is not None else ns.outfile
+    winter = ns.sounding_mode == "winter"
     try:
-        outfile = (
-            ns.outfile
-            if ns.outfile is not None
-            else str(export_file_path("sharpmod_sounding.png"))
-        )
-        out = render(
-            ns.infile,
-            outfile,
-            image_mode=ns.image_mode,
-            parcel=ns.parcel,
-            locator_overlay=ns.locator_overlay,
-        )
-    except (ExportDirectoryError, RenderError) as exc:
+        if ns.json:
+            from sharpmod_rs import sounding_png_report
+
+        if outfile is None:
+            outfile = str(export_file_path("sharpmod_sounding.png"))
+        with redirect_stdout(sys.stderr) if ns.json else nullcontext():
+            out = render(
+                ns.infile,
+                outfile,
+                image_mode=ns.image_mode,
+                parcel=DEFAULT_RENDER_PARCEL if winter else ns.parcel,
+                locator_overlay=ns.locator_overlay,
+                show_locator=bool(ns.locator_overlay),
+                view={"mode": "winter", "chart": "streamwiseness", "edits": []} if winter else None,
+            )
+        if ns.json:
+            print(sounding_png_report(out, ns.sounding_mode))
+        else:
+            print("wrote", os.path.abspath(out))
+    except (ExportDirectoryError, RenderError, ImportError, OSError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    print("wrote", os.path.abspath(out))
     return 0
 
 

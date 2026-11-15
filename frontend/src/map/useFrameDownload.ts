@@ -17,7 +17,8 @@ export type ForecastHourState = "cached" | "loading" | "missing" | "failed" | "u
 export function useFrameDownload() {
   const context = useForecastContext();
   const drawnProducts = useDrawnProducts();
-  const checkingProducts = useMapCatalog().isPending;
+  const catalogQuery = useMapCatalog();
+  const checkingProducts = catalogQuery.isPending || catalogQuery.isPlaceholderData;
   const client = useBackendClient();
   const queryClient = useQueryClient();
   const controller = useRef<AbortController | null>(null);

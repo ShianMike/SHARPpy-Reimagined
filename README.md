@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.7.2
+# SHARPpy Reimagined · v3.8.0
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,72 +10,26 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v372---2026-11-14)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v380---2026-11-15)
 
 </div>
 
-## What's new in 3.7.2
+## What's new in 3.8.0
 
-- **RAP and RDPS maps:** use the implemented parameters with shared HRRR color
-  tables and controls. Available choices follow the selected run's published
-  fields, with RAP's actual curved coverage outline and RDPS's native grid.
-  Other planned models and parameter sets remain upcoming.
-- **Readable color scales:** show five whole numbers beside outlined scales.
-  In two- and four-panel Model Viewer layouts, the eye button sits beside each
-  panel title. Wind, deep-layer shear and EHI use the supplied color tables.
-- **Matching radar pickers:** choose networks, sites, products and tilts in
-  movable popups with site search and a visible current selection.
-- **Direct service details and map recovery:** backend details appear as soon
-  as its status popup opens. Map startup recovery controls and the station list
-  are centered in the available map area.
-- **More native calculations:** shared map rendering, projection, diagnostics
-  and ensemble statistics use Rust through the existing application interfaces.
-
-### Included from 3.7.1
-
-Live radar now follows the latest available scan automatically, showing its
-actual time and age. Version 3.7.0 added radar coverage and sounding choices:
-
-- **German radar:** view DWD precipitation-scan reflectivity at 17 sites, with
-  measured values, source credits and terrain-following scan elevations.
-- **European radar:** discover OPERA sites and display compatible reflectivity
-  scans. Availability depends on each site's data format, licence and scans.
-- **French radar:** view additional Météo-France sites in France and overseas
-  through MRRL InterRAD, with the active radar's source credit at the bottom left.
-- **Radar controls:** choose a network, search sites by code or place, and click
-  map labels to select a site. Borders show selected and unavailable sites;
-  use the live timeline to request recent data as needed.
-- **Sounding display:** choose Dark, Light or Protanopia for sounding images in
-  Settings. The saved choice applies to interactive and exported soundings.
-
-### Included from 3.6.0
-
-Download published Windows installers and portable builds from
-[Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases).
-
-- **Native box soundings:** draw, move and resize a region on flat or globe maps
-  to average supported native GRIB columns. Show up to 64 individual temperature,
-  dew-point and hodograph traces behind the mean; retain them in portable files.
-  Diagnostics use all contributing valid columns. See [box soundings](docs/box-soundings.md)
-  for supported grids, coverage requirements, terrain handling and work limits.
-- **A compact workspace:** use the interface at 90% of its previous size, with
-  shared panel and popup sizing, responsive controls and moving selection
-  highlights that respect reduced motion. What’s new blurs the whole workspace
-  behind its highlights.
-- **Model sounding dates:** choose run days with the custom UTC calendar, select
-  cycles separately, and enter signed coordinates with matching hemisphere labels.
-- **Clear recovery:** use compact notices and relevant recovery actions across
-  maps, downloads, soundings and settings; expand Details for diagnostics.
-- **Consistent controls:** align sounding inspection, editing, parcels, chart
-  panels and export; arrange Map details in two columns and show loading in the
-  model and radar visibility controls.
-- **Global forecast maps:** select simulated Composite Reflectivity on GFS,
-  and use familiar parameter groups on the native 15 km GDPS forecast grids.
-- **Reliable box editing:** cancel interrupted gestures without losing the
-  committed region, keep map panning available, and reject late edit results.
-  Unavailable effective-layer winds stay masked instead of becoming invalid vectors.
-- **Faster profile edits:** use native pressure interpolation for repeated
-  calculations while preserving the rendered chart and diagnostic values.
+- **Winter soundings:** switch between Severe and Winter in the same sounding
+  viewer. Winter adds precipitation type guidance, snow growth, icing and
+  lower atmosphere profiles alongside the Skew-T and hodograph.
+- **Forecast GIFs:** choose forecast hours and export the active map parameter
+  as a looping animation. The color scale stays visible while hours load.
+- **Sounding images for other apps:** the headless renderer exports Severe and
+  Winter PNGs, with an optional JSON result for scripts and services. See the
+  [integration guide](docs/SOUNDING_IMAGE_INTEGRATION.md).
+- **More Rust calculations:** height charts and sounding profile comparisons
+  use native kernels through the existing interfaces.
+- **Temporary-file recovery:** desktop shutdown retries locked session files,
+  and a later launch recovers owned session files left by a process crash.
+- **Dependency updates:** includes ecCodes 2.50.1, Ruff 0.17.4 and the
+  action-gh-release 3.0.4 release workflow update.
 
 ## Weather analysis
 
@@ -105,91 +59,10 @@ open soundings, edits and history will be lost.
 
 ## Screenshots
 
-Interface views from 3.6.0, captured with Playwright in the local application at
-1920 × 1080. Maps and radar use real provider data; the point sounding uses
-the bundled HRRR example, and the box sounding was generated from the map.
-Open an image to view it at its original size.
+A Winter sounding rendered by v3.8.0 from the Barrow, Alaska observed profile.
+Open the image to inspect its full resolution.
 
-<details open>
-<summary><strong>Overview · forecast, live weather and sounding workflows</strong></summary>
-
-[![Overview with direct entry points to Model Viewer, Live Tracking and sounding sources](docs/images/v3.6.0/overview.jpg)](docs/images/v3.6.0/overview.jpg)
-
-</details>
-
-<details>
-<summary><strong>Model Viewer · forecast fields and playback</strong></summary>
-
-[![Model Viewer with HRRR surface temperature and forecast playback](docs/images/v3.6.0/model-viewer.jpg)](docs/images/v3.6.0/model-viewer.jpg)
-
-</details>
-
-<details>
-<summary><strong>Two panels · synchronized forecast comparison</strong></summary>
-
-[![Two synchronized forecast panels showing surface temperature and dewpoint](docs/images/v3.6.0/two-panels.jpg)](docs/images/v3.6.0/two-panels.jpg)
-
-</details>
-
-<details>
-<summary><strong>Four panels · independent products and scales</strong></summary>
-
-[![Four forecast panels showing 500 mb height and wind, dewpoint, temperature and relative humidity](docs/images/v3.6.0/four-panels.jpg)](docs/images/v3.6.0/four-panels.jpg)
-
-</details>
-
-<details>
-<summary><strong>Forecast downloads · saved hours and playback readiness</strong></summary>
-
-[![Forecast hour picker with saved hours, memory readiness and download controls](docs/images/v3.6.0/download-details.jpg)](docs/images/v3.6.0/download-details.jpg)
-
-</details>
-
-<details>
-<summary><strong>Live Tracking · radar products and measured values</strong></summary>
-
-[![Live Tracking with current CONUS radar imagery and scan times](docs/images/v3.6.0/live-tracking.jpg)](docs/images/v3.6.0/live-tracking.jpg)
-
-</details>
-
-<details>
-<summary><strong>Soundings · Skew-T, hodograph and profile editing</strong></summary>
-
-[![Imported HRRR sounding with linked Skew-T, hodograph, editing and export controls](docs/images/v3.6.0/sounding.jpg)](docs/images/v3.6.0/sounding.jpg)
-
-</details>
-
-<details>
-<summary><strong>Box soundings · native grid columns and area means</strong></summary>
-
-[![A native HRRR box selection with the compact region inspector](docs/images/v3.6.0/box-selection.jpg)](docs/images/v3.6.0/box-selection.jpg)
-
-[![The generated HRRR box sounding with individual grid traces behind its area mean](docs/images/v3.6.0/box-sounding.jpg)](docs/images/v3.6.0/box-sounding.jpg)
-
-</details>
-
-<details>
-<summary><strong>Settings · preferences and weather cache management</strong></summary>
-
-[![Storage settings with forecast and live-weather cache usage and clearing controls](docs/images/v3.6.0/settings.jpg)](docs/images/v3.6.0/settings.jpg)
-
-</details>
-
-<details>
-<summary><strong>Updates · release highlights</strong></summary>
-
-[![Updates settings with the current release highlights](docs/images/v3.6.0/updates.jpg)](docs/images/v3.6.0/updates.jpg)
-
-[![What's new in 3.6.0 with the whole workspace blurred behind the popup](docs/images/v3.6.0/whats-new.jpg)](docs/images/v3.6.0/whats-new.jpg)
-
-</details>
-
-<details>
-<summary><strong>Australian radar · native velocity and site selection</strong></summary>
-
-[![Australian Doppler velocity with the shared velocity palette and native site controls](docs/images/v3.6.0/australian-radar.jpg)](docs/images/v3.6.0/australian-radar.jpg)
-
-</details>
+[![Winter sounding with Skew-T, hodograph, precipitation source and low-level diagnostics](docs/images/v3.8.0/winter-sounding.png)](docs/images/v3.8.0/winter-sounding.png)
 
 ## Get started
 
@@ -221,7 +94,6 @@ For a live browser preview, run `npm run dev:browser` in `frontend/` and open
 
 - [Using the app and command-line tools](docs/USAGE.md)
 - [Sounding parameter guide](docs/sounding_parameter_guide.md)
-- [Historical interface screenshots](https://github.com/ShianMike/SHARPpy-Reimagined/tree/84056a2634ae53028b931c8728a8a7e8b97bc07c/docs/images)
 - [Installation and optional dependencies](installation.txt)
 - [Frontend development](docs/frontend/ARCHITECTURE.md)
 - [Rust backend and Python fallback](docs/RUST_BACKEND.md)

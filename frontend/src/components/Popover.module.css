@@ -61,6 +61,7 @@
   --popover-shift-x: var(--space-1);
 }
 .popover[data-movable="true"] { --popover-shift-y: 0; --popover-closed-scale: 1; }
+.popover[data-nested="true"] { z-index: calc(var(--z-popover-focused) + var(--popover-depth)); }
 .popover[data-dragging="true"] { transition: none; }
 
 .popover[data-width="popover"] {

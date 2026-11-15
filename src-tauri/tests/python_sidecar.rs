@@ -168,6 +168,19 @@ async fn session_files_are_removed_after_normal_and_forced_exit() {
         std::fs::create_dir(&downloads).unwrap();
         std::fs::write(downloads.join("model.grib2"), b"GRIB").unwrap();
         std::fs::write(downloads.join("model.grib2.provenance.json"), b"{}").unwrap();
+        #[cfg(windows)]
+        let release = force.then(|| {
+            use std::os::windows::fs::OpenOptionsExt;
+            let held = std::fs::OpenOptions::new()
+                .read(true)
+                .share_mode(0x0000_0001 | 0x0000_0002)
+                .open(downloads.join("model.grib2"))
+                .unwrap();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(250));
+                drop(held);
+            })
+        });
         if force {
             process.control.start_kill();
         } else {
@@ -183,6 +196,10 @@ async fn session_files_are_removed_after_normal_and_forced_exit() {
             .unwrap();
         if !force {
             assert_eq!(code, Some(0));
+        }
+        #[cfg(windows)]
+        if let Some(release) = release {
+            release.join().unwrap();
         }
         assert!(!cache.exists(), "session files survived (forced={force})");
         assert_eq!(std::fs::read(&saved).unwrap(), sample);

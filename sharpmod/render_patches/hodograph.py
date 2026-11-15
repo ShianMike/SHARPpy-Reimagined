@@ -38,6 +38,7 @@ def install_hodo_label_fit(
         import sharppy.viz.hodo as _hodo_mod
         import sharppy.sharptab as _tab
         import numpy as _np
+        from sharpmod_rs import configure_hodograph_rings
 
         _bg = _hodo_mod.backgroundHodo
         _plot = _hodo_mod.plotHodo
@@ -54,6 +55,15 @@ def install_hodo_label_fit(
 
         label_cap = int(HODO_LABEL_MAX_PT)
         readout_cap = int(HODO_READOUT_MAX_PT)
+
+        # Keep the full ring range whenever the upstream widget rebuilds its background.
+        _orig_background = _bg.plotBackground
+
+        def plotBackground(self):
+            configure_hodograph_rings(self)
+            return _orig_background(self)
+
+        _bg.plotBackground = plotBackground
 
         # --- 1. Cap fonts after initUI (called at construction AND on resize) ---
         _orig_initUI = _bg.initUI

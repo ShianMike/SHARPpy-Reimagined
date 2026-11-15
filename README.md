@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.8.0
+# SHARPpy Reimagined · v3.8.1
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,11 +10,18 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v380---2026-11-15)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v381---2026-11-15)
 
 </div>
 
-## What's new in 3.8.0
+## What's new in 3.8.1
+
+- **Winter rendering repair:** the Windows package now includes the SVG modules
+  needed to draw Winter soundings and export HD/UHD PNGs.
+- **Hodograph rings:** Severe and Winter include speed rings through 200 kt,
+  retaining the current zoom and centering controls.
+
+## Sounding and forecast tools
 
 - **Winter soundings:** switch between Severe and Winter in the same sounding
   viewer. Winter adds precipitation type guidance, snow growth, icing and
@@ -59,7 +66,7 @@ open soundings, edits and history will be lost.
 
 ## Screenshots
 
-A Winter sounding rendered by v3.8.0 from the Barrow, Alaska observed profile.
+A Winter sounding from the Barrow, Alaska observed profile.
 Open the image to inspect its full resolution.
 
 [![Winter sounding with Skew-T, hodograph, precipitation source and low-level diagnostics](docs/images/v3.8.0/winter-sounding.png)](docs/images/v3.8.0/winter-sounding.png)

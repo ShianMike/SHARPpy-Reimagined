@@ -18,6 +18,7 @@ mod gdps_fields;
 pub mod grib;
 mod height_grid;
 mod height_grid_bindings;
+mod hodograph;
 mod iem_bindings;
 mod igra;
 mod igra_bindings;
@@ -854,6 +855,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     map_raster_bindings::register(module)?;
     wind_reference_bindings::register(module)?;
     height_grid_bindings::register(module)?;
+    hodograph::register(module)?;
     igra_bindings::register(module)?;
     report_bindings::register(module)?;
     sars_bindings::register(module)?;

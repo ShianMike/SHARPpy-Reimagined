@@ -79,7 +79,7 @@ pub(super) fn render(
         slot * 3.,
         49.,
         11,
-        "Precipitation source · height AGL",
+        "Precipitation Source · Height AGL",
         &p.fg,
     );
     let label = d.source.map_or_else(
@@ -88,31 +88,43 @@ pub(super) fn render(
     );
     // Center within the source's own content area, which ends at the hazard
     // divider. Use Qt SVG's actual text bounds, including glyph bearings.
+    let hazard_heading = "Severe Weather Possible Hazard Type";
     let measure = format!(
-        "{}<text id=\"source-value\" x=\"0\" y=\"0\" font-size=\"17\">{}</text></g></svg>",
+        "{}<text id=\"source-value\" x=\"0\" y=\"0\" font-size=\"17\">{}</text><text id=\"hazard-heading\" x=\"0\" y=\"0\" font-size=\"10\">{}</text></g></svg>",
         canvas(width, height, p),
         escape(&label),
+        escape(hazard_heading),
     );
     let py = prof.py();
     let bytes = PyModule::import(py, "qtpy.QtCore")?
         .getattr("QByteArray")?
         .call1((pyo3::types::PyBytes::new(py, measure.as_bytes()),))?;
-    let bounds = PyModule::import(py, "qtpy.QtSvg")?
+    let renderer = PyModule::import(py, "qtpy.QtSvg")?
         .getattr("QSvgRenderer")?
-        .call1((bytes,))?
-        .call_method1("boundsOnElement", ("source-value",))?;
+        .call1((bytes,))?;
+    let bounds = renderer.call_method1("boundsOnElement", ("source-value",))?;
     let center = bounds.call_method0("center")?;
     let x = slot * 3. - center.call_method0("x")?.extract::<f64>()?;
     let y = (58. + hazard_top) / 2. - center.call_method0("y")?.extract::<f64>()?;
     text(&mut svg, x, y, 17, &label, "#c58ce7");
     line(&mut svg, slot * 2., hazard_top, w, hazard_top, &p.fg, 0.6);
-    centered(
-        &mut svg,
+    let heading_width: f64 = renderer
+        .call_method1("boundsOnElement", ("hazard-heading",))?
+        .call_method0("width")?
+        .extract()?;
+    let available = (slot * 2. - 16.).max(1.);
+    let heading_size = if heading_width > available {
+        9. * available / heading_width
+    } else {
+        10.
+    };
+    let _ = write!(
+        svg,
+        "<text x=\"{:.1}\" y=\"{:.1}\" font-size=\"{heading_size:.3}\" text-anchor=\"middle\" fill=\"{}\">{}</text>",
         slot * 3.,
         hazard_top + 16.,
-        10,
-        "Possible hazard",
-        &p.fg,
+        p.fg,
+        escape(hazard_heading),
     );
     centered(&mut svg, slot * 3., h - 12., 15, hazard, hazard_color);
     svg.push_str("</g></svg>");

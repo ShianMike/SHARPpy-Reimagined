@@ -262,8 +262,12 @@ hiddenimports += [
 # Only name the small pure-python helpers the freezer can miss.
 hiddenimports += ["dateutil", "certifi", "requests"]
 
-# The native winter composer imports this vector widget through PyO3.
-hiddenimports += ["qtpy.QtSvgWidgets", "PySide6.QtSvgWidgets"]
+# The native winter composer imports both SVG classes through PyO3, outside
+# Python's static import graph. Keep the qtpy wrappers and their Qt bindings.
+hiddenimports += [
+    "qtpy.QtSvg", "PySide6.QtSvg",
+    "qtpy.QtSvgWidgets", "PySide6.QtSvgWidgets",
+]
 
 block_cipher = None
 

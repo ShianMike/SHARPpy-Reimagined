@@ -7,6 +7,26 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v3.8.1] - 2026-11-15
+
+### Fixed
+
+- Include `qtpy.QtSvg` and `PySide6.QtSvg` in the frozen backend alongside
+  the SVG widgets. Restore Winter sounding images in installed Windows builds
+  that failed with `No module named 'qtpy.QtSvg'`.
+- Exercise the interactive Severe HD and Winter HD/UHD image routes in the
+  packaged desktop smoke check, and require their dimensions in the release
+  and installed-upgrade gates. Keep the older installer usable as the upgrade
+  baseline without requiring its report to contain the new fields.
+
+### Changed
+
+- Extend hodograph speed rings through 200 kt in Severe and Winter views,
+  retaining the selected zoom, centering and existing labels.
+- Capitalize the Winter source caption as `Precipitation Source · Height AGL`
+  and label its separate hazard readout `Severe Weather Possible Hazard Type`,
+  fitting the heading to its existing box.
+
 ## [v3.8.0] - 2026-11-15
 
 ### Added

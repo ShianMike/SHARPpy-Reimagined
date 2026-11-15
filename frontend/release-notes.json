@@ -1,4 +1,17 @@
 {
+  "3.8.1": {
+    "summary": "Restore Winter sounding images in the Windows app and extend hodograph speed rings.",
+    "highlights": [
+      {
+        "title": "Winter sounding repair",
+        "description": "Winter images now render in the installed Windows app, including HD and UHD exports. This fixes the missing QtSvg module error."
+      },
+      {
+        "title": "Hodograph rings to 200 kt",
+        "description": "Severe and Winter hodographs include speed rings through 200 kt. Your zoom and centering controls continue to work as before."
+      }
+    ]
+  },
   "3.8.0": {
     "summary": "Explore winter soundings, export forecast GIFs, and render sounding images from your own tools.",
     "highlights": [

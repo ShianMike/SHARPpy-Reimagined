@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string] $Executable,
     [Parameter(Mandatory = $true)][string] $ExpectedVersion,
     [Parameter(Mandatory = $true)][string] $Sample,
-    [Parameter(Mandatory = $true)][string] $Report
+    [Parameter(Mandatory = $true)][string] $Report,
+    [switch] $RequireWinter
 )
 $ErrorActionPreference = "Stop"
 $appExecutable = (Resolve-Path -LiteralPath $Executable).Path
@@ -42,6 +43,20 @@ try {
         $result.health.scientificBackend.rustVersion -ne $ExpectedVersion -or `
         $result.station_count -lt 1 -or $result.sounding.levelCount -lt 2 -or $result.image_bytes -lt 24) {
         throw "Desktop runtime report failed its backend, import, or rendering checks"
+    }
+    if ($RequireWinter) {
+        foreach ($name in @('severe_hd', 'winter_hd', 'winter_uhd')) {
+            $view = $result.views.$name
+            if ($null -eq $view -or $view.image_bytes -lt 24 -or $view.width -lt 1 -or $view.height -lt 1) {
+                throw "Packaged desktop did not render $name"
+            }
+        }
+        if ($result.views.winter_hd.width -ne $result.views.severe_hd.width -or
+            $result.views.winter_hd.height -ne $result.views.severe_hd.height -or
+            $result.views.winter_uhd.width -le $result.views.winter_hd.width -or
+            $result.views.winter_uhd.height -le $result.views.winter_hd.height) {
+            throw 'Packaged Winter images have inconsistent HD/UHD dimensions'
+        }
     }
     $result | ConvertTo-Json -Depth 8
 } finally {

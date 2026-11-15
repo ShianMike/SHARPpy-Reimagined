@@ -39,7 +39,8 @@ function Install-Candidate([string] $Path, [string] $Version, [string] $Phase) {
         $executable = $executables[0].FullName
     }
     & "$PSScriptRoot/verify_desktop_artifact.ps1" -Executable $executable -ExpectedVersion $Version `
-        -Sample $savedFile -Report (Join-Path $reportRoot "$Phase-runtime.json") | Out-Host
+        -Sample $savedFile -Report (Join-Path $reportRoot "$Phase-runtime.json") `
+        -RequireWinter:($Phase -eq 'upgraded') | Out-Host
     return $executable
 }
 

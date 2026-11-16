@@ -1,5 +1,6 @@
 import { useId, useRef, type ReactNode } from "react";
-import { Action } from "../../ui/Controls";
+import { ListChecks, ListX } from "lucide-react";
+import { Action, IconAction } from "../../ui/Controls";
 import { forecastLabel } from "../sounding/soundingTime";
 import styles from "./ForecastExportDialog.module.css";
 
@@ -15,15 +16,15 @@ export function ForecastHourSelection({ hours, currentHour, selected, disabled, 
   return <fieldset disabled={disabled} className={styles.hoursSection}>
     <legend>Forecast hours <span>{selection.length} selected</span></legend>
     <div className={styles.hourActions}>
-      <Action onClick={() => { choose([...hours]); }}>Select all</Action>
-      <Action onClick={() => { choose([]); }}>Clear</Action>
+      <IconAction icon={ListChecks} size="sm" label="Select all" hintText="Select all forecast hours" onClick={() => { choose([...hours]); }} />
+      <IconAction icon={ListX} size="sm" label="Clear" hintText="Clear selected hours" onClick={() => { choose([]); }} />
       <Action onClick={() => { choose(hours.filter(hour => hour >= currentHour && hour <= currentHour + 6)); }}
-        title="Include the current hour through six hours ahead">Next 6 hours</Action>
+        aria-label="Next 6 hours" title="Include the current hour through six hours ahead">Next 6h</Action>
       <Action onClick={() => { choose(hours.filter(hour => hour >= currentHour && hour <= currentHour + 12)); }}
-        title="Include the current hour through twelve hours ahead">Next 12 hours</Action>
+        aria-label="Next 12 hours" title="Include the current hour through twelve hours ahead">Next 12h</Action>
       <Action disabled={selection.length < 2} onClick={() => { const first = selection[0];
         if (first !== undefined) choose(selection.filter(hour => (hour - first) % 3 === 0));
-      }} title="Keep hours three hours apart, starting with the first selected hour">Every 3 hours</Action>
+      }} aria-label="Every 3 hours" title="Keep hours three hours apart, starting with the first selected hour">Every 3h</Action>
     </div>
     <p id={hint} className={styles.hourHint}>Ranges start at {forecastLabel(currentHour)} and include the endpoint. Shift-click to select or clear a range.</p>
     <div className={styles.hours} role="group" aria-label="Hours to export" aria-describedby={hint}>{hours.map(hour => <label key={hour}>

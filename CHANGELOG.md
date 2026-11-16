@@ -37,6 +37,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fit all five forecast-hour shortcuts in one row with Select all/Clear icons
+  and compact time-range labels. Retain full accessible names and tooltips.
 - Add regression coverage for panel-specific report settings, saved-preference
   migration and restoration, and delayed overlay loading during export.
 - Test sounding recovery after source-cache deletion, completed edit history,

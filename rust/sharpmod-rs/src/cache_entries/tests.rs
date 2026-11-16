@@ -3,6 +3,7 @@ use pyo3::ffi::c_str;
 
 #[test]
 fn cache_listing_tolerates_optional_container_values_and_null_source_fields() {
+    let _backend = crate::lock_python_backend_test();
     Python::initialize();
     Python::attach(|py| {
         let globals = PyDict::new(py);
@@ -36,6 +37,7 @@ for field, value in [('member', ['p01']), ('spatial', {'region': 'conus'}),
 
 #[test]
 fn cache_entries_preserve_public_types_coercions_and_stable_order() {
+    let _backend = crate::lock_python_backend_test();
     Python::initialize();
     Python::attach(|py| {
         let globals = PyDict::new(py);
@@ -106,6 +108,7 @@ assert math.isnan(raw[0]['accessed']) and raw[2]['accessed'] == float('inf')
 
 #[test]
 fn malformed_metadata_keeps_real_storage_usage_and_pinned_entries_available() {
+    let _backend = crate::lock_python_backend_test();
     Python::initialize();
     Python::attach(|py| {
         let globals = PyDict::new(py);
@@ -152,8 +155,10 @@ with TemporaryDirectory(prefix='rust-cache-qc-') as temp:
 
 #[test]
 fn cache_inspection_and_portable_validation_do_not_require_a_scientific_engine() {
+    let _backend = crate::lock_python_backend_test();
     Python::initialize();
     Python::attach(|py| {
+        let globals = PyDict::new(py);
         py.run(
             c_str!(
                 r#"
@@ -176,7 +181,7 @@ finally:
     selector.reset_backend_cache()
 "#
             ),
-            None,
+            Some(&globals),
             None,
         )
         .unwrap();

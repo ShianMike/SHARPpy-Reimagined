@@ -488,15 +488,16 @@ $env:SHARPMOD_BACKEND = "python"
 python -m pytest sharpmod/tests -k "backend or rust"
 ```
 
-Run the native checks from the crate and then run the equivalence tests with
-Rust required:
+Run the native checks from the crate and install the extension before testing.
+Some Rust tests call the public Python adapters through the installed extension.
+Then run the equivalence tests with Rust required:
 
 ```powershell
 Set-Location rust\sharpmod-rs
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked
 maturin develop --release --locked
+cargo test --locked
 Set-Location ..\..
 
 $env:SHARPMOD_BACKEND = "rust"

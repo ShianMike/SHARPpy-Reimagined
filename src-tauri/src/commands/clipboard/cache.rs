@@ -121,7 +121,7 @@ pub(super) fn cleanup(directory: &Path, protected: &[PathBuf], now: SystemTime) 
         let keep = protected.iter().any(|item| same_path(item, &path));
         candidates.push((path, metadata.modified()?, keep));
     }
-    candidates.sort_by(|a, b| b.1.cmp(&a.1));
+    candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.1));
     let mut retained = candidates.iter().filter(|candidate| candidate.2).count();
     let mut first_error = None;
     for (path, modified, keep) in candidates {

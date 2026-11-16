@@ -44,6 +44,7 @@ fn helicity_retains_signed_cross_products_and_knots_conversion() {
 
 #[test]
 fn wind_integral_bindings_match_existing_python_sampling_and_masks() {
+    let _backend = crate::lock_python_backend_test();
     Python::initialize();
     Python::attach(|py| {
         let module = PyModule::new(py, "wind_integral_test").unwrap();

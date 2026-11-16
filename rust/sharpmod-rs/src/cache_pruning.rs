@@ -108,8 +108,10 @@ mod tests {
 
     #[test]
     fn invalid_access_time_does_not_discard_pin_metadata() {
+        let _backend = crate::lock_python_backend_test();
         Python::initialize();
         Python::attach(|py| {
+            let globals = PyDict::new(py);
             py.run(c_str!(r#"
 from datetime import datetime, timezone
 from pathlib import Path
@@ -132,12 +134,13 @@ with TemporaryDirectory(prefix='cache-pin-regression-') as temp:
         assert cache.clear() == []
         assert directory.is_dir()
         assert json.loads(metadata.read_text())['pinned'] is True
-"#), None, None).unwrap();
+"#), Some(&globals), None).unwrap();
         });
     }
 
     #[test]
     fn expired_entries_size_retries_and_large_integer_budgets_match_existing_pruning() {
+        let _backend = crate::lock_python_backend_test();
         Python::initialize();
         Python::attach(|py| {
             let globals = PyDict::new(py);
@@ -193,6 +196,7 @@ for case in range(120):
 
     #[test]
     fn a_lease_acquired_after_scan_blocks_prune_and_clear_at_the_removal_boundary() {
+        let _backend = crate::lock_python_backend_test();
         Python::initialize();
         Python::attach(|py| {
             let globals = PyDict::new(py);
@@ -264,8 +268,10 @@ for operation in ['prune', 'clear']:
 
     #[test]
     fn cache_pruning_still_works_with_no_engine_or_an_invalid_selection() {
+        let _backend = crate::lock_python_backend_test();
         Python::initialize();
         Python::attach(|py| {
+            let globals = PyDict::new(py);
             py.run(
                 c_str!(
                     r#"
@@ -284,7 +290,7 @@ finally:
     selector.reset_backend_cache()
 "#
                 ),
-                None,
+                Some(&globals),
                 None,
             )
             .unwrap();

@@ -69,6 +69,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Install the matching extension before running Rust adapter tests in CI, and
+  isolate the tests that replace the shared Python backend during comparisons.
 - Draw hodograph motion, mean wind and ring labels without background plates
   so the traces and rings behind them remain visible.
 - Keep the Skew-T SFC label, inflow heights and helicity values, and the

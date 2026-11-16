@@ -1,6 +1,16 @@
 //! PyO3 bindings for SHARPpy Reimagined's primary Rust numerical and direct
 //! GRIB point-decoding backend.
 
+// These tests share Python's backend selector and extension module. File I/O
+// can release the GIL while a test has either one patched.
+#[cfg(test)]
+fn lock_python_backend_test() -> std::sync::MutexGuard<'static, ()> {
+    static BACKEND_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    BACKEND_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 pub mod batch_analysis;
 mod box_bindings;
 mod box_mean;

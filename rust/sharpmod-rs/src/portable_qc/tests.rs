@@ -3,6 +3,7 @@ use pyo3::ffi::c_str;
 
 #[test]
 fn portable_qc_matches_existing_checks_on_valid_missing_and_malformed_profiles() {
+    let _backend = crate::lock_python_backend_test();
     Python::initialize();
     Python::attach(|py| {
         let globals = PyDict::new(py);
@@ -57,6 +58,7 @@ assert fatal_issues(native(columns)) == ()
 
 #[test]
 fn portable_qc_preserves_array_conversion_strides_readonly_and_mask_data() {
+    let _backend = crate::lock_python_backend_test();
     Python::initialize();
     Python::attach(|py| {
         let globals = PyDict::new(py);

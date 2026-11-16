@@ -9,6 +9,8 @@ import { parseModelCatalog } from "../../lib/contracts/soundings";
 import { renderWithBackend } from "../../test/backendHarness";
 import { resolveForecast } from "../forecast/useForecast";
 import { useMapStore } from "../../stores/mapStore";
+import { useUiStore } from "../../stores/uiStore";
+import { DEFAULT_FORECAST_EXPORT_SETTINGS } from "../../stores/forecastExportSettings";
 import { ForecastExportDialog } from "./ForecastExportDialog";
 import { defaultProductFor } from "../../map/panelField";
 
@@ -16,7 +18,10 @@ const actions = vi.hoisted(() => ({ exportForecast: vi.fn(), copyGif: vi.fn() })
 vi.mock("./exportForecast", async (original) => ({ ...await original<typeof import("./exportForecast")>(), exportForecast: actions.exportForecast }));
 vi.mock("./forecastClipboard", () => ({ copyForecastGif: actions.copyGif }));
 
-beforeEach(() => { useMapStore.getState().setLayerVisible("model-field", true); });
+beforeEach(() => {
+  useMapStore.getState().setLayerVisible("model-field", true);
+  useUiStore.setState({ forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS });
+});
 
 it("uses each displayed panel's default parameter when exporting the whole layout", async () => {
   const inventory = parseMapCatalog(catalog), product = defaultProductFor(inventory, 0);
@@ -37,7 +42,37 @@ it("uses each displayed panel's default parameter when exporting the whole layou
   });
   view.unmount(); queryClient.clear(); anchor.remove();
 });
-afterEach(() => { cleanup(); useMapStore.setState(useMapStore.getInitialState(), true); vi.resetAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); useMapStore.setState(useMapStore.getInitialState(), true); useUiStore.setState({ forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS }); vi.resetAllMocks(); vi.unstubAllGlobals(); });
+
+it("remembers export options on reopening, uses one panel when needed, and restores the layout preference", async () => {
+  const inventory = parseMapCatalog(catalog), product = defaultProductFor(inventory, 0);
+  const context = resolveForecast(parseModelCatalog(models).models, inventory, { modelKey: "hrrr", runTime: null, forecastHour: 0 });
+  if (context === null || product === undefined) throw new Error("Forecast fixture missing");
+  useMapStore.getState().setPanelLayout(2);
+  const anchor = document.createElement("button"); document.body.append(anchor);
+  const dialog = <ForecastExportDialog anchor={anchor} context={context} product={product} panel={0} onClose={vi.fn()} />;
+  const first = renderWithBackend(dialog, createTransport());
+  fireEvent.click(screen.getByRole("combobox", { name: "Export area" }));
+  fireEvent.click(screen.getByRole("option", { name: "Whole layout · 2 panels" }));
+  fireEvent.click(screen.getByRole("combobox", { name: "Export resolution" }));
+  fireEvent.click(screen.getByRole("option", { name: "2560 × 1440 · QHD" }));
+  fireEvent.click(screen.getByRole("combobox", { name: "Time per forecast hour" }));
+  fireEvent.click(screen.getByRole("option", { name: "0.5 seconds" }));
+  first.view.unmount(); first.queryClient.clear();
+  useMapStore.getState().setPanelLayout(1);
+  const reopened = renderWithBackend(dialog, createTransport());
+  expect(screen.queryByRole("combobox", { name: "Export area" })).toBeNull();
+  expect(screen.getByText("Selected parameter · Panel 1")).toBeTruthy();
+  expect(screen.getByRole("combobox", { name: "Export resolution" }).textContent).toContain("2560 × 1440");
+  expect(screen.getByRole("combobox", { name: "Time per forecast hour" }).textContent).toContain("0.5 seconds");
+  act(() => { useMapStore.getState().setPanelLayout(2); });
+  expect(screen.getByRole("combobox", { name: "Export area" }).textContent).toContain("Whole layout · 2 panels");
+  actions.exportForecast.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+  await waitFor(() => { expect(screen.getByRole<HTMLButtonElement>("button", { name: "Create PNG" }).disabled).toBe(false); });
+  fireEvent.click(screen.getByRole("button", { name: "Create PNG" }));
+  expect(actions.exportForecast.mock.calls[0]?.[0]).toMatchObject({ width: 2560, height: 1440, delay: 500, panels: [{ panel: 0 }, { panel: 1 }] });
+  reopened.view.unmount(); reopened.queryClient.clear(); anchor.remove();
+});
 it("offers hours, resolution and timing without pixel, loop or transition controls", () => {
   const inventory = parseMapCatalog(catalog), product = inventory.products[0];
   const context = resolveForecast(parseModelCatalog(models).models, inventory, { modelKey: "hrrr", runTime: null, forecastHour: 0 });

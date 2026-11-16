@@ -10,6 +10,7 @@ import { useMapCatalog } from "../../map/catalogQuery";
 import { productOf } from "../../map/panelField";
 import { useForecastStore } from "../../stores/forecastStore";
 import { useUiStore } from "../../stores/uiStore";
+import { FORECAST_EXPORT_DELAYS, FORECAST_EXPORT_SIZES } from "../../stores/forecastExportSettings";
 import { Action, IconAction } from "../../ui/Controls";
 import { SourceSelect } from "../sounding/SourceFields";
 import { compactUtc, forecastLabel } from "../sounding/soundingTime";
@@ -18,10 +19,9 @@ import type { FieldProduct } from "../../types/map";
 import { exportForecast, forecastExportFilename, type ExportProgress, type ForecastExportOptions } from "./exportForecast";
 import { copyForecastGif } from "./forecastClipboard";
 import { useObjectUrl } from "../sounding/soundingQueries";
+import { ForecastHourSelection } from "./ForecastHourSelection";
 import styles from "./ForecastExportDialog.module.css";
 
-const SIZES = [{ value: 1280, label: "1280 × 720 · HD" }, { value: 1920, label: "1920 × 1080 · Full HD" },
-  { value: 2560, label: "2560 × 1440 · QHD" }, { value: 3840, label: "3840 × 2160 · UHD" }];
 const STAGES = { loading: "Loading forecast", capturing: "Capturing maps", encoding: "Encoding animation" };
 
 export function ForecastExportDialog({ anchor, context, product, panel, onClose }: {
@@ -29,15 +29,16 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
 }): ReactNode {
   const map = useMapStore();
   const catalog = useMapCatalog().data;
-  const [scope, setScope] = useState("panel");
+  const settings = useUiStore(state => state.forecastExport);
+  const setSettings = useUiStore(state => state.setForecastExport);
+  const { width, delay } = settings;
+  const scope = map.panelLayout > 1 ? settings.scope : "panel";
   const parts = scope === "layout" ? Array.from({ length: map.panelLayout }, (_, index) => ({
     panel: index, product: productOf(catalog, panelProduct(map, index), index) ?? undefined,
   })) : [{ panel, product }];
   const available = parts.every((part) => part.product !== undefined && panelLayers(map, part.panel)["model-field"].visible);
   const hours = context.hours.filter((hour) => parts.every((part) => part.product !== undefined && hour >= part.product.minimumForecastHour));
   const [selected, setSelected] = useState(() => hours.slice(Math.max(0, hours.indexOf(context.hour)), Math.max(0, hours.indexOf(context.hour)) + 12));
-  const [width, setWidth] = useState(1920);
-  const [delay, setDelay] = useState(750);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -119,21 +120,13 @@ export function ForecastExportDialog({ anchor, context, product, panel, onClose 
     <div className={styles.body}>
       <div className={styles.settings}>
         <section className={styles.identity} aria-label="Export parameter"><span>{scope === "layout" ? "Complete map layout" : `Selected parameter · Panel ${String(panel + 1)}`}</span><strong>{parts.map((part) => part.product?.label ?? "Unavailable parameter").join(" · ")}</strong><p>{scope === "layout" ? "Each panel keeps its parameter, color scale and valid time." : product.caveat || "Exports the current map extent with its color scale and valid times."}</p></section>
-        {map.panelLayout > 1 ? <SourceSelect label="Export area" value={scope} disabled={busy} options={[{ value: "panel", label: `Panel ${String(panel + 1)} only` }, { value: "layout", label: `Whole layout · ${String(map.panelLayout)} panels` }]} onChange={(value) => { resetResult(); setScope(value); }} /> : null}
+        {map.panelLayout > 1 ? <SourceSelect label="Export area" value={scope} disabled={busy} options={[{ value: "panel", label: `Panel ${String(panel + 1)} only` }, { value: "layout", label: `Whole layout · ${String(map.panelLayout)} panels` }]} onChange={(value) => { resetResult(); setSettings({ scope: value }); }} /> : null}
         {available ? null : <Notice tone="danger" title="A map panel is unavailable" message="Show a forecast parameter in every selected panel before exporting." />}
-        <fieldset disabled={busy} className={styles.hoursSection}>
-          <legend>Forecast hours <span>{selectedHours.length} selected</span></legend>
-          <div className={styles.hourActions}><Action onClick={() => { resetResult(); setSelected(hours); }}>Select all</Action><Action onClick={() => { resetResult(); setSelected([]); }}>Clear</Action></div>
-          <div className={styles.hours} role="group" aria-label="Hours to export">{hours.map((hour) => <label key={hour}>
-            <input type="checkbox" aria-label={`Export forecast hour ${String(hour)}`} checked={selected.includes(hour)} onChange={(event) => {
-              resetResult();
-              setSelected(event.currentTarget.checked ? [...selected, hour] : selected.filter((value) => value !== hour));
-            }} /><span>{forecastLabel(hour)}</span>
-          </label>)}</div>
-        </fieldset>
+        <ForecastHourSelection hours={hours} currentHour={context.hour} selected={selected} disabled={busy}
+          onChange={value => { resetResult(); setSelected(value); }} />
         <div className={styles.choices}>
-          <SourceSelect label="Export resolution" value={width} options={SIZES} disabled={busy} onChange={(value) => { resetResult(); setWidth(value); }} />
-          <SourceSelect label="Time per forecast hour" value={delay} disabled={busy} options={[{ value: 250, label: "0.25 seconds" }, { value: 500, label: "0.5 seconds" }, { value: 750, label: "0.75 seconds" }, { value: 1000, label: "1 second" }]} onChange={(value) => { resetResult(); setDelay(value); }} />
+          <SourceSelect label="Export resolution" value={width} options={FORECAST_EXPORT_SIZES} disabled={busy} onChange={(value) => { resetResult(); setSettings({ width: value }); }} />
+          <SourceSelect label="Time per forecast hour" value={delay} disabled={busy} options={FORECAST_EXPORT_DELAYS} onChange={(value) => { resetResult(); setSettings({ delay: value }); }} />
         </div>
       </div>
       <section className={styles.previewSection} aria-label="Forecast export preview">

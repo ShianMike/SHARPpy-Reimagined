@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { DEFAULT_UNITS, parseUnitPreferences, type UnitPreferences } from "../lib/displayUnits";
 import type { SoundingColorStyle } from "../types/soundings";
+import { DEFAULT_FORECAST_EXPORT_SETTINGS, parseForecastExportSettings, type ForecastExportSettings } from "./forecastExportSettings";
 
 export type Theme = "system" | "light" | "dark";
 type PopupPosition = { x: number; y: number } | null;
@@ -25,6 +26,8 @@ interface UiState {
   smoothPlayback: boolean;
   units: UnitPreferences;
   setUnits(value: UnitPreferences): void;
+  forecastExport: ForecastExportSettings;
+  setForecastExport: (value: Partial<ForecastExportSettings>) => void;
   popupPositions: Record<string, PopupPosition>;
   setPopupPosition(id: string, value: PopupPosition): void;
   setCollapsed(value: boolean): void;
@@ -60,6 +63,8 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
   smoothPlayback: false,
   units: DEFAULT_UNITS,
   setUnits: (units) => { set({ units: parseUnitPreferences(units) }); },
+  forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS,
+  setForecastExport: (value) => { set(state => ({ forecastExport: { ...state.forecastExport, ...value } })); },
   popupPositions: {},
   setPopupPosition: (id, position) => { set((state) => ({ popupPositions: { ...state.popupPositions, [id]: position } })); },
   setCollapsed: (collapsed) => { set({ collapsed }); },
@@ -87,7 +92,7 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
       removeItem: (name) => { memory = null; access(() => { localStorage.removeItem(name); }); },
     };
   }),
-  partialize: ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback, popupPositions, units }) => ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback, popupPositions, units }),
+  partialize: ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback, popupPositions, units, forecastExport }) => ({ lastVersion, lastUpdateCheckWindow, collapsed, theme, soundingColorStyle, speed, loop, smoothPlayback, popupPositions, units, forecastExport }),
   merge: (saved, current) => {
     const value = saved !== null && typeof saved === "object" ? saved as Record<string, unknown> : {};
     const positions = value.popupPositions !== null && typeof value.popupPositions === "object" ? value.popupPositions as Record<string, unknown> : {};
@@ -101,6 +106,7 @@ export const useUiStore = create<UiState>()(persist((set, get) => ({
       loop: typeof value.loop === "boolean" ? value.loop : current.loop,
       smoothPlayback: typeof value.smoothPlayback === "boolean" ? value.smoothPlayback : current.smoothPlayback,
       units: parseUnitPreferences(value.units),
+      forecastExport: parseForecastExportSettings(value.forecastExport),
       popupPositions: Object.fromEntries(Object.entries(positions).flatMap(([id, point]) => {
         if (point === null || typeof point !== "object") return [];
         const { x, y } = point as Record<string, unknown>;

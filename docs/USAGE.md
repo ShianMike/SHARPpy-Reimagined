@@ -187,6 +187,14 @@ Enabled storm reports, SPC outlooks and isobars also load for every selected
 panel and hour before capture. Each image waits for the current-time overlays
 to finish drawing, including full-layout PNG, GIF and WebP exports.
 
+Export resolution, time per forecast hour and the panel/layout choice are saved
+on this device. **Next 6 hours** and **Next 12 hours** select available hours
+from the displayed hour through the endpoint. **Every 3 hours** keeps selected
+hours three hours apart, starting with the first selected hour. Click an hour,
+then Shift-click another to select or clear the intervening available hours;
+Space and Shift-Space also work when an hour has keyboard focus. Hour selections
+start fresh for each export dialog so they match the current model run.
+
 The exporter captures lossless PNGs at the output resolution before encoding the
 GIF in a background worker. Map pixels are smooth, the GIF loops, and each
 selected hour appears directly without blended transition frames. The map fills

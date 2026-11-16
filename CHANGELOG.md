@@ -7,6 +7,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Remember forecast export resolution, frame duration and panel/layout scope
+  across dialog reopening and app restarts. Keep a saved layout choice when
+  temporarily using a single map, and restore it for multi-panel exports.
+- Add Next 6 hours and Next 12 hours selections from the current forecast
+  hour, including the endpoint, and an Every 3 hours shortcut for thinning
+  selected hours. Support Shift-click and Shift-Space to select or clear a
+  range using only available forecast hours.
+
 ### Fixed
 
 - Keep storm-report hazard filters and event windows independent for each

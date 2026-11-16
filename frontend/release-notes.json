@@ -1,7 +1,11 @@
 {
   "3.8.4": {
-    "summary": "Keep storm reports independent across panels and include enabled weather overlays reliably in forecast exports.",
+    "summary": "Choose export hours faster, keep your export preferences, and reliably include each panel's weather overlays.",
     "highlights": [
+      {
+        "title": "Faster forecast export setup",
+        "description": "Keep your resolution, frame duration and panel/layout choice between sessions. Select the next 6 or 12 hours, keep hours three hours apart, or Shift-click a range."
+      },
       {
         "title": "Storm reports stay with their panel",
         "description": "Choose a separate hazard and event window for each map in two- or four-panel layouts. The choices are saved and remain separate in Model Viewer and Live Tracking."

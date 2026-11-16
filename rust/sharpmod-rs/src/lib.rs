@@ -78,6 +78,7 @@ mod skewt_annotations;
 mod sounding_files;
 mod sounding_image;
 mod sounding_recovery;
+mod sounding_render;
 mod sounding_upload;
 mod sounding_view;
 mod surface_bindings;
@@ -867,6 +868,7 @@ fn py_grib_inventory_cache_info() -> (bool, usize, usize, u64, u64, u64, u64) {
 fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     animation::register(module)?;
     sounding_recovery::register(module)?;
+    sounding_render::register(module)?;
     sounding_upload::register(module)?;
     sounding_view::register(module)?;
     skewt_annotations::register(module)?;

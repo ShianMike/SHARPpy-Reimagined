@@ -11,15 +11,12 @@ never loads Qt.
 
 from __future__ import annotations
 
-import base64
 import logging
 from datetime import datetime, timedelta
 from typing import Any
 
 from sharpmod.bridge import params as p
-from sharpmod.bridge.errors import BridgeError
 from sharpmod.bridge.sounding_analysis import analysis
-from sharpmod.bridge.sounding_cache import cache
 from sharpmod.bridge.sounding_open import (
     open_era5, open_file, open_model, open_observed,
 )
@@ -44,32 +41,9 @@ def _png_size(data: bytes) -> tuple[int, int]:
 
 def render(params: dict[str, Any]) -> dict[str, Any]:
     """The SPC-style sounding image, drawn by ``sharpmod.rendering.cli.render``."""
-    p.keys(params, ("sounding_id",), ("parcel", "image_mode", "color_style"))
-    entry = cache().get(params["sounding_id"])
-    parcel = p.choice(params, "parcel", RENDER_PARCELS, "MU")
-    mode = p.choice(params, "image_mode", IMAGE_MODES, "hd")
-    style = p.choice(params, "color_style", COLOR_STYLES, "standard")
-    out = cache().render_path(entry.sounding_id, f"{parcel}-{style}", mode)
-    with entry.render_lock:
-        if not out.exists():
-            from sharpmod.bridge.render_client import client
+    from sharpmod_rs import render_sounding_png
 
-            client().render(entry.path, out, parcel, mode, color_style=style)
-        data = out.read_bytes()
-    if len(data) > MAX_IMAGE_BYTES:
-        raise BridgeError(
-            "RENDER_FAILED", "The sounding image is too large to send.", False
-        )
-    width, height = _png_size(data)
-    return {
-        "sounding_id": entry.sounding_id,
-        "parcel": parcel,
-        "image_mode": mode,
-        "width": width,
-        "height": height,
-        "byte_length": len(data),
-        "png_base64": base64.b64encode(data).decode("ascii"),
-    }
+    return render_sounding_png(params, MAX_IMAGE_BYTES)
 
 
 def _recent_runs(cycles: tuple[int, ...], now: datetime, count: int) -> list[datetime]:

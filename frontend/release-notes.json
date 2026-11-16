@@ -8,7 +8,7 @@
       },
       {
         "title": "More reliable sounding file handling",
-        "description": "Imported soundings display the correct filename across Windows and Linux. Failed imports clean up their temporary files, and invalid sounding image dimensions are reported before display or export."
+        "description": "Imported soundings display the correct filename across Windows and Linux. Failed imports clean up their temporary files. Cached images are checked before reuse, with automatic redraws for missing files or invalid image dimensions. Failed renders leave no cached partial image."
       },
       {
         "title": "More reliable sounding edits",

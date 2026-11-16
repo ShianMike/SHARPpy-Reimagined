@@ -9,7 +9,7 @@ use std::{
 use pyo3::{prelude::*, types::PyBytes};
 use serde_json::json;
 
-fn dimensions(header: &[u8]) -> io::Result<(u32, u32)> {
+pub(crate) fn dimensions(header: &[u8]) -> io::Result<(u32, u32)> {
     if header.len() < 24 || &header[..16] != b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR" {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,

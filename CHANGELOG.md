@@ -25,6 +25,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Recover from cached sounding PNGs with invalid headers, empty content,
+  excessive size or missing files by discarding stale cache references and
+  rendering again. Check new standard and interactive image headers and size
+  before publishing, clean up failed render output, and bound disk reads by
+  the bridge's image-response limit.
 - Reject invalid sounding animation ranges and incomplete storm-motion edits
   before starting a render worker, with structured request errors. Normalize
   drag target IDs before matching native edit points, and share cached images
@@ -46,6 +51,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Move standard and interactive sounding PNG cache transactions, staged-file
+  ownership, cache alias eviction and response base64 encoding into Rust.
+  Preserve the existing Qt render worker, per-sounding render lock, quality,
+  parcel/color choices and bounded interactive cache.
 - Move interactive sounding request validation into Rust, retaining existing
   chart and panel choices, numeric bounds, the 2000-level edit limit and
   non-destructive request handling. Keep Python as compatibility wiring.

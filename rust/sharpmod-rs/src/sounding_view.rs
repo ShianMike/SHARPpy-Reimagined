@@ -96,7 +96,7 @@ fn choice(params: &Bound<'_, PyDict>, key: &str, choices: &[&str]) -> PyResult<S
 }
 
 #[pyfunction]
-fn validate_sounding_view<'py>(
+pub(crate) fn validate_sounding_view<'py>(
     py: Python<'py>,
     value: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyDict>> {

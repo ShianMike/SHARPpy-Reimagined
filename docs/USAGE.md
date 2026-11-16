@@ -1,6 +1,6 @@
 # SHARPpy Reimagined Usage Guide
 
-This guide describes the **v3.8.3 desktop interface** and the
+This guide describes the **v3.8.4 desktop interface** and the
 command-line tools. For installation, see the [README](../README.md#get-started)
 and [dependency reference](../installation.txt). The previous Qt interface has
 its own [v2.0.0 Legacy guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md).

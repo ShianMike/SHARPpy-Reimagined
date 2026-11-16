@@ -7,6 +7,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v3.8.4] - 2026-11-18
+
 ### Added
 
 - Offer Restore previous session after reopening the app, including original

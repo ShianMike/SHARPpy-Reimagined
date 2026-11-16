@@ -71,11 +71,15 @@ export function applyPreferences(preferences: Preferences): void {
   const initial = useMapStore.getInitialState();
   useMapStore.setState({
     layers: { ...initial.layers, ...preferences.layers },
-    livePanels: initial.livePanels.map((panel, index) => ({ ...panel, ...preferences.livePanels[index], layers: { ...panel.layers, ...preferences.livePanels[index]?.layers } })),
+    livePanels: initial.livePanels.map((panel, index) => ({ ...panel,
+      reportWindowS: preferences.reportWindowS, reportFilter: preferences.reportFilter,
+      ...preferences.livePanels[index], layers: { ...panel.layers, ...preferences.livePanels[index]?.layers } })),
     productKey: preferences.productKey,
     panels: initial.panels.map((panel, index) => {
       const saved = preferences.panels[index];
-      return { productKey: saved === undefined ? panel.productKey : saved.productKey,
+      return { ...panel, reportWindowS: saved?.reportWindowS ?? preferences.reportWindowS,
+        reportFilter: saved?.reportFilter ?? preferences.reportFilter,
+        productKey: saved === undefined ? panel.productKey : saved.productKey,
         layers: { ...panel.layers, ...saved?.layers } };
     }),
     panelLayout: preferences.panelLayout,
@@ -119,7 +123,7 @@ export function currentPreferences(): Preferences {
     layers: { ...map.layers },
     livePanels: map.livePanels.map((panel) => ({ ...panel, layers: { ...panel.layers } })),
     productKey: map.productKey,
-    panels: map.panels.map(({ productKey, layers }) => ({ productKey, layers: { ...layers } })),
+    panels: map.panels.map((panel) => ({ ...panel, layers: { ...panel.layers } })),
     layerPanelCollapsed: map.layerPanelCollapsed,
     // A restored id still waiting for its catalogue is kept, not lost.
     lastSelectedStationId: app.selectedStationId ?? app.pendingStationId,
@@ -131,13 +135,13 @@ export function currentPreferences(): Preferences {
 export function resetLayerSettings(): void {
   const initial = useMapStore.getInitialState();
   if (useMapStore.getState().view === "live") {
-    useMapStore.setState({ livePanels: initial.livePanels, reportWindowS: initial.reportWindowS,
-      reportFilter: initial.reportFilter, layerPanelGroup: initial.layerPanelGroup });
+    useMapStore.setState({ livePanels: initial.livePanels, layerPanelGroup: initial.layerPanelGroup });
     return;
   }
   useMapStore.setState((state) => ({
     layers: initial.layers,
-    panels: state.panels.map((panel, index) => ({ ...panel, layers: initial.panels[index]?.layers ?? initial.layers })),
+    panels: state.panels.map((panel, index) => ({ ...panel, reportWindowS: initial.reportWindowS,
+      reportFilter: initial.reportFilter, layers: initial.panels[index]?.layers ?? initial.layers })),
     layerOrder: initial.layerOrder,
     projection: initial.projection,
     radarProduct: initial.radarProduct,

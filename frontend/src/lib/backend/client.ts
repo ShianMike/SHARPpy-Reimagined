@@ -152,8 +152,8 @@ export class BackendClient {
     return this.request("get_weather_field", parseFieldFrame, { product, runTime, forecastHour, model }, signal);
   }
 
-  getSpcOutlook(product: OutlookKey, validTime: string): Promise<SpcOutlook> {
-    return this.request("get_spc_outlook", parseSpcOutlook, { product, validTime });
+  getSpcOutlook(product: OutlookKey, validTime: string, signal?: AbortSignal): Promise<SpcOutlook> {
+    return this.request("get_spc_outlook", parseSpcOutlook, { product, validTime }, signal);
   }
 
   getWeatherAlerts(validTime: string): Promise<WeatherAlerts> {
@@ -207,7 +207,7 @@ export class BackendClient {
    * the total span in seconds (21600) and `hazardFilter` is the provider's
    * filter key ("all").
    */
-  getStormReports(validTime: string, windowS?: number, hazardFilter?: string): Promise<StormReports> {
+  getStormReports(validTime: string, windowS?: number, hazardFilter?: string, signal?: AbortSignal): Promise<StormReports> {
     const args: Record<string, unknown> = { validTime };
     if (windowS !== undefined) {
       args.windowS = windowS;
@@ -215,7 +215,7 @@ export class BackendClient {
     if (hazardFilter !== undefined) {
       args.hazardFilter = hazardFilter;
     }
-    return this.request("get_storm_reports", parseStormReports, args);
+    return this.request("get_storm_reports", parseStormReports, args, signal);
   }
 
   /** The provider's own window and filter labels for the reports controls. */

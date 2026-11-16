@@ -160,7 +160,7 @@ it.each(["map", "live"] as const)("renders storm reports at the %s clock with th
   const hook = renderHook(() => usePanelScene(runtime, 0), { wrapper });
   const time = view === "live" ? "2026-10-17T08:00:00Z" : "2026-10-04T21:00:00Z";
   await waitFor(() => { expect(scene.reports?.length).toBeGreaterThan(0); });
-  expect(calls).toHaveBeenCalledWith("get_storm_reports", { validTime: time, windowS: 21600, hazardFilter: "all" });
+  expect(calls).toHaveBeenCalledWith("get_storm_reports", expect.objectContaining({ validTime: time, windowS: 21600, hazardFilter: "all" }));
   const previous = scene.reports;
   act(() => {
     if (view === "live") useLiveTrackingStore.getState().selectTime(liveTime - 30 * 60_000);
@@ -173,7 +173,7 @@ it.each(["map", "live"] as const)("renders storm reports at the %s clock with th
     expect(scene.reports?.length).toBeGreaterThan(0);
     expect(scene.reports).not.toBe(previous);
   });
-  expect(calls).toHaveBeenCalledWith("get_storm_reports", { validTime: next, windowS: 7200, hazardFilter: "hail" });
+  expect(calls).toHaveBeenCalledWith("get_storm_reports", expect.objectContaining({ validTime: next, windowS: 7200, hazardFilter: "hail" }));
   expect(scene.reports?.every((report) => report.category === "h" || report.category === "significant" && report.symbol === "diamond")).toBe(true);
   act(() => { useMapStore.getState().setLayerVisible("storm-reports", false); });
   await waitFor(() => { expect(scene.reports).toBeNull(); });

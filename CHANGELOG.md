@@ -7,6 +7,23 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep storm-report hazard filters and event windows independent for each
+  Model Viewer and Live Tracking panel. Preserve the choices across layout
+  changes and restarts, migrate existing shared selections, and reset each
+  workspace without changing the other workspace's report settings. Load
+  live-history playback with each panel's own report choices.
+- Load every enabled storm-report, SPC outlook and isobar overlay for all
+  selected forecast hours and panels before export capture. Wait for current-time
+  overlays and their rendered layers before saving PNG, GIF or WebP frames,
+  with explicit failures for unavailable requested overlays.
+
+### Changed
+
+- Add regression coverage for panel-specific report settings, saved-preference
+  migration and restoration, and delayed overlay loading during export.
+
 ## [v3.8.3] - 2026-11-16
 
 ### Changed

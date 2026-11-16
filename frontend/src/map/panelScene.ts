@@ -9,7 +9,7 @@ import { useForecastContext } from "../features/forecast/useForecast";
 import { useWeatherTime } from "../features/tracking/useWeatherTime";
 import { liveTimestamp, useLiveTrackingStore } from "../stores/liveTrackingStore";
 import { useStationCatalog } from "../stations/stationQueries";
-import { panelLayers, panelWeather, useMapStore } from "../stores/mapStore";
+import { panelLayers, panelWeather, panelReports, useMapStore } from "../stores/mapStore";
 import type { Station } from "../types/contracts";
 import { OUTLOOK_KEYS, type FieldFrame, type Outlook, type OutlookKey, type Palette, type Place, type RadarFrame, type RadarSite } from "../types/map";
 import type { ForecastModel } from "../types/soundings";
@@ -103,12 +103,13 @@ export function usePngImage(query: Pick<UseQueryResult<PngFrame>, "data" | "isEr
 }
 
 /** The outlooks this panel has loaded, keyed by product; a stable object while they do not change. */
-function useOutlooks(panel: number, validTime: string | null): Readonly<Partial<Record<OutlookKey, Outlook>>> {
+function useOutlooks(panel: number, validTime: string | null): { outlooks: Readonly<Partial<Record<OutlookKey, Outlook>>>; ready: boolean } {
   const visible = useMapStore((state) => {
     const layers = panelLayers(state, panel);
     return OUTLOOK_KEYS.map((key) => layers[`spc-${key}` as const].visible).join();
   });
   const queries = useSpcOutlooks(OUTLOOK_KEYS.map((key, i) => visible.split(",")[i] === "true" && validTime !== null), validTime);
+  const ready = queries.every((query, index) => visible.split(",")[index] !== "true" || validTime !== null && query.isSuccess && !query.isFetching);
   const [cat, torn, wind, hail] = queries.map((query) =>
     validTime !== null && !query.isError && query.data?.outlook?.covers === true ? query.data.outlook : undefined,
   );
@@ -119,8 +120,8 @@ function useOutlooks(panel: number, validTime: string | null): Readonly<Partial<
         out[key] = outlook;
       }
     }
-    return out;
-  }, [cat, torn, wind, hail]);
+    return { outlooks: out, ready };
+  }, [cat, torn, wind, hail, ready]);
 }
 
 /** Feeds a panel's runtime; returns the panel's field for its chip. */
@@ -138,8 +139,8 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
   const surfaceVisible = layers["surface-plots"].visible;
   const placesVisible = layers["place-labels"].visible;
   const { radarScope: scope, radarProduct: requestedRadarProduct, satelliteChannel: channel } = useMapStore((state) => panelWeather(state, panel));
-  const reportWindowS = useMapStore((state) => state.reportWindowS);
-  const reportFilter = useMapStore((state) => state.reportFilter);
+  const reportWindowS = useMapStore((state) => panelReports(state, panel).reportWindowS);
+  const reportFilter = useMapStore((state) => panelReports(state, panel).reportFilter);
   const { site, product: radarProduct, tilt } = usePanelRadar(panel);
   const historyTime = useLiveTrackingStore((state) => state.selectedTime === null ? null : liveTimestamp(state.selectedTime));
   const mosaic = usePngImage(useRadarFrame(radarProduct, live && radarVisible && scope === "mosaic", live ? validTime : null), live && radarVisible && scope === "mosaic", radarProduct ?? "default", false);
@@ -181,22 +182,31 @@ export function usePanelScene(runtime: MapRuntime | null, panel: number): PanelF
     context?.model.key,
   );
   const isobars = isobarRequest && !isobarQuery.isError ? isobarQuery.data ?? null : null;
-  const outlooks = useOutlooks(panel, live ? null : validTime);
+  const outlookState = useOutlooks(panel, live ? null : validTime);
+  const outlooks = outlookState.outlooks;
   const places = usePlaceLabels(import.meta.env.MODE === "fixture" && placesVisible).data?.places ?? NO_PLACES;
   const model = live ? undefined : context?.model;
   const domain = useMemo(() => (model === undefined ? null : domainPath(model)), [model]);
+  const auxiliaryWanted = !live && field.request !== null && (contourSpec !== null || field.product?.wind === true);
+  const captureReady = (live || outlookState.ready)
+    && (!reportsVisible || reportQuery.isSuccess && !reportQuery.isFetching)
+    && (!auxiliaryWanted || contourQuery.isSuccess && !contourQuery.isFetching)
+    && (!isobarRequest || isobarQuery.isSuccess && !isobarQuery.isFetching)
+    && (!live || (!radarVisible || radarImage.decodedCurrent && radarImage.issue === null)
+      && (!layers.satellite.visible || satellite.decodedCurrent && satellite.issue === null)
+      && (!(layers.warnings.visible || layers.watches.visible) || alertQuery.isSuccess && !alertQuery.isFetching)
+      && (!surfaceVisible || surfaceQuery.isSuccess && !surfaceQuery.isFetching));
 
   useEffect(() => {
     runtime?.setStations(stations);
   }, [runtime, stations]);
   useFieldTransition(runtime, image, model?.key);
   useEffect(() => {
-    runtime?.setScene({ radar, satellite: satellite.image, reports, alerts, surfacePlots, contourSpec, contours: contourLines, isobars, outlooks, domain, radarSites, selectedRadarSite, unavailableRadarSites });
-  }, [runtime, radar, satellite.image, reports, alerts, surfacePlots, contourSpec, contourLines, isobars, outlooks, domain, radarSites, selectedRadarSite, unavailableRadarSites]);
+    runtime?.setScene({ captureReady, captureTime: validTime, radar, satellite: satellite.image, reports, alerts, surfacePlots, contourSpec, contours: contourLines, isobars, outlooks, domain, radarSites, selectedRadarSite, unavailableRadarSites });
+  }, [runtime, captureReady, validTime, radar, satellite.image, reports, alerts, surfacePlots, contourSpec, contourLines, isobars, outlooks, domain, radarSites, selectedRadarSite, unavailableRadarSites]);
   useEffect(() => {
     runtime?.setScene({ places });
   }, [runtime, places]);
-  const auxiliaryWanted = !live && field.request !== null && (contourSpec !== null || field.product?.wind === true);
   const missingWind = auxiliaryWanted && contourLines !== null && field.product?.wind === true && contourLines.wind === null;
   return { ...field, issues: [
     ...(radarImage.issue === null ? [] : [`Radar: ${radarImage.issue}`]),

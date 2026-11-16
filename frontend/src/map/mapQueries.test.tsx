@@ -70,7 +70,7 @@ it.each([2, 4] as const)("keeps %i panels on the loaded hour until the next fram
   const frame = parseFieldFrame(payloads.field);
   const runTime = "2026-10-04T12:00:00Z";
   const layers = defaultLayerStates(); layers["model-field"].visible = true;
-  useMapStore.setState({ panelLayout, productKey: "hgt-wind-500", layers, panels: Array.from({ length: 3 }, () => ({ productKey: null, layers })) });
+  useMapStore.setState({ panelLayout, productKey: "hgt-wind-500", layers, panels: useMapStore.getInitialState().panels.map(panel => ({ ...panel, productKey: null, layers })) });
   useForecastStore.setState({ modelKey: "hrrr", runTime, forecastHour: 0, playing: true });
   useUiStore.setState({ speed: 1, loop: true });
   useGraphicsStore.setState({ effective: { ...savedGraphics.effective, profile: "balanced" } });
@@ -232,7 +232,7 @@ it.each([2, 4] as const)("prefetches %i panels and the configured future hours c
     return product.key;
   });
   const layers = defaultLayerStates(); layers["model-field"].visible = true;
-  useMapStore.setState({ panelLayout, productKey: null, layers, panels: Array.from({ length: 3 }, () => ({ productKey: null, layers })) });
+  useMapStore.setState({ panelLayout, productKey: null, layers, panels: useMapStore.getInitialState().panels.map(panel => ({ ...panel, productKey: null, layers })) });
   useForecastStore.setState({ modelKey: "hrrr", runTime, forecastHour: 0, playing: false });
   useGraphicsStore.setState({ effective: { ...savedGraphics.effective, profile: "high" } });
   const client = new BackendClient({ call: () => Promise.resolve(contours), listen: () => Promise.resolve(() => undefined) });

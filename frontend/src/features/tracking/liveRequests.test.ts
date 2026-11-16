@@ -17,6 +17,30 @@ const now = Date.parse("2026-10-17T08:00:00Z");
 beforeEach(() => { useMapStore.setState(map, true); useAppStore.setState(app, true); });
 afterEach(() => { vi.restoreAllMocks(); });
 
+it.each([2, 4] as const)("preloads the separate report choices for all %i visible live panels", async (layout) => {
+  useMapStore.setState({ reportFilter: "all", reportWindowS: 86400 });
+  useAppStore.getState().setActiveWorkspace("live");
+  const state = useMapStore.getState();
+  state.setPanelLayout(layout);
+  const filters = ["tornado", "hail", "wind", "significant"];
+  const windows = [7200, 21600, 43200, 86400];
+  for (let panel = 0; panel < layout; panel++) {
+    state.setActivePanel(panel);
+    state.setLayerVisible("radar", false);
+    state.setLayerVisible("storm-reports", true);
+    state.setReportFilter(filters[panel] ?? "all");
+    state.setReportWindowS(windows[panel] ?? 21600);
+  }
+  const client = new BackendClient(createTransport());
+  const fetch = vi.spyOn(client, "getStormReports");
+  const time = "2026-10-17T08:00:00Z";
+  const requests = liveRequests(client, useMapStore.getState(), null, null, time);
+  expect(requests.map(({ queryKey }) => queryKey)).toEqual(filters.slice(0, layout)
+    .map((filter, panel) => mapKeys.reports(time, windows[panel] ?? 21600, filter)));
+  await Promise.all(requests.map(request => request.queryFn()));
+  for (let panel = 0; panel < layout; panel++) expect(fetch).toHaveBeenCalledWith(time, windows[panel], filters[panel]);
+});
+
 it("reuses a confirmed alert history gap on playback loops but retries other provider failures", async () => {
   const client = createQueryClient();
   const missing = new BackendFailure({ code: "OVERLAY_FETCH_FAILED", message: "No snapshot", retryable: false,

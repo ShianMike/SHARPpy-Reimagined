@@ -183,6 +183,10 @@ time each hour stays on screen, then choose **Create GIF**. Every selected hour
 loads and is checked before capture starts. Export stops if an hour or parameter
 is unavailable, rather than silently omitting it.
 
+Enabled storm reports, SPC outlooks and isobars also load for every selected
+panel and hour before capture. Each image waits for the current-time overlays
+to finish drawing, including full-layout PNG, GIF and WebP exports.
+
 The exporter captures lossless PNGs at the output resolution before encoding the
 GIF in a background worker. Map pixels are smooth, the GIF loops, and each
 selected hour appears directly without blended transition frames. The map fills
@@ -268,6 +272,8 @@ The layer controls offer SPC categorical, tornado, wind, and hail outlooks,
 radar, satellite imagery, surface observations, and storm reports. Open the
 controls for the active panel to configure its overlays. Hover a report or
 observation for its time, location, measured values, remarks, and source.
+Each panel keeps its own storm-report hazard filter and event window. Changing
+one panel preserves the other panels' choices, including after a restart.
 Wind barbs become denser as you zoom in. Borders and land outlines remain
 visible above filled overlays.
 

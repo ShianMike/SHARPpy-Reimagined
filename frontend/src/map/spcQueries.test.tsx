@@ -41,7 +41,7 @@ it("resolves SPC issuances for the selected hour even when a cached outlook stil
     hook.rerender({ time: later });
     expect(hook.result.current.panel?.data).toBeUndefined();
     expect(hook.result.current.status?.data).toBeUndefined();
-    await waitFor(() => { expect(call).toHaveBeenNthCalledWith(2, "get_spc_outlook", { product: "cat", validTime: later }); });
+    await waitFor(() => { expect(call).toHaveBeenNthCalledWith(2, "get_spc_outlook", expect.objectContaining({ product: "cat", validTime: later })); });
     await act(async () => {
       resolveLater({ ...outlook, validTime: later, outlook: { ...outlook.outlook, issued: "2026-10-04T20:00:00Z" } });
       await Promise.resolve();
@@ -70,7 +70,7 @@ it.each(["2026-10-03T23:58:00Z", "2026-10-04T11:58:00Z", "2026-10-04T23:58:00Z"]
     expect(hook.result.current?.data?.outlook).toBeNull();
     await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60_000); });
     expect(call).toHaveBeenCalledTimes(2);
-    expect(call).toHaveBeenLastCalledWith("get_spc_outlook", { product: "cat", validTime: time });
+    expect(call).toHaveBeenLastCalledWith("get_spc_outlook", expect.objectContaining({ product: "cat", validTime: time }));
     expect(hook.result.current?.data?.outlook?.issued).toBe(outlook.outlook.issued);
     hook.rerender({ enabled: false, selectedTime: time });
     await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60_000); });

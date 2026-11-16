@@ -22,8 +22,6 @@ export function useLiveHistory() {
   const { speed, loop } = useUiStore();
   const panels = useMapStore((state) => state.livePanels);
   const layout = useMapStore((state) => state.panelLayout);
-  const reportWindowS = useMapStore((state) => state.reportWindowS);
-  const reportFilter = useMapStore((state) => state.reportFilter);
   const pending = useIsFetching({ predicate: (query) => isLiveQuery(query.queryKey) && query.getObserversCount() > 0 });
 
   const load = useCallback(async (time: number): Promise<void> => {
@@ -52,7 +50,7 @@ export function useLiveHistory() {
       } else useLiveTrackingStore.getState().selectTime(next);
     });
     return () => { stopped = true; clearTimeout(timer); };
-  }, [now, selectedTime, playing, speed, loop, panels, layout, reportWindowS, reportFilter, load]);
+  }, [now, selectedTime, playing, speed, loop, panels, layout, load]);
   useEffect(() => () => { useLiveTrackingStore.getState().setPlaying(false); }, []);
 
   return { waiting: playing && pending > 0 };

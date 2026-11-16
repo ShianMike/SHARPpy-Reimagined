@@ -20,6 +20,23 @@ import { readCanvasTokens } from "../canvasTokens";
 import type { PickingInfo } from "@deck.gl/core";
 import { useHoverStore } from "../hover/hoverStore";
 import { clickFromPick, hoverFromPick, StationScene } from "./stationScene";
+import type { FieldImage } from "../layers/registry";
+
+it("does not capture a field before its enabled overlays resolve and match the frame time", () => {
+  const read = cssTokenReader(tokensCss);
+  const scene = new StationScene({ setProps: vi.fn() } as unknown as MapLibreOverlay,
+    readCanvasTokens(read), read("--font-mono"), 0, vi.fn());
+  const request = { model: "hrrr", product: "refc", runTime: "2026-03-10T12:00:00Z", forecastHour: 14 };
+  const field = { frame: { ...request, validTime: "2026-03-11T02:00:00Z" } } as unknown as FieldImage;
+  scene.setData({ field, captureReady: true, captureTime: "2026-03-11T01:00:00Z" });
+  expect(scene.matchesField(request)).toBe(false);
+  scene.setData({ captureTime: "2026-03-11T02:00:00.000Z", captureReady: false });
+  expect(scene.matchesField(request)).toBe(false);
+  scene.setData({ captureReady: true });
+  expect(scene.matchesField(request)).toBe(true);
+  scene.setData({ previousField: field });
+  expect(scene.matchesField(request)).toBe(false);
+});
 
 afterEach(() => {
   useMapStore.setState(useMapStore.getInitialState(), true);

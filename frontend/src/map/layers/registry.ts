@@ -91,6 +91,9 @@ export interface FieldImage extends RasterImage {
 
 /** What the map shows besides the stations; set by WeatherMap from the queries. */
 export interface SceneData {
+  /** Enabled overlays have resolved for this time and been submitted with the scene. */
+  captureReady: boolean;
+  captureTime: string | null;
   /** This panel's coloured model field. */
   field: FieldImage | null;
   previousField?: FieldImage | null;
@@ -121,6 +124,8 @@ export interface SceneData {
 }
 
 export const NO_SCENE_DATA: SceneData = {
+  captureReady: false,
+  captureTime: null,
   field: null,
   previousField: null,
   fieldMix: 1,

@@ -28,7 +28,7 @@ const frame = parseFieldFrame(Uint8Array.from(atob(field.split(",")[1] ?? ""), (
 function setup() {
   const layers = defaultLayerStates(); layers["model-field"].visible = true;
   useMapStore.setState({ panelLayout: 4, productKey: "hgt-wind-500", layers,
-    panels: Array.from({ length: 3 }, () => ({ productKey: "hgt-wind-500", layers })) });
+    panels: useMapStore.getInitialState().panels.map(panel => ({ ...panel, productKey: "hgt-wind-500", layers })) });
   useForecastStore.setState({ modelKey: "hrrr", runTime: "2026-10-04T12:00:00Z", forecastHour: 1, playing: true });
   const queryClient = createQueryClient();
   queryClient.setQueryData(QUERY_KEYS.models, parseModelCatalog(models));
@@ -98,7 +98,7 @@ it("downloads only complete intervals for mixed 1-hour and 3-hour products, incl
   queryClient.setQueryData(QUERY_KEYS.models, { ...parsed, models: parsed.models.map((model) => model.key === "hrrr" ? { ...model, forecastHours: [0, 1, 2, 3, 4, 5] } : model) });
   queryClient.setQueryData(mapKeys.catalog("hrrr", run, 3), available);
   useForecastStore.setState({ forecastHour: 3 });
-  useMapStore.setState({ productKey: "tmp-2m", panels: ["uh-2-5km-1h", "uh-2-5km-3h", "tmp-2m"].map((productKey) => ({ productKey, layers: useMapStore.getState().layers })) });
+  useMapStore.setState({ productKey: "tmp-2m", panels: ["uh-2-5km-1h", "uh-2-5km-3h", "tmp-2m"].map((productKey, index) => ({ ...useMapStore.getInitialState().panels[index], reportFilter: "all", reportWindowS: 21600, productKey, layers: useMapStore.getState().layers })) });
   saved.mockImplementation((_model, _products, _run, hours) => Promise.resolve(hours.filter((hour) => storedFields.has(hour))));
   let finishFrame!: () => void;
   fields.mockImplementationOnce((_product, _run, hour) => new Promise((resolve) => { finishFrame = () => { storedFields.add(hour); resolve(frame); }; }));

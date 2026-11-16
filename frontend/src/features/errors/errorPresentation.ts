@@ -61,6 +61,8 @@ const TITLES: Readonly<Record<string, string>> = {
   get_model_catalog: "Forecast models unavailable",
   get_model_status: "Model availability unknown",
   open_sounding: "Sounding unavailable",
+  get_sounding_snapshot: "Recovery copy unavailable",
+  restore_sounding_snapshot: "Session could not be restored",
   get_sounding_progress: "Download progress unavailable",
   inspect_wrf: "WRF file could not be read",
   get_sounding_analysis: "Sounding calculations unavailable",

@@ -22,6 +22,7 @@ pub mod range_http;
 pub mod raster_png;
 pub mod reports;
 pub mod satellite;
+pub mod sounding_recovery;
 pub mod spc_outlook;
 pub mod surface;
 pub mod threshold_catalog;

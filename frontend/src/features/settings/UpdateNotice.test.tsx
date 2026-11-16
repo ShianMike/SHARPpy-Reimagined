@@ -7,6 +7,7 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useLogStore } from "../../stores/logStore";
 import { useSoundingStore } from "../../stores/soundingStore";
+import { useSoundingRecoveryStore } from "../../stores/soundingRecoveryStore";
 import { AUTOMATIC_UPDATE_INTERVAL_MS, useUpdateStore } from "../../stores/updateStore";
 import { useUiStore } from "../../stores/uiStore";
 import { useAppStore, WORKSPACE_IDS } from "../../stores/appStore";
@@ -31,6 +32,7 @@ beforeEach(() => {
   useUiStore.setState({ lastUpdateCheckWindow: null });
   useUpdateStore.setState(useUpdateStore.getInitialState(), true);
   useSoundingStore.setState(useSoundingStore.getInitialState(), true);
+  useSoundingRecoveryStore.setState(useSoundingRecoveryStore.getInitialState(), true);
   useAppStore.setState(useAppStore.getInitialState(), true);
   useLogStore.getState().clear();
   check.mockReset();
@@ -81,7 +83,7 @@ it.each(WORKSPACE_IDS)("reviews installation from %s even when the notice was di
   act(() => { useUpdateStore.getState().install(); });
   const dialog = screen.getByRole("dialog", { name: "Discard sounding work and update?" });
   expect(screen.getByText(/Saved app preferences, source files and cached weather data on disk are kept/u)).toBeTruthy();
-  expect(screen.getByText(/All open soundings, profile edits, chart changes and undo\/redo history/u)).toBeTruthy();
+  expect(screen.getByText(/The current sounding work has not finished saving a recovery copy/u)).toBeTruthy();
   expect(screen.getByText(/A PNG cannot restore editable profiles or undo\/redo history/u)).toBeTruthy();
   expect(screen.getByRole("button", { name: "Discard work & install update" })).toBeTruthy();
   expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" }));
@@ -93,6 +95,18 @@ it.each(WORKSPACE_IDS)("reviews installation from %s even when the notice was di
   expect(check).not.toHaveBeenCalled();
 });
 
+it("describes a completed recovery copy before an update without claiming unfinished inputs are saved", () => {
+  const { update, download, install } = availableUpdate();
+  useUpdateStore.setState({ status: "available", update, dismissedVersion: update.version, installReview: "download" });
+  useSoundingStore.getState().add(parseSoundingSummary(summaryExample));
+  useSoundingRecoveryStore.setState({ status: "saved" });
+  render(<UpdateNotice />);
+  expect(screen.getByRole("dialog", { name: "Install app update?" })).toBeTruthy();
+  expect(screen.getByText("Recovery copy saved")).toBeTruthy();
+  expect(screen.getByText(/Unapplied level inputs and unfinished recalculations are not saved/u)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Install update & restart" })).toBeTruthy();
+  expect(download).not.toHaveBeenCalled(); expect(install).not.toHaveBeenCalled();
+});
 it("returns to soundings for PNG export without downloading or discarding work", () => {
   const { update, download, install } = availableUpdate();
   useUiStore.setState({ lastUpdateCheckWindow: Math.floor(Date.now() / AUTOMATIC_UPDATE_INTERVAL_MS) * AUTOMATIC_UPDATE_INTERVAL_MS });

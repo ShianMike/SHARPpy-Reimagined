@@ -1,7 +1,11 @@
 {
   "3.8.4": {
-    "summary": "Choose export hours faster, keep your export preferences, and reliably include each panel's weather overlays.",
+    "summary": "Recover open soundings after reopening, choose export hours faster, and reliably include each panel's weather overlays.",
     "highlights": [
+      {
+        "title": "Restore your sounding session",
+        "description": "Reopen saved profiles with completed edits, undo/redo history, selected times and the Severe or Winter view. Recovery copies stay on this device, separately from the weather cache. The controls show when a copy has finished saving."
+      },
       {
         "title": "Faster forecast export setup",
         "description": "Keep your resolution, frame duration and panel/layout choice between sessions. Select the next 6 or 12 hours, keep hours three hours apart, or Shift-click a range."

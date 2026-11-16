@@ -9,6 +9,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Offer Restore previous session after reopening the app, including original
+  sounding sources, completed profile edits and undo/redo history, selected
+  times, chart options, and the selected Severe or Winter view. Store recovery
+  copies locally and separately from temporary weather caches; show save
+  progress and failures, and preserve the saved session after backend restarts.
+  Allow deferring restoration or starting fresh without closing current work.
 - Remember forecast export resolution, frame duration and panel/layout scope
   across dialog reopening and app restarts. Keep a saved layout choice when
   temporarily using a single map, and restore it for multi-panel exports.
@@ -33,6 +39,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Add regression coverage for panel-specific report settings, saved-preference
   migration and restoration, and delayed overlay loading during export.
+- Test sounding recovery after source-cache deletion, completed edit history,
+  multi-time selection, failed checkpoints, deferred restoration and backend
+  restarts. Exercise desktop recovery commands through IPC using the host
+  platform's local app origin.
 
 ## [v3.8.3] - 2026-11-16
 

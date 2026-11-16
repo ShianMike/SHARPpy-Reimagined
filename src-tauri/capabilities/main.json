@@ -16,6 +16,8 @@
     "allow-get-model-status",
     "allow-open-sounding",
     "allow-get-sounding-progress",
+    "allow-get-sounding-snapshot",
+    "allow-restore-sounding-snapshot",
     "allow-inspect-wrf",
     "allow-get-sounding-analysis",
     "allow-get-threshold-metrics",

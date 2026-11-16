@@ -193,6 +193,8 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
   };
 
   const handlers: Record<CommandName, (args?: Readonly<Record<string, unknown>>) => Promise<unknown>> = {
+    get_sounding_snapshot: args => Promise.resolve({ soundingId: args?.soundingId, payload: "fixture-sounding-source" }),
+    restore_sounding_snapshot: () => Promise.resolve({ ...copy(soundingSummary) as Record<string, unknown>, soundingId: `recovered${String(++opened)}` }),
     cancel_request: () => Promise.resolve(null),
     encode_webp_frame: () => Promise.reject(new Error("Lossless WebP requires the real backend.")),
     get_cached_forecast_hours: (args) => Promise.resolve(frames.hours(args)),

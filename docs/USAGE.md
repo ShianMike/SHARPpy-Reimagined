@@ -68,6 +68,10 @@ on the device. This downloads a complete installer rather than a binary delta
 patch. Nothing installs until you click, and checks run only while the app is
 open. Browser previews cannot install updates.
 
+In the upcoming v3.8.4 interface, wait for **Recovery copy saved on this device**
+before closing or updating if you want to restore completed sounding work.
+Unapplied editor inputs and unfinished recalculations are not included.
+
 The original v3.0.0 app has no updater. Install the current Windows release using
 its installer once; v3.0.1 and newer can update through **Settings → Updates**.
 
@@ -436,11 +440,36 @@ for links and the distinction between research context and implemented methods.
   analysis, then copy or download the image from the viewer toolbar.
 
 Opening a file and rendering its image are separate operations. The first image
-can take longer while the render worker starts. Existing open profiles belong
-to the current backend session; restart or close the backend only after saving
-any images you need. Keep the original files to reopen local soundings later.
-After a backend restart, the app closes those profiles and clears their cached
-images and edit history. Source-form inputs remain available to reopen them.
+can take longer while the render worker starts.
+
+#### Recovering a sounding session (v3.8.4, unreleased)
+
+Open soundings are saved automatically on this device. After an accidental exit,
+Alt+F4 or a normal close, reopening offers **Restore previous session**. This
+reopens the original profiles with completed edits and undo/redo history, selected
+times, the active sounding, chart options, parcel choice and Severe/Winter view.
+The original source data is copied once; subsequent checkpoints save the edited
+view state. Restoration does not need to download the source again and regenerates
+images with the current renderer.
+
+Check **Recovery copy saved on this device** below the sounding controls before
+exiting. Saving failures are shown there with a retry action. An exit during a
+write retains the last complete checkpoint; unapplied editor inputs and unfinished
+recalculations are not saved. Recovery supports the app's 12 open soundings and
+the existing 5 MiB per-source import limit. Browser storage quotas still apply.
+
+**Not now** keeps the previous session available from the sounding controls.
+**Start fresh** removes that saved previous session while preserving any soundings
+opened since launch. Explicitly closing a sounding removes it from the current
+checkpoint. A backend restart also offers the saved session instead of silently
+discarding it. Another window on the same origin cannot overwrite an active
+window's recovery copy.
+
+Recovery storage is separate from temporary weather caches, so cache cleanup can
+continue normally. Recovery remains local to this device and app/browser origin;
+it does not sync between installations, browsers or preview ports. Removing app
+or browser site data removes recovery copies. Keep original input files and
+exported images for long-term storage.
 
 ### Settings and troubleshooting
 

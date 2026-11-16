@@ -12,6 +12,22 @@ use crate::dto::wrf::WrfFile;
 use crate::error::BackendError;
 use crate::state::AppState;
 
+#[tauri::command]
+pub async fn get_sounding_snapshot(
+    state: tauri::State<'_, AppState>,
+    sounding_id: String,
+) -> Result<crate::backend::sounding_recovery_ops::SoundingSnapshot, BackendError> {
+    state.router.sounding_snapshot(&sounding_id).await
+}
+
+#[tauri::command]
+pub async fn restore_sounding_snapshot(
+    state: tauri::State<'_, AppState>,
+    payload: String,
+) -> Result<SoundingSummary, BackendError> {
+    state.router.restore_sounding_snapshot(&payload).await
+}
+
 /// The forecast models that can produce a point sounding, with recent runs.
 #[tauri::command]
 pub async fn get_model_catalog(

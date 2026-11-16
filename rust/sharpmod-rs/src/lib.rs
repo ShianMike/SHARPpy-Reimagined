@@ -76,6 +76,7 @@ mod sars_bindings;
 mod satellite_bindings;
 mod skewt_annotations;
 mod sounding_image;
+mod sounding_recovery;
 mod surface_bindings;
 mod weather;
 pub mod wind;
@@ -862,6 +863,7 @@ fn py_grib_inventory_cache_info() -> (bool, usize, usize, u64, u64, u64, u64) {
 #[pymodule]
 fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     animation::register(module)?;
+    sounding_recovery::register(module)?;
     skewt_annotations::register(module)?;
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     module.add("__backend_api_version__", BACKEND_API_VERSION)?;

@@ -11,6 +11,8 @@ from typing import Any
 from sharpmod.bridge import params as p
 
 COMMANDS = {
+    "get_sounding_snapshot": "soundings.snapshot",
+    "restore_sounding_snapshot": "soundings.restore",
     "encode_webp_frame": "animation.webp_frame",
     "get_sounding_progress": "soundings.progress",
     "get_storage_usage": "storage.usage",

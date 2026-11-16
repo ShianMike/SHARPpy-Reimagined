@@ -37,6 +37,7 @@ export function scriptedTransport(replies: Partial<Record<CommandName, ScriptedR
 } {
   const counts: Record<CommandName, number> = {
     get_cached_forecast_hours: 0,
+    encode_webp_frame: 0,
     cancel_request: 0,
     get_storage_usage: 0,
     clear_cache: 0,

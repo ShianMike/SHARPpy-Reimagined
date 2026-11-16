@@ -49,6 +49,7 @@ export function errorActions(code: AnyBackendError["code"]): ErrorActions {
 
 const TITLES: Readonly<Record<string, string>> = {
   get_cached_forecast_hours: "Saved forecast hours unavailable",
+  encode_webp_frame: "WebP encoding unavailable",
   cancel_request: "Request is still running",
   get_radar_tilts: "Radar elevations unavailable",
   get_storage_usage: "Cache usage unavailable",

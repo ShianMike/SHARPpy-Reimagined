@@ -22,11 +22,15 @@ pub(super) fn winter_markers(
     hodo: &Bound<'_, PyAny>,
     data: &WinterProfile,
     d: &WinterDiagnostics,
+    hodo_only: bool,
 ) -> PyResult<()> {
     let py = sound.py();
     let gui = PyModule::import(py, "qtpy.QtGui")?;
     let core = PyModule::import(py, "qtpy.QtCore")?;
     for (widget, is_hodo) in [(sound, false), (hodo, true)] {
+        if hodo_only && !is_hodo {
+            continue;
+        }
         let qp = gui
             .getattr("QPainter")?
             .call1((widget.getattr("plotBitMap")?,))?;

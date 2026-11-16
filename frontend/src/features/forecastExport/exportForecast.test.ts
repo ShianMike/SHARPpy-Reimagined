@@ -26,7 +26,7 @@ vi.mock("./GifWriter", () => ({ GifWriter: class {
   finish() { return new Blob(["GIF89a"], { type: "image/gif" }); }
   close() { state.closes++; }
 } }));
-vi.mock("./forecastComposition", () => ({ composeForecast: () => undefined }));
+vi.mock("./forecastComposition", () => ({ composeForecast: vi.fn() }));
 vi.mock("../../map/fieldImages", () => ({ prepareFieldImage: () => Promise.resolve() }));
 const map = useMapStore.getInitialState(), forecast = useForecastStore.getInitialState();
 beforeEach(() => {
@@ -214,8 +214,8 @@ it("builds one bounded palette sample from every captured hour and the full ramp
   const { client, queryClient, options } = setup();
   let color = 10;
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => ({
-    getImageData: () => ({ data: new Uint8ClampedArray([color, 0, 0, 255]) }),
-    drawImage: () => { color += 10; },
+    getImageData: () => { color += 10; return { data: new Uint8ClampedArray([color, 0, 0, 255]) }; },
+    drawImage: () => { /* Palette sampling advances only when reading pixels. */ },
   }) as unknown as CanvasRenderingContext2D);
   await exportForecast(options, client, queryClient, new AbortController().signal, document.createElement("canvas"), () => undefined);
   const sample = state.samples[0];
@@ -225,5 +225,34 @@ it("builds one bounded palette sample from every captured hour and the full ramp
   expect(sample?.[8192 * 4]).toBe(40);
   expect(sample?.length).toBeLessThanOrEqual((131_072 + 32_768) * 4);
   expect(sample?.subarray(3 * 4096 * 4).some((value) => value !== 0)).toBe(true);
+  queryClient.clear();
+});
+
+it.each([2, 4] as const)("captures every panel of a %i-panel layout in the same PNG", async (count) => {
+  const { client, queryClient, options } = setup();
+  useMapStore.getState().setPanelLayout(count);
+  const parts = Array.from({ length: count }, (_, panel) => ({ panel, product: options.product }));
+  const captures = parts.map(({ panel }) => {
+    const captureFrame = vi.fn(() => Promise.resolve(document.createElement("canvas")));
+    mapCaptureSources.set(panel, { captureFrame }); return captureFrame;
+  });
+  const result = await exportForecast({ ...options, panels: parts, format: "png", hours: [2] },
+    client, queryClient, new AbortController().signal, document.createElement("canvas"), () => undefined);
+  expect(result.type).toBe("image/png");
+  for (const capture of captures) {
+    expect(capture).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ forecastHour: 2 }),
+      expect.any(AbortSignal), { width: options.width / 2, height: options.height / (count === 4 ? 2 : 1) });
+  }
+  expect(state.events).not.toContain("encoder:start");
+  expect(useForecastStore.getState().forecastHour).toBe(5);
+  queryClient.clear();
+});
+
+it("fails a whole-layout export before capture when any selected panel is missing", async () => {
+  const { client, queryClient, options, captureFrame } = setup();
+  await expect(exportForecast({ ...options, panels: [{ panel: 0, product: options.product }, { panel: 1, product: options.product }] },
+    client, queryClient, new AbortController().signal, document.createElement("canvas"), () => undefined)).rejects.toThrow("selected map is unavailable");
+  expect(captureFrame).not.toHaveBeenCalled();
+  expect(useForecastStore.getState().exporting).toBe(false);
   queryClient.clear();
 });

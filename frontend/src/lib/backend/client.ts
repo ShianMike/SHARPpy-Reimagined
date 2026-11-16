@@ -41,6 +41,7 @@ import { BRIDGE_STATUS_CHANGED } from "./events";
 import { callWithSignal, type CommandName, type Transport } from "./transport";
 import { recordLog } from "../../stores/logStore";
 import { parseSoundingView } from "../contracts/soundingView";
+import { parseWebpFrame, type WebpFrame } from "../contracts/webp";
 import type { SoundingView, ViewRequest } from "../../types/soundingView";
 function warnFailure(failure: BackendFailure, operation: string, extra?: unknown): void {
   const { code, context, details } = failure.error;
@@ -116,8 +117,8 @@ export class BackendClient {
     return this.request("get_sounding_progress", parseSoundingProgress, { progressId });
   }
   inspectWrf(filePath: string): Promise<WrfFile> { return this.request("inspect_wrf", parseWrfFile, { filePath }); }
-  getSoundingAnalysis(soundingId: string): Promise<SoundingAnalysis> {
-    return this.request("get_sounding_analysis", parseSoundingAnalysis, { soundingId });
+  getSoundingAnalysis(soundingId: string, signal?: AbortSignal): Promise<SoundingAnalysis> {
+    return this.request("get_sounding_analysis", parseSoundingAnalysis, { soundingId }, signal);
   }
 
   getThresholdMetrics(): Promise<ThresholdMetrics> { return this.request("get_threshold_metrics", parseThresholdMetrics); }
@@ -135,8 +136,12 @@ export class BackendClient {
     return this.request("render_sounding", parsePng, { soundingId, ascent, imageMode, colorStyle });
   }
 
-  renderSoundingView(soundingId: string, ascent: RenderChoice, imageMode: ImageMode, view: ViewRequest, colorStyle: SoundingColorStyle = "standard"): Promise<SoundingView> {
-    return this.request("render_sounding_view", parseSoundingView, { soundingId, ascent, imageMode, view, colorStyle });
+  renderSoundingView(soundingId: string, ascent: RenderChoice, imageMode: ImageMode, view: ViewRequest, colorStyle: SoundingColorStyle = "standard", signal?: AbortSignal): Promise<SoundingView> {
+    return this.request("render_sounding_view", parseSoundingView, { soundingId, ascent, imageMode, view, colorStyle }, signal);
+  }
+
+  encodeWebpFrame(png: string, signal?: AbortSignal): Promise<WebpFrame> {
+    return this.request("encode_webp_frame", parseWebpFrame, { png }, signal);
   }
 
   getMapCatalog(model = "hrrr", runTime?: string, forecastHour?: number): Promise<MapCatalog> {

@@ -194,6 +194,7 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
 
   const handlers: Record<CommandName, (args?: Readonly<Record<string, unknown>>) => Promise<unknown>> = {
     cancel_request: () => Promise.resolve(null),
+    encode_webp_frame: () => Promise.reject(new Error("Lossless WebP requires the real backend.")),
     get_cached_forecast_hours: (args) => Promise.resolve(frames.hours(args)),
     get_storage_usage: () => Promise.resolve(copy(storage)),
     clear_cache: (args) => {

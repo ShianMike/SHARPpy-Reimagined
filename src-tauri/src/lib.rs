@@ -51,6 +51,7 @@ fn log_plugin<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
 pub fn invoke_handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static
 {
     tauri::generate_handler![
+        commands::animation::encode_webp_frame,
         commands::backend::get_backend_health,
         commands::updater::check_for_updates,
         commands::stations::get_station_catalog,

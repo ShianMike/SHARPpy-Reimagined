@@ -10,6 +10,7 @@ import { useSoundingStore } from "../../stores/soundingStore";
 import { AscentPicker } from "./AscentPicker";
 import { SoundingErrorNotice } from "./SoundingErrorNotice";
 import { SoundingExport } from "./SoundingExport";
+import { SoundingAnimation } from "./SoundingAnimation";
 import { useObjectUrl } from "./soundingQueries";
 import { LevelEditor } from "./LevelEditor";
 import { LevelReadout } from "./LevelReadout";
@@ -228,6 +229,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
         </div>
       </details>
       <div className={styles.exportTools}>
+        <SoundingAnimation id={soundingId} choice={choice} quality={quality} view={request} ready={ready} />
         <SoundingExport view={data} quality={quality} onQualityChange={setQuality} ready={ready && !locatorImage.pending} busy={busy || locatorImage.pending}
           filename={title.replace(/[^a-zA-Z0-9_-]+/g, "-") + (mode === "winter" ? "-winter" : "-" + choice) + (timeIndex > 0 ? `-time-${String(timeIndex + 1)}` : "") + (edits.length ? "-edited" : "") + ".png"} />
       </div>

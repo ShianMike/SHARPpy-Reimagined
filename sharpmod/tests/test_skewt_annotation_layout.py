@@ -1,14 +1,7 @@
-"""The Skew-T's left-hand annotations are placed against each other.
+"""Geometry helpers and retained Skew-T annotation invariants.
 
-The max-lapse-rate value used to be anchored five degrees warm of the
-temperature trace, which is where the parcel levels, the freezing level and
-wet-bulb zero, the significant-level ticks and the wind barbs all already are.
-It now lives in the cold-side gutter beside the omega meter and the effective
-inflow layer -- a region with room, but not unlimited room, so the three have to
-be measured against one another rather than assumed to fit.
-
-Geometry needs a real widget size. Build the native Skew-T on its own so each
-size can be tested without reparenting a widget out of a live SPC grid.
+Fixed lapse-rate column coverage is owned by the Rust painter tests; effective
+inflow layout and the existing value, color and pressure-depth checks stay here.
 """
 
 from __future__ import annotations
@@ -266,19 +259,6 @@ def test_a_chain_of_blockers_is_cleared():
 # Placement on a real widget
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("width,height", SIZES)
-def test_the_lapse_rate_value_starts_at_the_gutter_or_right_of_it(
-        skewt, qt_app, width, height):
-    _sized(skewt, qt_app, width, height)
-    gutter = render_mod._skewt_left_gutter(skewt, QtGui)
-
-    boxes = _lapse(skewt).boxes()
-
-    assert boxes, "the max-lapse-rate value should be drawn"
-    for text, box in boxes:
-        assert box.x() >= gutter - 0.6, f"{text!r} at {box.x():.1f} < {gutter:.1f}"
-
-
-@pytest.mark.parametrize("width,height", SIZES)
 def test_the_lapse_rate_annotation_stays_put_with_omega(
         skewt, qt_app, width, height, monkeypatch):
     _sized(skewt, qt_app, width, height)
@@ -292,86 +272,6 @@ def test_the_lapse_rate_annotation_stays_put_with_omega(
     assert without.boxes() and without.lines
     assert with_meter.boxes() == without.boxes()
     assert with_meter.lines == without.lines
-
-
-@pytest.mark.parametrize("width,height", SIZES)
-def test_the_lapse_rate_value_stays_clear_of_the_traces(
-        skewt, qt_app, width, height):
-    """It moved off the crowded warm side; it must not creep back onto it.
-
-    The bound that matters is the temperature and dewpoint traces rather than
-    the diagram's midpoint: the free room in the cold region ends wherever the
-    first trace is, and on a dry profile the dewpoint is much further left than
-    on a saturated one.
-    """
-    import sharppy.sharptab as tab
-
-    _sized(skewt, qt_app, width, height)
-    _rate, pbot, ptop = skewt.prof.max_lapse_rate_2_6[:3]
-    limit = render_mod._skewt_trace_left_edge(skewt, tab, pbot, ptop)
-    assert limit is not None, "the traces should be measurable"
-
-    for text, box in _lapse(skewt).boxes():
-        assert box.right() <= limit, \
-            f"{text!r} reaches {box.right():.1f}, past the trace at {limit:.1f}"
-
-
-@pytest.mark.parametrize("width,height", SIZES)
-def test_the_lapse_rate_value_takes_the_column_right_of_the_inflow_labels(
-        skewt, qt_app, width, height):
-    """Its own column, rather than sharing the gutter with the inflow labels.
-
-    Those labels sit at whatever height the inflow layer happens to be, so in a
-    shared column they can come arbitrarily close to this one -- near enough to
-    read as a single smear without ever strictly overlapping.
-    """
-    _sized(skewt, qt_app, width, height)
-    inflow = _inflow_boxes(skewt)
-    assert inflow, "the inflow annotation should be drawn"
-    inflow_right = max(rect.right() for _text, rect in inflow)
-
-    for text, box in _lapse(skewt).boxes():
-        assert box.x() >= inflow_right, \
-            f"{text!r} starts at {box.x():.1f}, left of the inflow labels " \
-            f"ending at {inflow_right:.1f}"
-
-
-def test_the_value_falls_back_to_the_gutter_when_the_traces_leave_no_room(
-        skewt, qt_app, monkeypatch):
-    """A saturated, cold profile can close that column entirely."""
-    _sized(skewt, qt_app, 900, 700)
-    gutter = render_mod._skewt_left_gutter(skewt, QtGui)
-    inflow = _inflow_boxes(skewt)
-    inflow_right = max(rect.right() for _text, rect in inflow)
-
-    # Pretend the first trace sits just right of the inflow annotation.
-    monkeypatch.setattr(
-        render_mod, "_skewt_trace_left_edge",
-        lambda *_a, **_k: inflow_right + 10.0)
-
-    boxes = _lapse(skewt).boxes()
-
-    assert boxes, "the value should still be drawn"
-    for text, box in boxes:
-        assert box.x() < inflow_right, \
-            f"{text!r} should have retreated to the gutter"
-        assert box.x() >= gutter - 0.6, text
-        for inflow_text, rect in inflow:
-            assert not box.intersects(rect), \
-                f"{text!r} overlaps {inflow_text!r} in the fallback"
-
-
-@pytest.mark.parametrize("width,height", SIZES)
-def test_the_lapse_rate_value_clears_every_effective_layer_label(
-        skewt, qt_app, width, height):
-    _sized(skewt, qt_app, width, height)
-    lapse_boxes = _lapse(skewt).boxes()
-    eff_boxes = _effective(skewt).boxes()
-
-    for lapse_text, lapse_box in lapse_boxes:
-        for eff_text, eff_box in eff_boxes:
-            assert not lapse_box.intersects(eff_box), \
-                f"{lapse_text!r} overlaps the inflow label {eff_text!r}"
 
 
 @pytest.mark.parametrize("width,height", SIZES)
@@ -394,7 +294,7 @@ def test_the_value_and_its_unit_are_unchanged(skewt, qt_app):
     texts = [text for text, _box in _lapse(skewt).boxes()]
 
     assert len(texts) == 1
-    assert texts[0].endswith(" C/km")
+    assert texts[0].endswith(" °C/km")
     assert float(texts[0].split()[0]) == pytest.approx(
         float(skewt.prof.max_lapse_rate_2_6[0]), abs=0.05)
 
@@ -473,33 +373,6 @@ def test_the_label_stays_inside_the_plot_box(skewt, qt_app):
 # --------------------------------------------------------------------------- #
 # Collision, and the no-meter case
 # --------------------------------------------------------------------------- #
-def test_the_value_clears_the_inflow_labels_even_on_the_same_line(
-        skewt, qt_app):
-    """Drag the inflow layer's top onto the lapse layer's top.
-
-    Both annotations then belong to the same height, which is the case that used
-    to print one over the other. Its own column makes this unremarkable, and
-    that is the point -- but it is the case worth pinning.
-    """
-    _sized(skewt, qt_app, 900, 700)
-    undisturbed = _lapse(skewt).boxes()[0][1]
-
-    original = skewt.prof.etop
-    skewt.prof.etop = float(skewt.prof.max_lapse_rate_2_6[2])
-    try:
-        eff_boxes = _effective(skewt).boxes()
-        moved = _lapse(skewt).boxes()[0][1]
-    finally:
-        skewt.prof.etop = original
-
-    assert moved.y() == pytest.approx(undisturbed.y()), \
-        "the height it belongs to must not change"
-    for text, box in eff_boxes:
-        assert not moved.intersects(box), f"overlaps {text!r}"
-        assert moved.x() >= box.right(), \
-            f"should sit right of {text!r}"
-
-
 def _height_marker_ink(skewt):
     """Boxes for the ink of each height marker label.
 
@@ -708,22 +581,6 @@ def test_the_inflow_label_rects_are_sized_to_their_text(skewt, qt_app):
     for text, rect in _inflow_boxes(skewt):
         expected = max(float(metrics.horizontalAdvance(text)) + 4.0, 12.0)
         assert rect.width() == pytest.approx(expected, abs=1.0), text
-
-
-@pytest.mark.parametrize("case", ["degenerate-surface-based",
-                                 "shallow-surface-based"])
-def test_the_lapse_rate_still_clears_the_shifted_inflow_labels(
-        skewt, qt_app, case):
-    """The lapse rate reads these rects as blockers, so it must see the shift."""
-    _sized(skewt, qt_app, 900, 700)
-    ebottom, etop = _layer_cases(skewt)[case]
-
-    with _InflowLayer(skewt, ebottom, etop):
-        inflow = _inflow_boxes(skewt)
-        for lapse_text, lapse_box in _lapse(skewt).boxes():
-            for text, rect in inflow:
-                assert not lapse_box.intersects(rect), \
-                    f"{lapse_text!r} overlaps {text!r}"
 
 
 def test_the_value_is_no_longer_anchored_to_the_temperature_trace(

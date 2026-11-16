@@ -1,4 +1,25 @@
 {
+  "3.8.3": {
+    "summary": "Play sounding forecasts through time and export complete map layouts with lossless animated WebP.",
+    "highlights": [
+      {
+        "title": "Animate Severe and Winter soundings",
+        "description": "Choose 2–12 forecast hours or file profiles, preload the complete selection, then play or scrub the soundings on fixed plot axes. Save the animation as GIF or lossless WebP."
+      },
+      {
+        "title": "Export the whole map layout",
+        "description": "Save two or four map panels together as a PNG, GIF or animated WebP. Each panel keeps its parameter, color scale, valid time and displayed overlays."
+      },
+      {
+        "title": "Lossless animated WebP",
+        "description": "Preserve full-color frames with the shared Rust WebP encoder. Every selected hour loads and renders before encoding begins, and each animation loops without blended transitions."
+      },
+      {
+        "title": "Fixed lapse-rate placement",
+        "description": "The Severe sounding's lapse-rate bracket and value stay at −30 °C, keeping the SFC column at −20 °C clear even when omega bars overlap the area."
+      }
+    ]
+  },
   "3.8.2": {
     "summary": "Save sharper forecast animations and lossless PNGs, see the location on sounding maps, and keep exports and cache cleanup reliable.",
     "highlights": [

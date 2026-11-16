@@ -112,6 +112,7 @@ def decode_request(line: bytes) -> Request:
 #: Methods whose handler validates its own parameters (bridge/soundings.py,
 #: bridge/fields.py, bridge/map_layers.py).
 HANDLER_VALIDATED = frozenset({
+    "animation.webp_frame",
     "soundings.progress",
     "storage.clear",
     "models.catalog",

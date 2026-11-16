@@ -23,6 +23,7 @@
     "allow-export-threshold-csv",
     "allow-render-sounding",
     "allow-render-sounding-view",
+    "allow-encode-webp-frame",
     "allow-get-map-catalog",
     "allow-get-weather-field",
     "allow-get-cached-forecast-hours",

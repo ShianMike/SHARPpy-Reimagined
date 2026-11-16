@@ -11,6 +11,7 @@ fn lock_python_backend_test() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+mod animation;
 pub mod batch_analysis;
 mod box_bindings;
 mod box_mean;
@@ -73,6 +74,7 @@ mod report_bindings;
 mod sars;
 mod sars_bindings;
 mod satellite_bindings;
+mod skewt_annotations;
 mod sounding_image;
 mod surface_bindings;
 mod weather;
@@ -859,6 +861,8 @@ fn py_grib_inventory_cache_info() -> (bool, usize, usize, u64, u64, u64, u64) {
 
 #[pymodule]
 fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    animation::register(module)?;
+    skewt_annotations::register(module)?;
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     module.add("__backend_api_version__", BACKEND_API_VERSION)?;
     weather::register(module)?;

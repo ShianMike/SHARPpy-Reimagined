@@ -159,7 +159,13 @@ fn configure_winter_view<'py>(
             let data = profile(&prof)?;
             let diagnostics = data.diagnostics(panels::scalar(&prof, "plevel")?);
             plots::skew_layers(&sound, &data)?;
-            plots::winter_markers(&sound, winter_hodo.bind(args.py()), &data, &diagnostics)?;
+            plots::winter_markers(
+                &sound,
+                winter_hodo.bind(args.py()),
+                &data,
+                &diagnostics,
+                false,
+            )?;
             Ok(args.py().None())
         },
     )?;
@@ -193,7 +199,7 @@ fn configure_winter_view<'py>(
     sound.call_method0("update")?;
     hodo.call_method0("clearData")?;
     hodo.call_method0("plotData")?;
-    plots::winter_markers(&sound, &hodo, &data, &diagnostics)?;
+    plots::winter_markers(&sound, &hodo, &data, &diagnostics, false)?;
     hodo.call_method0("update")?;
 
     // Read the settled native hazard inset after profile edits. Its selected
@@ -260,6 +266,19 @@ fn configure_winter_view<'py>(
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(configure_winter_view, module)?)
+}
+
+pub(crate) fn refresh_hodograph_markers(sw: &Bound<'_, PyAny>) -> PyResult<()> {
+    let prof = sw.getattr("default_prof")?;
+    let data = profile(&prof)?;
+    let diagnostics = data.diagnostics(panels::scalar(&prof, "plevel")?);
+    plots::winter_markers(
+        &sw.getattr("sound")?,
+        &sw.getattr("hodo")?,
+        &data,
+        &diagnostics,
+        true,
+    )
 }
 
 #[cfg(test)]

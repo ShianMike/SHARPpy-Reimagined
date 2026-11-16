@@ -1452,7 +1452,7 @@ dependencies = [
 
 [[package]]
 name = "sharpmod-rs"
-version = "3.8.2"
+version = "3.8.3"
 dependencies = [
  "criterion",
  "csv",
@@ -1471,7 +1471,7 @@ dependencies = [
 
 [[package]]
 name = "sharpmod-weather"
-version = "3.8.2"
+version = "3.8.3"
 dependencies = [
  "base64 0.22.1",
  "bzip2",

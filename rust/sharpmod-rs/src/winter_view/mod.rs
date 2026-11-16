@@ -159,7 +159,13 @@ fn configure_winter_view<'py>(
             let data = profile(&prof)?;
             let diagnostics = data.diagnostics(panels::scalar(&prof, "plevel")?);
             plots::skew_layers(&sound, &data)?;
-            plots::winter_markers(&sound, winter_hodo.bind(args.py()), &data, &diagnostics, false)?;
+            plots::winter_markers(
+                &sound,
+                winter_hodo.bind(args.py()),
+                &data,
+                &diagnostics,
+                false,
+            )?;
             Ok(args.py().None())
         },
     )?;

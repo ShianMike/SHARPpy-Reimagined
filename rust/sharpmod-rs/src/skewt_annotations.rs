@@ -78,7 +78,7 @@ fn draw_fixed_lapse_layer(
         (x - 10., y2, x + 10., y2),
         (x, y1, x, y2),
     ] {
-        painter.call_method1("drawLine", (core.getattr("QLineF")?.call1(coords)?,))?;
+        painter.call_method1("drawLine", coords)?;
     }
     let flags: i32 = ["TextDontClip", "AlignHCenter", "AlignVCenter"]
         .iter()
@@ -95,3 +95,6 @@ fn draw_fixed_lapse_layer(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(draw_fixed_lapse_layer, module)?)
 }
+
+#[cfg(test)]
+mod tests;

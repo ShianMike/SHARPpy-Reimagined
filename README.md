@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.8.2
+# SHARPpy Reimagined · v3.8.3
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,32 +10,32 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v382---2026-11-16)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v383---2026-11-16)
 
 </div>
 
-## What's new in 3.8.2
+## What's new in 3.8.3
 
-- **Forecast exports:** save or copy a lossless PNG of the current hour. Export
-  selected hours as a looping GIF with a shared color palette and up to UHD
-  resolution. Copy supported GIFs directly in the Windows app.
-- **Named sounding locators:** the inset shows the displayed map layers and
-  scale, zoomed around the sounding point. Its place name sits in the header,
-  and the same map is included in the displayed and saved image.
-- **Clearer sounding annotations:** hodograph labels leave the wind trace
-  visible, and omega bars can cross the inflow and lapse-rate annotations
-  without moving them. Winter diagnostic labels and spacing are more consistent.
-- **Rust and cache updates:** wind calculations, model cache handling and
-  Ensemble CSV exports use native code. Failed exports preserve any existing
-  file, and cache cleanup respects active use and pinned entries.
+- **Sounding animation:** choose 2–12 forecast hours or file profiles in
+  Severe or Winter mode. Preload every selected profile, play or scrub the
+  sequence on fixed axes, and save it as GIF or animated WebP.
+- **Whole-layout exports:** save two or four Model Viewer panels together
+  as PNG, GIF or animated WebP, with each panel's parameter, color scale,
+  valid time, displayed overlays and source credits.
+- **Lossless animated WebP:** preserve full-color frames at the chosen
+  resolution. Every selected hour loads and renders before encoding begins;
+  animations loop through discrete hours without blended transitions.
+- **Fixed lapse-rate annotation:** the bracket and value stay at −30 °C,
+  keeping the existing SFC column at −20 °C clear.
 
 ## Sounding and forecast tools
 
 - **Winter soundings:** switch between Severe and Winter in the same sounding
   viewer. Winter adds precipitation type guidance, snow growth, icing and
   lower atmosphere profiles alongside the Skew-T and hodograph.
-- **Forecast GIFs:** choose forecast hours and export the active map parameter
-  as a looping animation. The color scale stays visible while hours load.
+- **Forecast exports:** choose forecast hours and export the active panel or
+  complete map layout. Save PNGs, looping GIFs or lossless animated WebPs.
+  The color scale stays visible while hours load.
 - **Sounding images for other apps:** the headless renderer exports Severe and
   Winter PNGs, with an optional JSON result for scripts and services. See the
   [integration guide](docs/SOUNDING_IMAGE_INTEGRATION.md).

@@ -8,7 +8,7 @@ import { createTransport } from "../../lib/backend/fixtureTransport";
 import { parseModelCatalog, parseSoundingSummary } from "../../lib/contracts/soundings";
 import type { SoundingView } from "../../types/soundingView";
 import { useSoundingStore } from "../../stores/soundingStore";
-import { prepareSoundingAnimation, soundingFrameChoices, type SoundingAnimationOptions } from "./soundingAnimation";
+import { prepareSoundingAnimation, soundingFrameChoices, type SoundingAnimationOptions } from "./prepareSoundingAnimation";
 
 beforeEach(() => { useSoundingStore.setState(useSoundingStore.getInitialState(), true); });
 function setup() {

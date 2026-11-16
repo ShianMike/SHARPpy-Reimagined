@@ -16,6 +16,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Retain the existing value, color, layer-depth and transparency checks.
 - Simplify the native radar viewport validation without changing its accepted
   coordinates or range limits, keeping the Rust warning gate clean.
+- Keep lossless-frame iteration compatible with current stable Rust linting
+  and the existing minimum supported Rust version.
 
 ### Added
 
@@ -32,6 +34,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Use distinct animation component and data-module names so Windows builds
+  resolve the sounding animation component correctly.
 - Anchor the Severe sounding's lapse-rate bracket and value at the −30 °C
   bottom-axis position. Keep the annotation fixed across profiles, omega bars,
   screen sizes and animation frames while retaining the layer's true depth.

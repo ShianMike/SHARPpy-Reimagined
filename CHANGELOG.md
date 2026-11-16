@@ -25,6 +25,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Normalize Windows and Unix upload paths to the same displayed sounding file
+  name. Reject empty path components and invalid upload data before writing;
+  remove staged files if decoding, summary assembly or registration fails.
+- Reject zero-dimension sounding PNGs and malformed IHDR lengths before returning
+  an image through the bridge, using the same native check as CLI PNG reports.
 - Keep storm-report hazard filters and event windows independent for each
   Model Viewer and Live Tracking panel. Preserve the choices across layout
   changes and restarts, migrate existing shared selections, and reset each
@@ -37,6 +42,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Move sounding-upload validation, base64 decoding and staged-file ownership
+  into Rust. Retain the existing format decoders, metadata, public bridge
+  errors and 5 MiB import limit. Share rollback handling with session recovery.
+- Route the bridge's sounding PNG dimension check through Rust, sharing the
+  header implementation with machine-readable CLI reports without decoding or
+  re-encoding image pixels.
 - Fit all five forecast-hour shortcuts in one row with Select all/Clear icons
   and compact time-range labels. Retain full accessible names and tooltips.
 - Add regression coverage for panel-specific report settings, saved-preference

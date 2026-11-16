@@ -1,11 +1,8 @@
 //! Adapt the process-owned sounding cache; all recovery format and I/O logic is Rust.
+use crate::sounding_files::Pending;
 use pyo3::{prelude::*, types::PyDict};
 use sharpmod_weather::sounding_recovery::{pack, unpack};
-use std::{
-    fs::{self, OpenOptions},
-    io::Write,
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 fn failure(py: Python<'_>, message: String) -> PyErr {
     match PyModule::import(py, "sharpmod.bridge.errors")
@@ -49,31 +46,6 @@ fn sounding_snapshot<'py>(
     Ok(out)
 }
 
-struct Pending {
-    paths: Vec<PathBuf>,
-    committed: bool,
-}
-impl Pending {
-    fn write(&mut self, path: PathBuf, bytes: &[u8]) -> std::io::Result<()> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)?;
-        self.paths.push(path);
-        file.write_all(bytes)?;
-        file.sync_all()
-    }
-}
-impl Drop for Pending {
-    fn drop(&mut self) {
-        if !self.committed {
-            for path in &self.paths {
-                let _ = fs::remove_file(path);
-            }
-        }
-    }
-}
-
 #[pyfunction]
 fn restore_sounding_snapshot<'py>(
     py: Python<'py>,
@@ -91,10 +63,7 @@ fn restore_sounding_snapshot<'py>(
     let write_path = path.clone();
     let mut pending = py
         .detach(move || {
-            let mut pending = Pending {
-                paths: Vec::new(),
-                committed: false,
-            };
+            let mut pending = Pending::default();
             pending.write(write_path.clone(), &source.bytes)?;
             if let Some(bytes) = source.sidecar {
                 pending.write(write_path.with_extension("json"), &bytes)?;

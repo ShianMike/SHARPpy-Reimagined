@@ -37,11 +37,9 @@ RECENT_RUN_COUNT = 16
 
 
 def _png_size(data: bytes) -> tuple[int, int]:
-    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
-        raise BridgeError(
-            "RENDER_FAILED", "The sounding renderer did not produce a PNG image.", False
-        )
-    return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+    from sharpmod_rs import sounding_png_size
+
+    return sounding_png_size(data)
 
 
 def render(params: dict[str, Any]) -> dict[str, Any]:

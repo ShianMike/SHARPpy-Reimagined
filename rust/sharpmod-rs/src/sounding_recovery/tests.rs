@@ -1,5 +1,6 @@
 use super::*;
 use pyo3::types::PyDict;
+use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
 static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -79,10 +80,7 @@ fn temporary_files_are_removed_when_restore_does_not_commit() {
     fs::create_dir(&root).unwrap();
     let path = root.join("source.npz");
     {
-        let mut pending = Pending {
-            paths: Vec::new(),
-            committed: false,
-        };
+        let mut pending = Pending::default();
         pending.write(path.clone(), b"profile").unwrap();
         assert!(path.exists());
         assert!(pending.write(path.clone(), b"replacement").is_err());

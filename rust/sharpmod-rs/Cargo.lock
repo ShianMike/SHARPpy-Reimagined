@@ -1454,6 +1454,7 @@ dependencies = [
 name = "sharpmod-rs"
 version = "3.8.3"
 dependencies = [
+ "base64 0.22.1",
  "criterion",
  "csv",
  "libloading",

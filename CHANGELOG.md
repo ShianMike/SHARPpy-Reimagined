@@ -55,9 +55,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Install the existing certificate-bundle dependency in standalone Rust CI so
-  real sounding-upload and session-recovery decoder tests run in its lean
-  Python environment.
+- Install the existing certificate-bundle dependency in standalone Rust CI
+  and build the native backend for Windows sidecar lifecycle checks, so real
+  sounding-upload, session-recovery and shutdown tests use their required
+  runtime interfaces.
 - Move standard and interactive sounding PNG cache transactions, staged-file
   ownership, cache alias eviction and response base64 encoding into Rust.
   Preserve the existing Qt render worker, per-sounding render lock, quality,

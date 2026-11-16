@@ -25,6 +25,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Reject invalid sounding animation ranges and incomplete storm-motion edits
+  before starting a render worker, with structured request errors. Normalize
+  drag target IDs before matching native edit points, and share cached images
+  when Severe/default time selections are omitted or stated explicitly.
 - Normalize Windows and Unix upload paths to the same displayed sounding file
   name. Reject empty path components and invalid upload data before writing;
   remove staged files if decoding, summary assembly or registration fails.
@@ -42,6 +46,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Move interactive sounding request validation into Rust, retaining existing
+  chart and panel choices, numeric bounds, the 2000-level edit limit and
+  non-destructive request handling. Keep Python as compatibility wiring.
 - Move sounding-upload validation, base64 decoding and staged-file ownership
   into Rust. Retain the existing format decoders, metadata, public bridge
   errors and 5 MiB import limit. Share rollback handling with session recovery.

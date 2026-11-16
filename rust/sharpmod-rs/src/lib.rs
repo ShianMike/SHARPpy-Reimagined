@@ -79,6 +79,7 @@ mod sounding_files;
 mod sounding_image;
 mod sounding_recovery;
 mod sounding_upload;
+mod sounding_view;
 mod surface_bindings;
 mod weather;
 pub mod wind;
@@ -867,6 +868,7 @@ fn sharpmod_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     animation::register(module)?;
     sounding_recovery::register(module)?;
     sounding_upload::register(module)?;
+    sounding_view::register(module)?;
     skewt_annotations::register(module)?;
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     module.add("__backend_api_version__", BACKEND_API_VERSION)?;

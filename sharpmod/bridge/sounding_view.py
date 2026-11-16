@@ -10,9 +10,6 @@ from pathlib import Path
 from sharpmod.bridge import params as p
 from sharpmod.bridge.sounding_cache import cache, log
 
-FIELDS = {"tmpc": (-150, 65), "dwpc": (-150, 65), "u": (-350, 350), "v": (-350, 350)}
-CHARTS = ("streamwiseness", "srw", "theta", "cape")
-PANELS = ("STP STATS", "COND STP", "WINTER", "FIRE", "SHIP", "VROT", "HEIGHT CHARTS")
 MAX_CACHED_VIEWS = 4
 
 
@@ -23,50 +20,9 @@ def _render_key(parcel, mode, view, color_style):
 
 
 def validate_view(value):
-    if not isinstance(value, dict):
-        raise p.invalid("view must be an object")
-    p.keys(value, ("edits",), ("chart", "panel", "drag", "timeIndex", "mode", "animationRange"))
-    p.choice(value, "mode", ("severe", "winter"), "severe")
-    value = {"chart": "streamwiseness", "panel": "STP STATS", **value}
-    p.choice(value, "chart", CHARTS, "streamwiseness")
-    p.choice(value, "panel", PANELS, "STP STATS")
-    if "timeIndex" in value:
-        p.integer(value, "timeIndex", 0, 1_000_000)
-    edits = value["edits"]
-    if not isinstance(edits, list) or len(edits) > 2000:
-        raise p.invalid("edits must contain at most 2000 levels")
-    seen = set()
-    for edit in edits:
-        if not isinstance(edit, dict):
-            raise p.invalid("each edit must be an object")
-        p.keys(edit, ("index", "values"))
-        index = p.integer(edit, "index", -2, 10000)
-        if index in seen:
-            raise p.invalid("each edited level must occur once")
-        seen.add(index)
-        values = edit["values"]
-        if not isinstance(values, dict) or not values:
-            raise p.invalid("edit values must be a nonempty object")
-        p.keys(values, (), tuple(FIELDS) if index >= 0 else ("u", "v"))
-        for field, number in values.items():
-            p.number({field: number}, field, *FIELDS[field])
-    drag = value.get("drag")
-    if drag is not None:
-        if not isinstance(drag, dict):
-            raise p.invalid("drag must be an object")
-        p.keys(drag, ("target", "x", "y"))
-        target = p.text(drag, "target", 1, 30).split(":")
-        if len(target) != 2 or target[0] not in ("tmpc", "dwpc", "wind", "storm"):
-            raise p.invalid("unknown edit target")
-        try:
-            index = int(target[1])
-        except ValueError:
-            raise p.invalid("edit target needs a level") from None
-        if not (-2 <= index <= -1 if target[0] == "storm" else 0 <= index <= 10000):
-            raise p.invalid("edit target level is invalid")
-        p.number(drag, "x", 0, 1)
-        p.number(drag, "y", 0, 1)
-    return value
+    from sharpmod_rs import validate_sounding_view
+
+    return validate_sounding_view(value)
 
 
 def render_view(params):

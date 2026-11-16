@@ -11,6 +11,10 @@
         "description": "Imported soundings display the correct filename across Windows and Linux. Failed imports clean up their temporary files, and invalid sounding image dimensions are reported before display or export."
       },
       {
+        "title": "More reliable sounding edits",
+        "description": "Invalid animation ranges and incomplete storm-motion edits report a clear request error before rendering. Drag targets match their native edit points, and equivalent default view selections reuse completed sounding images."
+      },
+      {
         "title": "Faster forecast export setup",
         "description": "Keep your resolution, frame duration and panel/layout choice between sessions. Compact icons and labels keep all hour shortcuts in one row. Select the next 6 or 12 hours, keep hours three hours apart, or Shift-click a range."
       },

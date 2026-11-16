@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { parseSoundingSummary } from "../../lib/contracts/soundings";
 import { useSoundingRecoveryStore } from "../../stores/soundingRecoveryStore";
 import { useUiStore } from "../../stores/uiStore";
-import { SoundingRecoveryPrompt, SoundingRecoveryStatus } from "./SoundingRecovery";
+import { SoundingRecoveryPrompt, SoundingRecoveryStatus } from "./SoundingRecoveryControls";
 
 afterEach(() => { cleanup(); useSoundingRecoveryStore.setState(useSoundingRecoveryStore.getInitialState(), true); useUiStore.setState({ whatsNewOpen: false }); });
 it("offers restoration, preserves a deferred session, and reopens the prompt from sounding controls", () => {

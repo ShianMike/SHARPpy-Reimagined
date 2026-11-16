@@ -27,6 +27,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Give sounding recovery controls and data handling distinct module names so
+  Windows builds resolve the prompt and save-status components correctly.
 - Recover from cached sounding PNGs with invalid headers, empty content,
   excessive size or missing files by discarding stale cache references and
   rendering again. Check new standard and interactive image headers and size
@@ -53,6 +55,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Install the existing certificate-bundle dependency in standalone Rust CI so
+  real sounding-upload and session-recovery decoder tests run in its lean
+  Python environment.
 - Move standard and interactive sounding PNG cache transactions, staged-file
   ownership, cache alias eviction and response base64 encoding into Rust.
   Preserve the existing Qt render worker, per-sounding render lock, quality,

@@ -4,7 +4,7 @@
     "highlights": [
       {
         "title": "Restore your sounding session",
-        "description": "Reopen saved profiles with completed edits, undo/redo history, selected times and the Severe or Winter view. Recovery copies stay on this device, separately from the weather cache. The controls show when a copy has finished saving."
+        "description": "Reopen saved profiles with completed edits, undo/redo history, selected times and the Severe or Winter view. Recovery copies stay on this device, separately from the weather cache. Recovery controls work in Windows builds and show when a copy has finished saving."
       },
       {
         "title": "More reliable sounding file handling",

@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { EmptyPanel } from "../ui/Controls";
 import { Shell } from "./Shell";
 import styles from "./App.module.css";
-import { SoundingRecoveryPrompt } from "../features/sounding/SoundingRecovery";
+import { SoundingRecoveryPrompt } from "../features/sounding/SoundingRecoveryControls";
 
 export function App(): ReactNode {
   return <><Shell /><SoundingRecoveryPrompt /></>;

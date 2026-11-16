@@ -12,7 +12,7 @@ import styles from "./Sounding.module.css";
 import viewer from "./Viewer.module.css";
 import { SourceSelect } from "./SourceFields";
 import { formatUtc } from "./soundingTime";
-import { SoundingRecoveryStatus } from "./SoundingRecovery";
+import { SoundingRecoveryStatus } from "./SoundingRecoveryControls";
 
 function SoundingViewer({ sources, onShow, showRef, controlsTarget, controls }: { sources: boolean; onShow: () => void; showRef: Ref<HTMLButtonElement>; controlsTarget: HTMLDivElement | null; controls: boolean }): ReactNode {
   const active = useActiveSounding();

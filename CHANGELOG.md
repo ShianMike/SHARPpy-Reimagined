@@ -14,6 +14,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Keep the lapse-rate position regression in Rust, checking the −30 °C
   column across widget sizes, omega visibility and inflow layer changes.
   Retain the existing value, color, layer-depth and transparency checks.
+- Simplify the native radar viewport validation without changing its accepted
+  coordinates or range limits, keeping the Rust warning gate clean.
 
 ### Added
 

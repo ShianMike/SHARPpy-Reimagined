@@ -365,12 +365,13 @@ pub fn decode_level3(payload: &[u8]) -> Result<DecodedLevel3, String> {
         });
     }
 
-    if !max_range_km.is_finite()
-        || !(0.0 < max_range_km && max_range_km <= 500.0)
-        || !lat.is_finite()
-        || !(-90.0..=90.0).contains(&lat)
-        || !lon.is_finite()
-        || !(-180.0..=180.0).contains(&lon)
+    if !(max_range_km.is_finite()
+        && 0.0 < max_range_km
+        && max_range_km <= 500.0
+        && lat.is_finite()
+        && (-90.0..=90.0).contains(&lat)
+        && lon.is_finite()
+        && (-180.0..=180.0).contains(&lon))
     {
         return Err("unsupported NEXRAD geometry or units".into());
     }

@@ -11,7 +11,7 @@ import { encodeAnimation, type AnimationFormat } from "../animation/encodeAnimat
 import { copyForecastGif } from "../forecastExport/forecastClipboard";
 import { useModelCatalog, useObjectUrl } from "./soundingQueries";
 import { SourceSelect } from "./SourceFields";
-import { prepareSoundingAnimation, soundingFrameChoices, type PreparedSoundings, type SoundingAnimationProgress } from "./soundingAnimation";
+import { prepareSoundingAnimation, soundingFrameChoices, type PreparedSoundings, type SoundingAnimationProgress } from "./prepareSoundingAnimation";
 import styles from "../forecastExport/ForecastExportDialog.module.css";
 import local from "./SoundingAnimationDialog.module.css";
 

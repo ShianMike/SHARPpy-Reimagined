@@ -67,13 +67,17 @@ fn encode_bytes(png: &[u8]) -> Result<(u32, u32, Vec<u8>), String> {
     match frame.color_type {
         png::ColorType::Rgba => rgba = pixels,
         png::ColorType::Rgb => pixels
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .for_each(|p| rgba.extend_from_slice(&[p[0], p[1], p[2], 255])),
         png::ColorType::Grayscale => pixels
             .iter()
             .for_each(|p| rgba.extend_from_slice(&[*p, *p, *p, 255])),
         png::ColorType::GrayscaleAlpha => pixels
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .for_each(|p| rgba.extend_from_slice(&[p[0], p[0], p[0], p[1]])),
         png::ColorType::Indexed => return Err("PNG palette expansion failed.".into()),
     }

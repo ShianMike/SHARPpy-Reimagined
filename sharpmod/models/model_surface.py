@@ -83,6 +83,15 @@ def merge_surface_level(
     and treated as a saturated ground row; a larger excess is refused.
     """
     missing = float(missing)
+    from sharpmod.backends import get_backend
+
+    if get_backend().name == "rust":
+        import sharpmod_rs
+
+        native_merge = getattr(sharpmod_rs, "merge_model_surface", None)
+        if native_merge is not None:
+            return native_merge(columns, surface, missing)
+
     normalized = {}
     size = None
     for name in PROFILE_COLUMN_NAMES:

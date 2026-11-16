@@ -80,55 +80,6 @@ pub struct SoundingAnalysis {
     pub groups: Vec<AnalysisGroup>,
 }
 
-pub const MAX_TREND_POINTS: usize = 400;
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TrendPoint {
-    /// RFC 3339 UTC valid time; `null` when the collection has no date for it.
-    pub time: Option<String>,
-    /// One value per column; `null` when sharpmod has no value.
-    pub values: Vec<Option<f64>>,
-    /// Why the point has no values, when it has none.
-    pub note: Option<String>,
-}
-
-/// `get_sounding_trends`: the legacy Trends metrics at every valid time.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(
-    rename_all(serialize = "camelCase", deserialize = "snake_case"),
-    deny_unknown_fields
-)]
-pub struct SoundingTrends {
-    pub sounding_id: String,
-    pub title: String,
-    pub columns: Vec<TableColumn>,
-    pub points: Vec<TrendPoint>,
-    /// More valid times exist than `points` holds.
-    pub truncated: bool,
-}
-
-impl SoundingTrends {
-    pub fn validate(&self) -> Result<(), String> {
-        check_text("soundingId", &self.sounding_id, 1, 64)?;
-        check_text("title", &self.title, 1, 80)?;
-        if self.columns.len() > MAX_COLUMNS || self.points.len() > MAX_TREND_POINTS {
-            return Err("the trend is too large".into());
-        }
-        for c in &self.columns {
-            check_label_set(&c.key, &c.label, &c.units, c.decimals)?;
-        }
-        for point in &self.points {
-            check_opt_text("time", point.time.as_ref(), 40)?;
-            check_opt_text("note", point.note.as_ref(), 200)?;
-            if point.values.len() != self.columns.len() {
-                return Err("a trend point does not have one value per column".into());
-            }
-        }
-        Ok(())
-    }
-}
-
 fn check_label_set(key: &str, label: &str, units: &str, decimals: u8) -> Result<(), String> {
     check_text("key", key, 1, 40)?;
     check_text("label", label, 1, 80)?;

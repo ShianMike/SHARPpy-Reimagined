@@ -1,12 +1,58 @@
-# Backend benchmarks
+# SHARPpy Reimagined benchmarks
 
-The [current performance plan](../docs/performance/RUST_MIGRATION_PLAN.md),
-[audit](../docs/performance/PERFORMANCE_AUDIT.md) and
-[results](../docs/performance/BENCHMARK_RESULTS.md) distinguish completed prior
-optimizations from new experiments. Keep individual samples and correctness
-evidence before making a speed claim.
+Use the released `v3.8.0` source and matching native wheel as the reference for
+new comparisons. Run the same workload, inputs and environment on both builds;
+keep the raw samples and output checks with the summary. A manual benchmark is
+separate from the [active pytest budgets](../constraints/test-performance-baseline.json).
+
+The [2026-11-15 v3.8.0 baseline](results/2026-11-15-v3.8.0-baseline/README.md)
+includes five renders per Severe/Winter HD/UHD configuration and three validated
+Full HD GIF exports. Raw records retain their measured source and environment.
+
+The separate [2026-11-16 Unreleased custom-wind comparison](results/2026-11-16-unreleased-wind-integrals/README.md)
+records complete public wind-layer calls before and after the optional native
+integration paths, with paired output checks and source hashes. It does not
+replace the complete-render baseline.
+
+| Workload | Reproducible measurement |
+| --- | --- |
+| Severe and Winter sounding PNGs | [Current Rust driver](#headless-sounding-renders), complete first and warm HD/UHD renders |
+| Native science and GRIB | [Criterion kernels and fixed local data](#numerical-backend-and-grib) |
+| Browser forecast export | [Frontend measurements](#frontend-measurements), with fixture data and separate export phases |
+| Previous experiments | [Historical index](#historical-evidence), with original raw files |
+
+For comparable results, record source SHA and dirty state, app/native versions,
+resolved backend, build profile, dependency versions, CPU and resource limits,
+fixture hashes and the exact command. Report cold and warm work separately.
+
+## Historical evidence
+
+Keep the existing dated files under [`results/`](results/), including their
+original inputs, context and limitations. The October 2026 [migration plan](../docs/performance/RUST_MIGRATION_PLAN.md),
+[audit](../docs/performance/PERFORMANCE_AUDIT.md), [measurements](../docs/performance/BENCHMARK_RESULTS.md)
+and [implementation report](../docs/performance/FINAL_PERFORMANCE_REPORT.md)
+describe the v3.2.0-era work. The [ECAPE record](results/2026-10-30-ecape-native.json)
+used native v3.5.0. These are useful historical comparisons, separate from the
+new v3.8.0 reference and from the current Tauri UI.
 
 ## Frontend measurements
+
+After `npm ci` and `npm run build:fixture` in `frontend/`, run the opt-in complete
+GIF measurement through the existing Playwright setup:
+
+```powershell
+$env:SHARPPY_GIF_BENCHMARK_OUT = 'C:/path/to/new-gif-export.json'
+$env:SHARPPY_GIF_BENCHMARK_REPEATS = '5'
+npm run e2e -- e2e/forecast-export-benchmark.spec.ts
+```
+
+It uses the production capture/composition/worker path with fixed offline
+fixtures, measures load, capture and encoding separately, and independently
+decodes all selected frames to check dimensions, delays and looping. It does not
+measure provider downloads or installed desktop performance. The output must be
+a new path. Routine browser tests skip this manual workload. In a Linux Docker
+preview, set `SHARPPY_GIF_BENCHMARK_CHROMIUM` to the installed Chromium executable;
+record `E2E_SWIFTSHADER=1` when using software rendering.
 
 Run `npm run test:performance` from `frontend/` for the SHRF PNG transport
 benchmark. Its `*.benchmark.ts` file is outside routine Vitest discovery;
@@ -26,7 +72,33 @@ Active pytest regression budgets live in
 
 ## Headless sounding renders
 
-`benchmark_rendering.py` measures the real bundled-input renderer in one fresh
+The Rust `sounding_benchmark` example calls the real offscreen renderer from
+an explicit source checkout. It requires matching app and native versions,
+the active Rust backend, and the same Python/NumPy/Qt environment as
+`sharpmod-render`. Build with the active environment's Python. For example,
+from the repository root on Windows:
+
+```powershell
+$env:PYO3_PYTHON = (Get-Command python).Source
+$env:PYTHONPATH = (Join-Path (Split-Path $env:PYO3_PYTHON -Parent) '../Lib/site-packages')
+cargo run --release --locked --manifest-path rust/sharpmod-rs/Cargo.toml --example sounding_benchmark -- `
+  --source-root . --sounding-mode winter --mode uhd --repeat 5 `
+  --power-mode 'Balanced' --output-json benchmarks/results/local/winter-uhd.json
+```
+
+On Linux, include the active environment's `lib/pythonX.Y/site-packages` in
+`PYTHONPATH` when the embedded interpreter cannot discover the virtualenv.
+Use an unchanged v3.8.0 checkout and its matching `sharpmod-rs` wheel for the
+baseline. Run each composition and density in a fresh process with a new
+output filename. It writes raw wall/CPU times, pixel hashes, dimensions, PNG
+sizes, and process memory where available. Repeated decoded pixels must
+match. First renders start in a fresh process with potentially warm OS caches;
+warm samples reuse the already initialized renderer. The measurement covers
+local profile decoding, composition and PNG writing, not network retrieval or
+the interactive desktop bridge.
+
+The existing `benchmark_rendering.py` remains for comparison with older
+Severe-only records. It measures the real bundled-input renderer in one fresh
 process. It records renderer import separately, first/subsequent renders, process
 CPU and native process-memory counters, exact output density/bytes and RGBA
 hashes. Every image is validated and repeats must preserve decoded pixels. The

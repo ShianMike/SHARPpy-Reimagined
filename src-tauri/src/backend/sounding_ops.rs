@@ -16,7 +16,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 
 use crate::backend::router::Router;
-use crate::dto::analysis::{SoundingAnalysis, SoundingTrends};
+use crate::dto::analysis::SoundingAnalysis;
 use crate::dto::checks::check_text;
 use crate::dto::models::{ModelCatalog, ModelStatus};
 use crate::dto::sounding_progress::SoundingProgress;
@@ -29,7 +29,6 @@ use crate::error::{BackendError, BridgeFailure, ErrorCode, ErrorContext, PYTHON_
 pub const OP_MODELS: &str = "get_model_catalog";
 pub const OP_OPEN: &str = "open_sounding";
 pub const OP_ANALYSIS: &str = "get_sounding_analysis";
-pub const OP_TRENDS: &str = "get_sounding_trends";
 pub const OP_RENDER: &str = "render_sounding";
 
 const MODELS_TIMEOUT: Duration = Duration::from_secs(30);
@@ -38,7 +37,6 @@ const OPEN_OBSERVED_TIMEOUT: Duration = Duration::from_secs(90);
 const OPEN_MODEL_TIMEOUT: Duration = Duration::from_secs(300);
 const OPEN_FILE_TIMEOUT: Duration = Duration::from_secs(60);
 const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(60);
-const TRENDS_TIMEOUT: Duration = Duration::from_secs(180);
 const RENDER_TIMEOUT: Duration = Duration::from_secs(200);
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
@@ -282,26 +280,6 @@ impl Router {
             .validate()
             .map_err(|reason| rejected(&context, "soundings.analysis", reason))?;
         Ok(analysis)
-    }
-
-    /// The legacy Trends metrics at every valid time of the sounding's file.
-    pub async fn sounding_trends(&self, sounding_id: &str) -> Result<SoundingTrends, BackendError> {
-        let context = ErrorContext::new(OP_TRENDS, Some(PYTHON_PROVIDER), Some("sounding trends"));
-        if !sounding_id_ok(sounding_id) {
-            return Err(invalid(&context, BAD_ID));
-        }
-        let trends: SoundingTrends = self
-            .call(
-                &context,
-                "soundings.trends",
-                json!({ "sounding_id": sounding_id }),
-                TRENDS_TIMEOUT,
-            )
-            .await?;
-        trends
-            .validate()
-            .map_err(|reason| rejected(&context, "soundings.trends", reason))?;
-        Ok(trends)
     }
 
     /// The edited PNG and normalized hit targets from sharpmod's native viewer.

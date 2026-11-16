@@ -82,6 +82,11 @@ jobs:
           cargo +stable clippy --locked --all-targets --all-features -- -D warnings
           cargo +stable clippy --manifest-path ../weather-core/Cargo.toml --target-dir target --locked --all-targets -- -D warnings
 
+      # The embedded Python tests call public adapters through the installed extension.
+      - name: Build and install extension
+        working-directory: rust/sharpmod-rs
+        run: python -m maturin develop --release --locked
+
       - name: Test all Rust targets on stable
         working-directory: rust/sharpmod-rs
         run: |
@@ -99,10 +104,6 @@ jobs:
         run: >-
           python -m pytest -q sharpmod/tests/test_backend_packaging.py
           -k "native_source_versions or rust_workflow or release_workflow"
-
-      - name: Build and install extension
-        working-directory: rust/sharpmod-rs
-        run: python -m maturin develop --release --locked
 
       - name: Smoke-test Rust backend selection
         env:

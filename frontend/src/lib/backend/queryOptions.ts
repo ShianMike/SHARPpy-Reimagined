@@ -42,7 +42,6 @@ export const mapKeys = {
 /** Per-sounding queries; a sounding's id never changes, so its data never goes stale. */
 export const soundingKeys = {
   analysis: (soundingId: string) => ["soundings", soundingId, "analysis"] as const,
-  trends: (soundingId: string) => ["soundings", soundingId, "trends"] as const,
   image: (soundingId: string, choice: string) => ["soundings", soundingId, "image", choice] as const,
 };
 

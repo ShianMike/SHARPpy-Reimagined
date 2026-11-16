@@ -77,6 +77,7 @@ fn winter_render_keeps_edit_targets_and_severe_render_is_unchanged() {
     Python::attach(|py| -> PyResult<()> {
         let extension = PyModule::import(py, "sharpmod_rs")?;
         register(&extension)?;
+        crate::locator_paths::register(&extension)?;
         // Inspect the actual Qt composition at the mode boundary, before the
         // window is captured and destroyed by the existing renderer.
         let verify_winter = PyCFunction::new_closure(
@@ -194,6 +195,13 @@ fn winter_render_keeps_edit_targets_and_severe_render_is_unchanged() {
                 .get_item("bounds")?;
             let right: f64 = bounds.get_item("right")?.extract()?;
             assert!((0.1..0.7).contains(&right));
+            let locator = metadata.get_item("locatorBounds")?.unwrap();
+            let left: f64 = locator.get_item("left")?.extract()?;
+            let top: f64 = locator.get_item("top")?.extract()?;
+            let right: f64 = locator.get_item("right")?.extract()?;
+            let bottom: f64 = locator.get_item("bottom")?.extract()?;
+            assert!(0.1 < left && left < right && right <= 1.);
+            assert!(0. <= top && top < bottom && bottom <= 1.);
         }
         Ok(())
     })

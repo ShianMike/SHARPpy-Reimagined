@@ -16,6 +16,7 @@ import { LevelReadout } from "./LevelReadout";
 import { QuickUnits } from "../settings/QuickUnits";
 import { SourceSelect } from "./SourceFields";
 import { useSoundingView } from "./useSoundingView";
+import { useSoundingLocator } from "./useSoundingLocator";
 import { replaceValues } from "./viewHistory";
 import styles from "./Viewer.module.css";
 
@@ -35,7 +36,10 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
   const inspectButton = useRef<HTMLButtonElement>(null);
   const gesture = useRef<{ id: string | null; x: number; y: number; left: number; top: number } | null>(null);
   const { image, edit, state, edits, request, busy, ready, update } = useSoundingView(soundingId, choice, quality, timeIndex);
-  const data = image.data;
+  const locatorImage = useSoundingLocator(soundingId, timeIndex, image.data);
+  const data = locatorImage.view;
+  const locator = data?.image !== image.data?.image ? data?.locatorBounds : undefined;
+  const insideLocator = (x: number, y: number): boolean => locator !== undefined && x >= locator.left && x <= locator.right && y >= locator.top && y <= locator.bottom;
   const editedLevels = useMemo(() => {
     const indices = new Set(edits.map((edit) => String(edit.index)));
     return new Set(data?.points.filter((point) => indices.has(point.id.split(":")[1] ?? "") && point.values.some((field) => field.original !== null && field.value !== field.original)).map((point) => point.id.split(":")[1]));
@@ -117,7 +121,9 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
     if (event.button !== 0 || data === undefined || unavailable || viewport.current === null) return;
     const rect = frame.current?.getBoundingClientRect();
     if (rect === undefined) return;
+    if (insideLocator((event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height)) return;
     const nearest = editing ? data.points.reduce<{ id: string | null; distance: number }>((best, point) => {
+      if (insideLocator(point.x, point.y)) return best;
       const distance = Math.hypot(point.x * rect.width + rect.left - event.clientX, point.y * rect.height + rect.top - event.clientY);
       return distance < best.distance ? { id: point.id, distance } : best;
     }, { id: null, distance: 16 }).id : null;
@@ -133,6 +139,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
       const rect = frame.current?.getBoundingClientRect();
       if (rect === undefined || data === undefined || unavailable || editing || event.buttons !== 0) return;
       const x = (event.clientX - rect.left) / rect.width, y = (event.clientY - rect.top) / rect.height;
+      if (insideLocator(x, y)) { setInspected(null); return; }
       const { bounds, levels } = data.inspection;
       const skew = x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
       const nearest = levels.reduce((best, level, index) => {
@@ -221,7 +228,7 @@ export function SoundingImage({ soundingId, choice, title, timeControl, navigati
         </div>
       </details>
       <div className={styles.exportTools}>
-        <SoundingExport view={data} quality={quality} onQualityChange={setQuality} ready={ready} busy={busy}
+        <SoundingExport view={data} quality={quality} onQualityChange={setQuality} ready={ready && !locatorImage.pending} busy={busy || locatorImage.pending}
           filename={title.replace(/[^a-zA-Z0-9_-]+/g, "-") + (mode === "winter" ? "-winter" : "-" + choice) + (timeIndex > 0 ? `-time-${String(timeIndex + 1)}` : "") + (edits.length ? "-edited" : "") + ".png"} />
       </div>
     </div>

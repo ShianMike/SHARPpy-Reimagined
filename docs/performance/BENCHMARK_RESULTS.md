@@ -1,8 +1,8 @@
 # Performance measurements
 
-Status: measured implementation and integration in progress, 2026-10-19.
-Accepted changes and unmodified baselines are distinguished below. v3.2.0
-remains unreleased; these measurements are not release approval.
+Historical checkpoint from 2026-10-19, recorded before v3.2.0 shipped.
+Accepted changes and unmodified baselines are distinguished below. Start at
+the [benchmark index](../../benchmarks/README.md) for current measurements.
 
 ## Environment and evidence
 

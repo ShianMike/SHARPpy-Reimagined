@@ -119,3 +119,13 @@ export function formatValue(value: number): string {
   const text = value.toFixed(magnitude >= 100 ? 0 : magnitude >= 1 ? 1 : 2);
   return /^-0(?:\.0+)?$/u.test(text) ? text.slice(1) : text;
 }
+
+/** Keep neighbouring scale labels distinct, including small values and narrow ranges. */
+export function formatScaleTick(value: number, span: number): string {
+  if (!Number.isFinite(value)) return "—";
+  if (value === 0) return "0";
+  const range = Math.abs(span);
+  const digits = range > 0 && Number.isFinite(range)
+    ? Math.max(3, Math.min(17, 3 + Math.floor(Math.log10(Math.abs(value))) - Math.floor(Math.log10(range)))) : 3;
+  return String(Number(value.toPrecision(digits)));
+}

@@ -53,3 +53,15 @@ it("rejects empty plot bounds and duplicate levels", () => {
   repeated.inspection.levels.push({ ...first });
   expect(() => parseSoundingView(repeated)).toThrow(ContractError);
 });
+
+it("accepts normalized native locator bounds and rejects malformed rectangles", () => {
+  const source = fixture();
+  expect(parseSoundingView(source).locatorBounds).toBeUndefined();
+  const bounds = { left: 0.55, top: 0.01, right: 0.68, bottom: 0.12 };
+  expect(parseSoundingView({ ...source, locatorBounds: bounds }).locatorBounds).toEqual(bounds);
+  const named = { ...bounds, location: "Nowata, Oklahoma" };
+  expect(parseSoundingView({ ...source, locatorBounds: named }).locatorBounds).toEqual(named);
+  expect(() => parseSoundingView({ ...source, locatorBounds: { ...bounds, location: 123 } })).toThrow(ContractError);
+  expect(() => parseSoundingView({ ...source, locatorBounds: { ...bounds, right: 0.5 } })).toThrow(ContractError);
+  expect(() => parseSoundingView({ ...source, locatorBounds: { ...bounds, bottom: 1.1 } })).toThrow(ContractError);
+});

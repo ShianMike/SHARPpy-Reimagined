@@ -12,6 +12,11 @@ export async function checkForUpdates(options: { timeout?: number } = {}): Promi
   return metadata === null ? null : new Update(metadata);
 }
 
+/** Sends encoded GIF bytes as Tauri's binary request body. */
+export function copyForecastGif(bytes: Uint8Array): Promise<void> {
+  return invoke("copy_forecast_gif", bytes);
+}
+
 export function createTransport(): Transport {
   return {
     call: (command, args) => invoke(command, args === undefined ? undefined : { ...args }),

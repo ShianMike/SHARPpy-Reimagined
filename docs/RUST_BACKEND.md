@@ -23,10 +23,8 @@ UWyo sounding decoding and availability, box-mean soundings, threshold
 controls, radar mosaics and satellite processing also use the native extension.
 Build/install `sharpmod_rs` before running the complete source application.
 
-The sounding height charts and height-aligned profile comparison also use
-the native extension. Comparison samples temperature, dewpoint and each wind
-component on the reference heights, preserving masks and the maximum-gap
-rule. Its Python result objects and the CLI commands are unchanged.
+The sounding height charts use the native extension while retaining their
+Python result objects and CLI commands.
 
 IGRA sounding header scans, fixed-width level decoding, humidity-derived
 dewpoints and decreasing-pressure assembly also require Rust. Their thin
@@ -53,6 +51,54 @@ layer bounds and separate masks for each component. Bunkers motion, helicity,
 Corfidi motion and critical angle retain the existing SHARPpy formulas. Profile
 construction and storm-motion edits use this path; source environments without
 the native operation keep the reference implementation.
+
+SharpTab's custom-layer `mean_wind`, `mean_wind_npw` and `helicity` also use
+optional native operations. Standard cached layer results still take precedence.
+Custom pressure means retain the exact requested top, fractional increments,
+separate component masks and storm-motion subtraction. Helicity retains the
+reported interior levels, endpoint interpolation, positive/negative sums and
+the same knots-to-metres-per-second conversion. The existing public tuples and
+masked constants are unchanged.
+
+These operations copy mask-aware, potentially strided/read-only input columns
+before releasing the interpreter. Mean integration streams pressure samples
+through prepared interpolation, without allocating a sampled wind grid. The
+native mean rejects more than one million pressure intervals, matching the
+existing native display-layer safety budget. Other invalid bounds/increments
+keep their missing-value result. Explicit Python science and older compatible
+extensions without these optional operations retain the existing implementation;
+the required backend API version is unchanged.
+
+Portable-sounding physical quality checks use an optional Rust operation after
+the existing archive, dtype, shape and level-count validation. Six owned NumPy
+data snapshots feed the same single-pass core as basic QC. This preserves the
+portable validator's issue order, `-9999`/non-finite missing values and advisory
+dewpoint reports; it does not introduce basic QC's absolute-zero checks into
+the portable format. NumPy `asarray` semantics, including underlying masked-array
+data, strides and read-only arrays, remain unchanged.
+
+Model-cache entry assembly is also optional Rust. It returns the existing
+`CacheEntry` objects with stable newest-first ordering, field coercions, paths,
+pins and protection flags. Malformed optional container metadata and null
+source-field lists no longer stop Storage from loading, including in the
+existing Python fallback. The native path presents non-finite access times as
+zero and non-iterable source fields as empty. It does not rewrite metadata or
+change cache discovery, pruning, filesystem validation or deletion ownership.
+Both adapters retain the existing implementation in explicit Python mode or
+when an older compatible extension lacks the new operation.
+Cache inspection and portable-file physical validation remain available if the
+scientific backend cannot load or its selection is invalid; scientific requests
+retain their normal backend error reporting.
+
+Cache pruning optionally runs its retention decisions in Rust too. It preserves
+stable LRU ordering (including equal signed-zero times), expiration-before-size
+eviction, failed-deletion accounting and the second-pass retry. Filesystem sizes
+are accumulated as integers, including limits above floating-point precision;
+arbitrarily large Python budgets remain valid. The existing cache owner performs
+removal and rechecks active leases immediately beforehand. Timestamp parsing
+preserves otherwise valid pin/provenance metadata and falls back to the metadata
+file's modification time for malformed/non-finite access times. This does not
+make interprocess lease creation and filesystem removal one atomic operation.
 
 ## Backend selection
 
@@ -265,7 +311,8 @@ decimal-digit category, such as Roman numerals and superscripts, remain errors.
 This deliberately mirrors Python `float()` rather than Rust's broader
 `char::is_numeric` predicate.
 
-No Qt, rendering, or forecast downloading has been ported. A Python
+The shared Qt renderer and forecast-source orchestration still use Python
+compatibility layers. A Python
 `AcceleratedConvectiveProfile` keeps SHARPpy's orchestration and public parcel
 objects while delegating its standard parcel/effective-layer searches and
 DCAPE integrations to the backend. The Skew-T user-parcel action delegates its
@@ -292,10 +339,41 @@ profile groups through `profile_batch_analysis`; load failures retain their
 original positions and fall back per profile without discarding successful
 members. The bounded metric cache fingerprints all source columns and rebuilds
 prepared results after either profile replacement or an in-place array edit.
+Its native signature snapshots contiguous data and masks into immutable bytes,
+then computes SHA-256 digests with the interpreter released. Shape, dtype and
+the explicit metrics revision remain part of the signature; absent and opaque
+columns retain their compatibility behavior. The private digest representation
+is process-local cache state, not a persistent artifact or public API.
 Nonstandard layers and any unavailable workspace continue through the existing
 Python routines. Basic QC and simple-row parsing remain
 equivalence-tested APIs without changing the SPC, UWyo, BUFKIT, WRF, or other
 decoder pipelines.
+
+Provider soundings also delegate their verified surface-row merge to Rust.
+The native GRIB decoder shares the same ground-row validation, including the
+0.5 °C saturation tolerance, wind limits and unit conversions. Provider
+columns enter owned buffers before native filtering and assembly release the
+interpreter; returned arrays remain contiguous float64 columns in the existing
+`SurfaceMergeResult`. Below-ground and equal-pressure levels are removed
+without sorting the remaining rows. Explicit Python-science selection and
+environments with an older optional extension retain the existing Python merge.
+
+MMP's maximum bulk-shear reduction also uses owned native wind endpoints.
+It scans the low/upper endpoint pairs without materializing a pair matrix,
+preserving masks and the reference square/sum/square-root overflow behavior.
+Endpoint selection, interpolation, regression coefficients, lapse-rate and
+mean-wind terms retain their existing owners. Python-science selection and
+extensions without this optional operation use the existing reduction.
+
+Ensemble CSV exports also use Rust. The boundary preserves metric order, missing
+fields, and ensemble membership and status rules. Python scalar and timestamp
+formatting retain their existing spelling. Rust writes quoted CSV records in
+batches of at most 64 owned rows while the interpreter is released. It flushes,
+syncs and closes a temporary file beside the destination before replacing the
+export, with cleanup on failure.
+Explicit Python science and older optional extensions retain the existing
+export and fingerprint implementations. No new backend API version is needed
+for these optional operations.
 
 ### Direct GRIB behavior
 
@@ -410,15 +488,16 @@ $env:SHARPMOD_BACKEND = "python"
 python -m pytest sharpmod/tests -k "backend or rust"
 ```
 
-Run the native checks from the crate and then run the equivalence tests with
-Rust required:
+Run the native checks from the crate and install the extension before testing.
+Some Rust tests call the public Python adapters through the installed extension.
+Then run the equivalence tests with Rust required:
 
 ```powershell
 Set-Location rust\sharpmod-rs
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked
 maturin develop --release --locked
+cargo test --locked
 Set-Location ..\..
 
 $env:SHARPMOD_BACKEND = "rust"

@@ -174,11 +174,6 @@ def install_hodo_label_fit(
                         _QtCore.QRectF(left_x, self.centery + offset, width, height)
                     )
 
-                for rect in rects:
-                    try:
-                        qp.fillRect(rect, self.bg_color)
-                    except Exception:
-                        pass
                 qp.setPen(_QtGui.QPen(self.fg_color))
                 for rect in rects:
                     qp.drawText(rect, _QtCore.Qt.AlignCenter, text)
@@ -271,37 +266,11 @@ def install_hodo_label_fit(
                 rm_rect = _QtCore.QRectF(ruu + h_offset, rvv + v_offset, rm_tw, th)
                 lm_rect = _QtCore.QRectF(luu + h_offset, lvv + v_offset, lm_tw, th)
 
-                # A range-ring speed label sits at each marker's on-axis
-                # position, so when a storm-motion vector lands on (or near) an
-                # axis its label crowds that ring number. Mask a region that
-                # extends up-and-left of the label -- toward the marker/axis --
-                # so the colliding ring number is painted over, not just the
-                # text's own footprint.
-                mask_pad_x = 14
-                mask_pad_y = 12
-
-                def _mask_rect(rect):
-                    return _QtCore.QRectF(
-                        rect.x() - mask_pad_x,
-                        rect.y() - mask_pad_y,
-                        rect.width() + mask_pad_x,
-                        rect.height() + mask_pad_y,
-                    )
-
-                # Background fill so labels are readable over the hodo traces
-                # and any range-ring number beneath / beside them.
-                qp.fillRect(_mask_rect(rm_rect), self.bg_color)
-                qp.fillRect(_mask_rect(lm_rect), self.bg_color)
-
                 pen = _QtGui.QPen(self.fg_color)
                 qp.setPen(pen)
                 qp.drawText(rm_rect, _QtCore.Qt.AlignCenter, rm_text)
                 qp.drawText(lm_rect, _QtCore.Qt.AlignCenter, lm_text)
 
-                # The widened mask can paint over the storm-motion marker
-                # circles (drawn earlier); redraw them on top so they survive.
-                qp.drawEllipse(center_rm, 5, 5)
-                qp.drawEllipse(center_lm, 5, 5)
                 occupied = getattr(self, "_sharpmod_hodo_annotation_rects", None)
                 if isinstance(occupied, list):
                     occupied.extend(
@@ -394,7 +363,6 @@ def install_hodo_label_fit(
                     text_rect = _fit_rect_to_hodo(
                         self, _QtCore, _QtCore.QRectF(xx + 2, yy + 5, tw, th)
                     )
-                    qp.fillRect(text_rect, self.bg_color)
                     qp.setPen(_QtGui.QPen(self.fg_color, 1))
                     qp.drawEllipse(_QPointF(xx, yy), 4, 4)
                     qp.drawText(text_rect, _QtCore.Qt.AlignCenter, readout)
@@ -465,9 +433,6 @@ def install_hodo_label_fit(
                 up_rect = _QtCore.QRectF(up_u + h_offset, up_v + v_offset, up_tw, th)
                 dn_rect = _QtCore.QRectF(dn_u + h_offset, dn_v + v_offset, dn_tw, th)
 
-                qp.fillRect(up_rect, self.bg_color)
-                qp.fillRect(dn_rect, self.bg_color)
-
                 pen = _QtGui.QPen(corfidi_color)
                 qp.setPen(pen)
                 qp.drawText(up_rect, _QtCore.Qt.AlignCenter, up_text)
@@ -527,7 +492,6 @@ def install_hodo_label_fit(
                 )
                 mean_color = _semantic_qcolor(self, "orange", override="#B8860B")
 
-                qp.fillRect(text_rect, self.bg_color)
                 qp.setBrush(_QtGui.QBrush(_QtCore.Qt.NoBrush))
                 qp.setPen(_QtGui.QPen(mean_color, 2, _QtCore.Qt.SolidLine))
                 qp.drawRect(marker_rect)

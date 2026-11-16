@@ -1,4 +1,4 @@
-"""Cached profile metrics for trends, comparisons, and ensembles.
+"""Cached metrics for soundings and ensembles.
 
 The GUI features built on this module all ask the same two questions of a
 profile: "what are these scalar parameters?" and "what does its thermodynamic
@@ -7,7 +7,7 @@ two useful properties:
 
 * the expensive composite tier is only evaluated when a requested key needs
   it, and each tier is cached once per unchanged profile; and
-* timeline and ensemble inspection reads ``ProfCollection`` storage directly,
+* ensemble inspection reads ``ProfCollection`` storage directly,
   so gathering data never changes the selected time or highlighted member.
 
 There is deliberately no Qt dependency.  The records are small immutable
@@ -16,30 +16,20 @@ objects which are cheap to build on a worker and safe to hand back to the UI.
 
 from __future__ import annotations
 
-from collections import OrderedDict
 from copy import deepcopy
 import csv
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
-import json
 import math
 import os
 from pathlib import Path
 import tempfile
-import threading
 from types import MappingProxyType
 from typing import Callable, Iterable, Mapping, Sequence
-import weakref
 
 import numpy as np
 
 from sharpmod.analysis import box_analysis
-from sharpmod.analysis.comparison import (
-    ComparisonBasis,
-    ComparisonContext,
-    assess_compatibility,
-    context_for_collection,
-)
 from sharpmod.analysis.ensemble_members import EnsembleAcquisition
 
 
@@ -52,9 +42,8 @@ DEFAULT_METRIC_KEYS = (
 )
 
 # Effective STP normally belongs to the expensive composite tier, but the
-# comparison workspace has a focused implementation that reuses the fast
-# parcel workspace and evaluates only STP. Other composite parameters remain
-# explicitly requested and use the full oracle.
+# summary tier reuses the fast parcel workspace and evaluates only STP. Other
+# composite parameters remain explicitly requested and use the full oracle.
 _SUMMARY_TIER = "summary"
 _SUMMARY_KEYS = frozenset({"stp_cin"})
 
@@ -66,19 +55,6 @@ DEFAULT_PRESSURE_LEVELS = tuple(float(value) for value in range(1000, 99, -25))
 
 class ProfileMetricsError(Exception):
     """A profile or collection could not supply the requested metrics."""
-
-
-@dataclass(frozen=True)
-class MetricSample:
-    """Metrics for one member at one valid time."""
-
-    valid_time: datetime | None
-    member: str | None
-    values: Mapping[str, float | None]
-    available: bool
-    reason: str | None = None
-    outcome: str | None = None
-    _request_key: tuple = field(default=(), repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -127,25 +103,6 @@ def freeze_collection(collection) -> CollectionSnapshot:
         _current_date(collection), _highlighted_member(collection, _profiles_by_member(collection)),
         **flags,
     )
-
-
-@dataclass(frozen=True)
-class ComparisonSample:
-    """One collection's contribution to a valid-time comparison."""
-
-    collection_index: int
-    label: str
-    requested_time: datetime | None
-    valid_time: datetime | None
-    member: str | None
-    values: Mapping[str, float | None]
-    available: bool
-    aligned: bool
-    reason: str | None = None
-    context: ComparisonContext | None = None
-    basis: ComparisonBasis | None = None
-    outcome: str | None = None
-    _request_key: tuple = field(default=(), repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -267,6 +224,9 @@ def _column_signature(profile, name: str) -> tuple[object, ...]:
 
 
 def _profile_signature(profile) -> tuple[object, ...]:
+    native = _native_metric_operation("profile_metric_signature")
+    if native is not None:
+        return native(profile)
     # ``ProfCollection.modify`` replaces the object, but callers can also edit
     # raw arrays in place.  These small soundings are cheap to fingerprint and
     # doing so prevents an apparently valid cache hit after such an edit.
@@ -381,14 +341,6 @@ def _profile_at(profiles: Mapping, member: str | None, index: int):
         return None
 
 
-def _first_profile_at(profiles: Mapping, index: int):
-    for key in profiles:
-        profile = _profile_at(profiles, str(key), index)
-        if profile is not None:
-            return str(key), profile
-    return None, None
-
-
 def _date_index(dates: Sequence[datetime], valid_time: datetime | None):
     if valid_time is None:
         return None
@@ -411,20 +363,6 @@ def _metadata(collection, key: str):
     return None
 
 
-def _collection_label(collection, index: int) -> str:
-    parts = []
-    for key in ("model", "loc"):
-        value = _metadata(collection, key)
-        if value not in (None, ""):
-            parts.append(str(value))
-    run = _metadata(collection, "run")
-    if isinstance(run, datetime):
-        parts.append(run.strftime("%Y-%m-%d %HZ"))
-    elif run not in (None, ""):
-        parts.append(str(run))
-    return " · ".join(parts) if parts else f"Sounding {index + 1}"
-
-
 def _distribution(values: Iterable[object]) -> MetricDistribution:
     import sharpmod_rs
 
@@ -439,194 +377,18 @@ def _interpolate_column(profile, field: str, pressure_levels) -> tuple:
 
 
 
-def _csv_keys(samples, keys) -> tuple[str, ...]:
-    if keys is not None:
-        return _normalize_keys(keys)
-    discovered = []
-    for sample in samples:
-        for key in sample.values:
-            if key not in discovered:
-                discovered.append(key)
-    return tuple(discovered)
+def _native_metric_operation(name):
+    from sharpmod.backends import get_backend
+
+    if get_backend().name == "rust":
+        import sharpmod_rs
+
+        return getattr(sharpmod_rs, name, None)
+    return None
 
 
 def _csv_time(value) -> str:
     return value.isoformat() if isinstance(value, datetime) else ""
-
-
-def export_timeline_csv(
-    path,
-    samples: Iterable[MetricSample],
-    keys: Iterable[str] | str | None = None,
-) -> Path:
-    """Write timeline samples to a stable, spreadsheet-friendly CSV."""
-    samples = tuple(samples)
-    metric_keys = _csv_keys(samples, keys)
-    destination = Path(path)
-    with destination.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(
-            stream,
-            fieldnames=("valid_time", "member", "available", "reason") + metric_keys,
-        )
-        writer.writeheader()
-        for sample in samples:
-            row = {
-                "valid_time": _csv_time(sample.valid_time),
-                "member": sample.member or "",
-                "available": sample.available,
-                "reason": sample.reason or "",
-            }
-            row.update(
-                {
-                    key: "" if sample.values.get(key) is None else sample.values[key]
-                    for key in metric_keys
-                }
-            )
-            writer.writerow(row)
-    return destination
-
-
-def export_timeline_series_csv(
-    path,
-    series: Iterable[tuple[str, Iterable[MetricSample]]],
-    keys: Iterable[str] | str | None = None,
-) -> Path:
-    """Write several labelled timelines to one CSV.
-
-    ``series`` is an iterable of ``(label, samples)``. A leading ``sounding``
-    column names which timeline each row belongs to, which
-    :func:`export_timeline_csv` has no need of; the header therefore describes
-    the data it is given, the same way the metric columns already do.
-    """
-    groups = tuple((str(label), tuple(samples)) for label, samples in series)
-    flattened = tuple(
-        sample for _label, samples in groups for sample in samples
-    )
-    metric_keys = _csv_keys(flattened, keys)
-    destination = Path(path)
-    with destination.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(
-            stream,
-            fieldnames=("sounding", "valid_time", "member", "available", "reason")
-            + metric_keys,
-        )
-        writer.writeheader()
-        for label, samples in groups:
-            for sample in samples:
-                row = {
-                    "sounding": label,
-                    "valid_time": _csv_time(sample.valid_time),
-                    "member": sample.member or "",
-                    "available": sample.available,
-                    "reason": sample.reason or "",
-                }
-                row.update(
-                    {
-                        key: (
-                            ""
-                            if sample.values.get(key) is None
-                            else sample.values[key]
-                        )
-                        for key in metric_keys
-                    }
-                )
-                writer.writerow(row)
-    return destination
-
-
-def export_comparison_csv(
-    path,
-    samples: Iterable[ComparisonSample],
-    keys: Iterable[str] | str | None = None,
-) -> Path:
-    """Write valid-time comparison rows to CSV, retaining mismatch status."""
-    samples = tuple(samples)
-    metric_keys = _csv_keys(samples, keys)
-    destination = Path(path)
-    fields = (
-        "collection_index",
-        "label",
-        "requested_time",
-        "valid_time",
-        "member",
-        "available",
-        "aligned",
-        "reason",
-        "requested_lat",
-        "requested_lon",
-        "selected_lat",
-        "selected_lon",
-        "grid_spacing_km",
-        "terrain_elevation_m",
-        "run_time",
-        "lead_hours",
-        "parcel_convention",
-        "storm_motion_convention",
-        "profile_edited",
-        "location_relation",
-        "compatibility_issues",
-        "incompatible_metrics",
-    ) + metric_keys
-    with destination.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        for sample in samples:
-            context = sample.context
-            basis = sample.basis
-            row = {
-                "collection_index": sample.collection_index,
-                "label": sample.label,
-                "requested_time": _csv_time(sample.requested_time),
-                "valid_time": _csv_time(sample.valid_time),
-                "member": sample.member or "",
-                "available": sample.available,
-                "aligned": sample.aligned,
-                "reason": sample.reason or "",
-                "requested_lat": getattr(context, "requested_lat", None),
-                "requested_lon": getattr(context, "requested_lon", None),
-                "selected_lat": getattr(context, "selected_lat", None),
-                "selected_lon": getattr(context, "selected_lon", None),
-                "grid_spacing_km": getattr(context, "grid_spacing_km", None),
-                "terrain_elevation_m": getattr(
-                    context, "terrain_elevation_m", None
-                ),
-                "run_time": _csv_time(getattr(context, "run_time", None)),
-                "lead_hours": getattr(context, "lead_hours", None),
-                "parcel_convention": getattr(
-                    context, "parcel_convention", None
-                ),
-                "storm_motion_convention": getattr(
-                    context, "storm_motion_convention", None
-                ),
-                "profile_edited": getattr(context, "profile_edited", None),
-                "location_relation": getattr(
-                    basis, "location_relation", "unknown"
-                ),
-                "compatibility_issues": json.dumps(
-                    [
-                        {
-                            "field": issue.field,
-                            "severity": issue.severity,
-                            "message": issue.message,
-                        }
-                        for issue in getattr(basis, "issues", ())
-                    ],
-                    separators=(",", ":"),
-                ),
-                "incompatible_metrics": json.dumps(
-                    dict(getattr(basis, "incompatible_metrics", {})),
-                    separators=(",", ":"),
-                    sort_keys=True,
-                ),
-            }
-            row.update(
-                {
-                    key: "" if sample.values.get(key) is None else sample.values[key]
-                    for key in metric_keys
-                }
-            )
-            writer.writerow(row)
-    return destination
 
 
 def export_ensemble_csv(
@@ -640,6 +402,9 @@ def export_ensemble_csv(
     an unavailable download from a loaded-but-unusable profile; neither state is
     serialized as a zero or a negative threshold outcome.
     """
+    native = _native_metric_operation("export_profile_ensemble_csv")
+    if native is not None:
+        return native(path, summary, acquisition)
 
     if not isinstance(summary, EnsembleSummary):
         raise TypeError("summary must be an EnsembleSummary")
@@ -755,5 +520,5 @@ def export_ensemble_csv(
 
 
 from sharpmod.analysis.profile_metrics_engine import (  # noqa: E402
-    ProfileMetricsEngine
+    ProfileMetricsEngine as ProfileMetricsEngine,
 )

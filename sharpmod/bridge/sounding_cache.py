@@ -46,7 +46,6 @@ class Entry:
     summary: dict[str, Any]
     collection: Any = None
     analysis: dict[str, Any] | None = None
-    trends: dict[str, Any] | None = None
     #: Guards the decoded collection and the computed results.
     lock: threading.Lock = field(default_factory=threading.Lock)
     #: Guards image renders, which never touch the collection, so a slow first

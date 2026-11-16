@@ -115,11 +115,8 @@ def _install_skewt_lapse_rate_label_placement():
     heights it marks, which is the part that carries meaning; only the column
     changes.
 
-    Placement is measured against its neighbours rather than assumed, because
-    the gutter is narrow: between the omega meter's right edge and the
-    effective-inflow column there is roughly 56 px on an 814 px wide plot, and
-    ``10.5 C/km`` alone needs 63 px. The value therefore has to be able to step
-    aside, and the bracket stays put while it does.
+    The height and inflow labels keep their clearance. Omega bars may extend
+    behind the bracket and value without changing their positions.
     """
     try:
         import sharppy.viz.skew as _skew
@@ -161,14 +158,7 @@ def _install_skewt_lapse_rate_label_placement():
                     layout["rect_bot"], layout["rect_top"],
                     layout["rect_esrh"])
 
-                # Preferred: a column of its own, right of the whole
-                # effective-inflow annotation. The gutter has to share a column
-                # with the inflow height labels, and those sit at whatever
-                # height that layer happens to be, so they can come arbitrarily
-                # close to this one -- near enough to read as one smear without
-                # ever strictly overlapping. Right of them there is real room:
-                # 104 to 310 px across panel sizes against the 67 to 85 px this
-                # label needs.
+                # Use the cold-side column next to the inflow labels when it fits.
                 column = _render_api._skewt_left_gutter(self, _QtGui)
                 if blockers:
                     candidate = max(

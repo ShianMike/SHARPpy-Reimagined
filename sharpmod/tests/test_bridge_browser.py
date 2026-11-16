@@ -72,11 +72,6 @@ CASES = [
         "soundings/analysis.example.json",
     ),
     (
-        "get_sounding_trends",
-        "soundings/trends.result.example.json",
-        "soundings/trends.example.json",
-    ),
-    (
         "get_threshold_metrics",
         "soundings/threshold-metrics.result.json",
         "soundings/threshold-metrics.json",

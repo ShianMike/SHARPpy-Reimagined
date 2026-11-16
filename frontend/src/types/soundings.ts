@@ -159,24 +159,6 @@ export interface SoundingAnalysis {
   groups: readonly AnalysisGroup[];
 }
 
-export interface TrendPoint {
-  /** RFC 3339 UTC valid time; null when the file has no date for it. */
-  time: string | null;
-  /** One value per column; null when sharpmod has no value. */
-  values: readonly (number | null)[];
-  /** Why the point has no values, when it has none. */
-  note: string | null;
-}
-
-/** The legacy Trends metrics at every valid time of a forecast file. */
-export interface SoundingTrends {
-  soundingId: string;
-  title: string;
-  columns: readonly TableColumn[];
-  points: readonly TrendPoint[];
-  truncated: boolean;
-}
-
 /** The renderer's ascent choices: sharpmod.rendering.cli.PARCEL_TYPES without USER. */
 export const RENDER_CHOICES = ["SFC", "ML", "FCST", "MU", "EFF"] as const;
 export type RenderChoice = (typeof RENDER_CHOICES)[number];

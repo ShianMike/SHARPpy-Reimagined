@@ -15,7 +15,6 @@ export type CommandName =
   | "get_sounding_progress"
   | "inspect_wrf"
   | "get_sounding_analysis"
-  | "get_sounding_trends"
   | "get_threshold_metrics"
   | "evaluate_threshold"
   | "export_threshold_csv"

@@ -10,10 +10,8 @@ import type {
   SoundingAnalysis,
   SoundingSummary,
   SoundingProgress,
-  SoundingTrends,
   TableColumn,
   TableRow,
-  TrendPoint,
   WrfFile,
 } from "../../types/soundings";
 import { parseBoxSounding } from "./boxSounding";
@@ -236,35 +234,6 @@ export function parseSoundingAnalysis(value: unknown, path = ""): SoundingAnalys
     parcelTable: parseTable(obj.parcelTable, at(path, "parcelTable")),
     motionTable: parseTable(obj.motionTable, at(path, "motionTable")),
     groups: expectArray(obj.groups, at(path, "groups"), parseGroup),
-  };
-}
-
-function parseTrendPoint(columns: number) {
-  return (value: unknown, path: string): TrendPoint => {
-    const obj = expectObject(value, path);
-    expectExactKeys(obj, path, ["time", "values", "note"]);
-    const values = expectArray(obj.values, at(path, "values"), optionalNumber);
-    if (values.length !== columns) {
-      throw new ContractError(at(path, "values"), `expected ${String(columns)} values`);
-    }
-    return {
-      time: expectNullable(obj.time, at(path, "time"), expectTimestamp),
-      values,
-      note: expectNullable(obj.note, at(path, "note"), (v, p) => expectString(v, p, { maxLength: 200 })),
-    };
-  };
-}
-
-export function parseSoundingTrends(value: unknown, path = ""): SoundingTrends {
-  const obj = expectObject(value, path);
-  expectExactKeys(obj, path, ["soundingId", "title", "columns", "points", "truncated"]);
-  const columns = expectArray(obj.columns, at(path, "columns"), parseColumn);
-  return {
-    soundingId: expectString(obj.soundingId, at(path, "soundingId"), { minLength: 1, maxLength: 64 }),
-    title: label(obj.title, at(path, "title")),
-    columns,
-    points: expectArray(obj.points, at(path, "points"), parseTrendPoint(columns.length)),
-    truncated: expectBoolean(obj.truncated, at(path, "truncated")),
   };
 }
 

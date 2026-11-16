@@ -19,7 +19,6 @@ import renderExampleUrl from "@contracts/public/soundings/render.example.png?url
 import viewExample from "@contracts/public/soundings/view.example.json";
 import soundingSummary from "@contracts/public/soundings/summary.example.json";
 import multiTimeSummary from "@contracts/public/soundings/summary.multi-time.json";
-import soundingTrends from "@contracts/public/soundings/trends.example.json";
 import fieldUnavailable from "@contracts/public/errors/FIELD_UNAVAILABLE.json";
 import overlayFailed from "@contracts/public/errors/OVERLAY_FETCH_FAILED.json";
 import stationListUnavailable from "@contracts/public/errors/STATION_LIST_UNAVAILABLE.json";
@@ -240,8 +239,6 @@ export function createTransport(scenarioParam: string | null = scenarioFromLocat
     inspect_wrf: (args) => Promise.resolve({ filePath: args?.filePath, fileName: "wrfout_d01.nc", times: ["2026-06-25T06:00:00Z", "2026-06-25T07:00:00Z"], latitude: 35, longitude: -97 }),
     get_sounding_analysis: (args) =>
       Promise.resolve({ ...(copy(soundingAnalysis) as Record<string, unknown>), soundingId: args?.soundingId }),
-    get_sounding_trends: (args) =>
-      Promise.resolve({ ...(copy(soundingTrends) as Record<string, unknown>), soundingId: args?.soundingId }),
     get_threshold_metrics: () => Promise.resolve(copy(thresholdMetricsFixture)),
     evaluate_threshold: (args) => Promise.resolve(thresholdFor(args)),
     export_threshold_csv: () => Promise.resolve(copy(thresholdCsvFixture)),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import errno
 import json
+import math
 import os
 import shutil
 import stat
@@ -369,9 +370,11 @@ class ModelDiskCache:
         except OSError:
             return False
 
-    @staticmethod
-    def _remove_tree(directory: Path) -> bool:
+    @classmethod
+    def _remove_tree(cls, directory: Path) -> bool:
         """Remove one entry and report the filesystem result truthfully."""
+        if cls._is_protected(directory):
+            return False
         try:
             shutil.rmtree(directory)
         except FileNotFoundError:
@@ -417,10 +420,14 @@ class ModelDiskCache:
                 payload = json.loads(metadata.read_text(encoding="utf-8"))
                 if not isinstance(payload, dict):
                     payload = {}
-                accessed = float(payload.get("accessed", info.st_mtime))
             except (OSError, ValueError, TypeError):
                 payload = {}
-                accessed = 0.0
+            try:
+                accessed = float(payload.get("accessed", info.st_mtime))
+            except (ValueError, TypeError, OverflowError):
+                accessed = info.st_mtime
+            if not math.isfinite(accessed):
+                accessed = info.st_mtime
             files = self._entry_files(directory)
             payload_files = self._payload_files(directory, files)
             try:
@@ -450,6 +457,16 @@ class ModelDiskCache:
     def entries(self) -> list[CacheEntry]:
         """Return newest-first cache metadata without exposing partial files."""
         with self._lock:
+            from sharpmod import backends
+            try:
+                use_rust = backends.get_backend().name == "rust"
+            except (backends.BackendUnavailableError, ValueError):
+                use_rust = False
+            if use_rust:
+                import sharpmod_rs
+                native = getattr(sharpmod_rs, "model_cache_entries", None)
+                if native is not None:
+                    return native(self._entries())
             raw = sorted(
                 self._entries(), key=lambda item: item["accessed"], reverse=True
             )
@@ -471,23 +488,23 @@ class ModelDiskCache:
                 fxx=fxx,
                 member=(
                     str(payload["member"])
-                    if payload.get("member") not in {None, ""} else None
+                    if payload.get("member") not in (None, "") else None
                 ),
                 spatial=(
                     str(payload["spatial"])
-                    if payload.get("spatial") not in {None, ""} else None
+                    if payload.get("spatial") not in (None, "") else None
                 ),
                 source_url=(
                     str(payload["source_url"])
-                    if payload.get("source_url") not in {None, ""} else None
+                    if payload.get("source_url") not in (None, "") else None
                 ),
                 source_transport=(
                     str(payload["source_transport"])
-                    if payload.get("source_transport") not in {None, ""}
+                    if payload.get("source_transport") not in (None, "")
                     else None
                 ),
                 source_fields=tuple(
-                    str(value) for value in payload.get("source_fields", ())
+                    str(value) for value in (payload.get("source_fields", ()) or ())
                 ),
                 accessed=item["accessed"],
                 size=item["size"],
@@ -571,6 +588,16 @@ class ModelDiskCache:
         cutoff = now - self.max_age_hours * 3600.0
         removed: list[Path] = []
         with self._lock:
+            from sharpmod import backends
+            try:
+                use_rust = backends.get_backend().name == "rust"
+            except (backends.BackendUnavailableError, ValueError):
+                use_rust = False
+            if use_rust:
+                import sharpmod_rs
+                native = getattr(sharpmod_rs, "prune_model_cache", None)
+                if native is not None:
+                    return native(self, cutoff)
             entries = sorted(self._entries(), key=lambda item: item["accessed"])
             kept = []
             for entry in entries:

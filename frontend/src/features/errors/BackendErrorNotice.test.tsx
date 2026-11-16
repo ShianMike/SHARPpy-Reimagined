@@ -120,7 +120,6 @@ describe("BackendErrorNotice", () => {
     ["get_model_status", "Model availability unknown"],
     ["get_sounding_progress", "Download progress unavailable"],
     ["inspect_wrf", "WRF file could not be read"],
-    ["get_sounding_trends", "Sounding trends unavailable"],
     ["render_sounding_view", "Sounding image unavailable"],
     ["get_radar_sites", "Radar sites unavailable"],
     ["get_radar_site_frame", "Radar image unavailable"],

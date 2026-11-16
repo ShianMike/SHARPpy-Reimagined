@@ -1,6 +1,6 @@
 //! Sounding and forecast-model commands.
 
-use crate::dto::analysis::{SoundingAnalysis, SoundingTrends};
+use crate::dto::analysis::SoundingAnalysis;
 use crate::dto::models::{ModelCatalog, ModelStatus};
 use crate::dto::sounding_progress::SoundingProgress;
 use crate::dto::soundings::{
@@ -71,15 +71,6 @@ pub async fn get_sounding_analysis(
     sounding_id: String,
 ) -> Result<SoundingAnalysis, BackendError> {
     state.router.sounding_analysis(&sounding_id).await
-}
-
-/// The Trends metrics at every valid time of an open sounding's file.
-#[tauri::command]
-pub async fn get_sounding_trends(
-    state: tauri::State<'_, AppState>,
-    sounding_id: String,
-) -> Result<SoundingTrends, BackendError> {
-    state.router.sounding_trends(&sounding_id).await
 }
 
 /// The sounding image of an open sounding, as raw PNG bytes (an ArrayBuffer in JS).

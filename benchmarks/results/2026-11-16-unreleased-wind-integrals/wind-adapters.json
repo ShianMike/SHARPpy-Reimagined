@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "measuredDate": "2026-11-16",
+  "status": "local-unreleased",
+  "source": {
+    "baseCommit": "e673eae13a527d0d2f5978c4b813c486e6205099",
+    "branch": "work/forecast-export-locator",
+    "dirty": true,
+    "applicationVersion": "3.8.1",
+    "nativeVersion": "3.8.1",
+    "fileSha256": {
+      "rust/sharpmod-rs/src/wind_integrals.rs": "5d336987ff587607d10dbbf5dc3c620810888f566e1d360d6267c94c931160be",
+      "rust/sharpmod-rs/src/wind_integral_bindings.rs": "b8908798622afb5fdc259f5a5df48f85b53602ef5dd75a16b7b2c452fad7d46e",
+      "rust/sharpmod-rs/src/wind_integrals/tests.rs": "ae0d30d092d2e1a2d4b61a632a5fcd7a94abd903b0c6a43bc01de8b7de5517fa",
+      "sharpmod/sharptab/winds.py": "79a4f5f07a7e6aef398f64a26a8615b1ef58521e9c8ebc2a02a11dd73addc089"
+    }
+  },
+  "environment": {
+    "platform": "Linux Docker in SHARPpyBuilder WSL",
+    "cpuLimit": 4,
+    "memoryGiB": 6,
+    "python": "3.11.18 (main, Nov  5 2026, 08:03:00) [GCC 12.2.0]",
+    "numpy": "2.4.6",
+    "nativePackage": "/opt/venv/lib/python3.11/site-packages/sharpmod_rs/__init__.py",
+    "nativeBuild": "release",
+    "backend": "rust",
+    "hostCpu": "12th Gen Intel(R) Core(TM) i5-1235U",
+    "hostLogicalProcessors": 12,
+    "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)"
+  },
+  "method": {
+    "profileLevels": 128,
+    "iterationsPerRepeat": 1000,
+    "repeats": 7,
+    "statistic": "median",
+    "order": "alternating reference/native",
+    "reference": "same public adapter with the optional custom wind operation disabled; existing Rust interpolation remains active",
+    "driver": "wind_integrals::tests::measure_public_wind_adapters",
+    "scope": "warm custom-layer calls; excludes provider I/O, application startup, rendering and standard cached layers"
+  },
+  "results": [
+    {
+      "operation": "weighted_mean",
+      "referenceMedianUs": 410.940717,
+      "nativeMedianUs": 126.49945000000001,
+      "speedup": 3.2485573415536586
+    },
+    {
+      "operation": "unweighted_mean",
+      "referenceMedianUs": 239.78989800000002,
+      "nativeMedianUs": 104.438445,
+      "speedup": 2.295992610767041
+    },
+    {
+      "operation": "custom_helicity",
+      "referenceMedianUs": 364.2665319999999,
+      "nativeMedianUs": 87.059981,
+      "speedup": 4.184086968730213
+    }
+  ],
+  "samples": [
+    {
+      "native_us": [
+        140.461034,
+        133.902498,
+        126.58969599999999,
+        111.765783,
+        122.420023,
+        126.49945000000001,
+        99.57586599999999
+      ],
+      "operation": "weighted_mean",
+      "reference_us": [
+        564.628532,
+        493.466138,
+        353.40321400000005,
+        417.288909,
+        357.22979100000003,
+        410.940717,
+        317.459909
+      ]
+    },
+    {
+      "native_us": [
+        112.782221,
+        102.270354,
+        104.438445,
+        109.75148399999999,
+        100.106112,
+        98.948332,
+        105.849547
+      ],
+      "operation": "unweighted_mean",
+      "reference_us": [
+        241.84724599999998,
+        227.521301,
+        239.78989800000002,
+        247.490905,
+        224.45666,
+        237.61468599999998,
+        252.993847
+      ]
+    },
+    {
+      "native_us": [
+        87.059981,
+        84.99459199999998,
+        83.35786900000001,
+        87.854184,
+        82.219614,
+        87.346413,
+        101.16800300000001
+      ],
+      "operation": "custom_helicity",
+      "reference_us": [
+        347.396892,
+        364.2665319999999,
+        331.821693,
+        351.95964899999996,
+        376.937124,
+        422.88948100000005,
+        459.915686
+      ]
+    }
+  ]
+}

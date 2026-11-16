@@ -49,7 +49,6 @@ export function scriptedTransport(replies: Partial<Record<CommandName, ScriptedR
     get_sounding_progress: 0,
     inspect_wrf: 0,
     get_sounding_analysis: 0,
-    get_sounding_trends: 0,
     get_threshold_metrics: 0,
     evaluate_threshold: 0,
     export_threshold_csv: 0,

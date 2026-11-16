@@ -1,0 +1,128 @@
+{
+  "application_version": "3.8.0",
+  "backend": {
+    "active_backend": "rust",
+    "fallback_reason": null,
+    "requested_backend": "rust",
+    "rust_installed": true,
+    "rust_version": "3.8.0"
+  },
+  "correctness": {
+    "all_pngs_decode": true,
+    "repeat_pixels_equal": true
+  },
+  "dependencies": {
+    "Pillow": "13.0.0",
+    "PySide6": "6.11.2",
+    "QtPy": "2.4.3",
+    "eccodes": "2.50.1",
+    "metpy": "1.7.1",
+    "numpy": "2.4.6"
+  },
+  "environment": {
+    "QT_QPA_PLATFORM": "offscreen",
+    "RAYON_NUM_THREADS": "4",
+    "SHARPMOD_BACKEND": "rust"
+  },
+  "fixture": {
+    "path": "examples/soundings/hrrr_point_36.68N_95.66W_f018.npz",
+    "sha256": "a0067c6e19b9608160c7786170102d8ff98298fb2df32a4b61731ad26cfe302c"
+  },
+  "image_mode": "uhd",
+  "import_cpu_seconds": 1.265037728,
+  "import_seconds": 0.856203345,
+  "machine": {
+    "arch": "x86_64",
+    "available_parallelism": 4,
+    "build": "release",
+    "cgroup_cpu_max": "400000 100000",
+    "cgroup_memory_max": "6442450944",
+    "cpu": "12th Gen Intel(R) Core(TM) i5-1235U",
+    "os": "linux",
+    "power_mode": "Windows Balanced; WSL2 Docker 4 CPU, 6 GiB",
+    "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)\nbinary: rustc\ncommit-hash: 1159e78c4747b02ef996e55082b704c09b970588\ncommit-date: 2025-09-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.90.0\nLLVM version: 20.1.8"
+  },
+  "measured_at_unix_seconds": 1794754658,
+  "native_sha256": "c790a0fb15ccdd4b07e2343cbf4a4b015a4313d8b0793e5931999d99a3d4615d",
+  "native_version": "3.8.0",
+  "python": "3.11.18 (main, Nov  5 2026, 08:03:00) [GCC 12.2.0]",
+  "repeat": 5,
+  "samples": [
+    {
+      "cpu_seconds": 3.110370764,
+      "elapsed_seconds": 3.087797777,
+      "height": 3077,
+      "index": 0,
+      "peak_working_set_bytes": 475082752,
+      "png_bytes": 1706838,
+      "private_bytes": null,
+      "rgba_sha256": "66896c798df869868e0b9073f15c4ae180ec4d52f6e67c510eb8d62eff3f48ec",
+      "state": "first",
+      "width": 4564,
+      "working_set_bytes": 419041280
+    },
+    {
+      "cpu_seconds": 2.8245760540000004,
+      "elapsed_seconds": 2.800679728,
+      "height": 3077,
+      "index": 1,
+      "peak_working_set_bytes": 670834688,
+      "png_bytes": 1706838,
+      "private_bytes": null,
+      "rgba_sha256": "66896c798df869868e0b9073f15c4ae180ec4d52f6e67c510eb8d62eff3f48ec",
+      "state": "warm",
+      "width": 4564,
+      "working_set_bytes": 614719488
+    },
+    {
+      "cpu_seconds": 2.8263956720000003,
+      "elapsed_seconds": 2.800409352,
+      "height": 3077,
+      "index": 2,
+      "peak_working_set_bytes": 851959808,
+      "png_bytes": 1706838,
+      "private_bytes": null,
+      "rgba_sha256": "66896c798df869868e0b9073f15c4ae180ec4d52f6e67c510eb8d62eff3f48ec",
+      "state": "warm",
+      "width": 4564,
+      "working_set_bytes": 795877376
+    },
+    {
+      "cpu_seconds": 2.6983808410000005,
+      "elapsed_seconds": 2.676210611,
+      "height": 3077,
+      "index": 3,
+      "peak_working_set_bytes": 964304896,
+      "png_bytes": 1706838,
+      "private_bytes": null,
+      "rgba_sha256": "66896c798df869868e0b9073f15c4ae180ec4d52f6e67c510eb8d62eff3f48ec",
+      "state": "warm",
+      "width": 4564,
+      "working_set_bytes": 931143680
+    },
+    {
+      "cpu_seconds": 3.398896819000001,
+      "elapsed_seconds": 3.35871025,
+      "height": 3077,
+      "index": 4,
+      "peak_working_set_bytes": 964304896,
+      "png_bytes": 1706838,
+      "private_bytes": null,
+      "rgba_sha256": "66896c798df869868e0b9073f15c4ae180ec4d52f6e67c510eb8d62eff3f48ec",
+      "state": "warm",
+      "width": 4564,
+      "working_set_bytes": 931143680
+    }
+  ],
+  "schema_version": 1,
+  "scope": "Complete cli.render in one fresh process: first render and subsequent calls, including Qt composition, PNG encoding and cleanup. Imports and validation are outside render samples. No provider network or reboot-cold claim. Memory is cumulative process high-water RSS, not per-render allocation or GPU memory.",
+  "sounding_mode": "winter",
+  "source": {
+    "dirty": false,
+    "revision": "f518ccf56fb4bfd6787f094465abcfec4cc21531",
+    "status": [],
+    "tree": "354a94bcf7d4493f33924cea0c497ef00fb8f52d"
+  },
+  "warm_median_seconds": 2.8005445399999997,
+  "workload": "complete-headless-sounding-render"
+}

@@ -29,6 +29,8 @@ class _Recorder:
     def drawRect(self, *args):  # noqa: N802 - Qt API name
         self.rects.append(args)
 
+    fillRect = drawRect
+
     def drawText(self, *args):  # noqa: N802 - Qt API name
         self.texts.append(str(args[-1]))
 
@@ -91,19 +93,19 @@ def mounted(qt_app, tmp_path):
 
 
 def test_storm_motion_labels_paint_no_plate(mounted, qt_app):
-    """``drawSMV`` positions RM/LM with rects it means to be invisible.
-
-    Upstream tries to hide them with an alpha-zero pen but never clears the
-    brush, so they were filled by whatever brush the previous call left active.
-    """
+    """The motion and mean-wind labels leave plot lines visible."""
     hodo = mounted.hodo
+    for draw, labels in ((hodo.drawSMV, ("RM", "LM")),
+                         (hodo.drawCorfidi, ("UP=", "DN="))):
+        recorder = _Recorder()
+        draw(recorder)
+        assert recorder.rects == []
+        assert all(any(label in text for text in recorder.texts)
+                   for label in labels)
     recorder = _Recorder()
-
-    type(hodo).drawSMV(hodo, recorder)
-
-    assert recorder.rects == []
-    assert any("RM" in text for text in recorder.texts)
-    assert any("LM" in text for text in recorder.texts)
+    hodo.drawLCLtoEL_MW(recorder)
+    assert len(recorder.rects) == 1  # the wind marker outline
+    assert len(recorder.texts) == 1
 
 
 def test_storm_motion_draw_restores_the_background_alpha(mounted, qt_app):

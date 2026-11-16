@@ -58,13 +58,13 @@ pub fn invoke_handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         commands::backend::cancel_request,
         commands::backend::get_storage_usage,
         commands::backend::clear_cache,
+        commands::clipboard::copy_forecast_gif,
         commands::soundings::get_model_catalog,
         commands::soundings::get_model_status,
         commands::soundings::open_sounding,
         commands::soundings::get_sounding_progress,
         commands::soundings::inspect_wrf,
         commands::soundings::get_sounding_analysis,
-        commands::soundings::get_sounding_trends,
         commands::soundings::get_threshold_metrics,
         commands::soundings::evaluate_threshold,
         commands::soundings::export_threshold_csv,
@@ -146,6 +146,7 @@ pub fn run() {
             let supervisor = state.router.supervisor().clone();
             let router = Arc::clone(&state.router);
             app.manage(state);
+            commands::clipboard::cleanup_on_startup(app.handle());
             log::info!("{PRODUCT_NAME} {} starting", app.package_info().version);
             supervisor.start();
             if let Some((output, sample)) = diagnostic {

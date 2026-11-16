@@ -9,12 +9,14 @@
 import { defineConfig } from "@playwright/test";
 
 const swiftshader = process.env.E2E_SWIFTSHADER === "1";
+const gifBenchmark = process.env.SHARPPY_GIF_BENCHMARK_OUT !== undefined;
+const benchmarkChromium = gifBenchmark ? process.env.SHARPPY_GIF_BENCHMARK_CHROMIUM : undefined;
 
 export default defineConfig({
   testDir: "e2e",
   // The desktop harness connects to the real app; playwright.desktop.config.ts runs it.
   // Anchored at e2e/: a bare "desktop/**" also matches a Desktop folder in the checkout path.
-  testIgnore: ["**/e2e/desktop/**"],
+  testIgnore: ["**/e2e/desktop/**", ...(gifBenchmark ? [] : ["**/e2e/forecast-export-benchmark.spec.ts"])],
   outputDir: "test-results",
   // Balance individual tests across CI machines; one browser per machine avoids GPU contention.
   fullyParallel: true,
@@ -25,13 +27,14 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   use: {
     baseURL: "http://127.0.0.1:4173",
-    channel: "msedge",
+    ...(benchmarkChromium === undefined ? { channel: "msedge" } : {}),
     headless: true,
     // Keep DOM/network diagnostics without continuous GPU readbacks during map animation.
-    trace: { mode: "retain-on-failure", screenshots: false },
+    trace: gifBenchmark ? "off" : { mode: "retain-on-failure", screenshots: false },
     screenshot: "only-on-failure",
     viewport: { width: 1440, height: 900 },
-    launchOptions: { args: swiftshader ? ["--enable-unsafe-swiftshader"] : [] },
+    launchOptions: { args: swiftshader ? ["--enable-unsafe-swiftshader"] : [],
+      ...(benchmarkChromium === undefined ? {} : { executablePath: benchmarkChromium }) },
   },
   webServer: {
     command: "npm run preview:fixture",

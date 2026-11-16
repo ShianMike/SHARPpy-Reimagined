@@ -13,7 +13,7 @@ vi.mock("../runtime/MapRuntime", () => ({ MapRuntime: class {
   constructor(container: HTMLElement) { const canvas = document.createElement("canvas"); canvas.tabIndex = 0; container.append(canvas); }
   dispose() {}
 } }));
-vi.mock("../panelScene", () => ({ usePanelScene: () => ({ blocked: "hidden", issues: [], retry: vi.fn() }) }));
+vi.mock("../panelScene", () => ({ usePanelScene: () => ({ blocked: "hidden", request: null, product: null, frame: { data: undefined }, issues: [], retry: vi.fn() }) }));
 vi.mock("../controls/ParameterScale", () => ({ ParameterScale: () => null }));
 vi.mock("../hover/FieldTooltip", () => ({ FieldTooltip: () => null }));
 

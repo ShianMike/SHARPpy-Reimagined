@@ -21,6 +21,8 @@ export interface SoundingView {
   edits: ViewEdit[];
   points: ViewPoint[];
   inspection: { bounds: { left: number; top: number; right: number; bottom: number }; levels: InspectionLevel[] };
+  /** Normalized native inset bounds and the resolved sounding location, when available. */
+  locatorBounds?: { left: number; top: number; right: number; bottom: number; location?: string };
   selection: Required<ViewOptions>;
   options: { key: keyof ViewOptions; label: string; choices: { key: string; label: string }[] }[];
 }

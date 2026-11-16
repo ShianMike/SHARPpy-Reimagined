@@ -175,9 +175,10 @@ workspace theme and applies to the interactive view and exported images.
 6. Use the small eye control beneath a panel's colour range to switch its
    model layer on or off. Other overlay visibility is controlled separately.
 
-Use **Export forecast GIF**, beside the Smooth/Fast button, to export the active
+Use **Export forecast**, beside the Smooth/Fast button, to export the active
 panel's selected model parameter. Its model layer must be on. Choose individual
-forecast hours, an output size (960 × 540, 1280 × 720, or 1920 × 1080), and the
+forecast hours, an output size (1280 × 720, 1920 × 1080, 2560 × 1440, or
+3840 × 2160), and the
 time each hour stays on screen, then choose **Create GIF**. Every selected hour
 loads and is checked before capture starts. Export stops if an hour or parameter
 is unavailable, rather than silently omitting it.
@@ -191,7 +192,17 @@ source credits. Preview the completed animation and choose **Save GIF**. Cancel
 at any stage to stop; the original forecast hour and pixel setting are restored.
 The app limits both stored PNG frames and the completed GIF to 128 MiB each;
 choose fewer hours or a smaller size if that limit is reached. GIF supports at
-most 256 colors.
+most 256 colors; a shared palette samples every selected frame and the parameter
+color ramp, keeping stationary colors consistent throughout the animation.
+
+Choose **Create PNG** to capture the currently displayed forecast hour as a
+lossless image at the selected resolution. PNG does not require selecting GIF
+hours. Choose **Save PNG** or **Copy PNG** after it finishes.
+
+Choose **Copy GIF** after an animation finishes to copy the encoded GIF. The
+Windows app offers GIF bytes and a file-paste entry, with a 16 MiB copy limit.
+Browsers must support writing the GIF clipboard format; otherwise use
+**Save GIF**. The receiving application determines whether a paste stays animated.
 
 The forecast and sounding pickers omit retired **NAM** (including NAM 3 km),
 **SREF**, **HREF**, and **HiResW** models. **RRFS** and the offered **REFS**
@@ -317,8 +328,17 @@ NetCDF backend. The CLI equivalent is [`wrf-extract`](#4-wrf-arw-model-output-wr
 
 ### Inspect, edit, and save a sounding
 
-The viewer displays the native Skew-T, hodograph, and scientific panels. The
-old locator-map inset is removed from the v3 sounding image.
+The viewer displays the native Skew-T, hodograph, and scientific panels. When
+the sounding location is visible in Model Viewer, the image can include a
+locator captured from that map. It retains the OpenStreetMap-based basemap,
+displayed layers, location marker and parameter scale. The locator shows a
+4× closer crop around the sounding point. The map fills the inset
+without tiny title/time or attribution bands. The locator also appears in saved
+and copied sounding PNGs.
+Hidden model fields produce a basemap locator without a parameter legend.
+Mismatched model runs or valid times, off-screen locations and unavailable map
+captures leave the original sounding image usable. Live Tracking locators are
+not included.
 
 Choose **Severe** or **Winter** above **Profile** in Sounding
 controls. Both modes use the same image dimensions and compact forecast/version

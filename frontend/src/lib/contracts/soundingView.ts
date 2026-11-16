@@ -42,15 +42,24 @@ export function parseViewEdits(value: unknown, path: string): ViewEdit[] {
 
 export function parseSoundingView(value: unknown): SoundingView {
   const obj = expectObject(value, "view");
-  expectExactKeys(obj, "view", ["image", "width", "height", "points", "edits", "options", "selection", "inspection"]);
+  expectExactKeys(obj, "view", ["image", "width", "height", "points", "edits", "options", "selection", "inspection"], ["locatorBounds"]);
   const encoded = expectString(obj.image, "image", { maxLength: 8 * 1024 * 1024 });
   const selection = expectObject(obj.selection, "selection");
+  const rawLocator = obj.locatorBounds === undefined ? null : expectObject(obj.locatorBounds, "locatorBounds");
+  const locatorBounds = rawLocator === null ? undefined : {
+    left: coordinate(rawLocator.left, "locatorBounds.left"), top: coordinate(rawLocator.top, "locatorBounds.top"),
+    right: coordinate(rawLocator.right, "locatorBounds.right"), bottom: coordinate(rawLocator.bottom, "locatorBounds.bottom"),
+    ...(rawLocator.location === undefined ? {} : { location: expectString(rawLocator.location, "locatorBounds.location", { minLength: 1, maxLength: 280 }) }),
+  };
+  if (locatorBounds !== undefined && (locatorBounds.left >= locatorBounds.right || locatorBounds.top >= locatorBounds.bottom))
+    throw new ContractError("locatorBounds", "must contain an inset area");
   return {
     image: parsePng(Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0))),
     width: expectInteger(obj.width, "width", { min: 1, max: 20000 }),
     height: expectInteger(obj.height, "height", { min: 1, max: 20000 }),
     edits: parseViewEdits(obj.edits, "edits"),
     inspection: parseInspection(obj.inspection),
+    ...(locatorBounds === undefined ? {} : { locatorBounds }),
     selection: { chart: text(selection.chart, "selection.chart"), panel: text(selection.panel, "selection.panel") },
     points: expectArray(obj.points, "points", (value, path) => {
       const point = expectObject(value, path);

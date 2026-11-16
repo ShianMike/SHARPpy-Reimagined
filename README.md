@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.8.1
+# SHARPpy Reimagined · v3.8.2
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,16 +10,24 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v381---2026-11-15)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v382---2026-11-16)
 
 </div>
 
-## What's new in 3.8.1
+## What's new in 3.8.2
 
-- **Winter rendering repair:** the Windows package now includes the SVG modules
-  needed to draw Winter soundings and export HD/UHD PNGs.
-- **Hodograph rings:** Severe and Winter include speed rings through 200 kt,
-  retaining the current zoom and centering controls.
+- **Forecast exports:** save or copy a lossless PNG of the current hour. Export
+  selected hours as a looping GIF with a shared color palette and up to UHD
+  resolution. Copy supported GIFs directly in the Windows app.
+- **Named sounding locators:** the inset shows the displayed map layers and
+  scale, zoomed around the sounding point. Its place name sits in the header,
+  and the same map is included in the displayed and saved image.
+- **Clearer sounding annotations:** hodograph labels leave the wind trace
+  visible, and omega bars can cross the inflow and lapse-rate annotations
+  without moving them. Winter diagnostic labels and spacing are more consistent.
+- **Rust and cache updates:** wind calculations, model cache handling and
+  Ensemble CSV exports use native code. Failed exports preserve any existing
+  file, and cache cleanup respects active use and pinned entries.
 
 ## Sounding and forecast tools
 
@@ -31,8 +39,8 @@
 - **Sounding images for other apps:** the headless renderer exports Severe and
   Winter PNGs, with an optional JSON result for scripts and services. See the
   [integration guide](docs/SOUNDING_IMAGE_INTEGRATION.md).
-- **More Rust calculations:** height charts and sounding profile comparisons
-  use native kernels through the existing interfaces.
+- **More Rust calculations:** sounding height charts use native kernels through
+  the existing interfaces.
 - **Temporary-file recovery:** desktop shutdown retries locked session files,
   and a later launch recovers owned session files left by a process crash.
 - **Dependency updates:** includes ecCodes 2.50.1, Ruff 0.17.4 and the

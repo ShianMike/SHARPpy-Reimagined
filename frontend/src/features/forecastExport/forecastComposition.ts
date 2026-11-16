@@ -1,6 +1,6 @@
 import type { FieldFrame, FieldProduct } from "../../types/map";
 import { convertUnit, displayUnit, type UnitPreferences } from "../../lib/displayUnits";
-import { buildLut, LUT_SIZE, paletteRange } from "../../map/field/colourize";
+import { buildLut, formatScaleTick, LUT_SIZE, paletteRange } from "../../map/field/colourize";
 import { compactUtc, forecastLabel } from "../sounding/soundingTime";
 
 export interface CapturedForecast {
@@ -76,10 +76,11 @@ export function composeForecast(canvas: HTMLCanvasElement, captured: CapturedFor
   context.strokeText(unit || (product.palette.units === "flag" ? "Present" : "Unitless"), width - padding, top, legendWidth);
   context.fillText(unit || (product.palette.units === "flag" ? "Present" : "Unitless"), width - padding, top, legendWidth);
   const { low, high } = paletteRange(product.palette);
+  const span = convertUnit(high, product.palette.units, unit, product.palette.display) - convertUnit(low, product.palette.units, unit, product.palette.display);
   context.textBaseline = "middle";
   for (const fraction of product.palette.units === "flag" ? [1, 0] : [1, 0.75, 0.5, 0.25, 0]) {
     const value = convertUnit(low + fraction * (high - low), product.palette.units, unit, product.palette.display);
-    const text = product.palette.units === "flag" ? fraction === 1 ? "Present" : "Absent" : String(Math.round(value));
+    const text = product.palette.units === "flag" ? fraction === 1 ? "Present" : "Absent" : formatScaleTick(value, span);
     context.strokeText(text, rampLeft - 8 * scale, rampTop + (1 - fraction) * rampHeight);
     context.fillText(text, rampLeft - 8 * scale, rampTop + (1 - fraction) * rampHeight);
   }

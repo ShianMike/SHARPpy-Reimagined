@@ -1,0 +1,489 @@
+{
+  "schema_version": 1,
+  "workload": "forecast-gif-export",
+  "measured_at": "2026-11-15T14:35:06.458Z",
+  "source": {
+    "revision": "f518ccf56fb4bfd6787f094465abcfec4cc21531",
+    "tree": "354a94bcf7d4493f33924cea0c497ef00fb8f52d",
+    "dirty": true,
+    "status": [
+      "M frontend/playwright.config.ts",
+      " M frontend/src/features/forecastExport/ForecastExportDialog.tsx",
+      "?? frontend/e2e/forecast-export-benchmark.spec.ts",
+      "?? frontend/src/features/forecastExport/gifExport.benchmark.ts"
+    ]
+  },
+  "environment": {
+    "node": "v24.22.2",
+    "browser": "156.0.8078.79",
+    "os": "linux",
+    "release": "6.6.87.2-microsoft-standard-WSL2",
+    "cpu": "12th Gen Intel(R) Core(TM) i5-1235U",
+    "availableParallelism": 4,
+    "swiftshader": true
+  },
+  "fixture_sha256": {
+    "src/lib/backend/fixtureTransport.ts": "f71d418d5824aad20d7b9ba0bdfd84ad672f61ac341bd46c7208ee0082e0e7a5",
+    "dist-fixture/geo/states.geojson": "23d4a92875134c6dcba1de475cf1180e3b097d767ee5caf4b41217494753c2d0",
+    "dist-fixture/geo/countries.geojson": "6926aabb2607dd1b43a67d9dc85dab8b5823f1cb25f6c7c33ccc4cda71d3575b",
+    "dist-fixture/geo/coastline.geojson": "36ad5929d1f3d9da1e2ca5a8d968706a2bb68b8d85b2aeb5dbc423bf078e6d1f",
+    "dist-fixture/geo/lakes.geojson": "55331e09d27a3d52455b51e78c147e371fc622c7af1bf2b4b938f3b5bea2e598",
+    "../src-tauri/contracts/public/map/field.shrf": "cb76eb949a65d5ac6a1f9e5e724c0c1d99380ad0ea39590acb196e13d3c29f81"
+  },
+  "scope": "Production capture, composition and worker GIF encoding in the offline browser fixture. Does not measure provider latency or installed WebView2 performance. First export starts after the initial forecast frame is displayed; warm exports reuse that page's caches. Decode validation and file hashing are outside timing.",
+  "samples": [
+    {
+      "index": 0,
+      "state": "first export",
+      "capture": {
+        "startedAtMs": 16420.60000000149,
+        "finishedAtMs": 61436.90000000596,
+        "events": [
+          {
+            "phase": "loading",
+            "done": 0,
+            "total": 3,
+            "hour": 0,
+            "atMs": 16425.60000000149
+          },
+          {
+            "phase": "loading",
+            "done": 1,
+            "total": 3,
+            "hour": 0,
+            "atMs": 16503.80000000447
+          },
+          {
+            "phase": "loading",
+            "done": 2,
+            "total": 3,
+            "hour": 1,
+            "atMs": 16528.90000000596
+          },
+          {
+            "phase": "loading",
+            "done": 3,
+            "total": 3,
+            "hour": 2,
+            "atMs": 21772.70000000298
+          },
+          {
+            "phase": "capturing",
+            "done": 0,
+            "total": 3,
+            "hour": 0,
+            "atMs": 21772.90000000596
+          },
+          {
+            "phase": "capturing",
+            "done": 1,
+            "total": 3,
+            "hour": 0,
+            "atMs": 34918.70000000298
+          },
+          {
+            "phase": "capturing",
+            "done": 1,
+            "total": 3,
+            "hour": 1,
+            "atMs": 34918.70000000298
+          },
+          {
+            "phase": "capturing",
+            "done": 2,
+            "total": 3,
+            "hour": 1,
+            "atMs": 45275
+          },
+          {
+            "phase": "capturing",
+            "done": 2,
+            "total": 3,
+            "hour": 2,
+            "atMs": 45275.10000000149
+          },
+          {
+            "phase": "capturing",
+            "done": 3,
+            "total": 3,
+            "hour": 2,
+            "atMs": 60948.20000000298
+          },
+          {
+            "phase": "encoding",
+            "done": 0,
+            "total": 3,
+            "hour": 0,
+            "atMs": 60948.30000000447
+          },
+          {
+            "phase": "encoding",
+            "done": 1,
+            "total": 3,
+            "hour": 0,
+            "atMs": 61192.20000000298
+          },
+          {
+            "phase": "encoding",
+            "done": 2,
+            "total": 3,
+            "hour": 1,
+            "atMs": 61270.60000000149
+          },
+          {
+            "phase": "encoding",
+            "done": 3,
+            "total": 3,
+            "hour": 2,
+            "atMs": 61375.90000000596
+          }
+        ],
+        "error": null,
+        "options": {
+          "model": "hrrr",
+          "product": "refc",
+          "run": "2026-10-04T16:00:00Z",
+          "hours": [
+            0,
+            1,
+            2
+          ],
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        }
+      },
+      "bytes": 367387,
+      "sha256": "5447667d54400d746c5984d7bdf1c9209b503e49945b8ff9f8132df1f30c6585",
+      "loop": true,
+      "frames": [
+        {
+          "complete": true,
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        },
+        {
+          "complete": true,
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        },
+        {
+          "complete": true,
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        }
+      ],
+      "milliseconds": {
+        "load": 5347.30000000447,
+        "capture": 39175.39999999851,
+        "encode": 488.6000000014901,
+        "total": 45016.30000000447
+      }
+    },
+    {
+      "index": 1,
+      "state": "same-page warm export",
+      "capture": {
+        "startedAtMs": 65102.20000000298,
+        "finishedAtMs": 107043,
+        "events": [
+          {
+            "phase": "loading",
+            "done": 0,
+            "total": 3,
+            "hour": 0,
+            "atMs": 65103.30000000447
+          },
+          {
+            "phase": "loading",
+            "done": 1,
+            "total": 3,
+            "hour": 0,
+            "atMs": 65116.10000000149
+          },
+          {
+            "phase": "loading",
+            "done": 2,
+            "total": 3,
+            "hour": 1,
+            "atMs": 65116.40000000596
+          },
+          {
+            "phase": "loading",
+            "done": 3,
+            "total": 3,
+            "hour": 2,
+            "atMs": 65116.70000000298
+          },
+          {
+            "phase": "capturing",
+            "done": 0,
+            "total": 3,
+            "hour": 0,
+            "atMs": 65116.80000000447
+          },
+          {
+            "phase": "capturing",
+            "done": 1,
+            "total": 3,
+            "hour": 0,
+            "atMs": 77417.20000000298
+          },
+          {
+            "phase": "capturing",
+            "done": 1,
+            "total": 3,
+            "hour": 1,
+            "atMs": 77417.40000000596
+          },
+          {
+            "phase": "capturing",
+            "done": 2,
+            "total": 3,
+            "hour": 1,
+            "atMs": 94242.70000000298
+          },
+          {
+            "phase": "capturing",
+            "done": 2,
+            "total": 3,
+            "hour": 2,
+            "atMs": 94242.70000000298
+          },
+          {
+            "phase": "capturing",
+            "done": 3,
+            "total": 3,
+            "hour": 2,
+            "atMs": 106614.40000000596
+          },
+          {
+            "phase": "encoding",
+            "done": 0,
+            "total": 3,
+            "hour": 0,
+            "atMs": 106614.5
+          },
+          {
+            "phase": "encoding",
+            "done": 1,
+            "total": 3,
+            "hour": 0,
+            "atMs": 106795
+          },
+          {
+            "phase": "encoding",
+            "done": 2,
+            "total": 3,
+            "hour": 1,
+            "atMs": 106917.60000000149
+          },
+          {
+            "phase": "encoding",
+            "done": 3,
+            "total": 3,
+            "hour": 2,
+            "atMs": 107003.90000000596
+          }
+        ],
+        "error": null,
+        "options": {
+          "model": "hrrr",
+          "product": "refc",
+          "run": "2026-10-04T16:00:00Z",
+          "hours": [
+            0,
+            1,
+            2
+          ],
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        }
+      },
+      "bytes": 367387,
+      "sha256": "5447667d54400d746c5984d7bdf1c9209b503e49945b8ff9f8132df1f30c6585",
+      "loop": true,
+      "frames": [
+        {
+          "complete": true,
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        },
+        {
+          "complete": true,
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        },
+        {
+          "complete": true,
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        }
+      ],
+      "milliseconds": {
+        "load": 13.5,
+        "capture": 41497.69999999553,
+        "encode": 428.5,
+        "total": 41940.79999999702
+      }
+    },
+    {
+      "index": 2,
+      "state": "same-page warm export",
+      "capture": {
+        "startedAtMs": 110793.80000000447,
+        "finishedAtMs": 154912.1000000015,
+        "events": [
+          {
+            "phase": "loading",
+            "done": 0,
+            "total": 3,
+            "hour": 0,
+            "atMs": 110795
+          },
+          {
+            "phase": "loading",
+            "done": 1,
+            "total": 3,
+            "hour": 0,
+            "atMs": 110809.10000000149
+          },
+          {
+            "phase": "loading",
+            "done": 2,
+            "total": 3,
+            "hour": 1,
+            "atMs": 110809.30000000447
+          },
+          {
+            "phase": "loading",
+            "done": 3,
+            "total": 3,
+            "hour": 2,
+            "atMs": 110809.80000000447
+          },
+          {
+            "phase": "capturing",
+            "done": 0,
+            "total": 3,
+            "hour": 0,
+            "atMs": 110809.80000000447
+          },
+          {
+            "phase": "capturing",
+            "done": 1,
+            "total": 3,
+            "hour": 0,
+            "atMs": 127574
+          },
+          {
+            "phase": "capturing",
+            "done": 1,
+            "total": 3,
+            "hour": 1,
+            "atMs": 127574.10000000149
+          },
+          {
+            "phase": "capturing",
+            "done": 2,
+            "total": 3,
+            "hour": 1,
+            "atMs": 140892.70000000298
+          },
+          {
+            "phase": "capturing",
+            "done": 2,
+            "total": 3,
+            "hour": 2,
+            "atMs": 140892.70000000298
+          },
+          {
+            "phase": "capturing",
+            "done": 3,
+            "total": 3,
+            "hour": 2,
+            "atMs": 153550.70000000298
+          },
+          {
+            "phase": "encoding",
+            "done": 0,
+            "total": 3,
+            "hour": 0,
+            "atMs": 153550.80000000447
+          },
+          {
+            "phase": "encoding",
+            "done": 1,
+            "total": 3,
+            "hour": 0,
+            "atMs": 154106.70000000298
+          },
+          {
+            "phase": "encoding",
+            "done": 2,
+            "total": 3,
+            "hour": 1,
+            "atMs": 154438.40000000596
+          },
+          {
+            "phase": "encoding",
+            "done": 3,
+            "total": 3,
+            "hour": 2,
+            "atMs": 154775.40000000596
+          }
+        ],
+        "error": null,
+        "options": {
+          "model": "hrrr",
+          "product": "refc",
+          "run": "2026-10-04T16:00:00Z",
+          "hours": [
+            0,
+            1,
+            2
+          ],
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        }
+      },
+      "bytes": 367387,
+      "sha256": "5447667d54400d746c5984d7bdf1c9209b503e49945b8ff9f8132df1f30c6585",
+      "loop": true,
+      "frames": [
+        {
+          "complete": true,
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        },
+        {
+          "complete": true,
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        },
+        {
+          "complete": true,
+          "width": 1920,
+          "height": 1080,
+          "delay": 750
+        }
+      ],
+      "milliseconds": {
+        "load": 14.800000004470348,
+        "capture": 42741,
+        "encode": 1361.2999999970198,
+        "total": 44118.29999999702
+      }
+    }
+  ]
+}

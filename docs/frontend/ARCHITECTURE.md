@@ -22,7 +22,7 @@ for the current implementation.
 
 The current shell uses the SHARPpy backend. Its workspaces are Overview,
 Model Viewer, Live Tracking, Soundings, Logs,
-and Settings. Analysis, Compare, and Ensemble are removed; ensemble models
+and Settings. The legacy Analysis workspace is no longer part of the app; ensemble models
 are excluded centrally from UI catalogues. The scientific Python tools and
 headless Qt renderer remain shared backend components. See [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).
 
@@ -152,7 +152,7 @@ The frontend never learns which one answered.
 | Scientific backend (`backend_info()`) | Python bridge `health`, only while the bridge is `up` |
 | Station catalogue | In-memory `Arc<StationCatalog>` cache, else Python bridge `stations.catalog`; `restart_backend` clears it |
 | Forecast-model list | In-memory cache for 10 minutes, else Python bridge `models.catalog` |
-| Open a sounding, its parameters, its Trends, its image | Python bridge `soundings.*` (`src-tauri/src/backend/sounding_ops.rs`); the image is returned as raw PNG bytes |
+| Open a sounding, its parameters, its image | Python bridge `soundings.*` (`src-tauri/src/backend/sounding_ops.rs`); the image is returned as raw PNG bytes |
 | Map catalogue, place names | In-memory cache for the session, else Python bridge `map.catalog`, `places.labels` (`src-tauri/src/backend/map_ops.rs`) |
 | Field grid, SPC outlook, radar mosaic, station availability | Python bridge `fields.grid`, `outlooks.spc`, `radar.mosaic`, `stations.availability`; Rust turns grids and radar images into `SHRF` frames |
 | Radar sites and tilt availability | The shared Rust `weather-core` embeds the 155-site catalogue and checks NOAA velocity directories, three requests at a time with a 45-second cache. Browser mode calls the same Rust code through `sharpmod_rs`. Reflectivity/correlation: Python `radar.tilts` |
@@ -174,7 +174,7 @@ and its tests do not change.
 | Command line | The packaged backend receives `--desktop-bridge`; an explicit Python interpreter receives `-I -u -X utf8 -m sharpmod.bridge`. Arguments use an array without a shell; working directory is the app local data directory | `src-tauri/src/python/launcher.rs` |
 | Windows | `CREATE_NO_WINDOW`; a kill-on-close Job Object; the bridge also exits when stdin reaches EOF | `src-tauri/src/python/job_windows.rs`, `sharpmod/bridge/server.py` |
 | States | `starting` → `up` → `restarting` → `unavailable`; each transition emits `bridge-status-changed` | `src-tauri/src/python/supervisor/state.rs`, `transitions.rs` |
-| Timeouts | spawn + `hello` 15 s, `health` 20 s, `stations.catalog` 15 s, liveness ping 3 s, shutdown 2 s; models 30 s, open observed 90 s, open model 300 s, open file 60 s, parameters 60 s, Trends 180 s, image 200 s; map catalogue 30 s, field 120 s, outlook 60 s, radar 60 s, places 30 s, availability 35 s | `SupervisorConfig` in `src-tauri/src/python/supervisor/mod.rs`; `src-tauri/src/backend/sounding_ops.rs`, `map_ops.rs` |
+| Timeouts | spawn + `hello` 15 s, `health` 20 s, `stations.catalog` 15 s, liveness ping 3 s, shutdown 2 s; models 30 s, open observed 90 s, open model 300 s, open file 60 s, parameters 60 s, image 200 s; map catalogue 30 s, field 120 s, outlook 60 s, radar 60 s, places 30 s, availability 35 s | `SupervisorConfig` in `src-tauri/src/python/supervisor/mod.rs`; `src-tauri/src/backend/sounding_ops.rs`, `map_ops.rs` |
 | Concurrency | eight worker threads; `hello` is answered on the read loop, so a liveness ping never waits behind a long download; per sounding, one lock for the collection and its results and another for images | `sharpmod/bridge/server.py`, `sounding_cache.py` |
 | Restarts | backoff 0.5, 1, 2, 4, 8, 16, then 30 s; reset after 60 s `up`; the fifth crash in 60 s gives `BRIDGE_UNAVAILABLE` until Restart backend | `transitions.rs`, `control.rs` |
 | Shutdown | `shutdown` request on exit, 2 s grace, then kill | `control.rs`, `lib.rs` run-event loop |
@@ -256,7 +256,7 @@ Each value lives in exactly one place. Zustand stores use
 | Hover (map-local) | the hovered station, the hovered outlook area, and the pointer position | `frontend/src/map/hover/hoverStore.ts` |
 | Map notices (map-local) | failed and slow basemap sources, runtime error count | `frontend/src/map/notices/mapNoticeStore.ts` |
 | Soundings | the open soundings (at most 12, newest first), the active one, the ascent choice, the source tab, and each form's inputs; session only, not persisted | `frontend/src/stores/soundingStore.ts` |
-| Server state | `["backend", "health"]`, `["stations", "catalog"]`, the model list, per sounding its parameters, Trends, and one image per ascent (images leave memory five minutes after their last view); the map catalogue, place names, field frames (trimmed to the profile's CPU budget), outlooks, the radar frame, and availability reports | TanStack Query, `frontend/src/lib/backend/queryOptions.ts`, `features/sounding/soundingQueries.ts`, `map/mapQueries.ts` |
+| Server state | `["backend", "health"]`, `["stations", "catalog"]`, the model list, per sounding its parameters and one image per ascent (images leave memory five minutes after their last view); the map catalogue, place names, field frames (trimmed to the profile's CPU budget), outlooks, the radar frame, and availability reports | TanStack Query, `frontend/src/lib/backend/queryOptions.ts`, `features/sounding/soundingQueries.ts`, `map/mapQueries.ts` |
 | Preferences | `localStorage["sharppy.prefs.v1"]`, validated field by field | `frontend/src/stores/preferences.ts` |
 
 - **Catalogue states** (loading, empty, seed fallback, error) have one owner,

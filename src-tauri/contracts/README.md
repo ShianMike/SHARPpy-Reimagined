@@ -22,7 +22,7 @@ Field names change in exactly one place, `src-tauri/src/backend/convert.rs`.
   `BackendError` per public error code (21).
 - `bridge/soundings/` and `public/soundings/` hold the sounding and model
   payloads: the model list, an open summary (one time, and the 49-time BUFKIT
-  example), the parameters, the Trends, and `render.example.png`, the image the
+  example), the parameters, and `render.example.png`, the image the
   browser fixture transport serves (sharpmod's render of the example, at half
   size).
 - `bridge/map/` and `public/map/` hold the map payloads: the map catalogue,

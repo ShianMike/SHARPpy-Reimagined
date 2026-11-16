@@ -19,7 +19,7 @@ export interface DiagnosticMetadata {
 const OPERATIONS = new Set<string>([
   "get_storage_usage", "clear_cache", "cancel_request", "get_backend_health", "get_station_catalog", "restart_backend",
   "get_model_catalog", "get_model_status", "open_sounding", "get_sounding_progress", "inspect_wrf", "get_sounding_analysis",
-  "get_sounding_trends", "get_threshold_metrics", "evaluate_threshold", "export_threshold_csv", "render_sounding", "render_sounding_view",
+  "get_threshold_metrics", "evaluate_threshold", "export_threshold_csv", "render_sounding", "render_sounding_view",
   "get_map_catalog", "get_weather_field", "get_cached_forecast_hours", "get_spc_outlook", "get_weather_alerts", "get_radar_frame",
   "get_radar_site_frame", "get_radar_sites", "get_radar_tilts", "get_satellite_frame", "get_storm_reports", "get_report_options",
   "get_field_contours", "get_surface_plots", "get_place_labels", "get_station_availability", "start_backend", "bridge-status-changed",

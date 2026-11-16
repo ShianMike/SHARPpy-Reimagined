@@ -8,7 +8,7 @@ import type { PickingInfo } from "@deck.gl/core";
 import { MARKS, markOnce } from "../../lib/metrics";
 import { useGraphicsStore } from "../../stores/graphicsStore";
 import { useBoxSoundingStore } from "../../stores/boxSoundingStore";
-import { useMapStore } from "../../stores/mapStore";
+import { panelLayers, useMapStore } from "../../stores/mapStore";
 import type { CanvasTokens } from "../canvasTokens";
 import { useHoverStore } from "../hover/hoverStore";
 import { attachMapEvents } from "./mapEvents";
@@ -16,7 +16,8 @@ import { createOverlay } from "./overlay";
 import type { StartupWatch } from "./startupWatch";
 import { clickFromPick, hoverFromPick } from "./stationScene";
 import type { StationScene } from "./stationScene";
-import { registerMapCapture } from "./mapCapture";
+import { captureMapFrame, registerMapCapture } from "./mapCapture";
+import { registerSoundingLocatorMap } from "./soundingLocator";
 
 /** What the handlers need from their runtime. */
 export interface RuntimeEventTarget {
@@ -31,7 +32,7 @@ export interface RuntimeEventTarget {
   styleLoaded(): void;
   runtimeError(message: string): void;
   readonly map?: MapLibreMap | null;
-  readonly scene?: Pick<StationScene, "matchesField"> | null;
+  readonly scene?: Pick<StationScene, "matchesField" | "readyForCapture"> | null;
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -96,9 +97,17 @@ export function createPanelOverlay(tokens: CanvasTokens, pixelRatio: number, tar
       }),
     },
   );
-  if (target.map !== undefined && target.map !== null) registerMapCapture(target.panel, target.map, overlay,
-    (request) => target.scene?.matchesField(request) === true,
-    (listener) => { captures.add(listener); return () => { captures.delete(listener); }; });
+  if (target.map !== undefined && target.map !== null) {
+    const map = target.map;
+    const onOverlayRender = (listener: () => void): (() => void) => { captures.add(listener); return () => { captures.delete(listener); }; };
+    registerMapCapture(target.panel, map, overlay,
+      (request) => target.scene?.matchesField(request) === true,
+      onOverlayRender);
+    registerSoundingLocatorMap(target.panel, map, (signal, resolution) => captureMapFrame(map, overlay,
+      () => target.overlayReady && target.scene?.readyForCapture() === true
+        && !panelLayers(useMapStore.getState(), target.panel)["model-field"].visible,
+      onOverlayRender, signal, resolution));
+  }
   return overlay;
 }
 

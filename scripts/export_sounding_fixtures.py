@@ -38,11 +38,11 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = ROOT / "src-tauri" / "contracts"
 EXAMPLE = ROOT / "examples" / "soundings" / "hrrr_point_36.68N_95.66W_f018.npz"
-#: A 49-time BUFKIT forecast file, for the trends fixture.
-TREND_EXAMPLE = ROOT / "examples" / "soundings" / "hrrr_kbvo_20260625_06z.buf"
+#: A 49-time BUFKIT forecast file for the multi-time summary fixture.
+MULTI_TIME_EXAMPLE = ROOT / "examples" / "soundings" / "hrrr_kbvo_20260625_06z.buf"
 FIXED_NOW = datetime(2026, 10, 4, 18, 30, tzinfo=UTC)
 FIXED_ID = "0123456789abcdef"
-TREND_ID = "fedcba9876543210"
+MULTI_TIME_ID = "fedcba9876543210"
 
 
 def _upload(path: Path) -> dict[str, str]:
@@ -131,9 +131,8 @@ def main() -> int:
         image = soundings.render({"sounding_id": summary["sounding_id"]})
         view = soundings.render_view({"sounding_id": summary["sounding_id"],
                                      "image_mode": "hd", "view": {"edits": []}})
-        sounding_cache.SoundingCache.new_id = staticmethod(lambda: TREND_ID)
-        trend_summary = soundings.open_file(_upload(TREND_EXAMPLE))
-        trend = soundings.trends({"sounding_id": trend_summary["sounding_id"]})
+        sounding_cache.SoundingCache.new_id = staticmethod(lambda: MULTI_TIME_ID)
+        multi_time_summary = soundings.open_file(_upload(MULTI_TIME_EXAMPLE))
         from sharpmod.bridge import thresholds
 
         with patch("sharpmod.tools.model_extract.extract", stand_in_extract(EXAMPLE)):
@@ -158,10 +157,8 @@ def main() -> int:
     write("public/soundings/analysis.example.json", camel(analysis))
     write("public/soundings/view.example.json", {key: value for key, value in view.items()
                                                if key not in ("image", "width", "height")})
-    write("bridge/soundings/open.result.multi-time.json", trend_summary)
-    write("bridge/soundings/trends.result.example.json", trend)
-    write("public/soundings/summary.multi-time.json", camel(trend_summary))
-    write("public/soundings/trends.example.json", camel(trend))
+    write("bridge/soundings/open.result.multi-time.json", multi_time_summary)
+    write("public/soundings/summary.multi-time.json", camel(multi_time_summary))
     write("bridge/soundings/threshold.result.example.json", threshold)
     write("bridge/soundings/threshold-metrics.result.json", threshold_metrics)
     write("bridge/soundings/threshold-csv.result.example.json", threshold_csv)

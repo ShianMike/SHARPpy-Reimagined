@@ -36,7 +36,7 @@ export function UpdateSettings(): ReactNode {
         <p className={styles.updateTitle}>{title}</p>
         <p>{!desktop ? "Check for updates in the installed Windows app." : (update === null
           ? "New releases are installed only when you choose."
-          : "Updating keeps saved preferences and disk caches. Open soundings, profile edits and undo/redo history are lost when the app closes. Review your work before installing.")}</p>
+          : "Updating keeps saved preferences and disk caches. Saved sounding recovery copies can be restored after reopening. Let recovery finish saving and review unfinished edits before installing.")}</p>
       </div>
       <div className={styles.updateActions}>
         <Action tone={update === null ? "accent" : "quiet"} disabled={!desktop || busy} onClick={() => { void check(); }}>{status === "checking" ? "Checking…" : "Check for updates"}</Action>

@@ -1,6 +1,6 @@
 # SHARPpy Reimagined Usage Guide
 
-This guide describes the **v3.8.3 desktop interface** and the
+This guide describes the **v3.8.4 desktop interface** and the
 command-line tools. For installation, see the [README](../README.md#get-started)
 and [dependency reference](../installation.txt). The previous Qt interface has
 its own [v2.0.0 Legacy guide](https://github.com/ShianMike/SHARPpy-Reimagined/blob/v2.0.0/docs/USAGE.md).
@@ -67,6 +67,10 @@ app closes during installation and reopens afterward. Saved preferences remain
 on the device. This downloads a complete installer rather than a binary delta
 patch. Nothing installs until you click, and checks run only while the app is
 open. Browser previews cannot install updates.
+
+In the upcoming v3.8.4 interface, wait for **Recovery copy saved on this device**
+before closing or updating if you want to restore completed sounding work.
+Unapplied editor inputs and unfinished recalculations are not included.
 
 The original v3.0.0 app has no updater. Install the current Windows release using
 its installer once; v3.0.1 and newer can update through **Settings → Updates**.
@@ -183,6 +187,18 @@ time each hour stays on screen, then choose **Create GIF**. Every selected hour
 loads and is checked before capture starts. Export stops if an hour or parameter
 is unavailable, rather than silently omitting it.
 
+Enabled storm reports, SPC outlooks and isobars also load for every selected
+panel and hour before capture. Each image waits for the current-time overlays
+to finish drawing, including full-layout PNG, GIF and WebP exports.
+
+Export resolution, time per forecast hour and the panel/layout choice are saved
+on this device. **Next 6 hours** and **Next 12 hours** select available hours
+from the displayed hour through the endpoint. **Every 3 hours** keeps selected
+hours three hours apart, starting with the first selected hour. Click an hour,
+then Shift-click another to select or clear the intervening available hours;
+Space and Shift-Space also work when an hour has keyboard focus. Hour selections
+start fresh for each export dialog so they match the current model run.
+
 The exporter captures lossless PNGs at the output resolution before encoding the
 GIF in a background worker. Map pixels are smooth, the GIF loops, and each
 selected hour appears directly without blended transition frames. The map fills
@@ -268,6 +284,8 @@ The layer controls offer SPC categorical, tornado, wind, and hail outlooks,
 radar, satellite imagery, surface observations, and storm reports. Open the
 controls for the active panel to configure its overlays. Hover a report or
 observation for its time, location, measured values, remarks, and source.
+Each panel keeps its own storm-report hazard filter and event window. Changing
+one panel preserves the other panels' choices, including after a restart.
 Wind barbs become denser as you zoom in. Borders and land outlines remain
 visible above filled overlays.
 
@@ -422,11 +440,36 @@ for links and the distinction between research context and implemented methods.
   analysis, then copy or download the image from the viewer toolbar.
 
 Opening a file and rendering its image are separate operations. The first image
-can take longer while the render worker starts. Existing open profiles belong
-to the current backend session; restart or close the backend only after saving
-any images you need. Keep the original files to reopen local soundings later.
-After a backend restart, the app closes those profiles and clears their cached
-images and edit history. Source-form inputs remain available to reopen them.
+can take longer while the render worker starts.
+
+#### Recovering a sounding session (v3.8.4, unreleased)
+
+Open soundings are saved automatically on this device. After an accidental exit,
+Alt+F4 or a normal close, reopening offers **Restore previous session**. This
+reopens the original profiles with completed edits and undo/redo history, selected
+times, the active sounding, chart options, parcel choice and Severe/Winter view.
+The original source data is copied once; subsequent checkpoints save the edited
+view state. Restoration does not need to download the source again and regenerates
+images with the current renderer.
+
+Check **Recovery copy saved on this device** below the sounding controls before
+exiting. Saving failures are shown there with a retry action. An exit during a
+write retains the last complete checkpoint; unapplied editor inputs and unfinished
+recalculations are not saved. Recovery supports the app's 12 open soundings and
+the existing 5 MiB per-source import limit. Browser storage quotas still apply.
+
+**Not now** keeps the previous session available from the sounding controls.
+**Start fresh** removes that saved previous session while preserving any soundings
+opened since launch. Explicitly closing a sounding removes it from the current
+checkpoint. A backend restart also offers the saved session instead of silently
+discarding it. Another window on the same origin cannot overwrite an active
+window's recovery copy.
+
+Recovery storage is separate from temporary weather caches, so cache cleanup can
+continue normally. Recovery remains local to this device and app/browser origin;
+it does not sync between installations, browsers or preview ports. Removing app
+or browser site data removes recovery copies. Keep original input files and
+exported images for long-term storage.
 
 ### Settings and troubleshooting
 

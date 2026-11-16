@@ -2,8 +2,35 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useTheme, useUiStore } from "./uiStore";
+import { DEFAULT_FORECAST_EXPORT_SETTINGS } from "./forecastExportSettings";
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); useUiStore.setState({ lastVersion: null, lastUpdateCheckWindow: null, whatsNewOpen: false, theme: "system", speed: 1, loop: true, smoothPlayback: false, collapsed: false, popupPositions: {} }); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); useUiStore.setState({ lastVersion: null, lastUpdateCheckWindow: null, whatsNewOpen: false, theme: "system", speed: 1, loop: true, smoothPlayback: false, collapsed: false, popupPositions: {}, forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS }); });
+
+it("restores valid forecast export choices and defaults missing or invalid fields independently", () => {
+  const merge = useUiStore.persist.getOptions().merge;
+  if (merge === undefined) throw new Error("Persistence requires a validating merge");
+  const state = useUiStore.getInitialState();
+  for (const forecastExport of [undefined, null, "corrupt", [], { scope: "all", width: -1, delay: "500" }]) {
+    expect(merge({ forecastExport }, state).forecastExport).toEqual(DEFAULT_FORECAST_EXPORT_SETTINGS);
+  }
+  expect(merge({ forecastExport: { scope: "layout", width: 2560, delay: 500 } }, state).forecastExport)
+    .toEqual({ scope: "layout", width: 2560, delay: 500 });
+  expect(merge({ forecastExport: { scope: "layout", width: 9999, delay: 1000 } }, state).forecastExport)
+    .toEqual({ scope: "layout", width: 1920, delay: 1000 });
+});
+
+it("persists forecast export settings and rehydrates them across a fresh UI session", async () => {
+  const storage = useUiStore.persist.getOptions().storage;
+  if (storage === undefined) throw new Error("UI preferences require storage");
+  useUiStore.getState().setForecastExport({ width: 3840, delay: 250, scope: "layout" });
+  const saved = await storage.getItem("sharppy-workspace-ui");
+  expect(saved?.state).toMatchObject({ forecastExport: { width: 3840, delay: 250, scope: "layout" } });
+  useUiStore.setState({ forecastExport: DEFAULT_FORECAST_EXPORT_SETTINGS });
+  if (saved === null) throw new Error("Export settings were not saved");
+  await storage.setItem("sharppy-workspace-ui", saved);
+  await useUiStore.persist.rehydrate();
+  expect(useUiStore.getState().forecastExport).toEqual({ width: 3840, delay: 250, scope: "layout" });
+});
 
 it("validates persisted workspace settings and ignores transient navigation state", () => {
   const state = useUiStore.getState();

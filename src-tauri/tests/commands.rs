@@ -6,6 +6,8 @@
 mod common;
 #[path = "commands/radar.rs"]
 mod radar;
+#[path = "commands/recovery.rs"]
+mod recovery;
 
 use std::sync::Arc;
 
@@ -76,7 +78,13 @@ fn invoke_args(
         cmd: cmd.into(),
         callback: CallbackFn(0),
         error: CallbackFn(1),
-        url: "http://tauri.localhost".parse().unwrap(),
+        url: if cfg!(windows) {
+            "http://tauri.localhost"
+        } else {
+            "tauri://localhost"
+        }
+        .parse()
+        .unwrap(),
         body: InvokeBody::Json(args),
         headers: Default::default(),
         invoke_key: INVOKE_KEY.to_string(),

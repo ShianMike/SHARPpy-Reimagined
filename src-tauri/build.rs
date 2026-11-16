@@ -14,6 +14,8 @@ fn main() {
             "get_model_status",
             "open_sounding",
             "get_sounding_progress",
+            "get_sounding_snapshot",
+            "restore_sounding_snapshot",
             "inspect_wrf",
             "get_sounding_analysis",
             "get_threshold_metrics",

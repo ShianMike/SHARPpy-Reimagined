@@ -1,4 +1,33 @@
 {
+  "3.8.4": {
+    "summary": "Recover open soundings after reopening, choose export hours faster, and reliably include each panel's weather overlays.",
+    "highlights": [
+      {
+        "title": "Restore your sounding session",
+        "description": "Reopen saved profiles with completed edits, undo/redo history, selected times and the Severe or Winter view. Recovery copies stay on this device, separately from the weather cache. Recovery controls work in Windows builds and show when a copy has finished saving."
+      },
+      {
+        "title": "More reliable sounding file handling",
+        "description": "Imported soundings display the correct filename across Windows and Linux. Failed imports clean up their temporary files. Cached images are checked before reuse, with automatic redraws for missing files or invalid image dimensions. Failed renders leave no cached partial image."
+      },
+      {
+        "title": "More reliable sounding edits",
+        "description": "Invalid animation ranges and incomplete storm-motion edits report a clear request error before rendering. Drag targets match their native edit points, and equivalent default view selections reuse completed sounding images."
+      },
+      {
+        "title": "Faster forecast export setup",
+        "description": "Keep your resolution, frame duration and panel/layout choice between sessions. Compact icons and labels keep all hour shortcuts in one row. Select the next 6 or 12 hours, keep hours three hours apart, or Shift-click a range."
+      },
+      {
+        "title": "Storm reports stay with their panel",
+        "description": "Choose a separate hazard and event window for each map in two- or four-panel layouts. The choices are saved and remain separate in Model Viewer and Live Tracking."
+      },
+      {
+        "title": "Complete overlays in forecast exports",
+        "description": "PNG, GIF and WebP exports load enabled storm reports, SPC outlooks and isobars for every selected panel and hour, then wait for those layers to finish drawing before capturing frames."
+      }
+    ]
+  },
   "3.8.3": {
     "summary": "Play sounding forecasts through time and export complete map layouts with lossless animated WebP.",
     "highlights": [

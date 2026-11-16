@@ -4,7 +4,7 @@ import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice
 import { OverlayErrorNotice } from "./OverlayErrorNotice";
 import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { formatUtc } from "../../features/sounding/soundingTime";
-import { panelLayers, panelWeather, useMapStore } from "../../stores/mapStore";
+import { panelLayers, panelWeather, panelReports, useMapStore } from "../../stores/mapStore";
 import type { StationAvailability } from "../../types/contracts";
 import { OUTLOOK_KEYS, type OutlookKey } from "../../types/map";
 import { LAYER_REGISTRY } from "../layers/descriptors";
@@ -68,10 +68,10 @@ function OutlookKey({ product }: { product: OutlookKey }) {
     </>;
 }
 
-function ReportKey() {
+function ReportKey({ panel }: { panel: number }) {
   const time = useWeatherTime();
-  const windowS = useMapStore((state) => state.reportWindowS);
-  const filter = useMapStore((state) => state.reportFilter);
+  const windowS = useMapStore((state) => panelReports(state, panel).reportWindowS);
+  const filter = useMapStore((state) => panelReports(state, panel).reportFilter);
   const query = useStormReports(time, windowS, filter, true);
   const symbols = [...new Map(query.data?.reports.map((report) => [JSON.stringify([report.category, report.symbol, report.fill, report.stroke]), report])).values()];
   return time === null ? <p>Choose a forecast time to view reports.</p> : query.isError ? <SoundingErrorNotice error={query.error} operation="get_storm_reports" onRetry={() => { void query.refetch(); }} busy={query.isFetching} testId="legend-reports-error" />
@@ -108,7 +108,7 @@ function WeatherKey({ id, panel }: { id: OrderableLayerId; panel: number }): Rea
     case "satellite": return <SatelliteKey panel={panel} />;
     case "warnings": return <AlertKey kind="warning" />;
     case "watches": return <AlertKey kind="watch" />;
-    case "storm-reports": return <ReportKey />;
+    case "storm-reports": return <ReportKey panel={panel} />;
     case "surface-plots": return <SurfacePlotControls />;
     default: return <OutlookKey product={id.slice("spc-".length) as OutlookKey} />;
   }

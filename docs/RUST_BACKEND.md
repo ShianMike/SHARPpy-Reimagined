@@ -23,6 +23,20 @@ UWyo sounding decoding and availability, box-mean soundings, threshold
 controls, radar mosaics and satellite processing also use the native extension.
 Build/install `sharpmod_rs` before running the complete source application.
 
+Sounding file uploads use Rust for request validation, bounded base64 decoding,
+portable filename handling and staged cache files. The existing decoder registry
+still owns NPZ, SPC, BUFKIT, PECAN, UWyo and custom-format interpretation; profile
+values and metadata do not pass through a new scientific calculation. Failed
+decoding, summary construction or registration rolls back the files created by
+the import. Creation never replaces an existing cache file. Session restoration
+shares the same staged-file owner. The public 5 MiB limit and bridge result
+shapes are unchanged.
+
+The sounding bridge and CLI PNG reports share a native header/dimension check.
+It requires the PNG signature, a 13-byte IHDR and nonzero width and height, and
+does not decode or modify pixels. It is a header check, not a replacement for
+full PNG decoding by the image consumer.
+
 The sounding height charts use the native extension while retaining their
 Python result objects and CLI commands.
 

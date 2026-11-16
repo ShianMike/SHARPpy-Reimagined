@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
 import logging
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,7 +17,6 @@ from sharpmod.models.model_transport import DownloadCancelled
 log = logging.getLogger("sharpmod.bridge")
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
-_SAFE_SUFFIX = re.compile(r"^\.[A-Za-z0-9_-]{1,12}$")
 
 
 def _observed_failure(exc: Exception, station: str, when: datetime) -> BridgeError:
@@ -257,44 +253,7 @@ def open_era5(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def open_file(params: dict[str, Any]) -> dict[str, Any]:
-    """A sounding file from the user's disk, sent as base64."""
-    p.keys(params, ("file_name", "content_base64"))
-    name = Path(p.text(params, "file_name", 1, 255)).name
-    encoded = params.get("content_base64")
-    if not isinstance(encoded, str) or len(encoded) > (MAX_UPLOAD_BYTES * 4) // 3 + 8:
-        raise p.invalid("content_base64 must be base64 text of at most 5 MiB of data")
-    try:
-        data = base64.b64decode(encoded, validate=True)
-    except (binascii.Error, ValueError):
-        raise p.invalid("content_base64 is not valid base64") from None
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise p.invalid("the file must be at most 5 MiB")
-    if not data:
-        raise BridgeError("SOUNDING_INVALID", f"{name} is empty.", False)
-    suffix = Path(name).suffix.lower()
-    suffix = suffix if _SAFE_SUFFIX.match(suffix) else ".txt"
-    entry_id = cache().new_id()
-    path = cache().data_path(entry_id, suffix)
-    path.write_bytes(data)
-    try:
-        collection, station = decode(path, display=name)
-    except Exception:
-        path.unlink(missing_ok=True)
-        raise
-    model = meta(collection, "model")
-    forecast = bool(model) and not meta(collection, "observed")
-    return register(
-        entry_id,
-        path,
-        summary(
-            entry_id,
-            "file",
-            collection,
-            title=f"{station} {name}".strip() if station else name,
-            location=station or None,
-            file_name=name,
-            model=str(model) if forecast else None,
-            run_time=p.iso(meta(collection, "run")) if forecast else None,
-        ),
-        collection,
-    )
+    """Stage a file through Rust while retaining the existing decoder contracts."""
+    from sharpmod_rs import open_sounding_file
+
+    return open_sounding_file(params, MAX_UPLOAD_BYTES)

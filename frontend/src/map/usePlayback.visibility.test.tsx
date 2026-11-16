@@ -56,7 +56,7 @@ it("prepares both active modes once across four matching panels, waits on cached
   sharp["model-field"] = { visible: true, opacity: 1 };
   smooth["model-field"] = { visible: true, opacity: 1, smoothing: true };
   useMapStore.setState({ panelLayout: 4, productKey: "refc", layers: sharp,
-    panels: [smooth, sharp, smooth].map((layers) => ({ productKey: "refc", layers })) });
+    panels: [smooth, sharp, smooth].map((layers, index) => ({ ...useMapStore.getInitialState().panels[index], reportFilter: "all", reportWindowS: 21600, productKey: "refc", layers })) });
   useForecastStore.setState({ modelKey: "hrrr", runTime: run, forecastHour: 0, playing: true });
   useUiStore.setState({ speed: 1, loop: true });
   useGraphicsStore.setState({ effective: { ...savedGraphics.effective, profile: "balanced" } });

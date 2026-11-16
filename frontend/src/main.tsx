@@ -28,6 +28,7 @@ import { startSessionLog } from "./stores/logStore";
 import { applyPreferences, createPreferencesRepository, DEFAULT_PREFERENCES, startPreferenceSync } from "./stores/preferences";
 import { useUiStore } from "./stores/uiStore";
 import type { GraphicsProfile } from "./types/graphics";
+import { startSoundingRecovery } from "./features/sounding/soundingRecovery";
 
 function startGraphics(): void {
   useGraphicsStore.getState().setCapabilities(probeGraphics());
@@ -92,6 +93,8 @@ async function boot(container: HTMLElement): Promise<void> {
     return;
   }
   const client = new BackendClient(await loadTransport());
+  const stopRecovery = startSoundingRecovery(client);
+  window.addEventListener("pagehide", stopRecovery, { once: true });
   const queryClient = createQueryClient();
   const tree: ReactNode = (
     <QueryClientProvider client={queryClient}>

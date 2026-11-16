@@ -7,6 +7,80 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v3.8.4] - 2026-11-18
+
+### Added
+
+- Offer Restore previous session after reopening the app, including original
+  sounding sources, completed profile edits and undo/redo history, selected
+  times, chart options, and the selected Severe or Winter view. Store recovery
+  copies locally and separately from temporary weather caches; show save
+  progress and failures, and preserve the saved session after backend restarts.
+  Allow deferring restoration or starting fresh without closing current work.
+- Remember forecast export resolution, frame duration and panel/layout scope
+  across dialog reopening and app restarts. Keep a saved layout choice when
+  temporarily using a single map, and restore it for multi-panel exports.
+- Add Next 6 hours and Next 12 hours selections from the current forecast
+  hour, including the endpoint, and an Every 3 hours shortcut for thinning
+  selected hours. Support Shift-click and Shift-Space to select or clear a
+  range using only available forecast hours.
+
+### Fixed
+
+- Give sounding recovery controls and data handling distinct module names so
+  Windows builds resolve the prompt and save-status components correctly.
+- Recover from cached sounding PNGs with invalid headers, empty content,
+  excessive size or missing files by discarding stale cache references and
+  rendering again. Check new standard and interactive image headers and size
+  before publishing, clean up failed render output, and bound disk reads by
+  the bridge's image-response limit.
+- Reject invalid sounding animation ranges and incomplete storm-motion edits
+  before starting a render worker, with structured request errors. Normalize
+  drag target IDs before matching native edit points, and share cached images
+  when Severe/default time selections are omitted or stated explicitly.
+- Normalize Windows and Unix upload paths to the same displayed sounding file
+  name. Reject empty path components and invalid upload data before writing;
+  remove staged files if decoding, summary assembly or registration fails.
+- Reject zero-dimension sounding PNGs and malformed IHDR lengths before returning
+  an image through the bridge, using the same native check as CLI PNG reports.
+- Keep storm-report hazard filters and event windows independent for each
+  Model Viewer and Live Tracking panel. Preserve the choices across layout
+  changes and restarts, migrate existing shared selections, and reset each
+  workspace without changing the other workspace's report settings. Load
+  live-history playback with each panel's own report choices.
+- Load every enabled storm-report, SPC outlook and isobar overlay for all
+  selected forecast hours and panels before export capture. Wait for current-time
+  overlays and their rendered layers before saving PNG, GIF or WebP frames,
+  with explicit failures for unavailable requested overlays.
+
+### Changed
+
+- Install the existing certificate-bundle dependency in standalone Rust CI
+  and build the native backend for Windows sidecar lifecycle checks, so real
+  sounding-upload, session-recovery and shutdown tests use their required
+  runtime interfaces.
+- Move standard and interactive sounding PNG cache transactions, staged-file
+  ownership, cache alias eviction and response base64 encoding into Rust.
+  Preserve the existing Qt render worker, per-sounding render lock, quality,
+  parcel/color choices and bounded interactive cache.
+- Move interactive sounding request validation into Rust, retaining existing
+  chart and panel choices, numeric bounds, the 2000-level edit limit and
+  non-destructive request handling. Keep Python as compatibility wiring.
+- Move sounding-upload validation, base64 decoding and staged-file ownership
+  into Rust. Retain the existing format decoders, metadata, public bridge
+  errors and 5 MiB import limit. Share rollback handling with session recovery.
+- Route the bridge's sounding PNG dimension check through Rust, sharing the
+  header implementation with machine-readable CLI reports without decoding or
+  re-encoding image pixels.
+- Fit all five forecast-hour shortcuts in one row with Select all/Clear icons
+  and compact time-range labels. Retain full accessible names and tooltips.
+- Add regression coverage for panel-specific report settings, saved-preference
+  migration and restoration, and delayed overlay loading during export.
+- Test sounding recovery after source-cache deletion, completed edit history,
+  multi-time selection, failed checkpoints, deferred restoration and backend
+  restarts. Exercise desktop recovery commands through IPC using the host
+  platform's local app origin.
+
 ## [v3.8.3] - 2026-11-16
 
 ### Changed

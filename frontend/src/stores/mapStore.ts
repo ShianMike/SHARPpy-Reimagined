@@ -34,7 +34,7 @@ export type PanelLayout = (typeof PANEL_LAYOUTS)[number];
 export const MAX_PANELS = 4;
 
 /** Panels 1 to 3: their own field product and layers. */
-export interface PanelState {
+export interface PanelState extends ReportSettings {
   /** Null until chosen: the panel then takes a default product. */
   productKey: string | null;
   layers: Record<LayerId, LayerState>;
@@ -47,7 +47,12 @@ export interface WeatherOptions {
   radarSite: string | null;
   satelliteChannel: "infrared" | "visible";
 }
-export interface LivePanelState extends WeatherOptions { layers: Record<LayerId, LayerState>; }
+export interface ReportSettings {
+  reportWindowS: number;
+  reportFilter: string;
+}
+export const DEFAULT_REPORT_SETTINGS: ReportSettings = { reportWindowS: 21600, reportFilter: "all" };
+export interface LivePanelState extends WeatherOptions, ReportSettings { layers: Record<LayerId, LayerState>; }
 
 export interface MapState {
   radarTilt: RadarTilt;
@@ -112,14 +117,14 @@ function extraPanel(): PanelState {
   const layers = defaultLayerStates();
   // A panel opened to compare fields shows its field from the start.
   layers["model-field"] = { ...layers["model-field"], visible: true };
-  return { productKey: null, layers };
+  return { productKey: null, layers, ...DEFAULT_REPORT_SETTINGS };
 }
 
 function livePanel(): LivePanelState {
   const layers = defaultLayerStates();
   layers.radar = { ...layers.radar, visible: true };
   layers["model-domain"] = { ...layers["model-domain"], visible: false };
-  return { layers, radarProduct: null, radarScope: "mosaic", radarSite: null, radarTilt: "0", satelliteChannel: "infrared" };
+  return { layers, radarProduct: null, radarScope: "mosaic", radarSite: null, radarTilt: "0", satelliteChannel: "infrared", ...DEFAULT_REPORT_SETTINGS };
 }
 
 /** Live Tracking stays flat without changing the saved Model Viewer projection. */
@@ -135,6 +140,17 @@ export function panelLayers(state: Pick<MapState, "layers" | "panels"> & Partial
 
 export function panelWeather(state: MapState, panel = state.activePanel): WeatherOptions {
   return state.view === "live" ? state.livePanels[panel] ?? state : state;
+}
+
+/** Storm report choices belong to one panel in each workspace. */
+export function panelReports(state: MapState, panel = state.activePanel): ReportSettings {
+  return state.view === "live" ? state.livePanels[panel] ?? state
+    : panel === 0 ? state : state.panels[panel - 1] ?? state;
+}
+
+function patchReports(state: MapState, patch: Partial<ReportSettings>): Partial<MapState> {
+  if (state.view === "live") return { livePanels: state.livePanels.map((panel, index) => index === state.activePanel ? { ...panel, ...patch } : panel) };
+  return state.activePanel === 0 ? patch : { panels: state.panels.map((panel, index) => index === state.activePanel - 1 ? { ...panel, ...patch } : panel) };
 }
 
 function patchWeather(state: MapState, patch: Partial<WeatherOptions>): Partial<MapState> {
@@ -177,8 +193,7 @@ export const useMapStore = create<MapState>()(
     radarScope: "mosaic",
     radarSite: null,
     satelliteChannel: "infrared",
-    reportWindowS: 21600,
-    reportFilter: "all",
+    ...DEFAULT_REPORT_SETTINGS,
     availabilityTime: null,
     layerPanelCollapsed: false,
     layerPanelGroup: "weather",
@@ -244,10 +259,10 @@ export const useMapStore = create<MapState>()(
       set((state) => patchWeather(state, { satelliteChannel: channel }));
     },
     setReportWindowS: (windowS) => {
-      set({ reportWindowS: windowS });
+      set((state) => patchReports(state, { reportWindowS: windowS }));
     },
     setReportFilter: (filter) => {
-      set({ reportFilter: filter });
+      set((state) => patchReports(state, { reportFilter: filter }));
     },
     setAvailabilityTime: (time) => {
       set({ availabilityTime: time });

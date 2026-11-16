@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { LAYER_DEFAULTS } from "../map/layers/registry";
-import { mapProjection, panelLayers, panelProduct, useMapStore } from "./mapStore";
+import { mapProjection, panelLayers, panelProduct, panelReports, useMapStore } from "./mapStore";
 import { useLiveTrackingStore } from "./liveTrackingStore";
 
 const initial = useMapStore.getState();
@@ -9,6 +9,32 @@ const liveInitial = useLiveTrackingStore.getState();
 beforeEach(() => {
   useMapStore.setState(initial, true);
   useLiveTrackingStore.setState(liveInitial, true);
+});
+
+it.each([2, 4] as const)("keeps storm report choices independent in %i panels and between workspaces", (layout) => {
+  const store = useMapStore.getState();
+  store.setPanelLayout(layout);
+  const filters = ["tornado", "hail", "wind", "significant"];
+  const windows = [7200, 21600, 43200, 86400];
+  for (const view of ["map", "live"] as const) {
+    useMapStore.setState({ view });
+    for (let panel = 0; panel < layout; panel++) {
+      store.setActivePanel(panel);
+      store.setReportFilter(filters[panel] ?? "all");
+      store.setReportWindowS(windows[panel] ?? 21600);
+      for (let other = 0; other < layout; other++) {
+        expect(panelReports(useMapStore.getState(), other)).toMatchObject(other <= panel
+          ? { reportFilter: filters[other], reportWindowS: windows[other] }
+          : { reportFilter: "all", reportWindowS: 21600 });
+      }
+    }
+  }
+  useMapStore.setState({ view: "live" });
+  store.setActivePanel(0); store.setReportFilter("all");
+  useMapStore.setState({ view: "map" });
+  store.setPanelLayout(1); store.setPanelLayout(layout);
+  expect(panelReports(useMapStore.getState(), 0).reportFilter).toBe("tornado");
+  expect(panelReports(useMapStore.getState(), layout - 1).reportFilter).toBe(filters[layout - 1]);
 });
 
 describe("mapStore", () => {

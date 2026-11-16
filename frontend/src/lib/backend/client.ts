@@ -1,6 +1,5 @@
 // Validate replies, normalize failures and log once for all transports (F2, C6).
 import type { BackendHealth, BridgeStatus, StationCatalog } from "../../types/contracts";
-import { parseBackendError } from "../contracts/errors";
 import { ContractError } from "../contracts/guards";
 import { parseBackendHealth, parseBridgeStatus } from "../contracts/health";
 import { parseModelStatus } from "../contracts/modelStatus";
@@ -36,37 +35,16 @@ import type {
 import { MARKS, markOnce } from "../metrics";
 import type { CacheClearResult, CacheTarget, StorageUsage } from "../../types/storage";
 import { parseCachedHours, parseCacheClearResult, parseStorageUsage } from "../contracts/storage";
-import { BackendFailure, contractViolation, overlayAvailability, transportFailed } from "./errors";
+import { BackendFailure, contractViolation } from "./errors";
 import { BRIDGE_STATUS_CHANGED } from "./events";
 import { callWithSignal, type CommandName, type Transport } from "./transport";
 import { recordLog } from "../../stores/logStore";
 import { parseSoundingView } from "../contracts/soundingView";
 import { parseWebpFrame, type WebpFrame } from "../contracts/webp";
 import type { SoundingView, ViewRequest } from "../../types/soundingView";
-function warnFailure(failure: BackendFailure, operation: string, extra?: unknown): void {
-  const { code, context, details } = failure.error;
-  const parts: unknown[] = [`[backend] ${code} in ${context?.operation ?? "unknown operation"}: ${failure.error.message}`];
-  if (details !== undefined) {
-    parts.push(details);
-  }
-  if (extra !== undefined) {
-    parts.push(extra);
-  }
-  console.warn(...parts);
-  const availability = overlayAvailability(failure.error);
-  recordLog(availability === null ? "error" : "warning", operation, failure.error.message, `${code}${context?.provider === undefined ? "" : ` · ${context.provider}`}`, { operation: context?.operation ?? operation, provider: context?.provider, code, reason: availability });
-}
-export function failureFromRejection(reason: unknown, operation: string): BackendFailure {
-  try {
-    const parsed = parseBackendError(reason);
-    return new BackendFailure(parsed ?? transportFailed(operation));
-  } catch (error) {
-    if (error instanceof ContractError) {
-      return new BackendFailure(contractViolation(operation, error));
-    }
-    throw error;
-  }
-}
+import { failureFromRejection, warnFailure } from "./requestFailures";
+import { parseSoundingSnapshot, type SoundingSnapshot } from "../contracts/soundingRecovery";
+export { failureFromRejection } from "./requestFailures";
 export class BackendClient {
   private lastBridgeStatus = "";
   private readonly statusChecks = new Set<Promise<void>>();
@@ -117,6 +95,12 @@ export class BackendClient {
     return this.request("get_sounding_progress", parseSoundingProgress, { progressId });
   }
   inspectWrf(filePath: string): Promise<WrfFile> { return this.request("inspect_wrf", parseWrfFile, { filePath }); }
+  getSoundingSnapshot(soundingId: string): Promise<SoundingSnapshot> {
+    return this.request("get_sounding_snapshot", parseSoundingSnapshot, { soundingId });
+  }
+  restoreSoundingSnapshot(payload: string): Promise<SoundingSummary> {
+    return this.request("restore_sounding_snapshot", parseSoundingSummary, { payload });
+  }
   getSoundingAnalysis(soundingId: string, signal?: AbortSignal): Promise<SoundingAnalysis> {
     return this.request("get_sounding_analysis", parseSoundingAnalysis, { soundingId }, signal);
   }
@@ -152,8 +136,8 @@ export class BackendClient {
     return this.request("get_weather_field", parseFieldFrame, { product, runTime, forecastHour, model }, signal);
   }
 
-  getSpcOutlook(product: OutlookKey, validTime: string): Promise<SpcOutlook> {
-    return this.request("get_spc_outlook", parseSpcOutlook, { product, validTime });
+  getSpcOutlook(product: OutlookKey, validTime: string, signal?: AbortSignal): Promise<SpcOutlook> {
+    return this.request("get_spc_outlook", parseSpcOutlook, { product, validTime }, signal);
   }
 
   getWeatherAlerts(validTime: string): Promise<WeatherAlerts> {
@@ -207,7 +191,7 @@ export class BackendClient {
    * the total span in seconds (21600) and `hazardFilter` is the provider's
    * filter key ("all").
    */
-  getStormReports(validTime: string, windowS?: number, hazardFilter?: string): Promise<StormReports> {
+  getStormReports(validTime: string, windowS?: number, hazardFilter?: string, signal?: AbortSignal): Promise<StormReports> {
     const args: Record<string, unknown> = { validTime };
     if (windowS !== undefined) {
       args.windowS = windowS;
@@ -215,7 +199,7 @@ export class BackendClient {
     if (hazardFilter !== undefined) {
       args.hazardFilter = hazardFilter;
     }
-    return this.request("get_storm_reports", parseStormReports, args);
+    return this.request("get_storm_reports", parseStormReports, args, signal);
   }
 
   /** The provider's own window and filter labels for the reports controls. */

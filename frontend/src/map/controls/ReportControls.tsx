@@ -7,14 +7,14 @@ import { useWeatherTime } from "../../features/tracking/useWeatherTime";
 import { SoundingErrorNotice } from "../../features/sounding/SoundingErrorNotice";
 import { SourceSelect } from "../../features/sounding/SourceFields";
 import { compactUtc } from "../../features/sounding/soundingTime";
-import { useMapStore } from "../../stores/mapStore";
+import { panelReports, useMapStore } from "../../stores/mapStore";
 import { useReportOptions, useStormReports } from "../mapQueries";
 import styles from "./LayerPanel.module.css";
 
 export function ReportControls(): ReactNode {
   const validTime = useWeatherTime();
-  const windowS = useMapStore((state) => state.reportWindowS);
-  const filter = useMapStore((state) => state.reportFilter);
+  const windowS = useMapStore((state) => panelReports(state).reportWindowS);
+  const filter = useMapStore((state) => panelReports(state).reportFilter);
   const options = useReportOptions(true);
   const reports = useStormReports(validTime, windowS, filter, true);
   return (

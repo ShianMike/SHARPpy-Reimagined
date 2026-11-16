@@ -3,7 +3,7 @@ import { isValidCamera, type CameraSnapshot } from "../map/runtime/camera";
 import { clampOpacity, LAYER_IDS, ORDERABLE_LAYER_IDS, type LayerId, type LayerState, type OrderableLayerId } from "../map/layers/registry";
 import type { GraphicsOverride } from "../types/graphics";
 import { RADAR_TILTS, type RadarTilt } from "../types/map";
-import { MAX_PANELS, PANEL_LAYOUTS, useMapStore, type MapState, type WeatherOptions } from "./mapStore";
+import { MAX_PANELS, PANEL_LAYOUTS, useMapStore, type MapState, type WeatherOptions, type ReportSettings } from "./mapStore";
 
 export const PREFERENCES_KEY = "sharppy.prefs.v1";
 const OVERRIDES: readonly GraphicsOverride[] = ["auto", "low", "balanced", "high"];
@@ -16,10 +16,10 @@ export interface Preferences extends Pick<MapState, "panelLayout" | "projection"
   modelKey: string | null;
   /** The stored state of each known layer; a missing id keeps its default. */
   layers: Partial<Record<LayerId, LayerState>>;
-  livePanels: (WeatherOptions & { layers: Preferences["layers"] })[];
+  livePanels: (WeatherOptions & ReportSettings & { layers: Preferences["layers"] })[];
   productKey: string | null;
   /** Panels 1 to 3, including those currently closed. */
-  panels: { productKey: string | null; layers: Preferences["layers"] }[];
+  panels: (ReportSettings & { productKey: string | null; layers: Preferences["layers"] })[];
   layerPanelCollapsed: boolean;
   lastSelectedStationId: string | null;
   camera: CameraSnapshot | null;
@@ -94,7 +94,7 @@ function parseLayers(value: unknown): Partial<Record<LayerId, LayerState>> {
   return layers; // Unknown ids are ignored.
 }
 
-function parsePanels(value: unknown): Preferences["panels"] {
+function parsePanels(value: unknown, reports: ReportSettings): Preferences["panels"] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
     warnPreferences("panels is not an array; the defaults are used");
@@ -103,9 +103,9 @@ function parsePanels(value: unknown): Preferences["panels"] {
   return value.slice(0, MAX_PANELS - 1).map((panel: unknown, index) => {
     if (!isRecord(panel)) {
       warnPreferences(`panels.${String(index)} is not an object; the defaults are used`);
-      return { productKey: null, layers: {} };
+      return { productKey: null, layers: {}, ...reports };
     }
-    return { productKey: field(panel, "productKey", isProductKey, null), layers: parseLayers(panel.layers) };
+    return { productKey: field(panel, "productKey", isProductKey, null), layers: parseLayers(panel.layers), ...parseReportSettings(panel, reports) };
   });
 }
 
@@ -115,12 +115,13 @@ function parseLayerOrder(value: unknown): OrderableLayerId[] {
   return [...new Set([...saved, ...ORDERABLE_LAYER_IDS])];
 }
 
-function parseLivePanels(value: unknown): Preferences["livePanels"] {
+function parseLivePanels(value: unknown, reports: ReportSettings): Preferences["livePanels"] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, MAX_PANELS).map((item: unknown) => {
     const panel = isRecord(item) ? item : {};
     return {
       layers: parseLayers(panel.layers),
+      ...parseReportSettings(panel, reports),
       radarProduct: field(panel, "radarProduct", isProductKey, null),
       radarTilt: field(panel, "radarTilt", isRadarTilt, "0"),
       radarScope: field(panel, "radarScope", (scope): scope is "mosaic" | "site" => scope === "mosaic" || scope === "site", "mosaic"),
@@ -168,6 +169,13 @@ const isProductKey = (value: unknown): value is string | null =>
 const isStationId = (value: unknown): value is string | null =>
   value === null || (typeof value === "string" && value.trim() !== "" && value.length <= MAX_STATION_ID_LENGTH);
 
+function parseReportSettings(data: Record<string, unknown>, fallback: ReportSettings): ReportSettings {
+  return {
+    reportWindowS: field(data, "reportWindowS", (value): value is number => [7200, 21600, 43200, 86400].includes(value as number), fallback.reportWindowS),
+    reportFilter: field(data, "reportFilter", (value): value is string => ["all", "tornado", "hail", "wind", "significant"].includes(value as string), fallback.reportFilter),
+  };
+}
+
 /** Parses the stored text, field by field. */
 export function parsePreferences(raw: string | null): Preferences {
   if (raw === null) {
@@ -185,6 +193,7 @@ export function parsePreferences(raw: string | null): Preferences {
     return DEFAULT_PREFERENCES;
   }
   const panelLayout = field(data, "panelLayout", (value): value is MapState["panelLayout"] => PANEL_LAYOUTS.includes(value as MapState["panelLayout"]), DEFAULT_PREFERENCES.panelLayout);
+  const reports = parseReportSettings(data, DEFAULT_PREFERENCES);
   return {
     version: 1,
     graphicsOverride: field(data, "graphicsOverride", isOverride, "auto"),
@@ -198,13 +207,12 @@ export function parsePreferences(raw: string | null): Preferences {
     radarScope: field(data, "radarScope", (value): value is MapState["radarScope"] => value === "mosaic" || value === "site", "mosaic"),
     radarSite: field(data, "radarSite", isStationId, null),
     satelliteChannel: field(data, "satelliteChannel", (value): value is MapState["satelliteChannel"] => value === "infrared" || value === "visible", "infrared"),
-    reportWindowS: field(data, "reportWindowS", (value): value is number => [7200, 21600, 43200, 86400].includes(value as number), DEFAULT_PREFERENCES.reportWindowS),
-    reportFilter: field(data, "reportFilter", (value): value is string => ["all", "tornado", "hail", "wind", "significant"].includes(value as string), "all"),
+    ...reports,
     layerPanelGroup: field(data, "layerPanelGroup", (value): value is MapState["layerPanelGroup"] => value === "weather" || value === "legend" || value === "map", "weather"),
     layers: parseLayers(data.layers),
-    livePanels: parseLivePanels(data.livePanels),
+    livePanels: parseLivePanels(data.livePanels, reports),
     productKey: field(data, "productKey", isProductKey, null),
-    panels: parsePanels(data.panels),
+    panels: parsePanels(data.panels, reports),
     layerPanelCollapsed: field(data, "layerPanelCollapsed", isBoolean, false),
     lastSelectedStationId: field(data, "lastSelectedStationId", isStationId, null),
     camera: parseCamera(data.camera),

@@ -1,6 +1,6 @@
 <div align="center">
 
-# SHARPpy Reimagined · v3.8.3
+# SHARPpy Reimagined · v3.8.4
 
 **Forecast maps, live weather and sounding analysis in one desktop workspace.**
 
@@ -10,23 +10,25 @@
 ![Python 3.11–3.13 + Rust](https://img.shields.io/badge/Analysis-Python_+_Rust-3776AB)
 [![BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
 
-[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v383---2026-11-16)
+[Screenshots](#screenshots) · [Downloads](https://github.com/ShianMike/SHARPpy-Reimagined/releases) · [User guide](docs/USAGE.md) · [Changelog](CHANGELOG.md#v384---2026-11-18)
 
 </div>
 
-## What's new in 3.8.3
+## What's new in 3.8.4
 
-- **Sounding animation:** choose 2–12 forecast hours or file profiles in
-  Severe or Winter mode. Preload every selected profile, play or scrub the
-  sequence on fixed axes, and save it as GIF or animated WebP.
-- **Whole-layout exports:** save two or four Model Viewer panels together
-  as PNG, GIF or animated WebP, with each panel's parameter, color scale,
-  valid time, displayed overlays and source credits.
-- **Lossless animated WebP:** preserve full-color frames at the chosen
-  resolution. Every selected hour loads and renders before encoding begins;
-  animations loop through discrete hours without blended transitions.
-- **Fixed lapse-rate annotation:** the bracket and value stay at −30 °C,
-  keeping the existing SFC column at −20 °C clear.
+- **Restore your sounding session:** recover open profiles, completed edits,
+  undo/redo history, selected times and the Severe or Winter view after an exit.
+  Recovery copies stay on this device, separately from temporary weather data.
+- **Faster forecast export setup:** remember quality, frame duration and panel
+  scope. Keep all hour shortcuts in one row, select the next 6 or 12 hours,
+  thin a selection to every 3 hours, or Shift-click a range.
+- **Independent storm reports:** each panel keeps its own hazard filter and
+  event window in Model Viewer and Live Tracking, including saved layouts.
+- **Complete export overlays:** load enabled storm reports, SPC outlooks and
+  isobars for every selected hour and panel before capturing PNG, GIF or WebP.
+- **More reliable sounding images:** native request checks catch invalid edits
+  before rendering. Rust manages imports and image-cache transactions, retries
+  invalid cached images, and cleans up failed uploads and partial renders.
 
 ## Sounding and forecast tools
 
@@ -69,8 +71,8 @@ settings compare Automatic, Low, Balanced and High in one view.
 
 Logs can copy a diagnostic summary with the operation, provider, time, error
 category and recovery action, excluding credentials and raw request details.
-Before an update installs, review which preferences and caches remain and which
-open soundings, edits and history will be lost.
+Before an update installs, review open sounding work. Completed recovery copies
+can restore profiles, edits and history after reopening the app.
 
 ## Screenshots
 

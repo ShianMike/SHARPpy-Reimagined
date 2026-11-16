@@ -12,6 +12,7 @@ import styles from "./Sounding.module.css";
 import viewer from "./Viewer.module.css";
 import { SourceSelect } from "./SourceFields";
 import { formatUtc } from "./soundingTime";
+import { SoundingRecoveryStatus } from "./SoundingRecoveryControls";
 
 function SoundingViewer({ sources, onShow, showRef, controlsTarget, controls }: { sources: boolean; onShow: () => void; showRef: Ref<HTMLButtonElement>; controlsTarget: HTMLDivElement | null; controls: boolean }): ReactNode {
   const active = useActiveSounding();
@@ -110,6 +111,7 @@ export function SoundingWorkspace(): ReactNode {
               </section> : null}
             </div>
           </div>
+          <SoundingRecoveryStatus />
         </Surface>
         <SoundingViewer sources={sources} onShow={show} showRef={showRef} controlsTarget={controlsTarget} controls={controls} />
       </div>

@@ -1,6 +1,6 @@
 [package]
 name = "sharpmod-rs"
-version = "3.8.3"
+version = "3.8.4"
 edition = "2021"
 rust-version = "1.88"
 description = "Primary Rust numerical and direct GRIB decoding backend for SHARPpy Reimagined"
@@ -15,6 +15,7 @@ name = "sharpmod_rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+base64 = "=0.22.1"
 csv = "1.4"
 libloading = "0.9"
 memchr = "2.7"

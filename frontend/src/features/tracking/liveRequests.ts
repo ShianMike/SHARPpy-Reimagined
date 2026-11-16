@@ -2,7 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import type { BackendClient } from "../../lib/backend/client";
 import { BackendFailure, overlayAvailability } from "../../lib/backend/errors";
 import { BASE_QUERY_OPTIONS, mapKeys, RADAR_HISTORY_STALE_MS } from "../../lib/backend/queryOptions";
-import { panelLayers, panelWeather, type MapState } from "../../stores/mapStore";
+import { panelLayers, panelReports, panelWeather, type MapState } from "../../stores/mapStore";
 import type { SurfaceAnchor } from "../../map/surfaceQueries";
 import type { RadarSite } from "../../types/map";
 import { panelRadar } from "../../map/panelRadar";
@@ -28,8 +28,10 @@ export function liveRequests(client: BackendClient, state: MapState, site: strin
     return [...new Map(requests.map((request) => [JSON.stringify(request.queryKey), request])).values()];
   }
   const requests: LiveRequest[] = [];
-  const layers = panelLayers({ ...state, view: "live" }, panel);
-  const weather = state.livePanels[panel] ?? panelWeather(state, panel);
+  const liveState: MapState = { ...state, view: "live" };
+  const layers = panelLayers(liveState, panel);
+  const weather = panelWeather(liveState, panel);
+  const reports = panelReports(liveState, panel);
   const { satelliteChannel: channel, radarScope } = weather;
   const { site: selectedSite, product, tilt, supportedProducts } = panelRadar(weather, site, sites);
   if (layers.radar.visible) {
@@ -38,7 +40,7 @@ export function liveRequests(client: BackendClient, state: MapState, site: strin
   }
   if (layers.satellite.visible) requests.push({ queryKey: mapKeys.satellite(channel, time), queryFn: () => client.getSatelliteFrame(time, channel) });
   if (layers.warnings.visible || layers.watches.visible) requests.push({ queryKey: mapKeys.alerts(time), queryFn: () => client.getWeatherAlerts(time) });
-  if (layers["storm-reports"].visible) requests.push({ queryKey: mapKeys.reports(time, state.reportWindowS, state.reportFilter), queryFn: () => client.getStormReports(time, state.reportWindowS, state.reportFilter) });
+  if (layers["storm-reports"].visible) requests.push({ queryKey: mapKeys.reports(time, reports.reportWindowS, reports.reportFilter), queryFn: () => client.getStormReports(time, reports.reportWindowS, reports.reportFilter) });
   if (layers["surface-plots"].visible && anchor !== null) requests.push({ queryKey: mapKeys.surface(anchor.latitude, anchor.longitude, time), queryFn: () => client.getSurfacePlots(anchor.latitude, anchor.longitude, time) });
   return requests;
 }

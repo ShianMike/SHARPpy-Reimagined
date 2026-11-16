@@ -14,6 +14,7 @@ import { isTransitional } from "../contracts/health";
 import type { BackendClient } from "./client";
 import { recordLog } from "../../stores/logStore";
 import { useSoundingStore } from "../../stores/soundingStore";
+import { useSoundingRecoveryStore } from "../../stores/soundingRecoveryStore";
 import {
   BASE_QUERY_OPTIONS,
   FALLBACK_POLL_MS,
@@ -63,11 +64,12 @@ export function BackendProvider({ client, children }: BackendProviderProps): Rea
       if (previous?.status !== "up" || (previous.pid === next.pid
         && previous.since === next.since && previous.restarts === next.restarts)) return;
       const hadSoundings = useSoundingStore.getState().open.length > 0;
-      useSoundingStore.setState({ open: [], activeId: null, views: {}, pendingChanges: [] });
+      if (hadSoundings) useSoundingRecoveryStore.getState().backendRestart();
+      useSoundingStore.setState({ open: [], activeId: null, views: {}, timeIndices: {}, pendingChanges: [] });
       void queryClient.cancelQueries({ queryKey: ["soundings"] });
       queryClient.removeQueries({ queryKey: ["soundings"] });
       if (hadSoundings) {
-        recordLog("warning", "Backend", "Soundings closed after backend restart", "Reopen the soundings to continue.");
+        recordLog("warning", "Backend", "Soundings closed after backend restart", "Use Restore previous session if a recovery copy was saved, or reopen the source files.");
       }
     });
     client

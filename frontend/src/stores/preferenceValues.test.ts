@@ -141,9 +141,9 @@ describe("parsePreferences", () => {
     }));
     expect(parsed.productKey).toBeNull();
     expect(parsed.panels).toEqual([
-      { productKey: null, layers: {} },
-      { productKey: "refc", layers: { "station-labels": { visible: true, opacity: 1 } } },
-      { productKey: null, layers: { "model-field": { visible: true, opacity: 0.7, smoothing: true } } },
+      { productKey: null, layers: {}, reportWindowS: 21600, reportFilter: "all" },
+      { productKey: "refc", layers: { "station-labels": { visible: true, opacity: 1 } }, reportWindowS: 21600, reportFilter: "all" },
+      { productKey: null, layers: { "model-field": { visible: true, opacity: 0.7, smoothing: true } }, reportWindowS: 21600, reportFilter: "all" },
     ]);
     applyPreferences(parsed);
     expect(useMapStore.getState().panels).toHaveLength(3);

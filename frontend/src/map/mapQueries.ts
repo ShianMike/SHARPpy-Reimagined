@@ -88,19 +88,24 @@ export function useFieldFrames(requests: readonly FrameRequest[]): UseQueryResul
   return useQueries({ queries: requests.map((request) => fieldQueryOptions(client, queryClient, request)) });
 }
 
+export function outlookQueryOptions(client: BackendClient, product: typeof OUTLOOK_KEYS[number], validTime: string) {
+  return {
+    ...BASE_QUERY_OPTIONS,
+    queryKey: mapKeys.outlook(product, validTime),
+    queryFn: ({ signal }: { signal: AbortSignal }) => client.getSpcOutlook(product, validTime, signal),
+    staleTime: SPC_REFRESH_MS,
+    gcTime: Number.POSITIVE_INFINITY,
+  };
+}
+
 /** The four outlook products in OUTLOOK_KEYS order; `enabled[i]` turns each on. */
 export function useSpcOutlooks(enabled: readonly boolean[], validTime: string | null): UseQueryResult<SpcOutlook>[] {
   const client = useBackendClient();
   const time = validTime ?? "";
   return useQueries({
     queries: OUTLOOK_KEYS.map((key, i) => ({
-      ...BASE_QUERY_OPTIONS,
-      // Overlapping validity windows can contain different issuances for each selected hour.
-      queryKey: mapKeys.outlook(key, time),
-      queryFn: () => client.getSpcOutlook(key, time),
+      ...outlookQueryOptions(client, key, time),
       enabled: enabled[i] === true && time !== "",
-      staleTime: SPC_REFRESH_MS,
-      gcTime: Number.POSITIVE_INFINITY,
       refetchInterval: SPC_REFRESH_MS,
     })),
   });
@@ -199,10 +204,18 @@ export function useSatelliteFrame(
   });
 }
 
-/**
- * Storm reports in a symmetric window of a valid time, after a hazard filter.
- * Time-addressed like the outlooks: the records state their own event times.
- */
+/** Shared by visible panels and export preloading, including cancellation. */
+export function reportQueryOptions(client: BackendClient, validTime: string, windowS: number, hazardFilter: string) {
+  return {
+    ...BASE_QUERY_OPTIONS,
+    queryKey: mapKeys.reports(validTime, windowS, hazardFilter),
+    queryFn: ({ signal }: { signal: AbortSignal }) => client.getStormReports(validTime, windowS, hazardFilter, signal),
+    staleTime: OUTLOOK_STALE_MS,
+    gcTime: Number.POSITIVE_INFINITY,
+  };
+}
+
+/** Storm reports in a symmetric event window, filtered by this panel's hazard. */
 export function useStormReports(
   validTime: string | null,
   windowS: number,
@@ -211,12 +224,8 @@ export function useStormReports(
 ): UseQueryResult<StormReports> {
   const client = useBackendClient();
   return useQuery({
-    ...BASE_QUERY_OPTIONS,
-    queryKey: mapKeys.reports(validTime ?? "", windowS, hazardFilter),
-    queryFn: () => client.getStormReports(validTime ?? "", windowS, hazardFilter),
+    ...reportQueryOptions(client, validTime ?? "", windowS, hazardFilter),
     enabled: enabled && validTime !== null,
-    staleTime: OUTLOOK_STALE_MS,
-    gcTime: Number.POSITIVE_INFINITY,
   });
 }
 
